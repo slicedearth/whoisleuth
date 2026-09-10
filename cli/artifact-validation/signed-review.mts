@@ -16,7 +16,11 @@ import {
 import {
   BULK_REVIEW_MANIFEST_SCHEMA,
   BULK_REVIEW_MANIFEST_VERSION,
-} from '../../packages/investigation/bulk-review-export.mts';
+  SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS,
+} from '../../packages/contracts/investigation-portability.mts';
+import { MAX_BULK_SESSION_ROWS, MAX_BULK_SESSION_SOURCES } from '../../packages/contracts/workspace-portability.mts';
+import { BULK_SORT_KEYS } from '../../packages/workspace/bulk-sort.mts';
+import { normalizeExplicitIsoTimestamp } from '../../packages/evidence/observation.mts';
 import {
   LOOKUP_CLAIM_PASSPORT_SCHEMA,
   LOOKUP_CLAIM_PASSPORT_TARGET_TYPES,
@@ -238,10 +242,15 @@ function validateDomainComparison(value: UnknownRecord): void {
   validateIntegrity(root.integrity, 'Domain comparison integrity', root.version, BULK_DOMAIN_COMPARISON_EXPORT_VERSION);
 }
 
-function validateSourceCoverage(value: unknown, label: string): void {
-  const source = exact(value, ['source', 'state'], label);
+function validateNullableObservationTime(value: unknown, label: string): void {
+  if (value !== null && normalizeExplicitIsoTimestamp(value) !== value) fail(label);
+}
+
+function validateSourceCoverage(value: unknown, label: string, observedTime = false): void {
+  const source = exact(value, ['source', 'state', ...(observedTime ? ['observedAt'] : [])], label);
   if (typeof source.source !== 'string' || !/^[a-z][a-z0-9_-]{0,39}$/u.test(source.source)) fail(label);
   enumeration(source.state, SOURCE_STATES.filter((state) => state !== 'not_recorded'), label);
+  if (observedTime) validateNullableObservationTime(source.observedAt, `${label} observedAt`);
 }
 
 function validateProfileContext(value: unknown, label: string): void {
@@ -307,34 +316,41 @@ function validateBulkView(value: unknown, label: string): void {
   text(view.caseDispositionFilter, label, 60, true);
   enumeration(view.reviewStateFilter, ['', 'unreviewed', 'reviewing', 'reviewed', 'deferred'], label);
   text(view.groupBy, label, 60, true);
-  enumeration(view.sortKey, ['domain', 'availability', 'risk', 'opportunity', 'activity', 'registrar', 'mutation'], label);
+  enumeration(view.sortKey, BULK_SORT_KEYS, label);
   if (view.sortDirection !== 1 && view.sortDirection !== -1) fail(label);
 }
 
 function validateBulkReviewManifest(value: UnknownRecord): void {
   const root = exact(value, ['schema', 'version', 'generatedAt', 'observedAt', 'lookupProfile', 'selection', 'view', 'rows', 'limitations', 'integrity'], 'Bulk review manifest');
+  const version = SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS.find((candidate) => candidate === root.version);
+  if (version === undefined) fail('Bulk review manifest version');
+  const sourceTimes = version === BULK_REVIEW_MANIFEST_VERSION;
+  const maximumRows = sourceTimes ? MAX_BULK_SESSION_ROWS : 2_000;
+  const maximumSources = sourceTimes ? MAX_BULK_SESSION_SOURCES : 12;
   iso(root.generatedAt, 'Bulk review manifest generatedAt');
-  iso(root.observedAt, 'Bulk review manifest observedAt');
+  if (sourceTimes) validateNullableObservationTime(root.observedAt, 'Bulk review manifest observedAt');
+  else iso(root.observedAt, 'Bulk review manifest observedAt');
   enumeration(root.lookupProfile, ['deep', 'fast'], 'Bulk review manifest lookup profile');
   const selection = exact(root.selection, ['count', 'domains'], 'Bulk review manifest selection');
-  const domains = strings(selection.domains, 'Bulk review manifest selected domains', 2_000, 253);
+  const domains = strings(selection.domains, 'Bulk review manifest selected domains', maximumRows, 253);
   domains.forEach((item) => domain(item, 'Bulk review manifest selected domain'));
-  if (integer(selection.count, 'Bulk review manifest selection count', 0, 2_000) !== domains.length) fail('Bulk review manifest selection');
+  if (integer(selection.count, 'Bulk review manifest selection count', 0, maximumRows) !== domains.length) fail('Bulk review manifest selection');
   validateBulkView(root.view, 'Bulk review manifest view');
-  const rows = array(root.rows, 'Bulk review manifest rows', 2_000);
+  const rows = array(root.rows, 'Bulk review manifest rows', maximumRows);
   for (const [index, candidate] of rows.entries()) {
-    const row = exact(candidate, ['domain', 'reviewState', 'resultState', 'scanDepth', 'sourceCoverage', 'profileContext'], `Bulk review manifest row ${index + 1}`);
+    const row = exact(candidate, ['domain', 'reviewState', 'resultState', 'scanDepth', ...(sourceTimes ? ['observedAt'] : []), 'sourceCoverage', 'profileContext'], `Bulk review manifest row ${index + 1}`);
     domain(row.domain, 'Bulk review manifest row domain');
     enumeration(row.reviewState, ['unreviewed', 'reviewing', 'reviewed', 'deferred'], 'Bulk review manifest review state');
     enumeration(row.resultState, ['complete', 'error'], 'Bulk review manifest result state');
     enumeration(row.scanDepth, ['deep', 'fast'], 'Bulk review manifest scan depth');
-    array(row.sourceCoverage, 'Bulk review manifest source coverage', 12).forEach((item, sourceIndex) => validateSourceCoverage(item, `Bulk review manifest source ${sourceIndex + 1}`));
+    if (sourceTimes) validateNullableObservationTime(row.observedAt, 'Bulk review manifest row observedAt');
+    array(row.sourceCoverage, 'Bulk review manifest source coverage', maximumSources).forEach((item, sourceIndex) => validateSourceCoverage(item, `Bulk review manifest source ${sourceIndex + 1}`, sourceTimes));
     validateProfileContext(row.profileContext, 'Bulk review manifest profile context');
     if (domains[index] !== row.domain) fail('Bulk review manifest selection');
   }
   if (rows.length !== domains.length) fail('Bulk review manifest selection');
   strings(root.limitations, 'Bulk review manifest limitations', 8, 600);
-  validateIntegrity(root.integrity, 'Bulk review manifest integrity', root.version, BULK_REVIEW_MANIFEST_VERSION);
+  validateIntegrity(root.integrity, 'Bulk review manifest integrity', root.version, version);
 }
 
 function validateInvestigationManifest(value: UnknownRecord): void {

@@ -76,6 +76,15 @@ test('privacy guidance stays concise, request-free and responsive', async ({ pag
     await test.info().attach(`csv-privacy-${surface.width}-${surface.theme}`, {
       body: await page.screenshot(), contentType: 'image/png',
     });
+    const bulkManifest = page.locator('p').filter({ hasText: 'Selected Bulk CSV exports include a review manifest' });
+    await expect(bulkManifest).toContainText('source states, observation times');
+    await expect(bulkManifest).toContainText('Raw responses, contacts, Profile contents and notes are excluded.');
+    await bulkManifest.scrollIntoViewIfNeeded();
+    await expect(bulkManifest).toBeInViewport();
+    await expectNoHorizontalOverflow(page);
+    await test.info().attach(`bulk-manifest-privacy-${surface.width}-${surface.theme}`, {
+      body: await page.screenshot(), contentType: 'image/png',
+    });
     const trust = page.locator('p').filter({ hasText: 'An optional signer trust file' });
     await expect(trust).toContainText('not private keys');
     await expect(trust).toContainText('without its path or other entries');

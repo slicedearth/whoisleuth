@@ -169,6 +169,10 @@ partial later observation does not erase an earlier usable component.
 Selected rows can continue to Cases, exports or response preparation. Selection
 does not submit a target to a provider or apply a control.
 
+Selected CSV exports include a review manifest containing the exact selection,
+filters, source states and separate batch, row and source observation times.
+Unknown observation times stay unknown; exporting does not refresh evidence.
+
 ## Brands
 
 A Brand Profile records analyst-authored owned or approved scope, protection

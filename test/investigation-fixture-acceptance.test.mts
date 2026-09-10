@@ -8,7 +8,8 @@ import { sha256ArtifactDigestV2 } from '../packages/evidence/artifact-integrity.
 import { buildBulkReviewManifest } from '../packages/investigation/bulk-review-export.mts';
 
 const fixtureRaw = (path: string) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
-const currentPath = 'test/fixtures/investigation-portability/bulk-review-manifest-v2-current.json';
+const currentPath = 'test/fixtures/investigation-portability/bulk-review-manifest-v3.json';
+const publicPath = 'test/fixtures/investigation-portability/bulk-review-manifest-v2-current.json';
 const invalidPath = 'test/fixtures/investigation-portability/bulk-review-manifest-v2.json';
 
 test('declared whole-integrity investigation fixtures pass the executable verifier, not only metadata checks', async (context) => {
@@ -39,9 +40,9 @@ test('the populated Bulk fixture matches the current writer and independently pr
     groupBy: '' as const, sortKey: 'risk' as const, sortDirection: -1 as const,
   };
   const built = await buildBulkReviewManifest({
-    generatedAt: '2026-09-01T01:00:00.000Z', observedAt: '2026-09-01T00:00:00.000Z', lookupProfile: 'deep', view,
+    generatedAt: '2026-09-01T01:00:00.000Z', lookupProfile: 'deep', view,
     rows: [
-      { domain: 'review.example', status: 'complete', scanDepth: 'deep', sourceCoverage: [{ source: 'rdap', state: 'partial', observedAt: '2026-09-01T00:00:00.000Z' }, { source: 'dns', state: 'unavailable', observedAt: null }],
+      { domain: 'review.example', status: 'complete', scanDepth: 'deep', observedAt: '2026-09-01T00:05:00.000Z', sourceCoverage: [{ source: 'rdap', state: 'partial', observedAt: '2026-09-01T00:00:00.000Z' }, { source: 'dns', state: 'unavailable', observedAt: null }],
         profileContext: { sourceState: 'unavailable', activeProfileId: null, profileUpdatedAt: null, limitation: 'Profile context was unavailable.' },
         raw: 'private-source-sentinel', contacts: ['private-contact-sentinel'], notes: 'private-note-sentinel' },
       { domain: 'failed.example', status: 'error', scanDepth: 'deep', sourceCoverage: [],
@@ -56,12 +57,37 @@ test('the populated Bulk fixture matches the current writer and independently pr
   assert.deepEqual(built.document.rows.map((row) => [row.domain, row.reviewState, row.resultState]), [
     ['review.example', 'reviewed', 'complete'], ['failed.example', 'unreviewed', 'error'],
   ]);
-  assert.deepEqual(built.document.rows[0]!.sourceCoverage, [{ source: 'rdap', state: 'partial' }, { source: 'dns', state: 'unavailable' }]);
+  assert.equal(built.document.observedAt, null);
+  assert.deepEqual(built.document.rows.map((row) => row.observedAt), ['2026-09-01T00:05:00.000Z', null]);
+  assert.deepEqual(built.document.rows[0]!.sourceCoverage, [{ source: 'rdap', state: 'partial', observedAt: '2026-09-01T00:00:00.000Z' }, { source: 'dns', state: 'unavailable', observedAt: null }]);
   assert.equal(built.document.rows[0]!.profileContext.sourceState, 'unavailable');
   assert.doesNotMatch(raw, /private-(?:source|contact|note)-sentinel/u);
   const tampered = JSON.parse(raw);
   tampered.generatedAt = '2026-09-02T01:00:00.000Z';
   await assert.rejects(verifyOfflineArtifact(JSON.stringify(tampered)), /failed its SHA-256/iu);
+});
+
+test('the exact published Bulk format remains readable without adding clocks or accepting a newer row shape', async () => {
+  const raw = await fixtureRaw(publicPath);
+  assert.equal(createHash('sha256').update(raw).digest('hex'), 'b4e209df9bc0e1c8be8a34d4f4aac486df9d0a4e1a1f750b9a21ab6e0d35b7b6');
+  const value = JSON.parse(raw);
+  assert.equal(value.version, 2);
+  assert.deepEqual(value.rows[0].sourceCoverage, [{ source: 'rdap', state: 'partial' }, { source: 'dns', state: 'unavailable' }]);
+  assert.equal(Object.hasOwn(value.rows[0], 'observedAt'), false);
+  const report = await verifyOfflineArtifact(raw);
+  assert.equal(report.artifact.version, 2);
+  assert.equal(report.checks.contentIntegrity, 'verified');
+  const confidence = structuredClone(value);
+  confidence.view.sortKey = 'confidence';
+  const { integrity: priorIntegrity, ...confidenceBody } = confidence;
+  const confidenceReport = await verifyOfflineArtifact(JSON.stringify({
+    ...confidenceBody, integrity: { ...priorIntegrity, digestSha256: await sha256ArtifactDigestV2(confidenceBody) },
+  }));
+  assert.equal(confidenceReport.checks.contentIntegrity, 'verified');
+  const { integrity, ...unsigned } = value;
+  unsigned.rows[0].observedAt = null;
+  const changed = { ...unsigned, integrity: { ...integrity, digestSha256: await sha256ArtifactDigestV2(unsigned) } };
+  await assert.rejects(verifyOfflineArtifact(JSON.stringify(changed)), /Bulk review manifest row.*malformed structure/u);
 });
 
 test('the retained string-view example remains checksum-consistent but structurally rejected', async () => {

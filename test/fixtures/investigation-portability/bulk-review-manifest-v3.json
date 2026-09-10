@@ -1,0 +1,81 @@
+{
+  "schema": "whoisleuth.bulk-review-manifest",
+  "version": 3,
+  "generatedAt": "2026-09-01T01:00:00.000Z",
+  "observedAt": null,
+  "lookupProfile": "deep",
+  "selection": {
+    "count": 2,
+    "domains": [
+      "review.example",
+      "failed.example"
+    ]
+  },
+  "view": {
+    "primaryFilter": "all",
+    "mutationFilter": "",
+    "signalFilters": [],
+    "sourceFilter": "",
+    "lifecycleFilter": "",
+    "ageFilter": "",
+    "mailFilter": "",
+    "registrarFilter": "",
+    "caseDispositionFilter": "",
+    "reviewStateFilter": "",
+    "groupBy": "",
+    "sortKey": "risk",
+    "sortDirection": -1
+  },
+  "rows": [
+    {
+      "domain": "review.example",
+      "reviewState": "reviewed",
+      "resultState": "complete",
+      "scanDepth": "deep",
+      "observedAt": "2026-09-01T00:05:00.000Z",
+      "sourceCoverage": [
+        {
+          "source": "rdap",
+          "state": "partial",
+          "observedAt": "2026-09-01T00:00:00.000Z"
+        },
+        {
+          "source": "dns",
+          "state": "unavailable",
+          "observedAt": null
+        }
+      ],
+      "profileContext": {
+        "sourceState": "unavailable",
+        "activeProfileId": null,
+        "profileUpdatedAt": null,
+        "limitation": "Profile context was unavailable."
+      }
+    },
+    {
+      "domain": "failed.example",
+      "reviewState": "unreviewed",
+      "resultState": "error",
+      "scanDepth": "deep",
+      "observedAt": null,
+      "sourceCoverage": [],
+      "profileContext": {
+        "sourceState": "ready",
+        "activeProfileId": null,
+        "profileUpdatedAt": null,
+        "limitation": ""
+      }
+    }
+  ],
+  "limitations": [
+    "This manifest records the explicit review selection and view context for a separate CSV export.",
+    "It contains compact source states, observation times and bounded row-level Brand Profile provenance only, and excludes raw payloads, Profile contents, contact records, notes, and transient request state.",
+    "The batch observation time is separate from each retained row and source time; null means the observation time is unknown, not the export time.",
+    "Reproducing the filters does not reproduce upstream responses or imply that evidence remains current."
+  ],
+  "integrity": {
+    "algorithm": "SHA-256",
+    "canonicalization": "sorted-json-v2",
+    "digestSha256": "sha256:f017e09b9ac966b7f327dd158fb9f3e43f87620a269f5e618e575afc72759678"
+  }
+}

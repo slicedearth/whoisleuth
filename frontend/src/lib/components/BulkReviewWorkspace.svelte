@@ -19,7 +19,6 @@
     saveView,
     loadView,
     deleteView,
-    status,
     sourceState = 'ready',
   }: {
     store: BulkReviewStore;
@@ -29,7 +28,6 @@
     saveView: (name: string, view: BulkReviewPresetView) => Promise<LocalMutationOutcome>;
     loadView: (preset: BulkReviewPreset) => void;
     deleteView: (preset: BulkReviewPreset) => void | Promise<void>;
-    status: string;
     sourceState?: BrowserLocalCollectionLoadState;
   } = $props();
 
@@ -103,7 +101,6 @@
       <button class="btn" type="submit" disabled={saving || !name.trim()}>Save current view</button>
     </form>
   </div>
-  <p class="review-status" role="status">{status}</p>
   {:else}
     <p class="source-state {sourceState}" role={sourceState === 'unavailable' ? 'alert' : 'status'}>Saved views and review state {sourceState === 'idle' ? 'have not been loaded' : sourceState === 'loading' ? 'are still loading' : 'could not be read'}.{#if sourceState === 'unavailable'} Reload to retry; saved work has not been changed.{/if}</p>
   {/if}
@@ -118,7 +115,6 @@
   .view-actions{display:flex;grid-column:1/-1;flex-wrap:wrap;align-items:end;gap:7px}.view-actions>button{flex-shrink:0}
   .controls form{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-column:1/-1;gap:7px;align-items:end}
   .danger-text{color:var(--danger)}
-  .review-status{grid-column:1/-1;color:var(--accent);font-size:var(--text-xs)}.source-state{margin:0;padding:10px 12px;border:1px dotted var(--muted);border-radius:var(--radius-sm);color:var(--muted);font-size:var(--text-xs);line-height:1.5}.source-state.loading{border-style:solid}
-  .review-status:empty{display:none}
+  .source-state{margin:0;padding:10px 12px;border:1px dotted var(--muted);border-radius:var(--radius-sm);color:var(--muted);font-size:var(--text-xs);line-height:1.5}.source-state.loading{border-style:solid}
   @media(max-width:760px){.review-views,.controls{grid-template-columns:1fr}.controls form{grid-template-columns:1fr}.view-actions .btn{flex:1}}
 </style>

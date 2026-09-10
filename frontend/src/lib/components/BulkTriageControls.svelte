@@ -168,7 +168,7 @@
 </script>
 
 <div class="triage-head">
-  <div class="filters desktop-filter-row">{#each filterKeys as key}<button class="btn" class:active={filter === key} aria-pressed={filter === key} onclick={() => setFilter(key)}>{key.replace('_', ' ')} <span>{counts[key]}</span></button>{/each}</div>
+  <div class="filters desktop-filter-row" role="group" aria-label="Bulk result filters">{#each filterKeys as key}<button class="btn" class:active={filter === key} aria-pressed={filter === key} onclick={() => setFilter(key)}>{key.replace('_', ' ')} <span>{counts[key]}</span></button>{/each}</div>
   <div id="bulk-output-tools" class:mobile-collapsed={!outputPanelOpen} class="triage-actions">
     {#if counts.errors}<button class="btn" onclick={retryErrors} disabled={running || profileContextState === 'loading'}>Retry errors</button>{/if}
     <button class="btn" onclick={exportCsv}>Export CSV</button>
@@ -225,7 +225,7 @@
   .triage-head{display:flex;min-width:0;justify-content:space-between;gap:14px}
   .filters,.triage-head>div{display:flex;min-width:0;flex-wrap:wrap;gap:6px}
   .mobile-review-bar,.mobile-selection-toggle{display:none}
-  .filters button{text-transform:capitalize}
+  .filters button{text-transform:capitalize;overflow-wrap:normal;word-break:normal}
   .filters span{color:var(--muted);font-weight:400}
   .filters .active span{color:inherit}
   .indicator-format{display:flex;min-width:0;align-items:center;gap:6px;padding:0 4px 0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font:600 var(--text-2xs) var(--mono)}
@@ -253,7 +253,7 @@
   .save-watchlist span{color:var(--muted);font-size:var(--text-xs)}
   @media(max-width:700px){
     .triage-head{display:block}
-    .desktop-filter-row{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:8px}
+    .desktop-filter-row{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(min(100%,7rem),1fr));gap:6px;margin-bottom:8px}
     .mobile-review-bar{display:grid;gap:8px}
     .desktop-filter-row button{min-width:0;padding-inline:7px;font-size:var(--text-2xs)}
     .mobile-review-controls{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:end}

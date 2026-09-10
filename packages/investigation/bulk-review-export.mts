@@ -1,6 +1,6 @@
 import {
+  MAX_BULK_SESSION_ROWS,
   normalizeBulkSessionResult,
-  type BulkSessionResult,
 } from '../workspace/bulk-session-model.mts';
 import {
   BULK_REVIEW_STATES,
@@ -8,24 +8,19 @@ import {
   type BulkReviewState,
 } from '../workspace/bulk-review-model.mts';
 import { SORTED_JSON_V2, sha256ArtifactDigestV2 } from '../evidence/artifact-integrity.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
   BULK_REVIEW_MANIFEST_SCHEMA,
   BULK_REVIEW_MANIFEST_VERSION,
 } from '../contracts/investigation-portability.mts';
 
 export { BULK_REVIEW_MANIFEST_SCHEMA, BULK_REVIEW_MANIFEST_VERSION };
-const MAX_MANIFEST_ROWS = 2_000;
 const REVIEW_STATE_SET = new Set<string>(BULK_REVIEW_STATES);
 
 type ReviewStateInput = Readonly<{ domain: string; state: string }>;
 
-function timestamp(value: unknown, fallback: string): string {
-  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) return fallback;
-  return new Date(value).toISOString();
-}
-
 function reviewStateMap(values: readonly ReviewStateInput[]): Map<string, BulkReviewState> {
-  return new Map(values.slice(0, MAX_MANIFEST_ROWS * 2).flatMap((item) => (
+  return new Map(values.slice(0, MAX_BULK_SESSION_ROWS * 2).flatMap((item) => (
     REVIEW_STATE_SET.has(item.state)
       ? [[item.domain, item.state as BulkReviewState] as const]
       : []
@@ -40,23 +35,25 @@ export async function buildBulkReviewManifest(input: Readonly<{
   observedAt?: unknown;
   generatedAt?: unknown;
 }>) {
-  const now = new Date().toISOString();
-  const generatedAt = timestamp(input.generatedAt, now);
-  const observedAt = timestamp(input.observedAt, generatedAt);
+  if (!Array.isArray(input.rows) || input.rows.length > MAX_BULK_SESSION_ROWS) {
+    throw new TypeError('The selected Bulk rows exceed the supported manifest capacity. No rows were exported.');
+  }
+  const generatedAt = normalizeExplicitIsoTimestamp(input.generatedAt) ?? new Date().toISOString();
+  const observedAt = normalizeExplicitIsoTimestamp(input.observedAt);
   const states = reviewStateMap(input.reviewStates);
-  const rows = input.rows
-    .map((row) => normalizeBulkSessionResult(row))
-    .filter((item): item is BulkSessionResult => Boolean(item))
-    .slice(0, MAX_MANIFEST_ROWS)
-    .map((item) => ({
+  const rows = input.rows.map((row) => {
+    const item = normalizeBulkSessionResult(row);
+    if (!item) throw new TypeError('A selected Bulk row could not be verified. No rows were exported.');
+    return {
       domain: item.domain,
       reviewState: states.get(item.domain) || 'unreviewed',
       resultState: item.status,
       scanDepth: item.scanDepth,
-      // The published manifest records source states, not full stored observations.
-      sourceCoverage: item.sourceCoverage.map(({ source, state }) => ({ source, state })),
+      observedAt: item.observedAt,
+      sourceCoverage: item.sourceCoverage.map(({ source, state, observedAt }) => ({ source, state, observedAt })),
       profileContext: { ...item.profileContext },
-    }));
+    };
+  });
   const unsigned = {
     schema: BULK_REVIEW_MANIFEST_SCHEMA,
     version: BULK_REVIEW_MANIFEST_VERSION,
@@ -71,7 +68,8 @@ export async function buildBulkReviewManifest(input: Readonly<{
     rows,
     limitations: [
       'This manifest records the explicit review selection and view context for a separate CSV export.',
-      'It contains compact source states and bounded row-level Brand Profile provenance only, and excludes raw payloads, Profile contents, contact records, notes, and transient request state.',
+      'It contains compact source states, observation times and bounded row-level Brand Profile provenance only, and excludes raw payloads, Profile contents, contact records, notes, and transient request state.',
+      'The batch observation time is separate from each retained row and source time; null means the observation time is unknown, not the export time.',
       'Reproducing the filters does not reproduce upstream responses or imply that evidence remains current.',
     ],
   };

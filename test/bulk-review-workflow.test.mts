@@ -10,10 +10,91 @@ import { buildBulkReviewManifest } from '../frontend/src/lib/analysis/bulk-revie
 import { sha256ArtifactDigestV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { buildBulkRetryPlan, preservePriorBulkResult } from '../frontend/src/lib/analysis/bulk-retry-plan.ts';
 import type { BulkSessionResult } from '../frontend/src/lib/analysis/bulk-session-model.ts';
+import { MAX_BULK_SESSION_ROWS } from '../packages/contracts/workspace-portability.mts';
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 
 const OBSERVED_AT = '2026-07-20T00:00:00.000Z';
 const GENERATED_AT = '2026-07-28T00:00:00.000Z';
+
+function manifestInput(rows: readonly unknown[]): Parameters<typeof buildBulkReviewManifest>[0] {
+  return {
+    rows, reviewStates: [], lookupProfile: 'deep', generatedAt: GENERATED_AT,
+    view: {
+      primaryFilter: 'all', mutationFilter: '', signalFilters: [], sourceFilter: '', lifecycleFilter: '',
+      ageFilter: '', mailFilter: '', registrarFilter: '', caseDispositionFilter: '', reviewStateFilter: '',
+      groupBy: '', sortKey: 'risk', sortDirection: -1,
+    },
+  };
+}
+
+test('selected review manifests preserve separate unknown, offset and future source times without export-clock fallback', async () => {
+  const samples: Array<[unknown, string | null]> = [
+    [undefined, null], [null, null], ['', null], [0, null], ['2026-07-20', null],
+    ['2026-07-20T00:00:00', null], ['2026-02-30T00:00:00Z', null],
+    ['2026-07-20T10:00:00+10:00', OBSERVED_AT], ['2030-01-01T00:00:00Z', '2030-01-01T00:00:00.000Z'],
+  ];
+  for (const [clock, expected] of samples) {
+    const input = manifestInput([{
+      ...result('source-clock.example'), observedAt: clock,
+      sourceCoverage: [{ source: 'rdap', state: 'partial', observedAt: clock }, { source: 'whois', state: 'unavailable', observedAt: null }],
+    }]);
+    const exported = await buildBulkReviewManifest({ ...input, observedAt: clock });
+    assert.equal(exported.document.generatedAt, GENERATED_AT);
+    assert.equal(exported.document.observedAt, expected);
+    assert.equal(exported.document.rows[0]!.observedAt, expected);
+    assert.deepEqual(exported.document.rows[0]!.sourceCoverage, [
+      { source: 'rdap', state: 'partial', observedAt: expected },
+      { source: 'whois', state: 'unavailable', observedAt: null },
+    ]);
+    assert.equal((await verifyOfflineArtifact(exported.content)).checks.contentIntegrity, 'verified');
+  }
+  const input = manifestInput([result('independent-clock.example', {
+    observedAt: null, sourceCoverage: [{ source: 'rdap', state: 'complete', observedAt: OBSERVED_AT }],
+  })]);
+  const exported = await buildBulkReviewManifest({ ...input, observedAt: '2026-07-21T00:00:00.000Z' });
+  assert.equal(exported.document.observedAt, '2026-07-21T00:00:00.000Z');
+  assert.equal(exported.document.rows[0]!.observedAt, null);
+  assert.equal(exported.document.rows[0]!.sourceCoverage[0]!.observedAt, OBSERVED_AT);
+});
+
+test('the manifest verifier rejects missing or malformed current clocks and future formats even after redigesting', async () => {
+  const original = (await buildBulkReviewManifest(manifestInput([result('clock-shape.example')]))).document;
+  const changes: Array<(value: typeof original) => void> = [
+    (value) => { Reflect.set(value, 'observedAt', '2026-07-20T00:00:00'); },
+    (value) => { Reflect.set(value.rows[0]!, 'observedAt', '2026-02-30T00:00:00.000Z'); },
+    (value) => { Reflect.deleteProperty(value.rows[0]!, 'observedAt'); },
+    (value) => { Reflect.deleteProperty(value.rows[0]!.sourceCoverage[0]!, 'observedAt'); },
+    (value) => { Reflect.set(value.rows[0]!.sourceCoverage[0]!, 'observedAt', GENERATED_AT.slice(0, 10)); },
+    (value) => { Reflect.set(value.rows[0]!.sourceCoverage[0]!, 'observedAt', '0000-01-01T00:00:00.000Z'); },
+    (value) => { Reflect.set(value.rows[0]!.sourceCoverage[0]!, 'raw', 'private-extra-source'); },
+    (value) => { Reflect.set(value, 'version', original.version + 1); },
+    (value) => { Reflect.set(value.view, 'sortKey', 'unknown-sort'); },
+  ];
+  for (const change of changes) {
+    const changed = structuredClone(original);
+    change(changed);
+    await assert.rejects(verifyOfflineArtifact(JSON.stringify(await redigest(changed))), /unsupported|malformed|not supported/u);
+  }
+  const input = manifestInput([result('confidence-order.example')]);
+  const confidence = await buildBulkReviewManifest({ ...input, view: { ...input.view, sortKey: 'confidence' } });
+  assert.equal(confidence.document.view.sortKey, 'confidence');
+  assert.equal((await verifyOfflineArtifact(confidence.content)).checks.contentIntegrity, 'verified');
+});
+
+test('manifest selection retains every admitted row and rejects excess or invalid input before producing a shorter export', async () => {
+  const rows = Array.from({ length: MAX_BULK_SESSION_ROWS }, (_, index) => result(`selected-${index}.example`, { observedAt: OBSERVED_AT }));
+  const exported = await buildBulkReviewManifest(manifestInput(rows));
+  assert.equal(exported.document.rows.length, MAX_BULK_SESSION_ROWS);
+  assert.deepEqual(exported.document.selection.domains, rows.map((row) => row.domain));
+  assert.equal(exported.document.rows.at(-1)!.observedAt, OBSERVED_AT);
+  assert.equal((await verifyOfflineArtifact(exported.content)).checks.contentIntegrity, 'verified');
+  let accessed = false;
+  const excess = Array(MAX_BULK_SESSION_ROWS + 1).fill(null);
+  Object.defineProperty(excess, '0', { get: () => { accessed = true; throw new Error('Must reject count before rows.'); } });
+  await assert.rejects(buildBulkReviewManifest(manifestInput(excess)), /capacity/u);
+  assert.equal(accessed, false);
+  await assert.rejects(buildBulkReviewManifest(manifestInput([rows[0], null])), /selected Bulk row could not be verified/u);
+});
 
 async function redigest<T extends Record<string, unknown>>(value: T): Promise<T> {
   const { integrity, ...unsigned } = value;

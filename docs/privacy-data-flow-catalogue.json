@@ -8406,9 +8406,10 @@
       "schema": "whoisleuth.bulk-review-manifest",
       "lifecycleSchema": "whoisleuth.bulk-review-manifest",
       "coverageClass": "registered_schema",
-      "currentVersion": 2,
+      "currentVersion": 3,
       "supportedVersions": [
-        2
+        2,
+        3
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -12981,7 +12982,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.bulk-review-manifest",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "investigation.privacy.output",
@@ -13147,7 +13148,8 @@
         {
           "schema": "whoisleuth.bulk-review-manifest",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null

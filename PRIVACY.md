@@ -249,6 +249,9 @@ explicit input bindings. Reused evidence stays local without extraction files.
 
 Optional metadata CSV retains source versions, collection and report times,
 collection origin and source-health states alongside the selected results.
+Selected Bulk CSV exports include a review manifest with targets, review filters,
+source states, observation times and compact Brand Profile provenance. Raw
+responses, contacts, Profile contents and notes are excluded.
 
 The offline `mail-headers` command parses only the bounded header block from a
 selected message or standard input. Its output can retain a header digest,

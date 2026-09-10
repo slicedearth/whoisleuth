@@ -1,6 +1,6 @@
 import { normalizeDomain } from '../cases/case-model.mts';
 import { CASE_DISPOSITIONS as CASE_DISPOSITION_OPTIONS } from '../cases/case-record-contracts.mts';
-import { normalizeBulkPresentationSortKey } from './bulk-sort.mts';
+import { BULK_SORT_KEYS, normalizeBulkPresentationSortKey } from './bulk-sort.mts';
 import type { BulkSortDirection, BulkSortKey } from './bulk-sort.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
@@ -85,7 +85,7 @@ const LIFECYCLE_FILTERS = new Set<string>(BULK_LIFECYCLE_FILTERS);
 const AGE_FILTERS = new Set<string>(BULK_AGE_FILTERS);
 const MAIL_FILTERS = new Set<string>(BULK_MAIL_FILTERS);
 const GROUPS = new Set<string>(BULK_GROUP_OPTIONS);
-const SORT_KEYS = new Set<BulkSortKey>(['domain', 'availability', 'confidence', 'risk', 'opportunity', 'activity', 'registrar', 'mutation']);
+const SORT_KEYS = new Set<BulkSortKey>(BULK_SORT_KEYS);
 const REVIEW_STATES = new Set<string>(BULK_REVIEW_STATES);
 const CASE_DISPOSITIONS = new Set(['', 'untracked', ...CASE_DISPOSITION_OPTIONS.map((item) => item.value)]);
 const SIGNAL_FILTERS = new Set(['favicon', 'password', 'phishing', 'asset_reuse', 'idn']);

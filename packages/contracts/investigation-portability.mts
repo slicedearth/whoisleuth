@@ -28,8 +28,8 @@ export const SUPPORTED_BULK_MAIL_EXPOSURE_EXPORT_VERSIONS = Object.freeze([BULK_
 export const MAX_BULK_MAIL_EXPOSURE_ROWS = 2_000;
 
 export const BULK_REVIEW_MANIFEST_SCHEMA = 'whoisleuth.bulk-review-manifest';
-export const BULK_REVIEW_MANIFEST_VERSION = 2;
-export const SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS = Object.freeze([BULK_REVIEW_MANIFEST_VERSION] as const);
+export const BULK_REVIEW_MANIFEST_VERSION = 3;
+export const SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS = Object.freeze([2, BULK_REVIEW_MANIFEST_VERSION] as const);
 
 export const INVESTIGATION_CAPSULE_SCHEMA = 'whoisleuth.investigation-capsule';
 export const INVESTIGATION_CAPSULE_VERSION = 4;
@@ -122,7 +122,7 @@ export const BULK_REVIEW_MANIFEST_COMPATIBILITY = defineSchemaCompatibility({
   currentVersion: BULK_REVIEW_MANIFEST_VERSION, supportedVersions: SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS,
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only',
   byteBudget: MAX_INVESTIGATION_PORTABLE_BYTES, owner: INVESTIGATION_PORTABILITY_CONTRACT_OWNER,
-  note: 'Version 2 uses deterministic sorted-json-v2 integrity for one bounded Bulk review selection while excluding raw payloads, contacts, notes, and transient request state.',
+  note: 'Version 3 retains nullable batch, row and source observation times in one selected Bulk review with deterministic sorted-json-v2 integrity. Published version 2 remains readable without inventing absent source times. Raw payloads, contacts, notes and transient request state are excluded.',
 });
 
 export const INVESTIGATION_CAPSULE_COMPATIBILITY = defineSchemaCompatibility({
@@ -180,7 +180,8 @@ const INVESTIGATION_FIXTURES = Object.freeze([
   { id: 'lookup-claim-passport-v1', path: 'test/fixtures/investigation-portability/lookup-claim-passport-v1.json', bytes: 2_011, sha256: 'dbf1c3975282e340b6639162a0555aeaed42c06abe92ed3b354409ce73c284a4', schema: LOOKUP_CLAIM_PASSPORT_SCHEMA, version: 1, role: 'current' as const },
   { id: 'bulk-domain-comparison-v4', path: 'test/fixtures/investigation-portability/bulk-domain-comparison-v4.json', bytes: 17_079, sha256: 'b718af34c8f5f1ba4427807cd149561bc1b7e605a6e74206a694beaee078cc2d', schema: BULK_DOMAIN_COMPARISON_SCHEMA, version: 4, role: 'current' as const },
   { id: 'bulk-mail-exposure-v2', path: 'test/fixtures/investigation-portability/bulk-mail-exposure-v2.json', bytes: 2_582, sha256: '9ff6c4c9f2dda4c5451daf8fb11e36a3ee15b513a09ad3c93515cc37df5d6660', schema: BULK_MAIL_EXPOSURE_SCHEMA, version: 2, role: 'current' as const },
-  { id: 'bulk-review-manifest-v2', path: 'test/fixtures/investigation-portability/bulk-review-manifest-v2-current.json', bytes: 2_118, sha256: 'b4e209df9bc0e1c8be8a34d4f4aac486df9d0a4e1a1f750b9a21ab6e0d35b7b6', schema: BULK_REVIEW_MANIFEST_SCHEMA, version: 2, role: 'current' as const },
+  { id: 'bulk-review-manifest-v2', path: 'test/fixtures/investigation-portability/bulk-review-manifest-v2-current.json', bytes: 2_118, sha256: 'b4e209df9bc0e1c8be8a34d4f4aac486df9d0a4e1a1f750b9a21ab6e0d35b7b6', schema: BULK_REVIEW_MANIFEST_SCHEMA, version: 2, role: 'historical' as const },
+  { id: 'bulk-review-manifest-v3', path: 'test/fixtures/investigation-portability/bulk-review-manifest-v3.json', bytes: 2_422, sha256: '0ee1022140b8d19a92100806f0091c197be0ffec0faae808721c47d7cb96d9ad', schema: BULK_REVIEW_MANIFEST_SCHEMA, version: 3, role: 'current' as const },
   // Synthetic integrity examples deliberately combine independently versioned
   // contracts. Their application labels are not captured-release provenance;
   // historical/current here describes the supported capsule schema only.

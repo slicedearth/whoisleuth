@@ -628,7 +628,29 @@
   async function retryErrors(){if(profileSourceState==='loading'){retryStatus='Wait for browser-local Brand Profile context to finish loading before retrying.';return;}const domains=results.filter(r=>r.status==='error').map(r=>r.domain);if(!domains.length||running)return;const plan=buildBulkRetryPlan(results.filter((row)=>domains.includes(row.domain)).map(toBulkSessionResult),mode,scanStartedAt);if(!confirm(`Retry ${plan.lookupRequests} failed lookup${plan.lookupRequests===1?'':'s'} using the ${mode} profile? Destinations: ${plan.destinations.join(', ')}.`))return;retryStatus=`Running ${plan.lookupRequests} reviewed retry${plan.lookupRequests===1?'':'ies'}.`;const preserved=await run(domains,false,true);retryStatus=`Retry completed.${preserved.length?` ${preserved.length} stronger prior result${preserved.length===1?' was':'s were'} retained.`:''}`;}
   function exportRowsCsv(selected:ScanResult[],scope='bulk'){const header=['domain','unicode_domain','idn_scripts','idn_mixed_script','idn_official_skeleton_matches','availability','confidence','profile_context_state','profile_context_limitation','profile_status','registrar','activity',...BULK_SCORE_CSV_HEADERS,'mutations','error','dns_status','dnssec','dns_a','dns_aaaa','dns_cname','dns_caa','technology_ids','tls_issuer','tls_spki_sha256','ct_first_observed','ct_last_observed','ct_certificate_count','ct_hostnames'];const rows=selected.map(r=>{const contextReady=r.saved.profileContext.sourceState==='ready';return[r.domain,r.idn?.hasIdn?r.idn.unicodeDomain:'',r.idn?.scripts?.join('|')||'',r.idn?.mixedScript?'true':'false',contextReady?r.idn?.referenceMatches?.map((match)=>match.asciiDomain).join('|')||'':'',r.availability,r.confidence,r.saved.profileContext.sourceState,r.saved.profileContext.limitation,contextReady?(r.trusted||''):'',r.registrar,r.activity,...bulkScoreCsvFields(r),r.mutationTypes.join('|'),r.error,r.dns?.status||'',r.dnssec||'',r.dns?.records.a.join('|')||'',r.dns?.records.aaaa.join('|')||'',r.dns?.records.cname.join('|')||'',r.dns?.records.caa.map((item)=>`${item.critical} ${item.tag} ${item.value}`).join('|')||'',r.comparisonEvidence?.technology.ids.join('|')||'',r.comparisonEvidence?.tls.issuerLabel||'',r.comparisonEvidence?.tls.spkiSha256||'',...ctCsvFields(r.ct)]});const url=URL.createObjectURL(new Blob([rowsToCsv([header,...rows])],{type:'text/csv'}));const a=document.createElement('a');a.href=url;a.download=`whoisleuth-${scope}-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url);}
   function exportCsv(){exportRowsCsv(results);}
-  async function exportSelectedCsv(){if(!selectedRows.length)return;await ensureBulkReviewContext();const generatedAt=new Date().toISOString();exportRowsCsv(selectedRows,'selected');const exported=await buildBulkReviewManifest({rows:selectedRows.map(toBulkSessionResult),reviewStates:bulkReviewStore.rows,view:currentBulkReviewView(),lookupProfile:mode,observedAt:scanStartedAt,generatedAt});downloadText(exported.content,exported.filename,'application/json');bulkReviewStatus=`Exported ${selectedRows.length} selected row${selectedRows.length===1?'':'s'} with an integrity-stamped review manifest.`;}
+  async function exportSelectedCsv(){
+    const selected = [...selectedRows];
+    if (!selected.length) return;
+    const view = currentBulkReviewView();
+    const lookupProfile = mode;
+    const observedAt = scanStartedAt;
+    try {
+      await ensureBulkReviewContext();
+      if (bulkReviewSourceState !== 'ready') {
+        bulkReviewStatus = 'Review state is unavailable. Reload before exporting selected rows.';
+        return;
+      }
+      const exported = await buildBulkReviewManifest({
+        rows: selected.map(toBulkSessionResult), reviewStates: bulkReviewStore.rows,
+        view, lookupProfile, observedAt, generatedAt: new Date().toISOString(),
+      });
+      exportRowsCsv(selected, 'selected');
+      downloadText(exported.content, exported.filename, 'application/json');
+      bulkReviewStatus = `Exported ${selected.length} selected row${selected.length === 1 ? '' : 's'} with an integrity-stamped review manifest.`;
+    } catch (cause) {
+      bulkReviewStatus = cause instanceof Error ? cause.message : 'The selected CSV and review manifest could not be prepared.';
+    }
+  }
   async function deepRescanSelected(){if(profileSourceState==='loading'){retryStatus='Wait for browser-local Brand Profile context to finish loading before rescanning.';return;}const domains=selectedRows.slice(0,200).map((row)=>row.domain);if(!domains.length||running)return;const nextMode:'deep'='deep';const destinations=buildBulkRetryPlan(selectedRows.map(toBulkSessionResult),nextMode,scanStartedAt).destinations;if(!confirm(`Deep rescan ${domains.length} explicitly selected domain${domains.length===1?'':'s'}? Destinations: ${destinations.join(', ')}.`))return;mode=nextMode;retryStatus=`Running a reviewed Deep rescan of ${domains.length} selected domain${domains.length===1?'':'s'}.`;const preserved=await run(domains,false,true);retryStatus=`Deep rescan completed.${preserved.length?` ${preserved.length} stronger prior result${preserved.length===1?' was':'s were'} retained.`:''}`;}
   async function executeReviewedRetry(){if(profileSourceState==='loading'){retryStatus='Wait for browser-local Brand Profile context to finish loading before retrying.';return;}if(!retryPlan.rows.length||running)return;const domains=retryPlan.rows.map((row)=>row.domain);retryStatus=`Running ${domains.length} reviewed ${retryPlan.mode} retr${domains.length===1?'y':'ies'}.`;const preserved=await run(domains,false,true);retryStatus=`Reviewed retry completed.${preserved.length?` ${preserved.length} stronger prior result${preserved.length===1?' was':'s were'} retained.`:''}`;}
   async function exportDomainComparison(){if(!domainComparison)return;const exported=await buildBulkDomainComparisonExport(domainComparison);downloadText(exported.content,exported.filename,'application/json');bulkReviewStatus='Exported the two-domain evidence comparison with an integrity digest.';}
@@ -739,7 +761,7 @@
       {:else}
         <DeferredSurface
           load={()=>import('$lib/components/BulkReviewWorkspace.svelte')}
-          props={{store:bulkReviewStore,currentView:currentBulkReviewView(),reviewFilter:reviewStateFilter,setReviewFilter:(value:BulkReviewFilter)=>{reviewStateFilter=value;page=1;},saveView:saveCurrentBulkReviewView,loadView:loadBulkReviewView,deleteView:removeBulkReviewView,status:bulkReviewStatus,sourceState:bulkReviewSourceState}}
+          props={{store:bulkReviewStore,currentView:currentBulkReviewView(),reviewFilter:reviewStateFilter,setReviewFilter:(value:BulkReviewFilter)=>{reviewStateFilter=value;page=1;},saveView:saveCurrentBulkReviewView,loadView:loadBulkReviewView,deleteView:removeBulkReviewView,sourceState:bulkReviewSourceState}}
           loadingLabel="Loading saved Bulk review views from this browser."
           unavailableLabel="Saved Bulk review views could not be loaded."
         />
@@ -747,6 +769,8 @@
     </div>
   {/if}
 </section>
+
+<p class="review-status" role="status" aria-label="Bulk review action status" aria-atomic="true">{bulkReviewStatus}</p>
 
 {#if results.length}
   <section id="results" class="triage card" tabindex="-1">
@@ -851,6 +875,8 @@
 <style>
   .local-context-status{margin:12px 0 0;color:var(--amber);font-size:var(--text-sm)}
   .local-context-status:empty{display:none}
+  .review-status{margin:12px 0;color:var(--accent);font-size:var(--text-sm);overflow-wrap:anywhere}
+  .review-status:empty{display:none}
   .bulk-workspace-shell{display:block;margin-top:16px}.mobile-workspace-toggle{display:flex;width:100%;min-width:0;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);color:var(--text);text-align:left}.mobile-workspace-toggle span:first-child{display:grid;min-width:0;gap:3px}.mobile-workspace-toggle strong{font:700 var(--text-sm) var(--mono)}.mobile-workspace-toggle small{color:var(--muted);font-size:var(--text-xs);font-weight:400;line-height:1.4}.mobile-workspace-toggle span:last-child{flex:0 0 auto;color:var(--accent);font:700 var(--text-lg) var(--mono)}.bulk-workspace-content{display:block;min-width:0}.workspace-tool-switcher{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0;padding:4px;border:1px solid var(--border);border-radius:var(--radius-md)}.workspace-tool-switcher button{min-height:38px;padding:6px 10px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:700 var(--text-xs) var(--mono)}.workspace-tool-switcher button[aria-pressed='true']{border-color:var(--accent);background:rgb(var(--accent-rgb) / .08);color:var(--accent)}
   .mobile-result-switcher{position:sticky;z-index:6;top:calc(var(--console-mobile-toolbar-height,0px) + 8px);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:12px 0;padding:4px;border:1px solid var(--border);border-radius:var(--radius-md);background:color-mix(in srgb,var(--panel) 94%,transparent);box-shadow:0 8px 24px rgb(var(--shadow-rgb) / .18);backdrop-filter:blur(10px)}.mobile-result-switcher button{min-width:0;min-height:44px;padding:6px 8px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:700 var(--text-xs) var(--mono)}.mobile-result-switcher button[aria-pressed='true']{background:rgb(var(--accent-rgb) / .12);color:var(--accent)}.mobile-result-panel{display:none;min-width:0}.mobile-result-panel.mobile-view-active{display:block}.extended-analysis-panel{margin-top:10px}
   .triage{padding:var(--card-pad)}
