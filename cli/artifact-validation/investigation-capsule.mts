@@ -2,6 +2,8 @@ import { investigationCapsuleContracts, MAX_LOOKUP_ASSET_NODES, MAX_LOOKUP_ASSET
 import {
   INVESTIGATION_CAPSULE_ANALYST_RECORDS_SCHEMA,
   INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION,
+  investigationCapsuleProjectionsMatch,
+  type InvestigationCapsule,
 } from '../../packages/investigation/investigation-capsule.mts';
 import {
   LOOKUP_ASSET_GRAPH_SCHEMA,
@@ -520,12 +522,11 @@ export function validateInvestigationCapsuleStructure(value: UnknownRecord): voi
   else validateCurrentBrief(root.investigationBrief, expectedBriefVersion);
   validateGraph(root.graphSnapshot, expected.graph);
   validateAnalystRecords(root.analystRecords);
-  const brief = root.investigationBrief as UnknownRecord;
-  const graph = root.graphSnapshot as UnknownRecord;
-  if (target.value !== brief.target || target.type !== brief.targetType
-    || graph.targetId === undefined
-    || (brief.relationships as UnknownRecord).nodes !== (graph.nodes as unknown[]).length
-    || (brief.relationships as UnknownRecord).edges !== (graph.edges as unknown[]).length) fail('Investigation capsule projection linkage');
+  // The version-specific validators above independently establish these common fields.
+  const projections = root as unknown as InvestigationCapsule;
+  if (!investigationCapsuleProjectionsMatch(projections.target, projections.investigationBrief, projections.graphSnapshot)) {
+    fail('Investigation capsule projection linkage');
+  }
   const integrity = exact(root.integrity, ['algorithm', 'canonicalization', 'scope', 'briefDigest', 'graphDigest', 'analystRecordsDigest', 'digestSha256'], 'Investigation capsule integrity');
   if (integrity.algorithm !== 'SHA-256') fail('Investigation capsule integrity');
   if (integrity.canonicalization !== 'sorted-json-v2' || integrity.scope !== 'capsule excluding integrity') fail('Investigation capsule integrity');

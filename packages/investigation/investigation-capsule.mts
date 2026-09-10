@@ -144,7 +144,26 @@ function analystProjection(record: CaseRecord | null | undefined): Investigation
   };
 }
 
+/** Links admitted projections; this does not authenticate their observations. */
+export function investigationCapsuleProjectionsMatch(
+  target: InvestigationCapsule['target'],
+  brief: Pick<LookupInvestigationBrief, 'target' | 'targetType' | 'relationships'>,
+  graph: Pick<LookupAssetGraph, 'targetId' | 'nodes' | 'edges' | 'truncated'>,
+): boolean {
+  const targets = graph.nodes.filter((node) => node.kind === 'target');
+  return target.value === brief.target && target.type === brief.targetType
+    && targets.length === 1 && targets[0]?.id === graph.targetId
+    && targets[0]?.label === target.value
+    && brief.relationships.nodes === graph.nodes.length
+    && brief.relationships.edges === graph.edges.length
+    && brief.relationships.truncated === graph.truncated;
+}
+
 export async function buildInvestigationCapsule(input: BuildInvestigationCapsuleInput): Promise<InvestigationCapsule> {
+  const target = { value: input.brief.target, type: input.brief.targetType };
+  if (!investigationCapsuleProjectionsMatch(target, input.brief, input.graph)) {
+    throw new TypeError('The investigation brief and graph must describe the same target and retained relationships.');
+  }
   const analystRecords = input.includeAnalystRecords ? analystProjection(input.caseRecord) : null;
   const [evidenceDigest, briefDigest, graphDigest, analystRecordsDigest] = await Promise.all([
     sha256ArtifactDigestV2(input.lookupEvidence),
@@ -160,7 +179,7 @@ export async function buildInvestigationCapsule(input: BuildInvestigationCapsule
     schemaVersion: INVESTIGATION_CAPSULE_VERSION,
     generatedAt: iso(input.generatedAt),
     application: { name: 'WHOISleuth', version: safeVersion(input.applicationVersion) },
-    target: { value: input.brief.target, type: input.brief.targetType },
+    target,
     sourceContracts: [
       { id: 'lookup-evidence', schema: evidenceSchema, version: evidenceVersion, digest: evidenceDigest, embedded: false },
       { id: 'investigation-brief', schema: LOOKUP_INVESTIGATION_BRIEF_SCHEMA, version: LOOKUP_INVESTIGATION_BRIEF_VERSION, digest: briefDigest, embedded: true },

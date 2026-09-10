@@ -991,7 +991,7 @@ describe('offline artifact verifier', () => {
     })), /integrity checks/iu);
     await assert.rejects(verifyOfflineArtifact(JSON.stringify({
       ...capsule,
-      graphSnapshot: { ...capsule.graphSnapshot, nodes: [{ ...capsule.graphSnapshot.nodes[0]!, label: 'changed.test' }] },
+      graphSnapshot: { ...capsule.graphSnapshot, nodes: [{ ...capsule.graphSnapshot.nodes[0]!, detail: 'Changed retained description' }] },
     })), /embedded projection integrity/u);
 
     const strictCode = await runCli(['verify-artifact', '--json', '--strict-exit'], {

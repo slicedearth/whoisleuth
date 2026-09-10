@@ -115,6 +115,57 @@ test('investigation capsule links evidence and verifies embedded projections', a
   assert.ok(serializeInvestigationCapsule(capsule).endsWith('\n'));
 });
 
+test('capsule creation rejects mismatched targets and retained relationship summaries', async () => {
+  const input = {
+    applicationVersion: '2.3.1', lookupEvidence: { schema: 'whoisleuth.lookup-evidence', schemaVersion: 28 },
+    brief, graph, generatedAt: brief.generatedAt,
+  };
+  const mismatches: LookupAssetGraph[] = [
+    { ...graph, nodes: [{ ...graph.nodes[0]!, label: 'other.example' }] },
+    { ...graph, nodes: [{ ...graph.nodes[0]!, kind: 'hostname' }] },
+    { ...graph, nodes: [...graph.nodes, { ...graph.nodes[0]!, id: 'another-target' }] },
+    { ...graph, targetId: 'missing-target' },
+    { ...graph, truncated: true },
+  ];
+  for (const candidate of mismatches) {
+    await assert.rejects(buildInvestigationCapsule({ ...input, graph: candidate }), /same target and retained relationships/u);
+  }
+  await assert.rejects(buildInvestigationCapsule({ ...input, brief: { ...brief, relationships: { ...brief.relationships, edges: 1 } } }), /same target and retained relationships/u);
+  for (const [target, targetType] of [['sub.example.test', 'domain'], ['192.0.2.1', 'ipv4'], ['2001:db8::1', 'ipv6'], ['AS64500', 'asn']] as const) {
+    const capsule = await buildInvestigationCapsule({ ...input,
+      brief: { ...brief, target, targetType },
+      graph: { ...graph, nodes: [{ ...graph.nodes[0]!, label: target }] },
+    });
+    assert.equal((await verifyOfflineArtifact(serializeInvestigationCapsule(capsule))).state, 'verified');
+  }
+});
+
+test('redigested capsule target mismatches remain invalid despite matching checksums', async () => {
+  const capsule = await buildInvestigationCapsule({
+    applicationVersion: '2.3.1', lookupEvidence: { schema: 'whoisleuth.lookup-evidence', schemaVersion: 28 },
+    brief, graph, generatedAt: brief.generatedAt,
+  });
+  const mutations: Array<(value: Record<string, unknown>) => void> = [
+    (value) => { (value.target as Record<string, unknown>).value = 'other.example'; },
+    (value) => { (value.target as Record<string, unknown>).type = 'ipv4'; },
+    (value) => { (((value.graphSnapshot as Record<string, unknown>).nodes as Array<Record<string, unknown>>)[0]!).label = 'other.example'; },
+    (value) => { (((value.graphSnapshot as Record<string, unknown>).nodes as Array<Record<string, unknown>>)[0]!).kind = 'hostname'; },
+    (value) => {
+      const nodes = (value.graphSnapshot as Record<string, unknown>).nodes as Array<Record<string, unknown>>;
+      nodes.push({ ...nodes[0]!, id: 'another-target' });
+      ((value.investigationBrief as Record<string, unknown>).relationships as Record<string, unknown>).nodes = nodes.length;
+    },
+    (value) => { ((value.investigationBrief as Record<string, unknown>).relationships as Record<string, unknown>).truncated = true; },
+  ];
+  for (const mutate of mutations) {
+    const changed = structuredClone(capsule) as unknown as Record<string, unknown>;
+    mutate(changed);
+    await redigestCapsule(changed);
+    assert.equal((await verifyInvestigationCapsule(changed as unknown as SupportedInvestigationCapsule)).valid, true, 'Checksums establish content integrity, not consistent or factual observations.');
+    await assert.rejects(verifyOfflineArtifact(JSON.stringify(changed)), /projection linkage.*unsupported or malformed/iu);
+  }
+});
+
 test('a frozen synthetic v2 capsule retains whole-integrity compatibility', async () => {
   // This is a cross-contract integrity fixture, not a captured application release.
   const raw = await readFile(new URL('./fixtures/investigation-capsule-v2.json', import.meta.url), 'utf8');
