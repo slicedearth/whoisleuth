@@ -2261,12 +2261,12 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Verify a signed evidence package",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth verify-signature [\u003csource>] [--public-key-file \u003cfile>] [--json] [--quiet] [--no-color]",
-      "example": "whoisleuth verify-signature packet.signed.json --json",
-      "boundary": "A valid signature proves package consistency for the embedded key. It does not upgrade failed or unsupported embedded-artefact assurance or establish the holder's real-world identity or authority.",
+      "usage": "whoisleuth verify-signature [\u003csource>] [--public-key-file \u003cfile>] [--trust-store-file \u003cfile>] [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth verify-signature packet.signed.json --trust-store-file trust.json --json",
+      "boundary": "A valid signature proves package consistency for the embedded key, not identity, authority or evidence accuracy. With --trust-store-file, unknown, retired, revoked or future-reviewed entries exit 4 even if --public-key-file matches. Replacement fingerprints need their own trusted entry; no signing date overrides current revocation.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one selected signed package and optional local public key."
+        "scope": "Reads one selected signed package, optional local public key and explicit fingerprint trust file. No automatic trust discovery or network requests."
       },
       "inputs": [
         {
@@ -2281,6 +2281,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       ],
       "importantOptions": [
         "--public-key-file",
+        "--trust-store-file",
         "--json",
         "--quiet",
         "--no-color"
@@ -2291,10 +2292,12 @@ export const PUBLIC_CLI_CATALOGUE = {
       "planSupport": false,
       "failurePolicySupport": false,
       "supportedSchemaIdentifiers": [
-        "whoisleuth\u002eevidence-signature-verification"
+        "whoisleuth\u002eevidence-signature-verification",
+        "whoisleuth\u002eevidence-signer-trust-store",
+        "whoisleuth\u002eevidence-signer-trust-report"
       ],
       "inputLimits": [
-        "Reads one selected signed package and optional local public key.",
+        "Reads one selected signed package, optional local public key and explicit fingerprint trust file. No automatic trust discovery or network requests.",
         "source: 0-1 file value"
       ],
       "outputLimits": [

@@ -370,7 +370,7 @@ function credentialUse(model: CapabilityDefinition['credentialModel']): string {
     required_public_trust_file: 'A selected local public trust file is read for validation and is not transmitted.',
     optional_secret_passphrase_file: 'A selected local passphrase file is read only for the requested local operation and is not emitted.',
     required_secret_private_key_file: 'A selected local private key is used locally and is not transmitted, retained or emitted.',
-    optional_public_key_file: 'A selected local public key can be used for verification and is not transmitted.',
+    optional_public_key_file: 'Selected local public keys and an optional fingerprint trust file are read only for verification, never transmitted or automatically retained. Trust output contains only the matching entry and a file digest.',
     worker_encryption_key: 'A configured worker key encrypts compact worker state and is never included in retained records or catalogue output.',
   };
   return descriptions[model];

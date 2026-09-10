@@ -64,6 +64,7 @@
 
     <h2 id="privacy-files">5. CLI, imports, and exports</h2>
     <p>The CLI runs on the operator's machine. Offline plans, comparisons, verification, reports, and imports make no network request. Networked commands disclose their target and source boundary. Local input is bounded before parsing, existing output is refused unless replacement is explicit, and files are not uploaded to WHOISleuth.</p>
+    <p>An optional signer trust file is read only when explicitly selected. It contains public-key fingerprints, labels and review notes, not private keys. Trust reports include only the matching entry and the file digest, without its path or other entries. The file is not uploaded, discovered automatically or changed by verification.</p>
     <p>Workflow-file output uses adjacent private lock files containing a local process ID. They are removed after the run; interruption can leave one for manual recovery.</p>
     <p>Workflow checkpoints retain selected paths, step evidence, content digests and explicit input bindings. Reused evidence stays local without extraction files.</p>
     <p>Optional metadata CSV retains source versions, collection and report times, collection origin and source-health states alongside the selected results.</p>

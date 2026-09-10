@@ -1,0 +1,28 @@
+{
+  "schema": "whoisleuth.evidence-signer-trust-store",
+  "version": 1,
+  "entries": [
+    {
+      "keyIdSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "label": "Primary evidence reviewer",
+      "status": "trusted",
+      "updatedAt": "2026-09-01T00:00:00.000Z",
+      "note": "Fingerprint confirmed through the established contact channel."
+    },
+    {
+      "keyIdSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "label": "Previous evidence reviewer key",
+      "status": "retired",
+      "updatedAt": "2026-09-01T00:00:00.000Z",
+      "note": "Replaced after a scheduled key change.",
+      "successorKeyIdSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "keyIdSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "label": "Withdrawn evidence reviewer key",
+      "status": "revoked",
+      "updatedAt": "2026-09-01T00:00:00.000Z",
+      "note": "Do not use for current trust decisions."
+    }
+  ]
+}

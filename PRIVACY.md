@@ -235,6 +235,11 @@ deliberately selects a local file. Existing files are refused unless replacement
 is explicit. CLI files are not uploaded to WHOISleuth and remain under the
 operator's retention and deletion control.
 
+An optional signer trust file is read only when explicitly selected. It contains
+public-key fingerprints, labels and review notes, not private keys. Trust reports
+include only the matching entry and the file digest, without its path or other
+entries. The file is not uploaded, discovered automatically or changed by verification.
+
 Workflow-file output uses adjacent private lock files containing a local process
 ID. They are removed after the run; interruption can leave one for manual recovery.
 Workflow checkpoints retain selected paths, step evidence, content digests and

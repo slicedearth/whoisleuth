@@ -22,6 +22,7 @@ import {
 } from '../lib/bounded-file.mts';
 import { normalizeSemanticVersion } from './release-version-check.mts';
 import { buildThirdPartyNotices } from './third-party-notices.mts';
+import { checkInstalledSigningTrust } from './cli-signing-package-check.mts';
 import {
   boundedPositiveInteger as positiveInteger,
   requireJsonRecord as record,
@@ -1186,6 +1187,8 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     }
 
     const commandHelpChecks: string[] = [];
+    const signingChecks = await checkInstalledSigningTrust(repositoryRoot, temporaryRoot,
+      (args, label, code) => runInstalledCheck(executable, args, label, code));
     const workflowFixture = path.join(temporaryRoot, 'workflow.json');
     await writeFile(workflowFixture, await readBoundedRegularFileWithin(repositoryRoot, 'test/fixtures/cli-investigation-run-v2.json', {
       maximumBytes: MAX_INVESTIGATION_RUN_BYTES, minimumBytes: 1, label: 'Public workflow checkpoint fixture',
@@ -1252,6 +1255,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       'discover-scan-network-boundary',
       'mail-header-review',
       'offline-workflow-artifact-reuse',
+      ...signingChecks,
       'domain-control-deep-imports',
       ...installedHandlerChecks,
       ...commandHelpChecks,

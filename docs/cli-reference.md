@@ -128,6 +128,45 @@ contract. `interchange-report` describes retained and omitted fields.
 validity and signer trust separate. None of these checks establishes that
 evidence is accurate, current, safe to share or attributable to a person.
 
+### Signer trust
+
+Use `verify-signature package.json --trust-store-file trust.json --json` to
+check an explicitly selected fingerprint policy offline. The result contains
+the ordinary signature verification and a separate current trust decision.
+Only a matching `trusted` entry succeeds; unknown, `retired`, `revoked` or
+future-reviewed entries return exit code 4, including with `--quiet`.
+Malformed files return 2. Without this option, the existing verification
+output is unchanged. A supplied `--public-key-file` must also match.
+
+The trust file contains no keys. For example:
+
+```json
+{
+  "schema": "whoisleuth.evidence-signer-trust-store",
+  "version": 1,
+  "entries": [{
+    "keyIdSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "label": "Evidence reviewer",
+    "status": "trusted",
+    "updatedAt": "2026-09-01T00:00:00.000Z",
+    "note": "Fingerprint confirmed through the established contact channel."
+  }]
+}
+```
+
+Replace the example fingerprint with the SHA-256 fingerprint of the signer's
+SPKI DER public-key bytes, confirmed through an authenticated channel—not
+merely copied from the package being checked. Review rotation and revocation
+updates through that channel. On rotation, mark the old entry `retired` and
+optionally record `successorKeyIdSha256`; independently confirm and add the
+replacement entry. Use `revoked` for a withdrawn trust decision. Neither a
+successor link nor a claimed signing date overrides current status.
+
+Files support 1,024 distinct entries within 4 MiB. Labels and single-line notes
+allow 160 and 2,048 characters respectively. Reports include only the matching
+entry and the exact file digest. Keep the file and any saved reports under your
+own retention policy. No automatic key discovery, key storage or trust refresh occurs.
+
 ## Command-family boundaries
 
 - Evidence collection commands retain separate source states. A failed or

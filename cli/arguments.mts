@@ -39,6 +39,7 @@ type VerifySignatureArguments = {
   action: 'verify-signature';
   source: string | null;
   publicKeySource: string | null;
+  trustStoreSource: string | null;
   output: 'terminal' | 'json';
 } & TerminalOptions;
 
@@ -141,6 +142,7 @@ function parseVerifySignatureArguments(parsed: ParsedCommandArguments): VerifySi
     action: 'verify-signature',
     source: parsed.positionalValue('source'),
     publicKeySource: parsed.optionValue('--public-key-file'),
+    trustStoreSource: parsed.optionValue('--trust-store-file'),
     output: parsed.hasOption('--json') ? 'json' : 'terminal',
     ...terminalOptions(parsed),
   };

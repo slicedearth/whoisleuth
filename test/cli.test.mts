@@ -491,6 +491,7 @@ describe('CLI argument parsing', () => {
       action: 'verify-signature',
       source: 'signed.json',
       publicKeySource: 'public.pem',
+      trustStoreSource: null,
       output: 'json',
       quiet: false,
       color: true,

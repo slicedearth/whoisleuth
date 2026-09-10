@@ -225,6 +225,33 @@ test('keeps CLI catalogue filters shareable across reloads', async ({ page }) =>
   await expect(page).toHaveURL(/\?q=workflow&mode=offline&common=1#commands$/u);
 });
 
+test('signer trust guidance is reachable by direct command link at supported widths and themes', async ({ page }, testInfo) => {
+  const investigationRequests = collectInvestigationRequests(page);
+  for (const viewport of [
+    { width: 1280, height: 720 }, { width: 1024, height: 768 },
+    { width: 390, height: 844 }, { width: 320, height: 700 },
+  ]) {
+    for (const theme of ['light', 'dark'] as const) {
+      await page.setViewportSize(viewport);
+      await useTheme(page, theme);
+      await page.goto('/cli?q=verify-signature#command-verify-signature');
+      const detail = page.locator('article[data-command-detail="verify-signature"]');
+      await expect(detail).toBeVisible();
+      await expect(detail).toContainText('--trust-store-file');
+      await expect(detail).toContainText('whoisleuth.evidence-signer-trust-report');
+      await expect(detail).toBeFocused();
+      await detail.getByText('Operational boundary', { exact: true }).click();
+      await expect(detail.locator('.boundary p')).toBeVisible();
+      await expect(detail.locator('.boundary p')).toContainText('unknown, retired, revoked or future-reviewed entries exit 4');
+      await expectNoHorizontalOverflow(page);
+      await testInfo.attach(`signer-trust-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      await detail.getByRole('link', { name: /Back to 1 filtered command/u }).click();
+      await expect(page.locator('article[data-command="verify-signature"] .command-open')).toBeFocused();
+    }
+  }
+  expect(investigationRequests).toEqual([]);
+});
+
 test('preserves CLI filter and router state across public Back and Forward navigation', async ({ page }) => {
   await page.goto('/cli');
   const search = page.getByTestId('public-cli-catalogue').getByRole('searchbox', { name: 'Search commands' });

@@ -90,6 +90,15 @@ test('privacy guidance stays concise, request-free and responsive', async ({ pag
     await test.info().attach(`csv-privacy-${surface.width}-${surface.theme}`, {
       body: await page.screenshot(), contentType: 'image/png',
     });
+    const trust = page.locator('p').filter({ hasText: 'An optional signer trust file' });
+    await expect(trust).toContainText('not private keys');
+    await expect(trust).toContainText('without its path or other entries');
+    await trust.scrollIntoViewIfNeeded();
+    await expect(trust).toBeInViewport();
+    await expectNoHorizontalOverflow(page);
+    await test.info().attach(`signer-privacy-${surface.width}-${surface.theme}`, {
+      body: await page.screenshot(), contentType: 'image/png',
+    });
   }
 });
 

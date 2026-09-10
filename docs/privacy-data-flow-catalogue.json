@@ -6837,7 +6837,7 @@
       "command": "verify-signature",
       "capabilityFamilyId": "portable_evidence",
       "title": "Verify a signed evidence package",
-      "requestPurpose": "Reads one selected signed package and optional local public key.",
+      "requestPurpose": "Reads one selected signed package, optional local public key and explicit fingerprint trust file. No automatic trust discovery or network requests.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -6882,7 +6882,7 @@
         ]
       },
       "credentialModel": "optional_public_key_file",
-      "credentialUse": "A selected local public key can be used for verification and is not transmitted.",
+      "credentialUse": "Selected local public keys and an optional fingerprint trust file are read only for verification, never transmitted or automatically retained. Trust output contains only the matching entry and a file digest.",
       "cancellation": "bounded_atomic",
       "partialResults": "explicit_document",
       "outcomes": [
@@ -6900,7 +6900,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "A valid signature proves package consistency for the embedded key. It does not upgrade failed or unsupported embedded-artefact assurance or establish the holder's real-world identity or authority.",
+        "A valid signature proves package consistency for the embedded key, not identity, authority or evidence accuracy. With --trust-store-file, unknown, retired, revoked or future-reviewed entries exit 4 even if --public-key-file matches. Replacement fingerprints need their own trusted entry; no signing date overrides current revocation.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
