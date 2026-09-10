@@ -35,7 +35,7 @@ test('an immutable version-2 manifest remains readable without adding current fi
 });
 
 test('a package preserves exact JSON and opaque bytes with separate declared sources and packaging time', async () => {
-  const opaque = new Uint8Array([0, 255, 128, 60, 115, 99, 114, 105, 112, 116, 62]);
+  const opaque = new Uint8Array([0, 255, 128, ...encoder.encode('<ScRiPt>private file contents</ScRiPt>')]);
   const built = await buildInvestigationPackage({ ...options, artifacts: [
     { content: raw, source: { identity: 'Source observation', observedAt: '2026-08-01T00:00:00.000Z' } },
     { content: opaque, mediaType: 'image/png', source: { identity: 'Analyst supplied capture', observedAt: null } },
@@ -51,7 +51,7 @@ test('a package preserves exact JSON and opaque bytes with separate declared sou
   assert.equal(built.manifest.artifacts[1]!.source.observedAt, null);
   assert.deepEqual(built.manifest.steps.map((step) => [step.action, step.occurredAt]), [['packaged', NOW], ['packaged', NOW]]);
   assert.equal(built.manifest.audience, 'private');
-  assert.doesNotMatch(JSON.stringify(built.manifest), /retained exactly|<script>/u);
+  assert.doesNotMatch(JSON.stringify(built.manifest), /retained exactly|private file contents|<script>/iu);
   const preview = await inspectInvestigationPackage(built.bytes);
   assert.equal(preview.identityVerified, true);
   assert.deepEqual(preview.entries.map((item) => item.interpretation), ['not_checked', 'opaque']);
