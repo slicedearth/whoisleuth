@@ -3,13 +3,16 @@ import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { createCase } from '../packages/cases/case-model.mts';
 import { richBulkSessionStore } from './bulk-session-fixture.mts';
-import { BROWSER_LOCAL_COLLECTIONS, BULK_SESSIONS_COLLECTION, CASES_COLLECTION } from '../frontend/src/lib/browser-local-data-definitions.ts';
+import { BROWSER_LOCAL_COLLECTIONS, BULK_SESSIONS_COLLECTION, CASES_COLLECTION, PROFILES_COLLECTION } from '../frontend/src/lib/browser-local-data-definitions.ts';
 import {
-  BrowserLocalDataError, decodeLocalDataSnapshots, localDataStorageRecords, plaintextJsonCodec,
+  BrowserLocalDataError, decodeLocalDataSnapshots, localDataStorageRecords, plaintextJsonCodec, prepareLocalDataContent,
   type AnyLocalDataCollectionDefinition, type BrowserLocalStoredRecord, type CapturedLocalDataCollection,
 } from '../frontend/src/lib/browser-local-data.ts';
 import { decodeBrowserLocalDataSnapshots } from '../frontend/src/lib/browser-local-data-worker.ts';
-import { decodeLocalDataWorkerRequest, type LocalDataDecodeRequest, type LocalDataDecodeResponse } from '../frontend/src/lib/browser-local-data-worker-model.ts';
+import { mergeBrowserBrandProfileFile, prepareBrowserLocalDataContent } from '../frontend/src/lib/browser-local-data-preparation.ts';
+import { decodeLocalDataWorkerRequest, runLocalDataWorkerRequest, type LocalDataDecodeRequest, type LocalDataWorkerRequest, type LocalDataWorkerResponse } from '../frontend/src/lib/browser-local-data-worker-model.ts';
+import { buildBrandProfileExport, normalizeBrandProfile, MAX_PROFILE_STORE_BYTES } from '../packages/workspace/brand-profile-model.mts';
+import { MAX_PROFILE_IMPORT_BYTES } from '../packages/contracts/workspace-portability.mts';
 import { BROWSER_WORKER_OPERATION_TIMEOUT_MS } from '../frontend/src/lib/browser-worker-operation.ts';
 
 const NOW = '2026-09-01T00:00:00.000Z';
@@ -45,11 +48,11 @@ class ControlledWorker {
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
   onerror: ((event: ErrorEvent) => void) | null = null;
   onmessageerror: (() => void) | null = null;
-  messages: LocalDataDecodeRequest[] = [];
+  messages: LocalDataWorkerRequest[] = [];
   terminated = 0;
   private markPosted!: () => void;
   readonly posted = new Promise<void>((resolve) => { this.markPosted = resolve; });
-  postMessage(value: LocalDataDecodeRequest) { this.messages.push(structuredClone(value)); this.markPosted(); }
+  postMessage(value: LocalDataWorkerRequest) { this.messages.push(structuredClone(value)); this.markPosted(); }
   terminate() { this.terminated += 1; }
   reply(value: unknown) { this.onmessage?.(new MessageEvent('message', { data: value })); }
   factory = () => this as unknown as Worker;
@@ -122,8 +125,8 @@ test('browser decoder sends function-free captured bytes and accepts only the ex
   const worker = new ControlledWorker();
   const pending = decodeBrowserLocalDataSnapshots([BULK_SESSIONS_COLLECTION], captured, plaintextJsonCodec, { createWorker: worker.factory });
   await worker.posted;
-  assert.deepEqual(worker.messages, [{ captured }]);
-  worker.reply(await decodeLocalDataWorkerRequest(worker.messages[0]!));
+  assert.deepEqual(worker.messages, [{ kind: 'decode', input: { captured } }]);
+  worker.reply(await runLocalDataWorkerRequest(worker.messages[0]!));
   assert.deepEqual(await pending, [largeDocument]);
   assert.equal(worker.terminated, 1);
   assert.equal(worker.onmessage, null);
@@ -182,20 +185,141 @@ test('worker load, deadline, cancellation and integrity failures remain explicit
 test('native storage worker runs only one request and shares the pure decoder', async () => {
   const captured = [capture(CASES_COLLECTION, cases)];
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'self');
-  const replies: LocalDataDecodeResponse[] = [];
+  const replies: LocalDataWorkerResponse[] = [];
   let responded!: () => void;
   const response = new Promise<void>((resolve) => { responded = resolve; });
-  const scope: { postMessage: (value: LocalDataDecodeResponse) => void; onmessage?: (event: MessageEvent<LocalDataDecodeRequest>) => void } = {
+  const scope: { postMessage: (value: LocalDataWorkerResponse) => void; onmessage?: (event: MessageEvent<LocalDataWorkerRequest>) => void } = {
     postMessage: (value) => { replies.push(value); responded(); },
   };
   Object.defineProperty(globalThis, 'self', { configurable: true, value: scope });
   try {
     await import('../frontend/src/lib/workers/browser-local-data.worker.ts');
     assert.equal(typeof scope.onmessage, 'function');
-    scope.onmessage?.(new MessageEvent('message', { data: { captured } }));
-    scope.onmessage?.(new MessageEvent('message', { data: { captured: [] } }));
+    scope.onmessage?.(new MessageEvent('message', { data: { kind: 'decode', input: { captured } } }));
+    scope.onmessage?.(new MessageEvent('message', { data: { kind: 'decode', input: { captured: [] } } }));
     await response;
     const documents = await decodeLocalDataSnapshots([CASES_COLLECTION], captured, plaintextJsonCodec);
     assert.deepEqual(replies, [{ kind: 'decoded', documents: [{ collection: 'cases', document: documents[0] }] }]);
   } finally { if (descriptor) Object.defineProperty(globalThis, 'self', descriptor); else Reflect.deleteProperty(globalThis, 'self'); }
+});
+
+test('background preparation preserves every record and the independently calculated storage digest', async () => {
+  const definitions: readonly AnyLocalDataCollectionDefinition[] = BROWSER_LOCAL_COLLECTIONS;
+  for (const definition of definitions) {
+    const input = definition.id === 'cases' ? cases : definition.empty();
+    const expected = capture(definition, input);
+    const worker = new ControlledWorker();
+    const pending = prepareBrowserLocalDataContent(definition, input, plaintextJsonCodec, { createWorker: worker.factory });
+    await worker.posted;
+    assert.deepEqual(worker.messages, [{ kind: 'prepare', collection: definition.id, input }]);
+    worker.reply(await runLocalDataWorkerRequest(worker.messages[0]!));
+    const content = await pending;
+    assert.deepEqual(content.records, expected.records);
+    assert.equal(content.digest, recordDigest(expected.records));
+    assert.equal(content.serializedBytes, expected.manifest.serializedBytes);
+    assert.equal(worker.terminated, 1);
+  }
+  const expected = await prepareLocalDataContent(CASES_COLLECTION, cases, plaintextJsonCodec);
+  let created = 0;
+  const options = { createWorker: () => { created += 1; throw new Error('Unexpected worker.'); } };
+  assert.deepEqual(await prepareBrowserLocalDataContent({ ...CASES_COLLECTION }, cases, plaintextJsonCodec, options), expected);
+  assert.deepEqual(await prepareBrowserLocalDataContent(CASES_COLLECTION, cases, { ...plaintextJsonCodec }, options), expected);
+  assert.deepEqual(await prepareBrowserLocalDataContent(CASES_COLLECTION, cases, plaintextJsonCodec), expected);
+  assert.equal(created, 0);
+});
+
+test('prepared worker records reject unexpected collections, counts, digests, bytes and order before persistence', async () => {
+  const original = await prepareLocalDataContent(CASES_COLLECTION, cases, plaintextJsonCodec);
+  const record = original.records[0]!;
+  const changes = [
+    null, { ...original, digest: '' }, { ...original, serializedBytes: CASES_COLLECTION.maximumBytes + 1 },
+    { ...original, records: Array(CASES_COLLECTION.maximumRecords + 1).fill(record) },
+    ...[
+      { ...record, payloadBytes: record.payloadBytes - 1 }, { ...record, collection: 'other' },
+      { ...record, codec: 'other' }, { ...record, ordinal: 1 }, { ...record, key: ['other', record.lookupKey] },
+    ].map((changed) => ({ ...original, records: [changed] })),
+  ];
+  for (const content of changes) {
+    const worker = new ControlledWorker();
+    const rejected = assert.rejects(prepareBrowserLocalDataContent(CASES_COLLECTION, cases, plaintextJsonCodec, { createWorker: worker.factory }),
+      (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'LOCAL_DATA_PREPARATION_FAILED'
+        && cause.cause instanceof BrowserLocalDataError && cause.cause.code === 'LOCAL_DATA_INTEGRITY');
+    await worker.posted; worker.reply({ kind: 'prepared', collection: 'cases', content }); await rejected;
+    assert.equal(worker.terminated, 1);
+  }
+  for (const reply of [null, { kind: 'prepared', collection: 'other', content: original }, { kind: 'profiles-merged', result: {} }]) {
+    const worker = new ControlledWorker();
+    const rejected = assert.rejects(prepareBrowserLocalDataContent(CASES_COLLECTION, cases, plaintextJsonCodec, { createWorker: worker.factory }), /incomplete or unexpected/u);
+    await worker.posted; worker.reply(reply); await rejected;
+  }
+});
+
+test('selected file parsing and merge remain held until the worker responds, with unchanged complete profile values', async () => {
+  const profile = normalizeBrandProfile({ id: 'file-import', name: 'Evidence owner', officialDomains: ['owner.example'], createdAt: NOW, updatedAt: NOW });
+  assert.ok(profile);
+  const file = new Blob([JSON.stringify(buildBrandProfileExport([profile], NOW), null, 2)]);
+  const worker = new ControlledWorker();
+  let finished = false;
+  const pending = mergeBrowserBrandProfileFile([], file, { createWorker: worker.factory }).then((value) => { finished = true; return value; });
+  await worker.posted;
+  assert.equal(finished, false);
+  assert.equal(worker.messages[0]?.kind, 'import-profiles');
+  const response = await runLocalDataWorkerRequest(worker.messages[0]!);
+  assert.equal(response.kind, 'profiles-merged');
+  worker.reply(response);
+  const result = await pending;
+  assert.deepEqual(result, { profiles: [profile], added: 1, updated: 0, skipped: 0 });
+  assert.equal(worker.terminated, 1);
+  assert.deepEqual(await mergeBrowserBrandProfileFile([], file), result);
+  const content = await prepareLocalDataContent(PROFILES_COLLECTION, result.profiles, plaintextJsonCodec);
+  assert.deepEqual(JSON.parse(content.records[0]!.payload).value, profile);
+});
+
+test('file worker enforces malformed, future and byte admission without reading over-bound files', async () => {
+  let reads = 0;
+  class TooLargeFile extends Blob {
+    override get size() { return MAX_PROFILE_IMPORT_BYTES + 1; }
+    override async text(): Promise<string> { reads += 1; throw new Error('An over-bound file must not be read.'); }
+  }
+  const file = new TooLargeFile();
+  await assert.rejects(mergeBrowserBrandProfileFile([], file), /Profile imports are limited/u);
+  const oversized = await runLocalDataWorkerRequest({ kind: 'import-profiles', current: [], file, nowIso: NOW });
+  assert.equal(oversized.kind, 'error');
+  assert.equal(reads, 0);
+  for (const raw of [
+    '{', JSON.stringify({ ...buildBrandProfileExport([], NOW), version: 999 }),
+    JSON.stringify({ ...buildBrandProfileExport([], NOW), padding: 'x'.repeat(MAX_PROFILE_STORE_BYTES + 1) }),
+  ]) {
+    const result = await runLocalDataWorkerRequest({ kind: 'import-profiles', current: [], file: new Blob([raw]), nowIso: NOW });
+    assert.equal(result.kind, 'error');
+    if (result.kind === 'error') assert.ok(result.detail.length <= 240);
+  }
+  assert.equal((await runLocalDataWorkerRequest({ kind: 'prepare', collection: 'unknown', input: [] })).kind, 'error');
+  assert.equal((await runLocalDataWorkerRequest(null as unknown as LocalDataWorkerRequest)).kind, 'error');
+});
+
+test('preparation failures and cancellation never trigger a foreground retry and always release the worker', async (context) => {
+  let reads = 0;
+  class TrackedFile extends Blob { override async text() { reads += 1; return super.text(); } }
+  const file = new TrackedFile([JSON.stringify(buildBrandProfileExport([], NOW))]);
+  await assert.rejects(mergeBrowserBrandProfileFile([], file, { createWorker: () => { throw new Error('private-worker-path'); } }),
+    (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'LOCAL_DATA_PREPARATION_FAILED' && !cause.message.includes('private'));
+  assert.equal(reads, 0);
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  for (const mode of ['timeout', 'abort', 'error', 'message', 'integrity'] as const) {
+    const worker = new ControlledWorker();
+    const controller = new AbortController();
+    const rejected = assert.rejects(mergeBrowserBrandProfileFile([], file, { createWorker: worker.factory, signal: controller.signal }),
+      (cause: unknown) => mode === 'abort'
+        ? cause instanceof DOMException && cause.name === 'AbortError'
+        : cause instanceof BrowserLocalDataError && cause.code === 'LOCAL_DATA_PREPARATION_FAILED');
+    await worker.posted;
+    if (mode === 'timeout') context.mock.timers.tick(BROWSER_WORKER_OPERATION_TIMEOUT_MS);
+    if (mode === 'abort') controller.abort();
+    if (mode === 'error') worker.onerror?.({ preventDefault() {} } as ErrorEvent);
+    if (mode === 'message') worker.onmessageerror?.();
+    if (mode === 'integrity') worker.reply({ kind: 'error', code: 'LOCAL_DATA_INTEGRITY', detail: 'Invalid prepared data.' });
+    await rejected;
+    assert.equal(worker.terminated, 1, mode);
+  }
 });

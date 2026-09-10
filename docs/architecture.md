@@ -172,9 +172,14 @@ digest-checked and reconstructed in a one-shot same-origin worker using the
 same collection definitions as the local decoder. Small collections, custom
 codecs and contexts without workers use that decoder locally. Verification
 failure leaves the collection unavailable; it does not produce an empty store
-or bypass integrity checks. Write coordination and commit recovery remain in
-the provider. The verification worker does not access storage or make collection
-requests.
+or bypass integrity checks. Brand file imports use the same worker for bounded
+file parsing, profile merge and collection preparation. The provider awaits the
+prepared result, rechecks the collection revision and owns the transaction and
+commit recovery. Cancellation before committing leaves the saved collection
+unchanged; cancellation after committing starts cannot turn a successful write
+into a failed-save retry. Workers do not access storage or make collection
+requests. Ordinary edits keep local preparation; background processing is
+explicit per operation.
 
 Dashboard and Lookup search use a disposable same-origin browser worker. The
 worker builds the shared investigation projection and search index, matches

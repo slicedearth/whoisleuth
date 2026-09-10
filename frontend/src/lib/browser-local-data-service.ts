@@ -5,13 +5,15 @@ import {
   type BrowserLocalDataInitialization,
   type BrowserLocalDataCommitListener,
   type LocalDataCollectionDefinition,
+  type BrowserLocalDataUpdater,
+  type BrowserLocalDataUpdateOptions,
 } from './browser-local-data.ts';
 import type {
   BrowserLocalCollectionDocumentMap,
   BrowserLocalCollectionId,
 } from './browser-local-data-definitions.ts';
 import { isDeferredModuleLoadError, loadDeferredModule } from './deferred-module.ts';
-import { decodeBrowserLocalDataSnapshots } from './browser-local-data-worker.ts';
+import { decodeBrowserLocalDataSnapshots, loadBrowserLocalDataPreparation } from './browser-local-data-worker.ts';
 
 export type BrowserLocalDataServiceState =
   | Readonly<{ state: 'idle' | 'initializing' }>
@@ -54,7 +56,13 @@ export function createBrowserLocalDataService(
     () => import('./browser-local-data-definitions.ts'),
   )
     .then((module) => module.BROWSER_LOCAL_COLLECTIONS));
-  const createProvider = dependencies.createProvider ?? ((oncommit: BrowserLocalDataCommitListener) => new BrowserLocalDataProvider({ oncommit, decodeSnapshots: decodeBrowserLocalDataSnapshots }));
+  const createProvider = dependencies.createProvider ?? ((oncommit: BrowserLocalDataCommitListener) => new BrowserLocalDataProvider({
+    oncommit, decodeSnapshots: decodeBrowserLocalDataSnapshots,
+    prepareInBackground: async (...args) => {
+      const { prepareBrowserLocalDataContent } = await loadBrowserLocalDataPreparation(args[3] ?? {});
+      return prepareBrowserLocalDataContent(...args);
+    },
+  }));
   const listeners = new Map<BrowserLocalCollectionId, Set<() => void>>();
   let providerPromise: Promise<BrowserLocalDataProviderBoundary> | null = null;
   let collectionsPromise: Promise<readonly AnyLocalDataCollectionDefinition[]> | null = null;
@@ -158,12 +166,11 @@ export function createBrowserLocalDataService(
 
   async function update<Collection extends BrowserLocalCollectionId, Result>(
     id: Collection,
-    updater: (
-      current: BrowserLocalCollectionDocumentMap[Collection],
-    ) => Readonly<{ document: BrowserLocalCollectionDocumentMap[Collection]; result: Result }>,
+    updater: BrowserLocalDataUpdater<BrowserLocalCollectionDocumentMap[Collection], Result>,
+    options: BrowserLocalDataUpdateOptions = {},
   ): Promise<Result> {
     const [provider, definition] = await Promise.all([activeProvider(), collection(id)]);
-    return provider.update(definition, updater);
+    return provider.update(definition, updater, options);
   }
 
   return Object.freeze({
@@ -211,11 +218,10 @@ export async function readBrowserLocalDataCollections<Collection extends Browser
 
 export async function updateBrowserLocalData<Collection extends BrowserLocalCollectionId, Result>(
   collection: Collection,
-  updater: (
-    current: BrowserLocalCollectionDocumentMap[Collection],
-  ) => Readonly<{ document: BrowserLocalCollectionDocumentMap[Collection]; result: Result }>,
+  updater: BrowserLocalDataUpdater<BrowserLocalCollectionDocumentMap[Collection], Result>,
+  options: BrowserLocalDataUpdateOptions = {},
 ): Promise<Result> {
-  return defaultService.update(collection, updater);
+  return defaultService.update(collection, updater, options);
 }
 
 export async function browserLocalDataCollection<Collection extends BrowserLocalCollectionId>(

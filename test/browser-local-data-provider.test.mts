@@ -10,6 +10,7 @@ import {
   decodeLocalDataSnapshots,
   isExpectedBrowserLocalDataFailure,
   plaintextJsonCodec,
+  prepareLocalDataContent,
   type AnyLocalDataCollectionDefinition,
   type BrowserLocalCollectionManifest,
   type BrowserLocalStoredRecord,
@@ -158,7 +159,7 @@ type DelayedWriteOutcome =
   | 'same_content_different_legacy_digest'
   | 'deferred_unknown';
 
-function delayedWriteFactory(outcome: DelayedWriteOutcome): {
+function delayedWriteFactory(outcome: DelayedWriteOutcome, onwrite: () => void = () => {}): {
   factory: IDBFactory;
   state: DelayedWriteState;
   recoveryStarted: Promise<void>;
@@ -255,6 +256,7 @@ function delayedWriteFactory(outcome: DelayedWriteOutcome): {
         put(value: BrowserLocalCollectionManifest) {
           state.manifest = value;
           state.writeApplied = true;
+          onwrite();
           return successfulRequest(value.collection);
         },
       } as unknown as IDBObjectStore;
@@ -455,6 +457,7 @@ test('multi-collection reads use one captured transaction and reject invalid sel
     },
   });
   await provider.initialize(definitions);
+  assert.equal(decodes, definitions.length, 'Current collections are each verified once during initialisation.');
   transactions.length = 0;
   decodes = 0;
   const documents = await provider.readMany(definitions);
@@ -474,6 +477,95 @@ test('multi-collection reads use one captured transaction and reject invalid sel
   selection.splice(0, selection.length, { ...WRITE_DEFINITION, id: 'unregistered' });
   assert.deepEqual([...await reading], definitions.map((definition) => [definition.id, []]));
   await provider.close();
+});
+
+test('awaited updates retain concurrent records and commit only against the current revision', { timeout: 3_000 }, async () => {
+  const restoreKeyRange = installKeyRangeStub();
+  let wrote!: () => void;
+  const writing = new Promise<void>((resolve) => { wrote = resolve; });
+  const harness = delayedWriteFactory('committed', wrote);
+  const provider = new BrowserLocalDataProvider({ indexedDB: harness.factory, storage: NULL_STORAGE });
+  try {
+    await provider.initialize([WRITE_DEFINITION]);
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => { release = resolve; });
+    let updating!: () => void;
+    const started = new Promise<void>((resolve) => { updating = resolve; });
+    const seen: string[][] = [];
+    const pending = provider.update(WRITE_DEFINITION, async (current) => {
+      seen.push([...current]);
+      if (seen.length === 1) { updating(); await hold; }
+      return { document: [...current, 'selected-file'], result: 'saved' };
+    });
+    await started;
+    assert.equal(harness.state.writeTransactions, 0);
+    const concurrent = await prepareLocalDataContent(WRITE_DEFINITION, ['other-tab'], plaintextJsonCodec);
+    harness.state.records = concurrent.records;
+    harness.state.manifest = {
+      ...harness.state.manifest, revision: harness.state.manifest.revision + 1,
+      serializedBytes: concurrent.serializedBytes, recordCount: concurrent.records.length,
+      digest: concurrent.digest, source: 'application',
+    };
+    release();
+    await writing;
+    harness.acknowledge();
+    assert.equal(await pending, 'saved');
+    assert.deepEqual(seen, [[], ['other-tab']]);
+    assert.deepEqual(await provider.read(WRITE_DEFINITION), ['other-tab', 'selected-file']);
+    assert.equal(harness.state.writeTransactions, 2, 'The stale transaction is refused before the current revision is saved.');
+  } finally { harness.acknowledge(); await provider.close(); restoreKeyRange(); }
+});
+
+test('background preparation is opt-in and cancellation or failure before commit leaves records unchanged', async () => {
+  const restoreKeyRange = installKeyRangeStub();
+  const harness = delayedWriteFactory('committed');
+  let preparations = 0;
+  let mode: 'reject' | 'abort' = 'reject';
+  const controller = new AbortController();
+  const provider = new BrowserLocalDataProvider({
+    indexedDB: harness.factory, storage: NULL_STORAGE,
+    prepareInBackground: async (definition, input, codec) => {
+      preparations += 1;
+      if (mode === 'reject') throw new BrowserLocalDataError('LOCAL_DATA_PREPARATION_FAILED', 'Worker unavailable.');
+      const content = await prepareLocalDataContent(definition, input, codec);
+      controller.abort();
+      return content;
+    },
+  });
+  try {
+    await provider.initialize([WRITE_DEFINITION]);
+    assert.equal(await provider.update(WRITE_DEFINITION, (current) => ({ document: current, result: 'unchanged' })), 'unchanged');
+    assert.equal(preparations, 0, 'Ordinary mutations do not start background preparation.');
+    await assert.rejects(provider.update(WRITE_DEFINITION, async () => ({ document: ['import'], result: 'saved' }), { preparation: 'background' }), /Worker unavailable/u);
+    mode = 'abort';
+    await assert.rejects(provider.update(WRITE_DEFINITION, async () => ({ document: ['import'], result: 'saved' }), { preparation: 'background', signal: controller.signal }), { name: 'AbortError' });
+    assert.equal(preparations, 2);
+    const before = harness.state.transactions;
+    await assert.rejects(provider.update(WRITE_DEFINITION, () => { throw new Error('A cancelled updater must not run.'); }, { signal: controller.signal }), { name: 'AbortError' });
+    assert.equal(harness.state.transactions, before);
+    assert.equal(harness.state.writeTransactions, 0);
+    assert.deepEqual(await provider.read(WRITE_DEFINITION), []);
+  } finally { await provider.close(); restoreKeyRange(); }
+});
+
+test('cancellation after a commit begins cannot relabel the committed write as a failed import', { timeout: 3_000 }, async () => {
+  const restoreKeyRange = installKeyRangeStub();
+  const controller = new AbortController();
+  let wrote!: () => void;
+  const writing = new Promise<void>((resolve) => { wrote = resolve; });
+  const harness = delayedWriteFactory('committed', wrote);
+  const notifications: Array<readonly string[]> = [];
+  const provider = new BrowserLocalDataProvider({ indexedDB: harness.factory, storage: NULL_STORAGE, oncommit: (ids) => { notifications.push(ids); } });
+  try {
+    await provider.initialize([WRITE_DEFINITION]);
+    const pending = provider.update(WRITE_DEFINITION, async () => ({ document: ['saved'], result: 'committed' }), { signal: controller.signal });
+    await writing;
+    controller.abort();
+    harness.acknowledge();
+    assert.equal(await pending, 'committed');
+    assert.deepEqual(await provider.read(WRITE_DEFINITION), ['saved']);
+    assert.deepEqual(notifications, [[WRITE_DEFINITION.id]]);
+  } finally { harness.acknowledge(); await provider.close(); restoreKeyRange(); }
 });
 
 test('failed captured-snapshot processing does not run an updater or start a write', async () => {

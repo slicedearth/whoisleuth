@@ -1,5 +1,6 @@
 import {
   buildBrandProfileExport,
+  createBrandProfileId,
   applyBrandProfileFieldPatch,
   brandPostureCollectionFingerprint,
   mergeBrandProfiles,
@@ -19,6 +20,7 @@ export type { BrandProfile } from './analysis/brand-profile-model.ts';
 import { normalizePageBaseline } from './analysis/page-baseline.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
 import { BrowserLocalDataError } from './browser-local-data.ts';
+import { loadBrowserLocalDataPreparation } from './browser-local-data-worker.ts';
 import { assertLocalRecordCurrent, LocalRecordConflictError } from './local-mutation-outcome.ts';
 import { LEGACY_PROFILES_KEY } from './browser-local-data-contract.ts';
 import { serialiseWorkspacePortableJson } from '../../../packages/contracts/workspace-portability.mts';
@@ -57,10 +59,8 @@ export type BrandProfileSaveResult =
   | { committed: true; profile: BrandProfile }
   | { committed: false; message: string };
 
-const id = () => crypto.randomUUID ? crypto.randomUUID() : `bp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
 export function normalizeProfile(raw: unknown, existing?: BrandProfile, touch = false): BrandProfile {
-  const profile = normalizeBrandProfile(raw, { existing, touch, makeId: id });
+  const profile = normalizeBrandProfile(raw, { existing, touch, makeId: createBrandProfileId });
   if (!profile) throw new Error('Enter a brand name.');
   return profile;
 }
@@ -169,12 +169,24 @@ export async function deleteProfile(profileId: string, expected: BrandProfile): 
 
 export async function importProfiles(value: unknown) {
   return updateBrowserLocalData('brand_profiles', (current) => {
-    const result = mergeBrandProfiles(current, value, { makeId: id });
+    const result = mergeBrandProfiles(current, value, { makeId: createBrandProfileId });
     return {
       document: result.profiles,
       result: { added: result.added, updated: result.updated, skipped: result.skipped },
     };
   });
+}
+
+export async function importProfileFile(file: Blob, signal?: AbortSignal) {
+  const options = signal ? { signal } : {};
+  const { mergeBrowserBrandProfileFile } = await loadBrowserLocalDataPreparation(options);
+  return updateBrowserLocalData('brand_profiles', async (current) => {
+    const result = await mergeBrowserBrandProfileFile(current, file, options);
+    return {
+      document: result.profiles,
+      result: { added: result.added, updated: result.updated, skipped: result.skipped },
+    };
+  }, { preparation: 'background', ...options });
 }
 
 export async function exportProfiles() {

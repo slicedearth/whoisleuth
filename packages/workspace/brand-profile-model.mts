@@ -852,6 +852,11 @@ export function normalizeBrandProfileStore(raw: unknown): BrandProfileStore {
   return { version: BRAND_PROFILE_SCHEMA_VERSION, profiles: [...byId.values()] };
 }
 
+/** New authored/imported records receive an identity only at the mutation boundary. */
+export function createBrandProfileId(): string {
+  return crypto.randomUUID ? crypto.randomUUID() : `bp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function serializeBrandProfileStore(profiles: unknown): string {
   return JSON.stringify(assertBrandProfileStoreBudget(profiles));
 }

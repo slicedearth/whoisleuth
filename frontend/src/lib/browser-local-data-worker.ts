@@ -1,4 +1,5 @@
 import { runBrowserWorkerOperation } from './browser-worker-operation.ts';
+import { DEFERRED_MODULE_RECOVERY_DETAIL, loadDeferredModule } from './deferred-module.ts';
 import {
   BrowserLocalDataError,
   decodeLocalDataSnapshots,
@@ -7,17 +8,26 @@ import {
   type CapturedLocalDataCollection,
   type LocalDataCollectionDefinition,
 } from './browser-local-data.ts';
-import type { LocalDataDecodeRequest, LocalDataDecodeResponse } from './browser-local-data-worker-model.ts';
+import type { LocalDataDecodeResponse, LocalDataWorkerRequest } from './browser-local-data-worker-model.ts';
 
 // Scheduling hint, not an admission or timing bound. Smaller payloads avoid
 // worker startup; both paths run the same complete integrity checks.
 const WORKER_MINIMUM_PAYLOAD_BYTES = 256 * 1024;
+type LocalWorkerOptions = Readonly<{ createWorker?: () => Worker; signal?: AbortSignal }>;
+
+export async function loadBrowserLocalDataPreparation(options: Readonly<{ signal?: AbortSignal }> = {}) {
+  try { return await loadDeferredModule(() => import('./browser-local-data-preparation.ts'), options); }
+  catch (cause) {
+    if (options.signal?.aborted) throw new DOMException('Browser-local preparation was cancelled.', 'AbortError');
+    throw new BrowserLocalDataError('LOCAL_DATA_PREPARATION_FAILED', `Local preparation is unavailable. No changes were saved. ${DEFERRED_MODULE_RECOVERY_DETAIL}`, { cause });
+  }
+}
 
 export async function decodeBrowserLocalDataSnapshots<T>(
   definitions: readonly LocalDataCollectionDefinition<T>[],
   captured: readonly CapturedLocalDataCollection[],
   codec: BrowserLocalDataCodec,
-  options: Readonly<{ createWorker?: () => Worker; signal?: AbortSignal }> = {},
+  options: LocalWorkerOptions = {},
 ): Promise<T[]> {
   if (options.signal?.aborted) throw new DOMException('Browser-local verification was cancelled.', 'AbortError');
   // Small collections and custom codecs/definitions use the same local decoder.
@@ -30,7 +40,7 @@ export async function decodeBrowserLocalDataSnapshots<T>(
     return decodeLocalDataSnapshots(definitions, captured, codec);
   }
   try {
-    return await runBrowserWorkerOperation<LocalDataDecodeRequest, T[]>({ captured }, {
+    return await runBrowserWorkerOperation<LocalDataWorkerRequest, T[]>({ kind: 'decode', input: { captured } }, {
       ...options,
       createWorker: options.createWorker ?? (() => new Worker(new URL('./workers/browser-local-data.worker.ts', import.meta.url), { type: 'module', name: 'browser-local-data-verification' })),
       messages: {

@@ -9,6 +9,7 @@ import { SHORTLIST_COLLECTION } from '../frontend/src/lib/browser-local-data-def
 import {
   BrowserLocalDataError,
   type BrowserLocalDataInitialization,
+  type BrowserLocalDataUpdater,
 } from '../frontend/src/lib/browser-local-data.ts';
 
 const READY: BrowserLocalDataInitialization = Object.freeze({
@@ -27,13 +28,32 @@ function readyProvider(overrides: Partial<BrowserLocalDataProviderBoundary> = {}
     readMany: async (definitions) => new Map(definitions.map((definition) => [definition.id, []])),
     update: async <Document, Result>(
       _definition: unknown,
-      updater: (current: Document) => Readonly<{ document: Document; result: Result }>,
-    ) => updater([] as Document).result,
+      updater: BrowserLocalDataUpdater<Document, Result>,
+    ) => (await updater([] as Document)).result,
     ...overrides,
   } as BrowserLocalDataProviderBoundary;
 }
 
 describe('browser-local data service', () => {
+  test('forwards an awaited updater and cancellation without another save coordinator', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const service = createBrowserLocalDataService({
+      loadCollections: async () => [SHORTLIST_COLLECTION],
+      createProvider: () => readyProvider({
+        update: async (definition, updater, options) => {
+          calls += 1;
+          assert.equal(definition, SHORTLIST_COLLECTION);
+          assert.equal(options?.signal, controller.signal);
+          assert.equal(options?.preparation, 'background');
+          return (await updater(definition.empty())).result;
+        },
+      }),
+    });
+    const value = await service.update('shortlist', async (current) => ({ document: current, result: 'prepared' }), { preparation: 'background', signal: controller.signal });
+    assert.equal(value, 'prepared');
+    assert.equal(calls, 1);
+  });
   test('a multi-collection request uses the provider snapshot rather than separate reads', async () => {
     const documents = new Map<string, unknown>([['shortlist', [{ domain: 'snapshot.example' }]]]);
     let reads = 0;
@@ -156,7 +176,7 @@ describe('browser-local data service', () => {
     const provider = readyProvider({
       update: async <Document, Result>(
         _definition: unknown,
-        updater: (current: Document) => Readonly<{ document: Document; result: Result }>,
+        updater: BrowserLocalDataUpdater<Document, Result>,
       ) => {
         updateCalls += 1;
         if (mode === 'unknown') {
@@ -165,7 +185,7 @@ describe('browser-local data service', () => {
             'The browser-local write may have committed. Reload before retrying.',
           );
         }
-        return updater([] as Document).result;
+        return (await updater([] as Document)).result;
       },
     });
     const service = createBrowserLocalDataService({

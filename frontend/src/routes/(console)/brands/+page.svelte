@@ -2,7 +2,6 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { getContext, onDestroy, onMount, tick } from 'svelte';
-  import { boundedJsonLimitsForBytes, parseBoundedJson } from '$lib/bounded-json';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import BrandProfileList from '$lib/components/BrandProfileList.svelte';
   import BrandProfileEditor from '$lib/components/BrandProfileEditor.svelte';
@@ -10,14 +9,14 @@
   import BrandReviewInbox from '$lib/components/BrandReviewInbox.svelte';
   import BrandAssetRegisterSummary from '$lib/components/BrandAssetRegisterSummary.svelte';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
-  import { activeProfileId, deleteProfile, exportProfiles, importProfiles, isBrandProfileMutationCommittedError, loadProfiles, MAX_PROFILE_IMPORT_BYTES, normalizeProfile, parseList, setActiveProfile, updateProfileFields, upsertProfile, type BrandProfile, type BrandProfileSaveResult } from '$lib/brand-profiles';
+  import { activeProfileId, deleteProfile, exportProfiles, importProfileFile, isBrandProfileMutationCommittedError, loadProfiles, normalizeProfile, parseList, setActiveProfile, updateProfileFields, upsertProfile, type BrandProfile, type BrandProfileSaveResult } from '$lib/brand-profiles';
   import { LocalRecordConflictError } from '$lib/local-mutation-outcome';
   import { createPageBaseline, normalizePageBaseline } from '$lib/analysis/page-baseline.ts';
   import { loadCases, type CaseRecord } from '$lib/cases';
   import { loadRelationshipObservations, type RelationshipObservation } from '$lib/relationship-observations';
   import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
   import type { DesiredPostureBaseline, OfficialChannel, ProtectionAttestation, RightsReference } from '$lib/analysis/brand-profile-model.ts';
-  import { brandPostureCollectionFingerprint, brandPostureObservationContext, currentDesiredPostureObservation, desiredPostureObservations, MAX_PROFILE_STORE_BYTES, normalizeDesiredPostureObservationHistory } from '$lib/analysis/brand-profile-model.ts';
+  import { brandPostureCollectionFingerprint, brandPostureObservationContext, currentDesiredPostureObservation, desiredPostureObservations, normalizeDesiredPostureObservationHistory } from '$lib/analysis/brand-profile-model.ts';
   import { buildDesiredPostureObservation, type DomainPostureAuditResult as AuditResult } from '$lib/analysis/owned-domain-posture-review.ts';
   import { brandProfileDeletionImpact, buildBrandReviewInbox, type BrandReviewSourceState } from '$lib/analysis/brand-review-inbox.ts';
   import { buildBrandAssetRegister } from '$lib/analysis/brand-asset-register.ts';
@@ -31,9 +30,9 @@
   import { LARGE_JSON_RESPONSE_BYTES, requestJsonCapped, STANDARD_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
   import { preloadBestEffort } from '$lib/idle-preload';
   import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
-  const moduleController = new AbortController();
-  const preloadModule = (load: () => Promise<unknown>) => preloadBestEffort(load, moduleController.signal);
-  onDestroy(() => moduleController.abort());
+  const pageController = new AbortController();
+  const preloadModule = (load: () => Promise<unknown>) => preloadBestEffort(load, pageController.signal);
+  onDestroy(() => pageController.abort());
   type BrandsView='overview'|'assets';
   type BrandWorkbench='control'|'portfolio'|'posture'|'baselines'|'passport'|'certificates'|'attestations'|'mail';
   type EditorField='name'|'official'|'products'|'tlds'|'partners'|'selectors'|'retiredSelectors'|'mailProtectionProfile'|'trademarkOwner'|'trademarkRegistration'|'faviconHash';
@@ -194,7 +193,7 @@
   function restoreCompletedAudit(snapshot:CompletedAuditSnapshot|null){if(!snapshot||profileSourceState!=='ready'||activePreferenceSourceState!=='ready')return;const current=profiles.find((profile)=>profile.id===activeId)||null;if(!current||current.id!==snapshot.profileId||auditProfileFingerprint(current)!==snapshot.profileFingerprint)return;auditResults=[...snapshot.results];}
   function installCommittedProfileSnapshot(committedProfiles:readonly BrandProfile[]){cancelAudit();profiles=[...committedProfiles];profileSourceState='ready';closeActivePreferenceSource();}
   function committedIssueText(issue:Exclude<ProfileCommitIssue,null>,noun='profile write'){return issue==='active-preference'?`The ${noun} was committed, but the active-profile preference could not be updated or reread. Refresh saved profiles before using profile-scoped tools.`:`The ${noun} was committed, but Brand Profiles could not be reread. Refresh saved profiles to retry the read, not the write.`;}
-  function profileWriteFailureMessage(cause:unknown,fallback:string){if(cause instanceof LocalRecordConflictError)profileRefreshRequired=true;if(cause instanceof BrowserLocalDataError&&(cause.code==='LOCAL_DATA_QUOTA'||cause.code==='LOCAL_DATA_WRITE_FAILED'))return `${fallback} ${cause.message}`;return profileFailureMessage(cause,fallback);}
+  function profileWriteFailureMessage(cause:unknown,fallback:string){if(cause instanceof LocalRecordConflictError)profileRefreshRequired=true;if(cause instanceof BrowserLocalDataError&&(cause.code==='LOCAL_DATA_QUOTA'||cause.code==='LOCAL_DATA_WRITE_FAILED'||cause.code==='LOCAL_DATA_PREPARATION_FAILED'))return `${fallback} ${cause.message}`;return profileFailureMessage(cause,fallback);}
   async function commitProfileMutation(write:()=>Promise<BrandProfile>,options:ProfileCommitOptions):Promise<{profile:BrandProfile;issue:ProfileCommitIssue}>{
     if(profileWriteDisabled)throw new Error('A profile write is pending or the saved profiles need to be refreshed. The draft is unchanged.');
     const origin=document.activeElement;
@@ -466,12 +465,13 @@
     if(!file||profileWriteDisabled)return;
     profileMutationPending=true;
     cancelAudit();
+    message='Importing Brand Profiles…';
     try{
-      let result:Awaited<ReturnType<typeof importProfiles>>;
+      let result:Awaited<ReturnType<typeof importProfileFile>>;
       try{
-        if(file.size>MAX_PROFILE_IMPORT_BYTES)throw new Error(`Profile imports are limited to ${MAX_PROFILE_IMPORT_BYTES / 1024 / 1024} MiB.`);
-        result=await importProfiles(parseBoundedJson(await file.text(),{label:'Profile import',maximumBytes:MAX_PROFILE_IMPORT_BYTES,limits:boundedJsonLimitsForBytes(MAX_PROFILE_STORE_BYTES)}));
-      }catch(cause){message=profileWriteFailureMessage(cause,'Import failed.');return;}
+        result=await importProfileFile(file,pageController.signal);
+      }catch(cause){if(!pageController.signal.aborted)message=profileWriteFailureMessage(cause,'Import failed.');return;}
+      if(pageController.signal.aborted)return;
       const skipped=result.skipped?`; skipped ${result.skipped} invalid or over-limit profile${result.skipped===1?'':'s'}`:'';
       const imported=`Imported ${result.added} new and ${result.updated} updated profiles${skipped}.`;
       try{await refreshProfiles();message=imported;}

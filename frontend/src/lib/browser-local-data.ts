@@ -114,14 +114,38 @@ export type BrowserLocalCollectionManifest = Readonly<{
   legacyDigest: string | null;
 }>;
 
-type PreparedCollection = Readonly<{
-  definition: AnyLocalDataCollectionDefinition;
+export type PreparedLocalDataContent = Readonly<{
   records: BrowserLocalStoredRecord[];
   serializedBytes: number;
   digest: string;
+}>;
+
+type PreparedCollection = PreparedLocalDataContent & Readonly<{
+  definition: AnyLocalDataCollectionDefinition;
   source: BrowserLocalCollectionManifest['source'];
   legacyDigest: string | null;
 }>;
+
+/** A pure update may be repeated against a newer revision after a conflict. */
+export type BrowserLocalDataUpdater<T, R> = (current: T) =>
+  | Readonly<{ document: T; result: R }>
+  | Promise<Readonly<{ document: T; result: R }>>;
+
+export type BrowserLocalDataUpdateOptions = Readonly<{
+  preparation?: 'background';
+  signal?: AbortSignal;
+}>;
+
+export type BrowserLocalDataPreparer = (
+  definition: AnyLocalDataCollectionDefinition,
+  input: unknown,
+  codec: BrowserLocalDataCodec,
+  options?: Readonly<{ signal?: AbortSignal }>,
+) => Promise<PreparedLocalDataContent>;
+
+function requirePendingLocalDataUpdate(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new DOMException('Browser-local update was cancelled before saving.', 'AbortError');
+}
 
 type CollectionSnapshot<T> = Readonly<{
   document: T;
@@ -315,6 +339,25 @@ function verifyStoredRecord(
   lookupKeys.add(record.lookupKey);
 }
 
+/** Validate the worker transport without repeating domain normalisation or hashing. */
+export function assertPreparedLocalDataContent(
+  definition: AnyLocalDataCollectionDefinition, input: unknown, codec: string,
+): asserts input is PreparedLocalDataContent {
+  const content = input as PreparedLocalDataContent | null;
+  if (!content || !Number.isSafeInteger(content.serializedBytes) || content.serializedBytes < 0
+    || content.serializedBytes > definition.maximumBytes || !isDigest(content.digest)
+    || !Array.isArray(content.records) || content.records.length > definition.maximumRecords) {
+    throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'Browser-local preparation returned an incomplete or unexpected collection.');
+  }
+  const keys = new Set<string>();
+  let bytes = 0;
+  for (const [ordinal, record] of content.records.entries()) {
+    verifyStoredRecord(record, definition, codec, keys, Math.min(definition.maximumBytes, definition.maximumBytes * 2 - bytes));
+    if (record.ordinal !== ordinal) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'Prepared browser-local records have an invalid order.');
+    bytes += record.payloadBytes;
+  }
+}
+
 function readBoundedStoredRecords<T>(
   index: IDBIndex,
   definition: LocalDataCollectionDefinition<T>,
@@ -495,6 +538,59 @@ function assertLocalDataManifest<T>(
   }
 }
 
+/** Pure collection preparation shared by foreground and same-origin worker paths. */
+export async function prepareLocalDataContent(
+  definition: AnyLocalDataCollectionDefinition,
+  input: unknown,
+  codec: BrowserLocalDataCodec,
+  options: Readonly<{ signal?: AbortSignal }> = {},
+): Promise<PreparedLocalDataContent> {
+  requirePendingLocalDataUpdate(options.signal);
+  let document: unknown;
+  try { document = definition.normalize(input); }
+  catch (cause) {
+    throw new BrowserLocalDataError('INVALID_LOCAL_DATA', `${definition.label} could not be normalized.`, { cause });
+  }
+  const serialized = definition.serialize(document);
+  const serializedBytes = assertSerializedBound(serialized, definition.maximumBytes, definition.label);
+  const records = localDataStorageRecords(definition, document);
+  if (!Array.isArray(records) || records.length > definition.maximumRecords || records.length > MAX_LOCAL_DATA_RECORDS_PER_COLLECTION) {
+    throw new BrowserLocalDataError('LOCAL_DATA_RECORD_LIMIT', `${definition.label} exceeds its record limit.`);
+  }
+  const seen = new Set<string>();
+  const storedRecords: BrowserLocalStoredRecord[] = [];
+  let encodedBytes = 0;
+  for (let ordinal = 0; ordinal < records.length; ordinal++) {
+    requirePendingLocalDataUpdate(options.signal);
+    const record = records[ordinal];
+    if (!record) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} contains an incomplete record.`);
+    const id = boundedIdentifier(record.id, `${definition.label} record identifier`, MAX_LOCAL_DATA_RECORD_ID_LENGTH);
+    if (seen.has(id)) throw new BrowserLocalDataError('LOCAL_DATA_DUPLICATE_ID', `${definition.label} contains a duplicate record identifier.`);
+    seen.add(id);
+    let encoded: EncodedLocalDataRecord;
+    try { encoded = await codec.encode({ collection: definition.id, id, value: record.value, maximumBytes: definition.maximumBytes }); }
+    catch (cause) {
+      throw new BrowserLocalDataError('LOCAL_DATA_ENCODING_FAILED', `${definition.label} could not be encoded for browser storage.`, { cause });
+    }
+    const lookupKey = boundedIdentifier(encoded.lookupKey, `${definition.label} lookup key`, MAX_LOCAL_DATA_RECORD_ID_LENGTH);
+    const payloadBytes = assertSerializedBound(encoded.payload, definition.maximumBytes, `${definition.label} record`);
+    encodedBytes += payloadBytes;
+    if (encodedBytes > definition.maximumBytes * 2) {
+      throw new BrowserLocalDataError('LOCAL_DATA_QUOTA', `${definition.label} encoded records exceed their application limit.`);
+    }
+    storedRecords.push(Object.freeze({
+      key: [definition.id, lookupKey] as [string, string], collection: definition.id,
+      lookupKey, ordinal, codec: codec.id, payload: encoded.payload, payloadBytes,
+    }));
+  }
+  if (new Set(storedRecords.map((record) => record.lookupKey)).size !== storedRecords.length) {
+    throw new BrowserLocalDataError('LOCAL_DATA_DUPLICATE_ID', `${definition.label} codec produced a duplicate lookup key.`);
+  }
+  const digest = await sha256(canonicalRecordContent(storedRecords));
+  requirePendingLocalDataUpdate(options.signal);
+  return Object.freeze({ records: storedRecords, serializedBytes, digest });
+}
+
 export class BrowserLocalDataProvider {
   readonly databaseName: string;
   readonly codec: BrowserLocalDataCodec;
@@ -510,6 +606,7 @@ export class BrowserLocalDataProvider {
   #commitState: BrowserLocalCommitState = 'confirmed';
   #oncommit: BrowserLocalDataCommitListener | undefined;
   #decodeSnapshots: BrowserLocalDataSnapshotDecoder;
+  #prepareInBackground: BrowserLocalDataPreparer;
 
   constructor(options: Readonly<{
     databaseName?: string;
@@ -520,6 +617,7 @@ export class BrowserLocalDataProvider {
     now?: () => Date;
     oncommit?: BrowserLocalDataCommitListener;
     decodeSnapshots?: BrowserLocalDataSnapshotDecoder;
+    prepareInBackground?: BrowserLocalDataPreparer;
   }> = {}) {
     let factory: IDBFactory | undefined;
     let storage: BrowserStorage | undefined;
@@ -547,6 +645,7 @@ export class BrowserLocalDataProvider {
     this.#now = options.now || (() => new Date());
     this.#oncommit = options.oncommit;
     this.#decodeSnapshots = options.decodeSnapshots ?? decodeLocalDataSnapshots;
+    this.#prepareInBackground = options.prepareInBackground ?? prepareLocalDataContent;
   }
 
   async initialize(definitions: readonly AnyLocalDataCollectionDefinition[]): Promise<BrowserLocalDataInitialization> {
@@ -590,18 +689,28 @@ export class BrowserLocalDataProvider {
 
   async update<T, R>(
     definition: LocalDataCollectionDefinition<T>,
-    updater: (current: T) => Readonly<{ document: T; result: R }>,
+    updater: BrowserLocalDataUpdater<T, R>,
+    options: BrowserLocalDataUpdateOptions = {},
   ): Promise<R> {
+    requirePendingLocalDataUpdate(options.signal);
     await this.#requireDefinition(definition);
     this.#requireConfirmedCommitState();
     for (let attempt = 1; attempt <= MAX_LOCAL_DATA_UPDATE_ATTEMPTS; attempt++) {
+      requirePendingLocalDataUpdate(options.signal);
       this.#requireConfirmedCommitState();
       const snapshot = await this.#readSnapshot(definition);
+      requirePendingLocalDataUpdate(options.signal);
       this.#requireConfirmedCommitState();
-      const updated = updater(snapshot.document);
-      const prepared = await this.#prepare(definition, updated.document, 'application', snapshot.manifest.legacyDigest);
+      const updated = await updater(snapshot.document);
+      requirePendingLocalDataUpdate(options.signal);
+      this.#requireConfirmedCommitState();
+      const prepared = await this.#prepare(definition, updated.document, 'application', snapshot.manifest.legacyDigest, options);
+      requirePendingLocalDataUpdate(options.signal);
+      this.#requireConfirmedCommitState();
       if (collectionContentMatches(prepared, snapshot.manifest, this.codec.id)) return updated.result;
       try {
+        // Once a commit starts, its acknowledgement/recovery owns the outcome.
+        // Cancellation must not turn a successful write into a retryable failure.
         this.#requireConfirmedCommitState();
         await this.#commit([prepared], new Map([[definition.id, snapshot.manifest]]));
         this.#notifyCommitted([definition.id]);
@@ -777,17 +886,16 @@ export class BrowserLocalDataProvider {
     await done;
 
     const missing = definitions.filter((_definition, index) => !manifests[index]);
-    const existingSnapshots = new Map<string, CollectionSnapshot<unknown>>();
-    for (let index = 0; index < definitions.length; index++) {
-      const definition = definitions[index];
-      if (!definition) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local definition is missing.');
-      const manifest = manifests[index];
-      if (!manifest) continue;
-      existingSnapshots.set(definition.id, await this.#readSnapshot(definition));
-    }
     const migratedCollections: string[] = [];
     const retainedLegacyKeys: string[] = [];
     if (missing.length) {
+      const existingSnapshots = new Map<string, CollectionSnapshot<unknown>>();
+      for (let index = 0; index < definitions.length; index++) {
+        const definition = definitions[index];
+        if (!definition) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local definition is missing.');
+        if (!manifests[index]) continue;
+        existingSnapshots.set(definition.id, await this.#readSnapshot(definition));
+      }
       const prepared: PreparedCollection[] = [];
       for (const definition of missing) {
         let raw: string | null;
@@ -880,58 +988,13 @@ export class BrowserLocalDataProvider {
     input: unknown,
     source: BrowserLocalCollectionManifest['source'],
     legacyDigest: string | null,
+    options: BrowserLocalDataUpdateOptions = {},
   ): Promise<PreparedCollection> {
-    let document: T;
-    try { document = definition.normalize(input); }
-    catch (cause) {
-      throw new BrowserLocalDataError('INVALID_LOCAL_DATA', `${definition.label} could not be normalized.`, { cause });
-    }
-    const serialized = definition.serialize(document);
-    const serializedBytes = assertSerializedBound(serialized, definition.maximumBytes, definition.label);
-    const records = localDataStorageRecords(definition, document);
-    if (!Array.isArray(records) || records.length > definition.maximumRecords || records.length > MAX_LOCAL_DATA_RECORDS_PER_COLLECTION) {
-      throw new BrowserLocalDataError('LOCAL_DATA_RECORD_LIMIT', `${definition.label} exceeds its record limit.`);
-    }
-    const seen = new Set<string>();
-    const storedRecords: BrowserLocalStoredRecord[] = [];
-    let encodedBytes = 0;
-    for (let ordinal = 0; ordinal < records.length; ordinal++) {
-      const record = records[ordinal];
-      if (!record) {
-        throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', `${definition.label} contains an incomplete record.`);
-      }
-      const id = boundedIdentifier(record.id, `${definition.label} record identifier`, MAX_LOCAL_DATA_RECORD_ID_LENGTH);
-      if (seen.has(id)) throw new BrowserLocalDataError('LOCAL_DATA_DUPLICATE_ID', `${definition.label} contains a duplicate record identifier.`);
-      seen.add(id);
-      let encoded: EncodedLocalDataRecord;
-      try { encoded = await this.codec.encode({ collection: definition.id, id, value: record.value, maximumBytes: definition.maximumBytes }); }
-      catch (cause) {
-        throw new BrowserLocalDataError('LOCAL_DATA_ENCODING_FAILED', `${definition.label} could not be encoded for browser storage.`, { cause });
-      }
-      const lookupKey = boundedIdentifier(encoded.lookupKey, `${definition.label} lookup key`, MAX_LOCAL_DATA_RECORD_ID_LENGTH);
-      const payloadBytes = assertSerializedBound(encoded.payload, definition.maximumBytes, `${definition.label} record`);
-      encodedBytes += payloadBytes;
-      if (encodedBytes > definition.maximumBytes * 2) {
-        throw new BrowserLocalDataError('LOCAL_DATA_QUOTA', `${definition.label} encoded records exceed their application limit.`);
-      }
-      storedRecords.push(Object.freeze({
-        key: [definition.id, lookupKey] as [string, string],
-        collection: definition.id,
-        lookupKey,
-        ordinal,
-        codec: this.codec.id,
-        payload: encoded.payload,
-        payloadBytes,
-      }));
-    }
-    if (new Set(storedRecords.map((record) => record.lookupKey)).size !== storedRecords.length) {
-      throw new BrowserLocalDataError('LOCAL_DATA_DUPLICATE_ID', `${definition.label} codec produced a duplicate lookup key.`);
-    }
+    const prepare = options.preparation === 'background' ? this.#prepareInBackground : prepareLocalDataContent;
+    const content = await prepare(definition, input, this.codec, options);
     return Object.freeze({
+      ...content,
       definition,
-      records: storedRecords,
-      serializedBytes,
-      digest: await sha256(canonicalRecordContent(storedRecords)),
       source,
       legacyDigest,
     });
