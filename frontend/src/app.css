@@ -620,6 +620,7 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 .local-nav a:hover, .local-nav a:focus-visible { color: var(--text); background: rgb(var(--accent-rgb) / var(--interactive-hover-alpha)); }
 .local-nav a.active { color: var(--text); background: rgb(var(--accent-rgb) / var(--interactive-fill-alpha)); box-shadow: inset 0 -2px var(--interface-accent); }
 .result-section { --local-nav-anchor-offset: 72px; scroll-margin-top: var(--local-nav-anchor-offset); }
+.paged-results { scroll-margin-top: var(--local-nav-anchor-offset, 72px); }
 @media (max-width: 900px) {
   .local-nav-shell { top: 70px; }
   .result-section { --local-nav-anchor-offset: 134px; }

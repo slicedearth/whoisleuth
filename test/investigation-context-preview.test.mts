@@ -62,27 +62,27 @@ test('projects at most three complete local matches without mutating the index',
   assert.deepEqual(index, before);
 });
 
-test('discloses bounded match omission and incomplete retained sources as partial', () => {
+test('separates result pagination from partial source coverage', () => {
   const index = indexWithEntries(5);
   const capped = projectInvestigationContextPreview(index, 'target');
-  assert.equal(capped.state, 'partial');
+  assert.equal(capped.state, 'ready');
   assert.equal(capped.results.length, MAX_INVESTIGATION_CONTEXT_PREVIEW_RESULTS);
   assert.equal(capped.omittedMatches, 2);
-  assert.match(capped.limitations.join(' '), /2 additional local matches were omitted/u);
-  assert.match(capped.detail, /2 additional local matches were omitted/u);
+  assert.match(capped.limitations.join(' '), /2 other local matches are available/u);
+  assert.match(capped.detail, /matches 1–3 of 5/u);
 
   index.limitations = ['One', 'Two', 'Three', 'Four'];
   const limitationCap = projectInvestigationContextPreview(index, 'target');
-  assert.equal(limitationCap.limitations.length, 4);
-  assert.match(limitationCap.limitations[0] ?? '', /2 additional local matches were omitted/u);
-  assert.match(limitationCap.detail, /2 additional local matches were omitted/u);
+  assert.ok(limitationCap.limitations.includes('Four'));
+  assert.match(limitationCap.limitations.join(' '), /2 other local matches are available/u);
+  assert.match(limitationCap.detail, /matches 1–3 of 5/u);
 
   const unavailableSource = markInvestigationSearchSourcesUnavailable(index, ['campaigns']);
   assert.equal(index.sources.campaigns.state, 'supported');
   assert.equal(unavailableSource.sources.campaigns.state, 'unavailable');
   const incomplete = projectInvestigationContextPreview(unavailableSource, 'target-0');
   assert.equal(incomplete.state, 'partial');
-  assert.match(incomplete.limitations.join(' '), /Campaigns saved context is unavailable/u);
+  assert.match(incomplete.limitations.join(' '), /Campaigns \(unavailable\)/u);
   assert.equal(incomplete.results.length, 1);
 
   const incompleteNoMatch = projectInvestigationContextPreview(unavailableSource, 'unrelated');
@@ -94,7 +94,7 @@ test('discloses bounded match omission and incomplete retained sources as partia
 test('keeps complete no-match and unavailable index states explicit', () => {
   const noMatch = projectInvestigationContextPreview(indexWithEntries(1), 'unrelated');
   assert.equal(noMatch.state, 'no_matches');
-  assert.match(noMatch.detail, /does not mean/u);
+  assert.match(noMatch.detail, /does not establish absence/u);
 
   const unavailable = projectInvestigationContextPreview(
     unavailableInvestigationSearchIndex('Local context could not be read.'),
@@ -102,4 +102,13 @@ test('keeps complete no-match and unavailable index states explicit', () => {
   );
   assert.equal(unavailable.state, 'unavailable');
   assert.match(unavailable.detail, /could not be read/u);
+});
+
+test('every context match remains reachable beyond the first fifty-result page', () => {
+  const index = indexWithEntries(124);
+  const pages = Array.from({ length: 42 }, (_, position) => projectInvestigationContextPreview(index, 'target', position + 1));
+  assert.ok(pages.every((page) => page.state === 'ready' && page.results.length <= 3 && page.totalMatches === 124));
+  assert.equal(new Set(pages.flatMap((page) => page.results.map((result) => result.entityId))).size, 124);
+  assert.equal(pages.at(-1)!.results.length, 1);
+  assert.match(pages.at(-1)!.detail, /124–124 of 124/u);
 });

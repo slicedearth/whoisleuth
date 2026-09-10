@@ -163,6 +163,18 @@ export async function useTheme(page: Page, preference: 'dark' | 'light' | 'syste
   if (preference !== 'system') await expect(root).toHaveAttribute('data-theme', preference);
 }
 
+export async function expectFocusedResultsVisible(page: Page, results: Locator) {
+  await expect(results).toBeFocused();
+  const header = page.getByRole('banner');
+  await expect(header).toBeVisible();
+  await expect.poll(async () => {
+    const [target, banner] = await Promise.all([results.boundingBox(), header.boundingBox()]);
+    if (!target || !banner) throw new Error('Focused result geometry is unavailable.');
+    return target.y - (banner.y + banner.height);
+  }).toBeGreaterThanOrEqual(0);
+  await expect(results.getByRole('heading').first()).toBeInViewport({ ratio: 1 });
+}
+
 export async function expectNoHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(() => {
     const doc = document.documentElement;

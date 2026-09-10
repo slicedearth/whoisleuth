@@ -1,22 +1,63 @@
 <script lang="ts">
+  import { tick } from 'svelte';
+  import Pagination from './Pagination.svelte';
+  import { reloadDeferredModulePage } from '$lib/deferred-module';
   import {
     MAX_INVESTIGATION_SEARCH_QUERY_LENGTH,
-    recentInvestigationResults,
-    searchInvestigationIndex,
+    MAX_INVESTIGATION_SEARCH_RESULTS,
     type InvestigationSearchField,
-    type InvestigationSearchIndex,
+    type InvestigationSearchResponse,
     type InvestigationSearchResult,
     type InvestigationSearchSourceSummary,
   } from '$lib/analysis/investigation-search.ts';
+  import type { InvestigationSearchSession } from '$lib/investigation-search-session';
 
-  let { index } = $props<{ index: InvestigationSearchIndex | null }>();
+  let { session, loadError = '' } = $props<{ session: InvestigationSearchSession | null; loadError?: string }>();
   let query = $state('');
-  const response = $derived(index ? searchInvestigationIndex(index, query) : null);
-  const recentResults = $derived(index ? recentInvestigationResults(index) : []);
+  let resultPage = $state(1);
+  let resultList = $state<HTMLOListElement>();
+  let pending = $state(false);
+  let queryError = $state('');
+  let completed = $state.raw<{ session: InvestigationSearchSession; query: string; page: number; response: InvestigationSearchResponse } | null>(null);
+  let focusRequest: { query: string; page: number } | null = null;
+  const index = $derived(session?.summary ?? null);
+  const response = $derived(completed?.session === session && completed?.query === query ? completed.response : null);
+  const pageCount = $derived(Math.max(1, Math.ceil((response?.totalMatches ?? 0) / MAX_INVESTIGATION_SEARCH_RESULTS)));
+  const currentPage = $derived(Math.min(completed?.page ?? 1, pageCount));
+  const recentResults = $derived(index?.recentResults ?? []);
   const sourceWarnings = $derived.by(() => {
     if (!index) return [] as Array<[string, InvestigationSearchSourceSummary]>;
     return (Object.entries(index.sources) as Array<[string, InvestigationSearchSourceSummary]>)
       .filter(([, source]) => source.state === 'invalid' || source.state === 'unsupported' || source.state === 'unavailable');
+  });
+
+  $effect(() => {
+    const currentSession = session;
+    const currentQuery = query;
+    const page = resultPage;
+    if (!currentSession) return;
+    let active = true;
+    pending = true;
+    queryError = '';
+    void currentSession.search(currentQuery, { page }).then(async (result: InvestigationSearchResponse) => {
+      if (!active) return;
+      completed = { session: currentSession, query: currentQuery, page, response: result };
+      pending = false;
+      if (focusRequest && focusRequest.query === currentQuery && focusRequest.page === page) {
+        focusRequest = null;
+        await tick();
+        if (!active) return;
+        resultList?.focus({ preventScroll: true });
+        resultList?.scrollIntoView({ block: 'start' });
+      }
+    }).catch((cause: unknown) => {
+      if (!active) return;
+      pending = false;
+      if (!(cause instanceof DOMException && cause.name === 'AbortError')) {
+        queryError = 'Saved-work search could not return results. Reload the page to retry.';
+      }
+    });
+    return () => { active = false; };
   });
 
   const typeLabels: Record<InvestigationSearchResult['entityType'], string> = {
@@ -62,6 +103,11 @@
   function formatDate(value: string): string {
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? 'Unknown time' : parsed.toLocaleString();
+  }
+  function setResultPage(value: number) {
+    if (pending) return;
+    resultPage = Math.min(pageCount, Math.max(1, value));
+    focusRequest = { query, page: resultPage };
   }
 </script>
 
@@ -110,6 +156,7 @@
     id="investigation-search-query"
     type="search"
     bind:value={query}
+    oninput={() => { resultPage = 1; focusRequest = null; }}
     maxlength={MAX_INVESTIGATION_SEARCH_QUERY_LENGTH}
     autocomplete="off"
     autocapitalize="none"
@@ -118,7 +165,10 @@
   >
   <p class="search-note">This searches only data already retained in this browser. It does not contact a provider or start a new check.</p>
 
-  {#if !index}
+  {#if loadError}
+    <p class="state-row error" role="alert">{loadError}</p>
+    <button class="btn" type="button" onclick={reloadDeferredModulePage}>Reload page</button>
+  {:else if !index}
     <p class="state-row" role="status">Preparing saved-work search.</p>
   {:else if index.state !== 'ready'}
     <p class="state-row error" role="alert">{index.limitations[0] || 'Saved-work search is unavailable.'}</p>
@@ -139,12 +189,17 @@
     {/if}
     {#if index.limitations.length}
       <details class="index-limitations">
-        <summary>How search coverage works</summary>
+        <summary>{index.truncated ? 'Partial search coverage' : 'Search coverage'}</summary>
         <ul>{#each index.limitations as limitation}<li>{limitation}</li>{/each}</ul>
       </details>
     {/if}
 
-    {#if response && response.state !== 'idle'}
+    {#if queryError}
+      <p class="result-status error" role="alert">{queryError}</p>
+      <button class="btn" type="button" onclick={reloadDeferredModulePage}>Reload page</button>
+    {:else if pending}
+      <p class="result-status" role="status">Searching saved work…</p>
+    {:else if response && response.state !== 'idle'}
       <p class:error={response.state === 'invalid'} class="result-status" role="status" aria-live="polite">{response.detail}</p>
     {/if}
 
@@ -163,11 +218,12 @@
     {/if}
 
     {#if response?.state === 'results'}
-      <ol class="result-list independent-grid" aria-label="Local investigation search results">
+      <ol class="result-list independent-grid paged-results" aria-label="Local investigation search results" aria-busy={pending} tabindex="-1" bind:this={resultList}>
         {#each response.results as result (result.entityId)}
           <li>{@render resultCard(result)}</li>
         {/each}
       </ol>
+      <Pagination {currentPage} {pageCount} setPage={setResultPage} ariaLabel="Saved-work search pages" />
     {/if}
   {/if}
 </section>

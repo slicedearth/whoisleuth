@@ -161,6 +161,12 @@ behaviour. Browser adapters perform version admission, transactions,
 quota-aware writes and concurrent-tab conflict handling; pure domain modules
 perform validation, normalisation and merge.
 
+Dashboard and Lookup search use a disposable same-origin browser worker. The
+worker builds the shared investigation projection and search index, matches
+normalised terms directly, and returns a summary or one requested result page.
+Collection reads and lifecycle cancellation remain in the browser adapter;
+the worker has no storage or network operations.
+
 Workspace exports are deliberate local files with versioned manifests and
 section digests. Import validates the full envelope before a non-destructive
 merge. Each format's compatibility declaration owns its current writer and

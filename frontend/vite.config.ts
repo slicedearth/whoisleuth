@@ -6,6 +6,7 @@ import ts from 'typescript';
 import { defineConfig, type Plugin } from 'vite';
 import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
 import { browserThirdPartyNoticesPlugin } from '../tools/third-party-notices.mts';
+import { frontendWorkerBuild } from '../tools/frontend-worker-build.mts';
 
 const THEME_INIT_PATH = fileURLToPath(new URL('./src/theme-init.ts', import.meta.url));
 const THEME_INIT_ASSET = 'theme-init.js';
@@ -88,15 +89,22 @@ function themeInitializerPlugin(): Plugin {
   };
 }
 
-export default defineConfig(async () => ({
-  define: {
-    __WHOISLEUTH_VERSION__: JSON.stringify(await applicationVersion()),
-    __WHOISLEUTH_BUILD_REVISION__: JSON.stringify(buildRevision()),
-  },
-  plugins: [themeInitializerPlugin(), browserThirdPartyNoticesPlugin(fileURLToPath(new URL('..', import.meta.url))), sveltekit()],
-  server: {
-    proxy: {
-      '/api': LOCAL_API_PROXY,
+export default defineConfig(async () => {
+  const workerBuild = frontendWorkerBuild(fileURLToPath(new URL('.', import.meta.url)));
+  return {
+    define: {
+      __WHOISLEUTH_VERSION__: JSON.stringify(await applicationVersion()),
+      __WHOISLEUTH_BUILD_REVISION__: JSON.stringify(buildRevision()),
     },
-  },
-}));
+    plugins: [
+      themeInitializerPlugin(),
+      workerBuild.client,
+      browserThirdPartyNoticesPlugin(fileURLToPath(new URL('..', import.meta.url)), workerBuild.renderedWorkerModules),
+      sveltekit(),
+    ],
+    worker: { plugins: workerBuild.workerPlugins },
+    server: {
+      proxy: { '/api': LOCAL_API_PROXY },
+    },
+  };
+});

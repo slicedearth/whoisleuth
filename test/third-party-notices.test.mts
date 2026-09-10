@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
 import { build } from 'vite';
+import { frontendWorkerBuild } from '../tools/frontend-worker-build.mts';
 
 import {
   buildThirdPartyNotices,
@@ -76,19 +77,36 @@ describe('third-party production dependency notices', () => {
       await mkdir(path.join(directory, 'public'), { recursive: true });
       await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name: 'notice-fixture', version: '1.0.0', private: true, type: 'module' }));
       const lockfile = fixtureLockfile();
-      await writeFile(path.join(directory, 'package-lock.json'), JSON.stringify({ ...lockfile, packages: { ...lockfile.packages, 'node_modules/unused-dev': { version: '1.0.0', dev: true, license: 'MIT' } } }));
+      await writeFile(path.join(directory, 'package-lock.json'), JSON.stringify({ ...lockfile, packages: { ...lockfile.packages,
+        'node_modules/unused-dev': { version: '1.0.0', dev: true, license: 'MIT' },
+        'node_modules/worker-only': { version: '1.0.0', dev: true, license: 'MIT' },
+      } }));
       for (const name of ['alpha', 'beta', 'shared', 'dev-only']) await writeFixturePackage(directory, name, `${name} licence text`);
       await writeFile(path.join(directory, 'node_modules/dev-only/package.json'), JSON.stringify({ name: 'dev-only', version: '4.0.0', license: 'MIT', type: 'module', exports: './index.js' }));
       await writeFile(path.join(directory, 'node_modules/dev-only/index.js'), 'export const visible = "retained-browser-value";');
-      await writeFile(path.join(directory, 'entry.js'), 'export { visible } from "dev-only";');
+      await writeFixturePackage(directory, 'worker-only', 'worker-only licence text');
+      await writeFile(path.join(directory, 'node_modules/worker-only/package.json'), JSON.stringify({ name: 'worker-only', version: '1.0.0', license: 'MIT', type: 'module', exports: './index.js' }));
+      await writeFile(path.join(directory, 'node_modules/worker-only/index.js'), 'export const message = "retained-worker-value";');
+      await mkdir(path.join(directory, 'src'));
+      await writeFile(path.join(directory, 'src/entry.js'), 'export { visible } from "dev-only"; export function start() { return new Worker(new URL("./index.worker.js", import.meta.url), { type: "module" }); }');
+      await writeFile(path.join(directory, 'src/index.worker.js'), 'import { message } from "worker-only"; self.postMessage(message);');
       await writeFile(path.join(directory, 'public/third-party-notices.txt'), 'copied production base');
+      const workerBuild = frontendWorkerBuild(directory);
       await build({
-        configFile: false, root: directory, logLevel: 'silent', plugins: [browserThirdPartyNoticesPlugin(directory)],
-        build: { outDir: 'dist', minify: false, lib: { entry: path.join(directory, 'entry.js'), formats: ['es'] } },
+        configFile: false, root: directory, logLevel: 'silent', plugins: [workerBuild.client, browserThirdPartyNoticesPlugin(directory, workerBuild.renderedWorkerModules)],
+        worker: { plugins: workerBuild.workerPlugins },
+        build: { outDir: 'dist', assetsDir: '_app/immutable/workers', manifest: true, minify: false,
+          lib: { entry: path.join(directory, 'src/entry.js'), formats: ['es'] } },
       });
       const notice = await readFile(path.join(directory, 'dist/third-party-notices.txt'), 'utf8');
       assert.match(notice, /^dev-only@4\.0\.0\nRelationship: bundled browser dependency/mu);
       assert.match(notice, /dev-only licence text/u);
+      assert.match(notice, /^worker-only@1\.0\.0\nRelationship: bundled browser dependency/mu);
+      assert.match(notice, /worker-only licence text/u);
+      const manifest = JSON.parse(await readFile(path.join(directory, 'dist/.vite/manifest.json'), 'utf8'));
+      assert.match(manifest['src/index.worker.js'].file, /^_app\/immutable\/workers\/index\.worker-[^/]+\.js$/u);
+      assert.match(await readFile(path.join(directory, 'dist', manifest['src/index.worker.js'].file), 'utf8'), /retained-worker-value/u);
+      assert.equal(Object.keys(manifest).filter((source) => source === 'src/index.worker.js').length, 1);
       assert.match(notice, /run npm run build/u);
       assert.doesNotMatch(notice, /run npm run licenses:update/u);
       assert.match(notice, /^alpha@1\.0\.0$/mu);

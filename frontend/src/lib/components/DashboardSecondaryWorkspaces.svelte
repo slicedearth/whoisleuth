@@ -7,18 +7,13 @@
   import { loadCampaigns } from '$lib/campaigns';
   import { loadCases } from '$lib/cases';
   import { loadProfiles } from '$lib/brand-profiles';
-  import { buildLocalInvestigationSearchIndex } from '$lib/investigation-search';
+  import { createInvestigationSearchSession, type InvestigationSearchSession } from '$lib/investigation-search-session';
   import { loadRelationshipObservations } from '$lib/relationship-observations';
   import {
     investigationRecipes,
     startInvestigationGuide,
     type InvestigationRecipeId,
   } from '$lib/investigation-guide';
-  import {
-    markInvestigationSearchSourcesUnavailable,
-    unavailableInvestigationSearchIndex,
-    type InvestigationSearchIndex,
-  } from '$lib/analysis/investigation-search.ts';
   import type { InvestigationStoreName } from '$lib/analysis/investigation-projection.ts';
   import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data.ts';
   import { loadInvestigationTemplates, type InvestigationTemplate } from '$lib/investigation-templates';
@@ -34,7 +29,9 @@
   } = $props();
 
   const publicResource = publicResources[0];
-  let investigationIndex = $state<InvestigationSearchIndex | null>(null);
+  let searchSession = $state.raw<InvestigationSearchSession | null>(null);
+  let searchError = $state('');
+  let refreshController: AbortController | null = null;
   let guideDomain = $state('');
   let guideRecipeId = $state<InvestigationRecipeId>('new_domain_triage');
   let guideTemplateId = $state('');
@@ -48,6 +45,12 @@
   const compatibleTemplates = $derived(templates.filter((template) => template.recipeId === guideRecipeId));
 
   async function refreshSecondaryWorkspaces() {
+    refreshController?.abort();
+    const controller = new AbortController();
+    refreshController = controller;
+    searchSession?.dispose();
+    searchSession = null;
+    searchError = '';
     templateLoadState = 'loading';
     workspaceMessage = '';
     const results = await Promise.allSettled([
@@ -57,6 +60,7 @@
       loadRelationshipObservations(),
       loadInvestigationTemplates(),
     ]);
+    if (controller.signal.aborted) return;
     const [caseResult, campaignResult, profileResult, relationshipResult, templateResult] = results;
     if (templateResult?.status === 'fulfilled') {
       templates = templateResult.value;
@@ -73,14 +77,23 @@
       if (campaignResult?.status === 'rejected') unavailableStores.push('campaigns');
       if (profileResult?.status === 'rejected') unavailableStores.push('brandProfiles');
       if (relationshipResult?.status === 'rejected') unavailableStores.push('relationshipObservations');
-      investigationIndex = markInvestigationSearchSourcesUnavailable(buildLocalInvestigationSearchIndex({
-        cases: caseResult?.status === 'fulfilled' ? caseResult.value : undefined,
-        campaigns: campaignResult?.status === 'fulfilled' ? campaignResult.value : undefined,
-        brandProfiles: profileResult?.status === 'fulfilled' ? profileResult.value : undefined,
-        relationshipObservations: relationshipResult?.status === 'fulfilled' ? relationshipResult.value : undefined,
-      }), unavailableStores);
+      if (mode === 'all') {
+        try {
+          const loaded = await createInvestigationSearchSession({
+            cases: caseResult?.status === 'fulfilled' ? caseResult.value : undefined,
+            campaigns: campaignResult?.status === 'fulfilled' ? campaignResult.value : undefined,
+            brandProfiles: profileResult?.status === 'fulfilled' ? profileResult.value : undefined,
+            relationshipObservations: relationshipResult?.status === 'fulfilled' ? relationshipResult.value : undefined,
+          }, unavailableStores, { signal: controller.signal });
+          if (controller.signal.aborted) { loaded.dispose(); return; }
+          searchSession = loaded;
+        } catch {
+          if (controller.signal.aborted) return;
+          searchError = 'Saved-work search could not be prepared. No saved records were changed. Reload the page to retry.';
+        }
+      }
     } else {
-      investigationIndex = unavailableInvestigationSearchIndex('Saved-work search is unavailable because one or more required browser-local collections could not be read.');
+      searchError = 'Saved-work search is unavailable because browser-local collections could not be read.';
     }
     const expectedFailures = results
       .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
@@ -126,7 +139,10 @@
   }
 
   onMount(() => {
-    void refreshSecondaryWorkspaces();
+    void refreshSecondaryWorkspaces().catch(() => {
+      if (!refreshController?.signal.aborted) workspaceMessage = 'Some saved-work tools could not be refreshed. No saved records were changed.';
+    });
+    return () => { refreshController?.abort(); searchSession?.dispose(); };
   });
 </script>
 
@@ -136,7 +152,7 @@
 
   {#if mode === 'all'}
     <BrowserLookupHandoff />
-    <InvestigationSearch index={investigationIndex} />
+    <InvestigationSearch session={searchSession} loadError={searchError} />
   {/if}
 
   {#if mode !== 'import'}<section class="guide-launcher card" aria-labelledby="guide-launcher-title">

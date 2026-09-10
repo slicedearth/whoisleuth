@@ -240,7 +240,7 @@ function bundledDependencyIds(dependencies: readonly BundledDependency[]): Set<s
 }
 
 /** Consume the bundler's delivered-module inventory; never infer it from dev flags. */
-export function browserThirdPartyNoticesPlugin(repositoryRoot: string): Plugin {
+export function browserThirdPartyNoticesPlugin(repositoryRoot: string, workerModules: () => readonly string[] = () => []): Plugin {
   return {
     name: 'whoisleuth-browser-notices',
     configEnvironment(name) {
@@ -264,14 +264,20 @@ export function browserThirdPartyNoticesPlugin(repositoryRoot: string): Plugin {
         });
         // Generated runtime helpers are virtual modules, which the standard inventory excludes.
         // Attribute only helpers that actually contribute code to their installed producer.
+        const deliveredWorkerModules = workerModules();
+        bundledDependencies.push(...await workerModuleDependencies(repositoryRoot, deliveredWorkerModules));
         const helperPackages = new Set<string>();
+        const renderedModuleIds = new Set(deliveredWorkerModules);
         for (const output of Object.values(bundle)) {
           if (output.type !== 'chunk') continue;
           for (const [id, module] of Object.entries(output.modules)) {
             if (module.renderedLength === 0) continue;
-            if (id === '\0vite/preload-helper.js' || id === '\0vite/modulepreload-polyfill.js') helperPackages.add('vite');
-            if (id === '\0rolldown/runtime.js') helperPackages.add('rolldown');
+            renderedModuleIds.add(id);
           }
+        }
+        for (const id of renderedModuleIds) {
+          if (id === '\0vite/preload-helper.js' || id === '\0vite/modulepreload-polyfill.js') helperPackages.add('vite');
+          if (id === '\0rolldown/runtime.js') helperPackages.add('rolldown');
         }
         for (const name of helperPackages) {
           const resolveFromProject = createRequire(path.join(repositoryRoot, 'frontend', 'package.json'));
@@ -288,6 +294,33 @@ export function browserThirdPartyNoticesPlugin(repositoryRoot: string): Plugin {
       },
     },
   };
+}
+
+async function workerModuleDependencies(repositoryRoot: string, modules: readonly string[]): Promise<BundledDependency[]> {
+  if (modules.length > 4_096) throw new TypeError('Worker licence module inventory exceeds its bound.');
+  if (!modules.length) return [];
+  const root = await realpath(repositoryRoot);
+  const nodeModulesRoot = await realpath(path.join(root, 'node_modules'));
+  const installPaths = new Set<string>();
+  for (const id of modules) {
+    if (id.length > 4_096) throw new TypeError('Worker licence module path exceeds its bound.');
+    if (id.startsWith('\0') || !id.replaceAll('\\', '/').includes('/node_modules/')) continue;
+    const relative = path.relative(root, await realpath(id.split('?', 1)[0]!)).split(path.sep).join('/');
+    const parts = relative.split('/');
+    const nodeModules = parts.lastIndexOf('node_modules');
+    const installPath = parts.slice(0, nodeModules + (parts[nodeModules + 1]?.startsWith('@') ? 3 : 2)).join('/');
+    packageNameFromInstallPath(installPath);
+    installPaths.add(installPath);
+    if (installPaths.size > MAX_NOTICE_PACKAGES) throw new TypeError('Worker licence package inventory exceeds its bound.');
+  }
+  return Promise.all([...installPaths].sort(compareCodeUnits).map(async (installPath) => {
+    const name = packageNameFromInstallPath(installPath);
+    const directory = await realpath(path.join(root, installPath));
+    if (!pathIsWithin(nodeModulesRoot, directory)) throw new TypeError('Worker package resolves outside node_modules.');
+    const manifest = record(await readBoundedJson(path.join(directory, 'package.json')), 'Worker package');
+    if (manifest.name !== name) throw new TypeError('Worker package identity is inconsistent.');
+    return { name, version: boundedToken(manifest.version, 'Worker package version', 128) };
+  }));
 }
 
 async function readBoundedText(filename: string, maxBytes: number): Promise<string> {

@@ -294,6 +294,26 @@ describe('hosted browser workspace diagnostics', () => {
 });
 
 describe('frontend build integrity', () => {
+  test('worker outputs require a manifest identity and remain verified without builder intermediates', (context) => {
+    const root = fixtureRepository(context);
+    const workerSource = 'src/lib/workers/search.worker.ts';
+    const workerOutput = '_app/immutable/workers/search.A.js';
+    write(root, `frontend/${workerSource}`, 'self.postMessage("ready");\n');
+    write(root, `frontend/.svelte-kit/output/client/${workerOutput}`, 'self.postMessage("ready");\n');
+    write(root, `frontend/build/${workerOutput}`, 'self.postMessage("ready");\n');
+    assert.throws(() => recordFrontendBuildIntegrity(root, ENVIRONMENT), /immutable client assets do not exactly match/u);
+    const manifestFile = path.join(root, 'frontend/.svelte-kit/output/client/.vite/manifest.json');
+    const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
+    manifest[workerSource] = { file: workerOutput, assets: [] };
+    writeFileSync(manifestFile, JSON.stringify(manifest));
+    const recorded = recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    assert.equal(frontendProductionChunk(recorded, workerSource), `/${workerOutput}`);
+    rmSync(path.join(root, 'frontend/.svelte-kit'), { recursive: true });
+    assert.deepEqual(assertFrontendBuildIntegrity(root, ENVIRONMENT), recorded);
+    write(root, `frontend/build/${workerOutput}`, 'self.postMessage("changed");\n');
+    assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /build is stale or mixed/u);
+  });
+
   test('records deterministic served bytes and verifies them after an absolute-root move', (context) => {
     const root = fixtureRepository(context);
     const first = recordFrontendBuildIntegrity(root, ENVIRONMENT);

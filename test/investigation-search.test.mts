@@ -10,6 +10,9 @@ import {
   MAX_RECENT_INVESTIGATION_RESULTS,
   MAX_INVESTIGATION_SEARCH_RESULTS,
   MAX_INVESTIGATION_SEARCH_TOKENS,
+  MAX_INVESTIGATION_SEARCH_TERM_BYTES,
+  MAX_INVESTIGATION_SEARCH_ENTITIES,
+  MAX_INVESTIGATION_SEARCH_TERMS_PER_ENTITY,
   markInvestigationSearchSourcesUnavailable,
   recentInvestigationResults,
   searchInvestigationIndex,
@@ -71,6 +74,23 @@ function projectionInput(overrides: Record<string, unknown> = {}): Record<string
 
 function indexFor(input: unknown) {
   return buildInvestigationSearchIndex(buildInvestigationProjection(input, { generatedAt: LATE }));
+}
+
+function indexedProjection(count: number, nameservers = 0, longTerms = false) {
+  return {
+    schema: INVESTIGATION_PROJECTION_SCHEMA, version: INVESTIGATION_PROJECTION_VERSION, generatedAt: LATE,
+    sources: Object.fromEntries(['cases', 'campaigns', 'brandProfiles', 'relationshipRows', 'relationshipObservations']
+      .map((source) => [source, { state: 'supported', version: 1, records: source === 'relationshipRows' ? 1 : 0, truncated: false }])),
+    entities: Array.from({ length: count }, (_, position) => ({
+      id: `entry-${position}`, type: 'domain', canonical: `item-${position}.example`, label: `item-${position}.example`,
+      properties: { domain: `item-${position}.example`, nameservers: Array.from({ length: nameservers }, (_, item) =>
+        `ns${item}.item-${position}.${longTerms ? `${'long'.repeat(55)}.` : ''}example`) },
+      observationIds: ['source-observation'], observationsTruncated: false,
+    })),
+    observations: [{ id: 'source-observation', kind: 'scan_relationship_evidence', store: 'relationshipRows', recordId: 'source.example',
+      source: 'retained_scan', observedAt: LATE, complete: true, truncated: false, limitations: [] as string[] }],
+    relationships: [], truncated: false, limitations: [] as string[],
+  };
 }
 
 describe('local investigation search index', () => {
@@ -359,7 +379,102 @@ describe('local investigation search index', () => {
     assert.equal(response.results.length, MAX_INVESTIGATION_SEARCH_RESULTS);
     assert.ok(response.totalMatches > response.results.length);
     assert.equal(response.truncated, true);
-    assert.match(response.detail, /first 50/);
+    assert.match(response.detail, /matches 1–50/);
+  });
+
+  test('pages through every indexed result with exact ordering, bounded pages and safe invalid-page defaults', () => {
+    const index = buildInvestigationSearchIndex(indexedProjection(123));
+    const all = [1, 2, 3].flatMap((page) => searchInvestigationIndex(index, 'item-', { page }).results);
+    assert.equal(all.length, 123);
+    assert.equal(new Set(all.map((item) => item.entityId)).size, 123);
+    assert.match(searchInvestigationIndex(index, 'item-', { page: 3 }).detail, /101–123 of 123/u);
+    assert.deepEqual(searchInvestigationIndex(index, 'item-', { page: 999 }).results, all.slice(100));
+    for (const page of [0, -1, Number.NaN, 1.5]) {
+      assert.deepEqual(searchInvestigationIndex(index, 'item-', { page }).results, all.slice(0, 50));
+    }
+    assert.equal(searchInvestigationIndex(index, 'item-', { pageSize: 1000 }).results.length, 50);
+    assert.equal(searchInvestigationIndex(index, 'item-', { pageSize: 3, page: 2 }).results[0]!.entityId, all[3]!.entityId);
+  });
+
+  test('indexes the full admitted rich projection without a second independent term-count ceiling', () => {
+    const index = buildInvestigationSearchIndex(indexedProjection(MAX_INVESTIGATION_SEARCH_ENTITIES, 20));
+    assert.equal(index.entityCount, 6000);
+    assert.equal(index.termCount, 126000);
+    assert.equal(index.truncated, false);
+    assert.equal(searchInvestigationIndex(index, 'ns19.item-5999.example').results[0]?.entityId, 'entry-5999');
+    assert.equal(markInvestigationSearchSourcesUnavailable(index, []), index);
+    const marked = markInvestigationSearchSourcesUnavailable(index, ['campaigns']);
+    assert.equal(marked.entries, index.entries);
+    assert.equal(marked.truncated, true);
+    assert.match(searchInvestigationIndex(marked, 'unmatched').detail, /coverage is partial/u);
+  });
+
+  test('exact matching retains Unicode-expanded terms and does not introduce fuzzy results', () => {
+    const projection = indexedProjection(1);
+    const entity = requiredValue(projection.entities[0]);
+    entity.label = '\uFDFA'.repeat(30);
+    const index = buildInvestigationSearchIndex(projection);
+    assert.equal(searchInvestigationIndex(index, '\uFDFA'.repeat(30)).results[0]?.entityId, entity.id);
+    assert.equal(searchInvestigationIndex(index, 'itm-0').totalMatches, 0);
+    assert.equal(searchInvestigationIndex(index, 'bad\nquery').state, 'invalid');
+  });
+
+  test('retains every canonical identity before optional fields consume the UTF-8 term budget', () => {
+    const index = buildInvestigationSearchIndex(indexedProjection(2000, 20, true));
+    assert.equal(index.entityCount, 2000);
+    const bytes = index.entries.reduce((total, entry) => total + entry.terms.reduce((sum, term) => sum + Buffer.byteLength(term.normalized), 0), 0);
+    assert.ok(bytes <= MAX_INVESTIGATION_SEARCH_TERM_BYTES);
+    assert.ok(bytes > MAX_INVESTIGATION_SEARCH_TERM_BYTES - 300);
+    assert.equal(index.truncated, true);
+    assert.equal(searchInvestigationIndex(index, 'item-1999.example').results[0]?.entityId, 'entry-1999');
+    assert.ok(index.limitations.some((value) => /Search omissions: [1-9][0-9]* eligible terms/u.test(value)));
+  });
+
+  test('per-item omissions and mandatory coverage notes survive full optional limitation arrays', () => {
+    const projection = indexedProjection(1, 80);
+    projection.limitations = Array.from({ length: 20 }, (_, index) => `Optional projection note ${index}.`);
+    projection.observations[0]!.limitations = Array.from({ length: 20 }, (_, index) => `Optional source note ${index}.`);
+    const index = buildInvestigationSearchIndex(projection);
+    assert.equal(index.entries[0]!.terms.length, MAX_INVESTIGATION_SEARCH_TERMS_PER_ENTITY);
+    assert.equal(index.entries[0]!.termsTruncated, true);
+    assert.equal(index.truncated, true);
+    assert.match(index.limitations[0]!, /coverage is partial/u);
+    assert.ok(index.limitations.some((value) => value.includes('16 uninspected nameserver values')));
+    assert.ok(index.entries[0]!.limitations.some((value) => value.includes('Search retained 32 of 65')));
+    assert.ok(index.entries[0]!.limitations.some((value) => value.includes('16 additional nameserver values')));
+  });
+
+  test('does not choose arbitrary duplicate identities or invent observation clocks', () => {
+    const duplicated = indexedProjection(1);
+    duplicated.observations.push({ ...duplicated.observations[0]!, source: 'other_retained_source' });
+    const ambiguous = buildInvestigationSearchIndex(duplicated);
+    assert.equal(ambiguous.entityCount, 0);
+    assert.equal(ambiguous.truncated, true);
+    assert.ok(ambiguous.limitations.some((value) => value.includes('2 duplicate-identity rows')));
+    const undated = indexedProjection(1);
+    undated.observations[0]!.observedAt = '2026-09-01T00:00:00';
+    const missingTime = buildInvestigationSearchIndex(undated);
+    assert.equal(missingTime.entityCount, 0);
+    assert.equal(missingTime.truncated, true);
+    assert.ok(missingTime.limitations.some((value) => value.includes('1 malformed or undated rows')));
+  });
+
+  test('rejects duplicate identities even when a conflicting row is malformed and does not repair source identifiers', () => {
+    const projection = indexedProjection(1);
+    projection.observations.push({ ...projection.observations[0]!, observedAt: 'not-a-time' });
+    const duplicate = buildInvestigationSearchIndex(projection);
+    assert.equal(duplicate.entityCount, 0);
+    assert.match(duplicate.limitations.join(' '), /2 duplicate-identity rows/u);
+    const altered = indexedProjection(1);
+    altered.observations[0]!.recordId = ' source.example ';
+    assert.equal(buildInvestigationSearchIndex(altered).entityCount, 0);
+    const references = indexedProjection(1);
+    references.entities[0]!.observationIds = ['source-observation', ' source-observation ', ...Array.from({ length: 100 }, (_, index) => `missing-${index}`)];
+    const limited = buildInvestigationSearchIndex(references);
+    assert.equal(limited.entityCount, 1);
+    assert.equal(limited.truncated, true);
+    assert.match(limited.limitations.join(' '), /1 entities with capped or invalid source references/u);
+    assert.equal(limited.entries[0]!.observedAt, '2026-07-19T00:00:00.000Z');
   });
 
   test('keeps source partialness, truncation, and limitations visible', () => {

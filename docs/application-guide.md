@@ -26,6 +26,8 @@ Case and watchlist counts. A nearby disclosure identifies the records behind a
 summary; viewing Dashboard does not mark anything reviewed.
 
 Saved-work search, templates and archive maintenance are secondary tools.
+Search results are paged; every indexed match is reachable. The coverage
+disclosure identifies unavailable collections and omitted fields or records.
 Search stays in the browser and operates over bounded normalised fields; it does
 not start collection or inspect raw upstream payloads.
 
