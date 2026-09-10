@@ -600,17 +600,12 @@ test('profile deletion separates a committed read failure from a rejected write'
   expect(after.records).toEqual(before.records);
 });
 
-test('keeps healthy Profiles available after an unreadable import and clears preference failure after activation succeeds', async ({ page }) => {
+test('keeps healthy Profiles available after a rejected import and clears preference failure after activation succeeds', async ({ page }) => {
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, storageEntries([], [profileFixture()], ''), { destination: '/brands' });
   await expect(page.getByRole('heading',{name:'Fixture profile',exact:true})).toBeVisible();
-  await page.evaluate(()=>{
-    const original=File.prototype.text;
-    let pending=true;
-    File.prototype.text=function text(){if(pending){pending=false;return Promise.reject(new DOMException('Fixture file could not be read','NotReadableError'));}return original.call(this);};
-  });
   await page.locator('label.file-btn input[type="file"]').setInputFiles({name:'profiles.json',mimeType:'application/json',buffer:Buffer.from('{}')});
-  await expect(page.getByRole('status').filter({hasText:'Fixture file could not be read'})).toBeVisible();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('This JSON file is not a WHOISleuth Brand Profile export.');
   await expect(page.getByRole('heading',{name:'Fixture profile',exact:true})).toBeVisible();
   await expect(page.locator('#brand-profile-source-state')).toHaveCount(0);
 

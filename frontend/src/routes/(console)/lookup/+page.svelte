@@ -728,6 +728,8 @@
     loading=true;loadingElapsedMs=0;error='';result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseNote='';caseStatus='';caseDisposition=DEFAULT_DISPOSITION;caseReviewReason='';caseRecheckComparison=null;linkedWatchlistNames=[];watchlistSourceState='loading';watchlistStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;evidenceExportStatus='';
     const requestedLookupMode=lookupMode;
     const requestRevision=++lookupRevision;
+    const revealIntent=lookupAnchorController?.captureRevealIntent();
+    const requestCurrent=()=>pageActive&&requestRevision===lookupRevision&&lookupEntries[0]===submittedEntry&&lookupMode===requestedLookupMode;
     const lookupUrl=buildLookupRequestUrl(target,{
       mode:lookupMode,
       includeExternalIntelligence,
@@ -747,22 +749,24 @@
         (elapsedMs)=>{loadingElapsedMs=elapsedMs;},
         refreshProfileContext,
       );
-      if(completed.state==='stale'||!pageActive||requestRevision!==lookupRevision||lookupEntries[0]!==submittedEntry||lookupMode!==requestedLookupMode)return;
+      if(completed.state==='stale'||!requestCurrent())return;
       const outcome=completed.outcome;
       if(!outcome.ok){error=outcome.message;return;}
       result=outcome.value;completedLookupTarget=target;completedIncidentUrl=submittedIncident?.exactUrl??'';completedLookupDepth=requestedLookupMode;
       await Promise.all([refreshCase(requestRevision),refreshWatchlistContext(requestRevision)]);
-      if(!pageActive||requestRevision!==lookupRevision||lookupEntries[0]!==submittedEntry||lookupMode!==requestedLookupMode)return;
-      if(options.refreshCaseEvidence)await openLookupCase();
-      if(!pageActive||requestRevision!==lookupRevision||lookupEntries[0]!==submittedEntry||lookupMode!==requestedLookupMode)return;
-      requestAnimationFrame(()=>{
-        if(options.refreshCaseEvidence){void navigateToResultSection('#case-response');return;}
-        if(window.location.hash&&lookupEvidenceFamilyForHref(window.location.hash))navigateToCurrentLookupHash();
-        else document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
-      });
+      if(!requestCurrent())return;
+      if(options.refreshCaseEvidence&&revealIntent?.current())await openLookupCase();
+      if(!requestCurrent())return;
+      loading=false;
+      await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
+      if(!requestCurrent()||!revealIntent?.current())return;
+      if(options.refreshCaseEvidence){void navigateToResultSection('#case-response');return;}
+      if(window.location.hash&&lookupEvidenceFamilyForHref(window.location.hash))navigateToCurrentLookupHash();
+      else document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
     }catch{
       if(pageActive&&requestRevision===lookupRevision)error='Lookup request could not be prepared.';
     }finally{
+      revealIntent?.dispose();
       if(pageActive&&requestRevision===lookupRevision)loading=false;
     }
   }
@@ -1115,7 +1119,7 @@
 {/if}
 
 <style>
-  .result-root{min-width:0;overflow-x:clip;overflow-clip-margin:3px}
+  .result-root{min-width:0;overflow-x:clip;overflow-clip-margin:3px;scroll-margin-top:var(--local-nav-anchor-offset,72px)}
   .evidence-sections{display:flow-root}
   .detailed-assessment{margin-top:12px;padding:0;overflow:hidden}
   .detailed-assessment>summary{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:14px;cursor:pointer;list-style:none}

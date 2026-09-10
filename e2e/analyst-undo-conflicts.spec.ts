@@ -33,7 +33,7 @@ test('a failed saved view retains its name and a completed earlier save preserve
   await name.fill('Submitted view');
   await failNextBrowserLocalManifestWrite(page, 'bulk_review');
   await views.getByRole('button', { name: 'Save current view' }).click();
-  await expect(views.getByRole('status')).toContainText(/storage|quota|save/iu);
+  await expect(page.getByRole('status', { name: 'Bulk review action status' })).toContainText(/storage|quota|save/iu);
   await expect(name).toHaveValue('Submitted view');
   const release = await holdBrowserLocalTransaction(page);
   try {
@@ -43,7 +43,7 @@ test('a failed saved view retains its name and a completed earlier save preserve
   } finally {
     await release();
   }
-  await expect(views.getByRole('status')).toContainText('Submitted view');
+  await expect(page.getByRole('status', { name: 'Bulk review action status' })).toContainText('Submitted view');
   await expect(name).toHaveValue('Next view draft');
   await expect(views.getByRole('combobox', { name: 'Saved Bulk review view' }).getByRole('option', { name: 'Submitted view' })).toHaveCount(1);
 });
@@ -78,7 +78,7 @@ test('a saved-view deletion checks the selected record and preserves a later nam
   const views = page.getByRole('region', { name: 'Saved views and review queue' });
   await views.getByLabel('New view name').fill('Shared view');
   await views.getByRole('button', { name: 'Save current view' }).click();
-  await expect(views.getByRole('status')).toContainText('Shared view');
+  await expect(page.getByRole('status', { name: 'Bulk review action status' })).toContainText('Shared view');
   await views.getByRole('combobox', { name: 'Saved Bulk review view' }).selectOption({ label: 'Shared view' });
   await views.getByLabel('New view name').fill('Unsaved next view');
   await page.setViewportSize({ width: 1024, height: 768 });
@@ -96,10 +96,10 @@ test('a saved-view deletion checks the selected record and preserves a later nam
     const peer = other.getByRole('region', { name: 'Saved views and review queue' });
     await peer.getByRole('combobox', { name: 'Saved Bulk review view' }).selectOption({ label: 'Shared view' });
     await peer.getByRole('button', { name: 'Delete', exact: true }).click();
-    await expect(peer.getByRole('status')).toContainText('Deleted the Shared view review view.');
+    await expect(other.getByRole('status', { name: 'Bulk review action status' })).toContainText('Deleted the Shared view review view.');
     await expect(peer.getByRole('combobox', { name: 'Saved Bulk review view' })).toBeFocused();
     await views.getByRole('button', { name: 'Delete', exact: true }).click();
-    await expect(views.getByRole('status')).toContainText('saved view changed or was deleted');
+    await expect(page.getByRole('status', { name: 'Bulk review action status' })).toContainText('saved view changed or was deleted');
     await expect(views.getByLabel('New view name')).toHaveValue('Unsaved next view');
     expect((await readBrowserLocalCollection(page, 'bulk_review')).records).toHaveLength(0);
   } finally { await other.close(); }

@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalReads, lookupDomainIdentity, migrateLegacyBrowserData, openDashboardGuidedInvestigation, openDashboardSecondaryWorkspaces, selectBulkResultView, useTheme } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalReads, holdBrowserLocalTransaction, lookupDomainIdentity, migrateLegacyBrowserData, openDashboardGuidedInvestigation, openDashboardSecondaryWorkspaces, selectBulkResultView, useTheme } from './helpers';
 import { BASE_URL } from './constants.ts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import { INVESTIGATION_GUIDE_KEY as GUIDE_KEY } from '../frontend/src/lib/investigation-guide-storage';
@@ -103,7 +103,7 @@ async function useGuideReturn(page: import('@playwright/test').Page, step: strin
   await expect.poll(hasStableUsefulExposure, { timeout: 15_000 }).toBe(true);
 }
 
-async function installLookupFixture(page: import('@playwright/test').Page) {
+async function installLookupFixture(page: import('@playwright/test').Page, beforeResponse?: () => Promise<void>) {
   await page.route('**/api/lookup?*', async (route) => {
     const url = new URL(route.request().url());
     const domain = url.searchParams.get('q') || 'portal.example.test';
@@ -125,6 +125,7 @@ async function installLookupFixture(page: import('@playwright/test').Page) {
       whois: { status: url.searchParams.get('fast') === '1' ? 'skipped' : 'complete' },
       availability: { status: 'complete' },
     };
+    await beforeResponse?.();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -136,6 +137,76 @@ async function installLookupFixture(page: import('@playwright/test').Page) {
         diagnostics,
       }),
     });
+  });
+}
+
+for (const width of [1280, 390]) for (const intent of ['unchanged', 'guide', 'wheel'] as const) {
+  test(`late Lookup reveal respects ${intent} viewport intent at ${width}px`, { tag: '@timing-sensitive' }, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: width === 1280 ? 720 : 844 });
+    await page.addInitScript(() => {
+      const state = { resultReveals: 0 };
+      Object.defineProperty(window, '__lookupRevealProbe', { value: state });
+      const original = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = function (options?: boolean | ScrollIntoViewOptions) {
+        if (this.id === 'result') state.resultReveals += 1;
+        original.call(this, options);
+      };
+    });
+    let release: (() => Promise<void>) | null = null;
+    await installLookupFixture(page, async () => { release = await holdBrowserLocalTransaction(page); });
+    await startRecipe(page, 'New-domain triage', 'portal.test');
+    await allowAndOpen(page, 'Lookup');
+    const run = page.getByRole('button', { name: 'Run lookup', exact: true });
+    await run.click();
+    const resultHeading = page.getByRole('heading', { name: 'portal.test', exact: true });
+    let retainedResultTop = 0;
+    try {
+      await expect(page.getByRole('heading', { name: 'registered', exact: true })).toBeVisible();
+      await expect.poll(() => release !== null).toBe(true);
+      await expect(page.getByRole('button', { name: 'Looking up…', exact: true })).toBeDisabled();
+      if (intent === 'guide') {
+        await openWorkPlan(page);
+        await expect(page.locator('details.work-plan > summary')).toBeFocused();
+      } else if (intent === 'wheel') {
+        const before = await page.evaluate(() => window.scrollY);
+        await page.mouse.move(width * 0.75, 300);
+        await page.mouse.wheel(0, 1000);
+        await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
+        retainedResultTop = await resultHeading.evaluate(async (element) => {
+          await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+          return element.getBoundingClientRect().top;
+        });
+      }
+    } finally {
+      const finish = release as (() => Promise<void>) | null;
+      if (finish) await finish();
+    }
+    await expect(run).toBeEnabled();
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())))));
+    const revealCount = await page.evaluate(() => (window as unknown as { __lookupRevealProbe: { resultReveals: number } }).__lookupRevealProbe.resultReveals);
+    if (intent === 'unchanged') {
+      expect(revealCount).toBe(1);
+      await expect(resultHeading).toBeInViewport();
+      await expect.poll(() => resultHeading.evaluate((element) =>
+        element.getBoundingClientRect().top - (document.querySelector('.shell > header')?.getBoundingClientRect().bottom ?? 0),
+      )).toBeGreaterThanOrEqual(0);
+      for (const theme of ['light', 'dark'] as const) {
+        await useTheme(page, theme);
+        await page.screenshot({ path: testInfo.outputPath(`lookup-reveal-${width}-${theme}.png`) });
+      }
+    } else {
+      expect(revealCount).toBe(0);
+      if (intent === 'guide') {
+        await expect(page.locator('details.work-plan > summary')).toBeFocused();
+        await expect(page.locator('details.work-plan > summary')).toBeInViewport();
+      } else {
+        // Removing the loading note can change scrollY through native scroll anchoring.
+        // The content the analyst reached must retain its viewport position.
+        const resultTop = await resultHeading.evaluate(element => element.getBoundingClientRect().top);
+        expect(Math.abs(resultTop - retainedResultTop)).toBeLessThanOrEqual(1);
+      }
+    }
   });
 }
 

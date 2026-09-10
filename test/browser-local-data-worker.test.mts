@@ -298,6 +298,19 @@ test('file worker enforces malformed, future and byte admission without reading 
   assert.equal((await runLocalDataWorkerRequest(null as unknown as LocalDataWorkerRequest)).kind, 'error');
 });
 
+test('a selected file read failure cannot enter a merge or modify the supplied profile collection', async () => {
+  const profile = normalizeBrandProfile({ id: 'read-failure', name: 'Retained profile', officialDomains: ['retained.example'], createdAt: NOW, updatedAt: NOW });
+  assert.ok(profile);
+  const current = [profile];
+  const before = structuredClone(current);
+  class UnreadableFile extends Blob {
+    override async text(): Promise<string> { throw new DOMException('Selected file could not be read.', 'NotReadableError'); }
+  }
+  const response = await runLocalDataWorkerRequest({ kind: 'import-profiles', current, file: new UnreadableFile(['{}']), nowIso: NOW });
+  assert.deepEqual(response, { kind: 'error', code: 'INVALID_LOCAL_DATA', detail: 'Selected file could not be read.' });
+  assert.deepEqual(current, before);
+});
+
 test('preparation failures and cancellation never trigger a foreground retry and always release the worker', async (context) => {
   let reads = 0;
   class TrackedFile extends Blob { override async text() { reads += 1; return super.text(); } }
