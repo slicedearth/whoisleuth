@@ -59,10 +59,10 @@ export const PRODUCTION_COVERAGE_EXCLUSIONS: readonly CoverageExclusion[] = Obje
   Object.freeze({ source: 'cli/runner-types.mts', category: 'type_only', owner: 'tsconfig.json' }),
   Object.freeze({ source: 'frontend/src/lib/analyst-review-state.ts', category: 'browser_adapter', owner: 'e2e/analyst-operations.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/analyst-undo.ts', category: 'browser_adapter', owner: 'e2e/analyst-operations.spec.ts' }),
+  Object.freeze({ source: 'frontend/src/lib/browser-workspace-provider.ts', category: 'browser_adapter', owner: 'e2e/browser-workspaces.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/bulk-review.ts', category: 'browser_adapter', owner: 'e2e/bulk-analysis.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/bulk-sessions.ts', category: 'browser_adapter', owner: 'e2e/bulk-session-workflows.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/campaigns.ts', category: 'browser_adapter', owner: 'e2e/investigation-search.spec.ts' }),
-  Object.freeze({ source: 'frontend/src/lib/candidate-handoff.ts', category: 'browser_adapter', owner: 'e2e/candidate-handoff.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/capabilities.ts', category: 'browser_adapter', owner: 'e2e/capabilities.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/components/demo-stages/brands.ts', category: 'compatibility_re_export', owner: 'e2e/demo.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/components/demo-stages/bulk.ts', category: 'compatibility_re_export', owner: 'e2e/demo.spec.ts' }),
@@ -72,12 +72,14 @@ export const PRODUCTION_COVERAGE_EXCLUSIONS: readonly CoverageExclusion[] = Obje
   Object.freeze({ source: 'frontend/src/lib/controllers/lookup-anchor-controller.ts', category: 'browser_adapter', owner: 'e2e/lookup-anchor-navigation.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/ct-history.ts', category: 'browser_adapter', owner: 'e2e/discover.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/detection-rules.ts', category: 'browser_adapter', owner: 'e2e/hosted-monitoring.spec.ts' }),
+  Object.freeze({ source: 'frontend/src/lib/download-local-file.ts', category: 'browser_adapter', owner: 'e2e/investigation-package.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/investigation-search.ts', category: 'browser_adapter', owner: 'e2e/investigation-search.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/investigation-templates.ts', category: 'browser_adapter', owner: 'e2e/dashboard.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/local-data-platform-probe.ts', category: 'browser_adapter', owner: 'e2e/local-data-platform.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/relationship-observations.ts', category: 'browser_adapter', owner: 'e2e/case-relationship-workflows.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/shortlist.ts', category: 'browser_adapter', owner: 'e2e/shortlist-storage.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/website-snapshots.ts', category: 'browser_adapter', owner: 'e2e/hosted-monitoring.spec.ts' }),
+  Object.freeze({ source: 'frontend/src/lib/workers/investigation-package.worker.ts', category: 'browser_adapter', owner: 'e2e/investigation-package.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/workspace-archive.ts', category: 'browser_adapter', owner: 'e2e/dashboard.spec.ts' }),
   Object.freeze({ source: 'frontend/src/routes/(public)/guide/+page.ts', category: 'framework_entry', owner: 'e2e/public-guide.spec.ts' }),
   Object.freeze({ source: 'frontend/src/routes/(public)/resources/[slug]/+page.ts', category: 'framework_entry', owner: 'e2e/public-guide.spec.ts' }),
@@ -325,30 +327,37 @@ export function parseProductionCoverage(input: string): ProductionCoverageReport
   });
 }
 
-function assertThreshold(actual: CoverageCount, minimum: number, label: string): void {
+function thresholdProblem(actual: CoverageCount, minimum: number, label: string): string | null {
   if (!Number.isFinite(minimum) || minimum < 0 || minimum > 100) throw new TypeError(`${label} threshold is invalid.`);
-  if (actual.percentage + Number.EPSILON < minimum) {
-    throw new Error(`${label} is ${actual.percentage.toFixed(2)}%; required ${minimum.toFixed(2)}%.`);
-  }
+  return actual.percentage + Number.EPSILON < minimum
+    ? `${label} is ${actual.percentage.toFixed(2)}%; required ${minimum.toFixed(2)}%.`
+    : null;
 }
 
 export function validateProductionCoverage(
   report: ProductionCoverageReport,
   policy: CoveragePolicy = PRODUCTION_COVERAGE_POLICY,
 ): void {
+  const problems: string[] = [];
   const observedAreas = new Set(report.records.map((record) => sourceArea(record.source)).filter(Boolean));
   const missingAreas = policy.requiredAreas.filter((area) => !observedAreas.has(area));
-  if (missingAreas.length) throw new Error(`Production coverage is missing maintained runtime areas: ${missingAreas.join(', ')}.`);
-  assertThreshold(report.global.lines, policy.global.lines, 'Global line coverage');
-  assertThreshold(report.global.branches, policy.global.branches, 'Global branch coverage');
-  assertThreshold(report.global.functions, policy.global.functions, 'Global function coverage');
+  if (missingAreas.length) problems.push(`Production coverage is missing maintained runtime areas: ${missingAreas.join(', ')}.`);
+  for (const metric of ['lines', 'branches', 'functions'] as const) {
+    const problem = thresholdProblem(report.global[metric], policy.global[metric], `Global ${metric === 'branches' ? 'branch' : metric.slice(0, -1)} coverage`);
+    if (problem) problems.push(problem);
+  }
   for (const [source, thresholds] of Object.entries(policy.criticalFiles)) {
     const record = report.records.find((candidate) => candidate.source === source);
-    if (!record) throw new Error(`Production coverage is missing critical source ${source}.`);
-    assertThreshold(record.lines, thresholds.lines, `${source} line coverage`);
-    assertThreshold(record.branches, thresholds.branches, `${source} branch coverage`);
-    assertThreshold(record.functions, thresholds.functions, `${source} function coverage`);
+    if (!record) {
+      problems.push(`Production coverage is missing critical source ${source}.`);
+      continue;
+    }
+    for (const metric of ['lines', 'branches', 'functions'] as const) {
+      const problem = thresholdProblem(record[metric], thresholds[metric], `${source} ${metric === 'branches' ? 'branch' : metric.slice(0, -1)} coverage`);
+      if (problem) problems.push(problem);
+    }
   }
+  if (problems.length) throw new Error(problems.join('\n'));
 }
 
 export function validateProductionCoverageInventory(
@@ -363,20 +372,22 @@ export function validateProductionCoverageInventory(
   }
   const exclusionSources = exclusions.map((item) => item.source);
   if (new Set(exclusionSources).size !== exclusionSources.length) throw new TypeError('Production coverage exclusions must be unique.');
+  const problems: string[] = [];
   for (const exclusion of exclusions) {
-    if (!inventorySet.has(exclusion.source)) throw new Error(`Production coverage exclusion is stale or unknown: ${exclusion.source}.`);
+    if (!inventorySet.has(exclusion.source)) problems.push(`Production coverage exclusion is stale or unknown: ${exclusion.source}.`);
     if (!SAFE_SOURCE_PATH.test(exclusion.owner) || !ownerExists(exclusion.owner)) {
-      throw new Error(`Production coverage exclusion owner is missing for ${exclusion.source}.`);
+      problems.push(`Production coverage exclusion owner is missing for ${exclusion.source}.`);
     }
   }
   const observed = new Set(report.records.map((record) => record.source));
   const unknown = [...observed].filter((source) => !inventorySet.has(source));
-  if (unknown.length) throw new Error(`Production coverage measured unknown source files: ${unknown.join(', ')}.`);
+  if (unknown.length) problems.push(`Production coverage measured unknown source files: ${unknown.join(', ')}.`);
   const stale = exclusions.filter((item) => observed.has(item.source));
-  if (stale.length) throw new Error(`Production coverage exclusions are now measured and must be removed: ${stale.map((item) => item.source).join(', ')}.`);
+  if (stale.length) problems.push(`Production coverage exclusions are now measured and must be removed: ${stale.map((item) => item.source).join(', ')}.`);
   const excluded = new Set(exclusionSources);
   const missing = inventory.filter((source) => !observed.has(source) && !excluded.has(source));
-  if (missing.length) throw new Error(`Production coverage has unreviewed source omissions: ${missing.join(', ')}.`);
+  if (missing.length) problems.push(`Production coverage has unreviewed source omissions: ${missing.join(', ')}.`);
+  if (problems.length) throw new Error(problems.join('\n'));
   const categories: Record<CoverageExclusion['category'], number> = {
     type_only: 0,
     compatibility_re_export: 0,
@@ -449,10 +460,18 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     const size = statSync(coveragePath).size;
     if (size < 1 || size > MAX_PRODUCTION_COVERAGE_BYTES) throw new TypeError('LCOV file has an invalid byte count.');
     const report = parseProductionCoverage(readFileSync(coveragePath, 'utf8'));
-    validateProductionCoverage(report);
-    const sources = readProductionCoverageInventory();
-    const forwarding = await discoverForwardingCoverageExclusions(report, sources);
-    const inventory = validateProductionCoverageInventory(report, sources, [...PRODUCTION_COVERAGE_EXCLUSIONS, ...forwarding]);
+    const problems: string[] = [];
+    let inventory: CoverageInventorySummary | undefined;
+    try { validateProductionCoverage(report); }
+    catch (error) { problems.push(error instanceof Error ? error.message : 'Production coverage thresholds failed.'); }
+    // Inventory validation is independent of the measured percentages. Report
+    // both sets of failures from this run instead of hiding later omissions.
+    try {
+      const sources = readProductionCoverageInventory();
+      const forwarding = await discoverForwardingCoverageExclusions(report, sources);
+      inventory = validateProductionCoverageInventory(report, sources, [...PRODUCTION_COVERAGE_EXCLUSIONS, ...forwarding]);
+    } catch (error) { problems.push(error instanceof Error ? error.message : 'Production coverage inventory failed.'); }
+    if (problems.length) throw new Error(problems.join('\n'));
     process.stdout.write(`${formatProductionCoverage(report, inventory)}\n`);
     return 0;
   } catch (error) {

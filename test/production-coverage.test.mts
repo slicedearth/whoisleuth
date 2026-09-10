@@ -12,6 +12,7 @@ import {
   discoverForwardingCoverageExclusions,
   parseProductionCoverage,
   productionCoverageArguments,
+  readProductionCoverageInventory,
   validateProductionCoverage,
   validateProductionCoverageInventory,
   type CoveragePolicy,
@@ -225,6 +226,82 @@ describe('production coverage policy', () => {
       lcovRecord('cli/runner.mts', [10, 8, 8, 8, 5, 5]),
     ].join('\n'));
     assert.throws(() => validateProductionCoverage(report, FOCUSED_COVERAGE_POLICY), /critical\.mts branch coverage is 62\.50%; required 75\.00%/u);
+  });
+
+  test('reports every measured threshold and missing area from one valid report', () => {
+    const report = parseProductionCoverage(lcovRecord('lib/critical.mts', [10, 1, 8, 1, 5, 1]));
+    assert.throws(() => validateProductionCoverage(report, FOCUSED_COVERAGE_POLICY), error => {
+      assert.ok(error instanceof Error);
+      for (const expected of [
+        'missing maintained runtime areas: CLI',
+        'Global line coverage is 10.00%; required 80.00%',
+        'Global branch coverage is 12.50%; required 70.00%',
+        'Global function coverage is 20.00%; required 90.00%',
+        'lib/critical.mts line coverage is 10.00%; required 90.00%',
+        'lib/critical.mts branch coverage is 12.50%; required 75.00%',
+        'lib/critical.mts function coverage is 20.00%; required 100.00%',
+      ]) assert.ok(error.message.includes(expected), expected);
+      return true;
+    });
+  });
+
+  test('reports missing, measured, unknown and unowned inventory entries together', () => {
+    const report = parseProductionCoverage([
+      lcovRecord('lib/measured.mts'), lcovRecord('lib/unknown.mts'),
+    ].join('\n'));
+    assert.throws(() => validateProductionCoverageInventory(report,
+      ['lib/measured.mts', 'lib/untested.mts'],
+      [
+        { source: 'lib/measured.mts', category: 'browser_adapter', owner: 'e2e/missing.spec.ts' },
+        { source: 'lib/removed.mts', category: 'browser_adapter', owner: 'e2e/missing.spec.ts' },
+      ], () => false), error => {
+      assert.ok(error instanceof Error);
+      for (const expected of [
+        'exclusion is stale or unknown: lib/removed.mts',
+        'exclusion owner is missing for lib/measured.mts',
+        'exclusion owner is missing for lib/removed.mts',
+        'measured unknown source files: lib/unknown.mts',
+        'exclusions are now measured and must be removed: lib/measured.mts',
+        'unreviewed source omissions: lib/untested.mts',
+      ]) assert.ok(error.message.includes(expected), expected);
+      return true;
+    });
+  });
+
+  test('the executable reports threshold and inventory failures before rejecting the same report', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-coverage-diagnostics-'));
+    try {
+      const omitted = 'cli/discriminated-command-handlers.mts';
+      const underCovered = 'cli/workflow-command-runner.mts';
+      const nowMeasured = 'frontend/src/lib/browser-workspace-provider.ts';
+      const excluded = new Set(PRODUCTION_COVERAGE_EXCLUSIONS.map(item => item.source));
+      const sources = readProductionCoverageInventory().filter(source =>
+        source !== omitted && (!excluded.has(source) || source === nowMeasured));
+      assert.ok(sources.includes(underCovered));
+      assert.ok(sources.includes(nowMeasured));
+      const file = path.join(directory, 'fixture.lcov');
+      await writeFile(file, sources.map(source => lcovRecord(source,
+        source === underCovered ? [10, 1, 8, 1, 5, 1] : [10, 10, 8, 8, 5, 5])).join('\n'));
+      const environment = { ...process.env };
+      delete environment.NODE_V8_COVERAGE;
+      await assert.rejects(promisify(execFile)(process.execPath, ['tools/production-coverage.mts', file], {
+        cwd: path.resolve(import.meta.dirname, '..'), env: environment,
+        encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024,
+      }), error => {
+        const result = error as Error & { code: number; stdout: string; stderr: string };
+        assert.equal(result.code, 2);
+        assert.equal(result.stdout, '');
+        for (const expected of [
+          `missing critical source ${omitted}`,
+          `${underCovered} line coverage is 10.00%; required 95.00%`,
+          `${underCovered} branch coverage is 12.50%; required 65.00%`,
+          `${underCovered} function coverage is 20.00%; required 100.00%`,
+          `exclusions are now measured and must be removed: ${nowMeasured}`,
+          `unreviewed source omissions: ${omitted}`,
+        ]) assert.ok(result.stderr.includes(expected), expected);
+        return true;
+      });
+    } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
   test('closes the complete source inventory with explicit, owned non-unit exclusions', () => {
