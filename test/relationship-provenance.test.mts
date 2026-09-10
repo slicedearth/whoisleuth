@@ -177,13 +177,16 @@ test('saved Bulk round trips preserve source times, while public rows remain exp
   const result = requiredValue(session.results[0]);
   result.relationship = relationshipObservation({ tls: tls('partial') });
   result.observedAt = LAST;
+  result.sourceCoverage = [{ source: 'dns', state: 'partial', observedAt: FIRST }, { source: 'tls', state: 'partial', observedAt: LAST }];
   const browserRow = fromBulkSessionResult(result);
   assert.equal(browserRow.saved.observedAt, LAST);
   assert.equal(toBulkSessionResult(browserRow).observedAt, LAST);
+  assert.deepEqual(toBulkSessionResult(browserRow).sourceCoverage, result.sourceCoverage);
   const restored = normalizeBulkSessionStore(JSON.parse(serializeBulkSessionStore(normalized)));
   const after = requiredValue(requiredValue(restored.sessions[0]).results[0]);
   assert.equal(after.observedAt, LAST);
   assert.deepEqual(after.relationship.sourceEvidence, result.relationship.sourceEvidence);
+  assert.deepEqual(after.sourceCoverage, result.sourceCoverage);
   const imported = mergeBulkSessions([], buildBulkSessionExport(restored, RETAINED));
   assert.equal(requiredValue(requiredValue(imported.sessions[0]).results[0]).observedAt, LAST);
   const publicEmpty = JSON.parse(await readFile(new URL('./fixtures/workspace-lifecycle/browser-bulk-v4.json', import.meta.url), 'utf8'));
@@ -207,6 +210,14 @@ test('the exact public archive migrates real rows and pivots without changing hi
   const bulk = requiredValue(normalizeBulkSessionStore(raw.sections.bulkSessions).sessions[0]);
   assert.equal(bulk.results.length, 2);
   assert.ok(bulk.results.every((row) => row.observedAt === null && Object.keys(row.relationship.sourceEvidence).length === 0));
+  assert.ok(bulk.results.every((row) => row.sourceCoverage.every((source) => source.observedAt === null)));
+  const addedClocks = structuredClone(raw.sections.bulkSessions);
+  for (const row of addedClocks.sessions[0].results) {
+    row.observedAt = RETAINED;
+    for (const source of row.sourceCoverage) source.observedAt = RETAINED;
+  }
+  const migrated = requiredValue(normalizeBulkSessionStore(addedClocks).sessions[0]);
+  assert.ok(migrated.results.every((row) => row.observedAt === null && row.sourceCoverage.every((source) => source.observedAt === null)));
   const pivot = requiredValue(normalizeRelationshipObservationStore(raw.sections.relationshipObservations).observations[0]);
   assert.equal(pivot.normalizedValue, 'a'.repeat(64));
   assert.equal(pivot.complete, false);
@@ -249,8 +260,10 @@ test('an undated pivot stays available as an explicit retention event, not a fre
     && entry.observedAt === RETAINED && entry.complete === false && entry.limitations.some((text) => text.includes('retention only'))));
   const timeline = buildRetainedEvidenceTimeline({ relationships: [record], now: RETAINED });
   const event = requiredValue(timeline.items.find((entry) => entry.kind === 'relationship'));
-  assert.equal(event.eventType, 'change');
+  assert.equal(event.eventType, 'evidence');
   assert.equal(event.freshness, 'unknown');
-  assert.equal(event.source, 'Analyst retention');
+  assert.equal(event.source, record.source);
+  assert.equal(event.observedAt, null);
+  assert.equal(event.storedAt, RETAINED);
   assert.equal(record.observedAt, null);
 });

@@ -53,7 +53,8 @@ export async function buildBulkReviewManifest(input: Readonly<{
       reviewState: states.get(item.domain) || 'unreviewed',
       resultState: item.status,
       scanDepth: item.scanDepth,
-      sourceCoverage: item.sourceCoverage,
+      // The published manifest records source states, not full stored observations.
+      sourceCoverage: item.sourceCoverage.map(({ source, state }) => ({ source, state })),
       profileContext: { ...item.profileContext },
     }));
   const unsigned = {

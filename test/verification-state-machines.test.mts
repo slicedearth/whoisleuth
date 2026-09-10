@@ -205,7 +205,7 @@ describe('bounded verification state machines', () => {
       fc.array(fc.constantFrom(...requiredStates), { minLength: 1, maxLength: 10 }),
       (sequence) => {
         const raw = richBulkSessionStore(1);
-        const expected = sequence.map((state, index) => ({ source: `source-${index}`, state }));
+        const expected = sequence.map((state, index) => ({ source: `source-${index}`, state, observedAt: index % 2 ? NOW : null }));
         const row = requiredValue(requiredValue(raw.sessions[0]).results[0]);
         row.sourceCoverage = expected.map((item) => ({ ...item, rawSource: 'Private fixture source payload' }));
         Object.assign(row, { rawWhois: 'Private fixture WHOIS body', notes: 'Private fixture analyst note' });

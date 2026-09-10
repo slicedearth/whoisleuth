@@ -24,26 +24,28 @@
     case_review: 'Review case',
   } as const;
 
-  let { review, now = new Date().toISOString(), oncase }: {
+  let { review, oncase }: {
     review: EvidenceDebtReview;
-    now?: string;
     oncase?: (caseId: string) => void;
   } = $props();
   let ownerFilter = $state<EvidenceDebtOwner | ''>('');
   let stateFilter = $state<EvidenceDebtState | ''>('');
   let sourceFilter = $state('');
   let page = $state(1);
+  let matrixPage = $state(1);
   let previousScope = $state('');
-  const sourceOptions = $derived([...new Map(review.items.map((item) => [item.sourceId, item.sourceLabel])).entries()]
-    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0));
+  const sourceQuery = $derived(sourceFilter.trim().toLowerCase());
   const filtered = $derived(review.items.filter((item) => (
     (!ownerFilter || item.owner === ownerFilter)
     && (!stateFilter || item.states.includes(stateFilter))
-    && (!sourceFilter || item.sourceId === sourceFilter)
+    && (!sourceQuery || `${item.sourceId} ${item.sourceLabel}`.toLowerCase().includes(sourceQuery))
   )));
   const pageCount = $derived(Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)));
   const currentPage = $derived(Math.min(page, pageCount));
   const visible = $derived(filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE));
+  const matrixPageCount = $derived(Math.max(1, Math.ceil(review.matrix.length / PAGE_SIZE)));
+  const currentMatrixPage = $derived(Math.min(matrixPage, matrixPageCount));
+  const visibleMatrix = $derived(review.matrix.slice((currentMatrixPage - 1) * PAGE_SIZE, currentMatrixPage * PAGE_SIZE));
   const scopeKey = $derived(`${review.sourceStates.bulk}:${review.sourceStates.cases}:${review.items.length}:${review.items[0]?.id ?? ''}`);
   const unavailableSources = $derived([
     review.sourceStates.bulk === 'unavailable' ? 'saved Bulk sessions' : '',
@@ -63,6 +65,7 @@
     if (scopeKey === previousScope) return;
     previousScope = scopeKey;
     page = 1;
+    matrixPage = 1;
   });
 
   function resetFilters() {
@@ -105,9 +108,10 @@
   {#if loadingSources.length}
     <p class="source-loading" role="status" aria-live="polite">Loading {loadingSources.join(' and ')} before reporting a complete evidence-gap count.</p>
   {/if}
+  {#if !review.evaluatedAt}<p class="source-warning" role="status">Review time unavailable. Source ages cannot be evaluated.</p>{/if}
 
   {#if review.matrix.length}
-    <details class="matrix" open>
+    <details class="matrix">
       <summary>Source states</summary>
       <div class="table-wrap desktop-matrix">
         <table>
@@ -115,7 +119,7 @@
             <tr><th>Owner</th><th>Source</th>{#each EVIDENCE_DEBT_STATES as state}<th>{stateLabels[state]}</th>{/each}<th>State total</th></tr>
           </thead>
           <tbody>
-            {#each review.matrix as row (row.id)}
+            {#each visibleMatrix as row (row.id)}
               <tr>
                 <td>{row.owner === 'bulk' ? 'Bulk' : 'Case pin'}</td>
                 <th scope="row">{row.sourceLabel}</th>
@@ -127,13 +131,14 @@
         </table>
       </div>
       <ul class="mobile-matrix">
-        {#each review.matrix as row (row.id)}
+        {#each visibleMatrix as row (row.id)}
           <li>
             <strong>{row.sourceLabel}</strong><span>{row.owner === 'bulk' ? 'Bulk' : 'Case pin'} · {row.total} state{row.total === 1 ? '' : 's'}</span>
             <dl>{#each EVIDENCE_DEBT_STATES as state}{#if row.counts[state]}<div><dt>{stateLabels[state]}</dt><dd>{row.counts[state]}</dd></div>{/if}{/each}</dl>
           </li>
         {/each}
       </ul>
+      <Pagination currentPage={currentMatrixPage} pageCount={matrixPageCount} setPage={(value) => matrixPage = value} ariaLabel="Source-state pages" pageInputLabel="Source-state page number" />
     </details>
   {/if}
 
@@ -142,7 +147,7 @@
       <h3>Sources to review</h3>
       <p>High-impact source failures and conflicts lead; medium-impact partial, stale, or unsupported evidence follows.</p>
     </div>
-    <span>{filtered.length} visible</span>
+    <span>{filtered.length} matching</span>
   </div>
   <div class="filters" role="group" aria-label="Evidence-gap filters">
     <label>Owner
@@ -159,10 +164,7 @@
       </select>
     </label>
     <label>Source
-      <select bind:value={sourceFilter} onchange={() => { page = 1; }}>
-        <option value="">All retained sources</option>
-        {#each sourceOptions as [id, label]}<option value={id}>{label}</option>{/each}
-      </select>
+      <input type="search" bind:value={sourceFilter} oninput={() => { page = 1; }} maxlength="80" placeholder="Filter sources">
     </label>
     <button type="button" class="btn" onclick={resetFilters}>Reset filters</button>
   </div>
@@ -191,7 +193,7 @@
         </li>
       {/each}
     </ol>
-    <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Evidence-gap pages" />
+    <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Evidence-gap pages" pageInputLabel="Evidence-gap page number" />
   {:else if review.truncated}
     <p class="empty incomplete">No matching item is visible within the bounded queue. Omitted items may remain.</p>
   {:else if review.countsComplete}
@@ -216,7 +218,7 @@
   {/if}
 
   {#if review.truncated}
-    <p class="bound-warning">Bounded projection: {review.omissions.items} queue item{review.omissions.items === 1 ? '' : 's'}, {review.omissions.matrixRows} matrix source row{review.omissions.matrixRows === 1 ? '' : 's'}, {review.omissions.bulkRows} Bulk row{review.omissions.bulkRows === 1 ? '' : 's'}, and {review.omissions.casePins} case pin{review.omissions.casePins === 1 ? '' : 's'} were outside display or scan bounds.</p>
+    <p class="bound-warning">Input exceeds the owning collection limits: {review.omissions.bulkSessions} Bulk sessions, {review.omissions.bulkRows} Bulk rows, {review.omissions.bulkSources} source records, {review.omissions.cases} Cases and {review.omissions.casePins} pins were outside those limits. {review.omissions.items} queue items and {review.omissions.matrixRows} matrix rows were omitted.</p>
   {/if}
   {#if review.omissions.olderBulkObservations}
     <p class="superseded-note">{review.omissions.olderBulkObservations} older duplicate Bulk source observation{review.omissions.olderBulkObservations === 1 ? ' was' : 's were'} superseded by a newer exact saved observation.</p>
@@ -248,7 +250,7 @@
   .queue-heading>span{flex:0 0 auto;color:var(--muted);font:650 var(--text-xs) var(--mono)}
   .filters{display:grid;grid-template-columns:repeat(3,minmax(130px,1fr)) auto;align-items:end;gap:8px;margin:14px 0}
   .filters label{display:grid;gap:5px;min-width:0;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
-  .filters select{width:100%;min-width:0;min-height:36px}
+  .filters select,.filters input{width:100%;min-width:0;min-height:36px}
   .filters button{min-height:36px}
   .queue{display:grid;gap:9px;margin:0;padding:0;list-style:none}
   .queue>li{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:14px;border-left:3px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}

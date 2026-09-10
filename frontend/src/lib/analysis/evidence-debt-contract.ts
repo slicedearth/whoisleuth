@@ -1,8 +1,11 @@
+import { MAX_CASES, MAX_CASE_EVIDENCE_PINS } from '../../../../packages/contracts/case-portability.mts';
+import { MAX_BULK_SESSIONS, MAX_BULK_SESSION_ROWS, MAX_BULK_SESSION_SOURCES } from '../../../../packages/contracts/workspace-portability.mts';
+
 export const EVIDENCE_DEBT_VERSION = 1;
-export const MAX_EVIDENCE_DEBT_ITEMS = 500;
-export const MAX_EVIDENCE_DEBT_MATRIX_ROWS = 64;
-export const MAX_EVIDENCE_DEBT_BULK_ROWS = 2_000;
-export const MAX_EVIDENCE_DEBT_CASE_PINS = 2_000;
+export const MAX_EVIDENCE_DEBT_BULK_ROWS = MAX_BULK_SESSIONS * MAX_BULK_SESSION_ROWS;
+export const MAX_EVIDENCE_DEBT_CASE_PINS = MAX_CASES * MAX_CASE_EVIDENCE_PINS;
+export const MAX_EVIDENCE_DEBT_ITEMS = MAX_EVIDENCE_DEBT_BULK_ROWS * MAX_BULK_SESSION_SOURCES + MAX_EVIDENCE_DEBT_CASE_PINS;
+export const MAX_EVIDENCE_DEBT_MATRIX_ROWS = MAX_EVIDENCE_DEBT_ITEMS;
 
 export const EVIDENCE_DEBT_STATES = [
   'conflicting',
@@ -55,6 +58,7 @@ export type EvidenceDebtReview = Readonly<{
   matrix: readonly EvidenceDebtMatrixRow[];
   counts: Readonly<Record<EvidenceDebtState | 'all', number>>;
   sourceStates: Readonly<{ bulk: EvidenceDebtSourceState; cases: EvidenceDebtSourceState }>;
+  evaluatedAt: string | null;
   countsComplete: boolean;
   truncated: boolean;
   omissions: Readonly<{
@@ -63,6 +67,9 @@ export type EvidenceDebtReview = Readonly<{
     bulkRows: number;
     casePins: number;
     olderBulkObservations: number;
+    bulkSessions: number;
+    cases: number;
+    bulkSources: number;
   }>;
   retention: Readonly<{
     bulkRowsWithoutCoverage: number;

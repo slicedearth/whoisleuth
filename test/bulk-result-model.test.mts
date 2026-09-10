@@ -148,12 +148,34 @@ describe('Bulk result model', () => {
       http: { status: 'future' },
       tls: { status: 'error' },
     }), [
-      { source: 'rdap', state: 'complete' },
-      { source: 'whois', state: 'skipped' },
-      { source: 'availability', state: 'partial' },
-      { source: 'dns', state: 'unsupported' },
-      { source: 'tls', state: 'error' },
+      { source: 'rdap', state: 'complete', observedAt: null },
+      { source: 'whois', state: 'skipped', observedAt: null },
+      { source: 'availability', state: 'partial', observedAt: null },
+      { source: 'dns', state: 'unsupported', observedAt: null },
+      { source: 'tls', state: 'error', observedAt: null },
     ]);
+  });
+
+  it('retains each source clock independently and rejects mismatched or unsupported envelope clocks', () => {
+    const rdap = '2026-09-01T01:00:00.000Z';
+    const whois = '2026-09-01T02:00:00.000Z';
+    const availability = '2026-09-01T03:00:00.000Z';
+    const dns = '2026-09-01T04:00:00.000Z';
+    const body = { availability: { applicable: true as const, domain: 'example.test', state: 'registered' as const, confidence: 'high' as const }, diagnostics: {
+      version: 7, rdap: { status: 'success', fetchedAt: rdap },
+      whois: { status: 'success', queriedAt: whois }, availability: { status: 'partial' },
+    } } as const;
+    const sources = compactSourceCoverage(body, {
+      observedAt: availability,
+      dns: { version: 1, source: 'dns', status: 'success', observedAt: dns },
+      http: { version: 1, source: 'tls', status: 'success', observedAt: dns },
+      tls: { version: 999, source: 'tls', status: 'success', observedAt: dns },
+    });
+    assert.deepEqual(sources.map(({ source, observedAt }) => [source, observedAt]), [
+      ['rdap', rdap], ['whois', whois], ['availability', availability], ['dns', dns], ['http', null], ['tls', null],
+    ]);
+    assert.deepEqual(compactSourceCoverage(body, { dns: { version: 1, source: 'dns', status: 'partial', observedAt: '2026-09-01T04:00:00' } }).find((source) => source.source === 'dns'),
+      { source: 'dns', state: 'partial', observedAt: null });
   });
 
   it('restores compact session rows without inventing excluded evidence', () => {

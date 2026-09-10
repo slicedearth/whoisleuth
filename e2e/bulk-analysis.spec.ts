@@ -68,7 +68,9 @@ test('offers bounded request pacing and preserves the operator choice during con
   await pacing.selectOption('gentle');
   await expect(page.locator('.mode-help')).toContainText('at most 2 lookups run in parallel');
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/u }).click();
+  await expect(page.getByRole('heading', { name: 'Bulk', exact: true })).toBeVisible();
   await expect(page.getByLabel('Request pacing')).toHaveValue('gentle');
 
   await page.getByLabel('Scan mode').selectOption('deep');
@@ -80,7 +82,9 @@ test('keeps the Bulk queue available when browser-local context cannot be loaded
   await failBrowserLocalReads(page);
   const navigation = page.locator('#console-navigation');
   await navigation.getByRole('link', { name: /^Dashboard/u }).click();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await navigation.getByRole('link', { name: /^Bulk/u }).click();
+  await expect(page.getByRole('heading', { name: 'Bulk', exact: true })).toBeVisible();
 
   await expect(page.locator('.local-context-status')).toContainText('Some browser-local context could not be loaded');
   await expect(page.locator('.local-context-status')).toContainText('profile');
@@ -170,7 +174,9 @@ test('retains successfully loaded Bulk context when one collection is unavailabl
   await failBrowserLocalCollectionReads(page, 'brand_profiles');
   const navigation = page.locator('#console-navigation');
   await navigation.getByRole('link', { name: /^Dashboard/u }).click();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await navigation.getByRole('link', { name: /^Bulk/u }).click();
+  await expect(page.getByRole('heading', { name: 'Bulk', exact: true })).toBeVisible();
   await expect(page.locator('.local-context-status')).toContainText('profile');
   await expect(page.locator('.local-context-status')).toContainText('Successfully loaded collections remain available');
   await openBulkWorkspaceTools(page);
@@ -214,8 +220,10 @@ test('keeps shortlist-derived analysis unavailable instead of inferring no selec
   await failBrowserLocalCollectionReads(page, 'shortlist');
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
   await expect(page).toHaveURL(/\/dashboard$/u);
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/u }).click();
   await expect(page).toHaveURL(/\/bulk$/u);
+  await expect(page.getByRole('heading', { name: 'Bulk', exact: true })).toBeVisible();
   await expect(page.locator('.local-context-status')).toContainText('shortlist');
   await page.locator('button.mobile-disclosure-toggle', { hasText: 'Shortlist' }).click();
   await expect(page.getByText(/The shortlist could not be read/u)).toBeVisible();
@@ -259,7 +267,9 @@ test('keeps case-derived indicator eligibility unavailable when Cases cannot be 
   await page.getByRole('button', { name: 'Save current session' }).click();
   await failBrowserLocalCollectionReads(page, 'cases');
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/u }).click();
+  await expect(page.getByRole('heading', { name: 'Bulk', exact: true })).toBeVisible();
   await openBulkWorkspaceTools(page);
   await page.locator('.bulk-sessions article', { hasText: 'Unavailable case review' }).getByRole('button', { name: 'Load' }).click();
 
@@ -939,7 +949,9 @@ test('keeps the current queue, results, filters, sort, and page during console n
 
   const consoleNavigation = page.locator('#console-navigation');
   await consoleNavigation.getByRole('link', { name: /^Dashboard/ }).click();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await consoleNavigation.getByRole('link', { name: /^Bulk/ }).click();
+  await expect(page.getByRole('heading', { name: 'Bulk', exact: true })).toBeVisible();
   await openBulkFilters(page);
 
   await expect(page.locator('#domains')).toHaveValue(domains.join('\n'));

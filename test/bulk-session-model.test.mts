@@ -132,6 +132,20 @@ function session(id = 'session-one', overrides: Record<string, unknown> = {}) {
 }
 
 describe('saved Bulk sessions', () => {
+  test('round trips independent source clocks without substituting row or session dates', () => {
+    const input = session('source-clocks', { results: [result('priority.invalid', { observedAt: LATER, sourceCoverage: [
+      { source: 'dns', state: 'complete', observedAt: FIRST },
+      { source: 'rdap', state: 'partial', observedAt: null },
+      { source: 'http', state: 'complete', observedAt: '2026-07-28T01:00:00' },
+    ] })] });
+    const normalized = normalizeBulkSessionStore([input]);
+    assert.deepEqual(normalized.sessions[0]?.results[0]?.sourceCoverage, [
+      { source: 'dns', state: 'complete', observedAt: FIRST },
+      { source: 'rdap', state: 'partial', observedAt: null },
+      { source: 'http', state: 'complete', observedAt: null },
+    ]);
+    assert.deepEqual(normalizeBulkSessionStore(JSON.parse(serializeBulkSessionStore(normalized))), normalized);
+  });
   test('only current versioned stores inherit identical session context; logical rows and mixed contexts remain explicit', () => {
     const normalized = normalizeBulkSessionStore([session()]);
     const wire = JSON.parse(serializeBulkSessionStore(normalized));

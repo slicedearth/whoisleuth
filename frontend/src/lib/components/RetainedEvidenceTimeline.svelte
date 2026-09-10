@@ -1,5 +1,6 @@
 <script lang="ts">
   import Pagination from '$lib/components/Pagination.svelte';
+  import RetainedTimelineEntities from './RetainedTimelineEntities.svelte';
   import {
     filterRetainedEvidenceTimeline,
     RETAINED_TIMELINE_AREAS,
@@ -55,7 +56,7 @@
     <div>
       <p class="eyebrow">Retained evidence</p>
       <h2 id="retained-evidence-timeline-title">Investigation timeline</h2>
-      <p>Review when retained evidence was observed and when this browser stored it. Open an owner to inspect exact values, limitations, and analyst context.</p>
+      <p>Review source observations and local activity, with storage times kept separate. Open a record for its evidence and analyst context.</p>
     </div>
     <div class="metrics" role="group" aria-label="Timeline summary">
       <span><strong>{timeline.counts.all}</strong> retained events</span>
@@ -65,17 +66,18 @@
   </header>
 
   <div class="filters" role="group" aria-label="Timeline filters">
-    <label>Entity<select bind:value={entity} onchange={resetPage}><option value="">All entities</option>{#each timeline.entities as option}<option value={option}>{option}</option>{/each}</select></label>
+    <label>Entity<input type="search" bind:value={entity} oninput={resetPage} maxlength="253" placeholder="Filter domains"></label>
     <label>Case<select bind:value={caseId} onchange={resetPage}><option value="">All cases</option>{#each timeline.cases as option}<option value={option.id}>{option.label}</option>{/each}</select></label>
-    <label>Source<select bind:value={source} onchange={resetPage}><option value="">All sources</option>{#each timeline.sources as option}<option value={option}>{option}</option>{/each}</select></label>
+    <label>Source<input type="search" bind:value={source} oninput={resetPage} maxlength="120" placeholder="Filter sources"></label>
     <label>Area<select bind:value={area} onchange={resetPage}><option value="">All areas</option>{#each RETAINED_TIMELINE_AREAS as option}<option value={option}>{areaLabel(option)}</option>{/each}</select></label>
     <label>Freshness<select bind:value={freshness} onchange={resetPage}><option value="all">Any freshness</option><option value="current">Current</option><option value="stale">Stale</option><option value="unknown">Unknown</option></select></label>
-    <label>Type<select bind:value={eventType} onchange={resetPage}><option value="all">Evidence and changes</option><option value="evidence">Evidence</option><option value="change">Changes</option></select></label>
-    <label>Observed<select bind:value={time} onchange={resetPage}><option value="all">Any time</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="90d">Last 90 days</option></select></label>
+    <label>Type<select bind:value={eventType} onchange={resetPage}><option value="all">All events</option><option value="evidence">Evidence</option><option value="change">Changes</option><option value="activity">Local activity</option></select></label>
+    <label>Event time<select bind:value={time} onchange={resetPage}><option value="all">Any time</option><option value="undated">Time unavailable</option><option value="7d" disabled={!timeline.evaluatedAt}>Last 7 days</option><option value="30d" disabled={!timeline.evaluatedAt}>Last 30 days</option><option value="90d" disabled={!timeline.evaluatedAt}>Last 90 days</option></select></label>
     <button type="button" class="btn" onclick={clearFilters} disabled={!entity&&!caseId&&!source&&!area&&freshness==='all'&&eventType==='all'&&time==='all'}>Clear filters</button>
   </div>
 
   {#if timeline.truncated}<div class="partial"><p>Partial timeline. The omitted records remain in their owning collection.</p><ul>{#each timeline.omissions as omission}<li>{omission.source}: {omission.count}</li>{/each}</ul></div>{/if}
+  {#if !timeline.evaluatedAt}<p class="partial" role="status">Review time unavailable. Source freshness and relative-date filters cannot be evaluated.</p>{/if}
   <p class="result-count">{filtered.length} matching event{filtered.length === 1 ? '' : 's'}</p>
 
   {#if visible.length}
@@ -92,14 +94,18 @@
               </div>
             </header>
             <p>{item.detail}</p>
-            {#if item.entities.length}<div class="entities">{#each item.entities as value}<code>{value}</code>{/each}</div>{/if}
+            <RetainedTimelineEntities values={item.entities} />
             <dl>
-              <div><dt>Observed</dt><dd><time datetime={item.observedAt}>{formatDate(item.observedAt)}</time></dd></div>
-              <div><dt>Stored</dt><dd><time datetime={item.storedAt}>{formatDate(item.storedAt)}</time></dd></div>
-              <div><dt>Freshness</dt><dd>{item.ageDays === null ? 'Unknown age' : `${item.ageDays} day${item.ageDays === 1 ? '' : 's'} old`} · stale at {item.freshnessThresholdDays} days</dd></div>
+              {#if item.eventType === 'activity'}
+                <div><dt>Session activity</dt><dd>{#if item.activityAt}<time datetime={item.activityAt}>{formatDate(item.activityAt)}</time>{:else}Time unavailable{/if}</dd></div>
+              {:else}
+                <div><dt>Observed</dt><dd>{#if item.observedAt}<time datetime={item.observedAt}>{formatDate(item.observedAt)}</time>{:else}Observation time unavailable{/if}</dd></div>
+              {/if}
+              <div><dt>{['case_snapshot', 'bulk_session', 'watchlist_check'].includes(item.kind) ? 'Record updated' : 'Stored'}</dt><dd>{#if item.storedAt}<time datetime={item.storedAt}>{formatDate(item.storedAt)}</time>{:else}Storage time unavailable{/if}</dd></div>
+              <div><dt>Freshness</dt><dd>{#if item.eventType === 'activity'}Not assigned to session activity{:else}{item.ageDays === null ? 'Unknown age' : `${item.ageDays} day${item.ageDays === 1 ? '' : 's'} old`} · stale at {item.freshnessThresholdDays} days{/if}</dd></div>
               <div><dt>Source</dt><dd>{item.source} · {item.sourceState}</dd></div>
               <div><dt>Area</dt><dd>{item.areas.map(areaLabel).join(' · ')}</dd></div>
-              <div><dt>Interpretation</dt><dd>{item.derived ? 'Derived relationship' : item.eventType === 'change' ? 'Observed change record' : 'Retained observation'}</dd></div>
+              <div><dt>Interpretation</dt><dd>{item.derived ? 'Derived relationship' : item.eventType === 'change' ? 'Observed change record' : item.eventType === 'activity' ? 'Local session activity; not source evidence' : 'Retained observation'}</dd></div>
             </dl>
             <div class="item-actions">
               <a class="btn" href={item.href}>Open {item.owner}</a>
@@ -110,7 +116,7 @@
         </li>
       {/each}
     </ol>
-    <Pagination currentPage={currentPage} {pageCount} setPage={(value)=>page=value} ariaLabel="Investigation timeline pages" />
+    <Pagination currentPage={currentPage} {pageCount} setPage={(value)=>page=value} ariaLabel="Investigation timeline pages" pageInputLabel="Investigation timeline page number" />
   {:else}
     <section class="empty card">
       <h3>No retained events match</h3>
@@ -124,12 +130,11 @@
 <style>
   .timeline-workspace{display:grid;gap:14px}.timeline-workspace>header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}.timeline-workspace>header h2{margin:0}.timeline-workspace>header p:not(.eyebrow){max-width:760px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .metrics{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}.metrics span{padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font:650 var(--text-2xs) var(--mono);white-space:nowrap}.metrics strong{color:var(--accent)}
-  .filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;gap:8px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}.filters label{display:grid;gap:4px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}.filters select{min-width:0;width:100%}.filters button{min-height:38px}
+  .filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;gap:8px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}.filters label{display:grid;gap:4px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}.filters select,.filters input{min-width:0;width:100%}.filters button{min-height:38px}
   .partial{margin:0;color:var(--amber);font:650 var(--text-xs) var(--mono)}.result-count{margin:0;color:var(--muted);font-size:var(--text-xs)}
   .timeline-list{display:grid;gap:0;margin:0;padding:0;list-style:none}.timeline-list>li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:7px}.rail{display:grid;justify-items:center}.rail::after{width:1px;height:100%;background:var(--border);content:''}.rail span{width:10px;height:10px;margin-top:20px;border:2px solid var(--accent);border-radius:50%;background:var(--panel-raised);box-shadow:0 0 12px rgb(var(--accent-rgb) / .32)}li.change .rail span{border-color:var(--amber);box-shadow:0 0 12px rgb(var(--amber-rgb) / .32)}li.derived .rail span{border-radius:2px}
   article{display:grid;gap:9px;margin-bottom:11px;padding:13px 14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}article>header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}article h3{margin:3px 0 0;font-size:var(--text-md)}article>p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}.kind{color:var(--accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   .item-states{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px}.completeness,.freshness-state,.truncated{padding:3px 7px;border:1px solid var(--border-strong);border-radius:999px;color:var(--text);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}.state-complete,.freshness-current{color:var(--text)}.state-partial,.state-inconclusive,.freshness-stale,.truncated{border-color:var(--amber);border-style:dashed;color:var(--amber)}.state-unknown,.freshness-unknown{border-color:var(--muted);border-style:dotted;color:var(--muted)}
-  .entities{display:flex;flex-wrap:wrap;gap:5px}.entities code{max-width:100%;padding:3px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);overflow-wrap:anywhere}
   dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0}dl div{min-width:0;padding:7px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}dt{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}dd{margin:3px 0 0;font-size:var(--text-xs);overflow-wrap:anywhere}
   .item-actions{display:flex;align-items:center;justify-content:space-between;gap:8px}.item-actions .btn{font-size:var(--text-xs)}details summary{color:var(--muted);font-size:var(--text-xs);cursor:pointer}details p{margin:7px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}.empty{padding:16px}.empty h3,.empty p{margin:0}.empty p{margin-top:5px;color:var(--muted);font-size:var(--text-xs)}.scope{margin-top:2px}
   @media(max-width:1100px){.filters{grid-template-columns:repeat(3,minmax(0,1fr))}.filters button{width:100%}}

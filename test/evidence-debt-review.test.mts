@@ -3,8 +3,8 @@ import { relationshipObservation } from '../packages/comparison/relationship-evi
 import { describe, test } from 'node:test';
 import {
   buildEvidenceDebtReview,
-  MAX_EVIDENCE_DEBT_BULK_ROWS,
 } from '../frontend/src/lib/analysis/evidence-debt-review.ts';
+import { normalizeBulkSessionStore, serializeBulkSessionStore } from '../packages/workspace/bulk-session-model.mts';
 import { buildAnalystReviewInbox } from '../frontend/src/lib/analysis/analyst-review-inbox.ts';
 import { createCase, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
 import type {
@@ -58,7 +58,7 @@ function result(domain: string, sourceCoverage: BulkSessionSourceCoverage[]): Bu
     dnssec: null,
     comparisonEvidence: null,
     relationship: relationshipObservation({}),
-    sourceCoverage,
+    sourceCoverage: sourceCoverage.map((source) => ({ observedAt: '2026-08-01T00:00:00.000Z', ...source })),
     profileContext: {
       sourceState: 'ready',
       activeProfileId: null,
@@ -209,12 +209,12 @@ describe('evidence debt review', () => {
     const older = session({
       id: 'older',
       updatedAt: '2026-07-01T00:00:00.000Z',
-      results: [result('same.invalid', [{ source: 'rdap', state: 'partial' }])],
+      results: [result('same.invalid', [{ source: 'rdap', state: 'partial', observedAt: '2026-07-01T00:00:00.000Z' }])],
     });
     const newer = session({
       id: 'newer',
       updatedAt: '2026-08-09T00:00:00.000Z',
-      results: [result('same.invalid', [{ source: 'rdap', state: 'complete' }])],
+      results: [result('same.invalid', [{ source: 'rdap', state: 'complete', observedAt: '2026-08-09T00:00:00.000Z' }])],
     });
     const forward = buildEvidenceDebtReview({ bulkSessions: [older, newer] }, NOW);
     const reverse = buildEvidenceDebtReview({ bulkSessions: [newer, older] }, NOW);
@@ -305,7 +305,7 @@ describe('evidence debt review', () => {
     assert.equal(new Set(review.items.map((item) => item.sourceId)).size, 2);
   });
 
-  test('sorts before applying scan bounds and discloses omitted rows deterministically', () => {
+  test('projects every admitted row across sessions without a second scan or display cap', () => {
     const newestRows = Array.from({ length: 1_100 }, (_, index) => result(
       `new-${String(index).padStart(4, '0')}.invalid`,
       [{ source: 'rdap', state: 'partial' }],
@@ -316,18 +316,64 @@ describe('evidence debt review', () => {
     ));
     const newer = session({ id: 'newer', updatedAt: '2026-08-09T00:00:00.000Z', domains: newestRows.map((row) => row.domain), results: newestRows });
     const older = session({ id: 'older', updatedAt: '2026-08-08T00:00:00.000Z', domains: olderRows.map((row) => row.domain), results: olderRows });
-    const review = buildEvidenceDebtReview({ bulkSessions: [older, newer] }, NOW);
-    const reversed = buildEvidenceDebtReview({ bulkSessions: [newer, older] }, NOW);
+    const admitted = normalizeBulkSessionStore([older, newer]);
+    assert.equal(admitted.sessions.flatMap((saved) => saved.results).length, 2_200);
+    assert.doesNotThrow(() => serializeBulkSessionStore(admitted));
+    const review = buildEvidenceDebtReview({ bulkSessions: admitted.sessions }, NOW);
+    const reversed = buildEvidenceDebtReview({ bulkSessions: [...admitted.sessions].reverse() }, NOW);
     assert.deepEqual(review, reversed);
-    assert.equal(review.omissions.bulkRows, 200);
-    assert.equal(review.counts.all, MAX_EVIDENCE_DEBT_BULK_ROWS);
-    assert.equal(review.items.length, 500);
-    assert.equal(review.omissions.items, 1_500);
-    assert.equal(review.countsComplete, false);
-    assert.equal(review.items.every((item) => {
-      if (!item.domain.startsWith('old-')) return true;
-      return Number(item.domain.slice(4, 8)) < 900;
-    }), true);
-    assert.equal(review.truncated, true);
+    assert.equal(review.omissions.bulkRows, 0);
+    assert.equal(review.counts.all, 2_200);
+    assert.equal(review.items.length, 2_200);
+    assert.equal(review.omissions.items, 0);
+    assert.equal(review.countsComplete, true);
+    assert.equal(review.truncated, false);
+    assert.deepEqual(new Set(review.items.map((item) => item.domain)), new Set([...newestRows, ...olderRows].map((row) => row.domain)));
+  });
+
+  test('keeps tied states and undated peers without selecting an arbitrary winner or trusting save time', () => {
+    const observedAt = '2026-08-09T00:00:00.000Z';
+    const values = [
+      session({ id: 'complete', updatedAt: '2026-07-01T00:00:00.000Z', results: [result('same.invalid', [{ source: 'dns', state: 'complete', observedAt }])] }),
+      session({ id: 'partial', updatedAt: NOW, results: [result('same.invalid', [{ source: 'dns', state: 'partial', observedAt }])] }),
+      session({ id: 'undated', updatedAt: NOW, results: [result('same.invalid', [{ source: 'dns', state: 'complete', observedAt: null }])] }),
+    ];
+    const review = buildEvidenceDebtReview({ bulkSessions: values }, NOW);
+    assert.deepEqual(review, buildEvidenceDebtReview({ bulkSessions: [...values].reverse() }, NOW));
+    assert.equal(review.items.length, 3);
+    assert.ok(review.items.every((item) => item.states.includes('conflicting') && item.states.includes('partial')));
+    assert.equal(review.items.find((item) => item.ownerId === 'undated')?.observedAt, null);
+    assert.equal(review.counts.stale, 0);
+    assert.equal(review.omissions.olderBulkObservations, 0);
+  });
+
+  test('a skipped collection cannot supersede collected evidence and different scan depths stay independent', () => {
+    const partial = session({ id: 'partial', results: [result('same.invalid', [{ source: 'dns', state: 'partial' }])] });
+    const skipped = session({ id: 'skipped', results: [result('same.invalid', [{ source: 'dns', state: 'skipped', observedAt: NOW }])] });
+    const fast = session({ id: 'fast', results: [{ ...result('same.invalid', [{ source: 'dns', state: 'complete', observedAt: NOW }]), scanDepth: 'fast' }] });
+    const review = buildEvidenceDebtReview({ bulkSessions: [partial, skipped, fast] }, NOW);
+    assert.deepEqual(review.items.map((item) => item.ownerId), ['partial']);
+    assert.equal(review.omissions.olderBulkObservations, 0);
+    assert.equal(review.retention.explicitlySkipped, 1);
+  });
+
+  test('missing, invalid and future source clocks and invalid review clocks never establish freshness', () => {
+    for (const observedAt of [null, '', '2026-08-09T00:00:00', '2026-08-10T00:00:00.000Z']) {
+      const review = buildEvidenceDebtReview({ bulkSessions: [session({ updatedAt: NOW, results: [result('clock.invalid', [{ source: 'dns', state: 'complete', observedAt }])] })] }, NOW);
+      assert.equal(review.counts.partial, 1);
+      assert.equal(review.counts.stale, 0);
+      assert.match(review.items[0]?.limitations.join(' ') ?? '', /session save time does not establish freshness/u);
+    }
+    const review = buildEvidenceDebtReview({ bulkSessions: [session()], cases: [caseRecord({ evidencePins: [pin('clock-pin', 'complete')] })] }, 'invalid');
+    assert.equal(review.evaluatedAt, null);
+    assert.equal(review.counts.partial, 2);
+    assert.equal(review.counts.stale, 0);
+  });
+
+  test('source spelling remains an identity rather than merging unrelated punctuation variants', () => {
+    const record = caseRecord({ evidencePins: [pin('one', 'partial', 'partial', 'source-one'), pin('two', 'partial', 'partial', 'source_one')] });
+    const review = buildEvidenceDebtReview({ cases: [record] }, NOW);
+    assert.equal(review.matrix.length, 2);
+    assert.deepEqual(new Set(review.matrix.map((row) => row.sourceId)), new Set(['source-one', 'source_one']));
   });
 });

@@ -318,7 +318,7 @@ export const BULK_SESSION_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   supportedVersions: BULK_SESSION_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_BULK_SESSION_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Public schema 4 sessions migrate with unknown row times and contributing-source provenance. Schema 5 retains those bounded fields without retaining raw lookup payloads; future versions are preserved without rewrite.',
+  note: 'Public schema 4 sessions migrate with unknown row and per-source observation times and contributing-source provenance. Schema 5 retains those bounded fields without retaining raw lookup payloads; future versions are preserved without rewrite.',
 });
 export const INVESTIGATION_TEMPLATE_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.investigation-templates', kind: 'browser_store', schema: null,
@@ -389,7 +389,7 @@ export const BULK_SESSION_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   supportedVersions: SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_BULK_SESSION_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Public schema 4 sessions migrate directly to schema 5 with unknown historical row times and source provenance. Current exports retain source-qualified relationship evidence and bounded profile context.',
+  note: 'Public schema 4 sessions migrate directly to schema 5 with unknown historical row and per-source observation times and source provenance. Current exports retain source-qualified relationship evidence and bounded profile context.',
 });
 export const INVESTIGATION_TEMPLATE_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.investigation-templates', kind: 'export', schema: INVESTIGATION_TEMPLATE_SCHEMA,

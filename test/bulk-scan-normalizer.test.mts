@@ -79,10 +79,10 @@ describe('Bulk scan normalizer', () => {
     });
     assert.deepEqual(result.abuseEvidence, { abuseEmail: 'abuse@example.test' });
     assert.deepEqual(result.sourceCoverage, [
-      { source: 'rdap', state: 'complete' },
-      { source: 'whois', state: 'skipped' },
-      { source: 'availability', state: 'complete' },
-      { source: 'dns', state: 'complete' },
+      { source: 'rdap', state: 'complete', observedAt: null },
+      { source: 'whois', state: 'skipped', observedAt: null },
+      { source: 'availability', state: 'complete', observedAt: null },
+      { source: 'dns', state: 'complete', observedAt: null },
     ]);
     assert.doesNotMatch(JSON.stringify(result), /must not persist|publication metadata|delivery metadata/u);
 

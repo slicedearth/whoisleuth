@@ -36,7 +36,7 @@ export type BulkMailExposureRow = Readonly<{
   baselineDetail: string;
   mutationTypes: readonly string[];
   registration: string;
-  sourceCoverage: readonly BulkSessionSourceCoverage[];
+  sourceCoverage: readonly Pick<BulkSessionSourceCoverage, 'source' | 'state'>[];
   profileContextState: BulkProfileContextProvenance['sourceState'];
   profileContextLimitation: string;
   limitations: readonly string[];
@@ -257,7 +257,8 @@ export function buildBulkMailExposureReport(
         ...relation(state, profile, profileSourceState, profileContextComparable, profileContextLimitation),
         mutationTypes: item.mutationTypes.slice(0, 40),
         registration: item.availability,
-        sourceCoverage: item.sourceCoverage.slice(0, 12),
+        // The published review retains source states; full source clocks stay in the workspace.
+        sourceCoverage: item.sourceCoverage.map(({ source, state }) => ({ source, state })),
         profileContextState: item.profileContext.sourceState,
         profileContextLimitation,
         limitations: rowLimitations(item, state, profileSourceState, profileContextComparable, profileContextLimitation),

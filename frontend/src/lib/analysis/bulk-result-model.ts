@@ -5,7 +5,7 @@ import type { CompactLookupHttpResponse } from './lookup-response.ts';
 import type { RelationshipObservation } from './relationship-evidence.ts';
 import { normalizeCaaCritical } from './dns-record-normalization.ts';
 import { recordOrNull } from '../../../../lib/json-record.mts';
-import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+import { normalizeExplicitIsoTimestamp, OBSERVATION_VERSION } from '../../../../packages/evidence/observation.mts';
 import {
   BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION,
   normalizeBulkProfileContext,
@@ -185,17 +185,20 @@ export function compactSourceCoverage(
   availability: Record<string, unknown>,
 ): BulkSessionSourceCoverage[] {
   const diagnostics = plainRecord(body.diagnostics);
-  const sources: Array<[string, unknown]> = [
-    ['rdap', plainRecord(diagnostics?.rdap)?.status],
-    ['whois', plainRecord(diagnostics?.whois)?.status],
-    ['availability', plainRecord(diagnostics?.availability)?.status],
-    ['dns', plainRecord(availability.dns)?.status],
-    ['http', plainRecord(availability.http)?.status],
-    ['tls', plainRecord(availability.tls)?.status],
+  const rdap = plainRecord(diagnostics?.rdap);
+  const whois = plainRecord(diagnostics?.whois);
+  const sources: Array<[string, unknown, unknown]> = [
+    ['rdap', rdap?.status, rdap?.fetchedAt],
+    ['whois', whois?.status, whois?.queriedAt],
+    ['availability', plainRecord(diagnostics?.availability)?.status, availability.observedAt],
+    ...(['dns', 'http', 'tls'] as const).map((source): [string, unknown, unknown] => {
+      const evidence = plainRecord(availability[source]);
+      return [source, evidence?.status, evidence?.version === OBSERVATION_VERSION && evidence.source === source ? evidence.observedAt : null];
+    }),
   ];
-  return sources.flatMap(([source, value]) => {
+  return sources.flatMap(([source, value, observedAt]) => {
     const state = sourceState(value);
-    return state ? [{ source, state }] : [];
+    return state ? [{ source, state, observedAt: normalizeExplicitIsoTimestamp(observedAt) }] : [];
   });
 }
 

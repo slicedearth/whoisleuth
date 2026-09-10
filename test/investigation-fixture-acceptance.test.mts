@@ -41,7 +41,7 @@ test('the populated Bulk fixture matches the current writer and independently pr
   const built = await buildBulkReviewManifest({
     generatedAt: '2026-09-01T01:00:00.000Z', observedAt: '2026-09-01T00:00:00.000Z', lookupProfile: 'deep', view,
     rows: [
-      { domain: 'review.example', status: 'complete', scanDepth: 'deep', sourceCoverage: [{ source: 'rdap', state: 'partial' }, { source: 'dns', state: 'unavailable' }],
+      { domain: 'review.example', status: 'complete', scanDepth: 'deep', sourceCoverage: [{ source: 'rdap', state: 'partial', observedAt: '2026-09-01T00:00:00.000Z' }, { source: 'dns', state: 'unavailable', observedAt: null }],
         profileContext: { sourceState: 'unavailable', activeProfileId: null, profileUpdatedAt: null, limitation: 'Profile context was unavailable.' },
         raw: 'private-source-sentinel', contacts: ['private-contact-sentinel'], notes: 'private-note-sentinel' },
       { domain: 'failed.example', status: 'error', scanDepth: 'deep', sourceCoverage: [],

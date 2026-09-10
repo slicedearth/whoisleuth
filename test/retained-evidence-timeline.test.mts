@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createCase, normalizeCase } from '../frontend/src/lib/analysis/case-model.ts';
+import { createCase, normalizeCase, normalizeCaseStore, serializeCaseStore } from '../frontend/src/lib/analysis/case-model.ts';
 import type { BulkSession } from '../frontend/src/lib/analysis/bulk-session-model.ts';
 import { createRelationshipObservation } from '../frontend/src/lib/analysis/relationship-observation-model.ts';
 import {
@@ -12,6 +12,41 @@ import { normalizeWebsiteProfileSnapshot } from '../frontend/src/lib/analysis/we
 
 const OBSERVED_AT = '2026-07-20T00:00:00.000Z';
 const STORED_AT = '2026-07-21T00:00:00.000Z';
+const ALL_FILTERS = { entity: '', caseId: '', source: '', area: '', freshness: 'all', eventType: 'all', time: 'all' } as const;
+
+test('all admitted pins remain searchable beyond the former 2,000-entry projection limit', () => {
+  const cases = Array.from({ length: 75 }, (_, index) => {
+    const record = createCase({ domain: `retained-${index}.example`, evidencePin: { label: 'Undated fact', value: 'Known value', source: 'whois', observedAt: null } }, STORED_AT);
+    record.evidencePins = Array.from({ length: 40 }, (_, pin) => ({ ...record.evidencePins[0]!, id: `pin-${index}-${pin}` }));
+    return record;
+  });
+  const admitted = normalizeCaseStore(JSON.parse(serializeCaseStore(cases))).cases;
+  assert.equal(admitted.length, 75);
+  assert.equal(admitted.flatMap((record) => record.evidencePins).length, 3_000);
+  const timeline = buildRetainedEvidenceTimeline({ cases: admitted, now: STORED_AT });
+  assert.equal(timeline.items.length, 3_000);
+  assert.equal(timeline.truncated, false);
+  assert.equal(timeline.freshnessCounts.unknown, 3_000);
+  assert.equal(filterRetainedEvidenceTimeline(timeline, { ...ALL_FILTERS, entity: 'retained-74.example', time: 'undated' }).length, 40);
+  assert.equal(filterRetainedEvidenceTimeline(timeline, { ...ALL_FILTERS, time: '7d' }).length, 0);
+});
+
+test('full relationship membership stays searchable and unavailable clocks never become current', () => {
+  const domains = Array.from({ length: 50 }, (_, index) => `member-${String(index).padStart(2, '0')}.example`);
+  const relationship = createRelationshipObservation({ type: 'ip_address', value: '192.0.2.10', domains }, { retainedAt: STORED_AT });
+  for (const observedAt of [null, '', '2026-07-20T00:00:00', '2026-07-22T00:00:00.000Z']) {
+    const timeline = buildRetainedEvidenceTimeline({ relationships: [{ ...relationship, observedAt }], now: STORED_AT });
+    assert.equal(timeline.items[0]?.freshness, 'unknown');
+    assert.deepEqual(timeline.items[0]?.entities, domains);
+    assert.equal(filterRetainedEvidenceTimeline(timeline, { ...ALL_FILTERS, entity: 'member-49' }).length, 1);
+    assert.equal(filterRetainedEvidenceTimeline(timeline, { ...ALL_FILTERS, time: '7d' }).length, 0);
+  }
+  const timeline = buildRetainedEvidenceTimeline({ relationships: [{ ...relationship, observedAt: OBSERVED_AT }], now: 'invalid' });
+  assert.equal(timeline.evaluatedAt, null);
+  assert.equal(timeline.items[0]?.freshness, 'unknown');
+  assert.equal(filterRetainedEvidenceTimeline(timeline, { ...ALL_FILTERS, time: '7d' }).length, 0);
+  assert.equal(filterRetainedEvidenceTimeline(timeline, ALL_FILTERS).length, 1);
+});
 
 test('the timeline retains the complete supported Case history and counts nested exclusions', () => {
   const base = createCase({ domain: 'history.example', source: 'lookup', evidence: { scanDepth: 'deep', availability: 'registered', capturedAt: OBSERVED_AT } }, STORED_AT);
@@ -36,9 +71,11 @@ test('the timeline retains the complete supported Case history and counts nested
   assert.equal(overBound.truncated, true);
   assert.deepEqual(overBound.omissions, [{ source: 'Case snapshots outside the source bound', count: 1 }]);
   const undated = buildRetainedEvidenceTimeline({ cases: [{ ...record, evidenceHistory: [{ ...history[0]!, capturedAt: '' }] }], now: STORED_AT });
-  assert.equal(undated.items.length, 0);
-  assert.equal(undated.truncated, true);
-  assert.deepEqual(undated.omissions, [{ source: 'Undated Case snapshots', count: 1 }]);
+  assert.equal(undated.items.length, 1);
+  assert.equal(undated.items[0]?.observedAt, null);
+  assert.equal(undated.items[0]?.freshness, 'unknown');
+  assert.equal(undated.truncated, false);
+  assert.deepEqual(undated.omissions, []);
 });
 
 test('retained evidence timeline keeps observation, storage, source, and owner context separate', () => {
@@ -137,9 +174,13 @@ test('retained evidence timeline keeps observation, storage, source, and owner c
   assert.equal(timeline.counts.watchlist_check, 1);
   assert.equal(timeline.counts.relationship, 1);
   assert.equal(timeline.counts.change, 1);
-  assert.equal(timeline.freshnessCounts.stale, 2);
+  assert.equal(timeline.freshnessCounts.stale, 1);
   assert.equal(timeline.freshnessCounts.current, 4);
-  assert.ok(timeline.items.every((item) => item.observedAt === OBSERVED_AT));
+  assert.equal(timeline.freshnessCounts.unknown, 1);
+  assert.ok(timeline.items.filter((item) => item.kind !== 'bulk_session').every((item) => item.observedAt === OBSERVED_AT));
+  assert.equal(timeline.items.find((item) => item.kind === 'bulk_session')?.observedAt, null);
+  assert.equal(timeline.items.find((item) => item.kind === 'bulk_session')?.activityAt, OBSERVED_AT);
+  assert.equal(timeline.counts.activity, 1);
   assert.ok(timeline.items.every((item) => item.storedAt === STORED_AT));
   assert.ok(timeline.items.every((item) => item.href.startsWith('/')));
   assert.doesNotMatch(JSON.stringify(timeline), /Example Registrar/u);
@@ -218,14 +259,14 @@ test('retained evidence timeline exposes bounded area and freshness review acros
     caseId: '',
     source: '',
     area: 'bulk',
-    freshness: 'stale',
+    freshness: 'unknown',
     eventType: 'all',
     time: 'all',
   }, '2026-07-29T00:00:00.000Z');
   assert.equal(staleBulk.length, 1);
   assert.equal(staleBulk[0]?.kind, 'bulk_session');
   assert.equal(staleBulk[0]?.freshnessThresholdDays, 7);
-  assert.match(staleBulk[0]?.limitations.join(' ') ?? '', /does not establish the current state/u);
+  assert.match(staleBulk[0]?.limitations.join(' ') ?? '', /not a source observation/u);
 
   const currentLookup = filterRetainedEvidenceTimeline(timeline, {
     entity: '',

@@ -701,7 +701,7 @@ test('projects retained evidence into a filterable source-attributed timeline', 
   await expect(workspace).toContainText('Timeline Bulk review retained');
   await page.getByRole('button', { name: 'Clear filters' }).click();
   await page.getByLabel('Freshness').selectOption('stale');
-  await expect(workspace.locator('.timeline-list article')).toHaveCount(2);
+  await expect(workspace.locator('.timeline-list article')).toHaveCount(1);
   await page.getByRole('button', { name: 'Clear filters' }).click();
   await page.getByLabel('Type').selectOption('change');
   await expect(workspace.locator('.timeline-list article')).toHaveCount(1);
@@ -711,7 +711,7 @@ test('projects retained evidence into a filterable source-attributed timeline', 
   await expect(page.getByRole('heading', { name: 'Timeline watchlist' })).toBeVisible();
   await expect(page.locator('#watchlist-history')).toBeFocused();
   await page.getByRole('tab', { name: /^Timeline/u }).click();
-  await page.getByLabel('Entity').selectOption('timeline-related.invalid');
+  await page.getByRole('searchbox', { name: 'Entity', exact: true }).fill('timeline-related.invalid');
   await expect(workspace.locator('.timeline-list article')).toHaveCount(1);
   await expect(workspace.getByRole('link', { name: /Open Retained relationship/ })).toHaveAttribute('href', /view=relationships/);
 

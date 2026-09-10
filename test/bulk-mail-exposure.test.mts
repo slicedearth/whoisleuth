@@ -202,6 +202,7 @@ describe('Bulk lookalike mail exposure', () => {
   test('exports a deterministic bounded review without raw records', async () => {
     const report = buildBulkMailExposureReport([{
       ...result('export.example'),
+      sourceCoverage: [{ source: 'dns', state: 'complete', observedAt: OBSERVED_AT }],
       rawWhois: 'excluded',
       registrant: { email: 'private@example.test' },
     }], {
@@ -214,6 +215,7 @@ describe('Bulk lookalike mail exposure', () => {
     assert.match(first.document.integrity.digestSha256, /^sha256:[a-f0-9]{64}$/u);
     assert.equal(first.content.includes('private@example.test'), false);
     assert.equal(first.content.includes('excluded'), false);
+    assert.deepEqual(report.rows[0]?.sourceCoverage, [{ source: 'dns', state: 'complete' }]);
     const verification = await verifyOfflineArtifact(first.content);
     assert.equal(verification.artifact.schema, 'whoisleuth.bulk-mail-exposure');
     assert.equal(verification.state, 'verified');

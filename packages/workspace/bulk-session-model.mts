@@ -79,6 +79,7 @@ export type BulkSessionSourceState =
 export type BulkSessionSourceCoverage = {
   source: string;
   state: BulkSessionSourceState;
+  observedAt?: string | null;
 };
 
 export type BulkSessionRiskFactor = {
@@ -356,7 +357,7 @@ function normalizeSourceCoverage(value: unknown): BulkSessionSourceCoverage[] {
     const state = boundedText(item?.state, 20);
     if (!SOURCE_RE.test(source) || !SOURCE_STATES.has(state) || seen.has(source)) continue;
     seen.add(source);
-    output.push({ source, state: state as BulkSessionSourceState });
+    output.push({ source, state: state as BulkSessionSourceState, observedAt: normalizeExplicitIsoTimestamp(item?.observedAt) });
     if (output.length >= MAX_BULK_SESSION_SOURCES) break;
   }
   return output;
@@ -583,6 +584,7 @@ export function normalizeBulkSession(value: unknown, sourceStoreVersion?: number
     if (publicLegacyRow) {
       result.observedAt = null;
       result.relationship.sourceEvidence = {};
+      result.sourceCoverage = result.sourceCoverage.map((source) => ({ ...source, observedAt: null }));
     }
     seen.add(result.domain);
     results.push(result);

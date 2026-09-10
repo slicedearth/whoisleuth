@@ -257,7 +257,18 @@ from collected evidence.
 
 If snapshots share the latest capture time, or any snapshot is undated, the
 timeline retains them without selecting a latest assessment. Record updates do
-not refresh evidence capture times. The calendar
+not refresh evidence capture times. The investigation timeline includes all
+admitted records across pages; domain and source filters search the complete
+projection. Undated evidence remains visible, and Bulk session activity is
+labelled separately from source observation time.
+
+Evidence gaps uses each retained source's own date. Equal-time disagreements
+and undated observations remain available; session-save times do not establish
+freshness. The queue and source-state table are paginated without dropping
+admitted records. Strictly older dated Bulk observations remain in their saved
+sessions.
+
+The calendar
 shows every matching follow-up from the admitted Case store across pages;
 completed actions and earlier effect reviews are available through its
 historical filter. Event times display in the browser's time zone. Select

@@ -54,8 +54,8 @@ function bulkSessionStore() {
         status: 'complete',
         scanDepth: 'deep',
         sourceCoverage: [
-          { source: 'rdap', state: 'partial' },
-          { source: LONG_BULK_SOURCE, state: 'unavailable' },
+          { source: 'rdap', state: 'partial', observedAt: OBSERVED_AT },
+          { source: LONG_BULK_SOURCE, state: 'unavailable', observedAt: OBSERVED_AT },
           { source: 'whois', state: 'skipped' },
         ],
       }, {
@@ -163,6 +163,8 @@ test('projects exact retained evidence gaps, exposes deliberate actions, and sta
   await expect(region).toBeVisible();
   await installNoSideEffectCounters(page);
   await expect(region.locator('.review-heading > strong')).toHaveText('4 evidence gaps to review');
+  await expect(region.locator('.matrix')).not.toHaveAttribute('open');
+  await region.locator('.matrix > summary').press('Enter');
   await expect(region.getByRole('row', { name: /Bulk RDAP 0 0 0 1 0 0 1/u })).toBeVisible();
   await expect(region).toContainText('1 scanned Bulk row has no retained per-source coverage');
   await expect(region).toContainText('1 active case has no separately pinned evidence source');
@@ -186,13 +188,14 @@ test('projects exact retained evidence gaps, exposes deliberate actions, and sta
 
   const returnedRegion = page.getByRole('region', { name: 'Evidence gaps' });
   const returnedFilters = returnedRegion.getByRole('group', { name: 'Evidence-gap filters' });
-  await returnedFilters.getByLabel('Source').selectOption({ label: 'WHOIS' });
+  await returnedFilters.getByRole('searchbox', { name: 'Source', exact: true }).fill('WHOIS');
   const rateLimited = returnedRegion.locator('.queue > li', { hasText: 'rate-limited.invalid' });
   await expect(rateLimited).toBeVisible();
   const deepLookup = rateLimited.getByRole('link', { name: 'Open Deep Lookup' });
   await expect(deepLookup).toHaveAttribute('href', '/lookup?q=rate-limited.invalid&depth=deep');
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await returnedRegion.locator('.matrix > summary').press('Enter');
   await expect(returnedRegion.locator('.mobile-matrix')).toBeVisible();
   const desktopMatrix = returnedRegion.locator('.desktop-matrix');
   await expect(desktopMatrix).toHaveCount(1);
