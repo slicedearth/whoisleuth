@@ -4,9 +4,11 @@ import {
   buildLookupInvestigationBrief,
   formatLookupInvestigationBriefMarkdown,
   lookupInvestigationBriefFilename,
+  LOOKUP_INVESTIGATION_BRIEF_VERSION,
 } from '../frontend/src/lib/analysis/lookup-investigation-brief.ts';
 import { buildDecisionFacts } from '../packages/evidence/decision-fact.mts';
 import type { LookupAssetGraph } from '../frontend/src/lib/analysis/lookup-asset-graph.ts';
+import { LOOKUP_ASSET_GRAPH_VERSION } from '../packages/contracts/investigation-portability.mts';
 import type {
   LookupDecisionSupport,
   LookupEvidenceQualityMatrix,
@@ -79,11 +81,12 @@ const quality: LookupEvidenceQualityMatrix = {
 };
 
 const graph: LookupAssetGraph = {
-  version: 2,
+  version: LOOKUP_ASSET_GRAPH_VERSION,
   targetId: 'domain:example.test',
   nodes: [{ id: 'domain:example.test', kind: 'target', label: 'example.test', detail: 'Lookup target' }],
   edges: [],
   sources: [],
+  coverage: { inputs: [] },
   truncated: false,
   limitations: ['Relationship evidence is point in time.'],
 };
@@ -150,7 +153,7 @@ test('investigation brief carries the bounded canonical Decision Fact projection
     quality,
     graph,
   });
-  assert.equal(brief.schemaVersion, 2);
+  assert.equal(brief.schemaVersion, LOOKUP_INVESTIGATION_BRIEF_VERSION);
   assert.equal(brief.decisionFacts.total, 2);
   assert.equal(brief.decisionFacts.displayed, 2);
   assert.equal(brief.decisionFacts.omitted, 0);

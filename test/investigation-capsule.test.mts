@@ -18,10 +18,14 @@ import {
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 import { projectDecisionFacts } from '../packages/evidence/decision-fact.mts';
 import type { CaseRecord } from '../packages/cases/case-record-contracts.mts';
+import { LOOKUP_ASSET_GRAPH_VERSION, LOOKUP_INVESTIGATION_BRIEF_VERSION } from '../packages/contracts/investigation-portability.mts';
+import { buildLookupAssetGraph, type LookupAssetGraph } from '../packages/investigation/lookup-asset-graph.mts';
+import { lookupGraphCapacityFixture } from './lookup-graph-capacity-fixture.mts';
+import { createLookupViewModel, parseLookupHttpResponse } from '../lib/lookup-response-contract.mts';
 
-const brief = {
+const brief: import('../packages/investigation/lookup-investigation-brief.mts').LookupInvestigationBrief = {
   schema: 'whoisleuth.investigation-brief' as const,
-  schemaVersion: 2 as const,
+  schemaVersion: LOOKUP_INVESTIGATION_BRIEF_VERSION,
   generatedAt: '2026-08-04T00:00:00.000Z',
   target: 'example.test', targetType: 'domain', task: 'general' as const,
   taskLabel: 'General review', question: 'What is known?', summary: 'Review evidence.',
@@ -29,7 +33,7 @@ const brief = {
   decisionFacts: projectDecisionFacts([]),
   relationships: { nodes: 1, edges: 0, truncated: false, kinds: [] }, limitations: [],
 };
-const graph = { version: 2 as const, targetId: 'target-example', nodes: [{ id: 'target-example', label: 'example.test', kind: 'target' as const, detail: 'Lookup target' }], edges: [], sources: [], truncated: false, limitations: [] };
+const graph: LookupAssetGraph = { version: LOOKUP_ASSET_GRAPH_VERSION, targetId: 'target-example', nodes: [{ id: 'target-example', label: 'example.test', kind: 'target' as const, detail: 'Lookup target' }], edges: [], sources: [], coverage: { inputs: [] }, truncated: false, limitations: [] };
 
 async function redigestCapsule<T extends Record<string, unknown>>(value: T): Promise<T> {
   const briefDigest = await sha256ArtifactDigestV2(value.investigationBrief);
@@ -48,6 +52,52 @@ async function redigestCapsule<T extends Record<string, unknown>>(value: T): Pro
   return value;
 }
 
+test('the exact historical v3 capsule remains readable without rewriting its graph', async () => {
+  const raw = await readFile(new URL('./fixtures/investigation-portability/investigation-capsule-v3.json', import.meta.url), 'utf8');
+  const capsule = JSON.parse(raw) as SupportedInvestigationCapsule;
+  assert.equal(capsule.schemaVersion, 3);
+  assert.equal(capsule.graphSnapshot.version, 2);
+  assert.equal((await verifyInvestigationCapsule(capsule)).valid, true);
+  assert.equal((await verifyOfflineArtifact(raw)).state, 'verified');
+});
+
+test('the current capsule fixture keeps graph identity and missing source clocks consistent', async () => {
+  const raw = await readFile(new URL('./fixtures/investigation-portability/investigation-capsule-v4.json', import.meta.url), 'utf8');
+  const capsule = JSON.parse(raw) as import('../packages/investigation/investigation-capsule.mts').InvestigationCapsule;
+  assert.equal(capsule.target.value, 'example.test');
+  assert.equal(capsule.investigationBrief.target, 'example.test');
+  assert.equal(capsule.graphSnapshot.nodes.find(node => node.id === capsule.graphSnapshot.targetId)?.label, 'example.test');
+  assert.equal(capsule.investigationBrief.observation.observedAt, null);
+  assert.equal(capsule.graphSnapshot.edges.find(edge => edge.kind === 'presents-certificate')?.observedAt, null);
+  assert.equal((await verifyOfflineArtifact(raw)).state, 'verified');
+});
+
+test('complete current graph exports verify beyond historical graph bounds and reject coverage or version drift', async () => {
+  const parsed = parseLookupHttpResponse(lookupGraphCapacityFixture());
+  if (!parsed.ok) assert.fail('The source fixture must be admitted.');
+  const view = createLookupViewModel(parsed.value);
+  const fullGraph = buildLookupAssetGraph({ ...view, rdapEvidence: view.rdap, target: 'example.test' });
+  const fullBrief = { ...brief, relationships: { nodes: fullGraph.nodes.length, edges: fullGraph.edges.length, truncated: fullGraph.truncated, kinds: [...new Set(fullGraph.edges.map(edge => edge.label))] } };
+  const capsule = await buildInvestigationCapsule({ applicationVersion: '2.3.1', lookupEvidence: { schema: 'whoisleuth.lookup-evidence', schemaVersion: 31 }, brief: fullBrief, graph: fullGraph, generatedAt: brief.generatedAt });
+  assert.ok(fullGraph.nodes.length > 72 && fullGraph.edges.length > 120);
+  assert.equal((await verifyOfflineArtifact(serializeInvestigationCapsule(capsule))).state, 'verified');
+  for (const mutate of [
+    (value: Record<string, unknown>) => { value.schemaVersion = 5; },
+    (value: Record<string, unknown>) => { (value.graphSnapshot as Record<string, unknown>).version = 2; },
+    (value: Record<string, unknown>) => { (value.investigationBrief as Record<string, unknown>).schemaVersion = 2; },
+    (value: Record<string, unknown>) => { (value.graphSnapshot as Record<string, unknown>).truncated = true; },
+    (value: Record<string, unknown>) => {
+      const row = (((value.graphSnapshot as Record<string, unknown>).coverage as Record<string, unknown>).inputs as Record<string, unknown>[]).find(row => Number(row.supplied) > 0)!;
+      row.admitted = Number(row.admitted) + 1;
+    },
+  ]) {
+    const changed = structuredClone(capsule) as unknown as Record<string, unknown>;
+    mutate(changed);
+    await redigestCapsule(changed);
+    await assert.rejects(verifyOfflineArtifact(JSON.stringify(changed)), /unsupported|malformed/iu);
+  }
+});
+
 test('investigation capsule links evidence and verifies embedded projections', async () => {
   const capsule = await buildInvestigationCapsule({
     applicationVersion: '1.35.0',
@@ -58,7 +108,7 @@ test('investigation capsule links evidence and verifies embedded projections', a
   });
   assert.equal(capsule.sourceContracts[0]?.embedded, false);
   assert.equal(capsule.schemaVersion, INVESTIGATION_CAPSULE_VERSION);
-  assert.equal(capsule.investigationBrief.schemaVersion, 2);
+  assert.equal(capsule.investigationBrief.schemaVersion, LOOKUP_INVESTIGATION_BRIEF_VERSION);
   assert.match(capsule.sourceContracts[0]?.digest ?? '', /^sha256:[a-f0-9]{64}$/u);
   assert.deepEqual(await verifyInvestigationCapsule(capsule), { valid: true, brief: true, graph: true, analystRecords: null, whole: true });
   assert.equal(investigationCapsuleFilename(capsule), 'whoisleuth-investigation-capsule-example.test-2026-08-04.json');

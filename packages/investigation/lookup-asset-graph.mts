@@ -17,7 +17,11 @@ type ForceGraphLinkInput = {
 import {
   LOOKUP_ASSET_GRAPH_SCHEMA,
   LOOKUP_ASSET_GRAPH_VERSION,
+  MAX_LOOKUP_ASSET_LIMITATIONS,
 } from '../contracts/investigation-portability.mts';
+import { MAX_PROFILE_VALUES } from '../contracts/workspace-portability.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { createGraphInputReader, graphInputIsIncomplete, type LookupAssetInputCoverage } from './lookup-asset-graph-inputs.mts';
 
 export { LOOKUP_ASSET_GRAPH_SCHEMA, LOOKUP_ASSET_GRAPH_VERSION };
 
@@ -82,6 +86,9 @@ export type LookupAssetGraph = Readonly<{
   nodes: readonly LookupAssetNode[];
   edges: readonly LookupAssetEdge[];
   sources: readonly LookupAssetSource[];
+  coverage: Readonly<{
+    inputs: readonly LookupAssetInputCoverage[];
+  }>;
   truncated: boolean;
   limitations: readonly string[];
 }>;
@@ -101,15 +108,14 @@ type JsonRecord = Record<string, unknown>;
 type NormalizedWebOrigin = Readonly<{ origin: string; hostname: string }>;
 
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/gu;
-const MAX_NODES = 72;
-const MAX_EDGES = 120;
-const MAX_VALUES = 16;
-const MAX_LIMITATIONS = 5;
+const MAX_VALUES = 64;
+const MAX_NESTED_VALUES = 32;
+const MAX_LIMITATIONS = MAX_LOOKUP_ASSET_LIMITATIONS;
 const MAX_VISUAL_EDGES_PER_HUB = 10;
 
 function projectedNodeGroup(
   node: LookupAssetNode,
-  edges: readonly LookupAssetEdge[],
+  incident: readonly LookupAssetEdge[],
 ): Readonly<{ id: string; label: string }> {
   if (node.kind === 'target') return { id: 'focus', label: 'Lookup target' };
   if (node.kind === 'address' || node.kind === 'network' || node.kind === 'prefix') {
@@ -124,7 +130,6 @@ function projectedNodeGroup(
     return { id: 'identity', label: 'Web identity' };
   }
   if (node.kind === 'hostname') {
-    const incident = edges.filter((edge) => edge.source === node.id || edge.target === node.id);
     if (incident.some((edge) => edge.kind === 'authorizes-name')) {
       return { id: 'certificate', label: 'Certificates' };
     }
@@ -137,15 +142,26 @@ function projectedNodeGroup(
   return { id: 'evidence', label: 'Other evidence' };
 }
 
+function nodeGroups(nodes: readonly LookupAssetNode[], edges: readonly LookupAssetEdge[]) {
+  const incident = new Map<string, LookupAssetEdge[]>();
+  for (const edge of edges) {
+    for (const id of [edge.source, edge.target]) {
+      const list = incident.get(id) ?? [];
+      list.push(edge);
+      incident.set(id, list);
+    }
+  }
+  return new Map(nodes.map((node) => [node.id, projectedNodeGroup(node, incident.get(node.id) ?? [])]));
+}
+
 function interleaveVisualEdgesByFamily(
   edges: readonly LookupAssetEdge[],
-  nodesById: ReadonlyMap<string, LookupAssetNode>,
+  groups: ReturnType<typeof nodeGroups>,
 ): LookupAssetEdge[] {
   const buckets = new Map<string, LookupAssetEdge[]>();
   for (const edge of edges) {
-    const endpointGroups = [nodesById.get(edge.source), nodesById.get(edge.target)]
-      .filter((node): node is LookupAssetNode => Boolean(node))
-      .map((node) => projectedNodeGroup(node, edges).id)
+    const endpointGroups = [groups.get(edge.source)?.id, groups.get(edge.target)?.id]
+      .filter((group): group is string => Boolean(group))
       .filter((group) => group !== 'focus')
       .sort();
     const family = [...new Set(endpointGroups)].join('+') || 'evidence';
@@ -180,36 +196,12 @@ function record(value: unknown): JsonRecord {
     : {};
 }
 
-function records(value: unknown, maximum = MAX_VALUES): JsonRecord[] {
-  return Array.isArray(value)
-    ? value.slice(0, maximum).map(record).filter((item) => Object.keys(item).length > 0)
-    : [];
-}
-
 function text(value: unknown, maximum = 240): string {
-  return String(value ?? '')
+  return (typeof value === 'string' ? value.slice(0, maximum * 4) : typeof value === 'number' && Number.isFinite(value) ? String(value) : '')
     .replace(CONTROL_CHARACTERS, ' ')
     .replace(/\s+/gu, ' ')
     .trim()
     .slice(0, maximum);
-}
-
-function textList(value: unknown, maximum = MAX_VALUES): string[] {
-  if (!Array.isArray(value)) return [];
-  const output: string[] = [];
-  const seen = new Set<string>();
-  for (const item of value.slice(0, maximum * 2)) {
-    const normalized = text(item, 320);
-    if (!normalized || seen.has(normalized)) continue;
-    seen.add(normalized);
-    output.push(normalized);
-    if (output.length >= maximum) break;
-  }
-  return output;
-}
-
-function limitations(value: unknown): string[] {
-  return textList(value, MAX_LIMITATIONS).map((item) => text(item, 280));
 }
 
 function hash(value: string): string {
@@ -227,9 +219,7 @@ function nodeId(kind: LookupAssetNodeKind, value: string): string {
 }
 
 function isoDate(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function hostname(value: unknown): string | null {
@@ -304,15 +294,29 @@ export function buildLookupAssetGraph(input: Readonly<{
       nodes: [],
       edges: [],
       sources: [],
+      coverage: { inputs: [] },
       truncated: false,
       limitations: ['A normalised domain target is required before an asset graph can be projected.'],
     };
   }
-  const observedAt = isoDate(input.observedAt);
+  const reader = createGraphInputReader();
+  const textList = (value: unknown, id: string, maximum = MAX_VALUES) => reader.values(id, value, maximum, (item) => {
+    if (typeof item !== 'string' || item.length > 320 || item.search(CONTROL_CHARACTERS) >= 0) {
+      return null;
+    }
+    return text(item, 320) || null;
+  }, (item) => item);
+  const records = (value: unknown, id: string, maximum = MAX_NESTED_VALUES) => reader.values(id, value, maximum,
+    (item) => item && typeof item === 'object' && !Array.isArray(item) ? item as JsonRecord : null);
+  const limitations = (value: unknown, id: string, mandatory: readonly string[] = []) => {
+    const optional = textList(value, `${id}.limitations`, MAX_LIMITATIONS - mandatory.length - 1);
+    const row = reader.coverage.get(`${id}.limitations`)!;
+    const omitted = row.supplied - row.inspected + row.omitted + row.invalid;
+    return [...new Set([...mandatory, ...optional]), ...(omitted ? [`${omitted} additional source limitation entries were not retained; review the source evidence.`] : [])];
+  };
   const nodes = new Map<string, LookupAssetNode>();
   const edges = new Map<string, LookupAssetEdge>();
   const sources = new Map<string, LookupAssetSource>();
-  let truncated = false;
   const targetId = nodeId('target', target);
   nodes.set(targetId, { id: targetId, label: target, kind: 'target', detail: 'Lookup target' });
 
@@ -321,11 +325,7 @@ export function buildLookupAssetGraph(input: Readonly<{
     if (!label) return null;
     const id = nodeId(kind, label);
     if (!nodes.has(id)) {
-      if (nodes.size >= MAX_NODES) {
-        truncated = true;
-        return null;
-      }
-      nodes.set(id, { id, label, kind, detail: text(detail, 180) });
+      nodes.set(id, { id, label, kind, detail: text(detail, 500) });
     }
     return id;
   };
@@ -333,10 +333,6 @@ export function buildLookupAssetGraph(input: Readonly<{
     if (!nodes.has(edge.source) || !nodes.has(edge.target) || edge.source === edge.target) return;
     const id = `${edge.kind}-${hash(`${edge.source}|${edge.target}|${edge.sourceLabel}`)}`;
     if (edges.has(id)) return;
-    if (edges.size >= MAX_EDGES) {
-      truncated = true;
-      return;
-    }
     const sourceId = `source-${hash(`${edge.sourceLabel}|${edge.href}`)}`;
     const existingSource = sources.get(sourceId);
     const sourceLimitations = [...new Set([
@@ -352,7 +348,7 @@ export function buildLookupAssetGraph(input: Readonly<{
       id: sourceId,
       label: edge.sourceLabel,
       href: edge.href,
-      observedAt: existingSource?.observedAt ?? edge.observedAt,
+      observedAt: existingSource && existingSource.observedAt !== edge.observedAt ? null : edge.observedAt,
       completeness: sourceCompleteness,
       limitations: sourceLimitations,
     });
@@ -370,11 +366,11 @@ export function buildLookupAssetGraph(input: Readonly<{
     addEdge({ ...edge, source, target: targetNode });
     return targetNode;
   };
-  const reviewedProfileDomains = new Set([
-    ...textList(input.profileDomains?.official, 32),
-    ...textList(input.profileDomains?.partner, 32),
-    ...textList(input.profileDomains?.allowlisted, 32),
-  ].map((value) => value.toLowerCase().replace(/\.$/u, '')));
+  const reviewedProfileDomains = new Set(['official', 'partner', 'allowlisted'].flatMap((key) => reader.values(
+    `profile.${key}`, input.profileDomains?.[key as 'official' | 'partner' | 'allowlisted'], MAX_PROFILE_VALUES,
+    (value) => typeof value === 'string' && value.length <= 253 ? hostname(value) : null,
+    (value) => value,
+  )));
   const trustBoundary = (
     candidate: string | null,
     sourceHost = target,
@@ -385,13 +381,14 @@ export function buildLookupAssetGraph(input: Readonly<{
     if (candidateOrigin && sourceOrigin && candidateOrigin === sourceOrigin) return 'same_origin';
     if (candidate === sourceHost || candidate === target || candidate.endsWith(`.${target}`)) return 'same_registrable_domain';
     if (reviewedProfileDomains.has(candidate)) return 'reviewed_profile';
+    if ([...reader.coverage.values()].some((row) => row.id.startsWith('profile.') && graphInputIsIncomplete(row))) return 'unresolved';
     return 'external';
   };
 
   const dnsEvidence = record(input.dnsEvidence);
   const dnsRecords = record(input.dnsRecords);
   const dnsCompleteness = sourceCompleteness(dnsEvidence);
-  const dnsLimits = limitations(dnsEvidence.limitations);
+  const dnsLimits = limitations(dnsEvidence.limitations, 'dns');
   const dnsEdge = (
     kind: string,
     label: string,
@@ -401,27 +398,26 @@ export function buildLookupAssetGraph(input: Readonly<{
     kind,
     label,
     sourceLabel: 'DNS',
-    observedAt: isoDate(dnsEvidence.observedAt) || observedAt,
+    observedAt: isoDate(dnsEvidence.observedAt),
     completeness: dnsCompleteness,
     limitations: dnsLimits,
     lenses,
     href,
   });
 
-  for (const address of [...textList(dnsRecords.a), ...textList(dnsRecords.aaaa)]) {
+  for (const address of [...textList(dnsRecords.a, 'dns.a'), ...textList(dnsRecords.aaaa, 'dns.aaaa')]) {
     connect('address', address, dnsEdge('resolves-to', 'resolves to', ['all']));
   }
-  for (const alias of textList(dnsRecords.cname)) {
+  for (const alias of textList(dnsRecords.cname, 'dns.cname')) {
     connect('hostname', alias, dnsEdge('aliases-to', 'aliases to', ['all']));
   }
-  for (const nameserver of textList(dnsRecords.ns)) {
+  for (const nameserver of textList(dnsRecords.ns, 'dns.ns')) {
     connect('hostname', nameserver, dnsEdge('uses-nameserver', 'uses nameserver', ['all', 'delegation']));
   }
-  for (const mx of Array.isArray(dnsRecords.mx) ? dnsRecords.mx.slice(0, MAX_VALUES) : []) {
-    const host = mxHostname(mx);
+  for (const host of reader.values('dns.mx', dnsRecords.mx, MAX_VALUES, mxHostname, (item) => item)) {
     if (host) connect('hostname', host, dnsEdge('routes-mail-to', 'routes mail to', ['all']));
   }
-  for (const binding of records(dnsRecords.https)) {
+  for (const binding of records(dnsRecords.https, 'dns.https', MAX_VALUES)) {
     const serviceTarget = hostname(binding.target);
     if (serviceTarget && serviceTarget !== '.') {
       connect(
@@ -451,9 +447,9 @@ export function buildLookupAssetGraph(input: Readonly<{
         kind: 'registered-via',
         label: 'registered via',
         sourceLabel: 'Registry RDAP',
-        observedAt,
+        observedAt: isoDate(rdapEvidence.fetchedAt ?? rdapEvidence.observedAt),
         completeness: sourceCompleteness(rdapEvidence),
-        limitations: limitations(rdapEvidence.limitations),
+        limitations: limitations(rdapEvidence.limitations, 'rdap'),
         lenses: ['all'],
         href: '#evidence-registry',
       },
@@ -462,36 +458,38 @@ export function buildLookupAssetGraph(input: Readonly<{
   }
 
   const delegation = record(dnsEvidence.delegation);
-  const delegationLimits = limitations(delegation.limitations);
+  const delegationLimits = limitations(delegation.limitations, 'delegation');
   const registryObservationId = addNode('observation', 'Registry publication', 'Registry nameserver and glue evidence');
   const parentObservationId = addNode('observation', 'Recursive parent view', 'Point-in-time parent delegation observation');
-  for (const nameserver of textList(record(delegation.registry).nameservers)) {
+  for (const nameserver of textList(record(delegation.registry).nameservers, 'delegation.registry.nameservers')) {
     const nameserverId = addNode('hostname', nameserver, 'Authoritative nameserver');
     if (registryObservationId && nameserverId) {
       addEdge({
         source: registryObservationId,
         target: nameserverId,
         ...dnsEdge('registry-publishes', 'registry publishes', ['delegation']),
+        observedAt: isoDate(rdapEvidence.fetchedAt ?? rdapEvidence.observedAt),
         sourceLabel: 'Registry delegation',
         completeness: sourceCompleteness(delegation),
         limitations: delegationLimits,
       });
     }
   }
-  for (const nameserver of textList(record(delegation.parent).nameservers)) {
+  for (const nameserver of textList(record(delegation.parent).nameservers, 'delegation.parent.nameservers')) {
     const nameserverId = addNode('hostname', nameserver, 'Authoritative nameserver');
     if (parentObservationId && nameserverId) {
       addEdge({
         source: parentObservationId,
         target: nameserverId,
         ...dnsEdge('parent-observes', 'parent view observes', ['delegation']),
+        observedAt: isoDate(delegation.observedAt),
         sourceLabel: 'Recursive parent view',
         completeness: sourceCompleteness(delegation),
         limitations: delegationLimits,
       });
     }
   }
-  for (const authority of records(delegation.authorities)) {
+  for (const [authorityIndex, authority] of records(delegation.authorities, 'delegation.authorities').entries()) {
     const nameserver = hostname(authority.nameserver);
     if (!nameserver) continue;
     const nameserverId = addNode('hostname', nameserver, `Direct authority state: ${text(authority.state, 40) || 'unknown'}`);
@@ -500,18 +498,20 @@ export function buildLookupAssetGraph(input: Readonly<{
         source: targetId,
         target: nameserverId,
         ...dnsEdge('direct-authority', 'queried directly', ['delegation']),
+        observedAt: isoDate(delegation.observedAt),
         sourceLabel: 'Direct authoritative DNS',
         completeness: authority.state === 'success' ? 'complete' : authority.state ? 'partial' : 'unknown',
         limitations: delegationLimits,
       });
     }
-    for (const address of textList(authority.addresses, 4)) {
+    for (const address of textList(authority.addresses, `delegation.authorities.${authorityIndex}.addresses`)) {
       const addressId = addNode('address', address, text(authority.addressSource, 80));
       if (nameserverId && addressId) {
         addEdge({
           source: nameserverId,
           target: addressId,
           ...dnsEdge('nameserver-address', 'answered at', ['delegation']),
+          observedAt: isoDate(delegation.observedAt),
           sourceLabel: text(authority.addressSource, 80) || 'Nameserver address',
           completeness: authority.state === 'success' ? 'complete' : 'partial',
           limitations: delegationLimits,
@@ -534,16 +534,16 @@ export function buildLookupAssetGraph(input: Readonly<{
       kind: 'observed-endpoint',
       label: 'was observed at',
       sourceLabel: 'Observed network context',
-      observedAt: isoDate(networkContext.observedAt) || observedAt,
+      observedAt: isoDate(networkContext.observedAt),
       completeness: sourceCompleteness(networkContext),
-      limitations: limitations(networkContext.limitations),
+      limitations: limitations(networkContext.limitations, 'network'),
       lenses: ['all'],
       href: '#evidence-network',
     });
   }
   const networkLabel = text(network.name || network.holder || network.handle, 180);
   const networkId = networkLabel
-    ? addNode('network', networkLabel, textList(network.cidrs, 4).join(', '))
+    ? addNode('network', networkLabel, textList(network.cidrs, 'network.cidrs').join(', '))
     : null;
   if (endpointId && networkId) {
     addEdge({
@@ -552,14 +552,14 @@ export function buildLookupAssetGraph(input: Readonly<{
       kind: 'registered-with',
       label: 'registered within',
       sourceLabel: 'IP RDAP',
-      observedAt: isoDate(networkContext.observedAt) || observedAt,
+      observedAt: isoDate(networkContext.observedAt),
       completeness: sourceCompleteness(networkContext),
-      limitations: limitations(networkContext.limitations),
+      limitations: limitations(networkContext.limitations, 'network'),
       lenses: ['all'],
       href: '#evidence-network',
     });
   }
-  for (const cidr of textList(network.cidrs, 8)) {
+  for (const cidr of textList(network.cidrs, 'network.cidrs')) {
     const prefixId = addNode('prefix', cidr, 'Published IP RDAP network prefix');
     const prefixSource = networkId || endpointId;
     if (prefixId && prefixSource) {
@@ -569,9 +569,9 @@ export function buildLookupAssetGraph(input: Readonly<{
         kind: 'publishes-prefix',
         label: 'publishes prefix',
         sourceLabel: 'IP RDAP',
-        observedAt: isoDate(networkContext.observedAt) || observedAt,
+        observedAt: isoDate(networkContext.observedAt),
         completeness: sourceCompleteness(networkContext),
-        limitations: limitations(networkContext.limitations),
+        limitations: limitations(networkContext.limitations, 'network'),
         lenses: ['all'],
         href: '#evidence-network',
       });
@@ -589,9 +589,9 @@ export function buildLookupAssetGraph(input: Readonly<{
           kind: 'redirects-to',
           label: finalHost === target ? 'served from' : 'redirects to',
           sourceLabel: 'HTTP',
-          observedAt: isoDate(httpEvidence.observedAt) || observedAt,
+          observedAt: isoDate(httpEvidence.observedAt),
           completeness: sourceCompleteness(httpEvidence),
-          limitations: limitations(httpEvidence.limitations),
+          limitations: limitations(httpEvidence.limitations, 'http'),
           lenses: ['all', 'identity'],
           href: '#evidence-http',
           boundary: trustBoundary(finalHost),
@@ -600,6 +600,7 @@ export function buildLookupAssetGraph(input: Readonly<{
       )
     : null;
   const identitySource = finalHostId || targetId;
+  const pageObservedAt = isoDate(record(input.pageIdentity).observedAt);
   const canonicalOrigin = webOrigin(record(input.pageCanonical).url);
   if (canonicalOrigin) {
     connect(
@@ -609,9 +610,9 @@ export function buildLookupAssetGraph(input: Readonly<{
         kind: 'declares-canonical',
         label: 'declares canonical origin',
         sourceLabel: 'HTML canonical metadata',
-        observedAt,
+        observedAt: pageObservedAt,
         completeness: sourceCompleteness(input.pageIdentity),
-        limitations: limitations(record(input.pageIdentity).limitations),
+        limitations: limitations(record(input.pageIdentity).limitations, 'page'),
         lenses: ['identity'],
         href: '#evidence-page',
         boundary: trustBoundary(canonicalOrigin.hostname, finalHost || target, canonicalOrigin.origin, finalOrigin?.origin ?? null),
@@ -629,9 +630,9 @@ export function buildLookupAssetGraph(input: Readonly<{
         kind: 'declares-open-graph',
         label: 'declares Open Graph origin',
         sourceLabel: 'Open Graph metadata',
-        observedAt,
+        observedAt: pageObservedAt,
         completeness: sourceCompleteness(input.pageIdentity),
-        limitations: limitations(record(input.pageIdentity).limitations),
+        limitations: limitations(record(input.pageIdentity).limitations, 'page'),
         lenses: ['identity'],
         href: '#evidence-page',
         boundary: trustBoundary(openGraphOrigin.hostname, finalHost || target, openGraphOrigin.origin, finalOrigin?.origin ?? null),
@@ -640,7 +641,7 @@ export function buildLookupAssetGraph(input: Readonly<{
       identitySource,
     );
   }
-  for (const origin of textList(record(input.pageForms).externalActionOrigins)) {
+  for (const origin of textList(record(input.pageForms).externalActionOrigins, 'page.formOrigins')) {
     const destination = webOrigin(origin);
     if (destination) {
       connect(
@@ -650,9 +651,9 @@ export function buildLookupAssetGraph(input: Readonly<{
           kind: 'form-destination',
           label: 'form may submit to',
           sourceLabel: 'Static HTML form',
-          observedAt,
+          observedAt: pageObservedAt,
           completeness: sourceCompleteness(input.pageIdentity),
-          limitations: ['A declared form action does not prove that a user submitted data or that the endpoint received it.'],
+          limitations: limitations(record(input.pageIdentity).limitations, 'page.forms', ['A declared form action does not prove that a user submitted data or that the endpoint received it.']),
           lenses: ['identity'],
           href: '#evidence-page',
           boundary: trustBoundary(destination.hostname, finalHost || target, destination.origin, finalOrigin?.origin ?? null),
@@ -662,7 +663,7 @@ export function buildLookupAssetGraph(input: Readonly<{
       );
     }
   }
-  for (const origin of textList(record(input.pageResources).externalOrigins)) {
+  for (const origin of textList(record(input.pageResources).externalOrigins, 'page.resourceOrigins')) {
     const resource = webOrigin(origin);
     if (resource) {
       connect(
@@ -672,9 +673,9 @@ export function buildLookupAssetGraph(input: Readonly<{
           kind: 'loads-from',
           label: 'references resources from',
           sourceLabel: 'Static HTML resources',
-          observedAt,
+          observedAt: pageObservedAt,
           completeness: sourceCompleteness(input.pageIdentity),
-          limitations: ['A static resource reference does not prove that a browser loaded the resource or disclosed data to it.'],
+          limitations: limitations(record(input.pageIdentity).limitations, 'page.resources', ['A static resource reference does not prove that a browser loaded the resource or disclosed data to it.']),
           lenses: ['identity'],
           href: '#evidence-page',
           boundary: trustBoundary(resource.hostname, finalHost || target, resource.origin, finalOrigin?.origin ?? null),
@@ -684,7 +685,7 @@ export function buildLookupAssetGraph(input: Readonly<{
       );
     }
   }
-  for (const identifier of records(record(input.pageIdentity).trackingIdentifiers, 12)) {
+  for (const identifier of records(record(input.pageIdentity).trackingIdentifiers, 'page.trackingIdentifiers', MAX_VALUES)) {
     const value = text(identifier.value, 160);
     if (value) {
       connect(
@@ -694,9 +695,9 @@ export function buildLookupAssetGraph(input: Readonly<{
           kind: 'declares-tracker',
           label: 'declares tracker identifier',
           sourceLabel: 'Static HTML identity',
-          observedAt,
+          observedAt: pageObservedAt,
           completeness: sourceCompleteness(input.pageIdentity),
-          limitations: ['A shared identifier is a relationship lead and does not establish common ownership or control.'],
+          limitations: limitations(record(input.pageIdentity).limitations, 'page.trackers', ['A shared identifier is a relationship lead and does not establish common ownership or control.']),
           lenses: ['identity'],
           href: '#evidence-page',
         },
@@ -707,7 +708,12 @@ export function buildLookupAssetGraph(input: Readonly<{
   }
 
   const structuredIdentity = record(input.structuredDataIdentity);
-  for (const entity of records(structuredIdentity.entities, 12)) {
+  const structuredObservedAt = isoDate(structuredIdentity.observedAt);
+  const structuredLimits = limitations(structuredIdentity.limitations, 'structured', [
+    'Publisher-declared structured metadata is not independent identity verification.',
+    'A sameAs declaration is a site-authored claim and does not establish ownership or control.',
+  ]);
+  for (const [entityIndex, entity] of records(structuredIdentity.entities, 'structured.entities').entries()) {
     const entityLabel = text(entity.name, 180);
     const declaredOrigin = webOrigin(entity.declaredOrigin);
     const entityId = entityLabel
@@ -718,16 +724,13 @@ export function buildLookupAssetGraph(input: Readonly<{
             kind: 'declares-publisher',
             label: 'declares publisher',
             sourceLabel: 'Structured identity metadata',
-            observedAt,
+            observedAt: structuredObservedAt,
             completeness: sourceCompleteness(structuredIdentity),
-            limitations: [
-              ...limitations(structuredIdentity.limitations),
-              'Publisher-declared structured metadata is not independent identity verification.',
-            ].slice(0, MAX_LIMITATIONS),
+            limitations: structuredLimits,
             lenses: ['identity'],
             href: '#evidence-structured-identity',
           },
-          textList(entity.types, 5).join(', ') || 'Publisher-declared entity',
+          textList(entity.types, `structured.entities.${entityIndex}.types`, MAX_NESTED_VALUES).join(', ') || 'Publisher-declared entity',
           identitySource,
         )
       : identitySource;
@@ -739,9 +742,9 @@ export function buildLookupAssetGraph(input: Readonly<{
           kind: 'declares-origin',
           label: 'declares origin',
           sourceLabel: 'Structured identity metadata',
-          observedAt,
+          observedAt: structuredObservedAt,
           completeness: sourceCompleteness(structuredIdentity),
-          limitations: limitations(structuredIdentity.limitations),
+          limitations: structuredLimits,
           lenses: ['identity'],
           href: '#evidence-structured-identity',
           boundary: trustBoundary(declaredOrigin.hostname, finalHost || target, declaredOrigin.origin, finalOrigin?.origin ?? null),
@@ -750,7 +753,7 @@ export function buildLookupAssetGraph(input: Readonly<{
         entityId || identitySource,
       );
     }
-    for (const sameAsHost of textList(entity.sameAsHosts, 12)) {
+    for (const sameAsHost of textList(entity.sameAsHosts, `structured.entities.${entityIndex}.sameAsHosts`, MAX_NESTED_VALUES)) {
       connect(
         'origin',
         sameAsHost,
@@ -758,12 +761,9 @@ export function buildLookupAssetGraph(input: Readonly<{
           kind: 'declares-same-as',
           label: 'declares sameAs',
           sourceLabel: 'Structured identity metadata',
-          observedAt,
+          observedAt: structuredObservedAt,
           completeness: sourceCompleteness(structuredIdentity),
-          limitations: [
-            ...limitations(structuredIdentity.limitations),
-            'A sameAs declaration is a site-authored claim and does not establish ownership or control.',
-          ].slice(0, MAX_LIMITATIONS),
+          limitations: structuredLimits,
           lenses: ['identity'],
           href: '#evidence-structured-identity',
           boundary: trustBoundary(hostname(sameAsHost), finalHost || target),
@@ -792,9 +792,9 @@ export function buildLookupAssetGraph(input: Readonly<{
           kind: 'presents-certificate',
           label: 'presented certificate',
           sourceLabel: 'TLS',
-          observedAt: isoDate(tlsEvidence.observedAt) || observedAt,
+          observedAt: isoDate(tlsEvidence.observedAt),
           completeness: sourceCompleteness(tlsEvidence),
-          limitations: limitations(tlsEvidence.limitations),
+          limitations: limitations(tlsEvidence.limitations, 'tls'),
           lenses: ['all', 'certificate'],
           href: '#evidence-tls',
         },
@@ -818,9 +818,9 @@ export function buildLookupAssetGraph(input: Readonly<{
           kind: 'reviewed-hostname-match',
           label: 'reviewed hostname match',
           sourceLabel: 'TLS hostname verification',
-          observedAt: isoDate(tlsEvidence.observedAt) || observedAt,
+          observedAt: isoDate(tlsEvidence.observedAt),
           completeness: sourceCompleteness(tlsEvidence),
-          limitations: limitations(tlsEvidence.limitations),
+          limitations: limitations(tlsEvidence.limitations, 'tls'),
           lenses: ['certificate', 'identity'],
           href: '#evidence-tls',
         });
@@ -830,9 +830,9 @@ export function buildLookupAssetGraph(input: Readonly<{
           kind: 'evaluated-certificate',
           label: 'evaluated certificate',
           sourceLabel: 'TLS hostname verification',
-          observedAt: isoDate(tlsEvidence.observedAt) || observedAt,
+          observedAt: isoDate(tlsEvidence.observedAt),
           completeness: sourceCompleteness(tlsEvidence),
-          limitations: limitations(tlsEvidence.limitations),
+          limitations: limitations(tlsEvidence.limitations, 'tls'),
           lenses: ['certificate'],
           href: '#evidence-tls',
         });
@@ -854,15 +854,15 @@ export function buildLookupAssetGraph(input: Readonly<{
           kind: 'reviewed-runtime-trust',
           label: 'reviewed runtime trust',
           sourceLabel: 'TLS chain verification',
-          observedAt: isoDate(tlsEvidence.observedAt) || observedAt,
+          observedAt: isoDate(tlsEvidence.observedAt),
           completeness: sourceCompleteness(tlsEvidence),
-          limitations: limitations(tlsEvidence.limitations),
+          limitations: limitations(tlsEvidence.limitations, 'tls'),
           lenses: ['certificate'],
           href: '#evidence-tls',
         });
       }
     }
-    for (const name of textList(record(input.tlsAltNames).dnsNames, 16)) {
+    for (const name of textList(record(input.tlsAltNames).dnsNames, 'tls.dnsNames')) {
       const sanId = addNode('hostname', name, 'Certificate DNS subject alternative name');
       if (sanId) {
         addEdge({
@@ -871,9 +871,9 @@ export function buildLookupAssetGraph(input: Readonly<{
           kind: 'authorizes-name',
           label: 'contains SAN',
           sourceLabel: 'TLS certificate',
-          observedAt: isoDate(tlsEvidence.observedAt) || observedAt,
+          observedAt: isoDate(tlsEvidence.observedAt),
           completeness: sourceCompleteness(tlsEvidence),
-          limitations: limitations(tlsEvidence.limitations),
+          limitations: limitations(tlsEvidence.limitations, 'tls'),
           lenses: ['certificate', 'identity'],
           href: '#evidence-tls',
           boundary: trustBoundary(hostname(name)),
@@ -891,38 +891,48 @@ export function buildLookupAssetGraph(input: Readonly<{
           kind: 'uses-key',
           label: 'uses public key',
           sourceLabel: 'TLS certificate',
-          observedAt: isoDate(tlsEvidence.observedAt) || observedAt,
+          observedAt: isoDate(tlsEvidence.observedAt),
           completeness: sourceCompleteness(tlsEvidence),
-          limitations: limitations(tlsEvidence.limitations),
+          limitations: limitations(tlsEvidence.limitations, 'tls'),
           lenses: ['certificate'],
           href: '#evidence-tls',
         });
       }
     }
     const issuer = record(input.tlsIssuer);
-    const issuerOrganizations = textList(issuer.organizations, 8);
-    const issuerCommonNames = textList(issuer.commonNames, 8);
+    const issuerOrganizations = textList(issuer.organizations, 'tls.issuer.organizations');
+    const issuerCommonNames = textList(issuer.commonNames, 'tls.issuer.commonNames');
     const issuerLabel = issuerOrganizations[0]
       || issuerCommonNames[0]
       || text(issuer.organization || issuer.commonName || issuer.CN, 180);
     if (issuerLabel) {
       const issuerId = addNode('issuer', issuerLabel, 'Certificate issuer');
       if (issuerId) {
+        for (const [attribute, values] of [['organization', issuerOrganizations], ['common-name', issuerCommonNames]] as const) {
+          for (const value of values) {
+            connect('identity', value, {
+              kind: `issuer-${attribute}`, label: `declares issuer ${attribute === 'organization' ? 'organisation' : 'common name'}`,
+              sourceLabel: 'TLS certificate', observedAt: isoDate(tlsEvidence.observedAt),
+              completeness: sourceCompleteness(tlsEvidence), limitations: limitations(tlsEvidence.limitations, 'tls'),
+              lenses: ['certificate'], href: '#evidence-tls',
+            }, 'Certificate issuer distinguished-name attribute', issuerId);
+          }
+        }
         addEdge({
           source: certificateId,
           target: issuerId,
           kind: 'issued-by',
           label: 'issued by',
           sourceLabel: 'TLS certificate',
-          observedAt: isoDate(tlsEvidence.observedAt) || observedAt,
+          observedAt: isoDate(tlsEvidence.observedAt),
           completeness: sourceCompleteness(tlsEvidence),
-          limitations: limitations(tlsEvidence.limitations),
+          limitations: limitations(tlsEvidence.limitations, 'tls'),
           lenses: ['certificate'],
           href: '#evidence-tls',
         });
       }
     }
-    for (const finding of records(record(input.certificatePolicyReview).findings, 8)) {
+    for (const [findingIndex, finding] of records(record(input.certificatePolicyReview).findings, 'certificatePolicy.findings').entries()) {
       const findingId = text(finding.id, 80);
       const state = text(finding.state, 80);
       if (!findingId || state === 'not_configured') continue;
@@ -938,9 +948,9 @@ export function buildLookupAssetGraph(input: Readonly<{
           kind: 'reviewed-against-policy',
           label: 'reviewed against',
           sourceLabel: 'DNS / TLS / Brand Profile',
-          observedAt: isoDate(record(input.certificatePolicyReview).observedAt) || observedAt,
+          observedAt: isoDate(record(input.certificatePolicyReview).observedAt),
           completeness: state === 'indeterminate' || state === 'no_target_policy_observed' ? 'partial' : 'complete',
-          limitations: limitations(finding.limitations),
+          limitations: limitations(finding.limitations, `certificatePolicy.${findingIndex}`),
           lenses: ['certificate'],
           href: '#evidence-certificate-policy',
         });
@@ -948,12 +958,18 @@ export function buildLookupAssetGraph(input: Readonly<{
     }
   }
 
+  const retainedEdges = [...edges.values()];
+  const connectedNodeIds = new Set([targetId, ...[...edges.values()].flatMap((edge) => [edge.source, edge.target])]);
+  const retainedSourceIds = new Set(retainedEdges.map((edge) => edge.sourceId));
+  const inputCoverage = [...reader.coverage.values()];
+  const truncated = inputCoverage.some(graphInputIsIncomplete);
   return {
     version: LOOKUP_ASSET_GRAPH_VERSION,
     targetId,
-    nodes: [...nodes.values()],
-    edges: [...edges.values()],
-    sources: [...sources.values()].sort((left, right) => left.label.localeCompare(right.label)),
+    nodes: [...nodes.values()].filter((node) => connectedNodeIds.has(node.id)),
+    edges: retainedEdges,
+    sources: [...sources.values()].filter((source) => retainedSourceIds.has(source.id)).sort((left, right) => left.label.localeCompare(right.label)),
+    coverage: { inputs: inputCoverage },
     truncated,
     limitations: [
       'The graph contains only settled evidence from this Lookup and does not start additional requests.',
@@ -979,10 +995,11 @@ export function projectLookupAssetGraph(
 ): LookupAssetGraphProjection {
   const acceptedEdges = graph.edges.filter((edge) => edgeMatchesLens(edge, lens));
   const graphNodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+  const groups = nodeGroups(graph.nodes, acceptedEdges);
   const visualEdges: LookupAssetEdge[] = [];
   const visualDegree = new Map<string, number>();
   const omittedByHub = new Map<string, number>();
-  for (const edge of interleaveVisualEdgesByFamily(acceptedEdges, graphNodeById)) {
+  for (const edge of interleaveVisualEdgesByFamily(acceptedEdges, groups)) {
     const sourceDegree = visualDegree.get(edge.source) ?? 0;
     const targetDegree = visualDegree.get(edge.target) ?? 0;
     const saturatedHub = sourceDegree >= MAX_VISUAL_EDGES_PER_HUB
@@ -1011,7 +1028,7 @@ export function projectLookupAssetGraph(
   const nodes: ForceGraphNodeInput[] = graph.nodes
     .filter((node) => nodeIds.has(node.id))
     .map((node) => {
-      const group = projectedNodeGroup(node, visualEdges);
+      const group = groups.get(node.id)!;
       return {
         id: node.id,
         label: node.label,

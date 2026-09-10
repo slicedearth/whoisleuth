@@ -8,6 +8,7 @@ import {
   checkpointPinInputs,
   compareCheckpointPins,
 } from '../frontend/src/lib/analysis/case-evidence-checkpoint.ts';
+import { buildLookupAssetGraph } from '../packages/investigation/lookup-asset-graph.mts';
 import type { LookupEvidenceReplay } from '../frontend/src/lib/analysis/lookup-evidence-replay.ts';
 import { normalizeCaseEvidencePins } from '../frontend/src/lib/analysis/case-response-model.ts';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
@@ -208,7 +209,7 @@ describe('case evidence checkpoints', () => {
       recommendedSteps: [],
       pagePublicationMetadata: null,
       httpDeliveryMetadata: null,
-      graph: { version: 2, targetId: 'target', nodes: [], edges: [], sources: [], truncated: false, limitations: [] },
+      graph: buildLookupAssetGraph({ target: 'login.example.test' }),
       limitations: [],
     } as LookupEvidenceReplay;
     const facts = buildLookupReplayCheckpointFacts(replay);

@@ -4,6 +4,7 @@ import {
   buildLookupAssetGraph,
   countLookupAssetGraphEdgesByLens,
   projectLookupAssetGraph,
+  LOOKUP_ASSET_GRAPH_VERSION,
 } from '../frontend/src/lib/analysis/lookup-asset-graph.ts';
 import { buildTlsObservation } from '../lib/tls-intelligence.mts';
 
@@ -17,6 +18,7 @@ function fixture() {
       observedAt: '2026-07-31T00:00:01.000Z',
       records: {},
       delegation: {
+        observedAt: '2026-07-31T00:00:01.000Z',
         status: 'partial',
         complete: false,
         registry: { nameservers: ['ns1.example.test'] },
@@ -45,7 +47,7 @@ function fixture() {
     },
     observedNetworkEndpoint: { address: '192.0.2.10', selectedFrom: 'tls_connection' },
     observedNetwork: { name: 'Example network', cidrs: ['192.0.2.0/24'] },
-    rdapEvidence: { status: 'success', complete: true },
+    rdapEvidence: { status: 'success', complete: true, fetchedAt: '2026-07-31T00:00:00.000Z' },
     rdapParsed: { registrar: { name: 'Example Registrar' } },
     httpEvidence: {
       status: 'success',
@@ -58,11 +60,13 @@ function fixture() {
     pageForms: { externalActionOrigins: ['https://forms.example/'] },
     pageResources: { externalOrigins: ['https://assets.example/'] },
     pageIdentity: {
+      observedAt: '2026-07-31T00:00:03.000Z',
       status: 'success',
       complete: true,
       trackingIdentifiers: [{ type: 'tag-container', value: 'TAG-1234' }],
     },
     structuredDataIdentity: {
+      observedAt: '2026-07-31T00:00:03.000Z',
       status: 'success',
       complete: true,
       entities: [{
@@ -102,7 +106,7 @@ function fixture() {
 
 test('asset graph keeps separately attributed typed relationships', () => {
   const graph = fixture();
-  assert.equal(graph.version, 2);
+  assert.equal(graph.version, LOOKUP_ASSET_GRAPH_VERSION);
   assert.equal(graph.truncated, false);
   assert.ok(graph.nodes.some((node) => node.kind === 'target' && node.label === 'example.test'));
   assert.ok(graph.edges.some((edge) => edge.kind === 'resolves-to' && edge.sourceLabel === 'DNS'));
@@ -235,8 +239,11 @@ test('asset graph bounds hostile or excessive collections', () => {
       externalOrigins: Array.from({ length: 200 }, (_, index) => `https://asset-${index}.example/`),
     },
   });
-  assert.ok(graph.nodes.length <= 72);
-  assert.ok(graph.edges.length <= 120);
+  assert.equal(graph.edges.length, 192);
+  assert.equal(graph.truncated, true);
+  assert.deepEqual(graph.coverage.inputs.find((row) => row.id === 'dns.a'), {
+    id: 'dns.a', supplied: 200, inspected: 200, admitted: 64, invalid: 0, duplicates: 0, omitted: 136,
+  });
   assert.equal(graph.nodes.some((node) => node.label.includes('\u0000')), false);
 });
 

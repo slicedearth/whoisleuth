@@ -23,6 +23,7 @@ import {
   sha256ArtifactDigest,
   sha256ArtifactDigestV2,
 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { buildLookupAssetGraph } from '../packages/investigation/lookup-asset-graph.mts';
 import { buildInvestigationCapsule } from '../frontend/src/lib/analysis/investigation-capsule.ts';
 import { buildBulkReviewManifest } from '../frontend/src/lib/analysis/bulk-review-export.ts';
 import {
@@ -79,15 +80,7 @@ const CAPSULE_OBSERVED_AT = '2026-08-04T00:00:00.000Z';
 const CAPSULE_GENERATED_AT = '2026-08-04T01:00:00.000Z';
 
 function currentCapsuleGraph() {
-  return {
-    version: 2 as const,
-    targetId: 'target-example',
-    nodes: [{ id: 'target-example', label: 'example.test', kind: 'target' as const, detail: 'Lookup target' }],
-    edges: [],
-    sources: [],
-    truncated: false,
-    limitations: [],
-  };
+  return buildLookupAssetGraph({ target: 'example.test' });
 }
 
 function currentCapsuleBrief(): LookupInvestigationBrief {

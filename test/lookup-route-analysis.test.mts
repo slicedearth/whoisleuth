@@ -15,6 +15,7 @@ import {
   THREAT_INTELLIGENCE_SCHEMA,
 } from '../lib/threat-intelligence-types.mts';
 import { buildFixtureRegistrarStanding as buildRegistrarStanding } from './registrar-standing-fixture.mts';
+import { LOOKUP_INVESTIGATION_BRIEF_VERSION } from '../packages/contracts/investigation-portability.mts';
 
 function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpResponse {
   return {
@@ -119,7 +120,7 @@ describe('Lookup route analysis', () => {
         + analysis.lookupReviewActionModel.recommendedNextReviews.omittedCount,
     );
     assert.equal(analysis.lookupClaimReadiness.version, 2);
-    assert.equal(analysis.lookupInvestigationBrief.schemaVersion, 2);
+    assert.equal(analysis.lookupInvestigationBrief.schemaVersion, LOOKUP_INVESTIGATION_BRIEF_VERSION);
     assert.equal(
       analysis.lookupInvestigationBrief.decisionFacts.total,
       analysis.lookupDecisionFacts.length,

@@ -8236,12 +8236,13 @@
       "schema": "whoisleuth.lookup-asset-graph",
       "lifecycleSchema": "whoisleuth.lookup-asset-graph",
       "coverageClass": "registered_schema",
-      "currentVersion": 2,
+      "currentVersion": 3,
       "supportedVersions": [
-        2
+        2,
+        3
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "read_only",
       "writeSemantics": "read_only",
       "byteBudget": null,
       "storageClass": "transient_process_memory",
@@ -8254,10 +8255,11 @@
       "schema": "whoisleuth.investigation-brief",
       "lifecycleSchema": "whoisleuth.investigation-brief",
       "coverageClass": "registered_schema",
-      "currentVersion": 2,
+      "currentVersion": 3,
       "supportedVersions": [
         1,
-        2
+        2,
+        3
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -8755,10 +8757,11 @@
       "schema": "whoisleuth.investigation-capsule",
       "lifecycleSchema": "whoisleuth.investigation-capsule",
       "coverageClass": "registered_schema",
-      "currentVersion": 3,
+      "currentVersion": 4,
       "supportedVersions": [
         2,
-        3
+        3,
+        4
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -12945,7 +12948,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.investigation-brief",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "investigation.privacy.output",
@@ -12988,7 +12991,8 @@
         {
           "schema": "whoisleuth.lookup-asset-graph",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "embedded",
           "discriminator": null
@@ -13005,7 +13009,8 @@
           "schema": "whoisleuth.investigation-brief",
           "versions": [
             1,
-            2
+            2,
+            3
           ],
           "mode": "embedded",
           "discriminator": null
@@ -13013,7 +13018,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.investigation-capsule",
-        "version": 3,
+        "version": 4,
         "discriminator": null
       },
       "privacyProfileId": "investigation.privacy.output",
@@ -13055,7 +13060,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.lookup-asset-graph",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "investigation.privacy.output",
@@ -13139,7 +13144,8 @@
           "schema": "whoisleuth.investigation-capsule",
           "versions": [
             2,
-            3
+            3,
+            4
           ],
           "mode": "direct",
           "discriminator": null

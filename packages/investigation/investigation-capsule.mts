@@ -20,6 +20,7 @@ import {
   INVESTIGATION_CAPSULE_VERSION,
   PUBLIC_INVESTIGATION_CAPSULE_VERSION,
   SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS,
+  investigationCapsuleContracts,
 } from '../contracts/investigation-portability.mts';
 
 export {
@@ -200,9 +201,10 @@ export async function buildInvestigationCapsule(input: BuildInvestigationCapsule
   };
 }
 
-type PublicInvestigationCapsule = Omit<InvestigationCapsule, 'schemaVersion' | 'investigationBrief'> & Readonly<{
-  schemaVersion: typeof PUBLIC_INVESTIGATION_CAPSULE_VERSION;
+type PublicInvestigationCapsule = Omit<InvestigationCapsule, 'schemaVersion' | 'investigationBrief' | 'graphSnapshot'> & Readonly<{
+  schemaVersion: 2 | 3;
   investigationBrief: Readonly<Record<string, unknown>>;
+  graphSnapshot: Readonly<Record<string, unknown>>;
 }>;
 
 export type SupportedInvestigationCapsule = InvestigationCapsule
@@ -215,10 +217,8 @@ export async function verifyInvestigationCapsule(capsule: SupportedInvestigation
   analystRecords: boolean | null;
   whole: boolean;
 }>> {
-  const current = capsule.schemaVersion === INVESTIGATION_CAPSULE_VERSION;
-  const publicVersion = capsule.schemaVersion === PUBLIC_INVESTIGATION_CAPSULE_VERSION;
   const integrityRecord = capsule.integrity as unknown as Record<string, unknown>;
-  if ((!current && !publicVersion)
+  if (!investigationCapsuleContracts(capsule.schemaVersion)
     || integrityRecord.canonicalization !== SORTED_JSON_V2
     || integrityRecord.scope !== 'capsule excluding integrity') {
     return { valid: false, brief: false, graph: false, analystRecords: null, whole: false };

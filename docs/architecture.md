@@ -56,6 +56,11 @@ The packet component owns one transient manual-handoff preview. Its generator
 supplies text and structured output; input identity and the existing
 freshness-bound review digest govern reuse. No preview is stored in the Case.
 
+The shared investigation package owns graph relationships, source clocks and
+input coverage. The browser owns visual grouping, search and pagination.
+Capsule version 4 embeds graph version 3 and brief version 3; exact historical
+capsules remain readable through their declared embedded-contract versions.
+
 ## Request pipeline
 
 A hosted request passes through one protected pipeline:

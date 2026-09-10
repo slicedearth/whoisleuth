@@ -94,6 +94,12 @@ sections use disclosures, while important unavailable or contradictory evidence
 remains visible. Tables and text remain the complete accessible review surface;
 charts are summaries only.
 
+The evidence graph retains every supported relationship from the admitted
+Lookup evidence. Lenses, visual grouping and the searchable, paginated list
+change the view, not the retained data. Projection input coverage distinguishes
+admitted values, duplicates, invalid input and capacity omissions. Source
+observation times remain separate from the time an export was created.
+
 A full Deep domain result can include:
 
 - registry RDAP and a separately attributed registrar RDAP follow-up;

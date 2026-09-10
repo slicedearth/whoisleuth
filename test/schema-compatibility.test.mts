@@ -27,6 +27,13 @@ import {
 } from '../tools/schema-compatibility.mts';
 import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
 import {
+  INVESTIGATION_CAPSULE_VERSION,
+  LOOKUP_ASSET_GRAPH_VERSION,
+  LOOKUP_INVESTIGATION_BRIEF_VERSION,
+  SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS,
+  SUPPORTED_LOOKUP_INVESTIGATION_BRIEF_VERSIONS,
+} from '../packages/contracts/investigation-portability.mts';
+import {
   discoverSchemaSources,
   validateSchemaSourceCoverage,
 } from '../tools/schema-source-coverage.mts';
@@ -359,7 +366,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.bulk-mail-exposure').schema, 'whoisleuth.bulk-mail-exposure');
     assert.equal(byId(inventory, 'export.bulk-review-manifest').schema, 'whoisleuth.bulk-review-manifest');
     assert.equal(byId(inventory, 'export.investigation-capsule').schema, 'whoisleuth.investigation-capsule');
-    assert.equal(byId(inventory, 'derived.lookup-asset-graph').currentVersion, 2);
+    assert.equal(byId(inventory, 'derived.lookup-asset-graph').currentVersion, LOOKUP_ASSET_GRAPH_VERSION);
     assert.equal(byId(inventory, 'derived.case-analyst-records').currentVersion, 1);
     assert.equal(byId(inventory, 'cli.lookalike-calibration-input').schema, 'whoisleuth.lookalike-calibration-input');
     assert.equal(byId(inventory, 'cli.lookalike-calibration').schema, 'whoisleuth.lookalike-calibration');
@@ -882,11 +889,11 @@ describe('schema compatibility inventory', () => {
     assert.deepEqual(byId(inventory, 'export.cases').supportedVersions, [...CASE_IMPORT_VERSIONS]);
     assert.deepEqual(byId(inventory, 'export.brand-profiles').supportedVersions, [...SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS]);
     assert.deepEqual(byId(inventory, 'browser.website-snapshots').supportedVersions, [...SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS]);
-    assert.deepEqual(byId(inventory, 'export.investigation-capsule').supportedVersions, [2, 3]);
-    assert.deepEqual(byId(inventory, 'derived.lookup-investigation-brief').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'export.investigation-capsule').supportedVersions, [...SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS]);
+    assert.deepEqual(byId(inventory, 'derived.lookup-investigation-brief').supportedVersions, [...SUPPORTED_LOOKUP_INVESTIGATION_BRIEF_VERSIONS]);
     assert.deepEqual(byId(inventory, 'export.lookup-readable-report').supportedVersions, [3]);
-    assert.equal(byId(inventory, 'export.investigation-capsule').currentVersion, 3);
-    assert.equal(byId(inventory, 'derived.lookup-investigation-brief').currentVersion, 2);
+    assert.equal(byId(inventory, 'export.investigation-capsule').currentVersion, INVESTIGATION_CAPSULE_VERSION);
+    assert.equal(byId(inventory, 'derived.lookup-investigation-brief').currentVersion, LOOKUP_INVESTIGATION_BRIEF_VERSION);
     assert.equal(byId(inventory, 'export.lookup-readable-report').currentVersion, 3);
   });
 
