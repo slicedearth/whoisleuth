@@ -133,7 +133,7 @@
   let bulkSessionsSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let websiteSnapshots=$state.raw<WebsiteProfileSnapshot[]>([]);
   let websiteSnapshotsSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
-  let analystReviewState=$state<AnalystReviewStateStore>(emptyAnalystReviewStateStore());
+  let analystReviewState=$state.raw<AnalystReviewStateStore>(emptyAnalystReviewStateStore());
   let analystReviewStateSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let certificateReviewCount=$state<number|null>(null);
   let reviewInboxCount=$state<number|null>(null);
@@ -151,8 +151,8 @@
   let retainedRelationships=$state.raw<RelationshipObservation[]>([]);
   let relationshipsSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   const investigationProjection=$derived(buildInvestigationProjection({cases,campaigns,relationshipObservations:retainedRelationships}));
-  const timelineInput=$derived({cases,bulkSessions,watchlists,relationships:retainedRelationships,websiteSnapshots});
-  const timelineSourceStates=$derived([casesSourceState,watchlistsSourceState,bulkSessionsSourceState,relationshipsSourceState,websiteSnapshotsSourceState]);
+  const timelineInput=$derived({cases,bulkSessions,watchlists,relationships:retainedRelationships,websiteSnapshots,reviewState:analystReviewState});
+  const timelineSourceStates=$derived([casesSourceState,watchlistsSourceState,bulkSessionsSourceState,relationshipsSourceState,websiteSnapshotsSourceState,analystReviewStateSourceState]);
   const timelineSourceState=$derived(timelineSourceStates.includes('unavailable')?'unavailable':timelineSourceStates.includes('loading')?'loading':'ready');
   let timelinePreparation=$state.raw<RetainedReviewPreparation<'timeline'>|null>(null);
   const timelineController=createRetainedReviewController('timeline',(next)=>timelinePreparation=next);
@@ -377,7 +377,7 @@
 {#if view==='inbox'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-inbox">
   {#if reviewInboxSourceState==='ready'}
-    <UnifiedAnalystReviewInbox {cases} {watchlists} {bulkSessions} profiles={brandProfiles} {detectionRules} {websiteSnapshots} reviewState={analystReviewState} ondismiss={dismissEvidenceGap} onreview={recordAnalystReviewDecision} oncount={(count:number)=>reviewInboxCount=count} />
+    <UnifiedAnalystReviewInbox {cases} {watchlists} {bulkSessions} profiles={brandProfiles} {detectionRules} {websiteSnapshots} reviewState={analystReviewState} selectedSubjectKey={page.url.searchParams.get('review')??''} ondismiss={dismissEvidenceGap} onreview={recordAnalystReviewDecision} oncount={(count:number)=>reviewInboxCount=count} />
     {#if caseMessage}<p class="case-message" role="status" aria-live="polite">{caseMessage}</p>{/if}
   {:else}
     <LocalCollectionState state={reviewInboxSourceState} title="Review inbox evidence unavailable" detail="Cases, watchlists, saved Bulk sessions, Brand Profiles, custom rules, website snapshots, and the analyst lifecycle overlay must all be readable before the combined inbox can distinguish zero review items from missing browser-local state. Fulfilled collections remain available in their own views." />
@@ -425,7 +425,7 @@
     </div>
     <DeferredSurface load={()=>import('$lib/components/RetainedChangeReview.svelte')} loadingLabel="Loading retained change review…" unavailableLabel="The retained change review could not be loaded." props={{cases,websiteSnapshots,watchlists,bulkSessions}} placeholder="workspace" />
   {:else}
-    <LocalCollectionState state={casesSourceState==='loading'||watchlistsSourceState==='loading'||bulkSessionsSourceState==='loading'||relationshipsSourceState==='loading'||websiteSnapshotsSourceState==='loading'?'loading':'unavailable'} title="Retained timeline unavailable" detail="The combined timeline requires readable cases, watchlists, saved Bulk sessions, relationship observations, and website snapshots. No empty history is inferred while any required collection is unavailable." />
+    <LocalCollectionState state={timelineSourceState} title="Retained timeline unavailable" detail="The combined timeline requires readable Cases, watchlists, saved Bulk sessions, relationship observations, website snapshots, and analyst review decisions. No empty history is inferred while any required collection is unavailable." />
   {/if}
 </div>
 {/if}

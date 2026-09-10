@@ -33,7 +33,7 @@ describe('Monitor route controller', () => {
     );
     assert.deepEqual(
       monitorViewCollections('timeline'),
-      ['cases', 'watchlists', 'bulk-sessions', 'relationships', 'website-snapshots'],
+      ['analyst-review-state', 'cases', 'watchlists', 'bulk-sessions', 'relationships', 'website-snapshots'],
     );
     assert.deepEqual(monitorViewCollections('cases'), []);
     for (const path of ['/monitor?domain=case.example', '/monitor?investigation=1&domain=case.example']) {
@@ -43,7 +43,7 @@ describe('Monitor route controller', () => {
 
   it('builds one canonical navigation URL and clears stale focus state', () => {
     const current = new URL(
-      'https://example.test/monitor?view=cases&case=case-1&investigation=1&domain=old.example#case-response-case-1',
+      'https://example.test/monitor?view=cases&case=case-1&review=previous&investigation=1&domain=old.example#case-response-case-1',
     );
     assert.equal(
       buildMonitorNavigationUrl(current, 'watchlists'),

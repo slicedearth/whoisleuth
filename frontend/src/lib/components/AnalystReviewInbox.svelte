@@ -7,6 +7,7 @@
     ANALYST_REVIEW_QUEUE_OPTIONS,
     ANALYST_REVIEW_DISMISSAL_REASONS,
     analystReviewQueue,
+    analystReviewQueueMembership,
     filterAnalystReviewItems,
     type AnalystReviewAge,
     type AnalystReviewDismissalReason,
@@ -26,11 +27,13 @@
 
   let {
     inbox,
+    selectedSubjectKey = '',
     now = new Date().toISOString(),
     ondismiss,
     onreview,
   }: {
     inbox: AnalystReviewInbox;
+    selectedSubjectKey?: string;
     now?: string;
     ondismiss?: (item: AnalystReviewItem, reason: AnalystReviewDismissalReason) => void | Promise<void>;
     onreview?: (item: AnalystReviewItem, input: { disposition: AnalystReviewDisposition; rationale: string; expiresAt: string | null; reviewDueAt: string | null }) => void | Promise<void>;
@@ -54,10 +57,11 @@
     option.value === 'all' ? inbox.items.length : inbox.items.filter((item) => analystReviewQueue(item, now) === option.value).length,
   ])) as Record<AnalystReviewQueue, number>);
   const filteredByQueue = $derived(inbox.items.filter((item) => {
+    if (selectedSubjectKey) return item.subjectKey === selectedSubjectKey;
     if (queue !== 'all' && analystReviewQueue(item, now) !== queue) return false;
     return !kindFilter || item.kind === kindFilter;
   }));
-  const filtered = $derived(filterAnalystReviewItems(filteredByQueue, {
+  const filtered = $derived(selectedSubjectKey ? filteredByQueue : filterAnalystReviewItems(filteredByQueue, {
     ...(sourceFilter ? { source: sourceFilter } : {}),
     ...(ageFilter ? { age: ageFilter } : {}),
     ...(caseFilter ? { caseQuery: caseFilter } : {}),
@@ -123,7 +127,10 @@
     {#if inbox.items.length || inbox.truncated}<strong aria-label={`${inbox.admission.displayed} retained review items`}>{inbox.admission.displayed}</strong>{/if}
   </div>
 
-  {#if inbox.items.length}
+  {#if selectedSubjectKey}
+    <p class="selected-review" role="status">{filteredByQueue.length ? 'Showing the selected review and its retained history.' : 'The selected review is unavailable in the admitted inbox. No other review has been substituted.'} <a href="/monitor?view=inbox#review-inbox-title">Show all review items</a></p>
+  {/if}
+  {#if inbox.items.length && !selectedSubjectKey}
   <div class="filters" role="group" aria-label="Review queue">
     {#each ANALYST_REVIEW_QUEUE_OPTIONS as option}
       <button type="button" class:active={queue === option.value} aria-pressed={queue === option.value} onclick={() => setQueue(option.value)}>
@@ -185,6 +192,7 @@
   {#if visible.length}
     <ol class="items">
       {#each visible as item (item.id)}
+        {@const membership = analystReviewQueueMembership(item, now)}
         <li class:urgent={item.priority === 'urgent'} class:high={item.priority === 'high'}>
           <div class="item-main">
             <div class="item-meta">
@@ -200,7 +208,7 @@
             <p>{item.detail}</p>
             <small>{item.source} · observed {formatDate(item.observedAt) || 'at an unknown time'}</small>
             <small>{item.rankingReason}</small>
-            {#if onreview}<ReviewLifecycleControls {item} lifecycle={lifecycleFor(item)} {onreview} />{/if}
+            <p class="queue-reason">{ANALYST_REVIEW_QUEUE_OPTIONS.find((option) => option.value === membership.queue)?.label}: {membership.reason}</p>
           </div>
           <div class="item-actions">
             <a class="btn" href={item.href}>Review</a>
@@ -226,6 +234,7 @@
               <button type="button" class="dismiss" disabled={!dismissalReasons[item.id]} onclick={() => dismiss(item)}>Dismiss gap</button>
             {/if}
           </div>
+          <div class="review-lifecycle"><ReviewLifecycleControls {item} lifecycle={lifecycleFor(item)} {...(onreview ? { onreview } : {})} /></div>
         </li>
       {/each}
     </ol>
@@ -284,16 +293,17 @@
   .detail-filters select:focus-visible,.detail-filters input:focus-visible,.detail-filters .reset:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .admission-warning{display:grid;gap:7px;margin-top:14px}.admission-warning .warning{margin:0}.admission-warning details{font-size:var(--text-xs)}.admission-warning summary{cursor:pointer;font:700 var(--text-xs) var(--mono)}.admission-warning ul{display:grid;gap:4px;margin:8px 0 0;padding:0;list-style:none}.admission-warning li{display:flex;justify-content:space-between;gap:16px;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}.admission-warning li span:first-child{color:var(--text);text-transform:capitalize}
   .items{display:grid;gap:8px;margin:0;padding:0;list-style:none}
-  .items li{display:flex;min-width:0;align-items:flex-start;justify-content:space-between;gap:18px;padding:14px;border-left:3px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .items li{display:grid;grid-template-columns:minmax(0,1fr) auto;min-width:0;align-items:start;gap:10px 18px;padding:14px;border-left:3px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .items li.high{border-left-color:var(--amber)}
   .items li.urgent{border-left-color:var(--danger)}
-  .item-main{flex:1;min-width:0}
+  .item-main{min-width:0}.review-lifecycle{grid-column:1/-1;min-width:0}
   .item-meta{display:flex;flex-wrap:wrap;gap:6px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   .item-meta span{padding:2px 6px;border:1px solid var(--border);border-radius:99px}
   .item-meta .overdue{border-color:rgb(var(--danger-rgb) / .55);color:var(--danger)}
   h3{margin:8px 0 3px;font:700 var(--text-sm) var(--mono);overflow-wrap:anywhere}
   .items p,.items small{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
   .items small{display:block;margin-top:5px;font-size:var(--text-xs)}
+  .items .queue-reason{margin-top:7px;color:var(--text)}.selected-review{margin:14px 0;color:var(--muted);font-size:var(--text-sm);line-height:1.5;overflow-wrap:anywhere}
   .item-actions{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;min-width:168px}
   .item-actions .btn{text-align:center}
   .item-actions select,.dismiss{width:100%;min-height:34px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);font:650 var(--text-2xs) var(--mono)}
@@ -305,5 +315,5 @@
   .warning{color:var(--amber)}
   .limitations{margin:18px 0 0;padding-left:20px}
   @media(max-width:640px){.filters button,.detail-filters select,.detail-filters input,.detail-filters .reset,.item-actions select,.dismiss{min-height:44px}}
-  @media(max-width:640px){.items li{display:grid}.item-actions{width:100%}.items .btn{width:100%;text-align:center}.inbox-heading>strong{font-size:1.6rem}}
+  @media(max-width:640px){.items li{grid-template-columns:minmax(0,1fr)}.item-actions{width:100%}.items .btn{width:100%;text-align:center}.inbox-heading>strong{font-size:1.6rem}}
 </style>

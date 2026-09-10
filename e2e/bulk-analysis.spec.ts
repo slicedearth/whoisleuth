@@ -824,7 +824,7 @@ test('persists named review views and per-domain review state without restarting
   await openBulkWorkspaceTools(page, 'review');
   await page.getByLabel('New view name').fill('Limited active review');
   await page.getByRole('button', { name: 'Save current view' }).click();
-  await expect(page.getByRole('status', { name: 'Bulk review action status', exact: true })).toContainText('Saved the “Limited active review” view.');
+  await expect(page.getByRole('status', { name: 'Bulk review action status', exact: true })).toContainText(/Saved.*Limited active review/u);
 
   const stored = await readBrowserLocalCollection(page, 'bulk_review', { minimumRecords: 2 });
   expect(JSON.stringify(stored.records)).not.toContain('availability');

@@ -1,11 +1,13 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
 import { createCase, serializeCaseStore } from '../packages/cases/case-model.mts';
 import { createRelationshipObservation } from '../packages/workspace/relationship-observation-model.mts';
 import { normalizeBulkSessionStore, serializeBulkSessionStore } from '../packages/workspace/bulk-session-model.mts';
 import { richBulkSessionStore } from '../test/bulk-session-fixture.mts';
+import { buildAnalystReviewInbox } from '../frontend/src/lib/analysis/analyst-review-inbox.ts';
+import { emptyAnalystReviewStateStore, setAnalystReviewDecision } from '../packages/monitoring/analyst-review-state.mts';
 
 const NOW = '2026-09-10T00:00:00.000Z';
 function caseStore(count = 2, pins = 1) {
@@ -26,6 +28,155 @@ async function seed(page: Page, entries = {}, fixedClock = true) {
   }, { clearStorage: true, destination: '/monitor?view=watchlists' });
   await expect(page.getByRole('tab', { name: /^Watchlists/u })).toHaveAttribute('aria-selected', 'true');
 }
+
+test('review history links exact retained decisions and missing associations without collecting or changing saved evidence', async ({ page }, testInfo) => {
+  const record = createCase({ domain: 'review-history.example' }, NOW);
+  const subject = buildAnalystReviewInbox({ cases: [record] }, NOW).items[0]!;
+  expect(subject).toBeTruthy();
+  let state = emptyAnalystReviewStateStore();
+  for (let index = 0; index < 3; index += 1) state = setAnalystReviewDecision(state, subject, {
+    disposition: index === 1 ? 'suppressed' : 'open',
+    rationale: `Decision ${index}: ${'retained-rationale-'.repeat(48)}`,
+    reviewedAt: new Date(Date.parse(NOW) - (3 - index) * 60_000).toISOString(),
+    expiresAt: index === 1 ? '2026-09-11T00:00:00.000Z' : null,
+    caseIds: [record.id, 'missing-review-case'],
+  });
+  await seed(page, {
+    'whois-rdap-cases-v1': JSON.parse(serializeCaseStore([record])),
+    'whoisleuth-analyst-review-state-v1': currentBrowserLocalDocument('analyst_review_state', { records: state.records }),
+  });
+  let apiRequests = 0;
+  await page.route('**/api/**', async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/session' || pathname === '/api/capabilities') { await route.fallback(); return; }
+    apiRequests += 1;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  });
+  const before = await readBrowserLocalCollection(page, 'analyst_review_state', { minimumRecords: 1 });
+  const casesBefore = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  await page.getByRole('tab', { name: /^Timeline/u }).click();
+  const timeline = page.getByRole('region', { name: 'Investigation timeline', exact: true });
+  await expect(timeline).toContainText('3 retained events');
+  await timeline.getByRole('combobox', { name: 'Case', exact: true }).selectOption('missing-review-case');
+  await expect(timeline.locator('.timeline-list article')).toHaveCount(3);
+  const latest = timeline.locator('.timeline-list article').filter({ has: page.getByRole('heading', { name: 'Latest case review: open', exact: true }) });
+  await expect(latest).toBeVisible();
+  await expect(latest).toContainText('Analyst decision');
+  await expect(latest.getByText('Local activity', { exact: true })).toBeVisible();
+  await expect(latest.locator('dt').filter({ hasText: /^(Observed|Freshness)$/u })).toHaveCount(0);
+  await latest.getByText('Currently associated Cases (2)', { exact: true }).click();
+  await expect(latest.getByRole('link', { name: 'review-history.example', exact: true })).toHaveAttribute('href', `/monitor?view=cases&case=${record.id}`);
+  await expect(latest).toContainText('missing-review-case (unavailable)');
+  await expect(latest.getByRole('link', { name: /missing-review-case/u })).toHaveCount(0);
+  const reviewHref = await latest.getByRole('link', { name: 'Open review history', exact: true }).getAttribute('href');
+  expect(new URL(reviewHref!, 'https://example.test').searchParams.get('review')).toBe(subject.subjectKey);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const [width, height] of [[1280, 720], [1024, 768], [390, 844], [320, 700]] as const) {
+      await page.setViewportSize({ width, height });
+      await expectNoHorizontalOverflow(page);
+      await timeline.getByRole('combobox', { name: 'Case', exact: true }).focus();
+      const action = latest.getByRole('link', { name: 'Open review history', exact: true });
+      await action.focus();
+      await expect(action).toBeFocused();
+      await expect(action).toBeInViewport({ ratio: 1 });
+      await page.screenshot({ path: testInfo.outputPath(`timeline-${theme}-${width}.png`) });
+      await latest.screenshot({ path: testInfo.outputPath(`timeline-card-${theme}-${width}.png`) });
+    }
+  }
+  await latest.getByRole('link', { name: 'Open review history', exact: true }).press('Enter');
+  const inbox = page.getByRole('region', { name: 'Review inbox', exact: true });
+  await expect(inbox).toContainText('Showing the selected review and its retained history.');
+  const selected = inbox.locator('.items > li');
+  await expect(selected).toHaveCount(1);
+  await expect(selected).toContainText('Needs action: The analyst retained this item as open.');
+  await selected.locator('details.lifecycle-controls > summary').press('Enter');
+  await selected.getByText('Earlier decisions (2)', { exact: true }).press('Enter');
+  const history = selected.locator('.decision-history li');
+  await expect(history).toHaveCount(2);
+  await expect(history.nth(0)).toContainText(state.records[0]!.history[0]!.rationale);
+  await expect(history.nth(1)).toContainText(state.records[0]!.history[1]!.rationale);
+  await expect(history.nth(0)).toContainText('Expiry:');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const [width, height] of [[1280, 720], [1024, 768], [390, 844], [320, 700]] as const) {
+      await page.setViewportSize({ width, height });
+      await expectNoHorizontalOverflow(page);
+      await selected.locator('details.lifecycle-controls > summary').focus();
+      const historySummary = selected.getByText('Earlier decisions (2)', { exact: true });
+      await historySummary.focus();
+      await expect(historySummary).toBeFocused();
+      await expect(historySummary).toBeInViewport({ ratio: 1 });
+      const [itemBounds, historyBounds] = await Promise.all([selected.boundingBox(), selected.locator('.decision-history').boundingBox()]);
+      expect(itemBounds).not.toBeNull();
+      expect(historyBounds).not.toBeNull();
+      expect(historyBounds!.width).toBeGreaterThan(itemBounds!.width - 80);
+      await page.screenshot({ path: testInfo.outputPath(`history-${theme}-${width}.png`) });
+    }
+  }
+  expect((await readBrowserLocalCollection(page, 'analyst_review_state', { minimumRecords: 1 })).records).toEqual(before.records);
+  expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records).toEqual(casesBefore.records);
+  await page.goto('/monitor?view=inbox&review=missing-review');
+  await expect(inbox).toContainText('The selected review is unavailable in the admitted inbox.');
+  await expect(inbox.locator('.items > li')).toHaveCount(0);
+  await inbox.getByRole('link', { name: 'Show all review items', exact: true }).press('Enter');
+  await expect(inbox.locator('.items > li')).not.toHaveCount(0);
+  await page.getByRole('tab', { name: /^Timeline/u }).click();
+  expect(new URL(page.url()).searchParams.has('review')).toBe(false);
+  expect(apiRequests).toBe(0);
+});
+
+test('a pending review read stays loading after the other timeline collections are ready', async ({ page }) => {
+  const record = createCase({ domain: 'pending-review.example' }, NOW);
+  const subject = buildAnalystReviewInbox({ cases: [record] }, NOW).items[0]!;
+  const rationale = 'A held local review verification remains pending.';
+  const state = setAnalystReviewDecision(emptyAnalystReviewStateStore(), subject, {
+    disposition: 'open', rationale, reviewedAt: NOW,
+  });
+  await seed(page, {
+    'whois-rdap-cases-v1': JSON.parse(serializeCaseStore([record])),
+    'whoisleuth-analyst-review-state-v1': currentBrowserLocalDocument('analyst_review_state', { records: state.records }),
+  });
+  // Hold only this record's integrity verification, after migration. Native
+  // database transactions and every other collection continue normally.
+  const gate = await page.evaluateHandle((marker) => {
+    const original = crypto.subtle.digest;
+    let held = false;
+    let release = () => {};
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    crypto.subtle.digest = async function digest(algorithm, data) {
+      const result = await original.call(this, algorithm, data);
+      if (new TextDecoder().decode(data).includes(marker)) { held = true; await pending; }
+      return result;
+    };
+    return { get held() { return held; }, release, restore() { release(); crypto.subtle.digest = original; } };
+  }, rationale);
+  try {
+    await page.getByRole('tab', { name: /^Relationships/u }).click();
+    await expect(page.getByRole('tab', { name: /^Relationships/u }).locator('span')).not.toHaveAttribute('aria-label', /count (loading|unavailable)/u);
+    await page.getByRole('tab', { name: /^Inbox/u }).click();
+    await expect.poll(() => gate.evaluate((control) => control.held)).toBe(true);
+    const gaps = page.getByRole('region', { name: 'Evidence gaps', exact: true });
+    await expect(gaps).toBeVisible();
+    await expect(gaps).toHaveAttribute('aria-busy', 'false');
+    await page.getByRole('tab', { name: /^Timeline/u }).click();
+    await expect(page.getByRole('heading', { name: 'Loading saved work', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Investigation timeline', exact: true })).toHaveCount(0);
+    await gate.evaluate((control) => control.release());
+    await expect(page.getByRole('region', { name: 'Investigation timeline', exact: true })).toContainText('1 retained event');
+  } finally {
+    await gate.evaluate((control) => control.restore());
+    await gate.dispose();
+  }
+});
+
+test('an unreadable review collection cannot produce an apparently complete activity timeline', async ({ page }) => {
+  await seed(page);
+  await failBrowserLocalCollectionReads(page, 'analyst_review_state');
+  await page.getByRole('tab', { name: /^Timeline/u }).click();
+  await expect(page.getByRole('tab', { name: /^Timeline/u }).locator('span')).toHaveAttribute('aria-label', 'count unavailable');
+  await expect(page.getByRole('region', { name: 'Investigation timeline', exact: true })).toHaveCount(0);
+});
 
 async function holdNextWorker(page: Page) {
   const pattern = `**${productionChunkPath('src/lib/workers/retained-review.worker.ts')}`;

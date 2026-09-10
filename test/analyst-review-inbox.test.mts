@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   analystReviewQueue,
+  analystReviewQueueMembership,
   compareAnalystReviewAdmission,
   buildAnalystReviewInbox,
   filterAnalystReviewItems,
@@ -203,6 +204,25 @@ describe('analyst review inbox', () => {
       ...changed,
       lifecycle: { ...changed.lifecycle, state: 'expected' },
     }, NOW), 'waiting');
+  });
+
+  test('queue membership and its explanation share the same decision and priority', () => {
+    const record = caseRecord();
+    const item = buildAnalystReviewInbox({ cases: [record] }, NOW).items[0]!;
+    const changedReason = 'Material evidence changed after the saved decision.';
+    const cases = [
+      { item, queue: 'needs_action', reason: /No analyst lifecycle decision/u },
+      { item: { ...item, dueAt: '2026-07-29T00:00:00.000Z' }, queue: 'waiting', reason: /follow-up time has not arrived/u },
+      { item: { ...item, lifecycle: { ...item.lifecycle, state: 'resolved' as const } }, queue: 'reviewed', reason: /outside the action queues/u },
+      { item: { ...item, lifecycle: { ...item.lifecycle, state: 'resolved' as const, invalidated: true, reason: changedReason } }, queue: 'changed', reason: /Material evidence changed/u },
+    ];
+    for (const entry of cases) {
+      const membership = analystReviewQueueMembership(entry.item, NOW);
+      assert.equal(membership.queue, entry.queue);
+      assert.equal(analystReviewQueue(entry.item, NOW), entry.queue);
+      assert.match(membership.reason, entry.reason);
+    }
+    assert.equal(analystReviewQueueMembership({ ...item, dueAt: '2026-07-29T00:00:00.000Z' }, 'unavailable').queue, 'needs_action');
   });
 
   test('links a watchlist change directly to one matching Case but not an ambiguous set', () => {

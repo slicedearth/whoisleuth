@@ -14,7 +14,7 @@
   }: {
     item: AnalystReviewItem;
     lifecycle: AnalystReviewLifecycle;
-    onreview: (item: AnalystReviewItem, input: {
+    onreview?: (item: AnalystReviewItem, input: {
       disposition: AnalystReviewDisposition;
       rationale: string;
       expiresAt: string | null;
@@ -37,6 +37,7 @@
   }
 
   async function submit() {
+    if (!onreview || busy) return;
     message = '';
     const selectedDisposition = disposition;
     if (!selectedDisposition) {
@@ -89,7 +90,23 @@
       {#if lifecycle.decision.historyOmitted} · at least {lifecycle.decision.historyOmitted} additional omitted{/if}
     </p>
     <p class="retained-rationale">{lifecycle.decision.rationale}</p>
+    {#if lifecycle.decision.history.length}
+      <details class="decision-history">
+        <summary>Earlier decisions ({lifecycle.decision.history.length})</summary>
+        <ol>
+          {#each lifecycle.decision.history as decision}
+            <li>
+              <p><strong>{decision.disposition}</strong> · <time datetime={decision.reviewedAt}>{new Date(decision.reviewedAt).toLocaleString('en-AU')}</time></p>
+              <p>{decision.rationale}</p>
+              {#if decision.expiresAt}<p>Expiry: <time datetime={decision.expiresAt}>{new Date(decision.expiresAt).toLocaleString('en-AU')}</time></p>{/if}
+              {#if decision.reviewDueAt}<p>Next review: <time datetime={decision.reviewDueAt}>{new Date(decision.reviewDueAt).toLocaleString('en-AU')}</time></p>{/if}
+            </li>
+          {/each}
+        </ol>
+      </details>
+    {/if}
   {/if}
+  {#if onreview}
   <div class="decision-grid">
     <label>Review outcome
       <select bind:value={disposition} disabled={busy}>
@@ -112,6 +129,7 @@
   </div>
   <small>Times use this device’s timezone and are stored as UTC. Material evidence changes or expiry reopen the item; earlier rationale remains historical.</small>
   {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
+  {/if}
 </details>
 
 <style>
@@ -120,6 +138,7 @@
   summary span{margin-left:6px;padding:1px 6px;border:1px solid var(--amber);border-radius:99px;color:var(--amber);font-size:var(--text-2xs)}
   .lifecycle-reason,.last-decision,.retained-rationale,.message{margin:7px 0 0;line-height:1.45;overflow-wrap:anywhere}
   .retained-rationale{padding:7px;border-left:2px solid var(--border);background:var(--panel)}
+  .decision-history{margin-top:8px}.decision-history ol{display:grid;gap:8px;padding-left:22px}.decision-history li{min-width:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.decision-history p{margin:0;overflow-wrap:anywhere}.decision-history p+p{margin-top:5px}
   .decision-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr));align-items:end;gap:7px;margin-top:10px}
   label{display:grid;min-width:0;gap:4px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   select,textarea,input,button{min-width:0;min-height:36px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);font:600 var(--text-xs) var(--mono)}

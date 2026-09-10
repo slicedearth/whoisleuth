@@ -264,7 +264,15 @@ timeline retains them without selecting a latest assessment. Record updates do
 not refresh evidence capture times. The investigation timeline includes all
 admitted records across pages; domain and source filters search the complete
 projection. Undated evidence remains visible, and Bulk session activity is
-labelled separately from source observation time.
+labelled separately from source observation time. Analyst decisions and their
+retained history appear as local activity, with links to the review and its
+currently associated Cases. Unavailable Case identifiers remain visible.
+The review inbox explains each queue assignment; **Earlier decisions** shows
+the retained rationale and dates. Historic omissions are stated explicitly.
+
+Bulk saved views apply their filters, grouping and sort order to the currently
+loaded results. They do not retain targets, select a Brand Profile or authorise
+a scan. Loading a view makes no collection request.
 
 Evidence gaps uses each retained source's own date. Equal-time disagreements
 and undated observations remain available; session-save times do not establish

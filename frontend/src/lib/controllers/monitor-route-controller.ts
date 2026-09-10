@@ -60,6 +60,7 @@ const MONITOR_VIEW_COLLECTIONS = Object.freeze({
     'website-snapshots',
   ]),
   timeline: Object.freeze([
+    'analyst-review-state',
     'cases',
     'watchlists',
     'bulk-sessions',
@@ -112,7 +113,7 @@ function buildMonitorNavigationUrl(
 ): string {
   const url = new URL(current);
   url.searchParams.set('view', next);
-  for (const parameter of ['case', 'watchlist', 'campaign', 'observation']) {
+  for (const parameter of ['case', 'watchlist', 'campaign', 'observation', 'review']) {
     url.searchParams.delete(parameter);
   }
   if (!focus) {

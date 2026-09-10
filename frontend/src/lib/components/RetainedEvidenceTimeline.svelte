@@ -76,7 +76,7 @@
     <button type="button" class="btn" onclick={clearFilters} disabled={!entity&&!caseId&&!source&&!area&&freshness==='all'&&eventType==='all'&&time==='all'}>Clear filters</button>
   </div>
 
-  {#if timeline.truncated}<div class="partial"><p>Partial timeline. The omitted records remain in their owning collection.</p><ul>{#each timeline.omissions as omission}<li>{omission.source}: {omission.count}</li>{/each}</ul></div>{/if}
+  {#if timeline.truncated}<div class="partial"><p>Partial timeline. Source omissions are listed below.</p><ul>{#each timeline.omissions as omission}<li>{omission.source}: {omission.count === Number.MAX_SAFE_INTEGER ? 'at least ' : ''}{omission.count}</li>{/each}</ul></div>{/if}
   {#if !timeline.evaluatedAt}<p class="partial" role="status">Review time unavailable. Source freshness and relative-date filters cannot be evaluated.</p>{/if}
   <p class="result-count">{filtered.length} matching event{filtered.length === 1 ? '' : 's'}</p>
 
@@ -89,24 +89,32 @@
             <header>
               <div><span class="kind">{kindLabel(item.kind)}</span><h3>{item.title}</h3></div>
               <div class="item-states">
+                {#if item.eventType === 'activity'}<span class="completeness">Local activity</span>{:else}
                 <span class={`freshness-state freshness-${item.freshness}`}>{item.freshness}</span>
                 <span class={`completeness state-${item.completeness}`}>{item.completeness}</span>
+                {/if}
               </div>
             </header>
             <p>{item.detail}</p>
             <RetainedTimelineEntities values={item.entities} />
             <dl>
               {#if item.eventType === 'activity'}
-                <div><dt>Session activity</dt><dd>{#if item.activityAt}<time datetime={item.activityAt}>{formatDate(item.activityAt)}</time>{:else}Time unavailable{/if}</dd></div>
+                <div><dt>{item.kind === 'review_decision' ? 'Analyst decision' : 'Session activity'}</dt><dd>{#if item.activityAt}<time datetime={item.activityAt}>{formatDate(item.activityAt)}</time>{:else}Time unavailable{/if}</dd></div>
               {:else}
                 <div><dt>Observed</dt><dd>{#if item.observedAt}<time datetime={item.observedAt}>{formatDate(item.observedAt)}</time>{:else}Observation time unavailable{/if}</dd></div>
               {/if}
-              <div><dt>{['case_snapshot', 'bulk_session', 'watchlist_check'].includes(item.kind) ? 'Record updated' : 'Stored'}</dt><dd>{#if item.storedAt}<time datetime={item.storedAt}>{formatDate(item.storedAt)}</time>{:else}Storage time unavailable{/if}</dd></div>
-              <div><dt>Freshness</dt><dd>{#if item.eventType === 'activity'}Not assigned to session activity{:else}{item.ageDays === null ? 'Unknown age' : `${item.ageDays} day${item.ageDays === 1 ? '' : 's'} old`} · stale at {item.freshnessThresholdDays} days{/if}</dd></div>
+              {#if item.eventType !== 'activity' || item.storedAt}<div><dt>{['case_snapshot', 'bulk_session', 'watchlist_check'].includes(item.kind) ? 'Record updated' : 'Stored'}</dt><dd>{#if item.storedAt}<time datetime={item.storedAt}>{formatDate(item.storedAt)}</time>{:else}Storage time unavailable{/if}</dd></div>{/if}
+              {#if item.eventType !== 'activity'}<div><dt>Freshness</dt><dd>{item.ageDays === null ? 'Unknown age' : `${item.ageDays} day${item.ageDays === 1 ? '' : 's'} old`} · stale at {item.freshnessThresholdDays} days</dd></div>{/if}
               <div><dt>Source</dt><dd>{item.source} · {item.sourceState}</dd></div>
               <div><dt>Area</dt><dd>{item.areas.map(areaLabel).join(' · ')}</dd></div>
-              <div><dt>Interpretation</dt><dd>{item.derived ? 'Derived relationship' : item.eventType === 'change' ? 'Observed change record' : item.eventType === 'activity' ? 'Local session activity; not source evidence' : 'Retained observation'}</dd></div>
+              {#if item.eventType !== 'activity'}<div><dt>Interpretation</dt><dd>{item.derived ? 'Derived relationship' : item.eventType === 'change' ? 'Observed change record' : 'Retained observation'}</dd></div>{/if}
             </dl>
+            {#if item.caseAssociations?.length}
+              <details class="case-associations">
+                <summary>Currently associated Cases ({item.caseAssociations.length})</summary>
+                <ul>{#each item.caseAssociations as association}<li>{#if association.present}<a href={`/monitor?view=cases&case=${encodeURIComponent(association.id)}`}>{association.label}</a>{:else}{association.label}{/if}</li>{/each}</ul>
+              </details>
+            {/if}
             <div class="item-actions">
               <a class="btn" href={item.href}>Open {item.owner}</a>
               {#if item.truncated}<span class="truncated">Truncated</span>{/if}
@@ -120,7 +128,7 @@
   {:else}
     <section class="empty card">
       <h3>No retained events match</h3>
-      <p>{timeline.items.length ? 'Clear or broaden the timeline filters.' : 'Retain case evidence, website snapshots, watchlist history, or reviewed relationships to build this timeline.'}</p>
+      <p>{timeline.items.length ? 'Clear or broaden the timeline filters.' : 'Retain Case evidence, website snapshots, watchlist history, relationships, or analyst decisions to build this timeline.'}</p>
     </section>
   {/if}
 
@@ -137,6 +145,7 @@
   .item-states{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px}.completeness,.freshness-state,.truncated{padding:3px 7px;border:1px solid var(--border-strong);border-radius:999px;color:var(--text);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}.state-complete,.freshness-current{color:var(--text)}.state-partial,.state-inconclusive,.freshness-stale,.truncated{border-color:var(--amber);border-style:dashed;color:var(--amber)}.state-unknown,.freshness-unknown{border-color:var(--muted);border-style:dotted;color:var(--muted)}
   dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0}dl div{min-width:0;padding:7px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}dt{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}dd{margin:3px 0 0;font-size:var(--text-xs);overflow-wrap:anywhere}
   .item-actions{display:flex;align-items:center;justify-content:space-between;gap:8px}.item-actions .btn{font-size:var(--text-xs)}details summary{color:var(--muted);font-size:var(--text-xs);cursor:pointer}details p{margin:7px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}.empty{padding:16px}.empty h3,.empty p{margin:0}.empty p{margin-top:5px;color:var(--muted);font-size:var(--text-xs)}.scope{margin-top:2px}
+  .case-associations ul{display:grid;gap:7px;padding-left:22px;font-size:var(--text-xs);overflow-wrap:anywhere}article>p{overflow-wrap:anywhere}
   @media(max-width:1100px){.filters{grid-template-columns:repeat(3,minmax(0,1fr))}.filters button{width:100%}}
   @media(max-width:760px){.timeline-workspace>header{display:grid}.metrics{justify-content:flex-start}.filters{grid-template-columns:1fr 1fr}dl{grid-template-columns:1fr 1fr}}
   @media(max-width:480px){.filters,dl{grid-template-columns:1fr}.timeline-list>li{grid-template-columns:14px minmax(0,1fr);gap:4px}.item-actions{align-items:flex-start;flex-direction:column}.item-actions .btn{width:100%}}

@@ -453,14 +453,14 @@
     if(bulkReviewSourceState!=='ready'||!bulkReviewApi){bulkReviewStatus='Saved review state is unavailable. Reload before changing saved views.';return'rejected';}
     try{
       bulkReviewStore=await bulkReviewApi.saveBulkReviewPreset({name,view});
-      bulkReviewStatus=`Saved the “${name.trim()}” view.`;
+      bulkReviewStatus=`Saved the “${name.trim()}” filters for use with loaded Bulk results.`;
       return'committed';
     }catch(cause){
       bulkReviewStatus=cause instanceof Error?cause.message:'Could not save the review view.';
       return failedLocalMutationOutcome(cause);
     }
   }
-  function loadBulkReviewView(preset:BulkReviewPreset){const view=preset.view;filter=view.primaryFilter as BulkPrimaryFilter;mutationFilter=view.mutationFilter;signalFilters=new Set(view.signalFilters);sourceFilter=view.sourceFilter as BulkSourceFilter;lifecycleFilter=view.lifecycleFilter;ageFilter=view.ageFilter as BulkAgeFilter;mailFilter=view.mailFilter as BulkMailFilter;registrarFilter=view.registrarFilter;caseDispositionFilter=view.caseDispositionFilter;reviewStateFilter=view.reviewStateFilter;groupBy=view.groupBy as BulkGroupBy;sortKey=normalizeBulkPresentationSortKey(view.sortKey);sortDirection=view.sortDirection;page=1;bulkReviewStatus=`Loaded the ${preset.name} review view. No scan was started.`;}
+  function loadBulkReviewView(preset:BulkReviewPreset){const view=preset.view;filter=view.primaryFilter as BulkPrimaryFilter;mutationFilter=view.mutationFilter;signalFilters=new Set(view.signalFilters);sourceFilter=view.sourceFilter as BulkSourceFilter;lifecycleFilter=view.lifecycleFilter;ageFilter=view.ageFilter as BulkAgeFilter;mailFilter=view.mailFilter as BulkMailFilter;registrarFilter=view.registrarFilter;caseDispositionFilter=view.caseDispositionFilter;reviewStateFilter=view.reviewStateFilter;groupBy=view.groupBy as BulkGroupBy;sortKey=normalizeBulkPresentationSortKey(view.sortKey);sortDirection=view.sortDirection;page=1;bulkReviewStatus=`Loaded the ${preset.name} review view for the current Bulk results. No scan was started.`;}
   async function removeBulkReviewView(preset:BulkReviewPreset){const submitted=$state.snapshot(preset);await ensureBulkReviewContext();if(bulkReviewSourceState!=='ready'||!bulkReviewApi){bulkReviewStatus='Saved review state is unavailable. Reload before deleting saved views.';return;}try{bulkReviewStore=await bulkReviewApi.deleteBulkReviewPreset(submitted.id,submitted);bulkReviewStatus=`Deleted the ${submitted.name} review view.`;}catch(cause){bulkReviewStatus=cause instanceof Error?cause.message:'Could not delete the review view.';}}
   async function setBulkReviewState(row:ScanResult,state:string){
     await ensureBulkReviewContext();

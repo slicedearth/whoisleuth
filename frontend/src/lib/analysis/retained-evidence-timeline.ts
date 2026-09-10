@@ -1,4 +1,4 @@
-import type { CaseRecord } from './case-model.ts';
+import { caseLookupTarget, type CaseRecord } from './case-model.ts';
 import type { BulkSession } from './bulk-session-model.ts';
 import type { RelationshipObservation } from './relationship-observation-model.ts';
 import type { WatchlistCollection } from './watchlist-store.ts';
@@ -6,9 +6,12 @@ import type { WebsiteProfileSnapshot } from './website-snapshot-model.ts';
 import { normalizeExplicitIsoTimestamp, readObservationTime } from '../../../../packages/evidence/observation.mts';
 import { MAX_CASES, MAX_CASE_ASSERTIONS, MAX_CASE_EVIDENCE_PINS, MAX_EVIDENCE_SNAPSHOTS_PER_CASE } from '../../../../packages/contracts/case-portability.mts';
 import { MAX_BULK_SESSIONS, MAX_BULK_SESSION_ROWS, MAX_RELATIONSHIP_OBSERVATIONS, MAX_RELATIONSHIP_OBSERVATION_DOMAINS, MAX_WATCHLISTS, MAX_WATCHLIST_HISTORY_EVENTS, MAX_WATCHLIST_CHANGES_PER_EVENT, MAX_WEBSITE_SNAPSHOTS } from '../../../../packages/contracts/workspace-portability.mts';
+import { MAX_ANALYST_REVIEW_STATE_RECORDS, MAX_ANALYST_REVIEW_HISTORY, MAX_ANALYST_REVIEW_ASSOCIATIONS, MAX_ANALYST_REVIEW_RATIONALE_LENGTH, type AnalystReviewStateStore } from '../../../../packages/contracts/analyst-review-state-contract.mts';
+import { analystReviewDecisionIdentity } from '../../../../packages/monitoring/analyst-review-state.mts';
 
 export const MAX_RETAINED_TIMELINE_ITEMS = MAX_CASES * (MAX_EVIDENCE_SNAPSHOTS_PER_CASE + MAX_CASE_EVIDENCE_PINS + MAX_CASE_ASSERTIONS)
-  + MAX_BULK_SESSIONS + MAX_RELATIONSHIP_OBSERVATIONS + MAX_WATCHLISTS * MAX_WATCHLIST_HISTORY_EVENTS + MAX_WEBSITE_SNAPSHOTS;
+  + MAX_BULK_SESSIONS + MAX_RELATIONSHIP_OBSERVATIONS + MAX_WATCHLISTS * MAX_WATCHLIST_HISTORY_EVENTS + MAX_WEBSITE_SNAPSHOTS
+  + MAX_ANALYST_REVIEW_STATE_RECORDS * (1 + MAX_ANALYST_REVIEW_HISTORY);
 export const MAX_RETAINED_TIMELINE_ENTITIES = Math.max(MAX_BULK_SESSION_ROWS, MAX_RELATIONSHIP_OBSERVATION_DOMAINS, MAX_WATCHLIST_CHANGES_PER_EVENT);
 export const MAX_RETAINED_TIMELINE_LIMITATIONS = 8;
 
@@ -21,6 +24,7 @@ export const RETAINED_TIMELINE_KINDS = [
   'website_snapshot',
   'watchlist_check',
   'relationship',
+  'review_decision',
 ] as const;
 export type RetainedTimelineKind = typeof RETAINED_TIMELINE_KINDS[number];
 export type RetainedTimelineCompleteness = 'complete' | 'partial' | 'inconclusive' | 'unknown';
@@ -33,17 +37,19 @@ export const RETAINED_TIMELINE_AREAS = [
   'case',
   'evidence_pin',
   'relationship',
+  'review',
 ] as const;
 export type RetainedTimelineArea = typeof RETAINED_TIMELINE_AREAS[number];
 export type RetainedTimelineFreshness = 'current' | 'stale' | 'unknown';
 
-export const RETAINED_TIMELINE_FRESHNESS_DAYS: Readonly<Record<RetainedTimelineArea, number>> = {
+export const RETAINED_TIMELINE_FRESHNESS_DAYS: Readonly<Record<RetainedTimelineArea, number | null>> = {
   lookup: 30,
   bulk: 7,
   watchlist: 7,
   case: 30,
   evidence_pin: 30,
   relationship: 30,
+  review: null,
 };
 
 export type RetainedTimelineItem = Readonly<{
@@ -55,6 +61,7 @@ export type RetainedTimelineItem = Readonly<{
   entities: readonly string[];
   caseId: string | null;
   caseLabel: string | null;
+  caseAssociations?: readonly Readonly<{ id: string; label: string; present: boolean }>[];
   owner: string;
   href: string;
   areas: readonly RetainedTimelineArea[];
@@ -65,7 +72,7 @@ export type RetainedTimelineItem = Readonly<{
   activityAt?: string | null;
   freshness: RetainedTimelineFreshness;
   ageDays: number | null;
-  freshnessThresholdDays: number;
+  freshnessThresholdDays: number | null;
   completeness: RetainedTimelineCompleteness;
   truncated: boolean;
   derived: boolean;
@@ -132,7 +139,7 @@ function freshnessMetadata(
 ): Pick<RetainedTimelineItem, 'freshness' | 'ageDays' | 'freshnessThresholdDays'> {
   const threshold = RETAINED_TIMELINE_FRESHNESS_DAYS[area];
   const { ageDays } = readObservationTime(observedAt, now);
-  if (ageDays === null) {
+  if (ageDays === null || threshold === null) {
     return { freshness: 'unknown', ageDays: null, freshnessThresholdDays: threshold };
   }
   return {
@@ -143,7 +150,7 @@ function freshnessMetadata(
 }
 
 function omitTimelineSource(omissions: Map<string, number>, source: string, count: number) {
-  if (count > 0) omissions.set(source, (omissions.get(source) ?? 0) + count);
+  if (count > 0) omissions.set(source, Math.min(Number.MAX_SAFE_INTEGER, (omissions.get(source) ?? 0) + count));
 }
 
 function timelineSource<T>(values: readonly T[], maximum: number, source: string, omissions: Map<string, number>, newestLast = false): T[] {
@@ -385,6 +392,59 @@ function bulkTimelineItems(sessions: readonly BulkSession[], now: string | null,
   });
 }
 
+function reviewTimelineItems(
+  store: AnalystReviewStateStore | undefined,
+  cases: readonly CaseRecord[],
+  omissions: Map<string, number>,
+): RetainedTimelineItem[] {
+  const caseById = new Map(cases.slice(0, MAX_CASES).map((record) => [record.id, record]));
+  return timelineSource(store?.records ?? [], MAX_ANALYST_REVIEW_STATE_RECORDS, 'Review records outside the source bound', omissions).flatMap((record) => {
+    const caseAssociations = timelineSource(record.caseIds, MAX_ANALYST_REVIEW_ASSOCIATIONS, 'Review Case associations outside the source bound', omissions).map((id) => {
+      const associated = caseById.get(id);
+      return { id, label: associated ? caseLookupTarget(associated) : `${id} (unavailable)`, present: Boolean(associated) };
+    });
+    const history = timelineSource(record.history, MAX_ANALYST_REVIEW_HISTORY, 'Review history outside the source bound', omissions);
+    omitTimelineSource(omissions, 'Earlier analyst decisions no longer retained', record.historyOmitted);
+    const occurrences = new Map<string, number>();
+    return [record, ...history].map((decision, index): RetainedTimelineItem => {
+      const identity = analystReviewDecisionIdentity(record.subjectKey, decision);
+      const occurrence = occurrences.get(identity) ?? 0;
+      occurrences.set(identity, occurrence + 1);
+      return {
+        id: `review-${identity}:${occurrence}`,
+        kind: 'review_decision',
+        eventType: 'activity',
+        title: `${index === 0 ? 'Latest' : 'Earlier'} ${record.evidenceFamily.replaceAll('_', ' ')} review: ${decision.disposition}`,
+        detail: text(decision.rationale, MAX_ANALYST_REVIEW_RATIONALE_LENGTH),
+        entities: caseAssociations.filter((association) => association.present).map((association) => association.label),
+        caseId: caseAssociations.length === 1 ? caseAssociations[0]!.id : null,
+        caseLabel: caseAssociations.length === 1 ? caseAssociations[0]!.label : null,
+        caseAssociations,
+        owner: 'review history',
+        href: `/monitor?view=inbox&review=${encodeURIComponent(record.subjectKey)}#review-inbox-title`,
+        areas: ['review', ...(caseAssociations.length ? ['case'] as const : [])],
+        source: 'Analyst review decision',
+        sourceState: index === 0 ? 'latest retained decision' : 'historical decision',
+        observedAt: null,
+        storedAt: null,
+        activityAt: timestamp(decision.reviewedAt),
+        freshness: 'unknown',
+        ageDays: null,
+        freshnessThresholdDays: null,
+        completeness: 'unknown',
+        truncated: record.historyOmitted > 0 || record.history.length > MAX_ANALYST_REVIEW_HISTORY,
+        derived: false,
+        limitations: [
+          'This timestamp records the analyst decision, not when its source evidence was observed. Open the review for current applicability and earlier rationale.',
+          ...(index > 0 && caseAssociations.length ? ['Case links use the latest retained associations; historical associations were not stored.'] : []),
+          ...(caseAssociations.some((association) => !association.present) ? ['One or more associated Cases are unavailable in the loaded workspace. Their identifiers remain retained.'] : []),
+          ...(record.historyOmitted > 0 ? [`At least ${record.historyOmitted} earlier decisions are no longer retained.`] : []),
+        ],
+      };
+    });
+  });
+}
+
 function eventTime(item: RetainedTimelineItem): string | null {
   return item.eventType === 'activity' ? item.activityAt ?? null : item.observedAt;
 }
@@ -404,6 +464,7 @@ export function buildRetainedEvidenceTimeline(input: Readonly<{
   watchlists?: WatchlistCollection;
   relationships?: readonly RelationshipObservation[];
   websiteSnapshots?: readonly WebsiteProfileSnapshot[];
+  reviewState?: AnalystReviewStateStore;
   now?: unknown;
 }>): RetainedEvidenceTimeline {
   const cases = Array.isArray(input.cases) ? input.cases : [];
@@ -419,6 +480,7 @@ export function buildRetainedEvidenceTimeline(input: Readonly<{
     ...websiteTimelineItems(websiteSnapshots, now, omissions),
     ...watchlistTimelineItems(watchlists, now, omissions),
     ...relationshipTimelineItems(relationships, now, omissions),
+    ...reviewTimelineItems(input.reviewState, cases, omissions),
   ].sort(itemSort);
   const items = timelineSource(all, MAX_RETAINED_TIMELINE_ITEMS, 'Timeline entries outside the display bound', omissions);
   const counts = Object.fromEntries([
@@ -431,6 +493,7 @@ export function buildRetainedEvidenceTimeline(input: Readonly<{
   const caseOptions = new Map<string, string>();
   for (const item of items) {
     if (item.caseId && item.caseLabel) caseOptions.set(item.caseId, item.caseLabel);
+    for (const association of item.caseAssociations ?? []) caseOptions.set(association.id, association.label);
   }
   const freshnessCounts = {
     current: items.filter((item) => item.freshness === 'current').length,
@@ -448,7 +511,7 @@ export function buildRetainedEvidenceTimeline(input: Readonly<{
     limitations: [
       'This is a bounded projection of deliberately retained browser-local records. It does not run collection, duplicate raw payloads, or infer maliciousness.',
       'Observation time records when evidence was collected or asserted. Storage time records when this browser retained the owning record; the two are never silently merged.',
-      'Undated evidence remains available. Time filters use source observation dates for evidence and separately labelled event dates for session activity.',
+      'Undated evidence remains available. Time filters use source observation dates for evidence and separately labelled event dates for session activity and analyst decisions.',
       ...(now === null ? ['The review clock is unavailable; freshness and relative-date filters cannot be evaluated.'] : []),
       'Open the owning record for complete retained detail, exact values, source limitations, and analyst notes.',
       'Freshness is a bounded age check over retained observation time. It does not run a lookup or imply that current live evidence has changed.',
@@ -473,7 +536,7 @@ export function filterRetainedEvidenceTimeline(
     const inTimeRange = filters.time === 'all' || (filters.time === 'undated' ? observedAt === null
       : observedAt !== null && Date.parse(observedAt) >= cutoff && Date.parse(observedAt) <= current);
     return (!normalizedEntity || item.entities.some((entity) => entity.includes(normalizedEntity)))
-    && (!normalizedCase || item.caseId === normalizedCase)
+    && (!normalizedCase || item.caseId === normalizedCase || item.caseAssociations?.some((association) => association.id === normalizedCase))
     && (!normalizedSource || item.source.toLowerCase().includes(normalizedSource.toLowerCase()))
     && (!filters.area || item.areas.includes(filters.area))
     && (filters.freshness === 'all' || item.freshness === filters.freshness)

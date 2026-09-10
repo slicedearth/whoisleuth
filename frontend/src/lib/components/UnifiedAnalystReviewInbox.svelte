@@ -19,6 +19,7 @@
     detectionRules,
     websiteSnapshots,
     reviewState,
+    selectedSubjectKey = '',
     ondismiss,
     onreview,
     oncount,
@@ -30,6 +31,7 @@
     detectionRules: readonly DetectionRule[];
     websiteSnapshots: readonly WebsiteProfileSnapshot[];
     reviewState: AnalystReviewStateStore;
+    selectedSubjectKey?: string;
     ondismiss?: (item: AnalystReviewItem, reason: AnalystReviewDismissalReason) => void | Promise<void>;
     onreview?: (item: AnalystReviewItem, input: { disposition: AnalystReviewDisposition; rationale: string; expiresAt: string | null; reviewDueAt: string | null }) => void | Promise<void>;
     oncount?: (count: number) => void;
@@ -55,6 +57,7 @@
 
 <AnalystReviewInbox
   {inbox}
+  {selectedSubjectKey}
   now={review.now}
   {...(ondismiss ? { ondismiss } : {})}
   {...(onreview ? { onreview } : {})}

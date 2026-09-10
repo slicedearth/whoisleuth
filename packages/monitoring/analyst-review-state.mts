@@ -371,6 +371,11 @@ function snapshotIdentity(snapshot: AnalystReviewDecisionSnapshot): string {
   ]);
 }
 
+export function analystReviewDecisionIdentity(subjectKey: string, snapshot: AnalystReviewDecisionSnapshot): string {
+  if (!SAFE_SUBJECT_RE.test(subjectKey)) throw inputError('Review subject identity is invalid');
+  return `decision:${stableHash([subjectKey, snapshotIdentity(snapshot)])}`;
+}
+
 function mergedReviewHistory(
   current: AnalystReviewStateRecord,
   other: AnalystReviewStateRecord,

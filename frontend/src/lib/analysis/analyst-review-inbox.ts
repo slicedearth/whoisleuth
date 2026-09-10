@@ -62,6 +62,7 @@ export const ANALYST_REVIEW_QUEUE_OPTIONS = [
   { value: 'needs_action', label: 'Needs action' },
   { value: 'waiting', label: 'Waiting / follow-up' },
   { value: 'changed', label: 'Changed since review' },
+  { value: 'reviewed', label: 'Reviewed' },
   { value: 'all', label: 'Everything' },
 ] as const;
 export type AnalystReviewQueue = typeof ANALYST_REVIEW_QUEUE_OPTIONS[number]['value'];
@@ -126,15 +127,23 @@ const CHANGED_REVIEW_KINDS = new Set<AnalystReviewKind>(['watchlist_change', 'co
 export function analystReviewQueue(
   item: AnalystReviewInboxItem,
   now: unknown,
-): Exclude<AnalystReviewQueue, 'all'> | 'reviewed' {
+): Exclude<AnalystReviewQueue, 'all'> {
+  return analystReviewQueueMembership(item, now).queue;
+}
+
+export function analystReviewQueueMembership(
+  item: AnalystReviewInboxItem,
+  now: unknown,
+): Readonly<{ queue: Exclude<AnalystReviewQueue, 'all'>; reason: string }> {
   const nowIso = timestamp(now) ?? '';
-  if (item.lifecycle.invalidated || item.lifecycle.recurred) return 'changed';
-  if (item.lifecycle.state === 'resolved') return 'reviewed';
+  if (item.lifecycle.invalidated || item.lifecycle.recurred) return { queue: 'changed', reason: item.lifecycle.reason };
+  if (item.lifecycle.state === 'resolved') return { queue: 'reviewed', reason: 'The retained resolved decision still applies. This item is outside the action queues.' };
   const dueAt = item.dueAt ? Date.parse(item.dueAt) : Number.NaN;
   const futureFollowUp = Number.isFinite(dueAt) && dueAt > Date.parse(nowIso);
-  if (item.lifecycle.state === 'expected' || item.lifecycle.state === 'suppressed' || futureFollowUp) return 'waiting';
-  if (CHANGED_REVIEW_KINDS.has(item.kind)) return 'changed';
-  return 'needs_action';
+  if (item.lifecycle.state === 'expected' || item.lifecycle.state === 'suppressed') return { queue: 'waiting', reason: item.lifecycle.reason };
+  if (futureFollowUp) return { queue: 'waiting', reason: 'The retained follow-up time has not arrived.' };
+  if (CHANGED_REVIEW_KINDS.has(item.kind)) return { queue: 'changed', reason: 'This retained change or comparison is awaiting review.' };
+  return { queue: 'needs_action', reason: item.lifecycle.reason };
 }
 
 type AdmissionComparableItem = AnalystReviewItem & Readonly<{ lifecycle?: AnalystReviewLifecycle }>;
@@ -758,24 +767,13 @@ export function buildAnalystReviewInbox(
   const combinedItems = [...currentItems, ...orphanedItems];
   const items = retainTopAnalystReviewItems(combinedItems, { now: nowIso }).items as AnalystReviewInboxItem[];
   const admission = buildAdmission(combinedItems, items, projected);
-  const counts: Record<AnalystReviewKind | 'all' | 'overdue', number> = {
-    all: items.length,
-    overdue: items.filter((item) => item.dueAt !== null && Date.parse(item.dueAt) <= nowMs).length,
-    case: items.filter((item) => item.kind === 'case').length,
-    case_action: items.filter((item) => item.kind === 'case_action').length,
-    observed_effect_review: items.filter((item) => item.kind === 'observed_effect_review').length,
-    evidence_gap: items.filter((item) => item.kind === 'evidence_gap').length,
-    watchlist_change: items.filter((item) => item.kind === 'watchlist_change').length,
-    bulk_session: items.filter((item) => item.kind === 'bulk_session').length,
-    comparison: items.filter((item) => item.kind === 'comparison').length,
-    suppression: items.filter((item) => item.kind === 'suppression').length,
-    change_window: items.filter((item) => item.kind === 'change_window').length,
-    desired_posture: items.filter((item) => item.kind === 'desired_posture').length,
-    certificate: items.filter((item) => item.kind === 'certificate').length,
-    incomplete_packet: items.filter((item) => item.kind === 'incomplete_packet').length,
-    detection_rule: items.filter((item) => item.kind === 'detection_rule').length,
-    orphaned_state: items.filter((item) => item.kind === 'orphaned_state').length,
-  };
+  const counts = Object.fromEntries([
+    ...ANALYST_REVIEW_KINDS.map((kind) => [kind, 0]), ['all', items.length], ['overdue', 0],
+  ]) as Record<AnalystReviewKind | 'all' | 'overdue', number>;
+  for (const item of items) {
+    counts[item.kind] += 1;
+    if (item.dueAt !== null && Date.parse(item.dueAt) <= nowMs) counts.overdue += 1;
+  }
   return {
     items,
     counts,
