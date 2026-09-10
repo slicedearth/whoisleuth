@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import test from 'node:test';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 
 const moduleUrl = (path: string) => new URL(path, import.meta.url).href;
 const urls = {
@@ -222,24 +223,27 @@ function rejectNestedCase(timezone: string, timestamp: string, version: number):
 
 test('Case nested timestamps obey the current policy and retired schemas fail without reinterpretation', () => {
   const zoneLess = '2026-03-15T12:00:00.000';
-  const current = runNestedCase('UTC', zoneLess, 15);
-  assert.deepEqual(runNestedCase('Australia/Melbourne', zoneLess, 15), current);
-  assert.equal(current.pinObservedAt, '2026-01-01T00:00:00.000Z');
-  assert.equal(current.certificateNotAfter, null);
-  assert.equal(current.actionDueAt, null);
-  assert.equal(current.provenanceObservedAt, null);
-  assert.equal(current.evidenceCreatedDate, null);
-  assert.equal(current.lifecycleStartsAt, null);
+  for (const version of [15, CASE_SCHEMA_VERSION]) {
+    const current = runNestedCase('UTC', zoneLess, version);
+    assert.deepEqual(runNestedCase('Australia/Melbourne', zoneLess, version), current);
+    assert.equal(current.pinObservedAt, null);
+    assert.equal(current.sightingObservedAt, null);
+    assert.equal(current.certificateNotAfter, null);
+    assert.equal(current.actionDueAt, null);
+    assert.equal(current.provenanceObservedAt, null);
+    assert.equal(current.evidenceCreatedDate, null);
+    assert.equal(current.lifecycleStartsAt, null);
+    const offset = runNestedCase('UTC', '2026-03-15T12:00:00.000+01:00', version);
+    assert.deepEqual(runNestedCase('Australia/Melbourne', '2026-03-15T12:00:00.000+01:00', version), offset);
+    assert.equal(offset.pinObservedAt, '2026-03-15T11:00:00.000Z');
+    assert.equal(offset.lifecycleStartsAt, '2026-02-13T11:00:00.000Z');
+  }
 
   for (const timezone of ['UTC', 'Australia/Melbourne']) {
     assert.match(
       rejectNestedCase(timezone, zoneLess, 11),
-      /Case schema 11 is not part of the supported compatibility boundary.*schema 15.*no data was changed/isu,
+      /Case schema 11 is not part of the supported compatibility boundary.*migrate to schema.*no data was changed/isu,
     );
   }
 
-  const offset = runNestedCase('UTC', '2026-03-15T12:00:00.000+01:00', 15);
-  assert.deepEqual(runNestedCase('Australia/Melbourne', '2026-03-15T12:00:00.000+01:00', 15), offset);
-  assert.equal(offset.pinObservedAt, '2026-03-15T11:00:00.000Z');
-  assert.equal(offset.lifecycleStartsAt, '2026-02-13T11:00:00.000Z');
 });

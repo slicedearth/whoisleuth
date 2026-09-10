@@ -79,7 +79,7 @@ type RetainedFact = Readonly<{
   pinId: string;
   field: string;
   value: string;
-  observedAt: string;
+  observedAt: string | null;
   source: string;
   completeness: AnalystReviewCompleteness;
   caseId: string;
@@ -183,7 +183,12 @@ function currentRetainedFact(
         : fact && analystReviewAgeAt(fact.observedAt, now) === 'unknown'
           ? 'The source observation is later than the review clock, or that clock is unavailable. No current comparison is made.'
         : null;
-  return { fact: limitation ? null : fact, candidates, observedAt: cohort.undated.length ? '' : cohort.observedAt ?? '', limitation };
+  return {
+    fact: !limitation && fact && cohort.observedAt ? { ...fact, observedAt: cohort.observedAt } : null,
+    candidates,
+    observedAt: cohort.undated.length ? '' : cohort.observedAt ?? '',
+    limitation,
+  };
 }
 
 function retainedValues(value: string): string[] {
@@ -194,7 +199,7 @@ function retainedValues(value: string): string[] {
     .sort();
 }
 
-function changeWindowAt(desired: DesiredPostureBaseline, observedAt: string) {
+function changeWindowAt(desired: DesiredPostureBaseline, observedAt: string | null) {
   const observed = Date.parse(normalizeExplicitIsoTimestamp(observedAt) ?? '');
   if (!Number.isFinite(observed)) return null;
   return desired.approvedChangeWindows.find((window) => (
@@ -643,7 +648,7 @@ export function buildCertificateReviewInbox(
                 : kind === 'expiry' || kind === 'expired_acknowledgement'
                   ? `The retained not-after time is ${notAfter}. Acknowledgement changes only the Review Item lifecycle.`
                   : 'The retained publication event differs from the reviewed posture and needs analyst review.',
-          observedAt: event.observedAt,
+          observedAt: event.observedAt ?? '',
           notAfter,
           certificateSha256: event.certificateSha256,
           spkiSha256: null,

@@ -6,7 +6,7 @@ import {
   MAX_EVIDENCE_DEBT_BULK_ROWS,
 } from '../frontend/src/lib/analysis/evidence-debt-review.ts';
 import { buildAnalystReviewInbox } from '../frontend/src/lib/analysis/analyst-review-inbox.ts';
-import type { CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
+import { createCase, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
 import type {
   BulkSession,
   BulkSessionResult,
@@ -142,6 +142,19 @@ function pin(
 }
 
 describe('evidence debt review', () => {
+  test('keeps undated pins actionable without calling their save time a source observation or stale evidence', () => {
+    const record = createCase({ domain: 'undated.invalid', evidencePin: {
+      label: 'Retained source fact', value: 'Known value with unknown source time', source: 'whois',
+      observedAt: null, completeness: 'complete',
+    } }, '2026-01-01T00:00:00.000Z');
+    const review = buildEvidenceDebtReview({ cases: [record], bulkSessions: [] }, NOW);
+    assert.equal(review.counts.all, 1);
+    assert.equal(review.counts.partial, 1);
+    assert.equal(review.counts.stale, 0);
+    assert.equal(review.items[0]?.observedAt, null);
+    assert.match(review.items[0]?.limitations.join(' ') ?? '', /freshness cannot be determined from the save time/u);
+  });
+
   test('projects only explicit actionable saved source states and separately pinned gaps', () => {
     const bulk = session({
       domains: ['review.invalid', 'no-coverage.invalid', 'expected.bv'],

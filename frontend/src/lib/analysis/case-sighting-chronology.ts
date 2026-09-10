@@ -4,8 +4,10 @@ import type {
   CaseSightingRecord,
   CaseSightingState,
 } from './case-response-model.ts';
+import { MAX_CASE_SIGHTINGS } from './case-response-model.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 
-export const MAX_CASE_SIGHTING_CHRONOLOGY_ENTRIES = 40;
+export const MAX_CASE_SIGHTING_CHRONOLOGY_ENTRIES = MAX_CASE_SIGHTINGS;
 
 const OBSERVATION_STATES = new Set<CaseSightingState>([
   'observed_by_deployment',
@@ -24,8 +26,9 @@ export type CaseSightingChronologyEntry = Readonly<{
   category: CaseSightingCategory;
   sourceClass: CaseSightingRecord['sourceClass'];
   source: string;
-  firstObservedAt: string;
-  lastObservedAt: string;
+  firstObservedAt: string | null;
+  lastObservedAt: string | null;
+  undatedCount: number;
   observationCount: number;
   states: readonly CaseSightingState[];
   completeness: CasePinCompleteness;
@@ -36,8 +39,9 @@ type MutableChronologyEntry = {
   category: CaseSightingCategory;
   sourceClass: CaseSightingRecord['sourceClass'];
   source: string;
-  firstObservedAt: string;
-  lastObservedAt: string;
+  firstObservedAt: string | null;
+  lastObservedAt: string | null;
+  undatedCount: number;
   observationCount: number;
   states: Set<CaseSightingState>;
   completeness: CasePinCompleteness;
@@ -60,8 +64,9 @@ export function buildCaseSightingChronology(
 ): CaseSightingChronologyEntry[] {
   const grouped = new Map<string, MutableChronologyEntry>();
 
-  for (const sighting of sightings.slice(-80)) {
+  for (const sighting of sightings.slice(-MAX_CASE_SIGHTINGS)) {
     if (!OBSERVATION_STATES.has(sighting.state)) continue;
+    const observedAt = normalizeExplicitIsoTimestamp(sighting.observedAt);
     const key = chronologyKey(sighting);
     const existing = grouped.get(key);
     if (!existing) {
@@ -69,8 +74,9 @@ export function buildCaseSightingChronology(
         category: sighting.category,
         sourceClass: sighting.sourceClass,
         source: sighting.source,
-        firstObservedAt: sighting.observedAt,
-        lastObservedAt: sighting.observedAt,
+        firstObservedAt: observedAt,
+        lastObservedAt: observedAt,
+        undatedCount: observedAt === null ? 1 : 0,
         observationCount: 1,
         states: new Set([sighting.state]),
         completeness: sighting.completeness,
@@ -79,12 +85,13 @@ export function buildCaseSightingChronology(
       continue;
     }
 
-    if (sighting.observedAt < existing.firstObservedAt) {
-      existing.firstObservedAt = sighting.observedAt;
+    if (observedAt && (!existing.firstObservedAt || observedAt < existing.firstObservedAt)) {
+      existing.firstObservedAt = observedAt;
     }
-    if (sighting.observedAt > existing.lastObservedAt) {
-      existing.lastObservedAt = sighting.observedAt;
+    if (observedAt && (!existing.lastObservedAt || observedAt > existing.lastObservedAt)) {
+      existing.lastObservedAt = observedAt;
     }
+    if (!observedAt) existing.undatedCount += 1;
     existing.observationCount += 1;
     existing.states.add(sighting.state);
     existing.completeness = lessComplete(existing.completeness, sighting.completeness);
@@ -96,7 +103,8 @@ export function buildCaseSightingChronology(
 
   return [...grouped.values()]
     .sort((left, right) =>
-      right.lastObservedAt.localeCompare(left.lastObservedAt)
+      Number(left.lastObservedAt === null) - Number(right.lastObservedAt === null)
+      || (right.lastObservedAt ?? '').localeCompare(left.lastObservedAt ?? '')
       || left.category.localeCompare(right.category)
       || left.source.localeCompare(right.source))
     .slice(0, MAX_CASE_SIGHTING_CHRONOLOGY_ENTRIES)

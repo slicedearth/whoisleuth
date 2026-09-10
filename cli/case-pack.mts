@@ -27,6 +27,7 @@ import {
   CASE_SCHEMA_VERSION,
   CLI_CASE_PACK_SCHEMA,
   CLI_CASE_PACK_VERSION,
+  CLI_CASE_PACK_INPUT_CASE_VERSIONS,
   CLI_CASE_PACK_CURRENT_REDACTION_KEYS,
   CLI_CASE_PACK_PUBLIC_REPORT_KEYS,
   CLI_CASE_PACK_INTEGRITY_KEYS as INTEGRITY_KEYS,
@@ -38,6 +39,7 @@ import {
   MAX_CASE_PACK_CASES,
   MAX_CASE_PACK_INPUT_BYTES,
   PUBLIC_CASE_SCHEMA_VERSION,
+  PUBLISHED_V2_3_CASE_SCHEMA_VERSION,
   caseReportVersionMatchesCase,
 } from '../packages/contracts/case-portability.mts';
 import { CliUsageError } from './errors.mts';
@@ -196,7 +198,7 @@ function assertCanonicalCaseIdentities(cases: readonly unknown[], label: string)
   }
 }
 
-function assertCurrentCaseProjection(rawCases: readonly unknown[], normalised: readonly CaseRecord[], label: string): void {
+function assertCurrentCaseProjection(rawCases: readonly unknown[], normalised: readonly CaseRecord[], label: string, caseVersion: number = CASE_SCHEMA_VERSION): void {
   const requiredFields = new Set<string>(CASE_RECORD_FIELD_NAMES);
   if (rawCases.length !== normalised.length || rawCases.some((item, index) => {
     const raw = record(item);
@@ -205,8 +207,22 @@ function assertCurrentCaseProjection(rawCases: readonly unknown[], normalised: r
       || Object.keys(raw).some((key) => !requiredFields.has(key))
       || !canonicalValuesMatch(raw, normalised[index]);
   })) {
-    throw new TypeError(`${label} contains a schema ${CASE_SCHEMA_VERSION} Case that would be repaired, truncated, or otherwise changed during normalisation.`);
+    throw new TypeError(`${label} contains a schema ${caseVersion} Case that would be repaired, truncated, or otherwise changed during normalisation.`);
   }
+}
+
+function canonicalPackProjection(cases: readonly CaseRecord[], caseVersion: number): CaseRecord[] {
+  if (caseVersion !== PUBLISHED_V2_3_CASE_SCHEMA_VERSION) return [...cases];
+  return cases.map((value) => {
+    if ([...value.evidencePins, ...value.sightings].some((item) => item.observedAt === null)) {
+      throw new TypeError('The published Case 15 format requires a known observation time on each retained pin and sighting.');
+    }
+    return {
+      ...value,
+      sightings: [...value.sightings].sort((left, right) => Date.parse(left.observedAt!) - Date.parse(right.observedAt!)
+        || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0)),
+    };
+  });
 }
 
 /** Historical packs keep their immutable wire shape, so only their retained audience guarantees are checked here. */
@@ -289,7 +305,7 @@ function assertCurrentReportProjection(report: Record<string, unknown>, rawCase:
     includeNotes: false,
     generatedAt: report.generatedAt,
   }).json;
-  if (!canonicalValuesMatch(report, expected)) {
+  if (!canonicalValuesMatch(report, { ...expected, schemaVersion: report.schemaVersion })) {
     throw new TypeError('The CLI case pack contains an invalid or mismatched Case report projection.');
   }
 }
@@ -308,14 +324,15 @@ export function buildCliCasePack(
     parsed = JSON.parse(normalized);
   } catch { throw new CliUsageError('Case-pack input must be valid bounded JSON without duplicate keys.'); }
   const root = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
-  if (Number.isSafeInteger(root.version) && (root.version as number) < CASE_SCHEMA_VERSION) {
-    throw new CliUsageError(`Case schema ${String(root.version)} is retired. Export it as schema ${CASE_SCHEMA_VERSION} with the last broad-reader release before packaging; no data was changed.`);
+  const supportedInput = CLI_CASE_PACK_INPUT_CASE_VERSIONS.some((version) => version === root.version);
+  if (Number.isSafeInteger(root.version) && (root.version as number) < CASE_SCHEMA_VERSION && !supportedInput) {
+    throw new CliUsageError(`Case schema ${String(root.version)} cannot be packaged directly. This command accepts schemas ${CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(', ')}. Use a supported Case import to create a current export first; no data was changed.`);
   }
   if (Number.isSafeInteger(root.version) && (root.version as number) > CASE_SCHEMA_VERSION) {
     throw new CliUsageError(`Case schema ${String(root.version)} is newer than the supported schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
   }
-  if (root.version !== CASE_SCHEMA_VERSION || !Array.isArray(root.cases)) {
-    throw new CliUsageError(`Case-pack input must be a well-formed WHOISleuth Case schema ${CASE_SCHEMA_VERSION} export.`);
+  if (!supportedInput || !Array.isArray(root.cases)) {
+    throw new CliUsageError(`Case-pack input must be a well-formed WHOISleuth Case export with schema ${CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(' or ')}.`);
   }
   try {
     assertCanonicalCaseIdentities(root.cases, 'Case-pack input');
@@ -338,7 +355,7 @@ export function buildCliCasePack(
   if (normalised.length > MAX_CASE_PACK_CASES) {
     throw new CliUsageError(`Case packs are limited to ${MAX_CASE_PACK_CASES} reviewed cases. Export a smaller selected set so no case is silently omitted.`);
   }
-  try { assertCurrentCaseProjection(root.cases, normalised, 'Case-pack input'); }
+  try { assertCurrentCaseProjection(root.cases, canonicalPackProjection(normalised, root.version as number), 'Case-pack input', root.version as number); }
   catch (cause) { throw new CliUsageError(cause instanceof Error ? cause.message : `Case-pack schema ${CASE_SCHEMA_VERSION} input is not exact.`); }
   const cases = normalised.map((item) => projectCaseForAudience(item, options.audience));
   const brandProfileReferencesOmitted = options.audience === 'public'
@@ -448,9 +465,10 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
   if (normalised.length !== root.cases.length) {
     throw new TypeError('The CLI case pack contains an invalid case collection.');
   }
-  const currentCaseSchema = root.version === CASE_SCHEMA_VERSION;
-  if (currentCaseSchema) assertCurrentCaseProjection(root.cases, normalised, 'The CLI case pack');
-  const normalisedByDomain = new Map(normalised.map((item) => [item.domain, item]));
+  const currentCaseSchema = root.version >= PUBLISHED_V2_3_CASE_SCHEMA_VERSION;
+  const projected = canonicalPackProjection(normalised, root.version as number);
+  if (currentCaseSchema) assertCurrentCaseProjection(root.cases, projected, 'The CLI case pack', root.version as number);
+  const normalisedByDomain = new Map(projected.map((item) => [item.domain, item]));
   const caseReferenceLists: string[][] = [];
   const reportReferenceLists: string[][] = [];
 

@@ -19,6 +19,11 @@ const PASSPHRASE = 'reserved fixture passphrase';
 const FIXTURE_ROOT = new URL('./fixtures/case-lifecycle/', import.meta.url);
 const REJECTION_FIXTURE = new URL('./fixtures/case-consolidation/unsupported-contracts-v1.json', import.meta.url);
 const PUBLIC_CASE_EXPORT_FIXTURE = new URL('./fixtures/case-v12-response-lifecycle.json', import.meta.url);
+const CURRENT_BROWSER = `browser-case-v${contracts.CASE_SCHEMA_VERSION}`;
+const CURRENT_EXPORT = `case-export-v${contracts.CASE_SCHEMA_VERSION}`;
+const CURRENT_REPORT = `case-report-v${contracts.CASE_REPORT_SCHEMA_VERSION}`;
+const CURRENT_PACKET = `case-response-packet-v${contracts.CASE_RESPONSE_PACKET_VERSION}`;
+const CURRENT_REVIEW_INPUTS = `case-response-review-inputs-v${contracts.CASE_RESPONSE_REVIEW_INPUTS_VERSION}`;
 
 async function fixtureText(name: string): Promise<string> {
   return readFile(new URL(`${name}.json`, FIXTURE_ROOT), 'utf8');
@@ -83,10 +88,10 @@ describe('canonical Case portability lifecycle', () => {
     assert.equal(workspace.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS, contracts.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS);
     assert.equal(encryptedWorkspace.ENCRYPTED_WORKSPACE_ARCHIVE_VERSION, contracts.ENCRYPTED_WORKSPACE_ARCHIVE_VERSION);
 
-    assert.deepEqual([...contracts.CASE_BROWSER_SUPPORTED_VERSIONS], [12, 13, 14, 15]);
-    assert.deepEqual([...contracts.CASE_IMPORT_VERSIONS], [12, 13, 14, 15]);
-    assert.deepEqual([...contracts.CASE_REPORT_OUTPUT_VERSIONS], [9, 10, 11]);
-    assert.deepEqual([...contracts.SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS], [6, 7, 8, 9]);
+    assert.deepEqual([...contracts.CASE_BROWSER_SUPPORTED_VERSIONS], [12, 13, 14, 15, contracts.CASE_SCHEMA_VERSION]);
+    assert.deepEqual([...contracts.CASE_IMPORT_VERSIONS], [12, 13, 14, 15, contracts.CASE_SCHEMA_VERSION]);
+    assert.deepEqual([...contracts.CASE_REPORT_OUTPUT_VERSIONS], [9, 10, 11, contracts.CASE_REPORT_SCHEMA_VERSION]);
+    assert.deepEqual([...contracts.SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS], [6, 7, 8, 9, contracts.CASE_RESPONSE_PACKET_VERSION]);
     assert.deepEqual([...contracts.SUPPORTED_CLI_CASE_PACK_VERSIONS], [2]);
     assert.deepEqual([...contracts.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS], [5, 6, 7, 8]);
 
@@ -114,19 +119,61 @@ describe('canonical Case portability lifecycle', () => {
     }
   });
 
+  test('describes the exact compact browser writer without adding a trailing newline', () => {
+    const bytes = caseModel.serializeCaseStore([]);
+    assert.equal(bytes, `{"version":${contracts.CASE_SCHEMA_VERSION},"cases":[]}`);
+    const profile = contracts.CASE_PORTABILITY_LIFECYCLE_FAMILY.metadata.serialisationProfiles
+      .find((item) => item.schema === contracts.CASE_BROWSER_STORE_LIFECYCLE_SCHEMA);
+    assert.ok(profile);
+    assert.equal(profile.indentSpaces, 0);
+    assert.equal(profile.terminalLf, false);
+  });
+
+  test('retains unknown source times through migration, storage, export and reports', () => {
+    for (const version of [15, contracts.CASE_SCHEMA_VERSION]) {
+      const record = caseModel.createCase({ domain: 'undated.example.test',
+        evidencePin: { label: 'Retained observation', value: 'Source fact', observedAt: null },
+        sighting: { state: 'reported_by_provider', source: 'Fixture report', observedAt: null },
+      }, NOW);
+      assert.equal(record.evidencePins.length, 1);
+      assert.equal(record.sightings.length, 1);
+      const imported = caseModel.normalizeCaseStore({ version, cases: [record] });
+      const restored = caseModel.normalizeCaseStore(JSON.parse(caseModel.serializeCaseStore(imported.cases)));
+      const exported = caseModel.buildCaseExport(restored.cases, NOW);
+      const merged = caseModel.mergeCases([], exported).cases[0]!;
+      assert.equal(merged.evidencePins[0]!.observedAt, null);
+      assert.equal(merged.sightings[0]!.observedAt, null);
+      assert.equal(merged.evidencePins[0]!.createdAt, record.evidencePins[0]!.createdAt);
+      const report = caseReport.buildCaseReport(merged, { generatedAt: NOW });
+      assert.match(report.markdown, /Observation time unavailable/iu);
+      assert.equal(JSON.stringify(report.json).includes('"observedAt":null'), true);
+    }
+  });
+
+  test('published review inputs reject unknown pin times while the new writer retains them', async () => {
+    for (const [name, accepted] of [['case-response-review-inputs-v3', false], [CURRENT_REVIEW_INPUTS, true]] as const) {
+      const input = await fixture<Record<string, unknown>>(name);
+      input.selectedEvidence = [{ id: 'undated-pin', label: 'Retained observation', source: 'Fixture',
+        observedAt: null, completeness: 'complete', limitations: [],
+      }];
+      if (accepted) assert.doesNotThrow(() => responsePacket.validateCaseResponseReviewInputs(input));
+      else assert.throws(() => responsePacket.validateCaseResponseReviewInputs(input), /observation time/iu);
+    }
+  });
+
   test('verifies every durable current reader fixture and exact starting-checkout path', async () => {
-    const browserStore = await fixture('browser-case-v15');
+    const browserStore = await fixture(CURRENT_BROWSER);
     assert.deepEqual(caseModel.normalizeCaseStore(browserStore), browserStore);
     assert.deepEqual(
       JSON.parse(caseModel.serializeCaseStore(caseModel.normalizeCaseStore(browserStore).cases)),
       browserStore,
     );
 
-    for (const name of ['browser-case-v12', 'browser-case-v13', 'browser-case-v14']) {
+    for (const name of ['browser-case-v12', 'browser-case-v13', 'browser-case-v14', 'browser-case-v15']) {
       assert.deepEqual(caseModel.normalizeCaseStore(await fixture(name)), browserStore);
     }
 
-    const currentExport = await fixture('case-export-v15');
+    const currentExport = await fixture(CURRENT_EXPORT);
     assert.equal(caseModel.mergeCases([], currentExport).added, 1);
     const publicExport = JSON.parse(await readFile(PUBLIC_CASE_EXPORT_FIXTURE, 'utf8')) as Record<string, unknown>;
     assert.deepEqual(caseModel.buildCaseExport(caseModel.mergeCases([], publicExport).cases, NOW), currentExport);
@@ -139,13 +186,13 @@ describe('canonical Case portability lifecycle', () => {
       currentExport,
     );
 
-    for (const name of ['case-response-packet-v6', 'case-response-packet-v7', 'case-response-packet-v8', 'case-response-packet-v9']) {
+    for (const name of ['case-response-packet-v6', 'case-response-packet-v7', 'case-response-packet-v8', 'case-response-packet-v9', CURRENT_PACKET]) {
       const packet = await fixture<Record<string, unknown>>(name);
       validateOfflineArtifactStructure(contracts.CASE_RESPONSE_PACKET_SCHEMA, packet);
       assert.equal(await responsePacket.verifyCaseResponsePacketIntegrity(packet), true);
     }
 
-    for (const name of ['cli-case-pack-v2-case-v12-public', 'cli-case-pack-v2-case-v13', 'cli-case-pack-v2-case-v14', 'cli-case-pack-v2-case-v15', 'cli-case-pack-v2-case-v15-current']) {
+    for (const name of ['cli-case-pack-v2-case-v12-public', 'cli-case-pack-v2-case-v13', 'cli-case-pack-v2-case-v14', 'cli-case-pack-v2-case-v15', 'cli-case-pack-v2-case-v15-current', contracts.CLI_CASE_PACK_WRITER_FIXTURE_ID]) {
       const pack = await fixture(name);
       assert.ok(casePack.verifyCliCasePack(pack).caseCount > 0);
       assert.ok(caseModel.mergeCases([], pack).added > 0);
@@ -175,15 +222,15 @@ describe('canonical Case portability lifecycle', () => {
     const frozenExport = await fixture('case-export-v15');
     const cases = caseModel.mergeCases([], frozenExport).cases;
     const currentExport = caseModel.buildCaseExport(cases, NOW);
-    assert.equal(contracts.serialiseCasePortableJson(currentExport), await fixtureText('case-export-v15'));
+    assert.equal(contracts.serialiseCasePortableJson(currentExport), await fixtureText(CURRENT_EXPORT));
 
     const currentCase = cases[0];
     assert.ok(currentCase);
     const actionId = currentCase.actions[0]?.id;
     assert.ok(actionId);
-    assert.deepEqual(caseReport.buildCaseReport(currentCase, { generatedAt: NOW }).json, await fixture('case-report-v11'));
-    assert.deepEqual((await responsePacket.buildCaseResponsePacket(currentCase, packetInput(actionId), NOW)).json, await fixture('case-response-packet-v9'));
-    assert.deepEqual(responsePacket.buildCaseResponseReviewInputs(currentCase, packetInput(actionId), NOW), await fixture('case-response-review-inputs-v3'));
+    assert.deepEqual(caseReport.buildCaseReport(currentCase, { generatedAt: NOW }).json, await fixture(CURRENT_REPORT));
+    assert.deepEqual((await responsePacket.buildCaseResponsePacket(currentCase, packetInput(actionId), NOW)).json, await fixture(CURRENT_PACKET));
+    assert.deepEqual(responsePacket.buildCaseResponseReviewInputs(currentCase, packetInput(actionId), NOW), await fixture(CURRENT_REVIEW_INPUTS));
     assert.deepEqual(
       casePack.buildCliCasePack(contracts.serialiseCasePortableJson(currentExport), { audience: 'internal', reviewed: true }, NOW),
       await fixture(contracts.CLI_CASE_PACK_WRITER_FIXTURE_ID),
@@ -218,16 +265,16 @@ describe('canonical Case portability lifecycle', () => {
     assert.throws(() => caseModel.mergeCases([], retiredCase), /schema 11 is not part of the supported compatibility boundary.*no data was changed/iu);
     assert.deepEqual(retiredCase, retiredCaseBefore);
     assert.throws(() => caseModel.mergeCases([], retired.portableCase), /schema 11 is not part of the supported compatibility boundary/iu);
-    assert.throws(() => caseModel.mergeCases([], future.browserCase), /newer than the supported schema 15/iu);
-    assert.throws(() => caseModel.mergeCases([], future.portableCase), /newer than the supported schema 15/iu);
-    assert.throws(() => caseModel.mergeCases([], { version: 15, cases: 'invalid' }), /well-formed.*schema 15/iu);
+    assert.throws(() => caseModel.mergeCases([], future.browserCase), /newer than the supported schema/iu);
+    assert.throws(() => caseModel.mergeCases([], future.portableCase), /newer than the supported schema/iu);
+    assert.throws(() => caseModel.mergeCases([], { version: contracts.CASE_SCHEMA_VERSION, cases: 'invalid' }), /well-formed.*schema/iu);
 
-    const malformedCurrent = await fixture<Record<string, unknown>>('case-export-v15');
+    const malformedCurrent = await fixture<Record<string, unknown>>(CURRENT_EXPORT);
     delete (((malformedCurrent.cases as Array<Record<string, unknown>>)[0]!.actions as Array<Record<string, unknown>>)[0]!).routeReviewAfter;
     const malformedCurrentBefore = structuredClone(malformedCurrent);
     assert.throws(
       () => caseModel.mergeCases([], malformedCurrent),
-      /schema 15 response actions must declare their route review deadline.*no data was changed/iu,
+      /response actions must declare their route review deadline.*no data was changed/iu,
     );
     assert.deepEqual(malformedCurrent, malformedCurrentBefore);
 
@@ -244,7 +291,7 @@ describe('canonical Case portability lifecycle', () => {
         contracts.CASE_RESPONSE_PACKET_SCHEMA,
         future.responsePacket as Record<string, unknown>,
       ),
-      /version 10 is newer than the supported version 9.*no data was changed/iu,
+      /newer than the supported version.*no data was changed/iu,
     );
 
     assert.throws(
@@ -253,7 +300,7 @@ describe('canonical Case portability lifecycle', () => {
     );
     assert.throws(
       () => casePack.verifyCliCasePack(future.cliCasePack),
-      /case-pack version 3 is newer than the supported version 2.*no data was changed/iu,
+      /case-pack version .* is newer than the supported version 2.*no data was changed/iu,
     );
     await assert.rejects(
       workspace.readWorkspaceArchive(retired.workspaceArchive),
@@ -264,17 +311,17 @@ describe('canonical Case portability lifecycle', () => {
       /newer than the supported schema 8.*no data was changed/iu,
     );
 
-    const currentExport = await fixture<Record<string, unknown>>('case-export-v15');
+    const currentExport = await fixture<Record<string, unknown>>(CURRENT_EXPORT);
     assert.throws(() => caseModel.mergeCases([], { ...currentExport, undeclared: true }), /undeclared envelope fields/iu);
-    const currentPack = await fixture<Record<string, unknown>>('cli-case-pack-v2-case-v15');
+    const currentPack = await fixture<Record<string, unknown>>(contracts.CLI_CASE_PACK_WRITER_FIXTURE_ID);
     assert.throws(() => casePack.verifyCliCasePack({ ...currentPack, undeclared: true }), /unexpected root envelope field/iu);
   });
 
   test('keeps exact bounded review-input validation for malformed, sparse, and future values', async () => {
     const publishedV2ReviewInputs = await fixture<Record<string, unknown>>('case-response-review-inputs-v1');
     const latestPublicReviewInputs = await fixture<Record<string, unknown>>('case-response-review-inputs-v2');
-    const reviewInputs = await fixture<Record<string, unknown>>('case-response-review-inputs-v3');
-    assert.throws(() => responsePacket.validateCaseResponseReviewInputs({ ...reviewInputs, version: 4 }), /unsupported version/iu);
+    const reviewInputs = await fixture<Record<string, unknown>>(CURRENT_REVIEW_INPUTS);
+    assert.throws(() => responsePacket.validateCaseResponseReviewInputs({ ...reviewInputs, version: Number.MAX_SAFE_INTEGER }), /unsupported version/iu);
     assert.throws(() => responsePacket.validateCaseResponseReviewInputs({ ...reviewInputs, undeclared: true }), /undeclared/iu);
     const nestedUnknown = structuredClone(reviewInputs);
     (nestedUnknown.profile as Record<string, unknown>).undeclared = true;

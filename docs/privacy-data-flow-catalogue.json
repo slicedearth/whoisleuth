@@ -3023,7 +3023,7 @@
       "command": "case-pack",
       "capabilityFamilyId": "portable_evidence",
       "title": "Build a reviewed case package",
-      "requestPurpose": "Reads one bounded Case-schema-15 browser export and writes a separate audience-specific Case-pack v2.",
+      "requestPurpose": "Reads one bounded Case export from schemas 15 or 16 and writes a separate audience-specific Case-pack v2.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -7788,12 +7788,13 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.case-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 15,
+      "currentVersion": 16,
       "supportedVersions": [
         12,
         13,
         14,
-        15
+        15,
+        16
       ],
       "futureVersionBehavior": "preserve_without_write",
       "migration": "normalize_to_current",
@@ -8180,11 +8181,12 @@
       "schema": "whoisleuth.case-response-review-inputs",
       "lifecycleSchema": "whoisleuth.case-response-review-inputs",
       "coverageClass": "registered_schema",
-      "currentVersion": 3,
+      "currentVersion": 4,
       "supportedVersions": [
         1,
         2,
-        3
+        3,
+        4
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -8477,11 +8479,12 @@
       "schema": "whoisleuth.case-report",
       "lifecycleSchema": "whoisleuth.case-report",
       "coverageClass": "registered_schema",
-      "currentVersion": 11,
+      "currentVersion": 12,
       "supportedVersions": [
         9,
         10,
-        11
+        11,
+        12
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -8497,12 +8500,13 @@
       "schema": "whoisleuth.case-response-packet",
       "lifecycleSchema": "whoisleuth.case-response-packet",
       "coverageClass": "registered_schema",
-      "currentVersion": 9,
+      "currentVersion": 10,
       "supportedVersions": [
         6,
         7,
         8,
-        9
+        9,
+        10
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -8518,12 +8522,13 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.case-export",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 15,
+      "currentVersion": 16,
       "supportedVersions": [
         12,
         13,
         14,
-        15
+        15,
+        16
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
@@ -11013,7 +11018,8 @@
             12,
             13,
             14,
-            15
+            15,
+            16
           ],
           "mode": "direct",
           "discriminator": null
@@ -11021,7 +11027,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.case-store",
-        "version": 15,
+        "version": 16,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.browser-state",
@@ -11043,7 +11049,8 @@
         {
           "schema": "whoisleuth.case-export",
           "versions": [
-            15
+            15,
+            16
           ],
           "mode": "direct",
           "discriminator": null
@@ -11157,7 +11164,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-export",
-        "version": 15,
+        "version": 16,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -11178,7 +11185,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-response-packet",
-        "version": 9,
+        "version": 10,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -11203,7 +11210,8 @@
             6,
             7,
             8,
-            9
+            9,
+            10
           ],
           "mode": "direct",
           "discriminator": null
@@ -11232,7 +11240,8 @@
             6,
             7,
             8,
-            9
+            9,
+            10
           ],
           "mode": "direct",
           "discriminator": null
@@ -11257,7 +11266,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-report",
-        "version": 11,
+        "version": 12,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -11281,7 +11290,8 @@
           "versions": [
             9,
             10,
-            11
+            11,
+            12
           ],
           "mode": "embedded",
           "discriminator": null
@@ -11306,7 +11316,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-response-review-inputs",
-        "version": 3,
+        "version": 4,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -11330,7 +11340,8 @@
           "versions": [
             1,
             2,
-            3
+            3,
+            4
           ],
           "mode": "direct",
           "discriminator": null
@@ -11438,7 +11449,8 @@
             12,
             13,
             14,
-            15
+            15,
+            16
           ],
           "mode": "direct",
           "discriminator": null

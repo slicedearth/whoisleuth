@@ -55,7 +55,7 @@
         label: pinLabel,
         value: pinValue,
         source: pinSource,
-        observedAt: isoFromUtcInput(pinObservedAt) || new Date().toISOString(),
+        observedAt: isoFromUtcInput(pinObservedAt),
         completeness: pinCompleteness,
         limitations: list(pinLimitations),
       },
@@ -72,7 +72,7 @@
         state: sightingState,
         category: sightingCategory,
         source: sightingSource,
-        observedAt: isoFromUtcInput(sightingObservedAt) || new Date().toISOString(),
+        observedAt: isoFromUtcInput(sightingObservedAt),
         completeness: sightingCompleteness,
         evidencePinId: sightingEvidencePinId || null,
         limitations: list(sightingLimitations),
@@ -95,9 +95,11 @@
         <label class="field">Source
           <input bind:value={pinSource} maxlength="80" required placeholder="Lookup evidence">
         </label>
-        <label class="field">Observed at
-          <input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={pinObservedAt}>
-        </label>
+        <div class="field">
+          <label for={`pin-observed-at-${record.id}`}>Observed at</label>
+          <input id={`pin-observed-at-${record.id}`} aria-describedby={`pin-time-help-${record.id}`} type="datetime-local" {...utcDateTimeInputAttributes} bind:value={pinObservedAt}>
+          <small id={`pin-time-help-${record.id}`}>Optional; leave blank if unknown.</small>
+        </div>
         <label class="field">Completeness
           <select bind:value={pinCompleteness}>
             {#each CASE_PIN_COMPLETENESS as value}<option {value}>{value}</option>{/each}
@@ -118,7 +120,7 @@
           <li>
             <strong>{pin.label}</strong>
             <p>{pin.value}</p>
-            <small>{pin.source} · {pin.completeness} · {pin.observedAt}</small>
+            <small>{pin.source} · {pin.completeness} · {pin.observedAt ?? 'Observation time unavailable'}</small>
             {#if pin.limitations.length}<small>Limits: {pin.limitations.join('; ')}</small>{/if}
           </li>
         {/each}
@@ -145,9 +147,11 @@
         <label class="field">Source
           <input bind:value={sightingSource} maxlength="80" required>
         </label>
-        <label class="field">Observed or reviewed at
-          <input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={sightingObservedAt}>
-        </label>
+        <div class="field">
+          <label for={`sighting-observed-at-${record.id}`}>Observed or reviewed at</label>
+          <input id={`sighting-observed-at-${record.id}`} aria-describedby={`sighting-time-help-${record.id}`} type="datetime-local" {...utcDateTimeInputAttributes} bind:value={sightingObservedAt}>
+          <small id={`sighting-time-help-${record.id}`}>Optional; leave blank if unknown.</small>
+        </div>
         <label class="field">Completeness
           <select bind:value={sightingCompleteness}>
             {#each CASE_PIN_COMPLETENESS as value}<option {value}>{value}</option>{/each}
@@ -173,7 +177,7 @@
           <li>
             <strong>{sighting.state.replaceAll('_', ' ')} · {sighting.category}</strong>
             <p>{sighting.source}</p>
-            <small>{sighting.sourceClass} source · {sighting.completeness} · {sighting.observedAt}</small>
+            <small>{sighting.sourceClass} source · {sighting.completeness} · {sighting.observedAt ?? 'Observation time unavailable'}</small>
             {#if sighting.limitations.length}<small>Limits: {sighting.limitations.join('; ')}</small>{/if}
           </li>
         {/each}
@@ -192,9 +196,10 @@
               <div><strong>{entry.category}</strong><span>{entry.sourceClass} · {entry.completeness}</span></div>
               <p>{entry.source}</p>
               <dl>
-                <div><dt>First observed</dt><dd>{entry.firstObservedAt}</dd></div>
-                <div><dt>Last observed</dt><dd>{entry.lastObservedAt}</dd></div>
+                <div><dt>First dated observation</dt><dd>{entry.firstObservedAt ?? 'Unavailable'}</dd></div>
+                <div><dt>Last dated observation</dt><dd>{entry.lastObservedAt ?? 'Unavailable'}</dd></div>
                 <div><dt>Observations</dt><dd>{entry.observationCount}</dd></div>
+                {#if entry.undatedCount}<div><dt>Time unavailable</dt><dd>{entry.undatedCount}</dd></div>{/if}
               </dl>
               {#if entry.limitations.length}<small>Limits: {entry.limitations.join('; ')}</small>{/if}
             </li>

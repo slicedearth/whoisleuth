@@ -13,7 +13,7 @@ import {
 } from '../frontend/src/lib/analysis/workspace-archive.ts';
 import { createRelationshipObservation } from '../frontend/src/lib/analysis/relationship-observation-model.ts';
 import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
-import { createCase, mergeCases, normalizeCaseStore, updateCase, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
+import { CASE_SCHEMA_VERSION, createCase, mergeCases, normalizeCaseStore, updateCase, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
 import { mergeBrandProfiles } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import {
   BULK_PROFILE_CONTEXT_IMPORTED_LIMITATION,
@@ -449,7 +449,7 @@ describe('portable workspace archive', () => {
     assert.deepEqual(merged.cases[0]?.brandProfileIds, ['local-profile', 'profile-one']);
   });
 
-  test('keeps archive v8 while round-tripping embedded Case v15 lifecycle histories', async () => {
+  test('keeps the archive envelope while round-tripping current embedded Case lifecycle histories', async () => {
     let record = createCase({
       domain: 'response-archive.invalid',
       source: 'lookup',
@@ -487,7 +487,7 @@ describe('portable workspace archive', () => {
     source.cases = [record];
     const archive = await buildWorkspaceArchive(source, { generatedAt: '2026-07-19T02:04:00.000Z' });
     assert.equal(archive.version, WORKSPACE_ARCHIVE_VERSION);
-    assert.equal(archive.sections.cases.version, 15);
+    assert.equal(archive.sections.cases.version, CASE_SCHEMA_VERSION);
     const parsed = await readWorkspaceArchive(archive);
     const cases = parsed.sections.find((section) => section.id === 'cases');
     assert.equal(cases?.status, 'ready');
@@ -822,16 +822,16 @@ describe('portable workspace archive', () => {
     assert.equal(preview.unsupportedCount, 1);
   });
 
-  test('isolates a checksummed future Case v16 section as unsupported', async () => {
+  test('isolates a checksummed future Case section as unsupported', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
-    await retargetSectionVersion(archive, 'cases', 16);
+    await retargetSectionVersion(archive, 'cases', 999);
     const parsed = await readWorkspaceArchive(archive);
     assert.equal(parsed.sections.find((section) => section.id === 'cases')?.status, 'unsupported');
     const preview = await previewWorkspaceArchive(archive, emptyInput());
     const cases = preview.sections.find((section) => section.id === 'cases');
     assert.equal(cases?.status, 'unsupported');
     assert.equal(cases?.selected, false);
-    assert.match(cases?.reason ?? '', /newer schema 16/iu);
+    assert.match(cases?.reason ?? '', /newer schema 999/iu);
   });
 
   test('isolates a checksummed unsupported Case v11 section with explicit non-destructive guidance', async () => {

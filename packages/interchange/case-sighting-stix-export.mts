@@ -1,4 +1,6 @@
 import type { CaseRecord } from '../cases/case-model.mts';
+import { MAX_CASE_SIGHTINGS } from '../contracts/case-portability.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 
 export const CASE_SIGHTING_STIX_EXPORT_VERSION = 1;
 export const MAX_CASE_SIGHTING_STIX_OBJECTS = 180;
@@ -26,9 +28,7 @@ function text(value: unknown, maximum: number): string {
 }
 
 function timestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 64) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function defaultIdFactory(type: string): string {
@@ -71,7 +71,7 @@ export function buildCaseSightingStixExport(
     ? options.idFactory as IdFactory
     : defaultIdFactory;
   const target = domain(caseRecord.domain);
-  const sightings = caseRecord.sightings.slice(0, 80);
+  const sightings = caseRecord.sightings.slice(0, MAX_CASE_SIGHTINGS);
   if (!sightings.length) throw new Error('Record at least one source-qualified sighting before exporting STIX.');
 
   const used = new Set<string>();
@@ -100,11 +100,10 @@ export function buildCaseSightingStixExport(
 
   for (const sighting of sightings) {
     const observedAt = timestamp(sighting.observedAt);
-    if (!observedAt) continue;
     const source = text(sighting.source, 80) || 'Source not reported';
     const state = text(sighting.state, 40);
     const objectRefs = [domainId];
-    if (AFFIRMATIVE_STATES.has(state) && objects.length + 2 <= MAX_CASE_SIGHTING_STIX_OBJECTS) {
+    if (observedAt && AFFIRMATIVE_STATES.has(state) && objects.length + 2 <= MAX_CASE_SIGHTING_STIX_OBJECTS) {
       const observedDataId = nextId('observed-data');
       objectRefs.push(observedDataId);
       objects.push({
@@ -133,9 +132,9 @@ export function buildCaseSightingStixExport(
       created_by_ref: producerId,
       created: generatedAt,
       modified: generatedAt,
-      content: `Source-qualified case sighting: ${state.replaceAll('_', ' ')}; category ${sighting.category}; source ${source}; completeness ${sighting.completeness}.`,
+      content: `Source-qualified case sighting: ${state.replaceAll('_', ' ')}; category ${sighting.category}; source ${source}; completeness ${sighting.completeness}.${observedAt ? '' : ' Observation time is unavailable; no observed-data object is asserted.'}`,
       object_refs: objectRefs,
-      x_whoisleuth_observed_at: observedAt,
+      ...(observedAt ? { x_whoisleuth_observed_at: observedAt } : {}),
       x_whoisleuth_source_qualified_state: state,
       x_whoisleuth_source_class: sighting.sourceClass,
       x_whoisleuth_source: source,

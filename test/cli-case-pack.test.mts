@@ -10,7 +10,8 @@ import {
 } from '../cli/case-pack.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
-import { CASE_SCHEMA_VERSION, createCase, normalizeCaseStore, caseAudienceExclusions, projectCaseForAudience } from '../frontend/src/lib/analysis/case-model.ts';
+import { CASE_REPORT_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
+import { CASE_SCHEMA_VERSION, createCase, updateCase, normalizeCaseStore, caseAudienceExclusions, projectCaseForAudience } from '../frontend/src/lib/analysis/case-model.ts';
 import {
   canonicalArtifactJsonV2,
 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
@@ -53,7 +54,7 @@ describe('CLI case pack', () => {
     assert.equal(pack.version, CASE_SCHEMA_VERSION);
     assert.equal(pack.cases.length, 1);
     assert.equal(pack.packet.reports[0]?.schema, 'whoisleuth.case-report');
-    assert.equal(pack.packet.reports[0]?.schemaVersion, 11);
+    assert.equal(pack.packet.reports[0]?.schemaVersion, CASE_REPORT_SCHEMA_VERSION);
     assert.deepEqual(pack.cases[0]?.notes, []);
     assert.deepEqual(pack.cases[0]?.brandProfileIds, []);
     assert.deepEqual(pack.cases[0]?.actions, []);
@@ -68,7 +69,7 @@ describe('CLI case pack', () => {
     assert.doesNotMatch(JSON.stringify(pack), /private analyst note|private recipient|private target|Private branch name/u);
   });
 
-  test('retains exact submitted hostnames in the Case collection without adding them to report v11', () => {
+  test('retains exact submitted hostnames in the Case collection without adding them to the report projection', () => {
     const record = createCase({
       domain: 'example.test',
       source: 'lookup',
@@ -142,6 +143,57 @@ describe('CLI case pack', () => {
     assert.equal(code, EXIT_CODES.USAGE);
     assert.equal(reads, 0);
     assert.match(stderr, /case-pack requires --reviewed/iu);
+  });
+
+  test('accepts the latest public export and preserves published pack validation independently of the current writer', () => {
+    const bytes = readFileSync(new URL('./fixtures/case-lifecycle/case-export-v15.json', import.meta.url), 'utf8');
+    const pack = buildCliCasePack(bytes, { audience: 'internal', reviewed: true }, NOW);
+    assert.equal(pack.version, CASE_SCHEMA_VERSION);
+    assert.equal(pack.packet.reports[0]?.schemaVersion, CASE_REPORT_SCHEMA_VERSION);
+    assert.deepEqual(verifyCliCasePack(pack), { caseCount: 1 });
+    const published = JSON.parse(readFileSync(new URL('./fixtures/case-lifecycle/cli-case-pack-v2-case-v15-current.json', import.meta.url), 'utf8'));
+    assert.equal(published.version, 15);
+    assert.equal(published.packet.reports[0].schemaVersion, 11);
+    assert.deepEqual(verifyCliCasePack(published), { caseCount: 1 });
+    const retainedPin = createCase({ domain: 'undated.invalid', evidencePin: {
+      label: 'Retained observation', value: 'Source fact', source: 'Fixture', observedAt: null,
+    } }, NOW).evidencePins[0]!;
+    published.cases[0].evidencePins = [retainedPin];
+    assert.throws(() => verifyCliCasePack(resign(published)), /published Case 15.*known observation time/iu);
+    const invalidInput = JSON.parse(bytes);
+    invalidInput.cases[0].evidencePins = [retainedPin];
+    assert.throws(() => buildCliCasePack(JSON.stringify(invalidInput), { audience: 'internal', reviewed: true }, NOW), /published Case 15.*known observation time/iu);
+  });
+
+  test('preserves published observation ordering while migrating all sightings to the current recorded-order writer', () => {
+    let record = createCase({ domain: 'ordering.invalid', sighting: {
+      state: 'reported_by_provider', source: 'Fixture report', observedAt: '2026-08-04T00:00:00.000Z',
+    } }, NOW);
+    record = updateCase([record], record.id, { sighting: {
+      state: 'reported_by_provider', source: 'Earlier fixture observation', observedAt: '2026-08-03T00:00:00.000Z',
+    } }, '2026-08-05T04:00:00.000Z').record;
+    const current = buildCliCasePack(JSON.stringify({ version: CASE_SCHEMA_VERSION, cases: [record] }), { audience: 'internal', reviewed: true }, NOW);
+    const published = JSON.parse(JSON.stringify(current));
+    published.version = 15;
+    published.packet.reports[0].schemaVersion = 11;
+    published.cases[0].sightings.reverse();
+    published.packet.reports[0].analystResponse.sightings.reverse();
+    assert.deepEqual(verifyCliCasePack(resign(published)), { caseCount: 1 });
+    const repackaged = buildCliCasePack(JSON.stringify({ version: 15, cases: published.cases }), { audience: 'internal', reviewed: true }, NOW);
+    assert.equal(repackaged.version, CASE_SCHEMA_VERSION);
+    assert.deepEqual(repackaged.cases[0]!.sightings, record.sightings);
+    assert.deepEqual(verifyCliCasePack(repackaged), { caseCount: 1 });
+  });
+
+  test('packages unknown current observation times without inventing source timestamps', () => {
+    const source = exportedCases();
+    const undated = createCase({ domain: 'undated.invalid', evidencePin: {
+      label: 'Undated observation', value: 'Retained fact', source: 'Fixture', observedAt: null,
+    } }, NOW);
+    source.cases = [undated];
+    const pack = buildCliCasePack(JSON.stringify(source), { audience: 'internal', reviewed: true }, NOW);
+    assert.equal(pack.cases[0]!.evidencePins[0]!.observedAt, null);
+    assert.deepEqual(verifyCliCasePack(pack), { caseCount: 1 });
   });
 
   test('verifies the complete browser hand-off and rejects changed content', () => {
@@ -229,7 +281,7 @@ describe('CLI case pack', () => {
     assert.throws(() => verifyCliCasePack(resign(wrongReportVersion)), /invalid or mismatched Case report/iu);
 
     const futureReportVersion = structuredClone(buildCliCasePack(JSON.stringify(exportedCases()), { audience: 'trusted', reviewed: true }, NOW)) as unknown as Record<string, unknown>;
-    ((futureReportVersion.packet as Record<string, unknown>).reports as Array<Record<string, unknown>>)[0]!.schemaVersion = 12;
+    ((futureReportVersion.packet as Record<string, unknown>).reports as Array<Record<string, unknown>>)[0]!.schemaVersion = Number.MAX_SAFE_INTEGER;
     assert.throws(() => verifyCliCasePack(resign(futureReportVersion)), /invalid or mismatched Case report/iu);
 
     const wrongSourceCount = structuredClone(buildCliCasePack(JSON.stringify(exportedCases()), { audience: 'public', reviewed: true }, NOW)) as unknown as Record<string, unknown>;
@@ -262,14 +314,14 @@ describe('CLI case pack', () => {
 
   });
 
-  test('rejects malformed schema 15 builder references before normalisation', () => {
+  test('rejects malformed current builder references before normalisation', () => {
     for (const value of [undefined, 'profile-a', ['profile-a', 'profile-a'], [' profile-a'], Array.from({ length: 9 }, (_, index) => `profile-${index}`)]) {
       const source = structuredClone(exportedCases()) as unknown as { version: number; cases: Array<Record<string, unknown>> };
       if (value === undefined) delete source.cases[0]!.brandProfileIds;
       else source.cases[0]!.brandProfileIds = value;
       assert.throws(
         () => buildCliCasePack(JSON.stringify(source), { audience: 'trusted', reviewed: true }, NOW),
-        /schema 15 input requires exact canonical Case identities and an exact, unique, bounded brandProfileIds array/iu,
+        /input requires exact canonical Case identities and an exact, unique, bounded brandProfileIds array/iu,
       );
     }
 

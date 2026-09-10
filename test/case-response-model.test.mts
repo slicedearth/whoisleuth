@@ -59,6 +59,32 @@ test('the response workflow retains one ordered canonical stage vocabulary', () 
 });
 
 describe('case response record normalization', () => {
+  test('retains undated pins and sightings without substituting creation or import time', () => {
+    for (const observedAt of [undefined, null, '', '2026-02-30T10:00:00Z', '2026-07-28T01:00:00', 'not-a-time']) {
+      const pin = requiredValue(appendCaseEvidencePin([], { label: 'Retained fact', value: 'Observed content', observedAt }, LATER)[0]);
+      const sighting = requiredValue(appendCaseSighting([], { state: 'reported_by_provider', source: 'Fixture report', observedAt }, LATER)[0]);
+      assert.equal(pin.observedAt, null);
+      assert.equal(sighting.observedAt, null);
+      assert.equal(pin.createdAt, LATER);
+      assert.equal(sighting.createdAt, LATER);
+      assert.equal(requiredValue(normalizeCaseEvidencePins([pin], LATEST)[0]).observedAt, null);
+      assert.equal(requiredValue(normalizeCaseSightings([sighting], LATEST)[0]).observedAt, null);
+    }
+    const pin = requiredValue(appendCaseEvidencePin([], { label: 'Dated fact', value: 'Observed content', observedAt: NOW }, LATER)[0]);
+    assert.equal(pin.observedAt, NOW);
+    assert.equal(pin.createdAt, LATER);
+    const sights = normalizeCaseSightings([
+      { id: 'dated', state: 'analyst_confirmed', source: 'Fixture review', observedAt: NOW, createdAt: LATER },
+      { id: 'undated', state: 'analyst_confirmed', source: 'Fixture review', observedAt: null, createdAt: NEXT },
+    ], LATEST);
+    assert.deepEqual(sights.map((item) => item.id), ['dated', 'undated']);
+    const trail = buildCaseInvestigationTrail({ sightings: sights });
+    assert.equal(trail[0]?.createdAt, NEXT);
+    assert.match(trail[0]?.detail ?? '', /observed time unavailable/);
+    assert.equal(trail[1]?.createdAt, LATER);
+    assert.match(trail[1]?.detail ?? '', new RegExp(NOW.replaceAll('.', '\\.')));
+  });
+
   test('import content identity is optional, bounded and not inferred for historical pins', () => {
     const input = { label: 'Imported fact', value: 'Retained observation', importContentSha256: 'a'.repeat(64) };
     const current = requiredValue(normalizeCaseEvidencePins([input], NOW, { sourceVersion: 15 })[0]);

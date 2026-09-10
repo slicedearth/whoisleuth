@@ -20,16 +20,19 @@ import {
   type CaseObservedEffectState,
 } from './case-response-model.mts';
 import { canonicalArtifactJsonV2, SORTED_JSON_V2 } from '../evidence/artifact-integrity.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertBoundedJsonStructure } from '../../lib/bounded-json.mts';
 import {
   CASE_RESPONSE_PACKET_SCHEMA,
   CASE_RESPONSE_PACKET_VERSION,
   PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION,
+  PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION,
   PUBLIC_CASE_RESPONSE_PACKET_VERSION,
   PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION,
   CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   PUBLISHED_V2_2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+  PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   MAX_ABUSE_CATEGORY_LENGTH,
   MAX_ABUSIVE_URLS,
@@ -51,6 +54,7 @@ import {
   MAX_RESPONSE_VALUE_LENGTH,
   RESPONSE_ROUTE_STALE_AFTER_DAYS,
   SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS,
+  SUPPORTED_CASE_RESPONSE_REVIEW_INPUTS_VERSIONS,
 } from '../contracts/case-portability.mts';
 
 export {
@@ -62,11 +66,13 @@ export {
   CASE_RESPONSE_PACKET_SCHEMA,
   CASE_RESPONSE_PACKET_VERSION,
   PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION,
+  PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION,
   PUBLIC_CASE_RESPONSE_PACKET_VERSION,
   PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION,
   CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   PUBLISHED_V2_2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+  PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   MAX_ABUSE_CATEGORY_LENGTH,
   MAX_ABUSIVE_URLS,
@@ -405,7 +411,7 @@ export type CaseResponsePacket = {
     id: string;
     label: string;
     source: string;
-    observedAt: string;
+    observedAt: string | null;
     completeness: string;
     limitations: string[];
   }>;
@@ -531,9 +537,7 @@ function compareCodeUnits(left: string, right: string): number {
 }
 
 function timestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 64 || CONTROL_RE.test(value)) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function normalizeExactUrl(value: unknown, rejectOverlong: boolean): string | null {
@@ -703,7 +707,7 @@ function normalizeSelectedEvidence(caseRecord: CaseRecord, value: unknown): Case
       id: pin.id,
       label: text(pin.label, 80),
       source: text(pin.source, 120),
-      observedAt: timestamp(pin.observedAt) ?? caseRecord.updatedAt,
+      observedAt: timestamp(pin.observedAt),
       completeness: text(pin.completeness, 40),
       limitations: normalizeLimitations(pin.limitations),
     }));
@@ -742,7 +746,6 @@ function readinessOverride(value: unknown, key: keyof ResponseReadinessInput): R
 }
 
 function buildResponseReadiness(
-  caseRecord: CaseRecord,
   input: CaseResponsePacketInput,
   generatedAt: string,
   contacts: CaseResponsePacket['contacts'],
@@ -752,7 +755,7 @@ function buildResponseReadiness(
 ): CaseResponsePacket['readiness'] {
   const profile = responsePacketProfile(input.profile);
   const urls = normalizeUrls(input.abusiveUrls);
-  const observedAt = timestamp(input.observedAt) || latestCaseEvidence(caseRecord)?.capturedAt || null;
+  const observedAt = timestamp(input.observedAt);
   const age = observedAt ? observationAge(observedAt, generatedAt) : null;
   const infrastructure = readinessOverride(input.readiness, 'infrastructureResponsibility');
   const authority = readinessOverride(input.readiness, 'authorityReview');
@@ -783,7 +786,10 @@ function buildResponseReadiness(
     {
       id: 'capture_provenance', label: 'Capture provenance',
       state: !selectedEvidence.length ? 'unavailable' : selectedEvidence.every((item) => item.source && item.observedAt) ? 'complete' : 'partial',
-      detail: selectedEvidence.length ? 'Selected evidence retains source and observation metadata.' : 'No selected evidence is available for capture-provenance review.',
+      detail: !selectedEvidence.length ? 'No selected evidence is available for capture-provenance review.'
+        : selectedEvidence.every((item) => item.source && item.observedAt)
+          ? 'Selected evidence retains source and observation metadata.'
+          : 'Selected evidence is retained, but some source or observation-time metadata is unavailable.',
       requiredForAuthorisation: true,
       limitations: selectedEvidence.flatMap((item) => item.limitations).slice(0, 8),
     },
@@ -859,7 +865,6 @@ export function buildCaseResponseReadiness(
   const binding = bindPacketRoute(caseRecord, input, normalizedGeneratedAt);
   const selectedEvidence = normalizeSelectedEvidence(caseRecord, input.selectedEvidencePinIds);
   return buildResponseReadiness(
-    caseRecord,
     input,
     normalizedGeneratedAt,
     binding.contacts,
@@ -917,7 +922,7 @@ export function buildResponsePacketProfilePreview(
   const binding = bindPacketRoute(caseRecord, input, caseRecord.updatedAt);
   const missingEvidence = [
     ...(!normalizeUrls(input.abusiveUrls).length ? ['At least one exact HTTP(S) URL'] : []),
-    ...(!timestamp(input.observedAt) && !latestCaseEvidence(caseRecord)?.capturedAt ? ['Observation time'] : []),
+    ...(!timestamp(input.observedAt) ? ['Observation time'] : []),
     ...(!normalizeSelectedEvidence(caseRecord, input.selectedEvidencePinIds).length ? ['Explicitly selected evidence pin'] : []),
     ...(profile.id !== 'internal_soc' && binding.actionBinding.state !== 'selected'
       ? ['Selected retained Case action']
@@ -948,8 +953,7 @@ export function buildCaseResponsePreflight(
   input: CaseResponsePacketInput,
   generatedAt: string = new Date().toISOString(),
 ): CaseResponsePreflight {
-  const latestEvidence = latestCaseEvidence(caseRecord);
-  const observedAt = timestamp(input.observedAt) || latestEvidence?.capturedAt || null;
+  const observedAt = timestamp(input.observedAt);
   const normalizedGeneratedAt = timestamp(generatedAt) || new Date().toISOString();
   const binding = bindPacketRoute(caseRecord, input, normalizedGeneratedAt);
   const urls = normalizeUrls(input.abusiveUrls);
@@ -1219,7 +1223,7 @@ export function buildCaseResponseReviewInputs(
   const selectedEvidence = normalizeSelectedEvidence(caseRecord, input.selectedEvidencePinIds);
   const contradictions = normalizeContradictions(caseRecord);
   const binding = bindPacketRoute(caseRecord, input, generatedAt);
-  const readiness = buildResponseReadiness(caseRecord, input, generatedAt, binding.contacts, binding.recipientRoute, selectedEvidence, contradictions);
+  const readiness = buildResponseReadiness(input, generatedAt, binding.contacts, binding.recipientRoute, selectedEvidence, contradictions);
   const escalation = normalizeActionHistory(caseRecord, input);
   return {
     contract: CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
@@ -1246,7 +1250,7 @@ export function buildCaseResponseReviewInputs(
       affectedParty: text(input.affectedParty, MAX_AFFECTED_PARTY_LENGTH),
       abusiveUrls: normalizeUrls(input.abusiveUrls, true),
       observedHarm: text(input.observedHarm, MAX_RESPONSE_HARM_LENGTH),
-      observedAt: timestamp(input.observedAt) || latestCaseEvidence(caseRecord)?.capturedAt || null,
+      observedAt: timestamp(input.observedAt),
     },
     contacts: binding.contacts,
     recipientRoute: binding.recipientRoute,
@@ -1410,12 +1414,12 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
     throw new TypeError('Case-response review inputs must not contain accessors.');
   }
   const version = descriptors.version.value;
-  const current = version === CASE_RESPONSE_REVIEW_INPUTS_VERSION;
-  const hasActionBinding = version === PUBLISHED_V2_2_CASE_RESPONSE_REVIEW_INPUTS_VERSION || current;
-  const publishedV2 = version === PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION;
-  if (descriptors.contract.value !== CASE_RESPONSE_REVIEW_INPUTS_SCHEMA || (!current && !hasActionBinding && !publishedV2)) {
+  if (descriptors.contract.value !== CASE_RESPONSE_REVIEW_INPUTS_SCHEMA
+    || !SUPPORTED_CASE_RESPONSE_REVIEW_INPUTS_VERSIONS.some((supported) => supported === version)) {
     throw new TypeError('Case-response review inputs contain an unsupported version, shape, or bound.');
   }
+  const hasPlatformRoutes = version >= PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION;
+  const hasActionBinding = version >= PUBLISHED_V2_2_CASE_RESPONSE_REVIEW_INPUTS_VERSION;
   const source = exactReviewRecord(
     value,
     hasActionBinding ? CASE_RESPONSE_REVIEW_INPUT_KEYS : PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUT_KEYS,
@@ -1425,7 +1429,7 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
     'id', 'label', 'audience', 'subject', 'checklist', 'includedEvidence',
     'excludedEvidence', 'redactions',
   ], 'Case-response review profile');
-  const supportedProfileIds = current ? RESPONSE_PROFILE_IDS : PRE_PLATFORM_PROFILE_IDS;
+  const supportedProfileIds = hasPlatformRoutes ? RESPONSE_PROFILE_IDS : PRE_PLATFORM_PROFILE_IDS;
   if (typeof profile.id !== 'string' || !supportedProfileIds.has(profile.id)) {
     throw new TypeError('Case-response review profile is unsupported.');
   }
@@ -1456,9 +1460,9 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
 
   for (const candidate of boundedReviewArray(source.contacts, MAX_RESPONSE_CONTACTS, 'Case-response contacts')) {
     const contact = exactReviewRecord(candidate, [
-      'kind', 'contact', 'source', 'observedAt', ...(current ? ['reviewAfter'] : []), 'freshness', 'limitations',
+      'kind', 'contact', 'source', 'observedAt', ...(hasPlatformRoutes ? ['reviewAfter'] : []), 'freshness', 'limitations',
     ], 'Case-response contact');
-    const supportedContactKinds = current ? CONTACT_KINDS : PRE_PLATFORM_CONTACT_KINDS;
+    const supportedContactKinds = hasPlatformRoutes ? CONTACT_KINDS : PRE_PLATFORM_CONTACT_KINDS;
     if (typeof contact.kind !== 'string' || !supportedContactKinds.has(contact.kind)
       || typeof contact.freshness !== 'string'
       || !['current', 'stale', 'unknown'].includes(contact.freshness)) {
@@ -1467,20 +1471,20 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
     reviewText(contact.contact, 320, 'Case-response contact value');
     reviewText(contact.source, 120, 'Case-response contact source');
     reviewText(contact.observedAt, 64, 'Case-response contact observation time', true);
-    if (current) reviewText(contact.reviewAfter, 64, 'Case-response contact review deadline', true);
+    if (hasPlatformRoutes) reviewText(contact.reviewAfter, 64, 'Case-response contact review deadline', true);
     reviewStrings(contact.limitations, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH, 'Case-response contact limitations');
   }
 
   if (hasActionBinding && source.recipientRoute !== null) {
     const route = exactReviewRecord(source.recipientRoute, [
-      'actionId', 'kind', 'contact', 'source', 'observedAt', ...(current ? ['reviewAfter'] : []), 'freshness', 'limitations',
+      'actionId', 'kind', 'contact', 'source', 'observedAt', ...(hasPlatformRoutes ? ['reviewAfter'] : []), 'freshness', 'limitations',
     ], 'Case-response recipient route');
     reviewText(route.actionId, 64, 'Case-response recipient action id');
-    reviewEnum(route.kind, [...(current ? RESPONSE_CONTACT_KINDS : [...PRE_PLATFORM_CONTACT_KINDS]), 'manual'], 'Case-response recipient kind');
+    reviewEnum(route.kind, [...(hasPlatformRoutes ? RESPONSE_CONTACT_KINDS : [...PRE_PLATFORM_CONTACT_KINDS]), 'manual'], 'Case-response recipient kind');
     reviewText(route.contact, 320, 'Case-response recipient value');
     reviewText(route.source, 120, 'Case-response recipient source');
     reviewText(route.observedAt, 64, 'Case-response recipient observation time', true);
-    if (current) reviewText(route.reviewAfter, 64, 'Case-response recipient review deadline', true);
+    if (hasPlatformRoutes) reviewText(route.reviewAfter, 64, 'Case-response recipient review deadline', true);
     reviewEnum(route.freshness, ['current', 'stale', 'unknown'], 'Case-response recipient freshness');
     reviewStrings(route.limitations, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH, 'Case-response recipient limitations');
   }
@@ -1513,7 +1517,7 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
     reviewText(evidence.id, 64, 'Case-response evidence id');
     reviewText(evidence.label, 80, 'Case-response evidence label');
     reviewText(evidence.source, 120, 'Case-response evidence source');
-    reviewText(evidence.observedAt, 64, 'Case-response evidence observation time');
+    reviewText(evidence.observedAt, 64, 'Case-response evidence observation time', version > PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION);
     reviewEnum(evidence.completeness, CASE_PIN_COMPLETENESS, 'Case-response evidence completeness');
     reviewStrings(evidence.limitations, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH, 'Case-response evidence limitations');
   }
@@ -1585,7 +1589,7 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
     const action = exactReviewRecord(candidate, [
       'actionId', 'type', 'recipient', 'contactSource', 'state', 'reference',
       ...(hasActionBinding ? ['routeObservedAt'] : []),
-      ...(current ? ['routeReviewAfter'] : []),
+      ...(hasPlatformRoutes ? ['routeReviewAfter'] : []),
       'providerOutcome', 'outcomeDetail', 'originActionId', 'historyOmitted',
       'historyLimitations', 'transitions', 'createdAt', 'updatedAt',
     ], 'Case-response escalation action');
@@ -1597,8 +1601,8 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
     }
     escalationActionIds.push(action.actionId as string);
     if (hasActionBinding) reviewText(action.routeObservedAt, 64, 'Case-response action route observation time', true);
-    if (current) reviewText(action.routeReviewAfter, 64, 'Case-response action route review deadline', true);
-    reviewEnum(action.type, current ? CASE_ACTION_TYPES : PRE_PLATFORM_ACTION_TYPES, 'Case-response action type');
+    if (hasPlatformRoutes) reviewText(action.routeReviewAfter, 64, 'Case-response action route review deadline', true);
+    reviewEnum(action.type, hasPlatformRoutes ? CASE_ACTION_TYPES : PRE_PLATFORM_ACTION_TYPES, 'Case-response action type');
     reviewEnum(action.state, CASE_ACTION_STATES, 'Case-response action state');
     for (const key of ['reference', 'outcomeDetail', 'originActionId'] as const) {
       reviewText(action[key], MAX_RESPONSE_VALUE_LENGTH, `Case-response action ${key}`, true);
@@ -1741,7 +1745,7 @@ export async function buildCaseResponsePacket(
   const abusiveUrls = normalizeUrls(input.abusiveUrls, true);
   const observedHarm = text(input.observedHarm, MAX_RESPONSE_HARM_LENGTH);
   const latestEvidence = latestCaseEvidence(caseRecord);
-  const observedAt = timestamp(input.observedAt) || latestEvidence?.capturedAt || null;
+  const observedAt = timestamp(input.observedAt);
   if (!category || !affectedParty || !abusiveUrls.length || !observedHarm || !observedAt) {
     throw new Error('Category, affected party, at least one exact HTTP(S) URL, observed harm, and an observation time are required.');
   }
@@ -1909,7 +1913,7 @@ export async function buildCaseResponsePacket(
     '',
     '## Selected evidence and integrity references',
     '',
-    ...(selectedEvidence.length ? selectedEvidence.map((item) => `- ${escapeMarkdown(item.id)} · ${escapeMarkdown(item.label)} · ${escapeMarkdown(item.source)} · ${item.observedAt} · ${escapeMarkdown(item.completeness)}`) : ['- No evidence pin was explicitly selected.']),
+    ...(selectedEvidence.length ? selectedEvidence.map((item) => `- ${escapeMarkdown(item.id)} · ${escapeMarkdown(item.label)} · ${escapeMarkdown(item.source)} · ${item.observedAt ?? 'Observation time unavailable'} · ${escapeMarkdown(item.completeness)}`) : ['- No evidence pin was explicitly selected.']),
     ...artefactReferences.map((item) => `- ${escapeMarkdown(item.id)} · ${escapeMarkdown(item.label)} · SHA-256 ${item.digestSha256} · captured ${item.capturedAt}`),
     '',
     '## Provider outcome and independent effect',
@@ -1962,7 +1966,7 @@ export async function buildCaseResponsePacket(
     '',
     'Selected evidence:',
     ...(selectedEvidence.length
-      ? selectedEvidence.map((item) => `- ${item.label} — ${item.source}, observed ${item.observedAt} (${item.completeness})`)
+      ? selectedEvidence.map((item) => `- ${item.label} — ${item.source}, observed ${item.observedAt ?? 'time unavailable'} (${item.completeness})`)
       : ['- No Case evidence pin was selected.']),
     '',
     `Reviewed packet SHA-256: ${digestSha256}`,

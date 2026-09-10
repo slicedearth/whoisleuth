@@ -2880,7 +2880,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "The command is an offline handoff from the browser Case workflow: it creates a new package, never creates or mutates a durable Case, never mutates the source archive, and requires an explicit review acknowledgement.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one bounded Case-schema-15 browser export and writes a separate audience-specific Case-pack v2."
+        "scope": "Reads one bounded Case export from schemas 15 or 16 and writes a separate audience-specific Case-pack v2."
       },
       "inputs": [
         {
@@ -2910,7 +2910,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecase-report"
       ],
       "inputLimits": [
-        "Reads one bounded Case-schema-15 browser export and writes a separate audience-specific Case-pack v2.",
+        "Reads one bounded Case export from schemas 15 or 16 and writes a separate audience-specific Case-pack v2.",
         "source: 0-1 file value"
       ],
       "outputLimits": [

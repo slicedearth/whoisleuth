@@ -13,8 +13,8 @@
     return 'Aligned';
   }
 
-  function date(value: string): string {
-    return new Date(value).toLocaleString();
+  function date(value: string | null): string {
+    return value ? new Date(value).toLocaleString() : 'Observation time unavailable';
   }
 </script>
 

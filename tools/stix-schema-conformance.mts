@@ -189,6 +189,7 @@ function conformanceBundles(): string[] {
       observedAt: generatedAt, completeness: 'partial', limitations: ['Static fixture.'],
     },
   }, generatedAt);
+  caseRecord.sightings.push({ ...caseRecord.sightings[0]!, id: 'undated-fixture', observedAt: null });
   const sightings = buildCaseSightingStixExport(caseRecord, { generatedAt, idFactory: idFactory() }).content;
   return [indicators, sightings];
 }

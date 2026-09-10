@@ -211,7 +211,7 @@ export type CaseSightingRecord = {
   sourceClass: 'deployment' | 'provider' | 'analyst';
   category: CaseSightingCategory;
   source: string;
-  observedAt: string;
+  observedAt: string | null;
   completeness: CasePinCompleteness;
   evidencePinId: string | null;
   limitations: string[];
@@ -235,7 +235,7 @@ export type CaseEvidencePin = {
   certificateObservation?: CaseCertificateObservation | null;
   /** Identity of a complete imported finding; not source authentication. */
   importContentSha256?: string;
-  observedAt: string;
+  observedAt: string | null;
   collectionDepth: 'deep' | 'fast' | 'unknown';
   completeness: CasePinCompleteness;
   truncated: boolean | null;
@@ -661,7 +661,7 @@ function normalizePin(
     source: text(item.source, MAX_RESPONSE_LABEL_LENGTH) || 'analyst_selected',
     sourceState: text(item.sourceState, 40) || null,
     sourceSchema: normalizedSourceSchema,
-    observedAt: iso(item.observedAt, createdAt, options),
+    observedAt: optionalIso(item.observedAt, options),
     collectionDepth: item.collectionDepth === 'deep' || item.collectionDepth === 'fast'
       ? item.collectionDepth
       : 'unknown',
@@ -1765,7 +1765,7 @@ function normalizeCaseSighting(
       ? item.category as CaseSightingCategory
       : 'other',
     source,
-    observedAt: iso(item.observedAt, createdAt, options),
+    observedAt: optionalIso(item.observedAt, options),
     completeness: typeof item.completeness === 'string' && COMPLETENESS.has(item.completeness)
       ? item.completeness as CasePinCompleteness
       : 'unknown',
@@ -1788,7 +1788,7 @@ export function normalizeCaseSightings(
     if (normalized && !byId.has(normalized.id)) byId.set(normalized.id, normalized);
   }
   return [...byId.values()]
-    .sort((left, right) => Date.parse(left.observedAt) - Date.parse(right.observedAt) || compareCodeUnits(left.id, right.id))
+    .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt) || compareCodeUnits(left.id, right.id))
     .slice(-MAX_CASE_SIGHTINGS);
 }
 
@@ -2229,15 +2229,15 @@ export function buildCaseInvestigationTrail(
       id: `sighting:${item.id}`,
       kind: 'sighting',
       label: `${item.state.replaceAll('_', ' ')} · ${item.category}`,
-      detail: `${item.source} · ${item.completeness}`,
-      createdAt: item.observedAt,
+      detail: `${item.source} · ${item.completeness} · observed ${item.observedAt ?? 'time unavailable'}`,
+      createdAt: item.createdAt,
     })),
     ...(input.observedEffects?.reviews ?? []).map((item): CaseInvestigationTrailItem => ({
       id: `observed-effect:${item.id}`,
       kind: 'observed_effect',
       label: `independent effect · ${item.state.replaceAll('_', ' ')}`,
-      detail: `${item.source} · ${item.completeness}`,
-      createdAt: item.observedAt,
+      detail: `${item.source} · ${item.completeness} · observed ${item.observedAt}`,
+      createdAt: item.createdAt,
     })),
     ...(input.closures?.records ?? []).map((item): CaseInvestigationTrailItem => ({
       id: `closure:${item.id}`,

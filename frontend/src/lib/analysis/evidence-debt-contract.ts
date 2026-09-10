@@ -30,7 +30,7 @@ export type EvidenceDebtItem = Readonly<{
   states: readonly EvidenceDebtState[];
   primaryState: EvidenceDebtState;
   priority: EvidenceDebtPriority;
-  observedAt: string;
+  observedAt: string | null;
   detail: string;
   limitations: readonly string[];
   reviewHref: string;

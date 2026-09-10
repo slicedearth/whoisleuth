@@ -10,6 +10,7 @@ import {
 } from '../packages/contracts/risk-calibration.mts';
 import {
   CASE_SCHEMA_VERSION,
+  CLI_CASE_PACK_INPUT_CASE_VERSIONS,
   SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
   WORKSPACE_ARCHIVE_VERSION,
 } from '../packages/contracts/case-portability.mts';
@@ -1290,11 +1291,11 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "case-pack": commandSeed({
     reference: {
-      description: `Package browser-created Case-schema-${CASE_SCHEMA_VERSION} records as a reviewed, audience-specific Case-pack v2.`,
+      description: `Package browser-created Case records from schemas ${CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(' or ')} as a reviewed, audience-specific Case-pack v2 with current schema ${CASE_SCHEMA_VERSION}.`,
       example: 'whoisleuth case-pack cases.json --audience trusted --reviewed --json',
       boundary: 'The command is an offline handoff from the browser Case workflow: it creates a new package, never creates or mutates a durable Case, never mutates the source archive, and requires an explicit review acknowledgement.',
     },
-    collection: { mode: 'offline', scope: `Reads one bounded Case-schema-${CASE_SCHEMA_VERSION} browser export and writes a separate audience-specific Case-pack v2.` },
+    collection: { mode: 'offline', scope: `Reads one bounded Case export from schemas ${CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(' or ')} and writes a separate audience-specific Case-pack v2.` },
     summary: 'Build a reviewed case package',
     options: ['--audience', '--reviewed', '--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,

@@ -30,6 +30,7 @@ import {
 import {
   CASE_REPORT_SCHEMA,
   PUBLIC_CASE_SCHEMA_VERSION,
+  PUBLISHED_V2_3_CASE_SCHEMA_VERSION,
   caseReportVersionMatchesCase,
   CLI_CASE_PACK_CURRENT_REDACTION_KEYS,
   CLI_CASE_PACK_INTEGRITY_KEYS,
@@ -158,8 +159,8 @@ export function normalizeCaseStore(raw: unknown): CaseStore {
     if (sourceVersion > CASE_SCHEMA_VERSION) {
       throw new TypeError(`Case schema ${sourceVersion} is newer than the supported schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
     }
-    if (sourceVersion === CASE_SCHEMA_VERSION) {
-      assertCurrentCaseShape(raw);
+    if (sourceVersion >= PUBLISHED_V2_3_CASE_SCHEMA_VERSION) {
+      assertModernCaseShape(raw, sourceVersion);
     }
   }
   const byDomain = new Map<string, CaseRecord>();
@@ -183,24 +184,24 @@ export function normalizeCaseStore(raw: unknown): CaseStore {
   return { version: CASE_SCHEMA_VERSION, cases };
 }
 
-function assertCurrentCaseShape(raw: unknown): void {
+function assertModernCaseShape(raw: unknown, sourceVersion: number): void {
   for (const item of boundedCaseList(raw).items) {
     const itemRecord = objectRecord(item);
     const evidenceHistory = itemRecord.evidenceHistory;
     for (const snapshot of Array.isArray(evidenceHistory) ? evidenceHistory : []) {
       const record = objectRecord(snapshot);
       if (Object.keys(record).length > 0 && !Object.hasOwn(record, 'inputHostname')) {
-        throw new TypeError(`Case schema ${CASE_SCHEMA_VERSION} evidence snapshots must declare their exact submitted hostname, including null; unreleased local Case checkpoints are not interpreted as the v2 format and no data was changed.`);
+        throw new TypeError(`Case schema ${sourceVersion} evidence snapshots must declare their exact submitted hostname, including null; no data was changed.`);
       }
     }
     const actions = itemRecord.actions;
     for (const action of Array.isArray(actions) ? actions : []) {
       const record = objectRecord(action);
       if (Object.keys(record).length > 0 && !Object.hasOwn(record, 'routeObservedAt')) {
-        throw new TypeError(`Case schema ${CASE_SCHEMA_VERSION} response actions must declare their route observation time, including null; unreleased local Case checkpoints are not interpreted as the current format and no data was changed.`);
+        throw new TypeError(`Case schema ${sourceVersion} response actions must declare their route observation time, including null; no data was changed.`);
       }
       if (Object.keys(record).length > 0 && !Object.hasOwn(record, 'routeReviewAfter')) {
-        throw new TypeError(`Case schema ${CASE_SCHEMA_VERSION} response actions must declare their route review deadline, including null; unreleased local Case checkpoints are not interpreted as the current format and no data was changed.`);
+        throw new TypeError(`Case schema ${sourceVersion} response actions must declare their route review deadline, including null; no data was changed.`);
       }
     }
     const decisions = itemRecord.decisions;
@@ -208,7 +209,7 @@ function assertCurrentCaseShape(raw: unknown): void {
       const record = objectRecord(decision);
       if (Object.keys(record).length > 0
         && (!Object.hasOwn(record, 'confidence') || !Object.hasOwn(record, 'confidenceBasis'))) {
-        throw new TypeError(`Case schema ${CASE_SCHEMA_VERSION} analyst decisions must declare confidence and its basis; unreleased local Case checkpoints are not interpreted as the current format and no data was changed.`);
+        throw new TypeError(`Case schema ${sourceVersion} analyst decisions must declare confidence and its basis; no data was changed.`);
       }
     }
   }
@@ -274,7 +275,7 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
     || null;
   const normalizedFallback = importFallback || '1970-01-01T00:00:00.000Z';
   const timestampOptions = {
-    legacyTimestamps: importedVersion < CASE_SCHEMA_VERSION,
+    legacyTimestamps: importedVersion < PUBLISHED_V2_3_CASE_SCHEMA_VERSION,
     sourceVersion: importedVersion,
   };
   const rawEvidence = Array.isArray(record.evidenceHistory) ? record.evidenceHistory : [];
@@ -643,7 +644,7 @@ export function mergeCases(
     || !Array.isArray(importedEnvelope.cases)) {
     throw new Error(`Expected a well-formed WHOISleuth Case export using schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
   }
-  if (importedVersion === CASE_SCHEMA_VERSION) assertCurrentCaseShape(importedEnvelope);
+  if (importedVersion !== null && importedVersion >= PUBLISHED_V2_3_CASE_SCHEMA_VERSION) assertModernCaseShape(importedEnvelope, importedVersion);
   const local = normalizeCaseStore(localCases).cases;
   const supportedImportedVersion = importedVersion ?? 0;
   const byDomain = new Map(local.map((item) => [item.domain, item]));

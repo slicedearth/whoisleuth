@@ -29,7 +29,6 @@
   } from '$lib/analysis/case-response-stage.ts';
   import { isoFromUtcInput, utcInputFromIso, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
   import { responseRouteFreshness } from '../../../../packages/cases/response-route-freshness.mts';
-  import { latestObservationCohort } from '../../../../packages/evidence/latest-observations.mts';
 
   let {
     record,
@@ -161,10 +160,6 @@
       packetSelectedEvidenceIds = latestDecision.evidencePinIds.filter((id) => retainedIds.has(id));
     }
     if (!packetActionId && record.actions.length === 1) packetActionId = record.actions[0]?.id ?? '';
-    if (!packetObservedAt) {
-      const cohort = latestObservationCohort(record.evidencePins, (pin) => pin.observedAt);
-      packetObservedAt = utcInputFromIso(cohort.undated.length ? null : cohort.observedAt);
-    }
     const retainedIncidentUrls = caseResponseIncidentUrls(record);
     if (!packetUrlsEdited) packetUrls = retainedIncidentUrls.join('\n');
     if (!packetCategoryEdited) packetCategory = caseTypeSummary(record.tags).slice(0, 80);
@@ -432,7 +427,7 @@
       {#if packetWizardStep === 1}
         <section id={`packet-wizard-step-${record.id}-2`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-2`}>
           <header><div><p class="eyebrow">Prepare</p><h4 id={`packet-wizard-title-${record.id}-2`}>Evidence selection</h4></div><span>Selected material</span></header>
-          <fieldset class="pin-references"><legend>Evidence selected for this exact packet</legend>{#if record.evidencePins.length}{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={packetSelectedEvidenceIds.includes(pin.id)} onchange={(event) => packetSelectedEvidenceIds = event.currentTarget.checked ? [...packetSelectedEvidenceIds, pin.id] : packetSelectedEvidenceIds.filter((id) => id !== pin.id)}><span>{pin.label} · {pin.source} · {pin.observedAt}</span></label>{/each}{:else}<p class="notice">No evidence pins are retained in this Case. The draft will keep this unavailable.</p>{/if}</fieldset>
+          <fieldset class="pin-references"><legend>Evidence selected for this exact packet</legend>{#if record.evidencePins.length}{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={packetSelectedEvidenceIds.includes(pin.id)} onchange={(event) => packetSelectedEvidenceIds = event.currentTarget.checked ? [...packetSelectedEvidenceIds, pin.id] : packetSelectedEvidenceIds.filter((id) => id !== pin.id)}><span>{pin.label} · {pin.source} · {pin.observedAt ?? 'Observation time unavailable'}</span></label>{/each}{:else}<p class="notice">No evidence pins are retained in this Case. The draft will keep this unavailable.</p>{/if}</fieldset>
           <p class="notice">Selection includes only retained Case pins supported by response-packet v{CASE_RESPONSE_PACKET_VERSION}. It does not collect, upload, or infer new evidence.</p>
         </section>
       {/if}

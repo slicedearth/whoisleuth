@@ -27,7 +27,6 @@ import {
   type CaseEvidenceRelationStance,
 } from './case-response-model.mts';
 import {
-  CASE_SCHEMA_VERSION,
   MAX_CASES,
   MAX_NOTES_PER_CASE,
   type CaseEvidenceSnapshot,
@@ -35,6 +34,7 @@ import {
   type CasePatch,
   type CaseRecord,
 } from './case-record-contracts.mts';
+import { PUBLISHED_V2_3_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
 import {
   caseDispositionSupportsDefensiveResponse,
   caseStatusIsClosed,
@@ -239,7 +239,7 @@ export function normalizeCase(
   const createdAt = existing ? existing.createdAt : caseTimestampOrNull(record.createdAt, sourceVersion) || now;
   const updatedAt = caseTimestampOrNull(record.updatedAt, sourceVersion) || createdAt;
   const timestampOptions = {
-    legacyTimestamps: sourceVersion != null && sourceVersion < CASE_SCHEMA_VERSION,
+    legacyTimestamps: sourceVersion != null && sourceVersion < PUBLISHED_V2_3_CASE_SCHEMA_VERSION,
     ...(sourceVersion === undefined ? {} : { sourceVersion }),
   };
   const evidencePins = normalizeCaseEvidencePins(record.evidencePins, updatedAt, timestampOptions);

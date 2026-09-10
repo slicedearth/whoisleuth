@@ -23,7 +23,7 @@
     publish: (next) => { contextState = next; },
   });
 
-  function date(value: string) { return new Date(value).toLocaleString(); }
+  function date(value: string | null) { return value ? new Date(value).toLocaleString() : 'Observation time unavailable'; }
   function requestRefresh() {
     if (insideCaseEditor || document.visibilityState === 'hidden') return;
     void reader.refresh();

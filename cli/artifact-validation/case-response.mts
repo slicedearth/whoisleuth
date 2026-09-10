@@ -4,11 +4,13 @@ import { canonicalArtifactJsonV2 } from '../../packages/evidence/artifact-integr
 import {
   CASE_RESPONSE_PACKET_VERSION,
   PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION,
+  PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION,
   PUBLIC_CASE_RESPONSE_PACKET_VERSION,
   PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION,
   CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   PUBLISHED_V2_2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+  PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   MAX_ABUSIVE_URLS,
   MAX_RESPONSE_ARTEFACT_REFERENCES,
@@ -261,33 +263,34 @@ function validateCurrentActionSummary(value: unknown, label: string): number {
   return total;
 }
 
-function validateCaseResponsePacketV7ToV9(
+function validateVersionedCaseResponsePacket(
   value: UnknownRecord,
   version: typeof PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION
     | typeof PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION
+    | typeof PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION
     | typeof CASE_RESPONSE_PACKET_VERSION,
 ): void {
-  const current = version === CASE_RESPONSE_PACKET_VERSION;
-  const modern = version === PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION || current;
+  const hasPlatformRoutes = version >= PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION;
+  const hasActionBinding = version >= PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION;
   const root = exact(value, [
     'schema', 'schemaVersion', 'generatedAt', 'reviewRequired', 'submissionPerformed', 'profile', 'case',
     'incident', 'contacts', 'selectedEvidence', 'contradictions', 'readiness', 'artefactReferences',
     'authorisation', 'preflight', 'escalationHistory', 'escalationHistoryOmitted',
     'escalationHistoryLimitations', 'responseLifecycle', 'provenance', 'integrity',
-    ...(modern ? ['recipientRoute', 'actionBinding'] : []),
+    ...(hasActionBinding ? ['recipientRoute', 'actionBinding'] : []),
   ], `Case-response packet v${version}`);
   if (root.schemaVersion !== version) fail(`Case-response packet v${version}`);
   iso(root.generatedAt, 'Case-response packet generatedAt');
   if (root.reviewRequired !== true || root.submissionPerformed !== false) fail('Case-response packet review state');
 
   const profile = exact(root.profile, ['id', 'label', 'audience', 'subject', 'checklist', 'evidenceOrder', 'includedEvidence', 'excludedEvidence', 'redactions', 'attachments', 'followUpFields'], 'Case-response profile');
-  const profileId = enumeration(profile.id, current ? RESPONSE_PACKET_PROFILE_IDS : PRE_PLATFORM_PROFILE_IDS, 'Case-response profile id');
+  const profileId = enumeration(profile.id, hasPlatformRoutes ? RESPONSE_PACKET_PROFILE_IDS : PRE_PLATFORM_PROFILE_IDS, 'Case-response profile id');
   text(profile.label, 'Case-response profile label', 200);
   text(profile.audience, 'Case-response profile audience', 300);
   text(profile.subject, 'Case-response profile subject', 500);
   for (const key of ['checklist', 'evidenceOrder', 'includedEvidence', 'excludedEvidence', 'redactions', 'attachments', 'followUpFields'] as const) strings(profile[key], `Case-response profile ${key}`, 24, 500);
   const selectedProfile = RESPONSE_PACKET_PROFILES.find((candidate) => candidate.id === profileId);
-  const expectedRedactions = modern ? selectedProfile?.redactions : legacyProfileRedactions(profileId);
+  const expectedRedactions = hasActionBinding ? selectedProfile?.redactions : legacyProfileRedactions(profileId);
   if (!selectedProfile
     || profile.label !== selectedProfile.label
     || profile.audience !== selectedProfile.audience
@@ -321,21 +324,21 @@ function validateCaseResponsePacketV7ToV9(
   const contactKeys = new Set<string>();
   for (const candidate of contacts) {
     const contact = exact(candidate, [
-      'kind', 'contact', 'source', 'observedAt', ...(current ? ['reviewAfter'] : []), 'freshness', 'limitations',
+      'kind', 'contact', 'source', 'observedAt', ...(hasPlatformRoutes ? ['reviewAfter'] : []), 'freshness', 'limitations',
     ], 'Case-response contact');
-    const kind = enumeration(contact.kind, current ? RESPONSE_CONTACT_KINDS : PRE_PLATFORM_CONTACT_KINDS, 'Case-response contact kind');
+    const kind = enumeration(contact.kind, hasPlatformRoutes ? RESPONSE_CONTACT_KINDS : PRE_PLATFORM_CONTACT_KINDS, 'Case-response contact kind');
     const contactValue = text(contact.contact, 'Case-response contact value', MAX_RESPONSE_RECIPIENT_LENGTH);
     const key = `${kind}\u0000${contactValue.toLowerCase()}`;
     if (contactKeys.has(key)) fail('Case-response contacts');
     contactKeys.add(key);
     text(contact.source, 'Case-response contact source', 120);
     iso(contact.observedAt, 'Case-response contact observedAt', true);
-    if (current) iso(contact.reviewAfter, 'Case-response contact reviewAfter', true);
+    if (hasPlatformRoutes) iso(contact.reviewAfter, 'Case-response contact reviewAfter', true);
     const freshness = enumeration(contact.freshness, ['current', 'stale', 'unknown'], 'Case-response contact freshness');
     const routeAge = contact.observedAt === null
       ? null
       : Date.parse(root.generatedAt as string) - Date.parse(contact.observedAt as string);
-    const reviewExpired = current && contact.reviewAfter !== null
+    const reviewExpired = hasPlatformRoutes && contact.reviewAfter !== null
       && Date.parse(root.generatedAt as string) >= Date.parse(contact.reviewAfter as string);
     const expectedFreshness = routeAge === null
       ? 'unknown'
@@ -351,22 +354,22 @@ function validateCaseResponsePacketV7ToV9(
   let selectedActionId: string | null = null;
   let lineageActionIds: string[] = [];
   let lineageComplete = true;
-  if (modern) {
+  if (hasActionBinding) {
     if (root.recipientRoute !== null) {
       recipientRoute = exact(root.recipientRoute, [
-        'actionId', 'kind', 'contact', 'source', 'observedAt', ...(current ? ['reviewAfter'] : []), 'freshness', 'limitations',
+        'actionId', 'kind', 'contact', 'source', 'observedAt', ...(hasPlatformRoutes ? ['reviewAfter'] : []), 'freshness', 'limitations',
       ], 'Case-response recipient route');
       text(recipientRoute.actionId, 'Case-response recipient action id', 64);
-      enumeration(recipientRoute.kind, [...(current ? RESPONSE_CONTACT_KINDS : PRE_PLATFORM_CONTACT_KINDS), 'manual'], 'Case-response recipient kind');
+      enumeration(recipientRoute.kind, [...(hasPlatformRoutes ? RESPONSE_CONTACT_KINDS : PRE_PLATFORM_CONTACT_KINDS), 'manual'], 'Case-response recipient kind');
       text(recipientRoute.contact, 'Case-response recipient value', MAX_RESPONSE_RECIPIENT_LENGTH);
       text(recipientRoute.source, 'Case-response recipient source', 120);
       iso(recipientRoute.observedAt, 'Case-response recipient observedAt', true);
-      if (current) iso(recipientRoute.reviewAfter, 'Case-response recipient reviewAfter', true);
+      if (hasPlatformRoutes) iso(recipientRoute.reviewAfter, 'Case-response recipient reviewAfter', true);
       const freshness = enumeration(recipientRoute.freshness, ['current', 'stale', 'unknown'], 'Case-response recipient freshness');
       const routeAge = recipientRoute.observedAt === null
         ? null
         : Date.parse(root.generatedAt as string) - Date.parse(recipientRoute.observedAt as string);
-      const reviewExpired = current && recipientRoute.reviewAfter !== null
+      const reviewExpired = hasPlatformRoutes && recipientRoute.reviewAfter !== null
         && Date.parse(root.generatedAt as string) >= Date.parse(recipientRoute.reviewAfter as string);
       const expectedFreshness = routeAge === null
         ? 'unknown'
@@ -397,7 +400,7 @@ function validateCaseResponsePacketV7ToV9(
         || selectedContact.contact !== recipientRoute.contact
         || selectedContact.source !== recipientRoute.source
         || selectedContact.observedAt !== recipientRoute.observedAt
-        || (current && selectedContact.reviewAfter !== recipientRoute.reviewAfter)
+        || (hasPlatformRoutes && selectedContact.reviewAfter !== recipientRoute.reviewAfter)
         || selectedContact.freshness !== recipientRoute.freshness) fail('Case-response selected contact projection');
     }
   }
@@ -411,7 +414,7 @@ function validateCaseResponsePacketV7ToV9(
     evidenceIds.add(id);
     text(item.label, 'Case-response evidence label', 80);
     text(item.source, 'Case-response evidence source', 120);
-    iso(item.observedAt, 'Case-response evidence observedAt');
+    iso(item.observedAt, 'Case-response evidence observedAt', version > PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION);
     enumeration(item.completeness, ['complete', 'partial', 'inconclusive', 'unknown'], 'Case-response evidence completeness');
     strings(item.limitations, 'Case-response evidence limitations', 8, 240);
   }
@@ -437,7 +440,7 @@ function validateCaseResponsePacketV7ToV9(
     ...(profileId === 'internal_soc' ? [] : ['recipient_route']),
     ...(['registrar', 'registry', 'network_hosting'].includes(profileId) ? ['infrastructure_responsibility'] : []),
   ]);
-  const requiredContact = modern
+  const requiredContact = hasActionBinding
     ? recipientRoute ?? undefined
     : selectedProfile?.requiredContactKind
       ? contacts.find((candidate) => (candidate as UnknownRecord).kind === selectedProfile.requiredContactKind) as UnknownRecord | undefined
@@ -446,7 +449,7 @@ function validateCaseResponsePacketV7ToV9(
     observed_behaviour: 'complete',
     exact_url: 'complete',
     observation_time: expectedObservationAge(incident.observedAt as string, root.generatedAt as string).refreshRecommended ? 'stale' : 'complete',
-    capture_provenance: evidence.length ? 'complete' : 'unavailable',
+    capture_provenance: !evidence.length ? 'unavailable' : evidence.every((candidate) => (candidate as UnknownRecord).observedAt !== null) ? 'complete' : 'partial',
     recipient_route: !requiredContact
       ? 'not_provided'
       : requiredContact.freshness === 'stale'
@@ -523,8 +526,8 @@ function validateCaseResponsePacketV7ToV9(
     || (authorisationStatus === 'draft' && authorisation.confirmedAt !== null)) fail('Case-response authorisation');
 
   const preflight = exact(root.preflight, ['version', 'status', 'canExport', 'counts', 'checks', 'actionSummary'], 'Case-response preflight');
-  const preflightIds = modern ? CASE_RESPONSE_PREFLIGHT_IDS_V8 : CASE_RESPONSE_PREFLIGHT_IDS_V7;
-  if (preflight.version !== (modern ? 3 : 2)) fail('Case-response preflight');
+  const preflightIds = hasActionBinding ? CASE_RESPONSE_PREFLIGHT_IDS_V8 : CASE_RESPONSE_PREFLIGHT_IDS_V7;
+  if (preflight.version !== (hasActionBinding ? 3 : 2)) fail('Case-response preflight');
   const checks = array(preflight.checks, 'Case-response preflight checks', preflightIds.length, preflightIds.length);
   const actualCounts = { block: 0, caution: 0, pass: 0 };
   for (const [index, candidate] of checks.entries()) {
@@ -544,8 +547,8 @@ function validateCaseResponsePacketV7ToV9(
   const history = array(root.escalationHistory, 'Case-response escalation history', MAX_RESPONSE_ACTION_HISTORY);
   const escalationHistoryOmitted = integer(root.escalationHistoryOmitted, 'Case-response omitted actions', 0, MAX_CASE_ACTIONS);
   const escalationHistoryLimitations = strings(root.escalationHistoryLimitations, 'Case-response history limitations', 4, 600);
-  if ((!modern && history.length !== Math.min(actionTotal, MAX_RESPONSE_ACTION_HISTORY))
-    || (modern && history.length > Math.min(actionTotal, MAX_RESPONSE_ACTION_HISTORY))
+  if ((!hasActionBinding && history.length !== Math.min(actionTotal, MAX_RESPONSE_ACTION_HISTORY))
+    || (hasActionBinding && history.length > Math.min(actionTotal, MAX_RESPONSE_ACTION_HISTORY))
     || escalationHistoryOmitted !== actionTotal - history.length
     || (escalationHistoryOmitted > 0) !== (escalationHistoryLimitations.length > 0)) fail('Case-response action-history bounds');
   const actionIds = new Set<string>();
@@ -563,18 +566,18 @@ function validateCaseResponsePacketV7ToV9(
       'actionId', 'type', 'recipient', 'contactSource', 'state', 'reference',
       'providerOutcome', 'outcomeDetail', 'originActionId', 'historyOmitted',
       'historyLimitations', 'transitions', 'createdAt', 'updatedAt',
-      ...(modern ? ['routeObservedAt'] : []),
-      ...(current ? ['routeReviewAfter'] : []),
+      ...(hasActionBinding ? ['routeObservedAt'] : []),
+      ...(hasPlatformRoutes ? ['routeReviewAfter'] : []),
     ], 'Case-response escalation action');
     const actionId = text(action.actionId, 'Case-response action id', 64);
     if (actionIds.has(actionId)) fail('Case-response action identity');
     actionIds.add(actionId);
     actionIdOrder.push(actionId);
-    enumeration(action.type, current ? CASE_ACTION_TYPES : PRE_PLATFORM_ACTION_TYPES, 'Case-response action type');
+    enumeration(action.type, hasPlatformRoutes ? CASE_ACTION_TYPES : PRE_PLATFORM_ACTION_TYPES, 'Case-response action type');
     text(action.recipient, 'Case-response action recipient', 320);
     text(action.contactSource, 'Case-response action source', 120);
-    if (modern) iso(action.routeObservedAt, 'Case-response action route observedAt', true);
-    if (current) iso(action.routeReviewAfter, 'Case-response action route reviewAfter', true);
+    if (hasActionBinding) iso(action.routeObservedAt, 'Case-response action route observedAt', true);
+    if (hasPlatformRoutes) iso(action.routeReviewAfter, 'Case-response action route reviewAfter', true);
     enumeration(action.state, CASE_ACTION_STATES, 'Case-response action state');
     optionalText(action.reference, 'Case-response action reference', 500);
     if (action.providerOutcome !== null) enumeration(action.providerOutcome, CASE_PROVIDER_OUTCOMES, 'Case-response provider outcome');
@@ -657,7 +660,7 @@ function validateCaseResponsePacketV7ToV9(
     iso(action.createdAt, 'Case-response action createdAt');
     iso(action.updatedAt, 'Case-response action updatedAt');
   }
-  if (modern) {
+  if (hasActionBinding) {
     if (actionIds.size !== lineageActionIds.length
       || actionIdOrder.some((id, index) => lineageActionIds[index] !== id)) fail('Case-response action lineage');
     if (recipientRoute && !actionIds.has(recipientRoute.actionId as string)) fail('Case-response recipient action');
@@ -694,11 +697,11 @@ function validateCaseResponsePacketV7ToV9(
   const latestProviderEvents = latestProviderTime === null
     ? []
     : providerEvents.filter((event) => event.occurredAt === latestProviderTime);
-  const expectedLatestProvider = (modern ? lineageComplete : escalationHistoryOmitted === 0)
+  const expectedLatestProvider = (hasActionBinding ? lineageComplete : escalationHistoryOmitted === 0)
     && latestProviderEvents.length === 1 && latestProviderEvents[0]!.applied
     ? latestProviderEvents[0]!
     : null;
-  const expectedProviderState = (modern ? !lineageComplete : escalationHistoryOmitted > 0)
+  const expectedProviderState = (hasActionBinding ? !lineageComplete : escalationHistoryOmitted > 0)
     ? 'ambiguous'
     : providerEvents.length === 0 ? 'missing' : expectedLatestProvider ? 'available' : 'ambiguous';
   if (providerOutcomeState !== expectedProviderState
@@ -732,9 +735,10 @@ function validateCaseResponsePacketV7ToV9(
 
   const reviewedInputs = {
     contract: CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
-    version: current
+    version: version === CASE_RESPONSE_PACKET_VERSION
       ? CASE_RESPONSE_REVIEW_INPUTS_VERSION
-      : modern ? PUBLISHED_V2_2_CASE_RESPONSE_REVIEW_INPUTS_VERSION : PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+      : hasPlatformRoutes ? PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION
+      : hasActionBinding ? PUBLISHED_V2_2_CASE_RESPONSE_REVIEW_INPUTS_VERSION : PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
     profile: {
       id: profile.id,
       label: profile.label,
@@ -748,7 +752,7 @@ function validateCaseResponsePacketV7ToV9(
     case: root.case,
     incident: root.incident,
     contacts: root.contacts,
-    ...(modern ? { recipientRoute: root.recipientRoute, actionBinding: root.actionBinding } : {}),
+    ...(hasActionBinding ? { recipientRoute: root.recipientRoute, actionBinding: root.actionBinding } : {}),
     selectedEvidence: root.selectedEvidence,
     contradictions: root.contradictions,
     readiness: root.readiness,
@@ -783,10 +787,13 @@ function validateCaseResponsePacketV7ToV9(
 export function validateCaseResponsePacket(value: UnknownRecord): void {
   if (value.schemaVersion === PUBLIC_CASE_RESPONSE_PACKET_VERSION) return validateCaseResponsePacketV6(value);
   if (value.schemaVersion === PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION) {
-    return validateCaseResponsePacketV7ToV9(value, PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION);
+    return validateVersionedCaseResponsePacket(value, PUBLISHED_V2_CASE_RESPONSE_PACKET_VERSION);
   }
   if (value.schemaVersion === PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION) {
-    return validateCaseResponsePacketV7ToV9(value, PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION);
+    return validateVersionedCaseResponsePacket(value, PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION);
+  }
+  if (value.schemaVersion === PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION) {
+    return validateVersionedCaseResponsePacket(value, PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION);
   }
   if (Number.isSafeInteger(value.schemaVersion) && (value.schemaVersion as number) < CASE_RESPONSE_PACKET_VERSION) {
     throw new TypeError(`Case-response packet version ${String(value.schemaVersion)} is not part of the public compatibility boundary; no data was changed.`);
@@ -794,5 +801,5 @@ export function validateCaseResponsePacket(value: UnknownRecord): void {
   if (Number.isSafeInteger(value.schemaVersion) && (value.schemaVersion as number) > CASE_RESPONSE_PACKET_VERSION) {
     throw new TypeError(`Case-response packet version ${String(value.schemaVersion)} is newer than the supported version ${CASE_RESPONSE_PACKET_VERSION}; no data was changed.`);
   }
-  validateCaseResponsePacketV7ToV9(value, CASE_RESPONSE_PACKET_VERSION);
+  validateVersionedCaseResponsePacket(value, CASE_RESPONSE_PACKET_VERSION);
 }

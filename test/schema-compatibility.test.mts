@@ -102,6 +102,7 @@ import {
   CASE_SCHEMA_VERSION,
   MAX_CASE_IMPORT_BYTES,
 } from '../frontend/src/lib/analysis/case-model.ts';
+import { CASE_RESPONSE_PACKET_VERSION, CASE_RESPONSE_REVIEW_INPUTS_VERSION } from '../packages/contracts/case-portability.mts';
 import {
   buildDetectionRuleExport,
   DETECTION_RULE_SCHEMA,
@@ -493,8 +494,8 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.workspace-archive').currentVersion, WORKSPACE_ARCHIVE_VERSION);
     assert.deepEqual(byId(inventory, 'export.workspace-archive').supportedVersions, [5, 6, 7, 8]);
     assert.equal(byId(inventory, 'export.workspace-archive').byteBudget, MAX_WORKSPACE_ARCHIVE_BYTES);
-    assert.deepEqual(byId(inventory, 'export.case-response-packet').supportedVersions, [6, 7, 8, 9]);
-    assert.deepEqual(byId(inventory, 'derived.case-response-review-inputs').supportedVersions, [1, 2, 3]);
+    assert.deepEqual(byId(inventory, 'export.case-response-packet').supportedVersions, [6, 7, 8, 9, CASE_RESPONSE_PACKET_VERSION]);
+    assert.deepEqual(byId(inventory, 'derived.case-response-review-inputs').supportedVersions, [1, 2, 3, CASE_RESPONSE_REVIEW_INPUTS_VERSION]);
     assert.equal(byId(inventory, 'export.encrypted-workspace-archive').schema, ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA);
     assert.equal(byId(inventory, 'export.encrypted-workspace-archive').currentVersion, ENCRYPTED_WORKSPACE_ARCHIVE_VERSION);
     assert.equal(byId(inventory, 'export.encrypted-workspace-archive').byteBudget, MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES);
@@ -533,7 +534,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.brand-protection-operations-report').currentVersion, BRAND_PROTECTION_OPERATIONS_REPORT_VERSION);
     assert.equal(byId(inventory, 'export.brand-protection-operations-report').byteBudget, MAX_OPERATIONS_REPORT_BYTES);
     assert.deepEqual(byId(inventory, 'export.brand-protection-operations-report').supportedVersions, [2]);
-    assert.deepEqual(byId(inventory, 'export.case-report').supportedVersions, [9, 10, 11]);
+    assert.deepEqual(byId(inventory, 'export.case-report').supportedVersions, [9, 10, 11, CASE_REPORT_SCHEMA_VERSION]);
     assert.equal(byId(inventory, 'export.bulk-review').schema, BULK_REVIEW_SCHEMA);
     assert.equal(byId(inventory, 'export.bulk-review').currentVersion, BULK_REVIEW_SCHEMA_VERSION);
     assert.equal(byId(inventory, 'export.bulk-review').byteBudget, MAX_BULK_REVIEW_STORE_BYTES);
@@ -879,7 +880,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'browser.cases').tier, 'durable_interchange');
     assert.equal(byId(inventory, 'export.case-report').tier, 'durable_interchange');
     assert.equal(byId(inventory, 'derived.case-response-review-inputs').tier, 'internal');
-    assert.deepEqual(byId(inventory, 'browser.cases').supportedVersions, [12, 13, 14, 15]);
+    assert.deepEqual(byId(inventory, 'browser.cases').supportedVersions, [12, 13, 14, 15, CASE_SCHEMA_VERSION]);
     assert.deepEqual(byId(inventory, 'browser.brand-profiles').supportedVersions, [...SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS]);
     assert.deepEqual(byId(inventory, 'browser.watchlists').supportedVersions, [2]);
     assert.deepEqual(byId(inventory, 'browser.shortlist').supportedVersions, [3]);

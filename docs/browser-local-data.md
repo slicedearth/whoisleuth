@@ -40,15 +40,16 @@ truncation and limitations. Imported, analyst-authored, provider-reported and
 collected evidence remain distinct. Missing or unreadable storage is reported
 as unavailable; it does not become an empty collection or evidence of absence.
 
-Cases remain keyed by canonical registrable domain while schema 15 can retain
+Cases remain keyed by canonical registrable domain while schema 16 can retain
 the exact normalised submitted hostname on each new evidence snapshot and the
 observation time and explicit review deadline of a response route. Analyst
 decisions can retain confidence and its basis. Cases migrated from supported
-schemas 12, 13 or 14 may retain null or unknown values because WHOISleuth does
+schemas 12–15 may retain null or unknown values because WHOISleuth does
 not reconstruct historical input from weaker fields. Case response histories
-are append-only and bounded.
+are append-only and bounded. Pins and sightings keep unknown observation times
+as null, independently of the time the record was saved.
 
-The current workspace archive is version 8. It contains Case schema 15 and a
+The current workspace archive is version 8. It contains Case schema 16 and a
 bounded analyst review-state section. Exact workspace versions 5, 6 and 7 remain
 readable and migrate directly; version 5 adds an empty review-state section
 without inventing decisions. Brand Profiles write version 9 and read exact

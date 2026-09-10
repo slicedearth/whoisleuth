@@ -530,7 +530,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
     if (!response.evidencePins.length) lines.push('No evidence pins recorded.');
     for (const pin of response.evidencePins) {
       lines.push(`- **${escapeMarkdownInline(pin.label)}:** ${escapeMarkdownInline(pin.value)}`);
-      lines.push(`  Source: ${escapeMarkdownInline(pin.source)}; observed ${escapeMarkdownInline(pin.observedAt)}; completeness ${escapeMarkdownInline(pin.completeness)}.`);
+      lines.push(`  Source: ${escapeMarkdownInline(pin.source)}; observed ${escapeMarkdownInline(pin.observedAt ?? 'Time unavailable')}; completeness ${escapeMarkdownInline(pin.completeness)}.`);
       if (pin.limitations.length) lines.push(`  Limitations: ${escapeMarkdownInline(pin.limitations.join('; '))}`);
     }
     lines.push('');
@@ -538,7 +538,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
     lines.push('');
     if (!response.sightings.length) lines.push('No source-qualified sightings recorded.');
     for (const sighting of response.sightings) {
-      lines.push(`- **${escapeMarkdownInline(sighting.state.replaceAll('_', ' '))}:** ${escapeMarkdownInline(sighting.category)} (${escapeMarkdownInline(sighting.observedAt)})`);
+      lines.push(`- **${escapeMarkdownInline(sighting.state.replaceAll('_', ' '))}:** ${escapeMarkdownInline(sighting.category)} (${escapeMarkdownInline(sighting.observedAt ?? 'Observation time unavailable')})`);
       lines.push(`  Source: ${escapeMarkdownInline(sighting.source)}; class ${escapeMarkdownInline(sighting.sourceClass)}; completeness ${escapeMarkdownInline(sighting.completeness)}.`);
       if (sighting.evidencePinId) lines.push(`  Evidence pin: ${escapeMarkdownInline(sighting.evidencePinId)}`);
       if (sighting.limitations.length) lines.push(`  Limitations: ${escapeMarkdownInline(sighting.limitations.join('; '))}`);

@@ -58,6 +58,25 @@ test('keeps not-reproduced states as notes rather than negative observations', (
     && item.x_whoisleuth_source_qualified_state === 'not_reproduced'));
 });
 
+test('retains every undated sighting as a source-qualified note without invented observation times', () => {
+  const current = record();
+  current.sightings = [null, '', '2026-07-31', '2026-02-30T00:00:00Z'].map((observedAt, index) => ({
+    ...current.sightings[0]!, id: `undated-${index}`, observedAt,
+  }));
+  const exported = buildCaseSightingStixExport(current, { generatedAt: NOW, idFactory: ids() });
+  const bundle = JSON.parse(exported.content) as { objects: Array<Record<string, unknown>> };
+  const notes = bundle.objects.filter((item) => item.type === 'note');
+  assert.equal(exported.sightingCount, 4);
+  assert.equal(exported.truncated, false);
+  assert.equal(notes.length, 4);
+  assert.equal(bundle.objects.some((item) => item.type === 'observed-data'), false);
+  for (const note of notes) {
+    assert.equal(Object.hasOwn(note, 'x_whoisleuth_observed_at'), false);
+    assert.match(String(note.content), /Observation time is unavailable/);
+    assert.equal(note.x_whoisleuth_source, 'Deep lookup');
+  }
+});
+
 test('fails closed for empty sightings, invalid domains, and invalid identifiers', () => {
   const empty = record();
   empty.sightings = [];

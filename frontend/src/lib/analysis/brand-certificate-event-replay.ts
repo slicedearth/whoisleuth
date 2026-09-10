@@ -21,7 +21,7 @@ export type RetainedCertificateEventReview = Readonly<{
   eventId: string;
   certificateSha256: string;
   logId: string;
-  observedAt: string;
+  observedAt: string | null;
   notAfter: string | null;
   issuer: string | null;
   names: readonly string[];
@@ -51,7 +51,7 @@ type EventGroup = {
   eventId: string;
   certificateSha256: string;
   logIds: Set<string>;
-  observedAt: string;
+  observedAt: string | null;
   notAfterValues: Set<string>;
   issuers: Set<string>;
   names: Set<string>;
@@ -176,7 +176,8 @@ export function buildBrandCertificateEventReplay(
     .filter((record) => officialDomains.has(record.domain))
     .flatMap((record) => record.evidencePins.slice(0, 40).map((pin) => ({ key: eventKey(pin), observedAt: pin.observedAt })))
     .filter((item) => item.key)
-    .sort((left, right) => left.observedAt.localeCompare(right.observedAt) || left.key.localeCompare(right.key));
+    .sort((left, right) => Number(left.observedAt === null) - Number(right.observedAt === null)
+      || (left.observedAt ?? '').localeCompare(right.observedAt ?? '') || left.key.localeCompare(right.key));
   const uniqueRelevant = [...new Map(relevantKeys.map((item) => [item.key, item])).values()];
   const selectedKeys = new Set(uniqueRelevant.slice(-MAX_REPLAY_EVENTS).map((item) => item.key));
   const groups = new Map<string, EventGroup>();
@@ -216,7 +217,8 @@ export function buildBrandCertificateEventReplay(
     }
   }
   const reviews = [...groups.values()]
-    .sort((left, right) => left.observedAt.localeCompare(right.observedAt) || left.eventId.localeCompare(right.eventId));
+    .sort((left, right) => Number(left.observedAt === null) - Number(right.observedAt === null)
+      || (left.observedAt ?? '').localeCompare(right.observedAt ?? '') || left.eventId.localeCompare(right.eventId));
   const domains = [...officialDomains].map((domain) => {
     const baseline = baselineFor(profile, domain);
     return {

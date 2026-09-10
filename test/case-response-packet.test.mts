@@ -19,6 +19,7 @@ import {
   verifyCaseResponsePacketIntegrity,
 } from '../frontend/src/lib/analysis/case-response-packet.ts';
 import { createCase, updateCase } from '../frontend/src/lib/analysis/case-model.ts';
+import { validateOfflineArtifactStructure } from '../cli/offline-artifact-validation.mts';
 
 const NOW = '2026-07-28T02:00:00.000Z';
 
@@ -431,6 +432,40 @@ describe('case response packet', () => {
     assert.equal(await verifyCaseResponsePacketIntegrity(result.json), false);
   });
 
+  test('retains undated selected evidence and its incomplete provenance under explicit analyst review', async () => {
+    const caseRecord = reviewedCase();
+    caseRecord.evidencePins[0]!.observedAt = null;
+    const input = { ...packetInput(caseRecord), selectedEvidencePinIds: [caseRecord.evidencePins[0]!.id] };
+    const result = await buildCaseResponsePacket(caseRecord, {
+      ...input,
+      authorisation: {
+        reviewedInputDigestSha256: await buildCaseResponseReviewDigest(caseRecord, input, NOW),
+        confirmedAt: NOW,
+        confirmations: Object.fromEntries(RESPONSE_AUTHORISATION_CONFIRMATION_IDS.map((id) => [id, true])),
+      },
+    }, NOW);
+    assert.equal(result.json.selectedEvidence.length, 1);
+    assert.equal(result.json.selectedEvidence[0]!.observedAt, null);
+    assert.equal(result.json.incident.observedAt, NOW);
+    assert.equal(result.json.readiness.rows.find((row) => row.id === 'capture_provenance')?.state, 'partial');
+    assert.equal(result.json.authorisation.status, 'authorised');
+    assert.equal((await buildCaseResponsePacket(caseRecord, input, NOW)).json.authorisation.status, 'draft');
+    assert.match(result.markdown, /Observation time unavailable/iu);
+    assert.equal(await verifyCaseResponsePacketIntegrity(result.json), true);
+    validateOfflineArtifactStructure(CASE_RESPONSE_PACKET_SCHEMA, result.json);
+  });
+
+  test('requires the incident time even when an unrelated dated snapshot and pin are retained', async () => {
+    const caseRecord = reviewedCase();
+    for (const observedAt of [null, '', '2026-07-28T02:00:00']) {
+      const input = { ...packetInput(caseRecord), observedAt };
+      const readiness = buildCaseResponseReadiness(caseRecord, input, NOW);
+      assert.equal(readiness.rows.find((row) => row.id === 'observation_time')?.state, 'not_provided');
+      assert.equal(buildCaseResponsePreflight(caseRecord, input, NOW).canExport, false);
+      await assert.rejects(buildCaseResponsePacket(caseRecord, input, NOW), /observation time.*required/iu);
+    }
+  });
+
   test('preflight blocks missing incident facts and keeps review gaps explicit', () => {
     const preflight = buildCaseResponsePreflight(reviewedCase(), {
       profile: 'registrar',
@@ -443,7 +478,7 @@ describe('case response packet', () => {
     }, NOW);
     assert.equal(preflight.canExport, false);
     assert.equal(preflight.status, 'needs_input');
-    assert.equal(preflight.counts.block, 4);
+    assert.equal(preflight.counts.block, 5);
     assert.equal(preflight.checks.find((item) => item.id === 'recipient_route')?.state, 'block');
     assert.equal(preflight.checks.find((item) => item.id === 'packet_action')?.state, 'block');
   });

@@ -1,4 +1,5 @@
 import type { CaseRecord } from './case-model.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 import { caseStatusIsClosed } from './case-record-decisions.ts';
 import {
   BULK_REVIEW_STALE_AFTER_DAYS,
@@ -93,9 +94,7 @@ function boundedText(value: unknown, maximum: number): string {
 }
 
 function timestamp(value: unknown): string | null {
-  const text = boundedText(value, 64);
-  const parsed = Date.parse(text);
-  return text && Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function normalizeState(value: unknown): string {
@@ -155,7 +154,8 @@ function itemSort(left: Candidate, right: Candidate): number {
   if (left.priority !== right.priority) return left.priority === 'high' ? -1 : 1;
   const state = (STATE_RANK.get(left.primaryState) ?? 99) - (STATE_RANK.get(right.primaryState) ?? 99);
   if (state) return state;
-  const time = Date.parse(left.observedAt) - Date.parse(right.observedAt);
+  const time = Number(left.observedAt !== null) - Number(right.observedAt !== null)
+    || (left.observedAt && right.observedAt ? Date.parse(left.observedAt) - Date.parse(right.observedAt) : 0);
   if (time) return time;
   return compareText(left.id, right.id);
 }
@@ -196,7 +196,7 @@ function debtForCasePin(
   sourceState: unknown,
   completeness: unknown,
   truncated: unknown,
-  observedAt: string,
+  observedAt: string | null,
   nowMs: number,
 ): EvidenceDebtState[] {
   const rawState = normalizeState(sourceState);
@@ -208,12 +208,14 @@ function debtForCasePin(
   const states: EvidenceDebtState[] = [];
   const mapped = STATE_ALIASES[rawState];
   if (mapped) states.push(mapped);
+  if (!observedAt) states.push('partial');
   if (truncated === true || completeness === 'partial') states.push('partial');
   if ((completeness === 'inconclusive' || completeness === 'unknown') && rawState !== 'unsupported') {
     states.push('unavailable');
   }
   if (
     rawState !== 'unsupported'
+    && observedAt !== null
     && nowMs - Date.parse(observedAt) > CASE_EVIDENCE_STALE_AFTER_DAYS * DAY_MS
   ) {
     states.push('stale');
@@ -323,11 +325,12 @@ function buildCaseCandidates(
       .map((pin) => ({
         record,
         pin,
-        observedAt: timestamp(pin.observedAt) ?? timestamp(pin.createdAt) ?? new Date(0).toISOString(),
+        observedAt: timestamp(pin.observedAt),
       }));
   });
   pins.sort((left, right) => (
-    Date.parse(right.observedAt) - Date.parse(left.observedAt)
+    Number(left.observedAt !== null) - Number(right.observedAt !== null)
+    || (left.observedAt && right.observedAt ? Date.parse(right.observedAt) - Date.parse(left.observedAt) : 0)
     || compareText(left.record.id, right.record.id)
     || compareText(left.pin.id, right.pin.id)
   ));
@@ -354,7 +357,10 @@ function buildCaseCandidates(
       priority: itemPriority(states),
       observedAt,
       detail: `${pin.label} is an explicit retained pin with ${states.map((state) => state.replaceAll('_', ' ')).join(' and ')} evidence.`,
-      limitations: Object.freeze(boundedLimitations(pin.limitations)),
+      limitations: Object.freeze(boundedLimitations([
+        ...(!observedAt ? ['The source observation time is unavailable; freshness cannot be determined from the save time.'] : []),
+        ...pin.limitations,
+      ])),
       reviewHref: `/monitor?view=cases&case=${encodeURIComponent(record.id)}#case-response-${encodeURIComponent(record.id)}`,
       nextAction: next.action,
       nextHref: next.href,

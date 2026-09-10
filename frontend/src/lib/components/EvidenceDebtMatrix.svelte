@@ -76,7 +76,8 @@
     page = Math.max(1, Math.min(pageCount, Math.trunc(value)));
   }
 
-  function formatDate(value: string): string {
+  function formatDate(value: string | null): string {
+    if (value === null) return 'time unavailable';
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString('en-AU');
   }
