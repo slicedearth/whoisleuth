@@ -762,7 +762,7 @@
       if(!requestCurrent()||!revealIntent?.current())return;
       if(options.refreshCaseEvidence){void navigateToResultSection('#case-response');return;}
       if(window.location.hash&&lookupEvidenceFamilyForHref(window.location.hash))navigateToCurrentLookupHash();
-      else document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
+      else document.querySelector('#result')?.scrollIntoView({behavior:'instant',block:'start'});
     }catch{
       if(pageActive&&requestRevision===lookupRevision)error='Lookup request could not be prepared.';
     }finally{

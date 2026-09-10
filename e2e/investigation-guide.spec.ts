@@ -12,6 +12,11 @@ type RecipeLabel =
   | 'Mail abuse response'
   | 'Domain-control change response';
 
+type LookupRevealProbe = {
+  resultReveals: number;
+  immediateHeading: { top: number; bottom: number; headerBottom: number; viewportHeight: number } | null;
+};
+
 async function startRecipe(
   page: import('@playwright/test').Page,
   recipe: RecipeLabel = 'New-domain triage',
@@ -143,13 +148,21 @@ async function installLookupFixture(page: import('@playwright/test').Page, befor
 for (const width of [1280, 390]) for (const intent of ['unchanged', 'guide', 'wheel'] as const) {
   test(`late Lookup reveal respects ${intent} viewport intent at ${width}px`, { tag: '@timing-sensitive' }, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: width === 1280 ? 720 : 844 });
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.addInitScript(() => {
-      const state = { resultReveals: 0 };
+      const state: LookupRevealProbe = { resultReveals: 0, immediateHeading: null };
       Object.defineProperty(window, '__lookupRevealProbe', { value: state });
       const original = Element.prototype.scrollIntoView;
       Element.prototype.scrollIntoView = function (options?: boolean | ScrollIntoViewOptions) {
         if (this.id === 'result') state.resultReveals += 1;
         original.call(this, options);
+        if (this.id === 'result') {
+          const heading = this.querySelector('h2');
+          const header = document.querySelector('.shell > header');
+          if (!heading || !header) throw new Error('The completed Lookup must contain its result heading and console header.');
+          const rect = heading.getBoundingClientRect();
+          state.immediateHeading = { top: rect.top, bottom: rect.bottom, headerBottom: header.getBoundingClientRect().bottom, viewportHeight: window.innerHeight };
+        }
       };
     });
     let release: (() => Promise<void>) | null = null;
@@ -184,9 +197,13 @@ for (const width of [1280, 390]) for (const intent of ['unchanged', 'guide', 'wh
     await expect(run).toBeEnabled();
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() =>
       requestAnimationFrame(() => requestAnimationFrame(() => resolve())))));
-    const revealCount = await page.evaluate(() => (window as unknown as { __lookupRevealProbe: { resultReveals: number } }).__lookupRevealProbe.resultReveals);
+    const reveal = await page.evaluate(() => (window as unknown as { __lookupRevealProbe: LookupRevealProbe }).__lookupRevealProbe);
     if (intent === 'unchanged') {
-      expect(revealCount).toBe(1);
+      expect(reveal.resultReveals).toBe(1);
+      const immediate = reveal.immediateHeading;
+      if (!immediate) throw new Error('The completed Lookup did not record a result reveal.');
+      expect(immediate.top).toBeGreaterThanOrEqual(immediate.headerBottom);
+      expect(immediate.bottom).toBeLessThanOrEqual(immediate.viewportHeight);
       await expect(resultHeading).toBeInViewport();
       await expect.poll(() => resultHeading.evaluate((element) =>
         element.getBoundingClientRect().top - (document.querySelector('.shell > header')?.getBoundingClientRect().bottom ?? 0),
@@ -195,8 +212,11 @@ for (const width of [1280, 390]) for (const intent of ['unchanged', 'guide', 'wh
         await useTheme(page, theme);
         await page.screenshot({ path: testInfo.outputPath(`lookup-reveal-${width}-${theme}.png`) });
       }
+      await openWorkPlan(page);
+      await expect(page.locator('details.work-plan > summary')).toBeFocused();
+      await expect(page.locator('details.work-plan > summary')).toBeInViewport();
     } else {
-      expect(revealCount).toBe(0);
+      expect(reveal.resultReveals).toBe(0);
       if (intent === 'guide') {
         await expect(page.locator('details.work-plan > summary')).toBeFocused();
         await expect(page.locator('details.work-plan > summary')).toBeInViewport();
