@@ -166,6 +166,16 @@ behaviour. Browser adapters perform version admission, transactions,
 quota-aware writes and concurrent-tab conflict handling; pure domain modules
 perform validation, normalisation and merge.
 
+The provider captures bounded records and manifests in one readonly
+transaction. Larger standard plaintext collections are then decoded,
+digest-checked and reconstructed in a one-shot same-origin worker using the
+same collection definitions as the local decoder. Small collections, custom
+codecs and contexts without workers use that decoder locally. Verification
+failure leaves the collection unavailable; it does not produce an empty store
+or bypass integrity checks. Write coordination and commit recovery remain in
+the provider. The verification worker does not access storage or make collection
+requests.
+
 Dashboard and Lookup search use a disposable same-origin browser worker. The
 worker builds the shared investigation projection and search index, matches
 normalised terms directly, and returns a summary or one requested result page.

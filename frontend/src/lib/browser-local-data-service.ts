@@ -11,6 +11,7 @@ import type {
   BrowserLocalCollectionId,
 } from './browser-local-data-definitions.ts';
 import { isDeferredModuleLoadError, loadDeferredModule } from './deferred-module.ts';
+import { decodeBrowserLocalDataSnapshots } from './browser-local-data-worker.ts';
 
 export type BrowserLocalDataServiceState =
   | Readonly<{ state: 'idle' | 'initializing' }>
@@ -26,6 +27,7 @@ export type BrowserLocalDataProviderBoundary = Readonly<{
   read: BrowserLocalDataProvider['read'];
   readMany: BrowserLocalDataProvider['readMany'];
   update: BrowserLocalDataProvider['update'];
+  close?: BrowserLocalDataProvider['close'];
 }>;
 
 export type BrowserLocalDataServiceDependencies = Readonly<{
@@ -52,7 +54,7 @@ export function createBrowserLocalDataService(
     () => import('./browser-local-data-definitions.ts'),
   )
     .then((module) => module.BROWSER_LOCAL_COLLECTIONS));
-  const createProvider = dependencies.createProvider ?? ((oncommit: BrowserLocalDataCommitListener) => new BrowserLocalDataProvider({ oncommit }));
+  const createProvider = dependencies.createProvider ?? ((oncommit: BrowserLocalDataCommitListener) => new BrowserLocalDataProvider({ oncommit, decodeSnapshots: decodeBrowserLocalDataSnapshots }));
   const listeners = new Map<BrowserLocalCollectionId, Set<() => void>>();
   let providerPromise: Promise<BrowserLocalDataProviderBoundary> | null = null;
   let collectionsPromise: Promise<readonly AnyLocalDataCollectionDefinition[]> | null = null;
@@ -105,7 +107,10 @@ export function createBrowserLocalDataService(
       try {
         const definitions = await collections();
         const nextProvider = createProvider(notifyCommitted);
-        const initialization = await nextProvider.initialize(definitions);
+        const initialization = await nextProvider.initialize(definitions).catch(async (cause) => {
+          try { await nextProvider.close?.(); } catch { /* Preserve the original initialisation failure. */ }
+          throw cause;
+        });
         serviceState = Object.freeze({ state: 'ready', initialization });
         return nextProvider;
       } catch (cause) {

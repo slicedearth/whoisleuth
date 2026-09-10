@@ -115,12 +115,14 @@ describe('browser-local data service', () => {
 
   test('records a bounded initialisation failure and creates a fresh provider on explicit retry', async () => {
     let providerCreations = 0;
+    let closed = 0;
     const service = createBrowserLocalDataService({
       loadCollections: async () => [SHORTLIST_COLLECTION],
       createProvider: () => {
         providerCreations += 1;
         if (providerCreations === 1) {
           return readyProvider({
+            close: async () => { closed += 1; throw new Error('Cleanup did not replace the original failure.'); },
             initialize: async () => {
               throw new BrowserLocalDataError(
                 'LOCAL_DATA_UNSUPPORTED',
@@ -134,6 +136,7 @@ describe('browser-local data service', () => {
     });
 
     const failed = await service.initialize();
+    assert.equal(closed, 1);
     assert.equal(failed.state, 'error');
     if (failed.state !== 'error') return;
     assert.equal(failed.code, 'LOCAL_DATA_UNSUPPORTED');
@@ -142,6 +145,7 @@ describe('browser-local data service', () => {
 
     assert.deepEqual(await service.initialize(), { state: 'ready', initialization: READY });
     assert.equal(providerCreations, 2);
+    assert.equal(closed, 1);
   });
 
   test('delegates post-commit reconciliation once and never turns an unknown commit into an automatic retry', async () => {

@@ -8,6 +8,7 @@ import {
   THREAT_INTELLIGENCE_SCHEMA,
 } from '../lib/threat-intelligence-types.mts';
 import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
+import { INVESTIGATION_CAPSULE_VERSION, LOOKUP_INVESTIGATION_BRIEF_VERSION } from '../packages/contracts/investigation-portability.mts';
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
 import { parseRdap } from '../lib/rdap.mts';
 
@@ -247,9 +248,9 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   const capsulePath = await capsuleDownload.path();
   expect(capsulePath).not.toBeNull();
   const capsuleArtifact = JSON.parse(await readFile(capsulePath!, 'utf8'));
-  expect(capsuleArtifact.schemaVersion).toBe(3);
-  expect(capsuleArtifact.investigationBrief.schemaVersion).toBe(2);
-  expect(capsuleArtifact.sourceContracts.find((item: { id: string }) => item.id === 'investigation-brief')?.version).toBe(2);
+  expect(capsuleArtifact.schemaVersion).toBe(INVESTIGATION_CAPSULE_VERSION);
+  expect(capsuleArtifact.investigationBrief.schemaVersion).toBe(LOOKUP_INVESTIGATION_BRIEF_VERSION);
+  expect(capsuleArtifact.sourceContracts.find((item: { id: string }) => item.id === 'investigation-brief')?.version).toBe(LOOKUP_INVESTIGATION_BRIEF_VERSION);
   const capsuleFacts = capsuleArtifact.investigationBrief.decisionFacts;
   expect(capsuleFacts.total).toBe(capsuleFacts.displayed + capsuleFacts.omitted);
   expect(capsuleFacts.facts).toHaveLength(capsuleFacts.displayed);

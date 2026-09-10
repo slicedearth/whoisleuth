@@ -170,7 +170,9 @@ test('case consistency pagination exposes every bounded finding', async ({ page 
     'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases },
   });
 
-  const quality = page.locator('.quality');
+  await page.getByText('Case reports and follow-up tools', { exact: true }).click();
+  const quality = page.getByRole('region', { name: 'Case consistency audit', exact: true });
+  await expect(quality).toBeVisible();
   const pagination = quality.getByRole('navigation', { name: 'Case consistency finding pages' });
   await expect(quality.getByRole('listitem')).toHaveCount(24);
   await expect(quality.getByRole('status').first()).toContainText('Showing 1–24 of 30');

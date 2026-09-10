@@ -380,7 +380,7 @@
     <UnifiedAnalystReviewInbox {cases} {watchlists} {bulkSessions} profiles={brandProfiles} {detectionRules} {websiteSnapshots} reviewState={analystReviewState} ondismiss={dismissEvidenceGap} onreview={recordAnalystReviewDecision} oncount={(count:number)=>reviewInboxCount=count} />
     {#if caseMessage}<p class="case-message" role="status" aria-live="polite">{caseMessage}</p>{/if}
   {:else}
-    <LocalCollectionState state={reviewInboxSourceState} title={reviewInboxSourceState==='loading'?'Loading review inbox':'Review inbox evidence unavailable'} detail={reviewInboxSourceState==='loading'?'Reading retained evidence and review decisions from this browser.':'Cases, watchlists, saved Bulk sessions, Brand Profiles, custom rules, website snapshots, and the analyst lifecycle overlay must all be readable before the combined inbox can distinguish zero review items from missing browser-local state. Fulfilled collections remain available in their own views.'} />
+    <LocalCollectionState state={reviewInboxSourceState} title="Review inbox evidence unavailable" detail="Cases, watchlists, saved Bulk sessions, Brand Profiles, custom rules, website snapshots, and the analyst lifecycle overlay must all be readable before the combined inbox can distinguish zero review items from missing browser-local state. Fulfilled collections remain available in their own views." />
   {/if}
   {#if cases.length || bulkSessions.length || casesSourceState==='unavailable' || bulkSessionsSourceState==='unavailable'}
     <div class="retained-preparation" aria-busy={debtPreparation?.state==='loading'}>

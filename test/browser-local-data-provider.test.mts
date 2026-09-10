@@ -7,6 +7,7 @@ import {
   BrowserLocalDataError,
   BrowserLocalDataProvider,
   MAX_LOCAL_DATA_OPERATION_TIMEOUT_MS,
+  decodeLocalDataSnapshots,
   isExpectedBrowserLocalDataFailure,
   plaintextJsonCodec,
   type AnyLocalDataCollectionDefinition,
@@ -444,10 +445,20 @@ function readyEmptyCollectionsFactory(
 test('multi-collection reads use one captured transaction and reject invalid selections', async () => {
   const definitions = [WRITE_DEFINITION, SECOND_WRITE_DEFINITION];
   const transactions: string[][] = [];
-  const provider = new BrowserLocalDataProvider({ indexedDB: readyEmptyCollectionsFactory(definitions, transactions), storage: NULL_STORAGE });
+  let decodes = 0;
+  const provider = new BrowserLocalDataProvider({
+    indexedDB: readyEmptyCollectionsFactory(definitions, transactions), storage: NULL_STORAGE,
+    decodeSnapshots: async (selected, captured, codec) => {
+      decodes += 1;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      return decodeLocalDataSnapshots(selected, captured, codec);
+    },
+  });
   await provider.initialize(definitions);
   transactions.length = 0;
+  decodes = 0;
   const documents = await provider.readMany(definitions);
+  assert.equal(decodes, 1);
   assert.deepEqual([...documents], definitions.map((definition) => [definition.id, []]));
   assert.deepEqual(transactions, [['records', 'manifests']]);
   (documents.get(WRITE_DEFINITION.id) as string[]).push('caller-only');
@@ -462,6 +473,31 @@ test('multi-collection reads use one captured transaction and reject invalid sel
   const reading = provider.readMany(selection);
   selection.splice(0, selection.length, { ...WRITE_DEFINITION, id: 'unregistered' });
   assert.deepEqual([...await reading], definitions.map((definition) => [definition.id, []]));
+  await provider.close();
+});
+
+test('failed captured-snapshot processing does not run an updater or start a write', async () => {
+  const transactions: string[][] = [];
+  let failed = false;
+  let updaterCalls = 0;
+  const provider = new BrowserLocalDataProvider({
+    indexedDB: readyEmptyCollectionsFactory([WRITE_DEFINITION], transactions), storage: NULL_STORAGE,
+    decodeSnapshots: async (selected, captured, codec) => {
+      if (failed) throw new BrowserLocalDataError('LOCAL_DATA_READ_FAILED', 'Verification worker is unavailable.');
+      return decodeLocalDataSnapshots(selected, captured, codec);
+    },
+  });
+  await provider.initialize([WRITE_DEFINITION]);
+  transactions.length = 0;
+  failed = true;
+  await assert.rejects(provider.update(WRITE_DEFINITION, (document) => {
+    updaterCalls += 1;
+    return { document, result: 'saved' };
+  }), (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'LOCAL_DATA_READ_FAILED');
+  assert.equal(updaterCalls, 0);
+  assert.deepEqual(transactions, [['records', 'manifests']]);
+  failed = false;
+  assert.deepEqual(await provider.read(WRITE_DEFINITION), []);
   await provider.close();
 });
 

@@ -56,7 +56,7 @@ import {
   bulkSessionStorageValue,
   bulkSessionStoreVersion,
   normalizeBulkSessionStore,
-  serializeBulkSessionStore,
+  serializeNormalizedBulkSessions,
 } from './analysis/bulk-session-model.ts';
 import type { BulkSession } from './analysis/bulk-session-model.ts';
 import {
@@ -311,7 +311,7 @@ export const BULK_SESSIONS_COLLECTION: LocalDataCollectionDefinition<BulkSession
   acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'sessions', { schema: BULK_SESSION_SCHEMA }),
   normalize: (raw) => normalizeBulkSessionStore(raw).sessions,
   version: bulkSessionStoreVersion,
-  serialize: serializeBulkSessionStore,
+  serialize: serializeNormalizedBulkSessions,
   split: (sessions) => recordsFromArray(sessions, (record) => record.id),
   storageRecords: (sessions) => recordsFromArray(sessions.map(bulkSessionStorageValue), (record) => record.id),
   join: (records, schemaVersion) => ({

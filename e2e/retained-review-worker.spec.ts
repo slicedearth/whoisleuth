@@ -45,6 +45,7 @@ async function workerProbe(page: Page) {
     const NativeWorker = window.Worker;
     const startedAt = performance.now();
     const operations: { createdAt: number; kind: string; postedAt: number; postReturnedAt: number; repliedAt: number; terminatedAt: number; usableAt: number; animationFrames: number }[] = [];
+    const verificationOperations: typeof operations = [];
     const tasks: { start: number; duration: number }[] = [];
     let overflow = false;
     const collect = (entries: readonly PerformanceEntry[]) => { for (const entry of entries) {
@@ -67,16 +68,17 @@ async function workerProbe(page: Page) {
     window.Worker = class extends NativeWorker {
       constructor(url: string | URL, options?: WorkerOptions) {
         super(url, options);
-        if (options?.name !== 'retained-evidence-review') return;
+        const verification = options?.name === 'browser-local-data-verification';
+        if (!verification && options?.name !== 'retained-evidence-review') return;
         const operation = { createdAt: performance.now(), kind: '', postedAt: 0, postReturnedAt: 0, repliedAt: 0, terminatedAt: 0, usableAt: 0, animationFrames: 0 };
-        operations.push(operation);
+        (verification ? verificationOperations : operations).push(operation);
         let frame = 0;
         const next = () => { operation.animationFrames += 1; frame = requestAnimationFrame(next); };
         frame = requestAnimationFrame(next);
         this.addEventListener('message', () => { operation.repliedAt = performance.now(); cancelAnimationFrame(frame); });
         const post = this.postMessage.bind(this);
         this.postMessage = (message: unknown, options?: StructuredSerializeOptions | Transferable[]) => {
-          operation.kind = message && typeof message === 'object' && 'kind' in message ? String(message.kind) : '';
+          operation.kind = verification ? 'verification' : message && typeof message === 'object' && 'kind' in message ? String(message.kind) : '';
           operation.postedAt = performance.now();
           if (Array.isArray(options)) post(message, options); else post(message, options);
           operation.postReturnedAt = performance.now();
@@ -86,10 +88,10 @@ async function workerProbe(page: Page) {
       }
     };
     return {
-      read: () => ({ operations }),
+      read: () => ({ operations, verificationOperations }),
       finish: () => {
         recordUsable(); rendering.disconnect(); collect(observer?.takeRecords() ?? []); observer?.disconnect(); window.Worker = NativeWorker;
-        return { startedAt, finishedAt: performance.now(), operations, mainThreadLongTasks: supported ? tasks : null, overflow };
+        return { startedAt, finishedAt: performance.now(), operations, verificationOperations, mainThreadLongTasks: supported ? tasks : null, overflow };
       },
     };
   });
@@ -226,6 +228,28 @@ test('a committed Case edit replaces retained review inputs without losing its d
   } finally { await probe.evaluate((value) => value.finish()); await probe.dispose(); }
 });
 
+test('small retained collections preserve usable review and note workflows with observed worker overhead', async ({ page }, testInfo) => {
+  await seed(page, {}, false);
+  const probe = await workerProbe(page);
+  try {
+    await page.getByRole('tab', { name: /^Timeline/u }).click();
+    await expect(page.getByRole('region', { name: 'Investigation timeline', exact: true })).toContainText('2 retained events');
+    await page.getByRole('tab', { name: /^Cases/u }).click();
+    await page.locator('.case-head', { hasText: 'retained-01.example' }).click();
+    await page.getByRole('textbox', { name: 'Add note', exact: true }).fill('Small workspace note.');
+    const noteStartedAt = await page.evaluate(() => performance.now());
+    await page.getByRole('button', { name: 'Add note', exact: true }).click();
+    await expect(page.locator('.notes')).toContainText('Small workspace note.');
+    await expect(page.getByRole('textbox', { name: 'Add note', exact: true })).toHaveValue('');
+    const noteVisibleAt = await page.evaluate(() => performance.now());
+    const measurement = await probe.evaluate((value) => value.finish());
+    expect(measurement.verificationOperations).toHaveLength(0);
+    await testInfo.attach('retained-small-workspace-measurement', { body: JSON.stringify({
+      ...measurement, noteStartedAt, noteVisibleAt, cases: 2, timingAcceptance: 'informational', peakMemoryAvailable: false,
+    }), contentType: 'application/json' });
+  } finally { await probe.evaluate((value) => value.finish()).catch(() => undefined); await probe.dispose(); }
+});
+
 for (const kind of ['timeline', 'debt'] as const) test(`complete ${kind} preparation runs outside the UI thread at admitted capacity`, async ({ page }, testInfo) => {
   const cases = caseStore(75, 40);
   const bulk = normalizeBulkSessionStore(richBulkSessionStore(1_100));
@@ -255,6 +279,10 @@ for (const kind of ['timeline', 'debt'] as const) test(`complete ${kind} prepara
     expect(measurements.operations.every((operation) => operation.kind === kind
       && operation.repliedAt > operation.postReturnedAt && operation.postReturnedAt >= operation.postedAt
       && operation.terminatedAt >= operation.repliedAt && operation.usableAt >= operation.repliedAt)).toBe(true);
+    expect(measurements.verificationOperations.length).toBeGreaterThan(0);
+    expect(measurements.verificationOperations.every((operation) => operation.kind === 'verification'
+      && operation.repliedAt >= operation.postReturnedAt && operation.postReturnedAt >= operation.postedAt
+      && operation.terminatedAt >= operation.repliedAt)).toBe(true);
     expect(measurements.mainThreadLongTasks?.every((task) => task.start + task.duration >= measurements.startedAt) ?? true).toBe(true);
     expect(measurements.overflow).toBe(false);
     await testInfo.attach(`retained-${kind}-capacity-measurement`, { body: JSON.stringify({ ...measurements,

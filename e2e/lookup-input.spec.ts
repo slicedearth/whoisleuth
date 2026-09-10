@@ -2,8 +2,9 @@ import { expect, test } from './fixtures';
 import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, holdBrowserLocalReads, lookupDomainIdentity, readBrowserLocalCollection } from './helpers';
 import { TEST_SITE_PASSWORD } from './constants.ts';
 import { readFile } from 'node:fs/promises';
-import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
 import { buildLookupEvidence } from '../frontend/src/lib/analysis/evidence-export';
+
+const ACTIVE_PROFILE_KEY = 'whois-rdap-active-brand-profile-v1';
 
 // Invalid-input cases use dotless values; collectable targets use local
 // response fixtures. The independent server guard rejects missing fixtures

@@ -265,7 +265,7 @@ test('announces loading without presenting a false zero', async ({ page }) => {
   const region = page.getByRole('region', { name: 'Evidence gaps' });
   const loading = page.locator('.local-collection-state');
   await expect(loading).toHaveAttribute('aria-busy', 'true');
-  await expect(loading.getByRole('heading', { name: 'Loading review inbox', exact: true })).toBeVisible();
+  await expect(loading.getByRole('heading', { name: 'Loading saved work', exact: true })).toBeVisible();
   await expect(page.getByRole('tab', { name: /^Inbox/u }).locator('span')).toHaveAccessibleName('count loading');
   await expect(region).toHaveCount(0);
   await expect(page.getByText('No retained review items', { exact: true })).toHaveCount(0);

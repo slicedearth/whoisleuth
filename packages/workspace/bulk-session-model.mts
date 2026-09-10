@@ -657,9 +657,13 @@ export function bulkSessionStorageValue(session: BulkSession) {
   };
 }
 
+/** Current wire bytes for sessions already admitted by the collection owner. */
+export function serializeNormalizedBulkSessions(sessions: readonly BulkSession[]): string {
+  return JSON.stringify({ schema: BULK_SESSION_SCHEMA, version: BULK_SESSION_SCHEMA_VERSION, sessions: sessions.map(bulkSessionStorageValue) });
+}
+
 export function serializeBulkSessionStore(raw: unknown): string {
-  const store = normalizeBulkSessionStore(raw);
-  return JSON.stringify({ ...store, sessions: store.sessions.map(bulkSessionStorageValue) });
+  return serializeNormalizedBulkSessions(normalizeBulkSessionStore(raw).sessions);
 }
 
 function byteLength(value: string): number {

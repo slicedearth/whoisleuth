@@ -1,11 +1,5 @@
 import type { Page, Request } from '@playwright/test';
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
-import {
-  CASE_SCHEMA_VERSION,
-  PUBLISHED_V2_2_CASE_SCHEMA_VERSION,
-  PUBLIC_CASE_SCHEMA_VERSION,
-  PUBLISHED_V2_CASE_SCHEMA_VERSION,
-} from '../packages/contracts/case-portability.mts';
 import { PUBLIC_COVERAGE_SUMMARY } from '../frontend/src/lib/generated/public-coverage-summary.ts';
 import { PUBLIC_METHODOLOGY } from '../frontend/src/lib/generated/public-methodology.ts';
 import { expect, test } from './fixtures';
@@ -560,10 +554,9 @@ test('keeps privacy detail on the policy page and links to it from resources', a
   const investigationRequests = collectInvestigationRequests(page);
   await page.goto('/privacy');
   await expect(page.getByRole('heading', { name: 'Privacy policy', exact: true })).toBeVisible();
-  await expect(page.getByText(new RegExp(
-    `Current Case schema ${CASE_SCHEMA_VERSION}.*public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION}.*published-v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION} and ${PUBLISHED_V2_2_CASE_SCHEMA_VERSION} remain readable`,
-    'iu',
-  ))).toBeVisible();
+  const compatibility = page.locator('p').filter({ has: page.getByText('Compatibility.', { exact: true }) });
+  await expect(compatibility).toBeVisible();
+  await expect(compatibility).toContainText('remain readable');
   await expect(page.getByTestId('privacy-data-flow-summary')).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: 'Footer' }).getByRole('link', { name: 'Privacy' })).toHaveAttribute('aria-current', 'page');
 

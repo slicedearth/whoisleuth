@@ -14,6 +14,7 @@ import {
   normalizeBulkSessionResult,
   normalizeBulkSessionStore,
   serializeBulkSessionStore,
+  serializeNormalizedBulkSessions,
   summarizeBulkProfileContexts,
   type BulkProfileContextProvenance,
   unavailableBulkProfileContext,
@@ -35,6 +36,22 @@ const ACTIVE_PROFILE_CONTEXT = Object.freeze({
   activeProfileId: 'profile-one',
   profileUpdatedAt: FIRST,
   limitation: '',
+});
+
+test('admitted Bulk storage formatting preserves exact compact bytes while unknown-input serialization retains admission', () => {
+  const store = normalizeBulkSessionStore({ schema: BULK_SESSION_SCHEMA, version: BULK_SESSION_SCHEMA_VERSION, sessions: [session('stored-session')] });
+  assert.equal(store.sessions.length, 1);
+  const expectedSessions = store.sessions.map((saved) => ({ ...saved, results: saved.results.map(({ profileContext: _profileContext, ...row }) => row) }));
+  const expected = JSON.stringify({ schema: BULK_SESSION_SCHEMA, version: BULK_SESSION_SCHEMA_VERSION, sessions: expectedSessions });
+  assert.equal(serializeNormalizedBulkSessions(store.sessions), expected);
+  assert.equal(serializeBulkSessionStore(store), expected);
+  assert.deepEqual(JSON.parse(expected).sessions[0].domains, ['priority.invalid']);
+  assert.equal(Object.hasOwn(JSON.parse(expected).sessions[0].results[0], 'profileContext'), false);
+  let accessed = false;
+  const hostile = Object.defineProperty({}, 'sessions', { enumerable: true, get: () => { accessed = true; return store.sessions; } });
+  assert.throws(() => serializeBulkSessionStore(hostile));
+  assert.equal(accessed, false);
+  assert.throws(() => serializeBulkSessionStore({ ...store, version: BULK_SESSION_SCHEMA_VERSION + 1 }), /unsupported/u);
 });
 
 function result(domain = 'priority.invalid', overrides: Record<string, unknown> = {}) {
