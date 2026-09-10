@@ -178,6 +178,13 @@ cancellation; the shared interchange module owns input bounds and coverage.
 Parsed reports remain transient, with paginated browser rendering and explicit
 local export. The worker has no storage or network operations.
 
+Monitor prepares evidence gaps and timelines in one-shot same-origin workers
+using the existing source-review models. Immutable collection snapshots are
+shared between the two views; each controller retains only its current input
+and result. A collection change invalidates that result, inactive views do not
+start preparation, and refresh re-evaluates the retained evidence locally.
+Worker deadlines, cancellation and teardown share the browser operation adapter.
+
 Workspace exports are deliberate local files with versioned manifests and
 section digests. Import validates the full envelope before a non-destructive
 merge. Each format's compatibility declaration owns its current writer and

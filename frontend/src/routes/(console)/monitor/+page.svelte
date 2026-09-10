@@ -47,7 +47,7 @@
   import { loadBulkSessions } from '$lib/bulk-sessions';
   import { loadAnalystReviewState, saveAnalystReviewDecision } from '$lib/analyst-review-state';
   import type { BulkSession } from '$lib/analysis/bulk-session-model.ts';
-  import { buildEvidenceDebtReview } from '$lib/analysis/evidence-debt-review.ts';
+  import { createRetainedReviewController, type RetainedReviewPreparation } from '$lib/controllers/retained-review-controller.ts';
   import { analystReviewRequiredSourceState } from '$lib/analysis/analyst-review-source-state.ts';
   import {
     analystReviewDismissalReasonLabel,
@@ -59,7 +59,6 @@
     type AnalystReviewDisposition,
     type AnalystReviewStateStore,
   } from '$lib/analysis/analyst-review-state.ts';
-  import { buildRetainedEvidenceTimeline } from '$lib/analysis/retained-evidence-timeline.ts';
   import {
     buildWebsiteClusterAssertion,
     buildWebsiteProfileClusters,
@@ -138,11 +137,13 @@
   let certificateReviewCount=$state<number|null>(null);
   let reviewInboxCount=$state<number|null>(null);
   const websiteProfileClusters=$derived(buildWebsiteProfileClusters(websiteSnapshots));
-  const evidenceDebtReview=$derived(buildEvidenceDebtReview({
-    cases,
-    bulkSessions,
-    sourceStates:{cases:casesSourceState,bulk:bulkSessionsSourceState},
-  }));
+  const reviewCases=$derived($state.snapshot(cases));
+  const reviewBulkSessions=$derived($state.snapshot(bulkSessions));
+  const debtInput=$derived({cases:reviewCases,bulkSessions:reviewBulkSessions,sourceStates:{cases:casesSourceState,bulk:bulkSessionsSourceState}});
+  let debtPreparation=$state.raw<RetainedReviewPreparation<'debt'>|null>(null);
+  const debtController=createRetainedReviewController('debt',(next)=>debtPreparation=next);
+  const evidenceDebtReview=$derived(debtPreparation?.result??null);
+  const debtRefreshDisabled=$derived(casesSourceState==='loading'||bulkSessionsSourceState==='loading'||debtPreparation?.state==='loading');
   const decisionQuality=$derived(buildCaseDecisionQualityReport(cases));
 
   let campaignCount=$state(0);
@@ -151,7 +152,27 @@
   let investigationProjection=$state<unknown>(null);
   let retainedRelationships=$state<RelationshipObservation[]>([]);
   let relationshipsSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
-  const retainedTimeline=$derived(buildRetainedEvidenceTimeline({cases,bulkSessions,watchlists,relationships:retainedRelationships,websiteSnapshots}));
+  const reviewWatchlists=$derived($state.snapshot(watchlists));
+  const reviewRelationships=$derived($state.snapshot(retainedRelationships));
+  const reviewWebsiteSnapshots=$derived($state.snapshot(websiteSnapshots));
+  const timelineInput=$derived({cases:reviewCases,bulkSessions:reviewBulkSessions,watchlists:reviewWatchlists,relationships:reviewRelationships,websiteSnapshots:reviewWebsiteSnapshots});
+  const timelineSourceStates=$derived([casesSourceState,watchlistsSourceState,bulkSessionsSourceState,relationshipsSourceState,websiteSnapshotsSourceState]);
+  const timelineSourceState=$derived(timelineSourceStates.includes('unavailable')?'unavailable':timelineSourceStates.includes('loading')?'loading':'ready');
+  let timelinePreparation=$state.raw<RetainedReviewPreparation<'timeline'>|null>(null);
+  const timelineController=createRetainedReviewController('timeline',(next)=>timelinePreparation=next);
+  const retainedTimeline=$derived(timelinePreparation?.result??null);
+  const timelineRefreshDisabled=$derived(timelinePreparation?.state==='loading');
+  $effect(()=>{
+    const input=casesSourceState==='loading'||bulkSessionsSourceState==='loading'?null:debtInput;
+    const enabled=view==='inbox';
+    untrack(()=>debtController.select(input,enabled));
+  });
+  $effect(()=>{
+    const input=timelineSourceState==='ready'?timelineInput:null;
+    const enabled=view==='timeline';
+    untrack(()=>timelineController.select(input,enabled));
+  });
+  onDestroy(()=>{debtController.dispose();timelineController.dispose();});
   let customRuleCount=$state(0);
   let detectionRules=$state<DetectionRule[]>([]);
   let detectionRulesSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
@@ -342,7 +363,7 @@
 
 <MonitorViewTabs {view} counts={{
   inbox:reviewInboxSourceState==='ready'?reviewInboxCount:null,
-  timeline:casesSourceState==='ready'&&watchlistsSourceState==='ready'&&bulkSessionsSourceState==='ready'&&relationshipsSourceState==='ready'&&websiteSnapshotsSourceState==='ready'?retainedTimeline.counts.all:null,
+  timeline:timelineSourceState==='ready'&&timelinePreparation?.state==='ready'?retainedTimeline?.counts.all??null:null,
   cases:casesSourceState==='ready'?cases.length:null,
   campaigns:campaignsSourceState==='ready'?campaignCount:null,
   relationships:casesSourceState==='ready'&&campaignsSourceState==='ready'&&relationshipsSourceState==='ready'&&websiteSnapshotsSourceState==='ready'?relationshipCount:null,
@@ -351,7 +372,7 @@
   certificates:certificateReviewCount,
 }} countStates={{
   inbox:reviewInboxSourceState==='ready'?(reviewInboxCount===null?'loading':'ready'):reviewInboxSourceState,
-  timeline:[casesSourceState,watchlistsSourceState,bulkSessionsSourceState,relationshipsSourceState,websiteSnapshotsSourceState].includes('unavailable')?'unavailable':[casesSourceState,watchlistsSourceState,bulkSessionsSourceState,relationshipsSourceState,websiteSnapshotsSourceState].includes('loading')?'loading':'ready',
+  timeline:timelineSourceState!=='ready'?timelineSourceState:timelinePreparation?.state==='unavailable'?'unavailable':timelinePreparation?.state==='ready'?'ready':'loading',
   cases:casesSourceState,
   campaigns:campaignsSourceState,
   relationships:[casesSourceState,campaignsSourceState,relationshipsSourceState,websiteSnapshotsSourceState].includes('unavailable')?'unavailable':[casesSourceState,campaignsSourceState,relationshipsSourceState,websiteSnapshotsSourceState].includes('loading')?'loading':'ready',
@@ -369,8 +390,14 @@
   {:else}
     <LocalCollectionState state={reviewInboxSourceState} title={reviewInboxSourceState==='loading'?'Loading review inbox':'Review inbox evidence unavailable'} detail={reviewInboxSourceState==='loading'?'Reading retained evidence and review decisions from this browser.':'Cases, watchlists, saved Bulk sessions, Brand Profiles, custom rules, website snapshots, and the analyst lifecycle overlay must all be readable before the combined inbox can distinguish zero review items from missing browser-local state. Fulfilled collections remain available in their own views.'} />
   {/if}
-  {#if cases.length || bulkSessions.length || evidenceDebtReview.sourceStates.cases==='unavailable' || evidenceDebtReview.sourceStates.bulk==='unavailable'}
-    <EvidenceDebtMatrix review={evidenceDebtReview} oncase={openEvidenceDebtCase} />
+  {#if cases.length || bulkSessions.length || casesSourceState==='unavailable' || bulkSessionsSourceState==='unavailable'}
+    <div class="retained-preparation" aria-busy={debtPreparation?.state==='loading'}>
+      <div class="review-controls">
+        <p role="status">{#if debtPreparation?.state==='unavailable'}{debtPreparation.error}{#if evidenceDebtReview?.evaluatedAt} Showing the review from {date(evidenceDebtReview.evaluatedAt)}.{/if}{:else if debtPreparation?.state!=='ready'}Preparing evidence gaps locally…{#if evidenceDebtReview} The previous review remains visible.{/if}{:else if evidenceDebtReview?.evaluatedAt}Reviewed {date(evidenceDebtReview.evaluatedAt)}{/if}</p>
+        <button type="button" class="btn" aria-disabled={debtRefreshDisabled} onclick={()=>{if(!debtRefreshDisabled)debtController.prepare(debtInput,true);}}>{debtPreparation?.state==='unavailable'?'Retry evidence gaps':'Refresh evidence gaps'}</button>
+      </div>
+      {#if evidenceDebtReview}<EvidenceDebtMatrix review={evidenceDebtReview} oncase={openEvidenceDebtCase} />{/if}
+    </div>
   {/if}
   {#if casesSourceState==='ready' && cases.length}
     <details class="monitor-reports">
@@ -396,8 +423,14 @@
 
 {#if view==='timeline'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-timeline">
-  {#if casesSourceState==='ready'&&watchlistsSourceState==='ready'&&bulkSessionsSourceState==='ready'&&relationshipsSourceState==='ready'&&websiteSnapshotsSourceState==='ready'}
-    <DeferredSurface load={()=>import('$lib/components/RetainedEvidenceTimeline.svelte')} loadingLabel="Loading retained evidence timeline…" unavailableLabel="The retained evidence timeline could not be loaded." props={{timeline:retainedTimeline}} placeholder="workspace" />
+  {#if timelineSourceState==='ready'}
+    <div class="retained-preparation" aria-busy={timelinePreparation?.state==='loading'}>
+      <div class="review-controls">
+        <p role="status">{#if timelinePreparation?.state==='unavailable'}{timelinePreparation.error}{#if retainedTimeline?.evaluatedAt} Showing the review from {date(retainedTimeline.evaluatedAt)}.{/if}{:else if timelinePreparation?.state!=='ready'}Preparing the timeline locally…{#if retainedTimeline} The previous review remains visible.{/if}{:else if retainedTimeline?.evaluatedAt}Reviewed {date(retainedTimeline.evaluatedAt)}{/if}</p>
+        <button type="button" class="btn" aria-disabled={timelineRefreshDisabled} onclick={()=>{if(!timelineRefreshDisabled)timelineController.prepare(timelineInput,true);}}>{timelinePreparation?.state==='unavailable'?'Retry timeline':'Refresh timeline'}</button>
+      </div>
+      {#if retainedTimeline}<DeferredSurface load={()=>import('$lib/components/RetainedEvidenceTimeline.svelte')} loadingLabel="Loading retained evidence timeline…" unavailableLabel="The retained evidence timeline could not be loaded." props={{timeline:retainedTimeline}} placeholder="workspace" />{/if}
+    </div>
     <DeferredSurface load={()=>import('$lib/components/RetainedChangeReview.svelte')} loadingLabel="Loading retained change review…" unavailableLabel="The retained change review could not be loaded." props={{cases,websiteSnapshots,watchlists,bulkSessions}} placeholder="workspace" />
   {:else}
     <LocalCollectionState state={casesSourceState==='loading'||watchlistsSourceState==='loading'||bulkSessionsSourceState==='loading'||relationshipsSourceState==='loading'||websiteSnapshotsSourceState==='loading'?'loading':'unavailable'} title="Retained timeline unavailable" detail="The combined timeline requires readable cases, watchlists, saved Bulk sessions, relationship observations, and website snapshots. No empty history is inferred while any required collection is unavailable." />
@@ -470,6 +503,10 @@
 {/if}
 
 <style>
+  .review-controls{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:12px 0}
+  .review-controls p{flex:1 1 220px;min-width:0;margin:0;color:var(--muted);font-size:var(--text-xs);overflow-wrap:anywhere}
+  .review-controls .btn{max-width:100%}
+  .review-controls .btn[aria-disabled='true']{cursor:not-allowed;opacity:.45}
   .monitor-reports{margin-top:20px;border-top:1px solid var(--border)}
   .monitor-reports>summary{padding:14px 0;cursor:pointer;font:650 var(--text-sm) var(--mono)}
   :global(#watchlist-activity){margin-bottom:16px}
