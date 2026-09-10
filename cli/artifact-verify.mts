@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
+import type { OfflineInvestigationPackageDetails } from './investigation-package-review.mts';
 
 import { boundedJsonLimitsForBytes, parseBoundedJsonObject } from './bounded-json.mts';
 import {
@@ -75,7 +76,7 @@ import {
 } from '../packages/investigation/investigation-capsule.mts';
 import {
   INVESTIGATION_MANIFEST_SCHEMA,
-  INVESTIGATION_MANIFEST_VERSION,
+  SUPPORTED_INVESTIGATION_MANIFEST_VERSIONS,
 } from './investigation-manifest.mts';
 import { verifyCliCasePack } from './case-pack.mts';
 import {
@@ -85,7 +86,7 @@ import {
 } from '../lib/evidence-export.mts';
 
 export const OFFLINE_ARTIFACT_VERIFICATION_SCHEMA = 'whoisleuth.offline-artifact-verification';
-export const OFFLINE_ARTIFACT_VERIFICATION_VERSION = 3;
+export const OFFLINE_ARTIFACT_VERIFICATION_VERSION = 4;
 export const MAX_OFFLINE_ARTIFACT_BYTES = Math.max(MAX_DOMAIN_CONTROL_MANIFEST_BYTES, MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES);
 export const MAX_OFFLINE_PASSPHRASE_FILE_BYTES = 1024;
 
@@ -99,6 +100,7 @@ export class UnsupportedOfflineArtifactError extends TypeError {
 }
 
 type ArtifactKind =
+  | 'investigation_package'
   | 'workspace_archive'
   | 'encrypted_workspace_archive'
   | 'case_response_packet'
@@ -107,9 +109,9 @@ type ArtifactKind =
   | 'saved_lookup'
   | 'cli_case_pack'
   | 'signed_review_artifact';
-export type OfflineArtifactVerificationState = 'verified' | 'envelope_valid' | 'integrity_valid' | 'structure_valid';
-export type OfflineArtifactVerificationCheck = 'not_applicable' | 'not_checked' | 'verified';
-export type OfflineArtifactIntegrityScope = 'embedded_projections' | 'not_applicable' | 'not_checked' | 'whole_artifact';
+export type OfflineArtifactVerificationState = 'verified' | 'envelope_valid' | 'integrity_valid' | 'structure_valid' | 'partial';
+export type OfflineArtifactVerificationCheck = 'not_applicable' | 'not_checked' | 'verified' | 'failed';
+export type OfflineArtifactIntegrityScope = 'embedded_projections' | 'not_applicable' | 'not_checked' | 'whole_artifact' | 'manifest_and_files';
 export type OfflineArtifactAssuranceRequirement = 'applicable_integrity' | 'structure' | 'whole_integrity';
 export type ManifestArtifactIdentityState = 'canonical_match_only' | 'identity_verified' | 'mismatch';
 export type ManifestArtifactIdentityCheck = 'mismatch' | 'verified';
@@ -162,6 +164,7 @@ export type OfflineArtifactVerificationReport = Readonly<{
     limitations: readonly string[];
   }> | null;
   limitations: readonly string[];
+  package?: OfflineInvestigationPackageDetails;
 }>;
 
 type OfflineArtifactVerificationCore = Omit<OfflineArtifactVerificationReport, 'manifestIdentity'>;
@@ -182,7 +185,7 @@ const SIGNED_ARTIFACT_ROUTES: Readonly<Record<string, readonly ArtifactCanonical
   [BULK_REVIEW_MANIFEST_SCHEMA]: currentCanonicalizationRoutes(SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS),
   [DOMAIN_CONTROL_MANIFEST_SCHEMA]: DOMAIN_CONTROL_MANIFEST_CANONICALIZATION_ROUTES,
   [DOMAIN_CHANGE_PACKET_SCHEMA]: currentCanonicalizationRoutes(SUPPORTED_DOMAIN_CHANGE_PACKET_VERSIONS),
-  [INVESTIGATION_MANIFEST_SCHEMA]: currentCanonicalizationRoutes([INVESTIGATION_MANIFEST_VERSION]),
+  [INVESTIGATION_MANIFEST_SCHEMA]: currentCanonicalizationRoutes(SUPPORTED_INVESTIGATION_MANIFEST_VERSIONS),
 });
 
 function record(value: unknown): UnknownRecord | null {
@@ -260,6 +263,7 @@ export function hasVerifiedArtifactStructure(report: OfflineArtifactVerification
 export function hasVerifiedApplicableIntegrity(report: OfflineArtifactVerificationReport): boolean {
   return report.checks.contentIntegrity === 'verified'
     && (report.checks.contentIntegrityScope === 'whole_artifact'
+      || report.checks.contentIntegrityScope === 'manifest_and_files'
       || report.checks.contentIntegrityScope === 'embedded_projections');
 }
 
@@ -694,7 +698,7 @@ async function verifyManifestIdentity(
       : 'mismatch';
   return Object.freeze({
     state,
-    manifest: Object.freeze({ schema: INVESTIGATION_MANIFEST_SCHEMA, version: INVESTIGATION_MANIFEST_VERSION, entryId }),
+    manifest: Object.freeze({ schema: INVESTIGATION_MANIFEST_SCHEMA, version: manifestReport.artifact.version, entryId }),
     checks,
     expectedByteLength,
     actualByteLength,
@@ -767,6 +771,13 @@ export function formatOfflineArtifactVerification(
     lines.push(`Schema identity: ${report.manifestIdentity.checks.schema}`);
     lines.push(`Version identity: ${report.manifestIdentity.checks.version}`);
     for (const limitation of report.manifestIdentity.limitations) lines.push(`Manifest limitation: ${limitation}`);
+  }
+  if (report.package) {
+    lines.push(`Package bytes: ${report.package.digestSha256}`, 'Storage: unchanged; inspection only',
+      'Audience: private; review selected file contents before sharing',
+      'Signature trust: not checked', 'Trusted timestamp: not checked', 'Factual accuracy: not established');
+    for (const entry of report.package.entries) lines.push(`${entry.id}: ${entry.state} · ${entry.byteLength} bytes · ${entry.mediaType}${entry.issue ? ` · ${entry.issue}` : ''}`);
+    for (const link of report.package.links) lines.push(`Source link ${link.capsuleEntryId}: ${link.state}${link.sourceEntryId ? ` (${link.sourceEntryId})` : ''}`);
   }
   for (const limitation of report.limitations) lines.push(`Limitation: ${limitation}`);
   return `${lines.join('\n')}\n`;

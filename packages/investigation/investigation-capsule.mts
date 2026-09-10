@@ -1,4 +1,5 @@
 import type { CaseRecord } from '../cases/case-model.mts';
+import { LOOKUP_EVIDENCE_SCHEMA } from '../contracts/lookup-evidence.mts';
 import {
   canonicalArtifactJsonV2,
   sha256ArtifactDigestV2,
@@ -228,6 +229,26 @@ type PublicInvestigationCapsule = Omit<InvestigationCapsule, 'schemaVersion' | '
 
 export type SupportedInvestigationCapsule = InvestigationCapsule
   | PublicInvestigationCapsule;
+
+/** Cross-file linkage after the caller has bounded and hashed the source file.
+ * This is neither a source-format validator nor an authenticity decision. */
+export function investigationCapsuleSourceIdentity(
+  target: unknown,
+  reference: unknown,
+  source: Readonly<{ schema: string | null; version: number | null; digest: string | null; query: unknown }>,
+): Readonly<{ schema: boolean; version: boolean; target: boolean; contentDigest: boolean; linked: boolean }> {
+  const object = (value: unknown): Record<string, unknown> | null => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  const expected = object(reference);
+  const capsuleTarget = object(target);
+  const sourceQuery = object(source.query);
+  const validReference = expected?.id === 'lookup-evidence' && expected.embedded === false;
+  const schema = validReference && expected.schema === LOOKUP_EVIDENCE_SCHEMA && expected.schema === source.schema;
+  const version = validReference && Number.isSafeInteger(expected.version) && expected.version === source.version;
+  const targetMatches = typeof capsuleTarget?.value === 'string' && capsuleTarget.value.length > 0
+    && capsuleTarget.value === sourceQuery?.submitted && capsuleTarget.type === sourceQuery.type;
+  const contentDigest = validReference && typeof source.digest === 'string' && /^sha256:[a-f0-9]{64}$/u.test(source.digest) && expected.digest === source.digest;
+  return Object.freeze({ schema, version, target: targetMatches, contentDigest, linked: schema && version && targetMatches && contentDigest });
+}
 
 export async function verifyInvestigationCapsule(capsule: SupportedInvestigationCapsule): Promise<Readonly<{
   valid: boolean;

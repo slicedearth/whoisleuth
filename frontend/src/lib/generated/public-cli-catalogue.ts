@@ -266,19 +266,19 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Build an evidence manifest offline",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth manifest \u003cartefacts...> --workflow \u003cvalue> [--configuration-digest \u003cvalue>] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth manifest \u003cartefacts...> [--package|--json] --workflow \u003cvalue> [--configuration-digest \u003cvalue>] [--quiet] [--no-color]",
       "example": "whoisleuth manifest lookup.json comparison.json --workflow \"domain review\" --json",
-      "boundary": "The command records hashes and bounded schema metadata only. It omits source paths and artefact contents and performs no network collection.",
+      "boundary": "Ordinary output contains metadata only. Package output includes unchanged selected bytes and is private until reviewed for sharing. Filenames ending in .json are parsed as JSON; other files are opaque and never executed. Original paths are omitted. No network request is made.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads 1 to 16 local JSON artefacts capped at 32 MiB in total and retains no source paths."
+        "scope": "Reads 1 to 128 local files, at most 64 MiB each and 64 MiB combined; retains no source paths."
       },
       "inputs": [
         {
           "name": "artefacts",
           "valueKind": "file",
           "minimum": 1,
-          "maximum": 16,
+          "maximum": 128,
           "values": [],
           "inputSource": "argv",
           "requiredWhenOptions": []
@@ -287,6 +287,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "importantOptions": [
         "--workflow",
         "--configuration-digest",
+        "--package",
         "--json",
         "--quiet",
         "--no-color"
@@ -300,8 +301,8 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002einvestigation-manifest"
       ],
       "inputLimits": [
-        "Reads 1 to 16 local JSON artefacts capped at 32 MiB in total and retains no source paths.",
-        "artefacts: 1-16 file values"
+        "Reads 1 to 128 local files, at most 64 MiB each and 64 MiB combined; retains no source paths.",
+        "artefacts: 1-128 file values"
       ],
       "outputLimits": [
         "Output is bounded by the command-owned formatter and document contract.",
@@ -1954,12 +1955,12 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Validate saved evidence offline",
       "group": "assure",
       "common": true,
-      "usage": "whoisleuth verify-artifact [\u003csource>] [--passphrase-file \u003cfile>] [--manifest \u003cfile>] [--manifest-entry \u003cartifact-1|artifact-2|artifact-3|artifact-4|artifact-5|artifact-6|artifact-7|artifact-8|artifact-9|artifact-10|artifact-11|artifact-12|artifact-13|artifact-14|artifact-15|artifact-16>] [--json] [--strict-exit] [--quiet] [--no-color]",
+      "usage": "whoisleuth verify-artifact [\u003csource>] [--passphrase-file \u003cfile>] [--manifest \u003cfile>] [--manifest-entry \u003cartifact-1|artifact-2|artifact-3|artifact-4|artifact-5|artifact-6|artifact-7|artifact-8|artifact-9|artifact-10|artifact-11|artifact-12|artifact-13|artifact-14|artifact-15|artifact-16|artifact-17|artifact-18|artifact-19|artifact-20|artifact-21|artifact-22|artifact-23|artifact-24|artifact-25|artifact-26|artifact-27|artifact-28|artifact-29|artifact-30|artifact-31|artifact-32|artifact-33|artifact-34|artifact-35|artifact-36|artifact-37|artifact-38|artifact-39|artifact-40|artifact-41|artifact-42|artifact-43|artifact-44|artifact-45|artifact-46|artifact-47|artifact-48|artifact-49|artifact-50|artifact-51|artifact-52|artifact-53|artifact-54|artifact-55|artifact-56|artifact-57|artifact-58|artifact-59|artifact-60|artifact-61|artifact-62|artifact-63|artifact-64|artifact-65|artifact-66|artifact-67|artifact-68|artifact-69|artifact-70|artifact-71|artifact-72|artifact-73|artifact-74|artifact-75|artifact-76|artifact-77|artifact-78|artifact-79|artifact-80|artifact-81|artifact-82|artifact-83|artifact-84|artifact-85|artifact-86|artifact-87|artifact-88|artifact-89|artifact-90|artifact-91|artifact-92|artifact-93|artifact-94|artifact-95|artifact-96|artifact-97|artifact-98|artifact-99|artifact-100|artifact-101|artifact-102|artifact-103|artifact-104|artifact-105|artifact-106|artifact-107|artifact-108|artifact-109|artifact-110|artifact-111|artifact-112|artifact-113|artifact-114|artifact-115|artifact-116|artifact-117|artifact-118|artifact-119|artifact-120|artifact-121|artifact-122|artifact-123|artifact-124|artifact-125|artifact-126|artifact-127|artifact-128>] [--package] [--json] [--strict-exit] [--quiet] [--no-color]",
       "example": "whoisleuth verify-artifact report.json --manifest manifest.json --manifest-entry artifact-2 --json --strict-exit",
-      "boundary": "Verification is offline and redacted. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 when only an envelope or legacy projection integrity was verified.",
+      "boundary": "Verification is offline and redacted. --package requires a selected file and reports each entry separately without importing it. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 for incomplete verification, including unsupported package entries or unlinked capsule sources.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one selected bounded artefact and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity."
+        "scope": "Reads one selected bounded artefact or evidence package and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity."
       },
       "inputs": [
         {
@@ -1969,13 +1970,16 @@ export const PUBLIC_CLI_CATALOGUE = {
           "maximum": 1,
           "values": [],
           "inputSource": "argv_or_stdin",
-          "requiredWhenOptions": []
+          "requiredWhenOptions": [
+            "--package"
+          ]
         }
       ],
       "importantOptions": [
         "--passphrase-file",
         "--manifest",
         "--manifest-entry",
+        "--package",
         "--json",
         "--strict-exit",
         "--quiet",
@@ -1990,7 +1994,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002eoffline-artifact-verification"
       ],
       "inputLimits": [
-        "Reads one selected bounded artefact and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.",
+        "Reads one selected bounded artefact or evidence package and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.",
         "source: 0-1 file value"
       ],
       "outputLimits": [

@@ -11,6 +11,7 @@ import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliLookupDocument } from '../cli/saved-lookup.mts';
 import { buildCliEvidenceExport } from '../cli/export-evidence.mts';
+import { OFFLINE_ARTIFACT_VERIFICATION_VERSION } from '../cli/artifact-verify.mts';
 import * as evidence from '../lib/evidence-export.mts';
 
 const NOW = '2026-08-05T05:00:00.000Z';
@@ -23,7 +24,7 @@ function commandOutput(recipe: Parameters<typeof buildInvestigationPlan>[0], sub
   }, { diagnostics: { rdap: { status: 'unsupported' }, whois: { status: 'skipped' } }, availability: {} }, NOW, 'deep');
   if (command === 'lookup') return JSON.stringify(lookup);
   if (command === 'export') return JSON.stringify(buildCliEvidenceExport(JSON.stringify(lookup), evidence, NOW));
-  return JSON.stringify({ schema: step.produces, version: command === 'discover' ? 2 : command === 'verify-artifact' ? 3 : 1 });
+  return JSON.stringify({ schema: step.produces, version: command === 'discover' ? 2 : command === 'verify-artifact' ? OFFLINE_ARTIFACT_VERIFICATION_VERSION : 1 });
 }
 
 describe('fixed investigation execution', () => {

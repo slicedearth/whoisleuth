@@ -11,6 +11,8 @@ import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-po
 import { INVESTIGATION_CAPSULE_VERSION, LOOKUP_INVESTIGATION_BRIEF_VERSION } from '../packages/contracts/investigation-portability.mts';
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
 import { parseRdap } from '../lib/rdap.mts';
+import { inspectInvestigationPackage } from '../packages/investigation/investigation-package.mts';
+import { verifyOfflineInvestigationPackage } from '../cli/investigation-package-review.mts';
 
 const packageVersion = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;
 
@@ -256,6 +258,17 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   expect(capsuleFacts.facts).toHaveLength(capsuleFacts.displayed);
   expect(capsuleFacts.total).toBeGreaterThan(0);
   expect(capsuleArtifact.investigationBrief).not.toHaveProperty('verifiedFacts');
+  const packageDownloadPromise = page.waitForEvent('download');
+  await capsule.getByRole('button', { name: 'Download evidence package', exact: true }).click();
+  const packageDownload = await packageDownloadPromise;
+  const packageBytes = Buffer.concat(await (await packageDownload.createReadStream()).toArray());
+  const packageReview = await inspectInvestigationPackage(packageBytes);
+  expect(packageReview.identityVerified).toBe(true);
+  expect(packageReview.links).toEqual([{ capsuleEntryId: 'artifact-1', sourceEntryId: 'artifact-2', state: 'linked' }]);
+  const sourceFile = JSON.parse(new TextDecoder().decode(packageReview.contents.get('artifact-2')));
+  expect(sourceFile.schemaVersion).toBe(LOOKUP_EVIDENCE_SCHEMA_VERSION);
+  expect(sourceFile.query.submitted).toBe(capsuleArtifact.target.value);
+  expect((await verifyOfflineInvestigationPackage(packageBytes)).state).toBe('verified');
   const comparison = page.locator('.comparison');
   await expect(comparison.getByText(/0 source-only · 0 redacted · 4 unavailable\/incomplete/)).toBeVisible();
   await comparison.locator('summary').click();

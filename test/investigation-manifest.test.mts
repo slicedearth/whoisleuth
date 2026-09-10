@@ -4,6 +4,7 @@ import { describe, test } from 'node:test';
 import { verifyOfflineArtifact } from '../cli/artifact-verify.mts';
 import {
   MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES,
+  MAX_INVESTIGATION_MANIFEST_ARTIFACTS,
   INVESTIGATION_MANIFEST_SCHEMA,
   buildInvestigationManifest,
 } from '../cli/investigation-manifest.mts';
@@ -52,7 +53,7 @@ describe('investigation manifest', () => {
     }, NOW, '1.40.0'), /configurationDigestSha256/iu);
     await assert.rejects(() => buildInvestigationManifest({
       workflow: 'review', configurationDigestSha256: null, artifacts: [],
-    }, NOW, '1.40.0'), /between 1 and 16/iu);
+    }, NOW, '1.40.0'), new RegExp(`between 1 and ${MAX_INVESTIGATION_MANIFEST_ARTIFACTS}`, 'u'));
   });
 
   test('uses the shared semantic-version boundary', async () => {

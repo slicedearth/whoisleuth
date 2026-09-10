@@ -40,7 +40,13 @@ function canonicalArtifactJsonV2(value: unknown): string {
 
 async function sha256ArtifactDigestV2(value: unknown): Promise<string> {
   const bytes = new TextEncoder().encode(canonicalArtifactJsonV2(value));
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  return sha256ArtifactBytes(bytes);
+}
+
+async function sha256ArtifactBytes(bytes: Uint8Array): Promise<string> {
+  const buffer = bytes.buffer;
+  if (!(buffer instanceof ArrayBuffer)) throw new TypeError('Artefact digests require non-shared bytes.');
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new Uint8Array(buffer, bytes.byteOffset, bytes.byteLength));
   return `sha256:${[...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('')}`;
@@ -94,5 +100,6 @@ export {
   sha256ArtifactDigest,
   sha256ArtifactDigestFor,
   sha256ArtifactDigestV2,
+  sha256ArtifactBytes,
 };
 export type { ArtifactCanonicalization, ArtifactCanonicalizationRoute };

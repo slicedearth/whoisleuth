@@ -31,6 +31,7 @@ const rootManifest = {
   dependencies: {
     '@peculiar/x509': '^2.0.0',
     express: '^5.2.1',
+    fflate: '0.8.3',
     maxmind: '^5.0.7',
     parse5: '^8.0.1',
     'reflect-metadata': '0.2.2',
@@ -63,6 +64,7 @@ const lockfile = {
       dependencies: rootManifest.dependencies,
     },
     'node_modules/@peculiar/x509': { version: '2.0.0' },
+    'node_modules/fflate': { version: '0.8.3' },
     'node_modules/maxmind': { version: '5.0.7' },
     'node_modules/parse5': { version: '8.0.1' },
     'node_modules/reflect-metadata': { version: '0.2.2' },
@@ -290,6 +292,7 @@ describe('scoped CLI package contract', () => {
     assert.deepEqual(manifest.contentPolicy, { class: 'dual-use' });
     assert.deepEqual(manifest.dependencies, {
       '@peculiar/x509': '2.0.0',
+      fflate: '0.8.3',
       maxmind: '5.0.7',
       parse5: '8.0.1',
       'reflect-metadata': '0.2.2',

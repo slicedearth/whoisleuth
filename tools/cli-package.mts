@@ -193,6 +193,7 @@ const NODE_MODULE_COMPILER_INPUT_SUFFIXES = Object.freeze([
 const MAX_NODE_MODULE_COMPILER_INPUT_PATH_LENGTH = 4_096;
 export const CLI_RUNTIME_DEPENDENCIES = Object.freeze([
   '@peculiar/x509',
+  'fflate',
   'maxmind',
   'parse5',
   'reflect-metadata',
@@ -1187,6 +1188,29 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     }
 
     const commandHelpChecks: string[] = [];
+    const packageSource = path.join(temporaryRoot, 'package-source.json');
+    const packageOpaque = path.join(temporaryRoot, 'package-source.bin');
+    const packageOutput = path.join(temporaryRoot, 'evidence.zip');
+    await writeFile(packageSource, await readBoundedRegularFileWithin(repositoryRoot, 'test/fixtures/cli-lookup-v1.json', {
+      maximumBytes: 1024 * 1024, minimumBytes: 1, label: 'Public saved Lookup fixture',
+    }), { flag: 'wx', mode: 0o600 });
+    await writeFile(packageOpaque, new Uint8Array([0, 255, 128, 1]), { flag: 'wx', mode: 0o600 });
+    const packageCreation = await runInstalledCheck(executable, ['manifest', packageSource, packageOpaque,
+      '--workflow', 'Evidence review', '--package', '--output', packageOutput], 'evidence package creation');
+    if (packageCreation !== '') throw new TypeError('Binary package creation emitted terminal content.');
+    const packageReview = record(JSON.parse(await runInstalledCheck(executable,
+      ['verify-artifact', packageOutput, '--package', '--json', '--strict-exit'], 'evidence package verification')), 'Installed evidence package review');
+    const packageDetails = record(packageReview.package, 'Installed evidence package details');
+    const packageChecks = record(packageReview.checks, 'Installed evidence package checks');
+    if (packageReview.state !== 'verified' || packageDetails.storageEffect !== 'none'
+      || packageDetails.signatureTrust !== 'not_checked' || packageDetails.timestampAssurance !== 'not_checked'
+      || packageChecks.contentIntegrity !== 'verified' || packageChecks.contentIntegrityScope !== 'manifest_and_files'
+      || !Array.isArray(packageDetails.entries) || packageDetails.entries.length !== 2
+      || record(packageDetails.entries[0], 'Installed package JSON').state !== 'admitted'
+      || record(packageDetails.entries[1], 'Installed package binary').state !== 'opaque'
+      || record(packageDetails.entries[1], 'Installed package binary').byteLength !== 4) {
+      throw new TypeError('Installed package round trip did not preserve file identity and separate assurance.');
+    }
     const signingChecks = await checkInstalledSigningTrust(repositoryRoot, temporaryRoot,
       (args, label, code) => runInstalledCheck(executable, args, label, code));
     const workflowFixture = path.join(temporaryRoot, 'workflow.json');
@@ -1255,6 +1279,8 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       'discover-scan-network-boundary',
       'mail-header-review',
       'offline-workflow-artifact-reuse',
+      'evidence-package-creation',
+      'evidence-package-verification',
       ...signingChecks,
       'domain-control-deep-imports',
       ...installedHandlerChecks,

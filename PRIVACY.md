@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 10 September 2026.
+Last updated: 11 September 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -273,6 +273,16 @@ TLSA/DANE, PKIX, STARTTLS and address-authentication states remain separate.
 
 ## Imports, exports and sensitive files
 
+Portable evidence packages process selected JSON, screenshots and opaque files
+locally. File bytes are unchanged, unredacted and unencrypted by packaging;
+original filenames and paths are not retained in the manifest. Declared source
+identities, source times and local packaging events can be included. Unknown
+source times remain unknown. Package review uploads nothing, executes no file
+and changes no saved records. A workspace file requires its separate import
+preview and confirmation. Checksum identity, supported format, signature trust,
+timestamp assurance and factual accuracy remain separate results. Downloaded
+packages remain until the operator deletes them.
+
 Imports and exports are deliberate local actions. Importers validate bounded
 envelopes before preview or merge; omission never deletes destination data.
 Imported evidence remains attributed to its file and declared source and is not
@@ -337,8 +347,9 @@ visibility or page-identity claims.
 
 When an analyst selects a local capture manifest for one Case, the browser
 validates it before preview and imports only sanitised manifest metadata and
-declared digests. Screenshot, DOM-digest and other capture artefact bytes stay
-outside WHOISleuth and are not verified by that import.
+declared digests. Screenshot, DOM-digest and other capture artefact bytes are
+not read or verified by that Case import. Selecting them for a portable evidence
+package is a separate local file action.
 
 ## Retention and deletion
 

@@ -1,4 +1,6 @@
 import { Buffer } from 'node:buffer';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import { buildInvestigationPackage } from '../packages/investigation/investigation-package.mts';
 
 import { scanBoundedJson } from '../lib/bounded-json.mts';
 import {
@@ -53,6 +55,8 @@ import {
   MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES,
   buildInvestigationManifest,
   formatInvestigationManifest,
+  investigationFileMediaType,
+  type InvestigationManifestArtifactInput,
 } from './investigation-manifest.mts';
 import {
   buildOpenAssetModelBridge,
@@ -76,10 +80,18 @@ async function runManifestCommand(
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Investigation manifest');
-  const artifacts: { content: string }[] = [];
+  const artifacts: InvestigationManifestArtifactInput[] = [];
   let totalBytes = 0;
   try {
     for (const source of args.sources) {
+      if (args.package) {
+        const content = dependencies.readBinaryArtifactInput ? await dependencies.readBinaryArtifactInput(source)
+          : await readBoundedRegularFile(source, { maximumBytes: MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, minimumBytes: 1, label: 'Package artefact input', ...(dependencies.signal ? { signal: dependencies.signal } : {}) });
+        if (content.byteLength > MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES - totalBytes) throw new CliUsageError('Package artefacts exceed the combined byte limit.');
+        totalBytes += content.byteLength;
+        artifacts.push({ content, mediaType: investigationFileMediaType(source) });
+        continue;
+      }
       const content = dependencies.readDiffInput
         ? await dependencies.readDiffInput(source)
         : await context.readInput(source, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, 'Manifest artefact input');
@@ -95,6 +107,13 @@ async function runManifestCommand(
   }
   let document;
   try {
+    if (args.package) {
+      const built = await buildInvestigationPackage({ workflow: args.workflow, configurationDigestSha256: args.configurationDigestSha256, artifacts }, context.now(), context.packageVersion);
+      dependencies.signal?.throwIfAborted();
+      if (!context.writeBinaryOutput) throw new CliUsageError('Package output requires an explicit file destination.');
+      context.writeBinaryOutput(built.bytes);
+      return EXIT_CODES.SUCCESS;
+    }
     document = await buildInvestigationManifest({
       workflow: args.workflow,
       configurationDigestSha256: args.configurationDigestSha256,

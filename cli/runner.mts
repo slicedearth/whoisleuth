@@ -87,7 +87,7 @@ function usageEventReason(error: unknown): string {
   return 'invalid_input';
 }
 
-async function runParsedCli(args: CliArguments, dependencies: CliDependencies = {}): Promise<number> {
+async function runParsedCli(args: CliArguments, dependencies: CliDependencies = {}, writeBinaryOutput?: (value: Uint8Array) => void): Promise<number> {
   const stdout = dependencies.stdout || process.stdout;
   const stderr = dependencies.stderr || process.stderr;
   const environment = dependencies.environment || process.env;
@@ -168,6 +168,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       terminal,
       presentation: (color: boolean) => terminalPresentation(stdout, color, environment, palette),
       writeStdout: (value: string) => write(stdout, value),
+      ...(writeBinaryOutput ? { writeBinaryOutput } : {}),
       writeStderr: (value: string) => write(stderr, value),
       readSingleInput,
       readInput,
@@ -332,7 +333,7 @@ async function runCliCommand(argv: unknown, dependencies: CliDependencies = {}):
     return EXIT_CODES.INTERNAL_ERROR;
   }
   if (!args.destination) return runParsedCli(args, dependencies);
-  const buffered = createBufferedOutput();
+  const buffered = createBufferedOutput({ binary: args.action === 'manifest' && args.package === true });
   let checkpoint: Awaited<ReturnType<typeof import('./investigation-checkpoint.mts').prepareInvestigationCheckpoint>> | null = null;
   try {
     if (args.action === 'workflow-run') {
@@ -348,10 +349,16 @@ async function runCliCommand(argv: unknown, dependencies: CliDependencies = {}):
       ...(args.action === 'workflow-run' && args.resumeSource && resumeInput !== null && resumeInput !== undefined
         ? { workflowResumeInput: resumeInput }
         : {}),
-    });
+    }, buffered.writeBinary);
     if (code !== EXIT_CODES.SUCCESS && code !== EXIT_CODES.PARTIAL_FAILURE) return code;
-    if (checkpoint) await checkpoint.publish(buffered.value());
-    else await writePrivateFile(args.destination, buffered.value(), { force: args.force === true });
+    const content = buffered.value();
+    if (checkpoint) {
+      if (typeof content !== 'string') throw new TypeError('Workflow checkpoint output must be text.');
+      await checkpoint.publish(content);
+    } else await writePrivateFile(args.destination, content, {
+      force: args.force === true,
+      beforePublish: async () => { dependencies.signal?.throwIfAborted(); },
+    });
     return code;
   } catch (error) {
     if (isCancellation(error, dependencies.signal)) {

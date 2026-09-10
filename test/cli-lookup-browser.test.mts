@@ -865,6 +865,8 @@ describe('lookup browse CLI contract', () => {
       writePrivateFile: async (path, content, options) => {
         events.push('saved');
         savedPath = String(path);
+        assert.equal(typeof content, 'string');
+        if (typeof content !== 'string') assert.fail('A saved Lookup must remain text JSON.');
         savedContent = content;
         assert.match(options?.existingFileMessage || '', /already exists/u);
         return savedPath;

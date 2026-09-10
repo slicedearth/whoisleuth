@@ -1,4 +1,5 @@
 import { requiredValue } from './value-assertions.mts';
+import { OFFLINE_ARTIFACT_VERIFICATION_VERSION } from '../cli/artifact-verify.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
@@ -354,8 +355,8 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.registry-doctor').schema, 'whoisleuth.cli.registry-doctor');
     assert.equal(byId(inventory, 'cli.sharing-review').schema, 'whoisleuth.cli.sharing-review');
     assert.equal(byId(inventory, 'cli.sharing-review').currentVersion, 2);
-    assert.equal(byId(inventory, 'cli.offline-artifact-verification').currentVersion, 3);
-    assert.deepEqual(byId(inventory, 'cli.offline-artifact-verification').supportedVersions, [3]);
+    assert.equal(byId(inventory, 'cli.offline-artifact-verification').currentVersion, OFFLINE_ARTIFACT_VERIFICATION_VERSION);
+    assert.deepEqual(byId(inventory, 'cli.offline-artifact-verification').supportedVersions, [OFFLINE_ARTIFACT_VERIFICATION_VERSION]);
     assert.equal(byId(inventory, 'cli.evidence-signature-verification').currentVersion, 2);
     assert.equal(byId(inventory, 'cli.interchange-fidelity-report').currentVersion, 2);
     assert.equal(byId(inventory, 'cli.signed-evidence-package').currentVersion, 2);

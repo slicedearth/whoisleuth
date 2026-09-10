@@ -4,6 +4,7 @@
   import InvestigationSearch from '$lib/components/InvestigationSearch.svelte';
   import InvestigationTemplateManager from '$lib/components/InvestigationTemplateManager.svelte';
   import WorkspaceArchive from '$lib/components/WorkspaceArchive.svelte';
+  import InvestigationPackage from '$lib/components/InvestigationPackage.svelte';
   import { loadCampaigns } from '$lib/campaigns';
   import { loadCases } from '$lib/cases';
   import { loadProfiles } from '$lib/brand-profiles';
@@ -41,6 +42,7 @@
   let workspaceMessage = $state('');
   let supportDiagnostics = $state('');
   let supportStatus = $state('');
+  let workspaceArchive = $state<WorkspaceArchive>();
   const selectedRecipe = $derived(investigationRecipes.find((recipe) => recipe.id === guideRecipeId) || investigationRecipes[0]);
   const compatibleTemplates = $derived(templates.filter((template) => template.recipeId === guideRecipeId));
 
@@ -188,7 +190,13 @@
   </section>{/if}
 
   {#if mode === 'all'}<InvestigationTemplateManager {templates} loadState={templateLoadState} onchange={(value) => { templates = value; if (!value.some((item) => item.id === guideTemplateId)) guideTemplateId = ''; }} />{/if}
-  {#if mode !== 'guide'}<WorkspaceArchive onimport={handleArchiveImport} importOnly={mode === 'import'} />{/if}
+  {#if mode !== 'guide'}
+    <InvestigationPackage onworkspace={async file => {
+      if (!workspaceArchive) throw new Error('Workspace review is unavailable.');
+      await workspaceArchive.reviewFile(file);
+    }} />
+    <WorkspaceArchive bind:this={workspaceArchive} onimport={handleArchiveImport} importOnly={mode === 'import'} />
+  {/if}
   {#if mode === 'all'}
     <details class="support-diagnostics card">
       <summary>Support diagnostics</summary>

@@ -21,6 +21,7 @@ import {
   type CliHelpGroup,
 } from '../packages/contracts/cli-command-semantics.mts';
 import { CLI_FAIL_POLICIES_BY_COMMAND, type CliFailPolicyCommand } from './fail-policy.mts';
+import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../packages/investigation/investigation-manifest.mts';
 
 const LEGACY_WORKSPACE_ARCHIVE_VERSIONS = SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS
   .filter((version) => version !== WORKSPACE_ARCHIVE_VERSION);
@@ -311,6 +312,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--palette': enumeration(['auto', 'light', 'dark']),
   '--network': flag(),
   '--json': flag(),
+  '--package': flag(),
   '--quiet': flag('idempotent'),
   '--no-color': flag('idempotent'),
   '--common': flag(),
@@ -378,7 +380,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--summary-json': flag(),
   '--passphrase-file': file(),
   '--manifest': file(),
-  '--manifest-entry': enumeration(Array.from({ length: 16 }, (_, index) => `artifact-${index + 1}`)),
+  '--manifest-entry': enumeration(Array.from({ length: MAX_INVESTIGATION_MANIFEST_ARTIFACTS }, (_, index) => `artifact-${index + 1}`)),
   '--search': text(),
   '--require-match': flag(),
   '--reveal': flag(),
@@ -594,16 +596,18 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   manifest: commandSeed({
     reference: {
-      description: 'Record an ordered, path-free manifest for up to 16 local JSON artefacts.',
+      description: `Record an ordered, path-free manifest for up to ${MAX_INVESTIGATION_MANIFEST_ARTIFACTS} local JSON artefacts. Use --package --output evidence.zip to include JSON, screenshots and opaque files together.`,
       example: 'whoisleuth manifest lookup.json comparison.json --workflow "domain review" --json',
-      boundary: 'The command records hashes and bounded schema metadata only. It omits source paths and artefact contents and performs no network collection.',
+      boundary: 'Ordinary output contains metadata only. Package output includes unchanged selected bytes and is private until reviewed for sharing. Filenames ending in .json are parsed as JSON; other files are opaque and never executed. Original paths are omitted. No network request is made.',
     },
-    collection: { mode: 'offline', scope: 'Reads 1 to 16 local JSON artefacts capped at 32 MiB in total and retains no source paths.' },
+    collection: { mode: 'offline', scope: `Reads 1 to ${MAX_INVESTIGATION_MANIFEST_ARTIFACTS} local files, at most ${MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES / 1024 / 1024} MiB each and ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES / 1024 / 1024} MiB combined; retains no source paths.` },
     summary: 'Build an evidence manifest offline',
-    options: ['--workflow', '--configuration-digest', '--json', '--quiet', '--no-color'],
-    positionals: Object.freeze([positional('artefacts', 'file', 1, 16)]),
+    options: ['--workflow', '--configuration-digest', '--package', '--json', '--quiet', '--no-color'],
+    positionals: Object.freeze([positional('artefacts', 'file', 1, MAX_INVESTIGATION_MANIFEST_ARTIFACTS)]),
     constraints: Object.freeze([
     constraint({ kind: 'required', options: ['--workflow'] }),
+    constraint({ kind: 'requires_all', option: '--package', requiredOptions: ['--output'] }),
+    constraint({ kind: 'mutually_exclusive', options: ['--package', '--json'] }),
   ]),
     handlerOwner: 'inline',
     networkEffect: 'offline',
@@ -1035,17 +1039,18 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "verify-artifact": commandSeed({
     reference: {
-      description: 'Validate a supported archive, claim passport, packet, manifest, saved Lookup, or supported Lookup-evidence export without printing evidence contents.',
+      description: 'Validate a supported archive, claim passport, packet, manifest, saved Lookup or Lookup-evidence export without printing evidence contents. Use --package for a portable evidence ZIP.',
       example: 'whoisleuth verify-artifact report.json --manifest manifest.json --manifest-entry artifact-2 --json --strict-exit',
-      boundary: 'Verification is offline and redacted. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 when only an envelope or legacy projection integrity was verified.',
+      boundary: 'Verification is offline and redacted. --package requires a selected file and reports each entry separately without importing it. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 for incomplete verification, including unsupported package entries or unlinked capsule sources.',
     },
-    collection: { mode: 'offline', scope: 'Reads one selected bounded artefact and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.' },
+    collection: { mode: 'offline', scope: 'Reads one selected bounded artefact or evidence package and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.' },
     summary: 'Validate saved evidence offline',
-    options: ['--passphrase-file', '--manifest', '--manifest-entry', '--json', '--strict-exit', '--quiet', '--no-color'],
-    positionals: OPTIONAL_FILE_POSITIONAL,
+    options: ['--passphrase-file', '--manifest', '--manifest-entry', '--package', '--json', '--strict-exit', '--quiet', '--no-color'],
+    positionals: Object.freeze([positional('source', 'file', 0, 1, [], 'argv_or_stdin', ['--package'])]),
     constraints: Object.freeze([
     constraint({ kind: 'requires_all', option: '--manifest', requiredOptions: ['--manifest-entry'] }),
     constraint({ kind: 'requires_all', option: '--manifest-entry', requiredOptions: ['--manifest'] }),
+    constraint({ kind: 'excludes_all', option: '--package', excludedOptions: ['--manifest', '--manifest-entry', '--passphrase-file'] }),
   ]),
     handlerOwner: 'inline',
     networkEffect: 'offline',

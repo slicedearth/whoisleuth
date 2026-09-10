@@ -454,6 +454,18 @@ and the [interchange fidelity report](https://www.whoisleuth.com/cli#command-int
 
 ### Browser and CLI handoffs
 
+Lookup's **Download evidence package** includes the capsule and its exact
+linked Lookup JSON together. **Download capsule** retains the standalone format.
+In Dashboard saved-work tools, **Package and review evidence files** can also
+include selected screenshots and opaque files, with optional source declarations
+and observation times. Unknown times stay blank; packaging time is separate.
+
+Review shows all entries, their digests and the local packaging event before any
+import. It does not upload files or change saved data. Verified workspace files
+open the existing merge preview; other files can be downloaded without being
+rendered. Browser import support and CLI format verification are separate.
+Packaging keeps selected bytes unchanged and does not encrypt or redact them.
+
 Use the same short sequence for each handoff: export deliberately, verify the
 selected file, inspect its interchange report, then preview the destination
 import. These checks do not upload the file or establish that its observations

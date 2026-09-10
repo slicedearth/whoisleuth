@@ -59,6 +59,7 @@ type CliDependencies = {
   readExportInput?: (source?: string | null) => string | Promise<string>;
   readRiskCalibrationInput?: (source?: string | null) => string | Promise<string>;
   readArtifactInput?: (source?: string | null) => string | Promise<string>;
+  readBinaryArtifactInput?: (source: string) => Uint8Array | Promise<Uint8Array>;
   readPassphraseFile?: (source: string) => string | Promise<string>;
   readPrivateKeyFile?: (source: string) => string | Promise<string>;
   readPublicKeyFile?: (source: string) => string | Promise<string>;
@@ -113,6 +114,7 @@ type CliCommandContext = Readonly<{
   terminal(value: string, color?: boolean): string;
   presentation(color: boolean): TerminalPresentation;
   writeStdout(value: string): void;
+  writeBinaryOutput?(value: Uint8Array): void;
   writeStderr(value: string): void;
   readSingleInput(): Promise<string>;
   readInput(source: string | null | undefined, maximumBytes: number, label: string): Promise<string>;

@@ -124,6 +124,25 @@ cryptographic validation, and alignment differences can be legitimate.
 
 ## Output and automation
 
+### Portable evidence files
+
+Package selected files without changing their bytes, then verify the ZIP offline:
+
+```sh
+whoisleuth manifest evidence.json screenshot.png --workflow "Evidence review" \
+  --package --output evidence.zip
+whoisleuth verify-artifact evidence.zip --package --json --strict-exit
+```
+
+Packages contain up to 128 files and 64 MiB of payload plus bounded metadata.
+They use generated entry names, not original paths. They are private and
+unencrypted; packaging does not redact selected files. The report distinguishes
+file identity, supported source formats, opaque content and exact capsule/source
+links. It does not import files or establish source truth, signature trust or a
+trusted timestamp. Unsupported or rejected entries produce a partial report;
+`--strict-exit` returns 4. Without `--package`, `manifest` still produces a
+standalone JSON manifest; exact public version-2 manifests remain readable.
+
 ### Resuming a fixed workflow
 
 `workflow-run` emits a checkpoint for an installed recipe. A partial collection

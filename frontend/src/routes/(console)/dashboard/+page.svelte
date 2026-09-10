@@ -206,7 +206,8 @@
 </PageHeading>
 {#if workspaceMutationStatus}<p class="workspace-mutation-status" role="status" aria-live="polite" aria-atomic="true">{workspaceMutationStatus}</p>{/if}
 
-{#if summaryPending}
+{#if summaryPending && workspaceState !== 'loading'}<p role="status">Refreshing the saved-work summary…</p>{/if}
+{#if summaryPending && workspaceState === 'loading'}
 <section class="dashboard-state card" aria-live="polite" aria-busy="true">
   <p class="eyebrow">Browser-local workspace</p>
   <h2>Preparing your Dashboard</h2>
@@ -225,17 +226,6 @@
     <button class="getting-started-action card" type="button" aria-expanded={firstUseTool === 'guide'} onpointerenter={preloadSecondaryWorkspaces} onfocus={preloadSecondaryWorkspaces} onclick={() => openFirstUseTool('guide')}><IntelligenceIcon name="case" size={22} /><span><strong>Start a guided investigation</strong><small>Review the suggested steps for a task.</small></span></button>
     <button class="getting-started-action card" type="button" aria-expanded={firstUseTool === 'import'} onpointerenter={preloadSecondaryWorkspaces} onfocus={preloadSecondaryWorkspaces} onclick={() => openFirstUseTool('import')}><IntelligenceIcon name="registry" size={22} /><span><strong>Import existing work</strong><small>Review a supported workspace backup before adding selected records.</small></span></button>
   </div>
-  {#if firstUseTool}
-    <div id="dashboard-first-use-tool">
-      <DeferredSurface
-        load={() => import('$lib/components/DashboardSecondaryWorkspaces.svelte')}
-        props={{ mode: firstUseTool, onsummarychange: refreshLocalSummary }}
-        loadingLabel={`Loading the ${firstUseTool === 'guide' ? 'guided investigation' : 'workspace import'} controls.`}
-        unavailableLabel="The requested local tool could not be loaded."
-        placeholder="workspace"
-      />
-    </div>
-  {/if}
 </section>
 {:else}
 {#if attentionSummary}
@@ -271,7 +261,7 @@
   </div>
 </section>
 
-{#if workspaceState === 'returning'}<section class="dashboard-section" aria-labelledby="local-summary-title">
+{#if workspaceState === 'returning'}<section class="dashboard-section" aria-labelledby="local-summary-title" aria-busy={summaryPending}>
   <div class="section-intro">
     <p class="eyebrow">Saved in this browser</p>
     <h2 id="local-summary-title">Continue saved work</h2>
@@ -297,20 +287,22 @@
     <h2 id="secondary-launcher-title">Saved-work and guided tools</h2>
     <p>Search local work, hand off a browser target, manage templates, follow a guide, or import and export the local workspace.</p>
   </div>
-  <button class="btn" type="button" aria-expanded={secondaryOpen} aria-controls={secondaryOpen ? 'dashboard-secondary-workspaces' : undefined} onpointerenter={preloadSecondaryWorkspaces} onfocus={preloadSecondaryWorkspaces} onclick={()=>secondaryOpen=true}>Open saved-work tools</button>
+  <button class="btn" type="button" aria-expanded={secondaryOpen} aria-controls={secondaryOpen ? 'dashboard-secondary-workspaces' : undefined} onpointerenter={preloadSecondaryWorkspaces} onfocus={preloadSecondaryWorkspaces} onclick={()=>{firstUseTool='';secondaryOpen=true;}}>Open saved-work tools</button>
 </section>
-{#if secondaryOpen}
-  <div id="dashboard-secondary-workspaces">
+{/if}
+{/if}
+
+<!-- Open tools keep their drafts and import results when summary classification changes. -->
+{#if firstUseTool || secondaryOpen}
+  <div id={firstUseTool ? 'dashboard-first-use-tool' : 'dashboard-secondary-workspaces'}>
     <DeferredSurface
       load={() => import('$lib/components/DashboardSecondaryWorkspaces.svelte')}
-      props={{onsummarychange:refreshLocalSummary}}
+      props={{mode:firstUseTool || 'all',onsummarychange:refreshLocalSummary}}
       loadingLabel="Loading saved-work tools."
       unavailableLabel="Saved-work tools could not be loaded."
       placeholder="workspace"
     />
   </div>
-{/if}
-{/if}
 {/if}
 
 <style>

@@ -152,6 +152,13 @@ reports are projections of validated evidence. Digests establish content
 identity or integrity under their named canonicalisation contract; they do not
 establish truth, authorship or signer trust.
 
+The shared investigation manifest owns file identities, source declarations and
+ordered packaging events. Its ZIP container uses generated paths and the shared
+bounded ZIP reader. Browser preparation and inspection run in a cancellable
+one-shot worker; workspace imports use the existing preview and save coordinator.
+CLI package review applies the existing source-format validators after byte
+verification. Opaque files have byte identity only and are never rendered.
+
 The generated [capability contract](capability-manifest.md),
 [privacy/data-flow catalogue](privacy-data-flow-catalogue.md),
 [schema inventory](case-contracts.md) and

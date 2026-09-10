@@ -1,0 +1,45 @@
+{
+  "schema": "whoisleuth.investigation-manifest",
+  "version": 2,
+  "generatedAt": "2026-08-05T09:00:00.000Z",
+  "application": {
+    "name": "WHOISleuth CLI",
+    "version": "2.3.0"
+  },
+  "workflow": "retained evidence review",
+  "configuration": {
+    "digestSha256": null
+  },
+  "artifacts": [
+    {
+      "sequence": 1,
+      "id": "artifact-1",
+      "schema": "whoisleuth.fixture",
+      "version": 1,
+      "byteLength": 110,
+      "contentDigestSha256": "sha256:60560e843a66bcb5d993aa02e5c6fa4ed37e2deaec7b3ef94a9e690d11535722",
+      "canonicalDigestSha256": "sha256:33d0ae15698edbc541bd9a60ac96ce62e0cb1ba9e36b15df7e5e960fff196ff6"
+    }
+  ],
+  "steps": [
+    {
+      "sequence": 1,
+      "artifactId": "artifact-1",
+      "contentDigestSha256": "sha256:60560e843a66bcb5d993aa02e5c6fa4ed37e2deaec7b3ef94a9e690d11535722"
+    }
+  ],
+  "summary": {
+    "artifactCount": 1,
+    "totalBytes": 110
+  },
+  "limitations": [
+    "The manifest records ordered content digests, schema metadata, tool version, and an optional configuration digest; it deliberately omits source file paths and content values.",
+    "Reproduction still depends on access to the exact input artefacts, compatible source services, and any separately retained configuration represented by the supplied digest.",
+    "Matching digests establish content identity, not the accuracy, provenance, or current validity of an observation."
+  ],
+  "integrity": {
+    "algorithm": "SHA-256",
+    "canonicalization": "sorted-json-v2",
+    "digestSha256": "sha256:2fd30b08e885a6ea5a0d7c6fbecf230f4ebbb5d6f00543d6bddc504e0b33b79e"
+  }
+}

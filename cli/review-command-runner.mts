@@ -1,4 +1,7 @@
 import type { CliArguments } from './arguments.mts';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import { MAX_INVESTIGATION_PACKAGE_BYTES } from '../packages/investigation/investigation-package.mts';
+import { verifyOfflineInvestigationPackage } from './investigation-package-review.mts';
 import {
   MAX_OFFLINE_ARTIFACT_BYTES,
   formatOfflineArtifactVerification,
@@ -59,6 +62,21 @@ async function runVerifyArtifactCommand(
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Artefact verification');
+  if (args.package) {
+    if (!args.source || args.source === '-') throw new CliUsageError('--package requires a selected ZIP file; binary stdin is not accepted.');
+    let bytes: Uint8Array;
+    try {
+      bytes = dependencies.readBinaryArtifactInput ? await dependencies.readBinaryArtifactInput(args.source)
+        : await readBoundedRegularFile(args.source, { maximumBytes: MAX_INVESTIGATION_PACKAGE_BYTES, minimumBytes: 22, label: 'Investigation package', ...(dependencies.signal ? { signal: dependencies.signal } : {}) });
+    } catch (error) {
+      if (error instanceof CliUsageError) throw error;
+      throw new CliUsageError(`Could not read package input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+    }
+    const report = await verifyOfflineInvestigationPackage(bytes);
+    dependencies.signal?.throwIfAborted();
+    if (!args.quiet) context.writeStdout(args.output === 'json' ? formatJsonDocument(report) : context.terminal(formatOfflineArtifactVerification(report), args.color));
+    return args.strictExit && !isCompleteOfflineArtifactVerification(report) ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
+  }
   let input: string;
   try {
     input = dependencies.readArtifactInput

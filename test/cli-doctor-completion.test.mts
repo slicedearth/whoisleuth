@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { CLI_COMMANDS, parseCliArguments } from '../cli/arguments.mts';
+import { commandPositionalSpecs } from '../cli/command-reference.mts';
 import { MAX_CLI_COMPLETION_BYTES, buildShellCompletion } from '../cli/completion.mts';
 import { buildDoctorReport, formatDoctorReport } from '../cli/doctor.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
@@ -349,7 +350,7 @@ $results | ConvertTo-Json -Compress -AsArray`], { ...SHELL_COMPLETION_PROCESS_OP
     assert.match(scripts[1], /manifest\) options=\([^)]*--workflow/u);
     assert.match(scripts[2], /__whoisleuth_command_is manifest[^\n]*-l workflow/u);
     assert.match(scripts[3], /'manifest' = @\([^)]*'--workflow'/u);
-    assert.match(scripts[3], /\$fileLimits = @\{[\s\S]*'manifest' = 16/u);
+    assert.equal(Number(/\$fileLimits = @\{[\s\S]*?'manifest' = (\d+)/u.exec(scripts[3])?.[1]), commandPositionalSpecs('manifest')[0]!.maximum);
     for (const option of [
       '--workflow', '--configuration-digest', '--scan-limit', '--chunk-size', '--suffix',
       '--manifest-entry', '--limit', '--left-session', '--right-session',

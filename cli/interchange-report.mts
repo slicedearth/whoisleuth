@@ -185,7 +185,7 @@ export async function buildInterchangeFidelityReport(
         assuranceSatisfied = validation.skipped === 0 && contract.requiredAssurance === 'structure';
       } else {
         const verification = await verifyOfflineArtifact(raw, { passphrase: options.passphrase ?? null });
-        verificationState = verification.state;
+        verificationState = verification.state === 'partial' ? 'not_verified' : verification.state;
         assuranceSatisfied = contract.requiredAssurance === 'whole_integrity'
           ? offlineArtifactSatisfiesAssurance(verification, 'whole_integrity')
           : contract.requiredAssurance === 'applicable_integrity'

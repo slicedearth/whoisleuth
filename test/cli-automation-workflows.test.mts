@@ -357,7 +357,7 @@ describe('reproducible investigation manifest', () => {
     assert.equal(lookupCalled, false);
     const document = JSON.parse(stdout.value());
     assert.equal(document.schema, 'whoisleuth.investigation-manifest');
-    assert.doesNotMatch(stdout.value(), /private|lookup\.json|brief\.json/iu);
+    assert.doesNotMatch(stdout.value(), /\/private\/|lookup\.json|brief\.json/iu);
   });
 
   test('stops reading manifest sources when their cumulative bytes exceed the bound', async () => {

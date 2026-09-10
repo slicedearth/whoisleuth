@@ -29,6 +29,7 @@ import {
   type CliNetworkEffect,
 } from '../cli/command-reference.mts';
 import { buildShellCompletion } from '../cli/completion.mts';
+import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../packages/investigation/investigation-manifest.mts';
 import {
   runDiscriminatedCommandHandler,
   type DiscriminatedCommandHandlerMap,
@@ -247,7 +248,7 @@ describe('canonical CLI command registry', () => {
     assert.equal(commandOptionSpec('workflow-run', '--select')?.occurrence, 'repeatable');
     assert.equal(commandOptionSpec('bulk', '--resume')?.valueKind, 'flag');
     assert.deepEqual(commandPositionalSpecs('manifest'), [
-      { name: 'artefacts', valueKind: 'file', minimum: 1, maximum: 16, values: [], inputSource: 'argv', requiredWhenOptions: [] },
+      { name: 'artefacts', valueKind: 'file', minimum: 1, maximum: MAX_INVESTIGATION_MANIFEST_ARTIFACTS, values: [], inputSource: 'argv', requiredWhenOptions: [] },
     ]);
     assert.deepEqual(commandPositionalSpecs('page-compare'), [
       { name: 'sources', valueKind: 'file', minimum: 2, maximum: 2, values: [], inputSource: 'argv', requiredWhenOptions: [] },
@@ -773,7 +774,7 @@ describe('canonical CLI command registry', () => {
     ]);
     assert.ok(bashCandidates(['whoisleuth', 'completion', '--']).includes('--help'));
     assert.ok(bashCandidates(['whoisleuth', 'workflow-plan', '--']).includes('--json'));
-    assert.deepEqual(bashCandidates(['whoisleuth', 'verify-artifact', '--manifest-entry', '']).length, 16);
+    assert.deepEqual(bashCandidates(['whoisleuth', 'verify-artifact', '--manifest-entry', '']), commandOptionSpec('verify-artifact', '--manifest-entry')!.values);
     assert.deepEqual(bashCandidates(['whoisleuth', 'lookup', 'example.test', '--fail-on', '']), [
       'source-failure', 'inconclusive', 'danger',
     ]);

@@ -42,16 +42,12 @@ import { DOMAIN_CHANGE_REVIEW_SCHEMA } from '../../lib/domain-change-review.mts'
 import { DOMAIN_CONTROL_MANIFEST_SCHEMA } from '../../packages/contracts/domain-control-manifest.mts';
 import {
   INVESTIGATION_MANIFEST_SCHEMA,
-  INVESTIGATION_MANIFEST_VERSION,
-  MAX_INVESTIGATION_MANIFEST_ARTIFACTS,
-  MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES,
-  MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES,
+  validateInvestigationManifest,
 } from '../investigation-manifest.mts';
 import {
   array,
   boolean,
   domain,
-  digest,
   enumeration,
   exact,
   fail,
@@ -351,37 +347,6 @@ function validateBulkReviewManifest(value: UnknownRecord): void {
   if (rows.length !== domains.length) fail('Bulk review manifest selection');
   strings(root.limitations, 'Bulk review manifest limitations', 8, 600);
   validateIntegrity(root.integrity, 'Bulk review manifest integrity', root.version, version);
-}
-
-function validateInvestigationManifest(value: UnknownRecord): void {
-  const root = exact(value, ['schema', 'version', 'generatedAt', 'application', 'workflow', 'configuration', 'artifacts', 'steps', 'summary', 'limitations', 'integrity'], 'Investigation manifest');
-  iso(root.generatedAt, 'Investigation manifest generatedAt');
-  const application = exact(root.application, ['name', 'version'], 'Investigation manifest application');
-  if (application.name !== 'WHOISleuth CLI' || typeof application.version !== 'string'
-    || !/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(application.version)) fail('Investigation manifest application');
-  text(root.workflow, 'Investigation manifest workflow', 160);
-  const configuration = exact(root.configuration, ['digestSha256'], 'Investigation manifest configuration');
-  if (configuration.digestSha256 !== null) digest(configuration.digestSha256, 'Investigation manifest configuration');
-  const artifacts = array(root.artifacts, 'Investigation manifest artifacts', MAX_INVESTIGATION_MANIFEST_ARTIFACTS, 1);
-  const steps = array(root.steps, 'Investigation manifest steps', MAX_INVESTIGATION_MANIFEST_ARTIFACTS, 1);
-  let totalBytes = 0;
-  for (const [index, candidate] of artifacts.entries()) {
-    const item = exact(candidate, ['sequence', 'id', 'schema', 'version', 'byteLength', 'contentDigestSha256', 'canonicalDigestSha256'], `Investigation manifest artifact ${index + 1}`);
-    if (integer(item.sequence, 'Investigation manifest artifact sequence', 1, artifacts.length) !== index + 1
-      || item.id !== `artifact-${index + 1}`) fail('Investigation manifest artifact order');
-    if (item.schema !== null) text(item.schema, 'Investigation manifest artifact schema', 160);
-    if (item.version !== null) integer(item.version, 'Investigation manifest artifact version', 1, 1_000);
-    totalBytes += integer(item.byteLength, 'Investigation manifest artifact bytes', 1, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES);
-    digest(item.contentDigestSha256, 'Investigation manifest content digest');
-    digest(item.canonicalDigestSha256, 'Investigation manifest canonical digest');
-    const step = exact(steps[index], ['sequence', 'artifactId', 'contentDigestSha256'], `Investigation manifest step ${index + 1}`);
-    if (step.sequence !== item.sequence || step.artifactId !== item.id || step.contentDigestSha256 !== item.contentDigestSha256) fail('Investigation manifest step linkage');
-  }
-  const summary = exact(root.summary, ['artifactCount', 'totalBytes'], 'Investigation manifest summary');
-  if (integer(summary.artifactCount, 'Investigation manifest artifact count', 1, MAX_INVESTIGATION_MANIFEST_ARTIFACTS) !== artifacts.length
-    || integer(summary.totalBytes, 'Investigation manifest total bytes', 1, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES) !== totalBytes) fail('Investigation manifest summary');
-  strings(root.limitations, 'Investigation manifest limitations', 8, 600);
-  validateIntegrity(root.integrity, 'Investigation manifest integrity', root.version, INVESTIGATION_MANIFEST_VERSION);
 }
 
 function validateSourceObservations(value: unknown, label: string): UnknownRecord[] {

@@ -60,7 +60,7 @@ test('verifies and reviews a complete rich manifest above the former portable in
   await assert.rejects(() => buildInvestigationManifest({
     workflow: 'Reviewed domain settings', configurationDigestSha256: null,
     artifacts: [{ content: raw.padEnd(MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES + 1, ' ') }],
-  }, NOW, '2.3.1'), /must be between 1 byte/u);
+  }, NOW, '2.3.1'), /limit/u);
   const { privateKey, publicKey } = generateKeyPairSync('ed25519');
   const signed = await signEvidencePackage(raw, privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(), NOW);
   const signature = await verifyEvidencePackageSignature(JSON.stringify(signed, null, 2), publicKey.export({ type: 'spki', format: 'pem' }).toString());

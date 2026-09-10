@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { boundedJsonLimitsForBytes, parseBoundedJson } from '$lib/bounded-json';
   import {
     MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES,
@@ -29,6 +30,8 @@
   let confirmPassphrase=$state('');
   let encryptedImportValue=$state<unknown>(null);
   let importPassphrase=$state('');
+  let importHeading=$state<HTMLHeadingElement>();
+  let importStatus=$state<HTMLParagraphElement>();
 
   function selected(id:string){return selectedIds.includes(id);}
   async function toggle(id:string,checked:boolean){
@@ -86,10 +89,9 @@
     message=`Reviewed ${result.sections.length} backup sections. Check existing matches and skipped records before merging.`;
   }
 
-  async function chooseFile(event:Event){
-    const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];
+  export async function reviewFile(file:Blob):Promise<void>{
+    if(busy)throw new Error('Finish the current workspace operation before opening another file.');
     archiveReview=null;preview=null;selectedIds=[];encryptedImportValue=null;importPassphrase='';message='';
-    if(!file)return;
     busy=true;
     try{
       if(file.size>MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES)throw new Error(`Encrypted workspace archive imports are limited to ${MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES} bytes.`);
@@ -102,8 +104,14 @@
         if(file.size>MAX_WORKSPACE_ARCHIVE_BYTES)throw new Error(`Unencrypted workspace archive imports are limited to ${MAX_WORKSPACE_ARCHIVE_BYTES / 1024 / 1024} MiB.`);
         await previewArchive(value);
       }
-    }catch(cause){message=cause instanceof Error?cause.message:'Could not preview the workspace archive.';}
-    finally{busy=false;input.value='';}
+      await tick();importHeading?.focus();
+    }catch(cause){message=cause instanceof Error?cause.message:'Could not preview the workspace archive.';throw cause;}
+    finally{busy=false;}
+  }
+
+  async function chooseFile(event:Event){
+    const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];input.value='';
+    if(file)await reviewFile(file).catch(()=>{});
   }
 
   async function unlockImport(){
@@ -142,7 +150,7 @@
         message=`${resultMessage} The Dashboard summary could not be refreshed; reload it to reread the committed browser-local state.`;
       }
     }catch(cause){message=cause instanceof Error?cause.message:'Workspace archive import failed.';}
-    finally{busy=false;}
+    finally{busy=false;await tick();importStatus?.focus();}
   }
 
   async function prepareRollbackCopy(){
@@ -159,7 +167,7 @@
   <header class="section-head">
     <div>
       <p class="eyebrow">{importOnly ? 'Bring existing work' : 'Manage saved data'}</p>
-      <h2 id="workspace-archive-title">{importOnly ? 'Import a workspace' : 'Back up or move saved work'}</h2>
+      <h2 id="workspace-archive-title" bind:this={importHeading} tabindex="-1">{importOnly ? 'Import a workspace' : 'Back up or move saved work'}</h2>
       <p>{importOnly ? 'Review a supported workspace backup before adding its selected records to this browser.' : 'Download supported work from this browser, or review a previous backup before adding it here.'}</p>
     </div>
     <div class="top-actions toolbar">
@@ -242,7 +250,7 @@
     </div>
   {/if}
 
-  {#if message}<p class="status" role="status" aria-live="polite">{message}</p>{/if}
+  {#if message}<p bind:this={importStatus} class="status" role="status" aria-live="polite" tabindex="-1">{message}</p>{/if}
 </section>
 
 <style>

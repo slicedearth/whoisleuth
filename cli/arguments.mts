@@ -4,6 +4,7 @@ import type { InvestigationPlanRecipe, RunnableInvestigationPlanRecipe } from '.
 import type { WorkflowArtifactBinding } from '../packages/contracts/investigation-run.mts';
 import { parseCliFailPolicies, type CliFailPolicy, type CliFailPolicyCommand } from './fail-policy.mts';
 import { isDirectLookupTarget } from '../lib/classify.mts';
+import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../packages/investigation/investigation-manifest.mts';
 import {
   CLI_COMMANDS,
   cliMetaActionForInvocation,
@@ -13,7 +14,7 @@ import {
   type CompletionShell,
 } from './command-reference.mts';
 
-const MAX_CLI_ARGUMENTS = 32;
+const MAX_CLI_ARGUMENTS = MAX_INVESTIGATION_MANIFEST_ARTIFACTS + 32;
 const MAX_CLI_ARGUMENT_LENGTH = 1024;
 
 type TerminalOptions = { quiet: boolean; color: boolean };
@@ -49,7 +50,7 @@ type CliAction =
   | { action: 'completion'; shell: CompletionShell }
   | ({ action: 'commands'; output: 'terminal' | 'json'; common: boolean; group: CliHelpGroup | null; mode: 'offline' | 'network' | null } & TerminalOptions)
   | { action: 'manual' }
-  | ({ action: 'manifest'; sources: readonly string[]; workflow: string; configurationDigestSha256: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'manifest'; sources: readonly string[]; workflow: string; configurationDigestSha256: string | null; package?: true; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'map-observations'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'oam-export'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions)
@@ -70,7 +71,7 @@ type CliAction =
   | { action: 'registry-scaffold'; profile: string; suffix: string; scenario: 'registered' | 'not_found' | 'inconclusive' }
   | ({ action: 'risk-calibrate'; source: string | null; output: 'terminal' | 'json' | 'summary_json' } & TerminalOptions)
   | ({ action: 'lookalike-calibrate'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'verify-artifact'; source: string | null; passphraseSource: string | null; manifestSource: string | null; manifestEntryId: string | null; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
+  | ({ action: 'verify-artifact'; source: string | null; passphraseSource: string | null; manifestSource: string | null; manifestEntryId: string | null; package?: true; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
   | ({ action: 'interchange-report'; source: string | null; passphraseSource: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | InspectArchiveArguments
   | SignArtifactArguments
@@ -213,7 +214,7 @@ function parseLookupArguments(parsed: ParsedCommandArguments): Extract<CliAction
 
 function parseManifestArguments(parsed: ParsedCommandArguments): Extract<CliAction, { action: 'manifest' }> {
   const sources = parsed.positionalValues('artefacts');
-  if (sources.some((source) => !source)) throw new CliUsageError('manifest requires from 1 to 16 JSON artefact files.');
+  if (sources.some((source) => !source)) throw new CliUsageError(`manifest requires from 1 to ${MAX_INVESTIGATION_MANIFEST_ARTIFACTS} artefact files.`);
   if (new Set(sources).size !== sources.length) throw new CliUsageError('manifest artefact files must be different.');
   const configurationDigestSha256 = parsed.optionValue('--configuration-digest');
   if (configurationDigestSha256 !== null && !/^sha256:[a-f0-9]{64}$/u.test(configurationDigestSha256)) {
@@ -224,6 +225,7 @@ function parseManifestArguments(parsed: ParsedCommandArguments): Extract<CliActi
     sources,
     workflow: parsed.optionValue('--workflow')!,
     configurationDigestSha256,
+    ...(parsed.hasOption('--package') ? { package: true as const } : {}),
     output: jsonOutput(parsed),
     ...terminalOptions(parsed),
   };
@@ -362,6 +364,7 @@ function parseVerifyArtifactArguments(parsed: ParsedCommandArguments): Extract<C
     passphraseSource: parsed.optionValue('--passphrase-file'),
     manifestSource: parsed.optionValue('--manifest'),
     manifestEntryId: parsed.optionValue('--manifest-entry'),
+    ...(parsed.hasOption('--package') ? { package: true as const } : {}),
     output: jsonOutput(parsed),
     strictExit: parsed.hasOption('--strict-exit'),
     ...terminalOptions(parsed),

@@ -1206,7 +1206,8 @@
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Integrity, structure, signature and content assurance remain separate checks.",
         "Browser exports require an explicit browser action; CLI exports, verification and review require an explicit CLI command.",
-        "Sharing a generated artefact is a deliberate action outside the collection runtime."
+        "Sharing a generated artefact is a deliberate action outside the collection runtime.",
+        "Evidence packages retain selected JSON, screenshots and opaque file bytes unchanged, without automatic redaction or encryption. Review uploads nothing and changes no saved records; workspace import requires a separate preview and confirmation."
       ]
     },
     {
@@ -5375,7 +5376,7 @@
       "command": "manifest",
       "capabilityFamilyId": "portable_evidence",
       "title": "Build an evidence manifest offline",
-      "requestPurpose": "Reads 1 to 16 local JSON artefacts capped at 32 MiB in total and retains no source paths.",
+      "requestPurpose": "Reads 1 to 128 local files, at most 64 MiB each and 64 MiB combined; retains no source paths.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -5436,7 +5437,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "The command records hashes and bounded schema metadata only. It omits source paths and artefact contents and performs no network collection.",
+        "Ordinary output contains metadata only. Package output includes unchanged selected bytes and is private until reviewed for sharing. Filenames ending in .json are parsed as JSON; other files are opaque and never executed. Original paths are omitted. No network request is made.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -6764,7 +6765,7 @@
       "command": "verify-artifact",
       "capabilityFamilyId": "portable_evidence",
       "title": "Validate saved evidence offline",
-      "requestPurpose": "Reads one selected bounded artefact and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.",
+      "requestPurpose": "Reads one selected bounded artefact or evidence package and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -6826,7 +6827,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Verification is offline and redacted. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 when only an envelope or legacy projection integrity was verified.",
+        "Verification is offline and redacted. --package requires a selected file and reports each entry separately without importing it. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 for incomplete verification, including unsupported package entries or unlinked capsule sources.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
