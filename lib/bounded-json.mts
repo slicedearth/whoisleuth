@@ -167,7 +167,11 @@ export function scanBoundedJson(
   let stringCodeUnits = 0;
 
   const whitespace = () => {
-    while (index < raw.length && /[\t\n\r ]/u.test(raw[index]!)) index += 1;
+    while (index < raw.length) {
+      const code = raw.charCodeAt(index);
+      if (code !== 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0d) break;
+      index += 1;
+    }
   };
   const stringToken = (): Readonly<{ value: string; offset: number }> => {
     const start = index;

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { normalizeDomainPostureProfileContext, normalizeDomainPostureSourceContext, postureTransferRestriction } from '../packages/evidence/domain-posture-context.mts';
 import { canonicalPostureRecords } from '../packages/evidence/domain-control-runtime.mts';
@@ -128,6 +129,24 @@ test('distinct equal-time and undated observations survive retention without an 
   const undated = normalizeDesiredPostureObservationHistory([first, observation({ observedAt: '' })], null);
   assert.equal(undated.length, 2);
   assert.equal(currentDesiredPostureObservation({ ...baseline, observationHistory: undated }).observation, null);
+});
+
+test('history retains the established digest order and latest bound for unique, tied and undated cohorts', () => {
+  const row = (index: number, observedAt: string): DesiredPostureObservation => ({
+    observedAt, checks: [{ id: 'nameservers', status: 'pass', records: [`ns${index}.example.test`] }],
+  });
+  const unique = Array.from({ length: 36 }, (_, index) => row(index, new Date(Date.parse(BEFORE) + index * 1_000).toISOString()));
+  const tied = Array.from({ length: 24 }, (_, index) => row(index, CAPTURE));
+  const undated = Array.from({ length: 16 }, (_, index) => row(index, ''));
+  for (const input of [unique, tied, undated, [...unique.slice(0, 20), ...tied.slice(0, 12), ...undated.slice(0, 8)], [unique[0]!, unique[0]!, tied[0]!, tied[0]!]]) {
+    const byDigest = new Map(input.map((value) => [createHash('sha256').update(JSON.stringify(value)).digest('hex'), value]));
+    const expected = [...byDigest].sort(([a, left], [b, right]) =>
+      (left.observedAt === right.observedAt ? 0 : !left.observedAt ? 1 : !right.observedAt ? -1
+        : Date.parse(left.observedAt) - Date.parse(right.observedAt)) || (a < b ? -1 : a > b ? 1 : 0))
+      .slice(-12).map(([, value]) => value);
+    assert.deepEqual(normalizeDesiredPostureObservationHistory(input, null), expected);
+    assert.deepEqual(normalizeDesiredPostureObservationHistory([...input].reverse(), null), expected);
+  }
 });
 
 test('all 64 admitted records survive report retention and excess records remain qualified', () => {

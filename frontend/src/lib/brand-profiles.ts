@@ -171,7 +171,7 @@ export async function importProfiles(value: unknown) {
   return updateBrowserLocalData('brand_profiles', (current) => {
     const result = mergeBrandProfiles(current, value, { makeId: id });
     return {
-      document: boundedProfiles(result.profiles as BrandProfile[]),
+      document: result.profiles,
       result: { added: result.added, updated: result.updated, skipped: result.skipped },
     };
   });

@@ -7,7 +7,7 @@ import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { canonicalDomainControlRecords, normalizeDeclaredDomainControlRecordModes, normalizeDomainControlRecordModes } from '../evidence/domain-control-runtime.mts';
 import { DOMAIN_CONTROL_RECORD_LIST_FIELDS, type DomainControlRecordModes } from '../contracts/domain-control-manifest.mts';
 import { latestObservationCohort } from '../evidence/latest-observations.mts';
-import { sha256IdentityHex } from '../evidence/record-identity.mts';
+import { MAX_IDENTITY_DIGEST_BYTES, sha256IdentityHex } from '../evidence/record-identity.mts';
 import { DOMAIN_POSTURE_COMPARISON_VERSION, MAX_POSTURE_CHECKS, MAX_POSTURE_CHECK_RECORDS, MAX_POSTURE_RECORD_LENGTH, normalizeDomainPostureSourceContext, normalizeDomainPostureProfileContext, type DomainPostureProfileContext, type DomainPostureSourceContext } from '../evidence/domain-posture-context.mts';
 import { normalizeOpaqueReferenceId } from '../cases/opaque-reference-id.mts';
 import { normalizePageBaseline } from './page-baseline.mts';
@@ -457,17 +457,28 @@ export function normalizeDesiredPostureObservationHistory(
   previous: DesiredPostureObservation | null,
 ): DesiredPostureObservation[] {
   const candidates = Array.isArray(value) ? value : previous ? [previous] : [];
-  const byIdentity = new Map<string, DesiredPostureObservation>();
+  const byTime = new Map<string, DesiredPostureObservation[]>();
   for (const item of candidates.slice(0, MAX_DESIRED_POSTURE_OBSERVATIONS * 4)) {
     const normalized = normalizeDesiredPostureObservation(item);
-    if (normalized) byIdentity.set(desiredPostureObservationIdentity(normalized), normalized);
+    if (!normalized) continue;
+    if (new TextEncoder().encode(JSON.stringify(normalized)).byteLength > MAX_IDENTITY_DIGEST_BYTES) {
+      throw new RangeError('Record identity exceeds its byte limit.');
+    }
+    const cohort = byTime.get(normalized.observedAt) ?? [];
+    cohort.push(normalized);
+    byTime.set(normalized.observedAt, cohort);
   }
-  return [...byIdentity.entries()]
-    .sort(([a, left], [b, right]) => (left.observedAt === right.observedAt ? 0
-      : !left.observedAt ? 1 : !right.observedAt ? -1 : Date.parse(left.observedAt) - Date.parse(right.observedAt))
-      || (a < b ? -1 : a > b ? 1 : 0))
-    .slice(-MAX_DESIRED_POSTURE_OBSERVATIONS)
-    .map(([, observation]) => observation);
+  return [...byTime.entries()]
+    .sort(([left], [right]) => !left ? 1 : !right ? -1 : Date.parse(left) - Date.parse(right))
+    .flatMap(([, cohort]) => {
+      // Different capture times already distinguish observations. Digest-based
+      // deduplication and ordering remain necessary only within a tied cohort.
+      if (cohort.length === 1) return cohort;
+      const byIdentity = new Map(cohort.map((observation) => [desiredPostureObservationIdentity(observation), observation]));
+      return [...byIdentity.entries()].sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+        .map(([, observation]) => observation);
+    })
+    .slice(-MAX_DESIRED_POSTURE_OBSERVATIONS);
 }
 
 export function desiredPostureObservationIdentity(observation: DesiredPostureObservation): string {
@@ -862,7 +873,7 @@ export function mergeBrandProfiles(
   importedRaw: unknown,
   options: Pick<NormalizeBrandProfileOptions, 'nowIso' | 'makeId'> = {},
 ) {
-  assertWorkspaceInputGraph(localRaw, 'Local Brand Profile store', { maximumBytes: MAX_PROFILE_STORE_BYTES });
+  const local = normalizeBrandProfileStore(localRaw).profiles;
   assertWorkspaceInputGraph(importedRaw, 'Imported Brand Profile document', { maximumBytes: MAX_PROFILE_STORE_BYTES });
   assertWorkspacePortableVersion(importedRaw, BRAND_PROFILE_SCHEMA_VERSION, 'Imported Brand Profile document');
   const imported = record(importedRaw);
@@ -894,7 +905,6 @@ export function mergeBrandProfiles(
     const name = boundedText(value.name, MAX_PROFILE_NAME_LENGTH);
     if (id && name) retainIdName(id, name);
   }
-  const local = normalizeBrandProfileStore(localRaw).profiles;
   for (const profile of local) retainIdName(profile.id, profile.name);
   const byName = new Map(local.map((profile) => [profile.name.toLowerCase(), profile]));
   const input = profileList(importedRaw);

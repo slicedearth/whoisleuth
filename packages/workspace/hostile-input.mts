@@ -40,8 +40,7 @@ function ownDataDescriptors(
   });
 }
 
-export function ordinaryWorkspaceRecord(value: unknown, label = 'Workspace input'): UnknownRecord | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+function ordinaryRecordDescriptors(value: object, label: string) {
   let prototype: object | null;
   try {
     prototype = Object.getPrototypeOf(value);
@@ -58,6 +57,12 @@ export function ordinaryWorkspaceRecord(value: unknown, label = 'Workspace input
   if (descriptors.some(([, descriptor]) => !descriptor.enumerable)) {
     throw inputError(label, 'non-enumerable object fields are not supported');
   }
+  return descriptors;
+}
+
+export function ordinaryWorkspaceRecord(value: unknown, label = 'Workspace input'): UnknownRecord | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  ordinaryRecordDescriptors(value, label);
   return value as UnknownRecord;
 }
 
@@ -141,8 +146,7 @@ export function assertWorkspaceInputGraph(
       continue;
     }
 
-    const record = ordinaryWorkspaceRecord(candidate, current.label)!;
-    const descriptors = ownDataDescriptors(record, current.label);
+    const descriptors = ordinaryRecordDescriptors(candidate, current.label);
     if (limits) {
       keys += descriptors.length;
       if (keys > limits.maximumKeys) throw inputError(label, 'the graph exceeds the byte-budgeted key ceiling');

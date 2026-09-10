@@ -15,6 +15,7 @@ import * as relationship from '../packages/workspace/relationship-observation-mo
 import * as shortlist from '../packages/workspace/shortlist-model.mts';
 import * as watchlist from '../packages/workspace/watchlist-store.mts';
 import * as website from '../packages/workspace/website-snapshot-model.mts';
+import { assertWorkspaceInputGraph, ordinaryWorkspaceRecord } from '../packages/workspace/hostile-input.mts';
 import {
   MAX_WORKSPACE_INPUT_ARRAY_LENGTH,
   WORKSPACE_PORTABILITY_ARCHIVE_SECTION_REFERENCES,
@@ -84,6 +85,29 @@ async function fixtureValue(path: string): Promise<unknown> {
 }
 
 describe('workspace portability lifecycle', () => {
+  test('graph admission inspects each property surface once without invoking accessors', () => {
+    let keyReads = 0;
+    let descriptorReads = 0;
+    const value = new Proxy({ field: 'retained' }, {
+      ownKeys(target) { keyReads += 1; return Reflect.ownKeys(target); },
+      getOwnPropertyDescriptor(target, key) { descriptorReads += 1; return Reflect.getOwnPropertyDescriptor(target, key); },
+      get() { assert.fail('Graph admission must read data descriptors, not property getters.'); },
+    });
+    assert.doesNotThrow(() => assertWorkspaceInputGraph(value));
+    assert.equal(keyReads, 1);
+    assert.equal(descriptorReads, 1);
+    let invoked = false;
+    const accessor = Object.defineProperty({}, 'field', { enumerable: true, get() { invoked = true; return 'hidden'; } });
+    for (const inspect of [assertWorkspaceInputGraph, ordinaryWorkspaceRecord]) {
+      assert.throws(() => inspect(accessor), /accessor properties/);
+      assert.throws(() => inspect(Object.create({ inherited: 'hidden' })), /custom object prototypes/);
+      assert.throws(() => inspect(Object.defineProperty({}, 'hidden', { value: true })), /non-enumerable/);
+      assert.throws(() => inspect({ [Symbol('hidden')]: true }), /symbol keys/);
+      assert.throws(() => inspect(new Proxy({}, { ownKeys() { throw new Error('unavailable'); } })), /keys could not be inspected/);
+    }
+    assert.equal(invoked, false);
+  });
+
   test('owns every browser and portable compatibility contract with immutable fixture evidence', () => {
     const family = WORKSPACE_PORTABILITY_LIFECYCLE_FAMILY;
     assert.ok(family.compatibility.length > 0);

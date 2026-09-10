@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, openBrandWorkbench, readBrowserLocalCollection, useTheme } from './helpers';
-import { assertBrandProfileStoreBudget, buildBrandProfileExport } from '../packages/workspace/brand-profile-model.mts';
+import { assertBrandProfileStoreBudget, buildBrandProfileExport, normalizeBrandProfile } from '../packages/workspace/brand-profile-model.mts';
 import { MAX_PROFILE_IMPORT_BYTES, MAX_PROFILE_STORE_BYTES, serialiseWorkspacePortableJson } from '../packages/contracts/workspace-portability.mts';
 import { brandProfileStoreAtBytes, denseBrandHistoryStore, richBrandHistoryProfiles } from '../test/brand-profile-capacity-fixture.mts';
 import { beginBrowserInteractionReadiness, readBrowserInteractionReadiness } from './performance-sampling';
@@ -133,4 +133,24 @@ test('dense formatted histories remain importable with no omitted profiles', asy
   await measureImport(page, `Imported ${store.profiles.length} new and 0 updated profiles.`, document);
   const saved = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: store.profiles.length });
   expect(isDeepStrictEqual(saved.records.map((record) => record.value), store.profiles)).toBe(true);
+});
+
+test('concurrent imports retain both distinct profiles through the current collection revision', async ({ page, context }) => {
+  const other = await context.newPage();
+  try {
+    const pages = [page, other];
+    await Promise.all(pages.map(async (target) => {
+      await target.goto('/brands');
+      await expect(target.getByLabel('Import JSON', { exact: true })).toBeEnabled();
+    }));
+    await Promise.all(pages.map(async (target, index) => {
+      const profile = normalizeBrandProfile({ id: `import-${index}`, name: `Imported profile ${index}`, createdAt: NOW, updatedAt: NOW });
+      expect(profile).not.toBeNull();
+      const content = serialiseWorkspacePortableJson(buildBrandProfileExport([profile], NOW));
+      await target.getByLabel('Import JSON', { exact: true }).setInputFiles({ name: `profile-${index}.json`, mimeType: 'application/json', buffer: Buffer.from(content) });
+      await expect(target.getByRole('status', { name: 'Brand Profile action status' })).toHaveText('Imported 1 new and 0 updated profiles.');
+    }));
+    const saved = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 2 });
+    expect(saved.records.map((record) => record.id).sort()).toEqual(['import-0', 'import-1']);
+  } finally { await other.close(); }
 });

@@ -44,6 +44,19 @@ function partitionedKeys(total: number, width = MAX_BOUNDED_JSON_CONTAINER_ITEMS
 }
 
 describe('bounded parsed JSON structure', () => {
+  test('accepts only the four JSON whitespace characters at every token boundary', () => {
+    for (const space of [' ', '\t', '\n', '\r', ' \t\n\r'.repeat(4_096)]) {
+      const raw = `${space}{${space}"rows"${space}:${space}[${space}1${space},${space}true${space}]${space}}${space}`;
+      assert.deepEqual(parseBoundedJson(raw, { maximumBytes: Buffer.byteLength(raw) }), { rows: [1, true] });
+    }
+    for (const space of ['\v', '\f', '\u00a0', '\u2003', '\ufeff', '\u2028', '\u2029']) {
+      for (const raw of [`${space}{}`, `{}${space}`, `{${space}"x":1}`, `{"x":${space}1}`, `[1,${space}2]`]) {
+        assert.throws(() => scanBoundedJson(raw));
+        assert.throws(() => JSON.parse(raw));
+      }
+    }
+  });
+
   test('derives aggregate work from bytes without reducing valid minimal JSON or changing other bounds', () => {
     for (const raw of ['0', '[]', '{}', '[0]', '[0,0]', '[[],[]]', '{"":0}', '{"":{"":0}}', '{"é":"\\u0000"}']) {
       const maximumBytes = Buffer.byteLength(raw);
