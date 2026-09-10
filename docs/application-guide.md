@@ -208,6 +208,11 @@ Brand views can provide:
 - a transient Brand Asset Register joining profile scope, associated Cases and
   bounded one-hop retained leads.
 
+Mail report rows and policies are searchable and paginated. Exports retain all
+parsed rows and identify uninspected records, policies and archive entries.
+Partial report totals cover retained evidence only. Reports remain in the
+current tab; importing or exporting them does not update the Brand Profile.
+
 The register is a read-only view. One-hop candidates do not become authored
 scope or further anchors. Missing or partial sources remain explicit.
 

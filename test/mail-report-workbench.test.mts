@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 
 import { gzipSync, Zip, ZipDeflate, zipSync } from 'fflate';
@@ -8,6 +7,10 @@ import zipFixtures from '../fixtures/zip-fixtures.mts';
 import {
   buildMailReportReview,
   expandMailReportFile,
+  importMailReportReview,
+  MAX_DMARC_RECORDS,
+  MAX_MAIL_REPORT_REVIEW_REPORTS,
+  MAX_MAIL_REPORT_REVIEW_SOURCE_BYTES,
   MAX_MAIL_REPORT_EXPANDED_BYTES,
   parseMailReportFiles,
 } from '../frontend/src/lib/analysis/mail-report-workbench.ts';
@@ -77,18 +80,6 @@ const TLS_REPORT = {
 };
 
 describe('local aggregate mail report parsing', () => {
-  test('withholds an old review while retained reports are reconciled to changed profile scope', () => {
-    const source = readFileSync(new URL('../frontend/src/lib/components/MailReportWorkbench.svelte', import.meta.url), 'utf8');
-    const reconciliation = source.slice(
-      source.indexOf('} else if (reports.length) {'),
-      source.indexOf('</script>'),
-    );
-    assert.ok(reconciliation.indexOf('review = null;') >= 0);
-    assert.ok(reconciliation.indexOf('busy = true;') > reconciliation.indexOf('review = null;'));
-    assert.ok(reconciliation.indexOf('buildMailReportReview') > reconciliation.indexOf('busy = true;'));
-    assert.match(source, /disabled=\{!review \|\| busy\}/u);
-  });
-
   test('parses bounded DMARC XML without expanding document entities', async () => {
     const [report] = await parseMailReportFiles('aggregate.xml', encoder.encode(DMARC_XML));
     assert.equal(report?.kind, 'dmarc');
@@ -305,6 +296,7 @@ describe('local aggregate mail report parsing', () => {
     });
     const archiveReports = await parseMailReportFiles('reports.zip', archive);
     assert.deepEqual(archiveReports.map((report) => report.kind).sort(), ['dmarc', 'tls-rpt']);
+    assert.deepEqual(archiveReports[0]?.source.container, { format: 'zip', entries: { supplied: 3, inspected: 3, retained: 2, rejected: 0 } });
 
     const streamingArchive = await streamingZip('aggregate.xml', encoder.encode(DMARC_XML));
     const streamingReports = await parseMailReportFiles('streaming.zip', streamingArchive);
@@ -360,11 +352,127 @@ describe('local aggregate mail report parsing', () => {
       truncatedReports: 0,
     });
     assert.deepEqual(review.profileScope, {
+      state: 'complete',
       officialDomains: ['official.example'],
       outsideScopeDomains: ['example.test'],
+      unresolvedScopeDomains: [],
+      coverage: { supplied: 1, inspected: 1, retained: 1, rejected: 0 },
     });
     assert.match(review.integrity.digestSha256, /^sha256:[a-f0-9]{64}$/u);
     const repeated = await buildMailReportReview(reports, ['official.example'], ISO);
     assert.equal(repeated.integrity.digestSha256, review.integrity.digestSha256);
+  });
+
+  test('admits fifty thousand DMARC rows and counts every later uninspected row', async () => {
+    const row = '<record><row><count>1</count><policy_evaluated><disposition>none</disposition><dkim>pass</dkim><spf>fail</spf></policy_evaluated></row></record>';
+    assert.equal(MAX_DMARC_RECORDS, 50_000);
+    for (const supplied of [50_000, 50_003]) {
+      const [report] = await parseMailReportFiles('capacity.xml.gz', gzipSync(encoder.encode(`<feedback>${row.repeat(supplied)}</feedback>`)));
+      assert.ok(report?.kind === 'dmarc');
+      assert.equal(report.records.length, 50_000);
+      assert.equal(report.totalMessages, 50_000);
+      assert.deepEqual(report.recordCoverage, { supplied, inspected: 50_000, retained: 50_000, rejected: 0 });
+      assert.equal(report.truncated, supplied > 50_000);
+      const review = await buildMailReportReview([report], [], ISO);
+      assert.equal(review.summary.dmarcMessages, 50_000);
+      if (report.truncated) assert.match(review.limitations[0] ?? '', /Uninspected input/u);
+    }
+  });
+
+  test('accepts rich advertised TLS detail capacity and keeps every failure type and MX host', async () => {
+    const original = TLS_REPORT.policies[0]!;
+    const failures = Array.from({ length: 10_003 }, (_, i) => ({
+      'result-type': `failure-${i % 150}`, 'failed-session-count': 1,
+      'sending-mta-ip': '192.0.2.1', 'receiving-mx-hostname': 'mx.example',
+      'receiving-mx-helo': 'mx.example', 'receiving-ip': '192.0.2.2', 'failure-reason-code': 'fixture',
+    }));
+    const document = { ...TLS_REPORT, policies: [{ ...original,
+      policy: { ...original.policy, 'mx-host': Array.from({ length: 60 }, (_, i) => `mx-${i}.example`) },
+      summary: { 'total-successful-session-count': 0, 'total-failure-session-count': 10_003 },
+      'failure-details': failures,
+    }] };
+    const [report] = await parseMailReportFiles('capacity.json', encoder.encode(JSON.stringify(document)));
+    assert.ok(report?.kind === 'tls-rpt');
+    assert.equal(report.failedSessions, 10_003, 'reported summary is not replaced by the inspected detail total');
+    const policy = report.policies[0]!;
+    assert.equal(policy.failureTypes.length, 150);
+    assert.equal(policy.failureTypes.reduce((n, item) => n + item.count, 0), 10_000);
+    assert.ok(policy.failureTypes.some((item) => item.type === 'failure-149'));
+    assert.equal(policy.mxHosts.length, 60);
+    assert.ok(policy.mxHosts.includes('mx-59.example'));
+    assert.deepEqual(policy.failureDetailCoverage, { supplied: 10_003, inspected: 10_000, retained: 10_000, rejected: 0 });
+    assert.equal(report.truncated, true);
+  });
+
+  test('reports TLS policy and MX admission separately without inspecting discarded failure details', async () => {
+    const policy = { ...TLS_REPORT.policies[0]!, 'failure-details': [] };
+    const policies = Array.from({ length: 10_002 }, () => policy);
+    policies[0] = { ...policy, policy: { ...policy.policy, 'mx-host': Array.from({ length: 10_002 }, (_, i) => `mx-${i}.example`) } };
+    const [report] = await parseMailReportFiles('policies.json.gz', gzipSync(encoder.encode(JSON.stringify({ ...TLS_REPORT, policies }))));
+    assert.ok(report?.kind === 'tls-rpt');
+    assert.deepEqual(report.policyCoverage, { supplied: 10_002, inspected: 10_000, retained: 10_000, rejected: 0 });
+    assert.deepEqual(report.policies[0]?.mxHostCoverage, { supplied: 10_002, inspected: 10_000, retained: 10_000, rejected: 0 });
+    assert.equal(report.truncated, true);
+  });
+
+  test('uses full canonical profile capacity and does not label missing partial-scope domains outside', async () => {
+    const reports = await parseMailReportFiles('scope.xml', encoder.encode(DMARC_XML));
+    const official = [...Array.from({ length: 199 }, (_, i) => `official-${i}.example`), 'example.test'];
+    const complete = await buildMailReportReview(reports, official, ISO);
+    assert.equal(complete.profileScope.state, 'complete');
+    assert.equal(complete.profileScope.officialDomains.length, 200);
+    assert.deepEqual(complete.profileScope.outsideScopeDomains, []);
+    const partial = await buildMailReportReview(reports, ['first.example', ...official], ISO);
+    assert.equal(partial.profileScope.state, 'partial');
+    assert.deepEqual(partial.profileScope.outsideScopeDomains, []);
+    assert.deepEqual(partial.profileScope.unresolvedScopeDomains, ['example.test']);
+    const invalid = await buildMailReportReview(reports, ['x'.repeat(254)], ISO);
+    assert.equal(invalid.profileScope.state, 'partial');
+    assert.equal(invalid.profileScope.coverage.rejected, 1);
+  });
+
+  test('retains complete report batches, deduplicates before capacity and rejects atomic overflows', async () => {
+    const bytes = encoder.encode(DMARC_XML);
+    const [first] = await parseMailReportFiles('one.xml', bytes);
+    assert.ok(first);
+    const reports = Array.from({ length: MAX_MAIL_REPORT_REVIEW_REPORTS }, (_, i) => ({ ...first, source: { ...first.source, digestSha256: i ? `sha256:${i.toString(16).padStart(64, '0')}` : first.source.digestSha256 } }));
+    assert.equal((await buildMailReportReview(reports, [], ISO)).reports.length, 512);
+    const repeated = await importMailReportReview([{ name: 'one.xml', bytes }], reports, [], ISO);
+    assert.equal(repeated.review.reports.length, 512);
+    assert.equal(repeated.duplicateReports, 1);
+    const before = structuredClone(reports);
+    await assert.rejects(() => importMailReportReview([{ name: 'new.xml', bytes: encoder.encode(DMARC_XML.replace('report-1', 'new-report')) }], reports, [], ISO), /512 unique aggregate reports/u);
+    assert.deepEqual(reports, before);
+    const exact = { ...first, source: { ...first.source, bytes: MAX_MAIL_REPORT_REVIEW_SOURCE_BYTES } };
+    assert.equal((await buildMailReportReview([exact], [], ISO)).reports.length, 1);
+    await assert.rejects(() => buildMailReportReview([{ ...exact, source: { ...exact.source, bytes: MAX_MAIL_REPORT_REVIEW_SOURCE_BYTES + 1 } }], [], ISO), /20 MiB/u);
+    await assert.rejects(() => buildMailReportReview([...reports, first], [], ISO), /512 unique aggregate reports/u);
+  });
+
+  test('imports actual maximum report batches and does not retain unselected source content', async () => {
+    const files = Array.from({ length: 16 }, (_, file) => ({ name: `batch-${file}.zip`, bytes: zipSync(Object.fromEntries(
+      Array.from({ length: 32 }, (_, entry) => [`report-${entry}.xml`, encoder.encode(DMARC_XML
+        .replace('report-1', `report-${file}-${entry}`).replace('</feedback>', '<message_body>private-content-sentinel</message_body></feedback>'))]),
+    )) }));
+    const imported = await importMailReportReview(files, [], ['example.test'], ISO);
+    assert.equal(imported.loadedReports, 512);
+    assert.equal(imported.review.reports.length, 512);
+    assert.equal(imported.review.reports[511]?.reportId, 'report-15-31');
+    assert.equal(imported.duplicateReports, 0);
+    assert.doesNotMatch(JSON.stringify(imported.review), /private-content-sentinel|message_body|<feedback>/u);
+    const repeated = await importMailReportReview(files, imported.review.reports, ['example.test'], ISO);
+    assert.equal(repeated.review.reports.length, 512);
+    assert.equal(repeated.duplicateReports, 512);
+  });
+
+  test('admits an actual exact-byte expanded source and rejects one byte beyond it', async () => {
+    const source = `${DMARC_XML}${' '.repeat(MAX_MAIL_REPORT_EXPANDED_BYTES - encoder.encode(DMARC_XML).byteLength)}`;
+    assert.equal(encoder.encode(source).byteLength, 20 * 1024 * 1024);
+    const result = await importMailReportReview([{ name: 'exact.xml.gz', bytes: gzipSync(encoder.encode(source)) }], [], [], ISO);
+    assert.equal(result.review.reports[0]?.source.bytes, 20 * 1024 * 1024);
+    assert.equal(result.review.reports[0]?.kind, 'dmarc');
+    assert.equal(result.review.summary.dmarcMessages, 15);
+    await assert.rejects(() => importMailReportReview([{ name: 'over.xml.gz', bytes: gzipSync(encoder.encode(`${source} `)) }], [], [], ISO), /decompression limit/u);
+    await assert.rejects(() => parseMailReportFiles('too-many-values.json.gz', gzipSync(encoder.encode(JSON.stringify({ ...TLS_REPORT, policies: Array.from({ length: 100_001 }, () => null) })))), /container.*100000/u);
   });
 });

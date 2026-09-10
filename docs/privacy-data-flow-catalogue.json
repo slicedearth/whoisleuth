@@ -8810,9 +8810,10 @@
       "schema": "whoisleuth.mail-report-review",
       "lifecycleSchema": "whoisleuth.mail-report-review",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "not_applicable",
       "migration": "read_only",
@@ -10801,7 +10802,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.mail-report-review",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "analyst-interchange.privacy",

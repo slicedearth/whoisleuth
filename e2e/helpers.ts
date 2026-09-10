@@ -163,7 +163,7 @@ export async function useTheme(page: Page, preference: 'dark' | 'light' | 'syste
   if (preference !== 'system') await expect(root).toHaveAttribute('data-theme', preference);
 }
 
-export async function expectFocusedResultsVisible(page: Page, results: Locator) {
+export async function expectFocusedResultsVisible(page: Page, results: Locator, firstResult = results.getByRole('heading').first()) {
   await expect(results).toBeFocused();
   const header = page.getByRole('banner');
   await expect(header).toBeVisible();
@@ -172,7 +172,7 @@ export async function expectFocusedResultsVisible(page: Page, results: Locator) 
     if (!target || !banner) throw new Error('Focused result geometry is unavailable.');
     return target.y - (banner.y + banner.height);
   }).toBeGreaterThanOrEqual(0);
-  await expect(results.getByRole('heading').first()).toBeInViewport({ ratio: 1 });
+  await expect(firstResult).toBeInViewport({ ratio: 1 });
 }
 
 export async function expectNoHorizontalOverflow(page: Page) {

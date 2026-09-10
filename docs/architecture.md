@@ -167,6 +167,12 @@ normalised terms directly, and returns a summary or one requested result page.
 Collection reads and lifecycle cancellation remain in the browser adapter;
 the worker has no storage or network operations.
 
+Aggregate mail parsing, report admission and review digests run in a one-shot
+same-origin worker. The component owns file selection, profile identity and
+cancellation; the shared interchange module owns input bounds and coverage.
+Parsed reports remain transient, with paginated browser rendering and explicit
+local export. The worker has no storage or network operations.
+
 Workspace exports are deliberate local files with versioned manifests and
 section digests. Import validates the full envelope before a non-destructive
 merge. Each format's compatibility declaration owns its current writer and

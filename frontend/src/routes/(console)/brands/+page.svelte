@@ -82,7 +82,7 @@
   $effect(()=>{
     const profileId=draftProfile?.id||'';
     if(openedDraftTools.profileId!==profileId)openedDraftTools={profileId,tools:[]};
-    if(brandWorkbench&&['baselines','passport','attestations'].includes(brandWorkbench)&&!openedDraftTools.tools.includes(brandWorkbench)){
+    if(brandWorkbench&&['baselines','passport','attestations','mail'].includes(brandWorkbench)&&!openedDraftTools.tools.includes(brandWorkbench)){
       openedDraftTools={profileId,tools:[...openedDraftTools.tools,brandWorkbench]};
     }
   });
@@ -534,9 +534,10 @@
         <DeferredSurface load={()=>import('$lib/components/BrandPostureAudit.svelte')} props={{active,disabledReason:postureReason,auditing,results:auditResults,audit,retainObservation}} loadingLabel="Loading the current-settings review." unavailableLabel="The current-settings review could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='certificates'&&active}
         <DeferredSurface load={()=>import('$lib/components/BrandCertificateEventReplay.svelte')} props={{active,cases,unavailable:certificateReplayUnavailable}} loadingLabel="Loading certificate events." unavailableLabel="Certificate events could not be loaded." placeholder="workspace" />
-      {:else if brandWorkbench==='mail'&&active}
-        <DeferredSurface load={()=>import('$lib/components/MailReportWorkbench.svelte')} props={{active}} loadingLabel="Loading mail reports." unavailableLabel="Mail reports could not be loaded." placeholder="workspace" />
       {/if}
+      {/if}
+      {#if openedDraftTools.tools.includes('mail')}
+        <div hidden={brandWorkbench!=='mail'}><DeferredSurface load={()=>import('$lib/components/MailReportWorkbench.svelte')} props={{active:draftProfile,available:active?.id===draftProfile.id}} loadingLabel="Loading mail reports." unavailableLabel="Mail reports could not be loaded." placeholder="workspace" /></div>
       {/if}
       {#key draftProfile.id}
         {#if openedDraftTools.tools.includes('baselines')}

@@ -21,7 +21,7 @@ export const MISP_INDICATOR_EXPORT_VERSION = 2;
 export const DNS_CHANGE_REHEARSAL_VERSION = 2;
 export const DNS_CHANGE_REHEARSAL_EXPORT_SCHEMA = 'whoisleuth.dns-change-rehearsal';
 export const MAIL_REPORT_SCHEMA = 'whoisleuth.mail-report-review';
-export const MAIL_REPORT_VERSION = 1;
+export const MAIL_REPORT_VERSION = 2;
 export const REGISTRATION_DISCLOSURE_PLAN_SCHEMA = 'whoisleuth.registration-disclosure-plan';
 export const REGISTRATION_DISCLOSURE_PLAN_VERSION = 2;
 export const STATIC_PAGE_PATTERN_PACK_SCHEMA = 'whoisleuth.static-page-pattern-pack';
@@ -107,10 +107,10 @@ const DNS_REHEARSAL_COMPATIBILITY = defineSchemaCompatibility({
 });
 const MAIL_REPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.mail-report-review', kind: 'export', schema: MAIL_REPORT_SCHEMA,
-  currentVersion: MAIL_REPORT_VERSION, supportedVersions: [MAIL_REPORT_VERSION], acceptsUnversionedLegacy: false,
+  currentVersion: MAIL_REPORT_VERSION, supportedVersions: [1, MAIL_REPORT_VERSION], acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null,
   owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
-  note: 'Output-only review derived from bounded offline aggregate-report input; the producer has field and collection limits but no separate serialised-output byte contract.',
+  note: 'Output-only aggregate mail review. Version 2 reports source, entry, record, policy and profile-scope admission separately from display pagination. Historical version 1 has no reader; source-byte and collection bounds are distinct from serialised output bytes.',
 });
 const REGISTRATION_DISCLOSURE_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.registration-disclosure-plan', kind: 'export', schema: REGISTRATION_DISCLOSURE_PLAN_SCHEMA,
@@ -196,9 +196,12 @@ export const ANALYST_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(
       hook: { module: 'packages/interchange/dns-change-rehearsal.mts', exportName: 'buildDnsChangeRehearsalExport', role: 'builder', runtime: 'shared' },
       fixtures: [{ id: 'dns-change-rehearsal-v2', path: `${F}dns-change-rehearsal-v2.json`, bytes: 169, sha256: '31b2e5d8d3774356362c4f5fc1741506ce7060953b49bb3cd3588adbd3bb96d3', version: DNS_CHANGE_REHEARSAL_VERSION }] },
     { descriptor: MAIL_REPORT_COMPATIBILITY, lifecycleSchema: MAIL_REPORT_SCHEMA,
-      requiredKeys: ['schema', 'version', 'generatedAt'], optionalKeys: ['source', 'summary', 'findings', 'limitations'],
+      requiredKeys: ['schema', 'version', 'generatedAt'], optionalKeys: ['source', 'summary', 'findings', 'limitations', 'reports', 'profileScope', 'integrity'],
       hook: { module: 'packages/interchange/mail-report-workbench.mts', exportName: 'buildMailReportReview', role: 'builder', runtime: 'shared' },
-      fixtures: [{ id: 'mail-report-review-v1', path: `${F}mail-report-review-v1.json`, bytes: 152, sha256: '804ffda72784ee2f0b34985f47f78075238841b4fbcc484b971efcd17f2b0c17', version: MAIL_REPORT_VERSION }] },
+      fixtures: [
+        { id: 'mail-report-review-v1', path: `${F}mail-report-review-v1.json`, bytes: 152, sha256: '804ffda72784ee2f0b34985f47f78075238841b4fbcc484b971efcd17f2b0c17', version: 1 },
+        { id: 'mail-report-review-v2', path: `${F}mail-report-review-v2.json`, bytes: 2188, sha256: '42bb3b3a05605b0ffdda3f369a52e0490dcf1541405f2db9cee900ddf0477d97', version: MAIL_REPORT_VERSION },
+      ] },
     { descriptor: REGISTRATION_DISCLOSURE_COMPATIBILITY, lifecycleSchema: REGISTRATION_DISCLOSURE_PLAN_SCHEMA,
       requiredKeys: ['schema', 'version', 'generatedAt'], optionalKeys: ['domain', 'requests', 'limitations'],
       hook: { module: 'packages/interchange/registration-disclosure-plan.mts', exportName: 'buildRegistrationDisclosurePlan', role: 'builder', runtime: 'shared' },
