@@ -173,6 +173,14 @@ behaviour. Browser adapters perform version admission, transactions,
 quota-aware writes and concurrent-tab conflict handling; pure domain modules
 perform validation, normalisation and merge.
 
+The default workspace keeps its existing database. Named workspaces select a
+separate database through the same provider; a small versioned directory owns
+names and identity, not collection contents. Each loaded page fixes its
+selection, and switching performs a full navigation. Shared document locks
+exclude deletion while another tab uses a workspace; deletion records a
+tombstone before removing its database. See [browser-local data](browser-local-data.md)
+for storage, recovery and isolation boundaries.
+
 The provider captures bounded records and manifests in one readonly
 transaction. Larger standard plaintext collections are then decoded,
 digest-checked and reconstructed in a one-shot same-origin worker using the

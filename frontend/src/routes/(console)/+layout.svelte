@@ -14,6 +14,7 @@
   import BrandMark from '$lib/components/BrandMark.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import ConsoleLoading from '$lib/components/ConsoleLoading.svelte';
+  import BrowserWorkspaceIndicator from '$lib/components/BrowserWorkspaceIndicator.svelte';
   import IntelligenceIcon from '$lib/components/IntelligenceIcon.svelte';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
@@ -229,7 +230,8 @@
     detail="Opening bounded browser-local collections and checking the capabilities available to this deployment."
   />
 {:else if localData.state==='error'}
-  <div class="center"><section class="login card"><h1>Browser-local data unavailable</h1><p class="muted">{localData.detail}</p>{#if localData.code==='DEFERRED_MODULE_UNAVAILABLE'}<button class="primary" onclick={reloadDeferredModulePage}>Reload page</button>{:else}<button class="primary" onclick={retryLocalData}>Retry</button>{/if}<p class="login-links"><a href="/privacy">Review storage and privacy details</a></p></section></div>
+  <div class="workspace-error"><section class="login card"><h1>Browser-local data unavailable</h1><p class="muted">{localData.detail}</p>{#if localData.code==='DEFERRED_MODULE_UNAVAILABLE'}<button class="primary" onclick={reloadDeferredModulePage}>Reload page</button>{:else}<button class="primary" onclick={retryLocalData}>Retry</button>{/if}<p class="login-links"><a href="/privacy">Review storage and privacy details</a></p></section></div>
+  <section class="workspace-recovery card"><DeferredSurface load={() => import('$lib/components/BrowserWorkspaceManager.svelte')} props={{}} loadingLabel="Reading workspace recovery options." unavailableLabel="Workspace recovery could not be loaded. Reload the page to retry." /></section>
 {:else}
   <div class="shell" class:open={navOpen}>
     <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -261,6 +263,7 @@
     </aside>
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
     <main id="main-content" class:wide-workspace={wideWorkspace} tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>
+      <BrowserWorkspaceIndicator />
       {#if showCaseContext && selectedCaseId}<DeferredSurface load={() => import('$lib/components/SelectedCaseContext.svelte')} props={{caseId:selectedCaseId}} loadingLabel="Reading selected Case…" unavailableLabel="Selected Case context could not be loaded." />{/if}
       {#if investigationGuideRequested}<DeferredSurface load={() => import('$lib/components/InvestigationGuide.svelte')} props={{revealOnMount:revealInvestigationGuideOnMount}} loadingLabel="Loading the investigation guide." unavailableLabel="The investigation guide could not be loaded." placeholder="workspace" />{/if}
       {@render children()}
@@ -274,6 +277,8 @@
 {/if}
 
 <style>
+  .workspace-recovery{width:min(760px,calc(100% - 32px));margin:20px auto;padding:20px}
+  .workspace-error{display:flex;justify-content:center;margin:40px 16px 20px}.workspace-error .login{width:min(480px,100%)}
   .login-links{display:flex;justify-content:center;gap:8px;margin:18px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .login-links a{color:var(--accent)}
   .reference-nav{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}

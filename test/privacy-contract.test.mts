@@ -46,6 +46,8 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   { id: 'lookup-url-minimisation', pattern: /browser sends only its full hostname for collection, without the port, path, query or fragment/iu },
   { id: 'lookup-url-credentials', pattern: /Credential-bearing URLs are rejected/iu },
   { id: 'browser-plaintext', pattern: /IndexedDB as plaintext JSON/iu },
+  { id: 'named-workspace-isolation', pattern: /Named workspaces use separate IndexedDB databases.*local directory of random identifiers, names and timestamps.*share the browser profile and storage quota.*do not provide access control or encryption.*default workspace keeps existing data unchanged/iu },
+  { id: 'named-workspace-retention', pattern: /Each tab selects its workspace.*guide progress, candidate handoffs and named-workspace Brand preferences are scoped.*Backups and imports use the explicitly selected workspace, excluding the directory and tab state.*Deleting an inactive named workspace removes its saved collections, not other workspaces or downloaded files.*Clearing site data removes all workspaces/iu },
   { id: 'posture-source-retention', pattern: /Saved settings reviews also retain source times, completeness, the profile identifier and a digest of its collection settings/iu },
   { id: 'browser-delete', pattern: /Clearing site data removes the browser workspace/iu },
   { id: 'case-compatibility', pattern: new RegExp(`Case schema ${CASE_SCHEMA_VERSION}.*exact public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION}.*published-v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION}–${PUBLISHED_V2_3_CASE_SCHEMA_VERSION} remain readable`, 'iu') },

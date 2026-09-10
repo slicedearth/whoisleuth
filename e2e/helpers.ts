@@ -34,6 +34,7 @@ type RawBrowserLocalCollectionSnapshot = {
 };
 
 type BrowserLocalCollectionReadOptions = Readonly<{
+  databaseName?: string;
   minimumRecords?: number;
   minimumRevision?: number;
   timeout?: number;
@@ -347,6 +348,7 @@ export function requiredValue<Value>(
 async function tryReadBrowserLocalCollection<Collection extends BrowserLocalCollectionId>(
   page: Page,
   collection: Collection,
+  databaseName = LOCAL_DATA_DATABASE_NAME,
 ): Promise<BrowserLocalCollectionSnapshot<Collection> | null> {
   const snapshot = await page.evaluate(async ({
     databaseName,
@@ -395,7 +397,7 @@ async function tryReadBrowserLocalCollection<Collection extends BrowserLocalColl
     } finally {
       database.close();
     }
-  }, { databaseName: LOCAL_DATA_DATABASE_NAME, collectionId: collection });
+  }, { databaseName, collectionId: collection });
   if (!snapshot) return null;
   return {
     manifest: snapshot.manifest,
@@ -415,7 +417,7 @@ export async function readBrowserLocalCollection<Collection extends BrowserLocal
   let snapshot: BrowserLocalCollectionSnapshot<Collection> | null = null;
 
   await expect.poll(async () => {
-    snapshot = await tryReadBrowserLocalCollection(page, collection);
+    snapshot = await tryReadBrowserLocalCollection(page, collection, options.databaseName);
     return snapshot !== null
       && snapshot.records.length >= minimumRecords
       && Number(snapshot.manifest?.revision) >= minimumRevision;

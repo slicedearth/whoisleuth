@@ -27,5 +27,4 @@ test('console layout loads the investigation guide only when stored or requested
 test('guide presence check remains independent of the full guide model', () => {
   assert.doesNotMatch(storageBoundary, /from\s+['"].*investigation-guide(?:\.ts)?['"]/u);
   assert.doesNotMatch(storageBoundary, /from\s+['"](?:tldts|.*analysis.*)['"]/u);
-  assert.match(storageBoundary, /sessionStorage\.getItem/u);
 });

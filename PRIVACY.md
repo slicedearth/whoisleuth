@@ -74,6 +74,17 @@ candidate handoff uses a random token and is removed when accepted. Appearance
 preference can use `localStorage`. These records are not uploaded merely because
 they exist.
 
+Named workspaces use separate IndexedDB databases and a local directory of
+random identifiers, names and timestamps. They share the browser profile and
+storage quota; names do not provide access control or encryption. The default
+workspace keeps existing data unchanged. Each tab selects its workspace in
+`sessionStorage`; guide progress, candidate handoffs and named-workspace Brand
+preferences are scoped to that selection. Appearance stays browser-wide.
+Backups and imports use the explicitly selected workspace, excluding the
+directory and tab state. Deleting an inactive named workspace removes its saved
+collections, not other workspaces or downloaded files. Clearing site data
+removes all workspaces.
+
 Selected Case context uses only page memory and the existing local Case store.
 The selection clears on reload or sign-out and does not initiate collection.
 

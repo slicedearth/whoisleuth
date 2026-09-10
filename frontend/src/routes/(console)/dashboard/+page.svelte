@@ -20,6 +20,7 @@
   import { publicHomepage } from '$lib/workspaces';
   import { caseStatusIsClosed } from '$lib/analysis/case-record-decisions.ts';
   import { ANALYST_REVIEW_REQUIRED_COLLECTION_IDS } from '$lib/analysis/analyst-review-source-state.ts';
+  let workspaceManagerRequested = $state(false);
 
 
   type WorkflowAction = { href: string; label: string; detail: string; icon: IntelligenceIconName; taskPack?: true };
@@ -204,6 +205,10 @@
 <PageHeading eyebrow="Console" title="Dashboard" description="Start or resume Investigate, Respond and Assure work.">
   <a class="btn" href={publicHomepage.href} target="_blank" rel="noopener noreferrer" aria-label="View public homepage. Opens in a new tab.">View public homepage</a>
 </PageHeading>
+<details id="workspaces" class="workspace-directory card" ontoggle={event => { if (event.currentTarget.open) workspaceManagerRequested=true; }}>
+  <summary>Manage browser workspaces</summary>
+  {#if workspaceManagerRequested}<div class="workspace-directory-body"><DeferredSurface load={() => import('$lib/components/BrowserWorkspaceManager.svelte')} props={{}} loadingLabel="Reading browser workspaces." unavailableLabel="The workspace directory could not be loaded." /></div>{/if}
+</details>
 {#if workspaceMutationStatus}<p class="workspace-mutation-status" role="status" aria-live="polite" aria-atomic="true">{workspaceMutationStatus}</p>{/if}
 
 {#if summaryPending && workspaceState !== 'loading'}<p role="status">Refreshing the saved-work summary…</p>{/if}
@@ -306,6 +311,7 @@
 {/if}
 
 <style>
+  .workspace-directory{margin:20px 0;padding:16px;scroll-margin-top:80px}.workspace-directory summary{font:700 var(--text-sm) var(--mono)}.workspace-directory-body{padding-top:18px}
   .workspace-mutation-status{margin:16px 0 0;padding:10px 12px;border-left:2px solid var(--accent2);background:color-mix(in srgb,var(--accent2) 7%,transparent);color:var(--text);font-size:var(--text-sm);line-height:1.5}
   .summary-error{margin:14px 0 0;color:var(--amber);font-size:var(--text-sm)}
   .summary-error:empty{display:none}

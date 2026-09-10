@@ -14,6 +14,7 @@ import type {
 } from './browser-local-data-definitions.ts';
 import { isDeferredModuleLoadError, loadDeferredModule } from './deferred-module.ts';
 import { decodeBrowserLocalDataSnapshots, loadBrowserLocalDataPreparation } from './browser-local-data-worker.ts';
+import { currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE } from './browser-workspace-context.ts';
 
 export type BrowserLocalDataServiceState =
   | Readonly<{ state: 'idle' | 'initializing' }>
@@ -34,7 +35,7 @@ export type BrowserLocalDataProviderBoundary = Readonly<{
 
 export type BrowserLocalDataServiceDependencies = Readonly<{
   loadCollections: () => Promise<readonly AnyLocalDataCollectionDefinition[]>;
-  createProvider: (oncommit: BrowserLocalDataCommitListener) => BrowserLocalDataProviderBoundary;
+  createProvider: (oncommit: BrowserLocalDataCommitListener) => BrowserLocalDataProviderBoundary | Promise<BrowserLocalDataProviderBoundary>;
 }>;
 
 function boundedDetail(cause: unknown): string {
@@ -56,13 +57,18 @@ export function createBrowserLocalDataService(
     () => import('./browser-local-data-definitions.ts'),
   )
     .then((module) => module.BROWSER_LOCAL_COLLECTIONS));
-  const createProvider = dependencies.createProvider ?? ((oncommit: BrowserLocalDataCommitListener) => new BrowserLocalDataProvider({
-    oncommit, decodeSnapshots: decodeBrowserLocalDataSnapshots,
-    prepareInBackground: async (...args) => {
-      const { prepareBrowserLocalDataContent } = await loadBrowserLocalDataPreparation(args[3] ?? {});
-      return prepareBrowserLocalDataContent(...args);
-    },
-  }));
+  const createProvider = dependencies.createProvider ?? (async (oncommit: BrowserLocalDataCommitListener) => {
+    const options: ConstructorParameters<typeof BrowserLocalDataProvider>[0] = {
+      oncommit, decodeSnapshots: decodeBrowserLocalDataSnapshots,
+      prepareInBackground: async (...args) => {
+        const { prepareBrowserLocalDataContent } = await loadBrowserLocalDataPreparation(args[3] ?? {});
+        return prepareBrowserLocalDataContent(...args);
+      },
+    };
+    if (currentBrowserWorkspaceId() === DEFAULT_BROWSER_WORKSPACE) return new BrowserLocalDataProvider(options);
+    const { createNamedWorkspaceProvider } = await loadDeferredModule(() => import('./browser-workspace-provider.ts'));
+    return createNamedWorkspaceProvider(options);
+  });
   const listeners = new Map<BrowserLocalCollectionId, Set<() => void>>();
   let providerPromise: Promise<BrowserLocalDataProviderBoundary> | null = null;
   let collectionsPromise: Promise<readonly AnyLocalDataCollectionDefinition[]> | null = null;
@@ -114,7 +120,7 @@ export function createBrowserLocalDataService(
     providerPromise = (async () => {
       try {
         const definitions = await collections();
-        const nextProvider = createProvider(notifyCommitted);
+        const nextProvider = await createProvider(notifyCommitted);
         const initialization = await nextProvider.initialize(definitions).catch(async (cause) => {
           try { await nextProvider.close?.(); } catch { /* Preserve the original initialisation failure. */ }
           throw cause;
@@ -145,6 +151,7 @@ export function createBrowserLocalDataService(
   }
 
   async function restoreLegacyCopies() {
+    if (currentBrowserWorkspaceId() !== DEFAULT_BROWSER_WORKSPACE) throw new Error('Named workspaces use portable backups; no historical legacy copy exists.');
     const [provider, definitions] = await Promise.all([activeProvider(), collections()]);
     return provider.restoreLegacyCopies(definitions);
   }

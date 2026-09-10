@@ -35,6 +35,7 @@ import {
   INVESTIGATION_GUIDE_KEY,
 } from './investigation-guide-storage.ts';
 import { parseBoundedJson } from './bounded-json.ts';
+import { workspaceSessionStorage } from './browser-workspace-context.ts';
 
 export {
   INVESTIGATION_GUIDE_EVENT,
@@ -66,7 +67,7 @@ function serializedBytes(value: string): number {
 
 function readStoredGuide(key: string, requireReadable = false): InvestigationGuide | null {
   try {
-    const serialized = sessionStorage.getItem(key);
+    const serialized = workspaceSessionStorage().getItem(key);
     if (serialized === null) return null;
     if (serialized.length > MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES
       || serializedBytes(serialized) > MAX_INVESTIGATION_GUIDE_SERIALIZED_BYTES) {
@@ -89,7 +90,7 @@ function storeGuide(guide: InvestigationGuide) {
     throw new Error('Could not retain the guided investigation because its progress record is too large.');
   }
   try {
-    sessionStorage.setItem(INVESTIGATION_GUIDE_KEY, serialized);
+    workspaceSessionStorage().setItem(INVESTIGATION_GUIDE_KEY, serialized);
   } catch {
     throw new Error('Could not retain the guided investigation in this tab. Browser storage may be unavailable.');
   }
@@ -184,7 +185,7 @@ export function downloadInvestigationGuideSummary(): void {
 
 export function clearInvestigationGuide() {
   try {
-    sessionStorage.removeItem(INVESTIGATION_GUIDE_KEY);
+    workspaceSessionStorage().removeItem(INVESTIGATION_GUIDE_KEY);
   } catch {
     throw new Error('Could not clear the guided investigation in this tab. Its retained progress may still be present; try again when storage is available.');
   }

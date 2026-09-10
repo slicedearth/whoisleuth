@@ -411,6 +411,18 @@ the running model. See the [CLI risk-calibrate command](https://www.whoisleuth.c
 
 ## Browser-local storage and archives
 
+Use **Manage browser workspaces** on the Dashboard to separate investigations.
+Creating a workspace leaves the default workspace unchanged. Open it deliberately
+after saving current edits; switching reloads the Dashboard and leaves unsaved
+forms and page results behind. Other tabs keep their own workspace. The current
+workspace is shown above Console pages and beside backup/import controls.
+
+Export each workspace separately. Open the intended destination before reviewing
+an import. Names and tab state are not part of a backup. To delete a named
+workspace, switch away, close its other tabs and confirm its name. Pending
+deletions can be refreshed and retried. Workspaces share browser quota and are
+not encrypted or access-controlled from one another.
+
 Ordinary workspace state stays in IndexedDB as bounded plaintext JSON in the
 current browser profile. Failed reads, quota errors and unsupported versions
 remain explicit. Clearing site data removes the workspace; downloaded files

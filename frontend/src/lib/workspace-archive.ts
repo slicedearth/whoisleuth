@@ -24,6 +24,7 @@ import { mergeInvestigationTemplates } from './analysis/investigation-template-m
 import { mergeBulkReviewStores } from './analysis/bulk-review-model.ts';
 import { mergeAnalystReviewStateStores } from './analysis/analyst-review-state.ts';
 import { ACTIVE_PROFILE_KEY, activeProfileId, loadProfiles, setActiveProfile } from './brand-profiles';
+import { workspacePreferenceStorage } from './browser-workspace-context.ts';
 import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY, applyThemePreference, normalizeThemePreference, readThemePreference, setThemePreference } from './theme';
 import {
   browserLocalDataCollection,
@@ -156,7 +157,7 @@ export async function prepareLocalWorkspaceArchive(raw: unknown) {
 
 function snapshotSettings() {
   try {
-    return new Map(SETTINGS_KEYS.map((key) => [key, localStorage.getItem(key)]));
+    return new Map(SETTINGS_KEYS.map((key) => [key, (key === ACTIVE_PROFILE_KEY ? workspacePreferenceStorage() : localStorage).getItem(key)]));
   } catch {
     throw new Error('Could not read the browser-local workspace. Browser storage may be unavailable.');
   }
@@ -167,8 +168,9 @@ function restoreSettings(snapshot: Map<string, string | null>, applied: Map<stri
   const rollback = guardedWorkspaceSettingsRollback(current, applied, snapshot);
   for (const [key, value] of rollback.settings) {
     if (current.get(key) === value) continue;
-    if (value === null) localStorage.removeItem(key);
-    else localStorage.setItem(key, value);
+    const storage = key === ACTIVE_PROFILE_KEY ? workspacePreferenceStorage() : localStorage;
+    if (value === null) storage.removeItem(key);
+    else storage.setItem(key, value);
   }
   const theme = normalizeThemePreference(rollback.settings.get(THEME_STORAGE_KEY));
   applyThemePreference(theme);

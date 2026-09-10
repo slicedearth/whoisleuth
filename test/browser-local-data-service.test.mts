@@ -35,6 +35,37 @@ function readyProvider(overrides: Partial<BrowserLocalDataProviderBoundary> = {}
 }
 
 describe('browser-local data service', () => {
+  test('awaits one asynchronous provider selection and never dispatches an early read', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    let creations = 0;
+    let reads = 0;
+    const provider = readyProvider({ read: async <Document,>() => { reads++; return [] as Document; } });
+    const service = createBrowserLocalDataService({
+      loadCollections: async () => [SHORTLIST_COLLECTION],
+      createProvider: async () => { creations++; await gate; return provider; },
+    });
+    const first = service.read('shortlist');
+    const second = service.provider();
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.equal(creations, 1); assert.equal(reads, 0);
+    assert.equal(service.state().state, 'initializing');
+    release();
+    assert.deepEqual(await first, []); assert.equal(await second, provider);
+    assert.equal(creations, 1); assert.equal(reads, 1);
+  });
+
+  test('an asynchronous selection failure exposes an error before a deliberate provider retry', async () => {
+    let attempts = 0;
+    const service = createBrowserLocalDataService({
+      loadCollections: async () => [SHORTLIST_COLLECTION],
+      createProvider: async () => { if (++attempts === 1) throw new Error('Selected workspace is unavailable.'); return readyProvider(); },
+    });
+    assert.equal((await service.initialize()).state, 'error');
+    assert.equal(attempts, 1);
+    assert.equal((await service.initialize()).state, 'ready');
+    assert.equal(attempts, 2);
+  });
   test('forwards an awaited updater and cancellation without another save coordinator', async () => {
     const controller = new AbortController();
     let calls = 0;

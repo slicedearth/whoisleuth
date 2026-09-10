@@ -28,6 +28,36 @@ Small tab-scoped handoffs and transient preferences use `sessionStorage` or
 `localStorage` only under their documented limits. They are not silently
 promoted into workspace evidence.
 
+## Named workspaces
+
+The default workspace retains the original database and legacy keys. Named
+workspaces use UUID identities and separate databases with the same collection
+definitions, codecs and save coordinator. A version-1 IndexedDB directory holds
+up to 1,000 names, identifiers, revision counters and timestamps. Names are
+limited to 100 characters. Unknown versions or malformed directory records are
+unavailable, not an empty directory.
+
+Each loaded page fixes its workspace from a tab-local selection. Switching
+requires a full navigation to the Dashboard; in-flight operations cannot be
+retargeted. Guide progress, one-use candidate handoffs and named-workspace Brand
+preferences use workspace-scoped session keys. The default Brand preference
+keeps its original local-storage key. Appearance remains browser-wide.
+
+A document holds a shared Web Lock while its named workspace is open. Deletion
+requires an exclusive lock, refuses an open workspace and marks a directory
+record as pending deletion before deleting its database. A blocked or uncertain
+deletion retains that state for explicit recovery; it cannot recreate an empty
+workspace under the deleted identity. Renames compare directory revisions.
+Platforms without Web Locks retain default-workspace support but cannot open,
+create or delete named workspaces.
+
+All databases share the origin's browser quota and profile access. Workspace
+names provide neither encryption nor an access-control boundary. Backups do
+not include the directory or tab state. Export from each workspace separately
+and explicitly select the destination before importing. Named workspaces have
+no legacy local-storage copies; the default migration and rollback paths are
+unchanged. Clearing browser site data removes every workspace.
+
 The selected Case identifier lives only in the current page's memory. Its
 read-only context uses the canonical Case store, refreshes after Case writes in
 the same tab or when the tab regains focus, and clears on reload or sign-out.
@@ -73,7 +103,7 @@ newly dated source observation.
 
 The browser adapter provides:
 
-- one versioned database and manifest for the bounded workspace collections;
+- one versioned database and manifest per workspace for its bounded collections;
 - exact keyed reads rather than full-database scans for ordinary operations;
 - transactions for multi-record changes and archive application;
 - deterministic record and byte accounting before writes;
@@ -123,7 +153,7 @@ digests. Digests detect corruption or mismatched content; they do not establish
 authorship, truth or confidentiality.
 
 The record collections are captured together in one IndexedDB read transaction.
-Theme and active-profile preferences are read separately from local storage;
+Theme and active-profile preferences are read separately from their scoped storage;
 the exported active profile must exist in the captured profile collection.
 Backups use compact JSON, with a 32-MiB archive limit and a 5-MiB limit per
 section. Previously formatted JSON backups remain readable. Encryption adds

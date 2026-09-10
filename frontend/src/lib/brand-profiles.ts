@@ -23,6 +23,7 @@ import { BrowserLocalDataError } from './browser-local-data.ts';
 import { loadBrowserLocalDataPreparation } from './browser-local-data-worker.ts';
 import { assertLocalRecordCurrent, LocalRecordConflictError } from './local-mutation-outcome.ts';
 import { LEGACY_PROFILES_KEY } from './browser-local-data-contract.ts';
+import { workspacePreferenceStorage } from './browser-workspace-context.ts';
 import { serialiseWorkspacePortableJson } from '../../../packages/contracts/workspace-portability.mts';
 export { MAX_PROFILE_IMPORT_BYTES } from '../../../packages/contracts/workspace-portability.mts';
 
@@ -79,7 +80,7 @@ export async function writeProfiles(profiles: BrandProfile[]): Promise<void> {
 
 export function activeProfileId() {
   try {
-    return normalizeBrandProfileId(localStorage.getItem(ACTIVE_PROFILE_KEY)) || '';
+    return normalizeBrandProfileId(workspacePreferenceStorage().getItem(ACTIVE_PROFILE_KEY)) || '';
   } catch (cause) {
     throw new BrowserLocalDataError('LOCAL_DATA_READ_FAILED', 'Could not read the active-profile preference. Browser storage may be unavailable.', { cause });
   }
@@ -89,8 +90,8 @@ export function setActiveProfile(profileId: string) {
   try {
     const normalized = normalizeBrandProfileId(profileId);
     if (profileId && !normalized) throw new Error('Active profile identifier is invalid.');
-    if (normalized) localStorage.setItem(ACTIVE_PROFILE_KEY, normalized);
-    else localStorage.removeItem(ACTIVE_PROFILE_KEY);
+    if (normalized) workspacePreferenceStorage().setItem(ACTIVE_PROFILE_KEY, normalized);
+    else workspacePreferenceStorage().removeItem(ACTIVE_PROFILE_KEY);
   } catch (cause) {
     if (cause instanceof Error && cause.message === 'Active profile identifier is invalid.') throw cause;
     throw new BrowserLocalDataError('LOCAL_DATA_WRITE_FAILED', 'Could not set the active profile. Browser storage may be full or unavailable.', { cause });

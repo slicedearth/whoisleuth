@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
+  import BrowserWorkspaceIndicator from '$lib/components/BrowserWorkspaceIndicator.svelte';
+  import { currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE } from '$lib/browser-workspace-context.ts';
   import { boundedJsonLimitsForBytes, parseBoundedJson } from '$lib/bounded-json';
   import {
     MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES,
@@ -32,6 +34,8 @@
   let importPassphrase=$state('');
   let importHeading=$state<HTMLHeadingElement>();
   let importStatus=$state<HTMLParagraphElement>();
+  let defaultWorkspace=$state(true);
+  onMount(() => { defaultWorkspace=currentBrowserWorkspaceId()===DEFAULT_BROWSER_WORKSPACE; });
 
   function selected(id:string){return selectedIds.includes(id);}
   async function toggle(id:string,checked:boolean){
@@ -175,6 +179,7 @@
       <label class="btn file-btn" class:disabled={busy}>Review backup file<input type="file" accept="application/json,.json" onchange={chooseFile} disabled={busy}></label>
     </div>
   </header>
+  <BrowserWorkspaceIndicator destination />
 
   {#if showEncryptionForm}
     <form id="workspace-encryption-form" class="encryption-form" onsubmit={(event)=>{event.preventDefault();void downloadEncrypted();}}>
@@ -220,8 +225,10 @@
     <p>Each backup uses a versioned manifest and a SHA-256 checksum for every data section. WHOISleuth checks its format, size, supported versions, and integrity before showing a merge preview. Existing work follows each data type's normal merge rules, and records missing from the backup are retained.</p>
     <p>Encrypted backups use browser-native PBKDF2-HMAC-SHA-256 and AES-256-GCM authenticated encryption. Encryption cannot protect an unlocked Console from software already able to read the page. A forgotten passphrase makes the backup unrecoverable.</p>
     <button class="btn unencrypted-download" type="button" onclick={downloadUnencrypted} disabled={busy}>Download unencrypted backup</button>
-    <p>WHOISleuth keeps the original local-storage documents after its one-time IndexedDB migration. If you intend to return to an older build after making changes here, update those legacy copies first. This does not replace a downloaded backup and can fail when the workspace no longer fits within local-storage limits.</p>
-    <button class="btn rollback-copy" type="button" onclick={prepareRollbackCopy} disabled={busy}>Update legacy rollback copy</button>
+    {#if defaultWorkspace}
+      <p>WHOISleuth keeps the original local-storage documents after its one-time IndexedDB migration. If you intend to return to an older build after making changes here, update those legacy copies first. This does not replace a downloaded backup and can fail when the workspace no longer fits within local-storage limits.</p>
+      <button class="btn rollback-copy" type="button" onclick={prepareRollbackCopy} disabled={busy}>Update legacy rollback copy</button>
+    {:else}<p>Named workspaces have no historical local-storage copy. Download a portable backup for recovery; the default workspace is unchanged.</p>{/if}
   </details>{/if}
 
   {#if preview}
