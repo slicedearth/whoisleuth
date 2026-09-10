@@ -223,6 +223,11 @@ The review inbox appears first. Case reporting, decision summaries and the
 follow-up calendar are under **Case reports and follow-up tools** when Cases
 are retained.
 
+**Relationships** searches exact website-profile groups and weighted pairs
+across saved snapshots. Results are paginated, with a page-number control and
+all admitted domains retained in each group. Similarity uses complete,
+compatible saved fields; source limits remain separate from pagination.
+
 ### Cases and response preparation
 
 Open **Cases** from the Respond navigation, or use the Cases view in Monitor.

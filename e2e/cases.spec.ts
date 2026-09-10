@@ -819,6 +819,7 @@ test('saved website profiles form searchable cross-domain pivots without another
   });
   await expect(workspace.getByText('Example commerce', { exact: true })).toBeVisible();
   await expect(workspace.getByText('Weighted website-profile relationship', { exact: true })).toHaveCount(0);
+  await expect(workspace.locator('.cluster-head > strong')).toHaveText(['2 domains', '2 domains', '2 domains']);
   const observedDomain = workspace.locator('li', { has: page.getByRole('link', { name: 'first.invalid', exact: true }) });
   expect(await observedDomain.count()).toBeGreaterThan(0);
   for (const observation of await observedDomain.all()) await expect(observation).toContainText('Partial saved evidence');

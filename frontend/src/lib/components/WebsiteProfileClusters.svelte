@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tick } from 'svelte';
+  import Pagination from './Pagination.svelte';
   import {
     filterWebsiteProfileClusters,
     type WebsiteProfileCluster,
@@ -16,8 +18,26 @@
   let kind = $state<'all' | WebsiteProfileCluster['kind']>('all');
   let message = $state('');
   let pinning = $state('');
+  const pageSize = 20;
+  let resultPage = $state(1);
+  let resultList = $state<HTMLOListElement>();
   const filtered = $derived(filterWebsiteProfileClusters(summary, query)
     .filter((item) => kind === 'all' || item.kind === kind));
+  const pageCount = $derived(Math.max(1, Math.ceil(filtered.length / pageSize)));
+  const currentPage = $derived(Math.min(resultPage, pageCount));
+  const firstResult = $derived((currentPage - 1) * pageSize);
+  const visibleClusters = $derived(filtered.slice(firstResult, firstResult + pageSize));
+
+  $effect(() => { summary; resultPage = 1; });
+
+  async function setPage(value: number) {
+    const expected = { summary, query, kind };
+    resultPage = Math.min(pageCount, Math.max(1, value));
+    await tick();
+    if (summary !== expected.summary || query !== expected.query || kind !== expected.kind) return;
+    resultList?.focus({ preventScroll: true });
+    resultList?.scrollIntoView({ block: 'start' });
+  }
 
   async function pin(cluster: WebsiteProfileCluster, domain: string) {
     if (!onpin) return;
@@ -44,17 +64,18 @@
     <span>{summary.clusters.length} cluster{summary.clusters.length === 1 ? '' : 's'}</span>
   </header>
   <div class="filters">
-    <label class="field">Search saved profiles<input type="search" bind:value={query} maxlength="200" placeholder="Domain, technology, or evidence type"></label>
-    <label class="field">Relationship type<select bind:value={kind}><option value="all">All</option><option value="similarity">Weighted relationships</option><option value="technology">Technology</option><option value="identity">Page identity</option><option value="tracker">Tracking identifier</option><option value="form_action">Form action</option><option value="resource_host">Resource host</option></select></label>
+    <label class="field">Search saved profiles<input type="search" bind:value={query} oninput={() => resultPage = 1} maxlength="200" placeholder="Domain, technology, or evidence type"></label>
+    <label class="field">Relationship type<select bind:value={kind} onchange={() => resultPage = 1}><option value="all">All</option><option value="similarity">Weighted relationships</option><option value="technology">Technology</option><option value="identity">Page identity</option><option value="tracker">Tracking identifier</option><option value="form_action">Form action</option><option value="resource_host">Resource host</option></select></label>
   </div>
   <p class="coverage">{summary.snapshotsReviewed} saved observation{summary.snapshotsReviewed === 1 ? '' : 's'} across {summary.domainsReviewed} domain{summary.domainsReviewed === 1 ? '' : 's'} reviewed. Search, weighting, and grouping remain local to this browser.</p>
   {#if filtered.length}
-    <div class="cluster-grid independent-grid">
-      {#each filtered as cluster}
-        <article>
+    <p class="coverage" role="status">Showing {firstResult + 1}–{firstResult + visibleClusters.length} of {filtered.length} matching relationships · similarity model {summary.version}</p>
+    <ol class="cluster-grid independent-grid paged-results" aria-label="Saved website relationship results" tabindex="-1" bind:this={resultList}>
+      {#each visibleClusters as cluster (cluster.id)}
+        <li class="cluster-card">
           <div class="cluster-head">
-            <div><span>{cluster.kind}</span><h3>{cluster.label}</h3><small>{cluster.evidence}</small></div>
-            <strong>{cluster.domains.length}{cluster.truncated ? '+' : ''}</strong>
+            <div><span>{cluster.kind.replaceAll('_', ' ')}</span><h3>{cluster.label}</h3><small>{cluster.evidence}</small></div>
+            <strong>{cluster.domains.length} <small>domains</small></strong>
           </div>
           {#if cluster.contributingFields.length}
             <details class="contributions"><summary>{cluster.contributingFields.length} contributing field{cluster.contributingFields.length === 1 ? '' : 's'}</summary><ul>{#each cluster.contributingFields as field}<li><strong>{field.label} · +{field.weight}</strong><small>{field.detail}</small>{#if field.sharedValues.length}<code>{field.sharedValues.join(' · ')}</code>{/if}</li>{/each}</ul></details>
@@ -70,14 +91,15 @@
             {/each}
           </ul>
           <details><summary>Interpretation limits</summary><ul>{#each cluster.limitations as limitation}<li>{limitation}</li>{/each}</ul></details>
-        </article>
+        </li>
       {/each}
-    </div>
+    </ol>
+    <Pagination {currentPage} {pageCount} setPage={(value) => void setPage(value)} ariaLabel="Website relationship pages" pageInputLabel="Website relationship page" />
   {:else}
     <p class="empty">{summary.clusters.length ? 'No saved website-profile cluster matches these filters.' : 'Save compact website-profile snapshots for at least two domains to find cross-domain relationships.'}</p>
   {/if}
   {#if message}<p class="message" role="status">{message}</p>{/if}
-  <details class="summary-limits"><summary>Coverage limits</summary><ul>{#each summary.limitations as limitation}<li>{limitation}</li>{/each}{#if summary.truncated}<li>The bounded cluster view was capped.</li>{/if}</ul></details>
+  <details class="summary-limits"><summary>{summary.truncated ? 'Partial source coverage' : 'Source coverage'}</summary><ul>{#each summary.limitations as limitation}<li>{limitation}</li>{/each}{#if summary.truncated}<li>Some supplied snapshot evidence is incomplete. Pagination does not omit retained relationships.</li>{/if}</ul></details>
 </section>
 
 <style>
@@ -87,13 +109,15 @@
   .section-head>span{flex:none;padding:4px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:700 var(--text-2xs) var(--mono)}
   .filters{display:grid;grid-template-columns:minmax(0,2fr) minmax(180px,1fr);gap:10px;margin-top:16px}
   .coverage,.empty{color:var(--muted);font-size:var(--text-xs);line-height:1.5}
-  .cluster-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px}
-  .cluster-grid>article{min-width:0;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  .cluster-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:12px 0 0;padding:0;list-style:none}
+  .cluster-card{min-width:0;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .cluster-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .cluster-head>div{min-width:0}
   .cluster-head span{color:var(--accent2);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   .cluster-head h3{margin:3px 0 2px;overflow-wrap:anywhere;font:700 var(--text-sm) var(--mono)}
   .cluster-head small{color:var(--muted);font-size:var(--text-2xs)}
-  .cluster-head>strong{font:700 var(--text-lg) var(--mono)}
+  .cluster-head>strong{flex:none;font:700 var(--text-lg) var(--mono)}
+  .cluster-head>strong small{display:block;white-space:nowrap;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
   .cluster-grid ul{display:grid;gap:7px;margin:12px 0 0;padding:0;list-style:none}
   .cluster-grid li{min-width:0}
   .cluster-grid li a{display:block;overflow-wrap:anywhere;font:700 var(--text-xs) var(--mono)}

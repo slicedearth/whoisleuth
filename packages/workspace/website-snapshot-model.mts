@@ -110,6 +110,10 @@ const SERIAL_RE = /^[a-f0-9]{1,128}$/iu;
 const SNAPSHOT_TECHNOLOGY_ROLES = new Set([
   'observed_edge', 'application_platform', 'framework_runtime', 'embedded_dependency',
 ]);
+export const WEBSITE_SNAPSHOT_COLLECTION_LIMITS = Object.freeze({
+  technologies: 40, posture: 40, sources: 16, dependencies: 20,
+  resourceHosts: 30, trackingIdentifiers: 30, formActionOrigins: 20,
+});
 
 function record(value: unknown): UnknownRecord | null {
   return ordinaryWorkspaceRecord(value, 'Website-snapshot input');
@@ -289,8 +293,8 @@ function origin(value: unknown): string {
 
 function identityValues(value: unknown): WebsiteIdentityValues {
   const item = record(value);
-  const resourceHosts = values(item?.resourceHosts, 30, (candidate) => normalizeDomain(candidate)) as string[];
-  const trackingIdentifiers = values(item?.trackingIdentifiers, 30, (candidate) => {
+  const resourceHosts = values(item?.resourceHosts, WEBSITE_SNAPSHOT_COLLECTION_LIMITS.resourceHosts, (candidate) => normalizeDomain(candidate)) as string[];
+  const trackingIdentifiers = values(item?.trackingIdentifiers, WEBSITE_SNAPSHOT_COLLECTION_LIMITS.trackingIdentifiers, (candidate) => {
     const tracker = record(candidate);
     const type = text(tracker?.type, 40).toLowerCase();
     const trackerValue = text(tracker?.value, 64).toUpperCase();
@@ -298,7 +302,7 @@ function identityValues(value: unknown): WebsiteIdentityValues {
       ? { type, value: trackerValue }
       : null;
   }) as Array<{ type: string; value: string }>;
-  const formActionOrigins = values(item?.formActionOrigins, 20, origin) as string[];
+  const formActionOrigins = values(item?.formActionOrigins, WEBSITE_SNAPSHOT_COLLECTION_LIMITS.formActionOrigins, origin) as string[];
   return { resourceHosts, trackingIdentifiers, formActionOrigins };
 }
 
@@ -317,12 +321,12 @@ export function normalizeWebsiteProfileSnapshot(raw: unknown, sourceVersion?: nu
     complete: value?.complete === true,
     truncated: value?.truncated === true,
     profileProvenance: profileProvenance(value?.profileProvenance, sourceVersion),
-    technologies: values(value?.technologies, 40, technology) as WebsiteSnapshotTechnology[],
-    posture: values(value?.posture, 40, posture) as WebsiteSnapshotPosture[],
+    technologies: values(value?.technologies, WEBSITE_SNAPSHOT_COLLECTION_LIMITS.technologies, technology) as WebsiteSnapshotTechnology[],
+    posture: values(value?.posture, WEBSITE_SNAPSHOT_COLLECTION_LIMITS.posture, posture) as WebsiteSnapshotPosture[],
     identity: identity(value?.identity),
     identityValues: identityValues(value?.identityValues),
-    sources: values(value?.sources, 16, source) as WebsiteSnapshotSource[],
-    dependencies: values(value?.dependencies, 20, dependency) as WebsiteSnapshotDependency[],
+    sources: values(value?.sources, WEBSITE_SNAPSHOT_COLLECTION_LIMITS.sources, source) as WebsiteSnapshotSource[],
+    dependencies: values(value?.dependencies, WEBSITE_SNAPSHOT_COLLECTION_LIMITS.dependencies, dependency) as WebsiteSnapshotDependency[],
     certificate: certificate(value?.certificate),
   };
 }
