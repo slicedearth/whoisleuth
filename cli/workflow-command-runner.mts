@@ -33,18 +33,23 @@ type WorkflowCommandArguments = Extract<CliArguments, { action: WorkflowInlineCo
 
 function boundWorkflowInputs(command: CliCommand, inputs: WorkflowStepInputs, dependencies: CliDependencies, context: CliCommandContext): Partial<CliDependencies> {
   if (!inputs.size) return {};
-  const read = (source: string | null | undefined, fallback: (() => string | Promise<string>)) =>
-    typeof source === 'string' && inputs.has(source) ? inputs.get(source)! : fallback();
+  const read = <Source extends string | null | undefined>(
+    source: Source,
+    fallback: ((source: Source) => string | Promise<string>) | undefined,
+    maximumBytes: number,
+    label: string,
+  ) => typeof source === 'string' && inputs.has(source)
+    ? inputs.get(source)!
+    : fallback ? fallback(source) : context.readInput(source, maximumBytes, label);
   switch (command) {
-    case 'export': return { readExportInput: (source) => read(source, () => dependencies.readExportInput
-      ? dependencies.readExportInput(source) : context.readInput(source, MAX_SAVED_LOOKUP_INPUT_BYTES, 'Evidence export input')) };
-    case 'verify-artifact': return { readArtifactInput: (source) => read(source, () => dependencies.readArtifactInput
-      ? dependencies.readArtifactInput(source) : context.readInput(source, MAX_OFFLINE_ARTIFACT_BYTES, 'Artefact input')) };
+    case 'export': return { readExportInput: (source) => read(source, dependencies.readExportInput,
+      MAX_SAVED_LOOKUP_INPUT_BYTES, 'Evidence export input') };
+    case 'verify-artifact': return { readArtifactInput: (source) => read(source, dependencies.readArtifactInput,
+      MAX_OFFLINE_ARTIFACT_BYTES, 'Artefact input') };
     case 'diff':
-    case 'timeline': return { readDiffInput: (source) => read(source, () => dependencies.readDiffInput
-      ? dependencies.readDiffInput(source) : context.readInput(source,
-        command === 'diff' ? MAX_RETAINED_ARTIFACT_DIFF_BYTES : MAX_SAVED_LOOKUP_INPUT_BYTES,
-        command === 'diff' ? 'Retained diff input' : 'Lookup timeline input')) };
+    case 'timeline': return { readDiffInput: (source) => read(source, dependencies.readDiffInput,
+      command === 'diff' ? MAX_RETAINED_ARTIFACT_DIFF_BYTES : MAX_SAVED_LOOKUP_INPUT_BYTES,
+      command === 'diff' ? 'Retained diff input' : 'Lookup timeline input') };
     default: throw new CliUsageError('This fixed-workflow command does not accept retained artefacts.');
   }
 }

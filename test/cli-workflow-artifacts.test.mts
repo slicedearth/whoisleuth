@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, test } from 'node:test';
 
 import { parseCliArguments } from '../cli/arguments.mts';
@@ -117,6 +120,53 @@ describe('typed fixed-workflow artefact reuse', () => {
     assert.equal(result.completedSteps[2].inputs[0].input, 3);
     assert.equal(new Set(result.completedSteps[2].result.observations.map((item: { generatedAt: string }) => item.generatedAt)).size, 3);
     assert.equal(result.completedSteps[1].arguments[0], 'prior.json');
+  });
+
+  test('uses bounded native files alongside retained artefacts and fails a missing selection without recollection', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'workflow-native-inputs-'));
+    const priorPath = path.join(directory, 'prior observation.json');
+    const firstPath = path.join(directory, 'first observation.json');
+    const checkpoint = {
+      schema: 'whoisleuth.cli.investigation-run', version: 2, recipe: 'historical-comparison', subject: 'example.test', selections: [],
+      completedSteps: [{ id: 'current', command: 'lookup', arguments: ['example.test', '--deep', '--json'], mode: 'network', exitCode: 0, result: LOOKUP }],
+    };
+    const args = ['workflow-run', 'historical-comparison', 'example.test', '--resume', 'retained-state.json', '--json',
+      '--use-artifact', 'diff:2=current', '--select', `diff=${priorPath}`,
+      '--use-artifact', 'timeline:3=current', '--select', `timeline=${firstPath}`, '--select', `timeline=${priorPath}`];
+    try {
+      await writeFile(priorPath, JSON.stringify({ ...LOOKUP, generatedAt: '2026-08-01T00:00:00.000Z' }));
+      await writeFile(firstPath, JSON.stringify({ ...LOOKUP, generatedAt: '2026-07-01T00:00:00.000Z' }));
+      for (const missing of [false, true]) {
+        if (missing) await rm(priorPath);
+        const stdout = capture();
+        const stderr = capture();
+        const code = await runCli(args, {
+          stdout: stdout.stream, stderr: stderr.stream, now: () => NOW,
+          workflowResumeInput: JSON.stringify(checkpoint),
+          runUnifiedLookup: () => assert.fail('A retained current observation must not be recollected.'),
+        });
+        const result = JSON.parse(stdout.value());
+        assert.deepEqual(result.completedSteps[0].result, LOOKUP);
+        assert.equal(result.completedSteps[1].arguments[0], priorPath);
+        if (missing) {
+          assert.equal(code, 2);
+          assert.equal(result.state, 'step_failed');
+          assert.equal(result.completedSteps[1].artifact, null);
+          assert.equal(result.completedSteps.length, 2);
+          assert.match(stderr.value(), /^diff: Usage error:.*\bENOENT\b/u);
+          assert.doesNotMatch(stdout.value(), /\bENOENT\b/u);
+        } else {
+          assert.equal(code, 0, stderr.value());
+          assert.equal(stderr.value(), '');
+          assert.equal(result.state, 'complete');
+          assert.equal(result.completedSteps[1].result.schema, 'whoisleuth.cli.lookup-diff');
+          assert.equal(result.completedSteps[2].result.schema, 'whoisleuth.cli.lookup-timeline');
+          assert.deepEqual(result.completedSteps[2].result.observations.map((item: { generatedAt: string }) => item.generatedAt),
+            ['2026-07-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z', LOOKUP.generatedAt]);
+          assert.equal(result.completedSteps[2].inputs[0].input, 3);
+        }
+      }
+    } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
   test('rejects forward, duplicate, unknown, wrong-schema, out-of-range and non-file bindings before execution', async () => {
