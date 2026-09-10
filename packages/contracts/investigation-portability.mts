@@ -159,7 +159,7 @@ const INVESTIGATION_FIXTURES = Object.freeze([
   { id: 'lookup-claim-passport-v1', path: 'test/fixtures/investigation-portability/lookup-claim-passport-v1.json', bytes: 2_011, sha256: 'dbf1c3975282e340b6639162a0555aeaed42c06abe92ed3b354409ce73c284a4', schema: LOOKUP_CLAIM_PASSPORT_SCHEMA, version: 1, role: 'current' as const },
   { id: 'bulk-domain-comparison-v4', path: 'test/fixtures/investigation-portability/bulk-domain-comparison-v4.json', bytes: 17_079, sha256: 'b718af34c8f5f1ba4427807cd149561bc1b7e605a6e74206a694beaee078cc2d', schema: BULK_DOMAIN_COMPARISON_SCHEMA, version: 4, role: 'current' as const },
   { id: 'bulk-mail-exposure-v2', path: 'test/fixtures/investigation-portability/bulk-mail-exposure-v2.json', bytes: 2_582, sha256: '9ff6c4c9f2dda4c5451daf8fb11e36a3ee15b513a09ad3c93515cc37df5d6660', schema: BULK_MAIL_EXPOSURE_SCHEMA, version: 2, role: 'current' as const },
-  { id: 'bulk-review-manifest-v2', path: 'test/fixtures/investigation-portability/bulk-review-manifest-v2.json', bytes: 1_657, sha256: '1c90f4d0661357fc277360cc924f2464e463f9c8bd815a6b45408e95e1caf7d3', schema: BULK_REVIEW_MANIFEST_SCHEMA, version: 2, role: 'current' as const },
+  { id: 'bulk-review-manifest-v2', path: 'test/fixtures/investigation-portability/bulk-review-manifest-v2-current.json', bytes: 2_118, sha256: 'b4e209df9bc0e1c8be8a34d4f4aac486df9d0a4e1a1f750b9a21ab6e0d35b7b6', schema: BULK_REVIEW_MANIFEST_SCHEMA, version: 2, role: 'current' as const },
   // Synthetic integrity examples deliberately combine independently versioned
   // contracts. Their application labels are not captured-release provenance;
   // historical/current here describes the supported capsule schema only.
