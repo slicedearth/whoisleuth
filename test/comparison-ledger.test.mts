@@ -852,6 +852,19 @@ describe('retained comparison adapters', () => {
     assert.equal(index.truncated, true);
   });
 
+  test('does not inspect saved Bulk rows when no comparison pair was requested', () => {
+    const sessions = new Array<unknown>(10);
+    Object.defineProperty(sessions, 0, { get() { throw new Error('Unselected Bulk rows were inspected.'); } });
+    for (const bulkPairs of [undefined, []]) {
+      const index = buildComparisonLedgerIndex({ bulkSessions: sessions, bulkPairs });
+      assert.deepEqual(index.items, []);
+      assert.equal(index.truncated, false);
+      assert.ok(Object.values(index.omissions).every((count) => count === 0));
+      const details = buildComparisonLedgerDetails({ bulkSessions: sessions, bulkPairs }, {});
+      assert.deepEqual(details.rows, []);
+    }
+  });
+
   test('never creates a Bulk ledger item until an exact pair is supplied', () => {
     const earlier = bulkSession('bulk-earlier', 'Earlier saved session', EARLIER, [
       bulkResult('shared.reservation.invalid'),

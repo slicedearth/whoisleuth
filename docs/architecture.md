@@ -180,10 +180,14 @@ local export. The worker has no storage or network operations.
 
 Monitor prepares evidence gaps and timelines in one-shot same-origin workers
 using the existing source-review models. Immutable collection snapshots are
-shared between the two views; each controller retains only its current input
-and result. A collection change invalidates that result, inactive views do not
-start preparation, and refresh re-evaluates the retained evidence locally.
+replaced by their storage owners, not deeply reactive form state, and shared
+between the two views. Each controller retains only its current input and
+result; collection changes invalidate it, inactive views do not start
+preparation, and refresh re-evaluates the retained evidence locally.
+Relationship projections derive from their current collections when read.
 Worker deadlines, cancellation and teardown share the browser operation adapter.
+Retained comparison indexes inspect saved Bulk rows only after an explicit
+session pair is requested; selected sessions retain full validation.
 
 Workspace exports are deliberate local files with versioned manifests and
 section digests. Import validates the full envelope before a non-destructive

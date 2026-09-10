@@ -201,6 +201,31 @@ test('unchanged views reuse preparation and deleting a retained record invalidat
   } finally { await probe.evaluate((value) => value.finish()); await probe.dispose(); }
 });
 
+test('a committed Case edit replaces retained review inputs without losing its draft result or worker portability', async ({ page }) => {
+  await seed(page);
+  const probe = await workerProbe(page);
+  try {
+    await page.getByRole('tab', { name: /^Timeline/u }).click();
+    const timeline = page.getByRole('region', { name: 'Investigation timeline', exact: true });
+    await expect(timeline).toContainText('2 retained events');
+    await page.getByRole('tab', { name: /^Cases/u }).click();
+    const head = page.locator('.case-head', { hasText: 'retained-01.example' });
+    if (await head.getAttribute('aria-expanded') !== 'true') await head.click();
+    await page.getByRole('textbox', { name: 'Add note', exact: true }).fill('Retained review note.');
+    await page.getByRole('button', { name: 'Add note', exact: true }).click();
+    await expect(page.locator('.notes')).toContainText('Retained review note.');
+    await expect(page.getByRole('textbox', { name: 'Add note', exact: true })).toHaveValue('');
+    const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+    expect(stored.records.find((record) => record.value.domain === 'retained-01.example')?.value.notes).toHaveLength(1);
+    await page.getByRole('tab', { name: /^Timeline/u }).click();
+    await expect(timeline).toContainText('2 retained events');
+    const operations = (await probe.evaluate((value) => value.read())).operations;
+    expect(operations).toHaveLength(2);
+    expect(operations.every((operation) => operation.kind === 'timeline' && operation.repliedAt > 0)).toBe(true);
+    await expectNoHorizontalOverflow(page);
+  } finally { await probe.evaluate((value) => value.finish()); await probe.dispose(); }
+});
+
 for (const kind of ['timeline', 'debt'] as const) test(`complete ${kind} preparation runs outside the UI thread at admitted capacity`, async ({ page }, testInfo) => {
   const cases = caseStore(75, 40);
   const bulk = normalizeBulkSessionStore(richBulkSessionStore(1_100));

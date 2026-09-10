@@ -30,7 +30,7 @@
     initialMessage?: string;
     onchange?: (records: CaseRecord[], state: ParentDomainCampaignSourceState) => void;
   } = $props();
-  let cases = $state<CaseRecord[]>(untrack(() => initialCases ?? []));
+  let cases = $state.raw<CaseRecord[]>(untrack(() => initialCases ?? []));
   let casesSourceState = $state<'loading' | 'ready' | 'unavailable'>(untrack(() => initialCases ? 'ready' : 'loading'));
   let caseMessage = $state(untrack(() => initialMessage));
   const CASE_PAGE_SIZE = 25;

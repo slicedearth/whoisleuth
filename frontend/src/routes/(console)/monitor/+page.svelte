@@ -101,7 +101,7 @@
   }
 
   // --- Watchlists ---
-  let watchlists=$state<Watchlists>({});let selected=$state('');let changedOnly=$state(false);let message=$state('');
+  let watchlists=$state.raw<Watchlists>({});let selected=$state('');let changedOnly=$state(false);let message=$state('');
   let watchlistsSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let watchlistsRefreshing=$state(false);
   const names=$derived(Object.keys(watchlists).sort());const entry=$derived(selected?watchlists[selected]||null:null);const history=$derived(entry?(changedOnly?entry.history.filter(e=>e.changeCount>0):entry.history):[]);
@@ -121,25 +121,24 @@
   async function restoreHostedWatchlist(name:string,hostedEntry:WatchlistEntry){await restoreHostedWatchlistAtomically(name,hostedEntry);await refresh();}
 
   // --- Cases ---
-  let cases=$state<CaseRecord[]>([]);
+  // Collection owners replace complete snapshots; form drafts own deep reactivity.
+  let cases=$state.raw<CaseRecord[]>([]);
 
   let casesSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let parentDomainCasesSourceState=$state<ParentDomainCampaignSourceState>('loading');
   let brandProfiles=$state<BrandProfile[]>([]);
 
   let brandProfilesSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
-  let bulkSessions=$state<BulkSession[]>([]);
+  let bulkSessions=$state.raw<BulkSession[]>([]);
   let bulkSessionsSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
-  let websiteSnapshots=$state<WebsiteProfileSnapshot[]>([]);
+  let websiteSnapshots=$state.raw<WebsiteProfileSnapshot[]>([]);
   let websiteSnapshotsSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let analystReviewState=$state<AnalystReviewStateStore>(emptyAnalystReviewStateStore());
   let analystReviewStateSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let certificateReviewCount=$state<number|null>(null);
   let reviewInboxCount=$state<number|null>(null);
   const websiteProfileClusters=$derived(buildWebsiteProfileClusters(websiteSnapshots));
-  const reviewCases=$derived($state.snapshot(cases));
-  const reviewBulkSessions=$derived($state.snapshot(bulkSessions));
-  const debtInput=$derived({cases:reviewCases,bulkSessions:reviewBulkSessions,sourceStates:{cases:casesSourceState,bulk:bulkSessionsSourceState}});
+  const debtInput=$derived({cases,bulkSessions,sourceStates:{cases:casesSourceState,bulk:bulkSessionsSourceState}});
   let debtPreparation=$state.raw<RetainedReviewPreparation<'debt'>|null>(null);
   const debtController=createRetainedReviewController('debt',(next)=>debtPreparation=next);
   const evidenceDebtReview=$derived(debtPreparation?.result??null);
@@ -149,13 +148,10 @@
   let campaignCount=$state(0);
   let campaigns=$state<CampaignRecord[]>([]);
   let campaignsSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
-  let investigationProjection=$state<unknown>(null);
-  let retainedRelationships=$state<RelationshipObservation[]>([]);
+  let retainedRelationships=$state.raw<RelationshipObservation[]>([]);
   let relationshipsSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
-  const reviewWatchlists=$derived($state.snapshot(watchlists));
-  const reviewRelationships=$derived($state.snapshot(retainedRelationships));
-  const reviewWebsiteSnapshots=$derived($state.snapshot(websiteSnapshots));
-  const timelineInput=$derived({cases:reviewCases,bulkSessions:reviewBulkSessions,watchlists:reviewWatchlists,relationships:reviewRelationships,websiteSnapshots:reviewWebsiteSnapshots});
+  const investigationProjection=$derived(buildInvestigationProjection({cases,campaigns,relationshipObservations:retainedRelationships}));
+  const timelineInput=$derived({cases,bulkSessions,watchlists,relationships:retainedRelationships,websiteSnapshots});
   const timelineSourceStates=$derived([casesSourceState,watchlistsSourceState,bulkSessionsSourceState,relationshipsSourceState,websiteSnapshotsSourceState]);
   const timelineSourceState=$derived(timelineSourceStates.includes('unavailable')?'unavailable':timelineSourceStates.includes('loading')?'loading':'ready');
   let timelinePreparation=$state.raw<RetainedReviewPreparation<'timeline'>|null>(null);
@@ -192,13 +188,11 @@
 
   let caseMessage=$state('');
 
-  function refreshRelationships(){investigationProjection=buildInvestigationProjection({cases,campaigns,relationshipObservations:retainedRelationships});}
   async function refreshRetainedRelationships(){relationshipsSourceState='loading';try{retainedRelationships=await loadRelationshipObservations();relationshipsSourceState='ready';}catch(cause){relationshipsSourceState='unavailable';throw cause;}}
   async function removeRetainedRelationship(record:RelationshipObservation){
     if(!confirm(`Delete the retained ${record.label.toLowerCase()} observation for ${record.domains.length} domain${record.domains.length===1?'':'s'}?`))return;
     try{
       retainedRelationships=await deleteRelationshipObservation(record.id);
-      await refreshRelationships();
       caseMessage=`Deleted the retained relationship observation. Source cases and watchlists were not changed.`;
     }catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not delete the retained relationship observation.';}
   }
@@ -209,7 +203,6 @@
       cases = await loadCases();
       casesSourceState = 'ready';
       parentDomainCasesSourceState = 'ready';
-      refreshRelationships();
     } catch (cause) {
       parentDomainCasesSourceState = hadSnapshot ? 'partial' : parentDomainCaseFailureState(cause);
       if (!hadSnapshot) casesSourceState = 'unavailable';
@@ -220,7 +213,6 @@
     cases = committedCases;
     casesSourceState = sourceState === 'ready' || sourceState === 'partial' ? 'ready' : 'unavailable';
     parentDomainCasesSourceState = sourceState;
-    refreshRelationships();
   }
   async function reconcileCommittedCaseSnapshot(committed: { cases: CaseRecord[]; pruned: number }, success: string) {
     try {
@@ -331,10 +323,10 @@
   }
   function ensureWatchlists(){return loadCollection('watchlists',async()=>{try{await refresh();}catch{noteUnavailableCollection('watchlists');}});}
   function ensureCases(){return loadCollection('cases',async()=>{try{await refreshCases();}catch{noteUnavailableCollection('cases');}});}
-  function ensureRelationships(){return loadCollection('relationships',async()=>{try{await refreshRetainedRelationships();refreshRelationships();}catch{noteUnavailableCollection('retained relationships');}});}
+  function ensureRelationships(){return loadCollection('relationships',async()=>{try{await refreshRetainedRelationships();}catch{noteUnavailableCollection('retained relationships');}});}
   function ensureBulkSessions(){return loadCollection('bulk-sessions',async()=>{try{bulkSessions=await loadBulkSessions();bulkSessionsSourceState='ready';}catch{bulkSessionsSourceState='unavailable';noteUnavailableCollection('Bulk sessions');}});}
   function ensureWebsiteSnapshots(){return loadCollection('website-snapshots',async()=>{try{websiteSnapshots=await loadWebsiteSnapshots();websiteSnapshotsSourceState='ready';}catch{websiteSnapshotsSourceState='unavailable';noteUnavailableCollection('website profiles');}});}
-  function ensureCampaigns(){return loadCollection('campaigns',async()=>{try{campaigns=await loadCampaigns();campaignCount=campaigns.length;campaignsSourceState='ready';refreshRelationships();}catch{campaignsSourceState='unavailable';noteUnavailableCollection('campaigns');}});}
+  function ensureCampaigns(){return loadCollection('campaigns',async()=>{try{campaigns=await loadCampaigns();campaignCount=campaigns.length;campaignsSourceState='ready';}catch{campaignsSourceState='unavailable';noteUnavailableCollection('campaigns');}});}
   function ensureRules(){return loadCollection('rules',async()=>{try{detectionRules=await loadDetectionRules();customRuleCount=detectionRules.length;detectionRulesSourceState='ready';}catch{detectionRulesSourceState='unavailable';noteUnavailableCollection('rules');}});}
   function ensureProfiles(){return loadCollection('profiles',async()=>{try{brandProfiles=await loadProfiles();brandProfilesSourceState='ready';}catch{brandProfilesSourceState='unavailable';noteUnavailableCollection('Brand Profiles');}});}
   function ensureAnalystReviewState(){return loadCollection('analyst-review-state',async()=>{try{analystReviewState=await loadAnalystReviewState();analystReviewStateSourceState='ready';}catch{analystReviewStateSourceState='unavailable';noteUnavailableCollection('analyst Review Item lifecycle');}});}
@@ -441,7 +433,7 @@
 {#if view==='campaigns'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-campaigns">
   {#if campaignsSourceState==='ready'}
-    <DeferredSurface load={()=>import('$lib/components/CampaignManager.svelte')} loadingLabel="Loading campaign workspace…" unavailableLabel="The campaign workspace could not be loaded." props={{records:cases,profiles:brandProfiles,relationshipSummary,cohortSourceStates:{cases:casesSourceState,profiles:brandProfilesSourceState,relationships:relationshipsSourceState},parentDomainSourceState:parentDomainCasesSourceState,initialCampaigns:campaigns,focusId:page.url.searchParams.get('campaign')||'',onselect:openRelatedCase,oncount:(count:number)=>campaignCount=count,onchange:(nextCampaigns:CampaignRecord[])=>{campaigns=nextCampaigns;refreshRelationships();}}} placeholder="workspace" />
+    <DeferredSurface load={()=>import('$lib/components/CampaignManager.svelte')} loadingLabel="Loading campaign workspace…" unavailableLabel="The campaign workspace could not be loaded." props={{records:cases,profiles:brandProfiles,relationshipSummary,cohortSourceStates:{cases:casesSourceState,profiles:brandProfilesSourceState,relationships:relationshipsSourceState},parentDomainSourceState:parentDomainCasesSourceState,initialCampaigns:campaigns,focusId:page.url.searchParams.get('campaign')||'',onselect:openRelatedCase,oncount:(count:number)=>campaignCount=count,onchange:(nextCampaigns:CampaignRecord[])=>campaigns=nextCampaigns}} placeholder="workspace" />
   {:else}
     <LocalCollectionState state={campaignsSourceState} title="Campaigns unavailable" detail="The browser-local campaign collection could not be read, so its count and mutation controls remain unavailable. Reload to retry without treating the collection as empty." />
   {/if}

@@ -330,6 +330,9 @@ export function comparisonLedgerBulkPairIndexId(earlierSessionId: unknown, later
 }
 
 export function buildBulkComparisonCandidates(sessionsRaw: unknown, pairsRaw: unknown, counters: MutableComparisonLedgerCounters): ComparisonLedgerCandidate[] {
+  const pairs = comparisonLedgerInputArray(pairsRaw);
+  // Saved sessions are comparison inputs only after a pair is requested.
+  if (!pairs.length) return [];
   const input = comparisonLedgerInputArray(sessionsRaw);
   counters.inputRecords += Math.max(0, input.length - MAX_BULK_SESSIONS);
   const sessions = new Map<string, BulkSession>();
@@ -345,7 +348,6 @@ export function buildBulkComparisonCandidates(sessionsRaw: unknown, pairsRaw: un
     }
     sessions.set(item.id, item);
   }
-  const pairs = comparisonLedgerInputArray(pairsRaw);
   counters.inputRecords += Math.max(0, pairs.length - MAX_COMPARISON_LEDGER_BULK_PAIRS);
   const candidates: ComparisonLedgerCandidate[] = [];
   const seen = new Set<string>();
