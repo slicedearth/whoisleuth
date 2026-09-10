@@ -8,6 +8,9 @@ import {
   RUNNABLE_INVESTIGATION_PLAN_RECIPES,
 } from '../cli/investigation-plan.mts';
 import { runInvestigationRecipe } from '../cli/investigation-run.mts';
+import { buildCliLookupDocument } from '../cli/saved-lookup.mts';
+import { CLI_DISCOVER_SCHEMA_VERSION, CLI_POSTURE_SCHEMA_VERSION } from '../cli/formatters/json.mts';
+import { CLI_DISCOVERY_SCAN_VERSION } from '../cli/discovery-scan.mts';
 import { requestLookup, type LookupRequestOptions } from '../lib/lookup-request.mts';
 import { buildBulkSessionExport, mergeBulkSessions, normalizeBulkSessionStore, serializeBulkSessionStore } from '../packages/workspace/bulk-session-model.mts';
 import { richBulkSessionStore } from './bulk-session-fixture.mts';
@@ -240,7 +243,14 @@ describe('bounded verification state machines', () => {
               && item.arguments.every((argument, index) => argument === args[index]));
             assert.ok(step);
             calls.push({ command, arguments: args, mode: step.mode });
-            return { exitCode: 0, stdout: JSON.stringify({ schema: step.produces }) };
+            const output = command === 'lookup' ? buildCliLookupDocument(subject, {
+              type: 'domain', value: subject, inputHostname: subject, registrableDomain: subject, isSubdomain: false,
+            }, { diagnostics: { rdap: { status: 'unsupported' }, whois: { status: 'skipped' } }, availability: {} }, NOW, 'deep') : {
+              schema: step.produces,
+              version: command === 'discover' ? CLI_DISCOVER_SCHEMA_VERSION
+                : command === 'posture' ? CLI_POSTURE_SCHEMA_VERSION : CLI_DISCOVERY_SCAN_VERSION,
+            };
+            return { exitCode: 0, stdout: JSON.stringify(output) };
           },
         });
         assert.deepEqual(result.completedSteps.map((item) => item.id), plan.steps.slice(0, result.completedSteps.length).map((item) => item.id));

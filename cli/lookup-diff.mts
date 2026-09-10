@@ -21,7 +21,7 @@ type CliLookupDiffDocument = Readonly<{
   limitations: readonly string[];
 }>;
 type LookupDiffOptions = Readonly<{
-  domainMode?: 'different' | 'same';
+  domainMode?: 'different' | 'same' | 'auto';
 }>;
 
 function text(value: unknown, maximum = 300): string | null {
@@ -150,7 +150,9 @@ function buildCliLookupDiff(
 ): CliLookupDiffDocument {
   const left = parseSavedLookupDocument(leftText, { label: 'Left lookup input' });
   const right = parseSavedLookupDocument(rightText, { label: 'Right lookup input' });
-  const domainMode = options.domainMode ?? 'different';
+  const domainMode = options.domainMode === 'auto'
+    ? left.registrableDomain === right.registrableDomain ? 'same' : 'different'
+    : options.domainMode ?? 'different';
   if (domainMode === 'different' && left.registrableDomain === right.registrableDomain) {
     throw new CliUsageError('Lookup diff requires documents for two different domains.');
   }

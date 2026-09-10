@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 9 September 2026.
+Last updated: 10 September 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -237,6 +237,8 @@ operator's retention and deletion control.
 
 Workflow-file output uses adjacent private lock files containing a local process
 ID. They are removed after the run; interruption can leave one for manual recovery.
+Workflow checkpoints retain selected paths, step evidence, content digests and
+explicit input bindings. Reused evidence stays local without extraction files.
 
 Optional metadata CSV retains source versions, collection and report times,
 collection origin and source-health states alongside the selected results.

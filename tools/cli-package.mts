@@ -15,6 +15,7 @@ import {
   WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL,
 } from '../lib/project-metadata.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { CLI_INVESTIGATION_RUN_SCHEMA, CLI_INVESTIGATION_RUN_VERSION, MAX_INVESTIGATION_RUN_BYTES } from '../packages/contracts/investigation-run.mts';
 import {
   readBoundedRegularFile,
   readBoundedRegularFileWithin,
@@ -785,16 +786,24 @@ export function validatePackedCliFiles(
   return entries;
 }
 
-async function runInstalledCheck(executable: string, args: readonly string[], label: string): Promise<string> {
-  const { stdout, stderr } = await execFile(process.execPath, [executable, ...args], {
-    encoding: 'utf8',
-    timeout: CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS,
-    killSignal: 'SIGTERM',
-    maxBuffer: 2 * 1024 * 1024,
-    env: cliPackageProcessEnvironment({ FORCE_COLOR: '0', NO_COLOR: '1' }),
-  });
-  if (stderr) throw new TypeError(`Installed CLI ${label} wrote unexpected diagnostics.`);
-  return stdout;
+async function runInstalledCheck(executable: string, args: readonly string[], label: string, expectedExitCode = 0): Promise<string> {
+  let output: { stdout: string; stderr: string };
+  let exitCode = 0;
+  try {
+    output = await execFile(process.execPath, [executable, ...args], {
+      encoding: 'utf8', timeout: CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS,
+      killSignal: 'SIGTERM', maxBuffer: 2 * 1024 * 1024,
+      env: cliPackageProcessEnvironment({ FORCE_COLOR: '0', NO_COLOR: '1' }),
+    });
+  } catch (cause) {
+    const error = cause as { code?: unknown; stdout?: unknown; stderr?: unknown; killed?: unknown };
+    if (error.code !== expectedExitCode || error.killed || typeof error.stdout !== 'string' || typeof error.stderr !== 'string') throw cause;
+    exitCode = Number(error.code);
+    output = { stdout: error.stdout, stderr: error.stderr };
+  }
+  if (exitCode !== expectedExitCode) throw new TypeError(`Installed CLI ${label} returned an unexpected exit code.`);
+  if (output.stderr) throw new TypeError(`Installed CLI ${label} wrote unexpected diagnostics.`);
+  return output.stdout;
 }
 
 export async function checkCliPackage(repositoryRoot: string, options: CliPackageOptions = {}): Promise<CliPackageReport> {
@@ -1177,6 +1186,20 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     }
 
     const commandHelpChecks: string[] = [];
+    const workflowFixture = path.join(temporaryRoot, 'workflow.json');
+    await writeFile(workflowFixture, await readBoundedRegularFileWithin(repositoryRoot, 'test/fixtures/cli-investigation-run-v2.json', {
+      maximumBytes: MAX_INVESTIGATION_RUN_BYTES, minimumBytes: 1, label: 'Public workflow checkpoint fixture',
+    }), { mode: 0o600, flag: 'wx' });
+    const workflow = record(JSON.parse(await runInstalledCheck(executable, [
+      'workflow-run', 'domain-triage', 'example.test', '--resume', workflowFixture,
+      '--use-artifact', 'export:1=collect', '--use-artifact', 'verify:1=export', '--json',
+    ], 'offline workflow artefact reuse', 4)), 'Installed workflow');
+    if (workflow.schema !== CLI_INVESTIGATION_RUN_SCHEMA || workflow.version !== CLI_INVESTIGATION_RUN_VERSION || workflow.state !== 'partial'
+      || !Array.isArray(workflow.completedSteps) || workflow.completedSteps.length !== 3
+      || record(workflow.completedSteps[1], 'Installed workflow export').command !== 'export'
+      || record(workflow.completedSteps[2], 'Installed workflow verification').command !== 'verify-artifact') {
+      throw new TypeError('Installed workflow did not retain and reuse the partial public observation offline.');
+    }
     const catalogueCommands = commandCatalogue.commands.map((entry, index) => boundedString(
       record(entry, `Installed command catalogue entry ${index + 1}`).command,
       `Installed command catalogue entry ${index + 1} command`,
@@ -1228,6 +1251,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       'discover',
       'discover-scan-network-boundary',
       'mail-header-review',
+      'offline-workflow-artifact-reuse',
       'domain-control-deep-imports',
       ...installedHandlerChecks,
       ...commandHelpChecks,

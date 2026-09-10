@@ -359,21 +359,26 @@ test('keeps workflow partial-result and resume guidance readable across referenc
   await page.goto('/cli#command-workflow-run');
   const detail = page.locator('article[data-command-detail="workflow-run"]');
   await expect(detail).toBeVisible();
-  const boundary = detail.getByText(/Partial collections pause for review and are retained, not recollected, on resume/u);
+  await expect(detail.locator('details.boundary')).toHaveJSProperty('open', true);
+  const boundary = detail.locator('details.boundary > p');
   await expect(boundary).toBeVisible();
+  await expect(boundary).toContainText(/Partial collections pause for review.*not recollected.*resume/u);
   await expect(boundary).toContainText('failed validation or export steps remain retryable');
-  await expect(boundary).toContainText('Step diagnostics go to stderr, not the checkpoint');
+  await expect(boundary).toContainText(/diagnostics go to stderr/iu);
+  await expect(boundary).toContainText('--use-artifact <step-id>:<input-number>=<earlier-step-id>');
+  await expect(boundary).toContainText('Repeat --select for remaining placeholders in order');
+  await expect(boundary).toContainText('not proof of authenticity or freshness');
   for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 },
     { width: 390, height: 844 }, { width: 320, height: 700 }]) {
     await page.setViewportSize(viewport);
-    for (const theme of ['light', 'dark']) {
-      await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
       await boundary.scrollIntoViewIfNeeded();
       await expect(boundary).toBeInViewport();
       await expectNoHorizontalOverflow(page);
-      if ([320, 1280].includes(viewport.width)) {
-        await page.screenshot({ path: testInfo.outputPath(`workflow-guidance-${viewport.width}-${theme}.png`) });
-      }
+      await testInfo.attach(`workflow-artifact-${viewport.width}-${theme}`, {
+        body: await page.screenshot(), contentType: 'image/png',
+      });
     }
   }
   expect(requests).toEqual([]);

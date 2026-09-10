@@ -3455,9 +3455,9 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Execute approved fixed-recipe steps",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth workflow-run \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison> \u003csubject> [--select \u003cvalue>] [--approve-network] [--resume \u003cfile>] [--json] [--quiet] [--no-color]",
-      "example": "whoisleuth workflow-run domain-triage example.test --resume run.json --select export=saved-lookup.json --json --output run-next.json",
-      "boundary": "Only installed recipe commands can run. Network steps require explicit approval for each invocation. Repeat --select in placeholder order for one step; each bounded value replaces one exact placeholder and cannot start with a hyphen, become an option, or invoke a shell. Partial collections pause for review and are retained, not recollected, on resume; failed validation or export steps remain retryable. Step diagnostics go to stderr, not the checkpoint. File output holds exclusive adjacent locks through publication and refuses concurrently changed state files.",
+      "usage": "whoisleuth workflow-run \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison> \u003csubject> [--select \u003cvalue>] [--use-artifact \u003cvalue>] [--approve-network] [--resume \u003cfile>] [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth workflow-run domain-triage example.test --approve-network --use-artifact export:1=collect --use-artifact verify:1=export --json --output run.json",
+      "boundary": "Only installed recipe commands can run. Network steps require explicit approval for each invocation. Use --use-artifact \u003cstep-id>:\u003cinput-number>=\u003cearlier-step-id> for compatible retained outputs; input numbers start at 1. Repeat --select for remaining placeholders in order; values stay literal and cannot start with a hyphen or invoke a shell. Checkpoints retain exact schemas, content digests and input bindings, not proof of authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.",
       "collection": {
         "mode": "network",
         "scope": "Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause."
@@ -3489,6 +3489,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       ],
       "importantOptions": [
         "--select",
+        "--use-artifact",
         "--approve-network",
         "--resume",
         "--json",
@@ -3567,7 +3568,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "common": true,
       "usage": "whoisleuth diff \u003csources...> [--left-session \u003cvalue>] [--right-session \u003cvalue>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth diff earlier.json later.json --json",
-      "boundary": "Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.",
+      "boundary": "Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; same-domain comparisons preserve observation times and collection uncertainty. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.",
       "collection": {
         "mode": "offline",
         "scope": "Reads two compatible retained artefacts capped at 8 MiB each and retains no source paths."
@@ -3914,7 +3915,7 @@ export const PUBLIC_CLI_CATALOGUE = {
             "mode": "offline",
             "approval": "analyst_selection",
             "produces": "whoisleuth\u002elookup-evidence",
-            "completion": "Select the reviewed lookup file; the plan never guesses a path."
+            "completion": "Select a reviewed Lookup file or explicitly bind the collected Lookup output."
           },
           {
             "id": "verify",

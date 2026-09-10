@@ -1,6 +1,7 @@
 import { parseCommandArguments, type ParsedCommandArguments } from './command-argument-grammar.mts';
 import { CliUsageError, hasUnsafeCliText } from './errors.mts';
 import type { InvestigationPlanRecipe, RunnableInvestigationPlanRecipe } from './investigation-plan.mts';
+import type { WorkflowArtifactBinding } from '../packages/contracts/investigation-run.mts';
 import { parseCliFailPolicies, type CliFailPolicy, type CliFailPolicyCommand } from './fail-policy.mts';
 import { isDirectLookupTarget } from '../lib/classify.mts';
 import {
@@ -89,7 +90,7 @@ type CliAction =
   | ({ action: 'workflow-plan'; recipe: InvestigationPlanRecipe; subject: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'workflow-plan'; discovery: 'list'; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'workflow-plan'; discovery: 'explain'; recipe: InvestigationPlanRecipe; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'workflow-run'; recipe: RunnableInvestigationPlanRecipe; subject: string; resumeSource: string | null; selections: readonly Readonly<{ stepId: string; value: string }>[]; approveNetwork: boolean; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'workflow-run'; recipe: RunnableInvestigationPlanRecipe; subject: string; resumeSource: string | null; selections: readonly Readonly<{ stepId: string; value: string }>[]; artifactBindings: readonly WorkflowArtifactBinding[]; approveNetwork: boolean; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'diff'; leftSource: string; rightSource: string; leftSessionId: string | null; rightSessionId: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'reconcile'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'timeline'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
@@ -418,6 +419,11 @@ function parseWorkflowPlanArguments(parsed: ParsedCommandArguments): Extract<Cli
 }
 
 function parseWorkflowRunArguments(parsed: ParsedCommandArguments): Extract<CliAction, { action: 'workflow-run' }> {
+  const artifactBindings = parsed.optionValues('--use-artifact').map((value) => {
+    const match = /^([a-z0-9]+(?:-[a-z0-9]+)*):([1-9][0-9]?)=([a-z0-9]+(?:-[a-z0-9]+)*)$/u.exec(value);
+    if (!match) throw new CliUsageError('--use-artifact requires <step-id>:<input-number>=<earlier-step-id>.');
+    return Object.freeze({ stepId: match[1]!, input: Number(match[2]), sourceStepId: match[3]! });
+  });
   const selections = parsed.optionValues('--select').map((value) => {
     const separator = value.indexOf('=');
     const stepId = separator === -1 ? '' : value.slice(0, separator);
@@ -436,6 +442,7 @@ function parseWorkflowRunArguments(parsed: ParsedCommandArguments): Extract<CliA
     subject: parsed.positionalValue('subject')!,
     resumeSource: parsed.optionValue('--resume'),
     selections: Object.freeze(selections),
+    artifactBindings: Object.freeze(artifactBindings),
     approveNetwork: parsed.hasOption('--approve-network'),
     output: jsonOutput(parsed),
     ...terminalOptions(parsed),

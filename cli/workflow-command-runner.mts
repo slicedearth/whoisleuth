@@ -18,6 +18,11 @@ import {
   runInvestigationRecipe,
 } from './investigation-run.mts';
 import { MAX_OFFLINE_EVIDENCE_INPUT_BYTES } from './offline-evidence-review.mts';
+import { MAX_OFFLINE_ARTIFACT_BYTES } from './artifact-verify.mts';
+import { MAX_RETAINED_ARTIFACT_DIFF_BYTES } from './retained-artifact-diff.mts';
+import { MAX_SAVED_LOOKUP_INPUT_BYTES } from './saved-lookup.mts';
+import type { WorkflowStepInputs } from './investigation-artifacts.mts';
+import type { CliCommand } from './command-reference.mts';
 import { createBufferedOutput } from './output-file.mts';
 import type { CliCommandContext, CliDependencies } from './runner-types.mts';
 import { WORKFLOW_INLINE_COMMANDS } from './inline-command-families.mts';
@@ -25,6 +30,24 @@ import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } f
 
 type WorkflowInlineCommand = typeof WORKFLOW_INLINE_COMMANDS[number];
 type WorkflowCommandArguments = Extract<CliArguments, { action: WorkflowInlineCommand }>;
+
+function boundWorkflowInputs(command: CliCommand, inputs: WorkflowStepInputs, dependencies: CliDependencies, context: CliCommandContext): Partial<CliDependencies> {
+  if (!inputs.size) return {};
+  const read = (source: string | null | undefined, fallback: (() => string | Promise<string>)) =>
+    typeof source === 'string' && inputs.has(source) ? inputs.get(source)! : fallback();
+  switch (command) {
+    case 'export': return { readExportInput: (source) => read(source, () => dependencies.readExportInput
+      ? dependencies.readExportInput(source) : context.readInput(source, MAX_SAVED_LOOKUP_INPUT_BYTES, 'Evidence export input')) };
+    case 'verify-artifact': return { readArtifactInput: (source) => read(source, () => dependencies.readArtifactInput
+      ? dependencies.readArtifactInput(source) : context.readInput(source, MAX_OFFLINE_ARTIFACT_BYTES, 'Artefact input')) };
+    case 'diff':
+    case 'timeline': return { readDiffInput: (source) => read(source, () => dependencies.readDiffInput
+      ? dependencies.readDiffInput(source) : context.readInput(source,
+        command === 'diff' ? MAX_RETAINED_ARTIFACT_DIFF_BYTES : MAX_SAVED_LOOKUP_INPUT_BYTES,
+        command === 'diff' ? 'Retained diff input' : 'Lookup timeline input')) };
+    default: throw new CliUsageError('This fixed-workflow command does not accept retained artefacts.');
+  }
+}
 
 async function runMonitorOnceCommand(
   args: Extract<WorkflowCommandArguments, { action: 'monitor-once' }>,
@@ -123,16 +146,18 @@ async function runWorkflowRecipeCommand(
   const document = await runInvestigationRecipe(args.recipe, args.subject, {
     approveNetwork: args.approveNetwork,
     selections: args.selections,
+    artifactBindings: args.artifactBindings,
     resumeInput,
     generatedAt: context.now(),
     ...(dependencies.signal ? { signal: dependencies.signal } : {}),
-    execute: async (command, stepArguments) => {
+    execute: async (command, stepArguments, inputs) => {
       const stepStdout = createBufferedOutput();
       const stepStderr = createCliDiagnosticOutput();
       try {
         const exitCode = await context.executeCli([command, ...stepArguments], {
           stdout: stepStdout.stream,
           stderr: stepStderr.stream,
+          ...boundWorkflowInputs(command, inputs, dependencies, context),
         });
         return { exitCode, stdout: stepStdout.value() };
       } finally {

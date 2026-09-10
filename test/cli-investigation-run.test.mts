@@ -9,13 +9,21 @@ import { createCliDiagnosticOutput } from '../cli/errors.mts';
 import { buildInvestigationPlan } from '../cli/investigation-plan.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
+import { buildCliLookupDocument } from '../cli/saved-lookup.mts';
+import { buildCliEvidenceExport } from '../cli/export-evidence.mts';
+import * as evidence from '../lib/evidence-export.mts';
 
 const NOW = '2026-08-05T05:00:00.000Z';
 
 function commandOutput(recipe: Parameters<typeof buildInvestigationPlan>[0], subject: string, command: string) {
   const step = buildInvestigationPlan(recipe, subject, NOW).steps.find((item) => item.command === command);
   assert.ok(step);
-  return JSON.stringify({ schema: step.produces });
+  const lookup = buildCliLookupDocument('example.test', {
+    type: 'domain', value: 'example.test', inputHostname: 'example.test', registrableDomain: 'example.test', isSubdomain: false,
+  }, { diagnostics: { rdap: { status: 'unsupported' }, whois: { status: 'skipped' } }, availability: {} }, NOW, 'deep');
+  if (command === 'lookup') return JSON.stringify(lookup);
+  if (command === 'export') return JSON.stringify(buildCliEvidenceExport(JSON.stringify(lookup), evidence, NOW));
+  return JSON.stringify({ schema: step.produces, version: command === 'discover' ? 2 : command === 'verify-artifact' ? 3 : 1 });
 }
 
 describe('fixed investigation execution', () => {
@@ -96,7 +104,7 @@ describe('fixed investigation execution', () => {
 
   test('exposes explicit approval and resume arguments through the runner', async () => {
     assert.deepEqual(parseCliArguments(['workflow-run', 'domain-triage', 'example.test', '--select', 'export=saved.json', '--approve-network', '--resume', 'state.json', '--json']), {
-      action: 'workflow-run', recipe: 'domain-triage', subject: 'example.test', resumeSource: 'state.json', selections: [{ stepId: 'export', value: 'saved.json' }], approveNetwork: true, output: 'json', quiet: false, color: true,
+      action: 'workflow-run', recipe: 'domain-triage', subject: 'example.test', resumeSource: 'state.json', selections: [{ stepId: 'export', value: 'saved.json' }], artifactBindings: [], approveNetwork: true, output: 'json', quiet: false, color: true,
     });
     let stdout = '';
     let calls = 0;
@@ -173,7 +181,7 @@ describe('fixed investigation execution', () => {
       version: 1,
       recipe: 'lookalike-review',
       subject: 'example brand',
-      completedSteps: [{ ...plan.steps[0], exitCode: 0, result: { schema: plan.steps[0]?.produces } }],
+      completedSteps: [{ ...plan.steps[0], exitCode: 0, result: JSON.parse(commandOutput('lookalike-review', 'Example Brand', 'discover')) }],
     };
     const resumed = await runInvestigationRecipe('lookalike-review', 'Example Brand', {
       approveNetwork: true,
@@ -198,7 +206,7 @@ describe('fixed investigation execution', () => {
     const validStep = {
       ...plan.steps[0],
       exitCode: 0,
-      result: { schema: plan.steps[0]?.produces },
+      result: JSON.parse(commandOutput('lookalike-review', 'Example Brand', 'discover')),
     };
     const variants = [
       [{ ...validStep, command: 'lookup' }],
@@ -356,7 +364,11 @@ describe('fixed investigation execution', () => {
     assert.equal(resumed.version, 3);
     assert.equal(resumed.state, 'awaiting_analyst_selection');
     assert.equal(investigationRunExitCode(resumed), 4);
-    assert.deepEqual(resumed.completedSteps, JSON.parse(input).completedSteps);
+    assert.deepEqual(resumed.completedSteps.map(({ artifact, inputs, ...step }) => {
+      assert.match(artifact!.id, /^sha256:[a-f0-9]{64}$/u);
+      assert.deepEqual(inputs, []);
+      return step;
+    }), JSON.parse(input).completedSteps);
     for (const version of [0, 4, '3', null]) {
       await assert.rejects(() => runInvestigationRecipe('domain-triage', 'example.test', {
         approveNetwork: true, resumeInput: JSON.stringify({ ...JSON.parse(input), version }), generatedAt: NOW,

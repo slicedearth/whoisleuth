@@ -398,6 +398,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--list': flag(),
   '--explain': enumeration(INVESTIGATION_PLAN_RECIPES),
   '--select': optionDefinition('text', { occurrence: 'repeatable', acceptsOptionLikeValue: true }),
+  '--use-artifact': optionDefinition('text', { occurrence: 'repeatable' }),
   '--approve-network': flag(),
   '--left-session': text(true),
   '--right-session': text(true),
@@ -1440,12 +1441,12 @@ const COMMAND_SEEDS = Object.freeze({
   "workflow-run": commandSeed({
     reference: {
       description: 'Execute approved steps from a fixed investigation recipe and emit a resumable checkpoint.',
-      example: 'whoisleuth workflow-run domain-triage example.test --resume run.json --select export=saved-lookup.json --json --output run-next.json',
-      boundary: 'Only installed recipe commands can run. Network steps require explicit approval for each invocation. Repeat --select in placeholder order for one step; each bounded value replaces one exact placeholder and cannot start with a hyphen, become an option, or invoke a shell. Partial collections pause for review and are retained, not recollected, on resume; failed validation or export steps remain retryable. Step diagnostics go to stderr, not the checkpoint. File output holds exclusive adjacent locks through publication and refuses concurrently changed state files.',
+      example: 'whoisleuth workflow-run domain-triage example.test --approve-network --use-artifact export:1=collect --use-artifact verify:1=export --json --output run.json',
+      boundary: 'Only installed recipe commands can run. Network steps require explicit approval for each invocation. Use --use-artifact <step-id>:<input-number>=<earlier-step-id> for compatible retained outputs; input numbers start at 1. Repeat --select for remaining placeholders in order; values stay literal and cannot start with a hyphen or invoke a shell. Checkpoints retain exact schemas, content digests and input bindings, not proof of authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.',
     },
     collection: { mode: 'network', scope: 'Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause.' },
     summary: 'Execute approved fixed-recipe steps',
-    options: ['--select', '--approve-network', '--resume', '--json', '--quiet', '--no-color'],
+    options: ['--select', '--use-artifact', '--approve-network', '--resume', '--json', '--quiet', '--no-color'],
     positionals: Object.freeze([
     positional('recipe', 'enum', 1, 1, RUNNABLE_INVESTIGATION_PLAN_RECIPES),
     positional('subject', 'text', 1, 1),
@@ -1464,7 +1465,7 @@ const COMMAND_SEEDS = Object.freeze({
     reference: {
       description: 'Compare an earlier and later artefact from the same retained Lookup, Bulk-session, or domain-portfolio family.',
       example: 'whoisleuth diff earlier.json later.json --json',
-      boundary: 'Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.',
+      boundary: 'Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; same-domain comparisons preserve observation times and collection uncertainty. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.',
     },
     collection: { mode: 'offline', scope: 'Reads two compatible retained artefacts capped at 8 MiB each and retains no source paths.' },
     summary: 'Compare two compatible retained artefacts',

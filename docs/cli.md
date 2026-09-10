@@ -133,9 +133,28 @@ the run still exits with code 4. Validation, usage and export failures remain
 failures and are retried on resume. Step diagnostics stay on stderr, separate
 from checkpoint JSON. New network steps still need `--approve-network`.
 
+Use `--use-artifact <step-id>:<input-number>=<earlier-step-id>` to reuse a
+compatible retained output. Input numbers start at 1 and refer to placeholders
+shown by `workflow-plan`. For a complete domain-triage hand-off:
+
+```sh
+whoisleuth workflow-run domain-triage example.test --approve-network \
+  --use-artifact export:1=collect --use-artifact verify:1=export \
+  --json --output run.json
+```
+
+Bindings accept Lookup outputs for export, diff and timeline, and evidence
+exports for verification. Remaining placeholders use `--select` in order;
+for example, `--use-artifact diff:2=current --select diff=previous.json`.
+`diff` compares saved observations of the same or different domains; `timeline`
+orders observations of one domain. Candidate and domain-control intent inputs
+remain analyst selections. No file is inferred or extracted automatically.
+
 Checkpoint version 3 reads versions 1 and 2. Older installations reject version
-3 rather than unknowingly repeating an incomplete collection. The checkpoint
-can contain selected local paths and evidence; review it before sharing.
+3. Checkpoints retain exact output schemas, content digests and input bindings;
+changed identities or completed inputs are rejected. Digests identify content,
+not source authenticity, truth or freshness. The checkpoint can contain
+selected local paths and evidence; review it before sharing.
 
 Use `--json --output state.json` for a resumable file, and add `--force` when
 replacing it. File output holds private adjacent `.workflow.lock` files for

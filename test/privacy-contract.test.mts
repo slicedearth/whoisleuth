@@ -60,6 +60,7 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   { id: 'contact-minimisation', pattern: /Contact page.*Turnstile token.*does not send or retain/iu },
   { id: 'cli-local', pattern: /CLI runs on the operator's machine/iu },
   { id: 'workflow-file-locks', pattern: /Workflow-file output uses adjacent private lock files containing a local process ID.*removed after the run.*interruption can leave one for manual recovery/iu },
+  { id: 'workflow-evidence-reuse', pattern: /Workflow checkpoints retain selected paths, step evidence, content digests and explicit input bindings.*Reused evidence stays local without extraction files/iu },
   { id: 'active-mail-limit', pattern: /at most three selected MX hosts.*sends no message.*tests no relay, recipient, mailbox,? or catch-all/iu },
   { id: 'saved-lookup-sensitivity', pattern: /full saved Lookup.*raw RDAP publications.*WHOIS response bodies.*publicly published contacts/iu },
   { id: 'export-review', pattern: /full saved Lookup.*Review every file before sharing/iu },

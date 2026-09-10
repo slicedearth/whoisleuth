@@ -51,6 +51,8 @@ export const SCHEMA_DYNAMIC_USE_ALLOWLIST = Object.freeze([
   ['cli/formatters/json.mts', 'writer', 'Projects the selected canonical CLI result marker.'],
   ['cli/interchange-report.mts', 'reader', 'Matches a bounded container marker to a reviewed interchange contract.'],
   ['cli/interchange-report.mts', 'writer', 'Copies the matched interchange marker into a report.'],
+  ['cli/investigation-artifacts.mts', 'reader', 'Checks fixed-recipe outputs against canonical format identities and existing reusable-input validators.'],
+  ['cli/investigation-artifacts.mts', 'writer', 'Copies the checked output identity into content-bound checkpoint metadata.'],
   ['cli/investigation-manifest.mts', 'writer', 'Projects a reviewed manifest-entry marker.'],
   ['cli/retained-artifact-diff.mts', 'reader', 'Requires bounded retained documents to declare the same marker.'],
   ['cli/risk-calibration.mts', 'writer', 'Copies the validated calibration marker into report metadata.'],

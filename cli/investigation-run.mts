@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { isDeepStrictEqual } from 'node:util';
 
 import {
   buildInvestigationPlan,
@@ -18,7 +19,12 @@ import {
   MAX_INVESTIGATION_RUN_SELECTIONS,
   MAX_INVESTIGATION_RUN_SELECTION_LENGTH,
   type InvestigationRunState,
+  type WorkflowArtifactBinding,
 } from '../packages/contracts/investigation-run.mts';
+import {
+  normalizeWorkflowBindings, validateWorkflowResult, workflowArtifactReference,
+  type WorkflowArtifact, type WorkflowArtifactInput, type WorkflowStepInputs,
+} from './investigation-artifacts.mts';
 
 export {
   CLI_INVESTIGATION_RUN_SCHEMA,
@@ -37,6 +43,8 @@ type CompletedStep = Readonly<{
   mode: 'offline' | 'network';
   exitCode: number;
   result: unknown;
+  artifact: WorkflowArtifact | null;
+  inputs: readonly WorkflowArtifactInput[];
 }>;
 type WorkflowSelection = Readonly<{ stepId: string; value: string }>;
 type RetainedSelections = Readonly<{ stepId: string; values: readonly string[] }>;
@@ -63,20 +71,18 @@ function boundedResult(value: string): unknown {
   }
 }
 
-function resultSchema(value: unknown): string | null {
-  return value && typeof value === 'object' && !Array.isArray(value) && typeof (value as Record<string, unknown>).schema === 'string'
-    ? String((value as Record<string, unknown>).schema)
-    : null;
-}
-
-function stepDisposition(step: InvestigationStep, exitCode: number, result: unknown): 'complete' | 'partial' | 'failed' {
-  const expectedContract = resultSchema(result) === step.produces;
-  if (exitCode === EXIT_CODES.SUCCESS) {
-    if (!expectedContract) throw new CliUsageError(`Investigation step ${step.id} returned an unexpected command contract.`);
-    return 'complete';
+function stepDisposition(step: InvestigationStep, exitCode: number, result: unknown, retained = false) {
+  const partial = exitCode === EXIT_CODES.PARTIAL_FAILURE && step.mode === 'network'
+    && PARTIAL_OBSERVATION_COMMANDS.has(step.command);
+  if (exitCode === EXIT_CODES.SUCCESS || partial) {
+    try {
+      const artifact = validateWorkflowResult(step, result, retained);
+      return { disposition: partial ? 'partial' as const : 'complete' as const, artifact };
+    } catch {
+      if (!partial) throw new CliUsageError(`Investigation step ${step.id} returned an unexpected command contract or invalid result.`);
+    }
   }
-  return exitCode === EXIT_CODES.PARTIAL_FAILURE && step.mode === 'network'
-    && PARTIAL_OBSERVATION_COMMANDS.has(step.command) && expectedContract ? 'partial' : 'failed';
+  return { disposition: 'failed' as const, artifact: null };
 }
 
 function sameArguments(left: unknown, right: readonly string[]): boolean {
@@ -85,18 +91,40 @@ function sameArguments(left: unknown, right: readonly string[]): boolean {
     && left.every((value, index) => typeof value === 'string' && value === right[index]);
 }
 
-function selectedArguments(step: InvestigationStep, values: readonly string[]): readonly string[] {
+function selectedArguments(
+  step: InvestigationStep, values: readonly string[], bindings: readonly WorkflowArtifactBinding[], completed: readonly CompletedStep[],
+): readonly string[] {
   let selectionIndex = 0;
+  let input = 0;
   return Object.freeze(step.arguments.map((argument) => {
     if (!PLACEHOLDER_PATTERN.test(argument)) return argument;
+    input += 1;
+    const binding = bindings.find((item) => item.stepId === step.id && item.input === input);
+    if (binding) {
+      const artifact = completed.find((item) => item.id === binding.sourceStepId)?.artifact;
+      return artifact ? workflowArtifactReference(artifact) : argument;
+    }
     const selected = values[selectionIndex];
     selectionIndex += 1;
     return selected ?? argument;
   }));
 }
 
-function selectedStep(step: InvestigationStep, values: readonly string[]): InvestigationStep {
-  return Object.freeze({ ...step, arguments: selectedArguments(step, values) });
+function selectedStep(
+  step: InvestigationStep, values: readonly string[], bindings: readonly WorkflowArtifactBinding[], completed: readonly CompletedStep[],
+): InvestigationStep {
+  return Object.freeze({ ...step, arguments: selectedArguments(step, values, bindings, completed) });
+}
+
+function resolveStepInputs(step: InvestigationStep, bindings: readonly WorkflowArtifactBinding[], completed: readonly CompletedStep[]) {
+  const files = new Map<string, string>();
+  const inputs = bindings.filter((binding) => binding.stepId === step.id).map((binding) => {
+    const source = completed.find((item) => item.id === binding.sourceStepId);
+    if (!source?.artifact) throw new CliUsageError(`Workflow step ${step.id} has no validated source artefact.`);
+    files.set(workflowArtifactReference(source.artifact), JSON.stringify(source.result));
+    return Object.freeze({ input: binding.input, sourceStepId: source.id, artifactId: source.artifact.id });
+  });
+  return { files, inputs: Object.freeze(inputs) };
 }
 
 function placeholderCount(step: InvestigationStep): number {
@@ -174,6 +202,7 @@ function mergeSelections(
   retained: readonly RetainedSelections[],
   supplied: readonly RetainedSelections[],
   completed: readonly CompletedStep[],
+  bindings: readonly WorkflowArtifactBinding[],
 ): RetainedSelections[] {
   const merged = new Map(retained.map((item) => [item.stepId, item.values]));
   for (const item of supplied) {
@@ -181,6 +210,7 @@ function mergeSelections(
     if (completedStep && !sameArguments(completedStep.arguments, selectedArguments(
       plan.steps.find((step) => step.id === item.stepId)!,
       item.values,
+      bindings, completed,
     ))) {
       throw new CliUsageError(`workflow-run cannot change analyst selections for completed step ${item.stepId}.`);
     }
@@ -192,11 +222,38 @@ function mergeSelections(
   });
 }
 
+function mergeBindings(plan: InvestigationPlan, retained: readonly WorkflowArtifactBinding[], supplied: readonly WorkflowArtifactBinding[], completed: readonly CompletedStep[]) {
+  const merged = [...retained];
+  for (const binding of supplied) {
+    const index = merged.findIndex((item) => item.stepId === binding.stepId && item.input === binding.input);
+    if (completed.some((step) => step.id === binding.stepId) && !isDeepStrictEqual(merged[index], binding)) {
+      throw new CliUsageError(`workflow-run cannot change artefact inputs for completed step ${binding.stepId}.`);
+    }
+    if (index === -1) merged.push(binding); else merged[index] = binding;
+  }
+  return normalizeWorkflowBindings(plan, merged);
+}
+
+function validateSelectedInputs(plan: InvestigationPlan, selections: readonly RetainedSelections[], bindings: readonly WorkflowArtifactBinding[], completed: readonly CompletedStep[]) {
+  for (const selection of selections) {
+    const step = plan.steps.find((item) => item.id === selection.stepId)!;
+    if (selection.values.length + bindings.filter((item) => item.stepId === step.id).length > placeholderCount(step)) {
+      throw new CliUsageError(`Workflow step ${step.id} has more selections and artefact bindings than inputs.`);
+    }
+    // Ordinary filenames remain literal. A caller cannot make a selected file
+    // alias an explicitly bound in-memory document in the same invocation.
+    if (selection.values.some((value) => bindings.some((binding) => binding.stepId === step.id && completed.some((item) =>
+      item.id === binding.sourceStepId && item.artifact && value === workflowArtifactReference(item.artifact))))) {
+      throw new CliUsageError(`Workflow step ${step.id} has a filename that conflicts with an artefact reference.`);
+    }
+  }
+}
+
 function parseResumeState(
   input: string | null,
   plan: InvestigationPlan,
-): Readonly<{ completed: readonly CompletedStep[]; selections: readonly RetainedSelections[] }> {
-  if (!input) return Object.freeze({ completed: Object.freeze([]), selections: Object.freeze([]) });
+): Readonly<{ completed: readonly CompletedStep[]; selections: readonly RetainedSelections[]; bindings: readonly WorkflowArtifactBinding[] }> {
+  if (!input) return Object.freeze({ completed: Object.freeze([]), selections: Object.freeze([]), bindings: Object.freeze([]) });
   if (Buffer.byteLength(input, 'utf8') > MAX_INVESTIGATION_RUN_BYTES) throw new CliUsageError('Investigation resume state exceeds the 24 MiB limit.');
   const normalizedInput = input.replace(/^\uFEFF/u, '');
   try {
@@ -220,6 +277,11 @@ function parseResumeState(
   if (root.version === 1 && root.selections !== undefined) {
     throw new CliUsageError('Investigation resume state version 1 cannot contain analyst selections.');
   }
+  const bindings = root.version === CLI_INVESTIGATION_RUN_VERSION ? normalizeWorkflowBindings(plan, root.artifactBindings) : [];
+  if (root.version !== CLI_INVESTIGATION_RUN_VERSION && root.artifactBindings !== undefined) {
+    throw new CliUsageError('Legacy investigation checkpoints cannot declare artefact bindings.');
+  }
+  validateSelectedInputs(plan, selections, bindings, []);
   const selectionsByStep = new Map(selections.map((item) => [item.stepId, item.values]));
   if (root.completedSteps.length > plan.steps.length) {
     throw new CliUsageError('Investigation resume state contains more steps than the installed fixed recipe.');
@@ -227,7 +289,7 @@ function parseResumeState(
   const completed: CompletedStep[] = [];
   for (const [index, value] of root.completedSteps.entries()) {
     const baseStep = plan.steps[index];
-    const planned = baseStep ? selectedStep(baseStep, selectionsByStep.get(baseStep.id) ?? []) : null;
+    const planned = baseStep ? selectedStep(baseStep, selectionsByStep.get(baseStep.id) ?? [], bindings, completed) : null;
     if (!planned || !value || typeof value !== 'object' || Array.isArray(value)) {
       throw new CliUsageError('Investigation resume state contains a malformed or out-of-order step.');
     }
@@ -242,7 +304,16 @@ function parseResumeState(
       throw new CliUsageError('Investigation resume state does not match the installed fixed recipe.');
     }
     const exitCode = Number(item.exitCode);
-    if (stepDisposition(planned, exitCode, item.result) === 'failed') {
+    const { disposition, artifact } = stepDisposition(planned, exitCode, item.result, true);
+    const { inputs } = resolveStepInputs(planned, bindings, completed);
+    if (root.version === CLI_INVESTIGATION_RUN_VERSION) {
+      if (!isDeepStrictEqual(item.artifact, artifact) || !isDeepStrictEqual(item.inputs, inputs)) {
+        throw new CliUsageError('Investigation checkpoint artefact identity or input bindings do not match the retained results.');
+      }
+    } else if (item.artifact !== undefined || item.inputs !== undefined) {
+      throw new CliUsageError('Legacy investigation steps cannot declare artefact identities.');
+    }
+    if (disposition === 'failed') {
       if (index !== root.completedSteps.length - 1) {
         throw new CliUsageError('A failed investigation step must be the final retained step.');
       }
@@ -255,9 +326,12 @@ function parseResumeState(
       mode: planned.mode,
       exitCode,
       result: item.result,
+      artifact,
+      inputs,
     }));
   }
-  return Object.freeze({ completed: Object.freeze(completed), selections });
+  validateSelectedInputs(plan, selections, bindings, completed);
+  return Object.freeze({ completed: Object.freeze(completed), selections, bindings });
 }
 
 export async function runInvestigationRecipe(
@@ -267,9 +341,10 @@ export async function runInvestigationRecipe(
     approveNetwork: boolean;
     resumeInput: string | null;
     selections?: readonly WorkflowSelection[];
+    artifactBindings?: readonly WorkflowArtifactBinding[];
     generatedAt: string;
     signal?: AbortSignal;
-    execute: (command: CliCommand, args: readonly string[]) => Promise<ExecutionResult>;
+    execute: (command: CliCommand, args: readonly string[], inputs: WorkflowStepInputs) => Promise<ExecutionResult>;
   }>,
 ) {
   if (!isRunnableInvestigationRecipe(recipe)) {
@@ -278,7 +353,9 @@ export async function runInvestigationRecipe(
   const plan = buildInvestigationPlan(recipe, subjectValue, options.generatedAt);
   const prior = parseResumeState(options.resumeInput, plan);
   const suppliedSelections = normalizeInvocationSelections(plan, options.selections ?? []);
-  const selections = mergeSelections(plan, prior.selections, suppliedSelections, prior.completed);
+  const bindings = mergeBindings(plan, prior.bindings, normalizeWorkflowBindings(plan, options.artifactBindings ?? []), prior.completed);
+  const selections = mergeSelections(plan, prior.selections, suppliedSelections, prior.completed, bindings);
+  validateSelectedInputs(plan, selections, bindings, prior.completed);
   const selectionsByStep = new Map(selections.map((item) => [item.stepId, item.values]));
   const completed = [...prior.completed];
   let state: InvestigationRunState = completed.some((step) => step.exitCode === EXIT_CODES.PARTIAL_FAILURE) ? 'partial' : 'complete';
@@ -286,7 +363,7 @@ export async function runInvestigationRecipe(
 
   for (const baseStep of plan.steps) {
     options.signal?.throwIfAborted();
-    const step = selectedStep(baseStep, selectionsByStep.get(baseStep.id) ?? []);
+    const step = selectedStep(baseStep, selectionsByStep.get(baseStep.id) ?? [], bindings, completed);
     if (completed.some((item) => item.id === step.id)) continue;
     currentStep = step;
     if (step.arguments.some((argument) => /^<[^>]+>$/u.test(argument))) {
@@ -297,12 +374,14 @@ export async function runInvestigationRecipe(
       state = 'awaiting_network_approval';
       break;
     }
-    const result = await options.execute(step.command, step.arguments);
+    validateSelectedInputs(plan, selections, bindings, completed);
+    const { files, inputs } = resolveStepInputs(step, bindings, completed);
+    const result = await options.execute(step.command, step.arguments, files);
     if (result.exitCode === EXIT_CODES.CANCELLED) {
       throw options.signal?.reason || new DOMException('Cancelled', 'AbortError');
     }
     const parsedResult = boundedResult(result.stdout);
-    const disposition = stepDisposition(step, result.exitCode, parsedResult);
+    const { disposition, artifact } = stepDisposition(step, result.exitCode, parsedResult);
     completed.push(Object.freeze({
       id: step.id,
       command: step.command,
@@ -310,6 +389,8 @@ export async function runInvestigationRecipe(
       mode: step.mode,
       exitCode: result.exitCode,
       result: parsedResult,
+      artifact,
+      inputs,
     }));
     if (disposition === 'failed') {
       state = 'step_failed';
@@ -331,12 +412,14 @@ export async function runInvestigationRecipe(
     state,
     networkApprovedForThisRun: options.approveNetwork,
     selections: Object.freeze(selections),
+    artifactBindings: bindings,
     completedSteps: Object.freeze(completed),
     currentStep,
     limitations: Object.freeze([
       'Only commands and arguments from the installed fixed recipe can execute; no shell, script, arbitrary command, or enforcement action is accepted.',
       'Network steps run only with --approve-network for the current invocation. Unresolved analyst selections pause; supplied values replace exact placeholders and are passed as arguments without shell interpretation.',
       'A resume file is a local checkpoint and can retain selected local paths or values. It is not proof that prior evidence remains current or that a human reviewed each stored result.',
+      'Explicit artefact bindings reuse validated compatible earlier outputs without temporary extraction files. Content digests identify retained JSON; they do not authenticate a source or establish that evidence is true or current.',
       'An incomplete collection pauses for review. Resuming retains it without recollection; the run remains partial even after later steps finish. Failed validation or export steps are retried, not accepted as evidence.',
     ]),
   });

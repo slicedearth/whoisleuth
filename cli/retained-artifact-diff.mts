@@ -430,7 +430,7 @@ export function buildCliRetainedArtifactDiff(
   if (left.schema !== right.schema) throw new CliUsageError('diff requires two retained documents from the same supported artifact family.');
   if (left.schema === SAVED_LOOKUP_SCHEMA) {
     if (options.leftSessionId || options.rightSessionId) throw new CliUsageError('Saved-session selectors apply only to Bulk session exports.');
-    return buildCliLookupDiff(leftRaw, rightRaw, generatedAt);
+    return buildCliLookupDiff(leftRaw, rightRaw, generatedAt, { domainMode: 'auto' });
   }
   if (left.schema === BULK_SESSION_SCHEMA) return buildBulkLedger(leftRaw, rightRaw, left, right, options, generatedAt);
   if (left.schema === DOMAIN_PORTFOLIO_REVIEW_SCHEMA) {

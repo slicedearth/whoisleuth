@@ -27,7 +27,7 @@
 
   <article class="policy card" aria-labelledby="privacy-title">
     <h2 id="privacy-introduction">1. Introduction</h2>
-    <p id="privacy-title"><strong>Last updated: 9 September 2026.</strong></p>
+    <p id="privacy-title"><strong>Last updated: 10 September 2026.</strong></p>
     <p>WHOISleuth is local-first. Ordinary investigation state stays in this browser profile, and the service has no general user, Case, or workspace database. Network collection, local retention, export, and active review are separate deliberate actions.</p>
     <p>Only a deliberately started network-capable operation sends its declared bounded target or evidence fields. WHOISleuth does not automatically submit reports, contact recipients, acquire domains, apply defensive controls, or change external infrastructure. Missing, blocked, stale, malformed, partial, unavailable, or unsupported evidence never becomes absence, safety, ownership, control, intent, or remediation.</p>
     <p>This policy describes the public deployment. A self-hosted operator must adapt it when hosting, authentication, enabled providers, retention, or contact routes differ.</p>
@@ -65,6 +65,7 @@
     <h2 id="privacy-files">5. CLI, imports, and exports</h2>
     <p>The CLI runs on the operator's machine. Offline plans, comparisons, verification, reports, and imports make no network request. Networked commands disclose their target and source boundary. Local input is bounded before parsing, existing output is refused unless replacement is explicit, and files are not uploaded to WHOISleuth.</p>
     <p>Workflow-file output uses adjacent private lock files containing a local process ID. They are removed after the run; interruption can leave one for manual recovery.</p>
+    <p>Workflow checkpoints retain selected paths, step evidence, content digests and explicit input bindings. Reused evidence stays local without extraction files.</p>
     <p>Optional metadata CSV retains source versions, collection and report times, collection origin and source-health states alongside the selected results.</p>
     <p>The offline <code>mail-headers</code> command parses only the bounded header block from a selected message or standard input. Its output can retain a header digest, domain-only identity and routing, reported authentication states, and observation counts. It does not retain address local parts, display names, subject, body, attachments, or raw header values, and makes no network request.</p>
     <p>The isolated <code>dnssec-validate</code> and <code>mail-transport</code> commands require a selected literal public resolver, a local trust anchor, and explicit owned-or-authorised acknowledgement. Mail transport also requires active-probe acknowledgement. It handles at most three selected MX hosts, sends <code>EHLO</code>, and uses <code>STARTTLS</code> only when advertised. It sends no message, authenticates no account, and tests no relay, recipient, mailbox, or catch-all behaviour.</p>

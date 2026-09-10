@@ -147,8 +147,9 @@ evidence is accurate, current, safe to share or attributable to a person.
 - `workflow-plan` lists fixed installed recipes without executing them.
   `workflow-run` executes only installed steps, requires approval for network
   work and pauses at unresolved analyst selections. Repeat
-  `--select <step-id>=<path-or-value>` in placeholder order to resume a selected
-  step. Checkpoints retain exact selections and distinguish incomplete
+  `--select <step-id>=<path-or-value>` for remaining placeholders in order, or bind
+  a compatible earlier output with `--use-artifact <step-id>:<input-number>=<earlier-step-id>`.
+  Checkpoints retain exact selections and bindings and distinguish incomplete
   collection from retryable failures; see [resuming a fixed workflow](cli.md#resuming-a-fixed-workflow)
   for the supported versions and resume behaviour.
 
