@@ -368,7 +368,7 @@ describe('domain-control flight-recorder lifecycle', () => {
       plane: 'cli',
       operation: 'embed-after-current-manifest-bounded-passive-monitor',
       acceptedContracts: [],
-      emittedContract: { schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, version: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION },
+      emittedContract: { schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, version: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION, discriminator: null },
       shapeIds: [`domain-control-flight-recorder.document.v${DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION}`],
       boundProfileIds: ['domain-control-flight-recorder.output-wire.v1', 'domain-control-flight-recorder.monitor-action.v1'],
       hookIds: ['domain-control-flight-recorder.node.validate-document', 'domain-control-flight-recorder.cli.monitor'],

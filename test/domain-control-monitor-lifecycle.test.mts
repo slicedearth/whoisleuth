@@ -153,10 +153,10 @@ describe('domain-control monitor schema lifecycle', () => {
       ));
       assert.ok(shape);
       assert.deepEqual(shape.objects, [
-        { path: '$', requiredKeys: DOMAIN_CONTROL_MONITOR_ROOT_KEYS, optionalKeys: [], unknownKeys: 'reject' },
-        { path: '$.manifest', requiredKeys: DOMAIN_CONTROL_MONITOR_MANIFEST_KEYS, optionalKeys: [], unknownKeys: 'reject' },
-        { path: '$.collection', requiredKeys: DOMAIN_CONTROL_MONITOR_COLLECTION_KEYS, optionalKeys: [], unknownKeys: 'reject' },
-        { path: '$.collection.failures[]', requiredKeys: DOMAIN_CONTROL_MONITOR_FAILURE_KEYS, optionalKeys: [], unknownKeys: 'reject' },
+        { path: '$', requiredKeys: DOMAIN_CONTROL_MONITOR_ROOT_KEYS, optionalKeys: [], alternativeRequiredKeys: [], unknownKeys: 'reject' },
+        { path: '$.manifest', requiredKeys: DOMAIN_CONTROL_MONITOR_MANIFEST_KEYS, optionalKeys: [], alternativeRequiredKeys: [], unknownKeys: 'reject' },
+        { path: '$.collection', requiredKeys: DOMAIN_CONTROL_MONITOR_COLLECTION_KEYS, optionalKeys: [], alternativeRequiredKeys: [], unknownKeys: 'reject' },
+        { path: '$.collection.failures[]', requiredKeys: DOMAIN_CONTROL_MONITOR_FAILURE_KEYS, optionalKeys: [], alternativeRequiredKeys: [], unknownKeys: 'reject' },
       ]);
       assert.deepEqual(shape.fixedArrays, [{ path: '$.limitations', values: DOMAIN_CONTROL_MONITOR_LIMITATIONS }]);
       assert.equal(shape.normalisation, 'preserve_document');
