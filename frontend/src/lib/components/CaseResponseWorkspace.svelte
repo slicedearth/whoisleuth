@@ -216,7 +216,7 @@
     <button type="button" aria-pressed={presentationMode === 'quick'} onclick={() => presentationMode = 'quick'}>Quick</button>
     <button type="button" aria-pressed={presentationMode === 'advanced'} onclick={() => presentationMode = 'advanced'}>Advanced</button>
   </div>
-  <div class="case-section" hidden={activeSection !== 'summary'} aria-label="Case summary">
+  <div class="case-section" role="group" hidden={activeSection !== 'summary'} aria-label="Case summary">
   {#if investigationContext}
     <dl class="case-context" aria-label="Current Case context">
       <div class="context-objective"><dt>Objective</dt><dd>{investigationContext.objective}</dd></div>
@@ -270,7 +270,7 @@
 
   <div class="response-stages" class:quick-workspace={presentationMode === 'quick'}>
     {#key record.id}
-      <div class="case-section" hidden={activeSection !== 'evidence'} aria-label="Case evidence">
+      <div class="case-section" role="group" hidden={activeSection !== 'evidence'} aria-label="Case evidence">
       {@render evidence()}
       <CaseObservationStage {record} {mutationBusy} {persist} mode={presentationMode} />
       <CaseRenderedCapture
@@ -281,10 +281,10 @@
         {onmessage}
       />
       </div>
-      <div class="case-section" hidden={activeSection !== 'assessment'} aria-label="Case assessment workspace">
+      <div class="case-section" role="group" hidden={activeSection !== 'assessment'} aria-label="Case assessment workspace">
         <CaseAssessmentStage {record} {mutationBusy} {persist} {onmessage} mode={presentationMode} />
       </div>
-      <div class="case-section" hidden={activeSection !== 'response'} aria-label="Case response workspace">
+      <div class="case-section" role="group" hidden={activeSection !== 'response'} aria-label="Case response workspace">
       <CaseActionStage bind:this={actionStage} {record} {mutationBusy} {persist} mode={presentationMode} onadvanced={() => void openAdvancedStage('response_decision')} />
       <CaseResponsePacketWorkspace
         {record}
@@ -297,7 +297,7 @@
       <CaseOutcomeStage {record} {mutationBusy} {persist} mode={presentationMode} />
       {@render exports()}
       </div>
-      <div class="case-section" hidden={activeSection !== 'history'} aria-label="Case history">
+      <div class="case-section" role="group" hidden={activeSection !== 'history'} aria-label="Case history">
         {@render history()}
         <CaseHistoryStage {record} {mutationBusy} {persist} />
       </div>

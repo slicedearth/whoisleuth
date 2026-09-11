@@ -10,6 +10,7 @@
   import CaseBrandAssociations from '$lib/components/CaseBrandAssociations.svelte';
   import { readCaseNavigationContext } from '$lib/console-workflow-state';
   import { handlesLocalLink } from '$lib/link-activation';
+  import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
   import { CASE_WORKSPACE_SECTIONS, caseWorkspaceHref, caseWorkspaceSection, type CaseWorkspaceSection } from '$lib/analysis/case-response-stage.ts';
   import type { BrandProfile } from '$lib/brand-profiles';
   import { CASE_DISPOSITIONS, CASE_REVIEW_REASONS, caseLookupTarget, caseNumber, caseStatusOptionsForDirectEdit, dispositionLabel, sourceLabel, statusLabel, type CaseRecord } from '$lib/cases';
@@ -62,8 +63,9 @@
       if (!target?.closest(`[data-case-detail]`)) return;
       if (target instanceof HTMLDetailsElement) target.open = true;
       const heading = target.querySelector<HTMLElement>(':scope > summary') ?? target;
-      heading.scrollIntoView({ block: 'center', behavior: 'instant' });
-      heading.focus({ preventScroll: true });
+      if (restoreSubmittedFocus(null, heading, target)) {
+        heading.scrollIntoView({ block: 'center', behavior: 'instant' });
+      }
     });
     return () => { current = false; };
   });

@@ -73,7 +73,7 @@
     <h3 id={`timeline-heading-${record.id}`}>Evidence timeline <small>{timeline.length} snapshot{timeline.length===1?'':'s'}</small></h3>
     {#if timeline.length}
       <div class="timeline-controls">
-        <button aria-expanded={timelineExpanded} aria-controls={`timeline-list-${record.id}`} onclick={()=>timelineExpanded=!timelineExpanded}>{timelineExpanded?'Collapse all':'Expand all'}</button>
+        <button aria-expanded={timelineExpanded} aria-controls={timelineExpanded ? `timeline-list-${record.id}` : undefined} onclick={()=>timelineExpanded=!timelineExpanded}>{timelineExpanded?'Collapse all':'Expand all'}</button>
         <button aria-pressed={changedOnly} onclick={()=>changedOnly=!changedOnly}>Material changes only</button>
       </div>
     {/if}
@@ -89,7 +89,7 @@
         {@const isExpanded=expandedSnapshots.has(entry.snapshot.id)}
         <li class="timeline-entry">
           <div class="timeline-entry-head">
-            <button id={snapId} class="timeline-toggle" aria-expanded={isExpanded} aria-controls={bodyId} onclick={()=>toggleSnapshot(entry.snapshot.id)}>
+            <button id={snapId} class="timeline-toggle" aria-expanded={isExpanded} aria-controls={isExpanded ? bodyId : undefined} onclick={()=>toggleSnapshot(entry.snapshot.id)}>
               <span class="timeline-index">#{entry.displayIndex}</span>
               <time datetime={entry.snapshot.capturedAt}>{entry.hasRepeatedObservation?'Last observed ':'Captured '}{date(entry.snapshot.capturedAt)}</time>
             </button>

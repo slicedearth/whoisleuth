@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures';
 import { openCaseSection } from './console-navigation';
 import { caseRecord, snapshot } from './case-test-fixtures';
+import { productionChunkPath } from './production-build';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 
 async function seedCases(page: import('@playwright/test').Page, destination = '/cases') {
@@ -11,6 +12,40 @@ async function seedCases(page: import('@playwright/test').Page, destination = '/
       caseRecord({ id: 'workspace-second', domain: 'second-work.example' }),
     ] }),
   }, { destination });
+}
+
+for (const [section, preserveLaterFocus] of [
+  ['evidence', false], ['evidence', true], ['response', false], ['response', true],
+] as const) {
+  test(`delayed Case detail ${section} ${preserveLaterFocus ? 'preserves later control focus' : 'focuses its ready target'}`, async ({ page }) => {
+    await page.goto('/dashboard');
+    await migrateLegacyBrowserData(page, {
+      'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [caseRecord({
+        id: 'delayed-case', domain: 'delayed-review.example', evidenceHistory: [snapshot()],
+      })] }),
+    }, { clearStorage: true, destination: '/dashboard' });
+    const chunk = productionChunkPath('src/lib/components/CaseDetail.svelte');
+    let release = () => {};
+    const held = new Promise<void>(resolve => { release = resolve; });
+    await page.route(`**${chunk}`, async route => { await held; await route.continue(); });
+    try {
+      const destination = section === 'response'
+        ? '/cases?case=delayed-case&response=1#case-response-preflight-delayed-case'
+        : '/cases?case=delayed-case&section=evidence';
+      await page.goto(destination, { waitUntil: 'domcontentloaded' });
+      await expect(page.getByText('Opening Case…', { exact: true })).toBeVisible();
+      await expect(page.locator('#case-head-delayed-case')).toHaveCount(0);
+      const laterControl = page.getByRole('button', { name: 'Sign out', exact: true });
+      if (preserveLaterFocus) await laterControl.focus();
+      release();
+      await expect(page.getByRole('heading', { name: 'delayed-review.example', exact: true })).toBeVisible();
+      await expect(page.getByText('Opening Case…', { exact: true })).toHaveCount(0);
+      const target = section === 'response'
+        ? page.locator('#case-response-preflight-delayed-case > summary')
+        : page.locator('#case-head-delayed-case');
+      await expect(preserveLaterFocus ? laterControl : target).toBeFocused();
+    } finally { release(); await page.unroute(`**${chunk}`); }
+  });
 }
 
 test('Case detail replaces the list and returns to its retained filters and focus', async ({ page }) => {

@@ -5,7 +5,7 @@
   import { parseBoundedJson } from '$lib/bounded-json';
   import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
   import { registerAnalystUndo } from '$lib/analyst-undo';
-  import { createDraftRevision } from '$lib/controllers/submitted-draft';
+  import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
   import { preloadBestEffort } from '$lib/idle-preload';
   import { readCaseNavigationContext, selectConsoleCase } from '$lib/console-workflow-state';
   import { monitorRouteKey, monitorRouteTarget } from '$lib/controllers/monitor-route-controller.ts';
@@ -124,9 +124,11 @@
   }
   async function focusCase(record: CaseRecord) {
     await tick();
+    if (!mounted || expandedId !== record.id || page.url.hash.startsWith('#case-response-') || page.url.searchParams.get('response') === '1') return;
     const target = document.getElementById(`case-head-${record.id}`);
-    target?.scrollIntoView({ block: 'center' });
-    target?.focus({ preventScroll: true });
+    if (restoreSubmittedFocus(null, target, target?.closest('[data-case-workspace]'))) {
+      target?.scrollIntoView({ block: 'center' });
+    }
   }
   async function openGuidedCase(domain: string) {
     const editorUnchanged = captureCaseOpeningIntent();
@@ -496,13 +498,7 @@
       await tick();
       if (monitorRouteKey(page.url) !== routeKey)
         return;
-      const workspace = document.getElementById(`case-response-${record.id}`);
-      if (target.responseHash && workspace) {
-        workspace.scrollIntoView({ block: 'start' });
-        workspace.focus({ preventScroll: true });
-      }
-      else
-        await focusCase(record);
+      await focusCase(record);
       return;
     }
     expandedId = '';
@@ -561,7 +557,7 @@
       {#key selectedCase.id}
         <DeferredSurface load={() => import('$lib/components/CaseDetail.svelte')}
           loadingLabel="Opening Case…" unavailableLabel="The Case detail could not be loaded. Your saved Case has not changed."
-          onready={() => { if (!page.url.hash.startsWith('#case-response-') && page.url.searchParams.get('response') !== '1' && selectedCase) return focusCase(selectedCase); }}
+          onready={() => selectedCase && focusCase(selectedCase)}
           props={{ record: selectedCase, allRecords: cases, tagDraft, setTagDraft: (value: string) => { tagRevision.changed(); tagDraft = value; },
             noteDraft, setNoteDraft: (value: string) => { noteRevision.changed(); noteDraft = value; }, pendingNoteCaseIds,
             selectCase, returnToList, setStatus, setDisposition, setReviewReason, addBrandProfileAssociation, removeBrandProfileAssociation,

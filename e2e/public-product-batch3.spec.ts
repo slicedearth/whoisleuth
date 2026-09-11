@@ -543,10 +543,11 @@ test('uses Investigate, Respond and Assure as the only top-level product jobs', 
   await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await expect(page.getByTestId('practical-workflow')).toHaveCount(0);
-  await expect(page.getByText('Start or resume Investigate, Respond and Assure work.', { exact: true })).toBeVisible();
-  await expect(page.getByText('Verify', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Package', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Recheck', { exact: true })).toHaveCount(0);
+  const navigation = page.getByRole('navigation', { name: 'Console', exact: true });
+  for (const job of ['Investigate', 'Respond', 'Assure']) {
+    await expect(navigation.getByRole('group', { name: job, exact: true })).toBeVisible();
+  }
+  await expect(navigation.getByRole('group', { name: /^(Verify|Package|Recheck)$/u })).toHaveCount(0);
   expect(investigationRequests).toEqual([]);
 });
 

@@ -387,7 +387,7 @@ test('light chrome uses a theme-aware mark without a bright boxed plate', async 
   await expect(rail).toHaveCSS('background-color', 'rgba(250, 247, 241, 0.97)');
   await expect(rail.locator('.brand strong')).toHaveCSS('color', 'rgb(28, 25, 21)');
   await expect(rail.locator('nav a').first()).toHaveCSS('color', 'rgb(28, 25, 21)');
-  await expect(rail.locator('nav a small').first()).toHaveCSS('color', 'rgb(88, 80, 69)');
+  await expect(rail.getByText('Domain intelligence console', { exact: true })).toHaveCSS('color', 'rgb(88, 80, 69)');
   await expect(rail.locator('.brand .mark')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(rail.locator('[data-brand-tone="primary"]')).toHaveCSS('fill', 'rgb(0, 91, 145)');
   await expect(rail.locator('[data-brand-tone="secondary"]')).toHaveCSS('fill', 'rgb(0, 107, 73)');

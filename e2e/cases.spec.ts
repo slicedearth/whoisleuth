@@ -412,7 +412,7 @@ test('the evidence-gap inbox filters and dismisses a stale failed source on mobi
   const item = page.locator('.review-inbox .items li', { hasText: 'gap-mobile.invalid' });
   await expect(item).toBeVisible();
   await expect(item).toContainText('stale');
-  await expect(item.getByRole('link', { name: 'Refresh evidence' })).toHaveAttribute('href', '/lookup?q=gap-mobile.invalid&depth=deep');
+  await expect(item.getByRole('link', { name: 'Refresh evidence' })).toHaveAttribute('href', '/lookup?q=gap-mobile.invalid&depth=deep&case=case-gap-mobile');
   await item.getByRole('combobox').selectOption('accepted_limitation');
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
@@ -696,8 +696,9 @@ test('projects retained evidence into a filterable source-attributed timeline', 
   await expect(workspace).toContainText('Derived relationship');
   const pinnedEvidence = workspace.locator('.timeline-list article', { hasText: 'Evidence pin' });
   await pinnedEvidence.getByRole('link', { name: /Open Case · timeline-case\.invalid/u }).click();
-  await expect(page).toHaveURL('/cases?case=timeline-case#case-response-timeline-case');
-  await expect(page.locator('#case-response-timeline-case')).toBeFocused();
+  await expect(page).toHaveURL('/cases?case=timeline-case&section=evidence');
+  await expect(page.getByRole('navigation', { name: 'Case sections', exact: true }).getByRole('link', { name: 'Evidence', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('#case-head-timeline-case')).toBeFocused();
   await openConsoleView(page, 'timeline');
   await expect(page.getByRole('region', { name: 'Investigation timeline' })).toBeVisible();
   await page.getByLabel('Area').selectOption('bulk');
