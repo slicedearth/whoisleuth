@@ -124,6 +124,15 @@ profile, extension, same-origin script, or someone with local access. The
 privacy notice states that limitation. Portable encryption protects only the
 promised archive bytes under its key-lifecycle limits.
 
+Optional encrypted named workspaces protect record values and identifiers while
+locked. Authenticated records and collection membership reject undetected
+substitution, omission and reordering. Names, sizes, counts and times remain
+visible. An older valid database can be replayed, and browser deletion remains
+possible; this is not tamper-proof storage or a backup. Keys are document-local,
+tabs unlock independently, and no passphrase-reset service exists. Unlocked
+same-origin code, privileged extensions and a compromised device remain outside
+this protection.
+
 ### Import, export, and cryptographic overclaim
 
 An envelope, structure, digest, signature, trust chain, timestamp, DNSSEC proof,

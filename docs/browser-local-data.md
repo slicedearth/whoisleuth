@@ -19,10 +19,10 @@ behaviour and write semantics. The generated
 [schema inventory](case-contracts.md) and
 [privacy catalogue](privacy-data-flow-catalogue.md) project those declarations.
 
-The active IndexedDB codec is plaintext JSON. Browser access controls protect
-the profile boundary, but IndexedDB is not encrypted at rest by WHOISleuth.
+The default and unencrypted named workspaces use the plaintext JSON codec.
 Anyone able to use the browser profile, a privileged extension or the device
-may be able to read it. Clearing site data removes the local workspace.
+may be able to read them. Named workspaces can instead use the encrypted codec
+described below. Clearing site data removes every local workspace.
 
 Small tab-scoped handoffs and transient preferences use `sessionStorage` or
 `localStorage` only under their documented limits. They are not silently
@@ -52,11 +52,43 @@ Platforms without Web Locks retain default-workspace support but cannot open,
 create or delete named workspaces.
 
 All databases share the origin's browser quota and profile access. Workspace
-names provide neither encryption nor an access-control boundary. Backups do
+names alone are not an access-control boundary. Backups do
 not include the directory or tab state. Export from each workspace separately
 and explicitly select the destination before importing. Named workspaces have
 no legacy local-storage copies; the default migration and rollback paths are
 unchanged. Clearing browser site data removes every workspace.
+
+### Encrypted working workspaces
+
+An optional named-workspace codec encrypts each bounded JSON record with
+AES-256-GCM, a fresh 96-bit nonce and a 128-bit tag. A random 128-bit salt and
+600,000 PBKDF2-HMAC-SHA-256 iterations derive separate 256-bit encryption and
+authentication keys. Keys are non-extractable and held only in the document.
+Record lookup keys use HMAC rather than plaintext identifiers; authenticated
+context binds the workspace, collection and record. A keyed collection digest
+also binds schema, byte count, record membership and order. Metadata and codec
+versions fail closed. Ciphertext encoding overhead has separate bounds and
+does not increase decoded evidence limits.
+
+Creation initialises all encrypted collections before publishing the directory
+entry. Opening an existing encrypted workspace requires its collection manifests;
+missing manifests are not silently recreated as empty data. Adding collections
+to this format requires an explicit storage migration. Randomised ciphertext
+does not turn a semantically unchanged update into another write.
+
+Every tab unlocks independently. Reloading, locking or leaving the console
+discards the unlocked document; tab handoffs and Brand selection stay in memory.
+Workspace names, collection counts, sizes and timestamps are visible metadata.
+Encryption does not prevent deletion or rollback to an older valid copy, and
+does not protect an unlocked page or a compromised device. There is no key
+escrow or passphrase reset.
+
+Conversion is an explicit backup transfer: export an encrypted backup, create
+and unlock a new encrypted workspace, review the import, then check its records.
+The original workspace remains unchanged until deliberately deleted. Portable
+backups use their existing independent envelope and passphrase, not working
+workspace keys. A tested backup can restore into a new workspace if the working
+passphrase is lost; no backup means those encrypted records cannot be recovered.
 
 The selected Case identifier lives only in the current page's memory. Its
 read-only context uses the canonical Case store, refreshes after Case writes in

@@ -24,6 +24,17 @@ export function captureBrowserWorkspace(read: () => string | null): () => string
 }
 
 const pageWorkspace = captureBrowserWorkspace(() => sessionStorage.getItem(BROWSER_WORKSPACE_SELECTION_KEY));
+let encryptedSession = false;
+const volatileValues = new Map<string, string>();
+const volatileStorage: StorageAccess = {
+  getItem: key => volatileValues.get(key) ?? null,
+  setItem: (key, value) => { volatileValues.set(key, value); },
+  removeItem: key => { volatileValues.delete(key); },
+};
+
+/** Sensitive tab handoffs for encrypted workspaces remain in this document. */
+export function protectBrowserWorkspaceSession(): void { encryptedSession = true; }
+export function clearProtectedBrowserWorkspaceSession(): void { volatileValues.clear(); }
 export function currentBrowserWorkspaceId(): string {
   return typeof window === 'undefined' ? DEFAULT_BROWSER_WORKSPACE : pageWorkspace();
 }
@@ -39,7 +50,7 @@ export function scopedWorkspaceStorage(storage: StorageAccess, workspaceId: stri
 }
 
 export function workspaceSessionStorage(): StorageAccess {
-  return scopedWorkspaceStorage(sessionStorage, currentBrowserWorkspaceId());
+  return scopedWorkspaceStorage(encryptedSession ? volatileStorage : sessionStorage, currentBrowserWorkspaceId());
 }
 
 /** The public default preference stays in localStorage; named preferences are tab-local. */

@@ -1,4 +1,7 @@
-import { DEFAULT_BROWSER_WORKSPACE, DEFAULT_BROWSER_WORKSPACE_NAME, requireBrowserWorkspaceId } from './browser-workspace-context.ts';
+import { DEFAULT_BROWSER_WORKSPACE_NAME, requireBrowserWorkspaceId } from './browser-workspace-context.ts';
+import { readBrowserWorkspaceEncryption, type BrowserWorkspaceEncryption } from './browser-workspace-encryption-model.ts';
+import { browserWorkspaceDatabaseName, deleteWorkspaceDatabase, prepareEncryptedBrowserWorkspace } from './browser-workspace-storage.ts';
+export { browserWorkspaceDatabaseName } from './browser-workspace-storage.ts';
 
 export const BROWSER_WORKSPACE_DIRECTORY = 'whoisleuth-workspace-directory-v1';
 export const BROWSER_WORKSPACE_DIRECTORY_VERSION = 1;
@@ -16,12 +19,8 @@ export type BrowserWorkspace = Readonly<{
   updatedAt: string;
   revision: number;
   state: 'ready' | 'deleting';
+  encryption?: BrowserWorkspaceEncryption;
 }>;
-
-export function browserWorkspaceDatabaseName(id: string): string {
-  if (requireBrowserWorkspaceId(id) === DEFAULT_BROWSER_WORKSPACE) throw new Error('The default workspace keeps its existing database.');
-  return `whoisleuth-workspace-${id}-v1`;
-}
 
 export function browserWorkspaceName(value: unknown): string {
   if (typeof value !== 'string' || !value.trim() || value.length > MAX_BROWSER_WORKSPACE_NAME || /[\u0000-\u001f\u007f]/u.test(value)) {
@@ -34,6 +33,7 @@ export function readBrowserWorkspace(value: unknown): BrowserWorkspace {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The workspace directory contains an unreadable record.');
   const row = value as Record<string, unknown>;
   const keys = ['id', 'name', 'createdAt', 'updatedAt', 'revision', 'state'];
+  if (Object.hasOwn(row, 'encryption')) keys.push('encryption');
   if (Object.keys(row).length !== keys.length || keys.some(key => !Object.hasOwn(row, key))) throw new Error('The workspace directory record has an unsupported shape.');
   browserWorkspaceDatabaseName(requireBrowserWorkspaceId(row.id));
   if (browserWorkspaceName(row.name) !== row.name || !Number.isSafeInteger(row.revision) || Number(row.revision) < 1
@@ -42,7 +42,7 @@ export function readBrowserWorkspace(value: unknown): BrowserWorkspace {
     if (typeof value !== 'string' || value.length > 32 || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString() !== value) throw new Error('The workspace directory contains an invalid date.');
   }
   if (String(row.updatedAt) < String(row.createdAt)) throw new Error('The workspace directory dates are inconsistent.');
-  return Object.freeze({ ...row }) as BrowserWorkspace;
+  return Object.freeze({ ...row, ...(Object.hasOwn(row, 'encryption') ? { encryption: readBrowserWorkspaceEncryption(row.encryption) } : {}) }) as BrowserWorkspace;
 }
 
 type DirectoryOptions = Readonly<{ indexedDB?: IDBFactory; locks?: LockManager | null; now?: () => string; makeId?: () => string; timeoutMs?: number }>;
@@ -152,15 +152,44 @@ export function createBrowserWorkspaceDirectory(options: DirectoryOptions = {}) 
     return current;
   }
 
-  async function create(name: string): Promise<BrowserWorkspace> {
+  async function create(name: string, protection?: Readonly<{ passphrase: string }>): Promise<BrowserWorkspace> {
     requireLocks();
     if (browserWorkspaceName(name).toLowerCase() === DEFAULT_BROWSER_WORKSPACE_NAME.toLowerCase()) throw new Error('Choose a name other than the default workspace name.');
     const timestamp = now();
-    const candidate = readBrowserWorkspace({ id: (options.makeId ?? (() => crypto.randomUUID()))(), name: browserWorkspaceName(name), createdAt: timestamp, updatedAt: timestamp, revision: 1, state: 'ready' });
-    return transact('readwrite', (rows, store) => {
+    const id = (options.makeId ?? (() => crypto.randomUUID()))();
+    const label = browserWorkspaceName(name);
+    if (protection) {
+      const rows = await list();
+      if (rows.length >= MAX_BROWSER_WORKSPACES || rows.some(row => row.id === id || row.name.toLowerCase() === label.toLowerCase())) {
+        throw new Error('The workspace directory is full, or that name or identity already exists.');
+      }
+    }
+    const encryption = protection ? await (await import('./browser-workspace-encryption.ts')).createBrowserWorkspaceEncryption(id, protection.passphrase) : undefined;
+    const candidate = readBrowserWorkspace({ id, name: label, createdAt: timestamp, updatedAt: timestamp, revision: 1, state: 'ready', ...(encryption ? { encryption } : {}) });
+    const insert = () => transact('readwrite', (rows, store) => {
       if (rows.length >= MAX_BROWSER_WORKSPACES) throw new Error(`The directory already contains ${MAX_BROWSER_WORKSPACES} named workspaces.`);
       if (rows.some(row => row.id === candidate.id || row.name.toLowerCase() === candidate.name.toLowerCase())) throw new Error('A workspace already has that name or identity.');
       store.add(candidate); return candidate;
+    });
+    if (!encryption || !protection) return insert();
+    return requireLocks().request(lockName(id), { mode: 'exclusive', ifAvailable: true }, async lock => {
+      if (!lock) throw new Error('That workspace identity is already in use. Refresh the directory before retrying.');
+      await prepareEncryptedBrowserWorkspace(id, encryption, protection.passphrase, factory());
+      try { return await insert(); }
+      catch (cause) {
+        // A late commit must be reconciled before removing this newly prepared
+        // empty database. The exclusive lease prevents another tab opening it.
+        let current: BrowserWorkspace | undefined;
+        try { current = (await list()).find(row => row.id === id); }
+        catch { throw new Error('Encrypted workspace preparation completed, but its directory entry could not be confirmed. Refresh the directory before creating another workspace.'); }
+        if (current) {
+          if (JSON.stringify(current) === JSON.stringify(candidate)) return current;
+          throw new Error('The workspace identity changed during creation. No database was removed. Refresh the directory.');
+        }
+        try { await deleteWorkspaceDatabase(id, factory(), timeout); }
+        catch { throw new Error('The workspace was not added to the directory, but its empty encrypted database is still pending cleanup. Close older tabs and reload before retrying.'); }
+        throw cause;
+      }
     });
   }
 
@@ -203,14 +232,7 @@ export function createBrowserWorkspaceDirectory(options: DirectoryOptions = {}) 
       });
       // IndexedDB deletion cannot be cancelled. Keep the directory tombstone
       // until success, including after a timeout or a late blocked completion.
-      await new Promise<void>((resolve, reject) => {
-        let request: IDBOpenDBRequest;
-        try { request = factory().deleteDatabase(browserWorkspaceDatabaseName(deleting.id)); }
-        catch { reject(new Error('The workspace remains pending deletion. Refresh its status before retrying.')); return; }
-        const timer = setTimeout(() => reject(new Error('Deletion is pending. Close older tabs, refresh the directory and retry deletion.')), timeout);
-        request.onsuccess = () => { clearTimeout(timer); resolve(); };
-        request.onerror = () => { clearTimeout(timer); reject(new Error('The workspace remains pending deletion. Refresh its status before retrying.')); };
-      });
+      await deleteWorkspaceDatabase(deleting.id, factory(), timeout);
       try { await transact('readwrite', (rows, store) => { expectedRow(rows, deleting); store.delete(deleting.id); }); }
       catch { throw new Error('Workspace data was deleted, but its directory entry could not be removed. Refresh and retry deletion to finish cleanup.'); }
     });

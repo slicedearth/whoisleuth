@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
+  import { beforeNavigate, goto } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount, setContext, tick } from 'svelte';
   import {
@@ -23,6 +23,7 @@
   import { reloadDeferredModulePage } from '$lib/deferred-module';
   import { initializeBrowserLocalData, type BrowserLocalDataServiceState } from '$lib/browser-local-data-service';
   import { clearConsoleWorkflowState, subscribeSelectedConsoleCase } from '$lib/console-workflow-state';
+  import { hasUnlockedBrowserWorkspace, lockBrowserWorkspace } from '$lib/browser-workspace-unlock';
   import {
     hasStoredInvestigationGuide,
     INVESTIGATION_GUIDE_EVENT,
@@ -50,6 +51,14 @@
     && !(page.url.pathname === '/monitor' && (page.url.searchParams.get('view') === 'cases' || page.url.searchParams.has('case'))));
   const wideWorkspace = $derived(['/lookup', '/bulk', '/cases', '/monitor', '/brands'].includes(page.url.pathname));
   setContext(CAPABILITY_CONTEXT, () => capabilities);
+  beforeNavigate(({ to, willUnload, cancel }) => {
+    // Leaving an unlocked console replaces the document, including cached
+    // results and module state. Returning requires a fresh explicit unlock.
+    if (hasUnlockedBrowserWorkspace() && to && !willUnload && !isProtectedDestination(to.url)) {
+      cancel();
+      window.location.assign(to.url.href);
+    }
+  });
   onMount(() => {
     const cancelNavigationPreload = preloadOnIdle(() => preloadBestEffort(() => import('$lib/console-command-navigation')));
     const unsubscribeCase = subscribeSelectedConsoleCase((id) => { selectedCaseId = id; });
@@ -66,6 +75,7 @@
     };
     mobileNavigation.addEventListener('change', closeAtDesktopWidth);
     return () => {
+      lockBrowserWorkspace();
       cancelNavigationPreload();
       unsubscribeCase();
       mobileNavigation.removeEventListener('change', closeAtDesktopWidth);
@@ -232,7 +242,22 @@
     detail="Opening bounded browser-local collections and checking the capabilities available to this deployment."
   />
 {:else if localData.state==='error'}
-  <div class="workspace-error"><section class="login card"><h1>Browser-local data unavailable</h1><p class="muted">{localData.detail}</p>{#if localData.code==='DEFERRED_MODULE_UNAVAILABLE'}<button class="primary" onclick={reloadDeferredModulePage}>Reload page</button>{:else}<button class="primary" onclick={retryLocalData}>Retry</button>{/if}<p class="login-links"><a href="/privacy">Review storage and privacy details</a></p></section></div>
+  <div class="workspace-error">
+    <section class="workspace-access card">
+      {#if localData.code === 'LOCAL_DATA_WORKSPACE_LOCKED'}
+        <DeferredSurface load={() => import('$lib/components/BrowserWorkspaceUnlock.svelte')} props={{onunlock:retryLocalData}} loadingLabel="Loading workspace unlock." unavailableLabel="Workspace unlock could not be loaded. Reload the page to retry." />
+      {:else}
+        <h1>Browser-local data unavailable</h1>
+        <p class="muted">{localData.detail}</p>
+        {#if localData.code === 'DEFERRED_MODULE_UNAVAILABLE'}
+          <button class="primary" onclick={reloadDeferredModulePage}>Reload page</button>
+        {:else}
+          <button class="primary" onclick={retryLocalData}>Retry</button>
+        {/if}
+      {/if}
+      <p class="login-links"><a href="/privacy">Review storage and privacy details</a></p>
+    </section>
+  </div>
   <section class="workspace-recovery card"><DeferredSurface load={() => import('$lib/components/BrowserWorkspaceManager.svelte')} props={{}} loadingLabel="Reading workspace recovery options." unavailableLabel="Workspace recovery could not be loaded. Reload the page to retry." /></section>
 {:else}
   <div class="shell" class:open={navOpen}>
@@ -280,7 +305,7 @@
 
 <style>
   .workspace-recovery{width:min(760px,calc(100% - 32px));margin:20px auto;padding:20px}
-  .workspace-error{display:flex;justify-content:center;margin:40px 16px 20px}.workspace-error .login{width:min(480px,100%)}
+  .workspace-error{display:flex;justify-content:center;margin:40px 16px 20px}.workspace-access{width:min(480px,100%);padding:clamp(20px,4vw,34px);min-width:0;overflow-wrap:anywhere}
   .login-links{display:flex;justify-content:center;gap:8px;margin:18px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .login-links a{color:var(--accent)}
   .reference-nav{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}

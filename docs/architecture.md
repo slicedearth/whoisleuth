@@ -189,6 +189,12 @@ exclude deletion while another tab uses a workspace; deletion records a
 tombstone before removing its database. See [browser-local data](browser-local-data.md)
 for storage, recovery and isolation boundaries.
 
+Encrypted named workspaces use the provider's record codec and keyed collection
+integrity hook. The workspace directory holds only bounded encryption metadata;
+passphrase-derived keys remain in the unlocked document. The provider retains
+ownership of atomic writes, conflict checks and recovery. Ciphertext overhead
+is accounted for separately from decoded collection limits.
+
 The provider captures bounded records and manifests in one readonly
 transaction. Larger standard plaintext collections are then decoded,
 digest-checked and reconstructed in a one-shot same-origin worker using the

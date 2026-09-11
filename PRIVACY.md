@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 11 September 2026.
+Last updated: 12 September 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -61,8 +61,8 @@ does not query a live target or write protected workspace data.
 
 ## Browser-local processing
 
-The authenticated Console stores bounded workspace collections in IndexedDB as
-plaintext JSON. These include Cases, Brand Profiles, watchlists, shortlist
+The default workspace and unencrypted named workspaces store bounded
+collections in IndexedDB as plaintext JSON. These include Cases, Brand Profiles, watchlists, shortlist
 entries, campaigns, certificate-search history, custom rules, retained
 relationship observations, saved Bulk sessions, website snapshots,
 investigation templates, Bulk review state and Analyst Review Item state. They
@@ -76,7 +76,7 @@ they exist.
 
 Named workspaces use separate IndexedDB databases and a local directory of
 random identifiers, names and timestamps. They share the browser profile and
-storage quota; names do not provide access control or encryption. The default
+storage quota; names alone do not provide access control. The default
 workspace keeps existing data unchanged. Each tab selects its workspace in
 `sessionStorage`; guide progress, candidate handoffs and named-workspace Brand
 preferences are scoped to that selection. Appearance stays browser-wide.
@@ -84,6 +84,18 @@ Backups and imports use the explicitly selected workspace, excluding the
 directory and tab state. Deleting an inactive named workspace removes its saved
 collections, not other workspaces or downloaded files. Clearing site data
 removes all workspaces.
+
+Optional encrypted named workspaces protect saved collection values and record
+identifiers using AES-256-GCM and keyed collection integrity checks. A
+passphrase-derived key is held only in the unlocked document, never stored or
+sent. Reloading, locking or leaving the Console requires another unlock;
+another tab unlocks independently. Guide progress, candidate handoffs and Brand
+selection stay in memory in an encrypted workspace, not session storage.
+Names, collection counts, sizes and timestamps remain visible. Encryption does
+not protect an unlocked page, a compromised device, weak passphrases, deletion
+or rollback to an older valid database. There is no passphrase reset. Transfer
+existing work through a reviewed encrypted backup into a new workspace; the
+original unencrypted data remains until explicitly deleted.
 
 Selected Case context uses only page memory and the existing local Case store.
 The selection clears on reload or sign-out and does not initiate collection.
@@ -315,7 +327,7 @@ version-5 and Case-schema-12 public baseline before moving to v2.
 The optional encrypted workspace envelope remains version 1. Encryption and
 decryption happen in browser memory using password-based authenticated
 encryption. The passphrase and derived key are not persisted or sent. Encryption
-protects the downloaded file while locked, not an open Console, active IndexedDB,
+protects the downloaded file while locked, not an open Console or an unencrypted working workspace,
 malicious extension, compromised device or weak passphrase.
 
 Different exports have different sensitivity:
@@ -384,7 +396,7 @@ revalidation, DNS-rebinding resistance and pinned-address connections. Browser
 future versions are preserved without write where promised; portable future
 versions are rejected before merge.
 
-IndexedDB is plaintext, hosting providers can retain ordinary logs, public
+Unencrypted workspaces are readable in IndexedDB, hosting providers can retain ordinary logs, public
 sources can publish inaccurate or personal data, and downloaded files can be
 copied outside WHOISleuth. Review sensitive output before sharing. Missing,
 blocked, stale, malformed, partial, unavailable or unsupported evidence remains

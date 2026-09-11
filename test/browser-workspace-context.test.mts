@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   captureBrowserWorkspace, requireBrowserWorkspaceId, scopedWorkspaceStorage,
+  clearProtectedBrowserWorkspaceSession, protectBrowserWorkspaceSession, workspaceSessionStorage,
 } from '../frontend/src/lib/browser-workspace-context.ts';
 import {
   browserWorkspaceDatabaseName, browserWorkspaceName, createBrowserWorkspaceDirectory, readBrowserWorkspace,
@@ -73,4 +74,20 @@ test('unsupported capabilities and invalid operation deadlines fail before creat
   await assert.rejects(directory.list(), /IndexedDB is unavailable/);
   await assert.rejects(directory.ready('default'), /existing database/);
   await assert.rejects(directory.remove(readBrowserWorkspace(ROW), FIRST), /Switch away/);
+});
+
+test('encrypted workspace tab material stays in memory and is cleared when locking', () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
+  Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, get() { throw new Error('Encrypted transient state must not reach session storage.'); } });
+  try {
+    protectBrowserWorkspaceSession();
+    const storage = workspaceSessionStorage();
+    storage.setItem('fixture-handoff', 'private.example');
+    assert.equal(storage.getItem('fixture-handoff'), 'private.example');
+    clearProtectedBrowserWorkspaceSession();
+    assert.equal(storage.getItem('fixture-handoff'), null);
+  } finally {
+    if (original) Object.defineProperty(globalThis, 'sessionStorage', original);
+    else Reflect.deleteProperty(globalThis, 'sessionStorage');
+  }
 });

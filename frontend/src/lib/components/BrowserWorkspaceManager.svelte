@@ -2,6 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { browserWorkspaceDirectory, MAX_BROWSER_WORKSPACE_NAME, type BrowserWorkspace } from '$lib/browser-workspace-directory.ts';
   import { BROWSER_WORKSPACE_DIRECTORY_EVENT, currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE, DEFAULT_BROWSER_WORKSPACE_NAME, navigateToBrowserWorkspace } from '$lib/browser-workspace-context.ts';
+  import { MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES, MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS } from '$lib/browser-workspace-encryption-model.ts';
 
   const PAGE_SIZE = 10;
   type Intent = { kind: 'switch'; id: string; name: string } | { kind: 'rename' | 'delete'; workspace: BrowserWorkspace };
@@ -13,6 +14,9 @@
   let error = $state('');
   let status = $state('');
   let name = $state('');
+  let encrypted = $state(false);
+  let passphrase = $state('');
+  let repeatedPassphrase = $state('');
   let filter = $state('');
   let page = $state(0);
   let intent = $state<Intent | null>(null);
@@ -86,15 +90,32 @@
     if (selected.kind === 'rename') await mutate(() => browserWorkspaceDirectory.rename(selected.workspace, renameValue), 'Workspace renamed.', () => { intent = null; });
     else if (confirmation === selected.workspace.name) await mutate(() => browserWorkspaceDirectory.remove(selected.workspace, currentId ?? DEFAULT_BROWSER_WORKSPACE), 'Workspace data and directory entry deleted.', () => { intent = null; });
   }
+  async function create() {
+    if (encrypted && passphrase !== repeatedPassphrase) { error = 'The workspace passphrases do not match.'; return; }
+    await mutate(() => browserWorkspaceDirectory.create(name, encrypted ? { passphrase } : undefined), 'Workspace created. Open it when ready.', () => {
+      name = ''; passphrase = ''; repeatedPassphrase = ''; encrypted = false;
+    });
+    // Do not retain passphrases in a failed form while the directory is re-read.
+    passphrase = ''; repeatedPassphrase = '';
+  }
 </script>
 
 <section class="workspace-manager" aria-labelledby="workspace-manager-title">
   <h2 id="workspace-manager-title" bind:this={heading} tabindex="-1">Browser workspaces</h2>
-  <p>Each workspace has separate Cases, Brands, saved collections and review history. They share this browser profile’s storage quota and are not encrypted or access-controlled from one another.</p>
+  <p>Each workspace has separate Cases, Brands, saved collections and review history. They share this browser profile’s storage quota. Named workspaces can optionally encrypt their saved records with a passphrase.</p>
   <div class="default-workspace"><strong>{DEFAULT_BROWSER_WORKSPACE_NAME}</strong><span>{currentId === DEFAULT_BROWSER_WORKSPACE ? 'Current workspace' : 'Original saved work'}</span>{#if currentId !== DEFAULT_BROWSER_WORKSPACE}<button class="btn" type="button" disabled={busy} onclick={event => choose({ kind: 'switch', id: DEFAULT_BROWSER_WORKSPACE, name: DEFAULT_BROWSER_WORKSPACE_NAME }, event.currentTarget)}>Open default workspace</button>{/if}</div>
   {#if !supported}<p class="notice">Named workspaces require IndexedDB and Web Locks. The default workspace remains available; no data is moved.</p>{/if}
-  <form onsubmit={event => { event.preventDefault(); void mutate(() => browserWorkspaceDirectory.create(name), 'Workspace created. Open it when ready.', () => { name = ''; }); }}>
+  <form onsubmit={event => { event.preventDefault(); void create(); }}>
     <label>New workspace name<input maxlength={MAX_BROWSER_WORKSPACE_NAME} bind:value={name} disabled={busy || !available || !supported} required></label>
+    <label class="encryption-choice"><input type="checkbox" bind:checked={encrypted} disabled={busy || !available || !supported} onchange={() => { passphrase = ''; repeatedPassphrase = ''; }}>Encrypt saved workspace records</label>
+    {#if encrypted}
+      <fieldset class="encryption-fields" disabled={busy || !available || !supported}>
+        <legend>Workspace encryption</legend>
+        <label>New workspace passphrase<input type="password" bind:value={passphrase} autocomplete="new-password" maxlength={MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES} required></label>
+        <label>Repeat workspace passphrase<input type="password" bind:value={repeatedPassphrase} autocomplete="new-password" maxlength={MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES} required></label>
+        <p>Use at least {MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS} characters. Keep the passphrase safely: it is not stored and cannot be reset. Names, collection counts, sizes and timestamps remain visible. Encryption does not protect an unlocked tab from code running on this site or protect downloaded unencrypted exports.</p>
+      </fieldset>
+    {/if}
     <button class="primary" type="submit" disabled={busy || !available || !supported || !name.trim()}>Create workspace</button>
   </form>
   <div class="directory-tools"><label>Find workspace<input type="search" bind:value={filter} oninput={() => { page = 0; }} disabled={!available || busy}></label><button class="btn" type="button" onclick={load} disabled={busy}>Refresh workspace directory</button></div>
@@ -102,7 +123,7 @@
     <p>{matching.length} of {workspaces.length} named workspaces</p>
     <ul>
       {#each visible as workspace (workspace.id)}
-        <li><div><h3>{workspace.name}</h3><p>{workspace.id === currentId ? 'Current workspace' : workspace.state === 'deleting' ? 'Deletion pending' : 'Saved in this browser'}</p></div>
+        <li><div><h3>{workspace.name}</h3><p><span>{workspace.id === currentId ? 'Current workspace' : workspace.state === 'deleting' ? 'Deletion pending' : 'Saved in this browser'}</span> · <span>{workspace.encryption ? 'Encrypted records' : 'Unencrypted records'}</span></p></div>
           <div class="workspace-actions">
             {#if workspace.state === 'ready'}
               {#if workspace.id !== currentId}<button class="btn" type="button" aria-label={`Open workspace ${workspace.name}`} disabled={busy || !supported} onclick={event => choose({ kind: 'switch', id: workspace.id, name: workspace.name }, event.currentTarget)}>Open</button>{/if}
@@ -126,6 +147,7 @@
   {/if}
   <p bind:this={statusNode} class:error={Boolean(error)} role={error ? 'alert' : 'status'} tabindex="-1">{error || status}</p>
   <p class="recovery">Backups contain the selected workspace’s supported collections, not the workspace directory or tab state. Restore into the workspace you explicitly open. Clearing site data in browser settings removes all workspaces.</p>
+  <details><summary>Move existing work into an encrypted workspace</summary><ol><li>Download an encrypted backup from the original workspace.</li><li>Create and unlock a new encrypted workspace, then review and add the backup there.</li><li>Check the restored records before deleting the original workspace or its data. Creating an encrypted workspace does not remove any unencrypted copies.</li></ol><p>The backup and working workspace may use different passphrases. Test a backup restore before relying on it for recovery.</p></details>
 </section>
 
 <style>
@@ -142,6 +164,12 @@
   .default-workspace span { font-size: var(--text-xs); color: var(--muted); }
   .workspace-manager form, .directory-tools { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 18px 0; }
   .workspace-manager form label, .directory-tools label { flex: 1 1 220px; }
+  .workspace-manager .encryption-choice{display:flex;align-items:center;gap:8px;flex-basis:100%}
+  .workspace-manager .encryption-choice input{width:auto}
+  .encryption-fields{display:grid;gap:12px;min-width:0;flex:1 1 100%;border:1px solid var(--border);padding:12px}
+  .encryption-fields legend{font-size:var(--text-sm)}
+  .workspace-manager details{margin-top:16px}.workspace-manager summary{cursor:pointer;font-size:var(--text-sm);padding:8px 0}
+  .workspace-manager ol{padding-left:22px;font-size:var(--text-sm);line-height:1.6}.workspace-manager ol li{display:list-item;border:0;background:none;padding:4px 0}
   .workspace-manager ul { list-style: none; padding: 0; display: grid; gap: 10px; }
   .workspace-manager h3 { margin: 0; font-size: var(--text-sm); }
   .workspace-manager li p { margin: 5px 0 0; }

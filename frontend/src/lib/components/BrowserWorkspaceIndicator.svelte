@@ -3,6 +3,7 @@
   import { BROWSER_WORKSPACE_DIRECTORY_EVENT, currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE, DEFAULT_BROWSER_WORKSPACE_NAME } from '$lib/browser-workspace-context.ts';
   let { destination = false }: { destination?: boolean } = $props();
   let name = $state('Loading…');
+  let encrypted = $state(false);
   onMount(() => {
     let active = true;
     let generation = 0;
@@ -13,7 +14,7 @@
         if (id === DEFAULT_BROWSER_WORKSPACE) { name = DEFAULT_BROWSER_WORKSPACE_NAME; return; }
         const { browserWorkspaceDirectory } = await import('$lib/browser-workspace-directory.ts');
         const workspace = await browserWorkspaceDirectory.ready(id);
-        if (active && request === generation) name = workspace.name;
+        if (active && request === generation) { name = workspace.name; encrypted = Boolean(workspace.encryption); }
       } catch { if (active && request === generation) name = 'Unavailable'; }
     };
     void refresh();
@@ -27,7 +28,7 @@
   });
 </script>
 
-<p class="workspace-scope">{destination ? 'Backup and import workspace:' : 'Workspace:'} <strong>{name}</strong>{#if !destination} <a href="/dashboard#workspaces">Manage workspaces</a>{/if}</p>
+<p class="workspace-scope">{destination ? 'Backup and import workspace:' : 'Workspace:'} <strong>{name}</strong>{#if !destination}{#if encrypted}<button class="btn" type="button" onclick={async () => { const { lockBrowserWorkspace } = await import('$lib/browser-workspace-unlock.ts'); lockBrowserWorkspace(); window.location.reload(); }}>Lock workspace</button>{/if} <a href="/dashboard#workspaces">Manage workspaces</a>{/if}</p>
 
 <style>
   .workspace-scope{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 8px;margin:0 0 12px;font-size:var(--text-xs);color:var(--muted);overflow-wrap:anywhere;min-width:0}.workspace-scope strong{color:var(--text);min-width:0}.workspace-scope a{margin-left:auto;color:var(--accent);text-underline-offset:3px}

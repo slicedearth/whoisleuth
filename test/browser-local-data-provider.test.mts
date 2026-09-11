@@ -42,6 +42,24 @@ const NULL_STORAGE = {
   removeItem: () => undefined,
 };
 
+test('a late database upgrade is aborted after its opening deadline', async () => {
+  let aborts = 0;
+  let reads = 0;
+  const request = {
+    get result() { reads++; throw new Error('Late creation must not inspect or mutate stores.'); },
+    transaction: { abort: () => { aborts++; } },
+  } as unknown as IDBOpenDBRequest;
+  const provider = new BrowserLocalDataProvider({
+    indexedDB: { open: () => request } as unknown as IDBFactory,
+    storage: NULL_STORAGE, timeoutMs: TIMEOUT_MS,
+  });
+  await assert.rejects(provider.initialize([DEFINITION]), (error: unknown) => error instanceof BrowserLocalDataError && error.code === 'LOCAL_DATA_TIMEOUT');
+  request.onupgradeneeded?.call(request, { oldVersion: 0 } as IDBVersionChangeEvent);
+  assert.equal(aborts, 1); assert.equal(reads, 0);
+  assert.equal(provider.createdDatabase, false);
+  await provider.close();
+});
+
 const WRITE_DEFINITION: LocalDataCollectionDefinition<string[]> = {
   id: 'fixture-write',
   label: 'Fixture writes',
@@ -707,6 +725,45 @@ test('rejects invalid collection sets and returns no-op update results without w
   })), 'unchanged-many');
   assert.deepEqual(notifications, []);
   await provider.close();
+});
+
+test('opening an existing protected workspace cannot initialise missing collections', async () => {
+  const transactions: string[][] = [];
+  const provider = new BrowserLocalDataProvider({ indexedDB: readyEmptyCollectionsFactory([], transactions), storage: NULL_STORAGE, requireExistingCollections: true });
+  await assert.rejects(provider.initialize([WRITE_DEFINITION]), /No empty collections were created/);
+  assert.deepEqual(transactions, [['manifests']]);
+  await provider.close();
+});
+
+test('keyed collections avoid re-encoding no-op writes but preserve in-place updater changes', { timeout: 3_000 }, async () => {
+  const restoreKeyRange = installKeyRangeStub();
+  let wrote!: () => void;
+  const writing = new Promise<void>(resolve => { wrote = resolve; });
+  const harness = delayedWriteFactory('committed', wrote);
+  const content = await prepareLocalDataContent(WRITE_DEFINITION, ['retained'], plaintextJsonCodec);
+  harness.state.records = content.records;
+  harness.state.manifest = { ...harness.state.manifest, recordCount: 1, digest: content.digest, serializedBytes: content.serializedBytes };
+  let encodes = 0;
+  const provider = new BrowserLocalDataProvider({
+    indexedDB: harness.factory, storage: NULL_STORAGE,
+    codec: { ...plaintextJsonCodec,
+      digestCollection: async input => createHash('sha256').update(input.content).digest('base64url'),
+      encode: async input => { encodes++; return plaintextJsonCodec.encode(input); },
+    },
+  });
+  try {
+    await provider.initialize([WRITE_DEFINITION]);
+    assert.equal(await provider.update(WRITE_DEFINITION, document => ({ document, result: 'unchanged' })), 'unchanged');
+    assert.equal(await provider.updateMany([WRITE_DEFINITION], documents => ({ documents, result: 'unchanged-many' })), 'unchanged-many');
+    assert.equal(encodes, 0);
+    assert.equal(harness.state.writeTransactions, 0);
+    const pending = provider.update(WRITE_DEFINITION, document => { document.push('later'); return { document, result: 'saved' }; });
+    await writing;
+    harness.acknowledge();
+    assert.equal(await pending, 'saved');
+    assert.deepEqual(await provider.read(WRITE_DEFINITION), ['retained', 'later']);
+    assert.equal(encodes, 2);
+  } finally { harness.acknowledge(); await provider.close(); restoreKeyRange(); }
 });
 
 test('preserves a concurrent legacy value when a later rollback-copy write fails', async () => {

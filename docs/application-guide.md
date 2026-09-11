@@ -41,6 +41,19 @@ deletion also check the selected record before changing it.
 Drafts whose campaign or template was deleted can be saved explicitly as a new
 record. This does not recreate the deleted identity or restore campaign membership.
 
+### Workspaces and encryption
+
+**Browser workspaces** separates saved work without moving the default workspace.
+Choose **Encrypt saved workspace records** when creating a named workspace to
+require a passphrase in each tab. **Lock workspace**, reloading or leaving the
+Console clears its unlocked state. Names and storage counts remain visible;
+there is no passphrase reset.
+
+To move existing work, download an encrypted backup, create and unlock the new
+workspace, then review and add the backup. Verify its contents before deleting
+the original. Backup and workspace passphrases are independent, so a tested
+backup remains a recovery path if a workspace passphrase is lost.
+
 ### Guided investigations
 
 Starting a guide opens its current step. On ordinary tool entry, the retained
