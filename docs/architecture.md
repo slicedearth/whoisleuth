@@ -101,6 +101,12 @@ Optional security.txt and external intelligence actions are separate explicit
 selections. Authorised active DNSSEC and mail-transport commands are isolated
 CLI operations and never run through Lookup, Bulk, monitoring or recipes.
 
+Full Deep Lookup keeps registration queries at the registrable domain and
+addresses DNS, TLS and web collectors to the submitted hostname. Delegation
+health declares its registration-domain target separately. Evidence exports,
+Case snapshots and graph projections retain these identities; comparisons do
+not interpret a different collection target as an observed target change.
+
 ## Outbound trust boundary
 
 Every target, referral, redirect, resolved address and upstream response is

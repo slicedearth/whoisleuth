@@ -117,6 +117,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
         includeStructuredDataIdentity: !fast && !compact,
         includeTechnologyProfile: !fast,
         includeSecurityPosture: !compact,
+        ...(!fast && !compact ? { observationHostname: classified.inputHostname } : {}),
         featurePolicy,
         ...(options.signal ? { signal: options.signal } : {}),
         rdapRecordPromise: rdapPromise,

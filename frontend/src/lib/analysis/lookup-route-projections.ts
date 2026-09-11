@@ -8,6 +8,7 @@ import {
 import type { LookupTaskEvidenceKind } from './lookup-decision-support.ts';
 import type { LookupHttpResponse, LookupViewModel } from './lookup-response.ts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+import { lookupObservationHostname } from '../../../../packages/evidence/lookup-target.mts';
 
 export function latestLookupTimestamp(...values: unknown[]): string | null {
   const timestamps = values
@@ -102,13 +103,15 @@ export function buildLookupDnsRehearsalEvidence(
   lookupView: LookupViewModel,
 ) {
   const { availability, rdapParsed, whoisParsed, dnsEvidence, dnsRecords, tlsPublicKey } = lookupView;
+  const sameRegistrationScope = lookupObservationHostname(availability) === (availability.domain ?? result?.registrableDomain);
   return {
+    evidenceComplete: sameRegistrationScope && dnsEvidence.complete === true,
     currentGlue: records(rec(rec(dnsEvidence.delegation).registry).nameserverDetails),
     currentDs: records(rdapParsed.dsData),
-    currentMx: records(dnsRecords.mx),
-    currentCaa: records(dnsRecords.caa),
+    currentMx: sameRegistrationScope ? records(dnsRecords.mx) : [],
+    currentCaa: sameRegistrationScope ? records(dnsRecords.caa) : [],
     currentCriticalAddresses: [{
-      hostname: String(availability.domain || result?.registrableDomain || '').trim().toLowerCase(),
+      hostname: lookupObservationHostname(availability) ?? '',
       addresses: [
         ...stringList(dnsRecords.a, 16, 64),
         ...stringList(dnsRecords.aaaa, 16, 64),
@@ -118,7 +121,7 @@ export function buildLookupDnsRehearsalEvidence(
       ...stringList(rdapParsed.statuses, 100, 160),
       ...stringList(whoisParsed.statuses, 100, 160),
     ],
-    currentTlsSpkiSha256: tlsPublicKey.fingerprintSha256,
+    currentTlsSpkiSha256: sameRegistrationScope ? tlsPublicKey.fingerprintSha256 : null,
   };
 }
 

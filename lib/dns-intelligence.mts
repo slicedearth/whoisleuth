@@ -20,6 +20,7 @@ import {
 } from './lookup-network-evidence-bounds.mts';
 import { isPrivateAddress } from './safe-fetch.mts';
 import { resolveServiceBindingRecords } from './service-binding-dns.mts';
+import { canonicalRegistrableDomain } from './registrable-domain.mts';
 
 type MxRecord = { priority: number; exchange: string };
 type CaaRecord = { critical: number; tag: string; value: string };
@@ -43,6 +44,7 @@ type DnsIntelligenceOptions = {
   now?: () => number;
   observedAt?: () => string;
   registryEvidence?: unknown;
+  registrationDomain?: string;
   queryAuthority?: AuthorityQuery;
 };
 type ReverseDnsIntelligenceOptions = {
@@ -697,6 +699,10 @@ async function collectEffectiveCaaPolicy(domain: string, options: EffectiveCaaOp
 }
 
 async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOptions = {}) {
+  const registrationDomain = options.registrationDomain ?? domain;
+  if (options.registrationDomain !== undefined && canonicalRegistrableDomain(domain) !== registrationDomain) {
+    throw new TypeError('DNS registration context must match the hostname being observed.');
+  }
   const resolvers = options.resolvers || {};
   const includeExtendedContext = options.includeExtendedContext === true;
   const includeInheritedCaa = options.includeInheritedCaa === true;
@@ -734,8 +740,11 @@ async function collectDnsIntelligence(domain: string, options: DnsIntelligenceOp
         timeoutMs,
       )
     : Promise.resolve(null);
+  const registrationNsPromise = includeExtendedContext && registrationDomain !== domain
+    ? query(invoke('resolveNs', dns.resolveNs, registrationDomain), normalizeHostnames, timeoutMs)
+    : nsPromise;
   const delegationPromise = includeExtendedContext
-    ? nsPromise.then((parentNameservers) => collectDnsDelegationHealth(domain, parentNameservers, {
+    ? registrationNsPromise.then((parentNameservers) => collectDnsDelegationHealth(registrationDomain, parentNameservers, {
         registryEvidence: options.registryEvidence,
         resolve4: (resolvers.resolve4 || dns.resolve4) as (hostname: string) => Promise<unknown>,
         resolve6: (resolvers.resolve6 || dns.resolve6) as (hostname: string) => Promise<unknown>,

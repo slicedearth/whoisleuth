@@ -123,3 +123,20 @@ export const BROWSER_LOCAL_COLLECTION_MANIFEST = Object.freeze([
   BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.bulk_review,
   BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.analyst_review_state,
 ]);
+
+// Archive membership is distinct from browser persistence. Recovery drafts and
+// transient certificate searches remain local and are not portable sections.
+export const WORKSPACE_ARCHIVE_COLLECTIONS = [
+  ['cases', 'cases'],
+  ['campaigns', 'campaigns'],
+  ['brandProfiles', 'brand_profiles'],
+  ['watchlists', 'watchlists'],
+  ['shortlist', 'shortlist'],
+  ['detectionRules', 'detection_rules'],
+  ['relationshipObservations', 'relationship_observations'],
+  ['bulkSessions', 'bulk_sessions'],
+  ['websiteSnapshots', 'website_snapshots'],
+  ['investigationTemplates', 'investigation_templates'],
+  ['bulkReview', 'bulk_review'],
+  ['analystReviewState', 'analyst_review_state'],
+] as const satisfies readonly (readonly [string, keyof typeof BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID])[];

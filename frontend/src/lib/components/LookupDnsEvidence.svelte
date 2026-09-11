@@ -23,6 +23,7 @@
     failureDetail: string;
     truncated: boolean;
     delegation?: {
+      domain?: string;
       status: string;
       complete: boolean;
       detail: string;
@@ -68,6 +69,7 @@
       limitations: readonly string[];
     } | null;
     rehearsalEvidence?: {
+      evidenceComplete?: boolean;
       currentGlue?: readonly unknown[];
       currentDs?: readonly unknown[];
       currentMx?: readonly unknown[];
@@ -107,6 +109,7 @@
           <span class="evidence-status {evidenceStatusTone(delegation.status, { complete: delegation.complete })}">{delegation.status}</span>
         </div>
         <p class="delegation-detail">{delegation.detail}</p>
+        {#if delegation.domain}<p class="delegation-detail">Registration-delegation target: {delegation.domain}.</p>{/if}
         <div class="delegation-sources">
           <article><small>Parent resolver view</small><strong>{delegation.parentNameservers.join(' · ') || 'Unavailable'}</strong></article>
           <article><small>Registry publication</small><strong>{delegation.registryNameservers.join(' · ') || 'Unavailable'}</strong></article>
@@ -178,7 +181,7 @@
             currentCriticalAddresses={rehearsalEvidence.currentCriticalAddresses ?? []}
             currentRegistrationStatuses={rehearsalEvidence.currentRegistrationStatuses ?? []}
             currentTlsSpkiSha256={rehearsalEvidence.currentTlsSpkiSha256 ?? null}
-            evidenceComplete={delegation.complete}
+            evidenceComplete={delegation.complete && rehearsalEvidence.evidenceComplete !== false}
           />
         {/if}
         {#each delegation.limitations as limitation}<p class="delegation-limitation">{limitation}</p>{/each}

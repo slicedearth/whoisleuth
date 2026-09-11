@@ -118,7 +118,7 @@
         },
         "cliCasePack": {
           "caseCount": 8,
-          "totalBytes": 115244,
+          "totalBytes": 116212,
           "retainedEvidenceBytes": 86394,
           "caseLimitApplied": false
         }
@@ -348,7 +348,7 @@
         },
         "cliCasePack": {
           "caseCount": 24,
-          "totalBytes": 344207,
+          "totalBytes": 347111,
           "retainedEvidenceBytes": 259356,
           "caseLimitApplied": false
         }
@@ -396,7 +396,7 @@
           },
           {
             "kind": "evidence_pin",
-            "payloadDigest": "sha256:783a36653bdbc63cca24760db57f8755f84bf0a3f83c40525e5102d295064e2f",
+            "payloadDigest": "sha256:85dab9c789aeb537b37830d49eb05a2b23fc5f6b8e2a4d76ec027e2b3636e1db",
             "occurrences": 500,
             "payloadBytes": 601,
             "grossDuplicateBytes": 299899
@@ -429,7 +429,7 @@
           },
           {
             "kind": "evidence_pin",
-            "payloadDigest": "sha256:c5770b4c2caf0f408758e871c38b30f4fc883ac98b548de2cc7a89fe2933907c",
+            "payloadDigest": "sha256:e6797abd7696e08c8911f75bdb5e90afe255095ef742d2c79c76ca779b24f869",
             "occurrences": 500,
             "exactForms": 1,
             "payloadBytes": 601,
@@ -458,7 +458,7 @@
         },
         "cliCasePack": {
           "caseCount": 25,
-          "totalBytes": 280576,
+          "totalBytes": 283601,
           "retainedEvidenceBytes": 192225,
           "caseLimitApplied": true
         }

@@ -1,8 +1,38 @@
-// Collection needs an authority, not a pasted URL's private path or query.
+// Ordinary collection retains a hostname, not a pasted URL's private path or query.
 // Registration classification and network-address safety remain separate.
+import { isValidAsciiHostname } from '../contracts/domain-name.mts';
 export const MAX_LOOKUP_INPUT_CHARACTERS = 2 * 1024 * 1024;
 const URL_SCHEME = /^[a-z][a-z\d+.-]*:\/\//iu;
 const CONTROL = /[\u0000-\u001f\u007f]/u;
+
+/** Older results collected supporting evidence at the registrable domain. */
+export function lookupObservationHostname(availability: Readonly<{ observationHostname?: unknown; domain?: unknown }>): string | null {
+  const value = availability.observationHostname === undefined ? availability.domain : availability.observationHostname;
+  return typeof value === 'string' && isValidAsciiHostname(value) && value === value.toLowerCase() ? value : null;
+}
+
+function validLookupObservationHostname(
+  value: unknown,
+  query: Readonly<{ inputHostname?: unknown; registrableDomain?: unknown; submitted?: unknown }>,
+): boolean {
+  return typeof value === 'string' && isValidAsciiHostname(value) && value === value.toLowerCase()
+    && value === (query.inputHostname ?? query.submitted ?? query.registrableDomain)
+    && typeof query.registrableDomain === 'string'
+    && (value === query.registrableDomain || value.endsWith(`.${query.registrableDomain}`));
+}
+
+/** Bind collection identities without treating an omitted historical identity as new evidence. */
+export function validLookupObservationScope(
+  availability: Readonly<{ observationHostname?: unknown; dns?: unknown }>,
+  query: Readonly<{ inputHostname?: unknown; registrableDomain?: unknown; submitted?: unknown }>,
+): boolean {
+  if (availability.observationHostname !== undefined && !validLookupObservationHostname(availability.observationHostname, query)) return false;
+  const dns = availability.dns;
+  const delegation = dns && typeof dns === 'object' && !Array.isArray(dns) ? Reflect.get(dns, 'delegation') : null;
+  const registrationDomain = delegation && typeof delegation === 'object' && !Array.isArray(delegation) ? Reflect.get(delegation, 'domain') : null;
+  return registrationDomain == null || (typeof registrationDomain === 'string'
+    && isValidAsciiHostname(registrationDomain) && registrationDomain === query.registrableDomain);
+}
 
 export function parseCredentialFreeHttpUrl(value: unknown, maximumLength: number): URL | null {
   if (typeof value !== 'string' || !value || value.length > maximumLength

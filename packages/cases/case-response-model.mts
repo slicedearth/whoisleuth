@@ -5,6 +5,7 @@
 
 import {
   CASE_SCHEMA_VERSION,
+  PUBLISHED_V2_3_CASE_SCHEMA_VERSION,
   MAX_ASSERTION_PROVENANCE_LABELS,
   MAX_ASSERTION_PROVENANCE_MARKINGS,
   MAX_CASE_ASSERTIONS,
@@ -68,6 +69,7 @@ import {
   text,
   uniqueIds,
 } from './case-response-values.mts';
+import { isValidAsciiHostname } from '../../lib/hostname.mts';
 
 export * from './case-response-records.mts';
 export * from './case-response-actions.mts';
@@ -262,6 +264,12 @@ function normalizePin(
         value,
         sourceSchema: normalizedSourceSchema,
       }, options);
+  if ((options.sourceVersion ?? CASE_SCHEMA_VERSION) > PUBLISHED_V2_3_CASE_SCHEMA_VERSION
+    && item.observationHostname !== undefined) {
+    if (typeof item.observationHostname !== 'string' || !isValidAsciiHostname(item.observationHostname)
+      || item.observationHostname !== item.observationHostname.toLowerCase()) return null;
+    normalized.observationHostname = item.observationHostname;
+  }
   // Introduced in Case 15. Older public records must not acquire an identity
   // merely because an unrecognised input field resembles a digest.
   if ((options.sourceVersion ?? CASE_SCHEMA_VERSION) >= 15

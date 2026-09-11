@@ -21,6 +21,7 @@ const SCAN_DEPTH_LABELS = {
 /** Human labels for every known snapshot field. */
 const FIELD_LABELS = {
   inputHostname: 'Submitted hostname',
+  observationHostname: 'DNS, TLS and web observation hostname',
   scanDepth: 'Scan depth',
   availability: 'Availability',
   confidence: 'Confidence',
@@ -74,7 +75,7 @@ type SnapshotGroup = {
 const FIELD_GROUPS: Array<{ name: string; fields: SnapshotField[] }> = [
   {
     name: 'Observation context',
-    fields: ['inputHostname'],
+    fields: ['inputHostname', 'observationHostname'],
   },
   {
     name: 'Registration',

@@ -380,6 +380,7 @@ export type CaseResponsePacket = {
     id: string;
     label: string;
     source: string;
+    observationHostname?: string;
     observedAt: string | null;
     completeness: string;
     limitations: string[];
@@ -674,6 +675,7 @@ function normalizeSelectedEvidence(caseRecord: CaseRecord, value: unknown): Case
       id: pin.id,
       label: text(pin.label, 80),
       source: text(pin.source, 120),
+      ...(pin.observationHostname ? { observationHostname: pin.observationHostname } : {}),
       observedAt: timestamp(pin.observedAt),
       completeness: text(pin.completeness, 40),
       limitations: normalizeLimitations(pin.limitations),
@@ -1505,7 +1507,7 @@ export async function buildCaseResponsePacket(
     '',
     '## Selected evidence and integrity references',
     '',
-    ...(selectedEvidence.length ? selectedEvidence.map((item) => `- ${escapeMarkdown(item.id)} · ${escapeMarkdown(item.label)} · ${escapeMarkdown(item.source)} · ${item.observedAt ?? 'Observation time unavailable'} · ${escapeMarkdown(item.completeness)}`) : ['- No evidence pin was explicitly selected.']),
+    ...(selectedEvidence.length ? selectedEvidence.map((item) => `- ${escapeMarkdown(item.id)} · ${escapeMarkdown(item.label)} · ${escapeMarkdown(item.source)}${item.observationHostname ? ` · ${escapeMarkdown(item.observationHostname)}` : ''} · ${item.observedAt ?? 'Observation time unavailable'} · ${escapeMarkdown(item.completeness)}`) : ['- No evidence pin was explicitly selected.']),
     ...artefactReferences.map((item) => `- ${escapeMarkdown(item.id)} · ${escapeMarkdown(item.label)} · SHA-256 ${item.digestSha256} · captured ${item.capturedAt}`),
     '',
     '## Provider outcome and independent effect',
@@ -1558,7 +1560,7 @@ export async function buildCaseResponsePacket(
     '',
     'Selected evidence:',
     ...(selectedEvidence.length
-      ? selectedEvidence.map((item) => `- ${item.label} — ${item.source}, observed ${item.observedAt ?? 'time unavailable'} (${item.completeness})`)
+      ? selectedEvidence.map((item) => `- ${item.label} — ${item.source}${item.observationHostname ? ` for ${item.observationHostname}` : ''}, observed ${item.observedAt ?? 'time unavailable'} (${item.completeness})`)
       : ['- No Case evidence pin was selected.']),
     '',
     `Reviewed packet SHA-256: ${digestSha256}`,

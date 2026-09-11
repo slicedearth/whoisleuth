@@ -21,6 +21,7 @@ import {
 } from '../contracts/investigation-portability.mts';
 import { MAX_PROFILE_VALUES } from '../contracts/workspace-portability.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
 import { createGraphInputReader, graphInputIsIncomplete, type LookupAssetInputCoverage } from './lookup-asset-graph-inputs.mts';
 
 export { LOOKUP_ASSET_GRAPH_SCHEMA, LOOKUP_ASSET_GRAPH_VERSION };
@@ -257,6 +258,7 @@ function sourceCompleteness(value: unknown): 'complete' | 'partial' | 'unknown' 
 
 export function buildLookupAssetGraph(input: Readonly<{
   target?: unknown;
+  registrationDomain?: unknown;
   observedAt?: unknown;
   rdapEvidence?: unknown;
   rdapParsed?: unknown;
@@ -287,6 +289,10 @@ export function buildLookupAssetGraph(input: Readonly<{
   }>;
 }>): LookupAssetGraph {
   const target = hostname(input.target);
+  const suppliedRegistrationDomain = hostname(input.registrationDomain);
+  const registrationDomain = suppliedRegistrationDomain && target
+    && canonicalRegistrableDomain(target) === suppliedRegistrationDomain
+    ? suppliedRegistrationDomain : target;
   if (!target) {
     return {
       version: LOOKUP_ASSET_GRAPH_VERSION,
@@ -366,6 +372,14 @@ export function buildLookupAssetGraph(input: Readonly<{
     addEdge({ ...edge, source, target: targetNode });
     return targetNode;
   };
+  const registrationId = registrationDomain && registrationDomain !== target
+    && target.endsWith(`.${registrationDomain}`)
+    ? connect('hostname', registrationDomain, {
+        kind: 'registration-namespace', label: 'within registration namespace', sourceLabel: 'Hostname classification',
+        observedAt: null, completeness: 'complete', limitations: ['Hostname structure does not establish common ownership or control.'],
+        lenses: ['all', 'delegation'], href: '#evidence-registry',
+      }, 'Registrable-domain authority') ?? targetId
+    : targetId;
   const reviewedProfileDomains = new Set(['official', 'partner', 'allowlisted'].flatMap((key) => reader.values(
     `profile.${key}`, input.profileDomains?.[key as 'official' | 'partner' | 'allowlisted'], MAX_PROFILE_VALUES,
     (value) => typeof value === 'string' && value.length <= 253 ? hostname(value) : null,
@@ -379,7 +393,7 @@ export function buildLookupAssetGraph(input: Readonly<{
   ): LookupTrustBoundary => {
     if (!candidate) return 'unresolved';
     if (candidateOrigin && sourceOrigin && candidateOrigin === sourceOrigin) return 'same_origin';
-    if (candidate === sourceHost || candidate === target || candidate.endsWith(`.${target}`)) return 'same_registrable_domain';
+    if (candidate === sourceHost || candidate === registrationDomain || (registrationDomain && candidate.endsWith(`.${registrationDomain}`))) return 'same_registrable_domain';
     if (reviewedProfileDomains.has(candidate)) return 'reviewed_profile';
     if ([...reader.coverage.values()].some((row) => row.id.startsWith('profile.') && graphInputIsIncomplete(row))) return 'unresolved';
     return 'external';
@@ -454,6 +468,7 @@ export function buildLookupAssetGraph(input: Readonly<{
         href: '#evidence-registry',
       },
       'Published registrar of record',
+      registrationId,
     );
   }
 
@@ -495,7 +510,7 @@ export function buildLookupAssetGraph(input: Readonly<{
     const nameserverId = addNode('hostname', nameserver, `Direct authority state: ${text(authority.state, 40) || 'unknown'}`);
     if (nameserverId) {
       addEdge({
-        source: targetId,
+        source: registrationId,
         target: nameserverId,
         ...dnsEdge('direct-authority', 'queried directly', ['delegation']),
         observedAt: isoDate(delegation.observedAt),

@@ -617,6 +617,18 @@ describe('CLI lookup runner', () => {
     assert.equal(plan.planning.sources.find((source: { source: string }) => source.source === 'registrar_rdap').conditional, true);
   });
 
+  test('Fast preflight does not label the submitted child hostname as a collected observation', async () => {
+    const stdout = capture();
+    const code = await runCli(['lookup', 'login.example.test', '--fast', '--plan'], {
+      stdout: stdout.stream, stderr: capture().stream,
+      runUnifiedLookup: async () => { throw new Error('A plan must not collect evidence'); },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.match(stdout.value(), /Target: example\.test/u);
+    assert.match(stdout.value(), /Submitted hostname: login\.example\.test/u);
+    assert.doesNotMatch(stdout.value(), /Observation hostname:/u);
+  });
+
   test('invalid input is a usage error and never calls lookup', async () => {
     const stderr = capture();
     let called = false;

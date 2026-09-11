@@ -50,7 +50,7 @@ const FAST_DOMAIN_EVIDENCE: PlannedSource = Object.freeze({
 const DEEP_DOMAIN_EVIDENCE: PlannedSource = Object.freeze({
   source: 'domain_evidence',
   purpose: 'Collect bounded DNS, HTTP, TLS, page-identity, technology, and security-posture evidence.',
-  disclosure: 'DNS resolvers and the target website infrastructure receive the hostname through bounded probes.',
+  disclosure: 'DNS, TLS and website probes use the submitted hostname. Registration-delegation queries use the registrable domain.',
   conditional: false,
 });
 const REGISTRAR_RDAP: PlannedSource = Object.freeze({
@@ -113,6 +113,8 @@ function formatCliLookupPlan(plan: CliLookupPlan): string {
   const lines = [
     'WHOISleuth lookup preflight',
     `Target: ${plan.target.normalized}`,
+    ...(plan.target.inputHostname && plan.target.inputHostname !== plan.target.normalized
+      ? [`Submitted hostname: ${plan.target.inputHostname}`] : []),
     `Type: ${plan.target.type}`,
     `Mode: ${plan.mode}`,
     'Network requests made: no',

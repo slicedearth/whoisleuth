@@ -116,11 +116,13 @@ reports section metadata and digest-only search results unless `--reveal` is
 explicitly selected. It never searches notes, contacts or arbitrary raw fields.
 
 `export` reads supported saved Lookup v1 or v2 and writes current Lookup
-evidence schema 28. Published v2 schema 27 and exact v1 schema 26 remain
-readable. Versions 27 and 28 exclude raw registration payloads, expanded
+evidence schema 29. Published v2 schemas 27 and 28 and exact v1 schema 26 remain
+readable. Versions 27–29 exclude raw registration payloads, expanded
 contacts, credentials, complete query-bearing URLs and provider payloads;
-schema 28 can also retain the bounded, separately attributed registrar-standing
-projection shown by Lookup.
+schemas 28 and 29 also retain the bounded registrar-standing projection.
+Schema 29 identifies the hostname used for DNS, TLS and web observations,
+separately from the registrable domain used by registration sources. Older
+evidence retains its original collection scope.
 
 `verify-artifact` checks a recognised structure and its applicable integrity
 contract. `interchange-report` describes retained and omitted fields.

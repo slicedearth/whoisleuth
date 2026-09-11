@@ -14,6 +14,7 @@ import {
 type LookupResult = Awaited<ReturnType<typeof runUnifiedLookup>>;
 type FullLookupResult = Extract<LookupResult, { rdap: unknown }>;
 type AvailabilityFixtureOptions = {
+  observationHostname?: string;
   featurePolicy?: unknown;
   includeCredentialSurfaceProfile?: boolean;
   includePublicationMetadata?: boolean;
@@ -213,6 +214,7 @@ describe('runUnifiedLookup', () => {
       checkDomainAvailability: async (domain: string, options: AvailabilityFixtureOptions) => {
         availabilityCalls += 1;
         assert.equal(domain, 'example.com');
+        assert.equal(options.observationHostname, 'login.example.com');
         assert.equal(options.includeExtendedDnsContext, true);
         assert.equal(options.includeCredentialSurfaceProfile, true);
         assert.equal(options.includePublicationMetadata, true);
@@ -398,6 +400,7 @@ describe('runUnifiedLookup', () => {
       buildWhoisChain: async () => [{ server: 'whois.example', response: 'large raw WHOIS body' }],
       checkDomainAvailability: async (_domain: string, options: AvailabilityFixtureOptions) => {
         assert.equal(options.includeCredentialSurfaceProfile, false);
+        assert.equal(options.observationHostname, undefined);
         assert.equal(options.includePublicationMetadata, false);
         assert.equal(options.includeDeliveryMetadata, false);
         assert.equal(options.includeStructuredDataIdentity, false);

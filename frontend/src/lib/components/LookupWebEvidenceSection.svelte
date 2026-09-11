@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { CheckpointFact } from '$lib/analysis/case-evidence-checkpoint.ts';
+  import { lookupObservationHostname } from '../../../../packages/evidence/lookup-target.mts';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import LookupFamilySummary from '$lib/components/LookupFamilySummary.svelte';
   import type { BrandProfile } from '$lib/brand-profiles';
@@ -69,6 +70,7 @@
   } = $props();
 
   const availability = $derived(view.availability);
+  const observationHostname = $derived(lookupObservationHostname(availability) ?? caseDomain);
   const reverseDns = $derived(view.reverseDns);
   const observedNetworkContext = $derived(view.observedNetworkContext);
   const observedNetworkEndpoint = $derived(view.observedNetworkEndpoint);
@@ -158,7 +160,7 @@
         loadingLabel="Loading website snapshot controls…"
         unavailableLabel="Website snapshot controls could not be loaded."
         props={{
-          domain: caseDomain,
+          domain: observationHostname,
           canSave: !loading && lookupEvidenceDepth === 'deep' && Boolean(caseDomain) && technologyProfile.source === 'derived' && securityPosture.source === 'derived',
           buildSnapshot,
         }}
@@ -181,7 +183,7 @@
         loadingLabel="Loading DNS evidence…"
         unavailableLabel="DNS evidence could not be loaded."
         {onready}
-        props={{headingId: 'dns-title', status: show(dnsEvidence.status), complete: dnsEvidence.complete !== false, rows: networkDisplay.dnsRows, failureDetail: networkDisplay.dnsQueryFailures, truncated: Boolean(dnsEvidence.truncated), delegation: networkDisplay.dnsDelegation, rehearsalEvidence: dnsRehearsalEvidence, domain: caseDomain, allowRehearsal: result?.type === 'domain', note: 'Point-in-time resolver evidence. Service-binding targets and address hints are displayed but not followed. Verify shared infrastructure independently.'}}
+        props={{headingId: 'dns-title', status: show(dnsEvidence.status), complete: dnsEvidence.complete !== false, rows: networkDisplay.dnsRows, failureDetail: networkDisplay.dnsQueryFailures, truncated: Boolean(dnsEvidence.truncated), delegation: networkDisplay.dnsDelegation, rehearsalEvidence: dnsRehearsalEvidence, domain: caseDomain, allowRehearsal: result?.type === 'domain', note: `Point-in-time resolver evidence for ${observationHostname}. Registration-delegation checks retain their separately named domain. Service-binding targets and address hints are displayed but not followed. Verify shared infrastructure independently.`}}
       /></div>
       {@render sourceCheckpoint?.('dns', 'DNS')}
       {#if serviceDependencyReview}
@@ -189,7 +191,7 @@
           load={() => import('$lib/components/LookupServiceDependencyReview.svelte')}
           loadingLabel="Loading service-dependency review…"
           unavailableLabel="Service-dependency review could not be loaded."
-          props={{review: serviceDependencyReview, target: caseDomain, technologies: pageDisplay.technologyFindings, libraries: pageDisplay.browserLibraries, authorizedScope: serviceDependencyScope, falsePositiveTargets: serviceDependencyFalsePositives, setAuthorizedScope: setServiceDependencyScope, setFalsePositiveTargets: setServiceDependencyFalsePositives}}
+          props={{review: serviceDependencyReview, target: observationHostname, technologies: pageDisplay.technologyFindings, libraries: pageDisplay.browserLibraries, authorizedScope: serviceDependencyScope, falsePositiveTargets: serviceDependencyFalsePositives, setAuthorizedScope: setServiceDependencyScope, setFalsePositiveTargets: setServiceDependencyFalsePositives}}
         /></div>
       {/if}
     {/if}

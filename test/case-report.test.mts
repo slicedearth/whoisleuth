@@ -237,6 +237,13 @@ describe('buildCaseReport JSON', () => {
     assert.ok(entry.incomparableReasons.includes('observation-context'));
   });
 
+  test('keeps snapshot observation hostnames out of both report formats', () => {
+    const rec = caseRecord({ evidenceHistory: [snapshot({ inputHostname: 'submitted.example.test', observationHostname: 'observed.example.test' })] });
+    const result = caseReport.buildCaseReport(rec, { generatedAt: LATEST });
+    assert.doesNotMatch(JSON.stringify(result.json), /submitted\.example\.test|observed\.example\.test/u);
+    assert.doesNotMatch(result.markdown, /submitted\.example\.test|observed\.example\.test/u);
+  });
+
   test('single-snapshot baseline', () => {
     const rec = caseRecord({
       evidenceHistory: [snapshot({ id: 'ev-1', fingerprint: 'fp1' })],

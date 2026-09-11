@@ -6,7 +6,7 @@ import {
   canonicalArtifactJsonV2,
   SORTED_JSON_V2,
 } from '../packages/evidence/artifact-integrity.mts';
-import { buildCaseReport } from '../packages/cases/case-report.mts';
+import { buildCaseReport, buildCaseReportVerificationProjection } from '../packages/cases/case-report.mts';
 import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 import { assertBoundedJsonStructure, scanBoundedJson } from '../lib/bounded-json.mts';
 import {
@@ -300,12 +300,12 @@ function assertCurrentReportProjection(report: Record<string, unknown>, rawCase:
   if (typeof report.generatedAt !== 'string') {
     throw new TypeError('The CLI case pack contains an invalid or mismatched Case report.');
   }
-  const expected = buildCaseReport(rawCase, {
+  const expected = buildCaseReportVerificationProjection(rawCase, {
     applicationVersion: reportApplicationVersion(report),
     includeNotes: false,
     generatedAt: report.generatedAt,
-  }).json;
-  if (!canonicalValuesMatch(report, { ...expected, schemaVersion: report.schemaVersion })) {
+  }, report.schemaVersion as number);
+  if (!canonicalValuesMatch(report, expected)) {
     throw new TypeError('The CLI case pack contains an invalid or mismatched Case report projection.');
   }
 }

@@ -186,6 +186,7 @@ export type CaseEvidencePin = {
   label: string;
   value: string;
   source: string;
+  observationHostname?: string;
   sourceState: string | null;
   sourceSchema: {
     collection: string;

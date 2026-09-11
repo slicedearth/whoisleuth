@@ -53,6 +53,7 @@ import {
   domain,
   enumeration,
   exact,
+  exactOptional,
   fail,
   integer,
   iso,
@@ -408,12 +409,14 @@ function validateVersionedCaseResponsePacket(
   const evidence = array(root.selectedEvidence, 'Case-response selected evidence', MAX_RESPONSE_SELECTED_EVIDENCE);
   const evidenceIds = new Set<string>();
   for (const candidate of evidence) {
-    const item = exact(candidate, ['id', 'label', 'source', 'observedAt', 'completeness', 'limitations'], 'Case-response selected evidence');
+    const item = exactOptional(candidate, ['id', 'label', 'source', 'observedAt', 'completeness', 'limitations'],
+      version > PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION ? ['observationHostname'] : [], 'Case-response selected evidence');
     const id = text(item.id, 'Case-response evidence id', 64);
     if (evidenceIds.has(id)) fail('Case-response selected evidence');
     evidenceIds.add(id);
     text(item.label, 'Case-response evidence label', 80);
     text(item.source, 'Case-response evidence source', 120);
+    if (item.observationHostname !== undefined) domain(item.observationHostname, 'Case-response evidence hostname');
     iso(item.observedAt, 'Case-response evidence observedAt', version > PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION);
     enumeration(item.completeness, ['complete', 'partial', 'inconclusive', 'unknown'], 'Case-response evidence completeness');
     strings(item.limitations, 'Case-response evidence limitations', 8, 240);

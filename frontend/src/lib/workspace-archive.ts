@@ -34,6 +34,7 @@ import {
 import type { AnyLocalDataCollectionDefinition } from './browser-local-data.ts';
 import { guardedWorkspaceRollback, guardedWorkspaceSettingsRollback } from './analysis/workspace-rollback.ts';
 import { rethrowUnknownWorkspaceCommit } from './analysis/workspace-import-outcome.ts';
+import { WORKSPACE_ARCHIVE_COLLECTIONS as SECTION_COLLECTIONS } from '../../../packages/contracts/browser-local-collection-manifest.mts';
 
 export { MAX_WORKSPACE_ARCHIVE_BYTES } from './analysis/workspace-archive.ts';
 export {
@@ -72,21 +73,6 @@ function importSummary(
 }
 
 const SETTINGS_KEYS = [ACTIVE_PROFILE_KEY, THEME_STORAGE_KEY];
-const SECTION_COLLECTIONS = [
-  ['cases', 'cases'],
-  ['campaigns', 'campaigns'],
-  ['brandProfiles', 'brand_profiles'],
-  ['watchlists', 'watchlists'],
-  ['shortlist', 'shortlist'],
-  ['detectionRules', 'detection_rules'],
-  ['relationshipObservations', 'relationship_observations'],
-  ['bulkSessions', 'bulk_sessions'],
-  ['websiteSnapshots', 'website_snapshots'],
-  ['investigationTemplates', 'investigation_templates'],
-  ['bulkReview', 'bulk_review'],
-  ['analystReviewState', 'analyst_review_state'],
-] as const;
-
 async function localInput() {
   const documents = await readBrowserLocalDataCollections(SECTION_COLLECTIONS.map(([, collection]) => collection));
   return {

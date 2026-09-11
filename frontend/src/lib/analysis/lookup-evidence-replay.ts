@@ -6,7 +6,9 @@ import {
   LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES,
   LOOKUP_EVIDENCE_SCHEMA,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  HOSTNAME_SCOPED_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  REGISTRAR_STANDING_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   projectLookupEvidenceAvailability,
   projectLookupEvidenceRdapPublication,
   projectLookupEvidenceRdapSourcePublication,
@@ -15,6 +17,7 @@ import {
   projectLookupEvidenceWhoisSourcePublication,
   SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
 } from './evidence-export.ts';
+import { lookupObservationHostname, validLookupObservationScope } from '../../../../packages/evidence/lookup-target.mts';
 import {
   registrarStandingObservedBy,
   resolveRegistrarIanaId,
@@ -66,6 +69,7 @@ export type LookupEvidenceReplay = Readonly<{
   exportedAt: string;
   generatorVersion: string | null;
   target: string;
+  observationHostname?: string | null;
   caseDomain: string | null;
   targetType: string;
   availability: string;
@@ -122,6 +126,7 @@ function sameJsonValue(left: unknown, right: unknown): boolean {
 }
 
 function validateCurrentPrivacyBoundary(
+  schemaVersion: number,
   rdap: JsonRecord,
   whois: JsonRecord,
   availability: unknown,
@@ -139,7 +144,7 @@ function validateCurrentPrivacyBoundary(
       throw new Error('invalid current projection');
     }
   } catch {
-    throw new Error(`Lookup evidence schema ${LOOKUP_EVIDENCE_SCHEMA_VERSION} violates its privacy-minimized publication boundary.`);
+    throw new Error(`Lookup evidence schema ${schemaVersion} violates its privacy-minimized publication boundary.`);
   }
 }
 
@@ -252,6 +257,8 @@ export function buildLookupReplayCaseEvidence(
     source: 'import',
     capturedAt: replay.exportedAt,
     inputHostname: replay.target,
+    ...(replay.schemaVersion >= HOSTNAME_SCOPED_LOOKUP_EVIDENCE_SCHEMA_VERSION && replay.observationHostname
+      ? { observationHostname: replay.observationHostname } : {}),
     scanDepth: 'unknown',
     availability: replay.availability,
     confidence: replay.confidence,
@@ -383,6 +390,10 @@ export async function parseLookupEvidenceReplay(
   const sources = record(document.sources);
   const analysis = record(document.analysis);
   const availability = record(analysis.availability);
+  if ((availability.observationHostname !== undefined && schemaVersion < HOSTNAME_SCOPED_LOOKUP_EVIDENCE_SCHEMA_VERSION)
+    || !validLookupObservationScope(availability, query)) {
+    throw new Error('Lookup evidence observation hostname does not match its collection contract.');
+  }
   const rdap = record(sources.rdap);
   const whois = record(sources.whois);
   const rdapDiagnosticState = text(record(diagnostics.rdap).status, 40);
@@ -474,11 +485,11 @@ export async function parseLookupEvidenceReplay(
   const securityPosture = record(availability.securityPosture);
   const structuredDataIdentity = record(availability.structuredDataIdentity);
   const registrarStandingValue = analysis.registrarStanding;
-  if (schemaVersion < LOOKUP_EVIDENCE_SCHEMA_VERSION
+  if (schemaVersion < REGISTRAR_STANDING_LOOKUP_EVIDENCE_SCHEMA_VERSION
     && registrarStandingValue !== undefined) {
     throw new Error('Legacy Lookup evidence cannot contain registrar standing introduced by a newer schema.');
   }
-  if (schemaVersion === LOOKUP_EVIDENCE_SCHEMA_VERSION
+  if (schemaVersion >= REGISTRAR_STANDING_LOOKUP_EVIDENCE_SCHEMA_VERSION
     && registrarStandingValue !== null
     && !validRegistrarStanding(registrarStandingValue)) {
     throw new Error('Lookup evidence registrar standing is malformed or unsupported.');
@@ -537,6 +548,7 @@ export async function parseLookupEvidenceReplay(
     .slice(0, MAX_SOURCES);
   if (schemaVersion >= PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION) {
     validateCurrentPrivacyBoundary(
+      schemaVersion,
       rdap,
       whois,
       analysis.availability,
@@ -610,7 +622,8 @@ export async function parseLookupEvidenceReplay(
   const networkState = text(retainedNetworkContext.status, 40);
   const networkContext = ['success', 'partial'].includes(networkState) ? retainedNetworkContext : {};
   const graph = buildLookupAssetGraph({
-    target: query.inputHostname ?? query.submitted ?? query.registrableDomain,
+    target: lookupObservationHostname({ ...availability, domain: availability.domain ?? query.registrableDomain }) ?? query.registrableDomain ?? query.submitted,
+    registrationDomain: query.registrableDomain,
     observedAt: exportedAt,
     rdapEvidence: replayRdap,
     rdapParsed,
@@ -650,6 +663,9 @@ export async function parseLookupEvidenceReplay(
     exportedAt,
     generatorVersion,
     target: text(query.inputHostname ?? query.submitted ?? query.registrableDomain, 253) || 'Unknown target',
+    observationHostname: lookupObservationHostname({
+      ...availability, domain: availability.domain ?? query.registrableDomain,
+    }),
     caseDomain: text(query.type, 40) === 'domain'
       ? text(query.registrableDomain ?? query.submitted, 253) || null
       : null,

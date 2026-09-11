@@ -16,6 +16,7 @@
   import LookupWebEvidenceSection from '$lib/components/LookupWebEvidenceSection.svelte';
   import LookupSavedContextPreview from '$lib/components/LookupSavedContextPreview.svelte';
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
+  import { lookupObservationHostname } from '../../../../../packages/evidence/lookup-target.mts';
   import LookupPresentationControls from '$lib/components/LookupPresentationControls.svelte';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
@@ -163,6 +164,8 @@
   const lookupView=$derived(createLookupViewModel(result));
   const validatedResponseJson=$derived.by(()=>result ? JSON.stringify(result, null, 2) : '');
   const availability=$derived(lookupView.availability);
+  const observationHostname=$derived(availability.dns || availability.tls || availability.http
+    ? lookupObservationHostname(availability) : null);
   const rdap=$derived(lookupView.rdap);
   const registrarRdap=$derived(lookupView.registrarRdap);
   const whois=$derived(lookupView.whois);
@@ -236,7 +239,7 @@
   const activationContext=$derived(lookupAnalysis.activationContext);
   const acquisitionDueDiligence=$derived(lookupAnalysis.acquisitionDueDiligence);
   const serviceDependencyReview=$derived(buildServiceDependencyReview({
-    domain:caseDomain,
+    domain:observationHostname??caseDomain,
     dnsEvidence,
     dnsRecords,
     httpEvidence,
@@ -632,7 +635,7 @@
     const now=new Date().toISOString();
     return buildLookupWebsiteSnapshot({
       id:crypto.randomUUID?crypto.randomUUID():`website-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      domain:caseDomain,
+      domain:observationHostname??caseDomain,
       observedAt:lookupObservedAt||now,
       savedAt:now,
       lookupEvidenceDepth,
@@ -801,7 +804,7 @@
 
 {#if result}
   <section class="result-root" id="result" use:evidenceLinkNavigation>
-    <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)}
+    <LookupResultHeader title={show(result.inputHostname||result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} {observationHostname}
       observedAt={lookupObservedAt} depth={lookupEvidenceDepth} caseHref={caseDomain ? caseRecord ? caseWorkspaceHref(caseRecord.id) : '#case-response' : null}
       caseLabel={caseRecord ? 'Open saved Case' : caseSourceState === 'ready' ? 'Keep in Case' : 'Case context'} onCaseOpen={preserveLookupReturn}
       onExport={downloadEvidence} onReportExport={downloadReadableReport} onBriefExport={downloadInvestigationBrief} />

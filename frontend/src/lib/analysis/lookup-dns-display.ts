@@ -270,6 +270,7 @@ export function buildLookupDnsDisplay(input: {
   }));
   const dnsDelegation = delegation.delegationHealthVersion === 1
     ? {
+        domain: boundedTechnologyText(delegation.domain, 253),
         status: statusLabel(show(delegation.status)),
         complete: delegation.complete === true,
         detail: boundedTechnologyText(delegation.detail, 300),

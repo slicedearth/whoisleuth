@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isDeepStrictEqual } from 'node:util';
-import { BROWSER_LOCAL_COLLECTION_MANIFEST } from '../packages/contracts/browser-local-collection-manifest.mts';
+import { BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID, WORKSPACE_ARCHIVE_COLLECTIONS } from '../packages/contracts/browser-local-collection-manifest.mts';
 import { MAX_WORKSPACE_ARCHIVE_BYTES, MAX_WORKSPACE_ARCHIVE_SECTION_BYTES } from '../packages/contracts/case-portability.mts';
 import { MAX_DOMAIN_CONTROL_MANIFEST_BYTES } from '../packages/contracts/domain-control-manifest.mts';
 import { buildWorkspaceArchive, prepareWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
@@ -16,7 +16,10 @@ import { combinedWorkspaceAtCapacity } from './workspace-backup-capacity-fixture
 const NOW = '2026-09-09T00:00:00.000Z';
 
 test('archive intake covers the archived collection budgets and encrypted representation', () => {
-  const archived = BROWSER_LOCAL_COLLECTION_MANIFEST.filter((collection) => collection.id !== 'ct_history');
+  const archived = WORKSPACE_ARCHIVE_COLLECTIONS.map(([, id]) => BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID[id]);
+  const ids: readonly string[] = archived.map((collection) => collection.id);
+  assert.ok(!ids.includes('case_drafts'), 'Unsubmitted recovery forms never enter a portable backup.');
+  assert.ok(!ids.includes('ct_history'), 'Transient certificate searches remain outside backups.');
   assert.ok(archived.reduce((sum, collection) => sum + collection.maximumBytes, 0) < MAX_WORKSPACE_ARCHIVE_BYTES);
   assert.ok(archived.every((collection) => collection.maximumBytes < MAX_WORKSPACE_ARCHIVE_SECTION_BYTES));
   assert.ok(MAX_OFFLINE_ARTIFACT_BYTES >= MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES);

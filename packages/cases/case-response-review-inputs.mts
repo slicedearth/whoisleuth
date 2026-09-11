@@ -41,6 +41,7 @@ import {
   RESPONSE_READINESS_STATES,
   type ResponseReadinessState,
 } from './case-response-packet-vocabulary.mts';
+import { isValidAsciiHostname } from '../../lib/hostname.mts';
 
 const CONTACT_KINDS = new Set<string>(RESPONSE_CONTACT_KINDS);
 const PRE_PLATFORM_CONTACT_KINDS = new Set<string>(RESPONSE_CONTACT_KINDS.filter((kind) => kind !== 'application_platform'));
@@ -79,17 +80,18 @@ function exactReviewRecord(
   value: unknown,
   keys: readonly string[],
   label: string,
+  optionalKeys: readonly string[] = [],
 ): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new TypeError(`${label} must be an exact object.`);
   }
   const ownKeys = Reflect.ownKeys(value);
-  if (ownKeys.length !== keys.length
-    || ownKeys.some((key) => typeof key !== 'string' || !keys.includes(key))) {
+  if (keys.some((key) => !Object.hasOwn(value, key))
+    || ownKeys.some((key) => typeof key !== 'string' || !keys.includes(key) && !optionalKeys.includes(key))) {
     throw new TypeError(`${label} contains an undeclared field.`);
   }
   const descriptors = Object.getOwnPropertyDescriptors(value);
-  if (keys.some((key) => !descriptors[key] || !Object.hasOwn(descriptors[key]!, 'value'))) {
+  if (ownKeys.some((key) => typeof key !== 'string' || !descriptors[key] || !Object.hasOwn(descriptors[key]!, 'value'))) {
     throw new TypeError(`${label} must not contain accessors.`);
   }
   return value as Record<string, unknown>;
@@ -300,10 +302,14 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
   for (const candidate of boundedReviewArray(source.selectedEvidence, MAX_RESPONSE_SELECTED_EVIDENCE, 'Case-response selected evidence')) {
     const evidence = exactReviewRecord(candidate, [
       'id', 'label', 'source', 'observedAt', 'completeness', 'limitations',
-    ], 'Case-response selected evidence item');
+    ], 'Case-response selected evidence item', version > PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION ? ['observationHostname'] : []);
     reviewText(evidence.id, 64, 'Case-response evidence id');
     reviewText(evidence.label, 80, 'Case-response evidence label');
     reviewText(evidence.source, 120, 'Case-response evidence source');
+    if (evidence.observationHostname !== undefined && (typeof evidence.observationHostname !== 'string'
+      || !isValidAsciiHostname(evidence.observationHostname) || evidence.observationHostname !== evidence.observationHostname.toLowerCase())) {
+      throw new TypeError('Case-response evidence hostname is invalid.');
+    }
     reviewText(evidence.observedAt, 64, 'Case-response evidence observation time', version > PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION);
     reviewEnum(evidence.completeness, CASE_PIN_COMPLETENESS, 'Case-response evidence completeness');
     reviewStrings(evidence.limitations, MAX_RESPONSE_LIMITATIONS, MAX_RESPONSE_LIMITATION_LENGTH, 'Case-response evidence limitations');

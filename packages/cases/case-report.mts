@@ -23,6 +23,7 @@ import { normalizeCaseBrandProfileIds } from './case-brand-profile-references.mt
 import {
   CASE_REPORT_SCHEMA,
   CASE_REPORT_SCHEMA_VERSION,
+  PUBLISHED_V2_3_CASE_REPORT_SCHEMA_VERSION,
 } from '../contracts/case-portability.mts';
 
 // ---------------------------------------------------------------------------
@@ -31,7 +32,7 @@ import {
 
 export { CASE_REPORT_SCHEMA, CASE_REPORT_SCHEMA_VERSION };
 
-const LIMITATIONS_TEXT = [
+const PUBLISHED_V2_3_LIMITATIONS = Object.freeze([
   'This report contains normalised browser-local observations from WHOISleuth analyst cases.',
   'It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks.',
   'Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated.',
@@ -40,6 +41,11 @@ const LIMITATIONS_TEXT = [
   'Brand Profile references record an explicit analyst-selected association only; they do not establish ownership, attribution, intent, safety, or maliciousness.',
   'Provider workflow outcomes and independently observed technical effects remain separately attributed. A provider outcome does not establish independent remediation, absence, or safety; neither evidence family establishes legal sufficiency or provider performance.',
   'Generated locally in the browser. Review the package before sharing it.',
+]);
+const LIMITATIONS_TEXT = [
+  ...PUBLISHED_V2_3_LIMITATIONS.slice(0, 2),
+  'Snapshot hostnames are excluded; supporting DNS, TLS and web observations need not concern the Case registration domain.',
+  ...PUBLISHED_V2_3_LIMITATIONS.slice(2),
 ].join(' ');
 
 // ---------------------------------------------------------------------------
@@ -62,7 +68,7 @@ type ReportOptions = {
 };
 type ReportReason = 'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model' | 'other';
 type ReportChange = ReturnType<typeof compareCaseEvidence>[number];
-type ReportSnapshot = Omit<CaseEvidenceSnapshot, 'inputHostname'>;
+type ReportSnapshot = Omit<CaseEvidenceSnapshot, 'inputHostname' | 'observationHostname'>;
 type ReportTimelineEntry = {
   snapshot: ReportSnapshot;
   isBaseline: boolean;
@@ -351,6 +357,24 @@ export function buildCaseReport(
   const md = buildMarkdown(json, options.includeAttribution !== false);
 
   return { json, markdown: md };
+}
+
+/** Expected strict reader projection; historical disclosure wording is immutable. */
+export function buildCaseReportVerificationProjection(
+  caseRecord: CaseRecord,
+  options: ReportOptions,
+  schemaVersion: number,
+) {
+  const current = buildCaseReport(caseRecord, options).json;
+  if (schemaVersion === CASE_REPORT_SCHEMA_VERSION) return current;
+  if (schemaVersion !== PUBLISHED_V2_3_CASE_REPORT_SCHEMA_VERSION) {
+    throw new TypeError('No strict Case report projection is defined for this version.');
+  }
+  return {
+    ...current,
+    schemaVersion,
+    limitations: PUBLISHED_V2_3_LIMITATIONS.join(' ') + current.limitations.slice(LIMITATIONS_TEXT.length),
+  };
 }
 
 // ---------------------------------------------------------------------------

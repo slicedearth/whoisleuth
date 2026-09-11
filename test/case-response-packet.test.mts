@@ -20,6 +20,8 @@ import {
 } from '../frontend/src/lib/analysis/case-response-packet.ts';
 import { createCase, updateCase } from '../frontend/src/lib/analysis/case-model.ts';
 import { validateOfflineArtifactStructure } from '../cli/offline-artifact-validation.mts';
+import { buildCaseResponseReviewInputs } from '../packages/cases/case-response-packet.mts';
+import { validateCaseResponseReviewInputs } from '../packages/cases/case-response-review-inputs.mts';
 
 const NOW = '2026-07-28T02:00:00.000Z';
 
@@ -137,6 +139,30 @@ function packetInput(caseRecord: ReturnType<typeof reviewedCase>) {
 }
 
 describe('case response packet', () => {
+  test('selected observation hostnames survive offline packet verification and bind the reviewed digest', async () => {
+    const caseRecord = reviewedCase();
+    const input = packetInput(caseRecord);
+    input.selectedEvidencePinIds = [caseRecord.evidencePins[0]!.id];
+    caseRecord.evidencePins[0]!.observationHostname = 'portal.report.example';
+    const digest = await buildCaseResponseReviewDigest(caseRecord, input, NOW);
+    const packet = await buildCaseResponsePacket(caseRecord, input, NOW);
+    assert.equal(packet.json.selectedEvidence[0]?.observationHostname, 'portal.report.example');
+    assert.match(packet.markdown, /portal\.report\.example/u);
+    assert.match(packet.email, /portal\.report\.example/u);
+    assert.equal(await verifyCaseResponsePacketIntegrity(packet.json), true);
+    assert.doesNotThrow(() => validateOfflineArtifactStructure(CASE_RESPONSE_PACKET_SCHEMA, packet.json));
+    const review = buildCaseResponseReviewInputs(caseRecord, input, NOW);
+    assert.doesNotThrow(() => validateCaseResponseReviewInputs(review));
+    let accessorReads = 0;
+    Object.defineProperty(review.selectedEvidence[0]!, 'observationHostname', { get() { accessorReads += 1; return 'portal.report.example'; } });
+    assert.throws(() => validateCaseResponseReviewInputs(review), /accessors/u);
+    assert.equal(accessorReads, 0);
+    caseRecord.evidencePins[0]!.observationHostname = 'another.report.example';
+    assert.notEqual(await buildCaseResponseReviewDigest(caseRecord, input, NOW), digest);
+    packet.json.selectedEvidence[0]!.observationHostname = 'another.report.example';
+    assert.equal(await verifyCaseResponsePacketIntegrity(packet.json), false);
+  });
+
   test('refuses malformed packet shells before current v9 output', async () => {
     for (const version of [5, 6, 7, 8] as const) {
       assert.equal(await verifyCaseResponsePacketIntegrity({

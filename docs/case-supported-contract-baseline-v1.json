@@ -953,8 +953,8 @@
       {
         "id": "case-report-v12",
         "path": "test/fixtures/case-lifecycle/case-report-v12.json",
-        "bytes": 4640,
-        "sha256": "e170f1822490a02101bbe04de5c2e355bea3720c6c4bfc368b41b47084bccb57",
+        "bytes": 4761,
+        "sha256": "93c52116b892c363035d5924cdd2cdc8a0a6e030a23925a784f3da165bdc2f92",
         "contentDigestSha256": null,
         "version": 12,
         "expectation": "accepted_exact",
@@ -1113,9 +1113,9 @@
       {
         "id": "cli-case-pack-v2-case-v16-current",
         "path": "test/fixtures/case-lifecycle/cli-case-pack-v2-case-v16-current.json",
-        "bytes": 9439,
-        "sha256": "303fbe1fe11ed308d0cb956c5c628dc2fb197d54341cb7b06732fb4ae9376643",
-        "contentDigestSha256": "sha256:bf41184b4d130caffa534e943cc0893026c34d255e39fa8558dba6ddae85594c",
+        "bytes": 9560,
+        "sha256": "94e08ef63735b41f98ba0ae4b2e766f0e70486b47390d885c2b2648f826f09c4",
+        "contentDigestSha256": "sha256:9e5dced200c669471473e1ac139b151b1435ca0e7468468cd8df85caa77b14cb",
         "version": 2,
         "expectation": "accepted_exact",
         "shapeId": "case.cli-pack.current"

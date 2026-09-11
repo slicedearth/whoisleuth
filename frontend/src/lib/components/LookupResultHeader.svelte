@@ -8,6 +8,7 @@
     isSubdomain,
     registrableDomain,
     inputHostname,
+    observationHostname,
     observedAt,
     depth,
     caseHref,
@@ -22,6 +23,7 @@
     isSubdomain: boolean;
     registrableDomain: string;
     inputHostname: string;
+    observationHostname: string | null;
     observedAt: string | null;
     depth: 'fast' | 'deep';
     caseHref: string | null;
@@ -48,7 +50,7 @@
     <h2>{title}</h2>
     <p class="result-context"><span>{depth === 'deep' ? 'Deep' : 'Fast'} lookup</span>{#if observationTime}<time datetime={observationTime}>Observed {new Date(observationTime).toLocaleString()}</time>{:else}<span>Observation time unavailable</span>{/if}</p>
     {#if isSubdomain}
-      <p>Registry, DNS, website, TLS and page observations use {registrableDomain}. The submitted hostname was {inputHostname}; separately requested hostname-scoped sources remain labelled with their own target.</p>
+      <p>Registration: {registrableDomain}.{' '}{#if depth === 'deep' && observationHostname}DNS, TLS and web observation target: {observationHostname}.{:else}Submitted hostname: {inputHostname}.{/if}</p>
     {/if}
   </div>
   <div class="result-actions">

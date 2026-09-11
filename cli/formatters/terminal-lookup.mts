@@ -244,6 +244,9 @@ function formatTerminalLookup(
     targetLines.push(`Input host     ${safeTerminalValue(document.inputHostname)}`);
     targetLines.push(`Registry query ${safeTerminalValue(document.registrableDomain)}`);
   }
+  if (availability.observationHostname) {
+    targetLines.push(`DNS/TLS/web    ${safeTerminalValue(availability.observationHostname)}`);
+  }
   if (availability.applicable) {
     targetLines.push(`Availability   ${titleCase(availability.state)}`);
     targetLines.push(`Confidence     ${titleCase(availability.confidence)}`);

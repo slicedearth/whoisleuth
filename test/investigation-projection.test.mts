@@ -154,6 +154,7 @@ describe('typed local investigation projection', () => {
     const evidence = snapshot({
       firstCapturedAt: EARLY,
       inputHostname: 'login.a.invalid',
+      observationHostname: 'login.a.invalid',
       nameservers: ['NS2.SHARED.INVALID.', 'ns1.shared.invalid'],
       httpSummaryVersion: 1,
       httpEvidenceStatus: 'partial',
@@ -190,6 +191,21 @@ describe('typed local investigation projection', () => {
     assert.match(requiredValue(observation.limitations[0]), /source-health/);
   });
 
+  test('retains the unambiguous origin of historical root-target evidence', () => {
+    const result = buildInvestigationProjection(currentInput({
+      cases: { version: CASE_SCHEMA_VERSION, cases: [caseRecord('case-root', 'root.invalid', [snapshot({
+        inputHostname: 'root.invalid',
+        httpSummaryVersion: 1,
+        httpEvidenceStatus: 'success',
+        httpFinalOrigin: 'https://landing.invalid',
+        httpResponseStatus: 200,
+      })])] },
+    }), { generatedAt: LATE });
+    const origin = relationship(result, 'domain_reached_http_origin');
+    assert.equal(result.entities.find((item) => item.id === origin.from)?.canonical, 'root.invalid');
+    assert.equal(entity(result, 'http_origin').canonical, 'https://landing.invalid');
+  });
+
   test('does not create deep-only origin edges from fast or depth-unknown evidence', () => {
     const http = {
       httpSummaryVersion: 1,
@@ -202,6 +218,7 @@ describe('typed local investigation projection', () => {
         caseRecord('case-fast', 'fast.invalid', [snapshot({ ...http, inputHostname: 'fast.invalid', scanDepth: 'fast' })]),
         caseRecord('case-unknown', 'unknown.invalid', [snapshot({ ...http, inputHostname: 'unknown.invalid', scanDepth: 'unknown' })]),
         caseRecord('case-unknown-host', 'unknown-host.invalid', [snapshot({ ...http, inputHostname: null, scanDepth: 'deep' })]),
+        caseRecord('case-submitted-only', 'submitted.invalid', [snapshot({ ...http, inputHostname: 'portal.submitted.invalid', scanDepth: 'deep' })]),
       ] },
     }), { generatedAt: LATE });
     assert.equal(findEntity(result, 'http_origin'), undefined);

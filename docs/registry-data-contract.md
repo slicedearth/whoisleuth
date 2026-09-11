@@ -726,11 +726,14 @@ performance, identity, ownership, safety, or maliciousness conclusions.
 ## Evidence export and privacy boundary
 
 Lookup evidence uses schema `whoisleuth.lookup-evidence`. Exact v1 version 26,
-published v2 version 27, and current version 28 form its complete durable reader
+published v2 versions 27 and 28, and current version 29 form its complete durable reader
 boundary. Version 27 added bounded homepage publication and delivery/cache
 metadata and the privacy-minimised registration projection. Version 28 adds a
 bounded registrar-standing projection from the checked-in IANA registrar-ID and
-current-year ICANN compliance-notice catalogues. Other historical reader shapes
+current-year ICANN compliance-notice catalogues. Version 29 adds the explicit
+DNS, TLS and web observation hostname. Registration identity stays separately
+attributed; readers preserve the registrable-domain scope of older captures.
+Other historical reader shapes
 and unreleased checkpoints are unsupported.
 
 The document can contain query context, explicitly projected diagnostics,

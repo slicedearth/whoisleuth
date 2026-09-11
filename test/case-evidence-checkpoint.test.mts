@@ -113,6 +113,18 @@ function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpRespon
 }
 
 describe('case evidence checkpoints', () => {
+  test('hostname changes do not become a changed or missing checkpoint at the original target', () => {
+    const input = response({ availability: { ...response().availability, domain: 'checkpoint.example' } });
+    const before = buildLookupCheckpointFacts(input, { collectionDepth: 'deep' });
+    const pins = normalizeCaseEvidencePins(checkpointPinInputs(before, ['dns.spf', 'registration.registrar'], { checkpointId: 'scope-change' }), OBSERVED_AT);
+    assert.equal(pins.length, 2);
+    const same = compareCheckpointPins(pins, before);
+    assert.ok(same.every(row => row.state === 'equal'));
+    const changed = before.map(fact => fact.category === 'registration' ? fact : { ...fact, observationHostname: 'portal.checkpoint.example', value: null });
+    const compared = compareCheckpointPins(pins, changed);
+    assert.equal(compared.find(row => row.field === 'dns.spf')?.state, 'incomparable');
+    assert.equal(compared.find(row => row.field === 'registration.registrar')?.state, 'equal');
+  });
   test('keeps resolver nameservers separate from published registration nameservers', () => {
     const input = response({
       rdap: { fetchedAt: '2026-07-28T00:00:00.000Z', parsed: { nameservers: ['ns.registry.example'] } },

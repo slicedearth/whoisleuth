@@ -7,6 +7,7 @@
   <strong>{pin.label}</strong>
   <span class="value">{pin.value}</span>
   <span class="provenance">{pin.source}</span>
+  {#if pin.observationHostname}<span class="provenance">Observation hostname: {pin.observationHostname}</span>{/if}
   <span class="provenance">{#if pin.observedAt}Observed <time datetime={pin.observedAt}>{pin.observedAt}</time>{:else}Observation time unavailable{/if}</span>
   <span class="provenance">Completeness: {pin.completeness}{pin.truncated ? ' · truncated' : ''}{pin.sourceState ? ` · source state: ${pin.sourceState}` : ''}</span>
   {#each pin.limitations as limitation}<span class="provenance">{limitation}</span>{/each}

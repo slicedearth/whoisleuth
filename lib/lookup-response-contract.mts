@@ -29,6 +29,7 @@ import {
 } from '../packages/evidence/observation.mts';
 import { assertBoundedJsonStructure } from './bounded-json.mts';
 import { canonicalRegistrableDomain } from './registrable-domain.mts';
+import { validLookupObservationScope } from '../packages/evidence/lookup-target.mts';
 import {
   MAX_LOOKUP_DNS_RECORDS_PER_TYPE,
   MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS,
@@ -864,6 +865,9 @@ function validLookupDomainIdentity(value: JsonObject): boolean {
   if (availability.domain !== undefined && availability.domain !== null
     && (canonicalRegistrableDomain(availability.domain) !== queryDomain
       || normalizedDomain(availability.domain) !== queryDomain)) return false;
+  if (!validLookupObservationScope(availability, {
+    inputHostname: normalizedDomain(value.inputHostname ?? value.query), registrableDomain: queryDomain,
+  })) return false;
 
   if (value.inputHostname !== undefined
     && canonicalRegistrableDomain(value.inputHostname) !== queryDomain) return false;
@@ -1066,6 +1070,7 @@ function parseCompactLookupHttpResponse(
     || !expectedHostname
     || !expectedRegistrableDomain
     || Object.keys(availability).length > MAX_COMPACT_LOOKUP_AVAILABILITY_KEYS
+    || availability.observationHostname !== undefined
     || availability.applicable !== true
     || normalizedDomain(availability.domain) !== expectedRegistrableDomain
     || typeof availability.state !== 'string'

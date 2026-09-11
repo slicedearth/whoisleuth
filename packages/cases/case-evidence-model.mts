@@ -6,6 +6,7 @@ import { normalizeOpportunityModelVersion } from '../../lib/opportunity-scoring.
 import { normalizeRiskModelVersion } from '../../lib/risk-scoring.mts';
 import { latestObservationCohort } from '../evidence/latest-observations.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { PUBLISHED_V2_3_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
 import {
   MAX_EVIDENCE_CHANGES,
   MAX_EVIDENCE_DETAIL_LENGTH,
@@ -146,6 +147,7 @@ const DEEP_SIGNAL_FIELDS: Array<keyof CaseEvidenceMaterial> = [
 // another. Deterministic ordering here is what makes the fingerprint stable.
 const MATERIAL_FIELD_ORDER: Array<keyof CaseEvidenceMaterial> = [
   'inputHostname',
+  'observationHostname',
   'scanDepth',
   'availability', 'confidence', 'riskModelVersion', 'riskScore', 'opportunityModelVersion', 'opportunityScore',
   'riskFactors', 'opportunityFactors',
@@ -199,7 +201,7 @@ function isEmptyMaterial(value: unknown): boolean {
 
 // Fields that describe the capture rather than assert evidence, so they never
 // on their own keep an otherwise-empty snapshot alive.
-const NON_EVIDENCE_MATERIAL = new Set(['inputHostname', 'scanDepth', 'confidence']);
+const NON_EVIDENCE_MATERIAL = new Set(['inputHostname', 'observationHostname', 'scanDepth', 'confidence']);
 
 // A snapshot with no material evidence (only timestamps/source/depth, or only a
 // bare confidence/unknown-availability) is dropped rather than added to a
@@ -220,7 +222,7 @@ function canonicalMaterialString(snapshot: CaseEvidenceMaterial): string {
     // Preserve historical fingerprints when the new v14 observation-context
     // field is absent. A retained hostname is still material and therefore
     // separates otherwise-identical captures.
-    if (field === 'inputHostname' && value === null) continue;
+    if ((field === 'inputHostname' || field === 'observationHostname') && value === null) continue;
     canonical[field] = value;
   }
   return JSON.stringify(canonical);
@@ -254,10 +256,16 @@ function buildSnapshot(
   const httpSummary = normalizeHttpSummary(record);
   const acceptsProfileContext = options.sourceVersion === undefined || Number(options.sourceVersion) >= 12;
   const acceptsInputHostname = options.sourceVersion === undefined || Number(options.sourceVersion) >= 13;
+  const acceptsObservationHostname = options.sourceVersion === undefined || Number(options.sourceVersion) > PUBLISHED_V2_3_CASE_SCHEMA_VERSION;
+  const observationHostname = acceptsObservationHostname
+    ? normalizeEvidenceHostnameForCase(record.observationHostname, options.caseDomain)
+    : null;
+  if (acceptsObservationHostname && record.observationHostname != null && !observationHostname) return null;
   const fields: CaseEvidenceMaterial = {
     inputHostname: acceptsInputHostname
       ? normalizeEvidenceHostnameForCase(record.inputHostname, options.caseDomain)
       : null,
+    ...(observationHostname ? { observationHostname } : {}),
     scanDepth,
     availability: evidenceString(record.availability),
     confidence: evidenceString(record.confidence),
@@ -616,7 +624,7 @@ export function caseEvidenceIncomparableReasons(
 ): Array<'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model'> {
   if (!previous || !current || previous.fingerprint === current.fingerprint) return [];
   const reasons: Array<'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model'> = [];
-  if (previous.inputHostname !== current.inputHostname) reasons.push('observation-context');
+  if (!sameObservationContext(previous, current)) reasons.push('observation-context');
   const hasRiskEvidence = previous.riskScore !== null || current.riskScore !== null
     || previous.riskFactors.length > 0 || current.riskFactors.length > 0;
   if (hasRiskEvidence && !riskModelComparable(previous, current)) reasons.push('risk-model');
@@ -638,6 +646,11 @@ function isPresent(value: unknown): boolean {
   if (typeof value === 'string') return value.trim() !== '';
   if (Array.isArray(value)) return value.length > 0;
   return true;
+}
+
+function sameObservationContext(previous: CaseEvidenceSnapshot, current: CaseEvidenceSnapshot): boolean {
+  return previous.inputHostname === current.inputHostname
+    && (previous.observationHostname ?? null) === (current.observationHostname ?? null);
 }
 
 function setsEqual(a: unknown, b: unknown): boolean {
@@ -779,7 +792,7 @@ export function compareCaseEvidence(
   const comparableDepth = depthComparable(previous.scanDepth, current.scanDepth);
   const comparableRiskModel = riskModelComparable(previous, current);
   const comparableOpportunityModel = opportunityModelComparable(previous, current);
-  const sameHostname = previous.inputHostname === current.inputHostname;
+  const sameHostname = sameObservationContext(previous, current);
   const changes: EvidenceChange[] = [];
   for (const spec of COMPARE_FIELDS) {
     if (spec.scope === 'hostname' && !sameHostname) continue;

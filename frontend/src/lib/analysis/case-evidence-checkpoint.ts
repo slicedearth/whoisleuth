@@ -18,6 +18,7 @@ import type {
 } from './case-response-model.ts';
 import type { LookupEvidenceReplay } from './lookup-evidence-replay.ts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+import { lookupObservationHostname } from '../../../../packages/evidence/lookup-target.mts';
 
 export const CASE_EVIDENCE_CHECKPOINT_VERSION = 1;
 // This bounded selection accommodates separately attributed registration and
@@ -41,6 +42,7 @@ export type CheckpointFact = Readonly<{
   label: string;
   value: string | null;
   source: string;
+  observationHostname?: string;
   sourceState: string;
   observedAt: string | null;
   collectionDepth: 'deep' | 'fast' | 'unknown';
@@ -270,20 +272,26 @@ export function buildLookupCheckpointFacts(
     { field: 'disclosure.security_txt_contacts', category: 'disclosure', label: 'security.txt contacts', value: factValue(securityTxt.contacts), source: 'security.txt', sourceState: securityTxtState, observedAt: securityTxtObservedAt, collectionDepth: depth, completeness: completeness(securityTxtState), truncated: securityTxt.truncated === true ? true : null, limitations: ['Publication does not prove that a contact is monitored, appropriate, responsive, or responsible.', ...sourceLimitations(securityTxt.limitations)].slice(0, MAX_CHECKPOINT_LIMITATIONS) },
   ];
 
-  return specifications.map<CheckpointFact>((fact) => ({
-    version: 1,
-    ...fact,
-    completeness: fact.observedAt ? fact.completeness : 'unknown',
-    limitations: sourceLimitations([
-      ...(!fact.observedAt ? ['The source observation time is unavailable; this value cannot form a dated checkpoint.'] : []),
-      ...fact.limitations,
-    ]),
-    sourceSchema: {
-      collection: 'lookup_result',
-      schema: LOOKUP_EVIDENCE_SCHEMA,
-      version: LOOKUP_EVIDENCE_SCHEMA_VERSION,
-    },
-  })).slice(0, MAX_CHECKPOINT_FACTS);
+  return specifications.map<CheckpointFact>((fact) => {
+    const observationHostname = lookupObservationHostname({ domain: fact.category === 'registration'
+      ? response.registrableDomain
+      : fact.category === 'disclosure' ? response.inputHostname : lookupObservationHostname(availability) });
+    return {
+      version: 1,
+      ...fact,
+      ...(observationHostname ? { observationHostname } : {}),
+      completeness: fact.observedAt ? fact.completeness : 'unknown',
+      limitations: sourceLimitations([
+        ...(!fact.observedAt ? ['The source observation time is unavailable; this value cannot form a dated checkpoint.'] : []),
+        ...fact.limitations,
+      ]),
+      sourceSchema: {
+        collection: 'lookup_result',
+        schema: LOOKUP_EVIDENCE_SCHEMA,
+        version: LOOKUP_EVIDENCE_SCHEMA_VERSION,
+      },
+    };
+  }).slice(0, MAX_CHECKPOINT_FACTS);
 }
 
 const REPLAY_CHECKPOINT_FIELDS = Object.freeze({
@@ -331,6 +339,8 @@ export function buildLookupReplayCheckpointFacts(
       value,
       source: fact.source,
       sourceState: normalizedState,
+      ...((specification.category === 'registration' ? replay.caseDomain : replay.observationHostname)
+        ? { observationHostname: (specification.category === 'registration' ? replay.caseDomain : replay.observationHostname)! } : {}),
       observedAt: source.observedAt,
       collectionDepth: 'unknown' as const,
       completeness: replayCompleteness(normalizedState, fact.sourceComplete),
@@ -376,6 +386,7 @@ export function checkpointPinInputs(
       value: fact.value ?? '',
       source: fact.source,
       sourceState: fact.sourceState,
+      ...(fact.observationHostname ? { observationHostname: fact.observationHostname } : {}),
       sourceSchema: fact.sourceSchema,
       observedAt: fact.observedAt,
       collectionDepth: fact.collectionDepth,
@@ -433,7 +444,11 @@ export function compareCheckpointPins(
       let state: CheckpointComparisonState = 'not_recorded';
       let qualificationLimitation = '';
       if (current) {
-        if (UNAVAILABLE_STATES.has(current.sourceState)) state = 'unavailable';
+        if ((pin.observationHostname ?? null) !== (current.observationHostname ?? null)) {
+          state = 'incomparable';
+          qualificationLimitation = 'The observations concern different or unknown hostnames; absence or change cannot be inferred across them.';
+        }
+        else if (UNAVAILABLE_STATES.has(current.sourceState)) state = 'unavailable';
         else if (CONFLICT_STATES.has(current.sourceState)) state = 'conflicting';
         else if (current.value === null) state = 'missing';
         else {

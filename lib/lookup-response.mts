@@ -219,10 +219,8 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
       availability = {
         applicable: true,
         ...result,
-        // Every observation nested in the availability envelope is collected
-        // against this registrable target. Request context remains on the
-        // top-level response; exact-host sources such as security.txt retain
-        // their own requested/final URL attribution.
+        // Registration authority retains its registrable target. Deep source
+        // observations declare their independently collected hostname.
         domain: classified.value,
       };
     } else {

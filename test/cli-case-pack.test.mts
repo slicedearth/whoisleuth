@@ -176,6 +176,7 @@ describe('CLI case pack', () => {
     const published = JSON.parse(JSON.stringify(current));
     published.version = 15;
     published.packet.reports[0].schemaVersion = 11;
+    published.packet.reports[0].limitations = JSON.parse(readFileSync(new URL('./fixtures/case-lifecycle/case-report-v11.json', import.meta.url), 'utf8')).limitations;
     published.cases[0].sightings.reverse();
     published.packet.reports[0].analystResponse.sightings.reverse();
     assert.deepEqual(verifyCliCasePack(resign(published)), { caseCount: 1 });

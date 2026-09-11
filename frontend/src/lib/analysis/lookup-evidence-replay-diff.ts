@@ -2,6 +2,12 @@ import type { LookupEvidenceReplay } from './lookup-evidence-replay.ts';
 
 export const LOOKUP_EVIDENCE_REPLAY_DIFF_VERSION = 1;
 const MAX_DIFF_ROWS = 64;
+const HOSTNAME_SCOPED_SOURCES = new Set(['dns', 'http', 'tls', 'page-identity', 'technology', 'security-posture', 'network-context', 'sslbl']);
+
+function sameObservationTarget(left: LookupEvidenceReplay, right: LookupEvidenceReplay): boolean {
+  return sameCanonicalText(left.observationHostname ?? left.caseDomain ?? left.target,
+    right.observationHostname ?? right.caseDomain ?? right.target);
+}
 
 export type LookupEvidenceReplayDiffRow = Readonly<{
   id: string;
@@ -83,6 +89,13 @@ function appendMetadataRows(
   const after = right[key];
   if (!before && !after) return;
   const id = key === 'pagePublicationMetadata' ? 'publication' : 'delivery';
+  if (!sameObservationTarget(left, right)) {
+    rows.push({ id: `metadata:${id}`, label, kind: 'collection_quality_difference',
+      left: left.observationHostname ?? left.caseDomain ?? left.target,
+      right: right.observationHostname ?? right.caseDomain ?? right.target,
+      explanation: 'These metadata observations examined different hostnames; their values are not evidence of change at one target.' });
+    return;
+  }
   if (left.schemaVersion !== right.schemaVersion && (!before || !after)) {
     rows.push({
       id: `metadata:${id}`,
@@ -135,6 +148,13 @@ export function buildLookupEvidenceReplayDiff(
     throw new Error('Two-capture evidence comparison requires exports for the same target.');
   }
   const rows: LookupEvidenceReplayDiffRow[] = [];
+  const observationTargetChanged = !sameObservationTarget(left, right);
+  if (observationTargetChanged) rows.push({
+    id: 'collection:hostname', label: 'DNS, TLS and web observation hostname', kind: 'collection_quality_difference',
+    left: left.observationHostname ?? left.caseDomain ?? left.target,
+    right: right.observationHostname ?? right.caseDomain ?? right.target,
+    explanation: 'Registration identity is unchanged, but supporting observations examined different hostnames.',
+  });
   const sourceIds = [...new Set([...left.sources.map((item) => item.id), ...right.sources.map((item) => item.id)])].sort();
   for (const id of sourceIds) {
     const before = left.sources.find((item) => item.id === id);
@@ -160,7 +180,8 @@ export function buildLookupEvidenceReplayDiff(
       && factSourceExplicitlyComplete(after, before, right);
     const unchanged = before && after && sameFactValue(id, before.value, after.value);
     const sourceChanged = Boolean(before && after && before.sourceId !== after.sourceId);
-    const kind = sourceChanged
+    const scopeChanged = observationTargetChanged && [before?.sourceId, after?.sourceId].some((source) => source && HOSTNAME_SCOPED_SOURCES.has(source));
+    const kind = sourceChanged || scopeChanged
       ? 'collection_quality_difference'
       : unchanged
       ? 'unchanged'
@@ -176,7 +197,9 @@ export function buildLookupEvidenceReplayDiff(
       explanation: kind === 'observed_change'
         ? 'The bounded normalised value differs between two retained observations.'
         : kind === 'collection_quality_difference'
-          ? sourceChanged
+          ? scopeChanged
+            ? 'The source examined a different hostname, so this is not reported as change at one target.'
+            : sourceChanged
             ? 'The retained source attribution changed, so the values are not represented as a target change even when they differ.'
             : 'One observation lacks this fact without explicitly complete positive source evidence on both sides; this is a collection or provenance difference, not observed removal.'
           : 'The bounded normalised value is unchanged.',

@@ -104,6 +104,11 @@ A pasted HTTP(S) URL selects its full hostname for collection, not its port,
 path, query or fragment. URLs containing credentials are rejected. Retaining
 an exact Incident URL in a Case is a separate, deliberate choice.
 
+Registration queries use the registrable domain. Deep DNS, TLS and web probes
+use the selected hostname; registration-delegation checks keep their own domain.
+The header identifies this scope. Older exports keep their original
+registrable-domain observations rather than being relabelled as a subdomain.
+
 The result starts with registration and availability. Supporting DNS, website,
 TLS, certificate, network and provider evidence cannot silently replace
 registry authority.
@@ -152,7 +157,8 @@ nameservers remain separate. A failed save keeps the selection for a deliberate
 retry; a new Lookup clears it.
 
 Creating or refreshing a Case is deliberate. A Case retains the exact
-normalised submitted hostname on the new point-in-time evidence snapshot while
+normalised submitted hostname and, for new Deep observations, the separately
+identified DNS, TLS and web hostname on the point-in-time evidence snapshot while
 the Case remains keyed by canonical registrable domain. Different hostnames can
 therefore remain attached to different snapshots. Migrated Cases may retain a
 null hostname; WHOISleuth does not reconstruct one from URLs, certificates,
@@ -162,6 +168,9 @@ Ordinary transient Lookups create no hostname history. Case reports and
 response packets do not add the snapshot hostname, while ordinary Case,
 workspace and trusted Case-pack exports can contain it and require sharing
 review.
+
+Selected evidence pins keep their own observation hostname, which is included
+when those pins are deliberately selected for a response packet.
 
 ## Discover
 
@@ -509,7 +518,7 @@ Exports are deliberate local actions. Review them before sharing:
 - a full saved Lookup can include target, endpoints, raw RDAP publications,
   WHOIS bodies and publicly published contact data;
 - normalised Lookup evidence excludes raw registration payloads and expanded
-  contacts. Current schema 28 and published v2 schema 27 retain that boundary;
+  contacts. Current schema 29 and published v2 schemas 27 and 28 retain that boundary;
   exact v1 schema 26 can contain public contact fields;
 - Case, workspace and trusted Case-pack files can identify investigated
   hostnames and contain analyst records;

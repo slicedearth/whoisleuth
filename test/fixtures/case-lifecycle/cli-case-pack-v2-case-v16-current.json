@@ -200,7 +200,7 @@
           "latestObservedChangeAt": null,
           "latestClosure": null
         },
-        "limitations": "This report contains normalised browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and scoring-model gates prevent misleading comparisons; \"incomparable\" means observations differ materially but one or more fields cannot be compared reliably. Brand Profile references record an explicit analyst-selected association only; they do not establish ownership, attribution, intent, safety, or maliciousness. Provider workflow outcomes and independently observed technical effects remain separately attributed. A provider outcome does not establish independent remediation, absence, or safety; neither evidence family establishes legal sufficiency or provider performance. Generated locally in the browser. Review the package before sharing it."
+        "limitations": "This report contains normalised browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Snapshot hostnames are excluded; supporting DNS, TLS and web observations need not concern the Case registration domain. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and scoring-model gates prevent misleading comparisons; \"incomparable\" means observations differ materially but one or more fields cannot be compared reliably. Brand Profile references record an explicit analyst-selected association only; they do not establish ownership, attribution, intent, safety, or maliciousness. Provider workflow outcomes and independently observed technical effects remain separately attributed. A provider outcome does not establish independent remediation, absence, or safety; neither evidence family establishes legal sufficiency or provider performance. Generated locally in the browser. Review the package before sharing it."
       }
     ],
     "redactionManifest": {
@@ -219,6 +219,6 @@
   "integrity": {
     "algorithm": "SHA-256",
     "canonicalization": "sorted-json-v2",
-    "digestSha256": "sha256:bf41184b4d130caffa534e943cc0893026c34d255e39fa8558dba6ddae85594c"
+    "digestSha256": "sha256:9e5dced200c669471473e1ac139b151b1435ca0e7468468cd8df85caa77b14cb"
   }
 }

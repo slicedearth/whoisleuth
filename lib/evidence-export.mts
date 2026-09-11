@@ -15,6 +15,7 @@ import {
 } from '../packages/contracts/lookup-evidence.mts';
 export * from '../packages/contracts/lookup-evidence.mts';
 import { isValidAsciiHostname } from './hostname.mts';
+import { validLookupObservationScope } from '../packages/evidence/lookup-target.mts';
 import {
   REGISTRAR_STANDING_SCHEMA,
   REGISTRAR_STANDING_VERSION,
@@ -74,7 +75,7 @@ const PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS = new Set([
 const LOOKUP_AVAILABILITY_ANALYSIS_KEYS = new Set([
   ...[...PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS]
     .filter((key) => !['registrar', 'registrant', 'abuse'].includes(key)),
-  'registryContactsExcluded',
+  'registryContactsExcluded', 'observationHostname',
 ]);
 const LOOKUP_IDN_ANALYSIS_KEYS = new Set([
   'version', 'mappingVersion', 'asciiDomain', 'unicodeDomain', 'hasIdn',
@@ -1679,6 +1680,9 @@ export function buildLookupEvidence(response: unknown, options: LookupEvidenceOp
   });
   const query = projectLookupEvidenceQuery(body);
   const availabilityAnalysis = projectLookupEvidenceAvailability(body.availability);
+  if (!validLookupObservationScope(recordOrNull(body.availability) ?? {}, query)) {
+    throw new TypeError('Lookup evidence observation hostname must match its submitted registration context.');
+  }
   const idn = projectedKnownRecord(idnAnalysis, LOOKUP_IDN_ANALYSIS_KEYS);
   const evidence = {
     schema: LOOKUP_EVIDENCE_SCHEMA,

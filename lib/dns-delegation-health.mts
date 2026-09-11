@@ -375,6 +375,7 @@ function finding(
 function skippedDnsDelegationHealth(detail = 'Authoritative delegation checks were not collected for this lookup.') {
   return {
     delegationHealthVersion: DNS_DELEGATION_HEALTH_VERSION,
+    domain: null,
     ...createObservation({
       status: 'skipped',
       scanMode: 'deep',
@@ -693,6 +694,7 @@ async function collectDnsDelegationHealth(
   const observedAt = (options.observedAt || (() => new Date().toISOString()))();
   return {
     delegationHealthVersion: DNS_DELEGATION_HEALTH_VERSION,
+    domain,
     ...createObservation({
       status,
       observedAt,

@@ -62,6 +62,11 @@ import {
 
 const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
+test('export guidance preserves the independently published evidence versions', () => {
+  assert.match(COMMAND_DETAILS.export.boundary, /published v2 schemas 27, 28/u);
+  assert.match(COMMAND_DETAILS.export.boundary, /exact v1 schema 26/u);
+});
+
 function assertDeepFrozen(value: unknown, path = 'registry', seen = new Set<object>()): void {
   if (value === null || typeof value !== 'object' || seen.has(value)) return;
   seen.add(value);

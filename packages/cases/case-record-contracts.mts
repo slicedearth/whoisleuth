@@ -105,6 +105,7 @@ export type CaseEvidenceSnapshot = {
   capturedAt: string;
   source: string;
   inputHostname: string | null;
+  observationHostname?: string | null;
   scanDepth: string;
   availability: string | null;
   confidence: string | null;

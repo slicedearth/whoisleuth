@@ -2,6 +2,50 @@ import { expect, test } from './fixtures';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
 import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, useTheme } from './helpers';
 
+test('subdomain evidence keeps its collection identity through display, Case storage and selected pins', async ({ page }, testInfo) => {
+  const domain = 'example.test';
+  const hostname = `portal.${domain}`;
+  const fixture = sectionedLookupFixture(domain);
+  Object.assign(fixture, { query: hostname, inputHostname: hostname, isSubdomain: true });
+  Object.assign(fixture.availability, { observationHostname: hostname, deepScanComplete: true });
+  Object.assign(fixture.availability.dns, { observedAt: '2026-07-13T01:00:00.000Z' });
+  let requests = 0;
+  await page.route('**/api/lookup?*', async route => {
+    requests += 1;
+    expect(new URL(route.request().url()).searchParams.get('q')).toBe(hostname);
+    await route.fulfill({ json: fixture });
+  });
+  await page.goto('/lookup');
+  await page.locator('#query').fill(hostname);
+  await page.getByRole('radio', { name: /Deep/u }).check();
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  const header = page.locator('.result-head');
+  await expect(header.getByRole('heading', { name: hostname, exact: true })).toBeVisible();
+  await expect(header).toContainText(`Registration: example.test. DNS, TLS and web observation target: ${hostname}.`);
+  await page.getByRole('button', { name: 'Expand Web and DNS evidence', exact: true }).click();
+  await expect(page.locator('#evidence-dns')).toContainText(`Point-in-time resolver evidence for ${hostname}.`);
+  const dns = page.locator('.source-checkpoint', { has: page.locator('summary', { hasText: 'Pin DNS facts to Case' }) });
+  await dns.locator('summary').click();
+  await dns.getByRole('button', { name: 'Save lookup to Case', exact: true }).click();
+  await dns.getByRole('checkbox', { name: /^Nameservers /u }).check();
+  await dns.getByRole('button', { name: 'Save 1 checkpoint fact', exact: true }).click();
+  await expect(dns.getByRole('status')).toContainText('Saved 1 analyst-selected checkpoint fact');
+  const saved = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value;
+  expect(saved.domain).toBe('example.test');
+  expect(saved.evidenceHistory).toEqual([expect.objectContaining({ inputHostname: hostname, observationHostname: hostname })]);
+  expect(saved.evidencePins).toEqual([expect.objectContaining({ observationHostname: hostname, field: 'dns.nameservers' })]);
+  expect(requests).toBe(1);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280, 2560]) {
+      await page.setViewportSize({ width, height: 900 });
+      await header.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      await page.screenshot({ path: testInfo.outputPath(`hostname-${theme}-${width}.png`) });
+    }
+  }
+});
+
 test('pins source-local facts through the Case writer and preserves selections after a failed write', async ({ page }, testInfo) => {
   const domain = 'source-checkpoint.invalid';
   const observedAt = '2026-07-13T01:00:00.000Z';

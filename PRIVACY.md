@@ -120,7 +120,8 @@ records without another request. Derived views do not create evidence, prove a
 target state or silently mark an item reviewed.
 
 Creating or refreshing a Case is deliberate. Current Case schema 16 can retain
-the exact normalised submitted hostname on a new evidence snapshot, analyst
+the exact normalised submitted hostname and the DNS, TLS and web observation
+hostname on a new evidence snapshot, analyst
 decision confidence and its basis, and a response route's observation and
 review times. Pins and sightings with unknown observation times retain null;
 saving them does not create a source observation time.
@@ -128,6 +129,8 @@ Exact public v1 Case schema 12 and published-v2 schemas 13–15
 remain readable and migrate directly; migrated fields can remain null, unknown
 or blank because WHOISleuth does not reconstruct them from weaker evidence.
 Case report v12 JSON and Markdown do not add the snapshot hostname.
+Explicitly selected evidence pins can include their own observation hostname
+in response packets; this remains distinct from the Case's registration domain.
 
 A Case can also retain controlled classifications and exact HTTP(S) incident
 links as browser-local Case metadata. Exact links can contain public paths,
@@ -169,6 +172,10 @@ For a URL pasted into Lookup, the browser sends only its full hostname for
 collection, without the port, path, query or fragment. Credential-bearing URLs
 are rejected. Deliberate retention of an exact Incident URL in a Case remains
 separate from that collection request.
+
+Registration queries use the registrable domain. Deep DNS, TLS and web probes
+use the selected hostname; registration-delegation checks retain their own domain.
+Fast, compact, Bulk and monitoring collection scope is unchanged.
 
 Deep collection can disclose the target or related bounded query to the
 applicable registry or registrar, public DNS resolver, nameserver, HTTP origin,
@@ -344,9 +351,9 @@ Different exports have different sensitivity:
 
 - a full saved Lookup can contain targets, bounded source endpoints and timings,
   raw RDAP publications, WHOIS response bodies and publicly published contacts;
-- current Lookup evidence schema 28 excludes raw registration payloads,
+- current Lookup evidence schema 29 excludes raw registration payloads,
   expanded contacts, credentials and complete query-bearing URLs. Published v2
-  schema 27 and exact v1 schema 26 remain readable; schema 26 may contain public
+  schemas 27 and 28 and exact v1 schema 26 remain readable; schema 26 may contain public
   contact fields;
 - Case, workspace, Case-pack, graph, campaign and response files can identify
   investigated targets or contain analyst-authored material; and

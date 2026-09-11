@@ -20,6 +20,7 @@ import {
 } from '../packages/contracts/case-portability.mts';
 import {
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  LATEST_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
 } from '../lib/evidence-export.mts';
@@ -45,6 +46,7 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   { id: 'single-bulk-network', pattern: /Single and Bulk lookups send the selected target/iu },
   { id: 'lookup-url-minimisation', pattern: /browser sends only its full hostname for collection, without the port, path, query or fragment/iu },
   { id: 'lookup-url-credentials', pattern: /Credential-bearing URLs are rejected/iu },
+  { id: 'lookup-observation-scope', pattern: /Registration queries use the registrable domain.*Deep DNS, TLS and web probes use the selected hostname.*registration-delegation checks retain their own domain/iu },
   { id: 'browser-plaintext', pattern: /IndexedDB as plaintext JSON/iu },
   { id: 'named-workspace-isolation', pattern: /Named workspaces use separate IndexedDB databases.*local directory of random identifiers, names and timestamps.*share the browser profile and storage quota.*names alone do not provide access control.*default workspace keeps existing data unchanged/iu },
   { id: 'encrypted-working-workspace', pattern: /encrypted named workspaces protect saved collection values and record identifiers using AES-256-GCM.*keyed collection integrity.*key is held only in the unlocked document, never stored or sent.*another tab unlocks independently/iu },
@@ -75,7 +77,8 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   { id: 'download-deletion', pattern: /Deleting browser data does not delete separately downloaded files/iu },
   { id: 'direct-dns-records', pattern: /query A, AAAA, CAA,? and MX once through one selected\s+public address per nameserver/iu },
   { id: 'direct-dns-retention', pattern: /retaining at most sixteen normalised values\s+for each record type/iu },
-  { id: 'lookup-evidence-compatibility', pattern: new RegExp(`Lookup evidence schema ${LOOKUP_EVIDENCE_SCHEMA_VERSION}.*published v2 schema ${PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION}.*v1 schema ${V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION} remain readable`, 'iu') },
+  { id: 'lookup-evidence-compatibility', pattern: new RegExp(`Lookup evidence schema ${LOOKUP_EVIDENCE_SCHEMA_VERSION}.*published v2 schemas ${PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION} and ${LATEST_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION}.*v1 schema ${V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION} remain readable`, 'iu') },
+  { id: 'selected-pin-hostnames', pattern: /Explicitly selected evidence pins can include their own observation hostname in response packets.*distinct from the Case's registration domain/iu },
   { id: 'registrar-standing-network', pattern: /Registrar standing is matched locally using only the numeric IANA ID.*Lookup makes no additional IANA or ICANN request/iu },
   { id: 'integrity-limits', pattern: /Checksums and signatures.*do not prove evidence accuracy, authorship, signer identity/iu },
   { id: 'capture-disclosure', pattern: /executes remote page JavaScript.*exact requested URL, including its path and query/iu },
