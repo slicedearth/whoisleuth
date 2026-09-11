@@ -7,6 +7,9 @@
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { createDraftRevision } from '$lib/controllers/submitted-draft';
   import CaseInvestigationBranches from '$lib/components/CaseInvestigationBranches.svelte';
+  import CaseEvidenceFact from './CaseEvidenceFact.svelte';
+  import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
+  import { caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
 
   let { record, mode, mutationBusy, persist, onmessage }: {
     record: CaseRecord;
@@ -129,14 +132,14 @@
         <label class="field">Confidence basis<textarea bind:value={decisionConfidenceBasis} maxlength="2000" rows="2" required={decisionConfidence !== 'unknown'}></textarea></label>
       </div>
       {#if record.evidencePins.length}
-        <fieldset class="pin-references"><legend>{mode === 'quick' ? 'Evidence considered' : 'Supporting evidence pins'}</legend>{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={decisionPinIds.includes(pin.id)} onchange={(event) => decisionPinIds = event.currentTarget.checked ? [...decisionPinIds, pin.id] : decisionPinIds.filter((id) => id !== pin.id)}><span>{pin.label}</span></label>{/each}</fieldset>
+        <fieldset class="pin-references"><legend>{mode === 'quick' ? 'Evidence considered' : 'Supporting evidence pins'}</legend>{#each record.evidencePins as pin, index}<label class="choice"><input type="checkbox" aria-label={caseEvidenceChoiceName(pin, index)} checked={decisionPinIds.includes(pin.id)} onchange={(event) => decisionPinIds = event.currentTarget.checked ? [...decisionPinIds, pin.id] : decisionPinIds.filter((id) => id !== pin.id)}><CaseEvidenceFact {pin} /></label>{/each}</fieldset>
       {:else}
         <p class="notice">Pin an observation in Evidence before recording a conclusion. An unsupported hypothesis can be retained separately as an assertion.</p>
       {/if}
       <button class="btn" type="submit" disabled={mutationBusy || decisionDisposition === 'unreviewed' || !decisionReviewReason || !decisionSummary.trim() || !decisionRationale.trim() || !decisionPinIds.length || (decisionConfidence !== 'unknown' && !decisionConfidenceBasis.trim())}>{mode === 'quick' ? 'Record conclusion' : 'Record decision'}</button>
     </form>
     {#if record.decisions.length}
-      <ol class="records">{#each [...record.decisions].reverse() as decision}<li><strong>{decision.summary}</strong><p>{decision.rationale}</p><small>Confidence: {decision.confidence}{decision.confidenceBasis ? ` — ${decision.confidenceBasis}` : ''} · {decision.createdAt}{decision.evidencePinIds.length ? ` · ${decision.evidencePinIds.length} supporting pin${decision.evidencePinIds.length === 1 ? '' : 's'}` : ''}</small></li>{/each}</ol>
+      <ol class="records">{#each [...record.decisions].reverse() as decision}<li><strong>{decision.summary}</strong><p>{decision.rationale}</p><small>Confidence: {decision.confidence}{decision.confidenceBasis ? ` — ${decision.confidenceBasis}` : ''} · {decision.createdAt}</small><CaseLinkedEvidence pins={record.evidencePins} ids={decision.evidencePinIds} /></li>{/each}</ol>
     {/if}
   </details>
 
@@ -151,7 +154,7 @@
         <label class="field">Statement<textarea bind:value={assertionStatement} maxlength="2000" rows="3" required></textarea></label>
         <label class="field">Reasoning or limitation<textarea bind:value={assertionRationale} maxlength="2000" rows="2"></textarea></label>
         {#if record.evidencePins.length}
-          <fieldset class="pin-references"><legend>Evidence relationship matrix</legend><p class="notice">Classify how each selected observation relates to this assertion. Unlinked evidence remains available in the case.</p>{#each record.evidencePins as pin}<label class="field"><span>{pin.label}</span><select value={assertionEvidenceStance(pin.id)} onchange={(event) => setAssertionEvidenceStance(pin.id, event.currentTarget.value)}><option value="">Not linked</option>{#each CASE_EVIDENCE_RELATION_STANCES as value}<option {value}>{value}</option>{/each}</select></label>{/each}</fieldset>
+          <fieldset class="pin-references"><legend>Evidence relationship matrix</legend><p class="notice">Classify how each selected observation relates to this assertion. Unlinked evidence remains available in the Case.</p>{#each record.evidencePins as pin, index}<label class="field"><CaseEvidenceFact {pin} /><select aria-label={`Relationship for ${caseEvidenceChoiceName(pin, index)}`} value={assertionEvidenceStance(pin.id)} onchange={(event) => setAssertionEvidenceStance(pin.id, event.currentTarget.value)}><option value="">Not linked</option>{#each CASE_EVIDENCE_RELATION_STANCES as value}<option {value}>{value}</option>{/each}</select></label>{/each}</fieldset>
         {/if}
         <button class="btn" type="submit" disabled={mutationBusy}>Record assertion</button>
       </form>
@@ -167,11 +170,8 @@
                 <small>File SHA-256 {assertion.provenance.sourceDigestSha256} · {assertion.provenance.observedAt ? `observed ${assertion.provenance.observedAt}` : 'observation time not declared'}{assertion.provenance.createdAt ? ` · created ${assertion.provenance.createdAt}` : ''}{assertion.provenance.modifiedAt ? ` · modified ${assertion.provenance.modifiedAt}` : ''}</small>
                 {#if assertion.provenance.labels.length || assertion.provenance.markings.length}<small>{[...assertion.provenance.labels, ...assertion.provenance.markings].join(' · ')}</small>{/if}
               {/if}
-              {#if assertion.evidenceRelations?.length}
-                <small>{assertion.evidenceRelations.filter((item) => item.stance === 'supports').length} supporting · {assertion.evidenceRelations.filter((item) => item.stance === 'contradicts').length} contradicting · {assertion.evidenceRelations.filter((item) => item.stance === 'unresolved').length} unresolved evidence relationship{assertion.evidenceRelations.length === 1 ? '' : 's'}</small>
-              {:else}
-                <small>updated {assertion.updatedAt}{assertion.evidencePinIds.length ? ` · ${assertion.evidencePinIds.length} linked pin${assertion.evidencePinIds.length === 1 ? '' : 's'}` : ''}</small>
-              {/if}
+              <small>Updated {assertion.updatedAt}</small>
+              <CaseLinkedEvidence pins={record.evidencePins} ids={assertion.evidencePinIds} relations={assertion.evidenceRelations ?? []} />
               {#if assertion.state === 'open'}<button class="btn small" type="button" disabled={mutationBusy} onclick={() => void setAssertionState(assertion.id, 'resolved')}>Mark resolved</button>{/if}
             </li>
           {/each}

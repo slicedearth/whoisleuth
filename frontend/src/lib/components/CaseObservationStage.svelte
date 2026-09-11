@@ -9,6 +9,9 @@
   import { isoFromUtcInput, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
   import { createDraftRevision } from '$lib/controllers/submitted-draft';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
+  import CaseEvidenceFact from './CaseEvidenceFact.svelte';
+  import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
+  import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
 
   let { record, mode, mutationBusy, persist }: {
     record: CaseRecord;
@@ -118,10 +121,7 @@
       <ol class="records">
         {#each [...record.evidencePins].reverse() as pin}
           <li>
-            <strong>{pin.label}</strong>
-            <p>{pin.value}</p>
-            <small>{pin.source} · {pin.completeness} · {pin.observedAt ?? 'Observation time unavailable'}</small>
-            {#if pin.limitations.length}<small>Limits: {pin.limitations.join('; ')}</small>{/if}
+            <CaseEvidenceFact {pin} />
           </li>
         {/each}
       </ol>
@@ -158,12 +158,7 @@
           </select>
         </label>
         {#if record.evidencePins.length}
-          <label class="field">Supporting evidence pin
-            <select bind:value={sightingEvidencePinId}>
-              <option value="">No pin selected</option>
-              {#each record.evidencePins as pin}<option value={pin.id}>{pin.label}</option>{/each}
-            </select>
-          </label>
+          <CaseEvidencePinSelect label="Supporting evidence pin" pins={record.evidencePins} bind:value={sightingEvidencePinId} emptyLabel="No pin selected" />
         {/if}
       </div>
       <label class="field">Limitations <small>one per line</small>
@@ -178,6 +173,7 @@
             <strong>{sighting.state.replaceAll('_', ' ')} · {sighting.category}</strong>
             <p>{sighting.source}</p>
             <small>{sighting.sourceClass} source · {sighting.completeness} · {sighting.observedAt ?? 'Observation time unavailable'}</small>
+            {#if sighting.evidencePinId}<CaseLinkedEvidence pins={record.evidencePins} ids={[sighting.evidencePinId]} />{/if}
             {#if sighting.limitations.length}<small>Limits: {sighting.limitations.join('; ')}</small>{/if}
           </li>
         {/each}

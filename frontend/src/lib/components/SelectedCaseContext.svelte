@@ -8,6 +8,8 @@
   import { subscribeBrowserLocalData } from '$lib/browser-local-data-service';
   import { createSelectedCaseContextReader, type SelectedCaseContextState } from '$lib/controllers/selected-case-context';
   import { monitorViewFromUrl } from '$lib/controllers/monitor-route-controller';
+  import CaseEvidenceFact from './CaseEvidenceFact.svelte';
+  import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
 
   let { caseId }: { caseId: string } = $props();
   let contextState = $state<SelectedCaseContextState | null>(null);
@@ -71,19 +73,19 @@
         <div class="context-sections">
           <section aria-label="Case hypotheses">
             <h2>Open hypotheses ({context.hypotheses.length})</h2>
-            {#if context.hypotheses.length}<ul>{#each context.hypotheses as hypothesis}<li><p>{hypothesis.statement}</p>{#if hypothesis.rationale}<p class="muted">{hypothesis.rationale}</p>{/if}<small>{hypothesis.evidencePinIds.length} linked evidence {hypothesis.evidencePinIds.length === 1 ? 'pin' : 'pins'}</small></li>{/each}</ul>{:else}<p>No open hypothesis recorded.</p>{/if}
+            {#if context.hypotheses.length}<ul>{#each context.hypotheses as hypothesis}<li><p>{hypothesis.statement}</p>{#if hypothesis.rationale}<p class="muted">{hypothesis.rationale}</p>{/if}<CaseLinkedEvidence pins={record.evidencePins} ids={hypothesis.evidencePinIds} relations={hypothesis.evidenceRelations ?? []} /></li>{/each}</ul>{:else}<p>No open hypothesis recorded.</p>{/if}
           </section>
           <section aria-label="Case decisions">
             <h2>Analyst decision</h2>
             {#if context.decisions.length}
               {#if context.decisions.length > 1}<p>Multiple decisions share the latest recorded time or have no usable time. None is selected as authoritative.</p>{/if}
-              {#each context.decisions as decision}<article><h3>{decision.summary}</h3><p>{decision.rationale}</p><small>Confidence: {decision.confidence}{#if decision.confidenceBasis} · {decision.confidenceBasis}{/if}</small></article>{/each}
+              {#each context.decisions as decision}<article><h3>{decision.summary}</h3><p>{decision.rationale}</p><small>Confidence: {decision.confidence}{#if decision.confidenceBasis} · {decision.confidenceBasis}{/if}</small><CaseLinkedEvidence pins={record.evidencePins} ids={decision.evidencePinIds} /></article>{/each}
               {#if context.earlierDecisions}<a href={`${href}#case-response-${encodeURIComponent(caseId)}`}>Review all {record.decisions.length} recorded decisions</a>{/if}
             {:else}<p>No evidence-linked decision recorded.</p>{/if}
           </section>
           <section aria-label="Case evidence pins">
             <h2>Selected evidence ({record.evidencePins.length} {record.evidencePins.length === 1 ? 'pin' : 'pins'})</h2>
-            {#if record.evidencePins.length}<ul>{#each record.evidencePins as pin}<li><strong>{pin.label}</strong><p>{pin.value}</p><small>{pin.source} · {pin.sourceState ?? 'State unknown'} · {pin.completeness} · {date(pin.observedAt)}</small>{#if pin.limitations.length}<ul>{#each pin.limitations as limitation}<li>{limitation}</li>{/each}</ul>{/if}</li>{/each}</ul>{:else}<p>No evidence pins retained.</p>{/if}
+            {#if record.evidencePins.length}<ul>{#each record.evidencePins as pin}<li><CaseEvidenceFact {pin} /></li>{/each}</ul>{:else}<p>No evidence pins retained.</p>{/if}
           </section>
           <section aria-label="Case report history">
             <h2>Response history ({record.actions.length} {record.actions.length === 1 ? 'action' : 'actions'})</h2>

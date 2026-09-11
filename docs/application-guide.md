@@ -296,6 +296,12 @@ assertions, decisions, contact routes, actions, observed-effect reviews,
 closures and investigation branches. Analyst-authored records remain separate
 from collected evidence.
 
+Evidence choices show their source and observation time; selecting a pin shows
+its retained value and limitations. **Linked evidence** opens the actual facts
+behind a decision, assertion, response event or sighting. Supporting and
+contradicting relationships remain explicit; a missing reference is not
+replaced with another observation.
+
 If snapshots share the latest capture time, or any snapshot is undated, the
 timeline retains them without selecting a latest assessment. Record updates do
 not refresh evidence capture times. The investigation timeline includes all

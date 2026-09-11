@@ -141,7 +141,7 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
   await assessment.getByRole('combobox', { name: 'Review reason', exact: true }).selectOption('other_reviewed');
   await assessment.getByLabel('Conclusion summary', { exact: true }).fill('Request an authorised review');
   await assessment.getByLabel('Evidence-based rationale', { exact: true }).fill('The selected observation supports review, not an automatic verdict.');
-  await assessment.getByRole('checkbox', { name: 'Selected page observation', exact: true }).check();
+  await assessment.getByRole('checkbox', { name: /^Pin 1: Selected page observation · Fixture page review · 2026-09-10T10:00:00.000Z$/u }).check();
   await assessment.getByRole('button', { name: 'Record conclusion', exact: true }).click();
   await expect(assessment.locator('ol.records > li')).toHaveCount(1);
 
@@ -226,7 +226,7 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
   await actions.getByLabel('Outcome detail', { exact: true }).fill('Provider acknowledged the report for review.');
   await actions.getByLabel(/^Event time/).fill('2026-09-10T10:30:20.678');
   await actions.getByText('Event evidence and limitations', { exact: true }).click();
-  await actions.getByRole('combobox', { name: 'Receipt evidence', exact: true }).selectOption({ label: 'Selected page observation' });
+  await actions.getByRole('combobox', { name: 'Receipt evidence', exact: true }).selectOption({ label: 'Pin 1: Selected page observation · Fixture page review · 2026-09-10T10:00:00.000Z' });
   await actions.getByLabel(/^Receipt limitations/).fill('Receipt confirms review only, not removal.');
   await actions.getByRole('button', { name: 'Record provider response', exact: true }).click();
 
@@ -374,7 +374,7 @@ test('stage changes and pending saves preserve later assessment, outcome and bra
   await assessment.getByRole('combobox', { name: 'Review reason', exact: true }).selectOption('other_reviewed');
   await assessment.getByLabel('Conclusion summary', { exact: true }).fill('Submitted conclusion');
   await assessment.getByLabel('Evidence-based rationale', { exact: true }).fill('Submitted rationale');
-  await assessment.getByRole('checkbox', { name: 'Draft fixture evidence', exact: true }).check();
+  await assessment.getByRole('checkbox', { name: /^Pin 1: Draft fixture evidence ·/u }).check();
   await openCaseSection(page, 'Response');
   const outcome = workspace.getByRole('region', { name: 'Case independent review and closure', exact: true });
   await outcome.getByLabel('Source', { exact: true }).fill('Unsubmitted independent review');
@@ -401,9 +401,9 @@ test('stage changes and pending saves preserve later assessment, outcome and bra
   await openCaseSection(page, 'Assessment');
   await workspace.getByRole('button', { name: 'Advanced', exact: true }).click();
   const branch = assessment.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
-  await branch.locator('summary').click();
+  await branch.locator(':scope > summary').click();
   await branch.getByLabel('Branch name', { exact: true }).fill('Submitted branch');
-  await branch.getByRole('checkbox', { name: 'Draft fixture evidence', exact: true }).check();
+  await branch.getByRole('checkbox', { name: /^Pin 1: Draft fixture evidence ·/u }).check();
   const releaseBranch = await holdBrowserLocalTransaction(page);
   try {
     await branch.getByRole('button', { name: 'Create branch', exact: true }).click();
@@ -413,8 +413,8 @@ test('stage changes and pending saves preserve later assessment, outcome and bra
   } finally { await releaseBranch(); }
   await expect(caseWorkspaceActionStatus(page)).toContainText('Created an investigation branch');
   await workspace.getByRole('button', { name: 'Advanced', exact: true }).click();
-  await branch.locator('summary').click();
+  await branch.locator(':scope > summary').click();
   await expect(branch.getByLabel('Branch name', { exact: true })).toHaveValue('Later branch');
-  await expect(branch.getByRole('checkbox', { name: 'Draft fixture evidence', exact: true })).toBeChecked();
+  await expect(branch.getByRole('checkbox', { name: /^Pin 1: Draft fixture evidence ·/u })).toBeChecked();
   expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.branches?.map((item) => item.name)).toEqual(['Submitted branch']);
 });

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import CaseEvidenceFact from './CaseEvidenceFact.svelte';
+  import { caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
   import {
     caseInvestigationContext,
     caseResponseIncidentUrls,
@@ -427,7 +429,7 @@
       {#if packetWizardStep === 1}
         <section id={`packet-wizard-step-${record.id}-2`} class="wizard-panel" tabindex="-1" aria-labelledby={`packet-wizard-title-${record.id}-2`}>
           <header><div><p class="eyebrow">Prepare</p><h4 id={`packet-wizard-title-${record.id}-2`}>Evidence selection</h4></div><span>Selected material</span></header>
-          <fieldset class="pin-references"><legend>Evidence selected for this exact packet</legend>{#if record.evidencePins.length}{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={packetSelectedEvidenceIds.includes(pin.id)} onchange={(event) => packetSelectedEvidenceIds = event.currentTarget.checked ? [...packetSelectedEvidenceIds, pin.id] : packetSelectedEvidenceIds.filter((id) => id !== pin.id)}><span>{pin.label} · {pin.source} · {pin.observedAt ?? 'Observation time unavailable'}</span></label>{/each}{:else}<p class="notice">No evidence pins are retained in this Case. The draft will keep this unavailable.</p>{/if}</fieldset>
+          <fieldset class="pin-references"><legend>Evidence selected for this exact packet</legend>{#if record.evidencePins.length}{#each record.evidencePins as pin, index}<label class="choice"><input type="checkbox" aria-label={caseEvidenceChoiceName(pin, index)} checked={packetSelectedEvidenceIds.includes(pin.id)} onchange={(event) => packetSelectedEvidenceIds = event.currentTarget.checked ? [...packetSelectedEvidenceIds, pin.id] : packetSelectedEvidenceIds.filter((id) => id !== pin.id)}><CaseEvidenceFact {pin} /></label>{/each}{:else}<p class="notice">No evidence pins are retained in this Case. The draft will keep this unavailable.</p>{/if}</fieldset>
           <p class="notice">Selection includes only retained Case pins supported by response-packet v{CASE_RESPONSE_PACKET_VERSION}. It does not collect, upload, or infer new evidence.</p>
         </section>
       {/if}

@@ -2,6 +2,9 @@
   import type { CaseRecord } from '$lib/cases';
   import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { createDraftRevision } from '$lib/controllers/submitted-draft';
+  import { caseEvidenceCheckpointGroups, caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
+  import CaseEvidenceFact from './CaseEvidenceFact.svelte';
+  import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
 
   let { record, visible, mutationBusy, persist }: {
     record: CaseRecord;
@@ -17,7 +20,7 @@
   let actionIds = $state<string[]>([]);
   let nameInput = $state<HTMLInputElement | null>(null);
   const draft = createDraftRevision(() => record.id);
-  const checkpoints = $derived([...new Map(record.evidencePins.flatMap((pin) => pin.checkpointId ? [[pin.checkpointId, pin]] : [])).entries()]);
+  const checkpoints = $derived(caseEvidenceCheckpointGroups(record.evidencePins));
   const referenceCount = $derived(evidencePinIds.length + checkpointIds.length + assertionIds.length + actionIds.length);
 
   function toggle(values: string[], id: string, checked: boolean): string[] {
@@ -54,10 +57,10 @@
       <label class="field">Branch name<input bind:this={nameInput} bind:value={name} maxlength="80" required placeholder="Alternative infrastructure explanation"></label>
       <div class="reference-groups">
         {#if record.evidencePins.length}
-          <fieldset><legend>Evidence pins</legend>{#each record.evidencePins as pin}<label><input type="checkbox" checked={evidencePinIds.includes(pin.id)} onchange={(event) => evidencePinIds = toggle(evidencePinIds, pin.id, event.currentTarget.checked)}><span>{pin.label}</span></label>{/each}</fieldset>
+          <fieldset><legend>Evidence pins</legend>{#each record.evidencePins as pin, index}<label><input type="checkbox" aria-label={caseEvidenceChoiceName(pin, index)} checked={evidencePinIds.includes(pin.id)} onchange={(event) => evidencePinIds = toggle(evidencePinIds, pin.id, event.currentTarget.checked)}><CaseEvidenceFact {pin} /></label>{/each}</fieldset>
         {/if}
         {#if checkpoints.length}
-          <fieldset><legend>Evidence checkpoints</legend>{#each checkpoints as [id, pin]}<label><input type="checkbox" checked={checkpointIds.includes(id)} onchange={(event) => checkpointIds = toggle(checkpointIds, id, event.currentTarget.checked)}><span>{pin.label}</span></label>{/each}</fieldset>
+          <fieldset><legend>Evidence checkpoints</legend>{#each checkpoints as checkpoint, index}<div><label><input type="checkbox" checked={checkpointIds.includes(checkpoint.id)} onchange={(event) => checkpointIds = toggle(checkpointIds, checkpoint.id, event.currentTarget.checked)}><span>Checkpoint {index + 1} · {checkpoint.pins.length} fact{checkpoint.pins.length === 1 ? '' : 's'}</span></label><CaseLinkedEvidence pins={checkpoint.pins} ids={checkpoint.pins.map(pin => pin.id)} /></div>{/each}</fieldset>
         {/if}
         {#if record.assertions.length}
           <fieldset><legend>Assertions</legend>{#each record.assertions as assertion}<label><input type="checkbox" checked={assertionIds.includes(assertion.id)} onchange={(event) => assertionIds = toggle(assertionIds, assertion.id, event.currentTarget.checked)}><span>{assertion.statement}</span></label>{/each}</fieldset>
@@ -75,6 +78,7 @@
           <li>
             <div><strong>{branch.name}</strong><span class:resolved={branch.state === 'resolved'}>{branch.state}</span></div>
             <p>{branch.evidencePinIds.length} pin{branch.evidencePinIds.length === 1 ? '' : 's'} · {branch.checkpointIds.length} checkpoint{branch.checkpointIds.length === 1 ? '' : 's'} · {branch.assertionIds.length} assertion{branch.assertionIds.length === 1 ? '' : 's'} · {branch.actionIds.length} action{branch.actionIds.length === 1 ? '' : 's'}</p>
+            <CaseLinkedEvidence pins={record.evidencePins} ids={[...branch.evidencePinIds, ...record.evidencePins.filter(pin => pin.checkpointId && branch.checkpointIds.includes(pin.checkpointId)).map(pin => pin.id)]} />
             <small>Updated {branch.updatedAt}</small>
             <button class="btn small" type="button" disabled={mutationBusy} onclick={() => void setState(branch.id, branch.state === 'active' ? 'resolved' : 'active')}>{branch.state === 'active' ? 'Mark resolved' : 'Reopen'}</button>
           </li>

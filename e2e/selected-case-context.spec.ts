@@ -36,7 +36,7 @@ test('selected Case context follows tool navigation without changing saved evide
   await navigate(page, 'Bulk');
   const context = page.getByRole('region', { name: 'Selected Case', exact: true });
   await expect(context.getByRole('link', { name: DOMAIN, exact: true })).toBeVisible();
-  await context.locator('summary').click();
+  await context.locator(':scope > details > summary').click();
   await expect(context.getByRole('region', { name: 'Case hypotheses' })).toContainText('may impersonate');
   await expect(context.getByRole('region', { name: 'Case decisions' })).toContainText('needs corroborating evidence');
   await expect(context.getByRole('region', { name: 'Case evidence pins' })).toContainText('source capture was incomplete');
@@ -137,13 +137,13 @@ test('selected Case context has compact native controls and readable expanded co
       await page.setViewportSize(viewport);
       await expect(context.getByRole('link', { name: DOMAIN, exact: true })).toBeVisible();
       await page.evaluate(() => window.scrollTo(0, 0));
-      await expect(context.locator('details')).not.toHaveAttribute('open');
+      await expect(context.locator(':scope > details')).not.toHaveAttribute('open');
       const collapsed = await context.boundingBox();
       expect(collapsed).not.toBeNull();
       expect(collapsed!.height).toBeLessThan(viewport.height / 3);
-      const summary = context.locator('summary');
+      const summary = context.locator(':scope > details > summary');
       await summary.focus(); await page.keyboard.press('Enter');
-      await expect(context.locator('details')).toHaveAttribute('open', '');
+      await expect(context.locator(':scope > details')).toHaveAttribute('open', '');
       await expect(summary).toBeFocused();
       await expect(context.getByRole('heading', { name: 'Selected evidence (1 pin)', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);

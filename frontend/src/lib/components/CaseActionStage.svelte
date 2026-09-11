@@ -9,6 +9,8 @@
   import { responseRouteFreshness } from '../../../../packages/cases/response-route-freshness.mts';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { createDraftRevision } from '$lib/controllers/submitted-draft';
+  import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
+  import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
 
   let { record, mode, mutationBusy, persist, onadvanced }: {
     record: CaseRecord;
@@ -320,7 +322,7 @@
                 <small>Event ID {event.id} · {event.applied ? 'applied to projection' : 'retained concurrent conflict'}</small>
                 {#if event.providerOutcome}<p>Provider outcome: {event.providerOutcome.replaceAll('_', ' ')}{event.outcomeDetail ? ` · ${event.outcomeDetail}` : ''}</p>{:else if event.outcomeDetail}<p>Recorded outcome detail: {event.outcomeDetail}</p>{/if}
                 {#if event.reference}<p>Reference: {event.reference}</p>{/if}
-                {#if event.evidencePinId}<small>Evidence pin: {event.evidencePinId}</small>{/if}
+                {#if event.evidencePinId}<CaseLinkedEvidence pins={record.evidencePins} ids={[event.evidencePinId]} />{/if}
                 {#if event.originActionId}<small>Originating action: {event.originActionId}</small>{/if}
                 {#if event.limitations.length}<small>Limitations: {event.limitations.join('; ')}</small>{/if}
               </li>
@@ -354,7 +356,7 @@
           {/if}
           {#if ['authorised', 'submitted', 'acknowledged'].includes(quickAction.state)}
             <label class="field">Event time <small>UTC; leave blank only when recording the event as it happens</small><input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={quickOccurredAt}></label>
-            <details><summary>Event evidence and limitations</summary><div class="stack"><label class="field">Receipt evidence<select bind:value={quickEvidencePinId}><option value="">No evidence pin</option>{#each record.evidencePins as pin}<option value={pin.id}>{pin.label}</option>{/each}</select></label><label class="field">Receipt limitations <small>one per line</small><textarea bind:value={quickLimitations} maxlength="2000" rows="2"></textarea></label></div></details>
+            <details><summary>Event evidence and limitations</summary><div class="stack"><CaseEvidencePinSelect label="Receipt evidence" pins={record.evidencePins} bind:value={quickEvidencePinId} /><label class="field">Receipt limitations <small>one per line</small><textarea bind:value={quickLimitations} maxlength="2000" rows="2"></textarea></label></div></details>
           {/if}
           {#if quickAction.state !== 'terminal'}
             <button id={`quick-action-advance-${record.id}`} class="primary" type="submit" disabled={mutationBusy || quickAction.state === 'authorised' && !quickActionReference.trim() || ['submitted', 'acknowledged'].includes(quickAction.state) && !quickProviderOutcome}>{quickActionVerb(quickAction)}</button>
@@ -382,7 +384,7 @@
                 <label class="field">Original event time<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={transitionOccurredAt}></label>
                 <label class="field">Provenance<input bind:value={transitionProvenance} maxlength="80" required></label>
                 <label class="field">Bounded reference<input id={`case-action-transition-reference-${record.id}`} bind:value={transitionReference} maxlength="500"></label>
-                <label class="field">Evidence pin<select bind:value={transitionEvidencePinId}><option value="">No evidence pin</option>{#each record.evidencePins as pin}<option value={pin.id}>{pin.label}</option>{/each}</select></label>
+                <CaseEvidencePinSelect label="Evidence pin" pins={record.evidencePins} bind:value={transitionEvidencePinId} />
                 <label class="field">Typed provider outcome<select bind:value={transitionProviderOutcome} required={transitionNextState === 'terminal' && ['drafting', 'ready_for_review', 'reviewed', 'authorised'].includes(selectedAction.state)}><option value="">No provider outcome</option>{#each availableTransitionProviderOutcomes as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
               </div>
               {#if transitionNextState === 'terminal' && ['drafting', 'ready_for_review', 'reviewed', 'authorised'].includes(selectedAction.state)}

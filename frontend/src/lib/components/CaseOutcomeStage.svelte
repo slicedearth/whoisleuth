@@ -7,6 +7,8 @@
   import { isoFromUtcInput, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { createDraftRevision } from '$lib/controllers/submitted-draft';
+  import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
+  import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
 
   let { record, mode, mutationBusy, persist }: {
     record: CaseRecord;
@@ -108,7 +110,7 @@
           <label class="field">Source class<select bind:value={effectSourceClass}>{#each userObservedEffectSourceClasses as value}<option {value}>{value}</option>{/each}</select></label>
           <label class="field">{mode === 'quick' ? 'Source' : 'Separately attributed source'}<input bind:value={effectSource} maxlength="80" required></label>
           <label class="field">Completeness<select bind:value={effectCompleteness}>{#each CASE_PIN_COMPLETENESS as value}<option {value}>{value}</option>{/each}</select></label>
-          <label class="field">{mode === 'quick' ? 'Current evidence' : 'Evidence pin'}<select bind:value={effectEvidencePinId}><option value="">No evidence pin</option>{#each record.evidencePins as pin}<option value={pin.id}>{pin.label}</option>{/each}</select></label>
+          <CaseEvidencePinSelect label={mode === 'quick' ? 'Current evidence' : 'Evidence pin'} pins={record.evidencePins} bind:value={effectEvidencePinId} />
           <label class="field">Existing sighting<select bind:value={effectSightingId}><option value="">No sighting</option>{#each record.sightings as sighting}<option value={sighting.id}>{sighting.state.replaceAll('_', ' ')} · {sighting.source}</option>{/each}</select></label>
           <label class="field">{mode === 'quick' ? 'Follow up at' : 'Scheduled local follow-up'}<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={effectFollowUpAt}></label>
         </div>
@@ -118,7 +120,7 @@
       {#if record.observedEffects.reviews.length}
         <ol class="records embedded-records" aria-label="Independent observed-effect reviews">
           {#each [...record.observedEffects.reviews].reverse() as review}
-            <li><strong>{review.state.replaceAll('_', ' ')}</strong><p>{review.source}</p><small>Review ID {review.id} · {review.observedAt} · {review.sourceClass} · {review.completeness}</small>{#if review.evidencePinId}<small>Evidence pin: {review.evidencePinId}</small>{/if}{#if review.sightingId}<small>Sighting: {review.sightingId}</small>{/if}{#if review.followUpAt}<small>Scheduled follow-up: {review.followUpAt}</small>{/if}{#if review.limitations.length}<small>Limitations: {review.limitations.join('; ')}</small>{/if}</li>
+            <li><strong>{review.state.replaceAll('_', ' ')}</strong><p>{review.source}</p><small>Review ID {review.id} · {review.observedAt} · {review.sourceClass} · {review.completeness}</small>{#if review.evidencePinId}<CaseLinkedEvidence pins={record.evidencePins} ids={[review.evidencePinId]} />{/if}{#if review.sightingId}<small>Sighting: {review.sightingId}</small>{/if}{#if review.followUpAt}<small>Scheduled follow-up: {review.followUpAt}</small>{/if}{#if review.limitations.length}<small>Limitations: {review.limitations.join('; ')}</small>{/if}</li>
           {/each}
         </ol>
       {/if}
