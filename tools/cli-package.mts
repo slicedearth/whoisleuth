@@ -619,12 +619,14 @@ function compilerPackageManifests(relativePath: string): readonly string[] {
   return Object.freeze([...manifests].sort());
 }
 
-async function cliPackageCompilerSourceClosure(
+export async function discoverPackageCompilerClosure(
   inputRoot: string,
   temporaryRoot: string,
   entrySources: readonly string[],
+  options: Readonly<{ acceptsSource?: (source: string) => boolean }> = {},
 ): Promise<CliPackageCompilerClosure> {
   const canonicalInputRoot = await realpath(inputRoot);
+  const acceptsSource = options.acceptsSource ?? ((source: string) => LOCAL_SOURCE_PATTERN.test(source));
   const configurationPath = path.join(temporaryRoot, 'tsconfig.cli-package-closure.json');
   const configuration = {
     compilerOptions: packageCompilerOptions(
@@ -674,7 +676,7 @@ async function cliPackageCompilerSourceClosure(
     if (!relative || relative === '..' || relative.startsWith('../') || path.isAbsolute(relative)) {
       throw new TypeError(`CLI compiler source closure escaped its configured input root at ${path.basename(line.trim()).slice(0, 160)}.`);
     }
-    if (LOCAL_SOURCE_PATTERN.test(relative)) {
+    if (acceptsSource(relative)) {
       selected.add(relative);
       continue;
     }
@@ -849,7 +851,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     // captured before a second trusted closure pass runs from the private
     // materialized tree; an ephemeral extra root can therefore only cause a
     // rejection, never an emitted package module.
-    const liveClosure = await cliPackageCompilerSourceClosure(repositoryRoot, temporaryRoot, runtimeSources);
+    const liveClosure = await discoverPackageCompilerClosure(repositoryRoot, temporaryRoot, runtimeSources);
     const copyState = { totalBytes: 0 };
     const compilerState: CliPackageSnapshotState = {
       totalBytes: 0,
@@ -878,7 +880,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     await materializeCliPackageSourceSnapshot(sourceRoot, sourceSnapshot);
     await materializeCliPackageSourceSnapshot(sourceRoot, manifestSnapshot);
     await materializeCliPackageSourceSnapshot(sourceRoot, compilerSnapshot);
-    const materializedClosure = await cliPackageCompilerSourceClosure(
+    const materializedClosure = await discoverPackageCompilerClosure(
       sourceRoot,
       temporaryRoot,
       CLI_PACKAGE_ENTRY_MODULES,

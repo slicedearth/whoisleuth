@@ -355,8 +355,8 @@ authorship, signer identity, recipient authorisation or safety.
 
 ## Optional local rendered capture
 
-The repo-local capture package is an explicit authorised-capture action outside
-hosted and distributable collection. It executes remote page JavaScript in a
+The optional capture companion is an explicit authorised-capture action outside
+the hosted application and main CLI. It executes remote page JavaScript in a
 disposable network-bounded browser. Each admitted resource operator receives the
 exact requested URL, including its path and query.
 

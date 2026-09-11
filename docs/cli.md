@@ -35,6 +35,10 @@ dependency lifecycle scripts. From a repository checkout, replace `whoisleuth`
 with `node bin/whoisleuth.mts`; maintainers can verify the exact package closure
 with `npm run cli:package:check`.
 
+Rendered-page collection uses the separate [optional capture companion](../packages/web-capture/README.md),
+not the main CLI. It can be installed from a verified local archive; browser
+installation and each authorised capture remain explicit actions.
+
 ## First commands
 
 Inspect the installed command set and plan one Lookup before collecting:

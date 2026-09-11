@@ -1,18 +1,51 @@
-# WHOISleuth local rendered capture
+# WHOISleuth rendered capture companion
 
-This private, optional package captures one explicitly authorised public,
-domain-hosted web page with the Playwright installation used by the repository.
+This optional package captures one explicitly authorised public, domain-hosted
+web page. Its browser runtime is independent of the main CLI and website.
 IP-literal targets are rejected so every successful manifest remains compatible
 with the domain-only Cases importer. It is separate
 from the distributable WHOISleuth CLI and is never enabled by the hosted
 application.
 
-From the repository root:
+## Install a local candidate
+
+The companion is not published to a package registry. From a repository checkout,
+build and verify an installable archive into a new directory outside the checkout:
+
+```sh
+npm run capture:package:check -- --candidate ../capture-candidate
+```
+
+The candidate report identifies the archive, digest, pinned dependencies and
+installed checks. It includes notices for its own runtime dependencies; the
+repository advisory check also covers them without adding them to the application.
+Install the generated archive in a separate directory:
+
+```sh
+npm install --ignore-scripts /path/to/generated-archive.tgz
+./node_modules/.bin/whoisleuth-capture --help
+./node_modules/.bin/playwright install chromium
+./node_modules/.bin/whoisleuth-capture https://example.test --output-dir ./capture-example --authorize-rendered-capture
+./node_modules/.bin/whoisleuth-capture compare ./official/manifest.json ./candidate/manifest.json --json
+```
+
+Browser installation is explicit and downloads the matching browser; help and
+offline comparison do not need it. The browser sandbox remains enabled. On
+Linux, install the operating-system libraries required by the browser before
+capture. The companion has its own version; it is not an additional main-CLI command.
+
+Maintainers can add `--browser-smoke` before `--candidate` to exercise the installed
+archive with an already installed browser and synthetic response fixtures.
+It honours `PLAYWRIGHT_BROWSERS_PATH` and never downloads a browser automatically.
+
+For an existing development checkout, the equivalent commands are:
 
 ```sh
 npm run capture:local -- https://example.test --output-dir ./capture-example --authorize-rendered-capture
 npm run capture:compare -- ./official/manifest.json ./candidate/manifest.json --json
 ```
+
+## Output and collection boundaries
 
 The destination must not already exist. The package writes a fixed-size PNG,
 a sanitised DOM digest containing hashes and element counts rather than page

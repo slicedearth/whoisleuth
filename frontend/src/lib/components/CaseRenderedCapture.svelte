@@ -115,7 +115,7 @@
   <summary>Capture the retained Incident URL locally</summary>
   <div class="capture-body">
     {#if handoff}
-      <p>The browser app will not render an Incident URL or run this command. From this source checkout, the command opens the exact retained URL in a disposable local browser, executes page scripts within bounded controls, and writes a new private output directory.</p>
+      <p>From the directory where you installed the <a href="/cli#capture-companion">optional capture companion</a>, this command opens the retained URL in a disposable local browser and writes a new private output directory. The browser app does not run it.</p>
       <CopyableCommand command={handoff.command} label="Rendered-capture command" />
       <p class="manifest-path">Then select <code>{handoff.manifestPath}</code>. Review the URL first: its path and query are sent to the target and may contain sensitive values.</p>
       <label class="file-btn btn" aria-disabled={parsing || importing}>
@@ -152,6 +152,7 @@
   .capture-workspace{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   summary{padding:11px 12px;cursor:pointer;font:700 var(--text-xs) var(--mono)}details[open]>summary{border-bottom:1px solid var(--border)}
   .capture-body{display:grid;gap:10px;padding:12px}.capture-body>p{max-width:880px;margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.manifest-path code{overflow-wrap:anywhere;color:var(--accent)}
+  .capture-body a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
   .file-btn{justify-self:start}.file-btn input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.file-btn:focus-within{outline:2px solid var(--focus);outline-offset:3px}
   .capture-preview{display:grid;gap:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.capture-preview header{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px}.capture-preview h4{margin:0}.capture-preview header>span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}
   dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--border)}dl>div{min-width:0;padding:8px;background:var(--panel)}dt{color:var(--muted);font:650 var(--text-2xs) var(--mono)}dd{margin:3px 0 0;overflow-wrap:anywhere;font-size:var(--text-xs)}

@@ -71,6 +71,12 @@ describe('third-party production dependency notices', () => {
     assert.equal(collectProductionPackages(lockfile, { directDependencyNames: ['alpha'] }).some((entry) => entry.name === 'dev-only'), false);
   });
 
+  test('includes development-classified libraries when a separate package delivers them at runtime', () => {
+    const lockfile = fixtureLockfile();
+    assert.deepEqual(collectProductionPackages(lockfile, { directDependencyNames: ['dev-only'] }).map(item => item.name), ['dev-only']);
+    assert.equal(collectProductionPackages(lockfile).some(item => item.name === 'dev-only'), false);
+  });
+
   test('derives browser notices from a real build and replaces the copied production base', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-browser-notices-'));
     try {

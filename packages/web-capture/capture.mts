@@ -3,7 +3,7 @@ import { lstat, mkdir, open, rmdir, unlink } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import path from 'node:path';
 
-import type { Browser, BrowserContext, Page, Route } from '@playwright/test';
+import type { Browser, BrowserContext, Page, Route } from 'playwright';
 
 import { WHOISLEUTH_USER_AGENT } from '../../lib/outbound-identity.mts';
 import { inspectDecodedImage } from '../../lib/perceptual-hash.mts';

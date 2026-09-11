@@ -24,6 +24,7 @@ import {
   sanitizeCaptureText,
 } from '../packages/web-capture/capture.mts';
 import { startAnchoredArtifactWriter } from '../packages/web-capture/anchored-artifact-writer.mts';
+import { launchCaptureBrowser } from '../packages/web-capture/browser.mts';
 import {
   WEB_CAPTURE_COMPARISON_SCHEMA,
   compareRenderedCaptures,
@@ -203,8 +204,18 @@ function fakeBrowser(options: {
 }
 
 describe('optional local rendered capture package', () => {
+  test('keeps the browser sandbox and a bounded launch deadline without fallback', async () => {
+    const instance = fakeBrowser();
+    const result = await launchCaptureBrowser(5000, { launch: async options => {
+      assert.deepEqual(options, { headless: true, chromiumSandbox: true, timeout: 5000 });
+      return instance;
+    } });
+    assert.equal(result, instance);
+    for (const timeout of [0, -1, Infinity, 30001]) assert.throws(() => launchCaptureBrowser(timeout), /bounded deadline/u);
+    await assert.rejects(() => launchCaptureBrowser(1000, { launch: async () => { throw new Error('Sandbox unavailable'); } }), /Sandbox unavailable/u);
+  });
   test('entry point fails closed with bounded usage for incomplete capture and comparison commands', () => {
-    for (const args of [[], ['compare']]) {
+    for (const args of [['https://example.test'], ['compare']]) {
       const result = spawnSync(process.execPath, [CAPTURE_ENTRY, ...args], {
         cwd: path.dirname(CAPTURE_ENTRY),
         encoding: 'utf8',
@@ -215,6 +226,18 @@ describe('optional local rendered capture package', () => {
       assert.equal(result.stdout, '');
       assert.match(result.stderr, /^Capture error: Usage: whoisleuth-capture/u);
       assert.ok(Buffer.byteLength(result.stderr, 'utf8') < 1_024);
+    }
+  });
+
+  test('help and version work offline without a browser installation', () => {
+    for (const args of [[], ['--help'], ['-h'], ['compare', '--help'], ['--version']]) {
+      const result = spawnSync(process.execPath, [CAPTURE_ENTRY, ...args], {
+        encoding: 'utf8', timeout: 10_000,
+        env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: path.join(tmpdir(), 'absent-capture-browser-fixture') },
+      });
+      assert.equal(result.status, 0); assert.equal(result.stderr, '');
+      if (args[0] === '--version') assert.match(result.stdout, /^\d+\.\d+\.\d+\n$/u);
+      else assert.match(result.stdout, /Compare verifies selected local artefacts and makes no network requests/u);
     }
   });
 

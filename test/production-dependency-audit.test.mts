@@ -12,6 +12,7 @@ import {
 import {
   main,
   productionDependencyAuditArguments,
+  productionAuditLockfile,
   PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS,
 } from '../tools/production-dependency-audit.mts';
 
@@ -52,6 +53,24 @@ function outputBuffer() {
 }
 
 describe('production dependency audit policy', () => {
+  test('audits optional package runtimes without promoting unrelated development dependencies or changing the source lockfile', () => {
+    const source = { packages: {
+      '': { dependencies: { app: '^1.0.0' } },
+      'node_modules/app': { version: '1.0.0' },
+      'node_modules/optional': { version: '2.0.0', dev: true, dependencies: { shared: '3.0.0' } },
+      'node_modules/shared': { version: '3.0.0', dev: true, integrity: 'sha512-fixture' },
+      'node_modules/test-only': { version: '4.0.0', dev: true },
+    } };
+    const saved = structuredClone(source);
+    const result = productionAuditLockfile(source, [{ dependencies: { optional: '^2.0.0' } }]) as typeof source;
+    assert.deepEqual(result.packages[''].dependencies, { app: '^1.0.0', optional: '2.0.0' });
+    assert.equal(result.packages['node_modules/optional'].dev, undefined);
+    assert.equal(result.packages['node_modules/shared'].dev, undefined);
+    assert.equal(result.packages['node_modules/shared'].integrity, 'sha512-fixture');
+    assert.equal(result.packages['node_modules/test-only'].dev, true);
+    assert.deepEqual(source, saved);
+    assert.throws(() => productionAuditLockfile(source, [{ dependencies: { missing: '1.0.0' } }]), /not installed/u);
+  });
   test('accepts exactly zero production vulnerabilities', () => {
     const report = assessProductionDependencyAudit({ auditJson: JSON.stringify(auditReport()) });
     assert.equal(report.status, 'accepted');
@@ -201,6 +220,7 @@ describe('production dependency audit policy', () => {
       '--package-lock-only',
       '--omit=dev',
       '--json',
+      '--registry=https://registry.npmjs.org',
       '--offline=false',
       '--prefer-online',
     ]);

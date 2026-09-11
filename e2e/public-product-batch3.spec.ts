@@ -162,10 +162,11 @@ test('reference pages expose the first recipe on mobile and constrain wide prose
     await page.goto('/cli');
     const firstCommand = page.locator('.start-steps .copyable-command').first();
     await expect(firstCommand.getByRole('button', { name: 'Copy run-once help command' })).toBeVisible();
-    const commandBox = await firstCommand.boundingBox();
-    expect(commandBox).not.toBeNull();
-    expect(commandBox!.y).toBeGreaterThan(0);
-    expect(commandBox!.y + commandBox!.height).toBeLessThanOrEqual(700);
+    await expect(firstCommand.locator('code')).toBeInViewport({ ratio: 1 });
+    const copy = firstCommand.getByRole('button', { name: 'Copy run-once help command' });
+    await copy.focus();
+    await expect(copy).toBeFocused();
+    await expect(copy).toBeInViewport({ ratio: 1 });
     await expectNoHorizontalOverflow(page);
 
     for (const width of [1920, 3840]) {

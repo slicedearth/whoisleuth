@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { openCaseMetadata } from './console-navigation';
+import { openCaseMetadata, openCaseSection } from './console-navigation';
 
 import { expect, test } from './fixtures';
 import {
@@ -8,6 +8,7 @@ import {
   lookupDomainIdentity,
   migrateLegacyBrowserData,
   readBrowserLocalCollection,
+  useTheme,
 } from './helpers';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
 import { caseRecord, snapshot } from './case-test-fixtures';
@@ -70,7 +71,7 @@ test('a recheck across hostnames retains registration changes without offering a
   await expectNoHorizontalOverflow(page);
 });
 
-test('an Incident URL sends only its hostname and retains exact Case context only by choice', async ({ page }) => {
+test('an Incident URL sends only its hostname and retains exact Case context only by choice', async ({ page }, testInfo) => {
   const incidentUrl = 'https://login.incident.invalid/sign-in?reference=fixture,secondary;third#review';
   const lookupTarget = 'login.incident.invalid';
   const caseDomain = 'incident.invalid';
@@ -122,6 +123,27 @@ test('an Incident URL sends only its hostname and retains exact Case context onl
   expect(exact.records[0]?.value?.assertions).toEqual([
     expect.objectContaining({ statement: `Investigate incident URL: ${incidentUrl}` }),
   ]);
+  await caseCard.getByRole('link', { name: 'Open Case', exact: true }).click();
+  await openCaseSection(page, 'Evidence');
+  const capture = page.locator('.capture-workspace');
+  await capture.locator(':scope > summary').click();
+  await expect(capture).toContainText(`./node_modules/.bin/whoisleuth-capture '${incidentUrl}'`);
+  await expect(capture.getByRole('link', { name: 'optional capture companion' })).toHaveAttribute('href', '/cli#capture-companion');
+  for (const [width, height] of [[1280, 720], [1024, 768], [390, 844], [320, 700]]) {
+    await page.setViewportSize({ width: width!, height: height! });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expect(capture.getByRole('button', { name: 'Copy Rendered-capture command', exact: true })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      if (width === 320 && theme === 'light' || width === 1280 && theme === 'dark') {
+        await capture.screenshot({ path: testInfo.outputPath(`capture-handoff-${theme}-${width}.png`) });
+      }
+    }
+  }
+  await capture.getByRole('link', { name: 'optional capture companion' }).click();
+  await expect(page.getByRole('heading', { name: 'Optional rendered capture', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Capture installation, output and limits' })).toHaveAttribute('href', /\/packages\/web-capture\/README\.md$/u);
+  expect(requests).toEqual([lookupTarget]);
   await expectNoHorizontalOverflow(page);
 });
 

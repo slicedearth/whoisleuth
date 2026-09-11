@@ -36,6 +36,7 @@ export const FULL_BATCH_RELEASE_GATES = Object.freeze([
   'licences',
   'production-dependency-audit',
   'cli-package',
+  'capture-package',
   'release-contract',
   'browser-complete',
   'browser-timing-stress-when-affected',
@@ -50,6 +51,7 @@ export type SpecialisedCheck =
   | 'privacy-catalogue'
   | 'schema-inventory'
   | 'cli-package'
+  | 'capture-package'
   | 'release-contract'
   | 'licences'
   | 'production-dependency-audit'
@@ -197,6 +199,12 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     focusedBrowser: browser(),
     specialised: specialised('architecture', 'schema-inventory', 'privacy-catalogue'),
     browserRequired: false,
+  }),
+  Object.freeze({
+    id: 'capture-package-impact', area: 'optional capture package', priority: 0, impactOnly: true,
+    matches: (value: string) => value.startsWith('packages/web-capture/') || value.startsWith('tools/capture-package'),
+    focusedUnit: unit('test/local-web-capture.test.mts', 'test/capture-package.test.mts'),
+    focusedBrowser: browser(), specialised: specialised('capture-package'), browserRequired: false,
   }),
   Object.freeze({
     id: 'shared-runtime', area: 'shared runtime and evidence orchestration', priority: 30,
@@ -545,6 +553,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     focusedBrowser: browser(),
     specialised: specialised(
       'cli-package',
+      'capture-package',
       'release-contract',
       'schema-inventory',
       'documentation',

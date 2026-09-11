@@ -57,6 +57,7 @@ const SPECIALISED_SCRIPTS: Readonly<Partial<Record<SpecialisedCheck, string>>> =
   'privacy-catalogue': 'privacy:check',
   'schema-inventory': 'schema:inventory',
   'cli-package': 'cli:package:check',
+  'capture-package': 'capture:package:check',
   'release-contract': 'release:check',
   licences: 'licenses:check',
   'production-dependency-audit': 'dependencies:audit',

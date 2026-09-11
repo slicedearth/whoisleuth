@@ -396,8 +396,8 @@ or freshness require a new preview; receipt recording remains a separate action.
 Provider acknowledgement or reported resolution remains analyst-recorded state,
 not independently observed remediation.
 
-A retained exact Incident URL can also be handed to the authorised repo-local
-rendered-capture command. The browser validates the selected manifest and can
+A retained exact Incident URL can also be handed to the [optional capture companion](../packages/web-capture/README.md).
+The browser validates the selected manifest and can
 import its sanitised metadata and declared digests into that Case; screenshots
 and other capture artefact bytes remain in the local output directory.
 

@@ -12,6 +12,7 @@
     { href: '#tasks', label: 'Common tasks' },
     { href: '#commands', label: 'Command reference' },
     { href: '#browser-handoff', label: 'Browser and CLI handoffs' },
+    { href: '#capture-companion', label: 'Capture companion' },
     { href: '#behaviour', label: 'CLI behaviour' },
     { href: '#more', label: 'More documentation' },
   ] as const;
@@ -111,6 +112,12 @@
     {/each}
   </div>
   <p class="handoff-boundary">These checks do not upload, submit or publish an artefact. Browser import remains a separate reviewed action.</p>
+</section>
+
+<section class="cli-section" id="capture-companion" aria-labelledby="capture-companion-title">
+  <div class="section-intro"><h2 id="capture-companion-title">Optional rendered capture</h2><p>A separate local companion captures an explicitly authorised page or compares two captures offline. It is not included in the main CLI or hosted application.</p></div>
+  <p>Install it from a verified local archive, then install its browser explicitly. Cases can prepare a command for a retained Incident URL and import reviewed manifest metadata. Screenshots remain local files.</p>
+  <a class="btn" href={`${WHOISLEUTH_SOURCE_REPOSITORY_URL}/blob/main/packages/web-capture/README.md`}>Capture installation, output and limits</a>
 </section>
 
 <section class="cli-section" id="behaviour" aria-labelledby="behaviour-title">

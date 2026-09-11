@@ -296,7 +296,7 @@ describe('continuous integration workflow', () => {
       'verification:timing:update-candidate',
     ]);
     assert.equal(CI_CLI_RUNTIME_NODE_MAJOR, 26);
-    assert.deepEqual(CI_CLI_RUNTIME_SCRIPTS, ['cli:package:check']);
+    assert.deepEqual(CI_CLI_RUNTIME_SCRIPTS, ['cli:package:check', 'capture:package:check']);
     assert.match(localPlan, /^cli:package:check \(Node 26 compatibility runtime\)$/mu);
     assert.equal(
       selectNodeRuntimeExecutable(26, ['/fixture/node-24', '/fixture/node-26'], (candidate) => (

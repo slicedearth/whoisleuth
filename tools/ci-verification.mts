@@ -30,6 +30,7 @@ export const CI_QUALITY_SCRIPTS = Object.freeze([
   'providers:policy-check',
   'technology:coverage-check',
   'cli:package:check',
+  'capture:package:check',
   'architecture:check',
   'typecheck',
   'check',
@@ -68,6 +69,7 @@ export const CI_BROWSER_HEALTH_SCRIPTS = Object.freeze([
 export const CI_CLI_RUNTIME_NODE_MAJOR = 26;
 export const CI_CLI_RUNTIME_SCRIPTS = Object.freeze([
   'cli:package:check',
+  'capture:package:check',
 ] as const);
 export const CI_COMMAND_GROUPS = Object.freeze([
   'preflight',

@@ -4,10 +4,15 @@
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",
+  "description": "Optional authorised rendered-page capture and offline comparison companion.",
   "bin": {
     "whoisleuth-capture": "bin/whoisleuth-capture.mts"
   },
   "engines": {
     "node": ">=24"
+  },
+  "dependencies": {
+    "playwright": "1.62.1",
+    "undici": "^8.10.1"
   }
 }
