@@ -128,7 +128,6 @@ export const OFFLINE_COMPARISON_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily({
   contracts: OFFLINE_COMPARISON_CONTRACTS,
   fixtures: OFFLINE_COMPARISON_FIXTURES,
   metadata: {
-    metadataVersion: 4,
     enforcement: 'declarative_only',
     shapes: [
       offlineOutputShape('offline-comparison.page-output.current', CLI_PAGE_COMPARE_SCHEMA, [4], ['schema', 'version', 'generatedAt', 'left', 'right', 'page', 'technology', 'tls', 'limitations']),

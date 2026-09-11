@@ -49,7 +49,7 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
     file: 'packages/contracts/schema-lifecycle.mts',
     search: '          : contract.futureVersionBehaviour !== descriptor.futureVersionBehavior)\n',
     replacement: '          : false)\n',
-    focusedTests: Object.freeze(['test/schema-lifecycle-v4.test.mts']),
+    focusedTests: Object.freeze(['test/schema-lifecycle-variants.test.mts']),
     timeoutMs: 20_000,
   }),
   Object.freeze({

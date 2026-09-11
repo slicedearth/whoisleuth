@@ -171,7 +171,6 @@ export const EXTERNAL_OBSERVATION_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLif
   contracts: EXTERNAL_INTERCHANGE_CONTRACTS,
   fixtures: EXTERNAL_INTERCHANGE_FIXTURES,
   metadata: {
-    metadataVersion: 3,
     enforcement: 'declarative_only',
     shapes: [
       externalShape('external-interchange.findings.v4', EXTERNAL_FINDINGS_SCHEMA, [...SUPPORTED_EXTERNAL_FINDINGS_VERSIONS], ['schema', 'schemaVersion', 'source', 'findings'], 'preserve_document'),

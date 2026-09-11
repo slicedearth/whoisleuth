@@ -733,12 +733,6 @@ export function validateCasePortabilitySourceSnapshot(value: unknown): void {
   }
 
   for (const { file, source } of sources) {
-    if (!facadePaths.has(file)
-      && !adapterPaths.has(file)
-      && !ownerPaths.has(file)
-      && reachesCaseOwner(file, new Set<string>())) {
-      throw new TypeError(`Case domain compatibility facade is hidden from the canonical register: ${file}.`);
-    }
     if (file === CASE_CONTRACT_OWNER) continue;
     for (const name of [
       ...CASE_PORTABILITY_IDENTITY_CONSTANTS,

@@ -22,7 +22,7 @@ const DATASET_COMPATIBILITY = defineSchemaCompatibility({
   writeSemantics: 'normalized_rewrite',
   byteBudget: 1_024,
   owner: 'packages/contracts/test-schema-lifecycle-v4.mts',
-  note: 'Synthetic projected dataset used to verify lifecycle metadata version 4.',
+  note: 'Synthetic projected dataset used to verify lifecycle metadata.',
 });
 
 const REPORT_COMPATIBILITY = defineSchemaCompatibility({
@@ -37,7 +37,7 @@ const REPORT_COMPATIBILITY = defineSchemaCompatibility({
   writeSemantics: 'read_only',
   byteBudget: null,
   owner: 'packages/contracts/test-schema-lifecycle-v4.mts',
-  note: 'Synthetic retired and discriminated output history used to verify lifecycle metadata version 4.',
+  note: 'Synthetic retired and discriminated output history used to verify lifecycle metadata.',
 });
 
 function familySource(): any {
@@ -141,7 +141,6 @@ function familySource(): any {
       })),
     ],
     metadata: {
-      metadataVersion: 4,
       enforcement: 'declarative_only',
       shapes: [
         {
@@ -394,7 +393,22 @@ function familySource(): any {
   };
 }
 
-describe('schema lifecycle metadata version 4', () => {
+describe('schema lifecycle variants and projections', () => {
+  test('derives routine defaults without requiring another metadata dialect', () => {
+    const source = familySource();
+    delete source.fixtures[0].shapeId;
+    delete source.metadata.shapes[0].discriminator;
+    delete source.metadata.shapes[0].objects[0].alternativeRequiredKeys;
+    delete source.metadata.consumerEdges[0].emittedContract.discriminator;
+    const family = defineSchemaLifecycleFamily(source);
+    assert.equal(family.metadata.metadataVersion, 4);
+    assert.equal(family.metadata.shapes[0]?.discriminator, null);
+    assert.deepEqual(family.metadata.shapes[0]?.objects[0]?.alternativeRequiredKeys, []);
+    assert.equal(family.metadata.consumerEdges[0]?.emittedContract?.discriminator, null);
+    assert.equal(Object.hasOwn(source.metadata, 'metadataVersion'), false);
+    assert.deepEqual(defineSchemaLifecycleFamily(family), family);
+  });
+
   test('accepts an explicitly bounded finite-number unit without weakening integer bounds', () => {
     const source = familySource();
     const metadata = source.metadata as Record<string, unknown>;
@@ -515,7 +529,7 @@ describe('schema lifecycle metadata version 4', () => {
       ['compatibility future-version mismatch', (value) => { value.contracts[0].futureVersionBehaviour = 'preserve_without_write'; }],
       ['retired expectation', (value) => { value.fixtures[1].expectation = 'accepted_exact'; }],
       ['fixture shape', (value) => { value.fixtures[1].shapeId = 'test.variant-report.v3-summary'; }],
-      ['missing shape', (value) => { delete value.fixtures[1].shapeId; }],
+      ['ambiguous shape', (value) => { delete value.fixtures.find((fixture: { id: string }) => fixture.id === 'test-variant-report-v3-detailed').shapeId; }],
     ];
     for (const [label, mutate] of cases) {
       const value = familySource();
@@ -665,17 +679,17 @@ describe('schema lifecycle metadata version 4', () => {
     }
   });
 
-  test('keeps version 4 vocabulary isolated from older and six-key families', () => {
+  test('requires complete current metadata for variant and projection policies', () => {
     const withoutMetadata = familySource();
     delete withoutMetadata.metadata;
-    assert.throws(() => defineSchemaLifecycleFamily(withoutMetadata), /metadata version 4/iu);
+    assert.throws(() => defineSchemaLifecycleFamily(withoutMetadata), /metadata is required/iu);
 
     const older = familySource();
     older.metadata.metadataVersion = 3;
-    assert.throws(() => defineSchemaLifecycleFamily(older), /version 4|exact registered/iu);
+    assert.throws(() => defineSchemaLifecycleFamily(older), /exact registered/iu);
   });
 
-  test('fails closed on accessor and revoked version 4 metadata without invoking caller code', () => {
+  test('fails closed on accessor and revoked metadata without invoking caller code', () => {
     let getterCalls = 0;
     const discriminatorAccessor = familySource();
     Object.defineProperty(discriminatorAccessor.metadata.shapes[2], 'discriminator', {

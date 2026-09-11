@@ -1,5 +1,5 @@
 import { defineSchemaCompatibility } from './schema-compatibility.mts';
-import { buildExtractedLifecycleFamilyV4 } from './extracted-domain-lifecycle.mts';
+import { buildExtractedLifecycleFamily } from './extracted-domain-lifecycle.mts';
 import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 
 export const RELATIONSHIP_CONTRACT_OWNER = 'packages/contracts/relationship-portability.mts';
@@ -29,7 +29,7 @@ export function serialiseRelationshipPortableJson(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
-export const RELATIONSHIP_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(buildExtractedLifecycleFamilyV4({
+export const RELATIONSHIP_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(buildExtractedLifecycleFamily({
   id: 'relationship-portability',
   owner: RELATIONSHIP_CONTRACT_OWNER,
   serializerExportName: 'serialiseRelationshipPortableJson',

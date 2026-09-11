@@ -55,7 +55,6 @@ function extensibleFamily() {
       scope: 'repository' as const,
     }],
     metadata: {
-      metadataVersion: 3 as const,
       enforcement: 'declarative_only' as const,
       shapes: [{
         id: 'test-extensible-document.shape.v1',
@@ -181,12 +180,12 @@ function extensibleFamily() {
   };
 }
 
-describe('schema lifecycle metadata version 3', () => {
+describe('schema lifecycle bounded extensions', () => {
   test('preserves bounded extensions and discriminator-qualified consumers as detached frozen metadata', () => {
     const source = extensibleFamily();
     const family = defineSchemaLifecycleFamily(source);
 
-    assert.equal(family.metadata.metadataVersion, 3);
+    assert.equal(family.metadata.metadataVersion, 4);
     assert.equal(family.contracts[0]?.exactKeys, false);
     assert.equal(family.contracts[0]?.extensionPolicy, 'preserve_bounded');
     assert.equal(family.metadata.shapes[0]?.objects[0]?.unknownKeys, 'preserve_bounded');
@@ -205,7 +204,7 @@ describe('schema lifecycle metadata version 3', () => {
     );
   });
 
-  test('canonicalises an omitted version 3 consumer discriminator to null', () => {
+  test('canonicalises an omitted consumer discriminator to null', () => {
     const source = extensibleFamily() as any;
     delete source.metadata.consumerEdges[1].acceptedContracts[0].discriminator;
 
@@ -221,13 +220,13 @@ describe('schema lifecycle metadata version 3', () => {
     );
   });
 
-  test('rejects bounded-extension contracts without version 3 metadata', () => {
+  test('rejects bounded-extension contracts without metadata', () => {
     const source = extensibleFamily() as any;
     delete source.metadata;
 
     assert.throws(
       () => defineSchemaLifecycleFamily(source),
-      /metadata version 3.*bounded extensions/iu,
+      /metadata.*bounded extensions/iu,
     );
   });
 
@@ -249,7 +248,7 @@ describe('schema lifecycle metadata version 3', () => {
     }
   });
 
-  test('keeps the new vocabulary unavailable to older metadata versions', () => {
+  test('rejects obsolete internal metadata versions', () => {
     const value = extensibleFamily() as any;
     value.metadata.metadataVersion = 2;
     for (const edge of value.metadata.consumerEdges) {
@@ -257,7 +256,7 @@ describe('schema lifecycle metadata version 3', () => {
     }
     assert.throws(
       () => defineSchemaLifecycleFamily(value),
-      /version 3|bounded extensions/iu,
+      /exact registered declarative-only version/iu,
     );
   });
 });

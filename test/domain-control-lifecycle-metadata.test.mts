@@ -85,6 +85,12 @@ function baseLifecycle(value = mutableLifecycle()): SchemaLifecycleFamily {
   return base as unknown as SchemaLifecycleFamily;
 }
 
+function consumer(value: MutableLifecycle, id: string): Record<string, unknown> {
+  const edge = value.metadata.consumerEdges.find((candidate) => candidate.id === id);
+  assert.ok(edge, `Missing lifecycle consumer ${id}`);
+  return edge;
+}
+
 function assertRecursivelyFrozen(value: unknown, seen = new Set<object>()): void {
   if (!value || typeof value !== 'object' || seen.has(value)) return;
   seen.add(value);
@@ -148,7 +154,7 @@ describe('domain-control lifecycle metadata', () => {
       'serialisationProfiles', 'privacyProfiles', 'expiryProfiles', 'consumerEdges',
       'consumerRelationships',
     ]);
-    assert.equal(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.metadata.metadataVersion, 2);
+    assert.equal(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.metadata.metadataVersion, 4);
     assert.equal(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.metadata.enforcement, 'declarative_only');
     assertRecursivelyFrozen(DOMAIN_CONTROL_SCHEMA_LIFECYCLE);
     assert.deepEqual(
@@ -163,29 +169,20 @@ describe('domain-control lifecycle metadata', () => {
       /exact registered fields/iu,
     );
 
-    const metadataV1 = mutableLifecycle();
-    metadataV1.metadata.metadataVersion = 1;
-    Reflect.deleteProperty(metadataV1.metadata, 'consumerRelationships');
-    const metadataV1Copy = defineSchemaLifecycleFamily(
-      metadataV1 as unknown as SchemaLifecycleFamilyWithMetadata,
-    );
-    assert.equal(metadataV1Copy.metadata.metadataVersion, 1);
-    assert.deepEqual(Object.keys(metadataV1Copy.metadata), [
-      'metadataVersion', 'enforcement', 'shapes', 'boundProfiles', 'hooks',
-      'serialisationProfiles', 'privacyProfiles', 'expiryProfiles', 'consumerEdges',
-    ]);
+    for (const version of [1, 2, 3, 5]) {
+      const obsolete = mutableLifecycle();
+      obsolete.metadata.metadataVersion = version;
+      assert.throws(
+        () => defineSchemaLifecycleFamily(obsolete as unknown as SchemaLifecycleFamilyWithMetadata),
+        /exact registered declarative-only version/iu,
+      );
+    }
+    assert.deepEqual(defineSchemaLifecycleFamily(DOMAIN_CONTROL_SCHEMA_LIFECYCLE), DOMAIN_CONTROL_SCHEMA_LIFECYCLE);
 
-    const mixedV1 = mutableLifecycle();
-    mixedV1.metadata.metadataVersion = 1;
+    const incomplete = mutableLifecycle();
+    Reflect.deleteProperty(incomplete.metadata, 'consumerRelationships');
     assert.throws(
-      () => defineSchemaLifecycleFamily(mixedV1 as unknown as SchemaLifecycleFamilyWithMetadata),
-      /exact registered declarative-only version/iu,
-    );
-
-    const incompleteV2 = mutableLifecycle();
-    Reflect.deleteProperty(incompleteV2.metadata, 'consumerRelationships');
-    assert.throws(
-      () => defineSchemaLifecycleFamily(incompleteV2 as unknown as SchemaLifecycleFamilyWithMetadata),
+      () => defineSchemaLifecycleFamily(incomplete as unknown as SchemaLifecycleFamilyWithMetadata),
       /exact registered declarative-only version|exact registered fields/iu,
     );
   });
@@ -404,6 +401,7 @@ describe('domain-control lifecycle metadata', () => {
         edge.policyState,
       ]),
       [
+        ['domain-control.browser-build-input', 'browser', 'build-input', 'domain-control.manifest-sensitive.v1', 'domain-control.expiry.build-future.v1', 'none', 'none', 'declared_unenforced', 'current'],
         ['domain-control.browser-export', 'browser', 'export', 'domain-control.browser-export.v1', 'domain-control.expiry.build-future.v1', 'none', 'deliberate_local_file', 'declared_unenforced', 'current'],
         ['domain-control.browser-import', 'browser', 'import', 'domain-control.browser-import.v1', 'domain-control.expiry.require-current.v1', 'none', 'browser_indexeddb', 'declared_unenforced', 'current'],
         ['domain-control.node-build', 'node', 'build', 'domain-control.manifest-sensitive.v1', 'domain-control.expiry.build-future.v1', 'none', 'none', 'declared_unenforced', 'current'],
@@ -425,8 +423,9 @@ describe('domain-control lifecycle metadata', () => {
         const expectedVersions = accepted.schema === DOMAIN_CONTROL_MANIFEST_SCHEMA ? [2, 3] : [1, 2];
         assert.deepEqual(accepted.versions, expectedVersions, edge.id);
       }
-      if (edge.emittedContract) assert.deepEqual(edge.emittedContract,
-        { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, version: DOMAIN_CONTROL_MANIFEST_VERSION });
+      if (edge.emittedContract) assert.deepEqual(edge.emittedContract, edge.id === 'domain-control.browser-build-input'
+        ? { schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, version: DOMAIN_CONTROL_MANIFEST_INPUT_VERSION, discriminator: null }
+        : { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, version: DOMAIN_CONTROL_MANIFEST_VERSION, discriminator: null });
     }
     assert.equal(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.metadata.consumerEdges.every((edge) => edge.bindingState === 'declared_unenforced'), true);
   });
@@ -469,9 +468,9 @@ describe('domain-control lifecycle metadata', () => {
     const source = mutableLifecycle();
     const copied = defineSchemaLifecycleFamily(source as unknown as SchemaLifecycleFamilyWithMetadata);
     source.metadata.hooks[0]!.id = 'changed-after-definition';
-    source.metadata.consumerEdges[0]!.hookIds = ['changed-after-definition'];
+    consumer(source, 'domain-control.browser-export').hookIds = ['changed-after-definition'];
     assert.equal(copied.metadata.hooks[0]?.id, 'domain-control.shared.build-unsigned');
-    assert.equal(copied.metadata.consumerEdges[0]?.hookIds[0], 'domain-control.shared.build-unsigned');
+    assert.equal(copied.metadata.consumerEdges.find((edge) => edge.id === 'domain-control.browser-export')?.hookIds[0], 'domain-control.shared.build-unsigned');
     assertRecursivelyFrozen(copied.metadata);
 
     const cases: Array<Readonly<{ pattern: RegExp; mutate: (value: MutableLifecycle) => void }>> = [
@@ -492,11 +491,11 @@ describe('domain-control lifecycle metadata', () => {
       },
       {
         pattern: /contract shapes/iu,
-        mutate(value) { value.metadata.consumerEdges[0]!.shapeIds = (value.metadata.consumerEdges[0]!.shapeIds as string[]).slice(0, 1); },
+        mutate(value) { const edge = consumer(value, 'domain-control.browser-export'); edge.shapeIds = (edge.shapeIds as string[]).slice(0, 1); },
       },
       {
         pattern: /unknown or incompatible hook/iu,
-        mutate(value) { value.metadata.consumerEdges[0]!.hookIds = ['domain-control.cli.monitor-once']; },
+        mutate(value) { consumer(value, 'domain-control.browser-export').hookIds = ['domain-control.cli.monitor-once']; },
       },
       {
         pattern: /unique module and export pairs/iu,
@@ -507,17 +506,17 @@ describe('domain-control lifecycle metadata', () => {
       },
       {
         pattern: /unknown bound profile/iu,
-        mutate(value) { value.metadata.consumerEdges[0]!.boundProfileIds = ['domain-control.missing-bounds.v1']; },
+        mutate(value) { consumer(value, 'domain-control.browser-export').boundProfileIds = ['domain-control.missing-bounds.v1']; },
       },
       {
         pattern: /unknown serialisation profile/iu,
-        mutate(value) { value.metadata.consumerEdges[0]!.serialisationProfileId = 'domain-control.missing-json.v1'; },
+        mutate(value) { consumer(value, 'domain-control.browser-export').serialisationProfileId = 'domain-control.missing-json.v1'; },
       },
       {
         pattern: /unknown serialisation profile/iu,
         mutate(value) {
-          value.metadata.consumerEdges[0]!.hookIds = (
-            value.metadata.consumerEdges[0]!.hookIds as string[]
+          consumer(value, 'domain-control.browser-export').hookIds = (
+            consumer(value, 'domain-control.browser-export').hookIds as string[]
           ).filter((id) => id !== 'domain-control.shared.serialise-document');
         },
       },
@@ -527,25 +526,25 @@ describe('domain-control lifecycle metadata', () => {
           const duplicate = structuredClone(value.metadata.serialisationProfiles[0]!);
           duplicate.id = 'domain-control.manifest-json.duplicate';
           value.metadata.serialisationProfiles.push(duplicate);
-          value.metadata.consumerEdges[7]!.serialisationProfileId = duplicate.id;
+          consumer(value, 'domain-control.cli-build').serialisationProfileId = duplicate.id;
         },
       },
       {
         pattern: /privacy, request, or retention/iu,
-        mutate(value) { value.metadata.consumerEdges[0]!.retentionEffect = 'none'; },
+        mutate(value) { consumer(value, 'domain-control.browser-export').retentionEffect = 'none'; },
       },
       {
         pattern: /privacy, request, or retention/iu,
-        mutate(value) { value.metadata.consumerEdges.at(-1)!.requestMode = 'none'; },
+        mutate(value) { consumer(value, 'domain-control.cli-monitor').requestMode = 'none'; },
       },
       {
         pattern: /unknown expiry profile/iu,
-        mutate(value) { value.metadata.consumerEdges[0]!.expiryPolicyId = 'domain-control.expiry.missing.v1'; },
+        mutate(value) { consumer(value, 'domain-control.browser-export').expiryPolicyId = 'domain-control.expiry.missing.v1'; },
       },
       {
         pattern: /unreadable or duplicate contract/iu,
         mutate(value) {
-          const accepted = value.metadata.consumerEdges[0]!.acceptedContracts as Array<Record<string, unknown>>;
+          const accepted = consumer(value, 'domain-control.browser-export').acceptedContracts as Array<Record<string, unknown>>;
           accepted.push(structuredClone(accepted[0]!));
         },
       },

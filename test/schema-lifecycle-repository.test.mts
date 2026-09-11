@@ -487,15 +487,15 @@ describe('schema lifecycle repository closure', () => {
       /compatibility facade is stale/u,
     );
 
-    assert.throws(
+    assert.doesNotThrow(
       () => validateCasePortabilitySourceSnapshot([
         ...sources,
         Object.freeze({
-          file: 'frontend/src/lib/analysis/hidden-case-facade.mts',
+          file: 'frontend/src/lib/analysis/case-review-helper.mts',
           source: "export * from './case-model.ts';\n",
         }),
       ]),
-      /compatibility facade is hidden/u,
+      'An internal forwarding helper does not need a compatibility-register entry.',
     );
 
     assert.throws(

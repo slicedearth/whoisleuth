@@ -12,12 +12,21 @@ test that would fail without the change.
 - **Case decisions:** `packages/cases/case-record-decisions.mts` owns identities
   and labels. Transition policy is separate from presentation. Response forms
   use the existing workspace save coordinator, not independent writes.
+- **Response history:** `case-response-actions.mts` owns action transitions;
+  `case-response-outcomes.mts` owns observed effects and closure. Packet input
+  validation is in `case-response-review-inputs.mts`, separate from construction.
+- **Lookup downloads:** `frontend/src/lib/analysis/lookup-exports.ts` prepares
+  projections and files; the route owns visible status, not export formatting.
 - **CLI options:** `cli/command-reference.mts` owns grammar and command bindings.
   Help and completion derive from it; command handlers own execution.
 - **Portable fields:** `packages/cases/case-record-projection.mts` requires
   explicit audience treatment. Preserve independent privacy assertions and
   immutable published-version fixtures; do not derive their expected answers
   from the implementation being tested.
+
+Lifecycle definitions use one internal metadata format. Its factory supplies
+the metadata version and empty optional policies; variants still need explicit
+discriminators and fixture bindings. Public document versions are separate.
 
 Follow imports and nearby tests rather than adding another registration table.
 An ordinary helper in an existing area needs no package-inventory baseline or

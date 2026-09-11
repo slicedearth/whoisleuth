@@ -1440,7 +1440,6 @@ export const PRIVACY_DATA_FLOW_CATALOGUE_LIFECYCLE_FAMILY = defineSchemaLifecycl
     scope: 'repository',
   }],
   metadata: {
-    metadataVersion: 2,
     enforcement: 'declarative_only',
     shapes: [{
       id: 'privacy-data-flow-catalogue.document.v1',
@@ -1517,7 +1516,11 @@ export const PRIVACY_DATA_FLOW_CATALOGUE_LIFECYCLE_FAMILY = defineSchemaLifecycl
       id: 'privacy-data-flow-catalogue.public-generation.v1',
       plane: 'shared',
       operation: 'generate-public-catalogue',
-      acceptedContracts: [],
+      acceptedContracts: [{
+        schema: PRIVACY_DATA_FLOW_CATALOGUE_SCHEMA,
+        versions: [PRIVACY_DATA_FLOW_CATALOGUE_VERSION],
+        mode: 'direct',
+      }],
       emittedContract: {
         schema: PRIVACY_DATA_FLOW_CATALOGUE_SCHEMA,
         version: PRIVACY_DATA_FLOW_CATALOGUE_VERSION,

@@ -1,5 +1,5 @@
 import { defineSchemaCompatibility } from './schema-compatibility.mts';
-import { buildExtractedLifecycleFamilyV2 } from './extracted-domain-lifecycle.mts';
+import { buildExtractedLifecycleFamily } from './extracted-domain-lifecycle.mts';
 import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 
 export const INVESTIGATION_PROJECTION_CONTRACT_OWNER = 'packages/contracts/investigation-projections.mts';
@@ -58,7 +58,7 @@ export function serialiseInvestigationProjectionJson(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
-export const INVESTIGATION_PROJECTIONS_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(buildExtractedLifecycleFamilyV2({
+export const INVESTIGATION_PROJECTIONS_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(buildExtractedLifecycleFamily({
   id: 'investigation-projections',
   owner: INVESTIGATION_PROJECTION_CONTRACT_OWNER,
   serializerExportName: 'serialiseInvestigationProjectionJson',

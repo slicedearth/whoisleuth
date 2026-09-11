@@ -1,5 +1,5 @@
 import { defineSchemaCompatibility } from './schema-compatibility.mts';
-import { buildExtractedLifecycleFamilyV2 } from './extracted-domain-lifecycle.mts';
+import { buildExtractedLifecycleFamily } from './extracted-domain-lifecycle.mts';
 import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 
 export const MONITORING_CONTRACT_OWNER = 'packages/contracts/monitoring-portability.mts';
@@ -29,7 +29,7 @@ export function serialiseMonitoringPortableJson(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
-export const MONITORING_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(buildExtractedLifecycleFamilyV2({
+export const MONITORING_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(buildExtractedLifecycleFamily({
   id: 'monitoring-portability',
   owner: MONITORING_CONTRACT_OWNER,
   serializerExportName: 'serialiseMonitoringPortableJson',

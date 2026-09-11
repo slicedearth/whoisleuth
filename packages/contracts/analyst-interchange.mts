@@ -1,5 +1,5 @@
 import { defineSchemaCompatibility } from './schema-compatibility.mts';
-import { buildExtractedLifecycleFamilyV4 } from './extracted-domain-lifecycle.mts';
+import { buildExtractedLifecycleFamily } from './extracted-domain-lifecycle.mts';
 import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 export const ANALYST_INTERCHANGE_CONTRACT_OWNER = 'packages/contracts/analyst-interchange.mts';
 export const INVESTIGATION_CACAO_SPEC_VERSION = 'cacao-2.0';
@@ -133,7 +133,7 @@ export function serialiseAnalystInterchangeJson(value: unknown): string {
 }
 
 const F = 'test/fixtures/extracted-domain-lifecycle/';
-export const ANALYST_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(buildExtractedLifecycleFamilyV4({
+export const ANALYST_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(buildExtractedLifecycleFamily({
   id: 'analyst-interchange', owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
   serializerExportName: 'serialiseAnalystInterchangeJson', plane: 'shared', projection: 'browser_export',
   retention: 'operator_controlled_output',

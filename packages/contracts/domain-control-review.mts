@@ -507,7 +507,6 @@ export const DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamil
     ];
   }),
   metadata: {
-    metadataVersion: 4,
     enforcement: 'declarative_only',
     shapes: [
       ...CORE_REVIEW_SHAPES,

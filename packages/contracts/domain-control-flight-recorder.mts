@@ -268,7 +268,6 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE = defineSchemaLifec
     ];
   }),
   metadata: {
-    metadataVersion: 2,
     enforcement: 'declarative_only',
     shapes: SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS.flatMap((version) => [
       {

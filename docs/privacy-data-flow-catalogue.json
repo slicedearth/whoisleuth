@@ -17,10 +17,8 @@
       "familyCount": 18,
       "compatibilityCount": 85,
       "privacyProfileCount": 45,
-      "consumerFlowCount": 142,
+      "consumerFlowCount": 143,
       "metadataVersions": [
-        2,
-        3,
         4
       ]
     },
@@ -7384,6 +7382,7 @@
         "domain-control.signed-wrapper.v1"
       ],
       "consumerFlowIds": [
+        "domain-control.browser-build-input",
         "domain-control.browser-export",
         "domain-control.browser-import",
         "domain-control.cli-build",
@@ -9997,6 +9996,7 @@
       "network": "none",
       "sharingReview": "not_applicable",
       "consumerFlowIds": [
+        "domain-control.browser-build-input",
         "domain-control.node-build",
         "domain-control.node-verify"
       ]
@@ -12267,6 +12267,26 @@
       "policyState": "current"
     },
     {
+      "id": "domain-control.browser-build-input",
+      "familyId": "domain-control-manifest",
+      "plane": "browser",
+      "operation": "build-input",
+      "acceptedContracts": [],
+      "emittedContract": {
+        "schema": "whoisleuth.domain-control-manifest-input",
+        "version": 2,
+        "discriminator": null
+      },
+      "privacyProfileId": "domain-control.manifest-sensitive.v1",
+      "requestMode": "none",
+      "retentionEffect": "none",
+      "processingClasses": [
+        "transient_processing",
+        "offline_processing_no_request"
+      ],
+      "policyState": "current"
+    },
+    {
       "id": "domain-control.browser-export",
       "familyId": "domain-control-manifest",
       "plane": "browser",
@@ -13301,7 +13321,16 @@
       "familyId": "privacy-data-flow-catalogue",
       "plane": "shared",
       "operation": "generate-public-catalogue",
-      "acceptedContracts": [],
+      "acceptedContracts": [
+        {
+          "schema": "whoisleuth.privacy-data-flow-catalogue",
+          "versions": [
+            1
+          ],
+          "mode": "direct",
+          "discriminator": null
+        }
+      ],
       "emittedContract": {
         "schema": "whoisleuth.privacy-data-flow-catalogue",
         "version": 1,

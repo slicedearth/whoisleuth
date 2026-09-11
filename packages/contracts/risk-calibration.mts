@@ -439,7 +439,6 @@ export const RISK_CALIBRATION_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
     },
   ],
   metadata: {
-    metadataVersion: 4,
     enforcement: 'declarative_only',
     shapes: [
       ...[RISK_CALIBRATION_DATASET_VERSION].map((version) => ({

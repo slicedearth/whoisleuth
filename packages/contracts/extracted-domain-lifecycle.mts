@@ -1,9 +1,6 @@
 import type { SchemaCompatibilityDescriptor } from './schema-compatibility.mts';
 import type {
-  SchemaLifecycleFamilyWithMetadata,
-  SchemaLifecycleFamilyWithMetadataV2,
-  SchemaLifecycleFamilyWithMetadataV3,
-  SchemaLifecycleFamilyWithMetadataV4,
+  SchemaLifecycleFamilyDefinition,
   SchemaLifecyclePrivacyProfile,
 } from './schema-lifecycle.mts';
 
@@ -48,10 +45,8 @@ function formatSlug(id: string): string {
   return id.replaceAll('.', '-');
 }
 
-function lifecycleShapeId(format: ExtractedLifecycleFormat, version: number, v4: boolean): string {
-  return v4
-    ? `${formatSlug(format.descriptor.id)}.v${version}`
-    : `${formatSlug(format.descriptor.id)}.document`;
+function lifecycleShapeId(format: ExtractedLifecycleFormat, version: number): string {
+  return `${formatSlug(format.descriptor.id)}.v${version}`;
 }
 
 function contractState(format: ExtractedLifecycleFormat, version: number) {
@@ -70,7 +65,7 @@ function contractState(format: ExtractedLifecycleFormat, version: number) {
   };
 }
 
-function fixtureRecord(format: ExtractedLifecycleFormat, fixture: ExtractedLifecycleFixture, v4: boolean) {
+function fixtureRecord(format: ExtractedLifecycleFormat, fixture: ExtractedLifecycleFixture) {
   const state = contractState(format, fixture.version);
   const output = format.fixtures.find((candidate) => candidate.version === format.descriptor.currentVersion);
   return {
@@ -87,17 +82,15 @@ function fixtureRecord(format: ExtractedLifecycleFormat, fixture: ExtractedLifec
       ? output?.id ?? null
       : null,
     scope: 'repository' as const,
-    ...(v4 ? { shapeId: lifecycleShapeId(format, fixture.version, true) } : {}),
+    shapeId: lifecycleShapeId(format, fixture.version),
   };
 }
 
-function buildExtractedLifecycleFamily(
+export function buildExtractedLifecycleFamily(
   options: ExtractedLifecycleFamilyOptions,
-  metadataVersion: 2 | 3 | 4,
-): SchemaLifecycleFamilyWithMetadata {
-  const v4 = metadataVersion === 4;
+): SchemaLifecycleFamilyDefinition {
   const fixtures = options.formats.flatMap((format) => format.fixtures.map((fixture) => (
-    fixtureRecord(format, fixture, v4)
+    fixtureRecord(format, fixture)
   )));
   const contracts = options.formats.flatMap((format) => format.descriptor.supportedVersions.map((version) => ({
     compatibilityId: format.descriptor.id,
@@ -113,24 +106,19 @@ function buildExtractedLifecycleFamily(
       .filter((fixture) => fixture.schema === format.lifecycleSchema && fixture.version === version)
       .map((fixture) => fixture.id),
   })));
-  const shapes = options.formats.flatMap((format) => (v4
-    ? format.descriptor.supportedVersions
-    : [format.descriptor.currentVersion]
-  ).map((version) => ({
-    id: lifecycleShapeId(format, version, v4),
+  const shapes = options.formats.flatMap((format) => format.descriptor.supportedVersions.map((version) => ({
+    id: lifecycleShapeId(format, version),
     schema: format.lifecycleSchema,
-    versions: v4 ? [version] : format.descriptor.supportedVersions,
+    versions: [version],
     objects: [{
       path: '$',
       requiredKeys: format.requiredKeys,
       optionalKeys: format.optionalKeys,
-      ...(v4 ? { alternativeRequiredKeys: [] as const } : {}),
       unknownKeys: 'reject' as const,
     }],
     fixedArrays: [],
     normalisation: 'preserve_document' as const,
     target: null,
-    ...(v4 ? { discriminator: null } : {}),
   })));
   const boundProfiles = options.formats.map((format) => ({
     id: `${formatSlug(format.descriptor.id)}.bounds`,
@@ -182,9 +170,7 @@ function buildExtractedLifecycleFamily(
     const outputOnly = format.descriptor.futureVersionBehavior === 'not_applicable';
     const acceptedVersions = outputOnly ? [] : format.descriptor.supportedVersions;
     const edgeVersions = outputOnly ? [format.descriptor.currentVersion] : format.descriptor.supportedVersions;
-    const shapeIds = v4
-      ? edgeVersions.map((version) => lifecycleShapeId(format, version, true))
-      : [lifecycleShapeId(format, format.descriptor.currentVersion, false)];
+    const shapeIds = edgeVersions.map((version) => lifecycleShapeId(format, version));
     const hookId = hookIdFor(format);
     const serialises = index === 0;
     return {
@@ -196,13 +182,11 @@ function buildExtractedLifecycleFamily(
           schema: format.lifecycleSchema,
           versions: acceptedVersions,
           mode: 'direct' as const,
-          ...(metadataVersion >= 3 ? { discriminator: null } : {}),
         }]
         : [],
       emittedContract: {
         schema: format.lifecycleSchema,
         version: format.descriptor.currentVersion,
-        ...(v4 ? { discriminator: null } : {}),
       },
       shapeIds,
       boundProfileIds: [`${formatSlug(format.descriptor.id)}.bounds`],
@@ -217,7 +201,6 @@ function buildExtractedLifecycleFamily(
     };
   });
   const metadata = {
-    metadataVersion,
     enforcement: 'declarative_only' as const,
     shapes,
     boundProfiles,
@@ -267,23 +250,5 @@ function buildExtractedLifecycleFamily(
     contracts,
     fixtures,
     metadata,
-  } as SchemaLifecycleFamilyWithMetadata;
-}
-
-export function buildExtractedLifecycleFamilyV2(
-  options: ExtractedLifecycleFamilyOptions,
-): SchemaLifecycleFamilyWithMetadataV2 {
-  return buildExtractedLifecycleFamily(options, 2) as SchemaLifecycleFamilyWithMetadataV2;
-}
-
-export function buildExtractedLifecycleFamilyV3(
-  options: ExtractedLifecycleFamilyOptions,
-): SchemaLifecycleFamilyWithMetadataV3 {
-  return buildExtractedLifecycleFamily(options, 3) as SchemaLifecycleFamilyWithMetadataV3;
-}
-
-export function buildExtractedLifecycleFamilyV4(
-  options: ExtractedLifecycleFamilyOptions,
-): SchemaLifecycleFamilyWithMetadataV4 {
-  return buildExtractedLifecycleFamily(options, 4) as SchemaLifecycleFamilyWithMetadataV4;
+  };
 }

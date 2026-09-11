@@ -1,5 +1,5 @@
 import { defineSchemaCompatibility } from './schema-compatibility.mts';
-import { buildExtractedLifecycleFamilyV4 } from './extracted-domain-lifecycle.mts';
+import { buildExtractedLifecycleFamily } from './extracted-domain-lifecycle.mts';
 import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 
 export const TAB_PORTABILITY_CONTRACT_OWNER = 'packages/contracts/tab-portability.mts';
@@ -66,7 +66,7 @@ export function serialiseTabPortableJson(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
-export const TAB_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(buildExtractedLifecycleFamilyV4({
+export const TAB_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(buildExtractedLifecycleFamily({
   id: 'tab-portability',
   owner: TAB_PORTABILITY_CONTRACT_OWNER,
   serializerExportName: 'serialiseTabPortableJson',

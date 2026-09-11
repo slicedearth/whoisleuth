@@ -132,7 +132,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'shared-contracts', area: 'shared contracts and lifecycle metadata', priority: 40,
     matches: (value: string) => value.startsWith('packages/contracts/'),
-    focusedUnit: unit('test/schema-lifecycle-registry.test.mts', 'test/schema-lifecycle-v4.test.mts', 'test/schema-lifecycle-repository.test.mts', 'test/capability-manifest.test.mts', 'test/privacy-data-flow-catalogue.test.mts'),
+    focusedUnit: unit('test/schema-lifecycle-registry.test.mts', 'test/schema-lifecycle-variants.test.mts', 'test/schema-lifecycle-repository.test.mts', 'test/capability-manifest.test.mts', 'test/privacy-data-flow-catalogue.test.mts'),
     focusedBrowser: browser(),
     specialised: specialised('architecture', 'schema-inventory', 'capability-catalogue', 'privacy-catalogue', 'critical-mutation'),
     browserRequired: false,

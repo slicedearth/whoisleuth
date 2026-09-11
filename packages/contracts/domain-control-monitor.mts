@@ -110,7 +110,6 @@ export const DOMAIN_CONTROL_MONITOR_SCHEMA_LIFECYCLE = defineSchemaLifecycleFami
     },
   ],
   metadata: {
-    metadataVersion: 2,
     enforcement: 'declarative_only',
     shapes: SUPPORTED_CLI_DOMAIN_CONTROL_MONITOR_VERSIONS.map((version) => ({
         id: `domain-control-monitor.document.v${version}`,

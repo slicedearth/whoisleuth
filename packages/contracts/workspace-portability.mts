@@ -4,13 +4,13 @@ import { defineSchemaCompatibility, type SchemaCompatibilityDescriptor } from '.
 import {
   defineSchemaLifecycleFamily,
   type SchemaLifecycleBoundProfile,
-  type SchemaLifecycleConsumerEdgeV4,
+  type SchemaLifecycleConsumerEdge,
   type SchemaLifecycleContract,
-  type SchemaLifecycleFixtureV4,
+  type SchemaLifecycleFixture,
   type SchemaLifecycleHook,
   type SchemaLifecyclePrivacyProfile,
   type SchemaLifecycleSerialisationProfile,
-  type SchemaLifecycleShapeV4,
+  type SchemaLifecycleShape,
 } from './schema-lifecycle.mts';
 
 export const WORKSPACE_CONTRACT_OWNER = 'packages/contracts/workspace-portability.mts';
@@ -719,7 +719,7 @@ const WORKSPACE_LIFECYCLE_DEFINITIONS: readonly WorkspaceLifecycleDefinition[] =
   },
 ]);
 
-const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly Pick<SchemaLifecycleFixtureV4, 'id' | 'path' | 'bytes' | 'sha256' | 'schema' | 'version'>[] = Object.freeze([
+const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly Pick<SchemaLifecycleFixture, 'id' | 'path' | 'bytes' | 'sha256' | 'schema' | 'version'>[] = Object.freeze([
   {
     "id": "workspace.browser.brand.v6",
     "path": "test/fixtures/workspace-lifecycle/browser-brand-v6.json",
@@ -1021,8 +1021,8 @@ function workspaceShapeId(
   return 'workspace.' + plane + '.' + slug + '.' + lifecycle + '.shape';
 }
 
-const WORKSPACE_LIFECYCLE_FIXTURES: readonly SchemaLifecycleFixtureV4[] = Object.freeze(
-  WORKSPACE_LIFECYCLE_FIXTURE_SOURCE.map((fixture): SchemaLifecycleFixtureV4 => {
+const WORKSPACE_LIFECYCLE_FIXTURES: readonly SchemaLifecycleFixture[] = Object.freeze(
+  WORKSPACE_LIFECYCLE_FIXTURE_SOURCE.map((fixture): SchemaLifecycleFixture => {
     const definition = WORKSPACE_LIFECYCLE_DEFINITIONS.find((definition) =>
       definition.browserSchema === fixture.schema || definition.portable?.schema === fixture.schema);
     if (!definition) throw new TypeError(`Workspace fixture ${fixture.id} has no collection owner.`);
@@ -1099,7 +1099,7 @@ function workspaceShape(
   definition: WorkspaceLifecycleDefinition,
   plane: 'browser' | 'portable',
   lifecycle: 'current' | 'historical',
-): SchemaLifecycleShapeV4 {
+): SchemaLifecycleShape {
   const portable = plane === 'portable' ? definition.portable : null;
   const descriptor = portable?.descriptor ?? definition.browserDescriptor;
   const schema = portable?.schema ?? definition.browserSchema;
@@ -1132,7 +1132,7 @@ function workspaceShape(
   };
 }
 
-const WORKSPACE_LIFECYCLE_SHAPES: readonly SchemaLifecycleShapeV4[] = Object.freeze(
+const WORKSPACE_LIFECYCLE_SHAPES: readonly SchemaLifecycleShape[] = Object.freeze(
   WORKSPACE_LIFECYCLE_DEFINITIONS.flatMap((definition) => [
     ...(definition.browserDescriptor.supportedVersions.length > 1
       ? [workspaceShape(definition, 'browser', 'historical')]
@@ -1331,7 +1331,7 @@ const WORKSPACE_EDGE_POLICY = {
 
 function workspaceBrowserConsumer(
   definition: WorkspaceLifecycleDefinition,
-): SchemaLifecycleConsumerEdgeV4 {
+): SchemaLifecycleConsumerEdge {
   return {
     id: 'workspace.browser.' + definition.slug + '.read-write',
     plane: 'browser',
@@ -1370,7 +1370,7 @@ function workspaceBrowserConsumer(
 
 function workspacePortableConsumers(
   definition: WorkspaceLifecycleDefinition,
-): SchemaLifecycleConsumerEdgeV4[] {
+): SchemaLifecycleConsumerEdge[] {
   if (!definition.portable) return [];
   const portable = definition.portable;
   const importShapeIds = [
@@ -1430,7 +1430,7 @@ function workspacePortableConsumers(
   ];
 }
 
-const WORKSPACE_LIFECYCLE_CONSUMERS: readonly SchemaLifecycleConsumerEdgeV4[] = Object.freeze(
+const WORKSPACE_LIFECYCLE_CONSUMERS: readonly SchemaLifecycleConsumerEdge[] = Object.freeze(
   WORKSPACE_LIFECYCLE_DEFINITIONS.flatMap((definition) => [
     workspaceBrowserConsumer(definition),
     ...workspacePortableConsumers(definition),
@@ -1445,7 +1445,6 @@ export const WORKSPACE_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleFamil
   contracts: WORKSPACE_LIFECYCLE_CONTRACTS,
   fixtures: WORKSPACE_LIFECYCLE_FIXTURES,
   metadata: {
-    metadataVersion: 4,
     enforcement: 'declarative_only',
     shapes: WORKSPACE_LIFECYCLE_SHAPES,
     boundProfiles: WORKSPACE_LIFECYCLE_BOUNDS,

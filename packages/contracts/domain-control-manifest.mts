@@ -314,7 +314,6 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
     },
   ],
   metadata: {
-    metadataVersion: 2,
     enforcement: 'declarative_only',
     shapes: [
       ...SUPPORTED_DOMAIN_CONTROL_MANIFEST_INPUT_VERSIONS.map((version) => ({
@@ -777,6 +776,23 @@ export const DOMAIN_CONTROL_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
       },
     ],
     consumerEdges: [
+      {
+        id: 'domain-control.browser-build-input',
+        plane: 'browser',
+        operation: 'build-input',
+        acceptedContracts: [],
+        emittedContract: { schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, version: DOMAIN_CONTROL_MANIFEST_INPUT_VERSION },
+        shapeIds: [`domain-control.input.v${DOMAIN_CONTROL_MANIFEST_INPUT_VERSION}`],
+        boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.public-records.v2', 'domain-control.browser-profile.v1'],
+        hookIds: ['domain-control.browser.build-input'],
+        serialisationProfileId: null,
+        privacyProfileId: 'domain-control.manifest-sensitive.v1',
+        expiryPolicyId: 'domain-control.expiry.build-future.v1',
+        requestMode: 'none',
+        retentionEffect: 'none',
+        bindingState: 'declared_unenforced',
+        policyState: 'current',
+      },
       {
         id: 'domain-control.browser-export',
         plane: 'browser',

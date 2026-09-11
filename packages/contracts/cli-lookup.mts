@@ -160,7 +160,6 @@ export const CLI_LOOKUP_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
     },
   ],
   metadata: {
-    metadataVersion: 3,
     enforcement: 'declarative_only',
     shapes: [
       {

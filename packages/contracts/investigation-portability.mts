@@ -290,7 +290,6 @@ export const INVESTIGATION_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleF
   contracts: INVESTIGATION_CONTRACTS,
   fixtures: INVESTIGATION_FIXTURES,
   metadata: {
-    metadataVersion: 3,
     enforcement: 'declarative_only',
     shapes: INVESTIGATION_SHAPES,
     boundProfiles: [

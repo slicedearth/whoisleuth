@@ -1,7 +1,7 @@
 import { MAX_DOMAIN_NAME_LENGTH } from './domain-name.mts';
 import { defineSchemaCompatibility } from './schema-compatibility.mts';
 import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
-import type { SchemaLifecycleFamilyWithMetadataV4 } from './schema-lifecycle.mts';
+import type { SchemaLifecycleFamilyDefinition } from './schema-lifecycle.mts';
 
 export const CASE_CONTRACT_OWNER = 'packages/contracts/case-portability.mts';
 export const LATEST_PUBLIC_APPLICATION_VERSION = '2.3.0';
@@ -1836,7 +1836,6 @@ export const CASE_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily({
   ],
   fixtures: CASE_LIFECYCLE_FIXTURES,
   metadata: {
-    metadataVersion: 4 as const,
     enforcement: 'declarative_only',
     shapes: CASE_LIFECYCLE_SHAPES,
     boundProfiles: CASE_LIFECYCLE_BOUNDS,
@@ -1847,4 +1846,4 @@ export const CASE_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily({
     consumerEdges: CASE_LIFECYCLE_CONSUMERS,
     consumerRelationships: [],
   },
-} satisfies SchemaLifecycleFamilyWithMetadataV4);
+} satisfies SchemaLifecycleFamilyDefinition);
