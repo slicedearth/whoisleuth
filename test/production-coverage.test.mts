@@ -245,7 +245,7 @@ describe('production coverage policy', () => {
     });
   });
 
-  test('reports missing, measured, unknown and unowned inventory entries together', () => {
+  test('reports missing, unknown and unowned inventory entries together', () => {
     const report = parseProductionCoverage([
       lcovRecord('lib/measured.mts'), lcovRecord('lib/unknown.mts'),
     ].join('\n'));
@@ -261,7 +261,6 @@ describe('production coverage policy', () => {
         'exclusion owner is missing for lib/measured.mts',
         'exclusion owner is missing for lib/removed.mts',
         'measured unknown source files: lib/unknown.mts',
-        'exclusions are now measured and must be removed: lib/measured.mts',
         'unreviewed source omissions: lib/untested.mts',
       ]) assert.ok(error.message.includes(expected), expected);
       return true;
@@ -296,9 +295,9 @@ describe('production coverage policy', () => {
           `${underCovered} line coverage is 10.00%; required 95.00%`,
           `${underCovered} branch coverage is 12.50%; required 65.00%`,
           `${underCovered} function coverage is 20.00%; required 100.00%`,
-          `exclusions are now measured and must be removed: ${nowMeasured}`,
           `unreviewed source omissions: ${omitted}`,
         ]) assert.ok(result.stderr.includes(expected), expected);
+        assert.ok(!result.stderr.includes(nowMeasured), 'Measured browser-owned code is not an inventory failure.');
         return true;
       });
     } finally { await rm(directory, { recursive: true, force: true }); }
@@ -334,13 +333,39 @@ describe('production coverage policy', () => {
       () => validateProductionCoverageInventory(report, inventory, [], () => true),
       /unreviewed source omissions/u,
     );
-    assert.throws(
-      () => validateProductionCoverageInventory(report, inventory, [{ ...exclusion, source: 'cli/runner.mts' }], () => true),
-      /exclusions are now measured/u,
-    );
+    const measuredAdapter = parseProductionCoverage([
+      lcovRecord('lib/critical.mts'),
+      lcovRecord('cli/runner.mts'),
+      lcovRecord(exclusion.source),
+    ].join('\n'));
+    const measuredInventory = validateProductionCoverageInventory(measuredAdapter, inventory, [exclusion], () => true);
+    assert.equal(measuredInventory.sourceFiles, 3);
+    assert.equal(measuredInventory.measuredFiles, 3);
+    assert.equal(measuredInventory.excludedFiles, 0);
+    assert.equal(measuredInventory.exclusionsByCategory.browser_adapter, 0);
     assert.throws(
       () => validateProductionCoverageInventory(report, inventory, [exclusion], () => false),
       /exclusion owner is missing/u,
     );
+  });
+
+  test('a browser owner cannot excuse measured lines or bypass critical coverage thresholds', () => {
+    const report = parseProductionCoverage([
+      lcovRecord('lib/critical.mts', [10, 1, 8, 1, 5, 1]),
+      lcovRecord('cli/runner.mts', [10, 10, 8, 8, 5, 5]),
+    ].join('\n'));
+    const inventory = validateProductionCoverageInventory(report,
+      ['lib/critical.mts', 'cli/runner.mts'],
+      [{ source: 'lib/critical.mts', category: 'browser_adapter', owner: 'e2e/critical.spec.ts' }],
+      () => true);
+    assert.equal(inventory.excludedFiles, 0);
+    assert.equal(report.global.lines.hit, 11);
+    assert.equal(report.global.lines.found, 20);
+    assert.throws(() => validateProductionCoverage(report, FOCUSED_COVERAGE_POLICY), error => {
+      assert.ok(error instanceof Error);
+      assert.ok(error.message.includes('Global line coverage is 55.00%; required 80.00%'));
+      assert.ok(error.message.includes('lib/critical.mts line coverage is 10.00%; required 90.00%'));
+      return true;
+    });
   });
 });

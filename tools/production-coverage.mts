@@ -55,6 +55,9 @@ export type CoverageExclusion = Readonly<{
   owner: string;
 }>;
 
+// These are owners for files outside unit instrumentation, not instrumentation
+// filters. A file that becomes measured contributes normally to every coverage
+// threshold; its browser/framework owner can remain without a declaration edit.
 export const PRODUCTION_COVERAGE_EXCLUSIONS: readonly CoverageExclusion[] = Object.freeze([
   Object.freeze({ source: 'cli/runner-types.mts', category: 'type_only', owner: 'tsconfig.json' }),
   Object.freeze({ source: 'frontend/src/lib/analyst-review-state.ts', category: 'browser_adapter', owner: 'e2e/analyst-operations.spec.ts' }),
@@ -382,9 +385,8 @@ export function validateProductionCoverageInventory(
   const observed = new Set(report.records.map((record) => record.source));
   const unknown = [...observed].filter((source) => !inventorySet.has(source));
   if (unknown.length) problems.push(`Production coverage measured unknown source files: ${unknown.join(', ')}.`);
-  const stale = exclusions.filter((item) => observed.has(item.source));
-  if (stale.length) problems.push(`Production coverage exclusions are now measured and must be removed: ${stale.map((item) => item.source).join(', ')}.`);
-  const excluded = new Set(exclusionSources);
+  const unmeasuredExclusions = exclusions.filter((item) => !observed.has(item.source));
+  const excluded = new Set(unmeasuredExclusions.map((item) => item.source));
   const missing = inventory.filter((source) => !observed.has(source) && !excluded.has(source));
   if (missing.length) problems.push(`Production coverage has unreviewed source omissions: ${missing.join(', ')}.`);
   if (problems.length) throw new Error(problems.join('\n'));
@@ -395,11 +397,11 @@ export function validateProductionCoverageInventory(
     framework_entry: 0,
     executable_entry: 0,
   };
-  for (const exclusion of exclusions) categories[exclusion.category] += 1;
+  for (const exclusion of unmeasuredExclusions) categories[exclusion.category] += 1;
   return Object.freeze({
     sourceFiles: inventory.length,
     measuredFiles: report.records.length,
-    excludedFiles: exclusions.length,
+    excludedFiles: unmeasuredExclusions.length,
     exclusionsByCategory: Object.freeze(categories),
   });
 }
