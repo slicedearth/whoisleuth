@@ -94,6 +94,10 @@ sections use disclosures, while important unavailable or contradictory evidence
 remains visible. Tables and text remain the complete accessible review surface;
 charts are summaries only.
 
+Web & DNS includes the selected endpoint's IP RDAP record, separate from domain
+registration. Its summary names sources with partial, unavailable or unknown
+evidence.
+
 The evidence graph retains every supported relationship from the admitted
 Lookup evidence. Lenses, visual grouping and the searchable, paginated list
 change the view, not the retained data. Projection input coverage distinguishes
@@ -110,6 +114,10 @@ A full Deep domain result can include:
 - bounded technology, page-role and passive-posture indicators;
 - one observed public-address IP RDAP context; and
 - explicitly selected security.txt or provider results.
+
+Passive posture findings state the specific result. **Needs review** marks a
+missing control or a potential exposure; **Could not assess** means the required
+evidence was unavailable. Other findings are observations, not a safety verdict.
 
 Raw registration payloads, contacts, endpoints and provider records are not
 silently copied into compact browser stores. The deliberate raw view and full

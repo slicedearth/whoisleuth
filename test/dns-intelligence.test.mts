@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as dns } from 'node:dns';
+import { createSocket } from 'node:dgram';
+import { once } from 'node:events';
 import {
   collectDnsIntelligence,
   collectEffectiveCaaPolicy,
@@ -42,6 +44,64 @@ function resolvers(overrides: Partial<DnsResolvers> = {}): DnsResolvers {
     ...overrides,
   };
 }
+
+test('resolver MX metadata does not discard otherwise complete mail records', async () => {
+  const result = await collectDnsIntelligence('example.test', { resolvers: resolvers({
+    resolveMx: async () => [
+      { type: 'MX', priority: 20, exchange: 'MX2.EXAMPLE.TEST.' },
+      { type: 'MX', priority: 10, exchange: 'mx1.example.test' },
+    ],
+  }) });
+  assert.deepEqual(result.records.mx, [
+    { priority: 10, exchange: 'mx1.example.test' },
+    { priority: 20, exchange: 'mx2.example.test' },
+  ]);
+  assert.equal(result.status, 'success');
+  assert.equal(result.complete, true);
+  assert.equal(result.hasMx, true);
+  assert.equal(result.hasNullMx, false);
+  assert.deepEqual(result.diagnostics.mx, { status: 'success', truncated: false, discarded: 0 });
+});
+
+test('native MX resolver records retain their meaning through the collector', async (t) => {
+  // Exercise the supported runtime's real result shape against a loopback-only
+  // DNS fixture, rather than assuming which metadata its resolver returns.
+  const server = createSocket('udp4');
+  const resolver = new dns.Resolver({ timeout: 1000, tries: 1 });
+  let listening = false;
+  t.after(async () => {
+    resolver.cancel();
+    if (listening) await new Promise<void>((resolve) => server.close(resolve));
+  });
+  server.on('message', (query, remote) => {
+    const header = Buffer.alloc(12);
+    query.copy(header, 0, 0, 2);
+    header.writeUInt16BE(0x8180, 2);
+    header.writeUInt16BE(1, 4);
+    header.writeUInt16BE(1, 6);
+    const exchange = Buffer.from([2, ...Buffer.from('mx'), 7, ...Buffer.from('example'), 4, ...Buffer.from('test'), 0]);
+    const answer = Buffer.alloc(12);
+    answer.writeUInt16BE(0xc00c, 0);
+    answer.writeUInt16BE(15, 2);
+    answer.writeUInt16BE(1, 4);
+    answer.writeUInt32BE(60, 6);
+    answer.writeUInt16BE(exchange.length + 2, 10);
+    const question = query.subarray(12, query.indexOf(0, 12) + 5);
+    server.send(Buffer.concat([header, question, answer, Buffer.from([0, 10]), exchange]), remote.port, remote.address);
+  });
+  const ready = once(server, 'listening');
+  server.bind(0, '127.0.0.1');
+  await ready;
+  listening = true;
+  resolver.setServers([`127.0.0.1:${server.address().port}`]);
+  const result = await collectDnsIntelligence('example.test', { resolvers: resolvers({
+    resolveMx: (hostname) => resolver.resolveMx(hostname),
+  }) });
+  assert.deepEqual(result.records.mx, [{ priority: 10, exchange: 'mx.example.test' }]);
+  assert.equal(result.complete, true);
+  assert.equal(result.hasMx, true);
+  assert.equal(recordValue(result.diagnostics.mx).discarded, 0);
+});
 
 test('unusable DNS answers remain unknown through compact Bulk admission and retention', async () => {
   const result = await collectDnsIntelligence('example.test', { resolvers: resolvers({

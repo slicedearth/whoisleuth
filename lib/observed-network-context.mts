@@ -258,10 +258,12 @@ function networkSummary(parsedValue: unknown, family: 4 | 6) {
   const startAddress = publicAddress(parsed.startAddress, family);
   const endAddress = publicAddress(parsed.endAddress, family);
   const country = boundedString(parsed.country, 2);
-  const truncated = parsed.serverTruncated === true
-    || parsed.cidrsTruncated === true
-    || parsed.entitiesTruncated === true
-    || sourceCidrs.length > MAX_NETWORK_CIDRS;
+  const limitations = [
+    ...(parsed.serverTruncated === true ? ['The RDAP server declared that part of its response was truncated.'] : []),
+    ...(parsed.entitiesTruncated === true ? ['Some IP RDAP contact records or fields were omitted during bounded normalisation.'] : []),
+    ...(parsed.cidrsTruncated === true ? ['Some IP RDAP CIDR entries were invalid or exceeded the normalisation limit.'] : []),
+    ...(sourceCidrs.length > MAX_NETWORK_CIDRS ? ['The network CIDR summary reached its local retention limit.'] : []),
+  ];
   return {
     value: {
       handle: boundedString(parsed.handle, MAX_NAME_LENGTH),
@@ -274,8 +276,8 @@ function networkSummary(parsedValue: unknown, family: 4 | 6) {
       networkType: boundedString(parsed.networkType, 160),
       databaseUpdatedAt: isoTimestamp(lifecycle.databaseUpdatedDateIso || lifecycle.databaseUpdatedDate),
     },
-    truncated,
-    serverTruncated: parsed.serverTruncated === true,
+    truncated: limitations.length > 0,
+    limitations,
   };
 }
 
@@ -377,21 +379,25 @@ async function collectObservedNetworkContext(
       complete: !summary.truncated,
       truncated: summary.truncated,
     });
-    const partial = summary.truncated || routeProjection.truncated;
+    const incompleteReasons = [
+      ...summary.limitations,
+      ...(routeProjection.truncated ? [NETWORK_ABUSE_ROUTE_LIMITATION] : []),
+    ];
+    const partial = incompleteReasons.length > 0;
     return baseContext(selection, {
       status: partial ? 'partial' : 'success',
       observedAt: sourceObservedAt,
       durationMs,
       complete: !partial,
       truncated: partial,
-      detail: 'The selected public endpoint address was mapped to its separately attributed IP RDAP registration.',
+      detail: partial
+        ? `Network registration was retained, but the source record is incomplete. ${incompleteReasons[0]}`
+        : 'The selected public endpoint address was mapped to its separately attributed IP RDAP registration.',
       limitations: [
+        ...incompleteReasons,
         'This identifies the registered network for one point-in-time endpoint address, not a definitive origin host or hosting provider.',
         'CDNs, reverse proxies, load balancers, shared hosting, and location-dependent DNS can present different networks.',
         'Network registration is an investigative lead and does not prove control, ownership, intent, or maliciousness.',
-        ...(summary.serverTruncated ? ['The RDAP server declared that part of its response was truncated.'] : []),
-        ...(sourceCidrsWereCapped(parsed) ? ['The network CIDR summary reached its local retention limit.'] : []),
-        ...(routeProjection.truncated ? [NETWORK_ABUSE_ROUTE_LIMITATION] : []),
       ],
       diagnostics: {
         requestCount: 1,
@@ -417,11 +423,6 @@ async function collectObservedNetworkContext(
       rdap: attempts.length ? { endpoint: null, transportSecurity: null, httpStatus: null, fetchedAt: null, attempts } : null,
     });
   }
-}
-
-function sourceCidrsWereCapped(parsed: UnknownRecord): boolean {
-  return parsed.cidrsTruncated === true
-    || (Array.isArray(parsed.cidrs) && parsed.cidrs.length > MAX_NETWORK_CIDRS);
 }
 
 export {

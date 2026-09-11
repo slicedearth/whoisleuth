@@ -7,7 +7,7 @@ import { promises as dns } from 'node:dns';
 import * as net from 'node:net';
 
 import { createObservation } from '../packages/evidence/observation.mts';
-import { normalizeMxRecord } from '../packages/evidence/domain-control-runtime.mts';
+import { normalizeResolverMxRecord } from '../packages/evidence/domain-control-runtime.mts';
 import { isValidAsciiHostname } from './hostname.mts';
 import { isPrivateAddress } from './safe-fetch.mts';
 
@@ -215,7 +215,7 @@ function normaliseAuthorityValueSet(type: AuthorityRecordType, value: unknown) {
     }
     const source = record(item);
     if (type === 'MX') {
-      const mx = normalizeMxRecord(item);
+      const mx = normalizeResolverMxRecord(item);
       if (mx) return [`${mx.priority} ${mx.exchange}`];
       rejected += 1;
       return [];

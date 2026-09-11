@@ -555,6 +555,40 @@ describe('structured RDAP metadata', () => {
     assert.equal(complete.entitiesTruncated, false);
   });
 
+  test('distinguishes empty structured addresses from rejected address evidence', () => {
+    const cases: Array<{ value: unknown; truncated: boolean }> = [
+      { value: Array(7).fill(''), truncated: false },
+      { value: Array(7).fill('  '), truncated: false },
+      { value: ['', '', 'bad\naddress', '', '', '', ''], truncated: true },
+      { value: ['', '', 'x'.repeat(301), '', '', '', ''], truncated: true },
+      { value: ['', '', { unexpected: true }, '', '', '', ''], truncated: true },
+      { value: Array(33).fill(''), truncated: true },
+      { value: Array(7).fill('x'.repeat(200)), truncated: true },
+    ];
+    for (const { value, truncated } of cases) {
+      const source = {
+        entities: [{
+          handle: 'CONTACT-1', roles: ['registrant'],
+          vcardArray: ['vcard', [
+            ['fn', {}, 'text', 'Valid Name'],
+            ['adr', {}, 'text', value],
+          ]],
+        }],
+      };
+      const before = structuredClone(source);
+      for (const type of ['domain', 'ipv4', 'ipv6', 'asn'] as const) {
+        const parsed = parseFixture(type, source);
+        const entity = requiredValue(parsed.entitiesByRole.registrant?.[0]);
+        assert.equal(entity.name, 'Valid Name');
+        assert.equal(entity.truncated, truncated);
+        assert.equal(parsed.entitiesTruncated, truncated);
+        assert.equal(entity.address, null);
+        assert.deepEqual(entity.addresses, []);
+      }
+      assert.deepEqual(source, before);
+    }
+  });
+
   test('caps recursive entity traversal by depth and tolerates cyclic fixture objects', () => {
     const roles = ['registrar', 'registrant', 'administrative', 'technical', 'billing', 'abuse', 'noc', 'registrant'];
     type RecursiveEntityFixture = {

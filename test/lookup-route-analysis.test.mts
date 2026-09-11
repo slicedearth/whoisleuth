@@ -77,6 +77,25 @@ function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpRespon
 }
 
 describe('Lookup route analysis', () => {
+  test('keeps the network evidence family available without other web collectors', () => {
+    const base = response({ availability: {} });
+    const analyse = (result: LookupHttpResponse) => buildLookupRouteAnalysis({
+      result, lookupView: createLookupViewModel(result), profile: null,
+      task: 'general', completedLookupDepth: 'deep',
+    });
+    assert.equal(analyse(base).hasWebEvidence, false);
+    for (const status of ['success', 'partial', 'unsupported', 'not_found'] as const) {
+      const analysis = analyse({
+        ...base,
+        networkContext: { contextVersion: 1, source: 'ip_rdap', status },
+      });
+      assert.equal(analysis.hasWebEvidence, true);
+      const entry = analysis.evidenceCoverage.entries.find((item) => item.id === 'network-context');
+      assert.ok(entry);
+      assert.equal(entry.manualReviewSuggested, status === 'partial');
+    }
+  });
+
   test('builds the route evidence model from one normalized response view', () => {
     const result = response();
     const analysis = buildLookupRouteAnalysis({

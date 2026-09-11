@@ -113,6 +113,64 @@ describe('observed network context', () => {
     }
   });
 
+  test('empty contact-address slots do not make retained network evidence partial', async () => {
+    const parsed = requiredValue(parseRdap('ipv4', {
+      objectClassName: 'ip network', handle: 'EXAMPLE-NETWORK',
+      startAddress: '93.184.216.0', endAddress: '93.184.216.255',
+      cidr0_cidrs: [{ v4prefix: '93.184.216.0', length: 24 }],
+      entities: [{
+        roles: ['registrant'], vcardArray: ['vcard', [
+          ['fn', {}, 'text', 'Example Network Holder'],
+          ['adr', {}, 'text', Array(7).fill('')],
+        ]],
+        entities: [{
+          roles: ['abuse'], vcardArray: ['vcard', [
+            ['email', {}, 'text', 'abuse@network.example'],
+            ['adr', {}, 'text', Array(7).fill('')],
+          ]],
+        }],
+      }],
+    }));
+    let requests = 0;
+    const result = await collectObservedNetworkContext(availability(), {
+      fetchRdapRecord: async () => { requests += 1; return ipRdap({ parsed }); },
+      observedAt: () => OBSERVED_AT,
+    });
+    assert.equal(requests, 1);
+    assert.equal(result.status, 'success');
+    assert.equal(result.complete, true);
+    assert.equal(result.truncated, false);
+    assert.equal(recordValue(result.network).holder, 'Example Network Holder');
+    const routes = arrayValue(result.abuseRouting).map(recordValue);
+    assert.equal(routes.length, 1);
+    assert.equal(routes[0]?.contact, 'abuse@network.example');
+    assert.equal(routes[0]?.complete, true);
+    assert.equal(routes[0]?.truncated, false);
+    assert.doesNotMatch(result.limitations.join(' '), /omitted|retention limit|truncated/u);
+  });
+
+  test('identifies genuine contact and CIDR omissions without implying a request failure', async () => {
+    for (const [field, reason] of [
+      ['entitiesTruncated', /IP RDAP contact records or fields/u],
+      ['cidrsTruncated', /IP RDAP CIDR entries/u],
+    ] as const) {
+      const result = await collectObservedNetworkContext(availability(), {
+        fetchRdapRecord: async () => ipRdap({ parsed: { ...ipRdap().parsed, [field]: true } }),
+        observedAt: () => OBSERVED_AT,
+      });
+      assert.equal(result.status, 'partial');
+      assert.equal(result.complete, false);
+      assert.equal(result.truncated, true);
+      assert.match(result.detail, reason);
+      assert.match(result.limitations[0] ?? '', reason);
+      assert.doesNotMatch(result.limitations.join(' '), /server declared|CIDR summary reached/u);
+      assert.equal(recordValue(result.rdap).httpStatus, 200);
+      assert.equal(recordValue(result.network).holder, 'Example Network Holder');
+      assert.equal(recordValue(requiredValue(result.abuseRouting[0])).complete, false);
+      assert.equal(recordValue(requiredValue(result.abuseRouting[0])).truncated, true);
+    }
+  });
+
   test('does not mistake repeated fallback contacts for omitted routes', async () => {
     const emails = Array.from({ length: 6 }, (_, index) => `route-${index}@network.example`);
     const entity = { email: emails[0], emails: [...emails, emails[0]], phones: [] };

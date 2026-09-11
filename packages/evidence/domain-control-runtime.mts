@@ -197,6 +197,7 @@ function boundedDataArray(
 type DomainControlRecordKind = 'caa' | 'ds' | 'mx';
 
 const MX_RECORD_KEYS = new Set<string>(DOMAIN_CONTROL_MX_RECORD_KEYS);
+const RESOLVER_MX_RECORD_KEYS = new Set([...MX_RECORD_KEYS, 'type']);
 const CAA_RECORD_KEYS = new Set<string>(DOMAIN_CONTROL_CAA_RECORD_KEYS);
 const DS_RECORD_KEYS = new Set<string>(DOMAIN_CONTROL_DS_RECORD_KEYS);
 const DS_DIGEST_PATTERN = new RegExp(`^[a-f0-9]{${MIN_DOMAIN_CONTROL_DS_DIGEST_LENGTH},${MAX_DOMAIN_CONTROL_DS_DIGEST_LENGTH}}$`, 'u');
@@ -292,9 +293,10 @@ function canonicalIntegerAlias(
 
 type CanonicalMxParts = Readonly<{ priority: number | null; exchange: string }>;
 
-function mxRecordParts(value: unknown): CanonicalMxParts | null {
-  const item = structuredRecord(value, MX_RECORD_KEYS, 'Domain control MX record');
+function mxRecordParts(value: unknown, resolverRecord = false): CanonicalMxParts | null {
+  const item = structuredRecord(value, resolverRecord ? RESOLVER_MX_RECORD_KEYS : MX_RECORD_KEYS, 'Domain control MX record');
   if (item) {
+    if (resolverRecord && Object.hasOwn(item, 'type') && item.type !== 'MX') return null;
     const host = canonicalStringAlias(item, ['exchange', 'host', 'value'], (value) => value === '' ? '.' : exchange(value), 'Domain control MX host');
     const priority = canonicalIntegerAlias(item, ['priority', 'preference'], MAX_DOMAIN_CONTROL_MX_PRIORITY, 'Domain control MX priority');
     return host && priority !== null ? { priority, exchange: host } : null;
@@ -315,16 +317,25 @@ export function canonicalMxRecord(value: unknown): string {
   return !parts ? '' : parts.priority === null ? parts.exchange : `${parts.priority} ${parts.exchange}`;
 }
 
-/** Resolver records require an explicit preference; the root exchange is retained as '.'. */
-export function normalizeMxRecord(value: unknown): Readonly<{ priority: number; exchange: string }> | null {
+function completeMxRecord(value: unknown, resolverRecord: boolean): Readonly<{ priority: number; exchange: string }> | null {
   try {
-    const parts = mxRecordParts(value);
+    const parts = mxRecordParts(value, resolverRecord);
     return parts && parts.priority !== null
       ? { priority: parts.priority, exchange: parts.exchange } : null;
   } catch (error) {
     if (!(error instanceof TypeError)) throw error;
     return null;
   }
+}
+
+/** Complete canonical records require a preference and retain the root exchange as '.'. */
+export function normalizeMxRecord(value: unknown): Readonly<{ priority: number; exchange: string }> | null {
+  return completeMxRecord(value, false);
+}
+
+/** Accept the native resolver's optional record type without broadening import shapes. */
+export function normalizeResolverMxRecord(value: unknown): Readonly<{ priority: number; exchange: string }> | null {
+  return completeMxRecord(value, true);
 }
 
 function caaValue(value: unknown, tag: string): string {

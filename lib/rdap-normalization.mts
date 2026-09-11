@@ -181,8 +181,10 @@ function contactValuesTruncated(vcardArray: unknown): boolean {
       return rawPart.length > 300 || /[\u0000-\u001f\u007f]/u.test(rawPart) || rawPart.trim() !== '';
     });
     const retainedParts = parts.filter((part): part is string => part !== null);
+    // Empty structured components publish no address; they are not omitted
+    // evidence. Supplied non-blank values still pass every validation bound.
     if (rejectedNonBlankPart
-      || boundedString(retainedParts.join(', '), 1000) === null) return true;
+      || (retainedParts.length > 0 && boundedString(retainedParts.join(', '), 1000) === null)) return true;
   }
   return false;
 }

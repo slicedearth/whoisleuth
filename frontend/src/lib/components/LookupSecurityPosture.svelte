@@ -1,5 +1,6 @@
 <script lang="ts">
   import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
+  import { securityPostureReview, summarizeSecurityPostureReview } from '../../../../lib/website-security-posture.mts';
   type Finding = {
     id: string;
     category: string;
@@ -9,59 +10,51 @@
     detail: string;
     evidence: string[];
   };
-  type Summary = { observed: number; potentialExposure: number; observedAbsence: number; unavailable: number };
-
   let {
     status,
     complete,
-    summary,
     findings,
     limitations,
     initiallyExpanded = false,
   }: {
     status: string;
     complete: boolean;
-    summary: Summary;
     findings: Finding[];
     limitations: string[];
     initiallyExpanded?: boolean;
   } = $props();
 
-  function stateLabel(finding: Finding) {
-    if (finding.state === 'potential_exposure') return 'Review';
-    if (finding.state === 'observed_absence') return finding.tone === 'configured' ? 'No exposure observed' : 'Not observed';
-    if (finding.state === 'unavailable') return 'Unavailable';
-    return 'Observed';
-  }
+  const reviewSummary = $derived(summarizeSecurityPostureReview(findings));
 </script>
 
 <details class="security-posture-card evidence-card card" aria-labelledby="security-posture-title" open={initiallyExpanded}>
   <summary class="evidence-summary">
     <span class="evidence-summary-row">
-      <span class="evidence-summary-copy"><span class="eyebrow">Derived deep-scan analysis</span><span class="evidence-summary-title" id="security-posture-title" role="heading" aria-level="4">Passive security posture</span><span class="evidence-summary-detail">Observed {summary.observed} · Review {summary.potentialExposure} · Not observed {summary.observedAbsence} · Unavailable {summary.unavailable}</span></span>
+      <span class="evidence-summary-copy"><span class="eyebrow">Derived deep-scan analysis</span><span class="evidence-summary-title" id="security-posture-title" role="heading" aria-level="4">Passive security posture</span><span class="evidence-summary-detail">Needs review {reviewSummary.needsReview} · Other findings {reviewSummary.otherFindings} · Could not assess {reviewSummary.unavailable}</span></span>
       <span class="evidence-status {evidenceStatusTone(status, { complete })}">{status}</span>
     </span>
   </summary>
 
   <div class="evidence-body">
     <div class="posture-summary stat-grid" role="group" aria-label="Passive security posture summary">
-      <article><small>Observed</small><strong>{summary.observed}</strong></article>
-      <article class:review={summary.potentialExposure > 0}><small>Review</small><strong>{summary.potentialExposure}</strong></article>
-      <article><small>Not observed</small><strong>{summary.observedAbsence}</strong></article>
-      <article><small>Unavailable</small><strong>{summary.unavailable}</strong></article>
+      <article aria-label="Needs review" class:review={reviewSummary.needsReview > 0}><small>Needs review</small><strong>{reviewSummary.needsReview}</strong></article>
+      <article aria-label="Other findings"><small>Other findings</small><strong>{reviewSummary.otherFindings}</strong></article>
+      <article aria-label="Could not assess"><small>Could not assess</small><strong>{reviewSummary.unavailable}</strong></article>
     </div>
 
     <div class="posture-grid">
       {#each findings as finding}
-        <article class:review={finding.tone === 'review'} class:configured={finding.tone === 'configured'}>
+        {@const review = securityPostureReview(finding)}
+        <article class:review={review.kind === 'needsReview'} class:configured={review.kind === 'otherFindings' && finding.tone === 'configured'}>
           <div class="finding-head">
             <div><p>{finding.category}</p><h5>{finding.label}</h5></div>
-            <span class="state state-{finding.tone}">{stateLabel(finding)}</span>
+            {#if review.label}<span class="state" class:state-review={review.kind === 'needsReview'}>{review.label}</span>{/if}
           </div>
           <p class="detail">{finding.detail}</p>
           {#if finding.evidence.length}<p class="evidence">Evidence: {finding.evidence.join(', ')}</p>{/if}
         </article>
       {/each}
+      {#if !findings.length}<p class="detail">No posture findings were retained.</p>{/if}
     </div>
 
     {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
@@ -81,7 +74,6 @@
   .finding-head h5{margin:0;color:var(--text);font-size:var(--text-sm);overflow-wrap:anywhere}
   .state{flex:0 0 auto;padding:3px 7px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:.04em}
   .state-review{border-color:color-mix(in srgb,var(--amber) 45%,var(--border));color:var(--amber)}
-  .state-configured{border-color:color-mix(in srgb,var(--success) 40%,var(--border));color:var(--success)}
   .detail{margin:9px 0 0;font-size:var(--text-xs);line-height:1.5;overflow-wrap:anywhere}
   .evidence{margin:7px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}
   .callout{margin-top:12px}

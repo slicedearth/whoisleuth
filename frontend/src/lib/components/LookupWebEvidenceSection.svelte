@@ -66,6 +66,9 @@
 
   const availability = $derived(view.availability);
   const reverseDns = $derived(view.reverseDns);
+  const observedNetworkContext = $derived(view.observedNetworkContext);
+  const observedNetworkEndpoint = $derived(view.observedNetworkEndpoint);
+  const observedNetworkRdap = $derived(view.observedNetworkRdap);
   const dnsEvidence = $derived(view.dnsEvidence);
   const httpEvidence = $derived(view.httpEvidence);
   const tlsEvidence = $derived(view.tlsEvidence);
@@ -92,17 +95,20 @@
   const pageDisplay = $derived(analysis.pageDisplay);
   const brandMimicryReview = $derived(analysis.brandMimicryReview);
   const certificatePolicyReview = $derived(analysis.certificatePolicyReview);
-  const evidenceQualityMatrix = $derived(analysis.evidenceQualityMatrix);
+  const webSources = $derived(analysis.evidenceCoverage.entries.filter((entry) => entry.category === 'network' || entry.category === 'web'));
+  const limitedSources = $derived(webSources.filter((entry) => entry.manualReviewSuggested));
 </script>
 
 <section class="result-section family-web" id="web-evidence" aria-labelledby="web-evidence-title">
   <h3 id="web-evidence-title">{result?.type === 'domain' ? 'Web and DNS evidence' : 'DNS evidence'}</h3>
   <LookupFamilySummary
     label={result?.type === 'domain' ? 'Web and DNS evidence' : 'DNS evidence'}
-    description="Review point-in-time DNS, HTTP, TLS, page identity, technology, and passive posture evidence without merging their source states."
+    description={limitedSources.length
+      ? `Limited ${limitedSources.length === 1 ? 'source' : 'sources'}: ${limitedSources.map((entry) => `${entry.label} (${entry.statusLabel.toLowerCase()})`).join(', ')}.`
+      : 'Review point-in-time network registration, DNS, HTTP, TLS, page identity, technology and passive posture evidence.'}
     metrics={[
-      `${evidenceQualityMatrix.entries.filter((entry) => ['network', 'web'].includes(entry.category.toLowerCase())).length} source records`,
-      `${evidenceQualityMatrix.entries.filter((entry) => ['network', 'web'].includes(entry.category.toLowerCase()) && entry.state !== 'complete').length} limited`,
+      `${webSources.length} source records`,
+      `${limitedSources.length} limited`,
     ]}
     {expanded}
     {onpreload}
@@ -110,6 +116,26 @@
     {onhide}
   />
   {#if expanded}
+    {#if observedNetworkContext.contextVersion === 1}
+      <div class="evidence-component" id="evidence-network"><DeferredSurface
+        load={() => import('$lib/components/LookupNetworkContext.svelte')}
+        loadingLabel="Loading observed network context…"
+        unavailableLabel="Observed network context could not be loaded."
+        {onready}
+        props={{
+          status: statusLabel(boundedTechnologyText(observedNetworkContext.status || 'unsupported', 40)),
+          detail: boundedTechnologyText(observedNetworkContext.detail || 'Observed network context was unavailable.', 300),
+          address: boundedTechnologyText(observedNetworkEndpoint.address, 64),
+          addressSource: pageDisplay.observedNetworkSourceLabel,
+          rdapEndpoint: boundedTechnologyText(observedNetworkRdap.endpoint, 2048),
+          httpStatus: observedNetworkRdap.httpStatus ? String(observedNetworkRdap.httpStatus) : '',
+          fetchedAt: dateTimeAttribute(observedNetworkRdap.fetchedAt) || '',
+          rows: pageDisplay.observedNetworkRows,
+          limitations: pageDisplay.observedNetworkLimitations,
+        }}
+      /></div>
+    {/if}
+
     {#if sslbl.sslblVersion === 1 && sslbl.verdict === 'listed'}
       <aside class="sslbl-review-lead" aria-labelledby="sslbl-review-lead-title">
         <div>
@@ -235,7 +261,7 @@
         loadingLabel="Loading passive posture evidence…"
         unavailableLabel="Passive posture evidence could not be loaded."
         {onready}
-        props={{status: statusLabel(show(securityPosture.status)), complete: Boolean(securityPosture.complete), summary: pageDisplay.securityPostureSummary, findings: pageDisplay.securityPostureFindings, limitations: pageDisplay.securityPostureLimitations}}
+        props={{status: statusLabel(show(securityPosture.status)), complete: Boolean(securityPosture.complete), findings: pageDisplay.securityPostureFindings, limitations: pageDisplay.securityPostureLimitations}}
       /></div>
     {/if}
 

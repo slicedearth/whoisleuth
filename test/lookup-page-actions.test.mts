@@ -100,8 +100,9 @@ describe('lookup page actions', () => {
 
   test('maps bounded source-map anchors to the evidence family that renders them', () => {
     assert.equal(lookupEvidenceFamilyForHref('#evidence-registry'), 'registry');
-    assert.equal(lookupEvidenceFamilyForHref('#evidence-network'), 'registry');
     for (const href of [
+      '#evidence-network',
+      '#evidence-network-context',
       '#evidence-dns',
       '#evidence-reverse-dns',
       '#evidence-http',

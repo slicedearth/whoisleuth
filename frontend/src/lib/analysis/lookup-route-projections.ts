@@ -172,6 +172,7 @@ export function hasLookupWebEvidence(
   pageComparison: unknown,
 ): boolean {
   const {
+    observedNetworkContext,
     reverseDns,
     dnsEvidence,
     httpEvidence,
@@ -186,7 +187,8 @@ export function hasLookupWebEvidence(
     securityPosture,
     securityTxt,
   } = lookupView;
-  return reverseDns.source === 'reverse_dns'
+  return observedNetworkContext.contextVersion === 1
+    || reverseDns.source === 'reverse_dns'
     || dnsEvidence.source === 'dns'
     || httpEvidence.source === 'http'
     || tlsEvidence.source === 'tls'

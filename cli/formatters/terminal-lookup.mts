@@ -1,6 +1,7 @@
 import { registryAccessProfileLabel } from '../registry-access.mts';
 import { appendTechnologyLines } from './terminal-technology.mts';
 import { appendDeliveryMetadataLines, appendPublicationMetadataLines } from './terminal-metadata.mts';
+import { securityPostureReview, summarizeSecurityPostureReview } from '../../lib/website-security-posture.mts';
 import {
   appendSection,
   boundedTerminalComponent,
@@ -468,7 +469,7 @@ function formatTerminalLookup(
     const technology = terminalRecord(availability.technologyProfile);
     const browserLibraries = terminalRecord(technology.browserLibraryProfile);
     const posture = terminalRecord(availability.securityPosture);
-    const postureSummary = terminalRecord(posture.summary);
+    const postureReview = summarizeSecurityPostureReview(posture.findings);
     const pageIdentity = terminalRecord(availability.pageIdentity);
     const pageRole = terminalRecord(availability.pageRoleProfile);
     const clientBehavior = terminalRecord(availability.clientBehaviorProfile);
@@ -562,16 +563,15 @@ function formatTerminalLookup(
     });
     if (posture.status || posture.source === 'derived') {
       websiteLines.push(`Posture        ${titleCase(posture.status)}`);
-      if (detail !== 'summary' && Object.keys(postureSummary).length) websiteLines.push(
-        `Posture counts ${terminalCount(postureSummary.observed)} observed · `
-        + `${terminalCount(postureSummary.potentialExposure)} potential exposure · `
-        + `${terminalCount(postureSummary.observedAbsence)} observed absence · `
-        + `${terminalCount(postureSummary.unavailable)} unavailable`,
+      if (detail !== 'summary' && Array.isArray(posture.findings)) websiteLines.push(
+        `Posture checks Needs review ${postureReview.needsReview} · `
+        + `Other findings ${postureReview.otherFindings} · `
+        + `Could not assess ${postureReview.unavailable}`,
       );
       if (detail === 'verbose' && positiveSourceStatus(posture.status)) {
         const findings = boundedFindingLabels(posture.findings, (finding) => {
-          const state = finding.state ? ` (${titleCase(finding.state)})` : '';
-          return `${safeTerminalValue(finding.label, 'Unlabelled finding')}${state}`;
+          const review = securityPostureReview(finding);
+          return `${safeTerminalValue(finding.label, 'Unlabelled finding')}${review.label ? ` (${review.label})` : ''}`;
         });
         if (findings) websiteLines.push(`Posture labels ${findings}`);
       }

@@ -29,6 +29,16 @@ const REGISTRY = {
 };
 
 describe('DNS delegation health', () => {
+  test('native authority MX metadata does not hide matching record values', () => {
+    assert.deepEqual(normaliseAuthorityValues('MX', [
+      { type: 'MX', priority: 10, exchange: 'mx.example.test' },
+      { type: 'MX', priority: 0, exchange: '' },
+    ]), ['0 .', '10 mx.example.test']);
+    assert.deepEqual(normaliseAuthorityValues('MX', [
+      { type: 'TXT', priority: 10, exchange: 'mx.example.test' },
+    ]), []);
+  });
+
   test('retains null MX through the same record normaliser as other control projections', () => {
     assert.deepEqual(normaliseAuthorityValues('MX', [{ priority: 0, exchange: '' }, { priority: 0, exchange: '.' }]), ['0 .']);
     assert.deepEqual(normaliseAuthorityValues('MX', [{ priority: false, exchange: '.' }]), []);

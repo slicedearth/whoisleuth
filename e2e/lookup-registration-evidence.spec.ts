@@ -496,6 +496,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
 
   await page.locator('#query').fill('registrar-source.example');
   await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.getByRole('button', { name: 'Expand Web and DNS evidence' })).toBeVisible();
   await expandLookupFamilies(page);
 
   const registrationSummary = page.getByRole('button', { name: 'Collapse Registration evidence' });
@@ -601,7 +602,26 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await section.getByText('Published contacts · 1 role').click();
   await expect(section.getByText('Email: abuse@registrar.example')).toBeVisible();
 
-  const network = page.locator('.network-context');
+  const web = page.locator('#web-evidence');
+  const network = web.locator('.network-context');
+  await expect(network).toHaveCount(1);
+  await expect(page.locator('#registry .network-context')).toHaveCount(0);
+  await expect(web.locator('.family-summary .description')).not.toContainText('Observed network context');
+  await page.getByRole('tablist', { name: 'Relationship and history view' })
+    .getByRole('tab', { name: /^Evidence/ }).click();
+  const networkSource = page.getByRole('list', { name: 'Evidence item status' }).locator('a[href="#evidence-network"]');
+  await expect(networkSource).toHaveCount(1);
+  await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
+  await expect(page.locator('#evidence-network')).toHaveCount(0);
+  await networkSource.focus();
+  await networkSource.press('Enter');
+  await expect(page).toHaveURL(/#evidence-network$/);
+  await expect(page.locator('#evidence-network')).toBeInViewport();
+  await page.getByRole('button', { name: 'Collapse Web and DNS evidence' }).click();
+  await expect(page.locator('#evidence-network')).toHaveCount(0);
+  await page.evaluate(() => { window.location.hash = '#evidence-network-context'; });
+  await expect(page).toHaveURL(/#evidence-network$/);
+  await expect(page.locator('#evidence-network')).toBeInViewport();
   await expect(network).not.toHaveAttribute('open', '');
   await expect(network.getByRole('heading', { name: 'Observed network context' })).toBeVisible();
   await expect(network.getByText('93.184.216.34', { exact: true })).toBeHidden();

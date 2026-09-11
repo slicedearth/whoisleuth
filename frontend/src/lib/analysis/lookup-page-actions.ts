@@ -19,10 +19,10 @@ export type LookupEvidenceFamilyId =
 
 const REGISTRY_EVIDENCE_TARGETS = new Set([
   '#evidence-registry',
-  '#evidence-network',
 ]);
 const WEB_EVIDENCE_TARGETS = new Set([
   '#web-evidence',
+  '#evidence-network',
   '#evidence-dns',
   '#evidence-reverse-dns',
   '#evidence-http',

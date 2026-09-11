@@ -7,7 +7,7 @@ import { promises as dns } from 'node:dns';
 import * as net from 'node:net';
 
 import { classifyMxRecords } from './dns-mx.mts';
-import { normalizeMxRecord } from '../packages/evidence/domain-control-runtime.mts';
+import { normalizeResolverMxRecord } from '../packages/evidence/domain-control-runtime.mts';
 import {
   collectDnsDelegationHealth,
   skippedDnsDelegationHealth,
@@ -226,7 +226,7 @@ function normalizeMx(records: unknown): NormalizedRecords<MxRecord> {
   const byKey = new Map<string, MxRecord>();
   let discarded = Array.isArray(records) ? 0 : 1;
   for (const record of Array.isArray(records) ? records : []) {
-    const value = normalizeMxRecord(record);
+    const value = normalizeResolverMxRecord(record);
     if (!value) { discarded += 1; continue; }
     const { priority } = value;
     const exchange = value.exchange === '.' ? '' : value.exchange;

@@ -34,11 +34,9 @@
   } from '$lib/analysis/lookup-response.ts';
   import {
     boundedTechnologyText,
-    dateTimeAttribute,
     formatDate,
     records,
     show,
-    statusLabel,
     stringList,
   } from '$lib/analysis/lookup-display-model.ts';
   import { buildLookupRouteAnalysis } from '$lib/analysis/lookup-route-analysis.ts';
@@ -173,8 +171,6 @@
   const registrarStanding=$derived(lookupView.registrarStanding);
   const reverseDns=$derived(lookupView.reverseDns);
   const observedNetworkContext=$derived(lookupView.observedNetworkContext);
-  const observedNetworkEndpoint=$derived(lookupView.observedNetworkEndpoint);
-  const observedNetworkRdap=$derived(lookupView.observedNetworkRdap);
   const securityTxt=$derived(lookupView.securityTxt);
   const sslbl=$derived(lookupView.sslbl);
   const threatIntelligenceProviders=$derived(lookupView.threatIntelligenceProviders);
@@ -456,6 +452,7 @@
   function preloadLookupSection(sectionId:string){
     const loads:Array<Promise<unknown>>=[];
     if(sectionId==='web-evidence'){
+      if(observedNetworkContext.contextVersion===1)loads.push(import('$lib/components/LookupNetworkContext.svelte'));
       if(result?.type==='domain')loads.push(import('$lib/components/WebsiteSnapshotManager.svelte'));
       if(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns')loads.push(import('$lib/components/LookupDnsEvidence.svelte'));
       if(dnsEvidence.source==='dns'&&serviceDependencyReview)loads.push(import('$lib/components/LookupServiceDependencyReview.svelte'));
@@ -475,7 +472,6 @@
       if(registryAccess.suffix)loads.push(import('$lib/components/RegistryAccessNotice.svelte'));
       loads.push(import('$lib/components/LookupRegistrySources.svelte'));
       if(result?.type==='domain'&&Array.isArray(rdapParsed.redactions)&&rdapParsed.redactions.length)loads.push(import('$lib/components/RegistrationDisclosurePlanner.svelte'));
-      if(observedNetworkContext.contextVersion===1)loads.push(import('$lib/components/LookupNetworkContext.svelte'));
     }else if(sectionId==='relationships-history'){
       loads.push(import('$lib/components/LookupVisualWorkspace.svelte'));
     }else if(sectionId==='source-quality'){
@@ -956,15 +952,6 @@
         /></div>
       {/if}
 
-      {#if observedNetworkContext.contextVersion===1}
-        <div class="evidence-component" id="evidence-network"><DeferredSurface
-          load={()=>import('$lib/components/LookupNetworkContext.svelte')}
-          loadingLabel="Loading observed network context…"
-          unavailableLabel="Observed network context could not be loaded."
-          onready={restoreDeferredLookupTarget}
-          props={{status:statusLabel(boundedTechnologyText(observedNetworkContext.status||'unsupported',40)),detail:boundedTechnologyText(observedNetworkContext.detail||'Observed network context was unavailable.',300),address:boundedTechnologyText(observedNetworkEndpoint.address,64),addressSource:pageDisplay.observedNetworkSourceLabel,rdapEndpoint:boundedTechnologyText(observedNetworkRdap.endpoint,2048),httpStatus:observedNetworkRdap.httpStatus?String(observedNetworkRdap.httpStatus):'',fetchedAt:dateTimeAttribute(observedNetworkRdap.fetchedAt)||'',rows:pageDisplay.observedNetworkRows,limitations:pageDisplay.observedNetworkLimitations}}
-        /></div>
-      {/if}
       {/if}
     </section>
     {/snippet}

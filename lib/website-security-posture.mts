@@ -33,6 +33,32 @@ type WebsiteSecurityPostureInput = {
   observedAt?: unknown;
 };
 
+type PostureReview = Readonly<{
+  kind: 'needsReview' | 'otherFindings' | 'unavailable';
+  label: 'Needs review' | 'Could not assess' | null;
+}>;
+
+// Observation state and review significance are separate. These presentation
+// projections leave retained findings, wire counts and model versions intact.
+function securityPostureReview(value: unknown): PostureReview {
+  const item = record(value);
+  if (item.state !== 'observed' && item.state !== 'potential_exposure' && item.state !== 'observed_absence') {
+    return { kind: 'unavailable', label: 'Could not assess' };
+  }
+  if (item.state === 'potential_exposure' || item.tone === 'review') {
+    return { kind: 'needsReview', label: 'Needs review' };
+  }
+  return { kind: 'otherFindings', label: null };
+}
+
+function summarizeSecurityPostureReview(value: unknown) {
+  const counts = { needsReview: 0, otherFindings: 0, unavailable: 0 };
+  for (const item of (Array.isArray(value) ? value : []).slice(0, MAX_SECURITY_POSTURE_FINDINGS)) {
+    counts[securityPostureReview(item).kind] += 1;
+  }
+  return counts;
+}
+
 const MAX_RETAINED_ORIGINS = 30;
 
 function record(value: unknown): UnknownRecord {
@@ -520,6 +546,8 @@ export {
   MAX_SECURITY_POSTURE_FINDINGS,
   WEBSITE_SECURITY_POSTURE_VERSION,
   analyzeWebsiteSecurityPosture,
+  securityPostureReview,
+  summarizeSecurityPostureReview,
 };
 
 export type {
@@ -527,5 +555,6 @@ export type {
   PostureFinding,
   PostureState,
   PostureTone,
+  PostureReview,
   WebsiteSecurityPostureInput,
 };

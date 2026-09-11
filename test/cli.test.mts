@@ -1210,7 +1210,8 @@ test('terminal deep lookup summarizes current website evidence without exposing 
         summary: { observed: 3, potentialExposure: 1, observedAbsence: 2, unavailable: 1 },
         findings: Array.from({ length: 6 }, (_, index) => ({
           label: `Posture label ${index + 1}`,
-          state: index % 2 ? 'observed' : 'unavailable',
+          state: index === 3 ? 'observed_absence' : index % 2 ? 'observed' : 'unavailable',
+          tone: index === 3 ? 'review' : 'configured',
           detail: 'private-posture-detail-must-not-render',
         })),
       },
@@ -1279,13 +1280,16 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.match(terminal, /Example Commerce \(commerce platform, high signature strength\)/);
   assert.match(terminal, /JS libraries\s+Success · 2 apparent · 1 with catalogue advisory match/);
   assert.match(terminal, /Posture\s+Partial/);
-  assert.match(terminal, /Posture counts 3 observed · 1 potential exposure · 2 observed absence · 1 unavailable/);
+  assert.match(terminal, /Posture checks Needs review 1 · Other findings 2 · Could not assess 3/);
   assert.match(verbose, /Alt names\s+example\.com, www\.example\.com, 192\.0\.2\.44/);
   assert.match(verbose, /Purposes\s+TLS Web Server Authentication/);
   assert.match(verbose, /Findings\s+Wildcard certificate/);
   assert.match(verbose, /Snapshot date\s+2026-07-23T00:00:00\.000Z/);
   assert.match(verbose, /SHA-1\s+abababababababababababababababababababab/);
   assert.match(verbose, /Posture labels\s+.*\+1 more/);
+  assert.match(verbose, /Posture label 4 \(Needs review\)/);
+  assert.match(verbose, /Posture label 1 \(Could not assess\)/);
+  assert.doesNotMatch(verbose, /Posture label \d \((?:Observed|Observed Absence|Not observed)\)/);
   assert.match(verbose, /Client labels\s+.*\+2 more/);
   assert.match(verbose, /Image alt\s+missing 1 · empty 0 · non-empty 1 · unclassified 0/);
   assert.match(verbose, /Cache timing\s+max-age 3600s · s-maxage 120s · Age 45s/);
