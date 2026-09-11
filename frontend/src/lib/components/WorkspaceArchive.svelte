@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import BrowserWorkspaceIndicator from '$lib/components/BrowserWorkspaceIndicator.svelte';
+  import BrowserStorageHealth from './BrowserStorageHealth.svelte';
   import { currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE } from '$lib/browser-workspace-context.ts';
   import { boundedJsonLimitsForBytes, parseBoundedJson } from '$lib/bounded-json';
   import {
@@ -35,6 +36,7 @@
   let importHeading=$state<HTMLHeadingElement>();
   let importStatus=$state<HTMLParagraphElement>();
   let defaultWorkspace=$state(true);
+  let preparedAt=$state<string|null>(null);
   onMount(() => { defaultWorkspace=currentBrowserWorkspaceId()===DEFAULT_BROWSER_WORKSPACE; });
 
   function selected(id:string){return selectedIds.includes(id);}
@@ -64,7 +66,8 @@
     try{
       const output=await createWorkspaceArchiveDownload();
       downloadFile(output);
-      message=`Downloaded an unencrypted workspace backup with ${output.archive.manifest.sectionCount} verified data sections.`;
+      preparedAt=new Date().toISOString();
+      message=`Prepared an unencrypted workspace backup with ${output.archive.manifest.sectionCount} verified data sections. Check the downloaded file.`;
     }catch(cause){message=cause instanceof Error?cause.message:'Could not create the workspace archive.';}
     finally{busy=false;}
   }
@@ -76,7 +79,8 @@
       const output=await createEncryptedWorkspaceArchiveDownload(exportPassphrase);
       downloadFile(output);
       showEncryptionForm=false;
-      message=`Downloaded an encrypted workspace backup with ${output.archive.manifest.sectionCount} verified data sections. Keep the passphrase separately because it cannot be recovered.`;
+      preparedAt=new Date().toISOString();
+      message=`Prepared an encrypted workspace backup with ${output.archive.manifest.sectionCount} verified data sections. Check the downloaded file and keep its passphrase separately.`;
     }catch(cause){message=cause instanceof Error?cause.message:'Could not encrypt the workspace archive.';}
     finally{
       exportPassphrase='';
@@ -180,6 +184,7 @@
     </div>
   </header>
   <BrowserWorkspaceIndicator destination />
+  {#if !importOnly}<BrowserStorageHealth {preparedAt} />{/if}
 
   {#if showEncryptionForm}
     <form id="workspace-encryption-form" class="encryption-form" onsubmit={(event)=>{event.preventDefault();void downloadEncrypted();}}>
@@ -219,7 +224,7 @@
     </form>
   {/if}
 
-  <p class="privacy-note">Backups can include case notes and other analyst-owned records. Encrypted downloads protect the file while it is locked, but not this browser while the Console is open. Sessions, passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab state, and unrelated browser storage are excluded.</p>
+  <p class="privacy-note">Backups can include case notes and other analyst-owned records. Encrypted downloads protect the file while it is locked, but not this browser while the Console is open. Unfinished Case forms, sessions, passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab state, and unrelated browser storage are excluded.</p>
   {#if !importOnly}<details class="archive-details">
     <summary>How workspace backups work</summary>
     <p>Each backup uses a versioned manifest and a SHA-256 checksum for every data section. WHOISleuth checks its format, size, supported versions, and integrity before showing a merge preview. Existing work follows each data type's normal merge rules, and records missing from the backup are retained.</p>

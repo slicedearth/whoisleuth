@@ -7,6 +7,8 @@ import { downloadEncryptedWorkspaceArchive } from './workspace-backup';
 import { createCase } from '../packages/cases/case-model.mts';
 import { buildWorkspaceArchive, readWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
 import { decryptWorkspaceArchive, encryptWorkspaceArchive } from '../packages/workspace/workspace-archive-crypto.mts';
+import { createCase as createCaseThroughForm, openCaseResponseWorkspace } from './case-test-fixtures';
+import { openCaseSection } from './console-navigation';
 
 const WORKSPACE_PASSWORD = '<synthetic workspace fixture>';
 const BACKUP_PASSWORD = '<separate archive fixture>';
@@ -49,6 +51,30 @@ async function storedBytes(page: Page, databaseName: string) {
     } finally { db.close(); }
   }, databaseName);
 }
+
+test('unfinished Case forms use the encrypted workspace and remain outside its portable backup', async ({ page }) => {
+  await page.goto('/dashboard');
+  const row = await createEncrypted(page, 'Encrypted draft fixture'); await unlock(page, row.name);
+  await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
+  await createCaseThroughForm(page, 'encrypted-draft.example');
+  await openCaseResponseWorkspace(page); await openCaseSection(page, 'Evidence');
+  let details = page.locator('details').filter({ has: page.getByText('Pin an observed fact', { exact: true }) });
+  if (await details.getAttribute('open') === null) await details.locator(':scope > summary').click();
+  await details.getByLabel('Label', { exact: true }).fill('Protected unfinished fixture');
+  await details.getByLabel('Fact', { exact: true }).fill('This recovery-only sentence must not enter a backup.');
+  await expect(details.getByRole('status')).toContainText('Draft saved in this workspace');
+  expect(JSON.stringify(await storedBytes(page, namedDatabase(row.id)))).not.toContain('recovery-only sentence');
+  await page.reload(); await unlock(page, row.name);
+  await openCaseResponseWorkspace(page); await openCaseSection(page, 'Evidence');
+  details = page.locator('details').filter({ has: page.getByText('Pin an observed fact', { exact: true }) });
+  if (await details.getAttribute('open') === null) await details.locator(':scope > summary').click();
+  await details.getByText('1 saved draft for this form', { exact: true }).click();
+  await details.getByRole('button', { name: 'Restore draft', exact: true }).click();
+  await expect(details.getByLabel('Fact', { exact: true })).toHaveValue('This recovery-only sentence must not enter a backup.');
+  await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Dashboard', exact: true }).click();
+  const { content } = await downloadEncryptedWorkspaceArchive(page, BACKUP_PASSWORD);
+  expect(JSON.stringify(await decryptWorkspaceArchive(JSON.parse(content), BACKUP_PASSWORD))).not.toContain('recovery-only sentence');
+});
 
 test('encrypted workspace stays locked across reloads and supports a separately encrypted backup round trip', async ({ page, context }) => {
   const unexpected: string[] = [];

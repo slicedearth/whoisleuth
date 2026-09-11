@@ -23,15 +23,19 @@ export type LocalDataRecord = Readonly<{
   value: unknown;
 }>;
 
-export type LocalDataCollectionDefinition<T> = Readonly<{
+type LocalDataCollectionMetadata = Readonly<{
   id: string;
   label: string;
   legacyKey: string;
+  legacyRollback?: boolean;
   schemaVersion: number;
   minimumReadableVersion?: number;
   acceptsUnversionedLegacy?: boolean;
   maximumBytes: number;
   maximumRecords: number;
+}>;
+
+export type LocalDataCollectionDefinition<T> = LocalDataCollectionMetadata & Readonly<{
   empty: () => T;
   acceptLegacyRoot: (raw: unknown) => boolean;
   normalize: (raw: unknown) => T;
@@ -47,15 +51,7 @@ export type LocalDataCollectionDefinition<T> = Readonly<{
 // document type in one array. Method syntax keeps those parameters correlated
 // at the concrete definition while the provider treats mixed documents as
 // unknown until the owning definition normalizes them.
-export type AnyLocalDataCollectionDefinition = Readonly<{
-  id: string;
-  label: string;
-  legacyKey: string;
-  schemaVersion: number;
-  minimumReadableVersion?: number;
-  acceptsUnversionedLegacy?: boolean;
-  maximumBytes: number;
-  maximumRecords: number;
+export type AnyLocalDataCollectionDefinition = LocalDataCollectionMetadata & Readonly<{
   empty(): unknown;
   acceptLegacyRoot(raw: unknown): boolean;
   normalize(raw: unknown): unknown;
@@ -415,7 +411,7 @@ function readBoundedStoredRecords<T>(
   }), timeoutMs);
 }
 
-function normalizeDefinition<T>(definition: LocalDataCollectionDefinition<T>): LocalDataCollectionDefinition<T> {
+export function normalizeDefinition<T extends AnyLocalDataCollectionDefinition>(definition: T): T {
   boundedIdentifier(definition.id, 'Collection identifier', 64);
   boundedIdentifier(definition.label, 'Collection label', 100);
   boundedIdentifier(definition.legacyKey, 'Legacy storage key', 160);
@@ -430,6 +426,9 @@ function normalizeDefinition<T>(definition: LocalDataCollectionDefinition<T>): L
   }
   if (definition.acceptsUnversionedLegacy !== undefined && typeof definition.acceptsUnversionedLegacy !== 'boolean') {
     throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `${definition.label} has an invalid unversioned-data policy.`);
+  }
+  if (definition.legacyRollback !== undefined && typeof definition.legacyRollback !== 'boolean') {
+    throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `${definition.label} has an invalid legacy rollback policy.`);
   }
   if (!Number.isSafeInteger(definition.maximumBytes) || definition.maximumBytes < 1) {
     throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `${definition.label} has an invalid byte bound.`);
@@ -734,7 +733,7 @@ export class BrowserLocalDataProvider {
       requirePendingLocalDataUpdate(options.signal);
       this.#requireConfirmedCommitState();
       const snapshot = await this.#readSnapshot(definition);
-      const before = this.codec.digestCollection && snapshot.manifest.schemaVersion === definition.schemaVersion
+      const before = snapshot.manifest.schemaVersion === definition.schemaVersion
         ? definition.serialize(snapshot.document) : null;
       requirePendingLocalDataUpdate(options.signal);
       this.#requireConfirmedCommitState();
@@ -774,7 +773,7 @@ export class BrowserLocalDataProvider {
     for (let attempt = 1; attempt <= MAX_LOCAL_DATA_UPDATE_ATTEMPTS; attempt++) {
       this.#requireConfirmedCommitState();
       const snapshots = await this.#readSnapshots(definitions);
-      const before = snapshots.map((snapshot, index) => this.codec.digestCollection && snapshot.manifest.schemaVersion === definitions[index]!.schemaVersion
+      const before = snapshots.map((snapshot, index) => snapshot.manifest.schemaVersion === definitions[index]!.schemaVersion
         ? definitions[index]!.serialize(snapshot.document) : null);
       this.#requireConfirmedCommitState();
       const current = new Map<string, unknown>();
@@ -856,7 +855,8 @@ export class BrowserLocalDataProvider {
 
   async restoreLegacyCopies(definitions: readonly AnyLocalDataCollectionDefinition[]): Promise<LegacyRollbackCopyResult> {
     this.#assertDefinitionBatch(definitions);
-    definitions = [...definitions];
+    definitions = definitions.filter(definition => definition.legacyRollback !== false);
+    if (!definitions.length) return Object.freeze({ collectionCount: 0, serializedBytes: 0, keys: Object.freeze([]) });
     const documents = await this.readMany(definitions);
     const copies = definitions.map((definition) => {
       const serialized = definition.serialize(documents.get(definition.id));

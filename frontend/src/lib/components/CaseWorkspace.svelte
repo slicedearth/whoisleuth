@@ -1,11 +1,12 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { goto } from '$app/navigation';
+  import { beforeNavigate, goto } from '$app/navigation';
   import { onMount, tick, untrack } from 'svelte';
   import { parseBoundedJson } from '$lib/bounded-json';
   import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
   import { registerAnalystUndo } from '$lib/analyst-undo';
   import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
+  import { hasUnprotectedCaseDrafts } from '$lib/controllers/case-draft.svelte.ts';
   import { preloadBestEffort } from '$lib/idle-preload';
   import { readCaseNavigationContext, selectConsoleCase } from '$lib/console-workflow-state';
   import { monitorRouteKey, monitorRouteTarget } from '$lib/controllers/monitor-route-controller.ts';
@@ -59,6 +60,17 @@
   let guidedDomains = $state<string[]>([]);
   let guidedDomainsTruncated = $state(false);
   let mounted = false;
+  let navigationCancelled = false;
+  beforeNavigate(({ from, to, cancel, willUnload }) => {
+    navigationCancelled = false;
+    const sameCase = !willUnload && from?.url.pathname === to?.url.pathname
+      && from?.url.searchParams.get('case') && from.url.searchParams.get('case') === to?.url.searchParams.get('case');
+    if (!sameCase && hasUnprotectedCaseDrafts()
+      && (willUnload || !window.confirm('A Case form has not finished saving for recovery. Leave and lose any unprotected edits?'))) {
+      navigationCancelled = true;
+      cancel();
+    }
+  });
   const existingCaseDomains = $derived(new Set(cases.map((record) => record.domain)));
   const statusOrder = new Map(CASE_STATUSES.map((item, index) => [item.value, index]));
   const filteredCases = $derived.by(() => {
@@ -105,18 +117,11 @@
   }
   async function selectCase(record: CaseRecord) {
     selectionRevision.changed();
-    showCasePage(record);
-    expandedId = record.id;
-    selectConsoleCase(record.id);
-    tagDraft = caseTagDraft(record);
-    noteDraft = '';
     await navigateCase(record.id);
   }
   async function returnToList(previousId = expandedId) {
     selectionRevision.changed();
-    expandedId = '';
-    selectConsoleCase(null);
-    await goto(listHref, { noScroll: true, keepFocus: true });
+    if (!await navigateCaseUrl(listHref)) return;
     await tick();
     const target = document.getElementById(`case-head-${previousId}`) ?? document.getElementById('new-case');
     target?.scrollIntoView({ block: 'center' });
@@ -421,8 +426,16 @@
   }
   async function navigateCase(id: string, responseRequested = false) {
     const destination = `${caseWorkspaceHref(id)}${responseRequested ? '&response=1' : ''}`;
-    appliedRouteKey = monitorRouteKey(new URL(destination, page.url));
-    await goto(destination, { noScroll: true, keepFocus: true });
+    return navigateCaseUrl(destination);
+  }
+  async function navigateCaseUrl(destination: string): Promise<boolean> {
+    try {
+      await goto(destination, { noScroll: true, keepFocus: true });
+      return monitorRouteKey(page.url) === monitorRouteKey(new URL(destination, page.url));
+    } catch {
+      if (!navigationCancelled) caseMessage = 'Could not open the requested Case view. Your current form remains available.';
+      return false;
+    }
   }
   async function refreshCases() {
     const hadSnapshot = casesSourceState === 'ready';

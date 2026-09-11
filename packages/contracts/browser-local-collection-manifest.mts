@@ -47,6 +47,7 @@ import {
 } from './analyst-review-state-contract.mts';
 import { ANALYST_REVIEW_STATE_COMPATIBILITY } from './analyst-review-state.mts';
 import type { SchemaCompatibilityDescriptor } from './schema-compatibility.mts';
+import { CASE_DRAFT_COMPATIBILITY, MAX_CASE_DRAFT_RECORDS, MAX_CASE_DRAFT_STORE_BYTES } from './case-drafts.mts';
 
 export type BrowserLocalCollectionStaticDefinition = Readonly<{
   id: string;
@@ -80,6 +81,7 @@ function definition(value: Omit<BrowserLocalCollectionStaticDefinition, 'schemaV
 }
 
 export const BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID = Object.freeze({
+  case_drafts: definition({ id: 'case_drafts', label: 'Unfinished Case forms', compatibility: CASE_DRAFT_COMPATIBILITY, maximumBytes: MAX_CASE_DRAFT_STORE_BYTES, maximumRecords: MAX_CASE_DRAFT_RECORDS }),
   cases: definition({ id: 'cases', label: 'Cases', compatibility: CASE_BROWSER_COMPATIBILITY, maximumBytes: MAX_CASE_STORE_BYTES, maximumRecords: MAX_CASES }),
   campaigns: definition({ id: 'campaigns', label: 'Campaigns', compatibility: CAMPAIGN_BROWSER_COMPATIBILITY, maximumBytes: MAX_CAMPAIGN_STORE_BYTES, maximumRecords: MAX_CAMPAIGNS }),
   brand_profiles: definition({ id: 'brand_profiles', label: 'Brand Profiles', compatibility: BRAND_PROFILE_BROWSER_COMPATIBILITY, maximumBytes: MAX_PROFILE_STORE_BYTES, maximumRecords: MAX_PROFILES }),
@@ -106,6 +108,7 @@ export const BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID = Object.freeze({
 } as const);
 
 export const BROWSER_LOCAL_COLLECTION_MANIFEST = Object.freeze([
+  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.case_drafts,
   BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.cases,
   BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.campaigns,
   BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.brand_profiles,

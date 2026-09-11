@@ -140,7 +140,7 @@ test('combined full-capacity stores export and restore through native backup fil
     await beginBrowserInteractionReadiness(page, {
       start: { event: 'click', selector: '.unencrypted-download' },
       targets: [
-        { selector: '.workspace-archive [role="status"]', exactText: 'Downloaded an unencrypted workspace backup with 13 verified data sections.' },
+        { selector: '.workspace-archive > [role="status"]', exactText: 'Prepared an unencrypted workspace backup with 13 verified data sections. Check the downloaded file.' },
         { selector: '.unencrypted-download', requireEnabled: true },
       ],
     });

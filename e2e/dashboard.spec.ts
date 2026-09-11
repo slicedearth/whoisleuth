@@ -624,7 +624,7 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
   expect(content).not.toContain('must-not-export');
   expect(content).not.toContain('private.invalid');
   expect(content).not.toContain('wrt_session');
-  await expect(workspaceArchiveStatus(page)).toContainText('Downloaded an unencrypted workspace backup with 13 verified data sections');
+  await expect(workspaceArchiveStatus(page)).toContainText('Prepared an unencrypted workspace backup with 13 verified data sections');
 });
 
 test('reviewed case evidence keeps the same workspace content through two CLI and browser hand-offs', {
@@ -714,7 +714,7 @@ test('the dashboard encrypts and locally unlocks a portable workspace backup', a
   expect(content).not.toContain('archive-case.invalid');
   expect(content).not.toContain('Analyst archive note');
   expect(content).not.toContain(passphrase);
-  await expect(workspaceArchiveStatus(page)).toContainText('Keep the passphrase separately');
+  await expect(workspaceArchiveStatus(page)).toContainText('keep its passphrase separately');
 
   await migrateLegacyBrowserData(page, {}, { clearStorage: true });
   await reviewWorkspaceBackup(page, {

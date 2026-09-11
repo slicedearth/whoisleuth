@@ -119,8 +119,11 @@ import {
   LEGACY_WEBSITE_SNAPSHOTS_KEY,
 } from './browser-local-data-contract.ts';
 import { BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID } from '../../../packages/contracts/browser-local-collection-manifest.mts';
+import { CASE_DRAFT_SCHEMA, type CaseDraftRecord, type CaseDraftStore } from '../../../packages/contracts/case-drafts.mts';
+import { emptyCaseDraftStore, normalizeCaseDraftStore, serializeCaseDraftStore, caseDraftStoreVersion } from '../../../packages/cases/case-drafts.mts';
 
 export type BrowserLocalCollectionValueMap = Readonly<{
+  case_drafts: CaseDraftRecord;
   cases: CaseRecord;
   campaigns: CampaignRecord;
   brand_profiles: BrandProfile;
@@ -137,6 +140,7 @@ export type BrowserLocalCollectionValueMap = Readonly<{
 }>;
 
 export type BrowserLocalCollectionDocumentMap = Readonly<{
+  case_drafts: CaseDraftStore;
   cases: CaseRecord[];
   campaigns: CampaignRecord[];
   brand_profiles: BrandProfile[];
@@ -392,7 +396,21 @@ export const ANALYST_REVIEW_STATE_COLLECTION: LocalDataCollectionDefinition<Anal
     : analystReviewStateStoreFromRecords(records.map((record) => record.value)),
 });
 
+export const CASE_DRAFTS_COLLECTION: LocalDataCollectionDefinition<CaseDraftStore> = Object.freeze({
+  ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.case_drafts,
+  legacyKey: 'whoisleuth-case-drafts-v1',
+  legacyRollback: false,
+  empty: emptyCaseDraftStore,
+  acceptLegacyRoot: (raw) => record(raw)?.schema === CASE_DRAFT_SCHEMA && positiveVersion(record(raw)?.version) && Array.isArray(record(raw)?.records),
+  normalize: normalizeCaseDraftStore,
+  version: caseDraftStoreVersion,
+  serialize: serializeCaseDraftStore,
+  split: (store) => store.records.map(value => ({ id: value.id, value })),
+  join: (records, version) => ({ schema: CASE_DRAFT_SCHEMA, version, records: records.map(item => item.value) }),
+});
+
 export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
+  CASE_DRAFTS_COLLECTION,
   CASES_COLLECTION,
   CAMPAIGNS_COLLECTION,
   PROFILES_COLLECTION,

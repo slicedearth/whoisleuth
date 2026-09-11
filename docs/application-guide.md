@@ -296,8 +296,10 @@ person's workspace.
 pins and relationships; **Assessment** holds conclusions and branches;
 **Response** contains recipient review, packets, delivery and outcome records;
 **History** holds notes and manual investigation steps. Section links support
-browser back and forward. Unfinished drafts survive section changes, but are
-not saved when leaving the Case.
+browser back and forward. Case response forms save workspace-local recovery
+drafts. Their status distinguishes a recovery copy from a submitted Case
+record. After reopening a Case, restore a saved draft explicitly and review it
+before submitting. Copies from other tabs are not silently overwritten.
 
 Opening a Case keeps it selected while moving between Console tools. The
 compact Case context exposes retained hypotheses, pins, decisions, response
@@ -353,7 +355,11 @@ Quick response includes observation, conclusion, recipient review, packet,
 manual delivery record, independent recheck and closure. Stage links open the
 relevant form. Advanced adds assertions, branches, manual investigation steps
 and detailed action transitions. Switching presentations preserves unfinished
-stage drafts for the open Case; navigating away does not save them.
+stage drafts for the open Case. Evidence, conclusions, assertions, branches,
+actions, outcomes, closure and manual-step forms support recovery after reload.
+Unfinished drafts are excluded from exports and backups; submit or copy any
+unfinished work before moving to another browser. A failed recovery save warns
+before navigation and leaves the form available for retry.
 Recipient review retains the source observation and review deadline separately
 from operational follow-ups. Updating that evidence invalidates prior approval.
 Case response date and time fields use UTC and retain seconds and milliseconds.

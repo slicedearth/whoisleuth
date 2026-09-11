@@ -50,5 +50,5 @@ export async function reviewWorkspaceBackup(page: Page, file: string | { name: s
 }
 
 export function workspaceArchiveStatus(page: Page) {
-  return workspaceArchiveRegion(page).getByRole('status');
+  return workspaceArchiveRegion(page).locator(':scope > [role="status"]');
 }

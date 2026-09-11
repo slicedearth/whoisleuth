@@ -1,4 +1,5 @@
 import type { CasePatch } from './case-model.ts';
+import type { CaseDraftReceipt } from '../../../../packages/contracts/case-drafts.mts';
 
 export const CASE_RESPONSE_STAGE_DEFINITIONS = Object.freeze({
   observation: Object.freeze({ number: 1, label: 'Observation' }),
@@ -56,4 +57,5 @@ export type PersistCaseResponse = (
   patch: CasePatch,
   success: string,
   focusFallback?: (() => HTMLElement | null) | null,
+  draft?: CaseDraftReceipt,
 ) => Promise<boolean>;

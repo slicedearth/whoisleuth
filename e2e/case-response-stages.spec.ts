@@ -229,6 +229,8 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
   await actions.getByRole('combobox', { name: 'Receipt evidence', exact: true }).selectOption({ label: 'Pin 1: Selected page observation · Fixture page review · 2026-09-10T10:00:00.000Z' });
   await actions.getByLabel(/^Receipt limitations/).fill('Receipt confirms review only, not removal.');
   await actions.getByRole('button', { name: 'Record provider response', exact: true }).click();
+  await expect(actions.locator('.draft-recovery[data-recovery-form="action-receipt"]')).toHaveAttribute('data-recovery-status', 'idle');
+  await expect(actions.getByLabel('Outcome detail', { exact: true })).toHaveValue('');
 
   const recheck = workspace.getByRole('link', { name: 'Prepare a recheck for quick-stages.invalid', exact: true });
   await recheck.focus();
@@ -406,8 +408,10 @@ test('stage changes and pending saves preserve later assessment, outcome and bra
   await branch.getByRole('checkbox', { name: /^Pin 1: Draft fixture evidence ·/u }).check();
   const releaseBranch = await holdBrowserLocalTransaction(page);
   try {
-    await branch.getByRole('button', { name: 'Create branch', exact: true }).click();
-    await expect(branch.getByRole('button', { name: 'Saving…', exact: true })).toBeDisabled();
+    const submit = branch.locator('button[type="submit"]');
+    await expect(submit).toHaveAccessibleName('Create branch');
+    await submit.click();
+    await expect(submit).toBeDisabled();
     await branch.getByLabel('Branch name', { exact: true }).fill('Later branch');
     await workspace.getByRole('button', { name: 'Quick', exact: true }).click();
   } finally { await releaseBranch(); }

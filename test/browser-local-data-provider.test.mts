@@ -735,7 +735,22 @@ test('opening an existing protected workspace cannot initialise missing collecti
   await provider.close();
 });
 
-test('keyed collections avoid re-encoding no-op writes but preserve in-place updater changes', { timeout: 3_000 }, async () => {
+test('collections excluded from legacy rollback never read or write a plaintext copy', async () => {
+  const definition = { ...WRITE_DEFINITION, legacyRollback: false };
+  const transactions: string[][] = [];
+  const provider = new BrowserLocalDataProvider({
+    indexedDB: readyEmptyCollectionsFactory([definition], transactions),
+    storage: { getItem() { throw new Error('No plaintext read is allowed.'); }, setItem() { throw new Error('No plaintext write is allowed.'); }, removeItem() { throw new Error('No plaintext removal is allowed.'); } },
+  });
+  try {
+    await provider.initialize([definition]);
+    const before = transactions.length;
+    assert.deepEqual(await provider.restoreLegacyCopies([definition]), { collectionCount: 0, serializedBytes: 0, keys: [] });
+    assert.equal(transactions.length, before);
+  } finally { await provider.close(); }
+});
+
+for (const keyed of [false, true]) test(`${keyed ? 'keyed' : 'plaintext'} collections avoid re-encoding no-op writes but preserve in-place updater changes`, { timeout: 3_000 }, async () => {
   const restoreKeyRange = installKeyRangeStub();
   let wrote!: () => void;
   const writing = new Promise<void>(resolve => { wrote = resolve; });
@@ -747,7 +762,7 @@ test('keyed collections avoid re-encoding no-op writes but preserve in-place upd
   const provider = new BrowserLocalDataProvider({
     indexedDB: harness.factory, storage: NULL_STORAGE,
     codec: { ...plaintextJsonCodec,
-      digestCollection: async input => createHash('sha256').update(input.content).digest('base64url'),
+      ...(keyed ? { digestCollection: async (input: { content: string }) => createHash('sha256').update(input.content).digest('base64url') } : {}),
       encode: async input => { encodes++; return plaintextJsonCodec.encode(input); },
     },
   });

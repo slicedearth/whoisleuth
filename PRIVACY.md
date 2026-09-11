@@ -68,6 +68,16 @@ relationship observations, saved Bulk sessions, website snapshots,
 investigation templates, Bulk review state and Analyst Review Item state. They
 are visible to anyone able to use the browser profile.
 
+Unfinished Case response forms are saved automatically as bounded recovery
+drafts in the selected workspace. They remain separate from submitted Case
+records, use the workspace's encryption when enabled, and are excluded from
+portable backups, exports and legacy rollback copies. Drafts remain until
+submitted, explicitly discarded, or removed with their Case or workspace.
+Do not enter credentials into analyst forms. Storage health reads the browser's
+site-wide estimates; a persistence request happens only when selected and does
+not create a backup. Backup preparation is remembered only during that visit;
+the app cannot confirm that a file was kept or restored.
+
 Tab-scoped dictionaries, candidate handoffs, guided-investigation progress and
 similar transient state use bounded memory or `sessionStorage`. The one-use
 candidate handoff uses a random token and is removed when accepted. Appearance

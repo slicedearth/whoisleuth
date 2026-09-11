@@ -21,6 +21,7 @@
     type CaseResponseStageId,
   } from '$lib/analysis/case-response-stage.ts';
   import '$lib/components/case-response-stage.css';
+  import type { CaseDraftReceipt } from '../../../../packages/contracts/case-drafts.mts';
 
   let {
     record,
@@ -138,6 +139,7 @@
     patch: Parameters<typeof editCase>[1],
     success: string,
     focusFallback: (() => HTMLElement | null) | null = null,
+    draft?: CaseDraftReceipt,
   ): Promise<boolean> {
     if (mutationBusy) return false;
     const focusTarget = document.activeElement instanceof HTMLElement
@@ -147,7 +149,7 @@
     try {
       let committed: Awaited<ReturnType<typeof editCase>>;
       try {
-        committed = await editCase(record.id, patch);
+        committed = await editCase(record.id, patch, draft);
       } catch (cause) {
         onmessage(cause instanceof Error ? cause.message : 'Could not update the case response record.');
         return false;
@@ -199,7 +201,10 @@
       onmessage('The packet was exported, but its Case action has changed or is no longer available. Review and export the current packet before recording delivery.');
       return;
     }
-    actionStage.prepareDeliveryRecord(action.id, exported.digestSha256);
+    if (!await actionStage.prepareDeliveryRecord(action.id, exported.digestSha256)) {
+      onmessage('The packet was exported, but the current receipt draft could not be saved for recovery. Keep this form open and retry its recovery save before preparing another receipt.');
+      return;
+    }
     presentationMode = 'quick';
     await selectSection('response');
     await tick();

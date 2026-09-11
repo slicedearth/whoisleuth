@@ -6,7 +6,8 @@
   import { buildCaseResponseLifecycleSummary } from '$lib/analysis/case-response-model.ts';
   import { isoFromUtcInput, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
-  import { createDraftRevision } from '$lib/controllers/submitted-draft';
+  import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
+  import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
 
@@ -20,68 +21,70 @@
   let expanded = $state(false);
   $effect(() => { expanded = mode === 'quick'; });
 
-  let effectState = $state('not_checked');
-  let effectObservedAt = $state('');
-  let effectSourceClass = $state('analyst');
-  let effectSource = $state('Analyst review');
-  let effectCompleteness = $state('unknown');
-  let effectEvidencePinId = $state('');
-  let effectSightingId = $state('');
-  let effectFollowUpAt = $state('');
-  let effectLimitations = $state('');
-  let closureReason = $state('unable_to_proceed');
-  let closureSummary = $state('');
-  let closureReviewId = $state('');
-  let closureActionId = $state('');
-  let closureLimitations = $state('');
-  const effectDraft = createDraftRevision(() => record.id);
-  const closureDraft = createDraftRevision(() => record.id);
+  const effectDraft = createCaseDraft(() => record.id, 'observed-effect', {
+    effectState: 'not_checked',
+    effectObservedAt: '',
+    effectSourceClass: 'analyst',
+    effectSource: 'Analyst review',
+    effectCompleteness: 'unknown',
+    effectEvidencePinId: '',
+    effectSightingId: '',
+    effectFollowUpAt: '',
+    effectLimitations: ''
+  });
+  const closureDraft = createCaseDraft(() => record.id, 'closure', {
+    closureReason: 'unable_to_proceed',
+    closureSummary: '',
+    closureReviewId: '',
+    closureActionId: '',
+    closureLimitations: ''
+  });
   const responseLifecycle = $derived(buildCaseResponseLifecycleSummary(record));
   const userObservedEffectSourceClasses = CASE_OBSERVED_EFFECT_SOURCE_CLASSES.filter((value) => value !== 'import');
-  const closureNeedsReview = $derived(closureReason === 'independently_not_reproduced' || closureReason === 'infrastructure_changed');
-  const closureNeedsAction = $derived(closureReason === 'provider_reported_resolution_not_independently_checked');
+  const closureNeedsReview = $derived(closureDraft.value.closureReason === 'independently_not_reproduced' || closureDraft.value.closureReason === 'infrastructure_changed');
+  const closureNeedsAction = $derived(closureDraft.value.closureReason === 'provider_reported_resolution_not_independently_checked');
   const eligibleClosureReviews = $derived(record.observedEffects.reviews.filter((review) =>
-    closureReason === 'independently_not_reproduced'
+    closureDraft.value.closureReason === 'independently_not_reproduced'
       ? review.state === 'not_reproduced'
-      : closureReason === 'infrastructure_changed' ? review.state === 'changed' : true));
+      : closureDraft.value.closureReason === 'infrastructure_changed' ? review.state === 'changed' : true));
   const eligibleClosureActions = $derived(record.actions.filter((action) =>
     closureNeedsAction ? action.providerOutcome === 'provider_reports_resolved' : true));
 
   async function addObservedEffectReview() {
     const unchanged = effectDraft.capture();
-    if (!await persist({
+    if (!await effectDraft.persist(persist, {
       observedEffectReview: {
-        state: effectState,
-        observedAt: isoFromUtcInput(effectObservedAt) || new Date().toISOString(),
-        sourceClass: effectSourceClass,
-        source: effectSource,
-        completeness: effectCompleteness,
-        evidencePinId: effectEvidencePinId || null,
-        sightingId: effectSightingId || null,
-        followUpAt: isoFromUtcInput(effectFollowUpAt),
-        limitations: list(effectLimitations),
+        state: effectDraft.value.effectState,
+        observedAt: isoFromUtcInput(effectDraft.value.effectObservedAt) || new Date().toISOString(),
+        sourceClass: effectDraft.value.effectSourceClass,
+        source: effectDraft.value.effectSource,
+        completeness: effectDraft.value.effectCompleteness,
+        evidencePinId: effectDraft.value.effectEvidencePinId || null,
+        sightingId: effectDraft.value.effectSightingId || null,
+        followUpAt: isoFromUtcInput(effectDraft.value.effectFollowUpAt),
+        limitations: list(effectDraft.value.effectLimitations),
       },
     }, `Recorded an independent observed-effect review for ${record.domain}.`) || !unchanged()) return;
-    effectLimitations = '';
-    effectEvidencePinId = '';
-    effectSightingId = '';
+    effectDraft.value.effectLimitations = '';
+    effectDraft.value.effectEvidencePinId = '';
+    effectDraft.value.effectSightingId = '';
   }
 
   async function closeCaseDeliberately() {
     const unchanged = closureDraft.capture();
-    if (!await persist({
+    if (!await closureDraft.persist(persist, {
       closure: {
-        reason: closureReason,
-        summary: closureSummary,
-        observedEffectReviewId: closureReviewId || null,
-        actionId: closureActionId || null,
-        limitations: list(closureLimitations),
+        reason: closureDraft.value.closureReason,
+        summary: closureDraft.value.closureSummary,
+        observedEffectReviewId: closureDraft.value.closureReviewId || null,
+        actionId: closureDraft.value.closureActionId || null,
+        limitations: list(closureDraft.value.closureLimitations),
       },
     }, `Recorded a deliberate closure for ${record.domain}.`) || !unchanged()) return;
-    closureSummary = '';
-    closureReviewId = '';
-    closureActionId = '';
-    closureLimitations = '';
+    closureDraft.value.closureSummary = '';
+    closureDraft.value.closureReviewId = '';
+    closureDraft.value.closureActionId = '';
+    closureDraft.value.closureLimitations = '';
   }
 </script>
 
@@ -101,21 +104,22 @@
       {#if record.observedEffects.preV13HistoryUnavailable || record.closures.preV13HistoryUnavailable}
         <p class="history-warning">This Case predates v13. Earlier independent review or deliberate closure history is unavailable and was not reconstructed.</p>
       {/if}
-      <form class="stack" aria-labelledby={`effect-review-title-${record.id}`} oninput={effectDraft.changed} onchange={effectDraft.changed} onsubmit={(event) => { event.preventDefault(); void addObservedEffectReview(); }}>
+      <form class="stack" data-recovery-form={effectDraft.form} aria-labelledby={`effect-review-title-${record.id}`} oninput={effectDraft.changed} onsubmit={(event) => { event.preventDefault(); void addObservedEffectReview(); }}>
         <strong id={`effect-review-title-${record.id}`}>Append independent observed-effect review</strong>
         <p class="notice">Date and time fields use UTC.</p>
         <div class="two-columns">
-          <label class="field">Observed effect<select bind:value={effectState}>{#each CASE_OBSERVED_EFFECT_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
-          <label class="field">{mode === 'quick' ? 'Observed at' : 'Observation time'}<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={effectObservedAt}></label>
-          <label class="field">Source class<select bind:value={effectSourceClass}>{#each userObservedEffectSourceClasses as value}<option {value}>{value}</option>{/each}</select></label>
-          <label class="field">{mode === 'quick' ? 'Source' : 'Separately attributed source'}<input bind:value={effectSource} maxlength="80" required></label>
-          <label class="field">Completeness<select bind:value={effectCompleteness}>{#each CASE_PIN_COMPLETENESS as value}<option {value}>{value}</option>{/each}</select></label>
-          <CaseEvidencePinSelect label={mode === 'quick' ? 'Current evidence' : 'Evidence pin'} pins={record.evidencePins} bind:value={effectEvidencePinId} />
-          <label class="field">Existing sighting<select bind:value={effectSightingId}><option value="">No sighting</option>{#each record.sightings as sighting}<option value={sighting.id}>{sighting.state.replaceAll('_', ' ')} · {sighting.source}</option>{/each}</select></label>
-          <label class="field">{mode === 'quick' ? 'Follow up at' : 'Scheduled local follow-up'}<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={effectFollowUpAt}></label>
+          <label class="field">Observed effect<select bind:value={effectDraft.value.effectState}>{#each CASE_OBSERVED_EFFECT_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
+          <label class="field">{mode === 'quick' ? 'Observed at' : 'Observation time'}<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={effectDraft.value.effectObservedAt}></label>
+          <label class="field">Source class<select bind:value={effectDraft.value.effectSourceClass}>{#each userObservedEffectSourceClasses as value}<option {value}>{value}</option>{/each}</select></label>
+          <label class="field">{mode === 'quick' ? 'Source' : 'Separately attributed source'}<input bind:value={effectDraft.value.effectSource} maxlength="80" required></label>
+          <label class="field">Completeness<select bind:value={effectDraft.value.effectCompleteness}>{#each CASE_PIN_COMPLETENESS as value}<option {value}>{value}</option>{/each}</select></label>
+          <CaseEvidencePinSelect label={mode === 'quick' ? 'Current evidence' : 'Evidence pin'} pins={record.evidencePins} bind:value={effectDraft.value.effectEvidencePinId} />
+          <label class="field">Existing sighting<select bind:value={effectDraft.value.effectSightingId}><option value="">No sighting</option>{#each record.sightings as sighting}<option value={sighting.id}>{sighting.state.replaceAll('_', ' ')} · {sighting.source}</option>{/each}</select></label>
+          <label class="field">{mode === 'quick' ? 'Follow up at' : 'Scheduled local follow-up'}<input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={effectDraft.value.effectFollowUpAt}></label>
         </div>
-        <label class="field">Limitations <small>one per line</small><textarea bind:value={effectLimitations} maxlength="2000" rows="2"></textarea></label>
-        <button class="btn" type="submit" disabled={mutationBusy || mode === 'quick' && effectState === 'not_checked'}>{mode === 'quick' ? 'Record independent outcome' : 'Record independent review'}</button>
+        <label class="field">Limitations <small>one per line</small><textarea bind:value={effectDraft.value.effectLimitations} maxlength="2000" rows="2"></textarea></label>
+        <button class="btn" type="submit" disabled={effectDraft.state.busy || mutationBusy || mode === 'quick' && effectDraft.value.effectState === 'not_checked'}>{mode === 'quick' ? 'Record independent outcome' : 'Record independent review'}</button>
+        <CaseDraftRecovery draft={effectDraft} />
       </form>
       {#if record.observedEffects.reviews.length}
         <ol class="records embedded-records" aria-label="Independent observed-effect reviews">
@@ -126,17 +130,18 @@
       {/if}
       {#if record.observedEffects.omitted}<p class="history-warning">{record.observedEffects.omitted} earlier independent review{record.observedEffects.omitted === 1 ? '' : 's'} omitted by bounded retention.</p>{/if}
 
-      <form class="stack closure-form" aria-labelledby={`closure-title-${record.id}`} oninput={closureDraft.changed} onchange={closureDraft.changed} onsubmit={(event) => { event.preventDefault(); void closeCaseDeliberately(); }}>
+      <form class="stack closure-form" data-recovery-form={closureDraft.form} aria-labelledby={`closure-title-${record.id}`} oninput={closureDraft.changed} onsubmit={(event) => { event.preventDefault(); void closeCaseDeliberately(); }}>
         <strong id={`closure-title-${record.id}`}>Deliberate analyst closure</strong>
         <p class="notice">Select the reason that the retained evidence supports. A timeout or failure to reproduce does not establish removal.</p>
         <div class="two-columns">
-          <label class="field">{mode === 'quick' ? 'Reason' : 'Closure reason'}<select bind:value={closureReason}>{#each CASE_CLOSURE_REASONS as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
-          <label class="field">Independent review<select bind:value={closureReviewId} required={closureNeedsReview}><option value="">{closureNeedsReview ? 'Select the required typed review' : 'No linked review'}</option>{#each eligibleClosureReviews as review}<option value={review.id}>{review.state.replaceAll('_', ' ')} · {review.observedAt}</option>{/each}</select></label>
-          <label class="field">Provider action<select bind:value={closureActionId} required={closureNeedsAction}><option value="">{closureNeedsAction ? 'Select the required provider-resolution action' : 'No linked provider action'}</option>{#each eligibleClosureActions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.providerOutcome?.replaceAll('_', ' ') ?? action.state.replaceAll('_', ' ')}</option>{/each}</select></label>
+          <label class="field">{mode === 'quick' ? 'Reason' : 'Closure reason'}<select bind:value={closureDraft.value.closureReason}>{#each CASE_CLOSURE_REASONS as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
+          <label class="field">Independent review<select bind:value={closureDraft.value.closureReviewId} required={closureNeedsReview}><option value="">{closureNeedsReview ? 'Select the required typed review' : 'No linked review'}</option>{#each eligibleClosureReviews as review}<option value={review.id}>{review.state.replaceAll('_', ' ')} · {review.observedAt}</option>{/each}</select></label>
+          <label class="field">Provider action<select bind:value={closureDraft.value.closureActionId} required={closureNeedsAction}><option value="">{closureNeedsAction ? 'Select the required provider-resolution action' : 'No linked provider action'}</option>{#each eligibleClosureActions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.providerOutcome?.replaceAll('_', ' ') ?? action.state.replaceAll('_', ' ')}</option>{/each}</select></label>
         </div>
-        <label class="field">Closure summary<textarea bind:value={closureSummary} maxlength="2000" rows="2" required></textarea></label>
-        <label class="field">Closure limitations <small>one per line</small><textarea bind:value={closureLimitations} maxlength="2000" rows="2"></textarea></label>
-        <button class="btn" type="submit" disabled={mutationBusy}>Close case with reason</button>
+        <label class="field">Closure summary<textarea bind:value={closureDraft.value.closureSummary} maxlength="2000" rows="2" required></textarea></label>
+        <label class="field">Closure limitations <small>one per line</small><textarea bind:value={closureDraft.value.closureLimitations} maxlength="2000" rows="2"></textarea></label>
+        <button class="btn" type="submit" disabled={closureDraft.state.busy || mutationBusy}>Close case with reason</button>
+        <CaseDraftRecovery draft={closureDraft} />
       </form>
       {#if record.closures.records.length}
         <ol class="records embedded-records" aria-label="Deliberate case closures">

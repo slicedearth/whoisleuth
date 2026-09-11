@@ -2,7 +2,7 @@ import { openCaseMetadata, openCaseSection, openConsoleView } from './console-na
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, readBrowserLocalCollection, requiredValue } from './helpers';
+import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, readBrowserLocalCollection, requiredValue } from './helpers';
 import { caseRecord, createCase, openCaseResponseWorkspace, openCasesView, openSeededTimelineCase } from './case-test-fixtures';
 import { addFixtureCasePin, caseWorkspaceActionStatus, currentActionFixture, openPacketWizardStep } from './case-response-fixtures';
 import { CASE_RESPONSE_PACKET_VERSION } from '../packages/contracts/case-portability.mts';
@@ -633,10 +633,10 @@ test('keeps a drafting action form when the Case update fails before commit', as
   await action.getByLabel('Follow-up at').fill('2026-08-19T11:30');
   await action.getByLabel(/Contact limitations/).fill('Fixture contact route; no delivery attempted');
 
-  await failNextBrowserLocalCollectionRead(page, 'cases');
+  await failNextBrowserLocalManifestWrite(page, 'cases');
   await action.getByRole('button', { name: 'Create drafting action' }).click();
 
-  await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'Cases could not be read' })).toBeVisible();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('out of storage space');
   await expect(action.getByLabel('Action type')).toHaveValue('registrar_report');
   await expect(action.getByLabel('Recipient or internal owner')).toHaveValue('Fixture review desk');
   await expect(action.getByLabel('Contact source')).toHaveValue('Fixture registry role');
@@ -707,10 +707,10 @@ test('keeps an investigation-branch draft when the Case update fails before comm
   await branch.getByLabel('Branch name').fill('Draft branch');
   await branch.getByRole('checkbox', { name: 'Branch fixture pin' }).check();
 
-  await failNextBrowserLocalCollectionRead(page, 'cases');
+  await failNextBrowserLocalManifestWrite(page, 'cases');
   await branch.getByRole('button', { name: 'Create branch' }).click();
 
-  await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'Cases could not be read' })).toBeVisible();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('out of storage space');
   await expect(branch.getByLabel('Branch name')).toHaveValue('Draft branch');
   await expect(branch.getByRole('checkbox', { name: 'Branch fixture pin' })).toBeChecked();
   const unchanged = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });

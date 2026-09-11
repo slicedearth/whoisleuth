@@ -17,6 +17,7 @@ import {
   isExpectedBrowserLocalDataFailure,
   localDataStorageRecords,
   plaintextJsonCodec,
+  normalizeDefinition,
 } from '../frontend/src/lib/browser-local-data.ts';
 import type {
   AnyLocalDataCollectionDefinition,
@@ -78,6 +79,9 @@ function roundTrip(definition: AnyLocalDataCollectionDefinition, document: unkno
 }
 
 describe('browser-local collection definitions', () => {
+  test('every shipped collection satisfies the actual provider admission contract', () => {
+    for (const definition of BROWSER_LOCAL_COLLECTIONS) assert.equal(normalizeDefinition(definition), definition, definition.id);
+  });
   test('public HTML baselines retain their algorithm through collection splitting and encoding', () => {
     const archive = JSON.parse(readFileSync(new URL('./fixtures/workspace-html-baseline-v8-public.json', import.meta.url), 'utf8'));
     const profiles = roundTrip(PROFILES_COLLECTION, archive.sections.brandProfiles);
@@ -142,6 +146,7 @@ describe('browser-local collection definitions', () => {
       investigation_templates: { schema: 'whoisleuth.investigation-templates', version: futureVersion('investigation_templates'), templates: [] },
       bulk_review: { schema: 'whoisleuth.bulk-review', version: futureVersion('bulk_review'), presets: [], rows: [] },
       analyst_review_state: { schema: 'whoisleuth.analyst-review-state', version: ANALYST_REVIEW_STATE_COLLECTION.schemaVersion + 1, records: [] },
+      case_drafts: { schema: 'whoisleuth.case-drafts', version: futureVersion('case_drafts'), records: [] },
     };
     const definitions = BROWSER_LOCAL_COLLECTIONS.filter(({ id }) => id !== 'cases');
     assert.deepEqual(

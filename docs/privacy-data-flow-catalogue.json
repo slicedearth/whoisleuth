@@ -14,10 +14,10 @@
       "version": 1
     },
     "schemaLifecycleRegistry": {
-      "familyCount": 18,
-      "compatibilityCount": 85,
-      "privacyProfileCount": 45,
-      "consumerFlowCount": 143,
+      "familyCount": 19,
+      "compatibilityCount": 86,
+      "privacyProfileCount": 46,
+      "consumerFlowCount": 144,
       "metadataVersions": [
         4
       ]
@@ -7283,6 +7283,19 @@
       ]
     },
     {
+      "id": "case-drafts",
+      "privacyClass": "analyst_authored_sensitive",
+      "compatibilityIds": [
+        "browser.case-drafts"
+      ],
+      "privacyProfileIds": [
+        "case-drafts.privacy"
+      ],
+      "consumerFlowIds": [
+        "case-drafts.browser-case-drafts.consumer"
+      ]
+    },
+    {
       "id": "case-portability",
       "privacyClass": "analyst_authored_sensitive",
       "compatibilityIds": [
@@ -7778,6 +7791,24 @@
       "migration": "exact_current_only",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 524288,
+      "storageClass": "browser_profile_storage",
+      "retentionControl": "browser_profile_and_user_controlled"
+    },
+    {
+      "id": "browser.case-drafts",
+      "familyId": "case-drafts",
+      "kind": "browser_store",
+      "schema": "whoisleuth.case-drafts",
+      "lifecycleSchema": "whoisleuth.case-drafts",
+      "coverageClass": "registered_schema",
+      "currentVersion": 1,
+      "supportedVersions": [
+        1
+      ],
+      "futureVersionBehavior": "preserve_without_write",
+      "migration": "exact_current_only",
+      "writeSemantics": "optimistic_replace",
+      "byteBudget": 8388608,
       "storageClass": "browser_profile_storage",
       "retentionControl": "browser_profile_and_user_controlled"
     },
@@ -9340,6 +9371,31 @@
       "sharingReview": "not_applicable",
       "consumerFlowIds": [
         "analyst-review-state.browser-analyst-review-state.consumer"
+      ]
+    },
+    {
+      "id": "case-drafts.privacy",
+      "familyId": "case-drafts",
+      "classification": "analyst_authored_sensitive",
+      "projection": "browser_import",
+      "includedCategories": [
+        "case-reference",
+        "unfinished-form-values",
+        "local-revision",
+        "draft-time"
+      ],
+      "excludedCategories": [
+        "collected-source-payloads",
+        "password-controls",
+        "session-credentials",
+        "public-export"
+      ],
+      "notePolicy": "allowed_bounded",
+      "retention": "browser_indexeddb",
+      "network": "none",
+      "sharingReview": "not_applicable",
+      "consumerFlowIds": [
+        "case-drafts.browser-case-drafts.consumer"
       ]
     },
     {
@@ -10999,6 +11055,36 @@
         "discriminator": null
       },
       "privacyProfileId": "analyst-review-state.privacy",
+      "requestMode": "none",
+      "retentionEffect": "browser_indexeddb",
+      "processingClasses": [
+        "transient_processing",
+        "browser_local_retention",
+        "offline_processing_no_request"
+      ],
+      "policyState": "current"
+    },
+    {
+      "id": "case-drafts.browser-case-drafts.consumer",
+      "familyId": "case-drafts",
+      "plane": "browser",
+      "operation": "validate-and-produce",
+      "acceptedContracts": [
+        {
+          "schema": "whoisleuth.case-drafts",
+          "versions": [
+            1
+          ],
+          "mode": "direct",
+          "discriminator": null
+        }
+      ],
+      "emittedContract": {
+        "schema": "whoisleuth.case-drafts",
+        "version": 1,
+        "discriminator": null
+      },
+      "privacyProfileId": "case-drafts.privacy",
       "requestMode": "none",
       "retentionEffect": "browser_indexeddb",
       "processingClasses": [
