@@ -117,6 +117,17 @@ function functionalBrowserInventory(): readonly string[] {
 
 const FUNCTIONAL_BROWSER_INVENTORY = functionalBrowserInventory();
 
+/** Discover a suite family without registering each new specification. */
+export function browserSpecsForPrefixes(
+  prefixes: readonly string[],
+  inventory: readonly string[] = FUNCTIONAL_BROWSER_INVENTORY,
+): readonly string[] {
+  return Object.freeze(inventory.filter((file) => isPlaywrightFunctionalSpec(file)
+    && prefixes.some((prefix) => file === `e2e/${prefix}.spec.ts` || file.startsWith(`e2e/${prefix}-`))).sort());
+}
+
+const CASE_FORM_COMPONENT = /\/Case[A-Za-z]+Stage\.svelte$/u;
+
 const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'shared-contracts', area: 'shared contracts and lifecycle metadata', priority: 40,
@@ -130,12 +141,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     id: 'case-domain', area: 'Case domain and response lifecycle', priority: 40,
     matches: (value: string) => value.startsWith('packages/cases/'),
     focusedUnit: unit('test/case-model.test.mts', 'test/case-record-ownership.test.mts', 'test/case-report.test.mts', 'test/case-response-model.test.mts', 'test/case-portability-lifecycle.test.mts', 'test/model-contract-properties.test.mts'),
-    focusedBrowser: browser(
-      'e2e/cases.spec.ts',
-      'e2e/case-evidence-workflows.spec.ts',
-      'e2e/case-response-lifecycle.spec.ts',
-      'e2e/case-import-workflows.spec.ts',
-    ),
+    focusedBrowser: browserSpecsForPrefixes(['case', 'cases']),
     specialised: specialised('architecture', 'schema-inventory', 'privacy-catalogue', 'critical-mutation', 'analyst-journey-assurance'),
     browserRequired: true,
   }),
@@ -248,6 +254,14 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     browserRequired: true,
   }),
   Object.freeze({
+    id: 'case-response-form', area: 'Case response forms and submitted drafts', priority: 45,
+    matches: (value: string) => CASE_FORM_COMPONENT.test(value),
+    focusedUnit: unit('test/case-response-form-values.test.mts', 'test/submitted-draft.test.mts'),
+    focusedBrowser: browser('e2e/accessibility.spec.ts', ...browserSpecsForPrefixes(['case-response-stages', 'case-workspace', 'submitted-drafts'])),
+    specialised: specialised('architecture'),
+    browserRequired: true,
+  }),
+  Object.freeze({
     id: 'frontend-user-interface', area: 'frontend user-facing routes and components', priority: 30,
     matches: (value: string) => value.startsWith('frontend/src/'),
     focusedUnit: unit(),
@@ -259,15 +273,12 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     id: 'frontend-navigation-impact', area: 'shared navigation, theme, and layout behaviour', priority: 0,
     impactOnly: true,
     matches: (value: string) => value === 'frontend/src/app.css'
+      || value === 'frontend/src/lib/workspaces.ts'
+      || /\/console-(?:command-navigation|workflow-state)\.ts$/u.test(value)
       || /\/\+layout(?:\.svelte|\.ts)$/u.test(value)
-      || /\/(?:CommandPalette|LocalSectionNav|PublicReferenceSidebar|SiteFooter|ThemeSelector)\.svelte$/u.test(value),
+      || /\/(?:CommandPalette|LocalSectionNav|PageHeading|PublicReferenceSidebar|SiteFooter|ThemeSelector)\.svelte$/u.test(value),
     focusedUnit: unit('test/public-product-catalogue.test.mts'),
-    focusedBrowser: browser(
-      'e2e/design-system.spec.ts',
-      'e2e/mobile-nav.spec.ts',
-      'e2e/skip-navigation.spec.ts',
-      'e2e/theme.spec.ts',
-    ),
+    focusedBrowser: browserSpecsForPrefixes(['console-workflow', 'console-workspace', 'design-system', 'mobile-nav', 'skip-navigation', 'theme']),
     specialised: specialised('browser-timing-plan'),
     browserRequired: true,
   }),
@@ -277,13 +288,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     matches: (value: string) => value.includes('/lookup/')
       || /\/(?:Lookup|lookup-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
     focusedUnit: unit('test/lookup-request-controller.test.mts', 'test/lookup-route-analysis.test.mts'),
-    focusedBrowser: browser(
-      'e2e/lookup-anchor-navigation.spec.ts',
-      'e2e/lookup-input.spec.ts',
-      'e2e/lookup-interaction-design.spec.ts',
-      'e2e/lookup-network-evidence.spec.ts',
-      'e2e/lookup-registration-evidence.spec.ts',
-    ),
+    focusedBrowser: browserSpecsForPrefixes(['lookup']),
     specialised: specialised('privacy-catalogue', 'browser-timing-plan'),
     browserRequired: true,
   }),
@@ -293,7 +298,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     matches: (value: string) => value.includes('/bulk/')
       || /\/(?:Bulk|bulk-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
     focusedUnit: unit('test/bulk-route-model.test.mts', 'test/bulk-session-model.test.mts'),
-    focusedBrowser: browser('e2e/bulk-analysis.spec.ts', 'e2e/bulk-presentation.spec.ts', 'e2e/bulk-session-workflows.spec.ts'),
+    focusedBrowser: browserSpecsForPrefixes(['bulk']),
     specialised: specialised('privacy-catalogue', 'browser-timing-plan'),
     browserRequired: true,
   }),
@@ -311,17 +316,10 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'frontend-case-impact', area: 'Case analyst workflow', priority: 0,
     impactOnly: true,
-    matches: (value: string) => value === 'frontend/src/lib/cases.ts'
-      || /\/(?:Case|case-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
+    matches: (value: string) => !CASE_FORM_COMPONENT.test(value) && (value === 'frontend/src/lib/cases.ts'
+      || /\/(?:Case|case-)[^/]*\.(?:svelte|ts|mts)$/u.test(value)),
     focusedUnit: unit('test/case-model.test.mts', 'test/case-report.test.mts', 'test/case-response-model.test.mts'),
-    focusedBrowser: browser(
-      'e2e/cases.spec.ts',
-      'e2e/case-evidence-workflows.spec.ts',
-      'e2e/case-import-workflows.spec.ts',
-      'e2e/case-brand-association.spec.ts',
-      'e2e/case-relationship-workflows.spec.ts',
-      'e2e/case-response-lifecycle.spec.ts',
-    ),
+    focusedBrowser: browserSpecsForPrefixes(['case', 'cases']),
     specialised: specialised('privacy-catalogue'),
     browserRequired: true,
   }),
@@ -342,7 +340,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     impactOnly: true,
     matches: (value: string) => value.includes('/dashboard/') || /\/Dashboard[^/]*\.svelte$/u.test(value),
     focusedUnit: unit('test/analyst-review-inbox.test.mts'),
-    focusedBrowser: browser('e2e/analyst-context.spec.ts', 'e2e/dashboard.spec.ts', 'e2e/local-data-platform.spec.ts'),
+    focusedBrowser: browser('e2e/analyst-context.spec.ts', 'e2e/local-data-platform.spec.ts', ...browserSpecsForPrefixes(['dashboard', 'console-workflow'])),
     specialised: specialised('browser-timing-plan'),
     browserRequired: true,
   }),
@@ -668,9 +666,14 @@ export function buildVerificationOwnershipPlan(
       ...exactFocusedChecks(changedPath),
       ...(importedTests.get(changedPath) ?? []),
     ]);
+    // A generic UI owner does not establish workflow coverage. A new component
+    // outside a known family gets the complete functional fallback until its
+    // impact is explained, rather than silently running accessibility alone.
+    const unexplainedInterface = owner.id === 'frontend-user-interface' && impacts.length === 1;
     const focusedBrowserChecks = uniqueSorted([
       ...impacts.flatMap((rule) => rule.focusedBrowser),
       ...exactBrowserChecks(changedPath),
+      ...(unexplainedInterface ? FUNCTIONAL_BROWSER_INVENTORY : []),
     ]);
     const browserRequired = impacts.some((rule) => rule.browserRequired);
     if (browserRequired && focusedBrowserChecks.length === 0) {
@@ -702,6 +705,7 @@ export function buildVerificationOwnershipPlan(
       'Each path selects its most specific owner plus explicit cross-cutting impacts, not every ancestor owner.',
       'Every full batch and release gate remains mandatory regardless of this focused plan.',
       'The plan is request-free and contains test and check identities, never executable shell fragments.',
+      'Known browser families discover their current specifications; an unexplained interface change selects the complete functional inventory.',
     ]),
   });
 }

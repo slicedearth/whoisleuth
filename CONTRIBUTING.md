@@ -37,8 +37,10 @@ npm run verification:focused
 
 The default scope is the working diff. For a committed or smaller change, pass
 its paths explicitly after `--`. Read the plan: import analysis finds unit
-consumers, domain rules select browser checks, and missing import evidence
-falls back to all unit tests. A full run is still available for infrastructure
+consumers and domain rules select browser checks. Browser families discover new
+specifications by filename; Case stage forms use their form and workspace suites.
+Missing import evidence falls back to all unit tests, and unexplained interface
+changes select all functional browser tests. A full run remains available for infrastructure
 changes and reproducing CI; see [verification](docs/getting-started.md#verification).
 
 Before submitting a feature branch, run proportionate local checks and state

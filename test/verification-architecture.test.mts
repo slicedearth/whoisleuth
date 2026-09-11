@@ -31,6 +31,7 @@ import {
 import {
   assertDeclaredVerificationTest,
   buildVerificationOwnershipPlan,
+  browserSpecsForPrefixes,
   checkVerificationOwnershipMap,
   createVerificationOwnershipPlan,
   importedUnitTests,
@@ -335,7 +336,8 @@ describe('verification architecture contracts', () => {
     assert.ok(plan.focusedBrowserChecks.includes('e2e/dashboard.spec.ts'));
     assert.equal(plan.userFacingBrowserRequired, true);
     assert.match(JSON.stringify(plan), /Focused checks support iteration only/u);
-    assert.doesNotMatch(JSON.stringify(plan), /npm run|;|\$\(/u);
+    assert.ok(plan.focusedUnitChecks.every((file) => /^test\/[^/]+\.test\.mts$/u.test(file)));
+    assert.ok(plan.focusedBrowserChecks.every(isPlaywrightFunctionalSpec));
 
     const closure = checkVerificationOwnershipMap();
     assert.equal(closure.assignedFiles, closure.maintainedFiles);
@@ -344,6 +346,8 @@ describe('verification architecture contracts', () => {
     assert.ok(closure.privacyProfiles > 0 && closure.privacyConsumerFlows > 0);
     assert.ok(closure.browserRequiredSupportPaths > 0);
     assert.throws(() => buildVerificationOwnershipPlan(['../outside.mts']), /repository-relative|traverse/u);
+    assert.throws(() => buildVerificationOwnershipPlan(['lib/helper;touch.mts']), /repository-relative/u);
+    assert.throws(() => buildVerificationOwnershipPlan(['lib/$(id).mts']), /repository-relative/u);
     assert.throws(() => buildVerificationOwnershipPlan(['lib/safe-fetch.mts', 'lib/safe-fetch.mts']), /must not repeat/u);
     assert.throws(() => buildVerificationOwnershipPlan(['unowned-root.cfg']), /Unknown maintained ownership area/u);
     assert.throws(
@@ -447,6 +451,36 @@ describe('verification architecture contracts', () => {
       buildFocusedVerificationExecution(mixed).browserSpecs,
       functionalInventory,
     );
+  });
+
+  test('discovers new browser specifications by family without a maintained filename mirror', () => {
+    const inventory = ['e2e/lookup-new-review.spec.ts', 'e2e/lookup.spec.ts', 'e2e/lookupish.spec.ts', 'e2e/cases.spec.ts', 'e2e/auth.setup.ts'];
+    assert.deepEqual(browserSpecsForPrefixes(['lookup'], inventory), ['e2e/lookup-new-review.spec.ts', 'e2e/lookup.spec.ts']);
+    assert.deepEqual(browserSpecsForPrefixes(['lookup'], [...inventory].reverse()), browserSpecsForPrefixes(['lookup'], inventory));
+  });
+
+  test('covers canonical console destinations and focused Case forms without unrelated import journeys', () => {
+    const navigation = buildVerificationOwnershipPlan(['frontend/src/lib/workspaces.ts']);
+    assert.ok(navigation.focusedBrowserChecks.includes('e2e/console-workflow-navigation.spec.ts'));
+    assert.ok(navigation.focusedBrowserChecks.includes('e2e/console-workspace-layout.spec.ts'));
+    assert.ok(navigation.focusedBrowserChecks.includes('e2e/mobile-nav.spec.ts'));
+    const form = buildVerificationOwnershipPlan(['frontend/src/lib/components/CaseHistoryStage.svelte']);
+    assert.ok(form.focusedBrowserChecks.includes('e2e/case-workspace-navigation.spec.ts'));
+    assert.ok(form.focusedBrowserChecks.includes('e2e/submitted-drafts.spec.ts'));
+    assert.ok(form.focusedUnitChecks.includes('test/submitted-draft.test.mts'));
+    assert.equal(form.focusedBrowserChecks.includes('e2e/case-import-workflows.spec.ts'), false);
+    assert.equal(form.focusedBrowserChecks.includes('e2e/case-brand-association.spec.ts'), false);
+    assert.equal(form.mandatorySpecialisedChecks.includes('schema-inventory'), false);
+    assert.equal(form.mandatorySpecialisedChecks.includes('cli-package'), false);
+    assert.equal(form.mandatorySpecialisedChecks.includes('privacy-catalogue'), false);
+  });
+
+  test('does not mistake an unexplained interface for accessibility-only impact', () => {
+    const plan = buildVerificationOwnershipPlan(['frontend/src/lib/components/NewOrdinaryPanel.svelte']);
+    assert.deepEqual(plan.focusedBrowserChecks, readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).sort());
+    const family = buildVerificationOwnershipPlan(['frontend/src/lib/components/LookupNewReview.svelte']);
+    assert.ok(family.focusedBrowserChecks.includes('e2e/lookup-workspace-navigation.spec.ts'));
+    assert.equal(family.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
   });
 
   test('keeps document-only checks offline and avoids application compilation and browser work', async () => {
