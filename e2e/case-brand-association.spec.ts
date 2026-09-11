@@ -1,3 +1,4 @@
+import { openConsoleView } from './console-navigation';
 import type { Page, Request } from '@playwright/test';
 import { expect, test } from './fixtures';
 import {
@@ -149,8 +150,7 @@ function expectNoFeatureApiRequests(requests: readonly string[]): void {
 }
 
 async function openCasesTab(page: Page): Promise<void> {
-  await page.locator('#console-navigation').getByRole('link', { name: /^Monitor/u }).click();
-  await page.getByRole('tab', { name: /Cases/ }).click();
+  await openConsoleView(page, 'cases');
 }
 
 test('adds and removes exact associations by keyboard, restores focus, and preserves them through profile deletion', async ({ page }) => {

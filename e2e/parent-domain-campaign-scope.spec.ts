@@ -1,3 +1,4 @@
+import { openConsoleView } from './console-navigation';
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
@@ -255,7 +256,7 @@ test('reviews, filters, selects and exports exact parent scope without collectio
   await expect(pivot).toBeFocused();
   expect(await pivot.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('solid');
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('tab', { name: /Cases/u })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('.case-head', { hasText: 'example.test' })).toHaveAttribute('aria-expanded', 'true');
 });
 
@@ -282,7 +283,7 @@ test('presents loading and ready parent-domain evidence without inferring a load
       return request;
     };
   });
-  const monitor = page.locator('#console-navigation').getByRole('link', { name: /^Monitor/u });
+  const monitor = page.locator('#console-navigation').getByRole('link', { name: /^Review inbox/u });
   await monitor.evaluate((link) => link.setAttribute('href', '/monitor?view=campaigns&campaign=parent-scope-campaign'));
   await monitor.click();
 
@@ -302,7 +303,7 @@ test('presents unavailable and insufficient parent-domain evidence without misle
   await migrateLegacyBrowserData(page, parentScopeStorage(), { destination: '/bulk' });
   await expect(page.locator('#console-navigation')).toBeVisible();
   await failBrowserLocalCollectionReads(page, 'cases');
-  const monitor = page.locator('#console-navigation').getByRole('link', { name: /^Monitor/u });
+  const monitor = page.locator('#console-navigation').getByRole('link', { name: /^Review inbox/u });
   await monitor.evaluate((link) => link.setAttribute('href', '/monitor?view=campaigns&campaign=parent-scope-campaign'));
   await monitor.click();
   let scope = page.getByRole('region', { name: 'Parent-domain scope' });
@@ -323,9 +324,9 @@ test('presents unavailable and insufficient parent-domain evidence without misle
   await expect(scope.getByRole('table')).toHaveCount(0);
 });
 
-test('keeps attributable rows visible as partial after a committed Case reread fails', async ({ page }) => {
+test('a fresh campaign read replaces the partial state from a committed Case reread failure', async ({ page }) => {
   await openParentScope(page, [retainedParentCase()]);
-  await page.getByRole('tab', { name: /Cases/u }).click();
+  await openConsoleView(page, 'cases');
   await page.locator('.case-head', { hasText: 'example.test' }).click();
   const openCase = page.locator('article.case.open');
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
@@ -334,10 +335,10 @@ test('keeps attributable rows visible as partial after a committed Case reread f
     hasText: 'The change was saved, but Cases could not be reread',
   })).toBeVisible();
 
-  await page.getByRole('tab', { name: /Campaigns/u }).click();
+  await openConsoleView(page, 'campaigns');
   await page.locator('.campaign-head', { hasText: 'Exact parent review' }).click();
   const scope = page.getByRole('region', { name: 'Parent-domain scope' });
-  await expect(scope).toContainText('The review is partial. Visible rows remain attributable');
+  await expect(scope).not.toContainText('The review is partial. Visible rows remain attributable');
   await expect(scope.getByRole('table', {
     name: 'Exact retained hostnames grouped by canonical registrable parent',
   })).toContainText('login.example.test');

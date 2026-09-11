@@ -94,15 +94,24 @@ function monitorWorkflowForView(view: MonitorView) {
   return RESPOND_VIEWS.has(view)
     ? Object.freeze({
         eyebrow: 'Respond',
-        description: 'Review retained evidence, organise cases and prepare responses.',
+        title: view === 'campaigns' ? 'Campaigns' : view === 'relationships' ? 'Relationships' : 'Review inbox',
+        description: 'Review changes, evidence gaps and due follow-ups.',
       })
     : Object.freeze({
         eyebrow: 'Assure',
+        title: 'Monitoring',
         description: 'Review monitoring history, watchlists and local control rules.',
       });
 }
 
 function monitorRouteKey(url: URL): string {
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function canonicalCaseUrl(current: URL): string {
+  const url = new URL(current);
+  url.pathname = '/cases';
+  for (const parameter of ['view', 'attention', 'queue', 'review']) url.searchParams.delete(parameter);
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
@@ -113,7 +122,7 @@ function buildMonitorNavigationUrl(
 ): string {
   const url = new URL(current);
   url.searchParams.set('view', next);
-  for (const parameter of ['case', 'watchlist', 'campaign', 'observation', 'review']) {
+  for (const parameter of ['case', 'watchlist', 'campaign', 'observation', 'review', 'attention', 'queue']) {
     url.searchParams.delete(parameter);
   }
   if (!focus) {
@@ -186,6 +195,7 @@ export {
   buildMonitorNavigationUrl,
   createMonitorCollectionLoader,
   monitorRouteKey,
+  canonicalCaseUrl,
   monitorRouteTarget,
   monitorViewCollections,
   monitorViewFromUrl,

@@ -75,7 +75,7 @@ test('dashboard local search pivots to exact cases, campaigns, and brand profile
   await search.fill('candidate.invalid');
   const caseResult = page.locator('.result-card').filter({ hasText: 'Case' }).filter({ hasText: 'candidate.invalid' });
   await caseResult.getByRole('link', { name: /Open case/ }).click();
-  await expect(page).toHaveURL('/monitor?case=case-source', { timeout: 15_000 });
+  await expect(page).toHaveURL('/cases?case=case-source', { timeout: 15_000 });
   await expect(page.locator('.case-head', { hasText: 'candidate.invalid' })).toHaveAttribute('aria-expanded', 'true');
 
   await page.goto('/dashboard');
@@ -141,7 +141,7 @@ test('dashboard local search reports an unavailable store without remaining in a
     'One or more required browser-local collections are unavailable.',
     { timeout: 15_000 },
   );
-  await expect(page.getByRole('heading', { name: 'Choose an analyst job' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'New investigation', exact: true })).toBeVisible();
   await expect(page.getByRole('searchbox', { name: 'Search saved work' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Preparing your Dashboard' })).toHaveCount(0);
 });
@@ -165,13 +165,10 @@ test('dashboard preserves fulfilled counts and search when one local collection 
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
   await openDashboardSecondaryWorkspaces(page);
 
-  const openCases = page.locator('.summary-card').filter({ hasText: 'Open cases' });
-  const watchlists = page.locator('.summary-card').filter({ hasText: 'Watchlists' });
-  const profiles = page.locator('.summary-card').filter({ hasText: 'Brand profiles' });
-  await expect(openCases.locator('strong')).toHaveText('1');
-  await expect(openCases).toContainText('1 total saved case');
-  await expect(watchlists.locator('strong')).toHaveText('Unavailable');
-  await expect(profiles.locator('strong')).toHaveText('13');
+  const recent = page.getByRole('region', { name: 'Recent Cases', exact: true });
+  await expect(recent.getByRole('listitem')).toHaveCount(1);
+  await expect(recent.getByRole('link', { name: /^Watchlists/ })).toContainText('Unavailable');
+  await expect(recent.getByRole('link', { name: /^Brand profiles/ })).toContainText('13');
   await expect(page.locator('.summary-error')).toContainText('Available saved work is still shown');
 
   await page.getByRole('searchbox', { name: 'Search saved work' }).fill('candidate.invalid');
@@ -291,11 +288,11 @@ test('saved-work search reports a worker load failure without blaming empty or u
   await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord('worker-failure', 'retained.example')] } });
   await page.route(`**${productionChunkPath('src/lib/workers/investigation-search.worker.ts')}`, (route) => route.abort('failed'));
   await openDashboardSecondaryWorkspaces(page);
-  const search = page.getByRole('region', { name: 'Search what this browser remembers' });
+  const search = page.getByRole('region', { name: 'Search saved work', exact: true });
   await expect(search.getByRole('alert')).toContainText('Saved-work search could not be prepared. No saved records were changed.');
   await expect(search.getByRole('button', { name: 'Reload page', exact: true })).toBeVisible();
   await expect(search).not.toContainText('No indexed saved work matched');
-  await expect(page.locator('.summary-card').filter({ hasText: 'Open cases' }).locator('strong')).toHaveText('1');
+  await expect(page.getByRole('region', { name: 'Recent Cases', exact: true }).getByRole('listitem')).toHaveCount(1);
 });
 
 test('saved-work search indexes a rich admitted Case workspace off the main thread and reports phase measurements', async ({ page }) => {

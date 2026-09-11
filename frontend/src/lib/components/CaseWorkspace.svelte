@@ -7,7 +7,7 @@
   import { registerAnalystUndo } from '$lib/analyst-undo';
   import { createDraftRevision } from '$lib/controllers/submitted-draft';
   import { preloadBestEffort } from '$lib/idle-preload';
-  import { selectConsoleCase } from '$lib/console-workflow-state';
+  import { readCaseNavigationContext, selectConsoleCase } from '$lib/console-workflow-state';
   import { buildMonitorNavigationUrl, monitorRouteKey, monitorRouteTarget } from '$lib/controllers/monitor-route-controller.ts';
   import { loadInvestigationGuide } from '$lib/investigation-guide';
   import { loadProfiles, type BrandProfile } from '$lib/brand-profiles';
@@ -32,7 +32,7 @@
   } = $props();
   let cases = $state.raw<CaseRecord[]>(untrack(() => initialCases ?? []));
   let casesSourceState = $state<'loading' | 'ready' | 'unavailable'>(untrack(() => initialCases ? 'ready' : 'loading'));
-  let caseMessage = $state(untrack(() => initialMessage));
+  let caseMessage = $state(untrack(() => initialMessage || readCaseNavigationContext(page.url.searchParams.get('case'))?.message || ''));
   const CASE_PAGE_SIZE = 25;
   let pendingNoteCaseIds = $state<string[]>([]);
   let casesRefreshing = $state(false);

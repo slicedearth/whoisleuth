@@ -1,3 +1,4 @@
+import { openConsoleView } from './console-navigation';
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 
@@ -120,7 +121,7 @@ test.describe('browser-local campaigns', () => {
     await migrateLegacyBrowserData(page, {
       'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: records },
     });
-    await page.getByRole('tab', { name: /Campaigns/ }).click();
+    await openConsoleView(page, 'campaigns');
   }
 
   test('creates a campaign, adds cases, persists details and opens a member', async ({ page }) => {
@@ -188,16 +189,16 @@ test.describe('browser-local campaigns', () => {
     expect(mailColours.coverage).toBe(mailColours.marker);
     expect(mailColours.coverage).not.toBe('');
 
-    await page.getByRole('tab', { name: /Cases/ }).click();
-    await page.getByRole('tab', { name: /Campaigns/ }).click();
+    await openConsoleView(page, 'cases');
+    await openConsoleView(page, 'campaigns');
     await expect(page.locator('.campaign-head', { hasText: 'Credential cluster' })).toBeVisible();
 
     await page.reload();
-    await page.getByRole('tab', { name: /Campaigns/ }).click();
+    await openConsoleView(page, 'campaigns');
     await page.locator('.campaign-head', { hasText: 'Credential cluster' }).click();
     await expect(page.locator('.campaign-edit textarea')).toHaveValue('Domains grouped for analyst follow-up.');
     await page.getByRole('button', { name: 'Open case' }).click();
-    await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true })).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('.case-head', { hasText: 'member-one.invalid' })).toHaveAttribute('aria-expanded', 'true');
   });
 
@@ -297,7 +298,7 @@ test.describe('browser-local campaigns', () => {
     const openCase = cohort.getByRole('button', { name: /Open case cohort-alpha\.invalid/u });
     await openCase.focus();
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true })).toHaveAttribute('aria-current', 'page');
     const openedCase = page.locator('.case-head', { hasText: 'cohort-alpha.invalid' });
     await expect(openedCase).toHaveAttribute('aria-expanded', 'true');
     await expect(openedCase).toBeFocused();
@@ -309,7 +310,7 @@ test.describe('browser-local campaigns', () => {
     await migrateLegacyBrowserData(page, cohortStorage('Unavailable profile fixture'), { destination: '/bulk' });
     await expect(page.locator('#console-navigation')).toBeVisible();
     await failBrowserLocalCollectionReads(page, 'brand_profiles');
-    const monitor = page.locator('#console-navigation').getByRole('link', { name: /^Monitor/u });
+    const monitor = page.locator('#console-navigation').getByRole('link', { name: /^Review inbox/u });
     await monitor.evaluate((link) => link.setAttribute('href', '/monitor?view=campaigns&campaign=cohort-campaign'));
     await monitor.click();
     const region = page.getByRole('region', { name: 'Brand campaign cohorts' });
@@ -330,7 +331,7 @@ test.describe('browser-local campaigns', () => {
     await migrateLegacyBrowserData(page, cohortStorage(), { destination: '/bulk' });
     await expect(page.locator('#console-navigation')).toBeVisible();
     await failBrowserLocalCollectionReads(page, 'relationship_observations');
-    const monitor = page.locator('#console-navigation').getByRole('link', { name: /^Monitor/u });
+    const monitor = page.locator('#console-navigation').getByRole('link', { name: /^Review inbox/u });
     await monitor.evaluate((link) => link.setAttribute('href', '/monitor?view=campaigns&campaign=cohort-campaign'));
     await monitor.click();
     const region = page.getByRole('region', { name: 'Brand campaign cohorts' });
@@ -356,12 +357,12 @@ test.describe('browser-local campaigns', () => {
       }] }),
     });
     await holdBrowserLocalReads(page, 3_000);
-    const monitorLink = page.getByRole('link', { name: /Monitor/ }).first();
+    const monitorLink = page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Review inbox', exact: true });
     await monitorLink.evaluate((link) => {
       link.setAttribute('href', '/monitor?view=campaigns&campaign=delayed-campaign');
     });
     await monitorLink.click();
-    await page.getByRole('tab', { name: /Campaigns/ }).click();
+    await openConsoleView(page, 'campaigns');
 
     const campaign = page.locator('.campaign-head', { hasText: 'Delayed campaign' });
     await expect(campaign).toBeVisible();
@@ -383,7 +384,7 @@ test.describe('browser-local campaigns', () => {
         domains: ['export-member.invalid'], createdAt: '2026-07-01T00:00:00.000Z', updatedAt: '2026-07-01T00:00:00.000Z',
       }] }),
     });
-    await page.getByRole('tab', { name: /Campaigns/ }).click();
+    await openConsoleView(page, 'campaigns');
 
     const downloadPromise = page.waitForEvent('download');
     await page.locator('.campaign-toolbar').getByRole('button', { name: 'Export JSON' }).click();
@@ -443,8 +444,7 @@ test.describe('accessible cross-case relationship table', () => {
       minimumRecords: records.length,
       timeout: 10_000,
     });
-    await expect(page.getByRole('tab', { name: new RegExp(`Cases ${records.length}`) })).toBeVisible();
-    await page.getByRole('tab', { name: /Relationships/ }).click();
+    await openConsoleView(page, 'relationships');
   }
 
   test('filters semantic relationship rows and opens a member case', async ({ page }) => {
@@ -482,7 +482,7 @@ test.describe('accessible cross-case relationship table', () => {
     await expect(table).toContainText('Shared final website origin');
 
     await page.getByRole('button', { name: 'Open charlie-table.invalid' }).click();
-    await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true })).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('.case-head', { hasText: 'charlie-table.invalid' })).toHaveAttribute('aria-expanded', 'true');
   });
 
@@ -497,12 +497,12 @@ test.describe('accessible cross-case relationship table', () => {
         ],
       },
     });
-    await expect(page.getByRole('tab', { name: /Cases 2/ })).toBeVisible();
+    await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
     await failBrowserLocalCollectionReads(page, 'campaigns');
     const navigation = page.locator('#console-navigation');
     await navigation.getByRole('link', { name: /^Dashboard/u }).click();
-    await navigation.getByRole('link', { name: /^Monitor/u }).click();
-    await page.getByRole('tab', { name: /Relationships/ }).click();
+    await navigation.getByRole('link', { name: /^Review inbox/u }).click();
+    await openConsoleView(page, 'relationships');
 
     await expect(page.locator('.local-context-status')).toContainText('campaigns');
     await expect(page.locator('.local-context-status')).toContainText('Successfully loaded collections remain available');
@@ -641,7 +641,7 @@ test.describe('accessible cross-case relationship table', () => {
         observations,
       }),
     });
-    await page.getByRole('tab', { name: /Relationships/ }).click();
+    await openConsoleView(page, 'relationships');
 
     const graphRegion = page.getByRole('region', { name: 'Relationship graph' });
     const graph = graphRegion.locator('.graph-scroll > svg');
@@ -713,7 +713,7 @@ test.describe('accessible cross-case relationship table', () => {
     await expect(graph.getByRole('button', { name: 'Shared nameserver set: ns.shared-graph.invalid' })).toHaveCount(0);
 
     await inspector.getByRole('button', { name: 'Open case', exact: true }).click();
-    await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true })).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('.case-head', { hasText: 'alpha-graph.invalid' })).toHaveAttribute('aria-expanded', 'true');
   });
 
@@ -862,7 +862,7 @@ test.describe('accessible cross-case relationship table', () => {
         createdAt: '2026-07-10T00:00:00.000Z', updatedAt: '2026-07-18T00:00:00.000Z',
       }] }),
     });
-    await page.getByRole('tab', { name: /Relationships/ }).click();
+    await openConsoleView(page, 'relationships');
 
     const workspaceControls = page.getByRole('group', { name: 'Relationship workspace filters' });
     await workspaceControls.getByLabel('Source').selectOption('import');

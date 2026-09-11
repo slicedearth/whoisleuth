@@ -239,12 +239,17 @@ original fingerprint algorithm; refresh one deliberately to adopt the current
 parser. Different algorithms are not treated as equivalent evidence. See the
 [storage compatibility reference](browser-local-data.md) for supported formats.
 
-## Monitor, Respond and Assure
+## Review inbox and monitoring
 
-Monitor groups existing browser-local records into Respond and Assure views.
-The review inbox appears first. Case reporting, decision summaries and the
-follow-up calendar are under **Case reports and follow-up tools** when Cases
-are retained.
+**Review inbox** brings together changes, evidence gaps and due follow-ups,
+with Campaigns and Relationships alongside it. **Monitoring** contains
+Watchlists, Timeline, Certificates and Custom rules. Case reporting, decision
+summaries and the follow-up calendar are under **Case reports and follow-up
+tools** when Cases are retained.
+
+The Dashboard links its attention count and recent Cases to the corresponding
+saved work. Use **Search** (Ctrl/⌘ K) anywhere in the console to find a page or
+search browser-local records. Opening a destination does not collect evidence.
 
 **Relationships** searches exact website-profile groups and weighted pairs
 across saved snapshots. Results are paginated, with a page-number control and
@@ -253,7 +258,7 @@ compatible saved fields; source limits remain separate from pagination.
 
 ### Cases and response preparation
 
-Open **Cases** from the Respond navigation, or use the Cases view in Monitor.
+Open **Cases** from the Respond navigation. Older Monitor Case links still work.
 A Case's **Open Case page** link opens that record directly in this browser
 workspace. It does not share the record with another browser or person.
 

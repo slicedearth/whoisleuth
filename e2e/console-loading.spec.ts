@@ -17,7 +17,7 @@ import {
 
 type ConsoleRoute = Readonly<{
   path: '/lookup' | '/monitor' | '/cli';
-  heading: 'Lookup' | 'Monitor' | 'WHOISleuth CLI';
+  heading: 'Lookup' | 'Review inbox' | 'WHOISleuth CLI';
   readyControl: 'lookup-input' | 'monitor-inbox' | 'cli-search';
   readinessTargets: readonly BrowserReadinessTarget[];
   budget: Readonly<{
@@ -114,10 +114,10 @@ const routes: readonly ConsoleRoute[] = Object.freeze([
   }),
   Object.freeze({
     path: '/monitor',
-    heading: 'Monitor',
+    heading: 'Review inbox',
     readyControl: 'monitor-inbox',
     readinessTargets: Object.freeze([
-      Object.freeze({ selector: 'h1', exactText: 'Monitor' }),
+      Object.freeze({ selector: 'h1', exactText: 'Review inbox' }),
       Object.freeze({ selector: '#tab-inbox', requireEnabled: true }),
     ]),
     budget: coldLoadBudget('/monitor'),

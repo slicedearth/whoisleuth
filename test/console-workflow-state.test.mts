@@ -10,12 +10,38 @@ import {
   readSelectedConsoleCase,
   selectConsoleCase,
   subscribeSelectedConsoleCase,
+  readCaseNavigationContext,
+  setCaseNavigationContext,
 } from '../frontend/src/lib/console-workflow-state.ts';
 
 const lookupState = Object.freeze({
   query: 'example.test', completedTarget: '', completedLookupDepth: null, lookupMode: 'deep', includeExternalIntelligence: false,
   includeMalwareHostIntelligence: false, includeMalwareIocIntelligence: false,
   includeSecurityTxt: false, error: '', result: null,
+});
+
+test('Case navigation notices are bounded, target-specific, browser-only and cleared with the session', () => {
+  const previousWindow = globalThis.window;
+  const hadWindow = 'window' in globalThis;
+  setWindow({});
+  try {
+    setCaseNavigationContext('case-one', '/monitor?view=watchlists&watchlist=Review', 'Monitoring', 'Case saved; watchlist history remains separate.');
+    assert.equal(readCaseNavigationContext('case-two'), null);
+    assert.equal(readCaseNavigationContext('case-one')?.href, '/monitor?view=watchlists&watchlist=Review');
+    assert.match(readCaseNavigationContext('case-one')?.message ?? '', /watchlist history remains separate/);
+    assert.throws(() => setCaseNavigationContext('case-one', '/monitor', 'x'.repeat(81)), RangeError);
+    assert.throws(() => setCaseNavigationContext('case-one', '/monitor', 'Monitoring', 'x'.repeat(2_001)), RangeError);
+    setCaseNavigationContext('case-one', 'https://external.example', 'Monitoring');
+    assert.equal(readCaseNavigationContext('case-one')?.href, '/dashboard');
+    clearConsoleWorkflowState();
+    assert.equal(readCaseNavigationContext('case-one'), null);
+    removeWindow();
+    setCaseNavigationContext('case-one', '/monitor', 'Monitoring');
+    assert.equal(readCaseNavigationContext('case-one'), null);
+  } finally {
+    clearConsoleWorkflowState();
+    if (hadWindow) setWindow(previousWindow); else removeWindow();
+  }
 });
 const bulkState = Object.freeze({
   guideContext: '', input: 'example.test', mode: 'fast', pacing: 'balanced', completed: 1, total: 1, results: [], filter: 'all',

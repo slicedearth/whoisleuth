@@ -37,7 +37,7 @@ test('empty Monitor and Brands prioritise useful first actions across desktop an
       if (viewport.width <= 390) {
         await page.getByRole('tab', { name: /^Inbox/u }).focus();
         await page.keyboard.press('End');
-        const rules = page.getByRole('tab', { name: /^Custom rules/u });
+        const rules = page.getByRole('tab', { name: /^Relationships/u });
         await expect(rules).toBeFocused();
         await expect(rules).toHaveAttribute('aria-selected', 'true');
         await expect(rules).toBeInViewport({ ratio: 1 });

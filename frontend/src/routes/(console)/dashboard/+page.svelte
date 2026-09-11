@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import IntelligenceIcon, { type IntelligenceIconName } from '$lib/components/IntelligenceIcon.svelte';
+  import { goto } from '$app/navigation';
+  import IntelligenceIcon from '$lib/components/IntelligenceIcon.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import DashboardAttentionSummary from '$lib/components/DashboardAttentionSummary.svelte';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
@@ -18,55 +19,18 @@
     type DashboardWorkspaceState,
   } from '$lib/analysis/dashboard-workspace-state.ts';
   import { publicHomepage } from '$lib/workspaces';
-  import { caseStatusIsClosed } from '$lib/analysis/case-record-decisions.ts';
+  import { caseStatusIsClosed, statusLabel } from '$lib/analysis/case-record-decisions.ts';
   import { ANALYST_REVIEW_REQUIRED_COLLECTION_IDS } from '$lib/analysis/analyst-review-source-state.ts';
   let workspaceManagerRequested = $state(false);
+  let lookupTarget = $state('');
+  let recentCases = $state<BrowserLocalCollectionDocumentMap['cases']>([]);
+
+  function openLookup(event: SubmitEvent) {
+    event.preventDefault();
+    if (lookupTarget.trim()) void goto(`/lookup?${new URLSearchParams({ q: lookupTarget.trim() })}`);
+  }
 
 
-  type WorkflowAction = { href: string; label: string; detail: string; icon: IntelligenceIconName; taskPack?: true };
-  const workflowLanes: Array<{
-    id: 'investigate' | 'respond' | 'assure';
-    label: string;
-    detail: string;
-    icon: IntelligenceIconName;
-    actions: WorkflowAction[];
-  }> = [
-    {
-      id: 'investigate',
-      label: 'Investigate',
-      detail: 'Collect and compare source-attributed evidence for one target or a bounded candidate set.',
-      icon: 'lookup',
-      actions: [
-        { href: '/lookup', label: 'Lookup a target', detail: 'Review one domain, IP address, or ASN.', icon: 'lookup' },
-        { href: '/discover', label: 'Discover candidates', detail: 'Generate or search bounded domain leads.', icon: 'discover' },
-        { href: '/bulk', label: 'Triage a list', detail: 'Compare a focused set without broadening collection.', icon: 'bulk' },
-        { href: '/lookup?depth=deep&task=acquisition#query', label: 'Acquisition task pack', detail: 'Open Lookup with acquisition-readiness context.', icon: 'registry', taskPack: true },
-      ],
-    },
-    {
-      id: 'respond',
-      label: 'Respond',
-      detail: 'Continue retained review work, prepare bounded response material, and document follow-up.',
-      icon: 'case',
-      actions: [
-        { href: '/monitor', label: 'Review inbox', detail: 'Prioritise unfinished retained work.', icon: 'analysis' },
-        { href: '/monitor?view=cases', label: 'Cases & response', detail: 'Review evidence, decisions, and response preparation.', icon: 'case' },
-        { href: '/monitor?view=campaigns', label: 'Campaign review', detail: 'Review analyst-defined cohorts and hand-offs.', icon: 'discover' },
-      ],
-    },
-    {
-      id: 'assure',
-      label: 'Assure',
-      detail: 'Review retained change evidence, watchlists, owned-domain profiles, and local controls.',
-      icon: 'brand',
-      actions: [
-        { href: '/monitor?view=timeline', label: 'Monitoring history', detail: 'Compare retained observations and material changes.', icon: 'analysis' },
-        { href: '/monitor?view=watchlists', label: 'Watchlists', detail: 'Review saved change-tracking lists.', icon: 'watchlist' },
-        { href: '/monitor?view=rules', label: 'Control rules', detail: 'Review browser-local detection rules.', icon: 'registry' },
-        { href: '/brands', label: 'Owned-domain controls', detail: 'Review profiles, dependencies, and control posture.', icon: 'brand' },
-      ],
-    },
-  ];
   type LocalCounts = { cases: number | null; openCases: number | null; watchlists: number | null; profiles: number | null };
 
   let counts = $state<LocalCounts>({ cases: null, openCases: null, watchlists: null, profiles: null });
@@ -102,6 +66,7 @@
     });
     workspaceState = dashboardWorkspaceState(sourceStates);
     const caseRecords = (documents.get('cases') ?? []) as BrowserLocalCollectionDocumentMap['cases'];
+    recentCases = [...caseRecords].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.id.localeCompare(right.id)).slice(0, 5);
     const watchlists = (documents.get('watchlists') ?? {}) as BrowserLocalCollectionDocumentMap['watchlists'];
     const profiles = (documents.get('brand_profiles') ?? []) as BrowserLocalCollectionDocumentMap['brand_profiles'];
     const expectedFailures = results
@@ -173,11 +138,6 @@
     return value === null ? (summaryPending ? 'Loading' : 'Unavailable') : String(value);
   }
 
-  function countDetail(value: number | null, ready: string, unavailable: string): string {
-    if (value !== null) return ready;
-    return summaryPending ? 'Loading browser-local count' : unavailable;
-  }
-
   function openFirstUseTool(tool: 'guide' | 'import') {
     firstUseTool = firstUseTool === tool ? '' : tool;
   }
@@ -202,14 +162,16 @@
   <meta name="description" content="Start or continue a WHOISleuth domain investigation from the protected console's Dashboard.">
 </svelte:head>
 
-<PageHeading eyebrow="Console" title="Dashboard" description="Start or resume Investigate, Respond and Assure work.">
+<PageHeading eyebrow="Console" title="Dashboard" description="Continue your work or investigate a new target.">
   <a class="btn" href={publicHomepage.href} target="_blank" rel="noopener noreferrer" aria-label="View public homepage. Opens in a new tab.">View public homepage</a>
 </PageHeading>
-<details id="workspaces" class="workspace-directory card" ontoggle={event => { if (event.currentTarget.open) workspaceManagerRequested=true; }}>
-  <summary>Manage browser workspaces</summary>
-  {#if workspaceManagerRequested}<div class="workspace-directory-body"><DeferredSurface load={() => import('$lib/components/BrowserWorkspaceManager.svelte')} props={{}} loadingLabel="Reading browser workspaces." unavailableLabel="The workspace directory could not be loaded." /></div>{/if}
-</details>
+<form class="dashboard-lookup" onsubmit={openLookup}>
+  <label for="dashboard-target">Investigate a target</label>
+  <div><input id="dashboard-target" bind:value={lookupTarget} maxlength="253" placeholder="Domain, IP address or ASN" autocomplete="off" autocapitalize="none" spellcheck="false"><button class="primary" type="submit" disabled={!lookupTarget.trim()}>Open Lookup</button></div>
+  <nav aria-label="New investigation"><a href="/discover">Discover candidates</a><a href="/bulk">Triage a list</a>{#if workspaceState === 'returning'}<button type="button" class="link-action" onclick={() => openFirstUseTool('guide')}>Start a guided investigation</button>{/if}</nav>
+</form>
 {#if workspaceMutationStatus}<p class="workspace-mutation-status" role="status" aria-live="polite" aria-atomic="true">{workspaceMutationStatus}</p>{/if}
+{#if summaryError}<p class="summary-error" role="status">{summaryError}</p>{/if}
 
 {#if summaryPending && workspaceState !== 'loading'}<p role="status">Refreshing the saved-work summary…</p>{/if}
 {#if summaryPending && workspaceState === 'loading'}
@@ -233,58 +195,23 @@
   </div>
 </section>
 {:else}
+<div class="dashboard-work-grid">
+<div>
 {#if attentionSummary}
   <DashboardAttentionSummary summary={attentionSummary} />
 {:else if attentionUnavailable}
   <section class="dashboard-state card" role="status"><p class="eyebrow">Returning workspace</p><h2>Attention summary unavailable</h2><p>One or more required Review Item sources could not be read. Available work remains accessible below; no missing source was treated as empty.</p></section>
 {/if}
-
-<section class="dashboard-section" aria-labelledby="quick-actions-title">
-  <div class="section-intro">
-    <p class="eyebrow">Start here</p>
-    <h2 id="quick-actions-title">Choose an analyst job</h2>
-  </div>
-  <div class="workflow-grid responsive-grid">
-    {#each workflowLanes as lane,index}
-      <article class="workflow-lane" data-workflow={lane.id}>
-        <header>
-          <span class="workflow-meta" aria-hidden="true"><span>0{index + 1}</span><span class="workflow-icon"><IntelligenceIcon name={lane.icon} size={22} /></span></span>
-          <h3>{lane.label}</h3>
-          <p class="workflow-detail">{lane.detail}</p>
-        </header>
-        <nav aria-label={`${lane.label} actions`}>
-          {#each lane.actions as action}
-            <a class="workflow-action" data-task-pack={action.taskPack ? 'acquisition' : undefined} href={action.href}>
-              <span class="action-icon" aria-hidden="true"><IntelligenceIcon name={action.icon} size={18} /></span>
-              <span><strong>{action.label}</strong><small>{action.detail}</small></span>
-              <span class="action-arrow" aria-hidden="true">→</span>
-            </a>
-          {/each}
-        </nav>
-      </article>
-    {/each}
-  </div>
+</div>
+<section class="recent-cases" aria-labelledby="recent-cases-title">
+  <header><h2 id="recent-cases-title">Recent Cases</h2><a href="/cases">All Cases</a></header>
+  {#if recentCases.length}
+    <ol>{#each recentCases as record}<li><a href={`/cases?case=${encodeURIComponent(record.id)}`}><strong>{record.domain}</strong><span>{statusLabel(record.status)} · <time datetime={record.updatedAt}>{new Date(record.updatedAt).toLocaleDateString()}</time></span></a></li>{/each}</ol>
+  {:else if counts.cases === null}<p>Cases could not be read.</p>
+  {:else}<p>No Cases saved yet. Keep evidence from Lookup when you need to continue an investigation.</p>{/if}
+  <nav aria-label="Saved collections"><a href="/monitor?view=watchlists">Watchlists <span>{countText(counts.watchlists)}</span></a><a href="/brands">Brand profiles <span>{countText(counts.profiles)}</span></a></nav>
 </section>
-
-{#if workspaceState === 'returning'}<section class="dashboard-section" aria-labelledby="local-summary-title" aria-busy={summaryPending}>
-  <div class="section-intro">
-    <p class="eyebrow">Saved in this browser</p>
-    <h2 id="local-summary-title">Continue saved work</h2>
-    <p>Open retained cases, watchlists, and brand profiles. These counts stay in this browser and are not sent to the server.</p>
-  </div>
-  <div class="local-grid responsive-grid">
-    <a class="summary-card card" href="/monitor?view=cases">
-      <span class="summary-icon" aria-hidden="true"><IntelligenceIcon name="case" size={19} /></span><span class="summary-label">Open cases</span><strong>{countText(counts.openCases)}</strong><p>{countDetail(counts.cases, `${counts.cases} total saved case${counts.cases === 1 ? '' : 's'}`, 'Case count unavailable')}</p>
-    </a>
-    <a class="summary-card card" href="/monitor?view=watchlists">
-      <span class="summary-icon" aria-hidden="true"><IntelligenceIcon name="watchlist" size={19} /></span><span class="summary-label">Watchlists</span><strong>{countText(counts.watchlists)}</strong><p>{countDetail(counts.watchlists, `Saved change-tracking list${counts.watchlists === 1 ? '' : 's'}`, 'Watchlist count unavailable')}</p>
-    </a>
-    <a class="summary-card card" href="/brands">
-      <span class="summary-icon" aria-hidden="true"><IntelligenceIcon name="brand" size={19} /></span><span class="summary-label">Brand profiles</span><strong>{countText(counts.profiles)}</strong><p>{countDetail(counts.profiles, `Saved analysis profile${counts.profiles === 1 ? '' : 's'}`, 'Profile count unavailable')}</p>
-    </a>
-  </div>
-  <p class="summary-error" role="status">{summaryError}</p>
-</section>{:else}<p class="summary-error dashboard-source-error" role="status">{summaryError || 'One or more required browser-local collections are unavailable. WHOISleuth cannot classify this workspace as empty.'}</p>{/if}
+</div>
 
 {#if workspaceState === 'returning'}<section class="secondary-launcher card" aria-labelledby="secondary-launcher-title">
   <div>
@@ -296,6 +223,11 @@
 </section>
 {/if}
 {/if}
+
+<details id="workspaces" class="workspace-directory card" ontoggle={event => { if (event.currentTarget.open) workspaceManagerRequested=true; }}>
+  <summary>Manage browser workspaces</summary>
+  {#if workspaceManagerRequested}<div class="workspace-directory-body"><DeferredSurface load={() => import('$lib/components/BrowserWorkspaceManager.svelte')} props={{}} loadingLabel="Reading browser workspaces." unavailableLabel="The workspace directory could not be loaded." /></div>{/if}
+</details>
 
 <!-- Open tools keep their drafts and import results when summary classification changes. -->
 {#if firstUseTool || secondaryOpen}
@@ -311,39 +243,19 @@
 {/if}
 
 <style>
+  .dashboard-lookup{padding:16px 0 22px;border-bottom:1px solid var(--border)}.dashboard-lookup>label{display:block;margin-bottom:8px;font-weight:650}.dashboard-lookup>div{display:flex;gap:8px}.dashboard-lookup input{min-width:0;flex:1}.dashboard-lookup nav{display:flex;flex-wrap:wrap;gap:10px 20px;margin-top:12px;font-size:var(--text-sm)}.link-action{padding:0;border:0;background:none;color:var(--accent);font:inherit;text-decoration:underline;text-underline-offset:3px}.dashboard-work-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,.48fr);gap:24px;align-items:start}.dashboard-work-grid>div{min-width:0}.recent-cases{min-width:0;margin-top:28px}.recent-cases header{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.recent-cases h2{margin:0;font-size:var(--text-lg)}.recent-cases a{font-size:var(--text-sm)}.recent-cases ol{padding:0;list-style:none}.recent-cases li{border-bottom:1px solid var(--border)}.recent-cases li a{display:grid;gap:5px;padding:14px 0;overflow-wrap:anywhere}.recent-cases li span,.recent-cases>p{color:var(--muted);font-size:var(--text-xs);line-height:1.5}.recent-cases nav{display:grid;gap:8px;margin-top:22px}.recent-cases nav a{display:flex;justify-content:space-between;gap:10px}
+  @media(max-width:1150px){.dashboard-work-grid{grid-template-columns:1fr}.recent-cases{margin-top:0}}
+  @media(max-width:460px){.dashboard-lookup>div{flex-direction:column}}
   .workspace-directory{margin:20px 0;padding:16px;scroll-margin-top:80px}.workspace-directory summary{font:700 var(--text-sm) var(--mono)}.workspace-directory-body{padding-top:18px}
   .workspace-mutation-status{margin:16px 0 0;padding:10px 12px;border-left:2px solid var(--accent2);background:color-mix(in srgb,var(--accent2) 7%,transparent);color:var(--text);font-size:var(--text-sm);line-height:1.5}
   .summary-error{margin:14px 0 0;color:var(--amber);font-size:var(--text-sm)}
   .summary-error:empty{display:none}
   .secondary-launcher{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:20px;margin-top:28px;padding:18px 20px}.secondary-launcher>div{min-width:0}.secondary-launcher h2{margin:3px 0 0;font:700 var(--text-lg) var(--mono)}.secondary-launcher>div>p:not(.eyebrow){max-width:74ch;margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.5}.secondary-launcher button{flex:0 0 auto}
   .dashboard-section{margin-top:34px}
-  .dashboard-state{margin-top:28px;padding:20px}.dashboard-state h2{margin:3px 0 0;font:700 1.15rem var(--mono)}.dashboard-state>p:not(.eyebrow){max-width:760px;margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.5}.dashboard-source-error{margin-top:24px}
+  .dashboard-state{margin-top:28px;padding:20px}.dashboard-state h2{margin:3px 0 0;font:700 1.15rem var(--mono)}.dashboard-state>p:not(.eyebrow){max-width:760px;margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.5}
   .getting-started-grid{--grid-min:310px;--grid-gap:9px}.getting-started-action{display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;align-items:start;min-width:0;padding:17px;text-align:left;color:var(--text)}button.getting-started-action{width:100%;font:inherit;cursor:pointer}.getting-started-action :global(svg){margin-top:1px;color:var(--accent)}.getting-started-action span{display:grid;gap:5px;min-width:0}.getting-started-action strong{font:700 var(--text-sm) var(--mono)}.getting-started-action small{color:var(--muted);font-size:var(--type-supporting-size);line-height:1.45;overflow-wrap:anywhere}.getting-started-action:hover,.getting-started-action:focus-visible{border-color:var(--accent);background:rgb(var(--accent-rgb) / .06)}
   .section-intro{max-width:760px;margin-bottom:14px}
   .section-intro h2{margin:3px 0 0;font:700 1.15rem var(--mono)}
   .section-intro>p:not(.eyebrow){margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.55}
-  .workflow-grid{--grid-min:290px;--grid-gap:10px}
-  .workflow-lane{display:grid;min-width:0;align-content:start;border:1px solid var(--border);border-radius:var(--radius-md);background:rgb(var(--panel-rgb) / .55);overflow:hidden}
-  .workflow-lane>header{display:grid;min-height:174px;align-content:start;padding:18px;border-bottom:1px solid var(--border)}
-  .workflow-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;color:var(--interface-accent);font:700 var(--text-2xs) var(--mono)}
-  .workflow-icon{display:grid;width:38px;height:38px;place-items:center;border:1px solid color-mix(in srgb,var(--accent) 48%,var(--border));border-radius:50%;background:rgb(var(--accent-rgb) / .07);color:var(--accent)}
-  .workflow-lane h3{margin:5px 0 0;font:700 var(--text-lg) var(--mono)}
-  .workflow-detail{margin:7px 0 0;color:var(--muted);font-size:var(--type-body-size);line-height:1.5}
-  .workflow-lane nav{display:grid;margin:0;padding:7px}
-  .workflow-action{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:center;min-width:0;padding:10px;border:1px solid transparent;border-radius:var(--radius-sm)}
-  .workflow-action:hover,.workflow-action:focus-visible{border-color:var(--border-strong);background:rgb(var(--accent-rgb) / .06)}
-  .action-icon{display:grid;width:28px;height:28px;place-items:center;color:var(--accent)}
-  .workflow-action>span:nth-child(2){min-width:0}
-  .workflow-action strong,.workflow-action small{display:block;overflow-wrap:anywhere}
-  .workflow-action strong{color:var(--text);font:700 var(--text-xs) var(--mono)}
-  .workflow-action small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
-  .action-arrow{color:var(--accent);font:700 var(--text-sm) var(--mono)}
-  .local-grid{--grid-min:245px;--grid-gap:8px}
-  .summary-card{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:5px 10px;align-items:center;padding:17px 18px}
-  .summary-icon{display:grid;width:32px;height:32px;grid-row:1 / span 2;place-items:center;border:1px solid color-mix(in srgb,var(--interface-accent) 42%,var(--border));border-radius:50%;background:rgb(var(--interface-accent-rgb) / .06);color:var(--interface-accent)}
-  .summary-label{color:var(--muted);font:700 var(--text-2xs) var(--mono);letter-spacing:.06em;text-transform:uppercase}
-  .summary-card>strong{grid-row:1 / span 2;grid-column:3;color:var(--interface-accent);font:750 1.7rem var(--mono)}
-  .summary-card>p{grid-column:2;margin:0;color:var(--text);font-size:var(--text-xs);line-height:1.45}
-  @media(max-width:980px){.workflow-lane>header{min-height:0}}
   @media(max-width:760px){.secondary-launcher{align-items:stretch;flex-direction:column}.secondary-launcher button{width:100%}}
 </style>

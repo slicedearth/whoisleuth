@@ -5,6 +5,7 @@
   import { parseBoundedJson } from '$lib/bounded-json';
   import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
   import PageHeading from '$lib/components/PageHeading.svelte';
+  import { setCaseNavigationContext } from '$lib/console-workflow-state';
   import MonitorViewTabs from '$lib/components/MonitorViewTabs.svelte';
   import LocalCollectionState from '$lib/components/LocalCollectionState.svelte';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
@@ -27,6 +28,7 @@
     monitorRouteTarget,
     monitorViewCollections,
     monitorViewFromUrl,
+    canonicalCaseUrl,
     monitorWorkflowForView,
     type MonitorCollection,
     type MonitorFocus,
@@ -74,6 +76,7 @@
   $effect(()=>{
     const currentUrl=page.url;
     const requested=monitorViewFromUrl(currentUrl);
+    if(requested==='cases') { void goto(canonicalCaseUrl(currentUrl), {replaceState:true}); return; }
     untrack(()=>{
       view=requested;
     });
@@ -96,7 +99,6 @@
     else if(next==='campaigns')preloadModule(()=>import('$lib/components/CampaignManager.svelte'));
     else if(next==='relationships')preloadModule(()=>Promise.all([import('$lib/components/WebsiteProfileClusters.svelte'),import('$lib/components/RetainedRelationshipObservations.svelte'),import('$lib/components/CaseRelationshipClusters.svelte'),import('$lib/components/CaseRelationshipWorkspace.svelte')]));
     else if(next==='rules')preloadModule(()=>import('$lib/components/DetectionRuleManager.svelte'));
-    else if(next==='cases')preloadModule(()=>import('$lib/components/CaseWorkspace.svelte'));
     else if(next==='watchlists')preloadModule(()=>Promise.all([import('$lib/components/MonitorActivityHeatmap.svelte'),import('$lib/components/WatchlistWorkspace.svelte'),import('$lib/components/HostedWatchlistManager.svelte')]));
   }
 
@@ -227,8 +229,9 @@
     await reconcileCommittedCaseSnapshot(committed, success);
   }
 
-  async function openRelatedCase(record: CaseRecord) {
-    await navigateMonitor('cases', { parameter: 'case', value: record.id });
+  async function openRelatedCase(record: CaseRecord, notice = '') {
+    setCaseNavigationContext(record.id, `${page.url.pathname}${page.url.search}${page.url.hash}`, monitorWorkflow.title, notice);
+    await goto(`/cases?case=${encodeURIComponent(record.id)}`);
   }
   function openEvidenceDebtCase(caseId:string){const record=cases.find((item)=>item.id===caseId);if(record)openRelatedCase(record);else caseMessage='That retained case is no longer available.';}
 
@@ -239,7 +242,11 @@
     const { record, created } = committed;
     await reconcileCommittedCaseSnapshot(committed,
       `${created ? `Opened a new case for ${record.domain}.` : `Opened the existing case for ${record.domain}.`} Watchlist history remains separately attributed.`);
-    await openRelatedCase(record);
+    if (parentDomainCasesSourceState !== 'ready') {
+      message = caseMessage;
+      return;
+    }
+    await openRelatedCase(record, caseMessage);
   }
 
   async function recordWebsiteClusterLead(cluster:WebsiteProfileCluster,domain:string){
@@ -350,8 +357,8 @@
   });
 </script>
 
-<svelte:head><title>Monitor · WHOISleuth</title></svelte:head>
-<PageHeading eyebrow={monitorWorkflow.eyebrow} title="Monitor" description={monitorWorkflow.description} />
+<svelte:head><title>{monitorWorkflow.title} · WHOISleuth</title></svelte:head>
+<PageHeading eyebrow={monitorWorkflow.eyebrow} title={monitorWorkflow.title} description={monitorWorkflow.description} />
 
 <MonitorViewTabs {view} counts={{
   inbox:reviewInboxSourceState==='ready'?reviewInboxCount:null,
@@ -472,12 +479,6 @@
   {:else}
     <LocalCollectionState state={detectionRulesSourceState} title="Custom rules unavailable" detail="The browser-local rule collection could not be read, so its count and mutation controls remain unavailable. No empty rule collection is inferred." />
   {/if}
-</div>
-{/if}
-
-{#if view==='cases'}
-<div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-cases">
-  <DeferredSurface load={()=>import('$lib/components/CaseWorkspace.svelte')} loadingLabel="Loading Cases…" unavailableLabel="The Case workspace could not be loaded." props={{initialCases:casesSourceState==='ready'?cases:null,initialMessage:caseMessage,onchange:installCommittedCaseSnapshot}} placeholder="workspace" />
 </div>
 {/if}
 

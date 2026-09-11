@@ -1,3 +1,4 @@
+import { openConsoleView } from './console-navigation';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 import { createCase, serializeCaseStore } from '../packages/cases/case-model.mts';
@@ -59,7 +60,7 @@ for (const viewport of [
     await memberPages.scrollIntoViewIfNeeded();
     await testInfo.attach(`retained-timeline-members-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
 
-    await page.getByRole('tab', { name: /^Inbox/u }).click();
+    await openConsoleView(page, 'inbox');
     const debt = page.getByRole('region', { name: 'Evidence gaps', exact: true });
     await expect(debt.locator('.review-heading > strong')).toHaveText('3000 evidence gaps to review');
     await expect(debt.locator('.queue > li')).toHaveCount(25);

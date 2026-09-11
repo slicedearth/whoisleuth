@@ -85,6 +85,10 @@ describe('Dashboard workspace and attention states', () => {
     assert.equal(summary.changedSinceReview, 1);
     assert.equal(summary.overdue, 1);
     assert.equal(summary.attentionNeeded, 1);
+    const destination = new URL(summary.items[0]!.href, 'https://example.test');
+    assert.equal(destination.pathname, '/monitor');
+    assert.equal(destination.searchParams.get('attention'), '1');
+    assert.equal(destination.searchParams.get('review'), changed.subjectKey);
 
     const neverReviewed = item(analystReviewMaterialFingerprint(['unreviewed']));
     const unreviewedSummary = buildDashboardAttentionSummary({

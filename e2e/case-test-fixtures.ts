@@ -1,3 +1,4 @@
+import { openConsoleView } from './console-navigation';
 import type { Page } from '@playwright/test';
 import { expect } from './fixtures';
 import { migrateLegacyBrowserData } from './helpers';
@@ -136,13 +137,13 @@ export async function openSeededTimelineCase(
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': { version: schemaVersion, cases: records },
   }, { destination: '/monitor' });
-  await page.getByRole('tab', { name: /Cases/ }).click();
+  await openConsoleView(page, 'cases');
   await page.locator('.case-head', { hasText: domain }).click();
 }
 
 export async function openCasesView(page: Page) {
-  await page.goto('/monitor');
-  await page.getByRole('tab', { name: /Cases/ }).click();
+  await page.goto('/cases');
+  await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
 }
 
 export async function createCase(page: Page, domain: string) {

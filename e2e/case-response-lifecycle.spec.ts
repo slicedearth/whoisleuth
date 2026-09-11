@@ -1,3 +1,4 @@
+import { openConsoleView } from './console-navigation';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, readBrowserLocalCollection, requiredValue } from './helpers';
@@ -28,7 +29,7 @@ test('equal-time independent reviews remain visible without a selected outcome',
   await expect(reviews).toContainText('still observed');
   await expect(reviews).toContainText('not reproduced');
   await page.reload();
-  await page.getByRole('tab', { name: /Cases/ }).click();
+  await openConsoleView(page, 'cases');
   const reopened = await openCaseResponseWorkspace(page);
   const retained = reopened.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
   await retained.locator(':scope > summary').click();
@@ -149,7 +150,7 @@ test('rapid repeated note submission persists one note and is shown in the recor
   await expect(page.locator('.case-domain small')).toContainText('1 note');
 
   await page.reload();
-  await page.getByRole('tab', { name: /Cases/ }).click();
+  await openConsoleView(page, 'cases');
   await expect(page.locator('.case-head', { hasText: 'noted.invalid' })).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.notes p').first()).toHaveText('This domain looks suspicious.');
 });
@@ -287,7 +288,7 @@ test('a committed sighting is not offered as a failed write when refreshing Case
   expect(committed.manifest.revision).toBe(before.manifest.revision + 1);
   expect(committed.records[0]!.value.sightings).toHaveLength(1);
   await page.reload();
-  await page.getByRole('tab', { name: /Cases/ }).click();
+  await openConsoleView(page, 'cases');
   const restored = await openCaseResponseWorkspace(page);
   const restoredSighting = restored.locator('details[id^="case-response-observation-sightings-"]');
   await restoredSighting.locator('summary').click();
@@ -472,7 +473,7 @@ test('a committed note remains singular when its immediate reread fails', async 
   expect(stored.notes[0]?.body).toBe('One committed fixture note.');
 
   await page.reload();
-  await page.getByRole('tab', { name: /Cases/ }).click();
+  await openConsoleView(page, 'cases');
   await expect(page.locator('.case-head', { hasText: 'note-committed.invalid' })).toBeVisible();
   const reloaded = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
   expect(requiredValue(
@@ -944,7 +945,7 @@ test('append-only response review, exact authorisation, independent verification
   expect(stored.closures.records[0]).toMatchObject({ reason: 'infrastructure_changed' });
 
   await page.reload();
-  await page.getByRole('tab', { name: /Cases/ }).click();
+  await openConsoleView(page, 'cases');
   await expect(page.locator('.case-head', { hasText: 'response.invalid' })).toHaveAttribute('aria-expanded', 'true');
   const restoredWorkspace=await openCaseResponseWorkspace(page);
   await expect(restoredWorkspace).toContainText('1 pin · 0 sightings · 1 decision · 0 assertions · 1 action · 1 branch');

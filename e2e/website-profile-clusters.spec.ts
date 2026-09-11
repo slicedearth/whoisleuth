@@ -24,7 +24,7 @@ function savedProfile(index: number): WebsiteProfileSnapshot {
 
 test('saved website relationships retain complete membership and reach the last result page', async ({ page }) => {
   const profiles = Array.from({ length: 60 }, (_, index) => savedProfile(index));
-  await page.goto('/monitor?view=cases');
+  await page.goto('/monitor?view=campaigns');
   await migrateLegacyBrowserData(page, {
     'whoisleuth-website-snapshots-v1': currentBrowserLocalDocument('website_snapshots', { snapshots: profiles }),
   });

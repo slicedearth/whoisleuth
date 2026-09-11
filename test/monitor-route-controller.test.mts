@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import {
   appendUnavailableCollectionStatus,
+  canonicalCaseUrl,
   buildMonitorNavigationUrl,
   createMonitorCollectionLoader,
   monitorRouteKey,
@@ -13,6 +14,10 @@ import {
 } from '../frontend/src/lib/controllers/monitor-route-controller.ts';
 
 describe('Monitor route controller', () => {
+  it('keeps legacy Case targets and fragments while choosing the dedicated Case destination', () => {
+    assert.equal(canonicalCaseUrl(new URL('https://example.test/monitor?view=cases&case=case-1&response=1#case-response-case-1')), '/cases?case=case-1&response=1#case-response-case-1');
+    assert.equal(canonicalCaseUrl(new URL('https://example.test/monitor?view=cases&investigation=1&domain=example.test#case-review-queue')), '/cases?investigation=1&domain=example.test#case-review-queue');
+  });
   it('normalizes views, workflow ownership and collection requirements', () => {
     assert.equal(monitorViewFromUrl(new URL('https://example.test/monitor')), 'inbox');
     assert.equal(

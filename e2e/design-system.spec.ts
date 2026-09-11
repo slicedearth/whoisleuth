@@ -166,8 +166,8 @@ test('data-dense analyst routes can use the available desktop workspace without 
 test('certificate monitoring highlights the Assure navigation destination', async ({ page }) => {
   await page.goto('/monitor?view=certificates');
   const navigation = page.locator('#console-navigation');
-  await expect(navigation.getByRole('link', { name: /^Watchlists & controls/u })).toHaveAttribute('aria-current', 'page');
-  await expect(navigation.getByRole('link', { name: /^Monitor/u })).not.toHaveAttribute('aria-current', 'page');
+  await expect(navigation.getByRole('link', { name: /^Monitoring/u })).toHaveAttribute('aria-current', 'page');
+  await expect(navigation.getByRole('link', { name: /^Review inbox/u })).not.toHaveAttribute('aria-current', 'page');
 });
 
 // A deep-ish result with enough evidence groups to exercise the section
@@ -301,6 +301,10 @@ test('the console command palette filters destinations and remains keyboard oper
   await search.press('Tab');
   await expect(dialog.getByRole('button', { name: 'Close command palette' })).toBeFocused();
   await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Pages and tools', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Saved work', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(search).toBeFocused();
   await search.fill('whois');
   await expect(dialog.getByRole('option', { name: /Lookup/ })).toBeVisible();
@@ -316,8 +320,9 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(dialog.getByRole('option', { name: /Registry support/ })).toBeVisible();
   await expect(dialog.getByRole('option')).toHaveCount(1);
   await search.fill('campaign');
-  await expect(dialog.getByRole('option', { name: /Monitor/ })).toBeVisible();
-  await expect(dialog.getByRole('option')).toHaveCount(1);
+  await expect(dialog.getByRole('option', { name: /^Review inbox/ })).toBeVisible();
+  await expect(dialog.getByRole('option', { name: /^Campaigns/ })).toBeVisible();
+  await expect(dialog.getByRole('option')).toHaveCount(2);
   for (const group of ['Start', 'Investigate', 'Respond', 'Assure']) {
     await search.fill(group);
     const commands = consoleCommandNavigation.filter(command => command.group === group);
@@ -334,8 +339,8 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(dialog.locator('.command-copy strong')).toHaveText(publicMatches.map((command) => command.label));
   await expect(dialog.locator('[data-command-group]')).toHaveText(publicMatches.map((command) => command.group));
   await expect(dialog.getByRole('option', { name: /Overview/u })).toBeVisible();
-  await search.fill('monitor');
-  await expect(dialog.getByRole('option', { name: /Monitor/ })).toBeVisible();
+  await search.fill('review inbox');
+  await expect(dialog.getByRole('option', { name: /^Review inbox/ })).toBeVisible();
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
   await search.press('Enter');
   await expect(page).toHaveURL(/\/monitor$/);

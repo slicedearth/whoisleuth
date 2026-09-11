@@ -1,3 +1,4 @@
+import { openConsoleView } from './console-navigation';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
@@ -54,7 +55,7 @@ test('review history links exact retained decisions and missing associations wit
   });
   const before = await readBrowserLocalCollection(page, 'analyst_review_state', { minimumRecords: 1 });
   const casesBefore = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
-  await page.getByRole('tab', { name: /^Timeline/u }).click();
+  await openConsoleView(page, 'timeline');
   const timeline = page.getByRole('region', { name: 'Investigation timeline', exact: true });
   await expect(timeline).toContainText('3 retained events');
   await timeline.getByRole('combobox', { name: 'Case', exact: true }).selectOption('missing-review-case');
@@ -121,7 +122,7 @@ test('review history links exact retained decisions and missing associations wit
   await expect(inbox.locator('.items > li')).toHaveCount(0);
   await inbox.getByRole('link', { name: 'Show all review items', exact: true }).press('Enter');
   await expect(inbox.locator('.items > li')).not.toHaveCount(0);
-  await page.getByRole('tab', { name: /^Timeline/u }).click();
+  await openConsoleView(page, 'timeline');
   expect(new URL(page.url()).searchParams.has('review')).toBe(false);
   expect(apiRequests).toBe(0);
 });
@@ -152,14 +153,14 @@ test('a pending review read stays loading after the other timeline collections a
     return { get held() { return held; }, release, restore() { release(); crypto.subtle.digest = original; } };
   }, rationale);
   try {
-    await page.getByRole('tab', { name: /^Relationships/u }).click();
+    await openConsoleView(page, 'relationships');
     await expect(page.getByRole('tab', { name: /^Relationships/u }).locator('span')).not.toHaveAttribute('aria-label', /count (loading|unavailable)/u);
-    await page.getByRole('tab', { name: /^Inbox/u }).click();
+    await openConsoleView(page, 'inbox');
     await expect.poll(() => gate.evaluate((control) => control.held)).toBe(true);
     const gaps = page.getByRole('region', { name: 'Evidence gaps', exact: true });
     await expect(gaps).toBeVisible();
     await expect(gaps).toHaveAttribute('aria-busy', 'false');
-    await page.getByRole('tab', { name: /^Timeline/u }).click();
+    await openConsoleView(page, 'timeline');
     await expect(page.getByRole('heading', { name: 'Loading saved work', exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Investigation timeline', exact: true })).toHaveCount(0);
     await gate.evaluate((control) => control.release());
@@ -173,7 +174,7 @@ test('a pending review read stays loading after the other timeline collections a
 test('an unreadable review collection cannot produce an apparently complete activity timeline', async ({ page }) => {
   await seed(page);
   await failBrowserLocalCollectionReads(page, 'analyst_review_state');
-  await page.getByRole('tab', { name: /^Timeline/u }).click();
+  await openConsoleView(page, 'timeline');
   await expect(page.getByRole('tab', { name: /^Timeline/u }).locator('span')).toHaveAttribute('aria-label', 'count unavailable');
   await expect(page.getByRole('region', { name: 'Investigation timeline', exact: true })).toHaveCount(0);
 });
@@ -253,19 +254,19 @@ test('held preparation is not an empty result and switching views cancels it wit
   const probe = await workerProbe(page);
   const held = await holdNextWorker(page);
   try {
-    await page.getByRole('tab', { name: /^Timeline/u }).click();
+    await openConsoleView(page, 'timeline');
     await expect.poll(held.count).toBe(1);
     await expect(page.getByRole('status').filter({ hasText: 'Preparing the timeline locally' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Investigation timeline', exact: true })).toHaveCount(0);
     await expect(page.getByRole('tab', { name: /^Timeline/u }).locator('span')).toHaveAttribute('aria-label', 'count loading');
-    await page.getByRole('tab', { name: /^Inbox/u }).click();
+    await openConsoleView(page, 'inbox');
     await expect(page.getByRole('region', { name: 'Evidence gaps', exact: true })).toContainText('2 evidence gaps to review');
     await expect.poll(async () => (await probe.evaluate((value) => value.read())).operations[0]?.terminatedAt ?? 0).toBeGreaterThan(0);
     held.release();
-    await page.getByRole('tab', { name: /^Watchlists/u }).click();
+    await openConsoleView(page, 'watchlists');
     await expect(page.getByRole('tab', { name: /^Watchlists/u })).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('region', { name: 'Investigation timeline', exact: true })).toHaveCount(0);
-    await page.getByRole('tab', { name: /^Timeline/u }).click();
+    await openConsoleView(page, 'timeline');
     await expect(page.getByRole('region', { name: 'Investigation timeline', exact: true })).toContainText('2 retained events');
     const operations = (await probe.evaluate((value) => value.read())).operations;
     expect(operations.map((operation) => operation.kind)).toEqual(['timeline', 'debt', 'timeline']);
@@ -277,7 +278,7 @@ test('failed preparation allows deliberate retry and refresh preserves filters, 
   await seed(page);
   const pattern = `**${productionChunkPath('src/lib/workers/retained-review.worker.ts')}`;
   await page.route(pattern, (route) => route.abort('failed'));
-  await page.getByRole('tab', { name: /^Timeline/u }).click();
+  await openConsoleView(page, 'timeline');
   await expect(page.getByRole('status').filter({ hasText: 'retained review worker is unavailable' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Investigation timeline', exact: true })).toHaveCount(0);
   await expect(page.getByRole('tab', { name: /^Timeline/u }).locator('span')).toHaveAttribute('aria-label', 'count unavailable');
@@ -310,7 +311,7 @@ test('leaving Monitor cancels the active worker without a late route update', as
   const probe = await workerProbe(page);
   const held = await holdNextWorker(page);
   try {
-    await page.getByRole('tab', { name: /^Timeline/u }).click();
+    await openConsoleView(page, 'timeline');
     await expect.poll(held.count).toBe(1);
     await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: /^Dashboard(?:\s|$)/u }).click();
     await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
@@ -327,29 +328,29 @@ test('unchanged views reuse preparation and deleting a retained record invalidat
   }) });
   const probe = await workerProbe(page);
   try {
-    await page.getByRole('tab', { name: /^Timeline/u }).click();
+    await openConsoleView(page, 'timeline');
     const timeline = page.getByRole('region', { name: 'Investigation timeline', exact: true });
     await expect(timeline).toContainText('3 retained events');
-    await page.getByRole('tab', { name: /^Watchlists/u }).click();
+    await openConsoleView(page, 'watchlists');
     await expect(page.getByRole('tab', { name: /^Watchlists/u })).toHaveAttribute('aria-selected', 'true');
-    await page.getByRole('tab', { name: /^Timeline/u }).click();
+    await openConsoleView(page, 'timeline');
     await expect(timeline).toContainText('3 retained events');
     expect((await probe.evaluate((value) => value.read())).operations).toHaveLength(1);
-    await page.getByRole('tab', { name: /^Relationships/u }).click();
+    await openConsoleView(page, 'relationships');
     const retained = page.getByRole('region', { name: 'Retained relationship observations', exact: true });
     await expect(retained).toContainText('1 retained');
     page.once('dialog', (dialog) => dialog.accept());
     await retained.getByRole('button', { name: 'Delete retained observation', exact: true }).click();
     await expect(retained.getByRole('heading', { name: 'No retained relationship observations', exact: true })).toBeVisible();
-    await expect(page.getByRole('tab', { name: /^Timeline/u }).locator('span')).toHaveAttribute('aria-label', 'count loading');
     const held = await holdNextWorker(page);
     try {
-      await page.getByRole('tab', { name: /^Timeline/u }).click();
+      await openConsoleView(page, 'timeline');
+      await expect(page.getByRole('tab', { name: /^Timeline/u }).locator('span')).toHaveAttribute('aria-label', 'count loading');
       await expect.poll(held.count).toBe(1);
       await expect(timeline).toHaveCount(0);
       held.release();
       await expect(timeline).toContainText('2 retained events');
-      expect((await probe.evaluate((value) => value.read())).operations).toHaveLength(2);
+      expect((await probe.evaluate((value) => value.read())).operations.filter(operation => operation.kind === 'timeline')).toHaveLength(2);
     } finally { await held.dispose(); }
   } finally { await probe.evaluate((value) => value.finish()); await probe.dispose(); }
 });
@@ -358,10 +359,10 @@ test('a committed Case edit replaces retained review inputs without losing its d
   await seed(page);
   const probe = await workerProbe(page);
   try {
-    await page.getByRole('tab', { name: /^Timeline/u }).click();
+    await openConsoleView(page, 'timeline');
     const timeline = page.getByRole('region', { name: 'Investigation timeline', exact: true });
     await expect(timeline).toContainText('2 retained events');
-    await page.getByRole('tab', { name: /^Cases/u }).click();
+    await openConsoleView(page, 'cases');
     const head = page.locator('.case-head', { hasText: 'retained-01.example' });
     if (await head.getAttribute('aria-expanded') !== 'true') await head.click();
     await page.getByRole('textbox', { name: 'Add note', exact: true }).fill('Retained review note.');
@@ -370,7 +371,7 @@ test('a committed Case edit replaces retained review inputs without losing its d
     await expect(page.getByRole('textbox', { name: 'Add note', exact: true })).toHaveValue('');
     const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
     expect(stored.records.find((record) => record.value.domain === 'retained-01.example')?.value.notes).toHaveLength(1);
-    await page.getByRole('tab', { name: /^Timeline/u }).click();
+    await openConsoleView(page, 'timeline');
     await expect(timeline).toContainText('2 retained events');
     const operations = (await probe.evaluate((value) => value.read())).operations;
     expect(operations).toHaveLength(2);
@@ -383,9 +384,9 @@ test('small retained collections preserve usable review and note workflows with 
   await seed(page, {}, false);
   const probe = await workerProbe(page);
   try {
-    await page.getByRole('tab', { name: /^Timeline/u }).click();
+    await openConsoleView(page, 'timeline');
     await expect(page.getByRole('region', { name: 'Investigation timeline', exact: true })).toContainText('2 retained events');
-    await page.getByRole('tab', { name: /^Cases/u }).click();
+    await openConsoleView(page, 'cases');
     await page.locator('.case-head', { hasText: 'retained-01.example' }).click();
     await page.getByRole('textbox', { name: 'Add note', exact: true }).fill('Small workspace note.');
     const noteStartedAt = await page.evaluate(() => performance.now());
@@ -416,7 +417,7 @@ for (const kind of ['timeline', 'debt'] as const) test(`complete ${kind} prepara
   expect(stored.records.reduce((count, record) => count + record.value.evidencePins.length, 0)).toBe(3_000);
   const probe = await workerProbe(page);
   try {
-    await page.getByRole('tab', { name: kind === 'timeline' ? /^Timeline/u : /^Inbox/u }).click();
+    await openConsoleView(page, kind === 'timeline' ? 'timeline' : 'inbox');
     const region = page.getByRole('region', { name: kind === 'timeline' ? 'Investigation timeline' : 'Evidence gaps', exact: true });
     await expect(region).toContainText(kind === 'timeline' ? '3002 retained events' : '5200 evidence gaps to review');
     const refresh = page.getByRole('button', { name: kind === 'timeline' ? 'Refresh timeline' : 'Refresh evidence gaps', exact: true });

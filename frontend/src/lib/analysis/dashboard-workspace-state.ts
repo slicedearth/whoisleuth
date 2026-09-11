@@ -1,5 +1,6 @@
 import type { CaseRecord } from './case-model.ts';
 import { caseStatusIsClosed } from './case-record-decisions.ts';
+import { analystReviewAttentionHref, analystReviewNeedsAttention } from './analyst-review-attention.ts';
 import type { AnalystReviewInboxItem } from './analyst-review-inbox.ts';
 import type {
   AnalystReviewLifecycle,
@@ -77,10 +78,6 @@ export function dashboardWorkspaceState(
   return results.length === DASHBOARD_REQUIRED_COLLECTION_IDS.length ? 'first_use' : 'loading';
 }
 
-function needsAttention(lifecycle: AnalystReviewLifecycle): boolean {
-  return !['expected', 'suppressed', 'resolved'].includes(lifecycle.state);
-}
-
 function safeTime(value: string | null): number {
   const parsed = value ? Date.parse(value) : Number.NaN;
   return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
@@ -97,12 +94,12 @@ export function buildDashboardAttentionSummary(input: Readonly<{
     : new Date(0).toISOString();
   const bySubject = new Map<string, DashboardAttentionItem>();
   for (const item of input.reviewItems) {
-    if (!needsAttention(item.lifecycle)) continue;
+    if (!analystReviewNeedsAttention(item.lifecycle)) continue;
     bySubject.set(item.subjectKey, {
       subjectKey: item.subjectKey,
       title: item.title,
       detail: item.detail,
-      href: item.href,
+      href: analystReviewAttentionHref(item.subjectKey),
       lifecycle: item.lifecycle,
       dueAt: item.dueAt,
       source: item.source,

@@ -1,3 +1,4 @@
+import { openConsoleView } from './console-navigation';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { caseRecord } from './case-test-fixtures';
@@ -182,9 +183,9 @@ test('projects exact retained evidence gaps, exposes deliberate actions, and sta
   );
   await reviewCase.focus();
   await reviewCase.press('Enter');
-  await expect(page.getByRole('tab', { name: /^Cases/u })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('#case-head-case-conflicting')).toBeFocused();
-  await page.getByRole('tab', { name: /^Inbox/u }).click();
+  await openConsoleView(page, 'inbox');
 
   const returnedRegion = page.getByRole('region', { name: 'Evidence gaps' });
   const returnedFilters = returnedRegion.getByRole('group', { name: 'Evidence-gap filters' });
@@ -220,7 +221,7 @@ test('keeps readable Bulk gaps visible while the Case source is unavailable', as
   await seedEvidenceDebt(page, '/bulk');
   await expect(page.locator('#console-navigation')).toBeVisible();
   await failBrowserLocalCollectionReads(page, 'cases');
-  await page.locator('#console-navigation').getByRole('link', { name: /^Monitor/u }).click();
+  await page.locator('#console-navigation').getByRole('link', { name: /^Review inbox/u }).click();
 
   const region = page.getByRole('region', { name: 'Evidence gaps' });
   await expect(region.getByRole('alert')).toContainText('Cases could not be read');
@@ -245,7 +246,7 @@ test('a modified Case link opens its own tab without changing the inbox or writi
   await link.click({ modifiers: ['ControlOrMeta'] });
   const other = await opened;
   try {
-    await expect(other).toHaveURL(/\/monitor\?view=cases&case=case-conflicting#case-response-case-conflicting$/u);
+    await expect(other).toHaveURL(/\/cases\?case=case-conflicting#case-response-case-conflicting$/u);
     await expect(other.locator('#case-head-case-conflicting')).toHaveAttribute('aria-expanded', 'true');
     await expect(page).toHaveURL(originalUrl);
     await expect(page.getByRole('tab', { name: /^Inbox/u })).toHaveAttribute('aria-selected', 'true');
@@ -260,7 +261,7 @@ test('announces loading without presenting a false zero', async ({ page }) => {
   // Keep the fixture pending across navigation and the complete sequence of
   // accessibility assertions; this is not a product loading deadline.
   await holdBrowserLocalReads(page, 4_000);
-  const navigation = page.locator('#console-navigation').getByRole('link', { name: /^Monitor/u }).click();
+  const navigation = page.locator('#console-navigation').getByRole('link', { name: /^Review inbox/u }).click();
 
   const region = page.getByRole('region', { name: 'Evidence gaps' });
   const loading = page.locator('.local-collection-state');
@@ -270,7 +271,7 @@ test('announces loading without presenting a false zero', async ({ page }) => {
   await expect(region).toHaveCount(0);
   await expect(page.getByText('No retained review items', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Review inbox evidence unavailable', exact: true })).toHaveCount(0);
-  const heading = page.getByRole('heading', { name: 'Monitor', exact: true });
+  const heading = page.getByRole('heading', { name: 'Review inbox', exact: true });
   const tabs = page.getByRole('tablist', { name: 'Monitor views', exact: true });
   const headingBefore = await heading.boundingBox();
   const tabsBefore = await tabs.boundingBox();

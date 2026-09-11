@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { page as route } from '$app/state';
+  import { pushState } from '$app/navigation';
+  import { analystReviewNeedsAttention } from '../analysis/analyst-review-attention.ts';
   import Pagination from './Pagination.svelte';
   import ReviewLifecycleControls from './ReviewLifecycleControls.svelte';
   import {
@@ -38,7 +41,8 @@
     ondismiss?: (item: AnalystReviewItem, reason: AnalystReviewDismissalReason) => void | Promise<void>;
     onreview?: (item: AnalystReviewItem, input: { disposition: AnalystReviewDisposition; rationale: string; expiresAt: string | null; reviewDueAt: string | null }) => void | Promise<void>;
   } = $props();
-  let queue = $state<AnalystReviewQueue>('needs_action');
+  const attentionOnly = $derived(route.url.searchParams.get('attention') === '1');
+  const queue = $derived<AnalystReviewQueue>(ANALYST_REVIEW_QUEUE_OPTIONS.find(option => option.value === route.url.searchParams.get('queue'))?.value ?? 'needs_action');
   let kindFilter = $state<AnalystReviewKind | ''>('');
   let sourceFilter = $state('');
   let ageFilter = $state<AnalystReviewAge | ''>('');
@@ -58,6 +62,7 @@
   ])) as Record<AnalystReviewQueue, number>);
   const filteredByQueue = $derived(inbox.items.filter((item) => {
     if (selectedSubjectKey) return item.subjectKey === selectedSubjectKey;
+    if (attentionOnly) return analystReviewNeedsAttention(item.lifecycle);
     if (queue !== 'all' && analystReviewQueue(item, now) !== queue) return false;
     return !kindFilter || item.kind === kindFilter;
   }));
@@ -78,7 +83,10 @@
     .filter((row) => row.totalAtLeast > 0));
 
   function setQueue(value: AnalystReviewQueue) {
-    queue = value;
+    const url = new URL(route.url);
+    url.searchParams.delete('attention');
+    url.searchParams.set('queue', value);
+    pushState(`${url.pathname}${url.search}${url.hash}`, route.state);
     page = 1;
   }
 
@@ -128,12 +136,13 @@
   </div>
 
   {#if selectedSubjectKey}
-    <p class="selected-review" role="status">{filteredByQueue.length ? 'Showing the selected review and its retained history.' : 'The selected review is unavailable in the admitted inbox. No other review has been substituted.'} <a href="/monitor?view=inbox#review-inbox-title">Show all review items</a></p>
+    <p class="selected-review" role="status">{filteredByQueue.length ? 'Showing the selected review and its retained history.' : 'The selected review is unavailable in the admitted inbox. No other review has been substituted.'} <a href="/monitor?view=inbox&queue=all#review-inbox-title">Show all review items</a></p>
   {/if}
   {#if inbox.items.length && !selectedSubjectKey}
   <div class="filters" role="group" aria-label="Review queue">
+    {#if attentionOnly}<span class="active" role="status">Attention needed · {filteredByQueue.length}</span>{/if}
     {#each ANALYST_REVIEW_QUEUE_OPTIONS as option}
-      <button type="button" class:active={queue === option.value} aria-pressed={queue === option.value} onclick={() => setQueue(option.value)}>
+      <button type="button" class:active={!attentionOnly && queue === option.value} aria-pressed={!attentionOnly && queue === option.value} onclick={() => setQueue(option.value)}>
         {option.label} <span>{queueCounts[option.value]}</span>
       </button>
     {/each}

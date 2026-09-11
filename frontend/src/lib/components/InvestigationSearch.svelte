@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import Pagination from './Pagination.svelte';
   import { reloadDeferredModulePage } from '$lib/deferred-module';
   import {
@@ -12,7 +12,16 @@
   } from '$lib/analysis/investigation-search.ts';
   import type { InvestigationSearchSession } from '$lib/investigation-search-session';
 
-  let { session, loadError = '' } = $props<{ session: InvestigationSearchSession | null; loadError?: string }>();
+  let { session, loadError = '', compact = false, onopen } = $props<{ session: InvestigationSearchSession | null; loadError?: string; compact?: boolean; onopen?: (href: string) => void | Promise<void> }>();
+  let queryInput = $state<HTMLInputElement>();
+  const instanceId = $props.id();
+  onMount(() => { if (compact) queryInput?.focus(); });
+
+  function openResult(event: MouseEvent, href: string) {
+    if (!onopen || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    void onopen(href);
+  }
   let query = $state('');
   let resultPage = $state(1);
   let resultList = $state<HTMLOListElement>();
@@ -135,15 +144,15 @@
         </ul>
       </details>
     {/if}
-    <a class="result-action" href={result.href}>{result.action} <span aria-hidden="true">→</span></a>
+    <a class="result-action" href={result.href} onclick={event => openResult(event, result.href)}>{result.action} <span aria-hidden="true">→</span></a>
   </article>
 {/snippet}
 
-<section class="investigation-search card" aria-labelledby="investigation-search-title">
+<section class="investigation-search card" class:compact aria-labelledby={`${instanceId}-title`}>
   <div class="search-intro">
     <div>
       <p class="eyebrow">Find saved work</p>
-      <h2 id="investigation-search-title">Search what this browser remembers</h2>
+      <h2 id={`${instanceId}-title`}>Search saved work</h2>
       <p>Find saved domains, cases, campaigns, brand profiles, and related infrastructure without starting another check.</p>
     </div>
     {#if index?.state === 'ready'}
@@ -151,9 +160,10 @@
     {/if}
   </div>
 
-  <label for="investigation-search-query">Search saved work</label>
+  <label for={`${instanceId}-query`}>Search saved work</label>
   <input
-    id="investigation-search-query"
+    id={`${instanceId}-query`}
+    bind:this={queryInput}
     type="search"
     bind:value={query}
     oninput={() => { resultPage = 1; focusRequest = null; }}
@@ -204,9 +214,9 @@
     {/if}
 
     {#if response?.state === 'idle' && recentResults.length}
-      <section class="recent-work" aria-labelledby="recent-work-title">
+      <section class="recent-work" aria-labelledby={`${instanceId}-recent-title`}>
         <div>
-          <h3 id="recent-work-title">Recent saved work</h3>
+          <h3 id={`${instanceId}-recent-title`}>Recent saved work</h3>
           <p>Most recently observed items in the current bounded local index.</p>
         </div>
         <ol class="result-list independent-grid" aria-label="Recent local investigation work">
@@ -229,6 +239,7 @@
 </section>
 
 <style>
+  .compact{margin:0;padding:16px;border:0;border-radius:0;background:transparent}.compact .search-intro{display:none}.compact .result-list{grid-template-columns:1fr}.compact .result-card{padding:12px 0;border:0;border-bottom:1px solid var(--border);border-radius:0;background:transparent}.compact .search-note{margin-bottom:14px}.compact label{margin-top:0}
   .investigation-search{margin-top:28px;padding:21px;min-width:0}
   .search-intro{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
   .search-intro h2{margin:4px 0 7px;font:700 var(--text-lg) var(--mono)}

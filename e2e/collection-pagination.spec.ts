@@ -1,3 +1,4 @@
+import { openConsoleView } from './console-navigation';
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, openBulkShortlist } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
@@ -145,7 +146,7 @@ test('campaign and member pagination preserve expansion and case controls', asyn
     'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [] },
     'whoisleuth-campaigns-v1': currentBrowserLocalDocument('campaigns', { campaigns }),
   });
-  await page.getByRole('tab', { name: /Campaigns/ }).click();
+  await openConsoleView(page, 'campaigns');
 
   const campaignPages = page.getByRole('navigation', { name: 'Campaign pages' });
   await campaignPages.getByRole('button', { name: 'Next' }).click();

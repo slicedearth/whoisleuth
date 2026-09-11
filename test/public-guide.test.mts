@@ -78,10 +78,10 @@ test('tool guide covers every public-facing investigation tool once', () => {
     'Discover',
     'Bulk',
     'Cases',
-    'Monitor',
+    'Review inbox',
   ]);
   const monitor = toolGuides.find((tool) => tool.id === 'monitor');
-  assert.match(monitor?.result || '', /Respond contains.*Assure contains/iu);
+  assert.match(monitor?.result || '', /Monitoring has watchlists, timelines, certificates and custom rules/iu);
   assert.match(monitor?.result || '', /Evidence gaps.*unavailable and partial sources/iu);
   assert.match(monitor?.next || '', /Collection, response submission and control changes remain separate actions/iu);
 });
@@ -111,8 +111,8 @@ test('navigation, tool guide, and reference guide use one canonical product voca
   })), [
     { label: 'Start', items: ['Dashboard'] },
     { label: 'Investigate', items: ['Lookup', 'Discover', 'Bulk'] },
-    { label: 'Respond', items: ['Cases', 'Monitor'] },
-    { label: 'Assure', items: ['Watchlists & controls', 'Brands'] },
+    { label: 'Respond', items: ['Cases', 'Review inbox'] },
+    { label: 'Assure', items: ['Monitoring', 'Brands'] },
   ]);
   assert.deepEqual(consoleNavigationGroups.flatMap((group) => group.items), consoleNavigation);
   assert.deepEqual(protectedDestinations, [...consoleNavigation, ...referenceResources]);

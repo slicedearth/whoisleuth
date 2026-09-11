@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { openConsoleView } from './console-navigation';
 import {
   currentBrowserLocalDocument,
   currentBulkSessionBrowserStore,
@@ -170,7 +171,7 @@ test('delayed case deletion does not steal focus after leaving the Cases view', 
   page.once('dialog', (dialog) => dialog.accept());
   await holdBrowserLocalReads(page, 1_200, '#case-delete-delayed-case-focus');
   const timelineTab = page.getByRole('tab', { name: /Timeline/u });
-  await timelineTab.click();
+  await openConsoleView(page, 'timeline');
   await expect(timelineTab).toBeFocused();
   const committed = await readBrowserLocalCollection(page, 'cases', {
     minimumRevision: beforeDeletion.manifest.revision + 1,

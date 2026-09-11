@@ -257,7 +257,7 @@ async function retainCases(page: import('@playwright/test').Page, label: string,
   await currentAction(page).getByRole('link', { name: 'Open Monitor' }).click();
   const firstDomain = domains[0];
   if (!firstDomain) throw new Error('Case retention requires at least one domain.');
-  await expect(page).toHaveURL(new RegExp(`/monitor\\?view=cases&investigation=1&domain=${firstDomain.replaceAll('.', '\\.')}`));
+  await expect(page).toHaveURL(new RegExp(`/cases\\?investigation=1&domain=${firstDomain.replaceAll('.', '\\.')}`));
   const queue = page.locator('#case-review-queue');
   await expect(queue).toBeFocused();
   await expect(queue.locator('li')).toHaveCount(domains.length);
@@ -402,7 +402,7 @@ test('a response playbook reaches focused local packet preflight without a reque
   await expect(currentAction(page)).toContainText('Prepare reviewed response');
 
   await currentAction(page).getByRole('link', { name: /Open Monitor|Go to/ }).click();
-  await expect(page).toHaveURL(/\/monitor\?view=cases&investigation=1&response=1&domain=portal\.example\.test#case-review-queue/u);
+  await expect(page).toHaveURL(/\/cases\?investigation=1&response=1&domain=portal\.example\.test#case-review-queue/u);
   const queue = page.locator('#case-review-queue');
   await queue.getByRole('button', { name: 'Open case for portal.example.test' }).click();
   const preflight = page.locator('details[id^="case-response-preflight-"]');

@@ -1,3 +1,4 @@
+import { openConsoleView } from './console-navigation';
 import type { Page, Route } from '@playwright/test';
 
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
@@ -239,7 +240,7 @@ test('a pending protected module reaches a terminal reload state and ignores lat
   });
 
   await page.goto('/monitor');
-  await page.getByRole('tab', { name: /^Relationships\b/u }).click();
+  await openConsoleView(page, 'relationships');
   await requested;
   const placeholder = page.locator('[data-deferred-placeholder="workspace"]').first();
   await expect(placeholder).toBeVisible();

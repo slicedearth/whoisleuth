@@ -62,8 +62,8 @@ export const bulkNavigation = {
 
 export const monitorNavigation = {
     href: '/monitor',
-    label: 'Monitor',
-    detail: 'Review alerts, campaigns, relationships, and follow-up',
+    label: 'Review inbox',
+    detail: 'Review changes, evidence gaps and due follow-ups',
     icon: 'case',
     keywords: ['respond', 'case', 'response', 'campaign', 'follow-up', 'inbox'],
     activeQuery: {
@@ -83,8 +83,8 @@ export const casesNavigation = {
 
 export const monitorAssuranceNavigation = {
     href: '/monitor?view=watchlists',
-    label: 'Watchlists & controls',
-    detail: 'Review monitoring history, watchlists, and local rules',
+    label: 'Monitoring',
+    detail: 'Manage watchlists, change history and controls',
     icon: 'watchlist',
     keywords: ['assure', 'monitoring', 'watchlist', 'timeline', 'history', 'change', 'rules', 'controls'],
     activeQuery: {
@@ -92,6 +92,20 @@ export const monitorAssuranceNavigation = {
       values: ['certificates', 'timeline', 'watchlists', 'rules'],
     },
   } satisfies NavigationItem;
+
+export const monitorViewNavigation = [
+  { group: 'Respond', views: [
+    { view: 'inbox', label: 'Inbox', detail: monitorNavigation.detail },
+    { view: 'campaigns', label: 'Campaigns', detail: 'Review linked domains and campaign evidence' },
+    { view: 'relationships', label: 'Relationships', detail: 'Review connections between saved observations' },
+  ] },
+  { group: 'Assure', views: [
+    { view: 'timeline', label: 'Timeline', detail: 'Compare recorded monitoring observations' },
+    { view: 'certificates', label: 'Certificates', detail: 'Review certificate expectations and changes' },
+    { view: 'watchlists', label: 'Watchlists', detail: 'Manage targets and deliberate monitoring checks' },
+    { view: 'rules', label: 'Custom rules', detail: 'Manage browser-local review rules' },
+  ] },
+] as const;
 
 export const brandsNavigation = {
     href: '/brands',

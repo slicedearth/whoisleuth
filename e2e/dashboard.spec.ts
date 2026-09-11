@@ -380,15 +380,15 @@ test('the Dashboard waits for every collection and then presents only genuine fi
   await expect(page.getByRole('link', { name: /Investigate one target/u })).toHaveAttribute('href', '/lookup');
   await expect(page.getByRole('button', { name: /Start a guided investigation/u })).toBeVisible();
   await expect(page.getByRole('button', { name: /Import existing work/u })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Choose an analyst job' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Recent Cases', exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Continue saved work' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Follow a guided investigation' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Back up or move saved work' })).toHaveCount(0);
   await expect(page.locator('.workflow-lane')).toHaveCount(0);
-  await expect(page.locator('.workflow-action')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Attention needed', exact: true })).toHaveCount(0);
   await expect(page.locator('.quick-card')).toHaveCount(0);
   await expect(page.locator('.workspace-card')).toHaveCount(0);
-  await expect(page.locator('.summary-card')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Recent Cases', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Open saved-work tools' })).toHaveCount(0);
   await page.getByRole('button', { name: /Start a guided investigation/u }).click();
   await expect(page.getByRole('heading', { name: 'Follow a guided investigation' })).toBeVisible();
@@ -396,18 +396,17 @@ test('the Dashboard waits for every collection and then presents only genuine fi
   await expect(page.getByRole('combobox', { name: 'Guide' })).toBeVisible();
 });
 
-test('the Dashboard keeps interaction blue and outcome green in the dark theme', async ({ page }) => {
+test('the Dashboard keeps review counts neutral rather than implying an outcome in the dark theme', async ({ page }) => {
   await useTheme(page, 'dark');
   await page.goto('/dashboard');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord('dark-case', 'dark.invalid', 'new')] },
   });
-
-  await expect(page.locator('.workflow-icon').first()).toHaveCSS('color', 'rgb(94, 179, 255)');
-  await expect(page.locator('.workflow-meta').first()).toHaveCSS('color', 'rgb(126, 224, 168)');
-  await expect(page.locator('.workflow-action').first().locator('.action-arrow')).toHaveCSS('color', 'rgb(94, 179, 255)');
-  await expect(page.locator('.summary-icon').first()).toHaveCSS('color', 'rgb(126, 224, 168)');
-  await expect(page.locator('.summary-card').first().locator(':scope > strong')).toHaveCSS('color', 'rgb(126, 224, 168)');
+  const review = page.getByRole('region', { name: 'Attention needed', exact: true });
+  const metric = review.locator('.attention-grid article').filter({ hasText: 'Open Cases' }).locator('strong');
+  await expect(metric).toHaveText('1');
+  await expect(metric).toHaveCSS('color', await review.evaluate(element => getComputedStyle(element).color));
+  await expect(review.getByRole('link', { name: 'Open review inbox' })).toBeVisible();
 });
 
 test('the Dashboard never classifies an unavailable required collection as empty', async ({ page }) => {
@@ -415,9 +414,9 @@ test('the Dashboard never classifies an unavailable required collection as empty
   await expect(page.getByRole('heading', { name: 'Get started' })).toBeVisible();
   await failBrowserLocalCollectionReads(page, 'analyst_review_state');
   const navigation = page.getByRole('navigation', { name: 'Console' });
-  await navigation.getByRole('link', { name: /^Monitor/u }).click();
+  await navigation.getByRole('link', { name: /^Review inbox/u }).click();
   await expect(page).toHaveURL('/monitor');
-  await expect(page.getByRole('heading', { name: 'Monitor', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Review inbox', exact: true })).toBeVisible();
   await navigation.getByRole('link', { name: /^Dashboard/u }).click();
   await expect(page).toHaveURL('/dashboard');
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
@@ -434,9 +433,8 @@ for (const unavailableSource of ['detection_rules', 'website_snapshots'] as cons
     const attentionMetric = page.locator('.attention-grid article').filter({ hasText: 'Attention needed' });
     await expect(page.getByRole('heading', { name: 'Attention needed', exact: true })).toBeVisible();
     await expect(attentionMetric.locator('strong')).not.toHaveText('0');
-    await page.locator('details.contributors > summary').click();
-    await expect(page.locator('details.contributors')).toContainText('Review custom-rule match for attention-source.invalid');
-    await expect(page.locator('details.contributors')).toContainText('attention-source.invalid · adjacent website profiles');
+    await expect(page.getByRole('list', { name: 'Items needing attention' })).toContainText('Review custom-rule match for attention-source.invalid');
+    await expect(page.getByRole('list', { name: 'Items needing attention' })).toContainText('attention-source.invalid · adjacent website profiles');
 
     await page.getByRole('navigation', { name: 'Console' }).getByRole('link', { name: /^Bulk/u }).click();
     await expect(page).toHaveURL('/bulk');
@@ -565,11 +563,11 @@ test('the dashboard reports bounded browser-local counts and recent saved work',
     'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore(stored.profiles),
   }, { clearStorage: true });
 
-  await expect(page.locator('.summary-card', { hasText: 'Open cases' }).locator('strong')).toHaveText('1');
-  await expect(page.locator('.summary-card', { hasText: 'Open cases' })).toContainText('2 total saved cases');
-  await expect(page.locator('.summary-card', { hasText: 'Watchlists' }).locator('strong')).toHaveText('2');
-  await expect(page.locator('.summary-card', { hasText: 'Brand profiles' }).locator('strong')).toHaveText('2');
-  await expect(page.getByRole('heading', { name: 'Choose an analyst job' })).toBeVisible();
+  await expect(page.locator('.attention-grid article', { hasText: 'Open Cases' }).locator('strong')).toHaveText('1');
+  const recent = page.getByRole('region', { name: 'Recent Cases' });
+  await expect(recent.getByRole('listitem')).toHaveCount(2);
+  await expect(recent.getByRole('link', { name: /^Watchlists/ })).toContainText('2');
+  await expect(recent.getByRole('link', { name: /^Brand profiles/ })).toContainText('2');
   await expect(page.getByRole('heading', { name: 'Attention needed' })).toBeVisible();
   await openDashboardSecondaryWorkspaces(page);
   const recentWork = page.getByRole('list', { name: 'Recent local investigation work' });
@@ -582,18 +580,18 @@ test('the dashboard reports bounded browser-local counts and recent saved work',
   await expectNoHorizontalOverflow(page);
 });
 
-test('saved-work cards open the matching Monitor view', async ({ page }) => {
+test('saved collections open their canonical workspaces', async ({ page }) => {
   await page.goto('/dashboard');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord('saved-card-case', 'saved-card.invalid', 'new')] },
     'whois-rdap-watchlist-v1': currentBrowserLocalDocument('watchlists', { Saved: watchlistEntry('saved-card.invalid') }),
   });
-  await page.locator('.summary-card', { hasText: 'Open cases' }).click();
-  await expect(page).toHaveURL('/monitor?view=cases');
-  await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+  await expect(page).toHaveURL('/cases');
+  await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
 
   await page.goto('/dashboard');
-  await page.locator('.summary-card', { hasText: 'Watchlists' }).click();
+  await page.getByRole('navigation', { name: 'Saved collections' }).getByRole('link', { name: /^Watchlists/ }).click();
   await expect(page).toHaveURL('/monitor?view=watchlists');
   await expect(page.getByRole('tab', { name: /Watchlists/ })).toHaveAttribute('aria-selected', 'true');
 });

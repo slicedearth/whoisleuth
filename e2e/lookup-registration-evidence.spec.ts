@@ -1332,7 +1332,7 @@ test('published response routes can be recorded in a local case with their prove
     `/monitor?view=cases&case=${expectedCaseId}#case-response-${expectedCaseId}`,
   );
   await reviewPacket.click();
-  await expect(page).toHaveURL(new RegExp(`/monitor\\?view=cases&case=${expectedCaseId}#case-response-${expectedCaseId}$`));
+  await expect(page).toHaveURL(new RegExp(`/cases\\?case=${expectedCaseId}#case-response-${expectedCaseId}$`));
   const responseWorkspace = page.locator(`#case-response-${expectedCaseId}`);
   await expect(responseWorkspace).toBeVisible();
   await expect(responseWorkspace).toBeFocused();

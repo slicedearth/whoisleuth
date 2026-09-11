@@ -10,7 +10,7 @@ import {
   readBrowserLocalCollection,
 } from './helpers';
 
-test('direct Cases navigation restores selection and native links preserve Monitor access', async ({ page }) => {
+test('direct and legacy Cases navigation restore the same canonical selection', async ({ page }) => {
   await page.goto('/cases');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', {
@@ -22,19 +22,16 @@ test('direct Cases navigation restores selection and native links preserve Monit
   await expect(header).toBeFocused();
   const navigation = page.getByRole('navigation', { name: 'Console', exact: true });
   await expect(navigation.getByRole('link', { name: /^Cases/u })).toHaveAttribute('aria-current', 'page');
-  await expect(navigation.getByRole('link', { name: /^Monitor/u })).not.toHaveAttribute('aria-current', 'page');
+  await expect(navigation.getByRole('link', { name: /^Review inbox/u })).not.toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('link', { name: 'Open Case page', exact: true })).toHaveAttribute('href', '/cases?case=direct-case');
   await page.reload();
   await expect(header).toBeFocused();
   await expect(header).toHaveAttribute('aria-expanded', 'true');
   await page.goto('/monitor?view=cases&case=direct-case');
   await expect(header).toBeFocused();
-  await expect(page.getByRole('tab', { name: /^Cases/u })).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL('/cases?case=direct-case');
   await page.getByRole('link', { name: 'Open Case page', exact: true }).click();
   await expect(page).toHaveURL('/cases?case=direct-case');
-  await expect(header).toHaveAttribute('aria-expanded', 'true');
-  await page.goBack();
-  await expect(page).toHaveURL('/monitor?view=cases&case=direct-case');
   await expect(header).toHaveAttribute('aria-expanded', 'true');
 });
 

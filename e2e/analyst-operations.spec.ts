@@ -1,3 +1,4 @@
+import { openConsoleView } from './console-navigation';
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
@@ -518,7 +519,7 @@ test('one canonical Review Item lifecycle persists independently and recurs afte
   });
   expect(casesAfterDecision.records.map((record) => record.value)).toEqual(casesBefore.records.map((record) => record.value));
 
-  await page.getByRole('tab', { name: /Cases/ }).click();
+  await openConsoleView(page, 'cases');
   const caseHead = page.locator('.case-head', { hasText: 'lifecycle-review.invalid' });
   await caseHead.click();
   const workspace = await openCaseResponseWorkspace(page, 'case-lifecycle-review');
@@ -529,7 +530,7 @@ test('one canonical Review Item lifecycle persists independently and recurs afte
   await actions.getByRole('button', { name: 'Append transition' }).click();
   await expect(actions).toContainText('Current projection: reviewed');
 
-  await page.getByRole('tab', { name: /Inbox/ }).click();
+  await openConsoleView(page, 'inbox');
   await page.getByRole('group', { name: 'Review queue' })
     .getByRole('button', { name: /^Changed since review/ }).click();
   const advancedFilters = page.locator('.review-inbox details.advanced-filters');

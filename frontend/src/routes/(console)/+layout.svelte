@@ -8,7 +8,7 @@
     isProtectedDestination,
     referenceNavigation,
   } from '$lib/workspaces';
-  import { consoleCommandNavigation } from '$lib/console-command-navigation';
+  import { preloadBestEffort, preloadOnIdle } from '$lib/idle-preload';
   import { CAPABILITY_CONTEXT, fetchCapabilities, type CapabilityReport } from '$lib/capabilities';
   import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
   import BrandMark from '$lib/components/BrandMark.svelte';
@@ -51,6 +51,7 @@
   const wideWorkspace = $derived(['/lookup', '/bulk', '/cases', '/monitor', '/brands'].includes(page.url.pathname));
   setContext(CAPABILITY_CONTEXT, () => capabilities);
   onMount(() => {
+    const cancelNavigationPreload = preloadOnIdle(() => preloadBestEffort(() => import('$lib/console-command-navigation')));
     const unsubscribeCase = subscribeSelectedConsoleCase((id) => { selectedCaseId = id; });
     void checkSession();
     if (hasStoredInvestigationGuide()) investigationGuideRequested = true;
@@ -65,6 +66,7 @@
     };
     mobileNavigation.addEventListener('change', closeAtDesktopWidth);
     return () => {
+      cancelNavigationPreload();
       unsubscribeCase();
       mobileNavigation.removeEventListener('change', closeAtDesktopWidth);
       window.removeEventListener(INVESTIGATION_GUIDE_EVENT, showInvestigationGuide);
@@ -238,7 +240,7 @@
     <header bind:this={consoleHeader} inert={commandOpen} aria-hidden={commandOpen?'true':undefined}>
       <a href="/dashboard" aria-label="WHOISleuth Dashboard"><span class="mark small"><BrandMark /></span><strong>WHOISleuth</strong></a>
       <div class="console-header-actions">
-        <button class="command-trigger" type="button" aria-label="Open console navigation" bind:this={commandTrigger} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">Ctrl/⌘ K</span><span class="command-icon" aria-hidden="true"><IntelligenceIcon name="command" size={18} /></span><strong>Navigate</strong></button>
+        <button class="command-trigger" type="button" aria-label="Open console navigation" bind:this={commandTrigger} onpointerenter={() => preloadBestEffort(() => import('$lib/console-command-navigation'))} onfocus={() => preloadBestEffort(() => import('$lib/console-command-navigation'))} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">Ctrl/⌘ K</span><span class="command-icon" aria-hidden="true"><IntelligenceIcon name="command" size={18} /></span><strong>Search</strong></button>
         <span class="sign-out-control">
           <button class="console-sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>
           {#if logoutError}<span class="sign-out-error" role="alert">{logoutError}</span>{/if}
@@ -254,11 +256,11 @@
         {#each consoleNavigationGroups as navigationGroup}
           <div class="console-nav-group" role="group" aria-labelledby={`console-group-${navigationGroup.label.toLowerCase().replaceAll(' ', '-').replace('&', 'and')}`}>
             <p class="eyebrow" id={`console-group-${navigationGroup.label.toLowerCase().replaceAll(' ', '-').replace('&', 'and')}`}>{navigationGroup.label}</p>
-            {#each navigationGroup.items as item}<a class:active={isNavigationItemActive(item,page.url)} aria-current={isNavigationItemActive(item,page.url)?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}
+            {#each navigationGroup.items as item}<a class:active={isNavigationItemActive(item,page.url)} aria-current={isNavigationItemActive(item,page.url)?'page':undefined} href={item.href} title={item.detail} onclick={()=>navOpen=false}><IntelligenceIcon name={item.icon} size={18} /><strong>{item.label}</strong></a>{/each}
           </div>
         {/each}
       </nav>
-      <nav class="reference-nav" aria-label="Reference"><p class="eyebrow">Reference</p>{#each referenceNavigation as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} target={item.opensInNewTab?'_blank':undefined} rel={item.opensInNewTab?'noopener noreferrer':undefined} aria-label={item.opensInNewTab?`${item.label}. ${item.detail}. Opens in a new tab.`:undefined} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}</nav>
+      <nav class="reference-nav" aria-label="Reference"><p class="eyebrow">Reference</p>{#each referenceNavigation as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} title={item.detail} target={item.opensInNewTab?'_blank':undefined} rel={item.opensInNewTab?'noopener noreferrer':undefined} aria-label={item.opensInNewTab?`${item.label}. Opens in a new tab.`:undefined} onclick={()=>navOpen=false}><IntelligenceIcon name={item.icon} size={18} /><strong>{item.label}</strong></a>{/each}</nav>
       <div class="session"><ThemeSelector /><div class="session-row"><span role="note" title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span></div></div>
     </aside>
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
@@ -271,7 +273,7 @@
     </main>
     <div inert={navOpen||commandOpen}><AnalystUndo /></div>
     {#if commandOpen}
-      <CommandPalette commands={consoleCommandNavigation} onclose={closeCommandPalette} />
+      <CommandPalette onclose={closeCommandPalette} />
     {/if}
   </div>
 {/if}
@@ -284,7 +286,7 @@
   .reference-nav{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
   .sign-out-control{position:relative;display:inline-flex}
   .sign-out-error{position:absolute;z-index:20;top:calc(100% + 8px);right:0;width:min(300px,calc(100vw - 32px));padding:9px 11px;border:1px solid var(--danger);border-radius:var(--radius-sm);background:var(--panel);box-shadow:0 8px 24px rgb(var(--shadow-rgb) / .28);color:var(--danger);font-size:var(--text-2xs);line-height:1.4}
-  .console-nav-group+.console-nav-group{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+  .console-nav-group+.console-nav-group{margin-top:14px;padding-top:0}
   .command-trigger{display:flex;min-height:34px;align-items:center;gap:7px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--muted);font:650 var(--text-2xs) var(--mono);white-space:nowrap}
   .command-trigger:hover,.command-trigger:focus-visible{border-color:var(--accent);color:var(--accent);background:rgb(var(--accent-rgb) / .07)}
   .command-trigger span{padding:2px 4px;border:1px solid var(--border);border-radius:4px;color:var(--text);font:inherit}

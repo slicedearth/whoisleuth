@@ -1,3 +1,4 @@
+import { openConsoleView } from './console-navigation';
 import { createHash } from 'node:crypto';
 import { gzipSync, zipSync } from 'fflate';
 import { expect, test } from './fixtures';
@@ -533,7 +534,7 @@ test.describe('cases from Bulk', () => {
     await expect(caseCell.getByRole('link', { name: 'Open' })).toBeVisible();
 
     await page.goto('/monitor');
-    await page.getByRole('tab', { name: /Cases/ }).click();
+    await openConsoleView(page, 'cases');
     await expect(page.locator('.case-head', { hasText: 'bad-domain-1.invalid' })).toBeVisible();
     await expect(page.locator('.case-head', { hasText: 'bad-domain-1.invalid' }).locator('.badge').first()).toHaveText('New');
   });

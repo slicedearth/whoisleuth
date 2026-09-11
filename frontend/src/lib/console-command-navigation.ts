@@ -1,6 +1,7 @@
 import { publicReferenceCommandNavigation } from './public-reference-navigation.ts';
 import {
   consoleNavigationGroups,
+  monitorViewNavigation,
   publicCommandNavigation,
   referenceResources,
   type NavigationItem,
@@ -17,6 +18,12 @@ export const consoleCommandNavigation: readonly ConsoleCommandNavigationItem[] =
   ...consoleNavigationGroups.flatMap((navigationGroup) => (
     navigationGroup.items.map((item) => ({ ...item, group: navigationGroup.label }))
   )),
+  ...monitorViewNavigation.flatMap(({ group, views }) => views
+    .filter(({ view }) => view !== 'inbox' && view !== 'watchlists')
+    .map(({ view, label, detail }) => ({
+      href: `/monitor?view=${view}`, label, detail, group,
+      icon: 'watchlist' as const, keywords: ['monitor', 'saved work', view],
+    }))),
   ...referenceResources.map((item) => ({ ...item, group: 'Reference' })),
   ...publicCommands,
 ]);
