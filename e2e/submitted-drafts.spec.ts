@@ -56,29 +56,37 @@ test('template saving keeps a later form revision open', async ({ page }) => {
     }),
   });
   await openDashboardSecondaryWorkspaces(page);
-  await page.getByRole('button', { name: 'New template', exact: true }).click();
-  const name = page.getByRole('textbox', { name: 'Template name', exact: true });
+  const manager = page.getByRole('region', { name: 'Investigation templates', exact: true });
+  await manager.getByRole('button', { name: 'New template', exact: true }).click();
+  const name = manager.getByRole('textbox', { name: 'Template name', exact: true });
   await name.fill('Submitted template');
   const release = await holdBrowserLocalTransaction(page);
   try {
-    await page.getByRole('button', { name: 'Save template', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Save template', exact: true })).toBeDisabled();
+    await manager.getByRole('button', { name: 'Save template', exact: true }).click();
+    await expect(manager.getByRole('button', { name: 'Save template', exact: true })).toBeDisabled();
     await name.fill('Later template draft');
   } finally {
     await release();
   }
-  await expect(page.getByRole('status')).toContainText('Saved the Submitted template template.');
+  await expect(manager.getByRole('status')).toContainText('Saved the Submitted template template.');
   await expect(name).toHaveValue('Later template draft');
-  await expect(page.getByRole('button', { name: 'Save template', exact: true })).toBeEnabled();
+  await expect(manager.getByRole('button', { name: 'Save template', exact: true })).toBeEnabled();
+  const releaseSummary = await holdBrowserLocalTransaction(page);
+  try {
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(page.getByRole('status').filter({ hasText: /^Refreshing the saved-work summary…$/u })).toBeVisible();
+    await expect(manager.getByRole('status')).toContainText('Saved the Submitted template template.');
+    await expect(name).toHaveValue('Later template draft');
+  } finally { await releaseSummary(); }
   await page.setViewportSize({ width: 320, height: 700 });
-  const cancel = page.getByRole('region', { name: 'Investigation templates', exact: true }).getByRole('button', { name: 'Cancel', exact: true });
+  const cancel = manager.getByRole('button', { name: 'Cancel', exact: true });
   await expect(cancel).toBeVisible();
   expect(await cancel.evaluate((element) => {
     const range = document.createRange(); range.selectNodeContents(element);
     return range.getClientRects().length;
   })).toBe(1);
   await page.setViewportSize({ width: 1024, height: 768 });
-  const create = page.getByRole('button', { name: 'New template', exact: true });
+  const create = manager.getByRole('button', { name: 'New template', exact: true });
   await expect(create).toBeVisible();
   const inset = await create.evaluate((element) => {
     const card = element.closest('.card');
@@ -86,12 +94,12 @@ test('template saving keeps a later form revision open', async ({ page }) => {
     return card.getBoundingClientRect().right - Number.parseFloat(getComputedStyle(card).paddingRight) - element.getBoundingClientRect().right;
   });
   expect(inset).toBeGreaterThanOrEqual(-1);
-  await page.getByRole('button', { name: 'Save template', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Saved the Later template draft template.');
+  await manager.getByRole('button', { name: 'Save template', exact: true }).click();
+  await expect(manager.getByRole('status')).toContainText('Saved the Later template draft template.');
   const stored = await readBrowserLocalCollection(page, 'investigation_templates', { minimumRecords: 1 });
   expect(stored.records).toHaveLength(1);
   expect(stored.records[0]?.value.label).toBe('Later template draft');
-  await expect(page.locator('.template-list').getByRole('button', { name: 'Edit', exact: true })).toBeFocused();
+  await expect(manager.locator('.template-list').getByRole('button', { name: 'Edit', exact: true })).toBeFocused();
 });
 
 test('a new template draft cannot overwrite an already persisted identity', async ({ page }) => {
