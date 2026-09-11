@@ -1,4 +1,4 @@
-import { openConsoleView } from './console-navigation';
+import { openCaseClassification, openCaseMetadata, openCaseSection, openConsoleView } from './console-navigation';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
@@ -231,8 +231,8 @@ test('response lifecycle surfaces remain accessible across major desktop and mob
     await page.reload();
     await openConsoleView(page, 'cases');
     const head = page.locator('.case-head', { hasText: 'response-layout.invalid' });
-    if (await head.getAttribute('aria-expanded') !== 'true') await head.click();
-    const workspace = await openCaseResponseWorkspace(page);
+    if (!new URL(page.url()).searchParams.has('case')) await head.click();
+    const workspace = await openCaseResponseWorkspace(page, '', 'advanced', 'Response');
     const actions = workspace.locator('details', { hasText: 'Track append-only response actions' });
     await actions.getByText('Track append-only response actions', { exact: true }).click();
     const actionTimelines = actions.getByRole('list', { name: 'Response action transition timelines' });
@@ -260,13 +260,13 @@ test('@timing-sensitive a case created from Monitor persists across a reload', a
   await createCase(page, 'tracked.invalid');
 
   await expect(caseWorkspaceActionStatus(page)).toHaveText(/Opened a new case for tracked\.invalid/);
-  const head = page.locator('.case-head', { hasText: 'tracked.invalid' });
+  const head = page.locator('.case-heading', { hasText: 'tracked.invalid' });
   await expect(head.locator('.badge').first()).toHaveText('New');
   await expect(head.locator('.badge').nth(1)).toHaveText('Unreviewed');
 
   await page.reload();
   await openConsoleView(page, 'cases');
-  await expect(page.locator('.case-head', { hasText: 'tracked.invalid' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'tracked.invalid', exact: true })).toBeVisible();
 });
 
 test('a Case keeps its stable reference, controlled types, exact incident links and reporting route together', async ({ page }, testInfo) => {
@@ -276,10 +276,11 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
   const initial = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   const stored = requiredValue(initial.records[0], 'The created Case is missing.').value;
   const expectedNumber = caseNumber(stored.id);
-  const head = page.locator('.case-head', { hasText: 'reported-content.invalid' });
+  const head = page.locator('.case-heading', { hasText: 'reported-content.invalid' });
   await expect(head).toContainText(`Case …${expectedNumber.slice(-8)}`);
 
   const workspace = await openCaseResponseWorkspace(page);
+  await openCaseClassification(page);
   await expect(workspace.locator('.case-number code')).toHaveText(formattedCaseNumber(stored.id), { useInnerText: true });
   await workspace.getByRole('checkbox', { name: /^Phishing/u }).check();
   await workspace.getByRole('checkbox', { name: /^Trademark infringement/u }).check();
@@ -326,10 +327,12 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
   }
 
   const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
+  await openCaseSection(page, 'Response');
   await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
   await expect(packet.getByLabel('Abuse category')).toHaveValue('Phishing, Trademark infringement and 1 more');
   await expect(packet.getByLabel('Exact abusive HTTP(S) URLs')).toHaveValue(incidentUrl);
 
+  await openCaseMetadata(page);
   await page.getByLabel('Additional tags').fill('priority-review');
   await page.getByRole('button', { name: 'Save tags' }).click();
   await expect.poll(async () => {
@@ -347,10 +350,12 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
 
   await page.reload();
   await openConsoleView(page, 'cases');
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   await page.getByLabel('Search').fill('copyright infringement');
   const restoredHead = page.locator('.case-head', { hasText: 'reported-content.invalid' });
-  if (await restoredHead.getAttribute('aria-expanded') !== 'true') await restoredHead.click();
-  await expect(page.locator('.tag.case-type', { hasText: 'Phishing' })).toBeVisible();
+  await expect(page.locator('.tag', { hasText: 'Phishing' })).toBeVisible();
+  await restoredHead.click();
+  await openCaseMetadata(page);
   await expect(page.getByLabel('Additional tags')).toHaveValue('priority-review');
   await expectNoHorizontalOverflow(page);
 });
@@ -455,17 +460,18 @@ test('the mobile review inbox reveals and focuses a saved Bulk session', async (
 test('status and disposition edits persist across a reload', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'triage.invalid');
+  await openCaseMetadata(page);
 
-  await page.locator('.case-body .field-grid select').first().selectOption('escalated');
-  await page.locator('.case-body .field-grid select').nth(1).selectOption('confirmed_abuse');
+  await page.locator('.metadata-fields .field-grid select').first().selectOption('escalated');
+  await page.locator('.metadata-fields .field-grid select').nth(1).selectOption('confirmed_abuse');
 
-  const head = page.locator('.case-head', { hasText: 'triage.invalid' });
+  const head = page.locator('.case-heading', { hasText: 'triage.invalid' });
   await expect(head.locator('.badge').first()).toHaveText('Escalated');
   await expect(head.locator('.badge').nth(1)).toHaveText('Confirmed abuse');
 
   await page.reload();
   await openConsoleView(page, 'cases');
-  const reloaded = page.locator('.case-head', { hasText: 'triage.invalid' });
+  const reloaded = page.locator('.case-heading', { hasText: 'triage.invalid' });
   await expect(reloaded.locator('.badge').first()).toHaveText('Escalated');
   await expect(reloaded.locator('.badge').nth(1)).toHaveText('Confirmed abuse');
 });
@@ -506,6 +512,8 @@ test('reviewed cases export an explicitly selected privacy-bounded Risk calibrat
     has: page.getByText('unreviewed-calibration.invalid', { exact: true }),
   });
   await expect(page.getByRole('button', { name: /^Review calibration export/u })).toHaveCount(0);
+  await page.getByText('Advanced Case tools', { exact: true }).click();
+  await page.getByRole('button', { name: 'Select Cases for calibration export', exact: true }).click();
   await expect(unreviewed.getByRole('checkbox', { name: 'Include in offline Risk calibration export' })).toBeDisabled();
 
   await reviewed.getByRole('checkbox', { name: 'Include in offline Risk calibration export' }).check();
@@ -558,6 +566,7 @@ test('reviewed cases export an explicitly selected privacy-bounded Risk calibrat
 test('case tags offer bounded in-tab undo', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'undo-review.invalid');
+  await openCaseMetadata(page);
 
   const tags = page.getByLabel('Tags');
   await tags.fill('review, phishing');
@@ -571,10 +580,12 @@ test('Case tag undo preserves a newer change from another tab', async ({ page })
   await page.clock.setFixedTime('2026-09-08T00:00:00.000Z');
   await openCasesView(page);
   await createCase(page, 'undo-conflict.invalid');
+  await openCaseMetadata(page);
   const other = await page.context().newPage();
   try {
     await other.goto('/monitor?view=cases');
     await other.locator('.case-head', { hasText: 'undo-conflict.invalid' }).click();
+    await openCaseMetadata(other);
     await page.getByRole('textbox', { name: /^Additional tags\b/u }).fill('first-review');
     await page.getByRole('button', { name: 'Save tags', exact: true }).click();
     const undo = page.getByRole('region', { name: 'Undo analyst change' });

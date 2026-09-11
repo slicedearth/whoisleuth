@@ -136,9 +136,9 @@ test('CLI navigation readiness waits for working client-side filtering', async (
   }
 });
 
-test('Case preparation readiness cannot complete while its deferred workspace is held', async ({ page }) => {
+test('Case readiness cannot complete while its selected workspace is held', async ({ page }) => {
   const caseId = 'held-response-preparation';
-  const chunkPath = productionChunkPath('src/lib/components/CaseResponseWorkspace.svelte');
+  const chunkPath = productionChunkPath('src/lib/components/CaseDetail.svelte');
   let releaseChunk = () => {};
   const chunkReleased = new Promise<void>((resolve) => { releaseChunk = resolve; });
   let requestSeen = false;
@@ -163,10 +163,7 @@ test('Case preparation readiness cannot complete while its deferred workspace is
       },
     }, { clearStorage: true, destination: '/monitor?view=cases' });
     const caseHeading = page.locator(`#case-head-${caseId}`);
-    const caseBody = page.locator(`#case-body-${caseId}`);
-    const disclosure = page.locator(`#case-response-${caseId}`);
-    const summary = disclosure.locator(':scope > summary');
-    const responseWorkspace = disclosure.locator('.response-workspace');
+    const detail = page.locator(`[data-case-detail="${caseId}"]`);
     await expect(caseHeading).toBeVisible();
     await expect.poll(() => requestSeen, {
       message: 'waiting for the Case response module request to be held',
@@ -176,25 +173,19 @@ test('Case preparation readiness cannot complete while its deferred workspace is
     await beginBrowserInteractionReadiness(page, {
       start: { event: 'click', selector: `#case-head-${caseId}` },
       targets: [
-        { selector: `#case-body-${caseId}` },
-        { selector: `#case-response-${caseId}` },
-        { selector: `#case-response-${caseId} .response-workspace`, visibility: 'attached' },
-        { selector: `#case-response-${caseId} > summary`, requireEnabled: true },
+        { selector: `[data-case-detail="${caseId}"]` },
+        { selector: '.case-sections a[aria-current="page"]', requireEnabled: true },
+        { selector: '[aria-label="Retained Case records"]' },
       ],
     });
     await caseHeading.click();
-    await expect(caseBody).toBeVisible();
-    await expect(disclosure).toBeVisible();
-    await expect(responseWorkspace).toHaveCount(0);
+    await expect(page).toHaveURL(`/cases?case=${caseId}`);
+    await expect(detail).toHaveCount(0);
     await waitForAnimationFrames(page);
     expect(await isBrowserInteractionReadinessMarked(page)).toBe(false);
 
-    // Native disclosure is immediate, but a fast reveal cannot substitute for
-    // the held preparation phase or manufacture usable response controls.
-    await summary.click();
-    await expect(disclosure).toHaveAttribute('open', '');
-    await expect(responseWorkspace).toHaveCount(0);
-    await expect(disclosure.getByRole('button', { name: 'Advanced', exact: true })).toHaveCount(0);
+    await expect(page.getByText('Opening Case…', { exact: true })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Case sections' })).toHaveCount(0);
     await waitForAnimationFrames(page);
     expect(await isBrowserInteractionReadinessMarked(page)).toBe(false);
 
@@ -204,8 +195,10 @@ test('Case preparation readiness cannot complete while its deferred workspace is
       timeout: 5_000,
     }).toBe(true);
     expect((await readBrowserInteractionReadiness(page)).browserReadyMs).toBeGreaterThan(0);
-    await expect(responseWorkspace).toBeVisible();
-    await expect(disclosure.getByRole('button', { name: 'Advanced', exact: true })).toBeEnabled();
+    await expect(detail).toBeVisible();
+    const response = detail.getByRole('navigation', { name: 'Case sections' }).getByRole('link', { name: 'Response', exact: true });
+    await response.click();
+    await expect(detail.getByRole('textbox', { name: 'Recipient or owner', exact: true })).toBeEnabled();
     await expectNoHorizontalOverflow(page);
   } finally {
     releaseChunk();

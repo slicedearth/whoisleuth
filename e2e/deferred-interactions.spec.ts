@@ -29,8 +29,8 @@ type InteractionId =
   | 'bulk_analysis_transition'
   | 'bulk_cohort_outliers'
   | 'lookup_dns_evidence'
-  | 'case_response_preparation'
-  | 'case_response_packet'
+  | 'case_workspace_open'
+  | 'case_response_section'
   | 'dashboard_command_palette';
 
 type InteractionBudget = Readonly<{
@@ -103,9 +103,8 @@ type DeferredInteractionSampleSet = Readonly<{
 // The CLI filter row measures one real keyboard refinement after a prefilled
 // multi-result query. That keeps the browser recent-input semantics while
 // excluding artificial driver time for a no-delay multi-character sequence.
-// Case expansion/preparation and response disclosure are distinct rows. The
-// first ends when the workspace is attached inside its closed disclosure; the
-// second ends only when that prepared workspace and its controls are visible.
+// Case selection ends when its Summary and section navigation are usable.
+// Response navigation is separate and ends when its response controls are usable.
 // Bulk Analysis likewise owns a separate transition/preload row before the
 // cohort-outlier disclosure is measured. Each phase keeps its own observations.
 // These are transfer ceilings, not historical measurements. Prepared
@@ -122,8 +121,8 @@ const INTERACTION_TRANSFER_LIMITS: Readonly<Record<InteractionId, number>> = Obj
   bulk_analysis_transition: 71 * 1024,
   bulk_cohort_outliers: 0,
   lookup_dns_evidence: 83 * 1024,
-  case_response_preparation: 0,
-  case_response_packet: 0,
+  case_workspace_open: 0,
+  case_response_section: 0,
   dashboard_command_palette: 0,
 });
 
@@ -635,7 +634,7 @@ async function prepareCaseResponseFixture(page: Page, caseId: string): Promise<v
       version: CASE_SCHEMA_VERSION,
       cases: [caseRecord({ id: caseId, domain: 'response.example.test' })],
     },
-  }, { clearStorage: true, destination: '/monitor?view=cases' });
+  }, { clearStorage: true, destination: '/cases' });
   await expect(page.locator(`#case-head-${caseId}`)).toBeVisible();
 }
 
@@ -962,22 +961,20 @@ test('measures a deferred Lookup evidence family from deterministic fixture evid
   await expectNoHorizontalOverflow(page);
 });
 
-test('measures Case expansion through hidden response-workspace preparation', async ({ page }, testInfo) => {
+test('measures Case selection through a usable Summary and section navigation', async ({ page }, testInfo) => {
   const caseId = 'deferred-preparation-case';
   const caseHeading = page.locator(`#case-head-${caseId}`);
-  const caseBody = page.locator(`#case-body-${caseId}`);
-  const disclosure = page.locator(`#case-response-${caseId}`);
-  const summary = disclosure.locator(':scope > summary');
-  const responseWorkspace = disclosure.locator('.response-workspace');
+  const detail = page.locator(`[data-case-detail="${caseId}"]`);
+  const sectionLink = detail.getByRole('link', { name: 'Evidence', exact: true });
 
   await measureDeferredInteraction({
     page,
     testInfo,
-    interaction: 'case_response_preparation',
-    path: '/monitor',
+    interaction: 'case_workspace_open',
+    path: '/cases',
     prepare: async () => {
       await prepareCaseResponseFixture(page, caseId);
-      await expect(disclosure).toHaveCount(0);
+      await expect(detail).toHaveCount(0);
     },
     action: async () => {
       await caseHeading.focus();
@@ -986,60 +983,57 @@ test('measures Case expansion through hidden response-workspace preparation', as
     browserReadiness: {
       start: { event: 'click', selector: `#case-head-${caseId}` },
       targets: [
-        { selector: `#case-body-${caseId}` },
-        { selector: `#case-response-${caseId}` },
-        { selector: `#case-response-${caseId} .response-workspace`, visibility: 'attached' },
-        { selector: `#case-response-${caseId} > summary`, requireEnabled: true },
+        { selector: `[data-case-detail="${caseId}"]` },
+        { selector: '.case-sections a[aria-current="page"]' },
+        { selector: '.case-sections a[href$="section=evidence"]', requireEnabled: true },
+        { selector: '[aria-label="Retained Case records"]' },
       ],
     },
-    ready: responseWorkspace,
-    readyControl: summary,
-    readyPresentation: 'attached_hidden',
+    ready: detail,
+    readyControl: sectionLink,
     requireAsset: false,
   });
-  await expect(caseHeading).toHaveAttribute('aria-expanded', 'true');
-  await expect(caseBody).toBeVisible();
-  await expect(disclosure).not.toHaveAttribute('open', '');
+  await expect(page.getByRole('region', { name: 'Saved Cases', exact: true })).toHaveCount(0);
+  await expect(detail.getByRole('link', { name: 'Summary', exact: true })).toHaveAttribute('aria-current', 'page');
   await expectNoHorizontalOverflow(page);
 });
 
-test('measures disclosure of the prepared Case response and packet workspace', async ({ page }, testInfo) => {
+test('measures Case Response section activation through usable response controls', async ({ page }, testInfo) => {
   const caseId = 'deferred-response-case';
   const caseHeading = page.locator(`#case-head-${caseId}`);
-  const disclosure = page.locator(`#case-response-${caseId}`);
-  const summary = disclosure.locator(':scope > summary');
-  const responseWorkspace = disclosure.locator('.response-workspace');
-  const advancedPresentation = disclosure.getByRole('button', { name: 'Advanced', exact: true });
+  const detail = page.locator(`[data-case-detail="${caseId}"]`);
+  const responseLink = detail.getByRole('navigation', { name: 'Case sections' }).getByRole('link', { name: 'Response', exact: true });
+  const actions = detail.getByRole('region', { name: 'Case response actions', exact: true });
+  const recipient = actions.getByRole('textbox', { name: 'Recipient or owner', exact: true });
 
   await measureDeferredInteraction({
     page,
     testInfo,
-    interaction: 'case_response_packet',
-    path: '/monitor',
+    interaction: 'case_response_section',
+    path: '/cases',
     prepare: async () => {
       await prepareCaseResponseFixture(page, caseId);
-      await expect(disclosure).toHaveCount(0);
+      await expect(detail).toHaveCount(0);
       await caseHeading.click();
-      await expect(disclosure).toBeVisible();
-      await expect(responseWorkspace).toBeAttached();
-      await expect(responseWorkspace).toBeHidden();
+      await expect(responseLink).toBeVisible();
+      await expect(detail.getByRole('region', { name: 'Case response actions', exact: true, includeHidden: true })).toBeHidden();
     },
     action: async () => {
-      await summary.focus();
+      await responseLink.focus();
       await page.keyboard.press('Enter');
     },
     browserReadiness: {
-      start: { event: 'click', selector: '#case-response-deferred-response-case > summary' },
+      start: { event: 'click', selector: '.case-sections a[href$="section=response"]' },
       targets: [
-        { selector: '#case-response-deferred-response-case .response-workspace' },
-        { selector: '#case-response-deferred-response-case .presentation-switch button:nth-child(2)', requireEnabled: true },
+        { selector: '#case-response-decision-deferred-response-case' },
+        { selector: '#case-response-decision-deferred-response-case input[required][maxlength="320"]', requireEnabled: true },
       ],
     },
-    ready: responseWorkspace,
-    readyControl: advancedPresentation,
+    ready: actions,
+    readyControl: recipient,
     requireAsset: false,
   });
-  await expect(disclosure).toHaveAttribute('open', '');
+  await expect(responseLink).toHaveAttribute('aria-current', 'page');
   await expectNoHorizontalOverflow(page);
 });
 

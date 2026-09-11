@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page as route } from '$app/state';
-  import { pushState } from '$app/navigation';
+  import { goto } from '$app/navigation';
   import { analystReviewNeedsAttention } from '../analysis/analyst-review-attention.ts';
   import Pagination from './Pagination.svelte';
   import ReviewLifecycleControls from './ReviewLifecycleControls.svelte';
@@ -54,13 +54,15 @@
   let page = $state(1);
   let dismissalReasons = $state<Record<string, AnalystReviewDismissalReason | ''>>({});
   const nowMs = $derived(Date.parse(now));
+  const focusedCaseId = $derived(route.url.searchParams.get('case-review') ?? '');
+  const scopedItems = $derived(focusedCaseId ? inbox.items.filter(item => item.caseId === focusedCaseId) : inbox.items);
   const sourceOptions = $derived([...new Set(inbox.items.flatMap((item) => item.sourceIds))].sort());
   const evidenceFamilyOptions = $derived([...new Set(inbox.items.map((item) => item.evidenceFamily))].sort());
   const queueCounts = $derived(Object.fromEntries(ANALYST_REVIEW_QUEUE_OPTIONS.map((option) => [
     option.value,
-    option.value === 'all' ? inbox.items.length : inbox.items.filter((item) => analystReviewQueue(item, now) === option.value).length,
+    option.value === 'all' ? scopedItems.length : scopedItems.filter((item) => analystReviewQueue(item, now) === option.value).length,
   ])) as Record<AnalystReviewQueue, number>);
-  const filteredByQueue = $derived(inbox.items.filter((item) => {
+  const filteredByQueue = $derived(scopedItems.filter((item) => {
     if (selectedSubjectKey) return item.subjectKey === selectedSubjectKey;
     if (attentionOnly) return analystReviewNeedsAttention(item.lifecycle);
     if (queue !== 'all' && analystReviewQueue(item, now) !== queue) return false;
@@ -86,7 +88,7 @@
     const url = new URL(route.url);
     url.searchParams.delete('attention');
     url.searchParams.set('queue', value);
-    pushState(`${url.pathname}${url.search}${url.hash}`, route.state);
+    void goto(`${url.pathname}${url.search}${url.hash}`, { noScroll: true, keepFocus: true });
     page = 1;
   }
 
@@ -130,9 +132,9 @@
     <div>
       <p class="eyebrow">Analyst review</p>
       <h2 id="review-inbox-title">Review inbox</h2>
-      {#if inbox.items.length}<p>Retained Case decisions, evidence gaps, follow-ups, watchlist changes and incomplete Bulk sessions.</p>{/if}
+      {#if focusedCaseId}<p>Retained review items associated with the selected Case.</p>{:else if inbox.items.length}<p>Retained Case decisions, evidence gaps, follow-ups, watchlist changes and incomplete Bulk sessions.</p>{/if}
     </div>
-    {#if inbox.items.length || inbox.truncated}<strong aria-label={`${inbox.admission.displayed} retained review items`}>{inbox.admission.displayed}</strong>{/if}
+    {#if inbox.items.length || inbox.truncated}<strong aria-label={`${scopedItems.length} retained review items${focusedCaseId ? ' for the selected Case' : ''}`}>{scopedItems.length}</strong>{/if}
   </div>
 
   {#if selectedSubjectKey}
@@ -140,6 +142,7 @@
   {/if}
   {#if inbox.items.length && !selectedSubjectKey}
   <div class="filters" role="group" aria-label="Review queue">
+    {#if focusedCaseId}<span class="active">Selected Case</span><a href="/monitor?view=inbox&queue=all">Show all Cases</a>{/if}
     {#if attentionOnly}<span class="active" role="status">Attention needed · {filteredByQueue.length}</span>{/if}
     {#each ANALYST_REVIEW_QUEUE_OPTIONS as option}
       <button type="button" class:active={!attentionOnly && queue === option.value} aria-pressed={!attentionOnly && queue === option.value} onclick={() => setQueue(option.value)}>

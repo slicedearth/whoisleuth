@@ -1,4 +1,4 @@
-import { openConsoleView } from './console-navigation';
+import { openCaseClassification, openConsoleView } from './console-navigation';
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
@@ -332,6 +332,7 @@ test('platform reporting routes are unavailable before review and become usable 
   await page.clock.setFixedTime('2026-09-03T23:59:59.999Z');
   await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord({ id: 'platform-clock', domain: 'platform-clock.invalid' })] } }, { destination: '/cases?case=platform-clock' });
   const workspace = await openCaseResponseWorkspace(page, 'platform-clock');
+  await openCaseClassification(page);
   await workspace.getByLabel('Exact HTTP(S) URL').fill('https://t.me/example/7');
   await workspace.getByRole('button', { name: 'Add incident link', exact: true }).click();
   const routes = workspace.getByRole('region', { name: 'Official platform routes', exact: true });
@@ -351,6 +352,7 @@ test('platform reporting routes are unavailable before review and become usable 
   await page.clock.setFixedTime('2026-09-04T00:00:00.000Z');
   await page.reload();
   const refreshed = await openCaseResponseWorkspace(page, 'platform-clock');
+  await openCaseClassification(page);
   const reviewedRoutes = refreshed.getByRole('region', { name: 'Official platform routes', exact: true });
   await expect(reviewedRoutes.getByText('found', { exact: true })).toBeVisible();
   await expect(reviewedRoutes.getByRole('button', { name: 'Create drafting action', exact: true })).toBeEnabled();
@@ -500,9 +502,20 @@ test('one canonical Review Item lifecycle persists independently and recurs afte
     hasText: 'Recorded suppressed for Complete reviewed handoff for lifecycle-review.invalid',
   })).toBeVisible();
   await expect(item).toHaveCount(0);
-  await page.getByRole('group', { name: 'Review queue' }).getByRole('button', { name: /^Everything/u }).click();
+  const queues = page.getByRole('group', { name: 'Review queue' });
+  const everything = queues.getByRole('button', { name: /^Everything/u });
+  await everything.click();
+  await expect(page).toHaveURL('/monitor?view=inbox&queue=all');
+  await expect(everything).toHaveAttribute('aria-pressed', 'true');
+  await expect(everything).toBeFocused();
   await expect(item.locator('details.lifecycle-controls > summary')).toContainText('suppressed');
   await expect(item.locator('details.lifecycle-controls > summary')).not.toContainText('invalidated');
+  await page.goBack();
+  await expect(queues.getByRole('button', { name: /^Needs action/u })).toHaveAttribute('aria-pressed', 'true');
+  await expect(item).toHaveCount(0);
+  await page.goForward();
+  await expect(everything).toHaveAttribute('aria-pressed', 'true');
+  await expect(item.locator('details.lifecycle-controls > summary')).toContainText('suppressed');
 
   const reviewStateAfter = await readBrowserLocalCollection(page, 'analyst_review_state', {
     minimumRecords: 1,
@@ -522,7 +535,7 @@ test('one canonical Review Item lifecycle persists independently and recurs afte
   await openConsoleView(page, 'cases');
   const caseHead = page.locator('.case-head', { hasText: 'lifecycle-review.invalid' });
   await caseHead.click();
-  const workspace = await openCaseResponseWorkspace(page, 'case-lifecycle-review');
+  const workspace = await openCaseResponseWorkspace(page, 'case-lifecycle-review', 'advanced', 'Response');
   const actions = workspace.locator('details', { hasText: 'Track append-only response actions' });
   await actions.getByText('Track append-only response actions', { exact: true }).click();
   await actions.getByRole('button', { name: 'Review or append event' }).click();
@@ -582,8 +595,8 @@ test('ambiguous and future certificate observations remain reviewable through th
   }
   await sourceLink.focus();
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/view=cases&case=case-certificate-operations/u);
-  await expect(page.locator('#case-head-case-certificate-operations')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page).toHaveURL('/cases?case=case-certificate-operations');
+  await expect(page.locator('#case-head-case-certificate-operations')).toBeVisible();
   await expect(page.locator('#case-head-case-certificate-operations')).toBeFocused();
   await page.goto('/monitor?view=inbox');
   await page.getByRole('group', { name: 'Review queue' }).getByRole('button', { name: /^Changed since review/u }).click();

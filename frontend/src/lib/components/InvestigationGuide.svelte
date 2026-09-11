@@ -13,7 +13,7 @@
   import { buildGuidedCollectionPreflight } from '$lib/analysis/collection-preflight.ts';
   import CollectionPreflight from '$lib/components/CollectionPreflight.svelte';
   import { normalizeInvestigationGuideDomain } from '$lib/analysis/investigation-guide.ts';
-  import { toolNavigation } from '$lib/workspaces';
+  import { casesNavigation, toolNavigation } from '$lib/workspaces';
   import {
     approveInvestigationGuideCollection,
     clearInvestigationGuide,
@@ -113,7 +113,7 @@
   const actionApproved = $derived(Boolean(actionStage && (!actionStage.requiresApproval || actionProgress?.approvedAt)));
   const candidateSelectionRequired = $derived(Boolean(guide?.recipeId === 'brand_sweep' && actionStage?.id === 'lookup' && !guide.focusDomain));
   const actionHref = $derived(actionStage && guide
-    ? actionIsCurrent
+    ? actionIsCurrent && !(actionStage.workspace === 'monitor' && page.url.searchParams.has('case'))
       ? targetHashes.get(actionStage.path) || actionStage.path
       : investigationGuideHref(actionStage.id, guide.domain, guide.recipeId, guide.focusDomain)
     : '/dashboard');
@@ -518,6 +518,7 @@
   }
 
   function toolLabel(stage: InvestigationRecipeStage): string {
+    if (stage.workspace === 'monitor') return casesNavigation.label;
     return toolLabels.get(stage.path) ?? stage.workspace;
   }
 

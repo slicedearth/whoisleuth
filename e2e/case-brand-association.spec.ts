@@ -1,4 +1,4 @@
-import { openConsoleView } from './console-navigation';
+import { openCaseMetadata, openCaseSection, openConsoleView } from './console-navigation';
 import type { Page, Request } from '@playwright/test';
 import { expect, test } from './fixtures';
 import {
@@ -161,6 +161,7 @@ test('adds and removes exact associations by keyboard, restores focus, and prese
     [profileFixture(), profileFixture({ id: SECOND_PROFILE_ID, name: 'Second fixture profile' })],
   ), { destination: '/monitor?view=cases&case=associated-case' });
 
+  await openCaseMetadata(page);
   const associations = page.getByRole('region', { name: 'Brand Profile associations' });
   await expect(associations).toBeVisible();
 
@@ -263,6 +264,8 @@ test('keeps disjoint association intents across concurrent browser tabs', async 
   ), { destination });
   await secondPage.goto(destination);
 
+  await openCaseMetadata(page);
+  await openCaseMetadata(secondPage);
   const firstAssociations = page.getByRole('region', { name: 'Brand Profile associations' });
   const secondAssociations = secondPage.getByRole('region', { name: 'Brand Profile associations' });
   await expect(firstAssociations).toBeVisible();
@@ -282,6 +285,8 @@ test('keeps disjoint association intents across concurrent browser tabs', async 
   expect(new Set(stored.brandProfileIds)).toEqual(new Set([PROFILE_ID, SECOND_PROFILE_ID]));
 
   await Promise.all([page.reload(), secondPage.reload()]);
+  await openCaseMetadata(page);
+  await openCaseMetadata(secondPage);
   const reloadedFirst = page.getByRole('region', { name: 'Brand Profile associations' });
   const reloadedSecond = secondPage.getByRole('region', { name: 'Brand Profile associations' });
   await expect(reloadedFirst).toContainText(PROFILE_ID);
@@ -301,6 +306,7 @@ test('keeps disjoint association intents across concurrent browser tabs', async 
 
   await secondPage.reload();
   await secondPage.setViewportSize({ width: 390, height: 844 });
+  await openCaseMetadata(secondPage);
   const mobileAssociations = secondPage.getByRole('region', { name: 'Brand Profile associations' });
   await expect(mobileAssociations).toContainText(longProfileName);
   await expect(mobileAssociations).toContainText(LONG_PROFILE_ID);
@@ -315,6 +321,7 @@ test('reconciles a committed association when its immediate Case reread fails', 
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, storageEntries(boundedCases), { clearStorage:true,destination: '/monitor?view=cases&case=post-write-case' });
 
+  await openCaseMetadata(page);
   const associations = page.getByRole('region', { name: 'Brand Profile associations' });
   await expect(associations).toBeVisible();
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
@@ -331,8 +338,10 @@ test('reconciles a committed association when its immediate Case reread fails', 
   expect(stored.brandProfileIds).toEqual([PROFILE_ID]);
   const committedSnapshot=await readBrowserLocalCollection(page,'cases',{minimumRecords:1,minimumRevision:2});
   expect(requiredValue(committedSnapshot.records.find((record)=>record.value.id==='pruned-other-case'),'The prunable other Case is missing.').value.evidenceHistory).toHaveLength(0);
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   await page.getByLabel('Search').fill('pruned-other.invalid');
   await page.locator('.case-head',{hasText:'pruned-other.invalid'}).click();
+  await openCaseSection(page, 'Evidence');
   await expect(page.getByRole('heading',{name:'Evidence timeline 0 snapshots'})).toBeVisible();
 });
 
@@ -345,6 +354,7 @@ test('focuses the stable association region after removing the last unresolved r
     '',
   ), { destination: '/monitor?view=cases&case=unresolved-focus-case' });
 
+  await openCaseMetadata(page);
   const associations = page.getByRole('region', { name: 'Brand Profile associations' });
   await expect(associations.getByLabel('Add Brand Profile')).toBeDisabled();
   await associations.getByRole('button', { name: `Remove association with unavailable profile ${missingId}` }).click();
@@ -428,6 +438,7 @@ test('keeps loading explicit and fails every Case association mutation closed wh
   await failBrowserLocalCollectionReads(page, 'brand_profiles');
   await openCasesTab(page);
   await page.locator('.case-head', { hasText: 'preserved.invalid' }).click();
+  await openCaseMetadata(page);
   const associations = page.getByRole('region', { name: 'Brand Profile associations' });
   await expect(associations).toContainText('Profile details unavailable');
   await expect(associations).toContainText('association changes are unavailable');

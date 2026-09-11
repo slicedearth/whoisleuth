@@ -1,10 +1,9 @@
 <script lang="ts">
   import {
     CASE_ASSERTION_KINDS, CASE_ASSERTION_STATES, CASE_DECISION_CONFIDENCE_LEVELS,
-    CASE_DISPOSITIONS, CASE_EVIDENCE_RELATION_STANCES, CASE_MANUAL_TRAIL_KINDS,
+    CASE_DISPOSITIONS, CASE_EVIDENCE_RELATION_STANCES,
     CASE_REVIEW_REASONS, isReviewedCaseDisposition, type CaseRecord, type CaseEvidenceRelationStance,
   } from '$lib/cases';
-  import { buildCaseInvestigationTrail } from '$lib/analysis/case-response-model.ts';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { createDraftRevision } from '$lib/controllers/submitted-draft';
   import CaseInvestigationBranches from '$lib/components/CaseInvestigationBranches.svelte';
@@ -33,13 +32,8 @@
   let assertionRationale = $state('');
   let assertionEvidenceRelations = $state<Array<{ evidencePinId: string; stance: CaseEvidenceRelationStance }>>([]);
   let assertionState = $state('open');
-  let trailKind = $state('pivot');
-  let trailSummary = $state('');
-  let trailTarget = $state('');
   const decisionDraft = createDraftRevision(() => record.id);
   const assertionDraft = createDraftRevision(() => record.id);
-  const trailDraft = createDraftRevision(() => record.id);
-  const investigationTrail = $derived(buildCaseInvestigationTrail(record));
   $effect(() => {
     record.updatedAt;
     if (!decisionClassificationDirty && !mutationBusy) {
@@ -118,19 +112,6 @@
     );
   }
 
-  async function addTrailEvent() {
-    const unchanged = trailDraft.capture();
-    if (!await persist({
-      trailEvent: {
-        kind: trailKind,
-        summary: trailSummary,
-        target: trailTarget,
-      },
-    }, `Recorded a manual investigation step for ${record.domain}.`) || !unchanged()) return;
-    trailKind = 'pivot';
-    trailSummary = '';
-    trailTarget = '';
-  }
 </script>
 
 <section class="case-response-stage" aria-label="Case assessment">
@@ -150,7 +131,7 @@
       {#if record.evidencePins.length}
         <fieldset class="pin-references"><legend>{mode === 'quick' ? 'Evidence considered' : 'Supporting evidence pins'}</legend>{#each record.evidencePins as pin}<label class="choice"><input type="checkbox" checked={decisionPinIds.includes(pin.id)} onchange={(event) => decisionPinIds = event.currentTarget.checked ? [...decisionPinIds, pin.id] : decisionPinIds.filter((id) => id !== pin.id)}><span>{pin.label}</span></label>{/each}</fieldset>
       {:else}
-        <p class="notice">Pin an observation above before recording an evidence-linked conclusion. An unsupported hypothesis can be retained separately as an assertion.</p>
+        <p class="notice">Pin an observation in Evidence before recording a conclusion. An unsupported hypothesis can be retained separately as an assertion.</p>
       {/if}
       <button class="btn" type="submit" disabled={mutationBusy || decisionDisposition === 'unreviewed' || !decisionReviewReason || !decisionSummary.trim() || !decisionRationale.trim() || !decisionPinIds.length || (decisionConfidence !== 'unknown' && !decisionConfidenceBasis.trim())}>{mode === 'quick' ? 'Record conclusion' : 'Record decision'}</button>
     </form>
@@ -200,21 +181,4 @@
 
   {/if}
   <CaseInvestigationBranches {record} {mutationBusy} {persist} visible={mode === 'advanced'} />
-  {#if mode === 'advanced'}
-    <details>
-      <summary>Record and review the investigation trail</summary>
-      <form class="stack" oninput={trailDraft.changed} onchange={trailDraft.changed} onsubmit={(event) => { event.preventDefault(); void addTrailEvent(); }}>
-        <label class="field">Manual step type<select bind:value={trailKind}>{#each CASE_MANUAL_TRAIL_KINDS as value}<option {value}>{value}</option>{/each}</select></label>
-        <label class="field">What did you do or decide?<textarea bind:value={trailSummary} maxlength="2000" rows="2" required></textarea></label>
-        <label class="field">Target or destination <small>optional; do not paste credentials or sensitive query strings</small><input bind:value={trailTarget} maxlength="500"></label>
-        <button class="btn" type="submit" disabled={mutationBusy}>Record manual step</button>
-      </form>
-      {#if investigationTrail.length}
-        <ol class="records trail">{#each investigationTrail as item}<li><strong>{item.label}</strong><p>{item.detail}</p><small>{item.createdAt}</small></li>{/each}</ol>
-      {:else}
-        <p class="notice">No explicit case reasoning, actions, or manual pivots have been recorded. Browser navigation is not tracked.</p>
-      {/if}
-    </details>
-
-  {/if}
 </section>

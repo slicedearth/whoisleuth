@@ -254,7 +254,7 @@ async function runBulkStep(
 }
 
 async function retainCases(page: import('@playwright/test').Page, label: string, domains: string[]) {
-  await currentAction(page).getByRole('link', { name: 'Open Monitor' }).click();
+  await currentAction(page).getByRole('link', { name: 'Open Cases' }).click();
   const firstDomain = domains[0];
   if (!firstDomain) throw new Error('Case retention requires at least one domain.');
   await expect(page).toHaveURL(new RegExp(`/cases\\?investigation=1&domain=${firstDomain.replaceAll('.', '\\.')}`));
@@ -269,12 +269,13 @@ async function retainCases(page: import('@playwright/test').Page, label: string,
       && element.compareDocumentPosition(toolbar) & Node.DOCUMENT_POSITION_FOLLOWING,
     );
   })).toBe(true);
-  for (const domain of domains) {
+  for (const [index, domain] of domains.entries()) {
     await expect(queue).toContainText(domain);
     await queue.getByRole('button', { name: `Open case for ${domain}` }).click();
-    const caseHeader = page.locator('.case-head', { hasText: domain });
+    const caseHeader = page.locator('.case-heading', { hasText: domain });
     await expect(caseHeader).toBeVisible();
     await expect(caseHeader).toBeFocused();
+    if (index < domains.length - 1) await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   }
   await markReviewed(page, label);
   const completedGuide = page.locator('.guide-complete');
@@ -401,7 +402,7 @@ test('a response playbook reaches focused local packet preflight without a reque
   await currentAction(page).getByRole('button', { name: 'Confirm skipped' }).click();
   await expect(currentAction(page)).toContainText('Prepare reviewed response');
 
-  await currentAction(page).getByRole('link', { name: /Open Monitor|Go to/ }).click();
+  await currentAction(page).getByRole('link', { name: /Open Cases|Go to/ }).click();
   await expect(page).toHaveURL(/\/cases\?investigation=1&response=1&domain=portal\.example\.test#case-review-queue/u);
   const queue = page.locator('#case-review-queue');
   await queue.getByRole('button', { name: 'Open case for portal.example.test' }).click();

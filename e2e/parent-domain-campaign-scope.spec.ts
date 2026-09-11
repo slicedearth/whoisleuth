@@ -1,4 +1,4 @@
-import { openConsoleView } from './console-navigation';
+import { openCaseMetadata, openConsoleView } from './console-navigation';
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
@@ -256,8 +256,8 @@ test('reviews, filters, selects and exports exact parent scope without collectio
   await expect(pivot).toBeFocused();
   expect(await pivot.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('solid');
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true })).toHaveAttribute('aria-current', 'page');
-  await expect(page.locator('.case-head', { hasText: 'example.test' })).toHaveAttribute('aria-expanded', 'true');
+  await expect(page).toHaveURL('/cases?case=parent-scope-case');
+  await expect(page.locator('.case-heading', { hasText: 'example.test' })).toBeVisible();
 });
 
 test('presents loading and ready parent-domain evidence without inferring a loading count', async ({ page }) => {
@@ -328,7 +328,8 @@ test('a fresh campaign read replaces the partial state from a committed Case rer
   await openParentScope(page, [retainedParentCase()]);
   await openConsoleView(page, 'cases');
   await page.locator('.case-head', { hasText: 'example.test' }).click();
-  const openCase = page.locator('article.case.open');
+  const openCase = page.locator('article.case-detail');
+  await openCaseMetadata(page);
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await openCase.getByRole('combobox', { name: /^Status/u }).selectOption('reviewing');
   await expect(page.getByRole('status').filter({

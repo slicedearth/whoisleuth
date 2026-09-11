@@ -76,7 +76,7 @@ test('dashboard local search pivots to exact cases, campaigns, and brand profile
   const caseResult = page.locator('.result-card').filter({ hasText: 'Case' }).filter({ hasText: 'candidate.invalid' });
   await caseResult.getByRole('link', { name: /Open case/ }).click();
   await expect(page).toHaveURL('/cases?case=case-source', { timeout: 15_000 });
-  await expect(page.locator('.case-head', { hasText: 'candidate.invalid' })).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('.case-heading', { hasText: 'candidate.invalid' })).toBeVisible();
 
   await page.goto('/dashboard');
   await openDashboardSecondaryWorkspaces(page);

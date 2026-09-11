@@ -259,8 +259,16 @@ compatible saved fields; source limits remain separate from pagination.
 ### Cases and response preparation
 
 Open **Cases** from the Respond navigation. Older Monitor Case links still work.
-A Case's **Open Case page** link opens that record directly in this browser
-workspace. It does not share the record with another browser or person.
+Select a Case to open its workspace. **All Cases** returns to the retained list
+filters. Direct Case links open that record in this browser, not in another
+person's workspace.
+
+**Summary** shows retained records and next work; **Evidence** contains captures,
+pins and relationships; **Assessment** holds conclusions and branches;
+**Response** contains recipient review, packets, delivery and outcome records;
+**History** holds notes and manual investigation steps. Section links support
+browser back and forward. Unfinished drafts survive section changes, but are
+not saved when leaving the Case.
 
 Opening a Case keeps it selected while moving between Console tools. The
 compact Case context exposes retained hypotheses, pins, decisions, response

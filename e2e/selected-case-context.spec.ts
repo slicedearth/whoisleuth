@@ -20,7 +20,7 @@ async function seed(page: Page) {
     decisions: [{ id: 'context-decision', summary: 'Review the suspected impersonation', rationale: 'The retained field needs corroborating evidence.', confidence: 'unknown', confidenceBasis: 'The capture is partial.', evidencePinIds: ['context-pin'], createdAt: WHEN }],
   };
   await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [record, caseRecord({ id: 'other-context', domain: 'other-context.example' })] }) }, { destination: `/cases?case=${CASE_ID}` });
-  await expect(page.locator(`#case-head-${CASE_ID}`)).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator(`#case-head-${CASE_ID}`)).toBeVisible();
 }
 
 async function navigate(page: Page, label: string) {
@@ -43,7 +43,7 @@ test('selected Case context follows tool navigation without changing saved evide
   await expect(context.getByRole('region', { name: 'Case report history' })).toContainText('receipt-example');
   await expect(context.getByRole('region', { name: 'Case report history' })).toContainText('no independent removal finding');
   await expect(context.getByRole('region', { name: 'Case follow-up dates' }).locator('time')).toHaveAttribute('datetime', '2026-06-08T00:00:00.000Z');
-  for (const label of ['Lookup', 'Discover', 'Brands', 'Monitor', 'Dashboard']) {
+  for (const label of ['Lookup', 'Discover', 'Brands', 'Monitoring', 'Dashboard']) {
     await navigate(page, label);
     await expect(context.getByRole('link', { name: DOMAIN, exact: true })).toBeVisible();
   }
@@ -90,7 +90,8 @@ test('Case context rereads on focus, reports failed reads and recovers without a
   const peer = await browser.newPage();
   try {
     await peer.goto(`/cases?case=${CASE_ID}`);
-    await expect(peer.locator(`#case-head-${CASE_ID}`)).toHaveAttribute('aria-expanded', 'true');
+    await expect(peer.locator(`#case-head-${CASE_ID}`)).toBeVisible();
+    await peer.locator('.case-more > summary').click();
     peer.once('dialog', (dialog) => dialog.accept());
     await peer.locator(`#case-delete-${CASE_ID}`).click();
     await expect(peer.getByRole('status', { name: 'Case workspace action status' })).toContainText(`Deleted the case for ${DOMAIN}`);
@@ -107,7 +108,7 @@ test('Case links retain modified-click behaviour and selection clears on reload 
   const opened = browser.waitForEvent('page');
   await context.getByRole('link', { name: DOMAIN, exact: true }).click({ modifiers: ['ControlOrMeta'] });
   const peer = await opened;
-  try { await expect(peer).toHaveURL(`/cases?case=${CASE_ID}`); await expect(peer.locator(`#case-head-${CASE_ID}`)).toHaveAttribute('aria-expanded', 'true'); }
+  try { await expect(peer).toHaveURL(`/cases?case=${CASE_ID}`); await expect(peer.locator(`#case-head-${CASE_ID}`)).toBeVisible(); }
   finally { await peer.close(); }
   await expect(page).toHaveURL('/bulk');
   await page.reload();

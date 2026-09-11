@@ -199,7 +199,7 @@ test.describe('browser-local campaigns', () => {
     await expect(page.locator('.campaign-edit textarea')).toHaveValue('Domains grouped for analyst follow-up.');
     await page.getByRole('button', { name: 'Open case' }).click();
     await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true })).toHaveAttribute('aria-current', 'page');
-    await expect(page.locator('.case-head', { hasText: 'member-one.invalid' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('.case-heading', { hasText: 'member-one.invalid' })).toBeVisible();
   });
 
   test('reviews exact Brand-scoped cohorts without a request, write, or assertion-derived link', async ({ page }) => {
@@ -298,9 +298,9 @@ test.describe('browser-local campaigns', () => {
     const openCase = cohort.getByRole('button', { name: /Open case cohort-alpha\.invalid/u });
     await openCase.focus();
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true })).toHaveAttribute('aria-current', 'page');
-    const openedCase = page.locator('.case-head', { hasText: 'cohort-alpha.invalid' });
-    await expect(openedCase).toHaveAttribute('aria-expanded', 'true');
+    await expect(page).toHaveURL('/cases?case=cohort-alpha');
+    const openedCase = page.locator('.case-heading', { hasText: 'cohort-alpha.invalid' });
+    await expect(openedCase).toBeVisible();
     await expect(openedCase).toBeFocused();
   });
 
@@ -483,7 +483,7 @@ test.describe('accessible cross-case relationship table', () => {
 
     await page.getByRole('button', { name: 'Open charlie-table.invalid' }).click();
     await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true })).toHaveAttribute('aria-current', 'page');
-    await expect(page.locator('.case-head', { hasText: 'charlie-table.invalid' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('.case-heading', { hasText: 'charlie-table.invalid' })).toBeVisible();
   });
 
   test('keeps successful relationship context visible when campaigns cannot load', async ({ page }) => {
@@ -714,7 +714,7 @@ test.describe('accessible cross-case relationship table', () => {
 
     await inspector.getByRole('button', { name: 'Open case', exact: true }).click();
     await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true })).toHaveAttribute('aria-current', 'page');
-    await expect(page.locator('.case-head', { hasText: 'alpha-graph.invalid' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('.case-heading', { hasText: 'alpha-graph.invalid' })).toBeVisible();
   });
 
   test('focuses, pins, hides, resets, and compares bounded graph neighbours', async ({ page }) => {

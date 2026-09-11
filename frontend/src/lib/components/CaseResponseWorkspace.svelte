@@ -1,9 +1,11 @@
 <script lang="ts">
-  import { tick, type ComponentProps } from 'svelte';
-  import { caseInvestigationContext, dispositionLabel, editCase, type CaseRecord } from '$lib/cases';
+  import { tick, type ComponentProps, type Snippet } from 'svelte';
+  import { caseInvestigationContext, caseTypeSummary, dispositionLabel, editCase, type CaseRecord } from '$lib/cases';
+  import { handlesLocalLink } from '$lib/link-activation';
   import { buildCaseActionOutcomeSummary } from '$lib/analysis/case-response-model.ts';
   import CaseObservationStage from '$lib/components/CaseObservationStage.svelte';
   import CaseAssessmentStage from '$lib/components/CaseAssessmentStage.svelte';
+  import CaseHistoryStage from '$lib/components/CaseHistoryStage.svelte';
   import CaseActionStage from '$lib/components/CaseActionStage.svelte';
   import CaseOutcomeStage from '$lib/components/CaseOutcomeStage.svelte';
   import CaseRenderedCapture from '$lib/components/CaseRenderedCapture.svelte';
@@ -11,6 +13,9 @@
   import CaseResponsePacketWorkspace from '$lib/components/CaseResponsePacketWorkspace.svelte';
   import {
     CASE_RESPONSE_STAGE_DEFINITIONS,
+    CASE_STAGE_SECTION,
+    caseWorkspaceHref,
+    type CaseWorkspaceSection,
     type CaseResponsePresentation,
     type CaseResponseStage,
     type CaseResponseStageId,
@@ -24,6 +29,12 @@
     onmessage,
     sectionId,
     advancedInitially = false,
+    activeSection,
+    selectSection,
+    summary,
+    evidence,
+    history,
+    exports,
   }: {
     record: CaseRecord;
     onsaved: () => void | Promise<void>;
@@ -31,6 +42,12 @@
     onmessage: (message: string) => void;
     sectionId?: string;
     advancedInitially?: boolean;
+    activeSection: CaseWorkspaceSection;
+    selectSection: (section: CaseWorkspaceSection) => void | Promise<void>;
+    summary: Snippet;
+    evidence: Snippet;
+    history: Snippet;
+    exports: Snippet;
   } = $props();
 
   let presentationMode = $state<CaseResponsePresentation>('quick');
@@ -154,6 +171,7 @@
   }
 
   async function openStage(stage: CaseResponseStageId) {
+    await selectSection(CASE_STAGE_SECTION[stage]);
     await tick();
     const targets: Record<CaseResponseStageId, string> = {
       observation: `case-response-observation-${record.id}`,
@@ -183,6 +201,7 @@
     }
     actionStage.prepareDeliveryRecord(action.id, exported.digestSha256);
     presentationMode = 'quick';
+    await selectSection('response');
     await tick();
     document.getElementById(`quick-action-advance-${record.id}`)?.focus({ preventScroll: true });
     onmessage(action.state === 'authorised'
@@ -192,15 +211,12 @@
 </script>
 
 <section id={sectionId || `case-response-${record.id}`} class="response-workspace" aria-labelledby={`response-title-${record.id}`} tabindex="-1">
-  <header>
-    <div><p class="eyebrow">Reviewed response</p><h3 id={`response-title-${record.id}`}>Evidence, reasoning, and actions</h3></div>
-    <span>{countLabel(record.evidencePins.length, 'pin')} · {countLabel(record.sightings.length, 'sighting')} · {countLabel(record.decisions.length, 'decision')} · {countLabel(record.assertions.length, 'assertion')} · {countLabel(record.actions.length, 'action')} · {countLabel(record.branches?.length ?? 0, 'branch', 'branches')}</span>
-  </header>
-  <div class="presentation-switch" role="group" aria-label="Case response presentation">
+  <h2 id={`response-title-${record.id}`} class="visually-hidden">Case evidence, reasoning and actions</h2>
+  <div class="presentation-switch" role="group" aria-label="Case response presentation" hidden={activeSection === 'summary' || activeSection === 'history'}>
     <button type="button" aria-pressed={presentationMode === 'quick'} onclick={() => presentationMode = 'quick'}>Quick</button>
     <button type="button" aria-pressed={presentationMode === 'advanced'} onclick={() => presentationMode = 'advanced'}>Advanced</button>
-    <span>Both presentations edit this one Case record.</span>
   </div>
+  <div class="case-section" hidden={activeSection !== 'summary'} aria-label="Case summary">
   {#if investigationContext}
     <dl class="case-context" aria-label="Current Case context">
       <div class="context-objective"><dt>Objective</dt><dd>{investigationContext.objective}</dd></div>
@@ -225,35 +241,38 @@
     </div>
   {/if}
 
-  <CaseWorkflowDetails {record} {onsaved} {oncommitted} {onmessage} />
-
-  <nav class="response-stage-nav" aria-label="Case response stages">
-    {#each responseStages as stage}
-      <button type="button" aria-current={stage.id === currentResponseStage?.id ? 'step' : undefined} onclick={() => void openStage(stage.id)}>
-        <span>{stage.number}. {stage.label}</span>
-        <small>{stage.status.replaceAll('_', ' ')}</small>
-      </button>
-    {/each}
-  </nav>
-  {#if presentationMode === 'quick'}
-    <header class="quick-heading">
-      <h4>Next analyst action</h4>
-      <button class="btn" type="button" onclick={() => void openAdvancedStage('observation')}>Advanced history and fields</button>
-    </header>
     {#if currentResponseStage}
       <div class="next-action-summary" data-status={currentResponseStage.status} role="status" aria-label="Next Case requirement">
         <strong>{currentResponseStage.label}</strong>
         <span>{currentResponseStage.status.replaceAll('_', ' ')}</span>
         <p>{currentResponseStage.nextRequirement}</p>
+        <button class="btn" type="button" onclick={() => void openStage(currentResponseStage!.id)}>Open {currentResponseStage.label.toLowerCase()}</button>
       </div>
     {/if}
-  {/if}
+    <div class="summary-links" role="group" aria-label="Retained Case records">
+      {#each [
+        { section: 'evidence', label: 'Evidence', detail: `${countLabel(record.evidenceHistory.length, 'snapshot')} · ${countLabel(record.evidencePins.length, 'pin')} · ${countLabel(record.sightings.length, 'sighting')}` },
+        { section: 'assessment', label: 'Assessment', detail: `${countLabel(record.decisions.length, 'decision')} · ${countLabel(record.assertions.length, 'assertion')}` },
+        { section: 'response', label: 'Response', detail: `${countLabel(record.actions.length, 'action')} · ${countLabel(actionSummary.followUpDue, 'follow-up')} due` },
+        { section: 'history', label: 'History', detail: `${countLabel(record.notes.length, 'note')} · ${countLabel(record.manualTrail.length, 'manual step')}` },
+      ] as item}
+        <a href={caseWorkspaceHref(record.id, item.section as CaseWorkspaceSection)} onclick={(event) => {
+          if (handlesLocalLink(event)) { event.preventDefault(); void selectSection(item.section as CaseWorkspaceSection); }
+        }}><strong>{item.label}</strong><span>{item.detail}</span></a>
+      {/each}
+    </div>
+    <details class="summary-editor">
+      <summary>Classification and incident links <span>{caseTypeSummary(record.tags)}</span></summary>
+      <CaseWorkflowDetails {record} {onsaved} {oncommitted} {onmessage} />
+    </details>
+    {@render summary()}
+  </div>
 
   <div class="response-stages" class:quick-workspace={presentationMode === 'quick'}>
     {#key record.id}
+      <div class="case-section" hidden={activeSection !== 'evidence'} aria-label="Case evidence">
+      {@render evidence()}
       <CaseObservationStage {record} {mutationBusy} {persist} mode={presentationMode} />
-      <CaseAssessmentStage {record} {mutationBusy} {persist} {onmessage} mode={presentationMode} />
-      <CaseActionStage bind:this={actionStage} {record} {mutationBusy} {persist} mode={presentationMode} onadvanced={() => void openAdvancedStage('response_decision')} />
       <CaseRenderedCapture
         {record}
         exactIncidentUrl={investigationContext?.urlRetention === 'exact' ? investigationContext.incidentUrl : null}
@@ -261,6 +280,12 @@
         {oncommitted}
         {onmessage}
       />
+      </div>
+      <div class="case-section" hidden={activeSection !== 'assessment'} aria-label="Case assessment workspace">
+        <CaseAssessmentStage {record} {mutationBusy} {persist} {onmessage} mode={presentationMode} />
+      </div>
+      <div class="case-section" hidden={activeSection !== 'response'} aria-label="Case response workspace">
+      <CaseActionStage bind:this={actionStage} {record} {mutationBusy} {persist} mode={presentationMode} onadvanced={() => void openAdvancedStage('response_decision')} />
       <CaseResponsePacketWorkspace
         {record}
         visible
@@ -270,24 +295,24 @@
       />
 
       <CaseOutcomeStage {record} {mutationBusy} {persist} mode={presentationMode} />
+      {@render exports()}
+      </div>
+      <div class="case-section" hidden={activeSection !== 'history'} aria-label="Case history">
+        {@render history()}
+        <CaseHistoryStage {record} {mutationBusy} {persist} />
+      </div>
     {/key}
   </div>
 </section>
 
 <style>
-  .response-workspace, .response-stages { display: grid; gap: 16px; min-width: 0; }
-  .response-workspace { padding-block: 16px; border-top: 1px solid var(--border); }
-  header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px; }
-  h3, h4 { margin: 0; }
-  header > span { color: var(--muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+  .response-workspace, .response-stages, .case-section { display: grid; gap: 16px; min-width: 0; }
+  .response-workspace { padding-block: 16px; }
+  .case-section[hidden], .presentation-switch[hidden] { display: none; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .presentation-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-  .presentation-switch button, .response-stage-nav button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); color: var(--text); cursor: pointer; font: 650 var(--text-xs) var(--mono); }
-  .presentation-switch button[aria-pressed='true'], .response-stage-nav button[aria-current='step'] { border-color: var(--accent); color: var(--accent); background: rgb(var(--accent-rgb) / .06); }
-  .presentation-switch span { margin-left: 4px; color: var(--muted); font-size: var(--text-xs); }
-  .response-stage-nav { display: flex; flex-wrap: wrap; gap: 8px; }
-  .response-stage-nav button { flex: 1 1 150px; min-width: 0; text-align: left; }
-  .response-stage-nav span, .response-stage-nav small { display: block; overflow-wrap: anywhere; }
-  .response-stage-nav small { margin-top: 4px; color: var(--muted); font: 400 var(--text-xs) var(--font-sans); }
+  .presentation-switch button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); color: var(--text); cursor: pointer; font: 650 var(--text-xs) var(--mono); }
+  .presentation-switch button[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); background: rgb(var(--accent-rgb) / .06); }
   .case-context { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px 20px; margin: 0; padding-block: 12px; border-block: 1px solid var(--border); }
   .case-context > div { min-width: 0; }
   .case-context .context-objective { grid-column: 1/-1; }
@@ -297,20 +322,22 @@
   .action-summary span { color: var(--muted); font-size: var(--text-xs); }
   .action-summary strong { color: var(--text); }
   .action-summary .attention, .action-summary .attention strong { color: var(--amber); }
-  .quick-heading { align-items: center; }
-  .quick-heading h4 { font: 700 var(--text-md) var(--mono); }
+  .summary-links { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+  .summary-links a { display: grid; gap: 6px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); text-decoration: none; color: var(--text); min-width: 0; }
+  .summary-links a:hover { background: var(--panel-raised); }
+  .summary-links span { color: var(--muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+  .summary-editor { min-width: 0; border-block: 1px solid var(--border); }
+  .summary-editor > summary { padding-block: 14px; cursor: pointer; font-weight: 650; }
+  .summary-editor > summary > span { margin-left: 10px; color: var(--muted); font-size: var(--text-xs); font-weight: 400; }
   .next-action-summary { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 4px 12px; padding: 10px 14px; border-left: 3px solid var(--accent); }
   .next-action-summary[data-status='attention'] { border-color: var(--amber); }
   .next-action-summary[data-status='complete'] { border-color: var(--success); }
   .next-action-summary span { color: var(--muted); font-size: var(--text-xs); }
   .next-action-summary p { grid-column: 1/-1; margin: 2px 0 0; color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
-  @media (max-width: 620px) {
-    .quick-heading { display: grid; }
-    .quick-heading .btn { width: 100%; }
-  }
+  .next-action-summary .btn { justify-self: start; }
   @media (max-width: 480px) {
     .case-context { grid-template-columns: minmax(0,1fr); }
-    .response-stage-nav button { flex-basis: 120px; }
+    .summary-links { grid-template-columns: minmax(0,1fr); }
     .next-action-summary { grid-template-columns: minmax(0,1fr); }
   }
 </style>

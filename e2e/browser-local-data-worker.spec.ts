@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { openCaseSection } from './console-navigation';
 import { createCase } from '../packages/cases/case-model.mts';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
@@ -69,6 +70,7 @@ test('a verification worker failure after a committed note preserves the write a
   await seed(page);
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   await page.locator('.case-head', { hasText: DOMAIN }).click();
+  await openCaseSection(page, 'History');
   await page.evaluate(() => {
     let writes = 0;
     const put = IDBObjectStore.prototype.put;
@@ -99,7 +101,7 @@ test('a verification worker failure after a committed note preserves the write a
     expect(await page.evaluate(() => Number(Reflect.get(window, '__caseWrites')))).toBe(1);
   } finally { await page.unroute(pattern); }
   await page.reload();
-  await expect(page.locator('.case-head', { hasText: DOMAIN })).toBeVisible();
+  await expect(page.getByRole('heading', { name: DOMAIN, exact: true })).toBeVisible();
   const after = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   expect(after.manifest.revision).toBe(before.manifest.revision + 1);
   expect(after.records[0]!.value.notes).toMatchObject([{ body: 'One committed note.' }]);

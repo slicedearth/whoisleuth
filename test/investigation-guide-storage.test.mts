@@ -5,6 +5,8 @@ import {
   approveInvestigationGuideCollection,
   INVESTIGATION_GUIDE_EVENT,
   INVESTIGATION_GUIDE_KEY,
+  investigationGuideStageForGuidePath,
+  investigationGuideStageForPath,
   pauseInvestigationGuide,
   recordInvestigationGuideVisit,
   startInvestigationGuide,
@@ -44,9 +46,22 @@ test('guide mutation failures preserve stored progress and do not announce succe
     const updated = updateInvestigationGuideOutcome('lookup', 'partial', 'Retain this explanation');
     assert.equal(updated?.stages.find((stage) => stage.id === 'lookup')?.reviewNote, 'Retain this explanation');
     assert.equal(announcements, 4);
+    const unopened = recordInvestigationGuideVisit('/monitor')?.stages.find((stage) => stage.id === 'monitor');
+    assert.ok(unopened);
+    assert.equal(unopened.openedAt, null);
+    assert.equal(announcements, 4);
+    const visited = recordInvestigationGuideVisit('/cases');
+    assert.ok(visited?.stages.find((stage) => stage.id === 'monitor')?.openedAt);
+    assert.equal(investigationGuideStageForGuidePath(visited, '/cases')?.id, 'monitor');
+    assert.equal(investigationGuideStageForPath('/cases', 'infrastructure_pivot')?.id, 'monitor');
+    assert.equal(investigationGuideStageForGuidePath(visited, '/cases-unrelated'), null);
+    assert.equal(investigationGuideStageForGuidePath(visited, '/monitor'), null);
+    assert.equal(investigationGuideStageForPath('/monitor', 'infrastructure_pivot'), null);
+    assert.equal(visited?.stages.find((stage) => stage.id === 'monitor')?.outcome, 'pending');
+    assert.equal(announcements, 5);
     clearInvestigationGuide();
     assert.equal(stored.has(INVESTIGATION_GUIDE_KEY), false);
-    assert.equal(announcements, 5);
+    assert.equal(announcements, 6);
   } finally {
     for (const [key, descriptor] of descriptors) {
       if (descriptor) Object.defineProperty(globalThis, key, descriptor);

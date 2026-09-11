@@ -8,7 +8,8 @@
   import { createDraftRevision } from '$lib/controllers/submitted-draft';
   import { preloadBestEffort } from '$lib/idle-preload';
   import { readCaseNavigationContext, selectConsoleCase } from '$lib/console-workflow-state';
-  import { buildMonitorNavigationUrl, monitorRouteKey, monitorRouteTarget } from '$lib/controllers/monitor-route-controller.ts';
+  import { monitorRouteKey, monitorRouteTarget } from '$lib/controllers/monitor-route-controller.ts';
+  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import { loadInvestigationGuide } from '$lib/investigation-guide';
   import { loadProfiles, type BrandProfile } from '$lib/brand-profiles';
   import type { ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
@@ -25,6 +26,7 @@
   import CaseWorkspaceToolbar from '$lib/components/CaseWorkspaceToolbar.svelte';
   import CaseFilters from '$lib/components/CaseFilters.svelte';
   import CaseList from '$lib/components/CaseList.svelte';
+  import PageHeading from '$lib/components/PageHeading.svelte';
   let { initialCases = null, initialMessage = '', onchange }: {
     initialCases?: CaseRecord[] | null;
     initialMessage?: string;
@@ -44,6 +46,9 @@
   let caseSearch = $state('');
   let caseSort = $state<'updated' | 'domain' | 'status'>('updated');
   let expandedId = $state('');
+  let listHref = '/cases';
+  const selectedCase = $derived(cases.find((record) => record.id === expandedId));
+  let calibrationMode = $state(false);
   let noteDraft = $state('');
   let tagDraft = $state('');
   let newDomain = $state('');
@@ -98,32 +103,30 @@
   function caseTagDraft(record: CaseRecord) {
     return caseFreeformTags(record.tags).join(', ');
   }
-  function expand(record: CaseRecord) {
+  async function selectCase(record: CaseRecord) {
     selectionRevision.changed();
-    if (expandedId === record.id) {
-      expandedId = '';
-      return;
-    }
     showCasePage(record);
     expandedId = record.id;
     selectConsoleCase(record.id);
     tagDraft = caseTagDraft(record);
     noteDraft = '';
+    await navigateCase(record.id);
+  }
+  async function returnToList(previousId = expandedId) {
+    selectionRevision.changed();
+    expandedId = '';
+    selectConsoleCase(null);
+    await goto(listHref, { noScroll: true, keepFocus: true });
+    await tick();
+    const target = document.getElementById(`case-head-${previousId}`) ?? document.getElementById('new-case');
+    target?.scrollIntoView({ block: 'center' });
+    target?.focus({ preventScroll: true });
   }
   async function focusCase(record: CaseRecord) {
     await tick();
     const target = document.getElementById(`case-head-${record.id}`);
     target?.scrollIntoView({ block: 'center' });
     target?.focus({ preventScroll: true });
-  }
-  async function focusResponsePreflight(record: CaseRecord) {
-    await tick();
-    const details = document.getElementById(`case-response-preflight-${record.id}`) as HTMLDetailsElement | null;
-    if (!details)
-      return;
-    details.open = true;
-    details.scrollIntoView({ block: 'center' });
-    details.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true });
   }
   async function openGuidedCase(domain: string) {
     const editorUnchanged = captureCaseOpeningIntent();
@@ -147,11 +150,7 @@
     expandedId = record.id;
     tagDraft = caseTagDraft(record);
     noteDraft = '';
-    await navigateCase(record.id);
-    if (responseRequested)
-      await focusResponsePreflight(record);
-    else
-      await focusCase(record);
+    await navigateCase(record.id, responseRequested);
   }
   function prunedNote(pruned: number) {
     return pruned ? ` (pruned ${pruned} old evidence snapshot${pruned === 1 ? '' : 's'} to stay within storage)` : '';
@@ -351,6 +350,8 @@
   async function removeCase(record: CaseRecord) {
     if (!confirm(`Delete the case for ${record.domain}? Its notes are removed unless you exported them.`))
       return;
+    const previousIndex = pagedCases.findIndex(item => item.id === record.id);
+    const previousPage = currentCasePage;
     let committed: Awaited<ReturnType<typeof deleteCase>>;
     try {
       committed = await deleteCase(record.id);
@@ -359,8 +360,7 @@
       caseMessage = cause instanceof Error ? cause.message : 'Could not delete the case.';
       return;
     }
-    if (expandedId === record.id)
-      expandedId = '';
+    const returnAfterDeletion = expandedId === record.id;
     try {
       await refreshCases();
       caseMessage = `Deleted the case for ${record.domain}.`;
@@ -368,6 +368,10 @@
     catch {
       installCommittedCaseSnapshot(committed.cases, 'partial');
       caseMessage = `Deleted the case for ${record.domain}. The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.`;
+    }
+    if (mounted && returnAfterDeletion && (!expandedId || expandedId === record.id)) {
+      const next = currentCasePage < previousPage ? pagedCases.at(-1) : pagedCases[Math.min(Math.max(0, previousIndex), pagedCases.length - 1)];
+      await returnToList(next?.id ?? '');
     }
   }
   function clearCaseFilters() {
@@ -401,14 +405,6 @@
     target?.scrollIntoView({ block: 'center' });
     target?.focus({ preventScroll: true });
   }
-  async function restoreCaseListTarget() {
-    const caseId = page.url.searchParams.get('case');
-    if (!caseId || caseId !== expandedId || page.url.hash === `#case-response-${encodeURIComponent(caseId)}`)
-      return;
-    const target = cases.find((record) => record.id === caseId);
-    if (target)
-      await focusCase(target);
-  }
   const newCaseDraft = createDraftRevision(() => 'new-case');
   const tagRevision = createDraftRevision(() => expandedId);
   const noteRevision = createDraftRevision(() => expandedId);
@@ -418,12 +414,11 @@
     const selected = selectionRevision.capture();
     const note = noteRevision.capture();
     const tags = tagRevision.capture();
-    return () => selected() && note() && tags();
+    const domain = newCaseDraft.capture();
+    return () => selected() && note() && tags() && domain();
   }
-  async function navigateCase(id: string) {
-    const destination = page.url.pathname === '/monitor'
-      ? buildMonitorNavigationUrl(page.url, 'cases', { parameter: 'case', value: id })
-      : `/cases?case=${encodeURIComponent(id)}`;
+  async function navigateCase(id: string, responseRequested = false) {
+    const destination = `${caseWorkspaceHref(id)}${responseRequested ? '&response=1' : ''}`;
     appliedRouteKey = monitorRouteKey(new URL(destination, page.url));
     await goto(destination, { noScroll: true, keepFocus: true });
   }
@@ -490,9 +485,8 @@
         caseMessage = 'That Case is not available in this browser workspace. Choose a retained Case or import its workspace archive.';
         return;
       }
-      clearCaseFilters();
+      if (expandedId === record.id) return;
       selectConsoleCase(record.id);
-      casePage = 1;
       showCasePage(record);
       if (expandedId !== record.id) {
         expandedId = record.id;
@@ -511,6 +505,9 @@
         await focusCase(record);
       return;
     }
+    expandedId = '';
+    selectConsoleCase(null);
+    listHref = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
     guidedDomains = [];
     guidedDomainsTruncated = false;
     if (target.kind === 'investigation') {
@@ -537,7 +534,7 @@
   onMount(() => {
     mounted = true;
     const preloadController = new AbortController();
-    preloadBestEffort(() => import('$lib/components/CaseResponseWorkspace.svelte'), preloadController.signal);
+    preloadBestEffort(() => import('$lib/components/CaseDetail.svelte'), preloadController.signal);
     void refreshCases().catch(cause => {
       caseMessage = cause instanceof Error ? cause.message : 'Could not read browser-local Cases.';
     });
@@ -554,10 +551,24 @@
   });
 </script>
 <section class="case-workspace" data-case-workspace aria-label="Cases" aria-busy={casesRefreshing}>
+  {#if !selectedCase}<PageHeading eyebrow="Respond" title="Cases" description="Review evidence, record decisions and prepare responses." />{/if}
+  {#if caseMessage}<p class="message" role="status" aria-label="Case workspace action status" aria-live="polite" aria-atomic="true">{caseMessage}</p>{/if}
   {#if casesSourceState === 'ready'}
     {#if casesRefreshing}
       <p class="refresh-status" role="status" aria-live="polite">Refreshing Cases while the last readable snapshot remains available.</p>
     {/if}
+    {#if selectedCase}
+      {#key selectedCase.id}
+        <DeferredSurface load={() => import('$lib/components/CaseDetail.svelte')}
+          loadingLabel="Opening Case…" unavailableLabel="The Case detail could not be loaded. Your saved Case has not changed."
+          onready={() => { if (!page.url.hash.startsWith('#case-response-') && page.url.searchParams.get('response') !== '1' && selectedCase) return focusCase(selectedCase); }}
+          props={{ record: selectedCase, allRecords: cases, tagDraft, setTagDraft: (value: string) => { tagRevision.changed(); tagDraft = value; },
+            noteDraft, setNoteDraft: (value: string) => { noteRevision.changed(); noteDraft = value; }, pendingNoteCaseIds,
+            selectCase, returnToList, setStatus, setDisposition, setReviewReason, addBrandProfileAssociation, removeBrandProfileAssociation,
+            saveTags, addNote, removeCase, refreshCases, installCommittedCaseSnapshot, setMessage: (value: string) => caseMessage = value,
+            formatDate: date, brandProfiles, brandProfilesUnavailable }} />
+      {/key}
+    {:else}
     {#if guidedDomains.length}
       <DeferredSurface load={() => import('$lib/components/GuidedCaseQueue.svelte')}
         loadingLabel="Loading guided Case queue…" unavailableLabel="The guided Case queue could not be loaded."
@@ -567,7 +578,7 @@
     <CaseWorkspaceToolbar
       domain={newDomain} setDomain={(value) => { newCaseDraft.changed(); newDomain = value; }}
       {trackDomain} {openingCase} caseCount={cases.length} calibrationSelectedCount={calibrationCaseIds.length}
-      {downloadCases} {reviewCalibrationDataset} {importCaseFile} message={caseMessage} />
+      {downloadCases} {reviewCalibrationDataset} {importCaseFile} message="" />
     {#if calibrationReview}
       <DeferredSurface load={() => import('$lib/components/CalibrationExportReview.svelte')}
         loadingLabel="Loading calibration export review…" unavailableLabel="Calibration export review could not be loaded."
@@ -585,17 +596,8 @@
         clear={() => changeCaseView(clearCaseFilters)} matchedCount={filteredCases.length} totalCount={cases.length} />
 
       <CaseList
-        onready={restoreCaseListTarget} records={pagedCases} allRecords={cases} {expandedId}
-        {tagDraft} setTagDraft={(value) => { tagRevision.changed(); tagDraft = value; }}
-        {noteDraft} setNoteDraft={(value) => { noteRevision.changed(); noteDraft = value; }}
-        {pendingNoteCaseIds} {calibrationCaseIds} {toggleCalibrationCase} {expand}
-        {setStatus} {setDisposition} {setReviewReason} {addBrandProfileAssociation} {removeBrandProfileAssociation}
-        {saveTags} {addNote} {removeCase} {refreshCases} {installCommittedCaseSnapshot}
-        setMessage={(value) => caseMessage = value} formatDate={date}
-        currentPage={currentCasePage} pageCount={casePageCount} setPage={setCasePage}
-        {brandProfiles} {brandProfilesUnavailable}
-        responseCaseId={page.url.hash === `#case-response-${encodeURIComponent(expandedId)}`
-          || (page.url.searchParams.get('response') === '1' && page.url.searchParams.get('case') === expandedId) ? expandedId : ''} />
+        records={pagedCases} {selectCase} {calibrationMode} {calibrationCaseIds} {toggleCalibrationCase} formatDate={date}
+        currentPage={currentCasePage} pageCount={casePageCount} setPage={setCasePage} />
     {:else}
       <section class="empty-state card">
         <h2>No cases yet</h2>
@@ -605,13 +607,14 @@
     {/if}
     <details class="advanced-case-tools">
       <summary>Advanced Case tools</summary>
-      <p>Calibration is a secondary reference for reviewing how triage performed.</p>
+      <button class="btn" type="button" aria-pressed={calibrationMode} onclick={() => calibrationMode = !calibrationMode}>{calibrationMode ? 'Finish selecting calibration Cases' : 'Select Cases for calibration export'}</button>
       <DeferredSurface load={() => import('$lib/components/RiskCalibrationDashboard.svelte')} props={{}}
         loadingLabel="Loading risk-calibration reference…" unavailableLabel="Risk-calibration reference could not be loaded." />
     </details>
     <DeferredSurface load={() => import('$lib/components/ExternalFindingsImport.svelte')}
       loadingLabel="Loading external-findings import…" unavailableLabel="External-findings import could not be loaded."
       props={{ cases, oncomplete: refreshCases, oncommitted: installCommittedCaseSnapshot, onmessage: (value: string) => caseMessage = value }} />
+    {/if}
   {:else}
     <LocalCollectionState state={casesSourceState} title="Cases unavailable" detail="Browser-local cases could not be read, so the count, empty state, imports, and mutations remain unavailable. Reload to retry without overwriting unknown saved work." />
   {/if}
@@ -622,5 +625,6 @@
   .refresh-status { margin: 10px 2px; color: var(--muted); font-size: var(--text-xs); }
   .advanced-case-tools { margin: 16px 0; padding-block: 12px; border-block: 1px solid var(--border); }
   .advanced-case-tools summary { cursor: pointer; font: 650 var(--text-sm) var(--mono); }
-  .advanced-case-tools > p { color: var(--muted); font-size: var(--text-sm); }
+  .advanced-case-tools > button { margin-top: 12px; }
+  .message { color: var(--accent); font-size: var(--text-sm); overflow-wrap: anywhere; }
 </style>

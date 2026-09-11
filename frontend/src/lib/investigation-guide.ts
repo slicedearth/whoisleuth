@@ -10,8 +10,8 @@ import {
   investigationGuideApprovedHref,
   investigationGuideHref,
   investigationGuideRecipe,
-  investigationGuideStageForGuidePath,
-  investigationGuideStageForPath,
+  investigationGuideStageForGuidePath as storedGuideStageForGuidePath,
+  investigationGuideStageForPath as storedGuideStageForPath,
   investigationGuideStagesForGuide,
   investigationGuideStagesForRecipe,
   investigationGuideSummaryFilename,
@@ -56,6 +56,23 @@ export type {
 } from './analysis/investigation-guide.ts';
 
 export const investigationRecipes = INVESTIGATION_RECIPES;
+
+// Retained recipes identify the Case step as Monitor. Browser routing can
+// change without rewriting that published progress and template contract.
+function storedGuidePath(pathname: unknown): unknown {
+  if (typeof pathname !== 'string') return pathname;
+  if (pathname === '/cases' || pathname.startsWith('/cases/')) return `/monitor${pathname.slice('/cases'.length)}`;
+  // Monitoring and its review inbox do not constitute a Case review.
+  return pathname === '/monitor' || pathname.startsWith('/monitor/') ? null : pathname;
+}
+
+export function investigationGuideStageForGuidePath(value: unknown, pathname: unknown) {
+  return storedGuideStageForGuidePath(value, storedGuidePath(pathname));
+}
+
+export function investigationGuideStageForPath(pathname: unknown, recipeId: unknown = 'new_domain_triage') {
+  return storedGuideStageForPath(storedGuidePath(pathname), recipeId);
+}
 
 function announceGuideChange() {
   window.dispatchEvent(new CustomEvent(INVESTIGATION_GUIDE_EVENT));
@@ -128,7 +145,7 @@ export function startInvestigationGuide(
 
 export function recordInvestigationGuideVisit(pathname: string): InvestigationGuide | null {
   const current = readStoredGuide(INVESTIGATION_GUIDE_KEY, true);
-  return updateStoredGuide(visitInvestigationGuide(current, pathname), current);
+  return updateStoredGuide(visitInvestigationGuide(current, storedGuidePath(pathname)), current);
 }
 
 export function approveInvestigationGuideCollection(stageId: string): InvestigationGuide | null {
@@ -201,8 +218,6 @@ export {
   investigationGuideApprovedHref,
   investigationGuideHref,
   investigationGuideRecipe,
-  investigationGuideStageForGuidePath,
-  investigationGuideStageForPath,
   investigationGuideStagesForGuide,
   investigationGuideStagesForRecipe,
 };

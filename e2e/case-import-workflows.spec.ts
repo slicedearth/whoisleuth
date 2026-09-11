@@ -1,4 +1,4 @@
-import { openConsoleView } from './console-navigation';
+import { openCaseMetadata, openCaseSection, openConsoleView } from './console-navigation';
 import { createHash } from 'node:crypto';
 import { gzipSync, zipSync } from 'fflate';
 import { expect, test } from './fixtures';
@@ -94,6 +94,7 @@ for (const outcome of ['write-failure', 'refresh-failure'] as const) {
   test(`import selection preserves the correct retry boundary after ${outcome}`, async ({ page }) => {
     await openCasesView(page);
     await createCase(page, 'review-2.invalid');
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
     const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
     const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
     await importer.getByText('Import bounded external findings', { exact: true }).click();
@@ -200,10 +201,14 @@ test('external findings require a validated preview before creating local eviden
   await expect(externalWorkspace).toContainText('reported by provider · website');
   await expect(externalWorkspace).toContainText('WHOISleuth did not collect or independently verify this provider finding');
 
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
   await externalImport.locator('input[type="file"]').setInputFiles(file);
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'skipped 1 duplicate' })).toBeVisible();
-  await expect(externalWorkspace).toContainText('1 pin · 1 sighting · 0 decisions');
+  await page.locator('.case-head', { hasText: 'external-review.invalid' }).click();
+  await openCaseSection(page, 'Summary');
+  await expect(page.getByRole('group', { name: 'Retained Case records' })).toContainText('1 pin · 1 sighting');
 });
 
 test('external findings serialize file parsing before exposing import actions', async ({ page }) => {
@@ -386,6 +391,7 @@ test('portable WACZ evidence verifies package fixity before using the WARC priva
 test('STIX claims require an existing selected case and remain separate from collected evidence', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'intelligence-case.invalid');
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
   await externalImport.getByText('Import bounded external findings', { exact: true }).click();
   const payload = JSON.stringify({
@@ -425,9 +431,8 @@ test('STIX claims require an existing selected case and remain separate from col
   await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'Merged 1 external assertion' })).toBeVisible();
 
   const caseHead = page.locator('.case-head', { hasText: 'intelligence-case.invalid' });
-  if (await caseHead.getAttribute('aria-expanded') !== 'true') await caseHead.click();
-  const response = await openCaseResponseWorkspace(page);
-  await expect(response).toContainText('0 pins · 0 sightings · 0 decisions · 1 assertion');
+  await caseHead.click();
+  const response = await openCaseResponseWorkspace(page, '', 'advanced', 'Assessment');
   await response.getByText('Structure facts, hypotheses, unknowns, and next steps', { exact: true }).click();
   await expect(response).toContainText('external import · open');
   await expect(response).toContainText('External review source');
@@ -440,6 +445,7 @@ test('deleting a case removes it after confirmation', async ({ page }) => {
   await createCase(page, 'delete-me.invalid');
 
   page.on('dialog', (dialog) => dialog.accept());
+  await page.getByText('Case options', { exact: true }).click();
   await page.locator('.case-actions .danger').click();
 
   await expect(page.locator('.case-head', { hasText: 'delete-me.invalid' })).toHaveCount(0);
@@ -448,6 +454,7 @@ test('deleting a case removes it after confirmation', async ({ page }) => {
 test('a case file imports and merges through the Cases toolbar', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'local.invalid');
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
 
   const importPayload = {
     version: CASE_SCHEMA_VERSION,
@@ -488,9 +495,12 @@ test('filtering by status narrows the visible cases', async ({ page }) => {
   await createCase(page, 'filter-b.invalid');
 
   // Escalate one.
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   await page.locator('.case-head', { hasText: 'filter-a.invalid' }).click();
-  await page.locator('.case-body .field-grid select').first().selectOption('escalated');
+  await openCaseMetadata(page);
+  await page.locator('.metadata-fields .field-grid select').first().selectOption('escalated');
 
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   await page.locator('.case-filters select').first().selectOption('escalated');
   await expect(page.locator('.case-head', { hasText: 'filter-a.invalid' })).toBeVisible();
   await expect(page.locator('.case-head', { hasText: 'filter-b.invalid' })).toHaveCount(0);
@@ -502,7 +512,8 @@ test('the Cases view has no horizontal overflow on a short mobile viewport', {
   await page.setViewportSize({ width: 360, height: 560 });
   await openCasesView(page);
   await createCase(page, 'mobile.invalid');
-  await page.locator('.case-body .note-edit textarea').fill('A fairly long note that should wrap rather than push the layout wider than the viewport.');
+  await openCaseSection(page, 'History');
+  await page.locator('.note-edit textarea').fill('A fairly long note that should wrap rather than push the layout wider than the viewport.');
   await expectNoHorizontalOverflow(page);
 });
 

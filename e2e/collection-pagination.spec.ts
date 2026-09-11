@@ -74,7 +74,7 @@ function campaign(index: number, domains: string[] = []) {
   };
 }
 
-test('case pagination keeps deep-linked cases visible and expanded', async ({ page }) => {
+test('a deep-linked Case returns to its position in the paginated list', async ({ page }) => {
   const cases = Array.from({ length: 27 }, (_, index) => caseRecord(index + 1));
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
@@ -82,9 +82,10 @@ test('case pagination keeps deep-linked cases visible and expanded', async ({ pa
   });
   await page.goto('/monitor?case=case-26');
 
+  await expect(page.locator('.case-heading', { hasText: 'case-26.invalid' })).toBeVisible();
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   const pagination = page.getByRole('navigation', { name: 'Case pages' });
   await expect(pagination).toContainText('Page 2 of 2');
-  await expect(page.locator('.case-head', { hasText: 'case-26.invalid' })).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.case-head')).toHaveCount(2);
 });
 

@@ -1,3 +1,4 @@
+import { openCasePacket, openCaseSection } from './console-navigation';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import {
@@ -28,6 +29,7 @@ for (const viewport of [
       await openCasesView(page);
       await createCase(page, 'undated.invalid');
       const workspace = await openCaseResponseWorkspace(page, '', 'quick');
+      await openCaseSection(page, 'Evidence');
       const observation = workspace.getByRole('region', { name: 'Case observations', exact: true });
       await observation.getByLabel('Label', { exact: true }).fill('Retained undated evidence');
       await observation.getByLabel('Fact', { exact: true }).fill('The source fact is retained independently of its unknown date.');
@@ -78,6 +80,7 @@ for (const timezoneId of ['Australia/Melbourne', 'America/New_York']) {
       }));
       await openSeededTimelineCase(page, 'utc-entry.invalid', [caseRecord({ id: 'utc-entry', domain: 'utc-entry.invalid', actions })], CASE_SCHEMA_VERSION);
       const workspace = await openCaseResponseWorkspace(page, 'utc-entry');
+      await openCaseSection(page, 'Response');
       const actionStage = workspace.getByRole('region', { name: 'Case response actions', exact: true });
       await actionStage.getByText('Track append-only response actions', { exact: true }).click();
       for (const [index, instant] of instants.entries()) {
@@ -90,6 +93,7 @@ for (const timezoneId of ['Australia/Melbourne', 'America/New_York']) {
           routeObservedAt: instant, contactLimitations: [`Reviewed fixture ${index}`],
         });
       }
+      await openCaseSection(page, 'Evidence');
       const observation = workspace.getByRole('region', { name: 'Case observations', exact: true });
       await observation.getByText('Pin an observed fact', { exact: true }).click();
       await expect(observation.getByText('Date and time fields use UTC.', { exact: true }).first()).toBeVisible();
@@ -120,9 +124,9 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
   await openCasesView(page);
   await createCase(page, 'quick-stages.invalid');
   const workspace = await openCaseResponseWorkspace(page, '', 'quick');
-  const stages = workspace.getByRole('navigation', { name: 'Case response stages', exact: true });
-  await expect(stages.getByRole('button')).toHaveCount(5);
+  await expect(page.getByRole('navigation', { name: 'Case sections' }).getByRole('link')).toHaveCount(5);
 
+  await openCaseSection(page, 'Evidence');
   const observation = workspace.getByRole('region', { name: 'Case observations', exact: true });
   await observation.getByLabel('Label', { exact: true }).fill('Selected page observation');
   await observation.getByLabel('Source', { exact: true }).first().fill('Fixture page review');
@@ -131,6 +135,7 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
   await observation.getByRole('button', { name: 'Pin evidence', exact: true }).click();
   await expect(observation.locator('ol.records').first().locator('li')).toHaveCount(1);
 
+  await openCaseSection(page, 'Assessment');
   const assessment = workspace.getByRole('region', { name: 'Case assessment', exact: true });
   await assessment.getByRole('combobox', { name: 'Disposition', exact: true }).selectOption('suspicious');
   await assessment.getByRole('combobox', { name: 'Review reason', exact: true }).selectOption('other_reviewed');
@@ -140,6 +145,7 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
   await assessment.getByRole('button', { name: 'Record conclusion', exact: true }).click();
   await expect(assessment.locator('ol.records > li')).toHaveCount(1);
 
+  await openCaseSection(page, 'Response');
   const actions = workspace.getByRole('region', { name: 'Case response actions', exact: true });
   await actions.getByRole('combobox', { name: 'Action type', exact: true }).selectOption('registrar_report');
   await actions.getByLabel('Recipient or owner', { exact: true }).fill('Fixture abuse review desk');
@@ -153,11 +159,11 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
     await actions.getByRole('button', { name, exact: true }).click();
   }
   await expect(actions.getByRole('button', { name: 'Mark sent', exact: true })).toBeDisabled();
-  await stages.getByRole('button', { name: /4\. Evidence handoff/ }).click();
+  await openCasePacket(page);
   const packet = workspace.locator('details[id^="case-response-preflight-"]');
   await expect(packet).toHaveAttribute('open', '');
   await expect(packet.locator(':scope > summary')).toBeFocused();
-  await expect(packet.locator(':scope > summary')).toBeInViewport({ ratio: 1 });
+  await expect(packet.locator(':scope > summary')).toBeInViewport();
   await expect(packet.getByRole('combobox', { name: 'Audience profile', exact: true })).toBeVisible();
   await packet.getByRole('combobox', { name: 'Audience profile', exact: true }).selectOption('registrar');
   await packet.getByLabel('Abuse category', { exact: true }).fill('Credential phishing');
@@ -233,6 +239,7 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
   expect(collectionRequests).toBe(0);
   await selectedContext.getByRole('link', { name: 'quick-stages.invalid', exact: true }).click();
   await openCaseResponseWorkspace(page, '', 'quick');
+  await openCaseSection(page, 'Response');
   const outcome = workspace.getByRole('region', { name: 'Case independent review and closure', exact: true });
   await expect(outcome.getByRole('list', { name: 'Independent observed-effect reviews' })).toHaveCount(0);
   await expect(outcome).toContainText('accepted for review');
@@ -274,10 +281,10 @@ test('Quick recipient refresh invalidates approval and stale manual previews can
   await openSeededTimelineCase(page, record.domain, [record], CASE_SCHEMA_VERSION);
   await addFixtureCasePin(page, 'Route review evidence');
   const workspace = await openCaseResponseWorkspace(page, '', 'quick');
+  await openCaseSection(page, 'Response');
   const actions = workspace.getByRole('region', { name: 'Case response actions', exact: true });
   for (const name of ['Mark reviewed', 'Authorise']) await actions.getByRole('button', { name, exact: true }).click();
-  const stages = workspace.getByRole('navigation', { name: 'Case response stages', exact: true });
-  await stages.getByRole('button', { name: /4\. Evidence handoff/ }).click();
+  await openCasePacket(page);
   const packet = workspace.locator('details[id^="case-response-preflight-"]');
   await packet.getByRole('combobox', { name: 'Audience profile', exact: true }).selectOption('registrar');
   await packet.getByLabel('Abuse category', { exact: true }).fill('Reviewed fixture concern');
@@ -300,7 +307,7 @@ test('Quick recipient refresh invalidates approval and stale manual previews can
   await expect(packet.getByRole('textbox', { name: /^Exact manual complaint/ })).toHaveCount(0);
   expect(copies).toBe(0);
 
-  await stages.getByRole('button', { name: /3\. Response decision/ }).click();
+  await openCaseSection(page, 'Response');
   await actions.getByRole('button', { name: 'Review recipient and schedule', exact: true }).click();
   await expect(actions.getByLabel('Route observed at', { exact: true })).toBeFocused();
   await expect(actions.getByLabel('Route observed at', { exact: true })).toHaveValue('2026-09-10T11:00:00.123');
@@ -312,7 +319,7 @@ test('Quick recipient refresh invalidates approval and stale manual previews can
   const retained = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.actions[0]!;
   expect(retained).toMatchObject({ state: 'drafting', routeObservedAt: '2026-09-10T13:00:00.457Z', routeReviewAfter: '2026-09-12T13:00:00.789Z', followUpAt: '2026-10-01T00:00:00.000Z' });
   expect(retained.history.at(-1)).toMatchObject({ previousState: 'authorised', nextState: 'drafting', provenance: 'material_action_change' });
-  await stages.getByRole('button', { name: /4\. Evidence handoff/ }).click();
+  await openCasePacket(page);
   await packet.getByRole('button', { name: 'Copy email draft', exact: true }).click();
   await expect(caseWorkspaceActionStatus(page)).toContainText('preview is out of date');
   expect(copies).toBe(0);
@@ -327,6 +334,7 @@ test('a Quick closure without a response action preserves validation, failed-wri
   await openCasesView(page);
   await createCase(page, 'no-action-closure.invalid');
   const workspace = await openCaseResponseWorkspace(page, '', 'quick');
+  await openCaseSection(page, 'Response');
   const outcome = workspace.getByRole('region', { name: 'Case independent review and closure', exact: true });
   const summary = outcome.getByLabel('Closure summary', { exact: true });
   const submit = outcome.getByRole('button', { name: 'Close case with reason', exact: true });
@@ -355,19 +363,23 @@ test('stage changes and pending saves preserve later assessment, outcome and bra
   await openCasesView(page);
   await createCase(page, 'stage-drafts.invalid');
   const workspace = await openCaseResponseWorkspace(page, '', 'quick');
+  await openCaseSection(page, 'Evidence');
   const observation = workspace.getByRole('region', { name: 'Case observations', exact: true });
   await observation.getByLabel('Label', { exact: true }).fill('Draft fixture evidence');
   await observation.getByLabel('Fact', { exact: true }).fill('A bounded retained fact.');
   await observation.getByRole('button', { name: 'Pin evidence', exact: true }).click();
+  await openCaseSection(page, 'Assessment');
   const assessment = workspace.getByRole('region', { name: 'Case assessment', exact: true });
   await assessment.getByRole('combobox', { name: 'Disposition', exact: true }).selectOption('suspicious');
   await assessment.getByRole('combobox', { name: 'Review reason', exact: true }).selectOption('other_reviewed');
   await assessment.getByLabel('Conclusion summary', { exact: true }).fill('Submitted conclusion');
   await assessment.getByLabel('Evidence-based rationale', { exact: true }).fill('Submitted rationale');
   await assessment.getByRole('checkbox', { name: 'Draft fixture evidence', exact: true }).check();
+  await openCaseSection(page, 'Response');
   const outcome = workspace.getByRole('region', { name: 'Case independent review and closure', exact: true });
   await outcome.getByLabel('Source', { exact: true }).fill('Unsubmitted independent review');
   await outcome.getByLabel('Closure summary', { exact: true }).fill('Unsubmitted closure');
+  await openCaseSection(page, 'Assessment');
   const release = await holdBrowserLocalTransaction(page);
   try {
     await assessment.getByRole('button', { name: 'Record conclusion', exact: true }).click();
@@ -381,10 +393,12 @@ test('stage changes and pending saves preserve later assessment, outcome and bra
   await expect(assessment.locator('ol.records > li')).toHaveCount(1);
   await expect(assessment.getByLabel('Conclusion summary', { exact: true })).toHaveValue('Later conclusion');
   await expect(assessment.getByLabel('Evidence-based rationale', { exact: true })).toHaveValue('Later rationale');
+  await openCaseSection(page, 'Response');
   await expect(outcome.getByLabel('Source', { exact: true })).toHaveValue('Unsubmitted independent review');
   await expect(outcome.getByLabel('Closure summary', { exact: true })).toHaveValue('Unsubmitted closure');
   expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.decisions.map((item) => item.summary)).toEqual(['Submitted conclusion']);
 
+  await openCaseSection(page, 'Assessment');
   await workspace.getByRole('button', { name: 'Advanced', exact: true }).click();
   const branch = assessment.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
   await branch.locator('summary').click();

@@ -20,6 +20,38 @@ export type CaseResponseStage = Readonly<{
 }>;
 export type CaseResponsePresentation = 'quick' | 'advanced';
 
+export const CASE_WORKSPACE_SECTIONS = Object.freeze([
+  { id: 'summary', label: 'Summary' },
+  { id: 'evidence', label: 'Evidence' },
+  { id: 'assessment', label: 'Assessment' },
+  { id: 'response', label: 'Response' },
+  { id: 'history', label: 'History' },
+] as const);
+export type CaseWorkspaceSection = typeof CASE_WORKSPACE_SECTIONS[number]['id'];
+
+export const CASE_STAGE_SECTION: Readonly<Record<CaseResponseStageId, CaseWorkspaceSection>> = {
+  observation: 'evidence',
+  assessment: 'assessment',
+  response_decision: 'response',
+  evidence_handoff: 'response',
+  outcome_tracking: 'response',
+};
+
+export function caseWorkspaceSection(url: URL): CaseWorkspaceSection {
+  const section = url.searchParams.get('section');
+  const recognised = CASE_WORKSPACE_SECTIONS.find((item) => item.id === section);
+  if (recognised) return recognised.id;
+  if (url.hash.startsWith('#case-response-observation-')) return 'evidence';
+  if (url.hash.startsWith('#case-response-assessment-')) return 'assessment';
+  return url.searchParams.get('response') === '1' || url.hash.startsWith('#case-response-') ? 'response' : 'summary';
+}
+
+export function caseWorkspaceHref(id: string, section: CaseWorkspaceSection = 'summary'): string {
+  const params = new URLSearchParams({ case: id });
+  if (section !== 'summary') params.set('section', section);
+  return `/cases?${params}`;
+}
+
 export type PersistCaseResponse = (
   patch: CasePatch,
   success: string,

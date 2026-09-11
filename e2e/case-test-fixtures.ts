@@ -1,4 +1,4 @@
-import { openConsoleView } from './console-navigation';
+import { openCaseSection, openConsoleView } from './console-navigation';
 import type { Page } from '@playwright/test';
 import { expect } from './fixtures';
 import { migrateLegacyBrowserData } from './helpers';
@@ -139,6 +139,7 @@ export async function openSeededTimelineCase(
   }, { destination: '/monitor' });
   await openConsoleView(page, 'cases');
   await page.locator('.case-head', { hasText: domain }).click();
+  await openCaseSection(page, 'Evidence');
 }
 
 export async function openCasesView(page: Page) {
@@ -147,26 +148,22 @@ export async function openCasesView(page: Page) {
 }
 
 export async function createCase(page: Page, domain: string) {
+  if (new URL(page.url()).searchParams.has('case')) await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   await page.locator('#new-case').fill(domain);
   await page.getByRole('button', { name: 'Open or create case' }).click();
-  const heading = page.locator('.case-head', { hasText: domain });
+  const heading = page.getByRole('heading', { name: domain, exact: true });
   await expect(heading).toBeVisible();
-  await expect(heading).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('navigation', { name: 'Case sections', exact: true })).toBeVisible();
 }
 
 export async function openCaseResponseWorkspace(
   page: Page,
   caseId = '',
   presentation: 'quick' | 'advanced' = 'advanced',
+  section: 'Evidence' | 'Assessment' | 'Response' = 'Evidence',
 ) {
-  const disclosure = caseId
-    ? page.locator(`#case-response-${caseId}`)
-    : page.locator('.response-disclosure:visible').last();
-  await expect(disclosure).toBeVisible();
-  if (await disclosure.getAttribute('open') === null) {
-    await disclosure.locator(':scope > summary').click();
-  }
-  const workspace = disclosure.locator('.response-workspace');
+  await openCaseSection(page, section);
+  const workspace = caseId ? page.locator(`#case-response-${caseId}`) : page.locator('.response-workspace');
   await expect(workspace).toBeVisible();
   const presentationControl = workspace
     .getByRole('group', { name: 'Case response presentation' })

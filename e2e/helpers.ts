@@ -223,7 +223,7 @@ export async function openDashboardGuidedInvestigation(page: Page): Promise<void
   await expect(page.getByRole('heading', { name: 'Preparing your Dashboard' })).toHaveCount(0);
   const returningTrigger = page.getByRole('button', { name: 'Open saved-work tools' });
   const firstUseTrigger = page.getByRole('button', { name: /^Start a guided investigation/u });
-  await expect(returningTrigger.or(firstUseTrigger)).toBeVisible();
+  await expect(returningTrigger.or(firstUseTrigger).first()).toBeVisible();
   if (await returningTrigger.isVisible()) {
     await openDashboardSecondaryWorkspaces(page);
     return;

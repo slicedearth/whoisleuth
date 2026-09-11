@@ -1336,7 +1336,8 @@ test('published response routes can be recorded in a local case with their prove
   const responseWorkspace = page.locator(`#case-response-${expectedCaseId}`);
   await expect(responseWorkspace).toBeVisible();
   await expect(responseWorkspace).toBeFocused();
-  await expect(responseWorkspace.getByRole('heading', { name: 'Evidence, reasoning, and actions' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Case sections' }).getByRole('link', { name: 'Response', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(responseWorkspace.getByRole('region', { name: 'Case response actions', exact: true })).toBeVisible();
 });
 
 test('bounded WHOIS lifecycle and role-based contacts render in Lookup', async ({ page }) => {

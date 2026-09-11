@@ -1,5 +1,6 @@
-import { openConsoleView } from './console-navigation';
+import { openCaseMetadata, openCaseSection, openConsoleView } from './console-navigation';
 import { readFile } from 'node:fs/promises';
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, readBrowserLocalCollection, requiredValue } from './helpers';
 import { caseRecord, createCase, openCaseResponseWorkspace, openCasesView, openSeededTimelineCase } from './case-test-fixtures';
@@ -8,10 +9,20 @@ import { CASE_RESPONSE_PACKET_VERSION } from '../packages/contracts/case-portabi
 
 // Case response mutation, failure recovery and lifecycle coverage.
 
+async function expectNeighbourRetained(page: Page, domain: string) {
+  const selectedUrl = page.url();
+  expect(new URL(selectedUrl).searchParams.get('case')).toBeTruthy();
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+  await expect(page.locator('.case-head', { hasText: domain })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(selectedUrl);
+}
+
 test('equal-time independent reviews remain visible without a selected outcome', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'concurrent-reviews.invalid');
   const workspace = await openCaseResponseWorkspace(page);
+  await openCaseSection(page, 'Response');
   const remediation = workspace.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
   await remediation.locator(':scope > summary').click();
   const form = remediation.locator('form').filter({ hasText: 'Append independent observed-effect review' });
@@ -31,6 +42,7 @@ test('equal-time independent reviews remain visible without a selected outcome',
   await page.reload();
   await openConsoleView(page, 'cases');
   const reopened = await openCaseResponseWorkspace(page);
+  await openCaseSection(page, 'Response');
   const retained = reopened.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
   await retained.locator(':scope > summary').click();
   await expect(retained).toContainText('A single latest independent review cannot be selected');
@@ -71,6 +83,7 @@ test('packet handoffs reject inputs changed during hashing and a stale delivery 
   await openSeededTimelineCase(page, record.domain, [record]);
   await addFixtureCasePin(page, 'Selected observation');
   const workspace = await openCaseResponseWorkspace(page);
+  await openCaseSection(page, 'Response');
   const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
   await packet.locator('summary').click();
   await packet.getByLabel('Abuse category', { exact: true }).fill('Internal review');
@@ -138,20 +151,22 @@ test('packet handoffs reject inputs changed during hashing and a stale delivery 
 test('rapid repeated note submission persists one note and is shown in the record', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'noted.invalid');
+  await openCaseSection(page, 'History');
 
-  await page.locator('.case-body .note-edit textarea').fill('This domain looks suspicious.');
-  await page.locator('.case-body .note-edit').evaluate((form) => {
+  await page.locator('[data-case-detail] .note-edit textarea').fill('This domain looks suspicious.');
+  await page.locator('[data-case-detail] .note-edit').evaluate((form) => {
     (form as HTMLFormElement).requestSubmit();
     (form as HTMLFormElement).requestSubmit();
   });
 
   await expect(page.locator('.notes p').first()).toHaveText('This domain looks suspicious.');
   await expect(page.locator('.notes p')).toHaveCount(1);
-  await expect(page.locator('.case-domain small')).toContainText('1 note');
+  expect((await readBrowserLocalCollection(page, 'cases')).records[0]!.value.notes).toHaveLength(1);
 
   await page.reload();
   await openConsoleView(page, 'cases');
-  await expect(page.locator('.case-head', { hasText: 'noted.invalid' })).toHaveAttribute('aria-expanded', 'true');
+  await openCaseSection(page, 'History');
+  await expect(page.getByRole('heading', { name: 'noted.invalid', exact: true })).toBeVisible();
   await expect(page.locator('.notes p').first()).toHaveText('This domain looks suspicious.');
 });
 
@@ -160,6 +175,7 @@ test('a Case response save preserves unrelated analyst drafts and keyboard focus
   await createCase(page, 'draft-retention.invalid');
 
   const workspace = await openCaseResponseWorkspace(page);
+  await openCaseSection(page, 'Response');
   const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
   await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
   await packet.getByLabel('Abuse category').fill('Fixture abuse review');
@@ -168,6 +184,7 @@ test('a Case response save preserves unrelated analyst drafts and keyboard focus
   await packet.getByLabel('Observed harm').fill('A bounded draft that must survive an unrelated Case mutation.');
 
   const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
+  await openCaseSection(page, 'Evidence');
   await pin.getByText('Pin an observed fact', { exact: true }).click();
   await pin.getByLabel('Label').fill('Draft-retention pin');
   await pin.getByLabel('Source').fill('Fixture evidence');
@@ -189,17 +206,19 @@ test('Quick and Advanced Case Response presentations keep one record and focus t
   await createCase(page, 'quick-response.invalid');
 
   const workspace = await openCaseResponseWorkspace(page, '', 'quick');
-  await expect(workspace.getByRole('heading', { name: 'Evidence, reasoning, and actions' })).toBeVisible();
+  await openCaseSection(page, 'Summary');
   await expect(workspace.getByRole('status', { name: 'Next Case requirement' })).toContainText('Observation');
+  await openCaseSection(page, 'Evidence');
   const quickObservation = workspace.getByRole('region', { name: 'Case observations', exact: true });
   await expect(quickObservation.getByRole('button', { name: 'Pin evidence', exact: true })).toBeVisible();
-  await workspace.getByRole('button', { name: 'Advanced history and fields' }).click();
+  await workspace.getByRole('button', { name: 'Advanced', exact: true }).click();
+  await workspace.getByText('Pin an observed fact', { exact: true }).click();
   const observation = workspace.locator('details[id^="case-response-observation-"]').first();
   await expect(observation).toHaveAttribute('open', '');
   await expect(observation.getByText('Pin an observed fact', { exact: true })).toBeFocused();
   await expect(workspace.getByRole('button', { name: 'Advanced', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await workspace.getByRole('button', { name: 'Quick', exact: true }).click();
-  await expect(workspace.getByRole('heading', { name: 'Next analyst action' })).toBeVisible();
+  await expect(quickObservation.getByRole('button', { name: 'Pin evidence', exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
@@ -222,6 +241,7 @@ test('observation drafts survive presentation changes and another stage save', a
   await sighting.getByLabel(/Limitations/).fill('Retained sighting limit');
   await workspace.getByRole('button', { name: 'Quick', exact: true }).click();
   await expect(pin.getByLabel('Label')).toHaveValue('Retained draft');
+  await openCaseSection(page, 'Response');
   await workspace.getByLabel('Recipient or owner', { exact: true }).fill('Fixture internal reviewer');
   await workspace.getByRole('button', { name: 'Create drafting action' }).click();
   await expect(workspace.getByRole('button', { name: 'Ready for review', exact: true })).toBeVisible();
@@ -229,6 +249,7 @@ test('observation drafts survive presentation changes and another stage save', a
   expect(saved.records[0]!.value.actions).toHaveLength(1);
   expect(saved.records[0]!.value.actions[0]!.state).toBe('drafting');
   await workspace.getByRole('button', { name: 'Advanced', exact: true }).click();
+  await openCaseSection(page, 'Evidence');
   await pin.locator('summary').click();
   await expect(sighting).toHaveAttribute('open', '');
   await expect(pin.getByLabel('Label')).toHaveValue('Retained draft');
@@ -307,9 +328,10 @@ test('observation writes preserve another tab edit and coordinate rapid submissi
   try {
     await openCasesView(other);
     const heading = other.locator('.case-head', { hasText: 'observation-concurrent.invalid' });
-    if (await heading.getAttribute('aria-expanded') !== 'true') await heading.click();
-    await other.locator('.case-body .note-edit textarea').fill('Note from the other tab.');
-    await other.locator('.case-body .note-edit').evaluate((form) => (form as HTMLFormElement).requestSubmit());
+    await heading.click();
+    await openCaseSection(other, 'History');
+    await other.locator('[data-case-detail] .note-edit textarea').fill('Note from the other tab.');
+    await other.locator('[data-case-detail] .note-edit').evaluate((form) => (form as HTMLFormElement).requestSubmit());
     await expect(other.locator('.notes p')).toContainText(['Note from the other tab.']);
     await expect(pin.getByLabel('Label')).toHaveValue('Concurrent evidence');
     await pin.locator('form').evaluate((form) => {
@@ -345,9 +367,14 @@ test('Case stage forms remain usable across supported layouts and both themes', 
     workspace.getByRole('region', { name: 'Case response actions', exact: true }),
     workspace.getByRole('region', { name: 'Case independent review and closure', exact: true }),
   ];
-  for (const stage of stagePanels) await stage.locator(':scope > details > summary').first().click();
+  for (const [index, stage] of stagePanels.entries()) {
+    await openCaseSection(page, index === 0 ? 'Assessment' : 'Response');
+    await stage.locator(':scope > details > summary').first().click();
+  }
+  await openCaseSection(page, 'Assessment');
   await stagePanels[0]!.getByLabel('Decision summary', { exact: true }).fill('A reviewed conclusion with a deliberately long descriptive title');
   await stagePanels[0]!.getByLabel('Rationale', { exact: true }).fill('The observation and its limitations remain readable at every supported width. '.repeat(6));
+  await openCaseSection(page, 'Response');
   await stagePanels[1]!.getByLabel('Recipient or internal owner', { exact: true }).fill('Long fixture review-desk reference '.repeat(6));
   await stagePanels[2]!.getByLabel('Closure summary', { exact: true }).fill('Retained observations remain separate from provider claims. '.repeat(6));
   for (const theme of ['Light theme', 'Dark theme']) {
@@ -357,6 +384,7 @@ test('Case stage forms remain usable across supported layouts and both themes', 
     for (const [width, height] of [[1280, 720], [1024, 768], [390, 844], [320, 700], [1920, 1080], [2560, 1440], [3840, 2160]]) {
       await page.setViewportSize({ width: width!, height: height! });
       await expectNoHorizontalOverflow(page);
+      await openCaseSection(page, 'Evidence');
       const fact = pin.getByLabel('Fact', { exact: true });
       await fact.focus();
       await expect(fact).toBeFocused();
@@ -375,6 +403,7 @@ test('Case stage forms remain usable across supported layouts and both themes', 
       await page.screenshot({ path: testInfo.outputPath(`observation-${theme.split(' ')[0]!.toLowerCase()}-${width}.png`), animations: 'disabled' });
       await sighting.screenshot({ path: testInfo.outputPath(`sighting-${theme.split(' ')[0]!.toLowerCase()}-${width}.png`), animations: 'disabled' });
       for (const [index, stage] of stagePanels.entries()) {
+        await openCaseSection(page, index === 0 ? 'Assessment' : 'Response');
         const bounds = await stage.evaluate((element) => {
           const panel = element.getBoundingClientRect();
           const controls = [...element.querySelectorAll('input, select, textarea, button')]
@@ -410,6 +439,7 @@ test('Case mutation focus recovery respects deliberate movement and restores a d
 
   const workspace = await openCaseResponseWorkspace(page);
   const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
+  await openCaseSection(page, 'Evidence');
   await pin.getByText('Pin an observed fact', { exact: true }).click();
   await pin.getByLabel('Label').fill('Focus fixture pin');
   await pin.getByLabel('Source').fill('Fixture evidence');
@@ -418,11 +448,12 @@ test('Case mutation focus recovery respects deliberate movement and restores a d
 
   await holdBrowserLocalReads(page, 750);
   await pinSubmit.click();
-  const caseSearch = page.locator('.case-filters').getByRole('textbox', { name: 'Search' });
+  const caseSearch = page.getByRole('navigation', { name: 'Case sections' }).getByRole('link', { name: 'History', exact: true });
   await caseSearch.focus();
   await expect(workspace).toContainText('Focus fixture pin');
   await expect(caseSearch).toBeFocused();
 
+  await openCaseSection(page, 'Assessment');
   const branch = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
   await branch.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
   await branch.getByLabel('Branch name').fill('Focus recovery branch');
@@ -451,16 +482,17 @@ test('a committed note remains singular when its immediate reread fails', async 
   await openCasesView(page);
   await createCase(page, 'note-neighbour.invalid');
   await createCase(page, 'note-committed.invalid');
+  await openCaseSection(page, 'History');
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
 
-  const note = page.locator('.case-body .note-edit');
+  const note = page.locator('[data-case-detail] .note-edit');
   await note.getByLabel('Add note').fill('One committed fixture note.');
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await note.getByRole('button', { name: 'Add note' }).click();
 
   await expect(caseWorkspaceActionStatus(page)).toContainText('The change was saved, but Cases could not be reread');
   await expect(note.getByLabel('Add note')).toHaveValue('');
-  await expect(page.locator('.case-head', { hasText: 'note-neighbour.invalid' })).toBeVisible();
+  await expectNeighbourRetained(page, 'note-neighbour.invalid');
   const committed = await readBrowserLocalCollection(page, 'cases', {
     minimumRecords: 2,
     minimumRevision: before.manifest.revision + 1,
@@ -474,7 +506,7 @@ test('a committed note remains singular when its immediate reread fails', async 
 
   await page.reload();
   await openConsoleView(page, 'cases');
-  await expect(page.locator('.case-head', { hasText: 'note-committed.invalid' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'note-committed.invalid', exact: true })).toBeVisible();
   const reloaded = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
   expect(requiredValue(
     reloaded.records.find((item) => item.value.domain === 'note-committed.invalid'),
@@ -486,7 +518,8 @@ test('committed Case status, tags and deletion reconcile when immediate rereads 
   await openCasesView(page);
   await createCase(page, 'reconcile-neighbour.invalid');
   await createCase(page, 'reconcile-target.invalid');
-  const openCaseRecord = page.locator('article.case.open');
+  await openCaseMetadata(page);
+  const openCaseRecord = page.locator('[data-case-detail]');
   const status = openCaseRecord.getByRole('combobox', { name: /^Status/u });
 
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
@@ -495,7 +528,8 @@ test('committed Case status, tags and deletion reconcile when immediate rereads 
     hasText: 'Set reconcile-target.invalid to Reviewing. The change was saved, but Cases could not be reread',
   })).toBeVisible();
   await expect(status).toHaveValue('reviewing');
-  await expect(page.locator('.case-head', { hasText: 'reconcile-neighbour.invalid' })).toBeVisible();
+  await expectNeighbourRetained(page, 'reconcile-neighbour.invalid');
+  await openCaseMetadata(page);
   let committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
   expect(requiredValue(
     committed.records.find((item) => item.value.domain === 'reconcile-target.invalid'),
@@ -509,7 +543,7 @@ test('committed Case status, tags and deletion reconcile when immediate rereads 
     hasText: 'Updated tags for reconcile-target.invalid. The change was saved, but Cases could not be reread',
   })).toBeVisible();
   await expect(page.getByLabel('Tags')).toHaveValue('reviewed, retained');
-  await expect(page.locator('.tag-row')).toContainText('reviewed');
+  await expect(page.getByRole('textbox', { name: /^Additional tags/ })).toHaveValue('reviewed, retained');
   committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
   expect(requiredValue(
     committed.records.find((item) => item.value.domain === 'reconcile-target.invalid'),
@@ -518,11 +552,13 @@ test('committed Case status, tags and deletion reconcile when immediate rereads 
 
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   page.once('dialog', (dialog) => dialog.accept());
+  await page.getByText('Case options', { exact: true }).click();
   await page.getByRole('button', { name: 'Delete case' }).click();
   await expect(caseWorkspaceActionStatus(page).filter({
     hasText: 'Deleted the case for reconcile-target.invalid. The change was saved, but Cases could not be reread',
   })).toBeVisible();
   await expect(page.locator('.case-head', { hasText: 'reconcile-target.invalid' })).toHaveCount(0);
+  await expect(page).toHaveURL('/cases');
   await expect(page.locator('.case-head', { hasText: 'reconcile-neighbour.invalid' })).toBeVisible();
   committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   expect(committed.records.map((item) => item.value.domain)).toEqual(['reconcile-neighbour.invalid']);
@@ -532,7 +568,7 @@ test('rapid repeated action submission persists one drafting action', async ({ p
   await openCasesView(page);
   await createCase(page, 'action-single.invalid');
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
-  const details = (await openCaseResponseWorkspace(page)).locator('details', { hasText: 'Track append-only response actions' });
+  const details = (await openCaseResponseWorkspace(page, '', 'advanced', 'Response')).locator('details', { hasText: 'Track append-only response actions' });
   await details.getByText('Track append-only response actions', { exact: true }).click();
   await details.getByLabel('Recipient or internal owner').fill('Fixture review owner');
   await details.getByLabel('Contact source').fill('Fixture source');
@@ -558,7 +594,8 @@ test('rapid repeated branch submission persists one investigation branch', async
   await addFixtureCasePin(page, 'Single branch pin');
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   const workspace = await openCaseResponseWorkspace(page);
-  await expect(workspace.locator(':scope > header > span')).toContainText('0 branches');
+  await openCaseSection(page, 'Assessment');
+  await expect(workspace.locator('.branches li')).toHaveCount(0);
   const details = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
   await details.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
   await details.getByLabel('Branch name').fill('Single branch');
@@ -569,8 +606,7 @@ test('rapid repeated branch submission persists one investigation branch', async
   });
 
   await expect(details.locator('.branches li')).toHaveCount(1);
-  await expect(workspace.locator(':scope > header > span')).toContainText('1 branch');
-  await expect(workspace.locator(':scope > header > span')).not.toContainText('1 branches');
+  await expect(details.locator('.branches li')).toContainText('Single branch');
   const committed = await readBrowserLocalCollection(page, 'cases', {
     minimumRecords: 1,
     minimumRevision: before.manifest.revision + 1,
@@ -587,6 +623,7 @@ test('keeps a drafting action form when the Case update fails before commit', as
 
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   const workspace = await openCaseResponseWorkspace(page);
+  await openCaseSection(page, 'Response');
   const action = workspace.locator('details', { hasText: 'Track append-only response actions' });
   await action.getByText('Track append-only response actions', { exact: true }).click();
   await action.getByLabel('Action type').selectOption('registrar_report');
@@ -627,6 +664,7 @@ test('shows the complete committed Case snapshot when the immediate action rerea
 
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   const workspace = await openCaseResponseWorkspace(page);
+  await openCaseSection(page, 'Response');
   const action = workspace.locator('details', { hasText: 'Track append-only response actions' });
   await action.getByText('Track append-only response actions', { exact: true }).click();
   await action.getByLabel('Action type').selectOption('registry_report');
@@ -638,7 +676,7 @@ test('shows the complete committed Case snapshot when the immediate action rerea
 
   await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'The change was saved, but Cases could not be reread' })).toContainText('complete committed Case snapshot');
   await expect(workspace).toContainText('registry report · drafting');
-  await expect(page.locator('.case-head', { hasText: 'action-neighbour.invalid' })).toBeVisible();
+  await expectNeighbourRetained(page, 'action-neighbour.invalid');
   const committed = await readBrowserLocalCollection(page, 'cases', {
     minimumRecords: 1,
     minimumRevision: before.manifest.revision + 1,
@@ -663,6 +701,7 @@ test('keeps an investigation-branch draft when the Case update fails before comm
 
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   const workspace = await openCaseResponseWorkspace(page);
+  await openCaseSection(page, 'Assessment');
   const branch = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
   await branch.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
   await branch.getByLabel('Branch name').fill('Draft branch');
@@ -695,6 +734,7 @@ test('shows the complete committed Case snapshot when an investigation-branch re
 
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
   const workspace = await openCaseResponseWorkspace(page);
+  await openCaseSection(page, 'Assessment');
   const branch = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
   await branch.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
   await branch.getByLabel('Branch name').fill('Committed branch');
@@ -705,7 +745,7 @@ test('shows the complete committed Case snapshot when an investigation-branch re
 
   await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'The change was saved, but Cases could not be reread' })).toContainText('complete committed Case snapshot');
   await expect(workspace).toContainText('Committed branch');
-  await expect(page.locator('.case-head', { hasText: 'branch-neighbour.invalid' })).toBeVisible();
+  await expectNeighbourRetained(page, 'branch-neighbour.invalid');
   const committed = await readBrowserLocalCollection(page, 'cases', {
     minimumRecords: 2,
     minimumRevision: before.manifest.revision + 1,
@@ -725,12 +765,14 @@ test('append-only response review, exact authorisation, independent verification
   test.slow();
   await openCasesView(page);
   await createCase(page, 'response.invalid');
-  const caseMetadata = page.locator('.case-body > .field-grid');
+  await openCaseMetadata(page);
+  const caseMetadata = page.locator('.metadata-fields > .field-grid');
   await caseMetadata.getByLabel('Disposition').selectOption('confirmed_abuse');
   await caseMetadata.getByLabel('Review reason').selectOption('confirmed_credential_abuse');
 
   const workspace = await openCaseResponseWorkspace(page);
   const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
+  await openCaseSection(page, 'Evidence');
   await pin.getByText('Pin an observed fact', { exact: true }).click();
   await pin.getByLabel('Label').fill('Observed credential form');
   await pin.getByLabel('Source').fill('Lookup evidence');
@@ -740,6 +782,7 @@ test('append-only response review, exact authorisation, independent verification
   await pin.getByRole('button', { name: 'Pin evidence' }).click();
   await expect(workspace).toContainText('Observed credential form');
 
+  await openCaseSection(page, 'Assessment');
   const decision = workspace.locator('details', { hasText: 'Record an analyst decision' });
   await decision.getByText('Record an analyst decision', { exact: true }).click();
   await decision.getByLabel('Decision summary').fill('Escalate for reviewed reporting');
@@ -750,8 +793,10 @@ test('append-only response review, exact authorisation, independent verification
 
   await workspace.getByRole('button', { name: 'Quick', exact: true }).click();
   const nextRequirement = workspace.getByRole('status', { name: 'Next Case requirement' });
+  await openCaseSection(page, 'Summary');
   await expect(nextRequirement).toHaveAttribute('data-status', 'not_started');
   await expect(nextRequirement).toContainText('Response decision');
+  await openCaseSection(page, 'Response');
   await workspace.getByRole('button', { name: 'Advanced', exact: true }).click();
 
   const action = workspace.locator('details', { hasText: 'Track append-only response actions' });
@@ -762,6 +807,7 @@ test('append-only response review, exact authorisation, independent verification
   await action.getByRole('button', { name: 'Create drafting action' }).click();
   await expect(workspace).toContainText('registrar report · drafting');
 
+  await openCaseSection(page, 'Assessment');
   const branch = workspace.locator('details', { hasText: 'Group evidence and decisions into investigation branches' });
   await branch.getByText('Group evidence and decisions into investigation branches', { exact: true }).click();
   await branch.getByLabel('Branch name').fill('Registrar response path');
@@ -771,6 +817,7 @@ test('append-only response review, exact authorisation, independent verification
   await expect(branch).toContainText('Registrar response path');
   await expect(branch).toContainText('1 pin · 0 checkpoints · 0 assertions · 1 action');
 
+  await openCaseSection(page, 'Response');
   await action.getByRole('button', { name: 'Review or append event' }).click();
   for (const state of ['ready_for_review', 'reviewed', 'authorised'] as const) {
     await action.getByLabel('Next state').selectOption(state);
@@ -779,6 +826,7 @@ test('append-only response review, exact authorisation, independent verification
   }
   await expect(action.locator('.transition-timeline > li')).toHaveCount(4);
 
+  await openCaseSection(page, 'Response');
   const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
   await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
   await expect(packet.getByLabel('Audience profile')).toHaveValue('internal_soc');
@@ -901,6 +949,7 @@ test('append-only response review, exact authorisation, independent verification
 
   await workspace.getByRole('button', { name: 'Advanced', exact: true }).click();
   await action.getByText('Track append-only response actions', { exact: true }).click();
+  await openCaseSection(page, 'Response');
   await action.getByRole('button', { name: 'Review or append event' }).click();
   await action.getByLabel('Event source').selectOption('provider');
   await action.getByLabel('Next state').selectOption('acknowledged');
@@ -913,6 +962,7 @@ test('append-only response review, exact authorisation, independent verification
   await expect(action).toContainText('Latest typed provider outcome: accepted for review');
   await expect(action.locator('.transition-timeline > li')).toHaveCount(6);
 
+  await openCaseSection(page, 'Response');
   const remediation = workspace.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
   await remediation.getByText('Verify remediation independently and close deliberately', { exact: true }).click();
   await expect(remediation).toContainText('accepted for review');
@@ -946,9 +996,10 @@ test('append-only response review, exact authorisation, independent verification
 
   await page.reload();
   await openConsoleView(page, 'cases');
-  await expect(page.locator('.case-head', { hasText: 'response.invalid' })).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('heading', { name: 'response.invalid', exact: true })).toBeVisible();
   const restoredWorkspace=await openCaseResponseWorkspace(page);
-  await expect(restoredWorkspace).toContainText('1 pin · 0 sightings · 1 decision · 0 assertions · 1 action · 1 branch');
+  await openCaseSection(page, 'Summary');
+  await expect(restoredWorkspace.getByRole('group', { name: 'Retained Case records' })).toContainText('1 pin');
   await expect(restoredWorkspace).toContainText('Registrar response path');
   await expect(restoredWorkspace).toContainText('registrar report · acknowledged');
 });

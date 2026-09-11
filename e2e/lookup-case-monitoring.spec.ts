@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { openCaseMetadata } from './console-navigation';
 
 import { expect, test } from './fixtures';
 import {
@@ -168,8 +169,9 @@ test('partial Lookup evidence can be classified, monitored, rechecked, and revie
 
   await caseCard.getByRole('link', { name: 'Open in Monitor →' }).click();
   await expect(page).toHaveURL(/\/cases\?case=/u);
-  const monitorCase = page.locator('.case.open');
+  const monitorCase = page.locator('article.case-detail');
   await expect(monitorCase).toContainText(CASE_DOMAIN);
+  await openCaseMetadata(page);
   await monitorCase.getByLabel('Status').selectOption('monitoring');
   await expect(monitorCase.getByLabel('Status')).toHaveValue('monitoring');
   await page.goBack();

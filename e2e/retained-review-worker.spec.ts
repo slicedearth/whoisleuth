@@ -1,4 +1,4 @@
-import { openConsoleView } from './console-navigation';
+import { openCaseSection, openConsoleView } from './console-navigation';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
@@ -364,7 +364,8 @@ test('a committed Case edit replaces retained review inputs without losing its d
     await expect(timeline).toContainText('2 retained events');
     await openConsoleView(page, 'cases');
     const head = page.locator('.case-head', { hasText: 'retained-01.example' });
-    if (await head.getAttribute('aria-expanded') !== 'true') await head.click();
+    await head.click();
+    await openCaseSection(page, 'History');
     await page.getByRole('textbox', { name: 'Add note', exact: true }).fill('Retained review note.');
     await page.getByRole('button', { name: 'Add note', exact: true }).click();
     await expect(page.locator('.notes')).toContainText('Retained review note.');
@@ -388,6 +389,7 @@ test('small retained collections preserve usable review and note workflows with 
     await expect(page.getByRole('region', { name: 'Investigation timeline', exact: true })).toContainText('2 retained events');
     await openConsoleView(page, 'cases');
     await page.locator('.case-head', { hasText: 'retained-01.example' }).click();
+    await openCaseSection(page, 'History');
     await page.getByRole('textbox', { name: 'Add note', exact: true }).fill('Small workspace note.');
     const noteStartedAt = await page.evaluate(() => performance.now());
     await page.getByRole('button', { name: 'Add note', exact: true }).click();

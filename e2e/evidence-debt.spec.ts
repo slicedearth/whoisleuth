@@ -247,7 +247,7 @@ test('a modified Case link opens its own tab without changing the inbox or writi
   const other = await opened;
   try {
     await expect(other).toHaveURL(/\/cases\?case=case-conflicting#case-response-case-conflicting$/u);
-    await expect(other.locator('#case-head-case-conflicting')).toHaveAttribute('aria-expanded', 'true');
+    await expect(other.locator('#case-head-case-conflicting')).toBeVisible();
     await expect(page).toHaveURL(originalUrl);
     await expect(page.getByRole('tab', { name: /^Inbox/u })).toHaveAttribute('aria-selected', 'true');
     expect(await page.evaluate(() => (window as typeof window & { __evidenceDebtWrites?: number }).__evidenceDebtWrites || 0)).toBe(0);
@@ -271,7 +271,7 @@ test('announces loading without presenting a false zero', async ({ page }) => {
   await expect(region).toHaveCount(0);
   await expect(page.getByText('No retained review items', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Review inbox evidence unavailable', exact: true })).toHaveCount(0);
-  const heading = page.getByRole('heading', { name: 'Review inbox', exact: true });
+  const heading = page.getByRole('heading', { name: 'Review inbox', level: 1, exact: true });
   const tabs = page.getByRole('tablist', { name: 'Monitor views', exact: true });
   const headingBefore = await heading.boundingBox();
   const tabsBefore = await tabs.boundingBox();

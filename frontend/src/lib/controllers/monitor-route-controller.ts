@@ -122,7 +122,7 @@ function buildMonitorNavigationUrl(
 ): string {
   const url = new URL(current);
   url.searchParams.set('view', next);
-  for (const parameter of ['case', 'watchlist', 'campaign', 'observation', 'review', 'attention', 'queue']) {
+  for (const parameter of ['case', 'watchlist', 'campaign', 'observation', 'review', 'attention', 'queue', 'case-review', 'section']) {
     url.searchParams.delete(parameter);
   }
   if (!focus) {
