@@ -346,14 +346,6 @@ import {
 } from './first-use-analyst-study.mts';
 import { FRONTEND_LOADING_REPORT_SCHEMA, FRONTEND_LOADING_REPORT_VERSION } from './frontend-loading-report.mts';
 import {
-  INCREMENTAL_LOOKUP_QUALIFICATION_SCHEMA,
-  INCREMENTAL_LOOKUP_QUALIFICATION_VERSION,
-} from './incremental-lookup-qualification.mts';
-import {
-  INCREMENTAL_LOOKUP_TRANSPORT_SPIKE_SCHEMA,
-  INCREMENTAL_LOOKUP_TRANSPORT_SPIKE_VERSION,
-} from './incremental-lookup-transport-spike.mts';
-import {
   LOCAL_DATA_PLATFORM_EVALUATION_SCHEMA,
   LOCAL_DATA_PLATFORM_EVALUATION_VERSION,
 } from './local-data-platform-evaluation.mts';
@@ -437,12 +429,6 @@ import {
   MAX_LOOKUP_PROGRESS_STREAM_BYTES,
 } from '../lib/lookup-progress.mts';
 import {
-  LOOKUP_PROGRESS_STAGING_EVIDENCE_SCHEMA,
-  LOOKUP_PROGRESS_STAGING_EVIDENCE_VERSION,
-  LOOKUP_PROGRESS_STAGING_QUALIFICATION_SCHEMA,
-  LOOKUP_PROGRESS_STAGING_QUALIFICATION_VERSION,
-} from '../lib/lookup-progress-staging-evidence.mts';
-import {
   LOOKUP_READABLE_REPORT_SCHEMA,
   LOOKUP_READABLE_REPORT_VERSION,
   MAX_LOOKUP_READABLE_REPORT_BYTES,
@@ -460,7 +446,6 @@ import {
   SCHEDULED_MONITOR_LOG_SCHEMA,
   SCHEDULED_MONITOR_LOG_VERSION,
 } from '../netlify/functions/scheduled-monitor.mts';
-import { MAX_LOOKUP_PROGRESS_STAGING_FILE_BYTES } from './incremental-lookup-staging-evidence.mts';
 
 export const SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA = 'whoisleuth.schema-compatibility-inventory';
 export const SCHEMA_COMPATIBILITY_INVENTORY_VERSION = 1;
@@ -530,8 +515,6 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'maintainer.first-use-study-session', kind: 'cli_document', schema: FIRST_USE_STUDY_SESSION_SCHEMA, currentVersion: FIRST_USE_STUDY_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_FIRST_USE_STUDY_INPUT_BYTES, owner: 'tools/first-use-analyst-study.mts', note: 'Bounded analyst-entered study session consumed only by the local target-free aggregation command.' }),
   entry({ id: 'maintainer.first-use-study-report', kind: 'cli_document', schema: FIRST_USE_STUDY_REPORT_SCHEMA, currentVersion: FIRST_USE_STUDY_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/first-use-analyst-study.mts', note: 'Target-free aggregate report that excludes raw analyst notes and target identifiers.' }),
   entry({ id: 'maintainer.frontend-loading-report', kind: 'cli_document', schema: FRONTEND_LOADING_REPORT_SCHEMA, currentVersion: FRONTEND_LOADING_REPORT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/frontend-loading-report.mts', note: 'Post-build bounded static dependency and gzip-budget report; it does not execute generated application code.' }),
-  entry({ id: 'maintainer.incremental-lookup-qualification', kind: 'cli_document', schema: INCREMENTAL_LOOKUP_QUALIFICATION_SCHEMA, currentVersion: INCREMENTAL_LOOKUP_QUALIFICATION_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/incremental-lookup-qualification.mts', note: 'Offline synthetic qualification report for the bounded incremental Lookup transport.' }),
-  entry({ id: 'maintainer.incremental-lookup-transport-spike', kind: 'cli_document', schema: INCREMENTAL_LOOKUP_TRANSPORT_SPIKE_SCHEMA, currentVersion: INCREMENTAL_LOOKUP_TRANSPORT_SPIKE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/incremental-lookup-transport-spike.mts', note: 'Offline architecture-spike report; no deployment adapter or target request is enabled.' }),
   entry({ id: 'maintainer.local-data-platform-evaluation', kind: 'cli_document', schema: LOCAL_DATA_PLATFORM_EVALUATION_SCHEMA, currentVersion: LOCAL_DATA_PLATFORM_EVALUATION_VERSION, supportedVersions: [2], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/local-data-platform-evaluation.mts', note: 'Target-free browser-local storage evaluation report with reviewed capacity assumptions and no retained user data.' }),
   entry({ id: 'maintainer.local-codeql-temporary-reservation', kind: 'cli_document', schema: CODEQL_TEMP_MARKER_SCHEMA, currentVersion: CODEQL_TEMP_MARKER_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'ephemeral_replace', byteBudget: MAX_CODEQL_TEMP_MARKER_BYTES, owner: 'tools/local-codeql.mts', note: 'Private marker for one owned temporary analysis reservation; it contains only bounded process and filesystem identity metadata and is removed with the reservation.' }),
   entry({ id: 'maintainer.provider-policy-freshness', kind: 'cli_document', schema: PROVIDER_POLICY_FRESHNESS_SCHEMA, currentVersion: PROVIDER_POLICY_FRESHNESS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/provider-policy-freshness.mts', note: 'Provider-policy metadata freshness report; it does not enable an adapter or make a provider request.' }),
@@ -652,8 +635,6 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'cli.encrypted-dns-plan', kind: 'cli_document', schema: ENCRYPTED_DNS_CONTRACT_SCHEMA, currentVersion: ENCRYPTED_DNS_CONTRACT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/encrypted-dns-contract.mts', note: 'Request-free bounded adapter and disclosure plan; it does not enable an encrypted DNS provider or send a query.' }),
   entry({ id: 'cli.rdap-search-workbench', kind: 'cli_document', schema: RDAP_SEARCH_WORKBENCH_SCHEMA, currentVersion: RDAP_SEARCH_WORKBENCH_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/rdap-search-workbench.mts', note: 'One versioned output family for request-free capability help, bounded reverse-search plans, and offline response inspection.' }),
   entry({ id: 'derived.lookup-progress', kind: 'derived', schema: LOOKUP_PROGRESS_SCHEMA, currentVersion: LOOKUP_PROGRESS_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: MAX_LOOKUP_PROGRESS_STREAM_BYTES, owner: 'lib/lookup-progress.mts', note: 'Bounded incremental Lookup stream; partial fragments are presentation-only and only the validated final result is persistable.' }),
-  entry({ id: 'maintainer.lookup-progress-staging-evidence', kind: 'cli_document', schema: LOOKUP_PROGRESS_STAGING_EVIDENCE_SCHEMA, currentVersion: LOOKUP_PROGRESS_STAGING_EVIDENCE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_LOOKUP_PROGRESS_STAGING_FILE_BYTES, owner: 'lib/lookup-progress-staging-evidence.mts', note: 'Exact-current operator-supplied staging evidence with target-free bounded measurements and authenticated build identity.' }),
-  entry({ id: 'maintainer.lookup-progress-staging-qualification', kind: 'cli_document', schema: LOOKUP_PROGRESS_STAGING_QUALIFICATION_SCHEMA, currentVersion: LOOKUP_PROGRESS_STAGING_QUALIFICATION_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'lib/lookup-progress-staging-evidence.mts', note: 'Output-only target-free qualification across the fixed Express and Netlify staging evidence pair.' }),
   entry({ id: 'export.lookup-readable-report', kind: 'export', schema: LOOKUP_READABLE_REPORT_SCHEMA, currentVersion: LOOKUP_READABLE_REPORT_VERSION, supportedVersions: [...SUPPORTED_LOOKUP_READABLE_REPORT_VERSIONS], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: MAX_LOOKUP_READABLE_REPORT_BYTES, owner: 'lib/lookup-readable-report.mts', note: 'Output-only bounded human-readable Lookup report; version 3 is the current producer contract and no historical reader is claimed.' }),
   entry(RDAP_NAMESERVER_SEARCH_COMPATIBILITY),
   entry({ id: 'derived.threat-intelligence-result', kind: 'derived', schema: THREAT_INTELLIGENCE_SCHEMA, currentVersion: THREAT_INTELLIGENCE_CONTRACT_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'none', byteBudget: null, owner: 'lib/threat-intelligence-types.mts', note: 'Transient provider-attributed result with bounded findings; exact markers are validated before browser projection.' }),

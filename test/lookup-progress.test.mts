@@ -10,9 +10,6 @@ import {
   createLookupProgressStart,
   encodeLookupProgressEvent,
 } from '../lib/lookup-progress.mts';
-import {
-  buildIncrementalLookupTransportSpikeReport,
-} from '../tools/incremental-lookup-transport-spike.mts';
 
 const PLANNED = ['rdap', 'whois'] as const;
 
@@ -30,7 +27,7 @@ function reducer() {
   });
 }
 
-describe('incremental Lookup transport spike', () => {
+describe('bounded Lookup progress', () => {
   test('decodes arbitrary chunks while keeping partial fragments non-persistable', () => {
     const events = [
       createLookupProgressStart('deep', PLANNED),
@@ -114,12 +111,4 @@ describe('incremental Lookup transport spike', () => {
     );
   });
 
-  test('proves the offline reference sequence while keeping production disabled', () => {
-    const report = buildIncrementalLookupTransportSpikeReport();
-    assert.equal(report.ready, true);
-    assert.equal(report.productionEnabled, false);
-    assert.equal(report.events, 4);
-    assert.match(report.guarantees.join(' '), /never interpreted as absence/iu);
-    assert.match(report.remainingGates.join(' '), /remote-runtime adapter/iu);
-  });
 });
