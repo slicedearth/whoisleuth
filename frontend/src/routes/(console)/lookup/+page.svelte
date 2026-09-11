@@ -23,11 +23,13 @@
   import { loadWatchlists, saveSingleDomainWatchlist } from '$lib/watchlists';
   import type { LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
-  import { buildLookupEvidence, evidenceFilename, serializeLookupEvidence } from '$lib/analysis/evidence-export.ts';
   import {
-    formatLookupInvestigationBriefMarkdown,
-    lookupInvestigationBriefFilename,
-  } from '$lib/analysis/lookup-investigation-brief.ts';
+    prepareLookupEvidenceExport,
+    exportLookupEvidence,
+    exportLookupReadableReport,
+    exportLookupInvestigationBrief,
+    exportLookupClaimPassport,
+  } from '$lib/analysis/lookup-exports.ts';
   import {
     createLookupViewModel,
     type LookupHttpResponse,
@@ -40,9 +42,6 @@
     stringList,
   } from '$lib/analysis/lookup-display-model.ts';
   import { buildLookupRouteAnalysis } from '$lib/analysis/lookup-route-analysis.ts';
-  import {
-    buildLookupClaimPassport,
-  } from '$lib/analysis/lookup-claim-passport.ts';
   import type { LookupClaimId } from '$lib/analysis/lookup-claim-readiness.ts';
   import type { LookupFreshnessPolicyInput, LookupFreshnessThresholds } from '$lib/analysis/lookup-source-refresh.ts';
   import {
@@ -70,10 +69,6 @@
     defaultLookupWatchlistName,
     lookupWatchlistsForDomain,
   } from '$lib/analysis/lookup-watchlist-handoff.ts';
-  import {
-    buildLookupReadableReport,
-    lookupReadableReportFilename,
-  } from '$lib/analysis/lookup-readable-report.ts';
   import { buildServiceDependencyReview } from '$lib/analysis/service-dependency-review.ts';
   import { parseDomainInput } from '$lib/analysis/utils.ts';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, featureCapability, type CapabilityGetter } from '$lib/capabilities';
@@ -257,15 +252,7 @@
   const evidenceQualityMatrix=$derived(lookupAnalysis.evidenceQualityMatrix);
   const lookupSummary=$derived(lookupAnalysis.lookupSummary);
   const lookupInvestigationBrief=$derived(lookupAnalysis.lookupInvestigationBrief);
-  function portableOutputBoundFailure(cause:unknown):boolean{
-    return (cause instanceof TypeError||cause instanceof RangeError)
-      &&/(?:Lookup response|Lookup evidence|Readable Lookup report).*(?:bound|exceed|limit)/iu.test(cause.message);
-  }
-  const lookupEvidenceProjection=$derived.by(()=>{
-    if(!result)return {document:null,error:null};
-    try{return {document:buildLookupEvidence(result,{idnAnalysis,applicationVersion:__WHOISLEUTH_VERSION__}),error:null};}
-    catch(cause){if(!portableOutputBoundFailure(cause))throw cause;return {document:null,error:'Portable evidence and readable report exports are unavailable because this response exceeds the bounded evidence structure. The separately attributed Lookup result remains available.'};}
-  });
+  const lookupEvidenceProjection=$derived(prepareLookupEvidenceExport(result, {idnAnalysis,applicationVersion:__WHOISLEUTH_VERSION__}));
   const lookupEvidenceDocument=$derived(lookupEvidenceProjection.document);
   const evidenceTopologyTarget=$derived(lookupAnalysis.evidenceTopologyTarget);
   const evidenceTopologyProjection=$derived(projectEvidenceTopology(evidenceTopologyTarget,evidenceTopologyNodes));
@@ -659,28 +646,17 @@
     });
   }
   function downloadEvidence(){
-    if(!result)return;
-    if(!lookupEvidenceDocument){evidenceExportStatus=`Evidence JSON was not created. ${lookupEvidenceProjection.error||'Evidence export is unavailable for this result.'}`;return;}
-    evidenceExportStatus='';
-    try{
-      const body=serializeLookupEvidence(lookupEvidenceDocument,true);
-      const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));
-      const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);
-    }catch(cause){
-      if(!portableOutputBoundFailure(cause))throw cause;
-      evidenceExportStatus='Evidence export was not created because the retained result exceeds the portable evidence bounds.';
-    }
+    const status=exportLookupEvidence(result,lookupEvidenceProjection);
+    if(status!==null)evidenceExportStatus=status;
   }
   function downloadReadableReport(includeAttribution=true){
-    if(!result)return;
-    if(lookupEvidenceProjection.error){evidenceExportStatus=`Readable report was not created. ${lookupEvidenceProjection.error}`;return;}
-    try{const body=buildLookupReadableReport(result,{risk,decisionFacts:lookupDecisionFacts,applicationVersion:__WHOISLEUTH_VERSION__,includeAttribution});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
-    catch(cause){if(!portableOutputBoundFailure(cause))throw cause;evidenceExportStatus='Readable report export was not created because the retained result exceeds its bounded report structure.';}
+    const status=exportLookupReadableReport(result,lookupEvidenceProjection,{risk,decisionFacts:lookupDecisionFacts,applicationVersion:__WHOISLEUTH_VERSION__,includeAttribution});
+    if(status!==null)evidenceExportStatus=status;
   }
-  function downloadInvestigationBrief(){if(!result)return;const body=formatLookupInvestigationBriefMarkdown(lookupInvestigationBrief);const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupInvestigationBriefFilename(lookupInvestigationBrief);anchor.click();URL.revokeObjectURL(url);}
+  function downloadInvestigationBrief(){if(result)exportLookupInvestigationBrief(lookupInvestigationBrief);}
   async function downloadClaimPassport(claimId:LookupClaimId):Promise<string>{
     if(!result)throw new Error('Run a Lookup before exporting a claim passport.');
-    const exported=await buildLookupClaimPassport({
+    return exportLookupClaimPassport({
       readiness:lookupClaimReadiness,
       claimId,
       targetType:result.type,
@@ -691,9 +667,6 @@
       riskModelVersion:risk?.modelVersion,
       applicationVersion:__WHOISLEUTH_VERSION__,
     });
-    const url=URL.createObjectURL(new Blob([exported.content],{type:'application/json;charset=utf-8'}));
-    const anchor=document.createElement('a');anchor.href=url;anchor.download=exported.filename;anchor.click();URL.revokeObjectURL(url);
-    return `Downloaded a portable passport for ${exported.document.claim.label}.`;
   }
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
   function resultSectionLinks(){return buildLookupResultSectionLinks({

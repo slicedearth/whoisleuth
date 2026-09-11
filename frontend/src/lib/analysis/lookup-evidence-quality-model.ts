@@ -5,24 +5,19 @@ import {
   type DecisionFactEvidenceState,
   type DecisionFactFreshness,
   type DecisionFactPresentationDescriptor,
-  type DecisionFactProvenance,
 } from '../../../../packages/evidence/decision-fact.mts';
+import {
+  decisionFactPresentation as presentation,
+  presentLookupContributor,
+  type LookupContributorPresentation,
+} from './lookup-fact-presentation.ts';
 import type { EvidenceCoverageState } from './evidence-coverage-ledger.ts';
 import type { LookupEvidenceQualityMatrix } from './lookup-decision-support.ts';
 import type { LookupFreshnessPolicy } from './lookup-source-refresh.ts';
 
 export const LOOKUP_EVIDENCE_QUALITY_MODEL_VERSION = 1 as const;
 
-export type LookupEvidenceQualityContributorPresentation = Readonly<{
-  id: string;
-  label: string;
-  evidenceState: DecisionFactEvidenceState;
-  evidencePresentation: DecisionFactPresentationDescriptor;
-  provenance: DecisionFactProvenance;
-  provenancePresentation: DecisionFactPresentationDescriptor;
-  observedAt: string | null;
-  limitations: readonly string[];
-}>;
+export type LookupEvidenceQualityContributorPresentation = LookupContributorPresentation;
 
 export type LookupEvidenceQualityPresentationEntry = Readonly<{
   id: string;
@@ -81,18 +76,6 @@ const LIMITED_STATES = new Set<DecisionFactEvidenceState>([
   'unknown',
 ]);
 
-function presentation(
-  descriptor: DecisionFactPresentationDescriptor,
-): DecisionFactPresentationDescriptor {
-  return Object.freeze({
-    label: descriptor.label,
-    explanation: descriptor.explanation,
-    tone: descriptor.tone,
-    icon: descriptor.icon,
-    assistiveText: descriptor.assistiveText,
-  });
-}
-
 function freshnessPolicy(policy: LookupFreshnessPolicy): LookupFreshnessPolicy {
   return Object.freeze({
     version: policy.version,
@@ -103,25 +86,6 @@ function freshnessPolicy(policy: LookupFreshnessPolicy): LookupFreshnessPolicy {
       network: policy.thresholdsDays.network,
       web: policy.thresholdsDays.web,
     }),
-  });
-}
-
-function contributorPresentation(
-  contributor: DecisionFact['contributors'][number],
-): LookupEvidenceQualityContributorPresentation {
-  return Object.freeze({
-    id: contributor.id,
-    label: contributor.label,
-    evidenceState: contributor.evidenceState,
-    evidencePresentation: presentation(
-      DECISION_FACT_PRESENTATION_DESCRIPTORS.evidenceState[contributor.evidenceState],
-    ),
-    provenance: contributor.provenance,
-    provenancePresentation: presentation(
-      DECISION_FACT_PRESENTATION_DESCRIPTORS.provenance[contributor.provenance],
-    ),
-    observedAt: contributor.observedAt,
-    limitations: Object.freeze([...contributor.limitations]),
   });
 }
 
@@ -143,7 +107,7 @@ function entryProjection(
     throw new TypeError(`Lookup evidence quality fact ${fact.id} has mismatched contributor identity or state.`);
   }
 
-  const contributors = Object.freeze(fact.contributors.map(contributorPresentation));
+  const contributors = Object.freeze(fact.contributors.map(presentLookupContributor));
   const attributedLimitations = new Set(
     contributors.flatMap((contributor) => contributor.limitations),
   );

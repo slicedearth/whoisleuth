@@ -41,20 +41,28 @@ Frontend compatibility paths re-export shared modules through
 identity-preserving facades. Non-frontend production code cannot
 import Svelte routes, components or browser adapters.
 
-The Cases route and Monitor's Cases view use one Case workspace component.
-It owns the list, filters, selection, drafts and collection refresh; Monitor
-owns the separate inbox, watchlist, campaign and relationship projections.
+The Cases route uses the Case workspace component for its list, filters,
+selection, drafts and collection refresh. Monitor's legacy Cases URL redirects
+there; Monitor owns inbox, watchlist, campaign and relationship projections.
 The Console's in-memory workflow owner retains the selected Case identifier.
 A read-only context component reads that Case from the browser store; scoped
 commit notifications contain collection identifiers, not record payloads.
 The Case response workspace coordinates response writes, reconciliation and focus.
 Observation, assessment, action and outcome components own their forms and
 temporary drafts; Quick and Advanced use the same form definitions. The
-domain model owns validation and append-only histories, and the browser-store
-adapter owns persistence.
+domain model owns validation, and the browser-store adapter owns persistence.
+Within `packages/cases/`, response records define the vocabulary and types;
+response actions own transitions and history reconciliation; response outcomes
+own independent reviews and linked closures. The original response-model entry
+point exports these responsibilities. Packet construction and exact review-input
+validation are separate modules, sharing vocabulary but not field projections.
 The packet component owns one transient manual-handoff preview. Its generator
 supplies text and structured output; input identity and the existing
 freshness-bound review digest govern reuse. No preview is stored in the Case.
+
+Lookup's route coordinates collection and local context. Its export module owns
+portable-output preparation, download status and file delivery; evidence-quality
+and decision-review views share the contributor presentation projection.
 
 The shared investigation package owns graph relationships, source clocks and
 input coverage. The browser owns visual grouping, search and pagination.
