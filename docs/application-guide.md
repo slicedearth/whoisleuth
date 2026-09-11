@@ -132,6 +132,12 @@ handling.
 
 ### Retaining a Lookup
 
+Use the pin control beneath a source to select its normalised facts. Each
+pin keeps that source's observation time and limitations; undated values cannot
+be saved as dated checkpoints. Published registration nameservers and resolver
+nameservers remain separate. A failed save keeps the selection for a deliberate
+retry; a new Lookup clears it.
+
 Creating or refreshing a Case is deliberate. A Case retains the exact
 normalised submitted hostname on the new point-in-time evidence snapshot while
 the Case remains keyed by canonical registrable domain. Different hostnames can

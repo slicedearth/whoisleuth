@@ -9,6 +9,8 @@
   import type { LookupVisualView } from '$lib/components/LookupVisualWorkspace.svelte';
   import LookupEvidenceReplay from '$lib/components/LookupEvidenceReplay.svelte';
   import LookupEvidenceCheckpoint from '$lib/components/LookupEvidenceCheckpoint.svelte';
+  import LookupSourceCheckpoint from '$lib/components/LookupSourceCheckpoint.svelte';
+  import type { CheckpointFact } from '$lib/analysis/case-evidence-checkpoint.ts';
   import LookupForm from '$lib/components/LookupForm.svelte';
   import LookupTaskGuidance from '$lib/components/LookupTaskGuidance.svelte';
   import LookupWebEvidenceSection from '$lib/components/LookupWebEvidenceSection.svelte';
@@ -888,8 +890,19 @@
         onready={restoreDeferredLookupTarget}
         setServiceDependencyScope={(value) => serviceDependencyScope = value}
         setServiceDependencyFalsePositives={(value) => serviceDependencyFalsePositives = value}
+        {sourceCheckpoint}
       />
     {/if}
+    {/snippet}
+
+    {#snippet sourceCheckpoint(category: CheckpointFact['category'], label: string)}
+      {#if result?.type === 'domain'}
+        {#key result}
+          <LookupSourceCheckpoint {label} facts={checkpointFacts.filter(fact => fact.category === category)}
+            record={caseRecord} ready={caseSourceState === 'ready'} busy={caseActionBusy} status={caseStatus}
+            oncreate={openLookupCase} onsave={saveEvidenceCheckpoint} />
+        {/key}
+      {/if}
     {/snippet}
 
     {#snippet registrySection()}
@@ -940,6 +953,8 @@
           props={{domain:caseDomain,observedAt:lookupObservedAt,registryRdapEndpoint:boundedTechnologyText(rdap.endpoint,2048),rdapParsed,registrar:registryDisplay.registrarRdap,caseReference:caseRecord?.id??''}}
         /></div>
       {/if}
+
+      {@render sourceCheckpoint('registration', 'Registration')}
 
       {/if}
     </section>

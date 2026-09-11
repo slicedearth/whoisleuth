@@ -7,6 +7,7 @@ import {
   compareAcquisitionTransitionPins,
   checkpointPinInputs,
   compareCheckpointPins,
+  MAX_CHECKPOINT_FACTS,
 } from '../frontend/src/lib/analysis/case-evidence-checkpoint.ts';
 import { buildLookupAssetGraph } from '../packages/investigation/lookup-asset-graph.mts';
 import type { LookupEvidenceReplay } from '../frontend/src/lib/analysis/lookup-evidence-replay.ts';
@@ -52,6 +53,7 @@ function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpRespon
         status: 'success',
         observedAt: OBSERVED_AT,
         records: {
+          ns: ['ns1.checkpoint.example'],
           a: ['192.0.2.10'],
           aaaa: ['2001:db8::10'],
           caa: [{ critical: 0, tag: 'issue', value: 'fixture-ca.example' }],
@@ -111,8 +113,44 @@ function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpRespon
 }
 
 describe('case evidence checkpoints', () => {
+  test('keeps resolver nameservers separate from published registration nameservers', () => {
+    const input = response({
+      rdap: { fetchedAt: '2026-07-28T00:00:00.000Z', parsed: { nameservers: ['ns.registry.example'] } },
+    });
+    const facts = buildLookupCheckpointFacts(input);
+    const resolver = facts.find(fact => fact.field === 'dns.nameservers');
+    const registry = facts.find(fact => fact.field === 'registration.nameservers');
+    assert.ok(resolver);
+    assert.ok(registry);
+    assert.equal(resolver.source, 'DNS');
+    assert.equal(resolver.value, 'ns1.checkpoint.example');
+    assert.equal(resolver.observedAt, OBSERVED_AT);
+    assert.equal(registry.source, 'Registry RDAP');
+    assert.equal(registry.value, 'ns.registry.example');
+    assert.equal(registry.observedAt, '2026-07-28T00:00:00.000Z');
+    assert.ok(facts.length <= MAX_CHECKPOINT_FACTS);
+  });
+
+  test('requires the actual clock of every non-registration source before creating dated pins', () => {
+    const input = response();
+    const availability = input.availability as Record<string, unknown>;
+    for (const family of ['dns', 'http', 'tls']) {
+      Reflect.deleteProperty(availability[family] as object, 'observedAt');
+    }
+    Reflect.deleteProperty(input.networkContext as object, 'observedAt');
+    Reflect.deleteProperty(input.securityTxt as object, 'observedAt');
+    const facts = buildLookupCheckpointFacts(input).filter(fact => fact.category !== 'registration');
+    assert.ok(facts.some(fact => fact.value !== null));
+    for (const fact of facts) {
+      assert.equal(fact.observedAt, null, fact.field);
+      assert.equal(fact.completeness, 'unknown', fact.field);
+      assert.match(fact.limitations.join(' '), /source observation time is unavailable/u);
+    }
+    assert.deepEqual(checkpointPinInputs(facts, facts.map(fact => fact.field)), []);
+  });
+
   test('registration fallback keeps the selected publisher health and observation time', () => {
-    const before = buildLookupCheckpointFacts(response(), { collectionDepth: 'deep', generatedAt: OBSERVED_AT });
+    const before = buildLookupCheckpointFacts(response(), { collectionDepth: 'deep' });
     const later = '2026-07-30T01:00:00.000Z';
     const whoisTime = '2026-07-29T12:00:00.000Z';
     const changed = response({
@@ -120,7 +158,7 @@ describe('case evidence checkpoints', () => {
       whois: { parsed: { registrar: 'Another registrar' }, chain: [] },
       diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial', queriedAt: whoisTime } },
     });
-    const facts = buildLookupCheckpointFacts(changed, { collectionDepth: 'deep', generatedAt: later });
+    const facts = buildLookupCheckpointFacts(changed, { collectionDepth: 'deep' });
     const registrar = facts.find((fact) => fact.field === 'registration.registrar');
     assert.ok(registrar);
     assert.equal(registrar.source, 'WHOIS');
@@ -138,7 +176,7 @@ describe('case evidence checkpoints', () => {
   });
 
   test('an unknown registration observation time cannot be replaced with checkpoint creation time', () => {
-    const facts = buildLookupCheckpointFacts(response({ rdap: { parsed: { registrar: { name: 'Undated registrar' } } } }), { generatedAt: OBSERVED_AT });
+    const facts = buildLookupCheckpointFacts(response({ rdap: { parsed: { registrar: { name: 'Undated registrar' } } } }));
     const registrar = facts.find((fact) => fact.field === 'registration.registrar');
     assert.ok(registrar);
     assert.equal(registrar.value, 'Undated registrar');
@@ -158,7 +196,6 @@ describe('case evidence checkpoints', () => {
     });
     const facts = buildLookupCheckpointFacts(source, {
       collectionDepth: 'deep',
-      generatedAt: OBSERVED_AT,
     });
     const byField = new Map(facts.map((fact) => [fact.field, fact]));
 
@@ -225,7 +262,6 @@ describe('case evidence checkpoints', () => {
   test('creates pins only for explicit observed selections with one checkpoint identity', () => {
     const facts = buildLookupCheckpointFacts(response(), {
       collectionDepth: 'deep',
-      generatedAt: OBSERVED_AT,
     });
     const inputs = checkpointPinInputs(facts, [
       'registration.registrar',
@@ -247,7 +283,6 @@ describe('case evidence checkpoints', () => {
   test('keeps equal, changed, missing, unavailable, conflicting, and not-recorded distinct', () => {
     const sourceFacts = buildLookupCheckpointFacts(response(), {
       collectionDepth: 'deep',
-      generatedAt: OBSERVED_AT,
     });
     const selected = [
       'registration.registrar',
@@ -291,7 +326,6 @@ describe('case evidence checkpoints', () => {
   test('verifies declared acquisition transition expectations without treating unavailable data as a change', () => {
     const sourceFacts = buildLookupCheckpointFacts(response(), {
       collectionDepth: 'deep',
-      generatedAt: OBSERVED_AT,
     });
     const inputs = checkpointPinInputs(sourceFacts, [
       'dns.nameservers',
@@ -330,7 +364,6 @@ describe('case evidence checkpoints', () => {
   test('keeps matching partial or differently scoped transition evidence indeterminate', () => {
     const sourceFacts = buildLookupCheckpointFacts(response(), {
       collectionDepth: 'deep',
-      generatedAt: OBSERVED_AT,
     });
     const nameservers = sourceFacts.find((fact) => fact.field === 'dns.nameservers');
     assert.ok(nameservers);

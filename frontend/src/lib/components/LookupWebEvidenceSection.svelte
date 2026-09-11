@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
+  import type { CheckpointFact } from '$lib/analysis/case-evidence-checkpoint.ts';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import LookupFamilySummary from '$lib/components/LookupFamilySummary.svelte';
   import type { BrandProfile } from '$lib/brand-profiles';
@@ -42,6 +44,7 @@
     onready,
     setServiceDependencyScope,
     setServiceDependencyFalsePositives,
+    sourceCheckpoint,
   }: {
     result: LookupHttpResponse | null;
     view: LookupView;
@@ -62,6 +65,7 @@
     onready: () => void | Promise<void>;
     setServiceDependencyScope: (value: string) => void;
     setServiceDependencyFalsePositives: (value: string) => void;
+    sourceCheckpoint?: Snippet<[CheckpointFact['category'], string]>;
   } = $props();
 
   const availability = $derived(view.availability);
@@ -134,6 +138,7 @@
           limitations: pageDisplay.observedNetworkLimitations,
         }}
       /></div>
+      {@render sourceCheckpoint?.('network', 'Network')}
     {/if}
 
     {#if sslbl.sslblVersion === 1 && sslbl.verdict === 'listed'}
@@ -178,6 +183,7 @@
         {onready}
         props={{headingId: 'dns-title', status: show(dnsEvidence.status), complete: dnsEvidence.complete !== false, rows: networkDisplay.dnsRows, failureDetail: networkDisplay.dnsQueryFailures, truncated: Boolean(dnsEvidence.truncated), delegation: networkDisplay.dnsDelegation, rehearsalEvidence: dnsRehearsalEvidence, domain: caseDomain, allowRehearsal: result?.type === 'domain', note: 'Point-in-time resolver evidence. Service-binding targets and address hints are displayed but not followed. Verify shared infrastructure independently.'}}
       /></div>
+      {@render sourceCheckpoint?.('dns', 'DNS')}
       {#if serviceDependencyReview}
         <div class="evidence-component"><DeferredSurface
           load={() => import('$lib/components/LookupServiceDependencyReview.svelte')}
@@ -196,6 +202,7 @@
         {onready}
         props={{status: statusLabel(show(httpEvidence.status)), complete: httpEvidence.complete !== false, rows: networkDisplay.httpRows, crossOriginRedirect: Boolean(httpEvidence.crossOriginRedirect), httpsDowngrade: Boolean(httpEvidence.httpsDowngrade), redirects: networkDisplay.httpRedirects, attempts: networkDisplay.httpAttempts, metadata: networkDisplay.httpMetadata, deliveryMetadata: networkDisplay.httpDeliveryMetadata, limitations: stringList(httpEvidence.limitations, MAX_OBSERVATION_LIMITATIONS, MAX_OBSERVATION_LIMITATION_LENGTH)}}
       /></div>
+      {@render sourceCheckpoint?.('http', 'HTTP')}
     {/if}
 
     {#if tlsEvidence.source === 'tls'}
@@ -206,6 +213,7 @@
         {onready}
         props={{status: statusLabel(show(tlsEvidence.status)), complete: tlsEvidence.complete !== false, rows: networkDisplay.tlsRows, findings: networkDisplay.tlsFindings, leafCertificate: networkDisplay.leafCertificate, alternativeNames: networkDisplay.alternativeNames, alternativeNamesTruncated: Boolean(tlsAltNames.truncated), chain: networkDisplay.tlsChain, chainTruncated: Boolean(tlsEvidence.chainTruncated), validationDetails: networkDisplay.tlsValidation, limitations: stringList(tlsEvidence.limitations, MAX_OBSERVATION_LIMITATIONS, MAX_OBSERVATION_LIMITATION_LENGTH), validFrom: typeof tlsCertificate.validFrom === 'string' ? tlsCertificate.validFrom : null, validTo: typeof tlsCertificate.validTo === 'string' ? tlsCertificate.validTo : null, observedAt: lookupObservedAt}}
       /></div>
+      {@render sourceCheckpoint?.('tls', 'TLS')}
       <div class="evidence-component"><DeferredSurface
         load={() => import('$lib/components/LookupCertificatePolicyReview.svelte')}
         loadingLabel="Loading certificate-policy review…"
@@ -232,6 +240,7 @@
         {onready}
         props={{state: boundedTechnologyText(securityTxt.state || 'unavailable', 40), detail: boundedTechnologyText(securityTxt.detail || 'Disclosure contact collection was unavailable.', 300), endpoint: boundedTechnologyText(securityTxt.finalUrl, 2048), httpStatus: securityTxt.httpStatus ? String(securityTxt.httpStatus) : '', observedAt: dateTimeAttribute(securityTxt.observedAt) || '', expiresAt: dateTimeAttribute(securityTxt.expiresAt) || '', contacts: stringList(securityTxt.contacts).slice(0, 10), policies: stringList(securityTxt.policies).slice(0, 10), encryption: stringList(securityTxt.encryption).slice(0, 10), languages: stringList(securityTxt.preferredLanguages).slice(0, 10), limitations: stringList(securityTxt.limitations).slice(0, 10)}}
       /></div>
+      {@render sourceCheckpoint?.('disclosure', 'Disclosure contact')}
     {/if}
 
     {#if pageIdentity.source === 'html'}
@@ -242,6 +251,7 @@
         {onready}
         props={{status: statusLabel(show(pageIdentity.status)), complete: Boolean(pageIdentity.complete), facts: pageDisplay.pageIdentityFacts, externalFormOrigins: stringList(pageForms.externalActionOrigins, 10, 2048), resourceCount: Number(pageResources.count) || 0, resourceSummary: pageDisplay.resourceSummary, embeddedOrigins: stringList(pageIdentity.embeddedOrigins, 20, 2048), contactDomains: stringList(pageIdentity.contactDomains, 20, 253), downloadCount: Number(pageDownloads.count) || 0, downloadSummary: pageDisplay.downloadSummary, trackingIdentifiers: pageDisplay.trackingIdentifiers, fingerprints: pageDisplay.fingerprints, publicationMetadata: pageDisplay.pagePublicationMetadata, limitations: stringList(pageIdentity.limitations, MAX_OBSERVATION_LIMITATIONS, MAX_OBSERVATION_LIMITATION_LENGTH)}}
       /></div>
+      {@render sourceCheckpoint?.('page_identity', 'Page identity')}
     {/if}
 
     {#if credentialSurfaceProfile.source === 'html'}
