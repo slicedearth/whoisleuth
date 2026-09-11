@@ -19,6 +19,17 @@
     duplicateRows?: number;
     sourceOmittedRows?: number;
   } = $props();
+  const id = $props.id();
+  let expanded = $state<string[]>([]);
+  $effect(() => {
+    const current = new Set(rows.map(row => row.id));
+    const retained = expanded.filter(value => current.has(value));
+    if (retained.length !== expanded.length) expanded = retained;
+  });
+
+  function toggle(rowId: string) {
+    expanded = expanded.includes(rowId) ? expanded.filter(value => value !== rowId) : [...expanded, rowId];
+  }
 
   const MODE_LABELS: Record<ComparisonLedgerMode, string> = {
     publication: 'Publication comparison',
@@ -109,25 +120,30 @@
     </p>
   {/if}
 
+  <div class="ledger-content">
   <div class="ledger-table">
     <table aria-label="Exact retained comparison rows">
       <thead><tr><th>State</th><th>Entity and field</th><th>Mode</th><th>Completeness</th><th>Exact review</th></tr></thead>
-      <tbody>
-        {#each rows as row (row.id)}
+        {#each rows as row, index (row.id)}
+        <tbody>
           <tr data-ledger-state={row.state}>
             <td><span class="state-label">{stateLabel(row.state)}</span></td>
             <td><strong>{row.entityId}</strong><small>{row.family} · {row.field}</small></td>
             <td>{MODE_LABELS[row.mode]}</td>
             <td>{row.completeness.replaceAll('_', ' ')}{row.truncated ? ' · truncated' : ''}</td>
             <td>
-              <details>
-                <summary aria-label={`Inspect exact values for ${row.entityId}, ${row.field}`}>Inspect exact values</summary>
-                {@render ExactDetails(row)}
-              </details>
+              <button class="btn small" type="button" aria-label={`Inspect exact values for ${row.entityId}, ${row.field}`}
+                aria-expanded={expanded.includes(row.id)} aria-controls={expanded.includes(row.id) ? `${id}-row-${index}` : undefined}
+                onclick={() => toggle(row.id)}>Inspect exact values</button>
             </td>
           </tr>
+          {#if expanded.includes(row.id)}
+            <tr><td colspan="5"><section id={`${id}-row-${index}`} aria-label={`Exact values for ${row.entityId}, ${row.field}`}>
+              {@render ExactDetails(row)}
+            </section></td></tr>
+          {/if}
+        </tbody>
         {/each}
-      </tbody>
     </table>
   </div>
 
@@ -136,12 +152,13 @@
       <article data-ledger-state={row.state}>
         <header><div><span class="state-label">{stateLabel(row.state)}</span><h3>{row.field}</h3></div><small>{row.entityId}</small></header>
         <p>{MODE_LABELS[row.mode]} · {row.family} · {row.completeness.replaceAll('_', ' ')}{row.truncated ? ' · truncated' : ''}</p>
-        <details>
+        <details open={expanded.includes(row.id)} ontoggle={(event) => { if (event.currentTarget.open !== expanded.includes(row.id)) toggle(row.id); }}>
           <summary aria-label={`Inspect exact values for ${row.entityId}, ${row.field}`}>Inspect exact values</summary>
           {@render ExactDetails(row)}
         </details>
       </article>
     {/each}
+  </div>
   </div>
 {:else}
   <p class="empty">No exact row is available for the selected retained comparison.</p>
@@ -156,12 +173,14 @@
 <style>
   .row-count,.omission-note,.empty{margin:10px 0;color:var(--muted);font-size:var(--text-sm)}
   .omission-note{padding:10px 12px;border:1px dashed var(--amber);border-radius:var(--radius-sm);color:var(--text)}
-  .ledger-table{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-md)}
-  table{width:100%;min-width:820px;border-collapse:collapse}
+  .ledger-content{container-type:inline-size;min-width:0}
+  .ledger-table{border:1px solid var(--border);border-radius:var(--radius-md)}
+  table{width:100%;table-layout:fixed;border-collapse:collapse}
   th,td{padding:10px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border)}
-  tbody tr:last-child td{border-bottom:0}
+  tbody:last-child tr:last-child td{border-bottom:0}
   th{font-size:var(--text-xs);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;background:var(--panel-raised)}
-  td{font-size:var(--text-sm)}
+  td{font-size:var(--text-sm);overflow-wrap:anywhere}
+  td .btn{max-width:100%;white-space:normal;text-align:left;min-height:44px;padding-block:7px}
   td strong,td small{display:block;overflow-wrap:anywhere}
   td small{margin-top:3px;color:var(--muted)}
   details{min-width:0}
@@ -173,7 +192,7 @@
   [data-ledger-state="conflict"] .state-label{border-style:double;color:var(--danger)}
   [data-ledger-state="incomplete"] .state-label,[data-ledger-state="collection_changed"] .state-label,[data-ledger-state="model_changed"] .state-label{border-style:dashed;color:var(--amber)}
   [data-ledger-state="unavailable"] .state-label,[data-ledger-state="unsupported"] .state-label,[data-ledger-state="not_compared"] .state-label{border-style:dotted;color:var(--muted)}
-  .exact-details{margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);min-width:min(620px,75vw)}
+  .exact-details{margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);min-width:0}
   .row-contract,.side-metadata dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 12px;margin:0}
   dl div{min-width:0}
   dt{font-size:var(--text-xs);font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
@@ -185,7 +204,7 @@
   .row-limitations{margin-top:12px}
   .row-limitations ul,.row-limitations p{margin:5px 0 0;padding-left:18px;font-size:var(--text-sm)}
   .row-limitations p{padding-left:0}
-  .value-grid code{display:block;max-height:12rem;overflow:auto}
+  .value-grid code{display:block}
   .ledger-cards{display:none}
   .ledger-cards article{min-width:0;padding:12px;border:1px solid var(--border);border-left:4px solid var(--border-strong);border-radius:var(--radius-md);background:var(--panel)}
   .ledger-cards article[data-ledger-state="equivalent"]{border-left-color:var(--success)}
@@ -196,7 +215,7 @@
   .ledger-cards h3{margin:7px 0 0;font-size:var(--text-md);overflow-wrap:anywhere}
   .ledger-cards header small,.ledger-cards>article>p{color:var(--muted);overflow-wrap:anywhere}
   .ledger-cards>article>p{margin:8px 0;font-size:var(--text-sm)}
-  @media(max-width:680px){
+  @container(max-width:780px){
     .ledger-table{display:none}
     .ledger-cards{display:grid;gap:10px}
     .exact-details{min-width:0;padding:10px}

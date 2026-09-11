@@ -33,10 +33,11 @@ export const SYNTHETIC_DEMO_STAGES = [
   Object.freeze({ id: 'discover', label: '3. Discover' }),
   Object.freeze({ id: 'bulk', label: '4. Bulk' }),
   Object.freeze({ id: 'lookup', label: '5. Lookup' }),
-  Object.freeze({ id: 'monitor', label: '6. Monitor' }),
+  Object.freeze({ id: 'monitor', label: '6. Cases' }),
 ] as const;
 
 export type SyntheticDemoStageId = typeof SYNTHETIC_DEMO_STAGES[number]['id'];
+export type SyntheticDemoScenario = 'suspicious-domain' | 'brand-lookalike' | 'reported-change';
 export type SyntheticDemoCaseStatus = 'new' | 'reviewing' | 'monitoring';
 
 export interface SyntheticDemoState {
@@ -369,6 +370,16 @@ function boundedNote(value: unknown): string {
 
 export function createSyntheticDemoState(): SyntheticDemoState {
   return { version: SYNTHETIC_DEMO_VERSION, started: false, profileReady: false, candidatesReady: false, selectedCandidateId: '', caseReady: false, caseStatus: 'new', note: '', followUpReady: false };
+}
+
+export function startSyntheticDemoScenario(scenario: SyntheticDemoScenario): SyntheticDemoState {
+  const state = createSyntheticDemoState();
+  if (scenario === 'brand-lookalike') return { ...state, started: true };
+  return {
+    ...state, started: true, profileReady: true, candidatesReady: true,
+    selectedCandidateId: 'credential-lure', caseReady: scenario === 'reported-change',
+    caseStatus: scenario === 'reported-change' ? 'reviewing' : 'new',
+  };
 }
 
 export function normalizeSyntheticDemoState(value: unknown): SyntheticDemoState {

@@ -267,7 +267,7 @@ test('scans representative public initial, error, populated, and expanded states
   await expect(mobileComparison).toHaveAttribute('open', '');
   await expectNoAccessibilityViolations(page, testInfo, 'public-populated-expanded-light-mobile');
   await expectSequentialHeadingOrder(page, 'public populated demo');
-  await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
+  await page.getByRole('button', { name: 'Open synthetic Case' }).click();
   await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeVisible();
   await expectSequentialHeadingOrder(page, 'public monitor demo');
 });

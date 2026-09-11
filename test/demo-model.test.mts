@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import {
-  buildSyntheticDemoExport, createSyntheticDemoState, MAX_SYNTHETIC_DEMO_NOTE_LENGTH,
+  buildSyntheticDemoExport, createSyntheticDemoState, startSyntheticDemoScenario, MAX_SYNTHETIC_DEMO_NOTE_LENGTH,
   MAX_SYNTHETIC_DEMO_SERIALIZED_BYTES, normalizeSyntheticDemoState, parseSyntheticDemoState,
   SYNTHETIC_DEMO_CANDIDATES, SYNTHETIC_DEMO_EXPORT_SCHEMA,
   SYNTHETIC_DEMO_EXPORT_VERSION, SYNTHETIC_DEMO_PROFILE, SYNTHETIC_DEMO_STAGES,
@@ -16,6 +16,15 @@ function completeState(overrides = {}) {
 }
 
 describe('synthetic demo state', () => {
+  test('starts each task independently without completing its evidence review', () => {
+    for (const [scenario, stage] of [['suspicious-domain', 'lookup'], ['brand-lookalike', 'brands'], ['reported-change', 'monitor']] as const) {
+      const state = startSyntheticDemoScenario(scenario);
+      assert.equal(syntheticDemoStage(state), stage);
+      assert.deepEqual(parseSyntheticDemoState(JSON.stringify(state)), state);
+      assert.equal(state.followUpReady, false);
+      assert.equal(state.note, '');
+    }
+  });
   test('creates a bounded empty state', () => {
     assert.deepEqual(createSyntheticDemoState(), { version: 1, started: false, profileReady: false, candidatesReady: false, selectedCandidateId: '', caseReady: false, caseStatus: 'new', note: '', followUpReady: false });
   });

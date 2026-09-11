@@ -1,8 +1,45 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow } from './helpers';
+import { expectNoHorizontalOverflow, useTheme } from './helpers';
 
 test.use({ storageState: { cookies: [], origins: [] } });
+
+test('the suspicious-domain and change-review scenarios can start directly', async ({ page }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const apiRequests: string[] = [];
+  page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) apiRequests.push(request.url()); });
+  await page.goto('/demo');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [390, 1920]) {
+      await page.setViewportSize({ width, height: 1080 });
+      await expectNoHorizontalOverflow(page);
+      await page.screenshot({ path: testInfo.outputPath(`scenario-choices-${theme}-${width}.png`) });
+    }
+  }
+  await page.getByRole('button', { name: 'Inspect suspicious domain' }).click();
+  await expect(page.getByRole('heading', { name: 'northstar-login.example', exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Open synthetic Case' })).toBeVisible();
+  await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+  const evidence = page.getByRole('region', { name: 'Where this result came from', exact: true });
+  await expect(evidence).toBeVisible();
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [390, 1920]) {
+      await page.setViewportSize({ width, height: 1080 });
+      await evidence.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      await page.screenshot({ path: testInfo.outputPath(`scenario-evidence-${theme}-${width}.png`) });
+    }
+  }
+  await page.getByRole('button', { name: 'Reset demo' }).click();
+  await page.getByRole('button', { name: 'Compare a reported change' }).click();
+  await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeFocused();
+  await page.getByRole('button', { name: 'Load later synthetic observation' }).click();
+  await expect(page.getByRole('heading', { name: 'Repeated evidence and material changes stay distinct' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Export synthetic case report' })).toBeVisible();
+  expect(apiRequests.filter(url => new URL(url).pathname !== '/api/session')).toEqual([]);
+});
 
 async function progressToLookup(page: Page) {
   const workspace = page.locator('#demo-workspace');
@@ -48,7 +85,7 @@ test('completes the guided synthetic workflow without investigation requests or 
   await expect(page.getByText('Synthetic demo · State resets with this tab')).toBeVisible();
   await expect(page.locator('.demo-stage-summary')).toContainText('Tool substep 1 of 6');
   await expect(page.getByRole('button', { name: /Dashboard.*Current/ })).toHaveAttribute('aria-current', 'step');
-  await expect(page.getByRole('button', { name: /Monitor.*Upcoming/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /Cases.*Upcoming/ })).toBeDisabled();
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
   await expect(page.getByRole('heading', { name: 'Define the official identity' })).toBeFocused();
   await expect(page.getByRole('heading', { name: 'Northstar Outfitters' })).toBeVisible();
@@ -77,7 +114,7 @@ test('completes the guided synthetic workflow without investigation requests or 
   const familyControls = page.locator('.lookup-family button[aria-expanded]');
   await expect(familyControls).toHaveCount(5);
   expect(await familyControls.evaluateAll((buttons) => buttons.every((button) => button.getAttribute('aria-expanded') === 'false'))).toBe(true);
-  const monitorHandoff = page.getByRole('button', { name: 'Open synthetic case in Monitor' });
+  const monitorHandoff = page.getByRole('button', { name: 'Open synthetic Case' });
   await expect(monitorHandoff).toBeVisible();
   await expect(monitorHandoff).toBeInViewport();
   await expect(page.locator('#demo-evidence-registry')).toHaveCount(0);
@@ -168,7 +205,7 @@ test('settles long-to-short stage transitions at one stable workspace anchor', a
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/demo');
   await progressToLookup(page);
-  await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
+  await page.getByRole('button', { name: 'Open synthetic Case' }).click();
   await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeFocused();
   await expect(page.locator('#demo-workspace')).toHaveAttribute('aria-busy', 'false');
   await expect.poll(() => workspaceTop(page), { timeout: 2500 }).toBe(24);
@@ -259,7 +296,7 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   });
   await expect.poll(activeStageCenterOffset).toBeLessThanOrEqual(3);
   await expect(page.locator('.lookup-family button[aria-expanded="true"]')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Open synthetic case in Monitor' })).toBeInViewport();
+  await expect(page.getByRole('button', { name: 'Open synthetic Case' })).toBeInViewport();
   await expectNoHorizontalOverflow(page);
 
   await rail.evaluate((element) => element.scrollTo({ left: 0, behavior: 'auto' }));
@@ -280,7 +317,7 @@ test('keeps the guided workflow usable at narrow mobile widths', async ({ page }
   await page.setViewportSize({ width: 393, height: 852 });
   await expectNoHorizontalOverflow(page);
 
-  await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
+  await page.getByRole('button', { name: 'Open synthetic Case' }).click();
   await page.getByRole('button', { name: 'Load later synthetic observation' }).click();
   await expect(page.getByRole('heading', { name: 'Repeated evidence and material changes stay distinct' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Watchlist activity' })).toHaveCount(0);

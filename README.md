@@ -45,7 +45,8 @@ WHOISleuth uses three analyst jobs: **Investigate**, **Respond** and **Assure**.
 | **Discover** | Generate lookalikes or review certificate and registry observations. |
 | **Bulk** | Triage and compare a selected domain set. |
 | **Brands** | Record official scope, reviewed baselines and owned-domain controls. |
-| **Monitor** | Review Cases, changes, response preparation, watchlists and local rules. |
+| **Cases** | Retain evidence, assess findings and prepare response packets. |
+| **Monitor** | Review changes, watchlists, follow-ups and local rules. |
 
 The public [Resources hub](https://www.whoisleuth.com/resources) is the shortest
 user guide. [Application documentation](docs/application-guide.md) covers the

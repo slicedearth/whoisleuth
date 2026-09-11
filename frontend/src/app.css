@@ -128,11 +128,11 @@
 
   /* Type scale. --text-2xs is reserved for uppercase micro-labels that carry
      letter-spacing; running text and data values use --text-xs and up. */
-  --text-2xs: .7rem;
-  --text-xs: .77rem;
-  --text-sm: .84rem;
-  --text-md: .92rem;
-  --text-lg: 1.05rem;
+  --text-2xs: .75rem;
+  --text-xs: .8125rem;
+  --text-sm: .9375rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
   --text-xl: 1.3rem;
 
   /* Semantic roles keep consequential copy and compact evidence metadata
@@ -258,6 +258,26 @@
   --cluster-6: #34759a;
   --cluster-7: #ad2b6e;
 }
+
+:root[data-density='compact'] {
+  --text-2xs: .7rem;
+  --text-xs: .77rem;
+  --text-sm: .84rem;
+  --text-md: .92rem;
+  --text-lg: 1.05rem;
+  --card-pad: clamp(12px, 1.6vw, 18px);
+}
+
+:root[data-effects='minimal'] {
+  --body-grid-alpha: 0;
+  --body-ambient-alpha: 0;
+  --cursor-glow-alpha: 0;
+  --card-shadow-alpha: 0;
+  --card-hover-shadow-alpha: 0;
+}
+:root[data-effects='minimal'] :is(.cursor, .brand-mark, .prompt-sigil) { animation: none; text-shadow: none; filter: none; }
+:root[data-effects='minimal'] .topology-backdrop { display: none; }
+:root[data-effects='minimal'] :is(.source-node, .loading-command i) { animation: none; box-shadow: none; }
 
 html { color: var(--text); background: var(--bg); }
 
@@ -686,8 +706,9 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 .shell > aside nav a.active strong { color: var(--accent); }
 .shell > aside nav a strong { font: 650 var(--text-sm) var(--font-sans); }
 .shell > aside nav a small { margin-top: 2px; }
-.session { --theme-options-top: auto; --theme-options-bottom: calc(100% + 6px); display: grid; flex: 0 0 auto; gap: 10px; margin: auto 16px 16px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font: var(--text-2xs) var(--mono); }
+.session { --appearance-right: auto; --appearance-left: 0; --theme-options-top: auto; --theme-options-bottom: calc(100% + 6px); display: grid; flex: 0 0 auto; gap: 10px; margin: auto 16px 16px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font: var(--text-2xs) var(--mono); }
 .session-row { display: flex; min-width: 0; gap: 12px; align-items: center; }
+.session .theme-selector { --appearance-width: 192px; }
 .session-row span { min-width: 0; flex: 1 1 auto; margin-right: auto; overflow: visible; text-overflow: clip; white-space: nowrap; }
 
 main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px clamp(24px,4vw,58px) 72px; }

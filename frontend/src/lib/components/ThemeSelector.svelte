@@ -7,8 +7,14 @@
     setThemePreference,
     type ThemePreference,
   } from '$lib/theme';
+  import {
+    observeAppearancePreference, readAppearancePreference, setAppearancePreference,
+    type AppearancePreference,
+  } from '$lib/appearance.ts';
 
   let preference = $state<ThemePreference>('system');
+  let appearance = $state<AppearancePreference>({ density: 'comfortable', effects: 'full' });
+  const id = $props.id();
   let storageWarning = $state('');
   let open = $state(false);
   let trigger: HTMLButtonElement;
@@ -22,8 +28,11 @@
 
   onMount(() => {
     preference = readThemePreference();
+    appearance = readAppearancePreference();
     applyThemePreference(preference);
-    return observeThemePreference((next) => { preference = next; });
+    const stopTheme = observeThemePreference((next) => { preference = next; });
+    const stopAppearance = observeAppearancePreference((next) => { appearance = next; });
+    return () => { stopTheme(); stopAppearance(); };
   });
 
   function labelFor(value: ThemePreference) {
@@ -41,6 +50,12 @@
 
   function optionElements() {
     return [...control.querySelectorAll<HTMLElement>('[role="option"]')];
+  }
+
+  function chooseAppearance(next: AppearancePreference) {
+    appearance = next;
+    storageWarning = setAppearancePreference(next)
+      ? '' : 'Appearance applies to this tab only because browser storage is unavailable.';
   }
 
   async function openAndFocus(index: number) {
@@ -113,15 +128,17 @@
       type="button"
       aria-label={`Colour theme, ${labelFor(preference)} selected`}
       title={`${labelFor(preference)} theme`}
-      aria-haspopup="listbox"
+      aria-haspopup="dialog"
       aria-expanded={open}
-      aria-controls={open ? 'colour-theme-options' : undefined}
+      aria-controls={open ? `${id}-appearance` : undefined}
       bind:this={trigger}
       onclick={() => { open = !open; }}
       onkeydown={handleTriggerKeydown}
     ><span class="theme-trigger-label">{labelFor(preference)}</span>{@render themeSymbol(preference)}<span class="chevron" aria-hidden="true"></span></button>
     {#if open}
-      <div class="theme-options" id="colour-theme-options" role="listbox" aria-label="Colour theme options">
+      <div class="appearance-panel" id={`${id}-appearance`} role="dialog" aria-label="Appearance" tabindex="-1"
+        onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); open = false; trigger.focus(); } }}>
+      <div class="theme-options" role="listbox" aria-label="Colour theme options">
         {#each options as option, index}
           <button
             class="theme-option"
@@ -135,6 +152,16 @@
             onkeydown={(event) => handleOptionKeydown(event, index)}
           >{@render themeSymbol(option.value)}<span>{option.label}</span></button>
         {/each}
+      </div>
+      <label class="appearance-field" for={`${id}-density`}>Reading density
+        <select id={`${id}-density`} value={appearance.density}
+          onchange={(event) => chooseAppearance({ ...appearance, density: event.currentTarget.value === 'compact' ? 'compact' : 'comfortable' })}>
+          <option value="comfortable">Comfortable</option>
+          <option value="compact">Compact</option>
+        </select>
+      </label>
+      <label class="appearance-effects"><input type="checkbox" checked={appearance.effects === 'full'}
+        onchange={(event) => chooseAppearance({ ...appearance, effects: event.currentTarget.checked ? 'full' : 'minimal' })} />Decorative effects</label>
       </div>
     {/if}
   </div>
@@ -150,7 +177,12 @@
   .theme-symbol{width:18px;height:18px;flex:0 0 auto;overflow:visible;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
   .theme-symbol .moon-star{fill:currentColor;stroke:none}
   .chevron{width:6px;height:6px;flex:0 0 auto;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-2px) rotate(45deg)}
-  .theme-options{display:grid;position:absolute;top:var(--theme-options-top,calc(100% + 6px));bottom:var(--theme-options-bottom,auto);left:0;z-index:100;box-sizing:border-box;width:100%;min-width:0;gap:2px;padding:4px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--theme-options-surface);box-shadow:0 12px 32px rgb(var(--shadow-rgb) / .24)}
+  .appearance-panel{display:grid;position:absolute;top:var(--theme-options-top,calc(100% + 6px));bottom:var(--theme-options-bottom,auto);right:var(--appearance-right,0);left:var(--appearance-left,auto);z-index:100;box-sizing:border-box;width:min(var(--appearance-width,248px),calc(100vw - 32px));min-width:0;gap:12px;padding:10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--theme-options-surface);box-shadow:0 12px 32px rgb(var(--shadow-rgb) / .24);white-space:normal}
+  .theme-options{display:grid;gap:2px;background:var(--theme-options-surface)}
+  .appearance-field{display:grid;gap:6px;font:600 var(--text-xs) var(--font-sans);color:var(--text)}
+  .appearance-field select{width:100%;min-height:44px}
+  .appearance-effects{display:flex;align-items:center;gap:8px;min-height:44px;color:var(--text);font:600 var(--text-xs) var(--font-sans)}
+  .appearance-effects input{flex:0 0 auto;width:18px;height:18px}
   .theme-option{display:inline-flex;width:100%;min-height:40px;align-items:center;justify-content:flex-start;gap:8px;padding:0 6px;border:0;border-radius:4px;background:transparent;color:var(--text);font:700 var(--text-xs) var(--mono)}
   .theme-option:hover,.theme-option:focus-visible,.theme-option.selected{background:rgb(var(--accent-rgb) / .11);color:var(--accent)}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}

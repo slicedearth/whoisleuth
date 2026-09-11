@@ -177,6 +177,9 @@ export async function expectFocusedResultsVisible(page: Page, results: Locator, 
 }
 
 export async function expectNoHorizontalOverflow(page: Page) {
+  // A viewport update can complete before the browser has applied its media
+  // queries. Measure the rendered layout, not that intermediate protocol state.
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
   const overflow = await page.evaluate(() => {
     const doc = document.documentElement;
     const offenders = [...document.querySelectorAll<HTMLElement>('body *')]

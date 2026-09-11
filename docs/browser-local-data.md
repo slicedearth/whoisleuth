@@ -153,6 +153,9 @@ digests. Digests detect corruption or mismatched content; they do not establish
 authorship, truth or confidentiality.
 
 The record collections are captured together in one IndexedDB read transaction.
+Colour theme, reading density and decorative effects are browser-wide preferences;
+the Appearance control applies them without changing evidence or collection. Density
+and effects stay on this browser and are not included in workspace backups.
 Theme and active-profile preferences are read separately from their scoped storage;
 the exported active profile must exist in the captured profile collection.
 Backups use compact JSON, with a 32-MiB archive limit and a 5-MiB limit per

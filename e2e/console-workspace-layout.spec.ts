@@ -35,23 +35,25 @@ for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     const requests: string[] = [];
     await page.route('**/api/lookup**', async route => { requests.push(route.request().url()); await route.abort(); });
+    await page.goto('/brands?workbench=attestations');
+    const tools = page.getByRole('tab', { name: 'Tools', exact: true });
+    await expect(tools).toHaveAttribute('aria-selected', 'true');
+    const controls = page.getByRole('region', { name: 'Reviewed account controls', exact: true });
+    await expect(controls).toBeVisible();
+    await expect(page.locator('#brand-profiles-summary').locator('..')).not.toHaveAttribute('open', '');
+    await tools.focus();
+    await tools.press('Home');
+    const overview = page.getByRole('tab', { name: 'Overview', exact: true });
+    await expect(overview).toBeFocused();
+    await expect(overview).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('region', { name: 'Allowlist', exact: true })).toBeVisible();
+    await overview.press('End');
+    await expect(tools).toBeFocused();
+    await expect(controls).toBeVisible();
+    // Exercise the state transition once; resizing the same populated view
+    // tests layout without repeating domain operations or route preparation.
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
-      await page.goto('/brands?workbench=attestations');
-      const tools = page.getByRole('tab', { name: 'Tools', exact: true });
-      await expect(tools).toHaveAttribute('aria-selected', 'true');
-      const controls = page.getByRole('region', { name: 'Reviewed account controls', exact: true });
-      await expect(controls).toBeVisible();
-      await expect(page.locator('#brand-profiles-summary').locator('..')).not.toHaveAttribute('open', '');
-      await tools.focus();
-      await tools.press('Home');
-      const overview = page.getByRole('tab', { name: 'Overview', exact: true });
-      await expect(overview).toBeFocused();
-      await expect(overview).toHaveAttribute('aria-selected', 'true');
-      await expect(page.getByRole('region', { name: 'Allowlist', exact: true })).toBeVisible();
-      await overview.press('End');
-      await expect(tools).toBeFocused();
-      await expect(controls).toBeVisible();
       await expectNoHorizontalOverflow(page);
       for (const tab of await page.getByRole('tablist', { name: 'Brands views', exact: true }).getByRole('tab').all()) {
         const box = await tab.boundingBox();
@@ -69,15 +71,18 @@ for (const theme of ['light', 'dark'] as const) {
       }
       await page.evaluate(() => window.scrollTo(0, 0));
       await page.screenshot({ path: testInfo.outputPath(`brands-tools-${theme}-${viewport.width}.png`), fullPage: false });
-      await openBrandProfileList(page);
-      await expect(page.getByRole('radio', { name: `Set ${profile!.name} active`, exact: true })).toBeChecked();
-      await page.goto('/monitor?view=watchlists');
-      const tabs = page.getByRole('tablist', { name: 'Monitor views', exact: true });
-      const watchlists = tabs.getByRole('tab', { name: /^Watchlists/u });
-      await watchlists.focus();
-      await watchlists.press('End');
-      const selected = tabs.getByRole('tab', { name: /^Custom rules/u });
-      await expect(selected).toBeFocused();
+    }
+    await openBrandProfileList(page);
+    await expect(page.getByRole('radio', { name: `Set ${profile!.name} active`, exact: true })).toBeChecked();
+    await page.goto('/monitor?view=watchlists');
+    const tabs = page.getByRole('tablist', { name: 'Monitor views', exact: true });
+    const watchlists = tabs.getByRole('tab', { name: /^Watchlists/u });
+    await watchlists.focus();
+    await watchlists.press('End');
+    const selected = tabs.getByRole('tab', { name: /^Custom rules/u });
+    await expect(selected).toBeFocused();
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport);
       await expect(selected).toHaveAttribute('aria-selected', 'true');
       await expect(selected).toBeInViewport({ ratio: 1 });
       await expectNoHorizontalOverflow(page);
@@ -114,11 +119,11 @@ test('Bulk keeps collection and result controls readable with a header-aware vie
   });
   await page.goto('/bulk');
   await runBulkScan(page, targets);
+  await selectBulkResultView(page, 'List');
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
-      await selectBulkResultView(page, 'List');
       await expect(page.getByRole('heading', { name: 'Results', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
       for (const field of [page.locator('#domains'), page.getByLabel('Scan mode'), page.getByLabel('Request pacing')]) {

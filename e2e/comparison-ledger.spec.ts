@@ -1,7 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { caseRecord, snapshot } from './case-test-fixtures';
-import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
+import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData, useTheme } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import type { WebsiteProfileSnapshot, WebsiteSnapshotTechnology } from '../packages/workspace/website-snapshot-model.mts';
 import {
@@ -236,7 +236,7 @@ test('reviews retained case, website and watchlist changes without turning incom
   const review = await openRetainedReview(page, retainedFixture());
 
   await selectRetainedComparison(review, 'case-change.reservation.invalid · adjacent case snapshots');
-  const caseRow = review.locator('.ledger-table tbody tr', { hasText: 'Availability' });
+  const caseRow = review.locator('.ledger-table tbody', { hasText: 'Availability' });
   await expect(caseRow.locator('.state-label')).toHaveText('Incomplete comparison');
   expect(await caseRow.locator('.state-label').evaluate((element) => {
     const probe = document.createElement('span');
@@ -250,18 +250,17 @@ test('reviews retained case, website and watchlist changes without turning incom
     return result;
   })).toEqual({ colourMatches: true, borderStyle: 'dashed' });
   await expect(caseRow.getByText('Removed from later complete evidence', { exact: true })).toHaveCount(0);
-  const summary = caseRow.locator('summary');
+  const summary = caseRow.getByRole('button', { name: /^Inspect exact values/u });
   await summary.focus();
   await expect(summary).toBeFocused();
   await summary.press('Enter');
-  await expect(caseRow.locator('details')).toHaveAttribute('open', '');
+  await expect(summary).toHaveAttribute('aria-expanded', 'true');
   await expect(caseRow.getByText('registered', { exact: true })).toBeVisible();
   await expect(caseRow.getByText('unknown', { exact: true })).toBeVisible();
   await expect(caseRow.locator('.side-metadata').first().getByText('retained', { exact: true })).toBeVisible();
   await expect(caseRow.locator('.side-metadata').nth(1).getByText('incomplete', { exact: true })).toBeVisible();
-  expect(await caseRow.locator('.exact-details').evaluate((element) => (
-    [...element.children].map((child) => child.classList.item(0))
-  ))).toEqual(['row-contract', 'source-grid', 'row-limitations', 'value-grid']);
+  await expect(caseRow.getByRole('region', { name: 'Earlier source metadata' })).toBeVisible();
+  await expect(caseRow.getByRole('region', { name: 'Later source metadata' })).toBeVisible();
   await expect(review.getByRole('link', { name: 'Open owning record' })).toHaveAttribute(
     'href',
     '/cases?case=ledger-case&section=evidence',
@@ -281,7 +280,7 @@ test('reviews retained case, website and watchlist changes without turning incom
   await expect(partialWebsiteRow.getByText('Removed from later complete evidence', { exact: true })).toHaveCount(0);
 
   await selectRetainedComparison(review, 'Watch review · retained watchlist check');
-  const watchlistRow = review.locator('.ledger-table tbody tr', { hasText: 'Availability' });
+  const watchlistRow = review.locator('.ledger-table tbody', { hasText: 'Availability' });
   await expect(watchlistRow.locator('.state-label')).toHaveText('Different');
   expect(await watchlistRow.locator('.state-label').evaluate((element) => {
     const probe = document.createElement('span');
@@ -291,7 +290,7 @@ test('reviews retained case, website and watchlist changes without turning incom
     probe.remove();
     return matches;
   })).toBe(true);
-  await watchlistRow.locator('summary').click();
+  await watchlistRow.getByRole('button', { name: /^Inspect exact values/u }).click();
   await expect(watchlistRow.getByText('registered', { exact: true })).toBeVisible();
   await expect(watchlistRow.getByText('available', { exact: true })).toBeVisible();
 
@@ -329,7 +328,7 @@ test('adds only the saved Bulk pair selected explicitly', async ({ page }) => {
   await expect(review.getByRole('heading', {
     name: 'Earlier saved review → Later saved review · explicit saved-session pair',
   })).toBeVisible();
-  const registrarRow = review.locator('.ledger-table tbody tr', { hasText: 'Registrar' });
+  const registrarRow = review.locator('.ledger-table tbody', { hasText: 'Registrar' });
   await expect(registrarRow.locator('.state-label')).toHaveText('Not compared');
   expect(await registrarRow.locator('.state-label').evaluate((element) => {
     const probe = document.createElement('span');
@@ -342,7 +341,7 @@ test('adds only the saved Bulk pair selected explicitly', async ({ page }) => {
     probe.remove();
     return result;
   })).toEqual({ colourMatches: true, borderStyle: 'dotted' });
-  await registrarRow.locator('summary').click();
+  await registrarRow.getByRole('button', { name: /^Inspect exact values/u }).click();
   await expect(registrarRow.getByText('Earlier Registrar', { exact: true })).toBeVisible();
   await expect(registrarRow.getByText('Later Registrar', { exact: true })).toBeVisible();
   await expect(registrarRow.locator('.side-metadata').first().getByText('not_reported', { exact: true })).toBeVisible();
@@ -352,7 +351,7 @@ test('adds only the saved Bulk pair selected explicitly', async ({ page }) => {
   expect(requests).toEqual([]);
 });
 
-test('uses exact stacked cards without page overflow at narrow supported widths', async ({ page }) => {
+test('uses exact stacked cards without page overflow at narrow supported widths', async ({ page }, testInfo) => {
   const requests = unexpectedApiRequests(page);
   await page.setViewportSize({ width: 320, height: 844 });
   const review = await openRetainedReview(page, multiIntervalCaseFixture());
@@ -375,7 +374,7 @@ test('uses exact stacked cards without page overflow at narrow supported widths'
   await owner.selectOption(firstSelection ?? '');
   await expect(review.getByRole('heading', { name: 'case-intervals.reservation.invalid · adjacent case snapshots' })).toBeVisible();
 
-  for (const width of [320, 360, 390]) {
+  for (const width of [320, 360, 390, 1024]) {
     await page.setViewportSize({ width, height: 844 });
     const card = review.locator('.ledger-cards article', { hasText: 'Registrar' });
     await expect(card).toBeVisible();
@@ -394,6 +393,30 @@ test('uses exact stacked cards without page overflow at narrow supported widths'
   await card.locator('summary').press('Enter');
   await expect(card.getByText('Registrar A', { exact: true })).toBeVisible();
   await expect(card.getByText('Registrar B', { exact: true })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  const desktop = review.locator('.ledger-table');
+  const expanded = desktop.getByRole('region', { name: /^Exact values for/u });
+  await expect(expanded).toBeVisible();
+  await expect(expanded.getByText('Registrar A', { exact: true })).toBeVisible();
+  await expect(expanded.getByText('Registrar B', { exact: true })).toBeVisible();
+  const [tableBox, detailBox] = await Promise.all([desktop.boundingBox(), expanded.boundingBox()]);
+  expect(tableBox).not.toBeNull();
+  expect(detailBox).not.toBeNull();
+  expect(detailBox!.width).toBeGreaterThan(tableBox!.width * 0.8);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [390, 1920]) {
+      await page.setViewportSize({ width, height: 1080 });
+      const detail = width === 390 ? card.locator('.exact-details') : expanded;
+      await expect(detail).toBeVisible();
+      await detail.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      await page.screenshot({ path: testInfo.outputPath(`exact-comparison-${theme}-${width}.png`) });
+    }
+  }
+  await desktop.getByRole('button', { name: /^Inspect exact values/u }).press('Enter');
+  await expect(expanded).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
   expect(requests).toEqual([]);
 });
