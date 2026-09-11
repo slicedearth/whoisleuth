@@ -108,9 +108,9 @@ export function selectConsoleCase(id: string | null): void {
   if (id !== null && normalizeOpaqueReferenceId(id) !== id) {
     throw new RangeError('The selected Case identifier is invalid.');
   }
+  if (caseNavigationContext?.caseId !== id) caseNavigationContext = null;
   if (selectedCaseId === id) return;
   selectedCaseId = id;
-  if (caseNavigationContext?.caseId !== id) caseNavigationContext = null;
   for (const listener of [...caseSelectionListeners]) {
     try { void Promise.resolve(listener(id)).catch(() => {}); } catch { /* A view observer cannot change the selection. */ }
   }

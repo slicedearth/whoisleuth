@@ -42,7 +42,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await page.locator('#query').fill('sectioned-result.invalid');
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
-  const controls = page.getByRole('region', { name: 'Choose what to review' });
+  const controls = page.getByRole('region', { name: 'Evidence families' });
   const visibility = controls.getByRole('group', { name: 'Evidence family visibility' });
   await expect(visibility.getByRole('button', { name: 'Collapse all' })).toBeDisabled();
   await visibility.getByRole('button', { name: 'Expand all' }).click();

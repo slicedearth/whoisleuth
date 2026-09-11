@@ -83,7 +83,7 @@ test('Lookup analyst question and disclosure controls change presentation withou
   expect(lookupRequests).toHaveLength(1);
   expect(fixtureResponses).toBe(1);
 
-  const controls = page.getByRole('region', { name: 'Choose what to review' });
+  const controls = page.getByRole('region', { name: 'Evidence families' });
   const task = analystQuestion(page);
   const localNav = page.getByRole('navigation', { name: 'Result sections' });
   await expect(task).toHaveValue('general');
@@ -339,7 +339,7 @@ test('Lookup analyst question and disclosure controls change presentation withou
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.locator('#result')).toBeVisible();
   await expect(analystQuestion(page)).toHaveValue('acquisition');
-  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Detail')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Evidence families' }).getByLabel('Detail')).toHaveCount(0);
   expect(lookupRequests).toHaveLength(2);
   expect(fixtureResponses).toBe(2);
 });

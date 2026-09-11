@@ -45,7 +45,7 @@ test('saved context stays dormant until keyboard activation and then renders a p
     }),
   }, { clearStorage: true });
 
-  await expect(page.getByRole('heading', { name: 'Preview saved context for this target' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Saved context' })).toBeVisible();
   await page.evaluate(() => {
     const state = window as typeof window & { __savedContextManifestReads?: number; __savedContextWrites?: number };
     state.__savedContextManifestReads = 0;

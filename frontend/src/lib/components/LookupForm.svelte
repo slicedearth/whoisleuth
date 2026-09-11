@@ -66,6 +66,8 @@
   );
   const entryLimit = 2_000;
   const deepMode = $derived(lookupMode === 'deep');
+  const selectedSourceCount = $derived(Number(includeSecurityTxt) + Number(includeExternalIntelligence)
+    + Number(includeMalwareHostIntelligence) + Number(includeMalwareIocIntelligence));
   const preflight = $derived(buildLookupCollectionPreflight({
     mode: lookupMode,
     targetCount: entryCount,
@@ -78,19 +80,6 @@
   const loadingDetail = $derived(lookupMode === 'fast'
     ? 'Fast lookup is checking authoritative registration evidence and omitting slower web, WHOIS, and enrichment sources.'
     : 'Deep lookup is waiting for one final response covering registry, WHOIS, domain, web, TLS, and eligible enrichment branches. Some registries can take several seconds to answer.');
-  const requestedSourceFamilies = $derived(lookupMode === 'fast'
-    ? ['Authority', 'RDAP']
-    : [
-        'Registry RDAP',
-        'WHOIS',
-        'Domain evidence',
-        'Registrar RDAP',
-        'Network context',
-        ...(includeSecurityTxt ? ['security.txt'] : []),
-        ...(includeExternalIntelligence || includeMalwareHostIntelligence || includeMalwareIocIntelligence
-          ? ['Selected intelligence']
-          : []),
-      ]);
   const elapsedLabel = $derived(loadingElapsedMs < 1_000
     ? `${Math.max(0, Math.round(loadingElapsedMs))} ms elapsed`
     : `${(loadingElapsedMs / 1_000).toFixed(1)} s elapsed`);
@@ -124,7 +113,7 @@
   <label class="search-label" for="query">{task === 'incident' ? 'Incident URL, domain, IP address, or ASN' : 'Domain, IP address, ASN, or domain list'}</label>
   <div class="input-row">
     <div class="query-field">
-      <textarea id="query" bind:value={query} maxlength={MAX_DOMAIN_INPUT_CHARACTERS} placeholder="example.com" autocomplete="off" spellcheck="false" rows="2" onkeydown={handleQueryKeydown} oninput={(event) => onquerychange?.(event.currentTarget.value)}></textarea>
+      <textarea id="query" bind:value={query} maxlength={MAX_DOMAIN_INPUT_CHARACTERS} placeholder="example.com" autocomplete="off" spellcheck="false" rows="1" onkeydown={handleQueryKeydown} oninput={(event) => onquerychange?.(event.currentTarget.value)}></textarea>
       {#if query}<button type="button" class="clear" aria-label="Clear query" onclick={() => { query = ''; onquerychange?.(''); }}>×</button>{/if}
     </div>
     <button class="primary" aria-keyshortcuts="Control+Enter Meta+Enter" disabled={loading || !entryCount || inputTooLarge || Boolean(lookupDisabled)}>
@@ -134,7 +123,7 @@
   <p class="input-help">
     {entryCount > 1
       ? `${entryCount} unique entries detected. Multiple entries continue in Bulk${duplicateCount ? `; ${duplicateCount} duplicate${duplicateCount === 1 ? '' : 's'} removed` : ''}.`
-      : 'Separate multiple domains with commas, semicolons, tabs, or new lines.'}
+      : 'Lists accept commas, semicolons, tabs or new lines.'}
     <span>Press Ctrl+Enter or ⌘+Enter to run.</span>
   </p>
   {#if task === 'incident'}
@@ -159,7 +148,7 @@
     </div>
     <p>{lookupMode === 'deep'
       ? 'Deep adds WHOIS, web, DNS, TLS, registrar RDAP, and selected intelligence requests, so it may take longer.'
-      : 'Fast is the fresh-session default. It returns lower-request registration evidence and skips slower deep-only sources.'}</p>
+      : 'Fast checks registration evidence and skips web, WHOIS and enrichment sources.'}</p>
   </fieldset>
 
   {#if loading}
@@ -168,16 +157,15 @@
       <div class="loading-copy">
         <p role="status">{loadingDetail}</p>
         <p class="loading-meta"><strong>{elapsedLabel}</strong><span>{deadlineLabel}</span></p>
-        <div class="collection-trace" aria-hidden="true">
-          <span class="trace-prompt">collect://</span>
-          {#each requestedSourceFamilies as source}<span>{source}</span>{/each}
-        </div>
         <p class="loading-caveat">Sources remain pending until the final response reports their state. Cancelling stops this browser from waiting; work already admitted by the server may continue within its existing bounds.</p>
       </div>
       <button type="button" class="btn cancel-lookup" onclick={oncancel}>Cancel lookup</button>
     </div>
   {/if}
 
+  {#if securityTxtSupported || intelligenceOptionCount}
+  <details class="optional-sources">
+    <summary>Optional sources <span>{selectedSourceCount ? `${selectedSourceCount} selected for Deep` : 'None selected'}</span></summary>
   {#if securityTxtSupported}
     <fieldset class="intelligence-options">
       <legend>Optional disclosure contact</legend>
@@ -202,6 +190,9 @@
     </fieldset>
   {/if}
 
+  </details>
+  {/if}
+
   <CollectionPreflight {preflight} />
 
 </form>
@@ -216,13 +207,13 @@
   .input-help{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .input-help span{display:inline-block;margin-left:6px;color:var(--muted);font-family:var(--mono)}
   .incident-input-note{margin:8px 0 0;padding:8px 10px;border-left:3px solid var(--interface-accent);background:rgb(var(--interface-accent-rgb) / .06);color:var(--muted);font-size:var(--text-xs);line-height:1.5}
-  .lookup-mode{margin:14px 0 0;padding:0;border:0}
+  .lookup-mode{margin:12px 0 0;padding:0;border:0}
   .lookup-mode legend{margin-bottom:8px;color:var(--text);font:700 var(--text-xs) var(--mono)}
   .mode-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-width:520px}
-  .mode-options label{display:flex;gap:9px;align-items:center;min-width:0;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-md);background:rgb(var(--bg-rgb) / .54);cursor:pointer}
+  .mode-options label{display:flex;gap:9px;align-items:center;min-width:0;min-height:44px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:rgb(var(--bg-rgb) / .54);cursor:pointer}
   .mode-options label.active{border-color:rgb(var(--accent-rgb) / .72);background:rgb(var(--accent-rgb) / .12)}
   .mode-options input{flex:0 0 auto}
-  .mode-options span{display:grid;gap:2px;min-width:0}
+  .mode-options span{display:flex;flex-wrap:wrap;gap:3px 8px;align-items:baseline;min-width:0}
   .mode-options strong{font:700 var(--text-sm) var(--mono)}
   .mode-options small{color:var(--muted);font-size:var(--text-2xs)}
   .lookup-mode p,.loading-note{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
@@ -234,22 +225,19 @@
   .loading-caveat{margin-top:8px!important;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   .cancel-lookup{min-height:34px;padding:6px 9px;white-space:nowrap}
   .spinner{flex:0 0 auto;width:13px;height:13px;margin-top:2px;border:2px solid rgb(var(--accent-rgb) / .28);border-top-color:var(--accent);border-radius:50%;animation:lookup-spin .8s linear infinite}
-  .collection-trace{position:relative;display:flex;flex-wrap:wrap;gap:5px;margin-top:9px;overflow:hidden}
-  .collection-trace::after{content:"";position:absolute;inset:0 auto 0 -25%;width:20%;background:linear-gradient(90deg,transparent,rgb(var(--accent-rgb) / .12),transparent);animation:collection-scan 1.8s linear infinite;pointer-events:none}
-  .collection-trace>span{padding:3px 6px;border:1px solid var(--border);border-radius:999px;background:var(--panel);color:var(--muted);font:650 .58rem var(--mono);letter-spacing:.03em}
-  .collection-trace .trace-prompt{border-color:transparent;background:transparent;color:var(--accent2)}
   @keyframes lookup-spin{to{transform:rotate(360deg)}}
-  @keyframes collection-scan{to{transform:translateX(650%)}}
-  @media(prefers-reduced-motion:reduce){.spinner{animation:none;border-color:var(--accent)}.collection-trace::after{display:none}}
-  .intelligence-options{margin:14px 0 0;padding:12px 14px 14px;border:1px solid var(--border);border-radius:var(--radius-md)}
-  .intelligence-options legend{padding:0 6px;color:var(--text);font:700 var(--text-xs) var(--mono)}
+  @media(prefers-reduced-motion:reduce){.spinner{animation:none;border-color:var(--accent)}}
+  .optional-sources{margin-top:12px;border-top:1px solid var(--border)}
+  .optional-sources>summary{padding:12px 0;cursor:pointer;font:650 var(--text-xs) var(--mono)}
+  .optional-sources>summary>span{margin-left:8px;color:var(--muted);font-weight:400}
+  .intelligence-options{margin:10px 0 0;padding:0 0 12px;border:0;min-width:0}
+  .intelligence-options legend{margin-bottom:8px;color:var(--text);font:700 var(--text-xs) var(--mono)}
   .intelligence-hint{margin:0 0 10px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .intelligence-option{margin:8px 0 0}
   .intelligence-option span{color:var(--muted)}
   @media(max-width:600px){
     .input-row{grid-template-columns:1fr}
     .input-row .primary{width:100%;min-height:44px}
-    .mode-options{grid-template-columns:1fr}
     .loading-note{grid-template-columns:auto minmax(0,1fr)}
     .cancel-lookup{grid-column:2;justify-self:start}
   }

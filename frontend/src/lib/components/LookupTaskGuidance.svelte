@@ -29,13 +29,13 @@
     <p class="limitation">{guidance.limitation}</p>
   </div>
   <div class="guidance-actions">
-    <button class="btn" type="button" onclick={applyRecommendation} disabled={lookupMode === guidance.recommendation}>Use {guidance.recommendation === 'fast' ? 'Fast' : 'Deep'} recommendation</button>
+    {#if guidance.recommendation !== 'review_retained'}<button class="btn" type="button" onclick={applyRecommendation} disabled={lookupMode === guidance.recommendation}>Use {guidance.recommendation === 'fast' ? 'Fast' : 'Deep'} recommendation</button>{/if}
   </div>
   </details>
 </section>
 
 <style>
-  .task-guidance{display:grid;grid-template-columns:minmax(0,26rem) minmax(0,1fr);gap:12px 20px;align-items:start;margin-block:16px;padding-block:12px;border-block:1px solid var(--border)}
+  .task-guidance{display:grid;grid-template-columns:minmax(0,26rem) minmax(0,1fr);gap:8px 20px;align-items:end;margin-block:12px;padding-top:12px;border-top:1px solid var(--border)}
   label{display:grid;min-width:0;gap:5px;color:var(--muted);font:650 var(--text-xs) var(--mono)}
   select{width:100%;min-width:0}
   details{min-width:0}
@@ -44,5 +44,5 @@
   .guidance-copy p{margin:0;color:var(--muted);font-size:var(--text-sm);line-height:1.5}
   .guidance-copy .limitation{color:var(--amber)}
   .guidance-actions{margin-top:12px}
-  @media(max-width:760px){.task-guidance{grid-template-columns:1fr;gap:4px}summary,select{min-height:44px}.guidance-actions .btn{width:100%}}
+  @media(max-width:760px){.task-guidance{grid-template-columns:1fr;gap:0}summary,select{min-height:44px}.guidance-actions .btn{width:100%}}
 </style>

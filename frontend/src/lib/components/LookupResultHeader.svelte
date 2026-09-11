@@ -1,5 +1,6 @@
 <script lang="ts">
   import { availabilityStatusDisplay } from '$lib/analysis/availability-status-display.ts';
+  import { handlesLocalLink } from '$lib/link-activation';
 
   let {
     title,
@@ -7,6 +8,11 @@
     isSubdomain,
     registrableDomain,
     inputHostname,
+    observedAt,
+    depth,
+    caseHref,
+    caseLabel,
+    onCaseOpen,
     onExport,
     onReportExport = null,
     onBriefExport = null,
@@ -16,6 +22,11 @@
     isSubdomain: boolean;
     registrableDomain: string;
     inputHostname: string;
+    observedAt: string | null;
+    depth: 'fast' | 'deep';
+    caseHref: string | null;
+    caseLabel: string;
+    onCaseOpen: () => void;
     onExport: () => void;
     onReportExport?: ((includeAttribution: boolean) => void) | null;
     onBriefExport?: (() => void) | null;
@@ -24,6 +35,7 @@
   let exportMenuOpen = $state(false);
   let includeAttribution = $state(true);
   const availability = $derived(availabilityStatusDisplay(resultState));
+  const observationTime = $derived(observedAt && Number.isFinite(Date.parse(observedAt)) ? observedAt : null);
   function runExport(action: () => void) {
     action();
     exportMenuOpen = false;
@@ -34,14 +46,16 @@
   <div>
     <p class="eyebrow">Result</p>
     <h2>{title}</h2>
+    <p class="result-context"><span>{depth === 'deep' ? 'Deep' : 'Fast'} lookup</span>{#if observationTime}<time datetime={observationTime}>Observed {new Date(observationTime).toLocaleString()}</time>{:else}<span>Observation time unavailable</span>{/if}</p>
     {#if isSubdomain}
       <p>Registry, DNS, website, TLS and page observations use {registrableDomain}. The submitted hostname was {inputHostname}; separately requested hostname-scoped sources remain labelled with their own target.</p>
     {/if}
   </div>
   <div class="result-actions">
     <span class="chip {availability.className}">{availability.label}</span>
+    {#if caseHref}<a class="btn" href={caseHref} onclick={(event) => { if (handlesLocalLink(event)) onCaseOpen(); }}>{caseLabel}</a>{/if}
     <details class="export-menu" bind:open={exportMenuOpen}>
-      <summary class="btn">Export <span aria-hidden="true">▾</span></summary>
+      <summary class="btn">Export</summary>
       <div class="export-options" role="group" aria-label="Export Lookup result">
         {#if onReportExport}
           <button type="button" onclick={() => runExport(() => onReportExport(includeAttribution))}>Download report</button>
@@ -63,11 +77,13 @@
   .result-head{display:flex;align-items:end;justify-content:space-between;gap:12px 20px;margin:30px 0 0}
   .result-head h2{margin:0;font:700 clamp(1.5rem,3.4vw,2rem) var(--mono);letter-spacing:-.03em;overflow-wrap:anywhere}
   .result-head p{margin:6px 0 0;color:var(--muted);font-size:var(--text-xs)}
+  .result-head>div:first-child{min-width:0;flex:1}
+  .result-context{display:flex;flex-wrap:wrap;gap:4px 14px;line-height:1.5}
   .result-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
   .result-actions .chip{text-transform:capitalize;font-size:var(--text-xs)}
   .export-menu{position:relative}
-  .export-menu>summary{display:flex;align-items:center;gap:7px;cursor:pointer;list-style:none}
-  .export-menu>summary::-webkit-details-marker{display:none}
+  .export-menu>summary{display:list-item;cursor:pointer;list-style:disclosure-closed inside}
+  .export-menu[open]>summary{list-style-type:disclosure-open}
   .export-menu>summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .export-options{position:absolute;z-index:18;top:calc(100% + 6px);right:0;display:grid;min-width:210px;padding:5px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);box-shadow:0 14px 34px rgb(var(--shadow-rgb) / .24)}
   .export-options button{width:100%;padding:9px 10px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--text);font:650 var(--text-xs) var(--mono);text-align:left;cursor:pointer}

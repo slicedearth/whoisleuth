@@ -58,7 +58,7 @@ under the explicit supported rules; credentials, unsupported schemes and
 ambiguous targets are rejected.
 
 Before collection, Lookup shows the selected target and source families. During
-collection it displays elapsed time and source status. Current Express and
+collection it displays elapsed time and keeps source states pending. Current Express and
 Netlify deployments return one buffered final envelope, so pending sources
 settle together when that envelope arrives. Cancelling stops the browser from
 waiting and discards an incomplete response; already-admitted server work may
@@ -75,11 +75,16 @@ finish inside its existing bounds.
 - **Deep, full** collects the declared registrar, WHOIS, DNS, HTTP, TLS, page,
   technology, posture and observed-network context applicable to one target.
 
-Optional security.txt and external intelligence lookups are separate selections
-and never run merely because Deep was chosen. The CLI's authorised DNSSEC and
+Open **Optional sources** to select security.txt or external intelligence.
+Neither runs merely because Deep was chosen. The CLI's authorised DNSSEC and
 mail-transport actions are separate again and never run through browser Lookup.
 
 ### Reading the result
+
+The result header identifies the completed target, collection depth and observation
+time, even when the form has since changed. **Open saved Case** opens the matching
+retained Case. Its **Return to Lookup** link restores the current result without
+collecting again; this return context lasts only within the current browser session.
 
 A pasted HTTP(S) URL selects its full hostname for collection, not its port,
 path, query or fragment. URLs containing credentials are rejected. Retaining

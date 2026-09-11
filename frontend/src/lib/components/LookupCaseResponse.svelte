@@ -18,6 +18,8 @@
   import type { CheckpointFact } from '$lib/analysis/case-evidence-checkpoint.ts';
   import type { LookupConclusionEvidenceSelection } from '$lib/controllers/lookup-case-controller.ts';
   import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
+  import { handlesLocalLink } from '$lib/link-activation';
+  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
 
   type DraftAction = { email: string; body: string; mailto: string };
 
@@ -29,6 +31,7 @@
     incidentUrl,
     recheckComparison,
     record,
+    oncaseopen,
     note,
     caseStatus,
     caseSourceState,
@@ -73,6 +76,7 @@
       detail: string;
     }> | null;
     record: CaseRecord | null;
+    oncaseopen: () => void;
     note: string;
     caseStatus: string;
     caseSourceState: 'loading' | 'ready' | 'unavailable';
@@ -191,12 +195,6 @@
     }
   }
 
-  function caseWorkspaceHref(recordId: string, focusResponse = false): string {
-    const encodedId = encodeURIComponent(recordId);
-    const base = `/monitor?view=cases&case=${encodedId}`;
-    return focusResponse ? `${base}#case-response-${encodedId}` : base;
-  }
-
   function displayComparisonValue(value: unknown): string {
     if (Array.isArray(value)) return value.map(String).join(', ') || 'none';
     if (value === null || value === undefined || value === '') return 'unavailable';
@@ -244,7 +242,7 @@
         <form class="note-edit" onsubmit={(event) => { event.preventDefault(); addNote(); }}>
           <label class="field" for="case-note">Add note</label>
           <textarea id="case-note" value={note} oninput={(event) => setNote(event.currentTarget.value)} rows="2" placeholder="Observed behaviour, evidence, decisions…" disabled={actionBusy}></textarea>
-          <div class="case-actions"><button class="btn" type="submit" disabled={actionBusy || !note.trim()}>Add note</button><button class="btn" type="button" onclick={createCase} disabled={actionBusy} aria-label={`Refresh retained Case evidence for ${domain}`}>Refresh case evidence</button><a href={caseWorkspaceHref(record.id)}>Open in Monitor →</a></div>
+          <div class="case-actions"><button class="btn" type="submit" disabled={actionBusy || !note.trim()}>Add note</button><button class="btn" type="button" onclick={createCase} disabled={actionBusy} aria-label={`Refresh retained Case evidence for ${domain}`}>Refresh case evidence</button><a href={caseWorkspaceHref(record.id)} onclick={(event) => { if (handlesLocalLink(event)) oncaseopen(); }}>Open Case</a></div>
         </form>
         <div class="case-tools">
           {#if task === 'incident' && incidentUrlDetails}
@@ -307,7 +305,7 @@
               <p class="field-note">This observation target is not in a readable browser-local watchlist.</p>
             {/if}
             {#if record.status === 'monitoring' && watchlistSourceState === 'ready' && !linkedWatchlistNames.length}
-              <p class="monitoring-warning" role="note">This Case is marked Monitoring, but no readable watchlist currently contains {lookupTarget}. Add a local baseline or change the Case status in Monitor.</p>
+              <p class="monitoring-warning" role="note">This Case is marked Monitoring, but no readable watchlist currently contains {lookupTarget}. Add a local baseline or change its status in Cases.</p>
             {/if}
             <form class="watchlist-form" onsubmit={(event) => { event.preventDefault(); saveToWatchlist(); }}>
               <label class="field" for="lookup-case-watchlist-name">Browser-local watchlist name<input id="lookup-case-watchlist-name" value={watchlistName} oninput={(event) => setWatchlistName(event.currentTarget.value)} maxlength="100" autocomplete="off" disabled={watchlistBusy}></label>
@@ -338,7 +336,7 @@
             {#if watchlistStatus}<p class="case-status" role="status" aria-live="polite">{watchlistStatus}</p>{/if}
           </section>
         </div>
-        <p class="case-hint">{record.notes.length} note{record.notes.length === 1 ? '' : 's'} · full status, tags, decisions, response actions, evidence comparison and closure remain in Monitor. Cases and local watchlists stay in this browser.</p>
+        <p class="case-hint">{record.notes.length} note{record.notes.length === 1 ? '' : 's'} · Open Cases for the full evidence, assessment, response and history.</p>
       </div>
     {:else}
       <div class="case-body"><p class="case-hint">No case for {domain} yet.</p><button class="primary" onclick={createCase} disabled={actionBusy}>Create case</button></div>
@@ -365,7 +363,7 @@
             <button class="btn small" type="button" onclick={() => void recordRecipient(route)} disabled={!record || actionBusy}>Record in case</button>
             <button class="btn small" type="button" onclick={() => copyDraft(route.contact, `${abuseRecipientKindLabel(route.kind).toLowerCase()} destination`)}>Copy destination</button>
             {#if routeHref(route)}<a class="btn small" href={routeHref(route) ?? undefined} target={route.channel === 'url' ? '_blank' : undefined} rel={route.channel === 'url' ? 'noreferrer' : undefined}>Open {route.channel === 'email' ? 'email' : route.channel === 'phone' ? 'phone' : 'reporting route'}</a>{/if}
-            {#if record}<a class="btn small" href={caseWorkspaceHref(record.id, true)}>Review response packet</a>{/if}
+            {#if record}<a class="btn small" href={`${caseWorkspaceHref(record.id, 'response')}#case-response-${encodeURIComponent(record.id)}`} onclick={(event) => { if (handlesLocalLink(event)) oncaseopen(); }}>Review response packet</a>{/if}
           </div>
         </article>
       {/each}

@@ -167,7 +167,7 @@ test('partial Lookup evidence can be classified, monitored, rechecked, and revie
     decisions: [expect.objectContaining({ evidencePinIds: [expect.any(String)] })],
   }));
 
-  await caseCard.getByRole('link', { name: 'Open in Monitor →' }).click();
+  await caseCard.getByRole('link', { name: 'Open Case' }).click();
   await expect(page).toHaveURL(/\/cases\?case=/u);
   const monitorCase = page.locator('article.case-detail');
   await expect(monitorCase).toContainText(CASE_DOMAIN);

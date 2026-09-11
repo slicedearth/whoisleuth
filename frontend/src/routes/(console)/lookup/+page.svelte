@@ -77,7 +77,9 @@
   import { buildServiceDependencyReview } from '$lib/analysis/service-dependency-review.ts';
   import { parseDomainInput } from '$lib/analysis/utils.ts';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, featureCapability, type CapabilityGetter } from '$lib/capabilities';
-  import { readLookupWorkflowState, writeLookupWorkflowState, selectConsoleCase } from '$lib/console-workflow-state.ts';
+  import { readLookupWorkflowState, writeLookupWorkflowState, selectConsoleCase, setCaseNavigationContext } from '$lib/console-workflow-state.ts';
+  import { normalizeOpaqueReferenceId } from '../../../../../packages/cases/opaque-reference-id.mts';
+  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import { preloadBestEffort } from '$lib/idle-preload';
   import { LookupRequestController } from '$lib/controllers/lookup-request-controller';
   import { LookupCaseController, type LookupCaseActionResult, type LookupConclusionEvidenceSelection } from '$lib/controllers/lookup-case-controller';
@@ -103,6 +105,11 @@
   let completedLookupTarget=$state('');
   let completedIncidentUrl=$state('');
   let completedLookupDepth=$state<LookupMode|null>(null);
+  const linkedCaseReference = $derived(page.url.searchParams.get('case'));
+  const invalidCaseReference = $derived(linkedCaseReference !== null && normalizeOpaqueReferenceId(linkedCaseReference) === null);
+  $effect(() => {
+    if (linkedCaseReference !== null) selectConsoleCase(normalizeOpaqueReferenceId(linkedCaseReference));
+  });
   let profile=$state<BrandProfile|null>(null);
   let profileSourceState=$state<ActiveBrandProfileSourceState>('loading');
   let draftStatus=$state('');
@@ -215,6 +222,11 @@
   const limitedComparisonCount=$derived(lookupAnalysis.limitedComparisonCount);
   const caseDomain=$derived(lookupAnalysis.caseDomain);
   const caseObservationTarget=$derived(String(result?.inputHostname||caseDomain).trim().toLowerCase());
+  function preserveLookupReturn() {
+    if (!caseRecord) return;
+    const params = new URLSearchParams({ q: completedLookupTarget, depth: lookupEvidenceDepth, task: taskView });
+    setCaseNavigationContext(caseRecord.id, `/lookup?${params}#case-response`, 'Lookup');
+  }
   const observedPageBaseline=$derived(lookupAnalysis.observedPageBaseline);
   const pageComparison=$derived(lookupAnalysis.pageComparison);
   const pageDisplay=$derived(lookupAnalysis.pageDisplay);
@@ -773,7 +785,8 @@
 </script>
 
 <svelte:head><title>Lookup · WHOISleuth</title></svelte:head>
-<PageHeading eyebrow="Investigate" title="Lookup" description="Look up a domain, IP address, or ASN using RDAP and WHOIS, with DNS, HTTP, and bounded TLS/certificate checks for domains." />
+<PageHeading eyebrow="Investigate" title="Lookup" description="Collect evidence for a domain, IP address or ASN." />
+{#if invalidCaseReference}<p class="local-context-status" role="status">The Case reference is invalid. No Case was selected.</p>{/if}
 <LookupForm
   bind:query
   task={taskView}
@@ -813,7 +826,10 @@
 
 {#if result}
   <section class="result-root" id="result" use:evidenceLinkNavigation>
-    <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={downloadReadableReport} onBriefExport={downloadInvestigationBrief} />
+    <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)}
+      observedAt={lookupObservedAt} depth={lookupEvidenceDepth} caseHref={caseDomain ? caseRecord ? caseWorkspaceHref(caseRecord.id) : '#case-response' : null}
+      caseLabel={caseRecord ? 'Open saved Case' : caseSourceState === 'ready' ? 'Keep in Case' : 'Case context'} onCaseOpen={preserveLookupReturn}
+      onExport={downloadEvidence} onReportExport={downloadReadableReport} onBriefExport={downloadInvestigationBrief} />
     {#if evidenceExportStatus||lookupEvidenceProjection.error}<p class:portable-evidence-status={Boolean(lookupEvidenceProjection.error)} class="local-context-status" role="status" aria-atomic="true">{evidenceExportStatus||lookupEvidenceProjection.error}</p>{/if}
 
     <LookupPresentationControls
@@ -1029,7 +1045,7 @@
           loadingLabel="Loading Case and response workspace…"
           unavailableLabel="The Case and response workspace could not be loaded."
           onready={restoreDeferredLookupTarget}
-          props={{domain:caseDomain,lookupTarget:caseObservationTarget,lookupDepth:lookupEvidenceDepth,task:taskView,incidentUrl:completedIncidentUrl,recheckComparison:caseRecheckComparison,record:caseRecord,note:caseNote,caseStatus,caseSourceState,retryCaseRead:()=>refreshCase(),caseDisposition,caseReviewReason,checkpointFacts,draftStatus,outreach,recipientResolution:abuseRecipientResolution,linkedWatchlistNames,watchlistSourceState,watchlistName,watchlistStatus,setNote:(value:string)=>caseNote=value,setCaseDisposition:(value:string)=>{caseDisposition=value;if(!isReviewedCaseDisposition(value))caseReviewReason='';},setCaseReviewReason:(value:string)=>caseReviewReason=value,setWatchlistName:(value:string)=>watchlistName=value,createCase:openLookupCase,addNote:addLookupNote,recordConclusion:recordLookupConclusion,recordInvestigationContext:recordLookupInvestigationContext,recordRecheckOutcome:recordLookupRecheckOutcome,saveToWatchlist:saveLookupWatchlist,recheckCase:recheckLookupCase,recordRecipient:recordAbuseRecipient,copyDraft,statusLabel:caseStatusLabel,dispositionLabel:caseDispositionLabel,actionBusy:caseActionBusy,watchlistBusy:watchlistActionBusy}}
+          props={{oncaseopen:preserveLookupReturn,domain:caseDomain,lookupTarget:caseObservationTarget,lookupDepth:lookupEvidenceDepth,task:taskView,incidentUrl:completedIncidentUrl,recheckComparison:caseRecheckComparison,record:caseRecord,note:caseNote,caseStatus,caseSourceState,retryCaseRead:()=>refreshCase(),caseDisposition,caseReviewReason,checkpointFacts,draftStatus,outreach,recipientResolution:abuseRecipientResolution,linkedWatchlistNames,watchlistSourceState,watchlistName,watchlistStatus,setNote:(value:string)=>caseNote=value,setCaseDisposition:(value:string)=>{caseDisposition=value;if(!isReviewedCaseDisposition(value))caseReviewReason='';},setCaseReviewReason:(value:string)=>caseReviewReason=value,setWatchlistName:(value:string)=>watchlistName=value,createCase:openLookupCase,addNote:addLookupNote,recordConclusion:recordLookupConclusion,recordInvestigationContext:recordLookupInvestigationContext,recordRecheckOutcome:recordLookupRecheckOutcome,saveToWatchlist:saveLookupWatchlist,recheckCase:recheckLookupCase,recordRecipient:recordAbuseRecipient,copyDraft,statusLabel:caseStatusLabel,dispositionLabel:caseDispositionLabel,actionBusy:caseActionBusy,watchlistBusy:watchlistActionBusy}}
         />
         {#if caseRecord && checkpointFacts.length && taskView === 'acquisition'}
           <LookupEvidenceCheckpoint

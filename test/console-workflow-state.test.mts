@@ -33,6 +33,10 @@ test('Case navigation notices are bounded, target-specific, browser-only and cle
     assert.throws(() => setCaseNavigationContext('case-one', '/monitor', 'Monitoring', 'x'.repeat(2_001)), RangeError);
     setCaseNavigationContext('case-one', 'https://external.example', 'Monitoring');
     assert.equal(readCaseNavigationContext('case-one')?.href, '/dashboard');
+    selectConsoleCase('case-two');
+    setCaseNavigationContext('case-one', '/lookup?q=example.test', 'Lookup');
+    selectConsoleCase('case-two');
+    assert.equal(readCaseNavigationContext('case-one'), null);
     clearConsoleWorkflowState();
     assert.equal(readCaseNavigationContext('case-one'), null);
     removeWindow();

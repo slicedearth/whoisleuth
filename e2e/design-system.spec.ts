@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { boundingBox, currentBrandProfileBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData, useTheme } from './helpers';
+import { boundingBox, currentBrandProfileBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData, openLookupOptionalSources, useTheme } from './helpers';
 import { protectedDestinations } from '../frontend/src/lib/workspaces';
 import { consoleCommandNavigation } from '../frontend/src/lib/console-command-navigation';
 import { INTELLIGENCE_CAPABILITIES, sectionedLookupFixture } from './lookup-design-fixtures';
@@ -182,6 +182,7 @@ test('optional intelligence checkboxes stay native-sized and aligned with their 
   await page.getByRole('radio', { name: /Deep/u }).check();
 
   const group = page.getByRole('group', { name: 'Optional third-party intelligence' });
+  await openLookupOptionalSources(page);
   await expect(group).toBeVisible();
 
   for (const size of [
@@ -473,7 +474,7 @@ test('console reference navigation keeps public Resources separate without decor
   await expect(resources).toHaveAccessibleName(/Resources.*opens in a new tab/iu);
 });
 
-test('Lookup reports requested source families without implying staged completion', async ({ page }) => {
+test('Lookup describes pending collection without implying staged completion', async ({ page }) => {
   let releaseLookup: (() => void) | undefined;
   const lookupGate = new Promise<void>((resolve) => {
     releaseLookup = resolve;
@@ -493,9 +494,8 @@ test('Lookup reports requested source families without implying staged completio
 
   const loadingStatus = page.locator('.loading-note');
   await expect(loadingStatus).toContainText('Deep lookup is waiting for one final response');
-  await expect(page.locator('.collection-trace')).toContainText('Registry RDAP');
-  await expect(page.locator('.collection-trace')).toContainText('Domain evidence');
-  await expect(page.locator('.collection-trace')).not.toContainText('complete');
+  await expect(loadingStatus).toContainText('Sources remain pending until the final response reports their state.');
+  await expect(loadingStatus.getByRole('button', { name: 'Cancel lookup' })).toBeVisible();
   releaseLookup?.();
   await expect(page.locator('#result')).toBeVisible();
 });
@@ -569,7 +569,7 @@ test('console and policy pages expose one consistent primary heading', async ({ 
     ['/discover', 'Discover', 'Investigate'],
     ['/bulk', 'Bulk', 'Investigate'],
     ['/cases', 'Cases', 'Respond'],
-    ['/monitor', 'Monitor', 'Respond'],
+    ['/monitor', 'Review inbox', 'Respond'],
     ['/brands', 'Brands', 'Assure'],
     ['/registry-support', 'Registry support', 'Reference'],
     ['/privacy', 'Privacy policy', 'Policy'],

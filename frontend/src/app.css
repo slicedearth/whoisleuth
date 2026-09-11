@@ -615,7 +615,6 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 .local-nav-shell.show-start-fade::before, .local-nav-shell.show-end-fade::after { opacity: 1; }
 .local-nav { display: flex; max-width: 100%; gap: 4px; margin: 0; padding: 5px; overflow-x: auto; }
 .local-nav-select { display: none; }
-.local-nav-prompt { flex: 0 0 auto; align-self: center; padding: 0 7px; color: var(--interface-accent); font: 700 var(--text-2xs) var(--mono); text-shadow: 0 0 7px rgb(var(--interface-accent-rgb) / .3); }
 .local-nav a { position: relative; flex: 0 0 auto; margin: 0; padding: 8px 12px; border-radius: var(--radius-sm); color: var(--muted); font: 600 var(--text-2xs) var(--mono); letter-spacing: .04em; white-space: nowrap; }
 .local-nav a:hover, .local-nav a:focus-visible { color: var(--text); background: rgb(var(--accent-rgb) / var(--interactive-hover-alpha)); }
 .local-nav a.active { color: var(--text); background: rgb(var(--accent-rgb) / var(--interactive-fill-alpha)); box-shadow: inset 0 -2px var(--interface-accent); }
@@ -639,7 +638,9 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 }
 
 /* ---------- Application shell ---------- */
-.shell { display: grid; grid-template: "sidebar header" 54px "sidebar main" minmax(0,1fr) / 232px minmax(0,1fr); min-height: 100vh; overflow-x: clip; }
+.shell { --console-toolbar-height: 54px; display: grid; grid-template: "sidebar header" var(--console-toolbar-height) "sidebar main" minmax(0,1fr) / 232px minmax(0,1fr); min-height: 100vh; overflow-x: clip; }
+.shell .local-nav-shell { top: calc(var(--console-toolbar-height) + 8px); }
+.shell .result-section { --local-nav-anchor-offset: calc(var(--console-toolbar-height) + 76px); }
 .shell > aside {
   grid-area: sidebar;
   position: sticky;
@@ -688,7 +689,7 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
 .shell > main { margin-block: 0; }
 .shell main.wide-workspace { width: min(1600px,100%); }
 .public-content { width: min(960px,100%); }
-.shell > header { position: sticky; top: 0; z-index: 18; grid-area: header; display: flex; min-width: 0; height: 54px; align-items: center; justify-content: flex-end; padding: 0 clamp(24px,4vw,58px); border-bottom: 1px solid var(--border); background: rgb(var(--bg-rgb) / .96); backdrop-filter: blur(8px); }
+.shell > header { position: sticky; top: 0; z-index: 18; grid-area: header; display: flex; min-width: 0; height: var(--console-toolbar-height); align-items: center; justify-content: flex-end; padding: 0 clamp(24px,4vw,58px); border-bottom: 1px solid var(--border); background: rgb(var(--bg-rgb) / .96); backdrop-filter: blur(8px); }
 .shell > header > a { display: none; }
 .console-header-actions { display: flex; min-width: 0; gap: 8px; align-items: center; }
 .console-sign-out { min-height: 34px; padding: 0 13px; border: 1px solid var(--quiet-control-border); border-radius: var(--radius-sm); color: var(--text); background: var(--panel); font: 700 var(--text-2xs) var(--mono); white-space: nowrap; }
@@ -712,8 +713,8 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
 .error { color: var(--danger); }
 
 @media (max-width: 900px) {
-  .shell { display: block; padding-top: 62px; }
-  .shell > header { position: fixed; inset: 0 0 auto; z-index: 30; display: flex; height: 62px; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid var(--border); background: rgb(var(--bg-rgb) / .96); }
+  .shell { --console-toolbar-height: 62px; display: block; padding-top: var(--console-toolbar-height); }
+  .shell > header { position: fixed; inset: 0 0 auto; z-index: 30; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid var(--border); background: rgb(var(--bg-rgb) / .96); }
   .shell > header > a { display: flex; min-width: 0; gap: 10px; align-items: center; font-family: var(--mono); }
   .shell > header > a strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .navigation-toggle { display: block; width: 40px; height: 40px; padding: 0; border: 1px solid var(--quiet-control-border); border-radius: var(--radius-sm); background: var(--panel); }

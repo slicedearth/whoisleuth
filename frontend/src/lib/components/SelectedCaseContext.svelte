@@ -16,7 +16,7 @@
   const record = $derived(contextState?.id === caseId && (contextState.phase === 'ready' || contextState.phase === 'loading') ? contextState.record : null);
   const context = $derived(record ? caseWorkspaceContext(record) : null);
   const href = $derived(`/cases?case=${encodeURIComponent(caseId)}`);
-  const insideCaseEditor = $derived(page.url.pathname === '/monitor' && monitorViewFromUrl(page.url) === 'cases');
+  const insideCaseEditor = $derived(page.url.pathname === '/cases' || (page.url.pathname === '/monitor' && monitorViewFromUrl(page.url) === 'cases'));
   const reader = createSelectedCaseContextReader({
     selectedId: () => caseId,
     read: getCase,

@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expandLookupFamilies, expectNoHorizontalOverflow, lookupDomainIdentity, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { expandLookupFamilies, expectNoHorizontalOverflow, lookupDomainIdentity, migrateLegacyBrowserData, openLookupOptionalSources, readBrowserLocalCollection } from './helpers';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/evidence-export';
@@ -1060,6 +1060,7 @@ test('optional external intelligence searches are explicit, attributed, and mobi
   const malwareOption = page.getByRole('checkbox', { name: /Search malware-distribution records/ });
   const iocOption = page.getByRole('checkbox', { name: /Search malware infrastructure records/ });
   await page.getByRole('radio', { name: /Deep/u }).check();
+  await openLookupOptionalSources(page);
   await expect(option).toBeVisible();
   await expect(malwareOption).toBeVisible();
   await expect(iocOption).toBeVisible();
@@ -1329,10 +1330,10 @@ test('published response routes can be recorded in a local case with their prove
   const expectedCaseId = encodeURIComponent(String(stored?.id));
   await expect(reviewPacket).toHaveAttribute(
     'href',
-    `/monitor?view=cases&case=${expectedCaseId}#case-response-${expectedCaseId}`,
+    `/cases?case=${expectedCaseId}&section=response#case-response-${expectedCaseId}`,
   );
   await reviewPacket.click();
-  await expect(page).toHaveURL(new RegExp(`/cases\\?case=${expectedCaseId}#case-response-${expectedCaseId}$`));
+  await expect(page).toHaveURL(new RegExp(`/cases\\?case=${expectedCaseId}&section=response#case-response-${expectedCaseId}$`));
   const responseWorkspace = page.locator(`#case-response-${expectedCaseId}`);
   await expect(responseWorkspace).toBeVisible();
   await expect(responseWorkspace).toBeFocused();

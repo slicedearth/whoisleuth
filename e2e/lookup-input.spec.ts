@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, holdBrowserLocalReads, lookupDomainIdentity, readBrowserLocalCollection } from './helpers';
+import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, holdBrowserLocalReads, lookupDomainIdentity, openLookupOptionalSources, readBrowserLocalCollection } from './helpers';
 import { TEST_SITE_PASSWORD } from './constants.ts';
 import { readFile } from 'node:fs/promises';
 import { buildLookupEvidence } from '../frontend/src/lib/analysis/evidence-export';
@@ -39,7 +39,7 @@ test('a single domain can be entered normally', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Run lookup' })).toBeVisible();
   await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
   await expect(page.getByRole('radio', { name: /Deep/u })).not.toBeChecked();
-  await expect(page.getByText('Separate multiple domains with commas, semicolons, tabs, or new lines.')).toBeVisible();
+  await expect(page.locator('.input-help')).toContainText(/Lists accept commas, semicolons, tabs or new lines/u);
   await expect(page.getByText('Press Ctrl+Enter or ⌘+Enter to run.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Run lookup' })).toHaveAttribute('aria-keyshortcuts', 'Control+Enter Meta+Enter');
 });
@@ -194,7 +194,7 @@ test('fast lookup mode is explicit and sends the fast contract parameter', async
 
   await page.locator('#query').fill('example.test');
   await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
-  await expect(page.getByText(/Fast is the fresh-session default.*lower-request registration evidence/u)).toBeVisible();
+  await expect(page.locator('.lookup-mode')).toContainText('Fast checks registration evidence');
 
   const requestPromise = page.waitForRequest((request) => {
     const url = new URL(request.url());
@@ -256,8 +256,7 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   const pending = page.locator('.loading-note');
   await expect(pending).toContainText('Deep lookup is waiting for one final response');
   await expect(pending.locator('.loading-meta')).toContainText(/elapsed/u);
-  await expect(pending.locator('.collection-trace')).toContainText('Registry RDAP');
-  await expect(pending.locator('.collection-trace')).toContainText('Domain evidence');
+  await expect(pending).toContainText('Sources remain pending until the final response reports their state.');
   await expect(page.getByRole('button', { name: 'Cancel lookup' })).toBeVisible();
   releaseLookup?.();
 
@@ -778,6 +777,7 @@ test('keeps the current Lookup form and result during console navigation only', 
 
   await page.locator('#query').fill('portal.example.test');
   await page.getByRole('radio', { name: /Deep/u }).check();
+  await openLookupOptionalSources(page);
   await page.getByRole('checkbox', { name: /Retrieve security\.txt contacts/u }).check();
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
@@ -788,6 +788,7 @@ test('keeps the current Lookup form and result during console navigation only', 
 
   await expect(page.locator('#query')).toHaveValue('portal.example.test');
   await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
+  await openLookupOptionalSources(page);
   await expect(page.getByRole('checkbox', { name: /Retrieve security\.txt contacts/u })).toBeChecked();
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
   expect(requestCount).toBe(1);
@@ -971,6 +972,7 @@ test(`security.txt ${publication.state} collection retains its route deadline an
 
   const option = page.getByRole('checkbox', { name: /Retrieve security\.txt contacts/u });
   await page.getByRole('radio', { name: /Deep/u }).check();
+  await openLookupOptionalSources(page);
   await expect(option).not.toBeChecked();
   await page.locator('#query').fill('192.0.2.1');
   await expect(option).toBeDisabled();

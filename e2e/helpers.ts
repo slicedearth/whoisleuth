@@ -199,6 +199,13 @@ export async function expectNoHorizontalOverflow(page: Page) {
   ).toBeLessThanOrEqual(overflow.clientWidth + OVERFLOW_TOLERANCE_PX);
 }
 
+export async function openLookupOptionalSources(page: Page): Promise<void> {
+  const summary = page.locator('.optional-sources > summary');
+  await expect(summary).toBeVisible();
+  if (await summary.locator('..').getAttribute('open') === null) await summary.click();
+  await expect(summary.locator('..')).toHaveAttribute('open', '');
+}
+
 export async function expandLookupFamilies(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Run lookup', exact: true })).toBeEnabled();
   const visibility = page.getByRole('group', { name: 'Evidence family visibility' });

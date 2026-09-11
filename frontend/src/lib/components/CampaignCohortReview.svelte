@@ -107,7 +107,7 @@
   {:else if review.sources.cases === 'unavailable'}
     <p class="source-state unavailable" role="alert">Cases could not be read. Cohort membership and counts are unavailable; reload to retry browser-local storage.</p>
   {:else if !review.scopeOptions.length}
-    <p class="source-state">No campaign member Case has an explicit Brand Profile association. Add associations in Monitor Cases before reviewing a Brand scope.</p>
+    <p class="source-state">No campaign member Case has an explicit Brand Profile association. Add associations in Cases before reviewing a Brand scope.</p>
   {:else}
     <label class="scope-control" for={`campaign-cohort-scope-${campaign.id}`}>
       <span>Brand Profile scope</span>
