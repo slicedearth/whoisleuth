@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import { buildBrandCertificateEventReplay, type CertificateEventReplayState } from '$lib/analysis/brand-certificate-event-replay.ts';
   import type { BrandProfile } from '$lib/brand-profiles';
   import type { CaseRecord } from '$lib/cases';
@@ -62,7 +63,7 @@
                     {/each}
                   </div>
                   <div class="names"><strong>Retained names</strong><p>{event.names.join(', ')}</p></div>
-                  <div class="case-links"><strong>Cases</strong>{#each event.caseReferences as reference}<a href={`/monitor?view=cases&case=${encodeURIComponent(reference.id)}`}>{reference.domain}</a>{/each}</div>
+                  <div class="case-links"><strong>Cases</strong>{#each event.caseReferences as reference}<a href={caseWorkspaceHref(reference.id, 'evidence')}>{reference.domain}</a>{/each}</div>
                   {#if event.limitations.length}<ul>{#each event.limitations as limitation}<li>{limitation}</li>{/each}</ul>{/if}
                 </div>
               </details>

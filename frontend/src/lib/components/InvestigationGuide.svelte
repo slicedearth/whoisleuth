@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { caseWorkspaceHref as caseSectionHref } from '$lib/analysis/case-response-stage.ts';
   import { page } from '$app/state';
   import { onMount, tick } from 'svelte';
   import { loadLocalInvestigationProjection } from '$lib/investigation-search';
@@ -126,7 +127,7 @@
     !evidenceContextPending && !caseContextPending && evidenceContextAvailable && caseContextAvailable,
   );
   const caseWorkspaceHref = $derived(contextCase
-    ? `/monitor?view=cases&case=${encodeURIComponent(contextCase.id)}#case-response-${encodeURIComponent(contextCase.id)}`
+    ? caseSectionHref(contextCase.id, 'response')
     : null);
   const actionPreflight = $derived(actionStage ? buildGuidedCollectionPreflight({
     label: actionStage.label,

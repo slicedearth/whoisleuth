@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { tick } from 'svelte';
@@ -191,7 +192,7 @@
                 <td><ul>{#each row.explanations as explanation}<li>{explanation}</li>{/each}</ul></td>
                 <td><ul>{#each row.provenanceLabels as label}<li>{label}</li>{/each}</ul><small>Row coverage: {row.coverage}<br>Observation evidence: {evidenceLabel(row.observationalCompleteness)}</small></td>
                 <td><dl class="timestamps"><div><dt>Authored</dt><dd>Unavailable</dd></div><div><dt>Profile revision</dt><dd>{formatDate(row.timestamps.profileRevisionAt)}</dd></div><div><dt>Case retained</dt><dd>{formatDate(row.timestamps.caseRetainedAt)}</dd></div><div><dt>Observed</dt><dd>{formatDate(row.timestamps.latestObservedAt)}</dd></div><div><dt>Relationship retained</dt><dd>{formatDate(row.timestamps.latestRelationshipRetainedAt)}</dd></div></dl></td>
-                <td><div class="local-links">{#each row.caseReferences as reference}<a href={`/monitor?view=cases&case=${encodeURIComponent(reference.id)}`} aria-label={`Open Case ${reference.id} for ${row.domain}`}>Case · {reference.sourceLabel}</a>{/each}{#each row.relationshipReferences as reference}<a href={`/monitor?view=relationships&observation=${encodeURIComponent(reference.id)}`} aria-label={`Open retained relationship ${reference.id} for ${row.domain}`}>{reference.label}</a>{/each}{#if !row.caseReferences.length && !row.relationshipReferences.length}<span>None</span>{/if}</div></td>
+                <td><div class="local-links">{#each row.caseReferences as reference}<a href={caseWorkspaceHref(reference.id)} aria-label={`Open Case ${reference.id} for ${row.domain}`}>Case · {reference.sourceLabel}</a>{/each}{#each row.relationshipReferences as reference}<a href={`/monitor?view=relationships&observation=${encodeURIComponent(reference.id)}`} aria-label={`Open retained relationship ${reference.id} for ${row.domain}`}>{reference.label}</a>{/each}{#if !row.caseReferences.length && !row.relationshipReferences.length}<span>None</span>{/if}</div></td>
               </tr>
             {/each}
           </tbody>
@@ -207,7 +208,7 @@
               <div><dt>Why present</dt><dd><ul>{#each row.explanations as explanation}<li>{explanation}</li>{/each}</ul></dd></div>
               <div><dt>Source and state</dt><dd>{row.provenanceLabels.join(' · ')}<small>Row coverage: {row.coverage} · observation evidence: {evidenceLabel(row.observationalCompleteness)}</small></dd></div>
               <div><dt>Timestamps</dt><dd><span>Authored: Unavailable</span><span>Profile revision: {formatDate(row.timestamps.profileRevisionAt)}</span><span>Case retained: {formatDate(row.timestamps.caseRetainedAt)}</span><span>Observed: {formatDate(row.timestamps.latestObservedAt)}</span><span>Relationship retained: {formatDate(row.timestamps.latestRelationshipRetainedAt)}</span></dd></div>
-              <div><dt>Local links</dt><dd class="local-links">{#each row.caseReferences as reference}<a href={`/monitor?view=cases&case=${encodeURIComponent(reference.id)}`} aria-label={`Open Case ${reference.id} for ${row.domain}`}>Case · {reference.sourceLabel}</a>{/each}{#each row.relationshipReferences as reference}<a href={`/monitor?view=relationships&observation=${encodeURIComponent(reference.id)}`} aria-label={`Open retained relationship ${reference.id} for ${row.domain}`}>{reference.label}</a>{/each}{#if !row.caseReferences.length && !row.relationshipReferences.length}<span>None</span>{/if}</dd></div>
+              <div><dt>Local links</dt><dd class="local-links">{#each row.caseReferences as reference}<a href={caseWorkspaceHref(reference.id)} aria-label={`Open Case ${reference.id} for ${row.domain}`}>Case · {reference.sourceLabel}</a>{/each}{#each row.relationshipReferences as reference}<a href={`/monitor?view=relationships&observation=${encodeURIComponent(reference.id)}`} aria-label={`Open retained relationship ${reference.id} for ${row.domain}`}>{reference.label}</a>{/each}{#if !row.caseReferences.length && !row.relationshipReferences.length}<span>None</span>{/if}</dd></div>
             </dl>
           </article>
         {/each}

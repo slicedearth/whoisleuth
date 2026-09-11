@@ -818,6 +818,7 @@ test('measures a deferred Brand Profile tool with a fictional active profile', a
         [PROFILES_KEY]: currentBrandProfileBrowserStore([brandProfileFixture()]),
         [ACTIVE_PROFILE_KEY]: 'deferred-profile',
       }, { clearStorage: true, destination: '/brands' });
+      await page.getByRole('tab', { name: 'Tools', exact: true }).click();
       await expect(workbench).toBeEnabled();
       await expect(heading).toHaveCount(0);
     },

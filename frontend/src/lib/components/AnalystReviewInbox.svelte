@@ -1,6 +1,8 @@
 <script lang="ts">
   import { page as route } from '$app/state';
   import { goto } from '$app/navigation';
+  import { handlesLocalLink } from '../link-activation.ts';
+  import { setCaseNavigationContext } from '../console-workflow-state.ts';
   import { analystReviewNeedsAttention } from '../analysis/analyst-review-attention.ts';
   import Pagination from './Pagination.svelte';
   import ReviewLifecycleControls from './ReviewLifecycleControls.svelte';
@@ -92,6 +94,13 @@
     page = 1;
   }
 
+  function retainCaseReturn(event: MouseEvent, item: AnalystReviewItem) {
+    if (!handlesLocalLink(event) || !item.caseId) return;
+    const target = new URL(item.href, route.url);
+    if (target.origin !== route.url.origin || target.pathname !== '/cases' || target.searchParams.get('case') !== item.caseId) return;
+    setCaseNavigationContext(item.caseId, `${route.url.pathname}${route.url.search}${route.url.hash}`, 'review inbox');
+  }
+
   function resetDetailFilters() {
     kindFilter = '';
     sourceFilter = '';
@@ -127,15 +136,16 @@
   }
 </script>
 
-<section class="review-inbox card" aria-labelledby="review-inbox-title">
+<section class="review-inbox card" aria-label="Review inbox">
+  {#if inbox.items.length || inbox.truncated}
   <div class="inbox-heading">
     <div>
-      <p class="eyebrow">Analyst review</p>
-      <h2 id="review-inbox-title">Review inbox</h2>
-      {#if focusedCaseId}<p>Retained review items associated with the selected Case.</p>{:else if inbox.items.length}<p>Retained Case decisions, evidence gaps, follow-ups, watchlist changes and incomplete Bulk sessions.</p>{/if}
+      <h2 id="review-inbox-title">Retained review items</h2>
+      {#if focusedCaseId}<p>Associated with the selected Case.</p>{/if}
     </div>
     {#if inbox.items.length || inbox.truncated}<strong aria-label={`${scopedItems.length} retained review items${focusedCaseId ? ' for the selected Case' : ''}`}>{scopedItems.length}</strong>{/if}
   </div>
+  {/if}
 
   {#if selectedSubjectKey}
     <p class="selected-review" role="status">{filteredByQueue.length ? 'Showing the selected review and its retained history.' : 'The selected review is unavailable in the admitted inbox. No other review has been substituted.'} <a href="/monitor?view=inbox&queue=all#review-inbox-title">Show all review items</a></p>
@@ -223,7 +233,7 @@
             <p class="queue-reason">{ANALYST_REVIEW_QUEUE_OPTIONS.find((option) => option.value === membership.queue)?.label}: {membership.reason}</p>
           </div>
           <div class="item-actions">
-            <a class="btn" href={item.href}>Review</a>
+            <a class="btn" href={item.href} onclick={(event) => retainCaseReturn(event, item)}>Review</a>
             {#if item.retryHref}<a class="btn secondary" href={item.retryHref}>Refresh evidence</a>{/if}
             {#if ondismiss && item.dismissalTarget}
               <label>
@@ -253,7 +263,7 @@
     <Pagination currentPage={currentPage} {pageCount} setPage={(value) => { page = value; }} ariaLabel="Review inbox pages" />
   {:else if !inbox.items.length && !inbox.truncated}
     <div class="empty-start">
-      <h3>No retained review items</h3>
+      <h2 id="review-inbox-title">No retained review items</h2>
       <p>Investigate a domain or open saved Cases.</p>
       <div class="toolbar"><a class="primary" href="/lookup">Investigate a domain</a><a class="btn" href="/cases">Open Cases</a></div>
     </div>
@@ -283,7 +293,7 @@
 <style>
   .review-inbox{padding:var(--card-pad)}
   .empty-start{max-width:70ch;margin:20px 0}
-  .empty-start h3{font-size:var(--text-lg)}
+  .empty-start h2{font-size:var(--text-lg)}
   .empty-start p{color:var(--muted);font-size:var(--text-sm);line-height:1.5}
   .review-scope{margin-top:16px;padding-top:10px;border-top:1px solid var(--border)}
   .review-scope summary{cursor:pointer;font-size:var(--text-sm)}

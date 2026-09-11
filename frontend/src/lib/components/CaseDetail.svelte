@@ -91,7 +91,7 @@
       <div><span>Source: {sourceLabel(record.source)}</span><span>Opened {formatDate(record.createdAt)}</span><span class="complete-id">{caseNumber(record.id)}</span><button id={`case-delete-${record.id}`} class="btn danger" onclick={() => void removeCase(record)}>Delete case</button></div>
     </details>
   </div>
-  <nav class="case-sections" aria-label="Case sections">
+  <nav class="case-sections workspace-view-nav" aria-label="Case sections">
     {#each CASE_WORKSPACE_SECTIONS as section}
       <a href={caseWorkspaceHref(record.id, section.id)} aria-current={activeSection === section.id ? 'page' : undefined}
         onclick={(event) => { if (handlesLocalLink(event)) { event.preventDefault(); void selectSection(section.id); } }}>{section.label}</a>
@@ -145,10 +145,6 @@
   .case-more > div { display: grid; gap: 8px; max-width: 32rem; padding: 12px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); font-size: var(--text-xs); }
   .complete-id { overflow-wrap: anywhere; }
   .case-more .btn { justify-self: start; }
-  .case-sections { display: flex; flex-wrap: wrap; gap: 2px 6px; border-block: 1px solid var(--border); padding-block: 4px; }
-  .case-sections a { min-height: 44px; display: inline-flex; align-items: center; padding: 8px 14px; color: var(--muted); font: 650 var(--text-sm) var(--font-sans); text-decoration: none; border-bottom: 2px solid transparent; }
-  .case-sections a:hover { color: var(--text); background: var(--panel-raised); }
-  .case-sections a[aria-current] { color: var(--accent); border-color: var(--accent); }
   .field-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
   .metadata-editor { min-width: 0; border-bottom: 1px solid var(--border); }
   .metadata-editor > summary { padding-block: 14px; cursor: pointer; font-weight: 650; }

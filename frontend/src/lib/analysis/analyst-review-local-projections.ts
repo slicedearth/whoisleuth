@@ -1,4 +1,5 @@
 import { brandPostureObservationContext, currentDesiredPostureObservation, desiredPostureObservationIdentity, type BrandProfile } from './brand-profile-model.ts';
+import { caseWorkspaceHref } from './case-response-stage.ts';
 import { buildDesiredPostureComparisonsFromObservation } from './owned-domain-posture-review.ts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 import type { BulkSession } from './bulk-session-model.ts';
@@ -211,7 +212,7 @@ function packetItems(cases: readonly CaseRecord[], now: string): AnalystReviewIt
       dueAt: action.followUpAt ?? action.dueAt,
       completeness: record.evidencePins.length ? 'partial' : 'inconclusive',
       nextAction: 'resume',
-      href: `/monitor?view=cases&case=${encodeURIComponent(record.id)}&response=1#case-response-preflight-${encodeURIComponent(record.id)}`,
+      href: `${caseWorkspaceHref(record.id, 'response')}#case-response-preflight-${encodeURIComponent(record.id)}`,
       caseId: record.id,
       caseDomain: record.domain,
     }, now)));

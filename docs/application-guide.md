@@ -22,8 +22,9 @@ returning or unavailable.
 For an empty workspace it offers a small set of first actions: explore the demo,
 investigate a target, start a guide or import an existing workspace.
 For retained work it shows bounded attention, overdue, changed-since-review,
-Case and watchlist counts. A nearby disclosure identifies the records behind a
-summary; viewing Dashboard does not mark anything reviewed.
+Case and watchlist counts, with links to the corresponding retained reviews.
+The summary refreshes when you return to the tab or change saved work here;
+viewing Dashboard does not mark anything reviewed.
 
 Saved-work search, templates and archive maintenance are secondary tools.
 Search results are paged; every indexed match is reachable. The coverage
@@ -197,8 +198,12 @@ Start a profile with its name and official domains. Matching and mail settings,
 rights and official channels, and official-site identity are optional
 disclosures. Closing a disclosure preserves its unsaved fields.
 
+Overview contains the allowlist and review summary; Assets lists the profile's
+domain relationships; Tools opens domain, mail, certificate and account-control
+reviews. The Brand profiles disclosure switches the explicitly active profile.
+
 Allowlist, expected-setting, portable-setting and account-control drafts are
-preserved when switching tools or viewing Assets. Selecting or saving another
+preserved when switching views or tools. Selecting or saving another
 profile, or leaving Brands, clears the previous profile's tool drafts. A failed
 save preserves the draft; a successful save with a failed refresh offers a
 read-only refresh, not another write. Conflicting edits require reviewing the

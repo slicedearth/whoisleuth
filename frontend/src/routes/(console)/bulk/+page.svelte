@@ -774,6 +774,12 @@
 
 {#if results.length}
   <section id="results" class="triage card" tabindex="-1">
+    <div class="results-heading"><h2>Results</h2><p>{filtered.length} of {results.length} rows · {selectedRows.length} selected</p></div>
+    <div class="mobile-result-switcher workspace-view-nav" role="group" aria-label="Bulk result view">
+      <button type="button" aria-controls="bulk-review-panel" aria-pressed={mobileResultView==='review'} onpointerenter={()=>preloadResultView('review')} onfocus={()=>preloadResultView('review')} onclick={()=>selectResultView('review')}>Review</button>
+      <button type="button" aria-controls="bulk-list-panel" aria-pressed={mobileResultView==='list'} onpointerenter={()=>preloadResultView('list')} onfocus={()=>preloadResultView('list')} onclick={()=>selectResultView('list')}>List</button>
+      <button type="button" aria-controls="bulk-analysis-panel" aria-pressed={mobileResultView==='analysis'} onpointerenter={()=>preloadResultView('analysis')} onfocus={()=>preloadResultView('analysis')} onclick={()=>selectResultView('analysis')}>Analysis</button>
+    </div>
     <BulkMobileDisclosure title="Filters and result actions" description="Filter, sort, export, retain, or rescan the current result set." onpreload={()=>preloadModule(()=>import('$lib/components/BulkTriageControls.svelte'))}>
       <DeferredSurface
         load={()=>import('$lib/components/BulkTriageControls.svelte')}
@@ -782,11 +788,6 @@
         unavailableLabel="Filters and result actions could not be loaded. The primary result list remains available."
       />
     </BulkMobileDisclosure>
-    <div class="mobile-result-switcher" role="group" aria-label="Bulk result view">
-      <button type="button" aria-controls="bulk-review-panel" aria-pressed={mobileResultView==='review'} onpointerenter={()=>preloadResultView('review')} onfocus={()=>preloadResultView('review')} onclick={()=>selectResultView('review')}>Review</button>
-      <button type="button" aria-controls="bulk-list-panel" aria-pressed={mobileResultView==='list'} onpointerenter={()=>preloadResultView('list')} onfocus={()=>preloadResultView('list')} onclick={()=>selectResultView('list')}>List</button>
-      <button type="button" aria-controls="bulk-analysis-panel" aria-pressed={mobileResultView==='analysis'} onpointerenter={()=>preloadResultView('analysis')} onfocus={()=>preloadResultView('analysis')} onclick={()=>selectResultView('analysis')}>Analysis</button>
-    </div>
 
     <div id="bulk-review-panel" class:mobile-view-active={mobileResultView==='review'} class="mobile-result-panel review-result-panel">
       {#if mobileResultView==='review'}
@@ -878,8 +879,9 @@
   .review-status{margin:12px 0;color:var(--accent);font-size:var(--text-sm);overflow-wrap:anywhere}
   .review-status:empty{display:none}
   .bulk-workspace-shell{display:block;margin-top:16px}.mobile-workspace-toggle{display:flex;width:100%;min-width:0;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);color:var(--text);text-align:left}.mobile-workspace-toggle span:first-child{display:grid;min-width:0;gap:3px}.mobile-workspace-toggle strong{font:700 var(--text-sm) var(--mono)}.mobile-workspace-toggle small{color:var(--muted);font-size:var(--text-xs);font-weight:400;line-height:1.4}.mobile-workspace-toggle span:last-child{flex:0 0 auto;color:var(--accent);font:700 var(--text-lg) var(--mono)}.bulk-workspace-content{display:block;min-width:0}.workspace-tool-switcher{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0;padding:4px;border:1px solid var(--border);border-radius:var(--radius-md)}.workspace-tool-switcher button{min-height:38px;padding:6px 10px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:700 var(--text-xs) var(--mono)}.workspace-tool-switcher button[aria-pressed='true']{border-color:var(--accent);background:rgb(var(--accent-rgb) / .08);color:var(--accent)}
-  .mobile-result-switcher{position:sticky;z-index:6;top:calc(var(--console-mobile-toolbar-height,0px) + 8px);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:12px 0;padding:4px;border:1px solid var(--border);border-radius:var(--radius-md);background:color-mix(in srgb,var(--panel) 94%,transparent);box-shadow:0 8px 24px rgb(var(--shadow-rgb) / .18);backdrop-filter:blur(10px)}.mobile-result-switcher button{min-width:0;min-height:44px;padding:6px 8px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:700 var(--text-xs) var(--mono)}.mobile-result-switcher button[aria-pressed='true']{background:rgb(var(--accent-rgb) / .12);color:var(--accent)}.mobile-result-panel{display:none;min-width:0}.mobile-result-panel.mobile-view-active{display:block}.extended-analysis-panel{margin-top:10px}
+  .results-heading{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;justify-content:space-between}.results-heading h2{margin:0;font-size:var(--text-lg)}.results-heading p{margin:0;color:var(--muted);font-size:var(--text-xs)}
+  .mobile-result-switcher{position:sticky;z-index:6;top:calc(var(--console-toolbar-height,0px) + 8px);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:12px 0;padding:4px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.mobile-result-switcher button{justify-content:center;padding-inline:8px}.mobile-result-panel{display:none;min-width:0}.mobile-result-panel.mobile-view-active{display:block}.extended-analysis-panel{margin-top:10px}
   .triage{padding:var(--card-pad)}
   .triage{margin-top:16px}
-  @media(max-width:520px){.workspace-tool-switcher{display:grid;grid-template-columns:1fr}.mobile-result-switcher{top:calc(var(--console-mobile-toolbar-height,0px) + 8px)}}
+  @media(max-width:520px){.workspace-tool-switcher{display:grid;grid-template-columns:1fr}}
 </style>

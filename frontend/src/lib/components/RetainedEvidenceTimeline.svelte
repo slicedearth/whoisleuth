@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import Pagination from '$lib/components/Pagination.svelte';
   import RetainedTimelineEntities from './RetainedTimelineEntities.svelte';
   import {
@@ -112,7 +113,7 @@
             {#if item.caseAssociations?.length}
               <details class="case-associations">
                 <summary>Currently associated Cases ({item.caseAssociations.length})</summary>
-                <ul>{#each item.caseAssociations as association}<li>{#if association.present}<a href={`/monitor?view=cases&case=${encodeURIComponent(association.id)}`}>{association.label}</a>{:else}{association.label}{/if}</li>{/each}</ul>
+                <ul>{#each item.caseAssociations as association}<li>{#if association.present}<a href={caseWorkspaceHref(association.id)}>{association.label}</a>{:else}{association.label}{/if}</li>{/each}</ul>
               </details>
             {/if}
             <div class="item-actions">

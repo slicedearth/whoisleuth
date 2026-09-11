@@ -1,7 +1,7 @@
 import { openConsoleView } from './console-navigation';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { caseRecord } from './case-test-fixtures';
+import { caseRecord, snapshot } from './case-test-fixtures';
 import {
   currentBulkSessionBrowserStore,
   expectNoHorizontalOverflow,
@@ -82,6 +82,7 @@ function casesStore() {
           status: 'reviewing',
           disposition: 'suspicious',
           updatedAt: OBSERVED_AT,
+          evidenceHistory: [snapshot({ capturedAt: OBSERVED_AT, inputHostname: 'login.rate-limited.invalid', scanDepth: 'deep' })],
         }),
         evidencePins: [evidencePin('pin-rate-limited', 'rate-limited.invalid', 'whois', 'rate_limited')],
       },
@@ -179,7 +180,7 @@ test('projects exact retained evidence gaps, exposes deliberate actions, and sta
   const reviewCase = conflicting.getByRole('link', { name: 'Review case' });
   await expect(reviewCase).toHaveAttribute(
     'href',
-    '/monitor?view=cases&case=case-conflicting#case-response-case-conflicting',
+    '/cases?case=case-conflicting&section=evidence',
   );
   await reviewCase.focus();
   await reviewCase.press('Enter');
@@ -193,7 +194,7 @@ test('projects exact retained evidence gaps, exposes deliberate actions, and sta
   const rateLimited = returnedRegion.locator('.queue > li', { hasText: 'rate-limited.invalid' });
   await expect(rateLimited).toBeVisible();
   const deepLookup = rateLimited.getByRole('link', { name: 'Open Deep Lookup' });
-  await expect(deepLookup).toHaveAttribute('href', '/lookup?q=rate-limited.invalid&depth=deep');
+  await expect(deepLookup).toHaveAttribute('href', '/lookup?q=login.rate-limited.invalid&depth=deep&case=case-rate-limited');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await returnedRegion.locator('.matrix > summary').press('Enter');
@@ -208,8 +209,8 @@ test('projects exact retained evidence gaps, exposes deliberate actions, and sta
   await deepLookup.focus();
   await expect(deepLookup).toBeFocused();
   await deepLookup.press('Enter');
-  await expect(page).toHaveURL(/\/lookup\?q=rate-limited\.invalid&depth=deep$/u);
-  await expect(page.locator('#query')).toHaveValue('rate-limited.invalid');
+  await expect(page).toHaveURL('/lookup?q=login.rate-limited.invalid&depth=deep&case=case-rate-limited');
+  await expect(page.locator('#query')).toHaveValue('login.rate-limited.invalid');
   await expect(page.locator('#result')).toHaveCount(0);
   expect(collectionRequests).toEqual([]);
   expect(await page.evaluate(() => (window as typeof window & { __evidenceDebtWrites?: number }).__evidenceDebtWrites || 0)).toBe(0);
@@ -246,7 +247,7 @@ test('a modified Case link opens its own tab without changing the inbox or writi
   await link.click({ modifiers: ['ControlOrMeta'] });
   const other = await opened;
   try {
-    await expect(other).toHaveURL(/\/cases\?case=case-conflicting#case-response-case-conflicting$/u);
+    await expect(other).toHaveURL('/cases?case=case-conflicting&section=evidence');
     await expect(other.locator('#case-head-case-conflicting')).toBeVisible();
     await expect(page).toHaveURL(originalUrl);
     await expect(page.getByRole('tab', { name: /^Inbox/u })).toHaveAttribute('aria-selected', 'true');

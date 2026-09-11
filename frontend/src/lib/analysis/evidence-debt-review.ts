@@ -1,4 +1,5 @@
-import type { CaseRecord } from './case-model.ts';
+import { caseLookupTarget, type CaseRecord } from './case-model.ts';
+import { caseWorkspaceHref } from './case-response-stage.ts';
 import { normalizeExplicitIsoTimestamp, readObservationTime } from '../../../../packages/evidence/observation.mts';
 import { latestObservationCohort } from '../../../../packages/evidence/latest-observations.mts';
 import { MAX_CASES, MAX_CASE_EVIDENCE_PINS } from '../../../../packages/contracts/case-portability.mts';
@@ -227,7 +228,7 @@ function debtForCasePin(
   return sortStates(states);
 }
 
-function nextForCase(states: readonly EvidenceDebtState[], domain: string, caseId: string, source: string): Readonly<{
+function nextForCase(states: readonly EvidenceDebtState[], target: string, caseId: string, source: string): Readonly<{
   action: EvidenceDebtNextAction;
   href: string;
 }> {
@@ -238,12 +239,12 @@ function nextForCase(states: readonly EvidenceDebtState[], domain: string, caseI
   ) {
     return {
       action: 'case_review',
-      href: `/monitor?view=cases&case=${encodeURIComponent(caseId)}#case-response-${encodeURIComponent(caseId)}`,
+      href: caseWorkspaceHref(caseId, 'evidence'),
     };
   }
   return {
     action: 'deep_lookup',
-    href: `/lookup?q=${encodeURIComponent(domain)}&depth=deep`,
+    href: `/lookup?q=${encodeURIComponent(target)}&depth=deep&case=${encodeURIComponent(caseId)}`,
   };
 }
 
@@ -362,7 +363,7 @@ function buildCaseCandidates(
     if (!states.length) continue;
     const normalizedSource = sourceId(pin.source);
     const label = sourceLabel(pin.source);
-    const next = nextForCase(states, record.domain, record.id, sourceKind(pin.source));
+    const next = nextForCase(states, caseLookupTarget(record), record.id, sourceKind(pin.source));
     candidates.push(Object.freeze({
       id: stableComparisonLedgerId('debt-case', [record.id, pin.id, normalizedSource, observedAt, ...states]),
       owner: 'case',
@@ -380,7 +381,7 @@ function buildCaseCandidates(
         ...(readObservationTime(observedAt, nowIso).ageDays === null ? ['The source age is unavailable; freshness cannot be determined from the save time.'] : []),
         ...pin.limitations,
       ])),
-      reviewHref: `/monitor?view=cases&case=${encodeURIComponent(record.id)}#case-response-${encodeURIComponent(record.id)}`,
+      reviewHref: caseWorkspaceHref(record.id, 'evidence'),
       nextAction: next.action,
       nextHref: next.href,
       expectedEffect: next.action === 'case_review'

@@ -2,7 +2,7 @@ import { readFile, rm, writeFile } from 'node:fs/promises';
 import { isDeepStrictEqual } from 'node:util';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, openBrandWorkbench, readBrowserLocalCollection, useTheme } from './helpers';
+import { expectNoHorizontalOverflow, openBrandProfileList, openBrandWorkbench, readBrowserLocalCollection, useTheme } from './helpers';
 import { assertBrandProfileStoreBudget, buildBrandProfileExport, normalizeBrandProfile } from '../packages/workspace/brand-profile-model.mts';
 import { MAX_PROFILE_IMPORT_BYTES, MAX_PROFILE_STORE_BYTES, serialiseWorkspacePortableJson } from '../packages/contracts/workspace-portability.mts';
 import { brandProfileStoreAtBytes, denseBrandHistoryStore, richBrandHistoryProfiles } from '../test/brand-profile-capacity-fixture.mts';
@@ -46,7 +46,9 @@ async function measureImport(page: Page, expectedStatus: string, content: string
   });
   try {
     await selectProfileFile(page, content, async () => {
-      await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toHaveText(expectedStatus);
+      // Completion uses the bounded workflow deadline, not the default short
+      // assertion timeout. The observed import duration remains informational.
+      await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toHaveText(expectedStatus, { timeout: test.info().timeout });
       const ready = await readBrowserInteractionReadiness(page);
       const work = await observer.evaluate((probe, interval) => probe.finish(interval), ready);
       const afterHeap = await session.send('Runtime.getHeapUsage');
@@ -61,6 +63,7 @@ async function measureImport(page: Page, expectedStatus: string, content: string
 }
 
 test('rich Brand histories import, render and export without dropping captured records', async ({ page }) => {
+  test.slow(); // Import, eight rendered view/theme combinations, export and reload.
   const profiles = assertBrandProfileStoreBudget(richBrandHistoryProfiles(2)).profiles;
   await page.goto('/brands');
   const input = page.getByLabel('Import JSON', { exact: true });
@@ -102,6 +105,7 @@ test('rich Brand histories import, render and export without dropping captured r
   const exported = JSON.parse(await readFile(path!, 'utf8'));
   expect(isDeepStrictEqual(exported.profiles, profiles)).toBe(true);
   await page.reload();
+  await openBrandProfileList(page);
   await expect(page.getByRole('radio', { name: 'Set Capacity profile 0 active', exact: true })).toBeChecked();
   expect(isDeepStrictEqual((await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 2 })).records.map((record) => record.value), profiles)).toBe(true);
 });

@@ -1,15 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { goto } from '$app/navigation';
   import IntelligenceIcon from '$lib/components/IntelligenceIcon.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import DashboardAttentionSummary from '$lib/components/DashboardAttentionSummary.svelte';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
-  import { readBrowserLocalData } from '$lib/browser-local-data-service.ts';
-  import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data.ts';
+  import { readBrowserLocalData, subscribeBrowserLocalData } from '$lib/browser-local-data-service.ts';
   import type { BrowserLocalCollectionDocumentMap } from '$lib/browser-local-data-definitions.ts';
   import { preloadBestEffort, preloadOnIdle } from '$lib/idle-preload';
-  import { loadDeferredModule } from '$lib/deferred-module';
+  import { loadDeferredModule, reloadDeferredModulePage } from '$lib/deferred-module';
   import {
     DASHBOARD_REQUIRED_COLLECTION_IDS,
     buildDashboardAttentionSummary,
@@ -19,8 +18,9 @@
     type DashboardWorkspaceState,
   } from '$lib/analysis/dashboard-workspace-state.ts';
   import { publicHomepage } from '$lib/workspaces';
-  import { caseStatusIsClosed, statusLabel } from '$lib/analysis/case-record-decisions.ts';
+  import { statusLabel } from '$lib/analysis/case-record-decisions.ts';
   import { ANALYST_REVIEW_REQUIRED_COLLECTION_IDS } from '$lib/analysis/analyst-review-source-state.ts';
+  import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft.ts';
   let workspaceManagerRequested = $state(false);
   let lookupTarget = $state('');
   let recentCases = $state<BrowserLocalCollectionDocumentMap['cases']>([]);
@@ -31,11 +31,12 @@
   }
 
 
-  type LocalCounts = { cases: number | null; openCases: number | null; watchlists: number | null; profiles: number | null };
+  type LocalCounts = { cases: number | null; watchlists: number | null; profiles: number | null };
 
-  let counts = $state<LocalCounts>({ cases: null, openCases: null, watchlists: null, profiles: null });
+  let counts = $state<LocalCounts>({ cases: null, watchlists: null, profiles: null });
   let summaryPending = $state(true);
   let summaryError = $state('');
+  let summaryRecovery = $state<'read' | 'reload'>('read');
   let secondaryOpen = $state(false);
   let firstUseTool = $state<'guide' | 'import' | ''>('');
   let workspaceState = $state<DashboardWorkspaceState>('loading');
@@ -43,18 +44,22 @@
   let attentionUnavailable = $state(false);
   let workspaceMutationStatus = $state('');
   const moduleController = new AbortController();
+  let mounted = false;
+  let summaryGeneration = 0;
+  let summaryQueued = false;
+  let summaryRetryFocus: { origin: HTMLButtonElement; owner: HTMLElement | null } | null = null;
 
   async function refreshLocalSummary(message = '') {
+    if (!mounted) return;
+    const generation = ++summaryGeneration;
+    const current = () => mounted && generation === summaryGeneration;
     if (message) workspaceMutationStatus = message;
     summaryPending = true;
-    summaryError = '';
-    attentionSummary = null;
-    attentionUnavailable = false;
     const results = await Promise.allSettled(DASHBOARD_REQUIRED_COLLECTION_IDS.map(async (collection) => ({
       collection,
       document: await readBrowserLocalData(collection),
     })));
-    summaryPending = false;
+    if (!current()) return;
     const documents = new Map<string, unknown>();
     const sourceStates = results.map((result) => {
       if (result.status === 'rejected') return { status: 'unavailable' as const };
@@ -64,74 +69,103 @@
         count: dashboardCollectionRecordCount(result.value.collection, result.value.document),
       };
     });
-    workspaceState = dashboardWorkspaceState(sourceStates);
+    const nextWorkspaceState = dashboardWorkspaceState(sourceStates);
     const caseRecords = (documents.get('cases') ?? []) as BrowserLocalCollectionDocumentMap['cases'];
-    recentCases = [...caseRecords].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.id.localeCompare(right.id)).slice(0, 5);
     const watchlists = (documents.get('watchlists') ?? {}) as BrowserLocalCollectionDocumentMap['watchlists'];
     const profiles = (documents.get('brand_profiles') ?? []) as BrowserLocalCollectionDocumentMap['brand_profiles'];
-    const expectedFailures = results
-      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-      .filter((result) => isExpectedBrowserLocalDataFailure(result.reason));
-    const unexpectedFailure = results.find((result): result is PromiseRejectedResult =>
-      result.status === 'rejected' && !isExpectedBrowserLocalDataFailure(result.reason));
-
-    counts = {
+    const nextCounts = {
       cases: documents.has('cases') ? caseRecords.length : null,
-      openCases: documents.has('cases') ? caseRecords.filter((record) => !caseStatusIsClosed(record.status)).length : null,
       watchlists: documents.has('watchlists') ? Object.keys(watchlists).length : null,
       profiles: documents.has('brand_profiles') ? profiles.length : null,
     };
-    if (expectedFailures.length > 0) {
-      summaryError = workspaceState === 'unavailable'
+    let nextError = '';
+    let nextRecovery: 'read' | 'reload' = 'read';
+    let nextAttention: DashboardAttentionSummaryModel | null = null;
+    let nextAttentionUnavailable = false;
+    if (results.some(result => result.status === 'rejected')) {
+      nextError = nextWorkspaceState === 'unavailable'
         ? 'One or more required browser-local collections are unavailable. WHOISleuth cannot classify this workspace as empty.'
         : 'Some browser-local collections are unavailable. Available saved work is still shown below.';
     }
-    if (unexpectedFailure) throw unexpectedFailure.reason;
-
-    if (workspaceState === 'returning') {
+    if (nextWorkspaceState === 'returning') {
       if (ANALYST_REVIEW_REQUIRED_COLLECTION_IDS.some((source) => !documents.has(source))) {
-        attentionUnavailable = true;
+        nextAttentionUnavailable = true;
       } else {
-        let modules;
         try {
-          modules = await loadDeferredModule(() => Promise.all([
+          const modules = await loadDeferredModule(() => Promise.all([
             import('$lib/analysis/analyst-review-inbox.ts'),
             import('$lib/analysis/certificate-review-inbox.ts'),
             import('$lib/analysis/analyst-review-local-projections.ts'),
           ]), { signal: moduleController.signal });
+          if (!current()) return;
+          const [{ buildAnalystReviewInbox }, { buildCertificateReviewInbox }, { buildLocalAnalystReviewProjection }] = modules;
+          const reviewState = documents.get('analyst_review_state') as BrowserLocalCollectionDocumentMap['analyst_review_state'];
+          const reviewNow = new Date().toISOString();
+          const localProjection = buildLocalAnalystReviewProjection({
+            cases: caseRecords,
+            profiles,
+            detectionRules: documents.get('detection_rules') as BrowserLocalCollectionDocumentMap['detection_rules'],
+            websiteSnapshots: documents.get('website_snapshots') as BrowserLocalCollectionDocumentMap['website_snapshots'],
+            watchlists,
+            bulkSessions: documents.get('bulk_sessions') as BrowserLocalCollectionDocumentMap['bulk_sessions'],
+            reviewState,
+          }, reviewNow);
+          const certificateInbox = buildCertificateReviewInbox(profiles, caseRecords, { now: reviewNow, reviewState });
+          const inbox = buildAnalystReviewInbox({
+            cases: caseRecords,
+            watchlists,
+            bulkSessions: documents.get('bulk_sessions') as BrowserLocalCollectionDocumentMap['bulk_sessions'],
+            reviewState,
+            projectedItems: [...localProjection.items, ...certificateInbox.reviewItems],
+            projectedAdmissions: [localProjection.admission, certificateInbox.reviewAdmission],
+          }, reviewNow);
+          nextAttention = buildDashboardAttentionSummary({
+            reviewItems: inbox.items,
+            cases: caseRecords,
+            watchlistCount: Object.keys(watchlists).length,
+            now: reviewNow,
+          });
         } catch {
-          attentionUnavailable = true;
-          return;
+          nextAttentionUnavailable = true;
+          nextError = 'The local review summary could not be prepared. Available saved work remains accessible.';
+          nextRecovery = 'reload';
         }
-        const [{ buildAnalystReviewInbox }, { buildCertificateReviewInbox }, { buildLocalAnalystReviewProjection }] = modules;
-        const reviewState = documents.get('analyst_review_state') as BrowserLocalCollectionDocumentMap['analyst_review_state'];
-        const reviewNow = new Date().toISOString();
-        const localProjection = buildLocalAnalystReviewProjection({
-          cases: caseRecords,
-          profiles,
-          detectionRules: documents.get('detection_rules') as BrowserLocalCollectionDocumentMap['detection_rules'],
-          websiteSnapshots: documents.get('website_snapshots') as BrowserLocalCollectionDocumentMap['website_snapshots'],
-          watchlists,
-          bulkSessions: documents.get('bulk_sessions') as BrowserLocalCollectionDocumentMap['bulk_sessions'],
-          reviewState,
-        }, reviewNow);
-        const certificateInbox = buildCertificateReviewInbox(profiles, caseRecords, { now: reviewNow, reviewState });
-        const inbox = buildAnalystReviewInbox({
-          cases: caseRecords,
-          watchlists,
-          bulkSessions: documents.get('bulk_sessions') as BrowserLocalCollectionDocumentMap['bulk_sessions'],
-          reviewState,
-          projectedItems: [...localProjection.items, ...certificateInbox.reviewItems],
-          projectedAdmissions: [localProjection.admission, certificateInbox.reviewAdmission],
-        }, reviewNow);
-        attentionSummary = buildDashboardAttentionSummary({
-          reviewItems: inbox.items,
-          cases: caseRecords,
-          watchlistCount: Object.keys(watchlists).length,
-          now: reviewNow,
-        });
       }
     }
+    if (!current()) return;
+    workspaceState = nextWorkspaceState;
+    counts = nextCounts;
+    recentCases = [...caseRecords].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.id.localeCompare(right.id)).slice(0, 5);
+    attentionSummary = nextAttention;
+    attentionUnavailable = nextAttentionUnavailable;
+    summaryError = nextError;
+    summaryRecovery = nextRecovery;
+    summaryPending = false;
+    if (summaryRetryFocus) {
+      await tick();
+      if (!current()) return;
+      const { origin, owner } = summaryRetryFocus;
+      summaryRetryFocus = null;
+      const target = document.getElementById('refresh-dashboard-summary')
+        ?? document.getElementById(workspaceState === 'first_use' ? 'getting-started-title' : 'recent-cases-title');
+      if (restoreSubmittedFocus(origin, target, owner) && target !== origin) target?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  }
+
+  function retryLocalSummary(event: MouseEvent) {
+    if (summaryRecovery === 'reload') { reloadDeferredModulePage(); return; }
+    const origin = event.currentTarget as HTMLButtonElement;
+    summaryRetryFocus = { origin, owner: origin.closest('main') };
+    void refreshLocalSummary();
+  }
+
+  function scheduleSummaryRefresh() {
+    if (!mounted || document.visibilityState === 'hidden' || summaryQueued) return;
+    summaryQueued = true;
+    queueMicrotask(() => {
+      summaryQueued = false;
+      if (mounted) void refreshLocalSummary();
+    });
   }
 
   function countText(value: number | null): string {
@@ -147,9 +181,19 @@
   }
 
   onMount(()=>{
+    mounted = true;
+    const unsubscribe = DASHBOARD_REQUIRED_COLLECTION_IDS.map(collection => subscribeBrowserLocalData(collection, scheduleSummaryRefresh));
+    window.addEventListener('focus', scheduleSummaryRefresh);
+    document.addEventListener('visibilitychange', scheduleSummaryRefresh);
     void refreshLocalSummary();
     const cancelIdlePreload = preloadOnIdle(preloadSecondaryWorkspaces);
     return () => {
+      mounted = false;
+      summaryGeneration += 1;
+      summaryRetryFocus = null;
+      for (const stop of unsubscribe) stop();
+      window.removeEventListener('focus', scheduleSummaryRefresh);
+      document.removeEventListener('visibilitychange', scheduleSummaryRefresh);
       cancelIdlePreload();
       moduleController.abort();
     };
@@ -171,7 +215,7 @@
   <nav aria-label="New investigation"><a href="/discover">Discover candidates</a><a href="/bulk">Triage a list</a>{#if workspaceState === 'returning'}<button type="button" class="link-action" onclick={() => openFirstUseTool('guide')}>Start a guided investigation</button>{/if}</nav>
 </form>
 {#if workspaceMutationStatus}<p class="workspace-mutation-status" role="status" aria-live="polite" aria-atomic="true">{workspaceMutationStatus}</p>{/if}
-{#if summaryError}<p class="summary-error" role="status">{summaryError}</p>{/if}
+{#if summaryError}<div class="summary-error"><p role="status">{summaryError}</p>{#if summaryRecovery === 'reload'}<p>Reloading clears unsaved form edits.</p>{/if}<button id="refresh-dashboard-summary" class="btn" type="button" disabled={summaryPending} onclick={retryLocalSummary}>{summaryRecovery === 'reload' ? 'Reload review tools' : 'Refresh saved-work summary'}</button></div>{/if}
 
 {#if summaryPending && workspaceState !== 'loading'}<p role="status">Refreshing the saved-work summary…</p>{/if}
 {#if summaryPending && workspaceState === 'loading'}
@@ -184,7 +228,7 @@
 <section class="dashboard-section getting-started" aria-labelledby="getting-started-title">
   <div class="section-intro">
     <p class="eyebrow">First use</p>
-    <h2 id="getting-started-title">Get started</h2>
+    <h2 id="getting-started-title" tabindex="-1">Get started</h2>
     <p>Choose a starting point.</p>
   </div>
   <div class="getting-started-grid responsive-grid">
@@ -195,16 +239,16 @@
   </div>
 </section>
 {:else}
-<div class="dashboard-work-grid">
+<div class="dashboard-work-grid" aria-busy={summaryPending}>
 <div>
 {#if attentionSummary}
   <DashboardAttentionSummary summary={attentionSummary} />
 {:else if attentionUnavailable}
-  <section class="dashboard-state card" role="status"><p class="eyebrow">Returning workspace</p><h2>Attention summary unavailable</h2><p>One or more required Review Item sources could not be read. Available work remains accessible below; no missing source was treated as empty.</p></section>
+  <section class="dashboard-state card" role="status"><h2>Attention summary unavailable</h2><p>The combined review summary is unavailable. Available work remains accessible below; no missing source was treated as empty.</p></section>
 {/if}
 </div>
 <section class="recent-cases" aria-labelledby="recent-cases-title">
-  <header><h2 id="recent-cases-title">Recent Cases</h2><a href="/cases">All Cases</a></header>
+  <header><h2 id="recent-cases-title" tabindex="-1">Recent Cases</h2><a href="/cases">All Cases</a></header>
   {#if recentCases.length}
     <ol>{#each recentCases as record}<li><a href={`/cases?case=${encodeURIComponent(record.id)}`}><strong>{record.domain}</strong><span>{statusLabel(record.status)} · <time datetime={record.updatedAt}>{new Date(record.updatedAt).toLocaleDateString()}</time></span></a></li>{/each}</ol>
   {:else if counts.cases === null}<p>Cases could not be read.</p>

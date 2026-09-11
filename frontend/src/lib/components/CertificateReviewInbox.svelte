@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import Pagination from './Pagination.svelte';
   import ReviewLifecycleControls from './ReviewLifecycleControls.svelte';
   import { buildCertificateReviewInbox, type CertificateEvidenceClass, type CertificateReviewFindingState } from '../analysis/certificate-review-inbox.ts';
@@ -111,7 +112,7 @@
           <h3>{finding.label}</h3>
           <p>{finding.detail}</p>
           {#if finding.kind === 'ambiguous_observation'}
-            <a class="btn source-case" href={finding.item.caseId ? `/monitor?view=cases&case=${encodeURIComponent(finding.item.caseId)}` : '/monitor?view=cases'}>Review source {finding.item.caseId ? 'Case' : 'Cases'}</a>
+            <a class="btn source-case" href={finding.item.caseId ? caseWorkspaceHref(finding.item.caseId, 'evidence') : '/cases'}>Review source {finding.item.caseId ? 'Case' : 'Cases'}</a>
           {/if}
           <dl>
             <div><dt>Domain</dt><dd>{finding.domain}</dd></div>

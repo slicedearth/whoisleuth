@@ -1,3 +1,4 @@
+import { caseWorkspaceHref } from './case-response-stage.ts';
 import {
   caseLookupTarget,
   type CaseRecord,
@@ -403,7 +404,7 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
         dueAt: null,
         completeness: record.evidenceHistory.length || record.evidencePins.length ? 'partial' : 'inconclusive',
         nextAction: 'review',
-        href: `/monitor?view=cases&case=${encodeURIComponent(record.id)}`,
+        href: caseWorkspaceHref(record.id, 'assessment'),
         retryHref: null,
         caseId: record.id,
         dismissalTarget: null,
@@ -450,8 +451,8 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
           dueAt: null,
           completeness: openContradictions || openUnknowns ? 'inconclusive' : 'partial',
           nextAction: limitedPins ? 'refresh' : 'review',
-          href: `/monitor?view=cases&case=${encodeURIComponent(record.id)}#case-response-${encodeURIComponent(record.id)}`,
-          retryHref: `/lookup?q=${encodeURIComponent(record.domain)}&depth=deep`,
+          href: caseWorkspaceHref(record.id, openUnknowns || openContradictions ? 'assessment' : 'evidence'),
+          retryHref: `/lookup?q=${encodeURIComponent(caseLookupTarget(record))}&depth=deep&case=${encodeURIComponent(record.id)}`,
           caseId: record.id,
           dismissalTarget: dismissalTarget!,
         }, nowIso));
@@ -475,7 +476,7 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
         dueAt,
         completeness: action.state === 'submitted' || action.state === 'acknowledged' ? 'complete' : 'partial',
         nextAction: 'follow_up',
-        href: `/monitor?view=cases&case=${encodeURIComponent(record.id)}`,
+        href: caseWorkspaceHref(record.id, 'response'),
         retryHref: null,
         caseId: record.id,
         dismissalTarget: null,
@@ -498,7 +499,7 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
         dueAt,
         completeness: review.completeness === 'complete' ? 'complete' : review.completeness === 'partial' ? 'partial' : 'inconclusive',
         nextAction: 'follow_up',
-        href: `/monitor?view=cases&case=${encodeURIComponent(record.id)}#case-response-${encodeURIComponent(record.id)}`,
+        href: caseWorkspaceHref(record.id, 'response'),
         retryHref: null,
         caseId: record.id,
         dismissalTarget: null,
@@ -554,7 +555,7 @@ function watchlistItems(
       completeness: latestChange.conclusiveCount === latestChange.resultCount && latestChange.omittedChanges === 0 ? 'complete' : 'partial',
       nextAction: 'review',
       href: relatedCase
-        ? `/monitor?view=cases&case=${encodeURIComponent(relatedCase.id)}#case-response-${encodeURIComponent(relatedCase.id)}`
+        ? caseWorkspaceHref(relatedCase.id, 'evidence')
         : `/monitor?view=watchlists&watchlist=${encodeURIComponent(name)}`,
       retryHref: null,
       caseId: relatedCase?.id ?? null,

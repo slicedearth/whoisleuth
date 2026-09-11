@@ -33,7 +33,8 @@
   const pageController = new AbortController();
   const preloadModule = (load: () => Promise<unknown>) => preloadBestEffort(load, pageController.signal);
   onDestroy(() => pageController.abort());
-  type BrandsView='overview'|'assets';
+  const BRAND_VIEWS=[{id:'overview',label:'Overview'},{id:'assets',label:'Assets'},{id:'tools',label:'Tools'}] as const;
+  type BrandsView=typeof BRAND_VIEWS[number]['id'];
   type BrandWorkbench='control'|'portfolio'|'posture'|'baselines'|'passport'|'certificates'|'attestations'|'mail';
   type EditorField='name'|'official'|'products'|'tlds'|'partners'|'selectors'|'retiredSelectors'|'mailProtectionProfile'|'trademarkOwner'|'trademarkRegistration'|'faviconHash';
   let profiles=$state<BrandProfile[]>([]);let activeId=$state('');let editing=$state('');let showForm=$state(false);let message=$state('');let savingProfile=$state(false);let auditing=$state(false);let auditResults=$state<AuditResult[]>([]);
@@ -61,7 +62,12 @@
   const profileWriteDisabled=$derived(profileMutationPending||profileRefreshRequired||profileSourceState!=='ready');
   const draftWriteDisabled=$derived(profileWriteDisabled||active?.id!==draftProfile?.id);
   const orphanedProfileDraft=$derived(Boolean(showForm&&editing&&profileSourceState==='ready'&&!profiles.some((profile)=>profile.id===editing)));
-  const brandsView=$derived<BrandsView>(page.url.searchParams.get('view')==='assets'?'assets':'overview');
+  const brandsView=$derived.by<BrandsView>(()=>{
+    const requested=BRAND_VIEWS.find(view=>view.id===page.url.searchParams.get('view'));
+    return requested?.id??(brandWorkbench?'tools':'overview');
+  });
+  let profilesOpen=$state(true);
+  $effect(()=>{profilesOpen=brandsView==='overview';});
   const brandWorkbenchOptions:ReadonlyArray<Readonly<{id:BrandWorkbench;label:string}>>=[
     {id:'control',label:'Domain controls'},
     {id:'portfolio',label:'Compare owned domains'},
@@ -93,6 +99,7 @@
     caseSourceState==='unavailable'?'Cases could not be read, so linked-case context cannot be checked or displayed.':null,
     relationshipSourceState==='unavailable'?'Retained relationship observations could not be read, so Brand asset relationship coverage is partial.':null,
   ].filter(Boolean).join(' '));
+  const hasBrandWorkspace=$derived(Boolean(profiles.length||cases.length||relationships.length||activeId||draftProfile||localContextStatus||brandsView!=='overview'||[profileSourceState,caseSourceState,relationshipSourceState,activePreferenceSourceState].includes('loading')));
   const editorValues=$derived({name,official,products,tlds,partners,selectors,retiredSelectors,mailProtectionProfile,trademarkOwner,trademarkRegistration,faviconHash});
   const siteIdentityReason=$derived(siteIdentityDisabled?siteIdentityDisabled.reason||'Website checks are disabled by deployment policy.':'');
   const postureReason=$derived(postureDisabled?postureDisabled.reason||'Official-domain settings review is disabled by deployment policy.':'');
@@ -133,7 +140,16 @@
   async function refreshCasesForBrands(){caseSourceState='loading';cases=[];certificateReplayUnavailable=true;try{const loaded=await loadCases();cases=loaded;caseSourceState='ready';certificateReplayUnavailable=false;return loaded;}catch(cause){closeCaseSource();throw cause;}}
   async function refreshRelationshipsForBrands(){relationshipSourceState='loading';relationships=[];try{const loaded=await loadRelationshipObservations();relationships=loaded;relationshipSourceState='ready';return loaded;}catch(cause){closeRelationshipSource();throw cause;}}
   function preloadBrandsView(next:BrandsView){if(next==='assets')preloadModule(()=>import('$lib/components/BrandAssetRegister.svelte'));}
-  async function selectBrandsView(next:BrandsView){preloadBrandsView(next);if(next===brandsView)return;const url=new URL(page.url);if(next==='overview')url.searchParams.delete('view');else url.searchParams.set('view','assets');if(next==='overview')for(const parameter of ['assetClass','assetSource','assetEvidence','assetPage'])url.searchParams.delete(parameter);url.hash='';await goto(`${url.pathname}${url.search}`,{noScroll:true,keepFocus:true});}
+  async function selectBrandsView(next:BrandsView){
+    preloadBrandsView(next);
+    if(next===brandsView)return;
+    const url=new URL(page.url);
+    if(next==='overview'&&!brandWorkbench)url.searchParams.delete('view');else url.searchParams.set('view',next);
+    if(next!=='assets')for(const parameter of ['assetClass','assetSource','assetEvidence','assetPage'])url.searchParams.delete(parameter);
+    url.hash='';
+    await goto(`${url.pathname}${url.search}`,{noScroll:true,keepFocus:true});
+  }
+  async function chooseProfile(){profilesOpen=true;await tick();document.getElementById('brand-profiles-summary')?.focus();}
   function preloadBrandWorkbench(next:string){
     if(next==='control')preloadModule(()=>import('$lib/components/DomainControlCentre.svelte'));
     else if(next==='portfolio')preloadModule(()=>import('$lib/components/BrandPortfolioPostureMatrix.svelte'));
@@ -150,7 +166,7 @@
     if(selected)preloadBrandWorkbench(selected);
     if(selected)url.searchParams.set('workbench',selected);else url.searchParams.delete('workbench');
     if(selected!=='baselines')url.searchParams.delete('baseline');
-    url.searchParams.delete('view');
+    if(selected)url.searchParams.delete('view');else url.searchParams.set('view','tools');
     for(const parameter of ['assetClass','assetSource','assetEvidence','assetPage'])url.searchParams.delete(parameter);
     url.hash=selected==='baselines'&&page.url.hash==='#desired-posture-baseline'?page.url.hash:'';
     await goto(`${url.pathname}${url.search}${url.hash}`,{noScroll:true,keepFocus:true});
@@ -179,7 +195,7 @@
     target?.scrollIntoView({block:'center'});
     target?.focus({preventScroll:true});
   }
-  function brandsViewKeydown(event:KeyboardEvent){const views:BrandsView[]=['overview','assets'];const current=views.indexOf(brandsView);let index=-1;if(event.key==='ArrowRight')index=(current+1)%views.length;else if(event.key==='ArrowLeft')index=(current+views.length-1)%views.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=views.length-1;if(index<0)return;const next=views[index];if(!next)return;event.preventDefault();void selectBrandsView(next);const tablist=(event.currentTarget as HTMLButtonElement).closest('[role="tablist"]');requestAnimationFrame(()=>tablist?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());}
+  function brandsViewKeydown(event:KeyboardEvent){const views=BRAND_VIEWS.map(view=>view.id);const current=views.indexOf(brandsView);let index=-1;if(event.key==='ArrowRight')index=(current+1)%views.length;else if(event.key==='ArrowLeft')index=(current+views.length-1)%views.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=views.length-1;if(index<0)return;const next=views[index];if(!next)return;event.preventDefault();void selectBrandsView(next);const tablist=(event.currentTarget as HTMLButtonElement).closest('[role="tablist"]');requestAnimationFrame(()=>tablist?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());}
   async function focusEditor(){await tick();document.getElementById('brand-profile-name')?.focus();}
   function cancelIdentityCapture(){identityCaptureGeneration+=1;identityCaptureController?.abort();identityCaptureController=null;capturingIdentity=false;if(message==='Capturing official-site identity…')message='';}
   function closeEditor(){if(savingProfile)return;cancelIdentityCapture();showForm=false;}
@@ -266,6 +282,7 @@
     }catch(cause){message=profileWriteFailureMessage(cause,'Could not save profile.');}
     finally{
       savingProfile=false;
+      if(!showForm&&savedProfileId)profilesOpen=true;
       await tick();
       if(document.activeElement===document.body||document.activeElement===origin){
         const target=showForm?origin:document.getElementById(`brand-profile-edit-${savedProfileId}`)||document.getElementById('brand-profile-source-state')||document.getElementById('new-brand-profile');
@@ -499,30 +516,35 @@
 {#if localContextStatus}<p class="local-context-status" role="status">{localContextStatus}</p>{/if}
 {#if message}<p class="message" role="status" aria-label="Brand Profile action status" aria-live="polite" aria-atomic="true">{message}</p>{/if}
 {#if profileRefreshRequired}<button id="refresh-brand-profiles" class="btn" type="button" onclick={retryProfiles} disabled={profileMutationPending||refreshingProfiles}>Refresh saved profiles</button>{/if}
+{#if hasBrandWorkspace}
+<div class="brand-views workspace-view-nav" role="tablist" aria-label="Brands views">
+  {#each BRAND_VIEWS as view}
+    <button id={`brands-tab-${view.id}`} role="tab" aria-selected={brandsView===view.id} aria-controls="brands-view-panel" tabindex={brandsView===view.id?0:-1} onpointerenter={()=>preloadBrandsView(view.id)} onfocus={()=>preloadBrandsView(view.id)} onclick={()=>void selectBrandsView(view.id)} onkeydown={brandsViewKeydown}>{view.label}{#if view.id==='assets'} <span aria-label={brandAssetRegister.state==='unavailable'?'count unavailable':`${brandAssetRegister.rows.length} rows`}>{brandAssetRegister.state==='unavailable'?'—':brandAssetRegister.rows.length}</span>{/if}</button>
+  {/each}
+</div>
+{/if}
+{#snippet profilesList()}<BrandProfileList {profiles} {activeId} busy={profileWriteDisabled} activationDisabled={profileMutationPending||profileSourceState!=='ready'} focusId={page.url.searchParams.get('profile') || ''} {activate} {edit} {remove} formatDate={baselineDate} />{/snippet}
 {#if profileSourceState === 'loading'}
   <section class="profile-source-state card" role="status" aria-busy="true">Loading browser-local Brand Profiles…</section>
 {:else if profileSourceState === 'unavailable'}
   <section id="brand-profile-source-state" tabindex="-1" class="profile-source-state unavailable card" role="alert">Brand Profiles could not be read. No empty-profile conclusion has been drawn. Refresh saved profiles to retry; open drafts are retained.</section>
 {:else}
-  {#if profiles.length || !showForm}<BrandProfileList {profiles} {activeId} busy={profileWriteDisabled} activationDisabled={profileMutationPending||profileSourceState!=='ready'} focusId={page.url.searchParams.get('profile') || ''} {activate} {edit} {remove} formatDate={baselineDate} />{/if}
+  {#if profiles.length}<details class="brand-profiles" bind:open={profilesOpen}><summary id="brand-profiles-summary">Brand profiles <span>{profiles.length}</span><small>{active ? `Active: ${active.name}` : 'No active profile'}</small></summary><div>{@render profilesList()}</div></details>{:else if !showForm}{@render profilesList()}{/if}
 {/if}
 {#if showForm}<BrandProfileEditor editing={Boolean(editing)} values={editorValues} setValue={setEditorValue} {officialChannels} {rightsReferences} setOfficialChannels={(value)=>{profileDraft.changed();officialChannels=value;}} setRightsReferences={(value)=>{profileDraft.changed();rightsReferences=value;}} {pageBaseline} {capturingIdentity} busy={savingProfile} saveDisabled={profileWriteDisabled} orphaned={orphanedProfileDraft} disabledReason={siteIdentityReason} {captureSiteIdentity} save={orphanedProfileDraft?saveProfileAsNew:save} close={closeEditor} formatDate={baselineDate} />{/if}
-{#if profiles.length || cases.length || relationships.length || activeId || draftProfile || localContextStatus || brandsView==='assets' || [profileSourceState,caseSourceState,relationshipSourceState,activePreferenceSourceState].includes('loading')}
-<div class="brand-views" role="tablist" aria-label="Brands views">
-  <button id="brands-tab-overview" role="tab" aria-selected={brandsView==='overview'} aria-controls="brands-view-panel" tabindex={brandsView==='overview'?0:-1} class:active={brandsView==='overview'} onclick={()=>void selectBrandsView('overview')} onkeydown={brandsViewKeydown}>Overview</button>
-  <button id="brands-tab-assets" role="tab" aria-selected={brandsView==='assets'} aria-controls="brands-view-panel" tabindex={brandsView==='assets'?0:-1} class:active={brandsView==='assets'} onpointerenter={()=>preloadBrandsView('assets')} onfocus={()=>preloadBrandsView('assets')} onclick={()=>void selectBrandsView('assets')} onkeydown={brandsViewKeydown}>Assets <span aria-label={brandAssetRegister.state==='unavailable'?'count unavailable':`${brandAssetRegister.rows.length} rows`}>{brandAssetRegister.state==='unavailable'?'—':brandAssetRegister.rows.length}</span></button>
-</div>
+{#if hasBrandWorkspace}
 
 <div id="brands-view-panel" role="tabpanel" aria-labelledby={`brands-tab-${brandsView}`}>
-  <div hidden={brandsView!=='overview'}>
+  <div hidden={brandsView==='assets'}>
     {#if draftProfile}
       {#if !active || active.id!==draftProfile.id}
         <p id="brand-tool-draft-owner" class="local-context-status" role="status">Open drafts belong to “{draftProfile.name}”. {#if active}The selected profile is “{active.name}”.{:else}Its saved profile is unavailable; saving and export are disabled.{/if}</p>
         {#if active}<button class="btn" type="button" aria-describedby="brand-tool-draft-owner" onclick={()=>active&&activate(active.id)} disabled={profileWriteDisabled}>Discard tool drafts and switch</button>{/if}
       {/if}
-      {#key draftProfile.id}<BrandAllowlistManager profile={draftProfile} writeDisabled={draftWriteDisabled} onsave={saveAllowlist} onmessage={(value)=>message=value} />{/key}
-      <section class="workbench-launcher card" aria-labelledby="brand-workbench-title">
-        <div><h2 id="brand-workbench-title">Profile tools</h2><p>Choose a tool for this Brand Profile.</p></div>
+      <div hidden={brandsView!=='overview'}>{#key draftProfile.id}<BrandAllowlistManager profile={draftProfile} writeDisabled={draftWriteDisabled} onsave={saveAllowlist} onmessage={(value)=>message=value} />{/key}</div>
+      <div hidden={brandsView!=='tools'}>
+      <section class="workbench-launcher" aria-labelledby="brand-workbench-title">
+        <div><h2 id="brand-workbench-title">Profile tools</h2><p>{draftProfile.name}</p></div>
         <label for="brand-workbench">Tool<select id="brand-workbench" value={brandWorkbench??''} onfocus={()=>preloadBrandWorkbench(brandWorkbench??'control')} oninput={(event)=>preloadBrandWorkbench(event.currentTarget.value)} onchange={(event)=>void selectBrandWorkbench(event.currentTarget.value)}><option value="">Choose a tool</option>{#each brandWorkbenchOptions as option}<option value={option.id}>{option.label}</option>{/each}</select></label>
       </section>
       {#if active&&active.id===draftProfile.id}
@@ -550,9 +572,14 @@
           <div hidden={brandWorkbench!=='attestations'}><DeferredSurface load={()=>import('$lib/components/BrandProtectionAttestations.svelte')} props={{active:draftProfile,writeDisabled:draftWriteDisabled,saveAttestations}} loadingLabel="Loading reviewed account controls." unavailableLabel="Reviewed account controls could not be loaded." placeholder="workspace" /></div>
         {/if}
       {/key}
+      </div>
+    {:else if brandsView==='tools'}
+      <section class="profile-source-state"><h2>Select a Brand Profile</h2><p>Profile tools use the explicitly active profile.</p>{#if profiles.length}<button class="btn" type="button" onclick={chooseProfile}>Choose profile</button>{:else}<button class="btn" type="button" onclick={()=>clearForm()} disabled={profileWriteDisabled}>Create profile</button>{/if}</section>
     {/if}
+    <div hidden={brandsView!=='overview'}>
     <BrandReviewInbox inbox={brandReviewInbox} />
     <BrandAssetRegisterSummary projection={brandAssetRegister} />
+    </div>
   </div>
   {#if brandsView==='assets'}
     <DeferredSurface load={()=>import('$lib/components/BrandAssetRegister.svelte')} props={{projection:brandAssetRegister}} loadingLabel="Loading the selected Brand asset register." unavailableLabel="The Brand asset register could not be loaded. The profile list remains available." onready={deferredBrandReady} placeholder="workspace" />
@@ -562,16 +589,14 @@
 
 <style>
   .message{min-width:0;color:var(--accent);font-size:var(--text-sm);overflow-wrap:anywhere}
+  .top-actions>button,.top-actions>label{min-height:44px}
   .local-context-status{min-width:0;color:var(--amber);font-size:var(--text-sm);overflow-wrap:anywhere}
   .profile-source-state{padding:var(--card-pad);color:var(--muted);font-size:var(--text-sm)}
   .profile-source-state.unavailable{border-color:var(--muted);border-style:dotted;color:var(--muted)}
-  .brand-views{display:flex;flex-wrap:wrap;gap:6px;margin:16px 0;padding:5px;border:1px solid var(--border);border-radius:var(--radius-md);background:rgb(var(--bg-rgb) / .5)}
-  .brand-views button{display:flex;align-items:center;gap:7px;min-height:38px;padding:0 14px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--muted);font:600 var(--text-xs) var(--mono)}
-  .brand-views button:hover{color:var(--text)}
-  .brand-views button.active{border-color:rgb(var(--interface-accent-rgb) / .45);background:rgb(var(--interface-accent-rgb) / .08);color:var(--interface-accent)}
   .brand-views button span{padding:1px 7px;border-radius:99px;background:var(--border);color:var(--text);font-size:var(--text-2xs)}
+  .brand-profiles{margin:12px 0;border-bottom:1px solid var(--border)}.brand-profiles>summary{padding:12px 0;font:650 var(--text-sm) var(--font-sans);cursor:pointer;overflow-wrap:anywhere}.brand-profiles>summary span{margin-left:6px;color:var(--muted)}.brand-profiles>summary small{margin-left:16px;color:var(--muted);font-weight:400}.brand-profiles>div{padding-bottom:14px}
   #brands-view-panel{min-width:0}
-  .workbench-launcher{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:20px;margin-top:20px;padding:16px 18px}.workbench-launcher>div{min-width:0}.workbench-launcher h2{margin:3px 0 0;font:700 var(--text-md) var(--mono)}.workbench-launcher p:not(.eyebrow){margin:6px 0 0;color:var(--muted);font-size:var(--text-xs)}.workbench-launcher label{flex:0 1 340px;color:var(--muted);font:700 var(--text-2xs) var(--mono)}.workbench-launcher select{display:block;width:100%;min-width:0;margin-top:6px}
+  .workbench-launcher{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:12px 20px;padding:12px 0;border-bottom:1px solid var(--border)}.workbench-launcher>div{min-width:0}.workbench-launcher h2{margin:0;font:650 var(--text-lg) var(--font-sans)}.workbench-launcher p{margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);overflow-wrap:anywhere}.workbench-launcher label{flex:0 1 340px;color:var(--muted);font:700 var(--text-2xs) var(--mono)}.workbench-launcher select{display:block;width:100%;min-width:0;min-height:44px;margin-top:6px}
   @media(max-width:750px){
     .top-actions{margin-top:14px}
     .brand-views button{min-height:44px}

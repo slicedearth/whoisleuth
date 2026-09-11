@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalManifestWrite, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, migrateLegacyBrowserData, openBrandWorkbench, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
+import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalManifestWrite, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, migrateLegacyBrowserData, openBrandProfileList, openBrandWorkbench, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
 import {
   buildDomainControlManifest,
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
@@ -164,22 +164,26 @@ test('Brand refresh preserves separate profile, allowlist and account-control dr
   await openBrandWorkbench(page, 'attestations');
   const control = page.getByRole('group', { name: 'Registrar MFA', exact: true });
   await control.getByLabel('Review state').selectOption('observed');
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
   const release = await holdBrowserLocalTransaction(page);
   try {
     await allowlist.getByRole('button', { name: 'Save allowlist', exact: true }).click();
     await expect(allowlist.getByRole('button', { name: 'Saving…', exact: true })).toBeDisabled();
     await allowlist.getByLabel('Add domains').fill('later.example');
+    await page.getByRole('tab', { name: 'Tools', exact: true }).click();
     await control.getByLabel('Review note').fill('A separate unsaved review');
     await expect(page.getByRole('button', { name: 'Save controls', exact: true })).toBeDisabled();
   } finally { await release(); }
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved the allowlist');
   await expect(page.getByLabel('Brand name', { exact: true })).toHaveValue('Unsaved profile name');
-  await expect(allowlist.getByLabel('Add domains')).toHaveValue('later.example');
+  await expect(page.getByRole('region', { name: 'Allowlist', exact: true, includeHidden: true }).getByLabel('Add domains')).toHaveValue('later.example');
   await expect(control.getByLabel('Review note')).toHaveValue('A separate unsaved review');
   await expect(control.getByLabel('Review note')).toBeFocused();
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
   await allowlist.getByRole('button', { name: 'Add', exact: true }).first().click();
   await allowlist.getByRole('button', { name: 'Save allowlist', exact: true }).click();
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved the allowlist');
+  await page.getByRole('tab', { name: 'Tools', exact: true }).click();
   await page.getByRole('button', { name: 'Save controls', exact: true }).click();
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved reviewed account controls');
   const stored = requiredValue((await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0], 'The saved profile is missing.').value;
@@ -207,6 +211,8 @@ test('Brand tool and Assets navigation preserves each open draft without saving 
   await expect(controls).toBeHidden();
   await page.getByRole('tab', { name: 'Overview', exact: true }).click();
   await expect(allowlist.getByLabel('Add domains')).toHaveValue('unsaved.example');
+  await expect(controls).toBeHidden();
+  await page.getByRole('tab', { name: 'Tools', exact: true }).click();
   await expect(page.getByRole('group', { name: 'Registrar MFA', exact: true }).getByLabel('Review note')).toHaveValue('Unsaved account review');
   await openBrandWorkbench(page, 'baselines');
   await expect(page.locator('#desired-posture-baseline').getByLabel('Analyst note')).toHaveValue('Unsaved setting note');
@@ -280,9 +286,10 @@ test('a committed Brand review with failed refresh retains drafts and retries on
   await page.getByRole('button', { name: 'Save controls', exact: true }).click();
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('was committed, but Brand Profiles could not be reread');
   await expect(page.getByLabel('Brand name', { exact: true })).toHaveValue('Retained primary draft');
-  await expect(allowlist.getByLabel('Add domains')).toHaveValue('unadded.example');
   await expect(mfa.getByLabel('Review note')).toHaveValue('Committed review');
   await expect(page.getByRole('button', { name: 'Save controls', exact: true })).toBeDisabled();
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+  await expect(allowlist.getByLabel('Add domains')).toHaveValue('unadded.example');
   await expect(page.getByRole('region', { name: 'Brand review inbox', exact: true }).locator('.review-heading > strong')).toHaveText('Unavailable');
   const committed = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
   await page.getByRole('button', { name: 'Refresh saved profiles', exact: true }).click();
@@ -308,9 +315,11 @@ test('a refreshed peer selection does not replace the open Brand tool owner', as
     await failNextBrowserLocalCollectionReadAfterWrite(page, 'brand_profiles');
     await page.getByRole('button', { name: 'Save controls', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Refresh saved profiles', exact: true })).toBeVisible();
+    await openBrandProfileList(peer);
     await peer.getByRole('radio', { name: 'Set Second Brand active', exact: true }).check();
     await page.getByRole('button', { name: 'Refresh saved profiles', exact: true }).click();
     await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Refreshed saved profiles');
+    await page.getByRole('tab', { name: 'Overview', exact: true }).click();
     await expect(allowlist.getByLabel('Add domains')).toHaveValue('retained.example');
     await expect(page.getByText('Open drafts belong to “Stored Brand”.', { exact: false })).toBeVisible();
     await allowlist.getByRole('button', { name: 'Add', exact: true }).first().click();
@@ -322,8 +331,9 @@ test('a refreshed peer selection does not replace the open Brand tool owner', as
     const switchProfile = page.getByRole('button', { name: 'Discard tool drafts and switch', exact: true });
     await expect(switchProfile).toHaveAccessibleDescription('Open drafts belong to “Stored Brand”. The selected profile is “Second Brand”.');
     await switchProfile.click();
-    await expect(allowlist.getByLabel('Add domains')).toHaveValue('');
     await expect(page.getByRole('group', { name: 'Registrar MFA', exact: true }).getByLabel('Review note')).toHaveValue('');
+    await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+    await expect(allowlist.getByLabel('Add domains')).toHaveValue('');
     const saved = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 2 });
     expect(saved.records.find((item) => item.id === 'profile-2')?.value.protectionAttestations).toEqual([]);
     expect(saved.records.find((item) => item.id === 'profile-1')?.value.protectionAttestations).toHaveLength(1);
@@ -361,13 +371,16 @@ test('Brand editors reject same-clock peer changes without replacing unsaved dra
     await expect(peer.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved reviewed account controls');
     const before = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
     expect(before.records[0]?.value.updatedAt).toBe(ISO);
-    for (const button of [page.getByRole('button', { name: 'Save profile', exact: true }), allowlist.getByRole('button', { name: 'Save allowlist', exact: true }), page.getByRole('button', { name: 'Save controls', exact: true })]) {
+    for (const [view, button] of [['Overview', page.getByRole('button', { name: 'Save profile', exact: true })], ['Overview', allowlist.getByRole('button', { name: 'Save allowlist', exact: true })], ['Tools', page.getByRole('button', { name: 'Save controls', exact: true })]] as const) {
+      await page.getByRole('tab', { name: view, exact: true }).click();
       await button.click();
       await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Brand Profile changed or was deleted');
       await page.getByRole('button', { name: 'Refresh saved profiles', exact: true }).click();
       await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Refreshed saved profiles');
       await expect(page.getByLabel('Brand name', { exact: true })).toHaveValue('Local name draft');
+      await page.getByRole('tab', { name: 'Overview', exact: true }).click();
       await expect(allowlist.getByText('local.example', { exact: true })).toBeVisible();
+      await page.getByRole('tab', { name: 'Tools', exact: true }).click();
       await expect(mfa.getByLabel('Review note')).toHaveValue('Local review draft');
     }
     const after = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
@@ -419,6 +432,7 @@ test('expected-setting drafts follow the selected profile even for a shared doma
   const baseline = page.locator('#desired-posture-baseline');
   await expect(baseline.getByLabel('Nameservers', { exact: true })).toHaveValue('ns-a.example');
   await baseline.getByLabel('Nameservers', { exact: true }).fill('unsaved-a.example');
+  await openBrandProfileList(page);
   await page.getByRole('radio', { name: 'Set Profile b active', exact: true }).check();
   await expect(baseline.getByLabel('Nameservers', { exact: true })).toHaveValue('ns-b.example');
   await baseline.getByRole('button', { name: 'Save expected settings', exact: true }).click();
@@ -830,6 +844,7 @@ test('a profile switch invalidates an in-flight posture audit before it can publ
   await page.getByRole('button', { name: 'Review official domains' }).click();
   await auditStarted;
   await expect(page.getByRole('button', { name: 'Reviewing…' })).toBeDisabled();
+  await openBrandProfileList(page);
   await page.getByRole('radio', { name: 'Set Second stored brand active' }).check();
   await expect(page.getByRole('radio', { name: 'Set Second stored brand active' })).toBeChecked();
   await expect(page.getByRole('status').filter({ hasText: 'Set "Second stored brand" active.' })).toBeVisible();
@@ -867,6 +882,7 @@ test('editing the active profile invalidates its in-flight posture audit before 
 
   await page.getByRole('button', { name: 'Review official domains' }).click();
   await auditStarted;
+  await openBrandProfileList(page);
   await page.getByRole('button', { name: 'Edit Stored Brand (profile-1)' }).click();
   await page.getByLabel('Official domains').fill('changed.example');
   await page.getByRole('button', { name: 'Save profile' }).click();
@@ -902,10 +918,9 @@ test('creating a new active profile clears ownership of an older in-flight postu
     [PROFILES_KEY]: currentBrandProfileBrowserStore([profileFixture()]),
     [ACTIVE_KEY]: 'profile-1',
   }, { destination: '/brands' });
-  await openBrandWorkbench(page, 'posture');
-
   const allowlist = page.getByRole('region', { name: 'Allowlist', exact: true });
   await allowlist.getByLabel('Add domains').fill('previous-profile-draft.example');
+  await openBrandWorkbench(page, 'posture');
 
   await page.getByRole('button', { name: 'Review official domains' }).click();
   await auditStarted;
@@ -919,7 +934,9 @@ test('creating a new active profile clears ownership of an older in-flight postu
   await expect.poll(() => requestSettled).toBe(true);
   await expect(page.getByText('Official-domain review returned an invalid response.', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Review official domains' })).toBeEnabled();
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
   await expect(allowlist.getByLabel('Add domains')).toHaveValue('');
+  await page.getByRole('tab', { name: 'Tools', exact: true }).click();
   await page.getByRole('button', { name: 'Review official domains' }).click();
   await expect.poll(() => requestedDomains).toEqual(['stored.example', 'replacement.example']);
   await expect(page.locator('.audit-results h3')).toHaveText('replacement.example');
@@ -1359,7 +1376,7 @@ test('retained certificate events replay reviewed expectations without mobile ov
   await expect(replay).toContainText('Aligned');
   await replay.getByText(/Certificate …/u).click();
   await expect(replay).toContainText('The retained event matches the reviewed expectation.');
-  await expect(replay.getByRole('link', { name: 'stored.example' })).toHaveAttribute('href', /view=cases/);
+  await expect(replay.getByRole('link', { name: 'stored.example' })).toHaveAttribute('href', '/cases?case=case-certificate-event&section=evidence');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);

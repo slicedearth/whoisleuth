@@ -1,4 +1,5 @@
 import type { BrandProfile } from './brand-profile-model.ts';
+import { caseWorkspaceHref } from './case-response-stage.ts';
 import {
   buildAnalystReviewInbox,
   type AnalystReviewItem,
@@ -97,7 +98,7 @@ export function buildBrandReviewInbox(input: Readonly<{
           brandProfileId: profileId,
           caseId: record.id,
           caseDomain: record.domain,
-          href: `/monitor?view=cases&case=${encodeURIComponent(record.id)}`,
+          href: caseWorkspaceHref(record.id),
         });
       } else {
         unresolvedOmitted += 1;

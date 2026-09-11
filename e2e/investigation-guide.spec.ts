@@ -295,7 +295,7 @@ async function retainCases(page: import('@playwright/test').Page, label: string,
     await expect(caseSelector.locator('option:checked')).toHaveText(firstDomain);
   }
   await expect(completedGuide).toContainText('Case needs a reviewed disposition or decision');
-  await expect(completedGuide.getByRole('link', { name: 'Review case decision workspace' })).toHaveAttribute('href', /\/monitor\?view=cases&case=.+#case-response-/u);
+  await expect(completedGuide.getByRole('link', { name: 'Review case decision workspace' })).toHaveAttribute('href', /\/cases\?case=.+&section=response$/u);
 }
 
 test('the dashboard starts a selected tab-scoped recipe without navigation or analysis', async ({ page }) => {

@@ -5,7 +5,7 @@
   import IntelligenceIcon from '$lib/components/IntelligenceIcon.svelte';
   import DeferredSurface from './DeferredSurface.svelte';
   import { isNavigationItemActive, type NavigationItem } from '$lib/workspaces';
-  import { loadDeferredModule } from '$lib/deferred-module';
+  import { loadDeferredModule, reloadDeferredModulePage } from '$lib/deferred-module';
 
   type ConsoleCommand = NavigationItem & {
     group: string;
@@ -51,7 +51,7 @@
     }));
   const selectedCommand = $derived(filteredCommands[selectedIndex]);
   const activeOptionId = $derived(selectedCommand ? `command-option-${selectedIndex}` : undefined);
-  const selectedAnnouncement = $derived(selectedCommand
+  const selectedAnnouncement = $derived(destinationsState !== 'ready' ? '' : selectedCommand
     ? `${selectedCommand.label}, ${selectedCommand.group}${isNavigationItemActive(selectedCommand, page.url) ? ', current page' : ''}${selectedCommand.opensInNewTab ? ', opens in a new tab' : ''}.`
     : 'No matching destination.');
 
@@ -210,8 +210,8 @@
         bind:value={query}
         role="combobox"
         aria-autocomplete="list"
-        aria-controls="command-results"
-        aria-expanded="true"
+        aria-controls={destinationsState === 'ready' && filteredCommands.length ? 'command-results' : undefined}
+        aria-expanded={destinationsState === 'ready' && filteredCommands.length > 0}
         aria-activedescendant={activeOptionId}
         oninput={resetSelection}
         autocomplete="off"
@@ -224,7 +224,8 @@
     {#if destinationsState === 'loading'}
       <p class="no-results" role="status">Loading destinations…</p>
     {:else if destinationsState === 'unavailable'}
-      <p class="open-error" role="alert">Destinations could not be loaded. Close search and try again; the sidebar remains available.</p>
+      <p class="open-error" role="alert">Destinations could not be loaded. The sidebar remains available. Reloading this page clears unsaved form edits.</p>
+      <button class="btn" type="button" onclick={reloadDeferredModulePage}>Reload destinations</button>
     {:else if filteredCommands.length}
       <ul id="command-results" role="listbox" aria-label="Console destinations" bind:this={resultsList}>
         {#each filteredCommands as command,index (command.href)}

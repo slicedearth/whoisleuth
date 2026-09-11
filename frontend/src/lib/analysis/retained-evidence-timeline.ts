@@ -1,4 +1,5 @@
 import { caseLookupTarget, type CaseRecord } from './case-model.ts';
+import { caseWorkspaceHref } from './case-response-stage.ts';
 import type { BulkSession } from './bulk-session-model.ts';
 import type { RelationshipObservation } from './relationship-observation-model.ts';
 import type { WatchlistCollection } from './watchlist-store.ts';
@@ -161,7 +162,7 @@ function timelineSource<T>(values: readonly T[], maximum: number, source: string
 function caseTimelineItems(records: readonly CaseRecord[], now: string | null, omissions: Map<string, number>): RetainedTimelineItem[] {
   const items: RetainedTimelineItem[] = [];
   for (const record of timelineSource(records, MAX_CASES, 'Cases outside the source bound', omissions)) {
-    const caseHref = `/monitor?view=cases&case=${encodeURIComponent(record.id)}`;
+    const caseHref = caseWorkspaceHref(record.id, 'evidence');
     for (const snapshot of timelineSource(record.evidenceHistory, MAX_EVIDENCE_SNAPSHOTS_PER_CASE, 'Case snapshots outside the source bound', omissions, true)) {
       const observedAt = timestamp(snapshot.capturedAt);
       const storedAt = timestamp(record.updatedAt);
@@ -208,7 +209,7 @@ function caseTimelineItems(records: readonly CaseRecord[], now: string | null, o
         caseId: record.id,
         caseLabel: record.domain,
         owner: `Case · ${record.domain}`,
-        href: `${caseHref}#case-response-${encodeURIComponent(record.id)}`,
+        href: caseHref,
         areas: ['case', 'evidence_pin'],
         source: text(pin.source, 80) || 'Evidence pin',
         sourceState: text(pin.sourceState, 60) || 'recorded',
@@ -236,7 +237,7 @@ function caseTimelineItems(records: readonly CaseRecord[], now: string | null, o
         caseId: record.id,
         caseLabel: record.domain,
         owner: `Case · ${record.domain}`,
-        href: `${caseHref}#case-response-${encodeURIComponent(record.id)}`,
+        href: caseWorkspaceHref(record.id, 'assessment'),
         areas: ['case'],
         source: provenance.sourceName,
         sourceState: 'external assertion',

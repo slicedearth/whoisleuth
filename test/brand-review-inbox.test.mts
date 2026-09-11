@@ -151,7 +151,7 @@ describe('transient Brand review inbox', () => {
       brandProfileId: 'profile-removed',
       caseId: 'case-unresolved',
       caseDomain: 'unresolved.invalid',
-      href: '/monitor?view=cases&case=case-unresolved',
+      href: '/cases?case=case-unresolved',
     });
   });
 

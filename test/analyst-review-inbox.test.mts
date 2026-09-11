@@ -232,7 +232,7 @@ describe('analyst review inbox', () => {
     const linked = buildAnalystReviewInbox({ cases: [matching], watchlists: watchlists(target) }, NOW)
       .items.find((item) => item.kind === 'watchlist_change');
     assert.equal(linked?.caseId, matching.id);
-    assert.match(linked?.href ?? '', /case-response-case-one$/u);
+    assert.equal(linked?.href, '/cases?case=case-one&section=evidence');
     assert.match(linked?.detail ?? '', /Related Case: review\.invalid/u);
 
     const second = caseRecord();
@@ -287,8 +287,8 @@ describe('analyst review inbox', () => {
     assert.equal(gap.age, 'current');
     assert.equal(gap.nextAction, 'refresh');
     assert.match(gap.rankingReason, /high priority/i);
-    assert.match(gap.href, /case-response-case-one$/);
-    assert.equal(gap.retryHref, '/lookup?q=review.invalid&depth=deep');
+    assert.equal(gap.href, '/cases?case=case-one&section=assessment');
+    assert.equal(gap.retryHref, '/lookup?q=review.invalid&depth=deep&case=case-one');
     assert.match(gap.dismissalTarget ?? '', /^evidence-gap-review:case-one:[a-f0-9]{64}$/u);
   });
 

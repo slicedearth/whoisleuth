@@ -1,3 +1,4 @@
+import { caseWorkspaceHref } from './case-response-stage.ts';
 import {
   MAX_CASES,
   MAX_EVIDENCE_SNAPSHOTS_PER_CASE,
@@ -224,7 +225,7 @@ export function buildCaseComparisonCandidates(
           'Case evidence stores bounded normalised fields rather than raw source payloads.',
           'Case snapshots do not retain a whole-snapshot completeness flag; field-specific comparison gates remain authoritative.',
         ],
-        ownerHref: `/monitor?view=cases&case=${encodeURIComponent(item.id)}#case-response-${encodeURIComponent(item.id)}`,
+        ownerHref: caseWorkspaceHref(item.id, 'evidence'),
         buildDetails: () => buildCaseRows(item.id, item.domain, earlier, later),
       }, counters);
       if (candidate) candidates.push(candidate);

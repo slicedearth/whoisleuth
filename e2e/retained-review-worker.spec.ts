@@ -66,7 +66,7 @@ test('review history links exact retained decisions and missing associations wit
   await expect(latest.getByText('Local activity', { exact: true })).toBeVisible();
   await expect(latest.locator('dt').filter({ hasText: /^(Observed|Freshness)$/u })).toHaveCount(0);
   await latest.getByText('Currently associated Cases (2)', { exact: true }).click();
-  await expect(latest.getByRole('link', { name: 'review-history.example', exact: true })).toHaveAttribute('href', `/monitor?view=cases&case=${record.id}`);
+  await expect(latest.getByRole('link', { name: 'review-history.example', exact: true })).toHaveAttribute('href', `/cases?case=${record.id}`);
   await expect(latest).toContainText('missing-review-case (unavailable)');
   await expect(latest.getByRole('link', { name: /missing-review-case/u })).toHaveCount(0);
   const reviewHref = await latest.getByRole('link', { name: 'Open review history', exact: true }).getAttribute('href');

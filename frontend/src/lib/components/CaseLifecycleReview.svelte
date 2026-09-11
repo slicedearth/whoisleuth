@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import type { CaseRecord } from '$lib/cases';
   import { buildDisclosureRouteReview } from '$lib/analysis/disclosure-route-review.ts';
   import Pagination from '$lib/components/Pagination.svelte';
@@ -151,7 +152,7 @@
       {#each pagedEvents as event, index (event.uid)}
         <li>
           <label class="event-select"><input type="checkbox" checked={selectedEventSet.has(event.uid)} onchange={(input) => toggleEvent(event.uid, input.currentTarget.checked)} aria-label={`Select event ${(eventPage - 1) * eventPageSize + index + 1}: ${event.summary}${event.recipient ? ` · ${event.recipient}` : ''} · ${event.startsAt}`}><time datetime={event.startsAt}>{new Date(event.startsAt).toLocaleString()}</time></label>
-          <div><strong>{event.summary}</strong>{#if event.recipient}<small>Recipient or owner: {event.recipient}</small>{/if}<p>{event.description}</p><small>{event.sourceLabel}</small><a href={`/monitor?view=cases&case=${encodeURIComponent(event.caseId)}`}>Open {event.domain}</a></div>
+          <div><strong>{event.summary}</strong>{#if event.recipient}<small>Recipient or owner: {event.recipient}</small>{/if}<p>{event.description}</p><small>{event.sourceLabel}</small><a href={caseWorkspaceHref(event.caseId, 'response')}>Open {event.domain}</a></div>
         </li>
       {/each}
     </ol>
@@ -180,7 +181,7 @@
           {#if route.nextReviewAt}<small>Source review due: <time datetime={route.nextReviewAt}>{route.nextReviewAt}</time></small>{/if}
           {#if route.followUpAt}<small>Action follow-up: <time datetime={route.followUpAt}>{route.followUpAt}</time></small>{/if}
           <details><summary>Saved action details</summary><small>Action updated: {#if route.updatedAt}<time datetime={route.updatedAt}>{route.updatedAt}</time>{:else}Unknown{/if}</small>{#if route.limitations.length}<ul>{#each route.limitations as limitation}<li>{limitation}</li>{/each}</ul>{/if}</details>
-          <a href={`/monitor?view=cases&case=${encodeURIComponent(route.caseId)}`}>Open case</a>
+          <a href={caseWorkspaceHref(route.caseId, 'response')}>Open case</a>
         </article>
       {/each}
     </div>

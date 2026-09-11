@@ -249,10 +249,21 @@ export async function openBulkShortlist(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: /^Shortlist ·/u })).toBeVisible();
 }
 
+export async function openBrandProfileList(page: Page): Promise<void> {
+  const summary = page.locator('#brand-profiles-summary');
+  await expect(summary).toBeVisible();
+  const disclosure = summary.locator('..');
+  if (await disclosure.getAttribute('open') === null) await summary.click();
+  await expect(disclosure).toHaveAttribute('open', '');
+}
+
 export async function openBrandWorkbench(
   page: Page,
   workbench: 'attestations' | 'baselines' | 'certificates' | 'control' | 'mail' | 'passport' | 'portfolio' | 'posture',
 ): Promise<void> {
+  const tools = page.getByRole('tab', { name: 'Tools', exact: true });
+  await expect(tools).toBeVisible();
+  if (await tools.getAttribute('aria-selected') !== 'true') await tools.click();
   const selector = page.locator('#brand-workbench');
   await expect(selector).toBeEnabled();
   if (await selector.inputValue() !== workbench) await selector.selectOption(workbench);

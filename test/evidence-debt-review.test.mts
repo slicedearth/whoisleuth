@@ -7,6 +7,7 @@ import {
 import { normalizeBulkSessionStore, serializeBulkSessionStore } from '../packages/workspace/bulk-session-model.mts';
 import { buildAnalystReviewInbox } from '../frontend/src/lib/analysis/analyst-review-inbox.ts';
 import { createCase, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
+import { normalizeSnapshot } from '../packages/cases/case-evidence-model.mts';
 import type {
   BulkSession,
   BulkSessionResult,
@@ -142,6 +143,19 @@ function pin(
 }
 
 describe('evidence debt review', () => {
+  test('Case refresh links retain the latest observed hostname and explicit Case identity', () => {
+    const snapshot = normalizeSnapshot({
+      capturedAt: NOW, inputHostname: 'login.case-review.invalid', scanDepth: 'deep', availability: 'registered',
+    }, { caseDomain: 'case-review.invalid' });
+    assert.ok(snapshot);
+    const record = caseRecord({ evidenceHistory: [snapshot], evidencePins: [pin('refresh-pin', 'rate_limited')] });
+    const debt = buildEvidenceDebtReview({ cases: [record], bulkSessions: [] }, NOW);
+    const inbox = buildAnalystReviewInbox({ cases: [record] }, NOW);
+    assert.equal(debt.items[0]?.nextHref, '/lookup?q=login.case-review.invalid&depth=deep&case=case-one');
+    assert.equal(inbox.items.find(item => item.kind === 'evidence_gap')?.retryHref, '/lookup?q=login.case-review.invalid&depth=deep&case=case-one');
+    assert.equal(record.domain, 'case-review.invalid');
+  });
+
   test('keeps undated pins actionable without calling their save time a source observation or stale evidence', () => {
     const record = createCase({ domain: 'undated.invalid', evidencePin: {
       label: 'Retained source fact', value: 'Known value with unknown source time', source: 'whois',
@@ -201,7 +215,7 @@ describe('evidence debt review', () => {
     assert.equal(review.items.some((item) => item.detail.includes('skipped-pin')), false);
     assert.equal(review.items.find((item) => item.sourceId === 'rdap')?.nextAction, 'retry');
     assert.equal(review.items.find((item) => item.id.includes('debt-case') && item.primaryState === 'conflicting')?.nextAction, 'case_review');
-    assert.equal(review.items.find((item) => item.primaryState === 'rate_limited')?.nextHref, '/lookup?q=case-review.invalid&depth=deep');
+    assert.equal(review.items.find((item) => item.primaryState === 'rate_limited')?.nextHref, '/lookup?q=case-review.invalid&depth=deep&case=case-one');
     assert.match(review.limitations.join(' '), /Empty compact fields do not create debt/u);
   });
 

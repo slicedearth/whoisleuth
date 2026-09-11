@@ -264,7 +264,7 @@ test('reviews retained case, website and watchlist changes without turning incom
   ))).toEqual(['row-contract', 'source-grid', 'row-limitations', 'value-grid']);
   await expect(review.getByRole('link', { name: 'Open owning record' })).toHaveAttribute(
     'href',
-    /\/monitor\?view=cases&case=ledger-case#case-response-ledger-case$/u,
+    '/cases?case=ledger-case&section=evidence',
   );
 
   await selectRetainedComparison(review, 'complete-profile.reservation.invalid · adjacent website profiles');

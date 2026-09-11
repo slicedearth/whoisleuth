@@ -434,7 +434,7 @@ test('saved reporting routes remain reachable across pages with explicit local f
   await expect(routes.getByRole('article')).toContainText('platform report');
   await expect(routes.getByRole('article')).toContainText('Source observed: 2026-09-10T09:00:00.123Z');
   await expect(routes.getByRole('article')).toContainText('Action follow-up: 2026-09-10T11:00:00.000Z');
-  await expect(routes.getByRole('article').getByRole('link', { name: 'Open case', exact: true })).toHaveAttribute('href', '/monitor?view=cases&case=routes-5');
+  await expect(routes.getByRole('article').getByRole('link', { name: 'Open case', exact: true })).toHaveAttribute('href', '/cases?case=routes-5&section=response');
   await routes.getByRole('combobox', { name: 'Source review', exact: true }).selectOption('current');
   await expect(routes.getByRole('article')).toHaveCount(1);
   await expect(lifecycle.getByRole('list', { name: 'Browser-local lifecycle review timeline' }).getByRole('listitem')).toHaveCount(1);
@@ -581,7 +581,7 @@ test('ambiguous and future certificate observations remain reviewable through th
   await expect(ambiguous).toContainText('2 retained facts in 1 Case');
   await expect(ambiguous).toContainText('No single latest fact is selected');
   const sourceLink = ambiguous.getByRole('link', { name: 'Review source Case', exact: true });
-  await expect(sourceLink).toHaveAttribute('href', '/monitor?view=cases&case=case-certificate-operations');
+  await expect(sourceLink).toHaveAttribute('href', '/cases?case=case-certificate-operations&section=evidence');
   for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
     await page.setViewportSize(viewport);
     for (const theme of ['light', 'dark'] as const) {
@@ -595,7 +595,7 @@ test('ambiguous and future certificate observations remain reviewable through th
   }
   await sourceLink.focus();
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL('/cases?case=case-certificate-operations');
+  await expect(page).toHaveURL('/cases?case=case-certificate-operations&section=evidence');
   await expect(page.locator('#case-head-case-certificate-operations')).toBeVisible();
   await expect(page.locator('#case-head-case-certificate-operations')).toBeFocused();
   await page.goto('/monitor?view=inbox');

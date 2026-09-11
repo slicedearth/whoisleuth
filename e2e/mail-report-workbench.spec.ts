@@ -2,7 +2,7 @@ import { expect, test } from './fixtures';
 import { gzipSync } from 'node:zlib';
 import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
-import { expectFocusedResultsVisible, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, migrateLegacyBrowserData, openBrandWorkbench, readBrowserLocalCollection, useTheme } from './helpers';
+import { expectFocusedResultsVisible, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, migrateLegacyBrowserData, openBrandProfileList, openBrandWorkbench, readBrowserLocalCollection, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
@@ -126,6 +126,7 @@ test('does not publish an in-flight mail review under a different active profile
     buffer: Buffer.from(DMARC_XML),
   });
   await expect(workbench.getByText('Reading…', { exact: true })).toBeVisible();
+  await openBrandProfileList(page);
   await page.getByRole('radio', { name: 'Set Profile B active' }).check();
   workbench = page.getByRole('region', { name: 'DMARC and SMTP TLS reports' });
   await expect(workbench.getByText('Choose one or more aggregate report files to begin a transient review.')).toBeVisible();
@@ -281,6 +282,7 @@ test('changed profile scope withholds the old mail export until worker reconcili
     await route.fallback();
   });
   try {
+    await openBrandProfileList(page);
     await page.getByRole('button', { name: /^Edit/u }).click();
     await page.getByLabel('Official domains').fill('other.example');
     await page.getByRole('button', { name: 'Save profile', exact: true }).click();
@@ -305,6 +307,7 @@ test('mail reports survive tool navigation and failed profile refresh without re
   await expect(retainedWorkbench).toBeHidden();
   await openBrandWorkbench(page, 'mail');
   await expect(workbench.getByRole('group', { name: 'Imported mail report summary' })).toContainText('15');
+  await openBrandProfileList(page);
   await page.getByRole('button', { name: /^Edit/u }).click();
   await page.getByLabel('Official domains').fill('other.example');
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'brand_profiles');
