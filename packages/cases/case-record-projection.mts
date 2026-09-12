@@ -1,5 +1,5 @@
 import type { CaseRecord } from './case-record-contracts.mts';
-import { PUBLIC_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { PUBLIC_CASE_SCHEMA_VERSION, INCIDENT_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
 import { caseStatusIsClosed } from './case-record-decisions.mts';
 
 export type CaseAudience = 'internal' | 'public' | 'trusted';
@@ -11,6 +11,7 @@ type CaseField = keyof CompleteCaseRecord;
 type CaseAudienceExclusion = Readonly<{
   label: string;
   order: number;
+  sinceVersion?: number;
 }>;
 type CaseFieldRule<K extends CaseField> = Readonly<{
   key: K;
@@ -108,6 +109,14 @@ function publicClosureHistory(preV13HistoryUnavailable: boolean): CaseRecord['cl
 const CASE_FIELD_RULES = Object.freeze({
   id: preservedField('id'),
   domain: preservedField('domain'),
+  title: fieldRule('title', SHARED_EXCLUDE, (record, profile) => (
+    profile === 'trusted' || profile === 'public' ? '' : record.title ?? ''
+  ), {
+    audienceExclusions: {
+      trusted: { label: 'Case titles', order: 1, sinceVersion: INCIDENT_CASE_SCHEMA_VERSION },
+      public: { label: 'Case titles', order: 1, sinceVersion: INCIDENT_CASE_SCHEMA_VERSION },
+    },
+  }),
   status: fieldRule('status', PUBLIC_TRANSFORM, (record, profile) => (
     profile === 'public' && caseStatusIsClosed(record.status) && record.closures.records.length
       ? 'reviewing'
@@ -230,7 +239,7 @@ const OUTSIDE_SCHEMA_EXCLUSIONS = Object.freeze({
   public: Object.freeze({ label: 'Raw upstream payloads and credentials', order: 7 }),
 } as const satisfies Record<CaseAudience, CaseAudienceExclusion>);
 
-function currentAudienceExclusions(audience: CaseAudience): readonly string[] {
+function currentAudienceExclusions(audience: CaseAudience, caseVersion: number): readonly string[] {
   const entries = [
     ...Object.values(CASE_FIELD_RULES).flatMap((rule) => (
       rule.audienceExclusions[audience] ? [rule.audienceExclusions[audience]] : []
@@ -238,33 +247,19 @@ function currentAudienceExclusions(audience: CaseAudience): readonly string[] {
     OUTSIDE_SCHEMA_EXCLUSIONS[audience],
   ] as CaseAudienceExclusion[];
   const orderByLabel = new Map<string, number>();
-  const labelByOrder = new Map<number, string>();
   for (const entry of entries) {
+    if (entry.sinceVersion !== undefined && caseVersion < entry.sinceVersion) continue;
     if (!entry.label || entry.label.length > 160 || entry.label.trim() !== entry.label
       || !Number.isSafeInteger(entry.order) || entry.order < 1 || entry.order > 64) {
       throw new TypeError('Case audience exclusion metadata is malformed or exceeds its bound.');
     }
     const prior = orderByLabel.get(entry.label);
-    if (prior !== undefined && prior !== entry.order) {
-      throw new TypeError(`Case audience exclusion ${entry.label} has conflicting presentation order.`);
-    }
-    const priorLabel = labelByOrder.get(entry.order);
-    if (priorLabel !== undefined && priorLabel !== entry.label) {
-      throw new TypeError(`Case audience exclusions ${priorLabel} and ${entry.label} share a presentation order.`);
-    }
-    orderByLabel.set(entry.label, entry.order);
-    labelByOrder.set(entry.order, entry.label);
+    orderByLabel.set(entry.label, Math.min(prior ?? entry.order, entry.order));
   }
   return Object.freeze([...orderByLabel]
-    .sort((left, right) => left[1] - right[1])
+    .sort((left, right) => left[1] - right[1] || (left[0] < right[0] ? -1 : left[0] > right[0] ? 1 : 0))
     .map(([label]) => label));
 }
-
-const CURRENT_AUDIENCE_EXCLUSIONS = Object.freeze({
-  internal: currentAudienceExclusions('internal'),
-  trusted: currentAudienceExclusions('trusted'),
-  public: currentAudienceExclusions('public'),
-} as const satisfies Record<CaseAudience, readonly string[]>);
 
 // Schema 12 is an immutable public compatibility contract and deliberately
 // remains independent of the current field-policy projection.
@@ -284,7 +279,7 @@ export function caseAudienceExclusions(
 ): readonly string[] {
   return audience === 'public' && caseVersion === PUBLIC_CASE_SCHEMA_VERSION
     ? PUBLIC_V12_EXCLUSIONS
-    : CURRENT_AUDIENCE_EXCLUSIONS[audience];
+    : currentAudienceExclusions(audience, caseVersion);
 }
 
 export { CASE_FIELD_RULES };

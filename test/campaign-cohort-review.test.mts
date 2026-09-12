@@ -123,6 +123,18 @@ function fixture() {
 }
 
 describe('campaign cohort review', () => {
+  test('same-domain incidents cannot manufacture a registration co-occurrence', () => {
+    const original = fixture().records['alpha.invalid']!;
+    const peer = { ...structuredClone(original), id: 'separate-incident', title: 'Independent review' };
+    const review = buildCampaignCohortReview({
+      domains: [original.domain], cases: [original, peer], profiles: [profile()],
+      relationshipSummary: summary([]), selectedBrandProfileId: PROFILE_ID,
+    });
+    assert.equal(review.state, 'ready');
+    assert.equal(review.scopedCaseCount, 2);
+    assert.equal(review.rationaleCounts.temporal_cooccurrence, 0);
+  });
+
   test('keeps exact profile scope and all four rationale kinds inspectable', () => {
     const source = fixture();
     const review = buildCampaignCohortReview({

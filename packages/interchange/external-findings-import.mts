@@ -524,7 +524,6 @@ export function mergeExternalFindingsIntoCases(
   let duplicatesSkipped = 0;
 
   for (const finding of document.findings) {
-    const existing = cases.find((candidate) => candidate.domain === finding.domain) ?? null;
     const opened = openOrCreateCase(cases, { domain: finding.domain, source: 'import' }, now);
     cases = opened.cases;
     const target = cases.find((candidate) => candidate.id === opened.record.id) ?? opened.record;
@@ -535,8 +534,8 @@ export function mergeExternalFindingsIntoCases(
       continue;
     }
     findingsAdded += 1;
-    if (existing) updatedDomains.add(finding.domain);
-    else createdDomains.add(finding.domain);
+    if (opened.created) createdDomains.add(finding.domain);
+    else updatedDomains.add(finding.domain);
   }
 
   return {
@@ -578,7 +577,7 @@ export function externalFindingsCaseTargets(
 
 /**
  * Merges already-validated external findings into one selected Case. A Case is
- * keyed to its registrable domain, while rendered captures may retain an exact
+ * identified by its immutable ID with a registrable-domain pivot, while rendered captures may retain an exact
  * hostname. Only same-domain findings are accepted, the exact hostname remains
  * explicit in the retained evidence, and this operation can never open another
  * Case as a side effect.

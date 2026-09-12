@@ -47,7 +47,7 @@ export function createCaseDraft<T extends CaseDraftFields>(
       const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       const saved = await recovery.submit(receipt => persist(args[0], args[1], args[2], receipt));
       await tick();
-      restoreSubmittedFocus(origin, origin, origin?.closest('form'));
+      restoreSubmittedFocus(origin, args[2]?.() ?? origin, origin?.closest('form'));
       return saved;
     },
   };

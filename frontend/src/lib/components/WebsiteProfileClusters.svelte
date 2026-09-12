@@ -1,6 +1,9 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import Pagination from './Pagination.svelte';
+  import CasePicker from './CasePicker.svelte';
+  import { casesForDomain, selectedCasesByDomain } from '../../../../packages/cases/case-selection.mts';
+  import type { CaseRecord } from '$lib/cases';
   import {
     filterWebsiteProfileClusters,
     type WebsiteProfileCluster,
@@ -10,14 +13,18 @@
   let {
     summary,
     onpin = null,
+    cases = [],
   }: {
     summary: WebsiteProfileClusterSummary;
-    onpin?: ((cluster: WebsiteProfileCluster, domain: string) => void | Promise<void>) | null;
+    onpin?: ((cluster: WebsiteProfileCluster, domain: string, caseId?: string) => void | Promise<void>) | null;
+    cases?: readonly CaseRecord[];
   } = $props();
   let query = $state('');
   let kind = $state<'all' | WebsiteProfileCluster['kind']>('all');
   let message = $state('');
   let pinning = $state('');
+  let caseSelections = $state(new Map<string, string>());
+  const selectedCases = $derived(selectedCasesByDomain(cases, caseSelections));
   const pageSize = 20;
   let resultPage = $state(1);
   let resultList = $state<HTMLOListElement>();
@@ -44,7 +51,7 @@
     pinning = `${cluster.id}:${domain}`;
     message = '';
     try {
-      await onpin(cluster, domain);
+      await onpin(cluster, domain, selectedCases.get(domain)?.id);
       message = `Recorded the ${cluster.label.toLowerCase()} relationship as an analyst review lead for ${domain}.`;
     } catch (cause) {
       message = cause instanceof Error ? cause.message : 'Could not record the review lead.';
@@ -83,10 +90,15 @@
           <small class="range">Saved relationship observed {new Date(cluster.firstObservedAt).toLocaleDateString()} to {new Date(cluster.lastObservedAt).toLocaleDateString()}</small>
           <ul>
             {#each cluster.observations as observation}
+              {@const incidents = casesForDomain(cases, observation.domain)}
+              {@const selectedCase = selectedCases.get(observation.domain)}
               <li>
                 <a href={`/lookup?q=${encodeURIComponent(observation.domain)}`}>{observation.domain}</a>
                 <small>{observation.complete && !observation.truncated ? 'Complete saved evidence' : 'Partial saved evidence'} · {new Date(observation.firstObservedAt).toLocaleDateString()} to {new Date(observation.lastObservedAt).toLocaleDateString()}</small>
-                {#if onpin}<button class="btn small" type="button" disabled={Boolean(pinning)} onclick={() => void pin(cluster, observation.domain)}>{pinning === `${cluster.id}:${observation.domain}` ? 'Recording…' : 'Record review lead'}</button>{/if}
+                {#if onpin}
+                  {#if incidents.length > 1}<CasePicker id={`website-case-${cluster.id}-${observation.domain}`} records={incidents} selectedId={selectedCase?.id ?? ''} disabled={Boolean(pinning)} select={(id) => { caseSelections = new Map(caseSelections).set(observation.domain, id); }} />{/if}
+                  <button class="btn small" type="button" disabled={Boolean(pinning) || (incidents.length > 1 && !selectedCase)} onclick={() => void pin(cluster, observation.domain)}>{pinning === `${cluster.id}:${observation.domain}` ? 'Recording…' : 'Record review lead'}</button>
+                {/if}
               </li>
             {/each}
           </ul>

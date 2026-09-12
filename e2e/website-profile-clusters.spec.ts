@@ -4,6 +4,7 @@ import {
   migrateLegacyBrowserData, readBrowserLocalCollection, useTheme,
 } from './helpers';
 import type { WebsiteProfileSnapshot } from '../packages/workspace/website-snapshot-model.mts';
+import { caseRecord } from './case-test-fixtures';
 
 function savedProfile(index: number): WebsiteProfileSnapshot {
   const domain = `target-${String(index).padStart(2, '0')}.example`;
@@ -21,6 +22,33 @@ function savedProfile(index: number): WebsiteProfileSnapshot {
     },
   };
 }
+
+test('website relationship leads require a deliberate same-domain incident selection', async ({ page }) => {
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [
+      { ...caseRecord({ id: 'first-incident', domain: 'target-00.example' }), title: 'First website incident' },
+      { ...caseRecord({ id: 'second-incident', domain: 'target-00.example' }), title: 'Separate website incident' },
+    ] }),
+    'whoisleuth-website-snapshots-v1': currentBrowserLocalDocument('website_snapshots', { snapshots: [savedProfile(0), savedProfile(1)] }),
+  }, { clearStorage: true, destination: '/monitor?view=relationships' });
+  const workspace = page.getByRole('region', { name: 'Cross-domain website pivots' });
+  await workspace.getByRole('combobox', { name: 'Relationship type' }).selectOption('technology');
+  const cluster = workspace.getByRole('list', { name: 'Saved website relationship results' }).locator(':scope > li').first();
+  const target = cluster.locator(':scope > ul > li').filter({ has: page.getByRole('link', { name: 'target-00.example', exact: true }) });
+  await expect(target.getByRole('button', { name: 'Record review lead', exact: true })).toBeDisabled();
+  await target.getByRole('combobox', { name: 'Incident Case', exact: true }).selectOption('second-incident');
+  await target.getByRole('button', { name: 'Record review lead', exact: true }).click();
+  await expect(workspace.getByRole('status').last()).toContainText('Recorded');
+  const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  expect(saved.records.find(item => item.value.id === 'first-incident')!.value.assertions).toHaveLength(0);
+  expect(saved.records.find(item => item.value.id === 'second-incident')!.value.assertions).toHaveLength(1);
+  await page.setViewportSize({ width: 320, height: 700 });
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    await expectNoHorizontalOverflow(page);
+    await expect(target.getByRole('combobox', { name: 'Incident Case', exact: true })).toHaveValue('second-incident');
+  }
+});
 
 test('saved website relationships retain complete membership and reach the last result page', async ({ page }) => {
   const profiles = Array.from({ length: 60 }, (_, index) => savedProfile(index));

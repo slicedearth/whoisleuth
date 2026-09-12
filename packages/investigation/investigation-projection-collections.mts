@@ -295,7 +295,7 @@ function projectCaseSnapshot(
   }
 }
 
-const caseByDomain = new Map<string, InvestigationEntity>();
+const casesByDomain = new Map<string, InvestigationEntity[]>();
 const orderedCases = [...cases.records].sort((left, right) => (
   String(right.updatedAt).localeCompare(String(left.updatedAt))
   || String(left.domain).localeCompare(String(right.domain))
@@ -305,14 +305,15 @@ for (const caseRecord of orderedCases) {
   const domain = normalizeDomain(caseRecord.domain);
   if (!domain) continue;
   const domainEntity = addEntity('domain', domain, domain, { domain });
-  const caseEntity = addEntity('case', caseRecord.id, domain, {
+  const caseEntity = addEntity('case', caseRecord.id, caseRecord.title || domain, {
     caseId: caseRecord.id,
     domain,
+    name: caseRecord.title ?? '',
     status: text(caseRecord.status, 40),
     disposition: text(caseRecord.disposition, 40),
   });
   if (!domainEntity || !caseEntity) continue;
-  caseByDomain.set(domain, caseEntity);
+  casesByDomain.set(domain, [...(casesByDomain.get(domain) ?? []), caseEntity]);
   const observedAt = timestamp(caseRecord.updatedAt);
   if (!observedAt) continue;
   const caseObservation = addObservation({
@@ -461,8 +462,7 @@ for (const campaign of campaigns.records) {
       classification: 'direct',
       method: 'Canonical domain membership stored on the analyst campaign',
     }, campaignObservation);
-    const caseEntity = caseByDomain.get(domain);
-    if (caseEntity) {
+    for (const caseEntity of casesByDomain.get(domain) ?? []) {
       linkObservationEntity(campaignObservation, caseEntity);
       addRelationship({
         type: 'campaign_contains_case',

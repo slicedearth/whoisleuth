@@ -13,6 +13,7 @@
   import { externalIntelligenceAssertionContent } from '$lib/analysis/external-intelligence-import.ts';
   import type { ExternalFindingConversionReport } from '$lib/analysis/external-findings-converters.ts';
   import type { CaseRecord } from '$lib/analysis/case-model.ts';
+  import { caseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
 
   let { preview, conversionReport, cases, applying, onimport, oncancel }: {
     preview: ExternalImportPreview;
@@ -123,8 +124,9 @@
       <Pagination currentPage={diagnosticPage} pageCount={diagnosticPageCount} setPage={(next) => { diagnosticPage = next; }} ariaLabel="Import diagnostic pages" />
     </details>
   {/if}
-  {#if intelligence}
-    <label class="case-target">Merge into existing case<select bind:value={targetCaseId} disabled={applying || !total}><option value="">Select a case</option>{#each cases as record}<option value={record.id}>{record.domain}</option>{/each}</select></label>
+  {#if cases.length || intelligence}
+    <label class="case-target">Merge into existing case<select bind:value={targetCaseId} disabled={applying || !total}><option value="">{findings?'Resolve by domain only when unambiguous':'Select a case'}</option>{#each cases as record}<option value={record.id}>{record.title || record.domain} · {record.domain} · Case …{caseNumber(record.id).slice(-8)}</option>{/each}</select></label>
+    {#if findings}<p class="note">A selected Case accepts only findings for its registration domain or hostnames. Import separate domain groups separately when selecting an incident.</p>{/if}
     {#if !cases.length}<p class="warning">Open a Case before importing intelligence. Claims never create one automatically.</p>{/if}
   {/if}
   <div class="actions">

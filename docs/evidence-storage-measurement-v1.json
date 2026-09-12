@@ -86,17 +86,17 @@
       "responseActions": 8,
       "responseActionEvents": 8,
       "browserLocal": {
-        "serializedCaseBytes": 43622,
+        "serializedCaseBytes": 43710,
         "retainedEvidenceBytes": 35926,
         "evidenceHistoryBytes": 22006,
         "evidencePinBytes": 4824,
         "decisionHistoryBytes": 2048,
         "responseActionHistoryBytes": 7112,
-        "indexedDbRecordPayloadBytes": 43798,
-        "indexedDbRecordEnvelopeBytes": 49342,
+        "indexedDbRecordPayloadBytes": 43886,
+        "indexedDbRecordEnvelopeBytes": 49462,
         "indexedDbManifestBytes": 283,
-        "indexedDbSerializedContractBytes": 49625,
-        "currentQuotaRatio": 0.0104
+        "indexedDbSerializedContractBytes": 49745,
+        "currentQuotaRatio": 0.010421
       },
       "duplication": {
         "eligiblePayloads": 40,
@@ -113,12 +113,12 @@
       "portable": {
         "workspaceArchive": {
           "caseCount": 8,
-          "totalBytes": 49156,
+          "totalBytes": 49244,
           "retainedEvidenceBytes": 35927
         },
         "cliCasePack": {
           "caseCount": 8,
-          "totalBytes": 116212,
+          "totalBytes": 116388,
           "retainedEvidenceBytes": 86394,
           "caseLimitApplied": false
         }
@@ -134,17 +134,17 @@
       "responseActions": 24,
       "responseActionEvents": 24,
       "browserLocal": {
-        "serializedCaseBytes": 130906,
+        "serializedCaseBytes": 131170,
         "retainedEvidenceBytes": 107866,
         "evidenceHistoryBytes": 66008,
         "evidencePinBytes": 14500,
         "decisionHistoryBytes": 6172,
         "responseActionHistoryBytes": 21378,
-        "indexedDbRecordPayloadBytes": 131482,
-        "indexedDbRecordEnvelopeBytes": 148128,
+        "indexedDbRecordPayloadBytes": 131746,
+        "indexedDbRecordEnvelopeBytes": 148488,
         "indexedDbManifestBytes": 285,
-        "indexedDbSerializedContractBytes": 148413,
-        "currentQuotaRatio": 0.03121
+        "indexedDbSerializedContractBytes": 148773,
+        "currentQuotaRatio": 0.031273
       },
       "duplication": {
         "eligiblePayloads": 120,
@@ -343,12 +343,12 @@
       "portable": {
         "workspaceArchive": {
           "caseCount": 24,
-          "totalBytes": 136443,
+          "totalBytes": 136707,
           "retainedEvidenceBytes": 107867
         },
         "cliCasePack": {
           "caseCount": 24,
-          "totalBytes": 347111,
+          "totalBytes": 347639,
           "retainedEvidenceBytes": 259356,
           "caseLimitApplied": false
         }
@@ -364,17 +364,17 @@
       "responseActions": 500,
       "responseActionEvents": 500,
       "browserLocal": {
-        "serializedCaseBytes": 2037024,
+        "serializedCaseBytes": 2042524,
         "retainedEvidenceBytes": 1557500,
         "evidenceHistoryBytes": 687500,
         "evidencePinBytes": 301500,
         "decisionHistoryBytes": 128000,
         "responseActionHistoryBytes": 444500,
-        "indexedDbRecordPayloadBytes": 2049500,
-        "indexedDbRecordEnvelopeBytes": 2328890,
+        "indexedDbRecordPayloadBytes": 2055000,
+        "indexedDbRecordEnvelopeBytes": 2336390,
         "indexedDbManifestBytes": 287,
-        "indexedDbSerializedContractBytes": 2329177,
-        "currentQuotaRatio": 0.485664
+        "indexedDbSerializedContractBytes": 2336677,
+        "currentQuotaRatio": 0.486976
       },
       "duplication": {
         "eligiblePayloads": 2000,
@@ -453,12 +453,12 @@
       "portable": {
         "workspaceArchive": {
           "caseCount": 500,
-          "totalBytes": 2042564,
+          "totalBytes": 2048064,
           "retainedEvidenceBytes": 1557501
         },
         "cliCasePack": {
           "caseCount": 25,
-          "totalBytes": 283601,
+          "totalBytes": 284151,
           "retainedEvidenceBytes": 192225,
           "caseLimitApplied": true
         }

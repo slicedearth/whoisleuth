@@ -29,7 +29,7 @@
       <a id={`case-head-${record.id}`} class="case-head" href={caseWorkspaceHref(record.id)} onclick={(event) => {
         if (handlesLocalLink(event)) { event.preventDefault(); selectCase(record); }
       }}>
-        <span class="case-domain"><strong>{record.domain}</strong><small title={`Complete Case number: ${caseNumber(record.id)}`}>Case …{caseNumber(record.id).slice(-8)}{record.notes.length ? ` · ${record.notes.length} note${record.notes.length === 1 ? '' : 's'}` : ''}</small></span>
+        <span class="case-domain"><strong>{record.title || record.domain}</strong>{#if record.title}<small>{record.domain}</small>{/if}<small title={`Complete Case number: ${caseNumber(record.id)}`}>Case …{caseNumber(record.id).slice(-8)}{record.notes.length ? ` · ${record.notes.length} note${record.notes.length === 1 ? '' : 's'}` : ''}</small></span>
         <span class="badges"><span class={`badge status-${record.status}`}>{statusLabel(record.status)}</span><span class={`badge disposition-${record.disposition}`}>{dispositionLabel(record.disposition)}</span></span>
         <time class="updated" datetime={record.updatedAt}>{formatDate(record.updatedAt)}</time>
       </a>

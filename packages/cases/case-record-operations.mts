@@ -3,6 +3,7 @@
 
 import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
 import { parseCredentialFreeHttpUrl } from '../evidence/lookup-target.mts';
+import { selectExistingCase, type CaseOpenSelection } from './case-selection.mts';
 import {
   appendCaseAction,
   appendCaseAssertion,
@@ -34,7 +35,7 @@ import {
   type CasePatch,
   type CaseRecord,
 } from './case-record-contracts.mts';
-import { PUBLISHED_V2_3_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { PUBLISHED_V2_3_CASE_SCHEMA_VERSION, INCIDENT_CASE_SCHEMA_VERSION, MAX_CASE_OBJECTIVE_LENGTH } from '../contracts/case-portability.mts';
 import {
   caseDispositionSupportsDefensiveResponse,
   caseStatusIsClosed,
@@ -83,7 +84,7 @@ export {
 };
 export type { ReviewedCaseDisposition };
 
-export const MAX_CASE_OBJECTIVE_LENGTH = 320;
+export { MAX_CASE_OBJECTIVE_LENGTH };
 export const MAX_CASE_INCIDENT_URL_LENGTH = 1_850;
 export const INCIDENT_CONTEXT_STATEMENT_PREFIX = 'Investigate incident URL: ';
 const OBJECTIVE_PREFIX = 'Objective: ';
@@ -268,6 +269,7 @@ export function normalizeCase(
   return {
     id: existing ? existing.id : safeId(record.id) || deterministicId(domain),
     domain,
+    title: sourceVersion != null && sourceVersion < INCIDENT_CASE_SCHEMA_VERSION ? '' : normalizeCaseObjective(record.title),
     status: caseStatusRequiresClosure(normalizedStatus)
       && closures.records.length === 0 && !closures.preV13HistoryUnavailable
       ? 'reviewing'
@@ -338,6 +340,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
   return {
     id: makeId(),
     domain,
+    title: normalizeCaseObjective(input.title),
     status: input.closure !== undefined ? 'resolved' : normalizeStatus(input.status),
     disposition: normalizeDisposition(input.disposition),
     reviewReasonCode: normalizeReviewReasonCode(input.reviewReasonCode),
@@ -371,7 +374,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
 }
 
 /**
- * Opens the existing case for a domain, or creates one. Returns a new array
+ * Opens an explicitly selected or unambiguous Case, or creates one. Returns a new array
  * (callers persist it) plus the resolved record and whether it was created.
  * @param {CaseRecord[]} cases
  * @param {{ domain: unknown, status?: unknown, disposition?: unknown, source?: unknown, tags?: unknown, evidence?: unknown, note?: unknown }} input
@@ -382,14 +385,38 @@ export function openOrCreateCase(
   cases: CaseRecord[],
   input: CaseInput,
   nowIso?: string,
+  selection: CaseOpenSelection = {},
 ): { cases: CaseRecord[]; record: CaseRecord; created: boolean } {
   const domain = normalizeDomain(input.domain);
   if (!domain) throw new Error('A valid domain is required to open a case.');
-  const existing = cases.find((item) => item.domain === domain);
+  const existing = selectExistingCase(cases, domain, selection);
   if (existing) return { cases, record: existing, created: false };
   if (cases.length >= MAX_CASES) throw new Error(`Cases are limited to ${MAX_CASES}. Delete or export some first.`);
   const record = createCase({ ...input, domain }, nowIso);
+  if (cases.some(existingCase => existingCase.id === record.id)) throw new Error('A unique Case ID could not be allocated. No data was changed; try again.');
   return { cases: [record, ...cases], record, created: true };
+}
+
+export type CaseIncidentInput = Readonly<{
+  domain: unknown;
+  title: unknown;
+  reuse?: Readonly<{ caseId: string; snapshotId: string }>;
+}>;
+
+/** Start a separate incident; reuse only the deliberately selected observation. */
+export function createCaseIncident(cases: CaseRecord[], input: CaseIncidentInput, nowIso?: string) {
+  const domain = normalizeDomain(input.domain);
+  const title = normalizeCaseObjective(input.title);
+  if (!domain) throw new Error('Enter a valid domain for the incident.');
+  if (!title) throw new Error('Enter a title that distinguishes this incident.');
+  if (typeof input.title === 'string' && input.title.trim().length > MAX_CASE_OBJECTIVE_LENGTH) throw new Error(`Incident titles are limited to ${MAX_CASE_OBJECTIVE_LENGTH} characters.`);
+  let evidence: CaseEvidenceSnapshot | undefined;
+  if (input.reuse) {
+    const source = cases.find(record => record.id === input.reuse?.caseId && record.domain === domain);
+    evidence = source?.evidenceHistory.find(snapshot => snapshot.id === input.reuse?.snapshotId);
+    if (!evidence) throw new Error('The selected source observation is no longer available for this domain. No Case was created.');
+  }
+  return openOrCreateCase(cases, { domain, title, ...(evidence ? { evidence: structuredClone(evidence) } : {}) }, nowIso, { newIncident: true });
 }
 
 /**
@@ -415,6 +442,9 @@ export function updateCase(
   if (index < 0) throw new Error('That case no longer exists.');
   const current = cases[index];
   if (!current) throw new Error('That case no longer exists.');
+  if (patch.title !== undefined && patch.expectedTitle !== undefined && patch.expectedTitle !== (current.title ?? '')) {
+    throw new Error('The incident title changed after this draft was started. Reload and review the current title before saving; your draft has not been applied.');
+  }
   let notes = current.notes;
   if (patch.note !== undefined) {
     const body = normalizeNoteBody(patch.note);
@@ -505,6 +535,7 @@ export function updateCase(
   }
   const record: CaseRecord = {
     ...current,
+    title: patch.title === undefined ? current.title ?? '' : normalizeCaseObjective(patch.title),
     status: patch.closure !== undefined
       ? 'resolved'
       : patch.status !== undefined ? normalizeStatus(patch.status) : current.status,

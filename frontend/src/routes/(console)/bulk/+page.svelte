@@ -99,6 +99,7 @@
     buildBulkMailExposureReport,
   } from '$lib/analysis/bulk-mail-exposure.ts';
   import type { BulkReviewCockpitRow } from '$lib/analysis/bulk-review-cockpit.ts';
+  import { casesForDomain, selectedCasesByDomain } from '../../../../../packages/cases/case-selection.mts';
   import { registerAnalystUndo } from '$lib/analyst-undo';
   const moduleController = new AbortController();
   const preloadModule = (load: () => Promise<unknown>) => preloadBestEffort(load, moduleController.signal);
@@ -156,14 +157,23 @@
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
   const lookupDisabled=$derived(disabledCapability(capabilityReport?.()||null,'lookup'));
   const scanLimitations=$derived(disabledCapabilities(capabilityReport?.()||null,mode==='fast'?['rdap','availability']:['rdap','whois','availability','dns_intelligence','website_probe','tls_intelligence']));
-  const caseByDomain=$derived(new Map(cases.map(record=>[record.domain,record])));
+  let caseSelections=$state<ReadonlyMap<string,string>>(new Map());
+  const caseByDomain=$derived(selectedCasesByDomain(cases,caseSelections));
+  function selectIncidentCase(domain:string,id:string){
+    if(caseMutationBusy||!cases.some(record=>record.id===id&&record.domain===domain))return false;
+    caseSelections=new Map(caseSelections).set(domain,id);return true;
+  }
+  function caseTriageRow(row:ScanResult){
+    const selected=caseByDomain.get(row.domain)||null;
+    return toBulkRouteTriageRow(row,selected,casesSourceState!=='ready'?'unavailable':!selected&&casesForDomain(cases,row.domain).length?'selection_required':'ready');
+  }
   const mutationLabels=MUTATION_LABELS as Record<string,string>;
   const mutationOptions=$derived([...new Set(results.flatMap(row=>row.mutationTypes))].sort((a,b)=>(mutationLabels[a]||a).localeCompare(mutationLabels[b]||b)));
-  const triageRows=$derived(results.map((row)=>toBulkRouteTriageRow(row,caseByDomain.get(row.domain)||null,casesSourceState==='ready'?'ready':'unavailable')));
+  const triageRows=$derived(results.map(caseTriageRow));
   const advancedFilters=$derived<BulkAdvancedFilters>({source:sourceFilter,lifecycle:lifecycleFilter,age:ageFilter,mail:mailFilter,registrar:registrarFilter,caseDisposition:casesSourceState==='ready'?caseDispositionFilter:''});
   const bulkReviewStateByDomain=$derived(new Map(bulkReviewStore.rows.map((row)=>[row.domain,row.state])));
   const riskComparison=$derived(buildBulkRiskComparison(results));
-  const filtered = $derived.by(()=>sortBulkResults(results.filter((row)=>matchesBulkRouteFilter(row,{filter,mutationFilter,signalFilters},riskComparison)&&matchesBulkAdvancedFilters(toBulkRouteTriageRow(row,caseByDomain.get(row.domain)||null),advancedFilters)&&matchesReviewState(row.domain)),sortKey,sortDirection,(row)=>comparableBulkRiskScore(row,riskComparison)));
+  const filtered = $derived.by(()=>sortBulkResults(results.filter((row)=>matchesBulkRouteFilter(row,{filter,mutationFilter,signalFilters},riskComparison)&&matchesBulkAdvancedFilters(caseTriageRow(row),advancedFilters)&&matchesReviewState(row.domain)),sortKey,sortDirection,(row)=>comparableBulkRiskScore(row,riskComparison)));
   const mailExposureReport=$derived(buildBulkMailExposureReport(filtered.map(toBulkSessionResult),{
     observedAt:scanStartedAt,
     officialDomains:profileSourceState==='ready'?(profile?.officialDomains||[]):[],
@@ -172,12 +182,12 @@
     currentProfileContext:currentProfileContext(),
   }));
   const advancedFilterOptions=$derived(bulkAdvancedFilterOptions(triageRows));
-  const groupSummary=$derived(buildBulkTriageGroups(filtered.map((row)=>toBulkRouteTriageRow(row,caseByDomain.get(row.domain)||null,casesSourceState==='ready'?'ready':'unavailable')),groupBy));
+  const groupSummary=$derived(buildBulkTriageGroups(filtered.map(caseTriageRow),groupBy));
   const peerOutlierMatrix=$derived(buildBulkPeerOutlierMatrix(filtered));
   const shortlistedDomains=$derived(new Set(shortlist.map(item=>item.domain)));
   const reviewedIndicatorRows=$derived(casesSourceState==='ready'?filtered.map((row)=>({
     ...row,
-    analystDisposition:caseByDomain.get(row.domain)?.disposition||'unreviewed',
+    analystDisposition:caseByDomain.get(row.domain)?.disposition||(casesForDomain(cases,row.domain).length?'selection_required':'unreviewed'),
   })):[]);
   const indicatorPreflight=$derived(prepareDefensiveIndicatorExport(reviewedIndicatorRows,{
     selectedDomains:[...shortlistedDomains],
@@ -429,7 +439,8 @@
     if(casesSourceState!=='ready'||!casesApi){caseStatus='Cases are unavailable. Reload before creating a case.';return'rejected';}
     const s=row.saved;
     try{
-      const committed=await casesApi.openCase({domain:row.domain,source:'bulk',evidence:{scanDepth:s.scanDepth,availability:s.availability,confidence:row.confidence,riskModelVersion:s.riskModelVersion,riskScore:row.risk,riskFactors:s.riskFactors,opportunityModelVersion:s.opportunityModelVersion,opportunityScore:row.opportunity,registrar:row.registrar&&row.registrar!=='—'?row.registrar:null,createdDate:s.createdDate,expiryDate:s.expiryDate,nameservers:s.nameservers,hasMx:s.hasMx,hasSpf:s.hasSpf,hasDmarc:s.hasDmarc,activityStatus:s.activityStatus,pageTitle:s.pageTitle,...(normalizeHttpSummary(s)||{}),faviconMatch:s.faviconMatch,faviconNearMatch:s.faviconNearMatch,reusesOfficialAssets:s.reusesOfficialAssets,hasPasswordField:s.hasPasswordField,hasExternalFormAction:s.hasExternalFormAction,phishingLanguageMatch:s.phishingLanguageMatch,privacyProtected:s.privacyProtected,idnReferenceMatch:s.idnReferenceMatch,pageBaselineMatch:s.pageBaselineMatch,hasActiveBrandProfile:s.hasActiveBrandProfile,profileContextState:s.profileContext.sourceState==='ready'?'ready':'unavailable',profileContextLimitation:s.profileContext.limitation||null,mutationTypes:s.mutationTypes}});
+      const selected=caseByDomain.get(row.domain);
+      const committed=await casesApi.openCase({domain:row.domain,source:'bulk',evidence:{scanDepth:s.scanDepth,availability:s.availability,confidence:row.confidence,riskModelVersion:s.riskModelVersion,riskScore:row.risk,riskFactors:s.riskFactors,opportunityModelVersion:s.opportunityModelVersion,opportunityScore:row.opportunity,registrar:row.registrar&&row.registrar!=='—'?row.registrar:null,createdDate:s.createdDate,expiryDate:s.expiryDate,nameservers:s.nameservers,hasMx:s.hasMx,hasSpf:s.hasSpf,hasDmarc:s.hasDmarc,activityStatus:s.activityStatus,pageTitle:s.pageTitle,...(normalizeHttpSummary(s)||{}),faviconMatch:s.faviconMatch,faviconNearMatch:s.faviconNearMatch,reusesOfficialAssets:s.reusesOfficialAssets,hasPasswordField:s.hasPasswordField,hasExternalFormAction:s.hasExternalFormAction,phishingLanguageMatch:s.phishingLanguageMatch,privacyProtected:s.privacyProtected,idnReferenceMatch:s.idnReferenceMatch,pageBaselineMatch:s.pageBaselineMatch,hasActiveBrandProfile:s.hasActiveBrandProfile,profileContextState:s.profileContext.sourceState==='ready'?'ready':'unavailable',profileContextLimitation:s.profileContext.limitation||null,mutationTypes:s.mutationTypes}},selected?{caseId:selected.id}:{});
       await reconcileBulkCaseSnapshot(committed,`${committed.created?`Opened a case for ${committed.record.domain}.`:`${committed.record.domain} already has a case.`}${prunedNote(committed.pruned)}`);
       return'committed';
     }catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not open the case.';return failedLocalMutationOutcome(cause);}
@@ -662,9 +673,11 @@
     try{
       await ensurePrimaryResultContext();
       if(casesSourceState!=='ready'||!casesApi){caseStatus='Cases are unavailable. Reload before changing dispositions.';return;}
-      const records=selectedRows.map((row)=>caseByDomain.get(row.domain)).filter((record):record is CaseRecord=>Boolean(record)).slice(0,100);if(!records.length)return;
+      const records=selectedRows.map((row)=>caseByDomain.get(row.domain)).filter((record):record is CaseRecord=>Boolean(record)).slice(0,100);
+      const omitted=selectedRows.length-records.length;
+      if(!records.length){caseStatus='Select an incident Case for each target before changing its disposition.';return;}
       const committed=await casesApi.setCaseDispositions(records.map((record)=>record.id),value);
-      await reconcileBulkCaseSnapshot(committed,`Marked ${committed.changed} selected case${committed.changed===1?'':'s'} as ${casesApi.dispositionLabel(value)}${selectedRows.length>records.length?'; only existing cases were changed':''}.${prunedNote(committed.pruned)}`);
+      await reconcileBulkCaseSnapshot(committed,`Marked ${committed.changed} selected case${committed.changed===1?'':'s'} as ${casesApi.dispositionLabel(value)}.${omitted?` ${omitted} target${omitted===1?' was':'s were'} not changed: no incident was selected, no Case exists, or the 100-Case batch limit was reached.`:''}${prunedNote(committed.pruned)}`);
     }catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not update the selected Cases.';}
     finally{caseMutationBusy=false;}
   }
@@ -793,7 +806,7 @@
       {#if mobileResultView==='review'}
         <DeferredSurface
           load={()=>import('$lib/components/BulkReviewCockpit.svelte')}
-          props={{rows:cockpitRows,retryPlan,retryStatus,setReviewState:setReviewStateAt,toggleSaved:toggleSavedAt,trackCase:trackCaseAt,caseOptions,setDisposition:setDispositionAt,watchlistName,setWatchlistName:(value:string)=>watchlistName=value,saveToWatchlist:saveCurrentResultAt,actionStatus:saveStatus||caseStatus,inspectDomain:inspectAt,executeRetry:executeReviewedRetry,profileContextLoading:profileSourceState==='loading',shortlistAvailable:shortlistSourceState==='ready',caseAvailable:casesSourceState==='ready',reviewAvailable:bulkReviewSourceState==='ready'}}
+          props={{rows:cockpitRows,caseRecords:cases,selectIncident:selectIncidentCase,retryPlan,retryStatus,setReviewState:setReviewStateAt,toggleSaved:toggleSavedAt,trackCase:trackCaseAt,caseOptions,setDisposition:setDispositionAt,watchlistName,setWatchlistName:(value:string)=>watchlistName=value,saveToWatchlist:saveCurrentResultAt,actionStatus:saveStatus||caseStatus,inspectDomain:inspectAt,executeRetry:executeReviewedRetry,profileContextLoading:profileSourceState==='loading',shortlistAvailable:shortlistSourceState==='ready',caseAvailable:casesSourceState==='ready',reviewAvailable:bulkReviewSourceState==='ready'}}
           loadingLabel="Loading result review."
           unavailableLabel="Result review could not be loaded. The primary result list remains available."
         />
@@ -804,7 +817,7 @@
       {#if mobileResultView==='list'}
       <DeferredSurface
         load={()=>import('$lib/components/BulkResultsTable.svelte')}
-        props={{rows:resultRows,sortKey,sortDirection,setSort,toggleSaved:toggleSavedAt,caseOptions,setDisposition:setDispositionAt,trackCase:trackCaseAt,inspectDomain:inspectAt,copyDraft,currentPage,pageCount,setPage:(value:number)=>page=value,draftStatus,caseStatus,setReviewState:setReviewStateAt,shortlistSourceState,caseSourceState:casesSourceState,reviewSourceState:bulkReviewSourceState}}
+        props={{rows:resultRows,caseRecords:cases,selectIncident:selectIncidentCase,sortKey,sortDirection,setSort,toggleSaved:toggleSavedAt,caseOptions,setDisposition:setDispositionAt,trackCase:trackCaseAt,inspectDomain:inspectAt,copyDraft,currentPage,pageCount,setPage:(value:number)=>page=value,draftStatus,caseStatus,setReviewState:setReviewStateAt,shortlistSourceState,caseSourceState:casesSourceState,reviewSourceState:bulkReviewSourceState}}
         loadingLabel="Loading the primary Bulk result list."
         unavailableLabel="The primary Bulk result list could not be loaded. Collected results remain in this tab."
       />

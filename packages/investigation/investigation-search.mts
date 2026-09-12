@@ -11,6 +11,7 @@ import {
 } from './investigation-projection.mts';
 import { readBoundedInvestigationProjection } from './investigation-projection-reader.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { MAX_CASE_OBJECTIVE_LENGTH } from '../contracts/case-portability.mts';
 import {
   INVESTIGATION_SEARCH_SCHEMA,
   INVESTIGATION_SEARCH_VERSION,
@@ -322,8 +323,9 @@ function addTerm(
   output: Map<string, InvestigationSearchTerm>,
   field: InvestigationSearchField,
   rawValue: unknown,
+  maximum = 300,
 ): void {
-  const value = boundedText(rawValue, 300);
+  const value = boundedText(rawValue, maximum);
   if (!value) return;
   const normalized = normalizeSearchText(value);
   const previous = output.get(normalized);
@@ -336,7 +338,7 @@ function searchableTerms(entity: IndexedEntity): { terms: InvestigationSearchTer
   addTerm(terms, 'canonical', entity.canonical);
   addTerm(terms, 'label', entity.label);
   addTerm(terms, 'domain', entity.properties.domain);
-  addTerm(terms, 'name', entity.properties.name);
+  addTerm(terms, 'name', entity.properties.name, entity.type === 'case' ? MAX_CASE_OBJECTIVE_LENGTH : 300);
   addTerm(terms, 'origin', entity.properties.origin);
   addTerm(terms, 'sha256', entity.properties.sha256);
   addTerm(terms, 'ip', entity.properties.ipAddress);

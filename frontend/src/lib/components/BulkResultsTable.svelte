@@ -1,6 +1,9 @@
 <script lang="ts">
   import Pagination from '$lib/components/Pagination.svelte';
   import BulkRiskSummary from '$lib/components/BulkRiskSummary.svelte';
+  import CasePicker from './CasePicker.svelte';
+  import { casesForDomain } from '../../../../packages/cases/case-selection.mts';
+  import type { CaseRecord } from '$lib/analysis/case-model.ts';
   import type { BulkRiskPresentation } from '$lib/analysis/bulk-route-model.ts';
   import type { BulkSortKey as SortKey } from '$lib/analysis/bulk-sort.ts';
   import type { BrowserLocalCollectionLoadState } from '$lib/browser-local-data-service';
@@ -41,6 +44,8 @@
 
   let {
     rows,
+    caseRecords = [],
+    selectIncident,
     sortKey,
     sortDirection,
     setSort,
@@ -61,6 +66,8 @@
     reviewSourceState = 'ready',
   }: {
     rows: ResultRow[];
+    caseRecords?: CaseRecord[];
+    selectIncident: (domain: string, id: string) => boolean;
     sortKey: SortKey;
     sortDirection: 1 | -1;
     setSort: (value: SortKey) => void;
@@ -120,6 +127,7 @@
     <thead><tr><th aria-sort={sortKey === 'domain' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('domain')}>Domain {sortKey === 'domain' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'availability' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('availability')}>Registration {sortKey === 'availability' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'risk' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('risk')}>Risk {sortKey === 'risk' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'activity' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('activity')}>Website {sortKey === 'activity' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'registrar' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('registrar')}>Registrar {sortKey === 'registrar' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th aria-sort={sortKey === 'mutation' ? (sortDirection === 1 ? 'ascending' : 'descending') : 'none'}><button class="sort" onclick={() => setSort('mutation')}>Mutation {sortKey === 'mutation' ? (sortDirection === 1 ? '↑' : '↓') : ''}</button></th><th>Review</th><th>Case</th><th>Actions</th></tr></thead>
     <tbody>
       {#each rows as row}
+        {@const incidents=casesForDomain(caseRecords,row.domain)}
         <tr id={`bulk-result-${row.resultIndex}`} class:error-row={row.errorRow} class:trusted-row={Boolean(row.trusted)} class:mobile-expanded={expandedRows.has(row.resultIndex)}>
           <td data-label="Domain"><div class="domain"><button class="star" class:unavailable={!shortlistAvailable} disabled={!shortlistAvailable} aria-label={shortlistAvailable?`${row.shortlisted ? 'Remove' : 'Add'} ${row.domain} ${row.shortlisted ? 'from' : 'to'} shortlist`:shortlistSourceState==='loading'?`Shortlist state loading for ${row.domain}`:shortlistSourceState==='idle'?`Shortlist state not loaded for ${row.domain}`:`Shortlist state unavailable for ${row.domain}`} aria-pressed={shortlistAvailable?row.shortlisted:undefined} onclick={() => toggleSaved(row.resultIndex)}>{shortlistAvailable?(row.shortlisted?'★':'☆'):shortlistSourceState==='loading'?'…':'—'}</button><div class="domain-content"><strong>{row.domain}</strong>{#if shortlistSourceState === 'loading'}<small class="source-unavailable">Shortlist loading</small>{:else if shortlistSourceState === 'idle'}<small class="source-unavailable">Shortlist not loaded</small>{:else if !shortlistAvailable}<small class="source-unavailable">Shortlist unavailable</small>{/if}{#if row.unicodeDomain}<small class="idn-label">Unicode: {row.unicodeDomain}</small>{/if}{#if row.mixedScript}<small class="warn-label">Mixed writing scripts</small>{/if}{#if row.referenceMatch}<small class="warn-label">Official-domain skeleton match</small>{/if}{#if row.trusted}<small class="trusted-label">{row.trusted}</small>{/if}{#if !row.profileContextReady}<small class="warn-label">Brand Profile context unevaluated{row.profileContextLimitation ? ` — ${row.profileContextLimitation}` : ''}</small>{/if}{#if row.faviconMatch}<small class="danger-label">Favicon match</small>{:else if row.faviconNearMatch}<small class="warn-label">Favicon near-match</small>{/if}{#if row.reusesOfficialAssets}<small class="warn-label">Observed official-asset relationship</small>{/if}{#if row.hasPasswordField}<small class="warn-label">Password field</small>{/if}{#if row.phishingLanguageMatch}<small class="danger-label">Matched phishing-language pattern</small>{/if}{#if row.ct}<details class="ct-source"><summary>Certificate Transparency</summary><div class="ct-source-detail">{#if row.ct.lastObservedAt}<span>Latest CT observation <time datetime={row.ct.lastObservedAt}>{row.ct.lastObservedAt.slice(0, 10)}</time></span>{/if}<span>{row.ct.hostnameCount} observed hostname{row.ct.hostnameCount === 1 ? '' : 's'}</span><span>{row.ct.certificateCount} distinct certificate{row.ct.certificateCount === 1 ? '' : 's'}</span></div></details>{/if}{#if row.error}<small>{row.error}</small>{/if}</div></div><button class="mobile-row-toggle" type="button" aria-expanded={expandedRows.has(row.resultIndex)} aria-label={`${expandedRows.has(row.resultIndex) ? 'Hide' : 'Show'} details for ${row.domain}`} onclick={() => toggleRowDetails(row.resultIndex)}>{expandedRows.has(row.resultIndex) ? 'Hide details' : 'Show details'}</button></td>
           <td data-label="Registration"><span class="state" data-registration-state={row.availability}>{row.availability.replace('_', ' ')}</span><small class="confidence">{row.confidence} confidence</small></td>
@@ -128,7 +136,16 @@
           <td class="mobile-secondary" data-label="Registrar">{row.registrar}</td>
           <td class="mobile-secondary" data-label="Mutation">{row.mutationLabel}</td>
           <td class="mobile-secondary" data-label="Review">{#if reviewAvailable}<select class="review-state" aria-label={`Review state for ${row.domain}`} value={row.reviewState} onchange={(event) => setReviewState(row.resultIndex, event.currentTarget.value)}><option value="unreviewed">Unreviewed</option><option value="reviewing">Reviewing</option><option value="reviewed">Reviewed</option><option value="deferred">Deferred</option></select>{:else if reviewSourceState === 'loading'}<span class="source-unavailable">Review loading</span>{:else if reviewSourceState === 'idle'}<span class="source-unavailable">Open Review to load</span>{:else}<span class="source-unavailable">Review unavailable</span>{/if}</td>
-          <td class="mobile-secondary" data-label="Case">{#if caseSourceState === 'loading'}<span class="source-unavailable">Case loading</span>{:else if caseSourceState === 'idle'}<span class="source-unavailable">Case not loaded</span>{:else if !caseAvailable}<span class="source-unavailable">Case unavailable</span>{:else if row.caseRecord}<div class="case-cell"><select class="case-disp" aria-label={`Disposition for ${row.domain}`} value={row.caseRecord.disposition} onchange={(event) => setDisposition(row.resultIndex, event.currentTarget.value)}>{#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}</select><a class="case-open" href={`/monitor?case=${encodeURIComponent(row.caseRecord.id)}`}>Open</a></div>{:else}<button class="btn small case-track" onclick={() => trackCase(row.resultIndex)}>＋ Create case</button>{/if}</td>
+          <td class="mobile-secondary" data-label="Case">
+            {#if caseSourceState === 'loading'}<span class="source-unavailable">Case loading</span>
+            {:else if caseSourceState === 'idle'}<span class="source-unavailable">Case not loaded</span>
+            {:else if !caseAvailable}<span class="source-unavailable">Case unavailable</span>
+            {:else}
+              {#if incidents.length>1}<CasePicker id={`bulk-incident-${row.resultIndex}`} records={incidents} selectedId={row.caseRecord?.id??''} select={(id)=>selectIncident(row.domain,id)} />{/if}
+              {#if row.caseRecord}<div class="case-cell"><select class="case-disp" aria-label={`Disposition for ${row.domain}`} value={row.caseRecord.disposition} onchange={(event) => setDisposition(row.resultIndex, event.currentTarget.value)}>{#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}</select><a class="case-open" href={`/monitor?case=${encodeURIComponent(row.caseRecord.id)}`}>Open</a></div>
+              {:else if !incidents.length}<button class="btn small case-track" onclick={() => trackCase(row.resultIndex)}>＋ Create case</button>{/if}
+            {/if}
+          </td>
           <td class="mobile-secondary" data-label="Actions"><div class="draft-actions"><button class="inspect" onclick={() => inspectDomain(row.resultIndex)}>Inspect</button>{#if row.outreach}<a href={row.outreach.mailto}>Outreach</a><button onclick={() => copyDraft(row.outreach?.body ?? '', `${row.domain} outreach draft`)}>Copy</button>{/if}{#if row.responseHref}<a href={row.responseHref}>Prepare reviewed report</a>{/if}</div></td>
         </tr>
       {/each}

@@ -76,6 +76,22 @@ function indexFor(input: unknown) {
   return buildInvestigationSearchIndex(buildInvestigationProjection(input, { generatedAt: LATE }));
 }
 
+test('search keeps separate incident identities and indexes a full bounded title', () => {
+  const title = `${'a'.repeat(304)} final-title-key`;
+  const index = indexFor(projectionInput({ cases: { version: CASE_SCHEMA_VERSION, cases: [
+    caseRecord('incident-first', 'shared.example', { title }),
+    caseRecord('incident-second', 'shared.example', { title: 'Unrelated incident' }),
+  ] } }));
+  const first = index.entries.find(item => item.canonical === 'incident-first');
+  const second = index.entries.find(item => item.canonical === 'incident-second');
+  assert.ok(first && second);
+  assert.notEqual(first.entityId, second.entityId);
+  assert.ok(first.terms.some(term => term.value === title));
+  const found = searchInvestigationIndex(index, 'final-title-key');
+  assert.equal(found.results.length, 1);
+  assert.equal(found.results[0]?.canonical, 'incident-first');
+});
+
 function indexedProjection(count: number, nameservers = 0, longTerms = false) {
   return {
     schema: INVESTIGATION_PROJECTION_SCHEMA, version: INVESTIGATION_PROJECTION_VERSION, generatedAt: LATE,

@@ -5,7 +5,7 @@ import {
   LookupCaseController,
   type LookupCaseApi,
 } from '../frontend/src/lib/controllers/lookup-case-controller.ts';
-import { createCase, updateCase } from '../frontend/src/lib/analysis/case-model.ts';
+import { createCase, openOrCreateCase, updateCase } from '../frontend/src/lib/analysis/case-model.ts';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/evidence-export.ts';
 import type { ResolvedAbuseRecipient } from '../frontend/src/lib/analysis/abuse-recipient-resolver.ts';
 import type { CheckpointFact } from '../frontend/src/lib/analysis/case-evidence-checkpoint.ts';
@@ -38,7 +38,7 @@ function fixtureFact(field = 'dns.mx'): CheckpointFact {
 
 function fixtureApi(overrides: Partial<LookupCaseApi> = {}): LookupCaseApi {
   return {
-    getByDomain: unused,
+    getForDomain: unused,
     open: unused,
     addNote: unused,
     edit: unused,
@@ -47,9 +47,45 @@ function fixtureApi(overrides: Partial<LookupCaseApi> = {}): LookupCaseApi {
 }
 
 describe('Lookup case controller', () => {
+  test('reads and writes only an explicitly selected same-domain incident without granting selection from domain membership', async () => {
+    const domain = 'incident.example';
+    const first = createCase({ domain, title: 'First incident' }, '2026-08-20T00:00:00.000Z');
+    const second = createCase({ domain, title: 'Second incident' }, '2026-08-21T00:00:00.000Z');
+    let records = [first, second];
+    const controller = new LookupCaseController(fixtureApi({
+      getForDomain: async () => records,
+      open: async (input, selection) => {
+        const result = openOrCreateCase(records, input, '2026-08-22T00:00:00.000Z', selection);
+        records = result.cases; return { ...result, pruned: 0 };
+      },
+      edit: async (id, patch) => {
+        const result = updateCase(records, id, patch, '2026-08-22T00:00:00.000Z');
+        records = result.cases; return { ...result, pruned: 0 };
+      },
+    }));
+    const ambiguous = await controller.refresh(domain);
+    assert.equal(ambiguous.record, null);
+    assert.equal(ambiguous.records.length, 2);
+    assert.equal(ambiguous.sourceState, 'ready');
+    assert.equal((await controller.refresh(domain, first.id)).record?.id, first.id);
+    assert.equal((await controller.refresh(domain, 'unavailable-id')).record, null);
+    const before = structuredClone(records);
+    const rejected = await controller.open(domain, { availability: 'registered' }, 'fast');
+    assert.notEqual(rejected.mutationOutcome, 'committed');
+    assert.deepEqual(records, before);
+    const saved = await controller.open(domain, { availability: 'registered' }, 'fast', { caseId: second.id });
+    assert.equal(saved.record?.id, second.id);
+    assert.equal(records.find(record => record.id === first.id)?.evidenceHistory.length, 0);
+    assert.equal(records.find(record => record.id === second.id)?.evidenceHistory.length, 1);
+    const fresh = await controller.open(domain, { availability: 'registered' }, 'fast', { newIncident: true }, 'Third incident');
+    assert.equal(fresh.mutationOutcome, 'committed');
+    assert.equal(fresh.record?.title, 'Third incident');
+    assert.equal(records.length, 3);
+    assert.equal((await controller.openReplay(domain, { availability: 'registered' }, { caseId: first.id })).record?.id, first.id);
+  });
   test('returns an empty result when there is no domain context', async () => {
     const api: LookupCaseApi = {
-      getByDomain: unused,
+      getForDomain: unused,
       open: unused,
       addNote: unused,
       edit: unused,
@@ -58,6 +94,7 @@ describe('Lookup case controller', () => {
 
     assert.deepEqual(await controller.refresh(''), {
       record: null,
+      records: [],
       status: '',
       sourceState: 'ready',
     });
@@ -65,7 +102,7 @@ describe('Lookup case controller', () => {
 
   test('returns a clear status after browser-local case context loads', async () => {
     const api: LookupCaseApi = {
-      getByDomain: async () => null,
+      getForDomain: async () => [],
       open: unused,
       addNote: unused,
       edit: unused,
@@ -74,6 +111,7 @@ describe('Lookup case controller', () => {
 
     assert.deepEqual(await controller.refresh('case-context.example'), {
       record: null,
+      records: [],
       status: '',
       sourceState: 'ready',
     });
@@ -81,7 +119,7 @@ describe('Lookup case controller', () => {
 
   test('keeps browser-local case failure separate from collected evidence', async () => {
     const api: LookupCaseApi = {
-      getByDomain: async () => {
+      getForDomain: async () => {
         throw new Error('IndexedDB unavailable');
       },
       open: unused,
@@ -92,6 +130,7 @@ describe('Lookup case controller', () => {
 
     assert.deepEqual(await controller.refresh('case-context.example'), {
       record: null,
+      records: [],
       sourceState: 'unavailable',
       status:
         'Browser-local case context is unavailable. The collected lookup evidence remains available.',
@@ -103,7 +142,7 @@ describe('Lookup case controller', () => {
     let clock = 0;
     const now = () => `2026-08-${String(20 + clock++).padStart(2, '0')}T00:00:00.000Z`;
     const api: LookupCaseApi = {
-      getByDomain: async (domain) => records.find((record) => record.domain === domain) ?? null,
+      getForDomain: async (domain) => records.filter((record) => record.domain === domain),
       open: async (input) => {
         const existing = records.find((record) => record.domain === input.domain);
         if (existing) return { record: existing, cases: records, created: false, pruned: 0 };
@@ -143,7 +182,7 @@ describe('Lookup case controller', () => {
     const record = createCase({ domain: 'case-context.example' }, '2026-07-29T01:00:00.000Z');
     const patches: Array<Parameters<LookupCaseApi['edit']>[1]> = [];
     const api: LookupCaseApi = {
-      getByDomain: unused,
+      getForDomain: unused,
       open: unused,
       addNote: unused,
       edit: async (_id, value) => {

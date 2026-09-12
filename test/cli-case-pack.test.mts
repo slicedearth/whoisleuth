@@ -175,6 +175,8 @@ describe('CLI case pack', () => {
     const current = buildCliCasePack(JSON.stringify({ version: CASE_SCHEMA_VERSION, cases: [record] }), { audience: 'internal', reviewed: true }, NOW);
     const published = JSON.parse(JSON.stringify(current));
     published.version = 15;
+    delete published.cases[0].title;
+    delete published.packet.reports[0].case.title;
     published.packet.reports[0].schemaVersion = 11;
     published.packet.reports[0].limitations = JSON.parse(readFileSync(new URL('./fixtures/case-lifecycle/case-report-v11.json', import.meta.url), 'utf8')).limitations;
     published.cases[0].sightings.reverse();
@@ -402,11 +404,28 @@ describe('CLI case pack', () => {
     }
 
     const duplicates = structuredClone(exportedCases());
-    duplicates.cases.push({ ...structuredClone(duplicates.cases[0]!), id: 'case-2' });
+    duplicates.cases.push(structuredClone(duplicates.cases[0]!));
     assert.throws(
       () => buildCliCasePack(JSON.stringify(duplicates), { audience: 'internal', reviewed: true }, NOW),
       /duplicate Case identity/iu,
     );
+  });
+
+  test('packs separate same-domain incidents and binds every report to its exact Case identity', () => {
+    const source = exportedCases();
+    source.cases[0]!.title = 'First incident';
+    source.cases.push({ ...structuredClone(source.cases[0]!), id: 'case-second-incident', title: 'Second incident', notes: [] });
+    for (const audience of ['internal', 'trusted', 'public'] as const) {
+      const pack = buildCliCasePack(JSON.stringify(source), { audience, reviewed: true }, NOW);
+      assert.equal(pack.cases.length, 2);
+      assert.equal(new Set(pack.cases.map(record => record.domain)).size, 1);
+      assert.deepEqual(verifyCliCasePack(pack), { caseCount: 2 });
+      assert.deepEqual(pack.packet.reports.map(report => report.case.id), pack.cases.map(record => record.id));
+      if (audience !== 'internal') assert.ok(!JSON.stringify(pack).includes('First incident'));
+      const altered = JSON.parse(JSON.stringify(pack));
+      altered.packet.reports[0].case.id = altered.packet.reports[1].case.id;
+      assert.throws(() => verifyCliCasePack(resign(altered)), /report.*Case|report.*case|match/iu);
+    }
   });
 
   test('rejects re-signed public and trusted audience leaks in both cases and reports', () => {

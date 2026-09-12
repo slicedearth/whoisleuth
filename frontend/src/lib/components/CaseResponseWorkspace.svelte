@@ -10,6 +10,7 @@
   import CaseOutcomeStage from '$lib/components/CaseOutcomeStage.svelte';
   import CaseRenderedCapture from '$lib/components/CaseRenderedCapture.svelte';
   import CaseWorkflowDetails from '$lib/components/CaseWorkflowDetails.svelte';
+  import CaseTitleForm from '$lib/components/CaseTitleForm.svelte';
   import CaseResponsePacketWorkspace from '$lib/components/CaseResponsePacketWorkspace.svelte';
   import {
     CASE_RESPONSE_STAGE_DEFINITIONS,
@@ -270,6 +271,7 @@
       <summary>Classification and incident links <span>{caseTypeSummary(record.tags)}</span></summary>
       <CaseWorkflowDetails {record} {onsaved} {oncommitted} {onmessage} />
     </details>
+    <CaseTitleForm {record} {mutationBusy} {persist} />
     {@render summary()}
   </div>
 

@@ -318,6 +318,15 @@ Select a Case to open its workspace. **All Cases** returns to the retained list
 filters. Direct Case links open that record in this browser, not in another
 person's workspace.
 
+A domain can have several independent incident Cases. **Create a separate
+incident Case** gives the investigation a title and a new immutable Case ID.
+Optionally reuse one retained observation; its timestamps remain unchanged and
+the source Case's notes and decisions are not copied. Lookup and Bulk require
+an incident selection when several Cases share a domain. Search the Case list
+by title, domain or full Case number. Current imports match Case IDs; ID-less
+partial or older imports can match a domain only when the destination is
+unambiguous.
+
 **Summary** shows retained records and next work; **Evidence** contains captures,
 pins and relationships; **Assessment** holds conclusions and branches;
 **Response** contains recipient review, packets, delivery and outcome records;

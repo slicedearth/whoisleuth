@@ -5,6 +5,7 @@
     {
       "id": "case-v12-response",
       "domain": "response-history.example",
+      "title": "",
       "status": "reviewing",
       "disposition": "suspicious",
       "reviewReasonCode": null,
@@ -105,6 +106,7 @@
         },
         "case": {
           "id": "case-v12-response",
+          "title": "",
           "domain": "response-history.example",
           "status": "reviewing",
           "disposition": "suspicious",
@@ -219,6 +221,6 @@
   "integrity": {
     "algorithm": "SHA-256",
     "canonicalization": "sorted-json-v2",
-    "digestSha256": "sha256:9e5dced200c669471473e1ac139b151b1435ca0e7468468cd8df85caa77b14cb"
+    "digestSha256": "sha256:b0ca8fb0182b7d49e75fc2e6f4bcf7c7f70d4619123eb5e222a7238fa3055ebd"
   }
 }

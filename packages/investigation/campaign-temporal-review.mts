@@ -187,8 +187,8 @@ export function buildCampaignTemporalReview(domainsValue: unknown, recordsValue:
     ? [...new Set(domainsValue.map((value) => text(value, 253).toLowerCase()).filter(Boolean))].slice(0, MAX_MEMBERS)
     : [];
   const records = Array.isArray(recordsValue) ? recordsValue.slice(0, 500) as CaseRecord[] : [];
-  const byDomain = new Map(records.map((record) => [record.domain, record]));
-  const linked = domains.map((domain) => byDomain.get(domain)).filter((record): record is CaseRecord => Boolean(record));
+  const memberDomains = new Set(domains);
+  const linked = records.filter(record => memberDomains.has(record.domain));
   const candidates = linked.flatMap((record) => [
     ...record.evidencePins.map((pin) => candidateFromPin(record.domain, pin)).filter((item): item is Candidate => item !== null),
     ...candidatesFromSightings(record),
@@ -213,11 +213,11 @@ export function buildCampaignTemporalReview(domainsValue: unknown, recordsValue:
       ? [Object.freeze({ day, domains: Object.freeze(memberDomains), eventCount: items.length })]
       : [];
   });
-  const transitions = linked.flatMap((record) => {
-    const itemEvents = events.filter((item) => item.domain === record.domain);
+  const transitions = domains.flatMap((domain) => {
+    const itemEvents = events.filter((item) => item.domain === domain);
     if (!itemEvents.length) return [];
     return [Object.freeze({
-      domain: record.domain,
+      domain,
       layers: Object.freeze([...new Set(itemEvents.map((item) => item.layer))]),
       firstObservedAt: itemEvents[0]?.firstObservedAt ?? '',
       lastObservedAt: itemEvents.reduce((latest, item) => item.lastObservedAt > latest ? item.lastObservedAt : latest, ''),
@@ -227,7 +227,7 @@ export function buildCampaignTemporalReview(domainsValue: unknown, recordsValue:
     version: 1,
     memberCount: domains.length,
     linkedCaseCount: linked.length,
-    unavailableCaseCount: Math.max(0, domains.length - linked.length),
+    unavailableCaseCount: domains.length - new Set(linked.map(record => record.domain)).size,
     earliestAt,
     latestAt,
     spanDays: earliestAt && latestAt ? Math.max(0, Math.ceil((Date.parse(latestAt) - Date.parse(earliestAt)) / 86_400_000)) : null,
@@ -240,6 +240,7 @@ export function buildCampaignTemporalReview(domainsValue: unknown, recordsValue:
     limitations: Object.freeze([
       'This sequence uses only analyst-selected, source-qualified evidence already retained in browser-local cases and makes no request.',
       'Dates are retained observation or publication times, not global first-seen or service-activation dates.',
+      'Several incident Cases can contribute retained records for one domain; record counts are not independent-source counts.',
       'Temporal proximity, shared infrastructure, and event order do not prove common ownership, coordination, intent, compromise, or maliciousness.',
       'Unavailable members, unselected evidence, negative findings, and incomplete source states remain outside the observed sequence.',
     ]),

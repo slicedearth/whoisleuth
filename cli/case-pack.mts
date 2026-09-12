@@ -12,7 +12,6 @@ import { assertBoundedJsonStructure, scanBoundedJson } from '../lib/bounded-json
 import {
   assertCaseBrandProfileIds,
   CASE_AUDIENCE_SENSITIVE_FIELD_NAMES,
-  CASE_RECORD_FIELD_NAMES,
   caseAudienceExclusions,
   normalizeDomain,
   normalizeCaseStore,
@@ -25,6 +24,7 @@ import {
   CASE_REPORT_SCHEMA,
   CASE_IMPORT_VERSIONS,
   CASE_SCHEMA_VERSION,
+  INCIDENT_CASE_SCHEMA_VERSION,
   CLI_CASE_PACK_SCHEMA,
   CLI_CASE_PACK_VERSION,
   CLI_CASE_PACK_INPUT_CASE_VERSIONS,
@@ -179,7 +179,7 @@ function canonicalValuesMatch(left: unknown, right: unknown): boolean {
   catch { return false; }
 }
 
-function assertCanonicalCaseIdentities(cases: readonly unknown[], label: string): void {
+function assertCanonicalCaseIdentities(cases: readonly unknown[], label: string, caseVersion: number): void {
   const ids = new Set<string>();
   const domains = new Set<string>();
   for (const value of cases) {
@@ -190,7 +190,7 @@ function assertCanonicalCaseIdentities(cases: readonly unknown[], label: string)
       || typeof item.domain !== 'string'
       || normalizeDomain(item.domain) !== item.domain
       || ids.has(item.id)
-      || domains.has(item.domain)) {
+      || (caseVersion < INCIDENT_CASE_SCHEMA_VERSION && domains.has(item.domain))) {
       throw new TypeError(`${label} contains a missing, unsafe, non-canonical, or duplicate Case identity.`);
     }
     ids.add(item.id);
@@ -199,12 +199,9 @@ function assertCanonicalCaseIdentities(cases: readonly unknown[], label: string)
 }
 
 function assertCurrentCaseProjection(rawCases: readonly unknown[], normalised: readonly CaseRecord[], label: string, caseVersion: number = CASE_SCHEMA_VERSION): void {
-  const requiredFields = new Set<string>(CASE_RECORD_FIELD_NAMES);
   if (rawCases.length !== normalised.length || rawCases.some((item, index) => {
     const raw = record(item);
     return !raw
-      || Object.keys(raw).length !== requiredFields.size
-      || Object.keys(raw).some((key) => !requiredFields.has(key))
       || !canonicalValuesMatch(raw, normalised[index]);
   })) {
     throw new TypeError(`${label} contains a schema ${caseVersion} Case that would be repaired, truncated, or otherwise changed during normalisation.`);
@@ -217,8 +214,9 @@ function canonicalPackProjection(cases: readonly CaseRecord[], caseVersion: numb
     if ([...value.evidencePins, ...value.sightings].some((item) => item.observedAt === null)) {
       throw new TypeError('The published Case 15 format requires a known observation time on each retained pin and sighting.');
     }
+    const { title: _title, ...published } = value;
     return {
-      ...value,
+      ...published,
       sightings: [...value.sightings].sort((left, right) => Date.parse(left.observedAt!) - Date.parse(right.observedAt!)
         || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0)),
     };
@@ -273,9 +271,10 @@ function assertCurrentAudienceProjection(
   value: Record<string, unknown>,
   normalised: CaseRecord,
   audience: CasePackAudience,
+  caseVersion: number,
 ): void {
-  const expected = projectCaseForAudience(normalised, audience);
-  for (const field of CASE_RECORD_FIELD_NAMES) {
+  const expected = canonicalPackProjection([projectCaseForAudience(normalised, audience)], caseVersion)[0]!;
+  for (const field of Object.keys(expected) as (keyof CaseRecord)[]) {
     if (!canonicalValuesMatch(value[field], expected[field])) {
       throw new TypeError(`The CLI case pack contains ${field} excluded by its audience or transformed incorrectly.`);
     }
@@ -287,8 +286,9 @@ function assertAudienceProjection(
   normalised: CaseRecord,
   audience: CasePackAudience,
   currentSchema: boolean,
+  caseVersion: number,
 ): void {
-  if (currentSchema) assertCurrentAudienceProjection(value, normalised, audience);
+  if (currentSchema) assertCurrentAudienceProjection(value, normalised, audience, caseVersion);
   else assertLegacyAudienceFields(value, normalised, audience);
 }
 
@@ -335,7 +335,7 @@ export function buildCliCasePack(
     throw new CliUsageError(`Case-pack input must be a well-formed WHOISleuth Case export with schema ${CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(' or ')}.`);
   }
   try {
-    assertCanonicalCaseIdentities(root.cases, 'Case-pack input');
+    assertCanonicalCaseIdentities(root.cases, 'Case-pack input', root.version as number);
     for (const item of root.cases) {
       const rawCase = record(item);
       if (!rawCase || !Object.hasOwn(rawCase, 'brandProfileIds')) throw new Error('missing');
@@ -460,7 +460,7 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
     throw new TypeError('The CLI case pack has an invalid audience redaction manifest.');
   }
 
-  assertCanonicalCaseIdentities(root.cases, 'The CLI case pack');
+  assertCanonicalCaseIdentities(root.cases, 'The CLI case pack', root.version as number);
   const normalised = normalizeCaseStore(root).cases;
   if (normalised.length !== root.cases.length) {
     throw new TypeError('The CLI case pack contains an invalid case collection.');
@@ -468,7 +468,7 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
   const currentCaseSchema = root.version >= PUBLISHED_V2_3_CASE_SCHEMA_VERSION;
   const projected = canonicalPackProjection(normalised, root.version as number);
   if (currentCaseSchema) assertCurrentCaseProjection(root.cases, projected, 'The CLI case pack', root.version as number);
-  const normalisedByDomain = new Map(projected.map((item) => [item.domain, item]));
+  const normalisedById = new Map(projected.map((item) => [item.id, item]));
   const caseReferenceLists: string[][] = [];
   const reportReferenceLists: string[][] = [];
 
@@ -480,16 +480,17 @@ export function verifyCliCasePack(input: unknown): Readonly<{ caseCount: number 
       || !report
       || !reportCase
       || typeof rawCase.domain !== 'string'
+      || typeof rawCase.id !== 'string'
       || report.schema !== CASE_REPORT_SCHEMA
       || !caseReportVersionMatchesCase(root.version as number, report.schemaVersion)
       || reportCase.id !== rawCase.id
       || reportCase.domain !== rawCase.domain
-      || !normalisedByDomain.has(rawCase.domain)) {
+      || !normalisedById.has(rawCase.id)) {
       throw new TypeError('The CLI case pack contains an invalid or mismatched Case report.');
     }
-    const normalisedCase = normalisedByDomain.get(rawCase.domain);
+    const normalisedCase = normalisedById.get(rawCase.id);
     if (!normalisedCase) throw new TypeError('The CLI case pack contains an invalid Case projection.');
-    assertAudienceProjection(rawCase, normalisedCase, audience, currentCaseSchema);
+    assertAudienceProjection(rawCase, normalisedCase, audience, currentCaseSchema, root.version as number);
     try {
       if (!Object.hasOwn(rawCase, 'brandProfileIds') || !Object.hasOwn(reportCase, 'brandProfileIds')) throw new Error('missing');
       caseReferenceLists.push(assertCaseBrandProfileIds(rawCase.brandProfileIds));

@@ -28,13 +28,13 @@ test('campaign creation and membership retain later drafts while a write is pend
   }
   await expect(page.getByRole('status')).toContainText('Created campaign “Submitted campaign”');
   await expect(name).toHaveValue('Later campaign draft');
-  await page.getByRole('button', { name: 'Submitted campaign 0 cases', exact: true }).click();
-  const membership = page.getByRole('combobox', { name: 'Add an existing case', exact: true });
+  await page.getByRole('button', { name: /^Submitted campaign\b/u }).click();
+  const membership = page.getByRole('combobox', { name: 'Add a retained domain', exact: true });
   await membership.selectOption('member-a.example');
   const releaseMembership = await holdBrowserLocalTransaction(page);
   try {
-    await page.getByRole('button', { name: 'Add case', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Add case', exact: true })).toBeDisabled();
+    await page.getByRole('button', { name: 'Add domain', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Add domain', exact: true })).toBeDisabled();
     await membership.selectOption('member-b.example');
   } finally {
     await releaseMembership();
@@ -145,10 +145,10 @@ test('campaign detail drafts reject same-clock peer edits but preserve unrelated
   await page.getByRole('button', { name: 'Create campaign', exact: true }).click();
   const editor = page.locator('.campaign-edit');
   await editor.getByRole('textbox', { name: 'Name', exact: true }).fill('Local details');
-  await page.getByRole('combobox', { name: 'Add an existing case', exact: true }).selectOption('shared-member.example');
-  await page.getByRole('button', { name: 'Add case', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Add a retained domain', exact: true }).selectOption('shared-member.example');
+  await page.getByRole('button', { name: 'Add domain', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Added shared-member.example');
-  await expect(page.getByRole('button', { name: 'Shared campaign 1 case', exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: /^Shared campaign\b/u })).toBeFocused();
   await editor.getByRole('button', { name: 'Save details', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Updated campaign “Local details”');
   const original = (await readBrowserLocalCollection(page, 'campaigns', { minimumRecords: 1 })).records[0]?.value;
@@ -159,7 +159,7 @@ test('campaign detail drafts reject same-clock peer edits but preserve unrelated
   try {
     await other.clock.setFixedTime('2026-09-08T00:00:00.000Z');
     await other.goto('/monitor?view=campaigns');
-    await other.getByRole('button', { name: 'Local details 1 case', exact: true }).click();
+    await other.getByRole('button', { name: /^Local details\b/u }).click();
     await other.locator('.campaign-edit').getByRole('textbox', { name: 'Name', exact: true }).fill('Peer details');
     await other.getByRole('button', { name: 'Save details', exact: true }).click();
     await expect(other.getByRole('status')).toContainText('Updated campaign “Peer details”');
@@ -171,7 +171,7 @@ test('campaign detail drafts reject same-clock peer edits but preserve unrelated
     await page.getByRole('button', { name: 'Refresh campaigns', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('Refreshed campaigns');
     await expect(editor.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Unsaved local draft');
-    const heading = page.getByRole('button', { name: 'Peer details 1 case', exact: true });
+    const heading = page.getByRole('button', { name: /^Peer details\b/u });
     await heading.click();
     await heading.click();
     await expect(editor.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Peer details');

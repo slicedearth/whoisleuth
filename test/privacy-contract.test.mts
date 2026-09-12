@@ -59,6 +59,8 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   { id: 'unknown-source-time', pattern: /Pins and sightings with unknown observation times retain null; saving them does not create a source observation time/iu },
   { id: 'case-report', pattern: new RegExp(`Case report v${CASE_REPORT_SCHEMA_VERSION} JSON and Markdown`, 'iu') },
   { id: 'case-incident-links', pattern: /Case can (?:also )?retain controlled classifications and exact HTTP\(S\) incident links.*browser-local Case metadata/iu },
+  { id: 'case-incident-title-privacy', pattern: /Separate incident Cases can share a domain.*own IDs, titles and decisions.*ordinary Case exports, reports, workspace archives and internal CLI packs.*trusted and public CLI packs exclude them/iu },
+  { id: 'case-observation-reuse', pattern: /Reusing a selected observation copies only that evidence with its original timestamps, not the source Case's notes or decisions/iu },
   { id: 'public-case-pack', pattern: /Public CLI case packs clear identifiers, actions, observed-effect reviews,? and closure records/iu },
   { id: 'workspace-compatibility', pattern: new RegExp(`workspace archive version ${WORKSPACE_ARCHIVE_VERSION}.*exact versions ${PUBLIC_WORKSPACE_ARCHIVE_VERSION},? ${PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION},? and ${PUBLISHED_V2_2_WORKSPACE_ARCHIVE_VERSION} remain readable`, 'iu') },
   { id: 'unsupported-workspace', pattern: /Versions 1 through 4.*future versions fail without.*reset, deletion,? or rewrite/iu },

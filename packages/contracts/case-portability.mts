@@ -4,6 +4,7 @@ import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 import type { SchemaLifecycleFamilyDefinition } from './schema-lifecycle.mts';
 
 export const CASE_CONTRACT_OWNER = 'packages/contracts/case-portability.mts';
+export const MAX_CASE_OBJECTIVE_LENGTH = 320;
 export const LATEST_PUBLIC_APPLICATION_VERSION = '2.3.0';
 // Published writer identities are independent of the next writer. Historical
 // readers below use fixed release epochs, never a moving "latest" identity.
@@ -32,6 +33,7 @@ export const CASE_PORTABILITY_IDENTITY_CONSTANTS = Object.freeze([
   'CASE_BROWSER_STORE_LIFECYCLE_SCHEMA',
   'CASE_EXPORT_LIFECYCLE_SCHEMA',
   'CASE_SCHEMA_VERSION',
+  'INCIDENT_CASE_SCHEMA_VERSION',
   'CASE_BROWSER_SUPPORTED_VERSIONS',
   'CASE_IMPORT_VERSIONS',
   'CASE_REPORT_SCHEMA',
@@ -64,6 +66,7 @@ export const CASE_PORTABILITY_IDENTITY_CONSTANTS = Object.freeze([
 ] as const);
 
 export const CASE_PORTABILITY_BOUND_CONSTANTS = Object.freeze([
+  'MAX_CASE_OBJECTIVE_LENGTH',
   'MAX_CASES',
   'MAX_NOTES_PER_CASE',
   'MAX_NOTE_LENGTH',
@@ -159,7 +162,8 @@ export const PUBLIC_CASE_SCHEMA_VERSION = 12;
 export const PUBLISHED_V2_CASE_SCHEMA_VERSION = 13;
 export const PUBLISHED_V2_2_CASE_SCHEMA_VERSION = 14;
 export const PUBLISHED_V2_3_CASE_SCHEMA_VERSION = 15;
-export const CASE_SCHEMA_VERSION = 16;
+export const INCIDENT_CASE_SCHEMA_VERSION = 16;
+export const CASE_SCHEMA_VERSION = INCIDENT_CASE_SCHEMA_VERSION;
 export const CASE_BROWSER_SUPPORTED_VERSIONS = Object.freeze([
   PUBLIC_CASE_SCHEMA_VERSION,
   PUBLISHED_V2_CASE_SCHEMA_VERSION,
@@ -510,8 +514,8 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
   Object.freeze({
     id: 'browser-case-v16',
     path: 'test/fixtures/case-lifecycle/browser-case-v16.json',
-    bytes: 3167,
-    sha256: '269033479ab2a78b95714daf6a664866b4c4579c448d555eaf76b9eb9e075a7a',
+    bytes: 3186,
+    sha256: 'e0d9dd7d1da29ca31e1b6ccd0c514c44267d84fe9db2eff0ffce23c51fb04ce4',
     contentDigestSha256: null,
     schema: CASE_BROWSER_STORE_LIFECYCLE_SCHEMA,
     version: CASE_SCHEMA_VERSION,
@@ -580,8 +584,8 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
   Object.freeze({
     id: 'case-export-v16',
     path: 'test/fixtures/case-lifecycle/case-export-v16.json',
-    bytes: 3211,
-    sha256: '8d592316bd9bd635a1c9f1704f4b2d7333b8ae3a33d187e1f80431a1b67e16c9',
+    bytes: 3230,
+    sha256: 'b0c14fd4d391b1067f101d61c1549c28570999c9cebb58aed21e164d7af56ad8',
     contentDigestSha256: null,
     schema: CASE_EXPORT_LIFECYCLE_SCHEMA,
     version: CASE_SCHEMA_VERSION,
@@ -650,8 +654,8 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
   Object.freeze({
     id: 'case-report-v12',
     path: 'test/fixtures/case-lifecycle/case-report-v12.json',
-    bytes: 4761,
-    sha256: '93c52116b892c363035d5924cdd2cdc8a0a6e030a23925a784f3da165bdc2f92',
+    bytes: 4778,
+    sha256: '175b9ab720d95e497eb89a73f437b00c5db9595833b02b033a09bb526a926f36',
     contentDigestSha256: null,
     schema: CASE_REPORT_SCHEMA,
     version: CASE_REPORT_SCHEMA_VERSION,
@@ -846,9 +850,9 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
   Object.freeze({
     id: CLI_CASE_PACK_WRITER_FIXTURE_ID,
     path: `test/fixtures/case-lifecycle/${CLI_CASE_PACK_WRITER_FIXTURE_ID}.json`,
-    bytes: 9560,
-    sha256: '94e08ef63735b41f98ba0ae4b2e766f0e70486b47390d885c2b2648f826f09c4',
-    contentDigestSha256: 'sha256:9e5dced200c669471473e1ac139b151b1435ca0e7468468cd8df85caa77b14cb',
+    bytes: 9602,
+    sha256: 'dd770da2d1b644847c0b6ce9cdeacc6013d59ca7da54e34f049c768c1da16ab7',
+    contentDigestSha256: 'sha256:b0ca8fb0182b7d49e75fc2e6f4bcf7c7f70d4619123eb5e222a7238fa3055ebd',
     schema: CLI_CASE_PACK_SCHEMA,
     version: CLI_CASE_PACK_VERSION,
     role: 'current' as const,

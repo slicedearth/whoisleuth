@@ -426,7 +426,10 @@ test('STIX claims require an existing selected case and remain separate from col
   await expect(externalImport.getByRole('heading', { name: /bundle--/ })).toBeVisible();
   await expect(externalImport).toContainText('1 accepted');
   await expect(externalImport.getByRole('button', { name: 'Merge assertions into case' })).toBeDisabled();
-  await externalImport.getByLabel('Merge into existing case').selectOption({ label: 'intelligence-case.invalid' });
+  const selectedCase = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records.find(item => item.value.domain === 'intelligence-case.invalid')!;
+  const destination = externalImport.getByLabel('Merge into existing case');
+  await expect(destination.getByRole('option', { name: /intelligence-case\.invalid/u })).toHaveCount(1);
+  await destination.selectOption(selectedCase.value.id);
   await externalImport.getByRole('button', { name: 'Merge assertions into case' }).click();
   await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'Merged 1 external assertion' })).toBeVisible();
 

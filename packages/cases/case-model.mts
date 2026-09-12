@@ -4,3 +4,4 @@
 export * from './case-record-model.mts';
 export * from './case-migration-model.mts';
 export * from './case-storage-model.mts';
+export * from './case-selection.mts';

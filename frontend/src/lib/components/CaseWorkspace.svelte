@@ -11,6 +11,8 @@
   import { readCaseNavigationContext, selectConsoleCase } from '$lib/console-workflow-state';
   import { monitorRouteKey, monitorRouteTarget } from '$lib/controllers/monitor-route-controller.ts';
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
+  import { casesForDomain, type CaseIncidentInput } from '$lib/analysis/case-model.ts';
+  import { caseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
   import { loadInvestigationGuide } from '$lib/investigation-guide';
   import { loadProfiles, type BrandProfile } from '$lib/brand-profiles';
   import type { ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
@@ -19,12 +21,13 @@
     caseFreeformTags, caseTagsWithTypes, caseTypeIds, caseTypeRecords, deleteCase,
     dispositionLabel, editCase, editCaseTags, restoreCaseTags, exportCases,
     exportRiskCalibrationDataset, importCases, loadCases, MAX_CASE_IMPORT_BYTES,
-    openCase, previewRiskCalibrationDataset, removeCaseBrandProfileAssociation,
+    openCase, createCaseIncident, previewRiskCalibrationDataset, removeCaseBrandProfileAssociation,
     statusLabel, type CaseRecord, type RiskCalibrationExportPreview,
   } from '$lib/cases';
   import LocalCollectionState from '$lib/components/LocalCollectionState.svelte';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import CaseWorkspaceToolbar from '$lib/components/CaseWorkspaceToolbar.svelte';
+  import CaseIncidentForm from '$lib/components/CaseIncidentForm.svelte';
   import CaseFilters from '$lib/components/CaseFilters.svelte';
   import CaseList from '$lib/components/CaseList.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
@@ -54,6 +57,8 @@
   let tagDraft = $state('');
   let newDomain = $state('');
   let openingCase = $state(false);
+  let incidentDraftDirty = $state(false);
+  let incidentOpeningIntent: (() => boolean) | null = null;
   let calibrationCaseIds = $state<string[]>([]);
   let calibrationReview = $state<RiskCalibrationExportPreview | null>(null);
   let calibrationExportBusy = $state(false);
@@ -65,7 +70,7 @@
     navigationCancelled = false;
     const sameCase = !willUnload && from?.url.pathname === to?.url.pathname
       && from?.url.searchParams.get('case') && from.url.searchParams.get('case') === to?.url.searchParams.get('case');
-    if (!sameCase && hasUnprotectedCaseDrafts()
+    if (!sameCase && (hasUnprotectedCaseDrafts() || incidentDraftDirty)
       && (willUnload || !window.confirm('A Case form has not finished saving for recovery. Leave and lose any unprotected edits?'))) {
       navigationCancelled = true;
       cancel();
@@ -80,7 +85,7 @@
         return false;
       if (dispositionFilter && record.disposition !== dispositionFilter)
         return false;
-      if (term && !record.domain.includes(term) && !caseFreeformTags(record.tags).some(tag => tag.toLowerCase().includes(term)) && !caseTypeRecords(record.tags).some(type => type.label.toLowerCase().includes(term)))
+      if (term && !record.domain.includes(term) && !(record.title ?? '').toLowerCase().includes(term) && !caseNumber(record.id).toLowerCase().includes(term) && !caseFreeformTags(record.tags).some(tag => tag.toLowerCase().includes(term)) && !caseTypeRecords(record.tags).some(type => type.label.toLowerCase().includes(term)))
         return false;
       return true;
     }).sort((a, b) => {
@@ -136,6 +141,7 @@
     }
   }
   async function openGuidedCase(domain: string) {
+    if (showIncidentChoices(domain)) return;
     const editorUnchanged = captureCaseOpeningIntent();
     const responseRequested = page.url.searchParams.get('response') === '1';
     let committed: Awaited<ReturnType<typeof openCase>>;
@@ -171,6 +177,7 @@
       caseMessage = 'Enter a domain to track.';
       return;
     }
+    if (showIncidentChoices(domain)) return;
     const editorUnchanged = captureCaseOpeningIntent();
     openingCase = true;
     try {
@@ -202,6 +209,28 @@
     finally {
       openingCase = false;
     }
+  }
+  function showIncidentChoices(domain: string): boolean {
+    const matches = casesForDomain(cases, domain);
+    if (matches.length < 2) return false;
+    clearCaseFilters();
+    caseSearch = matches[0]!.domain;
+    casePage = 1;
+    caseMessage = `${matches.length} Cases use ${matches[0]!.domain}. Choose the intended incident below, or create a separate Case.`;
+    return true;
+  }
+  async function createIncident(input: CaseIncidentInput): Promise<CaseRecord | null> {
+    incidentOpeningIntent = captureCaseOpeningIntent();
+    let committed: Awaited<ReturnType<typeof createCaseIncident>>;
+    try { committed = await createCaseIncident(input); }
+    catch (cause) { caseMessage = cause instanceof Error ? cause.message : 'Could not create the incident Case.'; return null; }
+    await reconcileCommittedCaseSnapshot(committed, 'Created a separate incident Case.');
+    return committed.record;
+  }
+  async function openCreatedIncident(record: CaseRecord) {
+    if (!mounted || !incidentOpeningIntent?.()) return;
+    clearCaseFilters();
+    await selectCase(record);
   }
   async function setStatus(record: CaseRecord, value: string) {
     try {
@@ -528,8 +557,10 @@
       if (monitorRouteKey(page.url) === routeKey && target.restoreQueue)
         restoreGuidedQueueTarget();
     }
-    else if (target.kind === 'domain')
+    else if (target.kind === 'domain') {
       newDomain = target.domain;
+      caseSearch = target.domain;
+    }
   }
   $effect(() => {
     const currentUrl = new URL(page.url);
@@ -588,6 +619,7 @@
       domain={newDomain} setDomain={(value) => { newCaseDraft.changed(); newDomain = value; }}
       {trackDomain} {openingCase} caseCount={cases.length} calibrationSelectedCount={calibrationCaseIds.length}
       {downloadCases} {reviewCalibrationDataset} {importCaseFile} message="" />
+    <CaseIncidentForm records={cases} initialDomain={newDomain} create={createIncident} created={openCreatedIncident} ondirty={(dirty) => incidentDraftDirty = dirty} />
     {#if calibrationReview}
       <DeferredSurface load={() => import('$lib/components/CalibrationExportReview.svelte')}
         loadingLabel="Loading calibration export review…" unavailableLabel="Calibration export review could not be loaded."

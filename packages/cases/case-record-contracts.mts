@@ -159,6 +159,7 @@ export type CaseEvidenceMaterial = Omit<
 export type CaseRecord = {
   id: string;
   domain: string;
+  title?: string;
   status: CaseStatus;
   disposition: CaseDisposition;
   reviewReasonCode?: string | null;
@@ -183,6 +184,7 @@ export type CaseRecord = {
 export type CaseStore = { version: typeof CASE_SCHEMA_VERSION; cases: CaseRecord[] };
 export type CaseInput = {
   domain: unknown;
+  title?: unknown;
   status?: unknown;
   disposition?: unknown;
   reviewReasonCode?: unknown;
@@ -205,7 +207,7 @@ export type CaseInput = {
   branchUpdate?: unknown;
   note?: unknown;
 };
-export type CasePatch = Omit<Partial<CaseInput>, 'domain'>;
+export type CasePatch = Omit<Partial<CaseInput>, 'domain'> & { expectedTitle?: string };
 export type SnapshotOptions = {
   source?: string;
   fallback?: string | null;

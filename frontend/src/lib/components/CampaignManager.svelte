@@ -11,6 +11,8 @@
   import type { CampaignCohortSourceState } from '$lib/analysis/campaign-cohort-review.ts';
   import type { CaseRelationshipSummary } from '$lib/analysis/case-relationships.ts';
   import type { CaseRecord } from '$lib/cases';
+  import { casesForDomain } from '$lib/analysis/case-model.ts';
+  import { caseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
   import { buildCampaignReviewSummary } from '$lib/analysis/campaign-review-summary.ts';
   import { buildCampaignTemporalReview } from '$lib/analysis/campaign-temporal-review.ts';
   import { buildParentDomainCampaignReview, type ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
@@ -52,8 +54,7 @@
 
   const expanded=$derived(campaigns.find((campaign)=>campaign.id===expandedId)??null);
   const orphanedDraft=$derived(detailsBase&&expandedId===detailsBase.id&&!expanded?detailsBase:null);
-  const caseByDomain=$derived(new Map(records.map((record)=>[record.domain,record])));
-  const availableCases=$derived(records.filter((record)=>!expanded?.domains.includes(record.domain)).sort((a,b)=>a.domain.localeCompare(b.domain)));
+  const availableDomains=$derived([...new Set(records.map(record=>record.domain))].filter(domain=>!expanded?.domains.includes(domain)).sort());
   const pageCount=$derived(Math.max(1,Math.ceil(campaigns.length/PAGE_SIZE)));
   const currentPage=$derived(Math.min(page,pageCount));
   const pagedCampaigns=$derived(campaigns.slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE));
@@ -244,7 +245,6 @@
     try{if(file.size>MAX_CAMPAIGN_IMPORT_BYTES)throw new Error('Campaign imports are limited to 2 MB.');const result=await importCampaigns(parseBoundedJson(await file.text(),{label:'Campaign import',maximumBytes:MAX_CAMPAIGN_IMPORT_BYTES}));page=1;memberPage=1;await reconcile(result.campaigns,`Imported ${result.added} new and ${result.updated} merged campaign${result.added+result.updated===1?'':'s'}${result.skipped?`; skipped ${result.skipped} invalid or over-limit record${result.skipped===1?'':'s'}`:''}.`);}
     catch(cause){mutationFailure(cause,'Campaign import failed.');}finally{input.value='';mutating=false;}
   }
-  function openCase(domain:string){const record=caseByDomain.get(domain);if(record)onselect?.(record);}
 
 </script>
 
@@ -285,7 +285,7 @@
       <article class="campaign card" class:open={expandedId===campaign.id}>
         <button id={`campaign-head-${campaign.id}`} class="campaign-head" type="button" aria-expanded={expandedId===campaign.id} aria-controls={`campaign-${campaign.id}`} onclick={()=>open(campaign)}>
           <span><strong>{campaign.name}</strong>{#if campaign.description}<small>{campaign.description}</small>{/if}</span>
-          <span>{campaign.domains.length} case{campaign.domains.length===1?'':'s'}</span>
+          <span>{campaign.domains.length} domain{campaign.domains.length===1?'':'s'}</span>
         </button>
         {#if expandedId===campaign.id}
           <div class="campaign-body" id={`campaign-${campaign.id}`}>
@@ -295,20 +295,20 @@
               <header><div><p class="eyebrow">Members</p><h3>{campaign.domains.length} case domain{campaign.domains.length===1?'':'s'}</h3></div></header>
               {#if campaign.domains.length}
                 {#if !casesReady}<p class="source-state" role="alert">Case evidence could not be read. Retained campaign membership remains available, but linkage and missing-case states are unavailable.</p>{/if}
-                <ul>{#each pagedMembers as domain}{@const linked=casesReady?caseByDomain.get(domain):null}<li><div><strong>{domain}</strong>{#if casesReady&&!linked}<small>Case unavailable in this browser</small>{:else if !casesReady}<small>Case evidence unavailable</small>{/if}</div><div>{#if linked}<button class="btn small" type="button" onclick={()=>openCase(domain)}>Open case</button>{/if}<button class="btn small danger" type="button" onclick={()=>removeDomain(campaign,domain)} disabled={mutating || refreshRequired}>Remove</button></div></li>{/each}</ul>
+                <ul>{#each pagedMembers as domain}{@const linked=casesReady?casesForDomain(records,domain):[]}<li><div><strong>{domain}</strong>{#if casesReady&&!linked.length}<small>Case unavailable in this browser</small>{:else if !casesReady}<small>Case evidence unavailable</small>{/if}</div><div>{#each linked as record (record.id)}<button class="btn small" type="button" onclick={()=>onselect?.(record)}>{linked.length===1&&!record.title?'Open case':`${record.title||'Open Case'} · …${caseNumber(record.id).slice(-8)}`}</button>{/each}<button class="btn small danger" type="button" onclick={()=>removeDomain(campaign,domain)} disabled={mutating || refreshRequired}>Remove</button></div></li>{/each}</ul>
                 <Pagination currentPage={currentMemberPage} pageCount={memberPageCount} setPage={setMemberPage} ariaLabel={`Case pages for ${campaign.name}`} />
-              {:else}<p>No cases have been added to this campaign.</p>{/if}
+              {:else}<p>No domains have been added to this campaign.</p>{/if}
             </section>
 
             {#if casesReady}<section class="review-summary" aria-labelledby={`campaign-review-${campaign.id}`}>
               <header>
                 <div><p class="eyebrow">Latest retained evidence</p><h3 id={`campaign-review-${campaign.id}`}>Campaign review cues</h3></div>
-                <span>{reviewSummary.linkedCaseCount}/{reviewSummary.memberCount} linked</span>
+                <span>{reviewSummary.linkedCaseCount} linked Case{reviewSummary.linkedCaseCount===1?'':'s'} · {reviewSummary.memberCount} member domain{reviewSummary.memberCount===1?'':'s'}</span>
               </header>
               <div class="review-health">
                 <span><strong>{reviewSummary.unreviewedCaseCount}</strong> unreviewed</span>
                 <span><strong>{reviewSummary.limitedEvidenceCount}</strong> limited evidence</span>
-                <span><strong>{reviewSummary.unavailableCaseCount}</strong> unavailable cases</span>
+                <span><strong>{reviewSummary.unavailableCaseCount}</strong> domains without Cases</span>
               </div>
               <div class="cue-grid">
                 {#each reviewSummary.cues as cue}
@@ -329,8 +329,8 @@
             {#if casesReady}<CampaignTemporalReview campaign={campaign} review={temporalReview} onmessage={(value)=>message=value} />{/if}
 
             {#if casesReady}<form class="add-case" oninput={memberDraft.changed} onchange={memberDraft.changed} onsubmit={(event)=>{event.preventDefault();void add(campaign);}}>
-              <label for={`campaign-case-${campaign.id}`}>Add an existing case</label>
-              <div><select id={`campaign-case-${campaign.id}`} bind:value={selectedDomain} disabled={!availableCases.length}><option value="">{availableCases.length?'Choose a case':'All available cases are included'}</option>{#each availableCases as record}<option value={record.domain}>{record.domain}</option>{/each}</select><button class="btn" type="submit" disabled={mutating || refreshRequired || !selectedDomain}>Add case</button></div>
+              <label for={`campaign-case-${campaign.id}`}>Add a retained domain</label>
+              <div><select id={`campaign-case-${campaign.id}`} bind:value={selectedDomain} disabled={!availableDomains.length}><option value="">{availableDomains.length?'Choose a domain':'All retained domains are included'}</option>{#each availableDomains as domain}<option value={domain}>{domain}</option>{/each}</select><button class="btn" type="submit" disabled={mutating || refreshRequired || !selectedDomain}>Add domain</button></div>
             </form>{/if}
             <details><summary>Campaign data</summary><p>Campaigns store a label, description and normalised domain membership in this browser. Membership organises review; it is not attribution.</p></details>
             <button id={`campaign-delete-${campaign.id}`} class="btn danger delete" type="button" onclick={()=>void remove(campaign)} disabled={mutating || refreshRequired}>Delete campaign</button>

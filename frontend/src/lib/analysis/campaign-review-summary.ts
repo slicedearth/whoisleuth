@@ -1,5 +1,6 @@
 import { latestCaseEvidence, type CaseRecord } from './case-record-model.ts';
 import { isReviewedCaseDisposition } from './case-record-decisions.ts';
+import { casesForDomains } from '../../../../packages/cases/case-selection.mts';
 
 export type CampaignReviewCue = Readonly<{
   id: 'credential_surface' | 'identity_relationship' | 'mail_surface' | 'redirect_review';
@@ -35,8 +36,7 @@ export function buildCampaignReviewSummary(
   const records = Array.isArray(recordsValue)
     ? recordsValue.slice(0, MAX_CAMPAIGN_CASES) as CaseRecord[]
     : [];
-  const byDomain = new Map(records.map((record) => [record.domain, record]));
-  const linked = domains.map((domain) => byDomain.get(domain)).filter((record): record is CaseRecord => Boolean(record));
+  const linked = casesForDomains(records, domains);
   const snapshots = linked.map((record) => ({ record, evidence: latestCaseEvidence(record) }));
   const count = (predicate: (item: typeof snapshots[number]) => boolean) => snapshots.filter(predicate).length;
   const cues: CampaignReviewCue[] = [
@@ -75,7 +75,7 @@ export function buildCampaignReviewSummary(
   return {
     memberCount: domains.length,
     linkedCaseCount: linked.length,
-    unavailableCaseCount: Math.max(0, domains.length - linked.length),
+    unavailableCaseCount: domains.length - new Set(linked.map(record => record.domain)).size,
     unreviewedCaseCount: linked.filter((record) => !isReviewedCaseDisposition(record.disposition)).length,
     limitedEvidenceCount: snapshots.filter(({ evidence }) => (
       !evidence
@@ -85,6 +85,7 @@ export function buildCampaignReviewSummary(
     cues,
     limitations: [
       'Counts use only uniquely latest bounded evidence already retained in linked browser-local cases and make no request. Equal-time or undated snapshots remain limited evidence.',
+      'Several incident Cases can share one domain. Case counts do not imply independent sources or corroboration.',
       'Cue overlap is expected. Counts are not a score, campaign-attribution finding, ownership claim, or maliciousness determination.',
       'A campaign member without a linked case or usable snapshot remains unavailable rather than becoming a negative observation.',
     ],

@@ -143,6 +143,12 @@ queries and fragments, so they can be sensitive even when embedded credentials
 are rejected. They remain local until the analyst opens, exports or otherwise
 shares them.
 
+Separate incident Cases can share a domain while retaining their own IDs,
+titles and decisions. Titles are analyst-entered text: ordinary Case exports,
+reports, workspace archives and internal CLI packs retain them. Trusted and
+public CLI packs exclude them. Reusing a selected observation copies only that
+evidence with its original timestamps, not the source Case's notes or decisions.
+
 Brand Profiles can retain official-channel URLs and handles, rights owners,
 registration identifiers, jurisdictions, source URLs and review notes. These
 records can be sensitive and remain browser-local until deliberately exported.

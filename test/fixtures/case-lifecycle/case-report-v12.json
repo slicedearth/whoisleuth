@@ -9,6 +9,7 @@
   },
   "case": {
     "id": "case-v12-response",
+    "title": "",
     "domain": "response-history.example",
     "status": "reviewing",
     "disposition": "suspicious",

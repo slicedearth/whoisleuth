@@ -5,6 +5,7 @@
   import {
     EXTERNAL_FINDINGS_SCHEMA,
     importExternalFindings,
+    importExternalFindingsIntoCase,
     importExternalIntelligence,
     MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
     MAX_EXTERNAL_INTELLIGENCE_IMPORT_BYTES,
@@ -223,7 +224,10 @@
     const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     applying = true;
     try {
-      if (selected.kind === 'findings') {
+      if (selected.kind === 'findings' && targetCaseId) {
+        const result = await importExternalFindingsIntoCase(targetCaseId, selected.document);
+        await reconcileCommitted(result.cases, `Imported ${result.findingsAdded} findings into the selected incident Case; ${result.duplicatesSkipped} duplicates skipped.`);
+      } else if (selected.kind === 'findings') {
         const result = await importExternalFindings(selected.document);
         await reconcileCommitted(result.cases, `Imported ${result.findingsAdded} finding${result.findingsAdded === 1 ? '' : 's'} into ${result.casesCreated} new and ${result.casesUpdated} existing case${result.casesCreated + result.casesUpdated === 1 ? '' : 's'}${result.duplicatesSkipped ? `; skipped ${result.duplicatesSkipped} duplicate${result.duplicatesSkipped === 1 ? '' : 's'}` : ''}${result.pruned ? `; pruned ${result.pruned} old evidence snapshot${result.pruned === 1 ? '' : 's'} to stay within storage` : ''}.`);
       } else {

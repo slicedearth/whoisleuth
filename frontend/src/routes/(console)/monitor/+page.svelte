@@ -38,6 +38,7 @@
   import type { ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
   import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, restoreHostedWatchlist as restoreHostedWatchlistAtomically, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
   import { editCase, loadCases, openCase, type CaseRecord } from '$lib/cases';
+  import { casesForDomain } from '$lib/analysis/case-model.ts';
   import { loadCampaigns, type CampaignRecord } from '$lib/campaigns';
   import { loadDetectionRules, type DetectionRule } from '$lib/detection-rules';
   import {
@@ -236,6 +237,7 @@
   function openEvidenceDebtCase(caseId:string){const record=cases.find((item)=>item.id===caseId);if(record)openRelatedCase(record);else caseMessage='That retained case is no longer available.';}
 
   async function openWatchlistCase(domain: string) {
+    if(casesForDomain(cases,domain).length>1){await goto(`/cases?domain=${encodeURIComponent(domain)}`);return;}
     let committed: Awaited<ReturnType<typeof openCase>>;
     try { committed = await openCase({ domain, source: 'monitor' }); }
     catch (cause) { message = cause instanceof Error ? cause.message : 'Could not open the case.'; return; }
@@ -249,8 +251,8 @@
     await openRelatedCase(record, caseMessage);
   }
 
-  async function recordWebsiteClusterLead(cluster:WebsiteProfileCluster,domain:string){
-    const opened=await openCase({domain,source:'website-profile-cluster'});
+  async function recordWebsiteClusterLead(cluster:WebsiteProfileCluster,domain:string,caseId?:string){
+    const opened=await openCase({domain,source:'website-profile-cluster'},caseId?{caseId}:{});
     const{record}=opened;
     const assertion=buildWebsiteClusterAssertion(cluster,domain);
     if(record.assertions.some((item)=>item.statement===assertion.statement&&item.state==='open')){
@@ -450,7 +452,7 @@
 {#if view==='relationships'}
 <div id="monitor-view-panel" role="tabpanel" aria-labelledby="tab-relationships">
   {#if websiteSnapshotsSourceState==='ready'}
-    <DeferredSurface load={()=>import('$lib/components/WebsiteProfileClusters.svelte')} loadingLabel="Loading website-profile relationships…" unavailableLabel="Website-profile relationships could not be loaded." props={{summary:websiteProfileClusters,onpin:casesSourceState==='ready'?recordWebsiteClusterLead:null}} placeholder="workspace" />
+    <DeferredSurface load={()=>import('$lib/components/WebsiteProfileClusters.svelte')} loadingLabel="Loading website-profile relationships…" unavailableLabel="Website-profile relationships could not be loaded." props={{summary:websiteProfileClusters,cases,onpin:casesSourceState==='ready'?recordWebsiteClusterLead:null}} placeholder="workspace" />
   {:else}
     <LocalCollectionState state={websiteSnapshotsSourceState} title="Website-profile relationships unavailable" detail="Saved website snapshots could not be read, so no missing cluster is inferred and review-lead recording from that source remains unavailable." />
   {/if}

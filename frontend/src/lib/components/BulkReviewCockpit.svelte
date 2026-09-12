@@ -2,6 +2,9 @@
   import { describeBulkSourceCoverage } from '$lib/analysis/bulk-source-coverage.ts';
   import { officialRegistryLookupFor } from '$lib/analysis/registry-support.ts';
   import BulkRiskSummary from '$lib/components/BulkRiskSummary.svelte';
+  import CasePicker from './CasePicker.svelte';
+  import { casesForDomain } from '../../../../packages/cases/case-selection.mts';
+  import type { CaseRecord } from '$lib/analysis/case-model.ts';
   import {
     nextBulkReviewIndex,
     type BulkReviewCockpitRow,
@@ -10,6 +13,8 @@
 
   let {
     rows,
+    caseRecords = [],
+    selectIncident,
     retryPlan,
     retryStatus,
     setReviewState,
@@ -29,6 +34,8 @@
     reviewAvailable = true,
   }: {
     rows: BulkReviewCockpitRow[];
+    caseRecords?: CaseRecord[];
+    selectIncident: (domain: string, id: string) => boolean;
     retryPlan: BulkRetryPlan;
     retryStatus: string;
     setReviewState: (resultIndex: number, state: string) => void;
@@ -51,6 +58,7 @@
   let enabled = $state(false);
   let cursor = $state(0);
   const current = $derived(rows[cursor] ?? null);
+  const currentCases = $derived(current ? casesForDomain(caseRecords, current.domain) : []);
   const officialLookupUrl = $derived(current ? officialRegistryLookupFor(current.domain) : null);
   const unresolved = $derived(reviewAvailable?rows.filter((row) => row.reviewState !== 'reviewed' && row.reviewState !== 'deferred').length:0);
 
@@ -125,10 +133,11 @@
         <button class="btn" type="button" disabled={!reviewAvailable} aria-keyshortcuts="Alt+R" onclick={() => setReviewState(current.resultIndex, 'reviewed')}>Mark reviewed</button>
         <button class="btn" type="button" disabled={!reviewAvailable} aria-keyshortcuts="Alt+D" onclick={() => setReviewState(current.resultIndex, 'deferred')}>Defer</button>
         <button class="btn" type="button" disabled={!shortlistAvailable} aria-keyshortcuts="Alt+S" aria-pressed={shortlistAvailable?current.shortlisted:undefined} onclick={() => toggleSaved(current.resultIndex)}>{shortlistAvailable?(current.shortlisted?'Remove shortlist':'Shortlist'):'Shortlist unavailable'}</button>
-        {#if !caseAvailable}<span class="unavailable-action">Case unavailable</span>{:else if current.caseRecord}<a class="btn" href={`/monitor?case=${encodeURIComponent(current.caseRecord.id)}`}>Open case</a>{:else}<button class="btn" type="button" onclick={() => trackCase(current.resultIndex)}>Create case</button>{/if}
+        {#if !caseAvailable}<span class="unavailable-action">Case unavailable</span>{:else if current.caseRecord}<a class="btn" href={`/monitor?case=${encodeURIComponent(current.caseRecord.id)}`}>Open case</a>{:else if currentCases.length}<span>Choose an incident below.</span>{:else}<button class="btn" type="button" onclick={() => trackCase(current.resultIndex)}>Create case</button>{/if}
         <button class="btn accent" type="button" aria-keyshortcuts="Alt+I" onclick={() => inspectDomain(current.resultIndex)}>Inspect in Lookup</button>
       </div>
       <div class="handoffs">
+        {#if caseAvailable && currentCases.length > 1}<CasePicker id="bulk-review-incident" records={currentCases} selectedId={current.caseRecord?.id ?? ''} select={(id) => selectIncident(current!.domain, id)} />{/if}
         <label>
           <span>Case disposition</span>
           <select
@@ -137,10 +146,10 @@
             value={current.caseRecord?.disposition ?? ''}
             onchange={(event) => setDisposition(current.resultIndex, event.currentTarget.value)}
           >
-            {#if !caseAvailable}<option value="">Case evidence unavailable</option>{:else if !current.caseRecord}<option value="">Create a case first</option>{/if}
+            {#if !caseAvailable}<option value="">Case evidence unavailable</option>{:else if !current.caseRecord}<option value="">{currentCases.length ? 'Select an incident first' : 'Create a case first'}</option>{/if}
             {#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}
           </select>
-          <small>{!caseAvailable?'No absent Case state is inferred while the collection is unreadable.':current.caseRecord?'Updates this existing case only.':'Create a case before recording a disposition.'}</small>
+          <small>{!caseAvailable?'No absent Case state is inferred while the collection is unreadable.':current.caseRecord?'Updates this selected case only.':currentCases.length?'Select an incident before recording a disposition.':'Create a case before recording a disposition.'}</small>
         </label>
         <label>
           <span>Monitor list</span>

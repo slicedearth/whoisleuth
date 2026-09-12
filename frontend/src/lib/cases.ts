@@ -8,7 +8,8 @@ import {
   addCaseBrandProfileId,
   enforceStoreBudget,
   mergeCases,
-  normalizeDomain,
+  casesForDomain,
+  createCaseIncident as createCaseIncidentModel,
   openOrCreateCase,
   recordCaseConclusion as recordCaseConclusionModel,
   recordCaseInvestigationContext as recordCaseInvestigationContextModel,
@@ -18,6 +19,8 @@ import {
 } from './analysis/case-model.ts';
 import type {
   CaseInput,
+  CaseIncidentInput,
+  CaseOpenSelection,
   CaseConclusionInput,
   CasePatch,
   CaseRecord,
@@ -196,17 +199,20 @@ export async function getCase(id: string): Promise<CaseRecord | null> {
 }
 
 export async function getCaseByDomain(domain: string): Promise<CaseRecord | null> {
-  const target = normalizeDomain(domain);
-  if (!target) return null;
-  return (await loadCases()).find((item) => item.domain === target) || null;
+  const matches = await getCasesByDomain(domain);
+  return matches.length === 1 ? matches[0]! : null;
+}
+
+export async function getCasesByDomain(domain: string): Promise<CaseRecord[]> {
+  return casesForDomain(await loadCases(), domain);
 }
 
 // Mutations return the record as it exists in the persisted, budget-bounded
 // store (never a pre-persist copy that might still hold evidence pruned to fit),
 // plus how many snapshots were pruned so the UI can warn.
-export async function openCase(input: CaseInput): Promise<{ record: CaseRecord; cases: CaseRecord[]; created: boolean; pruned: number }> {
+export async function openCase(input: CaseInput, selection: CaseOpenSelection = {}): Promise<{ record: CaseRecord; cases: CaseRecord[]; created: boolean; pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
-    const result = openOrCreateCase(current, input);
+    const result = openOrCreateCase(current, input, undefined, selection);
     if (!result.created) return {
       document: current,
       result: { record: result.record, cases: current, created: false as boolean, pruned: 0 },
@@ -214,6 +220,16 @@ export async function openCase(input: CaseInput): Promise<{ record: CaseRecord; 
     const { cases, pruned } = boundedCases(result.cases);
     const record = cases.find((item) => item.id === result.record.id) ?? result.record;
     return { document: cases, result: { record, cases, created: true as boolean, pruned } };
+  });
+}
+
+export async function createCaseIncident(input: CaseIncidentInput) {
+  return updateBrowserLocalData('cases', current => {
+    const result = createCaseIncidentModel(current, input);
+    const { cases, pruned } = boundedCases(result.cases);
+    const record = cases.find(item => item.id === result.record.id);
+    if (!record) throw new Error('The new incident could not be retained. No data was changed.');
+    return { document: cases, result: { record, cases, created: true, pruned } };
   });
 }
 

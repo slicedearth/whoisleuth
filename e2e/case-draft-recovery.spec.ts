@@ -61,15 +61,15 @@ test('a failed recovery save protects navigation and can be retried without subm
   await form.getByLabel('Label', { exact: true }).fill('Keep this unfinished form');
   await expect(form.getByRole('status')).toContainText('could not be saved for recovery');
   let dialogs = 0;
-  page.on('dialog', async dialog => { dialogs++; await dialog.dismiss(); });
+  page.on('dialog', async dialog => { await dialog.dismiss(); dialogs++; });
   await openCaseSection(page, 'Response');
   await openCaseSection(page, 'Evidence');
   expect(dialogs).toBe(0);
   await page.getByRole('link', { name: 'All Cases', exact: true }).click();
-  await expect(page).toHaveURL(selected); expect(dialogs).toBe(1);
+  await expect.poll(() => dialogs).toBe(1); await expect(page).toHaveURL(selected);
   await expect(form.getByLabel('Label', { exact: true })).toHaveValue('Keep this unfinished form');
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Dashboard', exact: true }).click();
-  await expect(page).toHaveURL(selected); expect(dialogs).toBe(2);
+  await expect.poll(() => dialogs).toBe(2); await expect(page).toHaveURL(selected);
   await form.getByRole('button', { name: 'Retry recovery save', exact: true }).click();
   await expect(form.getByRole('status')).toContainText('Draft saved in this workspace');
   expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]?.value.evidencePins).toHaveLength(0);

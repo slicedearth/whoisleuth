@@ -16,6 +16,7 @@ import {
 } from '../lib/project-metadata.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
 import { CLI_INVESTIGATION_RUN_SCHEMA, CLI_INVESTIGATION_RUN_VERSION, MAX_INVESTIGATION_RUN_BYTES } from '../packages/contracts/investigation-run.mts';
+import { CLI_CASE_PACK_WRITER_FIXTURE_ID } from '../packages/contracts/case-portability.mts';
 import {
   readBoundedRegularFile,
   readBoundedRegularFileWithin,
@@ -1269,6 +1270,34 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       || reviewedHandoff.completedSteps.length !== 3 || reviewedHandoff.networkApprovedForThisRun !== false) {
       throw new TypeError('Installed handoff did not finish offline after the selected review confirmation.');
     }
+    const incidentChecks: string[] = [];
+    const currentPack = record(JSON.parse((await readBoundedRegularFileWithin(repositoryRoot,
+      `test/fixtures/case-lifecycle/${CLI_CASE_PACK_WRITER_FIXTURE_ID}.json`, {
+        maximumBytes: MAX_INVESTIGATION_RUN_BYTES, minimumBytes: 1, label: 'Current Case-pack fixture',
+      })).toString('utf8')), 'Current Case-pack fixture');
+    if (!Array.isArray(currentPack.cases) || !currentPack.cases.length) throw new TypeError('Current Case fixture has no records.');
+    const sourceIncident = record(currentPack.cases[0], 'Current incident fixture');
+    const incidentInput = path.join(temporaryRoot, 'incident-cases.json');
+    await writeFile(incidentInput, JSON.stringify({ version: currentPack.version, exportedAt: currentPack.exportedAt, cases: [
+      { ...sourceIncident, id: 'installed-incident-first', title: 'First private incident title' },
+      { ...sourceIncident, id: 'installed-incident-second', title: 'Second private incident title' },
+    ] }), { mode: 0o600, flag: 'wx' });
+    for (const audience of ['internal', 'trusted', 'public']) {
+      const output = await runInstalledCheck(executable, ['case-pack', incidentInput, '--audience', audience, '--reviewed', '--json'], `incident pack ${audience}`);
+      const pack = record(JSON.parse(output), 'Installed incident pack');
+      if (!Array.isArray(pack.cases) || pack.cases.length !== 2
+        || new Set(pack.cases.map(item => record(item, 'Installed incident').id)).size !== 2
+        || new Set(pack.cases.map(item => record(item, 'Installed incident').domain)).size !== 1
+        || (audience !== 'internal' && /private incident title/u.test(output))) {
+        throw new TypeError('Installed incident pack lost Case identity or exposed a shared-audience title.');
+      }
+      const incidentOutput = path.join(temporaryRoot, `incidents-${audience}.json`);
+      await writeFile(incidentOutput, output, { mode: 0o600, flag: 'wx' });
+      const verified = record(JSON.parse(await runInstalledCheck(executable,
+        ['verify-artifact', incidentOutput, '--json', '--strict-exit'], `incident pack ${audience} verification`)), 'Installed incident verification');
+      if (verified.state !== 'verified') throw new TypeError('The installed incident pack did not verify offline.');
+      incidentChecks.push(`incident-pack-${audience}`, `incident-pack-${audience}-verification`);
+    }
     const catalogueCommands = commandCatalogue.commands.map((entry, index) => boundedString(
       record(entry, `Installed command catalogue entry ${index + 1}`).command,
       `Installed command catalogue entry ${index + 1} command`,
@@ -1325,6 +1354,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       'offline-handoff-review-boundary',
       'offline-handoff-checkpoint-approval-isolation',
       'offline-handoff-completion',
+      ...incidentChecks,
       'evidence-package-creation',
       'evidence-package-verification',
       ...signingChecks,

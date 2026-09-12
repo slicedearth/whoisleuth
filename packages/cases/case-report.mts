@@ -84,6 +84,7 @@ type CaseReportJson = {
   application: PortableGeneratorMetadata;
   case: {
     id: string;
+    title: string;
     domain: string;
     status: CaseRecord['status'];
     disposition: CaseRecord['disposition'];
@@ -290,6 +291,7 @@ export function buildCaseReport(
     application: generator,
     case: {
       id: caseRecord.id,
+      title: caseRecord.title ?? '',
       domain: caseRecord.domain,
       status: caseRecord.status,
       disposition: caseRecord.disposition,
@@ -370,8 +372,10 @@ export function buildCaseReportVerificationProjection(
   if (schemaVersion !== PUBLISHED_V2_3_CASE_REPORT_SCHEMA_VERSION) {
     throw new TypeError('No strict Case report projection is defined for this version.');
   }
+  const { title: _title, ...publishedCase } = current.case;
   return {
     ...current,
+    case: publishedCase,
     schemaVersion,
     limitations: PUBLISHED_V2_3_LIMITATIONS.join(' ') + current.limitations.slice(LIMITATIONS_TEXT.length),
   };
@@ -393,6 +397,8 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
   const domain = escapeMarkdownInline(report.case.domain || 'unknown');
   lines.push(`# Case Report: ${domain}`);
   lines.push('');
+  if (report.case.title) { lines.push(`**Incident:** ${escapeMarkdownInline(report.case.title)}`); lines.push(''); }
+  lines.push(`**Case ID:** ${escapeMarkdownInline(report.case.id)}`);
 
   // Metadata
   lines.push(`**Generated:** ${escapeMarkdownInline(report.generatedAt)}`);

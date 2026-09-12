@@ -161,10 +161,10 @@ test.describe('browser-local campaigns', () => {
     await page.locator('.campaign-edit textarea').fill('Domains grouped for analyst follow-up.');
     await page.getByRole('button', { name: 'Save details' }).click();
     await page.locator('.add-case select').selectOption('member-one.invalid');
-    await page.getByRole('button', { name: 'Add case' }).click();
+    await page.getByRole('button', { name: 'Add domain', exact: true }).click();
     await expect(page.locator('.members')).toContainText('member-one.invalid');
     const reviewSummary = page.getByRole('region', { name: 'Campaign review cues' });
-    await expect(reviewSummary).toContainText('1/1 linked');
+    await expect(reviewSummary).toContainText('1 linked Case · 1 member domain');
     await expect(reviewSummary).toContainText('1 unreviewed');
     await expect(reviewSummary.locator('article', { hasText: 'Password field observed' })).toContainText('1');
     await expect(reviewSummary.locator('article', { hasText: 'Official identity relationship' })).toContainText('1');
@@ -425,7 +425,7 @@ test.describe('browser-local campaigns', () => {
     await page.locator('#new-campaign').fill('A long investigation campaign name that must wrap safely on a narrow viewport');
     await page.getByRole('button', { name: 'Create campaign' }).click();
     await page.locator('.add-case select').selectOption('long-mobile-campaign-member.invalid');
-    await page.getByRole('button', { name: 'Add case' }).click();
+    await page.getByRole('button', { name: 'Add domain', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Retained source sequence' })).toContainText('No source-qualified pins or sightings');
     await expectNoHorizontalOverflow(page);
   });

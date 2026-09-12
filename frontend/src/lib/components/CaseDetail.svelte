@@ -77,7 +77,7 @@
     {#if returnContext && returnContext.href !== '/cases'}<a href={returnContext.href}>Return to {returnContext.label}</a>{/if}
   </div>
   <div id={`case-head-${record.id}`} class="case-heading" tabindex="-1">
-    <PageHeading eyebrow="Case" title={record.domain} />
+    <PageHeading eyebrow="Case" title={record.title || record.domain} description={record.title ? record.domain : ''} />
     <div class="case-identity">
       <span class={`badge status-${record.status}`}>{statusLabel(record.status)}</span>
       <span class={`badge disposition-${record.disposition}`}>{dispositionLabel(record.disposition)}</span>

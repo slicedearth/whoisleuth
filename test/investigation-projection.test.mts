@@ -299,7 +299,7 @@ describe('typed local investigation projection', () => {
       updatedAt: LATE,
     };
     const result = buildInvestigationProjection(currentInput({
-      cases: { version: CASE_SCHEMA_VERSION, cases: [caseRecord('case-a', 'candidate.invalid')] },
+      cases: { version: CASE_SCHEMA_VERSION, cases: [caseRecord('case-a', 'candidate.invalid'), caseRecord('case-b', 'candidate.invalid')] },
       campaigns: { version: CAMPAIGN_SCHEMA_VERSION, campaigns: [campaign] },
       brandProfiles: { version: BRAND_PROFILE_SCHEMA_VERSION, profiles: [profile] },
     }), { generatedAt: LATE });
@@ -312,6 +312,9 @@ describe('typed local investigation projection', () => {
     assert.equal(relationship(result, 'campaign_contains_domain').classification, 'direct');
     assert.equal(relationship(result, 'campaign_contains_case').classification, 'derived');
     assert.match(relationship(result, 'campaign_contains_case').method, /canonical-domain match/);
+    const memberCaseIds = result.relationships.filter(item => item.type === 'campaign_contains_case').map(item => item.to);
+    assert.equal(memberCaseIds.length, 2);
+    assert.equal(new Set(memberCaseIds).size, 2);
   });
 
   test('preserves official-site baseline completeness, truncation, and model versions', () => {

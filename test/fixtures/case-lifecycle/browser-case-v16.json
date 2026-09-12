@@ -4,6 +4,7 @@
     {
       "id": "case-v12-response",
       "domain": "response-history.example",
+      "title": "",
       "status": "reviewing",
       "disposition": "suspicious",
       "reviewReasonCode": null,

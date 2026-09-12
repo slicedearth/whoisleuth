@@ -20,6 +20,8 @@
   import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
   import { handlesLocalLink } from '$lib/link-activation';
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
+  import CasePicker from './CasePicker.svelte';
+  import { MAX_CASE_OBJECTIVE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
 
   type DraftAction = { email: string; body: string; mailto: string };
 
@@ -31,6 +33,9 @@
     incidentUrl,
     recheckComparison,
     record,
+    cases = [],
+    selectCase,
+    createIncident,
     oncaseopen,
     note,
     caseStatus,
@@ -76,6 +81,9 @@
       detail: string;
     }> | null;
     record: CaseRecord | null;
+    cases?: CaseRecord[];
+    selectCase: (id: string) => void;
+    createIncident: (title: string) => Promise<LocalMutationOutcome>;
     oncaseopen: () => void;
     note: string;
     caseStatus: string;
@@ -131,6 +139,8 @@
   let recheckFollowUpAt = $state('');
   let recheckLimitations = $state('');
   let appliedRecheckKey = $state('');
+  let incidentTitle = $state('');
+  let recheckDraftEdited = $state(false);
   const retainedContext = $derived(caseInvestigationContext(record));
   const currentIncidentUrl = $derived(incidentUrl || retainedContext?.incidentUrl || '');
   const incidentUrlDetails = $derived(parseIncidentUrlContext(currentIncidentUrl));
@@ -151,7 +161,7 @@
   });
 
   $effect(() => {
-    const key = recheckComparison?.observedAt ?? '';
+    const key = recheckComparison ? `${record?.id ?? ''}:${recheckComparison.observedAt}` : '';
     if (!key || appliedRecheckKey === key) return;
     recheckState = recheckComparison?.changes.length ? 'changed' : 'still_observed';
     recheckCompleteness = 'complete';
@@ -159,6 +169,27 @@
     recheckLimitations = '';
     appliedRecheckKey = key;
   });
+
+  function confirmCaseChange(): boolean {
+    const edited = Boolean(note || conclusionRationale || conclusionEvidence.length || recheckDraftEdited
+      || contextObjective !== (retainedContext?.objective ?? '') || retainExactIncidentUrl !== (retainedContext?.urlRetention === 'exact')
+      || (record && (caseDisposition !== record.disposition || caseReviewReason !== (record.reviewReasonCode ?? ''))));
+    return !edited || window.confirm('Change incident and discard unsaved Lookup Case form edits? Saved Case evidence and decisions will not change.');
+  }
+  function resetCaseForms() {
+    setNote(''); conclusionRationale = ''; conclusionEvidence = [];
+    contextObjective = ''; retainExactIncidentUrl = false; appliedContextKey = '';
+    appliedRecheckKey = ''; recheckDraftEdited = false;
+  }
+  function changeIncident(id: string): boolean {
+    if (id === record?.id) return true;
+    if (actionBusy || !confirmCaseChange()) return false;
+    resetCaseForms(); selectCase(id); return true;
+  }
+  async function newIncident() {
+    if (actionBusy || !incidentTitle.trim() || !confirmCaseChange()) return;
+    if (clearsLocalMutationDraft(await createIncident(incidentTitle))) { incidentTitle = ''; resetCaseForms(); }
+  }
 
   function conclusionStance(field: string): LookupConclusionEvidenceSelection['stance'] {
     return conclusionEvidence.find((item) => item.field === field)?.stance ?? 'supports';
@@ -219,7 +250,7 @@
 
   async function submitRecheckOutcome() {
     if (!recheckComparison?.available) return;
-    await recordRecheckOutcome({
+    const outcome = await recordRecheckOutcome({
       state: recheckState,
       completeness: recheckCompleteness,
       source: recheckSource.trim(),
@@ -227,12 +258,21 @@
       limitations: recheckLimitations.split(/\r?\n/u).map((item) => item.trim()).filter(Boolean),
       comparisonSummary: comparisonSummary(),
     });
+    if (clearsLocalMutationDraft(outcome)) recheckDraftEdited = false;
   }
 </script>
 
 {#if domain}
   <section class="case-card evidence-card card">
     <div class="case-intro section-head"><div><p class="eyebrow">Investigation</p><h4>Analyst case</h4></div>{#if record}<div class="case-badges"><span class={`badge status-${record.status}`}>{statusLabel(record.status)}</span><span class={`badge disposition-${record.disposition}`}>{dispositionLabel(record.disposition)}</span></div>{/if}</div>
+    {#if caseSourceState === 'ready'}
+      {#if cases.length > 1 || (cases.length && !record)}<CasePicker id="lookup-incident-case" records={cases} selectedId={record?.id ?? ''} disabled={actionBusy} select={changeIncident} />{/if}
+      {#if record?.title}<p class="case-hint">{record.title}</p>{/if}
+      <details class="case-tool"><summary>Create a separate incident</summary><form onsubmit={(event) => { event.preventDefault(); void newIncident(); }}>
+        <label class="field" for="lookup-incident-title">Incident title<input id="lookup-incident-title" bind:value={incidentTitle} required maxlength={MAX_CASE_OBJECTIVE_LENGTH} disabled={actionBusy} autocomplete="off"></label>
+        <button class="btn" type="submit" disabled={actionBusy || !incidentTitle.trim()}>Create incident with this evidence</button>
+      </form></details>
+    {/if}
     {#if caseSourceState === 'loading'}
       <p class="case-hint" role="status">Loading saved Case context…</p>
     {:else if caseSourceState === 'unavailable'}
@@ -320,7 +360,7 @@
                   <ul>{#each recheckComparison.changes as change}<li data-tone={change.tone}><strong>{change.label}</strong><span>{displayComparisonValue(change.before)} → {displayComparisonValue(change.after)}</span></li>{/each}</ul>
                 {/if}
                 {#if recheckComparison.available}
-                  <form onsubmit={(event) => { event.preventDefault(); void submitRecheckOutcome(); }}>
+                  <form oninput={() => recheckDraftEdited = true} onsubmit={(event) => { event.preventDefault(); void submitRecheckOutcome(); }}>
                     <div class="classification-fields">
                       <label class="field">Observed outcome<select bind:value={recheckState}>{#each CASE_OBSERVED_EFFECT_STATES.filter((value) => value !== 'not_checked') as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
                       <label class="field">Completeness<select bind:value={recheckCompleteness}>{#each CASE_PIN_COMPLETENESS as value}<option {value}>{value}</option>{/each}</select></label>
@@ -339,7 +379,7 @@
         <p class="case-hint">{record.notes.length} note{record.notes.length === 1 ? '' : 's'} · Open Cases for the full evidence, assessment, response and history.</p>
       </div>
     {:else}
-      <div class="case-body"><p class="case-hint">No case for {domain} yet.</p><button class="primary" onclick={createCase} disabled={actionBusy}>Create case</button></div>
+      <div class="case-body">{#if cases.length}<p class="case-hint">Choose an incident Case above to retain this evidence.</p>{:else}<p class="case-hint">No case for {domain} yet.</p><button class="primary" onclick={createCase} disabled={actionBusy}>Create case</button>{/if}</div>
     {/if}
     {#if caseStatus}<p class="case-status" role="status" aria-live="polite">{caseStatus}</p>{/if}
   </section>
