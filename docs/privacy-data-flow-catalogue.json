@@ -14,10 +14,10 @@
       "version": 1
     },
     "schemaLifecycleRegistry": {
-      "familyCount": 19,
-      "compatibilityCount": 86,
-      "privacyProfileCount": 46,
-      "consumerFlowCount": 144,
+      "familyCount": 20,
+      "compatibilityCount": 87,
+      "privacyProfileCount": 47,
+      "consumerFlowCount": 145,
       "metadataVersions": [
         4
       ]
@@ -76,7 +76,7 @@
     {
       "id": "analyst_cases",
       "title": "Browser-local analyst cases and Review Item lifecycle",
-      "requestPurpose": "Retain analyst-selected Case material, recheck question context and separately selected original files using the current workspace codec; Review Item lifecycle state remains separately bounded.",
+      "requestPurpose": "Retain analyst-selected Case material, recheck questions and original files using the workspace codec; saved Case filters and Review Item state remain separate bounded collections.",
       "job": "respond",
       "executionPlanes": [
         "browser_local"
@@ -101,6 +101,7 @@
         "bounded_case_state",
         "recheck_question_context",
         "selected_original_files_and_provenance",
+        "saved_case_filters",
         "bounded_analyst_review_state"
       ],
       "processingClasses": [
@@ -4561,7 +4562,7 @@
       "command": "inspect-archive",
       "capabilityFamilyId": "portable_evidence",
       "title": "Inspect an archive locally",
-      "requestPurpose": "Reads one selected bounded workspace archive v8, retains exact v5 and v6 and v7 compatibility, and redacts output by default.",
+      "requestPurpose": "Reads one selected bounded workspace archive v9, retains exact v5 and v6 and v7 and v8 compatibility, and redacts output by default.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -7348,6 +7349,19 @@
       ]
     },
     {
+      "id": "case-views",
+      "privacyClass": "analyst_authored_sensitive",
+      "compatibilityIds": [
+        "browser.case-views"
+      ],
+      "privacyProfileIds": [
+        "case-views.privacy"
+      ],
+      "consumerFlowIds": [
+        "case-views.browser-case-views.consumer"
+      ]
+    },
+    {
       "id": "cli-lookup",
       "privacyClass": "analyst_authored_sensitive",
       "compatibilityIds": [
@@ -7822,6 +7836,24 @@
       "migration": "exact_current_only",
       "writeSemantics": "optimistic_replace",
       "byteBudget": 8388608,
+      "storageClass": "browser_profile_storage",
+      "retentionControl": "browser_profile_and_user_controlled"
+    },
+    {
+      "id": "browser.case-views",
+      "familyId": "case-views",
+      "kind": "browser_store",
+      "schema": "whoisleuth.case-views",
+      "lifecycleSchema": "whoisleuth.case-views",
+      "coverageClass": "registered_schema",
+      "currentVersion": 1,
+      "supportedVersions": [
+        1
+      ],
+      "futureVersionBehavior": "preserve_without_write",
+      "migration": "exact_current_only",
+      "writeSemantics": "optimistic_replace",
+      "byteBudget": 524288,
       "storageClass": "browser_profile_storage",
       "retentionControl": "browser_profile_and_user_controlled"
     },
@@ -9139,12 +9171,13 @@
       "schema": "whoisleuth.workspace-archive",
       "lifecycleSchema": "whoisleuth.workspace-archive",
       "coverageClass": "registered_schema",
-      "currentVersion": 8,
+      "currentVersion": 9,
       "supportedVersions": [
         5,
         6,
         7,
-        8
+        8,
+        9
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
@@ -9409,6 +9442,32 @@
       "sharingReview": "not_applicable",
       "consumerFlowIds": [
         "case-drafts.browser-case-drafts.consumer"
+      ]
+    },
+    {
+      "id": "case-views.privacy",
+      "familyId": "case-views",
+      "classification": "analyst_authored_sensitive",
+      "projection": "browser_import",
+      "includedCategories": [
+        "saved-filter-name",
+        "case-status-and-disposition",
+        "search-text",
+        "sort-order",
+        "authored-times"
+      ],
+      "excludedCategories": [
+        "matching-case-records",
+        "source-evidence",
+        "collection-authorisation",
+        "public-response-packets"
+      ],
+      "notePolicy": "allowed_bounded",
+      "retention": "browser_indexeddb",
+      "network": "none",
+      "sharingReview": "not_applicable",
+      "consumerFlowIds": [
+        "case-views.browser-case-views.consumer"
       ]
     },
     {
@@ -11108,6 +11167,36 @@
       "policyState": "current"
     },
     {
+      "id": "case-views.browser-case-views.consumer",
+      "familyId": "case-views",
+      "plane": "browser",
+      "operation": "validate-and-produce",
+      "acceptedContracts": [
+        {
+          "schema": "whoisleuth.case-views",
+          "versions": [
+            1
+          ],
+          "mode": "direct",
+          "discriminator": null
+        }
+      ],
+      "emittedContract": {
+        "schema": "whoisleuth.case-views",
+        "version": 1,
+        "discriminator": null
+      },
+      "privacyProfileId": "case-views.privacy",
+      "requestMode": "none",
+      "retentionEffect": "browser_indexeddb",
+      "processingClasses": [
+        "transient_processing",
+        "browser_local_retention",
+        "offline_processing_no_request"
+      ],
+      "policyState": "current"
+    },
+    {
       "id": "case.browser.read-write",
       "familyId": "case-portability",
       "plane": "browser",
@@ -11210,7 +11299,8 @@
             5,
             6,
             7,
-            8
+            8,
+            9
           ],
           "mode": "direct",
           "discriminator": null
@@ -11467,7 +11557,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.workspace-archive",
-        "version": 8,
+        "version": 9,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -11513,7 +11603,8 @@
             5,
             6,
             7,
-            8
+            8,
+            9
           ],
           "mode": "direct",
           "discriminator": null

@@ -17,10 +17,12 @@ import { TAB_PORTABILITY_LIFECYCLE_FAMILY } from './tab-portability.mts';
 import { PRIVACY_DATA_FLOW_CATALOGUE_LIFECYCLE_FAMILY } from './privacy-data-flow-catalogue.mts';
 import { ANALYST_REVIEW_STATE_LIFECYCLE_FAMILY } from './analyst-review-state.mts';
 import { CASE_DRAFT_LIFECYCLE_FAMILY } from './case-drafts.mts';
+import { CASE_VIEWS_LIFECYCLE_FAMILY } from './case-views.mts';
 import { defineSchemaLifecycleRegistry } from './schema-lifecycle.mts';
 
 export const SCHEMA_LIFECYCLE_REGISTRY = defineSchemaLifecycleRegistry([
   CASE_DRAFT_LIFECYCLE_FAMILY,
+  CASE_VIEWS_LIFECYCLE_FAMILY,
   CASE_PORTABILITY_LIFECYCLE_FAMILY,
   INVESTIGATION_PORTABILITY_LIFECYCLE_FAMILY,
   EXTERNAL_OBSERVATION_INTERCHANGE_LIFECYCLE_FAMILY,

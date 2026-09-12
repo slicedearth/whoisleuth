@@ -251,11 +251,12 @@ export const WORKSPACE_ARCHIVE_SCHEMA = 'whoisleuth.workspace-archive';
 export const PUBLIC_WORKSPACE_ARCHIVE_VERSION = 5;
 export const PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION = 6;
 export const PUBLISHED_V2_2_WORKSPACE_ARCHIVE_VERSION = 7;
-export const WORKSPACE_ARCHIVE_VERSION = 8;
+export const WORKSPACE_ARCHIVE_VERSION = 9;
 export const SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS = Object.freeze([
   PUBLIC_WORKSPACE_ARCHIVE_VERSION,
   PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION,
   PUBLISHED_V2_2_WORKSPACE_ARCHIVE_VERSION,
+  LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION,
   WORKSPACE_ARCHIVE_VERSION,
 ] as const);
 export function isSupportedWorkspaceArchiveVersion(value: unknown): value is number {
@@ -266,10 +267,10 @@ export function isSupportedWorkspaceArchiveVersion(value: unknown): value is num
 export const WORKSPACE_ARCHIVE_SECTION_IDS = Object.freeze([
   'cases', 'campaigns', 'brandProfiles', 'watchlists', 'shortlist', 'detectionRules',
   'relationshipObservations', 'bulkSessions', 'websiteSnapshots', 'investigationTemplates',
-  'bulkReview', 'analystReviewState', 'settings',
+  'bulkReview', 'analystReviewState', 'caseViews', 'settings',
 ] as const);
 export const PUBLIC_WORKSPACE_ARCHIVE_SECTION_IDS = Object.freeze(
-  WORKSPACE_ARCHIVE_SECTION_IDS.filter((id) => id !== 'analystReviewState'),
+  WORKSPACE_ARCHIVE_SECTION_IDS.filter((id) => id !== 'analystReviewState' && id !== 'caseViews'),
 );
 export const WORKSPACE_ARCHIVE_CASE_SECTION = Object.freeze({
   id: 'cases',
@@ -363,7 +364,7 @@ export const MAX_CASE_PACK_INPUT_BYTES = 4 * 1024 * 1024;
 export const MAX_CASE_PACK_CASES = 25;
 export const MAX_WORKSPACE_ARCHIVE_BYTES = 32 * 1024 * 1024;
 export const MAX_WORKSPACE_ARCHIVE_SECTION_BYTES = 5 * 1024 * 1024;
-export const MAX_WORKSPACE_ARCHIVE_SECTIONS = 13;
+export const MAX_WORKSPACE_ARCHIVE_SECTIONS = WORKSPACE_ARCHIVE_SECTION_IDS.length;
 export const WORKSPACE_ARCHIVE_PBKDF2_ITERATIONS = 600_000;
 export const MIN_WORKSPACE_ARCHIVE_PASSPHRASE_CHARACTERS = 12;
 export const MAX_WORKSPACE_ARCHIVE_PASSPHRASE_BYTES = 1024;
@@ -871,7 +872,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: PUBLIC_WORKSPACE_ARCHIVE_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: 'workspace-archive-v8-empty-current',
+    expectedOutputFixtureId: `workspace-archive-v${WORKSPACE_ARCHIVE_VERSION}-empty-current`,
     shapeId: 'case.workspace-archive.v5',
     scope: 'repository' as const,
   }),
@@ -885,7 +886,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: 'workspace-archive-v8-empty-current',
+    expectedOutputFixtureId: `workspace-archive-v${WORKSPACE_ARCHIVE_VERSION}-empty-current`,
     shapeId: 'case.workspace-archive.v6',
     scope: 'repository' as const,
   }),
@@ -899,7 +900,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     version: PUBLISHED_V2_2_WORKSPACE_ARCHIVE_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
-    expectedOutputFixtureId: 'workspace-archive-v8-empty-current',
+    expectedOutputFixtureId: `workspace-archive-v${WORKSPACE_ARCHIVE_VERSION}-empty-current`,
     shapeId: 'case.workspace-archive.v7',
     scope: 'repository' as const,
   }),
@@ -910,11 +911,25 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     sha256: '747062e2dbbcf96724b19718d36bf0dc50b08e96d8adb670115d2315032b6c05',
     contentDigestSha256: null,
     schema: WORKSPACE_ARCHIVE_SCHEMA,
+    version: LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION,
+    role: 'historical' as const,
+    expectation: 'normalises_to_current_output' as const,
+    expectedOutputFixtureId: `workspace-archive-v${WORKSPACE_ARCHIVE_VERSION}-empty-current`,
+    shapeId: 'case.workspace-archive.v8',
+    scope: 'repository' as const,
+  }),
+  Object.freeze({
+    id: 'workspace-archive-v9-empty-current',
+    path: 'test/fixtures/case-lifecycle/workspace-archive-v9-empty-current.json',
+    bytes: 7613,
+    sha256: '6786a9a892bdc21814b0f1165cd9286fb82258862a4c15140daf9caae71daff0',
+    contentDigestSha256: null,
+    schema: WORKSPACE_ARCHIVE_SCHEMA,
     version: WORKSPACE_ARCHIVE_VERSION,
     role: 'current' as const,
     expectation: 'accepted_exact' as const,
     expectedOutputFixtureId: null,
-    shapeId: 'case.workspace-archive.v8',
+    shapeId: `case.workspace-archive.v${WORKSPACE_ARCHIVE_VERSION}`,
     scope: 'repository' as const,
   }),
   Object.freeze({
@@ -1119,34 +1134,11 @@ const CASE_LIFECYCLE_SHAPES = Object.freeze([
     CLI_CASE_PACK_ROOT_KEYS,
     'preserve_signed_document',
   ),
-  shape(
-    'case.workspace-archive.v5',
-    WORKSPACE_ARCHIVE_SCHEMA,
-    [5],
+  ...SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS.map(version => shape(
+    `case.workspace-archive.v${version}`, WORKSPACE_ARCHIVE_SCHEMA, [version],
     ['schema', 'version', 'generatedAt', 'manifest', 'sections', 'limitations'],
     'preserve_signed_document',
-  ),
-  shape(
-    'case.workspace-archive.v6',
-    WORKSPACE_ARCHIVE_SCHEMA,
-    [PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION],
-    ['schema', 'version', 'generatedAt', 'manifest', 'sections', 'limitations'],
-    'preserve_signed_document',
-  ),
-  shape(
-    'case.workspace-archive.v7',
-    WORKSPACE_ARCHIVE_SCHEMA,
-    [PUBLISHED_V2_2_WORKSPACE_ARCHIVE_VERSION],
-    ['schema', 'version', 'generatedAt', 'manifest', 'sections', 'limitations'],
-    'preserve_signed_document',
-  ),
-  shape(
-    'case.workspace-archive.v8',
-    WORKSPACE_ARCHIVE_SCHEMA,
-    [WORKSPACE_ARCHIVE_VERSION],
-    ['schema', 'version', 'generatedAt', 'manifest', 'sections', 'limitations'],
-    'preserve_signed_document',
-  ),
+  )),
   shape(
     'case.workspace-settings.v1',
     WORKSPACE_SETTINGS_SCHEMA,
@@ -1420,7 +1412,7 @@ const CASE_LIFECYCLE_SERIALISATION = Object.freeze([
     ['case.export.json', CASE_EXPORT_LIFECYCLE_SCHEMA, [CASE_SCHEMA_VERSION], 'none', []],
     ['case.report.json', CASE_REPORT_SCHEMA, [...CASE_REPORT_OUTPUT_VERSIONS], 'none', []],
     ['case.packet.json', CASE_RESPONSE_PACKET_SCHEMA, [...SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS], 'structural_only_requires_separate_verification', ['case.packet.verify']],
-    ['case.workspace.json.v8', WORKSPACE_ARCHIVE_SCHEMA, [WORKSPACE_ARCHIVE_VERSION], 'structural_only_requires_separate_verification', ['case.workspace.verify']],
+    [`case.workspace.json.v${WORKSPACE_ARCHIVE_VERSION}`, WORKSPACE_ARCHIVE_SCHEMA, [WORKSPACE_ARCHIVE_VERSION], 'structural_only_requires_separate_verification', ['case.workspace.verify']],
     ['case.encrypted-workspace.json.v1', ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA, [ENCRYPTED_WORKSPACE_ARCHIVE_VERSION], 'structural_only_requires_separate_verification', ['case.encrypted-workspace.verify']],
   ] as const).map(([id, schema, versions, integrity, verifierHookIds]) => ({
     id,
@@ -1690,7 +1682,7 @@ const CASE_LIFECYCLE_CONSUMERS = Object.freeze([
       discriminator: null,
     }],
     emittedContract: null,
-    shapeIds: ['case.workspace-archive.v5', 'case.workspace-archive.v6', 'case.workspace-archive.v7', 'case.workspace-archive.v8', 'case.workspace-settings.v1'],
+    shapeIds: [...SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS.map(version => `case.workspace-archive.v${version}`), 'case.workspace-settings.v1'],
     boundProfileIds: ['case.workspace.bounds'],
     hookIds: ['case.workspace.verify'],
     serialisationProfileId: null,
@@ -1704,10 +1696,10 @@ const CASE_LIFECYCLE_CONSUMERS = Object.freeze([
     operation: 'build-workspace',
     acceptedContracts: [],
     emittedContract: { schema: WORKSPACE_ARCHIVE_SCHEMA, version: WORKSPACE_ARCHIVE_VERSION, discriminator: null },
-    shapeIds: ['case.workspace-archive.v8'],
+    shapeIds: [`case.workspace-archive.v${WORKSPACE_ARCHIVE_VERSION}`],
     boundProfileIds: ['case.workspace.bounds'],
     hookIds: ['case.workspace.build', 'case.portable.serialise'],
-    serialisationProfileId: 'case.workspace.json.v8',
+    serialisationProfileId: `case.workspace.json.v${WORKSPACE_ARCHIVE_VERSION}`,
     privacyProfileId: 'case.privacy.portable-output',
     retentionEffect: 'operator_controlled_output',
     ...sharedEdge,
@@ -1760,7 +1752,7 @@ const CASE_LIFECYCLE_CONSUMERS = Object.freeze([
       version: ENCRYPTED_WORKSPACE_ARCHIVE_VERSION,
       discriminator: null,
     },
-    shapeIds: ['case.workspace-archive.v5', 'case.workspace-archive.v6', 'case.workspace-archive.v7', 'case.workspace-archive.v8', 'case.encrypted-workspace-archive.v1'],
+    shapeIds: [...SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS.map(version => `case.workspace-archive.v${version}`), 'case.encrypted-workspace-archive.v1'],
     boundProfileIds: ['case.workspace.bounds', 'case.encrypted-workspace.bounds'],
     hookIds: ['case.encrypted-workspace.build', 'case.portable.serialise'],
     serialisationProfileId: 'case.encrypted-workspace.json.v1',

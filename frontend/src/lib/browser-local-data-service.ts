@@ -4,6 +4,7 @@ import {
   captureBrowserLocalDataUpdateOptions,
   type AnyLocalDataCollectionDefinition,
   type BrowserLocalDataInitialization,
+  type BrowserLocalDataInitializationOptions,
   type BrowserLocalDataCommitListener,
   type LocalDataCollectionDefinition,
   type BrowserLocalDataUpdater,
@@ -115,14 +116,14 @@ export function createBrowserLocalDataService(
     return definition as LocalDataCollectionDefinition<BrowserLocalCollectionDocumentMap[Collection]>;
   }
 
-  async function activeProvider(): Promise<BrowserLocalDataProviderBoundary> {
+  async function activeProvider(options: BrowserLocalDataInitializationOptions = {}): Promise<BrowserLocalDataProviderBoundary> {
     if (providerPromise) return providerPromise;
     serviceState = Object.freeze({ state: 'initializing' });
     providerPromise = (async () => {
       try {
         const definitions = await collections();
         const nextProvider = await createProvider(notifyCommitted);
-        const initialization = await nextProvider.initialize(definitions).catch(async (cause) => {
+        const initialization = await nextProvider.initialize(definitions, options).catch(async (cause) => {
           try { await nextProvider.close?.(); } catch { /* Preserve the original initialisation failure. */ }
           throw cause;
         });
@@ -145,8 +146,9 @@ export function createBrowserLocalDataService(
     return providerPromise;
   }
 
-  async function initialize(): Promise<BrowserLocalDataServiceState> {
-    try { await activeProvider(); }
+  async function initialize(options: BrowserLocalDataInitializationOptions = {}): Promise<BrowserLocalDataServiceState> {
+    const captured = options.createMissingCollections ? { createMissingCollections: [...options.createMissingCollections] } : {};
+    try { await activeProvider(captured); }
     catch { /* the explicit error state is returned below */ }
     return serviceState;
   }
@@ -205,8 +207,8 @@ export async function browserLocalDataProvider(): Promise<BrowserLocalDataProvid
   return await defaultService.provider() as BrowserLocalDataProvider;
 }
 
-export async function initializeBrowserLocalData(): Promise<BrowserLocalDataServiceState> {
-  return defaultService.initialize();
+export async function initializeBrowserLocalData(options: BrowserLocalDataInitializationOptions = {}): Promise<BrowserLocalDataServiceState> {
+  return defaultService.initialize(options);
 }
 
 export async function restoreLegacyBrowserData() {

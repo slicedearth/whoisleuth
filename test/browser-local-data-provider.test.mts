@@ -42,6 +42,19 @@ const NULL_STORAGE = {
   removeItem: () => undefined,
 };
 
+test('explicit empty-collection creation rejects undeclared and duplicate identities before opening storage', async () => {
+  let opened = 0;
+  const provider = new BrowserLocalDataProvider({
+    indexedDB: { open: () => { opened++; throw new Error('Unexpected database open'); } } as unknown as IDBFactory,
+    storage: NULL_STORAGE, requireExistingCollections: true,
+  });
+  for (const selected of [['unknown'], ['fixture', 'fixture']]) {
+    await assert.rejects(provider.initialize([DEFINITION], { createMissingCollections: selected }),
+      (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'INVALID_LOCAL_DATA_DEFINITION');
+  }
+  assert.equal(opened, 0);
+});
+
 test('a late database upgrade is aborted after its opening deadline', async () => {
   let aborts = 0;
   let reads = 0;

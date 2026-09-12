@@ -20,7 +20,7 @@ fixture remain. Every writer emits only the version shown in â€œCurrent writerâ€
 | Case-response packet | `whoisleuth.case-response-packet` | 6, 7, 8, 9, 10 | 6, 7, 8, 9, 10 | 10 | `reject` | `read_only` |
 | Review-input digest material | `whoisleuth.case-response-review-inputs` | 1, 2, 3, 4 | 1, 2, 3, 4 | 4 | `reject` | `read_only` |
 | CLI Case-pack | `whoisleuth.cli.case-pack` | 2 | 2 | 2 | `reject` | `read_only` |
-| Workspace archive | `whoisleuth.workspace-archive` | 5, 6, 7, 8 | 5, 6, 7, 8 | 8 | `reject` | `normalize_to_current` |
+| Workspace archive | `whoisleuth.workspace-archive` | 5, 6, 7, 8, 9 | 5, 6, 7, 8, 9 | 9 | `reject` | `normalize_to_current` |
 | Workspace settings section | `whoisleuth.workspace-settings` | 1 | 1 | 1 | `reject` | `exact_current_only` |
 | Encrypted workspace archive | `whoisleuth.encrypted-workspace-archive` | 1 | 1 | 1 | `reject` | `exact_current_only` |
 
@@ -46,7 +46,7 @@ The Case-pack verifier accepts every exact Case/report epoch listed below.
 | 16 | 12 |
 
 The durable CLI Case-pack envelope is version 2.
-The durable workspace archive envelope supports versions 5, 6, 7 and 8;
+The durable workspace archive envelope supports versions 5, 6, 7, 8 and 9;
 its embedded Case section consumes the supported Case contract shown above.
 The encrypted workspace envelope remains version 1
 and authenticates an ordinary workspace document without changing either the
@@ -60,7 +60,7 @@ Case schema 15, Case report schema 11, response-packet schema
 archive schema 8. Version 2.4.0 is the current writer in this
 checkout. It emits Case schema 16, report schema 12,
 response-packet schema 10, review-input version 4, and workspace
-archive schema 8.
+archive schema 9.
 
 Both the latest public formats and the current writers directly preserve the
 formats written by public release 1.47.4:
@@ -82,7 +82,7 @@ and no import path automatically deletes stored data.
 
 ## Durable compatibility evidence
 
-The lifecycle family binds 35 immutable current-format
+The lifecycle family binds 36 immutable current-format
 fixtures to exact byte counts and SHA-256 identities. The canonical JSON
 commitment is
 `docs/case-supported-contract-baseline-v1.json`; it is derived from

@@ -320,6 +320,13 @@ Select a Case to open its workspace. **All Cases** returns to the retained list
 filters. Direct Case links open that record in this browser, not in another
 person's workspace.
 
+**Saved Case views** retains the current status, disposition, search and sort
+choices. Name a view, then select **Save as new view**. **Apply view** runs those
+filters against the currently retained Cases; it does not collect evidence.
+Rename or change a selected view with **Update selected view**. Views belong to
+the current workspace and travel in workspace backups, not individual Case
+exports. A conflicting edit in another tab must be reviewed before replacement.
+
 A domain can have several independent incident Cases. **Create a separate
 incident Case** gives the investigation a title and a new immutable Case ID.
 Optionally reuse one retained observation; its timestamps remain unchanged and

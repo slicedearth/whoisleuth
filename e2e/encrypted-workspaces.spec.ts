@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { directoryRows, indicator, namedDatabase, openArchive, openManager, SELECTION } from './browser-workspace-fixtures';
-import { expectNoHorizontalOverflow, useTheme } from './helpers';
+import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, useTheme } from './helpers';
 import { downloadEncryptedWorkspaceArchive } from './workspace-backup';
 import { createCase } from '../packages/cases/case-model.mts';
 import { buildWorkspaceArchive, readWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
@@ -78,7 +78,7 @@ async function storedBytes(page: Page, databaseName: string) {
       const records = tx.objectStore('records').getAll();
       const manifests = tx.objectStore('manifests').getAll();
       await new Promise<void>((resolve, reject) => { tx.oncomplete = () => resolve(); tx.onabort = () => reject(tx.error); });
-      return { records: records.result as { payload: string; lookupKey: string; codec: string }[], manifests: manifests.result as { codec: string }[], session: { ...sessionStorage }, local: { ...localStorage } };
+      return { records: records.result as { payload: string; lookupKey: string; codec: string }[], manifests: manifests.result as { codec: string; collection: string; recordCount: number; revision: number }[], session: { ...sessionStorage }, local: { ...localStorage } };
     } finally { db.close(); }
   }, databaseName);
 }
@@ -195,6 +195,101 @@ test('missing encrypted collection manifests never create replacement empty data
   expect(records.manifests.length).toBeGreaterThan(0);
   expect(JSON.stringify(records)).not.toContain('"collection":"cases"');
 });
+
+for (const condition of ['empty', 'retained-record', 'retained-file', 'other-missing'] as const) {
+  test(`explicit saved-view storage creation preserves an encrypted workspace with ${condition}`, async ({ page }, testInfo) => {
+    await page.goto('/dashboard');
+    const row = await createEncrypted(page, `Additional storage ${condition}`);
+    await unlock(page, row.name);
+    await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
+    await createCaseThroughForm(page, 'retained-upgrade.example');
+    if (condition === 'empty') await useTheme(page, 'system');
+    if (condition === 'retained-record') {
+      await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+      const panel = page.locator('details.saved-views');
+      await panel.locator(':scope > summary').click();
+      await panel.getByRole('textbox', { name: 'View name', exact: true }).fill('Existing private view');
+      await panel.getByRole('button', { name: 'Save as new view', exact: true }).click();
+      await expect(panel.getByRole('status')).toContainText('Saved the view');
+    }
+    await page.evaluate(async ({ name, condition }) => {
+      const opened = indexedDB.open(name);
+      const db = await new Promise<IDBDatabase>((resolve, reject) => { opened.onsuccess = () => resolve(opened.result); opened.onerror = () => reject(opened.error); });
+      try {
+        const tx = db.transaction(['manifests', 'files'], 'readwrite');
+        tx.objectStore('manifests').delete('case_views');
+        if (condition === 'other-missing') tx.objectStore('manifests').delete('cases');
+        if (condition === 'retained-file') tx.objectStore('files').put({ key: ['case_views', 'unclaimed-file'], collection: 'case_views', lookupKey: 'unclaimed-file', codec: 'aes-gcm-hmac-v1', payload: new Uint8Array([1, 2, 3]).buffer });
+        await new Promise<void>((resolve, reject) => { tx.oncomplete = () => resolve(); tx.onabort = () => reject(tx.error); });
+      } finally { db.close(); }
+    }, { name: namedDatabase(row.id), condition });
+    const snapshot = async () => {
+      const { records, manifests } = await storedBytes(page, namedDatabase(row.id));
+      return { records, manifests };
+    };
+    const before = await snapshot();
+    const filesBefore = await storedFiles(page, namedDatabase(row.id));
+    const directoryBefore = await directoryRows(page);
+    await page.reload();
+    await page.getByLabel('Workspace passphrase', { exact: true }).fill(WORKSPACE_PASSWORD);
+    await page.getByRole('button', { name: 'Unlock workspace', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Browser-local data unavailable', exact: true })).toBeVisible();
+    await expect(page.locator('#main-content')).toHaveCount(0);
+    expect(await snapshot()).toEqual(before);
+    const upgrade = page.locator('.storage-upgrade');
+    await upgrade.locator(':scope > summary').click();
+    const create = upgrade.getByRole('button', { name: 'Create saved-view storage', exact: true });
+    if (condition === 'empty') {
+      for (const width of [320, 390, 1024, 1280, 2560]) for (const theme of ['light', 'dark'] as const) {
+        await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
+        await page.emulateMedia({ colorScheme: theme });
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        await create.focus();
+        await expect(create).toBeFocused();
+        await expectNoHorizontalOverflow(page);
+        const bounds = await create.evaluate(element => {
+          const control = element.getBoundingClientRect();
+          const parent = element.closest('.workspace-error')!.getBoundingClientRect();
+          return { left: control.left - parent.left, right: control.right - parent.left, width: parent.width, height: control.height };
+        });
+        expect(bounds.left).toBeGreaterThanOrEqual(0);
+        expect(bounds.right).toBeLessThanOrEqual(bounds.width);
+        if (width < 500) expect(bounds.height).toBeGreaterThanOrEqual(44);
+        await page.screenshot({ path: testInfo.outputPath(`saved-view-storage-${theme}-${width}.png`) });
+      }
+      expect((await new AxeBuilder({ page }).include('.workspace-error').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+      await page.setViewportSize({ width: 1280, height: 720 });
+    }
+    page.once('dialog', dialog => dialog.dismiss());
+    await create.click();
+    expect(await snapshot()).toEqual(before);
+    if (condition === 'empty') {
+      await failNextBrowserLocalManifestWrite(page, 'case_views');
+      page.once('dialog', dialog => dialog.accept()); await create.click();
+      await expect(page.locator('.workspace-error')).toContainText(/quota|storage|write/iu);
+      expect(await snapshot()).toEqual(before);
+      // Retry reads normally; it must not inherit the earlier creation approval.
+      await page.getByRole('button', { name: 'Retry', exact: true }).click();
+      await expect(page.locator('.workspace-error')).toContainText('No empty collections were created');
+      await upgrade.locator(':scope > summary').click();
+    }
+    page.once('dialog', dialog => dialog.accept()); await create.click();
+    if (condition === 'empty') {
+      await expect(indicator(page)).toHaveText(row.name);
+      await expect(page.locator('#main-content')).toBeFocused();
+      const after = await snapshot();
+      expect(after.records).toEqual(before.records);
+      expect(after.manifests.filter(item => item.collection !== 'case_views')).toEqual(before.manifests);
+      expect(after.manifests.find(item => item.collection === 'case_views')).toMatchObject({ codec: 'aes-gcm-hmac-v1', recordCount: 0, revision: 1 });
+    } else {
+      await expect(page.getByRole('heading', { name: 'Browser-local data unavailable', exact: true })).toBeFocused();
+      await expect(page.locator('.workspace-error')).toContainText(condition === 'other-missing' ? 'No empty collections were created' : 'still has retained records or files');
+      expect(await snapshot()).toEqual(before);
+    }
+    expect(await storedFiles(page, namedDatabase(row.id))).toEqual(filesBefore);
+    expect(await directoryRows(page)).toEqual(directoryBefore);
+  });
+}
 
 for (const failure of ['directory', 'initialisation'] as const) test(`a refused encrypted ${failure} write removes only its newly prepared empty database`, async ({ page }) => {
   await page.goto('/dashboard');

@@ -147,6 +147,7 @@ describe('browser-local collection definitions', () => {
       bulk_review: { schema: 'whoisleuth.bulk-review', version: futureVersion('bulk_review'), presets: [], rows: [] },
       analyst_review_state: { schema: 'whoisleuth.analyst-review-state', version: ANALYST_REVIEW_STATE_COLLECTION.schemaVersion + 1, records: [] },
       case_drafts: { schema: 'whoisleuth.case-drafts', version: futureVersion('case_drafts'), records: [] },
+      case_views: { schema: 'whoisleuth.case-views', version: futureVersion('case_views'), views: [] },
     };
     const definitions = BROWSER_LOCAL_COLLECTIONS.filter(({ id }) => id !== 'cases');
     assert.deepEqual(

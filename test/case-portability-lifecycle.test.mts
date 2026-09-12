@@ -93,7 +93,7 @@ describe('canonical Case portability lifecycle', () => {
     assert.deepEqual([...contracts.CASE_REPORT_OUTPUT_VERSIONS], [9, 10, 11, contracts.CASE_REPORT_SCHEMA_VERSION]);
     assert.deepEqual([...contracts.SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS], [6, 7, 8, 9, contracts.CASE_RESPONSE_PACKET_VERSION]);
     assert.deepEqual([...contracts.SUPPORTED_CLI_CASE_PACK_VERSIONS], [2]);
-    assert.deepEqual([...contracts.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS], [5, 6, 7, 8]);
+    assert.deepEqual([...contracts.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS], [5, 6, 7, 8, 9]);
 
     const family = contracts.CASE_PORTABILITY_LIFECYCLE_FAMILY;
     assert.ok(family.compatibility.length > 0);
@@ -235,7 +235,7 @@ describe('canonical Case portability lifecycle', () => {
       casePack.buildCliCasePack(contracts.serialiseCasePortableJson(currentExport), { audience: 'internal', reviewed: true }, NOW),
       await fixture(contracts.CLI_CASE_PACK_WRITER_FIXTURE_ID),
     );
-    const frozenArchive = await fixture<workspace.WorkspaceArchiveDocument>('workspace-archive-v8-empty-current');
+    const frozenArchive = await fixture<workspace.WorkspaceArchiveDocument>(`workspace-archive-v${contracts.WORKSPACE_ARCHIVE_VERSION}-empty-current`);
     const archive = await workspace.buildWorkspaceArchive(emptyWorkspaceInput(), { generatedAt: frozenArchive.generatedAt });
     const { manifest: frozenManifest, sections: frozenSections, ...frozenEnvelope } = frozenArchive;
     const { manifest, sections, ...envelope } = archive;
@@ -307,8 +307,8 @@ describe('canonical Case portability lifecycle', () => {
       /schema 4 is retired.*no data was changed/iu,
     );
     await assert.rejects(
-      workspace.readWorkspaceArchive(future.workspaceArchive),
-      /newer than the supported schema 8.*no data was changed/iu,
+      workspace.readWorkspaceArchive({ ...(future.workspaceArchive as Record<string, unknown>), version: contracts.WORKSPACE_ARCHIVE_VERSION + 1 }),
+      /newer than the supported schema.*no data was changed/iu,
     );
 
     const currentExport = await fixture<Record<string, unknown>>(CURRENT_EXPORT);

@@ -66,6 +66,25 @@ describe('browser-local data service', () => {
     assert.equal((await service.initialize()).state, 'ready');
     assert.equal(attempts, 2);
   });
+
+  test('explicit collection creation is captured once and is not inherited by later retries', async () => {
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    const observed: unknown[] = [];
+    const service = createBrowserLocalDataService({
+      loadCollections: async () => { await pending; return [SHORTLIST_COLLECTION]; },
+      createProvider: () => readyProvider({ initialize: async (_definitions, options) => {
+        observed.push(options);
+        throw new BrowserLocalDataError('LOCAL_DATA_MISSING', 'Missing fixture collection');
+      } }),
+    });
+    const selected = ['shortlist'];
+    const attempt = service.initialize({ createMissingCollections: selected });
+    selected[0] = 'cases'; release();
+    assert.equal((await attempt).state, 'error');
+    assert.equal((await service.initialize()).state, 'error');
+    assert.deepEqual(observed, [{ createMissingCollections: ['shortlist'] }, {}]);
+  });
   test('forwards an awaited updater and cancellation without another save coordinator', async () => {
     const controller = new AbortController();
     let calls = 0;

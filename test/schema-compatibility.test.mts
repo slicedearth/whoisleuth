@@ -493,7 +493,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'browser.bulk-review').byteBudget, MAX_BULK_REVIEW_STORE_BYTES);
     assert.equal(byId(inventory, 'export.workspace-archive').schema, WORKSPACE_ARCHIVE_SCHEMA);
     assert.equal(byId(inventory, 'export.workspace-archive').currentVersion, WORKSPACE_ARCHIVE_VERSION);
-    assert.deepEqual(byId(inventory, 'export.workspace-archive').supportedVersions, [5, 6, 7, 8]);
+    assert.deepEqual(byId(inventory, 'export.workspace-archive').supportedVersions, [5, 6, 7, 8, 9]);
     assert.equal(byId(inventory, 'export.workspace-archive').byteBudget, MAX_WORKSPACE_ARCHIVE_BYTES);
     assert.deepEqual(byId(inventory, 'export.case-response-packet').supportedVersions, [6, 7, 8, 9, CASE_RESPONSE_PACKET_VERSION]);
     assert.deepEqual(byId(inventory, 'derived.case-response-review-inputs').supportedVersions, [1, 2, 3, CASE_RESPONSE_REVIEW_INPUTS_VERSION]);

@@ -12,13 +12,14 @@
   import { monitorRouteKey, monitorRouteTarget } from '$lib/controllers/monitor-route-controller.ts';
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import { casesForDomain, type CaseIncidentInput } from '$lib/analysis/case-model.ts';
-  import { caseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
+  import { filterCaseList } from '../../../../packages/cases/case-list-view.mts';
+  import type { CaseViewFilters } from '../../../../packages/contracts/case-views-contract.mts';
   import { loadInvestigationGuide } from '$lib/investigation-guide';
   import { loadProfiles, type BrandProfile } from '$lib/brand-profiles';
   import type { ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
   import {
     addCaseBrandProfileAssociation, addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES,
-    caseFreeformTags, caseTagsWithTypes, caseTypeIds, caseTypeRecords, deleteCase,
+    caseFreeformTags, caseTagsWithTypes, caseTypeIds, deleteCase,
     dispositionLabel, editCase, editCaseTags, restoreCaseTags, exportCases,
     exportRiskCalibrationDataset, importCases, loadCases, MAX_CASE_IMPORT_BYTES,
     openCase, createCaseIncident, previewRiskCalibrationDataset, removeCaseBrandProfileAssociation,
@@ -29,6 +30,7 @@
   import CaseWorkspaceToolbar from '$lib/components/CaseWorkspaceToolbar.svelte';
   import CaseIncidentForm from '$lib/components/CaseIncidentForm.svelte';
   import CaseFilters from '$lib/components/CaseFilters.svelte';
+  import CaseSavedViews from '$lib/components/CaseSavedViews.svelte';
   import CaseList from '$lib/components/CaseList.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   let { initialCases = null, initialMessage = '', onchange }: {
@@ -45,8 +47,8 @@
   let brandProfiles = $state<BrandProfile[]>([]);
   let brandProfilesUnavailable = $state(true);
   let casePage = $state(1);
-  let statusFilter = $state('');
-  let dispositionFilter = $state('');
+  let statusFilter = $state<CaseViewFilters['status']>('');
+  let dispositionFilter = $state<CaseViewFilters['disposition']>('');
   let caseSearch = $state('');
   let caseSort = $state<'updated' | 'domain' | 'status'>('updated');
   let expandedId = $state('');
@@ -77,25 +79,8 @@
     }
   });
   const existingCaseDomains = $derived(new Set(cases.map((record) => record.domain)));
-  const statusOrder = new Map(CASE_STATUSES.map((item, index) => [item.value, index]));
-  const filteredCases = $derived.by(() => {
-    const term = caseSearch.trim().toLowerCase();
-    return cases.filter(record => {
-      if (statusFilter && record.status !== statusFilter)
-        return false;
-      if (dispositionFilter && record.disposition !== dispositionFilter)
-        return false;
-      if (term && !record.domain.includes(term) && !(record.title ?? '').toLowerCase().includes(term) && !caseNumber(record.id).toLowerCase().includes(term) && !caseFreeformTags(record.tags).some(tag => tag.toLowerCase().includes(term)) && !caseTypeRecords(record.tags).some(type => type.label.toLowerCase().includes(term)))
-        return false;
-      return true;
-    }).sort((a, b) => {
-      if (caseSort === 'domain')
-        return a.domain.localeCompare(b.domain);
-      if (caseSort === 'status')
-        return (statusOrder.get(a.status) ?? 99) - (statusOrder.get(b.status) ?? 99) || a.domain.localeCompare(b.domain);
-      return Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
-    });
-  });
+  const currentFilters = $derived({ status: statusFilter, disposition: dispositionFilter, search: caseSearch, sort: caseSort });
+  const filteredCases = $derived(filterCaseList(cases, currentFilters));
   const casePageCount = $derived(Math.max(1, Math.ceil(filteredCases.length / CASE_PAGE_SIZE)));
   const currentCasePage = $derived(Math.min(casePage, casePageCount));
   const pagedCases = $derived(filteredCases.slice((currentCasePage - 1) * CASE_PAGE_SIZE, currentCasePage * CASE_PAGE_SIZE));
@@ -627,7 +612,6 @@
           cancel: () => { if (!calibrationExportBusy) calibrationReview = null; } }} />
     {/if}
 
-    {#if cases.length}
       <CaseFilters
         status={statusFilter} setStatus={(value) => changeCaseView(() => statusFilter = value)}
         disposition={dispositionFilter} setDisposition={(value) => changeCaseView(() => dispositionFilter = value)}
@@ -635,7 +619,10 @@
         sort={caseSort} setSort={(value) => changeCaseView(() => caseSort = value)}
         statusOptions={CASE_STATUSES} dispositionOptions={CASE_DISPOSITIONS}
         clear={() => changeCaseView(clearCaseFilters)} matchedCount={filteredCases.length} totalCount={cases.length} />
-
+    <CaseSavedViews filters={currentFilters} onapply={(view) => changeCaseView(() => {
+      statusFilter = view.status; dispositionFilter = view.disposition; caseSearch = view.search; caseSort = view.sort;
+    })} />
+    {#if cases.length}
       <CaseList
         records={pagedCases} {selectCase} {calibrationMode} {calibrationCaseIds} {toggleCalibrationCase} formatDate={date}
         currentPage={currentCasePage} pageCount={casePageCount} setPage={setCasePage} />

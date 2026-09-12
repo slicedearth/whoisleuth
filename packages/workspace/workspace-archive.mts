@@ -82,6 +82,8 @@ import {
 } from '../contracts/case-portability.mts';
 import { ANALYST_REVIEW_STATE_COMPATIBILITY } from '../contracts/analyst-review-state.mts';
 import { WORKSPACE_PORTABILITY_ARCHIVE_SECTION_REFERENCES } from '../contracts/workspace-portability.mts';
+import { CASE_VIEWS_COMPATIBILITY } from '../contracts/case-views.mts';
+import { emptyCaseViewsStore, mergeCaseViews, normalizeCaseViewsStore } from './case-views.mts';
 
 export {
   isSupportedWorkspaceArchiveVersion,
@@ -155,6 +157,7 @@ export interface WorkspaceArchiveSectionMap {
   investigationTemplates: ReturnType<typeof buildInvestigationTemplateExport>;
   bulkReview: ReturnType<typeof buildBulkReviewExport>;
   analystReviewState: ReturnType<typeof buildAnalystReviewStateExport>;
+  caseViews: ReturnType<typeof normalizeCaseViewsStore>;
   settings: WorkspaceSettingsDocument;
 }
 
@@ -199,6 +202,7 @@ interface NormalizedWorkspaceInput {
   investigationTemplates: unknown[];
   bulkReview: unknown;
   analystReviewState: unknown;
+  caseViews: unknown;
   settings: UnknownRecord;
 }
 
@@ -326,6 +330,7 @@ function workspaceArchiveSections(
     investigationTemplates: buildInvestigationTemplateExport(input.investigationTemplates, now),
     bulkReview: buildBulkReviewExport(input.bulkReview),
     analystReviewState: buildAnalystReviewStateExport(input.analystReviewState),
+    caseViews: normalizeCaseViewsStore(input.caseViews),
     settings: settingsDocument(input),
   };
 }
@@ -460,6 +465,12 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     merge: (local, data) => mergeAnalystReviewStateStores(local.analystReviewState, data),
   },
   {
+    id: 'caseViews', label: 'Saved Case views', schema: compatibilitySchema(CASE_VIEWS_COMPATIBILITY),
+    version: CASE_VIEWS_COMPATIBILITY.currentVersion, supportedVersions: CASE_VIEWS_COMPATIBILITY.supportedVersions,
+    count: (data) => arrayCount(data, 'views'),
+    merge: (local, data) => mergeCaseViews(local.caseViews, data),
+  },
+  {
     id: 'settings', label: 'Workspace settings', schema: compatibilitySchema(WORKSPACE_SETTINGS_COMPATIBILITY),
     version: WORKSPACE_SETTINGS_COMPATIBILITY.currentVersion,
     supportedVersions: WORKSPACE_SETTINGS_COMPATIBILITY.supportedVersions,
@@ -494,6 +505,7 @@ function normalizedInput(input: unknown): NormalizedWorkspaceInput {
     investigationTemplates: Array.isArray(value.investigationTemplates) ? value.investigationTemplates : [],
     bulkReview: record(value.bulkReview) || {},
     analystReviewState: record(value.analystReviewState) || emptyAnalystReviewStateStore(),
+    caseViews: value.caseViews ?? emptyCaseViewsStore(),
     settings: record(value.settings) || {},
   };
 }
@@ -590,7 +602,7 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
   const sourceVersion = value.version;
   const expectedSectionIds: readonly string[] = sourceVersion === PUBLIC_WORKSPACE_ARCHIVE_VERSION
     ? PUBLIC_WORKSPACE_ARCHIVE_SECTION_IDS
-    : WORKSPACE_ARCHIVE_SECTION_IDS;
+    : sourceVersion < 9 ? WORKSPACE_ARCHIVE_SECTION_IDS.filter(id => id !== 'caseViews') : WORKSPACE_ARCHIVE_SECTION_IDS;
   const generatedAt = timestamp(value.generatedAt);
   if (!generatedAt) throw new Error('The workspace archive generation time is invalid.');
   assertExactKeys(value, WORKSPACE_ARCHIVE_ROOT_KEYS, `version ${sourceVersion} envelope`);
@@ -680,6 +692,15 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
       status: 'ready',
       reason: `Workspace schema ${PUBLIC_WORKSPACE_ARCHIVE_VERSION} did not contain Review Item lifecycle state. Import supplies an empty section and invents no analyst decisions.`,
       data,
+    });
+  }
+  if (sourceVersion < 9) {
+    const data = emptyCaseViewsStore();
+    sections.push({
+      id: 'caseViews', label: 'Saved Case views', schema: compatibilitySchema(CASE_VIEWS_COMPATIBILITY),
+      version: CASE_VIEWS_COMPATIBILITY.currentVersion, recordCount: 0,
+      bytes: byteLength(serialize(data)), checksum: await checksum(data, options.cryptoProvider), status: 'ready',
+      reason: 'This archive predates saved Case views. Import supplies an empty section and does not remove existing views.', data,
     });
   }
   sections.sort(canonicalSectionOrder);

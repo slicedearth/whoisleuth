@@ -38,6 +38,7 @@
   let capabilities = $state<CapabilityReport|null>(null);
   let capabilitiesChecked = $state(false);
   let localData = $state<BrowserLocalDataServiceState>({ state: 'idle' });
+  let storageErrorHeading = $state<HTMLHeadingElement>();
   let consoleHeader = $state<HTMLElement>();
   let navigationPanel = $state<HTMLElement>();
   let navigationToggle = $state<HTMLButtonElement>();
@@ -121,6 +122,15 @@
   async function retryLocalData(){
     localData={state:'initializing'};
     localData=await initializeBrowserLocalData();
+  }
+
+  async function createSavedViewStorage(){
+    if (localData.state !== 'error' || localData.code !== 'LOCAL_DATA_MISSING') return;
+    if (!window.confirm('Create empty saved Case view storage in this workspace? This does not recover lost views. If views were previously saved here, restore a verified backup instead. Existing records and files will not be replaced.')) return;
+    localData={state:'initializing'};
+    localData=await initializeBrowserLocalData({createMissingCollections:['case_views']});
+    await tick();
+    (localData.state === 'ready' ? document.querySelector<HTMLElement>('#main-content') : storageErrorHeading)?.focus();
   }
 
   async function logout(){
@@ -247,12 +257,19 @@
       {#if localData.code === 'LOCAL_DATA_WORKSPACE_LOCKED'}
         <DeferredSurface load={() => import('$lib/components/BrowserWorkspaceUnlock.svelte')} props={{onunlock:retryLocalData}} loadingLabel="Loading workspace unlock." unavailableLabel="Workspace unlock could not be loaded. Reload the page to retry." />
       {:else}
-        <h1>Browser-local data unavailable</h1>
+        <h1 tabindex="-1" bind:this={storageErrorHeading}>Browser-local data unavailable</h1>
         <p class="muted">{localData.detail}</p>
         {#if localData.code === 'DEFERRED_MODULE_UNAVAILABLE'}
           <button class="primary" onclick={reloadDeferredModulePage}>Reload page</button>
         {:else}
           <button class="primary" onclick={retryLocalData}>Retry</button>
+        {/if}
+        {#if localData.code === 'LOCAL_DATA_MISSING'}
+          <details class="storage-upgrade">
+            <summary>Workspace created before saved Case views?</summary>
+            <p>This adds only empty saved-view storage. All other collections must be readable, and no retained records or files may exist without their metadata. Previously saved views require backup recovery instead.</p>
+            <button class="btn" type="button" onclick={createSavedViewStorage}>Create saved-view storage</button>
+          </details>
         {/if}
       {/if}
       <p class="login-links"><a href="/privacy">Review storage and privacy details</a></p>
@@ -306,6 +323,7 @@
 <style>
   .workspace-recovery{width:min(760px,calc(100% - 32px));margin:20px auto;padding:20px}
   .workspace-error{display:flex;justify-content:center;margin:40px 16px 20px}.workspace-access{width:min(480px,100%);padding:clamp(20px,4vw,34px);min-width:0;overflow-wrap:anywhere}
+  .storage-upgrade{margin-top:16px}.storage-upgrade>summary{min-height:44px;cursor:pointer}.storage-upgrade button{min-height:44px;max-width:100%;padding:8px 13px;white-space:normal}
   .login-links{display:flex;justify-content:center;gap:8px;margin:18px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .login-links a{color:var(--accent)}
   .reference-nav{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}

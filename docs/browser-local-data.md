@@ -10,7 +10,7 @@ delete.
 The authenticated Console uses IndexedDB for bounded collections including
 Cases, Brand Profiles, watchlists, shortlist entries, campaigns, certificate
 search history, custom rules, retained relationship observations, saved Bulk
-sessions, website snapshots, investigation templates, Bulk review state and
+sessions, website snapshots, investigation templates, Bulk review state, saved Case views and
 Analyst Review Item lifecycle state.
 
 Each collection has a canonical owner that declares its current schema,
@@ -92,9 +92,12 @@ also advances the collection revision so its transaction can be acknowledged.
 
 Creation initialises all encrypted collections before publishing the directory
 entry. Opening an existing encrypted workspace requires its collection manifests;
-missing manifests are not silently recreated as empty data. Adding collections
-to this format requires an explicit storage migration. Randomised ciphertext
-does not turn a semantically unchanged update into another write.
+missing manifests are not silently recreated as empty data. A workspace created
+before saved Case views can explicitly add that empty collection from the storage
+recovery screen. Every other collection must validate; retained records or files
+without their manifest prevent creation. The transaction checks absence again
+before writing. This does not recover deleted views: those require a backup.
+Randomised ciphertext does not turn a semantically unchanged update into another write.
 
 Every tab unlocks independently. Reloading, locking or leaving the console
 discards the unlocked document; tab handoffs and Brand selection stay in memory.
@@ -132,10 +135,10 @@ not reconstruct historical input from weaker fields. Case response histories
 are append-only and bounded. Pins and sightings keep unknown observation times
 as null, independently of the time the record was saved.
 
-The current workspace archive is version 8. It contains Case schema 16 and a
-bounded analyst review-state section. Exact workspace versions 5, 6 and 7 remain
-readable and migrate directly; version 5 adds an empty review-state section
-without inventing decisions. Brand Profiles write version 9 and read exact
+The current workspace archive is version 9. It contains Case schema 16, bounded
+analyst review state and saved Case views. Exact workspace versions 5–8 remain
+readable and gain an empty saved-views section; version 5 also adds an empty
+review-state section without inventing decisions. Brand Profiles write version 9 and read exact
 versions 6–8; website snapshots write version 6 and read exact versions 4–5.
 Other historical formats and future versions are unsupported.
 

@@ -73,7 +73,7 @@
       "manifests"
     ],
     "browserCodec": "json-v1",
-    "browserCollectionCount": 14
+    "browserCollectionCount": 15
   },
   "scenarios": [
     {
@@ -113,7 +113,7 @@
       "portable": {
         "workspaceArchive": {
           "caseCount": 8,
-          "totalBytes": 49244,
+          "totalBytes": 49490,
           "retainedEvidenceBytes": 35927
         },
         "cliCasePack": {
@@ -343,7 +343,7 @@
       "portable": {
         "workspaceArchive": {
           "caseCount": 24,
-          "totalBytes": 136707,
+          "totalBytes": 136953,
           "retainedEvidenceBytes": 107867
         },
         "cliCasePack": {
@@ -453,7 +453,7 @@
       "portable": {
         "workspaceArchive": {
           "caseCount": 500,
-          "totalBytes": 2048064,
+          "totalBytes": 2048310,
           "retainedEvidenceBytes": 1557501
         },
         "cliCasePack": {

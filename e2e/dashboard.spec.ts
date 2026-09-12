@@ -603,9 +603,9 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
   const archive = JSON.parse(content) as WorkspaceArchiveDocument;
   expect(archive.schema).toBe('whoisleuth.workspace-archive');
   expect(archive.version).toBe(WORKSPACE_ARCHIVE_VERSION);
-  expect(archive.manifest.sectionCount).toBe(13);
+  expect(archive.manifest.sectionCount).toBe(14);
   expect(archive.manifest.sections.map((section) => section.id)).toEqual([
-    'cases', 'campaigns', 'brandProfiles', 'watchlists', 'shortlist', 'detectionRules', 'relationshipObservations', 'bulkSessions', 'websiteSnapshots', 'investigationTemplates', 'bulkReview', 'analystReviewState', 'settings',
+    'cases', 'campaigns', 'brandProfiles', 'watchlists', 'shortlist', 'detectionRules', 'relationshipObservations', 'bulkSessions', 'websiteSnapshots', 'investigationTemplates', 'bulkReview', 'analystReviewState', 'caseViews', 'settings',
   ]);
   expect(archive.manifest.sections.every((section) => /^sha256:[a-f0-9]{64}$/.test(section.checksum))).toBe(true);
   const archivedCase = requiredValue(archive.sections.cases.cases[0], 'The exported case fixture is missing.');
@@ -624,7 +624,7 @@ test('the dashboard exports one checksummed workspace archive without unrelated 
   expect(content).not.toContain('must-not-export');
   expect(content).not.toContain('private.invalid');
   expect(content).not.toContain('wrt_session');
-  await expect(workspaceArchiveStatus(page)).toContainText('Prepared an unencrypted workspace backup with 13 verified data sections');
+  await expect(workspaceArchiveStatus(page)).toContainText(`Prepared an unencrypted workspace backup with ${archive.manifest.sectionCount} verified data sections`);
 });
 
 test('reviewed case evidence keeps the same workspace content through two CLI and browser hand-offs', {
@@ -732,7 +732,7 @@ test('the dashboard encrypts and locally unlocks a portable workspace backup', a
   await page.getByRole('button', { name: 'Unlock and review' }).click();
   const preview = workspaceArchivePreview(page);
   await expect(preview.getByRole('heading', { name: 'Choose saved data to add' })).toBeVisible();
-  await expect(preview.locator('li')).toHaveCount(13);
+  await expect(preview.locator('li')).toHaveCount(originalWorkspace.manifest.sectionCount);
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
   await preview.getByRole('button', { name: 'Add selected data' }).click();
@@ -769,14 +769,14 @@ test('workspace archive import previews conflicts before a non-destructive mobil
 
   const preview = workspaceArchivePreview(page);
   await expect(preview.getByRole('heading', { name: 'Choose saved data to add' })).toBeVisible();
-  await expect(preview.locator('li')).toHaveCount(13);
+  await expect(preview.locator('li')).toHaveCount(archive.manifest.sectionCount);
   await expect(preview.locator('li', { hasText: 'Cases' })).toContainText('1 new');
   await expect(preview.locator('li', { hasText: 'Workspace settings' })).toContainText('Ready');
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
 
   await preview.getByRole('button', { name: 'Add selected data' }).click();
-  await expect(workspaceArchiveStatus(page)).toContainText('Added backup data from 13 sections');
+  await expect(workspaceArchiveStatus(page)).toContainText(`Added backup data from ${archive.manifest.sectionCount} sections`);
   const [cases, campaigns, profiles, relationshipObservations, websiteSnapshots, investigationTemplates, bulkReview, settings] = await Promise.all([
     readBrowserLocalCollection(page, 'cases', { minimumRevision: 2 }),
     readBrowserLocalCollection(page, 'campaigns', { minimumRevision: 2 }),
@@ -852,7 +852,7 @@ test('workspace selection reuses verified content while preview and merge see pe
     await createCaseInBrowser(peer, 'peer-added.invalid');
     await readBrowserLocalCollection(peer, 'cases', { minimumRecords: 3 });
     await preview.getByRole('button', { name: 'Add selected data' }).click();
-    await expect(workspaceArchiveStatus(page)).toContainText('Added backup data from 13 sections');
+    await expect(workspaceArchiveStatus(page)).toContainText(`Added backup data from ${archive.manifest.sectionCount} sections`);
     const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 3 });
     expect(stored.records.map((record) => record.value.domain).sort()).toEqual(['archive-case.invalid', 'archive-case.invalid', 'peer-added.invalid']);
     expect(stored.records.find((record) => record.value.id === original.value.id)?.value).toEqual(original.value);

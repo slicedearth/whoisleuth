@@ -12,6 +12,7 @@ const specifications = [
   'browser-workspaces.spec.ts',
   'encrypted-workspaces.spec.ts',
   'case-draft-recovery.spec.ts',
+  'case-views.spec.ts',
   'case-review-return.spec.ts',
   'case-packet-print.spec.ts',
   'capture-attachment-review.spec.ts',

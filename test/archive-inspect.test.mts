@@ -93,6 +93,20 @@ describe('offline workspace archive inspection', () => {
     );
   });
 
+  test('reports saved view inventory without exposing names or searching retained filter text', async () => {
+    const value = await buildWorkspaceArchive({ caseViews: {
+      schema: 'whoisleuth.case-views', version: 1, views: [{
+        id: 'private-view', name: 'Confidential review queue', createdAt: NOW, updatedAt: NOW,
+        filters: { status: 'monitoring', disposition: 'suspicious', search: DOMAIN, sort: 'updated' },
+      }],
+    } }, { generatedAt: NOW });
+    const report = await inspectWorkspaceArchive(JSON.stringify(value), { search: DOMAIN, reveal: true });
+    assert.equal(report.sections.find(section => section.id === 'caseViews')?.recordCount, 1);
+    assert.equal(report.search.matchCount, 0);
+    assert.doesNotMatch(JSON.stringify(report), /Confidential review queue|review-target\.invalid/u);
+    assert.doesNotMatch(formatArchiveInspection(report), /Confidential review queue|review-target\.invalid/u);
+  });
+
   test('searches only exact allowlisted fields and redacts matches by default', async () => {
     const raw = JSON.stringify(await archive());
     const redacted = await inspectWorkspaceArchive(raw, { search: DOMAIN });

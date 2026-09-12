@@ -27,6 +27,11 @@ export type LocalDataRecord = Readonly<{
   value: unknown;
 }>;
 
+export type BrowserLocalDataInitializationOptions = Readonly<{
+  /** Explicit approval to create only these absent, record-free collections. */
+  createMissingCollections?: readonly string[];
+}>;
+
 type LocalDataCollectionMetadata = Readonly<{
   id: string;
   label: string;
@@ -719,7 +724,7 @@ export class BrowserLocalDataProvider {
     this.#requireExistingCollections = options.requireExistingCollections ?? false;
   }
 
-  async initialize(definitions: readonly AnyLocalDataCollectionDefinition[]): Promise<BrowserLocalDataInitialization> {
+  async initialize(definitions: readonly AnyLocalDataCollectionDefinition[], options: BrowserLocalDataInitializationOptions = {}): Promise<BrowserLocalDataInitialization> {
     if (this.#initializationPromise) return this.#initializationPromise;
     if (!Array.isArray(definitions) || definitions.length < 1 || definitions.length > MAX_LOCAL_DATA_COLLECTIONS) {
       throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', `Local data requires between 1 and ${MAX_LOCAL_DATA_COLLECTIONS} collection definitions.`);
@@ -728,8 +733,15 @@ export class BrowserLocalDataProvider {
     if (new Set(normalized.map((definition) => definition.id)).size !== normalized.length) {
       throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', 'Local data collection identifiers must be unique.');
     }
+    const requested = options.createMissingCollections ?? [];
+    if (!Array.isArray(requested) || requested.length > normalized.length
+      || requested.some(id => !normalized.some(definition => definition.id === id))
+      || new Set(requested).size !== requested.length) {
+      throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', 'Only declared collections can be explicitly created.');
+    }
+    const approved = new Set<string>(requested);
     this.#definitions = new Map(normalized.map((definition) => [definition.id, definition]));
-    this.#initializationPromise = this.#initialize(normalized).catch((cause) => {
+    this.#initializationPromise = this.#initialize(normalized, approved).catch((cause) => {
       this.#initializationPromise = null;
       throw cause;
     });
@@ -1054,7 +1066,7 @@ export class BrowserLocalDataProvider {
     }
   }
 
-  async #initialize(definitions: readonly AnyLocalDataCollectionDefinition[]): Promise<BrowserLocalDataInitialization> {
+  async #initialize(definitions: readonly AnyLocalDataCollectionDefinition[], approved: ReadonlySet<string>): Promise<BrowserLocalDataInitialization> {
     const database = await this.#database();
     const transaction = database.transaction(LOCAL_DATA_MANIFEST_STORE, 'readonly');
     const done = transactionComplete(transaction, 'Reading local-data manifests', this.timeoutMs);
@@ -1067,7 +1079,7 @@ export class BrowserLocalDataProvider {
     await done;
 
     const missing = definitions.filter((_definition, index) => !manifests[index]);
-    if (missing.length && this.#requireExistingCollections) {
+    if (this.#requireExistingCollections && missing.some(definition => !approved.has(definition.id))) {
       throw new BrowserLocalDataError('LOCAL_DATA_MISSING', 'The encrypted workspace is missing collection manifests. No empty collections were created. Restore a backup into a new workspace, or use an explicit supported storage migration.');
     }
     const migratedCollections: string[] = [];
@@ -1087,6 +1099,9 @@ export class BrowserLocalDataProvider {
         catch (cause) {
           throw new BrowserLocalDataError('LOCAL_DATA_LEGACY_UNAVAILABLE', `Could not read legacy ${definition.label} data for migration.`, { cause });
         }
+        if (approved.has(definition.id) && raw !== null) {
+          throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'Explicit collection creation cannot replace a retained legacy document.');
+        }
         const document = this.#normalizeLegacy(definition, raw);
         prepared.push(await this.#prepare(
           definition,
@@ -1100,7 +1115,7 @@ export class BrowserLocalDataProvider {
         await this.#commit(prepared, new Map(definitions.map((definition) => [
           definition.id,
           existingSnapshots.get(definition.id)?.manifest ?? null,
-        ])));
+        ])), [], approved);
         migratedCollections.push(...missing.map((definition) => definition.id));
       } catch (cause) {
         if (!(cause instanceof BrowserLocalDataError) || cause.code !== 'LOCAL_DATA_CONFLICT') throw cause;
@@ -1236,11 +1251,12 @@ export class BrowserLocalDataProvider {
     prepared: readonly PreparedCollection[],
     expectedManifests: ReadonlyMap<string, ExpectedManifest>,
     binaryChanges: readonly PreparedBinaryChanges[] = [],
+    createEmptyCollections: ReadonlySet<string> = new Set(),
   ): Promise<void> {
     this.#requireConfirmedCommitState();
     const database = await this.#database();
     const changedFiles = binaryChanges.filter(change => change.writes.length || change.remove.length);
-    const transaction = database.transaction([LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE, ...(changedFiles.length ? [LOCAL_DATA_BINARY_STORE] : [])], 'readwrite');
+    const transaction = database.transaction([LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE, ...(changedFiles.length || createEmptyCollections.size ? [LOCAL_DATA_BINARY_STORE] : [])], 'readwrite');
     const done = transactionComplete(transaction, 'Saving browser-local data', this.timeoutMs);
     const records = transaction.objectStore(LOCAL_DATA_RECORD_STORE);
     const manifests = transaction.objectStore(LOCAL_DATA_MANIFEST_STORE);
@@ -1277,6 +1293,17 @@ export class BrowserLocalDataProvider {
           transaction.abort();
           await done.catch(() => undefined);
           throw new BrowserLocalDataError('LOCAL_DATA_CONFLICT', `${definition.label} changed in another tab.`);
+        }
+      }
+      for (const collection of createEmptyCollections) {
+        if (expectedManifests.get(collection) !== null) continue;
+        const range = IDBKeyRange.bound([collection], [collection, []]);
+        const counts = await Promise.all([
+          requestResult(records.count(range), 'Checking retained records before collection creation', this.timeoutMs),
+          requestResult(transaction.objectStore(LOCAL_DATA_BINARY_STORE).count(range), 'Checking retained files before collection creation', this.timeoutMs),
+        ]);
+        if (counts.some(count => count !== 0)) {
+          throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'The missing collection still has retained records or files. Nothing was replaced; restore from a verified backup or recover its missing metadata.');
         }
       }
       this.#requireConfirmedCommitState();

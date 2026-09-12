@@ -360,7 +360,7 @@ describe('portable workspace archive', () => {
     assert.equal(left.schema, WORKSPACE_ARCHIVE_SCHEMA);
     assert.equal(left.version, WORKSPACE_ARCHIVE_VERSION);
     assert.deepEqual(left.manifest.sections.map((section) => section.id), [...WORKSPACE_ARCHIVE_SECTION_IDS]);
-    assert.equal(left.manifest.sectionCount, 13);
+    assert.equal(left.manifest.sectionCount, WORKSPACE_ARCHIVE_SECTION_IDS.length);
     assert.equal(left.manifest.totalRecords, 13);
     assert.ok(left.manifest.sections.every((section) => /^sha256:[a-f0-9]{64}$/.test(section.checksum)));
     const settings = recordValue(left.sections.settings);
@@ -387,7 +387,7 @@ describe('portable workspace archive', () => {
 
   test('accepts an exact version 5 archive and migrates it to an empty Review Item section', async () => {
     const archive = structuredClone(await buildWorkspaceArchive(input(), { generatedAt: NOW }));
-    removeSections(archive, ['analystReviewState']);
+    removeSections(archive, ['analystReviewState', 'caseViews']);
     Reflect.set(archive, 'version', 5);
 
     const parsed = await readWorkspaceArchive(archive);
@@ -422,6 +422,7 @@ describe('portable workspace archive', () => {
       updatedAt: NOW,
     }];
     await retargetSectionVersion(archive, 'brandProfiles', 6);
+    removeSections(archive, ['caseViews']);
     Reflect.set(archive, 'version', 6);
 
     const parsed = await readWorkspaceArchive(archive);
@@ -788,7 +789,7 @@ describe('portable workspace archive', () => {
 
   test('closes versioned workspace envelopes, manifests, and manifest entries before integrity claims', async () => {
     const attacks: Array<{ label: string; mutate: (archive: Awaited<ReturnType<typeof buildWorkspaceArchive>>) => void }> = [
-      { label: 'version 8 envelope', mutate: (archive) => { Reflect.set(archive, 'rawWhoisPayload', { credential: 'private material' }); } },
+      { label: `version ${WORKSPACE_ARCHIVE_VERSION} envelope`, mutate: (archive) => { Reflect.set(archive, 'rawWhoisPayload', { credential: 'private material' }); } },
       { label: 'manifest', mutate: (archive) => { Reflect.set(archive.manifest, 'uncheckedPolicy', 'private material'); } },
       { label: 'manifest section entry', mutate: (archive) => { Reflect.set(archive.manifest.sections[0]!, 'credential', 'private material'); } },
     ];
@@ -886,7 +887,7 @@ describe('portable workspace archive', () => {
     await assert.rejects(readWorkspaceArchive(schemaMismatch), /section contract does not match/iu);
   });
 
-  test('rejects a checksummed unknown section from an exact version 8 archive', async () => {
+  test('rejects a checksummed unknown section from a current archive', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
     const index = archive.manifest.sections.findIndex((section) => section.id === 'settings');
     archive.manifest.sections[index] = {

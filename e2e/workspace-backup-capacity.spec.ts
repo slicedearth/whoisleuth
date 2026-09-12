@@ -134,13 +134,13 @@ test('combined full-capacity stores export and restore through native backup fil
       }
     }
     await preview.getByRole('button', { name: 'Add selected data' }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'Added backup data from 13 sections' }).first()).toBeVisible();
+    await expect(workspaceArchiveStatus(page)).toContainText(`Added backup data from ${archive.manifest.sectionCount} sections`);
     await page.setViewportSize({ width: 1280, height: 720 });
     await openDashboardSecondaryWorkspaces(page);
     await beginBrowserInteractionReadiness(page, {
       start: { event: 'click', selector: '.unencrypted-download' },
       targets: [
-        { selector: '.workspace-archive > [role="status"]', exactText: 'Prepared an unencrypted workspace backup with 13 verified data sections. Check the downloaded file.' },
+        { selector: '.workspace-archive > [role="status"]', exactText: `Prepared an unencrypted workspace backup with ${archive.manifest.sectionCount} verified data sections. Check the downloaded file.` },
         { selector: '.unencrypted-download', requireEnabled: true },
       ],
     });
@@ -173,7 +173,7 @@ test('combined full-capacity stores export and restore through native backup fil
     await page.getByRole('button', { name: 'Unlock and review' }).click();
     await expect(page.locator('.preview').getByRole('heading', { name: 'Choose saved data to add' })).toBeVisible();
     await page.locator('.preview').getByRole('button', { name: 'Add selected data' }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'Added backup data from 13 sections' }).first()).toBeVisible();
+    await expect(workspaceArchiveStatus(page)).toContainText(`Added backup data from ${archive.manifest.sectionCount} sections`);
     const restored = JSON.parse((await downloadWorkspaceArchive(page)).content) as WorkspaceArchiveDocument;
     expect(isDeepStrictEqual(restored.sections.cases.cases, output.sections.cases.cases)).toBe(true);
     expect(isDeepStrictEqual(restored.sections.brandProfiles.profiles, output.sections.brandProfiles.profiles)).toBe(true);

@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 12 September 2026.
+Last updated: 13 September 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -65,7 +65,7 @@ The default workspace and unencrypted named workspaces store bounded
 collections in IndexedDB as plaintext JSON. These include Cases, Brand Profiles, watchlists, shortlist
 entries, campaigns, certificate-search history, custom rules, retained
 relationship observations, saved Bulk sessions, website snapshots,
-investigation templates, Bulk review state and Analyst Review Item state. They
+investigation templates, Bulk review state, saved Case views and Analyst Review Item state. They
 are visible to anyone able to use the browser profile.
 
 Retained files require a separate explicit save. Selected originals are stored
@@ -382,10 +382,14 @@ finding-content digest distinguishes reimports from changed evidence; it is an
 identity aid, not anonymisation or proof that the source is authentic. Full Case
 exports and reports retain it; recipient response packets omit it.
 
-The current writer emits workspace archive version 8. Exact versions 5, 6 and 7
-remain readable. Version 5 migrates to an explicitly empty Analyst Review Item
-section without inventing decisions; version 6 migrates its existing sections
-directly, and version 7 gains only current default fields. Versions 1 through 4 are unsupported. Future versions fail without
+Saved Case views retain names, search text, status, disposition and sort choices
+within the current workspace. Workspace backups include them; response packets
+do not. Applying a view filters retained Cases without making network requests.
+
+The current writer emits workspace archive version 9. Exact versions 5, 6, 7 and 8
+remain readable. Versions 5–8 gain an empty saved-views section without removing
+existing views. Version 5 also gains an empty Analyst Review Item section without
+inventing decisions. Versions 1 through 4 are unsupported. Future versions fail without
 empty import, reset, deletion or rewrite. Release 1.47.4 can export the exact
 version-5 and Case-schema-12 public baseline before moving to v2.
 

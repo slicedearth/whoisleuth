@@ -15,6 +15,7 @@ export async function downloadWorkspaceArchive(page: Page) {
   const archive = workspaceArchiveRegion(page);
   const details = archive.locator('details').filter({ has: page.getByText('How workspace backups work', { exact: true }) });
   if (await details.getAttribute('open') === null) await details.locator(':scope > summary').click();
+  await expect(details).toHaveAttribute('open', '');
   const pending = page.waitForEvent('download');
   await archive.getByRole('button', { name: 'Download unencrypted backup' }).click();
   const download = await pending;
@@ -26,6 +27,7 @@ export async function downloadEncryptedWorkspaceArchive(page: Page, passphrase: 
   await openDashboardSecondaryWorkspaces(page);
   const archive = workspaceArchiveRegion(page);
   await archive.getByRole('button', { name: 'Download encrypted backup' }).click();
+  await expect(archive.getByRole('heading', { name: 'Set a backup passphrase', exact: true })).toBeVisible();
   await archive.getByLabel(/^Passphrase/).fill(passphrase);
   await archive.getByLabel('Confirm passphrase').fill(passphrase);
   const pending = page.waitForEvent('download');

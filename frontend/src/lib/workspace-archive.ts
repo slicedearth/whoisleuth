@@ -23,6 +23,7 @@ import { mergeWebsiteSnapshots } from './analysis/website-snapshot-model.ts';
 import { mergeInvestigationTemplates } from './analysis/investigation-template-model.ts';
 import { mergeBulkReviewStores } from './analysis/bulk-review-model.ts';
 import { mergeAnalystReviewStateStores } from './analysis/analyst-review-state.ts';
+import { mergeCaseViews } from '../../../packages/workspace/case-views.mts';
 import { ACTIVE_PROFILE_KEY, activeProfileId, loadProfiles, setActiveProfile } from './brand-profiles';
 import { workspacePreferenceStorage } from './browser-workspace-context.ts';
 import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY, applyThemePreference, normalizeThemePreference, readThemePreference, setThemePreference } from './theme';
@@ -271,6 +272,10 @@ async function mergeWorkspacePreview(
           } else if (section.id === 'analystReviewState') {
             const result = mergeAnalystReviewStateStores(documents.get('analyst_review_state'), section.data);
             next.set('analyst_review_state', result.store);
+            summaries.push(importSummary(section.id, result));
+          } else if (section.id === 'caseViews') {
+            const result = mergeCaseViews(documents.get('case_views'), section.data);
+            next.set('case_views', result.store);
             summaries.push(importSummary(section.id, result));
           } else continue;
         }

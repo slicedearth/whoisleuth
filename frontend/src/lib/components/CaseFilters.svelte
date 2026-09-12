@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { CASE_VIEW_SORTS, MAX_CASE_VIEW_SEARCH_LENGTH, type CaseViewFilters } from '../../../../packages/contracts/case-views-contract.mts';
   type Option = { value: string; label: string };
-  type Sort = 'updated' | 'domain' | 'status';
+  type Sort = CaseViewFilters['sort'];
 
   let {
     status,
@@ -17,10 +18,10 @@
     matchedCount,
     totalCount,
   }: {
-    status: string;
-    setStatus: (value: string) => void;
-    disposition: string;
-    setDisposition: (value: string) => void;
+    status: CaseViewFilters['status'];
+    setStatus: (value: CaseViewFilters['status']) => void;
+    disposition: CaseViewFilters['disposition'];
+    setDisposition: (value: CaseViewFilters['disposition']) => void;
     search: string;
     setSearch: (value: string) => void;
     sort: Sort;
@@ -34,10 +35,10 @@
 </script>
 
 <section class="case-filters card">
-  <label class="field">Status<select value={status} onchange={(event) => setStatus(event.currentTarget.value)}><option value="">All statuses</option>{#each statusOptions as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
-  <label class="field">Disposition<select value={disposition} onchange={(event) => setDisposition(event.currentTarget.value)}><option value="">All dispositions</option>{#each dispositionOptions as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
-  <label class="field search">Search<input value={search} oninput={(event) => setSearch(event.currentTarget.value)} placeholder="Title, domain, Case ID, type or tag" autocomplete="off"></label>
-  <label class="field">Sort<select value={sort} onchange={(event) => setSort(event.currentTarget.value as Sort)}><option value="updated">Recently updated</option><option value="domain">Domain</option><option value="status">Status</option></select></label>
+  <label class="field">Status<select value={status} onchange={(event) => setStatus(event.currentTarget.value as CaseViewFilters['status'])}><option value="">All statuses</option>{#each statusOptions as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
+  <label class="field">Disposition<select value={disposition} onchange={(event) => setDisposition(event.currentTarget.value as CaseViewFilters['disposition'])}><option value="">All dispositions</option>{#each dispositionOptions as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
+  <label class="field search">Search<input value={search} oninput={(event) => setSearch(event.currentTarget.value)} maxlength={MAX_CASE_VIEW_SEARCH_LENGTH} placeholder="Title, domain, Case ID, type or tag" autocomplete="off"></label>
+  <label class="field">Sort<select value={sort} onchange={(event) => setSort(event.currentTarget.value as Sort)}>{#each CASE_VIEW_SORTS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
   <button class="btn" onclick={clear} disabled={!status && !disposition && !search}>Clear</button>
 </section>
 <p class="count">{matchedCount} of {totalCount} case{totalCount === 1 ? '' : 's'} shown</p>

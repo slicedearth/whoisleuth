@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import {
   CASE_REPORT_SCHEMA_VERSION,
   CASE_SCHEMA_VERSION,
+  LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION,
   PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION,
   PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION,
   PUBLISHED_V2_3_CASE_SCHEMA_VERSION,
@@ -65,7 +66,8 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   { id: 'case-review-copy', pattern: /Review copies are ordinary full Case exports, not redacted or encrypted.*Returned-file previews stay in page memory/iu },
   { id: 'case-review-return', pattern: /handoff entry containing the file digest and selected-record-key digest.*(?:No upload occurs|Nothing is uploaded).*file identity does not authenticate the reviewer.*(?:conflicts|Conflicting entries).*response authorisations.*unselected records are not imported/iu },
   { id: 'public-case-pack', pattern: /Public CLI case packs clear identifiers, actions, observed-effect reviews,? and closure records/iu },
-  { id: 'workspace-compatibility', pattern: new RegExp(`workspace archive version ${WORKSPACE_ARCHIVE_VERSION}.*exact versions ${PUBLIC_WORKSPACE_ARCHIVE_VERSION},? ${PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION},? and ${PUBLISHED_V2_2_WORKSPACE_ARCHIVE_VERSION} remain readable`, 'iu') },
+  { id: 'workspace-compatibility', pattern: new RegExp(`workspace archive version ${WORKSPACE_ARCHIVE_VERSION}.*exact versions ${SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS.filter(version => version !== WORKSPACE_ARCHIVE_VERSION).join(',? (?:and )?')} remain readable`, 'iu') },
+  { id: 'saved-case-views', pattern: /Saved Case views retain names, search text, status, disposition and sort choices.*current workspace.*Workspace backups include them; response packets do not.*without making network requests/iu },
   { id: 'unsupported-workspace', pattern: /Versions 1 through 4.*future versions fail without.*reset, deletion,? or rewrite/iu },
   { id: 'monitoring-custody', pattern: /scheduled monitoring.*application-encrypted.*Disabling collection (?:does not delete|also leaves)/iu },
   { id: 'monitoring-key-custody', pattern: /worker runtime receives the encryption key through its deployment environment/iu },
@@ -128,6 +130,7 @@ test('public privacy notices share the current material data-handling contract',
     PUBLIC_WORKSPACE_ARCHIVE_VERSION,
     PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION,
     PUBLISHED_V2_2_WORKSPACE_ARCHIVE_VERSION,
+    LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION,
     WORKSPACE_ARCHIVE_VERSION,
   ]);
   assert.equal(PUBLIC_CASE_RESPONSE_PACKET_VERSION, 6);

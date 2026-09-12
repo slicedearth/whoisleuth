@@ -32,12 +32,12 @@
       "path": "current-writer-browser-import-and-offline-verifier"
     },
     "workspaceArchive": {
-      "version": 8,
+      "version": 9,
       "path": "current-writer-preview-and-non-destructive-merge"
     },
     "encryptedWorkspaceArchive": {
       "version": 1,
-      "workspaceVersion": 8,
+      "workspaceVersion": 9,
       "path": "current-encrypt-decrypt-and-verify"
     }
   },
@@ -170,12 +170,13 @@
         "id": "export.workspace-archive",
         "kind": "export",
         "schema": "whoisleuth.workspace-archive",
-        "currentVersion": 8,
+        "currentVersion": 9,
         "supportedVersions": [
           5,
           6,
           7,
-          8
+          8,
+          9
         ],
         "acceptsUnversionedLegacy": false,
         "futureVersionBehavior": "reject",
@@ -667,7 +668,7 @@
         "futureVersionBehaviour": "reject",
         "migrationTarget": {
           "schema": "whoisleuth.workspace-archive",
-          "version": 8
+          "version": 9
         },
         "canonicalisation": "workspace-section-sorted-json-v1",
         "byteBudget": 33554432,
@@ -687,7 +688,7 @@
         "futureVersionBehaviour": "reject",
         "migrationTarget": {
           "schema": "whoisleuth.workspace-archive",
-          "version": 8
+          "version": 9
         },
         "canonicalisation": "workspace-section-sorted-json-v1",
         "byteBudget": 33554432,
@@ -707,7 +708,7 @@
         "futureVersionBehaviour": "reject",
         "migrationTarget": {
           "schema": "whoisleuth.workspace-archive",
-          "version": 8
+          "version": 9
         },
         "canonicalisation": "workspace-section-sorted-json-v1",
         "byteBudget": 33554432,
@@ -719,6 +720,26 @@
         "key": "export.workspace-archive@8",
         "compatibilityId": "export.workspace-archive",
         "version": 8,
+        "lifecycle": "legacy",
+        "readable": true,
+        "emitted": false,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "reject",
+        "migrationTarget": {
+          "schema": "whoisleuth.workspace-archive",
+          "version": 9
+        },
+        "canonicalisation": "workspace-section-sorted-json-v1",
+        "byteBudget": 33554432,
+        "fixtureIds": [
+          "workspace-archive-v8-empty-current"
+        ]
+      },
+      {
+        "key": "export.workspace-archive@9",
+        "compatibilityId": "export.workspace-archive",
+        "version": 9,
         "lifecycle": "current",
         "readable": true,
         "emitted": true,
@@ -729,7 +750,7 @@
         "canonicalisation": "workspace-section-sorted-json-v1",
         "byteBudget": 33554432,
         "fixtureIds": [
-          "workspace-archive-v8-empty-current"
+          "workspace-archive-v9-empty-current"
         ]
       },
       {
@@ -811,21 +832,28 @@
         "key": "export.workspace-archive@5",
         "target": {
           "schema": "whoisleuth.workspace-archive",
-          "version": 8
+          "version": 9
         }
       },
       {
         "key": "export.workspace-archive@6",
         "target": {
           "schema": "whoisleuth.workspace-archive",
-          "version": 8
+          "version": 9
         }
       },
       {
         "key": "export.workspace-archive@7",
         "target": {
           "schema": "whoisleuth.workspace-archive",
-          "version": 8
+          "version": 9
+        }
+      },
+      {
+        "key": "export.workspace-archive@8",
+        "target": {
+          "schema": "whoisleuth.workspace-archive",
+          "version": 9
         }
       }
     ],
@@ -1167,8 +1195,18 @@
         "sha256": "747062e2dbbcf96724b19718d36bf0dc50b08e96d8adb670115d2315032b6c05",
         "contentDigestSha256": null,
         "version": 8,
-        "expectation": "accepted_exact",
+        "expectation": "normalises_to_current_output",
         "shapeId": "case.workspace-archive.v8"
+      },
+      {
+        "id": "workspace-archive-v9-empty-current",
+        "path": "test/fixtures/case-lifecycle/workspace-archive-v9-empty-current.json",
+        "bytes": 7613,
+        "sha256": "6786a9a892bdc21814b0f1165cd9286fb82258862a4c15140daf9caae71daff0",
+        "contentDigestSha256": null,
+        "version": 9,
+        "expectation": "accepted_exact",
+        "shapeId": "case.workspace-archive.v9"
       },
       {
         "id": "workspace-settings-v1",
@@ -1407,6 +1445,14 @@
         "target": null
       },
       {
+        "id": "case.workspace-archive.v9",
+        "versions": [
+          9
+        ],
+        "normalisation": "preserve_signed_document",
+        "target": null
+      },
+      {
         "id": "case.workspace-settings.v1",
         "versions": [
           1
@@ -1629,7 +1675,7 @@
             "phase": "pre_accumulation",
             "unit": "items",
             "minimum": 1,
-            "maximum": 13,
+            "maximum": 14,
             "handling": "reject"
           },
           {
@@ -1826,9 +1872,9 @@
         ]
       },
       {
-        "id": "case.workspace.json.v8",
+        "id": "case.workspace.json.v9",
         "versions": [
-          8
+          9
         ],
         "mediaType": "application/json",
         "encoding": "utf-8",
@@ -2287,7 +2333,8 @@
               5,
               6,
               7,
-              8
+              8,
+              9
             ],
             "mode": "direct",
             "discriminator": null
@@ -2307,6 +2354,7 @@
           "case.workspace-archive.v6",
           "case.workspace-archive.v7",
           "case.workspace-archive.v8",
+          "case.workspace-archive.v9",
           "case.workspace-settings.v1"
         ],
         "boundProfileIds": [
@@ -2327,11 +2375,11 @@
         "acceptedContracts": [],
         "emittedContract": {
           "compatibilityId": "export.workspace-archive",
-          "version": 8,
+          "version": 9,
           "discriminator": null
         },
         "shapeIds": [
-          "case.workspace-archive.v8"
+          "case.workspace-archive.v9"
         ],
         "boundProfileIds": [
           "case.workspace.bounds"
@@ -2340,7 +2388,7 @@
           "case.workspace.build",
           "case.portable.serialise"
         ],
-        "serialisationProfileId": "case.workspace.json.v8",
+        "serialisationProfileId": "case.workspace.json.v9",
         "privacyProfileId": "case.privacy.portable-output",
         "retentionEffect": "operator_controlled_output",
         "requestMode": "none"
@@ -2409,7 +2457,8 @@
               5,
               6,
               7,
-              8
+              8,
+              9
             ],
             "mode": "direct",
             "discriminator": null
@@ -2425,6 +2474,7 @@
           "case.workspace-archive.v6",
           "case.workspace-archive.v7",
           "case.workspace-archive.v8",
+          "case.workspace-archive.v9",
           "case.encrypted-workspace-archive.v1"
         ],
         "boundProfileIds": [
