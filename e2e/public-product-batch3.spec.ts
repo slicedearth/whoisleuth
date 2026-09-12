@@ -17,6 +17,28 @@ function collectInvestigationRequests(page: Page): string[] {
   return requests;
 }
 
+test('CLI workflow recipes and review confirmation remain reachable without empty planning groups', async ({ page }, testInfo) => {
+  await page.goto('/cli');
+  const workflows = page.locator('[aria-labelledby="runnable-recipes-title"]');
+  await expect(workflows.locator('li')).toHaveCount(10);
+  await expect(workflows).toContainText('certificate-anomaly');
+  await expect(workflows).toContainText('evidence-handoff');
+  await expect(page.getByRole('heading', { name: 'Planning templates', exact: true })).toHaveCount(0);
+  await page.goto('/cli#command-workflow-run');
+  const command = page.locator('.command-workspace');
+  await expect(command.getByRole('heading', { name: 'workflow-run', exact: true })).toBeVisible();
+  await expect(command).toContainText('--confirm-review');
+  await expect(command).toContainText('Checkpoints do not grant later approvals.');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280, 2560]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expectNoHorizontalOverflow(page);
+      if (width === 320 || width === 1280) await command.screenshot({ path: testInfo.outputPath(`workflow-review-${theme}-${width}.png`) });
+    }
+  }
+});
+
 test('keeps desktop and narrow public navigation complete and request-free', async ({ page }) => {
   const investigationRequests = collectInvestigationRequests(page);
   await page.setViewportSize({ width: 1280, height: 820 });
@@ -389,7 +411,7 @@ test('keeps workflow partial-result and resume guidance readable across referenc
   await expect(boundary).toContainText(/diagnostics go to stderr/iu);
   await expect(boundary).toContainText('--use-artifact <step-id>:<input-number>=<earlier-step-id>');
   await expect(boundary).toContainText('Repeat --select for remaining placeholders in order');
-  await expect(boundary).toContainText('not proof of authenticity or freshness');
+  await expect(boundary).toContainText(/not (?:proof of )?authenticity or freshness/u);
   for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 },
     { width: 390, height: 844 }, { width: 320, height: 700 }]) {
     await page.setViewportSize(viewport);

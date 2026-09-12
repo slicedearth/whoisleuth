@@ -1239,6 +1239,36 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       || record(workflow.completedSteps[2], 'Installed workflow verification').command !== 'verify-artifact') {
       throw new TypeError('Installed workflow did not retain and reuse the partial public observation offline.');
     }
+    const handoffEvidence = path.join(temporaryRoot, 'handoff-evidence.json');
+    const handoffCases = path.join(temporaryRoot, 'handoff-cases.json');
+    const handoffCheckpoint = path.join(temporaryRoot, 'handoff-checkpoint.json');
+    const publicCases = record(JSON.parse((await readBoundedRegularFileWithin(repositoryRoot,
+      'test/fixtures/case-lifecycle/cli-case-pack-v2-case-v15.json', {
+        maximumBytes: MAX_INVESTIGATION_RUN_BYTES, minimumBytes: 1, label: 'Public Case-pack fixture',
+      })).toString('utf8')), 'Public Case-pack fixture');
+    await writeFile(handoffEvidence, JSON.stringify(record(workflow.completedSteps[1], 'Retained export').result), { flag: 'wx', mode: 0o600 });
+    await writeFile(handoffCases, JSON.stringify({ version: publicCases.version, exportedAt: publicCases.exportedAt, cases: publicCases.cases }), { flag: 'wx', mode: 0o600 });
+    const handoff = record(JSON.parse(await runInstalledCheck(executable, [
+      'workflow-run', 'evidence-handoff', 'Example review', '--select', `verify=${handoffEvidence}`,
+      '--select', `package=${handoffCases}`, '--use-artifact', 'lint:1=package', '--confirm-review', 'package', '--json',
+    ], 'offline handoff review boundary')), 'Installed handoff');
+    if (handoff.state !== 'awaiting_review_confirmation' || record(handoff.currentStep, 'Handoff review step').id !== 'lint'
+      || !Array.isArray(handoff.completedSteps) || handoff.completedSteps.length !== 2) {
+      throw new TypeError('Installed handoff did not pause before the separately declared sharing review.');
+    }
+    await writeFile(handoffCheckpoint, JSON.stringify(handoff), { flag: 'wx', mode: 0o600 });
+    const resumedHandoff = record(JSON.parse(await runInstalledCheck(executable, [
+      'workflow-run', 'evidence-handoff', 'Example review', '--resume', handoffCheckpoint, '--json',
+    ], 'offline handoff checkpoint approval isolation')), 'Resumed handoff');
+    if (resumedHandoff.state !== 'awaiting_review_confirmation' || !Array.isArray(resumedHandoff.reviewsConfirmedForThisRun)
+      || resumedHandoff.reviewsConfirmedForThisRun.length !== 0) throw new TypeError('A handoff checkpoint granted a review confirmation.');
+    const reviewedHandoff = record(JSON.parse(await runInstalledCheck(executable, [
+      'workflow-run', 'evidence-handoff', 'Example review', '--resume', handoffCheckpoint, '--confirm-review', 'lint', '--json',
+    ], 'offline handoff completion')), 'Reviewed handoff');
+    if (reviewedHandoff.state !== 'complete' || !Array.isArray(reviewedHandoff.completedSteps)
+      || reviewedHandoff.completedSteps.length !== 3 || reviewedHandoff.networkApprovedForThisRun !== false) {
+      throw new TypeError('Installed handoff did not finish offline after the selected review confirmation.');
+    }
     const catalogueCommands = commandCatalogue.commands.map((entry, index) => boundedString(
       record(entry, `Installed command catalogue entry ${index + 1}`).command,
       `Installed command catalogue entry ${index + 1} command`,
@@ -1292,6 +1322,9 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       'discover-scan-network-boundary',
       'mail-header-review',
       'offline-workflow-artifact-reuse',
+      'offline-handoff-review-boundary',
+      'offline-handoff-checkpoint-approval-isolation',
+      'offline-handoff-completion',
       'evidence-package-creation',
       'evidence-package-verification',
       ...signingChecks,

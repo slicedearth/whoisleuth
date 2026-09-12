@@ -299,6 +299,8 @@ Workflow-file output uses adjacent private lock files containing a local process
 ID. They are removed after the run; interruption can leave one for manual recovery.
 Workflow checkpoints retain selected paths, step evidence, content digests and
 explicit input bindings. Reused evidence stays local without extraction files.
+Per-step review confirmations are recorded for the current invocation only;
+retained checkpoints do not authorise a later network or human-review step.
 
 Optional metadata CSV retains source versions, collection and report times,
 collection origin and source-health states alongside the selected results.

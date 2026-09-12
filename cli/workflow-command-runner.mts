@@ -21,6 +21,9 @@ import { MAX_OFFLINE_EVIDENCE_INPUT_BYTES } from './offline-evidence-review.mts'
 import { MAX_OFFLINE_ARTIFACT_BYTES } from './artifact-verify.mts';
 import { MAX_RETAINED_ARTIFACT_DIFF_BYTES } from './retained-artifact-diff.mts';
 import { MAX_SAVED_LOOKUP_INPUT_BYTES } from './saved-lookup.mts';
+import { MAX_COMPARE_INPUT_BYTES } from './compare.mts';
+import { MAX_SOURCE_RELIABILITY_INPUT_BYTES } from './source-reliability.mts';
+import { MAX_SHARING_REVIEW_BYTES } from './sharing-review.mts';
 import type { WorkflowStepInputs } from './investigation-artifacts.mts';
 import type { CliCommand } from './command-reference.mts';
 import { createBufferedOutput } from './output-file.mts';
@@ -46,6 +49,14 @@ function boundWorkflowInputs(command: CliCommand, inputs: WorkflowStepInputs, de
       MAX_SAVED_LOOKUP_INPUT_BYTES, 'Evidence export input') };
     case 'verify-artifact': return { readArtifactInput: (source) => read(source, dependencies.readArtifactInput,
       MAX_OFFLINE_ARTIFACT_BYTES, 'Artefact input') };
+    case 'brief': return { readArtifactInput: (source) => read(source, dependencies.readArtifactInput,
+      MAX_SAVED_LOOKUP_INPUT_BYTES, 'Lookup brief input') };
+    case 'sharing-review': return { readArtifactInput: (source) => read(source, dependencies.readArtifactInput,
+      MAX_SHARING_REVIEW_BYTES, 'Sharing review input') };
+    case 'compare': return { readCompareInput: (source) => read(source, dependencies.readCompareInput,
+      MAX_COMPARE_INPUT_BYTES, 'Comparison input') };
+    case 'source-report': return { readSourceReliabilityInput: (source) => read(source, dependencies.readSourceReliabilityInput,
+      MAX_SOURCE_RELIABILITY_INPUT_BYTES, 'Source reliability input') };
     case 'diff':
     case 'timeline': return { readDiffInput: (source) => read(source, dependencies.readDiffInput,
       command === 'diff' ? MAX_RETAINED_ARTIFACT_DIFF_BYTES : MAX_SAVED_LOOKUP_INPUT_BYTES,
@@ -152,6 +163,7 @@ async function runWorkflowRecipeCommand(
     approveNetwork: args.approveNetwork,
     selections: args.selections,
     artifactBindings: args.artifactBindings,
+    confirmedReviews: args.confirmedReviews,
     resumeInput,
     generatedAt: context.now(),
     ...(dependencies.signal ? { signal: dependencies.signal } : {}),

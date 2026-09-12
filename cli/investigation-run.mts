@@ -4,6 +4,7 @@ import { isDeepStrictEqual } from 'node:util';
 import {
   buildInvestigationPlan,
   isRunnableInvestigationRecipe,
+  workflowReviewDeclarations,
   type RunnableInvestigationPlanRecipe,
 } from './investigation-plan.mts';
 import { CliUsageError } from './errors.mts';
@@ -22,7 +23,7 @@ import {
   type WorkflowArtifactBinding,
 } from '../packages/contracts/investigation-run.mts';
 import {
-  normalizeWorkflowBindings, validateWorkflowResult, workflowArtifactReference,
+  normalizeWorkflowBindings, validateWorkflowResult, workflowArtifactReference, workflowInputSchemas,
   type WorkflowArtifact, type WorkflowArtifactInput, type WorkflowStepInputs,
 } from './investigation-artifacts.mts';
 
@@ -54,7 +55,7 @@ type InvestigationStep = InvestigationPlan['steps'][number];
 const PLACEHOLDER_PATTERN = /^<[^>]+>$/u;
 // These collectors can return useful incomplete observations. Offline validation
 // and export failures are not observations and must remain retryable failures.
-const PARTIAL_OBSERVATION_COMMANDS: ReadonlySet<CliCommand> = new Set(['lookup', 'posture', 'discover-scan']);
+const PARTIAL_OBSERVATION_COMMANDS: ReadonlySet<CliCommand> = new Set(['lookup', 'posture', 'discover-scan', 'ct-search', 'monitor-once']);
 
 function boundedResult(value: string): unknown {
   if (Buffer.byteLength(value, 'utf8') > MAX_INVESTIGATION_RUN_BYTES) {
@@ -342,6 +343,7 @@ export async function runInvestigationRecipe(
     resumeInput: string | null;
     selections?: readonly WorkflowSelection[];
     artifactBindings?: readonly WorkflowArtifactBinding[];
+    confirmedReviews?: readonly string[];
     generatedAt: string;
     signal?: AbortSignal;
     execute: (command: CliCommand, args: readonly string[], inputs: WorkflowStepInputs) => Promise<ExecutionResult>;
@@ -351,6 +353,12 @@ export async function runInvestigationRecipe(
     throw new CliUsageError('workflow-run supports only installed recipes whose exact steps satisfy the execution contract.');
   }
   const plan = buildInvestigationPlan(recipe, subjectValue, options.generatedAt);
+  const confirmedReviews = options.confirmedReviews ?? [];
+  if (!Array.isArray(confirmedReviews) || confirmedReviews.length > plan.steps.length
+    || new Set(confirmedReviews).size !== confirmedReviews.length
+    || confirmedReviews.some(id => !plan.steps.some(step => step.id === id && workflowReviewDeclarations(step).length))) {
+    throw new CliUsageError('--confirm-review must name each selected review-declaration step at most once.');
+  }
   const prior = parseResumeState(options.resumeInput, plan);
   const suppliedSelections = normalizeInvocationSelections(plan, options.selections ?? []);
   const bindings = mergeBindings(plan, prior.bindings, normalizeWorkflowBindings(plan, options.artifactBindings ?? []), prior.completed);
@@ -374,9 +382,14 @@ export async function runInvestigationRecipe(
       state = 'awaiting_network_approval';
       break;
     }
+    if (workflowReviewDeclarations(step).length && !confirmedReviews.includes(step.id)) {
+      state = 'awaiting_review_confirmation';
+      break;
+    }
     validateSelectedInputs(plan, selections, bindings, completed);
     const { files, inputs } = resolveStepInputs(step, bindings, completed);
     const result = await options.execute(step.command, step.arguments, files);
+    options.signal?.throwIfAborted();
     if (result.exitCode === EXIT_CODES.CANCELLED) {
       throw options.signal?.reason || new DOMException('Cancelled', 'AbortError');
     }
@@ -411,6 +424,7 @@ export async function runInvestigationRecipe(
     subject: plan.subject,
     state,
     networkApprovedForThisRun: options.approveNetwork,
+    reviewsConfirmedForThisRun: Object.freeze([...confirmedReviews]),
     selections: Object.freeze(selections),
     artifactBindings: bindings,
     completedSteps: Object.freeze(completed),
@@ -418,6 +432,7 @@ export async function runInvestigationRecipe(
     limitations: Object.freeze([
       'Only commands and arguments from the installed fixed recipe can execute; no shell, script, arbitrary command, or enforcement action is accepted.',
       'Network steps run only with --approve-network for the current invocation. Unresolved analyst selections pause; supplied values replace exact placeholders and are passed as arguments without shell interpretation.',
+      'Steps declaring human review require --confirm-review for that exact step in the current invocation. Confirm only after reviewing its selected material and each listed declaration; checkpoint metadata never grants permission to another step.',
       'A resume file is a local checkpoint and can retain selected local paths or values. It is not proof that prior evidence remains current or that a human reviewed each stored result.',
       'Explicit artefact bindings reuse validated compatible earlier outputs without temporary extraction files. Content digests identify retained JSON; they do not authenticate a source or establish that evidence is true or current.',
       'An incomplete collection pauses for review. Resuming retains it without recollection; the run remains partial even after later steps finish. Failed validation or export steps are retried, not accepted as evidence.',
@@ -437,15 +452,40 @@ export function investigationRunExitCode(document: Awaited<ReturnType<typeof run
 
 export function formatInvestigationRun(document: Awaited<ReturnType<typeof runInvestigationRecipe>>): string {
   const stepLabel = document.state === 'step_failed' ? 'Failed' : document.state === 'partial' ? 'Review' : 'Next';
+  const plan = buildInvestigationPlan(document.recipe, document.subject, document.generatedAt);
+  const accepted = document.completedSteps.filter(step => step.artifact);
+  const current = document.currentStep;
+  const inputs = current?.arguments.flatMap((argument, position) => {
+    if (!PLACEHOLDER_PATTERN.test(argument)) return [];
+    // Slots refer to the fixed recipe, including inputs already bound or selected.
+    const base = plan.steps.find(step => step.id === current.id)!;
+    const input = base.arguments.slice(0, position + 1).filter(value => PLACEHOLDER_PATTERN.test(value)).length;
+    const compatible = workflowInputSchemas(current.command);
+    const reusable = accepted.filter(step => step.artifact && compatible.includes(step.artifact.schema));
+    return [
+      `Input ${current.id}:${input}  ${argument} — --select ${current.id}=<path-or-value>`,
+      ...reusable.map(source => `  Reuse deliberately: --use-artifact ${current.id}:${input}=${source.id}`),
+    ];
+  }) ?? [];
   return [
     `Investigation run: ${document.recipe}`,
     `Subject    ${document.subject}`,
     `State      ${document.state.replaceAll('_', ' ')}`,
-    `Retained   ${document.completedSteps.length}`,
+    `Progress   ${accepted.length} of ${plan.steps.length} steps retained`,
+    ...accepted.map(step => `  ${step.id}: ${step.exitCode === EXIT_CODES.PARTIAL_FAILURE ? 'partial observation' : 'completed'} · ${step.artifact!.schema} v${step.artifact!.version} · ${step.artifact!.id}`),
     ...(document.currentStep ? [
       `${stepLabel.padEnd(11)}${document.currentStep.label}`,
       ...(document.state === 'partial' || document.state === 'step_failed' ? [] : [`Approval   ${document.currentStep.approval.replaceAll('_', ' ')}`]),
     ] : []),
+    ...inputs,
+    ...(document.state === 'awaiting_network_approval' ? ['Continue with --approve-network only after reviewing the next command’s network disclosure.'] : []),
+    ...(document.state === 'awaiting_review_confirmation' && current ? [
+      `Declarations: ${workflowReviewDeclarations(current).join(', ')}`,
+      `After reviewing the selected material, continue with --confirm-review ${current.id}.`,
+    ] : []),
+    ...(current ? ['Keep the JSON checkpoint with --json --output <run.json>, then continue the same recipe and subject with --resume <run.json>.'] : [
+      document.state === 'partial' ? 'All steps have run; retained incomplete observations remain incomplete.' : 'All recipe steps have run. This is not an analyst verdict or proof that every finding is resolved.',
+    ]),
     '',
   ].join('\n');
 }

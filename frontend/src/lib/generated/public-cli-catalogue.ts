@@ -3463,9 +3463,9 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Execute approved fixed-recipe steps",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth workflow-run \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison> \u003csubject> [--select \u003cvalue>] [--use-artifact \u003cvalue>] [--approve-network] [--resume \u003cfile>] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth workflow-run \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison|campaign-review|certificate-anomaly|registry-disagreement|evidence-handoff|planned-domain-change|post-change-verification> \u003csubject> [--select \u003cvalue>] [--use-artifact \u003cvalue>] [--confirm-review \u003cvalue>] [--approve-network] [--resume \u003cfile>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth workflow-run domain-triage example.test --approve-network --use-artifact export:1=collect --use-artifact verify:1=export --json --output run.json",
-      "boundary": "Only installed recipe commands can run. Network steps require explicit approval for each invocation. Use --use-artifact \u003cstep-id>:\u003cinput-number>=\u003cearlier-step-id> for compatible retained outputs; input numbers start at 1. Repeat --select for remaining placeholders in order; values stay literal and cannot start with a hyphen or invoke a shell. Checkpoints retain exact schemas, content digests and input bindings, not proof of authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.",
+      "boundary": "Only installed recipe commands can run. Network steps require explicit approval for each invocation. Use --use-artifact \u003cstep-id>:\u003cinput-number>=\u003cearlier-step-id> for compatible retained outputs; input numbers start at 1. Repeat --select for remaining placeholders in order; values stay literal and cannot start with a hyphen or invoke a shell. A step that declares human review pauses until --confirm-review \u003cstep-id> is supplied for that invocation, after checking its selected material and listed declarations. Checkpoints do not grant later approvals. Exact schemas, content digests and input bindings identify retained output, not authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.",
       "collection": {
         "mode": "network",
         "scope": "Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause."
@@ -3480,7 +3480,13 @@ export const PUBLIC_CLI_CATALOGUE = {
             "domain-triage",
             "lookalike-review",
             "owned-domain-review",
-            "historical-comparison"
+            "historical-comparison",
+            "campaign-review",
+            "certificate-anomaly",
+            "registry-disagreement",
+            "evidence-handoff",
+            "planned-domain-change",
+            "post-change-verification"
           ],
           "inputSource": "argv",
           "requiredWhenOptions": []
@@ -3498,6 +3504,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "importantOptions": [
         "--select",
         "--use-artifact",
+        "--confirm-review",
         "--approve-network",
         "--resume",
         "--json",
@@ -3542,12 +3549,14 @@ export const PUBLIC_CLI_CATALOGUE = {
           "public_ip_address",
           "homepage_request",
           "tls_handshake",
-          "mta_sts_policy_request"
+          "mta_sts_policy_request",
+          "certificate_search_term"
         ],
         "recipients": [
           "registry_service",
           "dns_resolver",
-          "target_public_service"
+          "target_public_service",
+          "certificate_transparency_service"
         ],
         "authorisation": "explicit_network_approval",
         "retention": "local_output_deliberate",
@@ -3562,6 +3571,7 @@ export const PUBLIC_CLI_CATALOGUE = {
           "partial",
           "awaiting_network_approval",
           "awaiting_analyst_selection",
+          "awaiting_review_confirmation",
           "step_failed"
         ],
         "privacyLimitations": [
@@ -4139,7 +4149,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "label": "Campaign candidate review",
         "objective": "Prepare a bounded candidate set, collect a deliberately selected queue, and review retained evidence without asserting campaign attribution.",
         "subjectRequirement": "brand_or_domain",
-        "runnableByWorkflowRun": false,
+        "runnableByWorkflowRun": true,
         "networkModes": [
           "offline",
           "network"
@@ -4183,16 +4193,16 @@ export const PUBLIC_CLI_CATALOGUE = {
           },
           {
             "id": "review",
-            "label": "Review selected retained evidence",
-            "command": "review-evidence",
+            "label": "Prepare a selected candidate brief",
+            "command": "brief",
             "exampleArguments": [
-              "\u003cselected-evidence.json>",
+              "\u003csaved-lookup.json>",
               "--json"
             ],
             "mode": "offline",
             "approval": "analyst_selection",
-            "produces": "whoisleuth\u002ecli.offline-evidence-review",
-            "completion": "Keep source observations separate and record any campaign grouping as analyst-authored."
+            "produces": "whoisleuth\u002ecli.lookup-brief",
+            "completion": "Select a saved candidate Lookup; keep any campaign grouping analyst-authored."
           }
         ],
         "limitations": [
@@ -4204,7 +4214,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "label": "Certificate anomaly review",
         "objective": "Review bounded certificate observations alongside current source-qualified domain evidence without treating issuance as proof of control or intent.",
         "subjectRequirement": "domain",
-        "runnableByWorkflowRun": false,
+        "runnableByWorkflowRun": true,
         "networkModes": [
           "network",
           "offline"
@@ -4237,8 +4247,8 @@ export const PUBLIC_CLI_CATALOGUE = {
             ],
             "mode": "offline",
             "approval": "analyst_selection",
-            "produces": "whoisleuth\u002ect-event-batch",
-            "completion": "Only selected saved observations enter the offline intake."
+            "produces": "whoisleuth\u002eexternal-findings",
+            "completion": "Select a certificate-event batch; a certificate-search report is not interchangeable with that input."
           },
           {
             "id": "corroborate",
@@ -4264,7 +4274,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "label": "Registry disagreement review",
         "objective": "Collect separately attributed registration evidence and review conflicting publications without selecting an arbitrary source as truth.",
         "subjectRequirement": "domain",
-        "runnableByWorkflowRun": false,
+        "runnableByWorkflowRun": true,
         "networkModes": [
           "network",
           "offline"
@@ -4324,7 +4334,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "label": "Reviewed evidence handoff",
         "objective": "Verify, minimise, and package analyst-selected evidence for a deliberate handoff without transmitting or submitting it.",
         "subjectRequirement": "review_label",
-        "runnableByWorkflowRun": false,
+        "runnableByWorkflowRun": true,
         "networkModes": [
           "offline"
         ],
@@ -4338,7 +4348,8 @@ export const PUBLIC_CLI_CATALOGUE = {
             "command": "verify-artifact",
             "exampleArguments": [
               "\u003cevidence.json>",
-              "--json"
+              "--json",
+              "--strict-exit"
             ],
             "mode": "offline",
             "approval": "analyst_selection",
@@ -4393,7 +4404,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "label": "Planned domain change",
         "objective": "Review an analyst-authored desired state and prepare bounded change material without changing DNS, registry, mail, or hosted configuration.",
         "subjectRequirement": "domain",
-        "runnableByWorkflowRun": false,
+        "runnableByWorkflowRun": true,
         "networkModes": [
           "offline"
         ],
@@ -4450,7 +4461,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "label": "Post-change verification",
         "objective": "Perform one explicit later observation and compare it with analyst-selected retained evidence after an authorised change.",
         "subjectRequirement": "domain",
-        "runnableByWorkflowRun": false,
+        "runnableByWorkflowRun": true,
         "networkModes": [
           "network",
           "offline"

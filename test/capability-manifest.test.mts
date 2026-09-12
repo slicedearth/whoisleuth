@@ -20,6 +20,7 @@ import {
   REQUEST_TIMEOUT_MS,
 } from '../lib/distributed-operation-budget.mts';
 import { plannedLookupProgressSources } from '../lib/lookup-source-progress.mts';
+import { INVESTIGATION_RUN_STATES } from '../packages/contracts/investigation-run.mts';
 
 import { computeOpportunityScore } from '../lib/opportunity-scoring.mts';
 import { computeRiskScore } from '../lib/risk-scoring.mts';
@@ -338,8 +339,10 @@ describe('canonical capability manifest', () => {
     assert.deepEqual(cliOperationForCommand('workflow-run')?.outcomes, ['complete', 'partial', 'blocked']);
     assert.deepEqual(
       cliOperationForCommand('workflow-run')?.documentStates,
-      ['complete', 'partial', 'awaiting_network_approval', 'awaiting_analyst_selection', 'step_failed'],
+      INVESTIGATION_RUN_STATES,
     );
+    assert.ok(cliOperationForCommand('workflow-run')?.recipients.includes('certificate_transparency_service'));
+    assert.ok(cliOperationForCommand('workflow-run')?.disclosedData.includes('certificate_search_term'));
   });
 
   test('matches feature-policy dependencies and operation-budget identities exactly', () => {

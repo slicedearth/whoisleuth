@@ -14,6 +14,7 @@ export const INVESTIGATION_RUN_STATES = Object.freeze([
   'partial',
   'awaiting_network_approval',
   'awaiting_analyst_selection',
+  'awaiting_review_confirmation',
   'step_failed',
 ] as const);
 export type InvestigationRunState = typeof INVESTIGATION_RUN_STATES[number];

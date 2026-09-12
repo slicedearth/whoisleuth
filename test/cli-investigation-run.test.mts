@@ -28,9 +28,9 @@ function commandOutput(recipe: Parameters<typeof buildInvestigationPlan>[0], sub
 }
 
 describe('fixed investigation execution', () => {
-  test('keeps plan-only recipes outside workflow-run execution', () => {
+  test('rejects names outside the installed fixed recipes', () => {
     assert.throws(
-      () => parseCliArguments(['workflow-run', 'campaign-review', 'Example Organisation']),
+      () => parseCliArguments(['workflow-run', 'arbitrary-command', 'Example Organisation']),
       CliUsageError,
     );
   });
@@ -105,7 +105,7 @@ describe('fixed investigation execution', () => {
 
   test('exposes explicit approval and resume arguments through the runner', async () => {
     assert.deepEqual(parseCliArguments(['workflow-run', 'domain-triage', 'example.test', '--select', 'export=saved.json', '--approve-network', '--resume', 'state.json', '--json']), {
-      action: 'workflow-run', recipe: 'domain-triage', subject: 'example.test', resumeSource: 'state.json', selections: [{ stepId: 'export', value: 'saved.json' }], artifactBindings: [], approveNetwork: true, output: 'json', quiet: false, color: true,
+      action: 'workflow-run', recipe: 'domain-triage', subject: 'example.test', resumeSource: 'state.json', selections: [{ stepId: 'export', value: 'saved.json' }], artifactBindings: [], confirmedReviews: [], approveNetwork: true, output: 'json', quiet: false, color: true,
     });
     let stdout = '';
     let calls = 0;

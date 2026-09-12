@@ -2489,6 +2489,7 @@
         "partial",
         "awaiting_network_approval",
         "awaiting_analyst_selection",
+        "awaiting_review_confirmation",
         "step_failed"
       ],
       "scoringEffect": "none",
@@ -7001,7 +7002,8 @@
         "public_ip_address",
         "homepage_request",
         "tls_handshake",
-        "mta_sts_policy_request"
+        "mta_sts_policy_request",
+        "certificate_search_term"
       ],
       "dataDeliberatelyNotSent": [
         "browser_local_records",
@@ -7014,7 +7016,8 @@
       "recipientClasses": [
         "registry_service",
         "dns_resolver",
-        "target_public_service"
+        "target_public_service",
+        "certificate_transparency_service"
       ],
       "returnedDataCategories": [
         "bounded_workflow_state",
@@ -7060,12 +7063,13 @@
         "partial",
         "awaiting_network_approval",
         "awaiting_analyst_selection",
+        "awaiting_review_confirmation",
         "step_failed"
       ],
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Only installed recipe commands can run. Network steps require explicit approval for each invocation. Use --use-artifact <step-id>:<input-number>=<earlier-step-id> for compatible retained outputs; input numbers start at 1. Repeat --select for remaining placeholders in order; values stay literal and cannot start with a hyphen or invoke a shell. Checkpoints retain exact schemas, content digests and input bindings, not proof of authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.",
+        "Only installed recipe commands can run. Network steps require explicit approval for each invocation. Use --use-artifact <step-id>:<input-number>=<earlier-step-id> for compatible retained outputs; input numbers start at 1. Repeat --select for remaining placeholders in order; values stay literal and cannot start with a hyphen or invoke a shell. A step that declares human review pauses until --confirm-review <step-id> is supplied for that invocation, after checking its selected material and listed declarations. Checkpoints do not grant later approvals. Exact schemas, content digests and input bindings identify retained output, not authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.",
         "Only fixed installed recipe steps can run, and every network invocation requires explicit approval."
       ],
       "variants": [
@@ -7090,7 +7094,8 @@
             "public_ip_address",
             "homepage_request",
             "tls_handshake",
-            "mta_sts_policy_request"
+            "mta_sts_policy_request",
+            "certificate_search_term"
           ],
           "dataDeliberatelyNotSent": [
             "browser_local_records",
@@ -7103,7 +7108,8 @@
           "recipientClasses": [
             "registry_service",
             "dns_resolver",
-            "target_public_service"
+            "target_public_service",
+            "certificate_transparency_service"
           ],
           "returnedDataCategories": [
             "bounded_workflow_state",
@@ -7148,6 +7154,7 @@
             "complete",
             "partial",
             "awaiting_analyst_selection",
+            "awaiting_review_confirmation",
             "step_failed"
           ],
           "scoringEffect": "none",
@@ -7223,6 +7230,7 @@
             "partial",
             "awaiting_network_approval",
             "awaiting_analyst_selection",
+            "awaiting_review_confirmation",
             "step_failed"
           ],
           "scoringEffect": "none",

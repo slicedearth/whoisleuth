@@ -92,7 +92,7 @@ type CliAction =
   | ({ action: 'workflow-plan'; recipe: InvestigationPlanRecipe; subject: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'workflow-plan'; discovery: 'list'; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'workflow-plan'; discovery: 'explain'; recipe: InvestigationPlanRecipe; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'workflow-run'; recipe: RunnableInvestigationPlanRecipe; subject: string; resumeSource: string | null; selections: readonly Readonly<{ stepId: string; value: string }>[]; artifactBindings: readonly WorkflowArtifactBinding[]; approveNetwork: boolean; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'workflow-run'; recipe: RunnableInvestigationPlanRecipe; subject: string; resumeSource: string | null; selections: readonly Readonly<{ stepId: string; value: string }>[]; artifactBindings: readonly WorkflowArtifactBinding[]; confirmedReviews: readonly string[]; approveNetwork: boolean; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'diff'; leftSource: string; rightSource: string; leftSessionId: string | null; rightSessionId: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'reconcile'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'timeline'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
@@ -449,6 +449,7 @@ function parseWorkflowRunArguments(parsed: ParsedCommandArguments): Extract<CliA
     resumeSource: parsed.optionValue('--resume'),
     selections: Object.freeze(selections),
     artifactBindings: Object.freeze(artifactBindings),
+    confirmedReviews: Object.freeze(parsed.optionValues('--confirm-review')),
     approveNetwork: parsed.hasOption('--approve-network'),
     output: jsonOutput(parsed),
     ...terminalOptions(parsed),

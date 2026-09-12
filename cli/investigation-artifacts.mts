@@ -9,7 +9,18 @@ import { LOOKUP_EVIDENCE_SCHEMA, LOOKUP_EVIDENCE_SCHEMA_VERSION, serializeLookup
 import { OFFLINE_ARTIFACT_VERIFICATION_SCHEMA, OFFLINE_ARTIFACT_VERIFICATION_VERSION } from './artifact-verify.mts';
 import { validateLookupEvidenceArtifactStructure } from './artifact-validation/lookup-evidence.mts';
 import { CLI_DISCOVERY_SCAN_SCHEMA, CLI_DISCOVERY_SCAN_VERSION } from './discovery-scan.mts';
-import { CLI_DISCOVER_SCHEMA, CLI_DISCOVER_SCHEMA_VERSION, CLI_POSTURE_SCHEMA, CLI_POSTURE_SCHEMA_VERSION } from './formatters/json.mts';
+import {
+  CLI_DISCOVER_SCHEMA, CLI_DISCOVER_SCHEMA_VERSION, CLI_POSTURE_SCHEMA, CLI_POSTURE_SCHEMA_VERSION,
+  CLI_CT_SEARCH_SCHEMA, CLI_CT_SEARCH_SCHEMA_VERSION, CLI_COMPARE_SCHEMA, CLI_COMPARE_SCHEMA_VERSION,
+} from './formatters/json.mts';
+import { CLI_LOOKUP_BRIEF_SCHEMA, CLI_LOOKUP_BRIEF_VERSION } from './lookup-brief.mts';
+import { EXTERNAL_FINDINGS_SCHEMA, EXTERNAL_FINDINGS_VERSION, parseExternalFindingsDocument } from '../packages/interchange/external-findings-import.mts';
+import { SOURCE_RELIABILITY_REPORT_SCHEMA, SOURCE_RELIABILITY_REPORT_VERSION } from './source-reliability.mts';
+import { CLI_CASE_PACK_SCHEMA, CLI_CASE_PACK_VERSION, verifyCliCasePack } from './case-pack.mts';
+import { SHARING_REVIEW_SCHEMA, SHARING_REVIEW_VERSION } from './sharing-review.mts';
+import { DOMAIN_ASSURANCE_SCHEMA, DOMAIN_ASSURANCE_VERSION } from '../lib/domain-assurance.mts';
+import { DOMAIN_CHANGE_PACKET_SCHEMA, DOMAIN_CHANGE_PACKET_VERSION } from '../lib/domain-change-packet.mts';
+import { CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, CLI_DOMAIN_CONTROL_MONITOR_VERSION } from '../packages/contracts/domain-control-monitor.mts';
 import { CLI_LOOKUP_DIFF_SCHEMA, CLI_LOOKUP_DIFF_VERSION } from './lookup-diff.mts';
 import { CLI_LOOKUP_TIMELINE_SCHEMA, CLI_LOOKUP_TIMELINE_VERSION } from './lookup-timeline.mts';
 import { normalizeCliLookupDocument } from './saved-lookup.mts';
@@ -45,6 +56,22 @@ export function validateWorkflowResult(step: Step, result: unknown, retained: bo
       schema = DOMAIN_CONTROL_REVIEW_SCHEMA; version = DOMAIN_CONTROL_REVIEW_VERSION;
       validateDomainControlReviewDocument(value);
       break;
+    case 'case-pack':
+      schema = CLI_CASE_PACK_SCHEMA; version = CLI_CASE_PACK_VERSION;
+      verifyCliCasePack(value);
+      break;
+    case 'ct-search': schema = CLI_CT_SEARCH_SCHEMA; version = CLI_CT_SEARCH_SCHEMA_VERSION; break;
+    case 'ct-intake':
+      schema = EXTERNAL_FINDINGS_SCHEMA; version = EXTERNAL_FINDINGS_VERSION;
+      parseExternalFindingsDocument(value);
+      break;
+    case 'brief': schema = CLI_LOOKUP_BRIEF_SCHEMA; version = CLI_LOOKUP_BRIEF_VERSION; break;
+    case 'compare': schema = CLI_COMPARE_SCHEMA; version = CLI_COMPARE_SCHEMA_VERSION; break;
+    case 'source-report': schema = SOURCE_RELIABILITY_REPORT_SCHEMA; version = SOURCE_RELIABILITY_REPORT_VERSION; break;
+    case 'sharing-review': schema = SHARING_REVIEW_SCHEMA; version = SHARING_REVIEW_VERSION; break;
+    case 'assurance': schema = DOMAIN_ASSURANCE_SCHEMA; version = DOMAIN_ASSURANCE_VERSION; break;
+    case 'change-packet': schema = DOMAIN_CHANGE_PACKET_SCHEMA; version = DOMAIN_CHANGE_PACKET_VERSION; break;
+    case 'monitor-once': schema = CLI_DOMAIN_CONTROL_MONITOR_SCHEMA; version = CLI_DOMAIN_CONTROL_MONITOR_VERSION; break;
     case 'discover': schema = CLI_DISCOVER_SCHEMA; version = CLI_DISCOVER_SCHEMA_VERSION; break;
     case 'discover-scan': schema = CLI_DISCOVERY_SCAN_SCHEMA; version = CLI_DISCOVERY_SCAN_VERSION; break;
     case 'posture': schema = CLI_POSTURE_SCHEMA; version = CLI_POSTURE_SCHEMA_VERSION; break;
@@ -53,11 +80,12 @@ export function validateWorkflowResult(step: Step, result: unknown, retained: bo
     case 'timeline': schema = CLI_LOOKUP_TIMELINE_SCHEMA; version = CLI_LOOKUP_TIMELINE_VERSION; break;
     default: throw new TypeError('This command has no fixed-workflow output contract.');
   }
-  const actualVersion = step.command === 'export' ? value.schemaVersion : value.version;
+  const envelope = step.command === 'case-pack' ? value.packet as Record<string, unknown> : value;
+  const actualVersion = step.command === 'export' || step.command === 'ct-intake' ? value.schemaVersion : envelope.version;
   // Only existing format validators admit historical versions. Report-only
   // steps use the same output versions as the latest public checkpoint writer.
   const historicalReader = retained && ['lookup', 'export', 'domain-control'].includes(step.command);
-  if (value.schema !== schema || schema !== step.produces
+  if (envelope.schema !== schema || schema !== step.produces
     || (!historicalReader && actualVersion !== version) || !Number.isSafeInteger(actualVersion)) {
     throw new TypeError('Unsupported workflow output schema or version.');
   }
@@ -81,10 +109,9 @@ export function normalizeWorkflowBindings(plan: Plan, value: unknown): readonly 
     const step = plan.steps[destinationIndex];
     const source = plan.steps[sourceIndex];
     const input = Number(item.input);
-    const expected = step?.command === 'export' || step?.command === 'diff' || step?.command === 'timeline'
-      ? CLI_LOOKUP_SCHEMA : step?.command === 'verify-artifact' ? LOOKUP_EVIDENCE_SCHEMA : null;
+    const expected = step ? workflowInputSchemas(step.command) : [];
     const slot = `${destinationIndex}:${input}`;
-    if (!step || !source || sourceIndex >= destinationIndex || expected === null || source.produces !== expected
+    if (!step || !source || sourceIndex >= destinationIndex || !expected.includes(source.produces)
       || typeof item.input !== 'number' || !Number.isSafeInteger(input) || input < 1
       || input > step.arguments.filter((argument) => /^<[^>]+>$/u.test(argument)).length || slots.has(slot)) {
       throw new CliUsageError('Workflow artefact binding does not match a compatible earlier output and file input in the fixed recipe.');
@@ -95,6 +122,16 @@ export function normalizeWorkflowBindings(plan: Plan, value: unknown): readonly 
   return Object.freeze(bindings.sort((left, right) =>
     plan.steps.findIndex((step) => step.id === left.stepId) - plan.steps.findIndex((step) => step.id === right.stepId)
       || left.input - right.input));
+}
+
+/** Compatible file inputs in the installed recipes, not general CLI pipelines. */
+export function workflowInputSchemas(command: Step['command']): readonly string[] {
+  switch (command) {
+    case 'export': case 'diff': case 'timeline': case 'compare': case 'source-report': case 'brief': return [CLI_LOOKUP_SCHEMA];
+    case 'verify-artifact': return [LOOKUP_EVIDENCE_SCHEMA];
+    case 'sharing-review': return [CLI_CASE_PACK_SCHEMA];
+    default: return [];
+  }
 }
 
 export function workflowArtifactReference(artifact: WorkflowArtifact): string {

@@ -1683,11 +1683,13 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
     });
   }
   if (policy.kind === 'workflow_run') {
+    const disclosedData = ['normalised_target', 'registry_query', 'whois_query', 'dns_question', 'public_ip_address', 'homepage_request', 'tls_handshake', 'mta_sts_policy_request', 'certificate_search_term'] as const;
+    const recipients = ['registry_service', 'dns_resolver', 'target_public_service', 'certificate_transparency_service'] as const;
     return passiveCliOperation(command, capabilityId, {
       planes: ['local_cli_offline', 'local_cli_network'],
       networkMode: 'conditional_bounded_passive',
-      disclosedData: ['normalised_target', 'registry_query', 'whois_query', 'dns_question', 'public_ip_address', 'homepage_request', 'tls_handshake', 'mta_sts_policy_request'],
-      recipients: ['registry_service', 'dns_resolver', 'target_public_service'],
+      disclosedData,
+      recipients,
       requestBudget: 'variant_specific',
       authorisation: 'explicit_network_approval',
       cancellation: 'step_stops_admission',
@@ -1720,8 +1722,8 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
           planes: ['local_cli_offline', 'local_cli_network'],
           trigger: 'explicit_cli_command',
           networkMode: 'conditional_bounded_passive',
-          disclosedData: ['normalised_target', 'registry_query', 'whois_query', 'dns_question', 'public_ip_address', 'homepage_request', 'tls_handshake', 'mta_sts_policy_request'],
-          recipients: ['registry_service', 'dns_resolver', 'target_public_service'],
+          disclosedData,
+          recipients,
           requestBudget: 'workflow_step_specific',
           responseBudget: 'collector_specific',
           concurrency: 'command_bounded',

@@ -156,7 +156,10 @@ standalone JSON manifest; exact public version-2 manifests remain readable.
 
 ### Resuming a fixed workflow
 
-`workflow-run` emits a checkpoint for an installed recipe. A partial collection
+All recipes listed by `workflow-plan --list` can run through `workflow-run`.
+Planning remains offline. Execution emits a checkpoint; terminal output shows
+retained steps, output identities, missing inputs and the next required action.
+A partial collection
 pauses for review; resuming keeps that observation and does not collect it
 again. Later steps can finish without making the earlier evidence complete:
 the run still exits with code 4. Validation, usage and export failures remain
@@ -173,12 +176,28 @@ whoisleuth workflow-run domain-triage example.test --approve-network \
   --json --output run.json
 ```
 
-Bindings accept Lookup outputs for export, diff and timeline, and evidence
-exports for verification. Remaining placeholders use `--select` in order;
+Bindings accept Lookup outputs for export, diff, timeline, comparison, source
+reports and briefs; evidence exports for verification; and Case-pack output
+for sharing review. Remaining placeholders use `--select` in order;
 for example, `--use-artifact diff:2=current --select diff=previous.json`.
 `diff` compares saved observations of the same or different domains; `timeline`
 orders observations of one domain. Candidate and domain-control intent inputs
 remain analyst selections. No file is inferred or extracted automatically.
+
+For example, registry review can reuse its collection without extracting files:
+
+```sh
+whoisleuth workflow-run registry-disagreement example.test --approve-network \
+  --use-artifact compare:1=collect --use-artifact report:1=collect \
+  --json --output registry-run.json
+```
+
+The evidence-handoff recipe pauses before any human-review declaration. Review
+the selected material and the listed declarations, then use
+`--confirm-review package` or `--confirm-review lint` for that particular step.
+Confirmation applies only to the current invocation and is not inferred from
+the checkpoint. A completed recipe means its commands ran, not that an
+investigation is resolved or sharing is authorised.
 
 Checkpoint version 3 reads versions 1 and 2. Older installations reject version
 3. Checkpoints retain exact output schemas, content digests and input bindings;
