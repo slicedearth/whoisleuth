@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick, type ComponentProps, type Snippet } from 'svelte';
-  import { caseInvestigationContext, caseTypeSummary, dispositionLabel, editCase, type CaseRecord } from '$lib/cases';
+  import { caseInvestigationContext, caseTypeSummary, dispositionLabel, editCase, importCaseReviewReturn, type CaseRecord } from '$lib/cases';
   import { handlesLocalLink } from '$lib/link-activation';
   import { buildCaseActionOutcomeSummary } from '$lib/analysis/case-response-model.ts';
   import CaseObservationStage from '$lib/components/CaseObservationStage.svelte';
@@ -11,6 +11,8 @@
   import CaseRenderedCapture from '$lib/components/CaseRenderedCapture.svelte';
   import CaseWorkflowDetails from '$lib/components/CaseWorkflowDetails.svelte';
   import CaseTitleForm from '$lib/components/CaseTitleForm.svelte';
+  import CaseReviewReturn from '$lib/components/CaseReviewReturn.svelte';
+  import type { CaseReviewReturn as ReviewReturn } from '../../../../packages/cases/case-review-return.mts';
   import CaseResponsePacketWorkspace from '$lib/components/CaseResponsePacketWorkspace.svelte';
   import {
     CASE_RESPONSE_STAGE_DEFINITIONS,
@@ -142,6 +144,18 @@
     focusFallback: (() => HTMLElement | null) | null = null,
     draft?: CaseDraftReceipt,
   ): Promise<boolean> {
+    return persistOperation(() => editCase(record.id, patch, draft), success, focusFallback);
+  }
+
+  async function persistReviewReturn(preview: ReviewReturn, keys: readonly string[], focus: () => HTMLElement | null): Promise<boolean> {
+    return persistOperation(() => importCaseReviewReturn(preview, keys), 'Added the selected review entries.', focus);
+  }
+
+  async function persistOperation(
+    operation: () => ReturnType<typeof editCase>,
+    success: string,
+    focusFallback: (() => HTMLElement | null) | null,
+  ): Promise<boolean> {
     if (mutationBusy) return false;
     const focusTarget = document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -150,7 +164,7 @@
     try {
       let committed: Awaited<ReturnType<typeof editCase>>;
       try {
-        committed = await editCase(record.id, patch, draft);
+        committed = await operation();
       } catch (cause) {
         onmessage(cause instanceof Error ? cause.message : 'Could not update the case response record.');
         return false;
@@ -303,6 +317,7 @@
 
       <CaseOutcomeStage {record} {mutationBusy} {persist} mode={presentationMode} />
       {@render exports()}
+      <CaseReviewReturn {record} {mutationBusy} persist={persistReviewReturn} />
       </div>
       <div class="case-section" role="group" hidden={activeSection !== 'history'} aria-label="Case history">
         {@render history()}

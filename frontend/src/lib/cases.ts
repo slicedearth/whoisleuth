@@ -29,6 +29,7 @@ import type {
 import { readBrowserLocalData, updateBrowserLocalData, browserLocalDataProvider, browserLocalDataCollection } from './browser-local-data-service.ts';
 import { removeCaseDraft } from '../../../packages/cases/case-drafts.mts';
 import type { CaseDraftReceipt, CaseDraftStore } from '../../../packages/contracts/case-drafts.mts';
+import { applyCaseReviewReturn, type CaseReviewReturn } from '../../../packages/cases/case-review-return.mts';
 import { LEGACY_CASES_KEY } from './browser-local-data-contract.ts';
 import { assertAnalystUndoCurrent } from './analysis/analyst-undo.ts';
 import {
@@ -399,6 +400,13 @@ export async function importCases(value: unknown): Promise<{ cases: CaseRecord[]
         pruned,
       },
     };
+  });
+}
+
+export async function importCaseReviewReturn(preview: CaseReviewReturn, keys: readonly string[]) {
+  return updateBrowserLocalData('cases', current => {
+    const result = applyCaseReviewReturn(current, preview, keys);
+    return { document: result.cases, result };
   });
 }
 

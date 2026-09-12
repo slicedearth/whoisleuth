@@ -176,8 +176,8 @@ registration sources does not repeat that page request.
 Creating or refreshing a Case is deliberate. A Case retains the exact
 normalised submitted hostname and, for new Deep observations, the separately
 identified DNS, TLS and web hostname on the point-in-time evidence snapshot while
-the Case remains keyed by canonical registrable domain. Different hostnames can
-therefore remain attached to different snapshots. Migrated Cases may retain a
+the Case retains its own incident ID and canonical registrable domain.
+Different hostnames can remain attached to different snapshots. Migrated Cases may retain a
 null hostname; WHOISleuth does not reconstruct one from URLs, certificates,
 redirects or other weaker evidence.
 
@@ -335,6 +335,19 @@ browser back and forward. Case response forms save workspace-local recovery
 drafts. Their status distinguishes a recovery copy from a submitted Case
 record. After reopening a Case, restore a saved draft explicitly and review it
 before submitting. Copies from other tabs are not silently overwritten.
+
+For a second opinion, open **Response → Review with another analyst** and
+export this Case for review. The full copy includes notes, incident links and
+evidence: share it deliberately. The reviewer imports it into a separate
+workspace, adds notes, pins, decisions or assertions, then exports that Case.
+Select the returned file in the original Case and review each addition before
+saving. Linked new pins must be selected with their claims; conflicting IDs
+never overwrite retained content. Status, actions, authorisations, closures and
+snapshots are not copied back. A changed destination requires another preview.
+Preview selections survive changing Case sections, but not leaving the page.
+The handoff trail identifies the file and selected entries, not the reviewer's
+identity. CLI packs can supply Case data; use CLI verification separately for
+their checksums and report binding.
 
 Opening a Case keeps it selected while moving between Console tools. The
 compact Case context exposes retained hypotheses, pins, decisions, response

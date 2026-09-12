@@ -149,6 +149,13 @@ reports, workspace archives and internal CLI packs retain them. Trusted and
 public CLI packs exclude them. Reusing a selected observation copies only that
 evidence with its original timestamps, not the source Case's notes or decisions.
 
+Review copies are ordinary full Case exports, not redacted or encrypted.
+Returned-file previews stay in page memory. Adding selected notes, pins,
+decisions or assertions saves them locally with their original record times,
+plus a handoff entry containing the file digest and selected-record-key digest.
+No upload occurs; file identity does not authenticate the reviewer. Existing
+conflicts, response authorisations and unselected records are not imported.
+
 Brand Profiles can retain official-channel URLs and handles, rights owners,
 registration identifiers, jurisdictions, source URLs and review notes. These
 records can be sensitive and remain browser-local until deliberately exported.
