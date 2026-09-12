@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { CaseEvidencePin } from '../packages/cases/case-response-records.mts';
-import { caseEvidenceCheckpointGroups, caseEvidenceChoiceName, caseEvidenceReferences } from '../frontend/src/lib/analysis/case-evidence-presentation.ts';
+import { caseEvidenceCheckpointGroups, caseEvidenceChoiceName, caseEvidenceReferences, caseRecheckEvidence } from '../frontend/src/lib/analysis/case-evidence-presentation.ts';
 
 const pin: CaseEvidencePin = {
   id: 'pin-one', checkpointId: 'checkpoint-one', field: 'dns.nameservers', category: 'dns',
@@ -10,6 +10,25 @@ const pin: CaseEvidencePin = {
   completeness: 'partial', truncated: false, transitionExpectation: null,
   limitations: ['One resolver observation.'], createdAt: '2026-09-02T00:00:00.000Z',
 };
+
+test('a recheck derives retained provenance without inventing a fresh source or observation time', () => {
+  const evidence = caseRecheckEvidence(pin);
+  assert.deepEqual(evidence, {
+    observedAt: '2026-09-01T00:00:00.000Z', sourceClass: 'analyst', source: 'DNS', completeness: 'partial',
+  });
+  assert.equal(caseRecheckEvidence({ ...pin, observedAt: null }).observedAt, null);
+  assert.equal(caseRecheckEvidence({ ...pin, observedAt: 'malformed' }).observedAt, null);
+  assert.equal(caseRecheckEvidence({ ...pin, source: 'Deployment output' }).sourceClass, 'analyst');
+  assert.equal(caseRecheckEvidence({ ...pin, importContentSha256: 'a'.repeat(64) }).sourceClass, 'analyst');
+  assert.equal(pin.limitations.length, 1);
+});
+
+test('retained truncation cannot become complete when it supplies a recheck', () => {
+  assert.equal(caseRecheckEvidence({ ...pin, completeness: 'complete', truncated: true }).completeness, 'partial');
+  assert.equal(caseRecheckEvidence({ ...pin, completeness: 'inconclusive', truncated: true }).completeness, 'inconclusive');
+  assert.equal(caseRecheckEvidence({ ...pin, completeness: 'unknown', truncated: true }).completeness, 'unknown');
+  assert.equal(caseRecheckEvidence({ ...pin, completeness: 'complete', truncated: false }).completeness, 'complete');
+});
 
 test('evidence choices identify duplicate labels and do not substitute creation time for observation time', () => {
   assert.equal(caseEvidenceChoiceName(pin, 0), 'Pin 1: Nameservers · DNS · 2026-09-01T00:00:00.000Z');

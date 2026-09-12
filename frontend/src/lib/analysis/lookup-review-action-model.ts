@@ -23,6 +23,7 @@ import {
   type LookupNextAction,
 } from './lookup-decision-support.ts';
 import type { LookupTaskView } from './lookup-presentation.ts';
+import { LOOKUP_GUIDANCE_TASKS } from '../../../../packages/investigation/lookup-task-guidance.mts';
 
 export const LOOKUP_REVIEW_ACTION_MODEL_VERSION = 1 as const;
 
@@ -77,7 +78,7 @@ type ContextActionRule = Readonly<{
 const SAFE_ID = /^[a-z0-9](?:[a-z0-9._:-]{0,199})$/u;
 const SAFE_FRAGMENT = /^#[a-z0-9](?:[a-z0-9._:-]{0,159})$/u;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/u;
-const TASKS = new Set<LookupTaskView>(['general', 'acquisition', 'brand', 'incident', 'owned']);
+const TASKS = new Set<LookupTaskView>(LOOKUP_GUIDANCE_TASKS);
 const IMPORTANCE = new Set<DecisionFactImportance>(['high', 'medium', 'low']);
 const BASIS = new Set<LookupReviewActionBasis>([
   'decision_fact',
@@ -96,7 +97,7 @@ const FACT_BACKED_ACTION_IDS = new Set([
   'review-refresh-options',
   'inspect-limited-source',
 ]);
-const ALL_TASKS = Object.freeze(['general', 'acquisition', 'brand', 'incident', 'owned'] as const);
+const ALL_TASKS = LOOKUP_GUIDANCE_TASKS;
 const ACQUISITION_TASK = Object.freeze(['acquisition'] as const);
 const BRAND_TASK = Object.freeze(['brand'] as const);
 const OWNED_TASK = Object.freeze(['owned'] as const);

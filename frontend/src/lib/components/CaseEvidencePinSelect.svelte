@@ -2,12 +2,13 @@
   import type { CaseEvidencePin } from '$lib/cases';
   import { caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
-  let { label, pins, value = $bindable(''), emptyLabel = 'No evidence pin', disabled = false }: {
+  let { label, pins, value = $bindable(''), emptyLabel = 'No evidence pin', disabled = false, onselect }: {
     label: string;
     pins: readonly CaseEvidencePin[];
     value?: string;
     emptyLabel?: string;
     disabled?: boolean;
+    onselect?: (id: string) => void;
   } = $props();
   const id = $props.id();
   const selected = $derived(pins.find(pin => pin.id === value));
@@ -15,7 +16,7 @@
 
 <div class="field evidence-selection">
   <label for={id}>{label}</label>
-  <select {id} {disabled} bind:value aria-describedby={selected ? `${id}-fact` : undefined}>
+  <select {id} {disabled} bind:value onchange={event => onselect?.(event.currentTarget.value)} aria-describedby={selected ? `${id}-fact` : undefined}>
     <option value="">{emptyLabel}</option>
     {#each pins as pin, index (pin.id)}<option value={pin.id}>{caseEvidenceChoiceName(pin, index)}</option>{/each}
   </select>
@@ -25,5 +26,5 @@
 <style>
   .evidence-selection{display:grid;align-content:start;gap:5px;min-width:0;overflow-wrap:anywhere}
   select{width:100%;min-width:0;max-width:100%}
-  .selected-fact{padding:8px 0 8px 10px;border-left:2px solid var(--border)}
+  .selected-fact{padding:8px 0 8px 10px;border-left:2px solid var(--border);font-family:var(--font-sans);font-weight:400}
 </style>

@@ -25,7 +25,7 @@ test('equal-time independent reviews remain visible without a selected outcome',
   await openCaseSection(page, 'Response');
   const remediation = workspace.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
   await remediation.locator(':scope > summary').click();
-  const form = remediation.locator('form').filter({ hasText: 'Append independent observed-effect review' });
+  const form = remediation.getByRole('form', { name: 'Record a recheck', exact: true });
   await expect(form).toHaveCount(1);
   const reviews = remediation.getByRole('list', { name: 'Independent observed-effect reviews' });
   for (const [index, state] of ['still_observed', 'not_reproduced'].entries()) {
@@ -971,6 +971,8 @@ test('append-only response review, exact authorisation, independent verification
   await remediation.getByLabel('Separately attributed source').fill('Independent fixture review');
   await remediation.getByLabel('Completeness').selectOption('complete');
   await remediation.getByLabel('Evidence pin').selectOption({ index: 1 });
+  await remediation.getByRole('checkbox', { name: 'Use selected source details', exact: true }).uncheck();
+  await expect(remediation.getByLabel('Separately attributed source')).toHaveValue('Independent fixture review');
   await remediation.getByLabel('Limitations').first().fill('The independent check covers only the retained exact URL.');
   await remediation.getByRole('button', { name: 'Record independent review' }).click();
   await expect(remediation.getByRole('list', { name: 'Independent observed-effect reviews' })).toContainText('changed');

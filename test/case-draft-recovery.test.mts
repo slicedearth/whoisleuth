@@ -4,6 +4,7 @@ import { createCaseDraftRecovery, restoreCaseDraftFields, type CaseDraftRecovery
 import { caseDraftFields, emptyCaseDraftStore, normalizeCaseDraftStore, removeCaseDraft, replaceCaseDraft, serializeCaseDraftStore } from '../packages/cases/case-drafts.mts';
 import { MAX_CASE_DRAFT_RECORDS, type CaseDraftFields, type CaseDraftRecord } from '../packages/contracts/case-drafts.mts';
 import { CASE_DRAFTS_COLLECTION } from '../frontend/src/lib/browser-local-data-definitions.ts';
+import type { CaseDraftValues } from '../frontend/src/lib/controllers/case-draft.svelte.ts';
 
 const draft = (overrides: Partial<CaseDraftRecord> = {}): CaseDraftRecord => ({
   id: 'draft-one', revision: 'revision-one', caseId: 'case-one', form: 'decision', formVersion: 1,
@@ -39,6 +40,15 @@ function harness() {
 }
 
 describe('bounded Case recovery drafts', () => {
+  test('checkbox defaults admit later values without changing scalar or relation field types', () => {
+    const values: CaseDraftValues<{ enabled: false; retained: true; note: string; ids: string[] }> = {
+      enabled: true, retained: false, note: 'Retained manual draft', ids: ['pin-one'],
+    };
+    assert.deepEqual(restoreCaseDraftFields(values, { enabled: false, retained: true, note: '', ids: [] as string[] }), values);
+    assert.deepEqual(restoreCaseDraftFields({ note: 'Earlier manual draft', pinId: 'pin-one' }, {
+      note: '', pinId: '', usePinMetadata: false,
+    }), { note: 'Earlier manual draft', pinId: 'pin-one', usePinMetadata: false });
+  });
   test('additive form fields take current defaults while incompatible fields fail without discarding text', () => {
     assert.deepEqual(restoreCaseDraftFields({ summary: 'Retained text' }, { summary: '', rationale: '', references: [] as string[] }), { summary: 'Retained text', rationale: '', references: [] });
     assert.throws(() => restoreCaseDraftFields({ removedField: 'Keep this' }, { summary: '' }));

@@ -8,20 +8,25 @@ import { createCaseDraftRecovery, restoreCaseDraftFields, INITIAL_CASE_DRAFT_REC
 
 const unprotected = new Set<object>();
 export function hasUnprotectedCaseDrafts(): boolean { return unprotected.size > 0; }
+export type CaseDraftValues<T extends CaseDraftFields> = {
+  [K in keyof T]: T[K] extends boolean ? boolean : T[K];
+};
 
 /** Form defaults own scalar types; the one relation-list form declares its row shape. */
 export function createCaseDraft<T extends CaseDraftFields>(
   caseId: () => string, form: string, initial: T,
   objectLists: Partial<Record<keyof T, Record<string, string>>> = {},
 ) {
-  let value = $state<T>(structuredClone(initial));
+  // A checkbox default selects its initial value, not its only permitted value.
+  const defaults = structuredClone(initial) as CaseDraftValues<T>;
+  let value = $state<CaseDraftValues<T>>(structuredClone(defaults));
   let state = $state<CaseDraftRecoveryState>(INITIAL_CASE_DRAFT_RECOVERY_STATE);
   const owner = {};
   const recovery = createCaseDraftRecovery({
     caseId: caseId(), form,
-    readFields: () => $state.snapshot(value) as T,
-    restoreFields: fields => { value = restoreCaseDraftFields(fields, initial, objectLists); },
-    resetFields: () => { value = structuredClone(initial); },
+    readFields: () => $state.snapshot(value) as CaseDraftValues<T>,
+    restoreFields: fields => { value = restoreCaseDraftFields(fields, defaults, objectLists); },
+    resetFields: () => { value = structuredClone(defaults); },
     storage: {
       read: () => readBrowserLocalData('case_drafts'),
       update: async change => {

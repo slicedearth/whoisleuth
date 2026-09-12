@@ -31,7 +31,7 @@
     decisionPinIds: [] as string[],
     decisionDisposition: 'unreviewed',
     decisionReviewReason: '',
-    decisionClassificationDirty: false as boolean
+    decisionClassificationDirty: false
   });
   const assertionDraft = createCaseDraft(() => record.id, 'assertion', {
     assertionKind: 'hypothesis',

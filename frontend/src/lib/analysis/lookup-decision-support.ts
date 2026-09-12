@@ -7,9 +7,15 @@ import type { LookupFreshnessPolicy } from './lookup-source-refresh.ts';
 import type { LookupTaskView } from './lookup-presentation.ts';
 import type { LookupTiming, LookupTimingSource } from './lookup-response.ts';
 import { readObservationTime } from '../../../../packages/evidence/observation.mts';
-
-export type LookupDecisionState = 'conflict' | 'uncertain';
-export type LookupDecisionImportance = 'high' | 'medium' | 'low';
+import { lookupTaskGuidance } from '../../../../packages/investigation/lookup-task-guidance.mts';
+import type {
+  LookupDecisionEntry, LookupDecisionImportance, LookupDecisionSupport,
+  LookupEvidenceQualityEntry, LookupEvidenceQualityMatrix, LookupNextAction, LookupTaskGuidance,
+} from '../../../../packages/investigation/lookup-artefact-inputs.mts';
+export type {
+  LookupDecisionEntry, LookupDecisionImportance, LookupDecisionState, LookupDecisionSupport,
+  LookupEvidenceQualityEntry, LookupEvidenceQualityMatrix, LookupNextAction, LookupTaskGuidance,
+} from '../../../../packages/investigation/lookup-artefact-inputs.mts';
 export type LookupTaskEvidenceKind =
   | 'delegation'
   | 'dependency'
@@ -23,75 +29,6 @@ export type LookupTaskEvidenceKind =
   | 'ptr'
   | 'redirect'
   | 'tls';
-
-export type LookupTaskGuidance = Readonly<{
-  task: LookupTaskView;
-  label: string;
-  summary: string;
-  questions: readonly string[];
-  prioritySections: readonly string[];
-}>;
-
-export type LookupDecisionEntry = Readonly<{
-  id: string;
-  state: LookupDecisionState;
-  importance: LookupDecisionImportance;
-  title: string;
-  detail: string;
-  sources: readonly string[];
-  href: `#${string}`;
-}>;
-
-export type LookupNextAction = Readonly<{
-  id: string;
-  label: string;
-  reason: string;
-  expectedOutcome: string;
-  href: `#${string}`;
-  priority: LookupDecisionImportance;
-}>;
-
-export type LookupDecisionSupport = Readonly<{
-  version: 1;
-  guidance: LookupTaskGuidance;
-  entries: readonly LookupDecisionEntry[];
-  actions: readonly LookupNextAction[];
-  counts: Readonly<{
-    conflicts: number;
-    uncertainties: number;
-  }>;
-}>;
-
-export type LookupEvidenceQualityEntry = Readonly<{
-  id: string;
-  label: string;
-  category: string;
-  endpointClass: string;
-  description: string;
-  state: EvidenceCoverageState;
-  statusLabel: string;
-  truncated: boolean;
-  observedAt: string | null;
-  ageDays: number | null;
-  durationMs: number | null;
-  timingOutcome: 'fulfilled' | 'rejected' | null;
-  refreshAvailable: boolean;
-  requestDisclosure: string | null;
-  limitations: readonly string[];
-  supports: readonly string[];
-}>;
-
-export type LookupEvidenceQualityMatrix = Readonly<{
-  version: 1;
-  observedAt: string | null;
-  totalMs: number | null;
-  entries: readonly LookupEvidenceQualityEntry[];
-  completeCount: number;
-  limitedCount: number;
-  stale: boolean;
-  ageDays: number | null;
-  freshnessPolicy: LookupFreshnessPolicy;
-}>;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -119,9 +56,8 @@ const ACTION_PRIORITY: Readonly<Record<LookupNextAction['priority'], number>> = 
   low: 2,
 });
 
-const TASK_GUIDANCE: Readonly<Record<LookupTaskView, Omit<LookupTaskGuidance, 'task'>>> = Object.freeze({
+const TASK_GUIDANCE: Readonly<Record<LookupTaskView, Omit<LookupTaskGuidance, 'task' | 'label'>>> = Object.freeze({
   general: Object.freeze({
-    label: 'General investigation',
     summary: 'Establish what was observed, which sources agree, and what remains unknown before drawing a conclusion.',
     questions: Object.freeze([
       'Which source observations are complete enough to rely on?',
@@ -131,7 +67,6 @@ const TASK_GUIDANCE: Readonly<Record<LookupTaskView, Omit<LookupTaskGuidance, 't
     prioritySections: Object.freeze(['overview', 'web-evidence', 'registry', 'case-response']),
   }),
   acquisition: Object.freeze({
-    label: 'Acquisition review',
     summary: 'Prioritise registration lifecycle, authority, transfer dependencies, mail, DNS, and services that would need a controlled transition.',
     questions: Object.freeze([
       'Is the registration conclusion authoritative and internally consistent?',
@@ -141,7 +76,6 @@ const TASK_GUIDANCE: Readonly<Record<LookupTaskView, Omit<LookupTaskGuidance, 't
     prioritySections: Object.freeze(['overview', 'registry', 'web-evidence', 'case-response']),
   }),
   brand: Object.freeze({
-    label: 'Brand review',
     summary: 'Prioritise declared identity, page similarity, credential surfaces, external destinations, and infrastructure relationships.',
     questions: Object.freeze([
       'Does the page claim or resemble a reviewed identity?',
@@ -151,7 +85,6 @@ const TASK_GUIDANCE: Readonly<Record<LookupTaskView, Omit<LookupTaskGuidance, 't
     prioritySections: Object.freeze(['overview', 'web-evidence', 'external-intelligence', 'case-response']),
   }),
   incident: Object.freeze({
-    label: 'Incident response',
     summary: 'Prioritise current reachability, redirects, certificate state, credential surfaces, warning data, and evidence that can support a reviewed response.',
     questions: Object.freeze([
       'What behaviour was observed at the recorded time?',
@@ -161,7 +94,6 @@ const TASK_GUIDANCE: Readonly<Record<LookupTaskView, Omit<LookupTaskGuidance, 't
     prioritySections: Object.freeze(['overview', 'external-intelligence', 'web-evidence', 'case-response']),
   }),
   owned: Object.freeze({
-    label: 'Owned-domain posture',
     summary: 'Prioritise delegation, mail, certificate, security-policy, lifecycle, and change evidence for a domain under review.',
     questions: Object.freeze([
       'Do registry publication and directly observed delegation agree?',
@@ -285,7 +217,7 @@ function comparisonDetail(left: unknown, right: unknown): string {
 }
 
 function taskGuidance(task: LookupTaskView): LookupTaskGuidance {
-  return { task, ...TASK_GUIDANCE[task] };
+  return { task, label: lookupTaskGuidance(task).label, ...TASK_GUIDANCE[task] };
 }
 
 function comparisonEntries(

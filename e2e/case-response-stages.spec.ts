@@ -16,6 +16,80 @@ import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts'
 
 test.use({ timezoneId: 'UTC' });
 
+test('a recheck uses selected evidence without advancing its clock or discarding the manual draft', async ({ page }, testInfo) => {
+  const observedAt = '2026-09-01T10:00:00.123Z';
+  const pin = {
+    id: 'pin-retained', checkpointId: null, field: 'http.status', category: 'http', label: 'Retained web response',
+    value: 'Response 200', source: 'Fixture HTTP observation', sourceState: 'partial', sourceSchema: null,
+    observedAt, collectionDepth: 'deep', completeness: 'partial', truncated: true, transitionExpectation: null,
+    limitations: ['The response body was incomplete.'], createdAt: observedAt,
+  };
+  const record = caseRecord({ domain: 'retained-recheck.invalid', evidencePins: [pin, { ...pin, id: 'pin-undated', observedAt: null }] });
+  await openSeededTimelineCase(page, record.domain, [record]);
+  const workspace = await openCaseResponseWorkspace(page, '', 'quick');
+  await openCaseSection(page, 'Response');
+  const form = workspace.getByRole('form', { name: 'Record a recheck', exact: true });
+  await form.getByLabel('Source', { exact: true }).fill('Separate manual review');
+  await form.getByLabel('Observed at', { exact: true }).fill('2026-09-02T11:30');
+  await form.getByRole('combobox', { name: 'Observed effect', exact: true }).selectOption('still_observed');
+  const source = form.getByRole('combobox', { name: 'Current evidence', exact: true });
+  await source.selectOption('pin-undated');
+  await expect(form.getByRole('status').filter({ hasText: 'no observation time' })).toBeVisible();
+  await expect(form.getByRole('button', { name: 'Record independent outcome', exact: true })).toBeDisabled();
+  await source.selectOption('pin-retained');
+  await expect(form.getByLabel('Source', { exact: true })).toHaveCount(0);
+  await expect(form.getByLabel('Observed at', { exact: true })).toHaveCount(0);
+  await expect(form.getByRole('combobox', { name: 'Completeness', exact: true })).toHaveCount(0);
+  await expect(form).toContainText(observedAt);
+  await expect(form).toContainText('The response body was incomplete.');
+  const useSource = form.getByRole('checkbox', { name: 'Use selected source details', exact: true });
+  await useSource.uncheck();
+  await expect(source).toHaveValue('pin-retained');
+  await expect(form.getByLabel('Source', { exact: true })).toHaveValue('Separate manual review');
+  await useSource.check();
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720], [2560, 1440]] as const) {
+      await page.setViewportSize({ width, height });
+      await expect(source).toBeVisible();
+      await expect(useSource).toBeChecked();
+      await source.focus();
+      await page.keyboard.press('Tab');
+      await expect(useSource).toBeFocused();
+      const box = await useSource.boundingBox();
+      const header = await page.locator('.shell > header').boundingBox();
+      expect(box && header && box.y >= header.y + header.height).toBe(true);
+      expect(await useSource.locator('..').evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+      await expectNoHorizontalOverflow(page);
+      await form.screenshot({ path: testInfo.outputPath(`retained-recheck-${theme}-${width}.png`), animations: 'disabled' });
+      await page.screenshot({ path: testInfo.outputPath(`retained-recheck-viewport-${theme}-${width}.png`), animations: 'disabled' });
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await source.selectOption('');
+  await expect(form.getByLabel('Source', { exact: true })).toHaveValue('Separate manual review');
+  await expect(form.getByLabel('Observed at', { exact: true })).toHaveValue('2026-09-02T11:30');
+  await source.selectOption('pin-retained');
+  await form.getByLabel('Limitations', { exact: false }).fill('The same page was still present in this retained observation.');
+  await openCaseSection(page, 'Assessment');
+  await openCaseSection(page, 'Response');
+  await expect(source).toHaveValue('pin-retained');
+  const save = form.getByRole('button', { name: 'Record independent outcome', exact: true });
+  await save.focus();
+  await page.keyboard.press('Enter');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Recorded an independent observed-effect review');
+  await expect(save).toBeFocused();
+  const stored = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value;
+  expect(stored.observedEffects.reviews).toEqual([expect.objectContaining({
+    state: 'still_observed', observedAt, sourceClass: 'analyst', source: 'Fixture HTTP observation',
+    completeness: 'partial', evidencePinId: 'pin-retained',
+    limitations: ['The same page was still present in this retained observation.'],
+  })]);
+  expect(stored.evidencePins[0]).toEqual(expect.objectContaining(pin));
+  await expect(form.getByLabel('Source', { exact: true })).toHaveValue('Separate manual review');
+  await expectNoHorizontalOverflow(page);
+});
+
 for (const viewport of [
   { width: 1280, height: 720 }, { width: 1024, height: 768 },
   { width: 390, height: 844 }, { width: 320, height: 700 },

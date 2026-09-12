@@ -1,6 +1,7 @@
 import type { EvidenceCoverageState } from './evidence-coverage-ledger.mts';
+import type { LookupGuidanceTask as LookupTaskView } from './lookup-task-guidance.mts';
 
-export type LookupTaskView = 'general' | 'acquisition' | 'brand' | 'incident' | 'owned';
+export type { LookupGuidanceTask as LookupTaskView } from './lookup-task-guidance.mts';
 export type LookupDecisionState = 'conflict' | 'uncertain';
 export type LookupDecisionImportance = 'high' | 'medium' | 'low';
 

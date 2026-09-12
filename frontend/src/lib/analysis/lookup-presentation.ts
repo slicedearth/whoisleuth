@@ -1,7 +1,9 @@
 import { parseBoundedJson } from '../bounded-json.ts';
 import { recordOrNull } from '../../../../lib/json-record.mts';
+import { LOOKUP_TASK_VIEWS, type LookupGuidanceTask as LookupTaskView } from '../../../../packages/investigation/lookup-task-guidance.mts';
 
-export type LookupTaskView = 'general' | 'acquisition' | 'brand' | 'incident' | 'owned';
+export { LOOKUP_TASK_VIEWS };
+export type { LookupGuidanceTask as LookupTaskView } from '../../../../packages/investigation/lookup-task-guidance.mts';
 export type LookupDepth = 'fast' | 'deep';
 export type LookupSectionLink = Readonly<{ href: `#${string}`; label: string }>;
 export type LookupPresentationState = Readonly<{
@@ -13,14 +15,6 @@ export type LookupPresentationStorage = Pick<Storage, 'getItem' | 'setItem'>;
 export const LOOKUP_PRESENTATION_STORAGE_KEY = 'whoisleuth:lookup-presentation:v1';
 export const MAX_LOOKUP_PRESENTATION_SERIALIZED_BYTES = 1_024;
 export const MAX_LOOKUP_URL_QUERY_LENGTH = 4_096;
-
-export const LOOKUP_TASK_VIEWS = Object.freeze([
-  Object.freeze({ id: 'general' as const, label: 'General investigation' }),
-  Object.freeze({ id: 'acquisition' as const, label: 'Acquisition review' }),
-  Object.freeze({ id: 'brand' as const, label: 'Brand review' }),
-  Object.freeze({ id: 'incident' as const, label: 'Incident response' }),
-  Object.freeze({ id: 'owned' as const, label: 'Owned-domain posture' }),
-]);
 
 const TASKS = new Set<LookupTaskView>(LOOKUP_TASK_VIEWS.map((option) => option.id));
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/u;

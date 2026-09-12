@@ -1,4 +1,15 @@
 import type { CaseEvidencePin, CaseEvidenceRelationStance } from '../cases.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+
+/** Reviewing a pin does not recollect its source or advance its observation time. */
+export function caseRecheckEvidence(pin: CaseEvidencePin) {
+  return {
+    observedAt: normalizeExplicitIsoTimestamp(pin.observedAt),
+    sourceClass: 'analyst' as const,
+    source: pin.source,
+    completeness: pin.truncated && pin.completeness === 'complete' ? 'partial' as const : pin.completeness,
+  };
+}
 
 /** An ordinal identifies a choice even when two retained observations agree. */
 export function caseEvidenceChoiceName(pin: CaseEvidencePin, index: number): string {

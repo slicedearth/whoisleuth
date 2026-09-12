@@ -412,6 +412,12 @@ from operational follow-ups. Updating that evidence invalidates prior approval.
 Case response date and time fields use UTC and retain seconds and milliseconds.
 Receipts retain an original event time, reference, optional evidence pin and
 limitations. **Prepare a recheck** opens Lookup without starting collection.
+In **Record a recheck**, select a retained pin to use its source, observation
+time and completeness. Its original limitations remain on the linked evidence;
+the form accepts any additional review qualifications. Undated pins cannot date
+a recheck. Clear **Use selected source details** to link the pin as context for
+a separate manual observation. **Enter a manual observation** restores that
+draft without a pin link.
 
 The saved reporting-route review includes platform reports. Filter by source
 review state or search by domain, recipient or source; pagination exposes all
