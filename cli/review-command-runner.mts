@@ -1,7 +1,8 @@
 import type { CliArguments } from './arguments.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { MAX_INVESTIGATION_PACKAGE_BYTES } from '../packages/investigation/investigation-package.mts';
-import { verifyOfflineInvestigationPackage } from './investigation-package-review.mts';
+import { verifyOfflineInvestigationFolder, verifyOfflineInvestigationPackage } from './investigation-package-review.mts';
+import { readInvestigationFolder } from './investigation-folder.mts';
 import {
   MAX_OFFLINE_ARTIFACT_BYTES,
   formatOfflineArtifactVerification,
@@ -62,6 +63,19 @@ async function runVerifyArtifactCommand(
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Artefact verification');
+  if (args.folder) {
+    let files: Map<string, Uint8Array>;
+    try { files = await readInvestigationFolder(args.folder, dependencies.signal); }
+    catch (cause) {
+      dependencies.signal?.throwIfAborted();
+      const reason = cause instanceof TypeError ? boundedCliErrorMessage(cause) : 'The selected folder is unavailable or could not be read.';
+      throw new CliUsageError(`Could not read evidence folder: ${reason}`);
+    }
+    const report = await verifyOfflineInvestigationFolder(files);
+    dependencies.signal?.throwIfAborted();
+    if (!args.quiet) context.writeStdout(args.output === 'json' ? formatJsonDocument(report) : context.terminal(formatOfflineArtifactVerification(report), args.color));
+    return args.strictExit && !isCompleteOfflineArtifactVerification(report) ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
+  }
   if (args.package) {
     if (!args.source || args.source === '-') throw new CliUsageError('--package requires a selected ZIP file; binary stdin is not accepted.');
     let bytes: Uint8Array;

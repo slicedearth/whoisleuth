@@ -73,10 +73,18 @@ export async function removeRetainedCaseAttachment(caseId: string, expected: Cas
 }
 
 export async function readRetainedCaseFile(attachment: CaseAttachment): Promise<Blob> {
-  const expected = readCaseAttachment(attachment);
+  return (await readRetainedCaseFiles([attachment]))[0]!.file;
+}
+
+export async function readRetainedCaseFiles(attachments: readonly CaseAttachment[]): Promise<readonly SelectedCaseAttachment[]> {
+  if (!Array.isArray(attachments) || !attachments.length || attachments.length > MAX_SELECTED_FILES) throw new Error(`Select between 1 and ${MAX_SELECTED_FILES} retained file references.`);
+  const selected = attachments.map(readCaseAttachment);
+  if (selected.reduce((total, item) => total + item.byteLength, 0) > MAX_SELECTED_FILE_TOTAL_BYTES) throw new Error('The selected files exceed the combined 64-MiB export limit. Select a smaller group; no files were omitted automatically.');
   const [provider, definition] = await Promise.all([browserLocalDataProvider(), browserLocalDataCollection('cases')]);
-  const files = await provider.readFiles(definition, [{ digestSha256: expected.digestSha256, byteLength: expected.byteLength }]);
-  const file = files.get(expected.digestSha256);
-  if (!file) throw new Error('The reference is retained, but its original bytes are missing from this workspace. Restore or deliberately retain the matching original file.');
-  return file;
+  const files = await provider.readFiles(definition, selected.map(item => ({ digestSha256: item.digestSha256, byteLength: item.byteLength })));
+  return selected.map(attachment => {
+    const file = files.get(attachment.digestSha256);
+    if (!file) throw new Error('The reference is retained, but its original bytes are missing from this workspace. Restore or deliberately retain the matching original file.');
+    return { attachment, file };
+  });
 }

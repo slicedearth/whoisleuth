@@ -11,8 +11,10 @@ import {
   type InvestigationManifestInput, type SupportedInvestigationManifest,
 } from './investigation-manifest.mts';
 
-const MANIFEST_PATH = 'manifest.json';
-const MAX_PACKAGE_ENTRIES = MAX_INVESTIGATION_MANIFEST_ARTIFACTS + 1;
+export const INVESTIGATION_PACKAGE_MANIFEST_PATH = 'manifest.json';
+const MANIFEST_PATH = INVESTIGATION_PACKAGE_MANIFEST_PATH;
+export const MAX_INVESTIGATION_PACKAGE_ENTRIES = MAX_INVESTIGATION_MANIFEST_ARTIFACTS + 1;
+const MAX_PACKAGE_ENTRIES = MAX_INVESTIGATION_PACKAGE_ENTRIES;
 // Stored ZIP entries use 76 header bytes plus two copies of the generated ASCII
 // path (at most 21 bytes). 128 bytes per entry also covers the fixed writer's
 // header overhead; the end record is 22 bytes. Payload admission is independent.
@@ -25,22 +27,55 @@ export function investigationPackageEntryPath(id: string): string {
   return `artifacts/${id}`;
 }
 
-function packagePath(name: string): string {
+export function investigationPackagePath(name: string): string {
+  if (typeof name !== 'string') throw new TypeError('Investigation package entry paths must be strings.');
   if (name === MANIFEST_PATH) return name;
   if (!name.startsWith('artifacts/') || investigationPackageEntryPath(name.slice('artifacts/'.length)) !== name) throw new TypeError('Investigation package contains an unexpected entry path.');
   return name;
 }
 
-export async function buildInvestigationPackage(input: InvestigationManifestInput, generatedAt: string, applicationVersion: string) {
+export async function prepareInvestigationPackageEntries(input: InvestigationManifestInput, generatedAt: string, applicationVersion: string) {
   const prepared = await prepareInvestigationManifest(input, generatedAt, applicationVersion);
+  const files = new Map<string, Uint8Array>();
+  files.set(MANIFEST_PATH, new TextEncoder().encode(canonicalArtifactJsonV2(prepared.manifest)));
+  for (const [index, item] of prepared.manifest.artifacts.entries()) files.set(investigationPackageEntryPath(item.id), prepared.contents[index]!);
+  return Object.freeze({ manifest: prepared.manifest, files });
+}
+
+/** Capture a directory selection before hashing; no caller-owned bytes survive. */
+function capturePackageEntries(input: ReadonlyMap<string, Uint8Array>): Map<string, Uint8Array> {
+  if (!(input instanceof Map) || input.size < 2 || input.size > MAX_PACKAGE_ENTRIES) throw new TypeError('Investigation package has an invalid entry count.');
+  const files = new Map<string, Uint8Array>();
+  let total = 0;
+  for (const [name, bytes] of input) {
+    investigationPackagePath(name);
+    const maximum = name === MANIFEST_PATH ? MAX_INVESTIGATION_MANIFEST_DOCUMENT_BYTES : MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES;
+    if (!(bytes instanceof Uint8Array) || bytes.byteLength < 1 || bytes.byteLength > maximum) throw new TypeError('Investigation package entry exceeds its byte limit.');
+    if (name !== MANIFEST_PATH) {
+      if (bytes.byteLength > MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES - total) throw new TypeError('Investigation package exceeds its combined byte limit.');
+      total += bytes.byteLength;
+    }
+    files.set(name, new Uint8Array(bytes));
+  }
+  if (!files.has(MANIFEST_PATH)) throw new TypeError('Investigation package is missing its manifest.');
+  return files;
+}
+
+/** A stable container representation, independent of directory listing order. */
+export function encodeInvestigationPackageEntries(input: ReadonlyMap<string, Uint8Array>): Uint8Array {
+  const captured = capturePackageEntries(input);
   const files: Record<string, Uint8Array> = Object.create(null);
-  files[MANIFEST_PATH] = new TextEncoder().encode(canonicalArtifactJsonV2(prepared.manifest));
-  for (const [index, item] of prepared.manifest.artifacts.entries()) files[investigationPackageEntryPath(item.id)] = prepared.contents[index]!;
+  for (const name of [...captured.keys()].sort()) files[name] = captured.get(name)!;
   // Stored entries avoid re-compressing images and large JSON while retaining
   // exact source bytes. The reader also admits independently bounded deflate.
   const bytes = zipSync(files, { level: 0, mtime: new Date(1980, 0, 1) });
   if (bytes.byteLength > MAX_INVESTIGATION_PACKAGE_BYTES) throw new TypeError('Investigation package exceeds its byte limit.');
-  return Object.freeze({ manifest: prepared.manifest, bytes });
+  return bytes;
+}
+
+export async function buildInvestigationPackage(input: InvestigationManifestInput, generatedAt: string, applicationVersion: string) {
+  const prepared = await prepareInvestigationPackageEntries(input, generatedAt, applicationVersion);
+  return Object.freeze({ manifest: prepared.manifest, bytes: encodeInvestigationPackageEntries(prepared.files) });
 }
 
 type PackageEntry = SupportedInvestigationManifest['artifacts'][number];
@@ -77,24 +112,32 @@ export async function inspectInvestigationPackage(input: Uint8Array) {
     maximumSelectedBytes: MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES + MAX_INVESTIGATION_MANIFEST_DOCUMENT_BYTES,
     selectedBytesExceededMessage: 'Investigation package exceeds its inflated byte limit.',
     metadataMismatchMessage: 'Investigation package ZIP metadata or CRC is invalid.',
-    keyForName: packagePath,
+    keyForName: investigationPackagePath,
     inspect(info) {
-      const key = packagePath(info.name);
+      const key = investigationPackagePath(info.name);
       const maximumBytes = key === MANIFEST_PATH ? MAX_INVESTIGATION_MANIFEST_DOCUMENT_BYTES : MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES;
       if (info.originalSize < 1 || info.originalSize > maximumBytes) throw new TypeError('Investigation package entry exceeds its byte limit.');
       return { key, selected: true, maximumBytes, exceededMessage: 'Investigation package entry exceeds its inflated byte limit.' };
     },
   });
-  const manifestBytes = extracted.files.get(MANIFEST_PATH);
+  return inspectOwnedPackageEntries(extracted.files);
+}
+
+export async function inspectInvestigationPackageEntries(input: ReadonlyMap<string, Uint8Array>) {
+  return inspectOwnedPackageEntries(capturePackageEntries(input));
+}
+
+async function inspectOwnedPackageEntries(files: ReadonlyMap<string, Uint8Array>) {
+  const manifestBytes = files.get(MANIFEST_PATH);
   if (!manifestBytes) throw new TypeError('Investigation package is missing its manifest.');
   const manifest = await readInvestigationManifest(new TextDecoder('utf-8', { fatal: true }).decode(manifestBytes));
-  if (extracted.files.size !== manifest.artifacts.length + 1) throw new TypeError('Investigation package has missing or unlisted files.');
+  if (files.size !== manifest.artifacts.length + 1) throw new TypeError('Investigation package has missing or unlisted files.');
   const entries: InvestigationPackageEntryReview[] = [];
   const contents = new Map<string, Uint8Array>();
   const captureDeclarations = new Map<string, readonly CaptureArtifactDeclaration[] | null>();
   const jsonSources = new Map<string, { schema: string | null; version: number | null; digest: string | null; query: unknown; target: unknown; references: unknown }>();
   for (const entry of manifest.artifacts) {
-    const content = extracted.files.get(investigationPackageEntryPath(entry.id));
+    const content = files.get(investigationPackageEntryPath(entry.id));
     if (!content) throw new TypeError('Investigation package is missing a declared file.');
     const isJson = !('mediaType' in entry) || entry.mediaType === 'application/json';
     const byteLength = content.byteLength === entry.byteLength;

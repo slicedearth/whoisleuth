@@ -1,5 +1,5 @@
 import { sha256ArtifactBytes } from '../packages/evidence/artifact-integrity.mts';
-import { MAX_INVESTIGATION_PACKAGE_BYTES, inspectInvestigationPackage, type InvestigationPackageSourceLink, type InvestigationPackageCaptureReview } from '../packages/investigation/investigation-package.mts';
+import { MAX_INVESTIGATION_PACKAGE_BYTES, encodeInvestigationPackageEntries, inspectInvestigationPackage, type InvestigationPackageSourceLink, type InvestigationPackageCaptureReview } from '../packages/investigation/investigation-package.mts';
 import { INVESTIGATION_MANIFEST_SCHEMA } from '../packages/investigation/investigation-manifest.mts';
 import {
   OFFLINE_ARTIFACT_VERIFICATION_SCHEMA, OFFLINE_ARTIFACT_VERIFICATION_VERSION,
@@ -8,6 +8,14 @@ import {
 } from './artifact-verify.mts';
 
 type EntryState = 'admitted' | 'opaque' | 'unsupported' | 'rejected' | 'review_required';
+
+export async function verifyOfflineInvestigationFolder(files: ReadonlyMap<string, Uint8Array>): Promise<OfflineArtifactVerificationReport> {
+  const report = await verifyOfflineInvestigationPackage(encodeInvestigationPackageEntries(files));
+  return Object.freeze({ ...report, limitations: Object.freeze([
+    'Folder input was converted in memory to the canonical stored-ZIP representation. Package digest and input byte count identify that representation, not filesystem metadata. No ZIP was written.',
+    ...report.limitations,
+  ]) });
+}
 export type OfflineInvestigationPackageDetails = Readonly<{
   digestSha256: string;
   audience: 'private';

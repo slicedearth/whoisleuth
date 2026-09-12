@@ -50,7 +50,7 @@ type CliAction =
   | { action: 'completion'; shell: CompletionShell }
   | ({ action: 'commands'; output: 'terminal' | 'json'; common: boolean; group: CliHelpGroup | null; mode: 'offline' | 'network' | null } & TerminalOptions)
   | { action: 'manual' }
-  | ({ action: 'manifest'; sources: readonly string[]; workflow: string; configurationDigestSha256: string | null; package?: true; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'manifest'; sources: readonly string[]; workflow: string; configurationDigestSha256: string | null; package?: true; folder?: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'map-observations'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'oam-export'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions)
@@ -71,7 +71,7 @@ type CliAction =
   | { action: 'registry-scaffold'; profile: string; suffix: string; scenario: 'registered' | 'not_found' | 'inconclusive' }
   | ({ action: 'risk-calibrate'; source: string | null; output: 'terminal' | 'json' | 'summary_json' } & TerminalOptions)
   | ({ action: 'lookalike-calibrate'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'verify-artifact'; source: string | null; passphraseSource: string | null; manifestSource: string | null; manifestEntryId: string | null; package?: true; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
+  | ({ action: 'verify-artifact'; source: string | null; passphraseSource: string | null; manifestSource: string | null; manifestEntryId: string | null; package?: true; folder?: string; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
   | ({ action: 'interchange-report'; source: string | null; passphraseSource: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | InspectArchiveArguments
   | SignArtifactArguments
@@ -227,6 +227,7 @@ function parseManifestArguments(parsed: ParsedCommandArguments): Extract<CliActi
     workflow: parsed.optionValue('--workflow')!,
     configurationDigestSha256,
     ...(parsed.hasOption('--package') ? { package: true as const } : {}),
+    ...(parsed.optionValue('--folder') ? { folder: parsed.optionValue('--folder')! } : {}),
     output: jsonOutput(parsed),
     ...terminalOptions(parsed),
   };
@@ -359,6 +360,7 @@ function parseTwoFileComparisonArguments(
 }
 
 function parseVerifyArtifactArguments(parsed: ParsedCommandArguments): Extract<CliAction, { action: 'verify-artifact' }> {
+  if (parsed.hasOption('--folder') && parsed.positionalValue('source')) throw new CliUsageError('--folder selects its own input; do not also supply a file or stdin marker.');
   return {
     action: 'verify-artifact',
     source: parsed.positionalValue('source'),
@@ -366,6 +368,7 @@ function parseVerifyArtifactArguments(parsed: ParsedCommandArguments): Extract<C
     manifestSource: parsed.optionValue('--manifest'),
     manifestEntryId: parsed.optionValue('--manifest-entry'),
     ...(parsed.hasOption('--package') ? { package: true as const } : {}),
+    ...(parsed.optionValue('--folder') ? { folder: parsed.optionValue('--folder')! } : {}),
     output: jsonOutput(parsed),
     strictExit: parsed.hasOption('--strict-exit'),
     ...terminalOptions(parsed),

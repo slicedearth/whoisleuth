@@ -4,12 +4,13 @@
   import type { CaseAttachment } from '../../../../packages/cases/case-attachment-model.mts';
   import type { PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
   import { isoFromUtcInput, utcDateTimeInputAttributes } from '$lib/analysis/case-response-form-values.ts';
-  import { prepareCaseAttachmentFiles, readRetainedCaseFile, removeRetainedCaseAttachment, retainCaseAttachments, type SelectedCaseAttachment } from '$lib/case-attachments.ts';
+  import { prepareCaseAttachmentFiles, readRetainedCaseFile, readRetainedCaseFiles, removeRetainedCaseAttachment, retainCaseAttachments, type SelectedCaseAttachment } from '$lib/case-attachments.ts';
   import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { supportsArtifactPreview } from '$lib/artifact-preview.ts';
   import { trackTransientCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
   import ArtifactPreview from './ArtifactPreview.svelte';
   import CaseImageReview from './CaseImageReview.svelte';
+  import EvidenceFileExport from './EvidenceFileExport.svelte';
 
   let { record, mutationBusy, persistOperation, onmessage }: {
     record: CaseRecord; mutationBusy: boolean; persistOperation: PersistCaseOperation; onmessage: (message: string) => void;
@@ -26,6 +27,9 @@
   let error = $state('');
   let imageReview = $state<CaseImageReview>();
   let imageBusy = $state(false);
+  let exporting = $state(false);
+  let exportIds = $state<string[]>([]);
+  const exportReferences = $derived((record.attachments ?? []).filter(item => exportIds.includes(item.id)));
   let generation = 0;
   let activeCaseId: string | undefined;
   let previewTrigger: HTMLButtonElement | null = null;
@@ -33,7 +37,7 @@
   $effect(() => {
     if (record.id === activeCaseId) return;
     activeCaseId = record.id;
-    generation++; pending = []; source = ''; observedAt = ''; preview = null; removing = null; error = ''; preparing = false; loading = '';
+    generation++; pending = []; source = ''; observedAt = ''; preview = null; removing = null; error = ''; preparing = false; loading = ''; exportIds = [];
   });
   onDestroy(() => { generation++; });
 
@@ -92,6 +96,13 @@
       removing = null;
     }
   }
+  async function exportFiles(signal: AbortSignal) {
+    const selected = exportReferences;
+    signal.throwIfAborted();
+    const files = await readRetainedCaseFiles(selected);
+    signal.throwIfAborted();
+    return files.map(({ attachment, file }) => ({ file, mediaType: attachment.mediaType, source: { identity: attachment.source, observedAt: attachment.observedAt } }));
+  }
 </script>
 
 <details class="case-files">
@@ -110,6 +121,15 @@
     {/if}
     {#if error}<p class="file-error" role="alert">{error}</p>{/if}
     {#if record.attachments?.length}
+      <details class="file-export-selection"><summary>Select files for export</summary>
+        <p>Include selected originals or derivatives with their declared sources and observation times. Case records, reference names and editing instructions stay in the separate JSON backup.</p>
+        <div class="export-selection">
+          {#each record.attachments as attachment (attachment.id)}<label><input type="checkbox" bind:group={exportIds} value={attachment.id} disabled={exporting || mutationBusy}> {attachment.fileName} · {attachment.byteLength.toLocaleString('en-AU')} bytes</label>{/each}
+        </div>
+        <p>{exportReferences.length} selected · {record.attachments.length - exportReferences.length} not selected. Missing original bytes stop the export; they are never silently omitted.</p>
+        <EvidenceFileExport workflow="Selected Case files" getFiles={exportFiles} disabled={!exportReferences.length || mutationBusy || preparing || Boolean(loading) || imageBusy || exporting}
+          onbusy={value => exporting = value} {onmessage} />
+      </details>
       <ul class="retained-files">{#each record.attachments as attachment (attachment.id)}
         <li>
           <div class="file-heading"><h4>{attachment.fileName}</h4><span>{attachment.byteLength.toLocaleString('en-AU')} bytes · {attachment.mediaType}</span></div>
@@ -151,5 +171,6 @@
   .retained-files>li{display:grid;gap:8px;min-width:0;padding:15px 0;border-top:1px solid var(--border)}.file-heading{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:baseline;min-width:0}.file-heading span{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
   .file-digest code{font:400 var(--text-2xs)/1.5 var(--mono);overflow-wrap:anywhere}.file-actions,.remove-file{display:flex;flex-wrap:wrap;gap:8px}.remove-file{align-items:center}.file-actions button{white-space:normal;overflow-wrap:anywhere;max-width:100%}.file-error{color:var(--danger)}
   .file-preview{display:grid;gap:14px;min-width:0;border-top:1px solid var(--border);padding-top:14px}.file-preview>button{justify-self:start}.derivation{min-width:0}.derivation summary{padding:8px 0}.derivation p,.derivation li{font-size:var(--text-xs);overflow-wrap:anywhere}.derivation ol{padding-left:1.5em}
+  .file-export-selection{min-width:0}.file-export-selection>summary{padding:8px 0}.file-export-selection>p{margin:10px 0}.export-selection{display:grid;gap:4px}.export-selection label{display:flex;align-items:center;gap:8px;min-width:0;min-height:44px;font-size:var(--text-xs);overflow-wrap:anywhere}.export-selection input{flex:none}
   @media(max-width:600px){.source-fields{grid-template-columns:minmax(0,1fr)}.files-body{padding:12px}.file-actions{align-items:stretch}.file-actions button{flex:1 1 100%}}
 </style>

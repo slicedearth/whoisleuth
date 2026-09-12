@@ -371,6 +371,13 @@ and changes no saved records. A workspace file requires its separate import
 preview and confirmation. Checksum identity, supported format, signature trust,
 timestamp assurance and factual accuracy remain separate results. Downloaded
 packages remain until the operator deletes them.
+Evidence folders use the same manifest and file identities. Folder review reads
+only the selected files. Direct browser output requires a folder picker grant,
+creates a new child folder and reads its files back for verification; handles
+are not saved or used for background access. CLI output requires a new explicit
+path. Cancelled or failed writes may leave partial private output for deliberate
+inspection or deletion. Selected Case-file exports are not complete workspace
+backups and do not include Case metadata or unselected files.
 Explicit inline review shows paged JSON text or locally decoded PNG pixels,
 without running document scripts, following links or making page requests.
 Capture attachment checks compare selected bytes with manifest declarations;

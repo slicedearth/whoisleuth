@@ -504,6 +504,15 @@ full byte count and digest. A missing file is not evidence of absence; restore
 or retain its matching original. JSON backups carry references only, so keep
 the original files separately.
 
+Use **Select files for export** to package selected retained originals or
+derivatives with their declared sources and observation times. Missing bytes
+stop the export. The ZIP uses generated entry names; Case metadata, filenames
+and editing instructions stay in the separate JSON backup. Where supported,
+**Write new evidence folder** creates and verifies a new child inside the
+folder you choose. Otherwise, extract the ZIP locally. Neither option is a
+complete workspace backup. **Review evidence folder** on Dashboard checks the
+same manifest and files without importing them or granting ongoing access.
+
 Preview a retained PNG to compare it with another retained image. Source,
 observation time, dimensions and byte identity remain separate; an appearance
 change is not proof of a site change when capture conditions are unknown.

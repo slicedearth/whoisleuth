@@ -144,6 +144,9 @@ Package selected files without changing their bytes, then verify the ZIP offline
 whoisleuth manifest evidence.json screenshot.png --workflow "Evidence review" \
   --package --output evidence.zip
 whoisleuth verify-artifact evidence.zip --package --json --strict-exit
+whoisleuth manifest evidence.json screenshot.png --workflow "Evidence review" \
+  --folder ./evidence-project
+whoisleuth verify-artifact --folder ./evidence-project --json --strict-exit
 ```
 
 Packages contain up to 128 files and 64 MiB of payload plus bounded metadata.
@@ -154,8 +157,16 @@ links and capture-manifest attachment matches. Include the capture manifest and
 its screenshot/DOM-digest files together to check their declared bytes; original
 filenames are not needed to establish a match. It does not import files or establish source truth, signature trust or a
 trusted timestamp. Unsupported or rejected entries produce a partial report;
-`--strict-exit` returns 4. Without `--package`, `manifest` still produces a
+`--strict-exit` returns 4. Without `--package` or `--folder`, `manifest` produces a
 standalone JSON manifest; exact public version-2 manifests remain readable.
+
+Folders contain `manifest.json` and generated `artifacts/artifact-N` files.
+Creation requires a new destination and never replaces an existing folder.
+Failed writes can leave partial private output; inspect or remove it before
+choosing another destination. Verification rejects symbolic links, unexpected
+trees and unlisted files. Its package digest and byte count describe the
+canonical stored-ZIP representation, not filesystem metadata. These are
+selected evidence exports, not complete workspace backups.
 
 ### Resuming a fixed workflow
 

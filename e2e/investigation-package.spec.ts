@@ -4,10 +4,13 @@ import { buildInvestigationPackage, inspectInvestigationPackage } from '../packa
 import { buildWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
 import { createCase } from '../packages/cases/case-model.mts';
 import { unzipSync, zipSync } from 'fflate';
-import { rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+import { writeInvestigationFolder } from '../cli/investigation-folder.mts';
 import { MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../packages/investigation/investigation-manifest.mts';
 import { captureReviewFixture } from '../test/capture-review-fixture.mts';
 import { expectedIconPixels } from '../test/favicon-image-fixtures.mts';
+import { productionChunkPath } from './production-build';
 
 const NOW = '2026-09-11T00:00:00.000Z';
 const makePackage = (artifacts: Parameters<typeof buildInvestigationPackage>[0]['artifacts']) => buildInvestigationPackage({ workflow: 'Evidence review', configurationDigestSha256: null, artifacts }, NOW, '2.3.1');
@@ -18,6 +21,112 @@ async function openPackages(page: import('@playwright/test').Page) {
   return page.getByRole('region', { name: 'Package and review evidence files' });
 }
 const asFile = (bytes: Uint8Array) => ({ name: 'evidence.zip', mimeType: 'application/zip', buffer: Buffer.from(bytes) });
+
+test('idle search indexing cannot displace a pressed package disclosure', async ({ page }, testInfo) => {
+  let release = () => {};
+  const released = new Promise<void>(resolve => { release = resolve; });
+  let held = false;
+  await page.route(`**${productionChunkPath('src/lib/workers/investigation-search.worker.ts')}`, async route => {
+    held = true; await released; await route.fallback();
+  });
+  try {
+    const panel = await openPackages(page);
+    await expect.poll(() => held).toBe(true);
+    const summary = panel.locator('.create-package > summary');
+    await summary.scrollIntoViewIfNeeded();
+    const bounds = await summary.boundingBox();
+    if (!bounds) throw new Error('The package disclosure is absent.');
+    const scroll = await page.evaluate(() => window.scrollY);
+    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    await page.mouse.down();
+    release();
+    await expect(page.locator('.investigation-search .index-count')).toHaveText('2 searchable items');
+    await expect(page.locator('.recent-work .result-list > li')).toHaveCount(2);
+    expect(await summary.boundingBox()).toEqual(bounds);
+    expect(await page.evaluate(() => window.scrollY)).toBe(scroll);
+    await page.mouse.up();
+    await expect(panel.getByLabel('Package purpose', { exact: true })).toBeVisible();
+    const recent = page.locator('.recent-work > summary');
+    await recent.focus(); await page.keyboard.press('Enter');
+    await expect(page.getByRole('list', { name: 'Recent local investigation work' })).toBeVisible();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.recent-work')).not.toHaveAttribute('open');
+    const search = page.getByRole('region', { name: 'Search saved work', exact: true });
+    for (const width of [320, 390, 1024, 1280, 2560]) for (const theme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
+      await useTheme(page, theme);
+      await search.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      await expect(search.getByRole('searchbox')).toBeVisible();
+      await search.screenshot({ path: testInfo.outputPath(`idle-search-${width}-${theme}.png`) });
+    }
+  } finally { release(); await page.mouse.up(); }
+});
+
+test('an explicitly selected local folder uses the ZIP review without importing or ignoring unlisted files', async ({ page }, testInfo) => {
+  const panel = await openPackages(page), before = await readBrowserLocalCollection(page, 'cases');
+  const target = testInfo.outputPath('selected-evidence');
+  await mkdir(dirname(target), { recursive: true });
+  await writeInvestigationFolder(target, { workflow: 'Selected files', configurationDigestSha256: null, artifacts: [
+    { content: '{"source":"retained exactly"}\n', source: { identity: 'Independent declaration', observedAt: null } },
+  ] }, NOW, '2.4.0');
+  const input = panel.getByLabel('Review evidence folder', { exact: true });
+  await input.setInputFiles(target);
+  const heading = panel.getByRole('heading', { name: 'Evidence folder review', exact: true });
+  await expect(heading).toBeFocused();
+  await expect(panel).toContainText('Every file matches its manifest');
+  await panel.getByRole('button', { name: 'View artifact-1', exact: true }).click();
+  await expect(panel.locator('pre')).toContainText('retained exactly');
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  await panel.getByRole('button', { name: 'Close package review', exact: true }).click();
+  await expect(input).toBeFocused();
+  await writeFile(`${target}/unexpected.txt`, 'not selected evidence');
+  await input.setInputFiles(target);
+  await expect(panel.getByRole('alert')).toContainText('unexpected entry path');
+  await expect(heading).toHaveCount(0);
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+});
+
+test('folder export uses direct activation and read-back verification, with a ZIP fallback when access is unavailable', async ({ page }) => {
+  const panel = await openPackages(page), before = await readBrowserLocalCollection(page, 'cases');
+  await panel.locator('.create-package > summary').click();
+  await panel.getByLabel('Choose evidence files', { exact: true }).setInputFiles({ name: 'selected.png', mimeType: 'image/png', buffer: Buffer.from([0, 255, 128, 1]) });
+  const native = await page.evaluate(() => typeof Reflect.get(window, 'showDirectoryPicker') === 'function');
+  const write = panel.getByRole('button', { name: 'Write new evidence folder', exact: true });
+  if (!native) {
+    await expect(write).toHaveCount(0);
+    await expect(panel).toContainText('extract the downloaded ZIP');
+    await expect(panel.getByRole('button', { name: 'Download private package', exact: true })).toBeEnabled();
+  } else {
+    const parentName = await page.evaluate(async () => {
+      const name = `evidence-export-fixture-${crypto.randomUUID()}`;
+      const parent = await (await navigator.storage.getDirectory()).getDirectoryHandle(name, { create: true });
+      Object.defineProperty(window, 'folderPickerProbe', { configurable: true, value: { calls: 0, active: false, mode: '' } });
+      Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async (options: { mode: string }) => {
+        const probe = Reflect.get(window, 'folderPickerProbe'); probe.calls++; probe.active = navigator.userActivation.isActive; probe.mode = options.mode;
+        return parent;
+      } });
+      return name;
+    });
+    try {
+      await write.focus(); await page.keyboard.press('Enter');
+      await expect(panel.getByRole('status')).toContainText('verified 1 file by reading it back');
+      await expect(write).toBeFocused();
+      const result = await page.evaluate(async name => {
+        const root = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+        const children: FileSystemHandle[] = []; for await (const entry of root.values()) children.push(entry);
+        if (children.length !== 1 || children[0]!.kind !== 'directory') throw new Error('Expected exactly one output child.');
+        const child = children[0] as FileSystemDirectoryHandle;
+        const manifest = JSON.parse(await (await (await child.getFileHandle('manifest.json')).getFile()).text());
+        const file = await (await (await child.getDirectoryHandle('artifacts')).getFileHandle('artifact-1')).getFile();
+        return { bytes: [...new Uint8Array(await file.arrayBuffer())], manifest, probe: Reflect.get(window, 'folderPickerProbe') };
+      }, parentName);
+      expect(result.bytes).toEqual([0, 255, 128, 1]); expect(result.manifest.artifacts[0].source.observedAt).toBeNull();
+      expect(result.probe).toEqual({ calls: 1, active: true, mode: 'readwrite' });
+    } finally { await page.evaluate(async name => (await navigator.storage.getDirectory()).removeEntry(name, { recursive: true }), parentName); }
+  }
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+});
 
 test('inline package review exposes all JSON text and actual PNG pixels without executing file content', async ({ page }, testInfo) => {
   const panel = await openPackages(page);
@@ -301,7 +410,7 @@ test('the complete package payload remains usable through the browser worker wit
       await panel.getByRole('button', { name: 'Download private package' }).click();
       const download = await downloadPromise;
       await download.saveAs(packagePath);
-      await expect(panel.getByRole('status')).toContainText('Downloaded 1 file, unchanged');
+      await expect(panel.getByRole('status')).toContainText('Prepared a private package of 1 unchanged file for download');
       await panel.getByLabel('Review evidence package', { exact: true }).setInputFiles(packagePath);
       await expect(panel.getByText('Every file matches its manifest')).toBeVisible();
       await expect(panel.getByRole('button', { name: 'Download artifact-1', exact: true })).toBeEnabled();

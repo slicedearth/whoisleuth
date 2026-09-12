@@ -8,6 +8,8 @@
   import { downloadLocalFile } from '$lib/download-local-file.ts';
   import ArtifactPreview from './ArtifactPreview.svelte';
   import { supportsArtifactPreview } from '$lib/artifact-preview.ts';
+  import { selectedInvestigationFolderFiles } from '$lib/investigation-folder.ts';
+  import EvidenceFileExport from './EvidenceFileExport.svelte';
 
   let { onworkspace }: { onworkspace?: (file: Blob) => Promise<void> } = $props();
   type Selection = SelectedInvestigationFile & { name: string; key: number };
@@ -26,9 +28,10 @@
   let reviewHeading = $state<HTMLHeadingElement>();
   let sourceInput = $state<HTMLInputElement>();
   let packageInput = $state<HTMLInputElement>();
-  let createButton = $state<HTMLButtonElement>();
+  let folderInput = $state<HTMLInputElement>();
+  let reviewKind = $state<'ZIP' | 'folder'>('ZIP');
   let selectedList = $state<HTMLUListElement>();
-  let operation = $state<'build' | 'inspect' | null>(null);
+  let operation = $state<'inspect' | 'inspectFolder' | null>(null);
   let controller = $state.raw<AbortController | null>(null);
   const totalBytes = $derived(selected.reduce((sum, item) => sum + item.file.size, 0));
   const selectedRows = $derived(selected.slice(selectedPage * PAGE_SIZE, (selectedPage + 1) * PAGE_SIZE));
@@ -40,7 +43,7 @@
     operation = null;
     message = 'Package processing cancelled. No saved records were changed.';
     await tick();
-    (cancelled === 'build' ? createButton : packageInput)?.focus();
+    (cancelled === 'inspectFolder' ? folderInput : packageInput)?.focus();
   }
   function chooseSources(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
@@ -63,28 +66,12 @@
   function setSource(key: number, field: 'identity' | 'observedAt', value: string) {
     selected = selected.map(item => item.key === key ? { ...item, source: { ...item.source, [field]: value.trim() || null } } : item);
   }
-  async function createPackage() {
-    if (busy || !selected.length) return;
-    busy = true; error = ''; message = '';
-    operation = 'build';
-    const current = new AbortController(); controller = current;
-    try {
-      const generatedAt = new Date().toISOString();
-      const output = await runInvestigationPackageWorker('build', { workflow, generatedAt, applicationVersion: __WHOISLEUTH_VERSION__,
-        files: selected.map(item => ({ file: item.file, mediaType: item.mediaType, source: { identity: item.source.identity, observedAt: item.source.observedAt } })),
-      }, { signal: current.signal });
-      if (current.signal.aborted) return;
-      downloadLocalFile(output.file, `whoisleuth-evidence-${generatedAt.slice(0, 10)}.zip`);
-      const count = output.manifest.artifacts.length;
-      message = `Downloaded ${count} file${count === 1 ? '' : 's'}, unchanged, in a private evidence package.`;
-    } catch (cause) { if (!current.signal.aborted) error = cause instanceof Error ? cause.message : 'Package creation failed.'; }
-    finally { if (controller === current) { controller = null; busy = false; operation = null; } }
-  }
   async function choosePackage(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0]; input.value = '';
     if (!file || busy) return;
     review = null; reviewPage = 0; activeArtifact = ''; error = ''; message = '';
+    reviewKind = 'ZIP';
     if (file.size < 22 || file.size > MAX_INVESTIGATION_PACKAGE_BYTES) { error = `The selected ZIP exceeds the ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES / 1024 / 1024} MiB payload plus metadata boundary, or is empty.`; return; }
     busy = true;
     operation = 'inspect';
@@ -99,12 +86,28 @@
     } catch (cause) { if (!current.signal.aborted) error = cause instanceof Error ? cause.message : 'Package review failed.'; }
     finally { if (controller === current) { controller = null; busy = false; operation = null; } }
   }
+  async function chooseFolder(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    if (!input.files?.length || busy) { input.value = ''; return; }
+    review = null; reviewPage = 0; activeArtifact = ''; error = ''; message = ''; reviewKind = 'folder';
+    busy = true; operation = 'inspectFolder';
+    const current = new AbortController(); controller = current;
+    try {
+      const files = selectedInvestigationFolderFiles(input.files); input.value = '';
+      const result = await runInvestigationPackageWorker('inspectFolder', { files }, { signal: current.signal });
+      if (current.signal.aborted) return;
+      review = result;
+      message = `Reviewed all ${result.entries.length} folder entries. Nothing has been imported.`;
+      await tick(); if (!current.signal.aborted) reviewHeading?.focus();
+    } catch (cause) { if (!current.signal.aborted) error = cause instanceof Error ? cause.message : 'Folder review failed.'; }
+    finally { input.value = ''; if (controller === current) { controller = null; busy = false; operation = null; } }
+  }
   async function closeReview() {
     review = null;
     activeArtifact = '';
     message = 'Package review closed. No saved records were changed.';
     await tick();
-    packageInput?.focus();
+    (reviewKind === 'folder' ? folderInput : packageInput)?.focus();
   }
   async function closeArtifact() {
     activeArtifact = ''; await tick(); artifactTrigger?.focus();
@@ -123,7 +126,7 @@
     // Download-only, neutral names: an untrusted media declaration cannot make
     // a file executable or open a document in the application origin.
     downloadLocalFile(file, `${id}.${json ? 'json' : 'bin'}`);
-    message = `Downloaded verified bytes for ${id}. No browser data was imported.`;
+    message = `Prepared verified bytes for ${id} for download. Confirm that the download completed; no browser data was imported.`;
   }
   onDestroy(() => controller?.abort());
 </script>
@@ -152,18 +155,20 @@
         </ul>
         <nav class="paging" aria-label="Selected evidence files"><button class="btn" type="button" onclick={() => selectedPage--} disabled={busy || selectedPage === 0}>Previous files</button><span>Page {selectedPage + 1} of {Math.ceil(selected.length / PAGE_SIZE)}</span><button class="btn" type="button" onclick={() => selectedPage++} disabled={busy || (selectedPage + 1) * PAGE_SIZE >= selected.length}>Next files</button></nav>
         <p>Leave unknown source times blank. Packaging records the local clock, not a trusted timestamp or earlier custody.</p>
-        <button bind:this={createButton} class="primary" type="button" onclick={() => void createPackage()} disabled={busy || !workflow.trim()}>Download private package</button>
+        <EvidenceFileExport {workflow} getFiles={async () => selected.map(item => ({ file: item.file, mediaType: item.mediaType, source: { ...item.source } }))}
+          disabled={busy || !workflow.trim()} onbusy={value => { busy = value; if (value) { message = ''; error = ''; } }} onmessage={value => message = value} />
       {/if}
     </div>
   </details>
   <label class="file-label review-file">Review evidence package<input bind:this={packageInput} type="file" accept="application/zip,.zip" onchange={choosePackage} disabled={busy}></label>
+  <label class="file-label review-file">Review evidence folder<input bind:this={folderInput} type="file" webkitdirectory multiple onchange={chooseFolder} disabled={busy}></label>
   {#if busy && controller}<button class="btn cancel-package" type="button" onclick={cancel}>Cancel package processing</button>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   <p class="status" role="status" aria-live="polite">{message}</p>
 
   {#if review}
     <div class="package-review">
-      <h3 bind:this={reviewHeading} tabindex="-1">Evidence package review</h3>
+      <h3 bind:this={reviewHeading} tabindex="-1">Evidence {reviewKind === 'folder' ? 'folder' : 'package'} review</h3>
       <p>{review.manifest.artifacts.length} file{review.manifest.artifacts.length === 1 ? '' : 's'} · {review.manifest.summary.totalBytes.toLocaleString()} bytes · Private audience · No storage changes</p>
       <dl class="review-facts"><div><dt>File identity</dt><dd>{review.identityVerified ? 'Every file matches its manifest' : 'Some files were rejected'}</dd></div><div><dt>Packaging event</dt><dd>{review.manifest.generatedAt} (local clock)</dd></div><div><dt>Trusted signatures and timestamps</dt><dd>Not checked</dd></div><div><dt>Factual accuracy</dt><dd>Not established by file identity</dd></div></dl>
       <p>Byte identity is separate from source-format validation. Workspace files open their existing import preview; use <code>verify-artifact --package</code> in the CLI for other supported format checks. Inline review shows JSON as text and PNGs as decoded pixels. Other files remain download-only; no document scripts or links run.</p>

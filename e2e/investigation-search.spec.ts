@@ -186,8 +186,9 @@ test('dashboard search retains matches and discloses one unavailable search prov
   await search.fill('candidate.invalid');
   await expect(page.getByRole('link', { name: 'Open case', exact: true })).toBeVisible();
   const warning = page.locator('.source-warning');
-  await expect(warning.locator('summary')).toContainText('1 saved-data warning');
-  await warning.locator('summary').click();
+  await expect(page.locator('.search-details > summary')).toHaveText('Search incomplete');
+  await page.locator('.search-details > summary').click();
+  await expect(warning).toContainText('1 saved-data warning');
   await expect(warning.getByText(/Campaigns: unavailable in browser-local storage and not searched/u)).toBeVisible();
 
   await search.fill('not-retained.invalid');
@@ -230,7 +231,7 @@ test('saved-work search waits for its worker, retains typing and pages through e
     await openDashboardSecondaryWorkspaces(page);
     const search = page.getByRole('searchbox', { name: 'Search saved work' });
     await expect.poll(() => held).toBe(1);
-    await expect(page.getByText('Preparing saved-work search.', { exact: true })).toBeVisible();
+    await expect(page.locator('.investigation-search .index-count')).toHaveText('Preparing index');
     await search.fill('item-');
     await search.focus();
     await page.keyboard.type('000');
@@ -289,6 +290,8 @@ test('saved-work search reports a worker load failure without blaming empty or u
   await page.route(`**${productionChunkPath('src/lib/workers/investigation-search.worker.ts')}`, (route) => route.abort('failed'));
   await openDashboardSecondaryWorkspaces(page);
   const search = page.getByRole('region', { name: 'Search saved work', exact: true });
+  await expect(search.locator('.search-details > summary')).toHaveText('Search unavailable');
+  await search.locator('.search-details > summary').click();
   await expect(search.getByRole('alert')).toContainText('Saved-work search could not be prepared. No saved records were changed.');
   await expect(search.getByRole('button', { name: 'Reload page', exact: true })).toBeVisible();
   await expect(search).not.toContainText('No indexed saved work matched');

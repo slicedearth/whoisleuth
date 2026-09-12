@@ -791,7 +791,7 @@ export function validatePackedCliFiles(
   return entries;
 }
 
-async function runInstalledCheck(executable: string, args: readonly string[], label: string, expectedExitCode = 0): Promise<string> {
+async function runInstalledCheck(executable: string, args: readonly string[], label: string, expectedExitCode = 0, expectedDiagnostics?: RegExp): Promise<string> {
   let output: { stdout: string; stderr: string };
   let exitCode = 0;
   try {
@@ -807,7 +807,7 @@ async function runInstalledCheck(executable: string, args: readonly string[], la
     output = { stdout: error.stdout, stderr: error.stderr };
   }
   if (exitCode !== expectedExitCode) throw new TypeError(`Installed CLI ${label} returned an unexpected exit code.`);
-  if (output.stderr) throw new TypeError(`Installed CLI ${label} wrote unexpected diagnostics.`);
+  if (expectedDiagnostics ? !expectedDiagnostics.test(output.stderr) : output.stderr) throw new TypeError(`Installed CLI ${label} wrote unexpected diagnostics.`);
   return output.stdout;
 }
 
@@ -1224,6 +1224,28 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       || record(packageDetails.entries[1], 'Installed package binary').byteLength !== 4) {
       throw new TypeError('Installed package round trip did not preserve file identity and separate assurance.');
     }
+    const folderOutput = path.join(temporaryRoot, 'evidence-folder');
+    const folderManifest = record(JSON.parse(await runInstalledCheck(executable, ['manifest', packageSource, packageOpaque,
+      '--workflow', 'Evidence review', '--folder', folderOutput, '--json'], 'evidence folder creation')), 'Installed folder manifest');
+    const folderReview = record(JSON.parse(await runInstalledCheck(executable,
+      ['verify-artifact', '--folder', folderOutput, '--json', '--strict-exit'], 'evidence folder verification')), 'Installed folder verification');
+    const folderDetails = record(folderReview.package, 'Installed folder details');
+    const folderBytes = await readBoundedRegularFileWithin(folderOutput, 'artifacts/artifact-2', { maximumBytes: 4, expectedBytes: 4, label: 'Installed folder binary' });
+    if (folderManifest.schema !== 'whoisleuth.investigation-manifest' || folderReview.state !== 'verified'
+      || JSON.stringify(folderDetails.entries) !== JSON.stringify(packageDetails.entries)
+      || !folderBytes.equals(Buffer.from([0, 255, 128, 1]))
+      || !Array.isArray(folderReview.limitations) || !folderReview.limitations.some(value => typeof value === 'string' && value.includes('not filesystem metadata'))) {
+      throw new TypeError('Installed folder output did not preserve exact files and separate container identity.');
+    }
+    const originalManifestBytes = await readBoundedRegularFileWithin(folderOutput, 'manifest.json', {
+      maximumBytes: 512 * 1024, minimumBytes: 1, label: 'Installed folder manifest',
+    });
+    const refusal = await runInstalledCheck(executable, ['manifest', packageSource, '--workflow', 'Evidence review', '--folder', folderOutput, '--quiet'],
+      'evidence folder replacement refusal', 2, /^Usage error: [^\r\n]+\n$/u);
+    const preservedManifestBytes = await readBoundedRegularFileWithin(folderOutput, 'manifest.json', {
+      maximumBytes: 512 * 1024, minimumBytes: 1, label: 'Installed folder manifest',
+    });
+    if (refusal !== '' || !preservedManifestBytes.equals(originalManifestBytes)) throw new TypeError('Folder replacement refusal changed the existing manifest or emitted success output.');
     const signingChecks = await checkInstalledSigningTrust(repositoryRoot, temporaryRoot,
       (args, label, code) => runInstalledCheck(executable, args, label, code));
     const workflowFixture = path.join(temporaryRoot, 'workflow.json');
@@ -1358,6 +1380,9 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       ...incidentChecks,
       'evidence-package-creation',
       'evidence-package-verification',
+      'evidence-folder-creation',
+      'evidence-folder-verification',
+      'evidence-folder-replacement-refusal',
       ...signingChecks,
       'domain-control-deep-imports',
       ...installedHandlerChecks,

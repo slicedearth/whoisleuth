@@ -155,9 +155,7 @@
       <h2 id={`${instanceId}-title`}>Search saved work</h2>
       <p>Find saved domains, cases, campaigns, brand profiles, and related infrastructure without starting another check.</p>
     </div>
-    {#if index?.state === 'ready'}
-      <span class="index-count">{index.entityCount} searchable item{index.entityCount === 1 ? '' : 's'}</span>
-    {/if}
+    <span class="index-count">{index?.state === 'ready' ? `${index.entityCount} searchable item${index.entityCount === 1 ? '' : 's'}` : loadError || index ? 'Index unavailable' : 'Preparing index'}</span>
   </div>
 
   <label for={`${instanceId}-query`}>Search saved work</label>
@@ -175,6 +173,8 @@
   >
   <p class="search-note">This searches only data already retained in this browser. It does not contact a provider or start a new check.</p>
 
+  <details class="search-details">
+    <summary aria-live="polite">{loadError || (index && index.state !== 'ready') ? 'Search unavailable' : sourceWarnings.length || index?.truncated ? 'Search incomplete' : 'Search details'}</summary>
   {#if loadError}
     <p class="state-row error" role="alert">{loadError}</p>
     <button class="btn" type="button" onclick={reloadDeferredModulePage}>Reload page</button>
@@ -184,8 +184,8 @@
     <p class="state-row error" role="alert">{index.limitations[0] || 'Saved-work search is unavailable.'}</p>
   {:else}
     {#if sourceWarnings.length}
-      <details class="source-warning">
-        <summary>{sourceWarnings.length} saved-data warning{sourceWarnings.length === 1 ? '' : 's'}</summary>
+      <div class="source-warning">
+        <p>{sourceWarnings.length} saved-data warning{sourceWarnings.length === 1 ? '' : 's'}</p>
         <ul>
           {#each sourceWarnings as [store, source]}
             <li>{storeLabels[store] || store}: {source.state === 'unsupported'
@@ -195,36 +195,47 @@
                 : 'could not be read safely'}.</li>
           {/each}
         </ul>
-      </details>
+      </div>
     {/if}
     {#if index.limitations.length}
-      <details class="index-limitations">
-        <summary>{index.truncated ? 'Partial search coverage' : 'Search coverage'}</summary>
+      <div class="index-limitations">
+        <p>{index.truncated ? 'Partial search coverage' : 'Search coverage'}</p>
         <ul>{#each index.limitations as limitation}<li>{limitation}</li>{/each}</ul>
-      </details>
+      </div>
     {/if}
 
-    {#if queryError}
+  {/if}
+  </details>
+
+  {#if !query.trim()}
+    <details class="recent-work">
+      <summary>Recent saved work</summary>
+      {#if !index && !loadError}<p>Preparing recent saved work.</p>
+      {:else if loadError || index?.state !== 'ready'}<p>Recent saved work is unavailable. Open search details for the reported limitation.</p>
+      {:else if !recentResults.length}<p>No recent items are present in this search index.</p>
+      {:else}
+        <p>Most recently observed items in the current bounded local index.</p>
+        <ol class="result-list independent-grid" aria-label="Recent local investigation work">
+          {#each recentResults as result (result.entityId)}
+            <li>{@render resultCard(result)}</li>
+          {/each}
+        </ol>
+      {/if}
+    </details>
+  {/if}
+
+  {#if query.trim()}
+    {#if !index && !loadError}
+      <p class="result-status" role="status">Preparing saved-work search.</p>
+    {:else if loadError || index?.state !== 'ready'}
+      <p class="result-status error" role="alert">Search is unavailable. Open search details to review the error and retry.</p>
+    {:else if queryError}
       <p class="result-status error" role="alert">{queryError}</p>
       <button class="btn" type="button" onclick={reloadDeferredModulePage}>Reload page</button>
     {:else if pending}
       <p class="result-status" role="status">Searching saved work…</p>
     {:else if response && response.state !== 'idle'}
       <p class:error={response.state === 'invalid'} class="result-status" role="status" aria-live="polite">{response.detail}</p>
-    {/if}
-
-    {#if response?.state === 'idle' && recentResults.length}
-      <section class="recent-work" aria-labelledby={`${instanceId}-recent-title`}>
-        <div>
-          <h3 id={`${instanceId}-recent-title`}>Recent saved work</h3>
-          <p>Most recently observed items in the current bounded local index.</p>
-        </div>
-        <ol class="result-list independent-grid" aria-label="Recent local investigation work">
-          {#each recentResults as result (result.entityId)}
-            <li>{@render resultCard(result)}</li>
-          {/each}
-        </ol>
-      </section>
     {/if}
 
     {#if response?.state === 'results'}
@@ -251,12 +262,12 @@
   .state-row,.result-status{margin:14px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .error{color:var(--danger)}
   .source-warning,.index-limitations,.limitations{margin-top:12px;color:var(--muted);font-size:var(--text-xs)}
+  .search-details{margin-top:14px;color:var(--muted);font-size:var(--text-xs)}
   summary{cursor:pointer;font:700 var(--text-xs) var(--mono)}
   .source-warning ul,.index-limitations ul,.limitations ul{margin:8px 0 0;padding-left:20px;line-height:1.5}
   .result-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0 0;padding:0;list-style:none}
   .recent-work{margin-top:18px;padding-top:15px;border-top:1px solid var(--border)}
-  .recent-work>div h3{margin:0;font:700 var(--text-sm) var(--mono)}
-  .recent-work>div p{margin:4px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
+  .recent-work>p{margin:8px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   .result-card{height:100%;min-width:0;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);padding:15px}
   .result-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   .type-badge{color:var(--accent2);font:700 var(--text-2xs) var(--mono);letter-spacing:.05em;text-transform:uppercase}

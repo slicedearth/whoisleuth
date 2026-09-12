@@ -23,7 +23,8 @@ export function runInvestigationPackageWorker<Kind extends InvestigationPackageK
         if (!reply.result?.document || !Array.isArray(reply.result.artifacts) || !Array.isArray(reply.result.matches)
           || !Array.isArray(reply.result.unusedIds) || !(reply.result.contents instanceof Map)) throw new Error('Capture processing returned an unexpected result.');
       } else if (!reply.result?.manifest || !Array.isArray(reply.result.manifest.artifacts)
-        || (reply.kind === 'inspect' ? !(reply.result.contents instanceof Map) : !(reply.result.file instanceof Blob))) throw new Error('Evidence package processing returned an unexpected result.');
+        || (reply.kind === 'inspect' || reply.kind === 'inspectFolder' ? !(reply.result.contents instanceof Map)
+          : reply.kind === 'folder' ? !Array.isArray(reply.result.files) : !(reply.result.file instanceof Blob))) throw new Error('Evidence package processing returned an unexpected result.');
       return reply.result as InvestigationPackageResults[Kind];
     },
   });

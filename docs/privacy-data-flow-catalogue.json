@@ -1141,7 +1141,7 @@
     {
       "id": "portable_evidence",
       "title": "Portable evidence, verification and reviewed hand-off",
-      "requestPurpose": "Build, verify or review bounded portable evidence under operator control.",
+      "requestPurpose": "Build, verify or review bounded portable ZIP or folder evidence under operator control; folder handles are not retained for background access.",
       "job": "assure",
       "executionPlanes": [
         "browser_local",
@@ -5443,7 +5443,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Ordinary output contains metadata only. Package output includes unchanged selected bytes and is private until reviewed for sharing. Filenames ending in .json are parsed as JSON; other files are opaque and never executed. Original paths are omitted. No network request is made.",
+        "Ordinary output contains metadata only. ZIP and folder output include unchanged selected bytes and are private until reviewed for sharing. Folders must be new; existing destinations are never replaced and a failed write may leave explicit partial output. Filenames ending in .json are parsed as JSON; other files are opaque and never executed. Original paths are omitted. No network request is made.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -6771,7 +6771,7 @@
       "command": "verify-artifact",
       "capabilityFamilyId": "portable_evidence",
       "title": "Validate saved evidence offline",
-      "requestPurpose": "Reads one selected bounded artefact or evidence package and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.",
+      "requestPurpose": "Reads one selected bounded artefact, ZIP or explicit evidence folder and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -6833,7 +6833,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Verification is offline and redacted. --package requires a selected file and reports each entry separately without importing it. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 for incomplete verification, including unsupported package entries or unlinked capsule sources.",
+        "Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Folders reject symbolic links, nested trees and unlisted files; their package digest describes a canonical ZIP representation, not filesystem metadata. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 for incomplete verification, including unsupported entries or unlinked capsule sources.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],

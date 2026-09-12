@@ -1,7 +1,7 @@
 import { canonicalArtifactJsonV2, sha256ArtifactBytes } from '../../../packages/evidence/artifact-integrity.mts';
 import { buildInvestigationCapsule, serializeInvestigationCapsule } from '../../../packages/investigation/investigation-capsule.mts';
-import { buildInvestigationPackage, inspectInvestigationPackage, MAX_INVESTIGATION_PACKAGE_BYTES } from '../../../packages/investigation/investigation-package.mts';
-import { MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES, type InvestigationManifestArtifactInput } from '../../../packages/investigation/investigation-manifest.mts';
+import { buildInvestigationPackage, inspectInvestigationPackage, inspectInvestigationPackageEntries, prepareInvestigationPackageEntries, investigationPackagePath, INVESTIGATION_PACKAGE_MANIFEST_PATH, MAX_INVESTIGATION_PACKAGE_ENTRIES, MAX_INVESTIGATION_PACKAGE_BYTES } from '../../../packages/investigation/investigation-package.mts';
+import { MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES, MAX_INVESTIGATION_MANIFEST_DOCUMENT_BYTES, type InvestigationManifestArtifactInput } from '../../../packages/investigation/investigation-manifest.mts';
 import { parseBoundedJson } from '../../../lib/bounded-json.mts';
 import { MAX_WEB_CAPTURE_MANIFEST_BYTES } from '../../../packages/contracts/web-capture.mts';
 import { readWebCaptureManifest, matchCaptureArtifacts, type CaptureArtifactMatch } from '../../../packages/interchange/web-capture-import.mts';
@@ -13,6 +13,8 @@ export type SelectedInvestigationFile = Readonly<{
 }>;
 type CapsuleInput = Parameters<typeof buildInvestigationCapsule>[0];
 type BuildResult = Readonly<{ file: Blob; manifest: Awaited<ReturnType<typeof buildInvestigationPackage>>['manifest'] }>;
+export type InvestigationFolderFile = Readonly<{ path: string; file: Blob }>;
+export type BrowserInvestigationFolder = Readonly<{ files: readonly InvestigationFolderFile[]; manifest: BuildResult['manifest'] }>;
 type Inspection = Awaited<ReturnType<typeof inspectInvestigationPackage>>;
 export type BrowserInvestigationPackageReview = Omit<Inspection, 'contents'> & Readonly<{ contents: ReadonlyMap<string, Blob> }>;
 export type BrowserCaptureAttachmentReview = ReturnType<typeof readWebCaptureManifest> & Readonly<{
@@ -22,11 +24,13 @@ export type BrowserCaptureAttachmentReview = ReturnType<typeof readWebCaptureMan
 }>;
 export type InvestigationPackageInputs = {
   build: { files: readonly SelectedInvestigationFile[]; workflow: string; generatedAt: string; applicationVersion: string };
+  folder: InvestigationPackageInputs['build'];
   capsule: { capsule: CapsuleInput; generatedAt: string };
   inspect: { file: Blob };
+  inspectFolder: { files: readonly InvestigationFolderFile[] };
   capture: { manifest: Blob; files: readonly Blob[] };
 };
-export type InvestigationPackageResults = { build: BuildResult; capsule: BuildResult; inspect: BrowserInvestigationPackageReview; capture: BrowserCaptureAttachmentReview };
+export type InvestigationPackageResults = { build: BuildResult; folder: BrowserInvestigationFolder; capsule: BuildResult; inspect: BrowserInvestigationPackageReview; inspectFolder: BrowserInvestigationPackageReview; capture: BrowserCaptureAttachmentReview };
 export type InvestigationPackageKind = keyof InvestigationPackageInputs;
 export type InvestigationPackageRequest = { [Kind in InvestigationPackageKind]: { kind: Kind; input: InvestigationPackageInputs[Kind] } }[InvestigationPackageKind];
 export type InvestigationPackageResponse = { [Kind in InvestigationPackageKind]: { kind: Kind; result: InvestigationPackageResults[Kind] } }[InvestigationPackageKind]
@@ -45,6 +49,20 @@ export function assertInvestigationFileSelection(files: readonly SelectedInvesti
     total += selected.file.size;
     if (total > MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES) throw new TypeError(`Selected files exceed ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES / 1024 / 1024} MiB in total.`);
   }
+}
+
+export function assertInvestigationFolderSelection(files: readonly InvestigationFolderFile[]): void {
+  if (!Array.isArray(files) || files.length < 2 || files.length > MAX_INVESTIGATION_PACKAGE_ENTRIES) throw new TypeError('Evidence folder has an invalid entry count.');
+  const paths = new Set<string>(); let total = 0;
+  for (const item of files) {
+    const name = investigationPackagePath(item.path), manifest = name === INVESTIGATION_PACKAGE_MANIFEST_PATH;
+    if (paths.has(name)) throw new TypeError('Evidence folder contains a duplicate path.');
+    paths.add(name);
+    const maximum = manifest ? MAX_INVESTIGATION_MANIFEST_DOCUMENT_BYTES : MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES;
+    if (!(item.file instanceof Blob) || !item.file.size || item.file.size > maximum) throw new TypeError('Evidence folder entry exceeds its byte limit.');
+    if (!manifest) { total += item.file.size; if (total > MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES) throw new TypeError('Evidence folder exceeds its combined byte limit.'); }
+  }
+  if (!paths.has(INVESTIGATION_PACKAGE_MANIFEST_PATH)) throw new TypeError('Evidence folder is missing its manifest.');
 }
 
 export async function runInvestigationPackageOperation(request: InvestigationPackageRequest): Promise<InvestigationPackageResponse> {
@@ -67,22 +85,36 @@ export async function runInvestigationPackageOperation(request: InvestigationPac
         unusedIds: candidates.filter(candidate => !used.has(candidate.id)).map(candidate => candidate.id),
       } };
     }
-    if (request.kind === 'inspect') {
-      const file = request.input.file;
-      if (!(file instanceof Blob) || file.size < 22 || file.size > MAX_INVESTIGATION_PACKAGE_BYTES) throw new TypeError('The selected package exceeds its input limit.');
-      const inspected = await inspectInvestigationPackage(new Uint8Array(await file.arrayBuffer()));
+    if (request.kind === 'inspect' || request.kind === 'inspectFolder') {
+      let inspected: Inspection;
+      if (request.kind === 'inspectFolder') {
+        assertInvestigationFolderSelection(request.input.files);
+        const selected = request.input.files.map(item => ({ path: item.path, file: item.file }));
+        const files = new Map<string, Uint8Array>();
+        for (const item of selected) files.set(item.path, new Uint8Array(await item.file.arrayBuffer()));
+        inspected = await inspectInvestigationPackageEntries(files);
+      } else {
+        const file = request.input.file;
+        if (!(file instanceof Blob) || file.size < 22 || file.size > MAX_INVESTIGATION_PACKAGE_BYTES) throw new TypeError('The selected package exceeds its input limit.');
+        inspected = await inspectInvestigationPackage(new Uint8Array(await file.arrayBuffer()));
+      }
       const contents = new Map<string, Blob>();
       for (const entry of inspected.entries) {
         const bytes = inspected.contents.get(entry.entry.id);
         if (bytes) contents.set(entry.entry.id, localBlob(bytes, 'application/octet-stream'));
       }
-      return { kind: 'inspect', result: { ...inspected, contents } };
+      return { kind: request.kind, result: { ...inspected, contents } };
     }
-    if (request.kind === 'build') {
+    if (request.kind === 'build' || request.kind === 'folder') {
       const { files, workflow, generatedAt, applicationVersion } = request.input;
       assertInvestigationFileSelection(files);
+      const selection = files.map(item => ({ file: item.file, mediaType: item.mediaType, source: { ...item.source } }));
       const artifacts: InvestigationManifestArtifactInput[] = [];
-      for (const selected of files) artifacts.push({ content: new Uint8Array(await selected.file.arrayBuffer()), mediaType: selected.mediaType, source: selected.source });
+      for (const selected of selection) artifacts.push({ content: new Uint8Array(await selected.file.arrayBuffer()), mediaType: selected.mediaType, source: selected.source });
+      if (request.kind === 'folder') {
+        const prepared = await prepareInvestigationPackageEntries({ workflow, configurationDigestSha256: null, artifacts }, generatedAt, applicationVersion);
+        return { kind: 'folder', result: { manifest: prepared.manifest, files: [...prepared.files].map(([path, bytes]) => ({ path, file: localBlob(bytes, 'application/octet-stream') })) } };
+      }
       const built = await buildInvestigationPackage({ workflow, configurationDigestSha256: null, artifacts }, generatedAt, applicationVersion);
       return { kind: 'build', result: { file: localBlob(built.bytes, 'application/zip'), manifest: built.manifest } };
     }
