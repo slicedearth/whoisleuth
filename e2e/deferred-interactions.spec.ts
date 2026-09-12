@@ -757,10 +757,10 @@ test('measures a later fictional demo stage without opening production storage',
     },
     action: () => start.click(),
     browserReadiness: {
-      start: { event: 'click', selector: '#demo-workspace button.primary' },
+      start: { event: 'click', selector: '#demo-workspace button' },
       targets: [
         { selector: '#brand-heading', exactText: 'Define the official identity' },
-        { selector: '#demo-workspace .profile-handoff button.primary', requireEnabled: true },
+        { selector: '#demo-workspace .profile-handoff button', requireEnabled: true },
       ],
     },
     ready: heading,
