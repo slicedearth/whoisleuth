@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { CLI_COMMANDS, parseCliArguments } from '../cli/arguments.mts';
-import { commandPositionalSpecs } from '../cli/command-reference.mts';
+import { commandPositionalSpecs, RUNNABLE_INVESTIGATION_PLAN_RECIPES } from '../cli/command-reference.mts';
 import { MAX_CLI_COMPLETION_BYTES, buildShellCompletion } from '../cli/completion.mts';
 import { buildDoctorReport, formatDoctorReport } from '../cli/doctor.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
@@ -187,7 +187,7 @@ describe('CLI shell completion', () => {
       ['whoisleuth case-pack package.json --palette ', ['auto', 'light', 'dark']],
       ['whoisleuth bulk package.json --concurrency ', ['1', '2', '3', '4', '5', '6', '7', '8']],
       ['whoisleuth workflow-plan ', ['domain-triage', 'lookalike-review', 'owned-domain-review', 'historical-comparison', 'campaign-review', 'certificate-anomaly', 'registry-disagreement', 'evidence-handoff', 'planned-domain-change', 'post-change-verification']],
-      ['whoisleuth workflow-run ', ['domain-triage', 'lookalike-review', 'owned-domain-review', 'historical-comparison']],
+      ['whoisleuth workflow-run ', RUNNABLE_INVESTIGATION_PLAN_RECIPES],
       ['whoisleuth completion ', ['bash', 'zsh', 'fish', 'powershell']],
       ['whoisleuth case-pack package.json --audience p', ['public']],
       ['whoisleuth sharing-review package.json --marking am', ['amber', 'amber-strict']],

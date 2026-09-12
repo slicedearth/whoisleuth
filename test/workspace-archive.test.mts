@@ -439,14 +439,29 @@ describe('portable workspace archive', () => {
   test('preserves and existing-first unions current Case Brand Profile references', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
     const local = emptyInput();
-    local.cases = [{ ...caseRecord('archive-one.invalid', 'local-case'), brandProfileIds: ['local-profile'] }];
+    local.cases = [{ ...caseRecord('archive-one.invalid', 'case-one'), brandProfileIds: ['local-profile'] }];
     const preview = await previewWorkspaceArchive(archive, local);
     const cases = preview.sections.find((section) => section.id === 'cases');
     assert.ok(cases);
     assert.equal(cases.status, 'ready');
     assert.equal(cases.brandProfileReferencesOmitted, 0);
     const merged = mergeCases(normalizeCaseStore(local.cases).cases, archive.sections.cases);
+    assert.equal(merged.cases.length, 1);
+    assert.equal(merged.cases[0]?.id, 'case-one');
     assert.deepEqual(merged.cases[0]?.brandProfileIds, ['local-profile', 'profile-one']);
+  });
+
+  test('does not union Brand Profile references across separate same-domain incidents', async () => {
+    const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
+    const local = normalizeCaseStore([
+      { ...caseRecord('archive-one.invalid', 'local-case'), brandProfileIds: ['local-profile'] },
+    ]).cases;
+    const before = structuredClone(local);
+    const merged = mergeCases(local, archive.sections.cases);
+    assert.equal(merged.cases.length, 2);
+    assert.deepEqual(merged.cases.find(record => record.id === 'local-case'), before[0]);
+    assert.deepEqual(merged.cases.find(record => record.id === 'case-one')?.brandProfileIds, ['profile-one']);
+    assert.deepEqual(local, before);
   });
 
   test('keeps the archive envelope while round-tripping current embedded Case lifecycle histories', async () => {
@@ -928,10 +943,13 @@ describe('portable workspace archive', () => {
     await assert.rejects(readWorkspaceArchive(archive), /cannot be serialised/);
   });
 
-  test('previews additive records and existing identities without mutating either side', async () => {
+  for (const [localId, expectedCases] of [
+    ['case-one', { added: 0, updated: 1, skipped: 0 }],
+    ['different-local-id', { added: 1, updated: 0, skipped: 0 }],
+  ] as const) test(`previews Case identity ${localId} without mutating either side`, async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
     const local = emptyInput();
-    local.cases = [caseRecord('archive-one.invalid', 'different-local-id')];
+    local.cases = [caseRecord('archive-one.invalid', localId)];
     local.settings.theme = 'dark';
     const beforeArchive = structuredClone(archive);
     const beforeLocal = structuredClone(local);
@@ -943,7 +961,7 @@ describe('portable workspace archive', () => {
     assert.ok(cases);
     assert.ok(campaigns);
     assert.ok(settings);
-    assert.deepEqual({ added: cases.added, updated: cases.updated, skipped: cases.skipped }, { added: 0, updated: 1, skipped: 0 });
+    assert.deepEqual({ added: cases.added, updated: cases.updated, skipped: cases.skipped }, expectedCases);
     assert.deepEqual({ added: campaigns.added, updated: campaigns.updated }, { added: 1, updated: 0 });
     assert.equal(settings.updated, 1);
     assert.equal(settings.skipped, 0);

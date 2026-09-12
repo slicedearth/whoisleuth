@@ -613,6 +613,7 @@ describe('canonical CLI command registry', () => {
   });
 
   test('keeps fixed workflow steps aligned with invocation-level network effects', () => {
+    assert.deepEqual(RUNNABLE_INVESTIGATION_PLAN_RECIPES, INVESTIGATION_PLAN_RECIPES);
     for (const recipe of INVESTIGATION_PLAN_RECIPES) {
       const subject = recipe === 'lookalike-review' ? 'Example Brand' : 'example.test';
       const plan = buildInvestigationPlan(recipe, subject, '2026-08-16T00:00:00.000Z');
@@ -744,7 +745,7 @@ describe('canonical CLI command registry', () => {
     const powershellCandidates = preparePowerShellCompletionBatch(powershell, powershellLines, REPOSITORY_ROOT);
     for (const script of [bash, zsh, fish, powershell]) {
       assert.match(script, /workflow-run/u);
-      for (const recipe of ['domain-triage', 'lookalike-review', 'owned-domain-review', 'historical-comparison']) {
+      for (const recipe of RUNNABLE_INVESTIGATION_PLAN_RECIPES) {
         assert.match(script, new RegExp(recipe, 'u'));
       }
       for (const policy of ['source-failure', 'inconclusive', 'danger', 'material-drift']) {
@@ -774,9 +775,7 @@ describe('canonical CLI command registry', () => {
     assert.deepEqual(bashCandidates(['whoisleuth', 'discover-scan', 'example.test', '--tlds', '--deep', '--scan-limit', '']).length, 500);
     assert.deepEqual(bashCandidates(['whoisleuth', 'discover-scan', 'example.test', '--chunk-size', '']).length, 100);
     assert.deepEqual(bashCandidates(['whoisleuth', 'monitor-once', '--limit', '']).length, 20);
-    assert.deepEqual(bashCandidates(['whoisleuth', 'workflow-run', '']), [
-      'domain-triage', 'lookalike-review', 'owned-domain-review', 'historical-comparison',
-    ]);
+    assert.deepEqual(bashCandidates(['whoisleuth', 'workflow-run', '']), RUNNABLE_INVESTIGATION_PLAN_RECIPES);
     assert.ok(bashCandidates(['whoisleuth', 'completion', '--']).includes('--help'));
     assert.ok(bashCandidates(['whoisleuth', 'workflow-plan', '--']).includes('--json'));
     assert.deepEqual(bashCandidates(['whoisleuth', 'verify-artifact', '--manifest-entry', '']), commandOptionSpec('verify-artifact', '--manifest-entry')!.values);
