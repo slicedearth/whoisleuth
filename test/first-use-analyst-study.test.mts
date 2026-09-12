@@ -3,6 +3,7 @@ import { describe, test } from 'node:test';
 
 import {
   FIRST_USE_ANALYST_STUDY_TASKS,
+  FIRST_USE_STUDY_TASK_VERSION,
 } from '../fixtures/first-use-analyst-study-tasks.mts';
 import {
   FIRST_USE_STUDY_TASK_DIGEST_SHA256,
@@ -18,7 +19,7 @@ function session(
   return {
     schema: 'whoisleuth.first-use-study-session',
     version: 1,
-    taskVersion: 1,
+    taskVersion: FIRST_USE_STUDY_TASK_VERSION,
     taskDigestSha256: FIRST_USE_STUDY_TASK_DIGEST_SHA256,
     device,
     observations,
@@ -45,9 +46,22 @@ describe('privacy-safe first-use analyst study kit', () => {
     assert.ok(taskIds.has('guided-new-domain-triage'));
     assert.ok(taskIds.has('guided-infrastructure-pivot'));
     assert.ok(taskIds.has('guided-brand-sweep'));
-    assert.ok(FIRST_USE_ANALYST_STUDY_TASKS.every((task) => (
+    assert.ok(FIRST_USE_ANALYST_STUDY_TASKS.filter(task => task.area === 'guided_investigation').every((task) => (
       task.allowedDevices.includes('desktop') && task.allowedDevices.includes('mobile')
     )));
+  });
+
+  test('records current recovery, retained evidence and continuity exercises without pooling older task scripts', () => {
+    for (const taskId of ['resume-saved-case-review', 'compare-original-and-derived-image', 'rehearse-workspace-recovery', 'interpret-recheck-question']) {
+      const task = FIRST_USE_ANALYST_STUDY_TASKS.find(candidate => candidate.id === taskId);
+      assert.ok(task); assert.deepEqual(task.allowedDevices, ['desktop', 'mobile']);
+      const report = buildFirstUseStudyReport([session('mobile', [observation({ taskId })])]);
+      assert.equal(report.tasks[0]?.taskId, taskId);
+    }
+    assert.ok(buildFirstUseStudySessionTemplate('desktop').observations.some(row => row.taskId === 'cli-recipe-resume'));
+    assert.ok(!buildFirstUseStudySessionTemplate('mobile').observations.some(row => row.taskId === 'cli-recipe-resume'));
+    assert.throws(() => buildFirstUseStudyReport([session('mobile', [observation({ taskId: 'cli-recipe-resume' })])]), /not available on mobile/u);
+    assert.throws(() => buildFirstUseStudyReport([session('desktop', [observation()], { taskVersion: 1 })]), /unsupported or invalid contract/u);
   });
 
   test('aggregates completion, pivot time, errors, backtracking, and controlled terminology issues', () => {

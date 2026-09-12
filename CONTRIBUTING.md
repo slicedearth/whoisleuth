@@ -69,6 +69,38 @@ a refresh failure is not an ordinary save failure: reconcile or reload rather
 than repeating an append-only action. Check keyboard focus, status messages and
 narrow-screen layout for affected forms.
 
+For a concrete editing rehearsal, use one small change at a time:
+
+- Change a Case form's presentation in its owning component. Inspect the
+  focused plan and exercise the affected control with keyboard and narrow-screen
+  checks; do not change domain rules to achieve a visual result.
+- Change a recheck rule in `packages/cases/case-recheck-model.mts` and add an
+  independently expected result in `test/case-recheck.test.mts`. A failed
+  collection must remain inconclusive.
+- Extract a private helper from an existing module, preserving its exported
+  behaviour. The existing consumer tests and focused plan should still find it
+  without an inventory baseline or a new registration table.
+
+Review the actual diff and selected checks after each exercise. These rehearsals
+show the change path; they do not establish that an unfamiliar contributor
+found it understandable.
+
+## Observe a first-use session
+
+The controlled [task script](fixtures/first-use-analyst-study-tasks.mts) covers
+orientation, evidence review, saved filters, rechecks, file recovery and CLI
+workflow continuation. Use supplied synthetic material in an isolated workspace;
+do not collect live targets merely to conduct a study.
+
+`npm run study:first-use -- --template=desktop` prints a current recording
+template; `--template=mobile` omits the CLI task. Record only attempted tasks,
+replace template defaults with observations, and keep the task version and
+digest unchanged. The same command accepts a local JSON array of sessions for
+aggregation. Older task scripts cannot be pooled into the current report.
+Do not retain names, targets, recordings or free-text notes in these records.
+Automated browser checks, simulated sessions and elapsed time alone are not
+evidence of human usability.
+
 Do not include credentials, private investigations or local paths in source,
 fixtures or reports. Automated tests use deterministic reserved targets and
 must not perform live collection. Report security issues through

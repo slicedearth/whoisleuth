@@ -599,6 +599,15 @@ performs enforcement or acquisition.
 Offline Risk calibration uses deliberately reviewed local data. Its summary
 contains aggregate model performance only and does not train or change
 the running model. See the [CLI risk-calibrate command](https://www.whoisleuth.com/cli#command-risk-calibrate).
+Choose review labels from independent evidence before inspecting the score.
+Include authorised lookalikes, ordinary domains, confirmed incidents and cases
+where collection is incomplete—not only examples that agree with the model.
+Suspicious, unreviewed and closed-without-action dispositions are excluded from
+binary metrics; unscored records remain excluded even when reviewed.
+Compare collection depths and review reasons, inspect the sample counts and
+uncertainty intervals, and keep examples used to adjust a rule separate from
+later evaluation. The repository's labelled synthetic examples test these
+boundaries; they are not an estimate of real-world detection accuracy.
 
 ## Browser-local storage and archives
 
