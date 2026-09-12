@@ -515,6 +515,7 @@ function registerNetworkApiRoutes(
       try {
         const result = await services.checkDomainAvailability(classified.value, {
           fast,
+          ...(!fast ? { observationHostname: classified.inputHostname } : {}),
           ...(req.networkFeaturePolicy ? { featurePolicy: req.networkFeaturePolicy } : {}),
         });
         // domain is the registrable domain actually looked up; inputHostname

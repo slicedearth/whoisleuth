@@ -7,7 +7,14 @@ import {
   buildLookupFreshnessPolicy,
   mergeLookupSourceRefreshLedger,
   requestLookupSourceRefresh,
+  MAX_LOOKUP_SOURCE_REFRESH_HISTORY,
+  type LookupSourceRefreshId,
+  type LookupSourceRefreshPlanItem,
+  type LookupSourceRefreshLedger,
 } from '../frontend/src/lib/analysis/lookup-source-refresh.ts';
+import { originalSourceRefreshFacts } from '../frontend/src/lib/analysis/lookup-source-observation.ts';
+import { compareCheckpointFacts } from '../frontend/src/lib/analysis/case-evidence-checkpoint.ts';
+import type { LookupHttpResponse } from '../lib/lookup-response-contract.mts';
 
 const NOW = '2026-07-30T00:00:00.000Z';
 
@@ -67,172 +74,229 @@ test('uses bounded task-specific and analyst-defined freshness thresholds', () =
   assert.equal(plan.freshnessPolicy.version, 1);
 });
 
-test('summarizes a separate WHOIS refresh without retaining its raw response', async () => {
-  const plan = buildLookupSourceRefreshPlan(buildEvidenceCoverageLedger([
-    { id: 'whois', label: 'WHOIS', category: 'registry', status: 'partial' },
-  ]), NOW, NOW, { observedAtByEvidence: { whois: NOW } }).items[0];
-  assert.ok(plan);
-  const outcome = await requestLookupSourceRefresh(plan, 'example.test', 'deep', {
-    now: () => NOW,
-    fetchImpl: async (input) => {
-      assert.equal(String(input), '/api/whois?q=example.test');
-      return new Response(JSON.stringify({
-        chain: [{ server: 'whois.example.test' }, { server: 'registrar.example.test' }],
-        parsed: { chainStatus: 'complete' },
-        raw: 'not projected',
-      }), { status: 200, headers: { 'content-type': 'application/json' } });
-    },
+const EARLIER = '2026-07-29T00:00:00.000Z';
+function original(): LookupHttpResponse {
+  return {
+    query: 'portal.example.test', type: 'domain', inputHostname: 'portal.example.test', registrableDomain: 'example.test',
+    rdap: { fetchedAt: EARLIER, upstreamStatus: 200, parsed: { domain: 'example.test', registrar: { name: 'Earlier registrar' }, nameservers: ['ns1.example.test'] } },
+    whois: { parsed: { registrar: 'Earlier WHOIS registrar', domainName: 'example.test' } },
+    availability: { applicable: true, domain: 'example.test', observationHostname: 'portal.example.test' },
+    diagnostics: { rdap: { status: 'success' }, whois: { status: 'complete', queriedAt: EARLIER } },
+  };
+}
+function plan(id: LookupSourceRefreshId): LookupSourceRefreshPlanItem {
+  return { id, label: id, endpoint: `/api/${id}`, evidenceIds: [id], reason: 'limited',
+    requestDisclosure: 'One bounded operation.', supersedesObservedAt: EARLIER };
+}
+function rdap() {
+  return { query: 'example.test', type: 'domain', fetchedAt: NOW, upstreamStatus: 200,
+    parsed: { domain: 'example.test', registrar: { name: 'Updated registrar' }, nameservers: ['ns2.example.test'] },
+    data: { rawContacts: 'private-example-contact' } };
+}
+async function refresh(id: LookupSourceRefreshId, body: unknown, input = original()) {
+  return requestLookupSourceRefresh(plan(id), input, 'deep', {
+    now: () => NOW, fetchImpl: async () => Response.json(body),
   });
-  assert.deepEqual(outcome, {
-    ok: true,
-    value: {
-      version: 1,
-      id: 'whois',
-      state: 'complete',
-      detail: 'WHOIS returned a complete 2-hop referral chain.',
-      observedAt: NOW,
-      attemptedAt: NOW,
-      reason: 'limited',
-      evidenceIds: ['whois'],
-      supersedesObservedAt: NOW,
-    },
-  });
+}
+
+test('retains validated registration facts and their actual clock without mutating the original or retaining contacts', async () => {
+  const input = original(), before = structuredClone(input);
+  const outcome = await refresh('rdap', rdap(), input);
+  assert.ok(outcome.ok);
+  assert.equal(outcome.value.state, 'complete');
+  assert.equal(outcome.value.observedAt, NOW);
+  assert.equal(outcome.value.attemptedAt, NOW);
+  assert.ok(outcome.value.facts.some(fact => fact.field === 'registration.registrar' && fact.value === 'Updated registrar'));
+  assert.ok(outcome.value.facts.every(fact => fact.source === 'Registry RDAP' && fact.observationHostname === 'example.test'));
+  assert.doesNotMatch(JSON.stringify(outcome), /rawContacts|private-example-contact/);
+  assert.deepEqual(input, before);
+  const comparisons = compareCheckpointFacts(originalSourceRefreshFacts('rdap', input, 'deep', NOW), outcome.value.facts);
+  assert.equal(comparisons.find(row => row.field === 'registration.registrar')?.state, 'changed');
 });
 
-test('a successful RDAP refresh preserves declared source truncation', async () => {
-  const plan = buildLookupSourceRefreshPlan(buildEvidenceCoverageLedger([
-    { id: 'rdap', label: 'RDAP', category: 'registry', status: 'partial' },
-  ]), NOW, NOW).items[0];
-  assert.ok(plan);
-  for (const truncated of [false, true]) {
-    const outcome = await requestLookupSourceRefresh(plan, 'example.test', 'deep', {
-      now: () => NOW,
-      fetchImpl: async () => new Response(JSON.stringify({ upstreamStatus: 200, parsed: { domain: 'example.test', serverTruncated: truncated } }), { status: 200 }),
+test('WHOIS refresh uses source-hop clocks and compares only WHOIS fields', async () => {
+  const outcome = await refresh('whois', {
+    query: 'example.test', type: 'domain',
+    chain: [{ server: 'registry.example.test', queriedAt: EARLIER, response: 'private-example-raw' }],
+    parsed: { domainName: 'example.test', registrar: 'New WHOIS registrar', chainStatus: 'complete', registrationStatus: 'registered', fieldsTruncated: [] },
+  });
+  assert.ok(outcome.ok);
+  assert.equal(outcome.value.state, 'complete');
+  assert.equal(outcome.value.observedAt, EARLIER);
+  const facts = outcome.value.facts.filter(fact => fact.value !== null);
+  assert.ok(facts.length > 0);
+  assert.ok(facts.every(fact => fact.source === 'WHOIS' && fact.observedAt === EARLIER));
+  assert.doesNotMatch(JSON.stringify(outcome.value), /private-example-raw|Earlier registrar/);
+  const previous = originalSourceRefreshFacts('whois', original(), 'deep', NOW);
+  assert.equal(previous.find(fact => fact.field === 'registration.registrar')?.value, 'Earlier WHOIS registrar');
+  assert.equal(compareCheckpointFacts(previous, facts).find(row => row.field === 'registration.registrar')?.state, 'incomparable');
+});
+
+test('source incompleteness, truncation and unknown clocks cannot become complete because HTTP succeeded', async () => {
+  for (const body of [
+    { ...rdap(), fetchedAt: null },
+    { ...rdap(), fetchedAt: '2027-01-01T00:00:00.000Z' },
+    { ...rdap(), complete: false },
+    { ...rdap(), parsed: { ...rdap().parsed, serverTruncated: true } },
+  ]) {
+    const outcome = await refresh('rdap', body);
+    assert.ok(outcome.ok);
+    assert.equal(outcome.value.state, 'limited');
+    assert.ok(outcome.value.facts.every(fact => fact.completeness !== 'complete'));
+  }
+  for (const flags of [{ complete: false }, { truncated: true }]) {
+    const outcome = await refresh('whois', {
+      query: 'example.test', type: 'domain', ...flags,
+      chain: [{ server: 'registry.example.test', queriedAt: EARLIER, response: 'Example registration' }],
+      parsed: { domainName: 'example.test', registrar: 'Example registrar', chainStatus: 'complete', registrationStatus: 'registered', fieldsTruncated: [] },
     });
     assert.ok(outcome.ok);
-    assert.equal(outcome.value.state, truncated ? 'limited' : 'complete');
-    if (truncated) assert.match(outcome.value.detail, /truncated/u);
+    assert.equal(outcome.value.state, 'limited');
+    assert.ok(outcome.value.facts.every(fact => fact.completeness !== 'complete'));
   }
 });
 
-test('recognizes complete deep and fast domain-evidence refresh contracts', async () => {
-  const plan = {
-    id: 'availability',
-    label: 'Domain evidence',
-    endpoint: '/api/availability',
-    evidenceIds: ['dns', 'http', 'tls'],
-    reason: 'limited',
-    requestDisclosure: 'Repeats bounded domain evidence.',
-    supersedesObservedAt: NOW,
-  } as const;
-  const deep = await requestLookupSourceRefresh(plan, 'example.test', 'deep', {
-    now: () => NOW,
-    fetchImpl: async () => new Response(JSON.stringify({
-      state: 'registered',
-      deepScanComplete: true,
-      dns: { status: 'success' },
-      http: { status: 'success' },
-      tls: { status: 'success' },
-    }), { status: 200 }),
-  });
-  assert.equal(deep.ok && deep.value.state, 'complete');
-
-  const fast = await requestLookupSourceRefresh(plan, 'example.test', 'fast', {
-    now: () => NOW,
-    fetchImpl: async (input) => {
-      assert.match(String(input), /fast=true/);
-      return new Response(JSON.stringify({ state: 'registered' }), { status: 200 });
-    },
-  });
-  assert.equal(fast.ok && fast.value.state, 'complete');
-});
-
-test('keeps inconclusive fast domain evidence limited', async () => {
-  const plan = {
-    id: 'availability',
-    label: 'Domain evidence',
-    endpoint: '/api/availability',
-    evidenceIds: ['dns'],
-    reason: 'limited',
-    requestDisclosure: 'Repeats bounded domain evidence.',
-    supersedesObservedAt: NOW,
-  } as const;
-  const outcome = await requestLookupSourceRefresh(plan, 'example.test', 'fast', {
-    now: () => NOW,
-    fetchImpl: async () => new Response(JSON.stringify({ state: 'unknown' }), { status: 200 }),
-  });
-  assert.equal(outcome.ok && outcome.value.state, 'limited');
-});
-
-test('keeps failed source refreshes explicit and bounded', async () => {
-  const plan = buildLookupSourceRefreshPlan(buildEvidenceCoverageLedger([
-    { id: 'rdap', label: 'RDAP', category: 'registry', status: 'unavailable' },
-  ]), NOW, NOW).items[0];
-  assert.ok(plan);
-  const outcome = await requestLookupSourceRefresh(plan, 'example.test', 'deep', {
-    now: () => NOW,
-    fetchImpl: async () => new Response(JSON.stringify({ error: 'Registry source unavailable' }), {
-      status: 503,
-      headers: { 'content-type': 'application/json' },
-    }),
-  });
-  assert.deepEqual(outcome, { ok: true, value: {
-    version: 1,
-    id: 'rdap',
-    state: 'unavailable',
-    detail: 'Registry source unavailable',
-    observedAt: null,
-    attemptedAt: NOW,
-    reason: 'limited',
-    evidenceIds: ['rdap'],
-    supersedesObservedAt: null,
-  } });
-});
-
-test('rejects oversized source refresh bodies before retaining raw content', async () => {
-  const plan = buildLookupSourceRefreshPlan(buildEvidenceCoverageLedger([
-    { id: 'rdap', label: 'RDAP', category: 'registry', status: 'unavailable' },
-  ]), NOW, NOW).items[0];
-  assert.ok(plan);
-  const outcome = await requestLookupSourceRefresh(plan, 'example.test', 'deep', {
-    now: () => NOW,
-    fetchImpl: async () => new Response('oversized', {
-      status: 200,
-      headers: { 'content-length': String(2 * 1024 * 1024 + 1) },
-    }),
-  });
-  assert.equal(outcome.ok && outcome.value.state, 'unavailable');
-  assert.equal(outcome.ok && outcome.value.observedAt, null);
-  assert.equal(outcome.ok && outcome.value.attemptedAt, NOW);
-  assert.match(outcome.ok ? outcome.value.detail : '', /exceeded the local limit/iu);
-});
-
-test('merges repeated refreshes into a bounded versioned chain without changing the unified result', () => {
-  const first = {
-    version: 1 as const,
-    id: 'rdap' as const,
-    state: 'limited' as const,
-    detail: 'First refresh.',
-    observedAt: '2026-07-30T00:01:00.000Z',
-    attemptedAt: '2026-07-30T00:01:00.000Z',
-    reason: 'limited' as const,
-    evidenceIds: ['rdap'],
-    supersedesObservedAt: NOW,
+test('domain refresh uses actual child states and clocks, not the enabled Deep flag', async () => {
+  const body = {
+    applicable: true, domain: 'example.test', observationHostname: 'portal.example.test', deepScanComplete: true,
+    dns: { status: 'success', observedAt: NOW, complete: true, records: { a: ['192.0.2.10'] } },
+    http: { status: 'error', observedAt: NOW, complete: false },
+    tls: { status: 'unavailable', observedAt: NOW, complete: false },
   };
-  const second = {
-    ...first,
-    state: 'complete' as const,
-    detail: 'Second refresh.',
-    observedAt: '2026-07-30T00:02:00.000Z',
-    attemptedAt: '2026-07-30T00:02:00.000Z',
-    supersedesObservedAt: first.observedAt,
-  };
-  const ledger = mergeLookupSourceRefreshLedger(
-    mergeLookupSourceRefreshLedger(null, first),
-    second,
-  );
-  assert.equal(ledger.version, 1);
-  assert.equal(ledger.truncated, false);
-  assert.deepEqual(ledger.entries.map((entry) => entry.observedAt), [first.observedAt, second.observedAt]);
-  assert.equal(ledger.entries[1]?.supersedesObservedAt, first.observedAt);
+  const limited = await refresh('availability', body);
+  assert.ok(limited.ok);
+  assert.equal(limited.value.state, 'limited');
+  assert.ok(limited.value.facts.some(fact => fact.field === 'dns.addresses' && fact.value === '192.0.2.10'));
+  const incompleteDns = await refresh('availability', { ...body, dns: { ...body.dns, complete: false } });
+  assert.ok(incompleteDns.ok);
+  assert.equal(incompleteDns.value.facts.find(fact => fact.field === 'dns.addresses')?.completeness, 'partial');
+  const complete = await refresh('availability', { ...body,
+    http: { status: 'success', observedAt: NOW, complete: true, response: { status: 200 } },
+    tls: { status: 'success', observedAt: NOW, complete: true, protocol: 'TLSv1.3' },
+  });
+  assert.equal(complete.ok && complete.value.state, 'complete');
+  const truncatedPage = await refresh('availability', { ...body,
+    http: { status: 'success', observedAt: NOW, complete: true, response: { status: 200, bodyTruncated: true } },
+    tls: { status: 'success', observedAt: NOW, complete: true, protocol: 'TLSv1.3' },
+  });
+  assert.equal(truncatedPage.ok && truncatedPage.value.state, 'limited');
+  const incompletePage = await refresh('availability', { ...body, pageTitle: 'Partial page',
+    http: { status: 'success', observedAt: NOW, complete: true, response: { status: 200, bodyTruncated: true } },
+  });
+  assert.ok(incompletePage.ok);
+  assert.equal(incompletePage.value.facts.find(fact => fact.field === 'page.title')?.completeness, 'partial');
+});
+
+test('response identity and nested shapes are admitted before retaining any source facts', async () => {
+  for (const body of [
+    { ...rdap(), query: 'another.test' },
+    { ...rdap(), type: 'asn' },
+    { ...rdap(), parsed: {} },
+    { ...rdap(), parsed: { ...rdap().parsed, domain: 'another.test' } },
+    { ...rdap(), parsed: { ...rdap().parsed, statuses: ['valid', { invalid: true }] } },
+    { ...rdap(), complete: 'false' },
+    { ...rdap(), parsed: { ...rdap().parsed, serverTruncated: 'true' } },
+    { ...rdap(), parsed: { ...rdap().parsed, objectClassName: 'autnum' } },
+    { ...rdap(), upstreamStatus: 404 },
+    [],
+  ]) {
+    const outcome = await refresh('rdap', body);
+    assert.ok(outcome.ok);
+    assert.equal(outcome.value.state, 'unavailable');
+    assert.deepEqual(outcome.value.facts, []);
+  }
+  const wrongHost = await refresh('availability', { applicable: true, domain: 'example.test', observationHostname: 'example.test' });
+  assert.equal(wrongHost.ok && wrongHost.value.state, 'unavailable');
+});
+
+test('selected-page evidence is not refreshed at a homepage and registry refresh sends only the registration domain', async () => {
+  const base = original();
+  const input = { ...base, availability: { ...base.availability, webObservationMode: 'selected_url' } };
+  const requests: string[] = [];
+  const options = { now: () => NOW, fetchImpl: async (url: RequestInfo | URL) => { requests.push(String(url)); return Response.json(rdap()); } };
+  const blocked = await requestLookupSourceRefresh(plan('availability'), input, 'deep', options);
+  assert.equal(blocked.ok, false);
+  assert.deepEqual(requests, []);
+  assert.equal((await requestLookupSourceRefresh(plan('rdap'), input, 'deep', options)).ok, true);
+  assert.deepEqual(requests, ['/api/rdap?q=example.test']);
+});
+
+test('domain refresh retains the earlier observation hostname, including an older root-scoped result', async () => {
+  for (const host of ['portal.example.test', 'example.test']) {
+    const base = original();
+    const input = { ...base, availability: { ...base.availability, observationHostname: host } };
+    let request = '';
+    await requestLookupSourceRefresh(plan('availability'), input, 'deep', {
+      fetchImpl: async url => { request = String(url); return Response.json({ applicable: true, domain: 'example.test', observationHostname: host }); },
+    });
+    assert.equal(request, '/api/availability?q=' + host);
+    const admitted = await refresh('availability', { applicable: true, domain: 'example.test', observationHostname: host }, input);
+    assert.equal(admitted.ok && admitted.value.state, 'limited');
+  }
+});
+
+test('cancellation, timeout and HTTP failures keep raw errors out of the review', async () => {
+  const controller = new AbortController();
+  const cancelled = requestLookupSourceRefresh(plan('rdap'), original(), 'deep', {
+    signal: controller.signal, fetchImpl: () => new Promise(() => {}),
+  });
+  controller.abort();
+  assert.deepEqual(await cancelled, { ok: false, message: 'Source refresh cancelled. No new observation was retained.' });
+  const timedOut = await requestLookupSourceRefresh(plan('rdap'), original(), 'deep', {
+    timeoutMs: 1, now: () => NOW, fetchImpl: () => new Promise(() => {}),
+  });
+  assert.equal(timedOut.ok && timedOut.value.observedAt, null);
+  assert.match(timedOut.ok ? timedOut.value.detail : '', /timed out/);
+  const failed = await requestLookupSourceRefresh(plan('rdap'), original(), 'deep', {
+    now: () => NOW, fetchImpl: async () => Response.json({ error: 'https://private.example/path?token=private-example' }, { status: 503 }),
+  });
+  assert.ok(failed.ok);
+  assert.equal(failed.value.state, 'unavailable');
+  assert.doesNotMatch(JSON.stringify(failed), /private-example|private.example/);
+});
+
+test('oversized, structurally deep and duplicate-key responses cannot enter refresh history', async () => {
+  const bodies = [
+    new Response('oversized', { headers: { 'content-length': String(2 * 1024 * 1024 + 1) } }),
+    new Response('{"query":"example.test","query":"another.test"}'),
+    new Response('['.repeat(200) + '0' + ']'.repeat(200)),
+  ];
+  for (const body of bodies) {
+    const result = await requestLookupSourceRefresh(plan('rdap'), original(), 'deep', { fetchImpl: async () => body });
+    assert.ok(result.ok);
+    assert.equal(result.value.state, 'unavailable');
+    assert.deepEqual(result.value.facts, []);
+  }
+});
+
+test('history does not evict or coalesce earlier valid observations, even with equal request times', async () => {
+  const outcome = await refresh('rdap', rdap());
+  assert.ok(outcome.ok);
+  let ledger: LookupSourceRefreshLedger | null = null;
+  for (let index = 0; index < MAX_LOOKUP_SOURCE_REFRESH_HISTORY; index++) {
+    ledger = mergeLookupSourceRefreshLedger(ledger, outcome.value);
+  }
+  assert.equal(ledger?.entries.length, MAX_LOOKUP_SOURCE_REFRESH_HISTORY);
+  const before = structuredClone(ledger);
+  assert.throws(() => mergeLookupSourceRefreshLedger(ledger, outcome.value), /Existing observations were kept/);
+  assert.deepEqual(ledger, before);
+});
+
+test('IP and ASN refreshes bind a returned registry range and retain only normalised identifiers', async () => {
+  for (const [type, query, parsed] of [
+    ['ipv4', '192.0.2.10', { startAddress: '192.0.2.0', endAddress: '192.0.2.255', name: 'Example network' }],
+    ['ipv6', '2001:db8::10', { startAddress: '2001:db8::', endAddress: '2001:db8::ffff', name: 'Example network' }],
+    ['asn', 'AS64512', { startAutnum: 64512, endAutnum: 64513, name: 'Example network' }],
+  ] as const) {
+    const input: LookupHttpResponse = { query, type, rdap: {}, whois: {}, availability: {}, diagnostics: {} };
+    const body = { query, type, fetchedAt: NOW, upstreamStatus: 200, parsed };
+    const accepted = await refresh('rdap', body, input);
+    assert.ok(accepted.ok);
+    assert.equal(accepted.value.state, 'complete');
+    assert.ok(accepted.value.facts.some(fact => fact.value === 'Example network'));
+    const mismatched = await refresh('rdap', { ...body, parsed: { ...parsed,
+      startAddress: '198.51.100.0', endAddress: '198.51.100.255', startAutnum: 64520, endAutnum: 64521,
+    } }, input);
+    assert.equal(mismatched.ok && mismatched.value.state, 'unavailable');
+  }
 });

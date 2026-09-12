@@ -5,6 +5,7 @@
 
 import snapshotValue from './common-infrastructure-snapshot.json' with { type: 'json' };
 import { COMMON_INFRASTRUCTURE_SCHEMA, COMMON_INFRASTRUCTURE_VERSION, MAX_SNAPSHOT_ENTRIES } from '../contracts/common-infrastructure.mts';
+import { addressValue, type AddressValue } from '../contracts/ip-address.mts';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -47,7 +48,6 @@ type Snapshot = Readonly<{
   limitations: readonly string[];
 }>;
 
-type AddressValue = Readonly<{ family: 4; value: number } | { family: 6; value: bigint }>;
 type CompiledCidr = Readonly<{ cidr: string } & (
   { family: 4; mask: number; network: number }
   | { family: 6; mask: bigint; network: bigint }
@@ -58,8 +58,6 @@ type CompiledSource = readonly CompiledCidr[];
 // snapshots are evaluated afresh, so changing their contents cannot reuse stale ranges.
 const compiledSnapshots = new WeakMap<Snapshot, readonly CompiledSource[]>();
 
-const IPV4_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/u;
-const IPV6_RE = /^[0-9a-f:.]+$/iu;
 const SHA256_RE = /^[0-9a-f]{64}$/u;
 const COMMIT_RE = /^[0-9a-f]{40}$/u;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/u;
@@ -74,58 +72,6 @@ function record(value: unknown): JsonRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as JsonRecord
     : null;
-}
-
-function canonicalIpv4(value: unknown): string | null {
-  if (typeof value !== 'string' || !IPV4_RE.test(value)) return null;
-  const octets = value.split('.').map(Number);
-  return octets.length === 4
-    && octets.every((octet) => Number.isInteger(octet) && octet >= 0 && octet <= 255)
-    ? octets.join('.')
-    : null;
-}
-
-function canonicalIpv6(value: unknown): string | null {
-  if (typeof value !== 'string' || !value.includes(':') || value.includes('%') || !IPV6_RE.test(value)) return null;
-  try {
-    const hostname = new URL(`https://[${value}]/`).hostname;
-    return hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1).toLowerCase() : null;
-  } catch {
-    return null;
-  }
-}
-
-function ipv4Long(value: string): number {
-  return value.split('.').reduce((total, octet) => (total << 8) + Number(octet), 0) >>> 0;
-}
-
-function expandedIpv6(value: string): string[] | null {
-  const embeddedIpv4 = value.includes('.');
-  if (embeddedIpv4) return null;
-  const pieces = value.split('::');
-  if (pieces.length > 2) return null;
-  const left = pieces[0] ? pieces[0].split(':') : [];
-  const right = pieces[1] ? pieces[1].split(':') : [];
-  if (left.some((part) => !/^[0-9a-f]{1,4}$/iu.test(part))
-    || right.some((part) => !/^[0-9a-f]{1,4}$/iu.test(part))) return null;
-  const missing = 8 - left.length - right.length;
-  if ((pieces.length === 1 && missing !== 0) || (pieces.length === 2 && missing < 1)) return null;
-  return [...left, ...Array.from({ length: Math.max(0, missing) }, () => '0'), ...right]
-    .map((part) => part.padStart(4, '0'));
-}
-
-function ipv6BigInt(value: string): bigint | null {
-  const parts = expandedIpv6(value);
-  if (!parts) return null;
-  return parts.reduce((total, part) => (total << 16n) + BigInt(`0x${part}`), 0n);
-}
-
-function addressValue(value: unknown): AddressValue | null {
-  const ipv4 = canonicalIpv4(value);
-  if (ipv4) return { family: 4, value: ipv4Long(ipv4) };
-  const ipv6 = canonicalIpv6(value);
-  const numeric = ipv6 ? ipv6BigInt(ipv6) : null;
-  return numeric === null ? null : { family: 6, value: numeric };
 }
 
 function compileCidr(value: unknown): CompiledCidr | null {

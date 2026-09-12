@@ -165,6 +165,14 @@ be saved as dated checkpoints. Published registration nameservers and resolver
 nameservers remain separate. A failed save keeps the selection for a deliberate
 retry; a new Lookup clears it.
 
+In **Source quality**, open the source-record review to refresh a source and
+compare its normalised facts with the original Lookup or its previous refresh.
+Source timestamps remain distinct from request times, including cached results.
+The review survives collapsing sections, but not leaving or reloading Lookup.
+Retain selected dated facts in a Case or download a readable review before
+leaving. A selected URL must be selected again in a new Deep lookup; refreshing
+registration sources does not repeat that page request.
+
 Creating or refreshing a Case is deliberate. A Case retains the exact
 normalised submitted hostname and, for new Deep observations, the separately
 identified DNS, TLS and web hostname on the point-in-time evidence snapshot while

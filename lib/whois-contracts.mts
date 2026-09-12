@@ -2,6 +2,7 @@
 // consumers can depend on the record shape without importing network code.
 
 export const MAX_WHOIS_STATUSES = 100;
+export const MAX_WHOIS_QUERY_HOPS = 6;
 
 export type WhoisScalarFields = Record<string, string | undefined>;
 

@@ -46,7 +46,7 @@
   } from '$lib/analysis/lookup-display-model.ts';
   import { buildLookupRouteAnalysis } from '$lib/analysis/lookup-route-analysis.ts';
   import type { LookupClaimId } from '$lib/analysis/lookup-claim-readiness.ts';
-  import type { LookupFreshnessPolicyInput, LookupFreshnessThresholds } from '$lib/analysis/lookup-source-refresh.ts';
+  import type { LookupFreshnessPolicyInput, LookupFreshnessThresholds, LookupSourceRefreshLedger } from '$lib/analysis/lookup-source-refresh.ts';
   import {
     LOOKUP_CLIENT_TIMEOUT_MS,
   } from '$lib/analysis/lookup-request.ts';
@@ -102,6 +102,8 @@
   let includeSecurityTxt=$state(false);
   let error=$state('');
   let result=$state<LookupHttpResponse|null>(null);
+  let sourceRefreshLedger=$state<LookupSourceRefreshLedger|null>(null);
+  $effect(()=>{result;sourceRefreshLedger=null;});
   let completedLookupTarget=$state('');
   let completedIncidentUrl=$state('');
   let completedLookupDepth=$state<LookupMode|null>(null);
@@ -378,6 +380,7 @@
     caseRecheckComparison={available:true,changes,observedAt:after.capturedAt,detail:changes.length?`${changes.length} comparable material change${changes.length===1?' was':'s were'} found.`:'No comparable material field change was found. This does not prove the page or behaviour is absent.'};
   }
   async function saveEvidenceCheckpoint(selectedFields:string[],transitionExpectations:Readonly<Record<string,CaseTransitionExpectation>>={}){const record=caseRecord;const facts=checkpointFacts;return performCaseAction(()=>lookupCaseController.recordCheckpoint(record,facts,[...selectedFields],{...transitionExpectations}));}
+  async function saveRefreshedCheckpoint(facts:readonly CheckpointFact[],selectedFields:string[]){const record=caseRecord;return performCaseAction(()=>lookupCaseController.recordCheckpoint(record,facts,[...selectedFields]));}
   function cancelLookup(){lookupRequestController.cancel();}
   function visualViewForTask(value:LookupTaskView):LookupVisualView{
     if(value==='acquisition'||value==='owned')return 'timeline';
@@ -1011,13 +1014,13 @@
         onshow={()=>void showSectionDetail('source-quality')}
         onhide={()=>void hideSectionDetail('source-quality')}
       />
-      {#if sectionDetailVisible('source-quality')}
+      {#if sectionDetailVisible('source-quality') && result}
         <DeferredSurface
           load={()=>import('$lib/components/LookupEvidenceQuality.svelte')}
           loadingLabel="Loading source-quality review…"
           unavailableLabel="Source-quality review could not be loaded."
           onready={restoreDeferredLookupTarget}
-          props={{matrix:evidenceQualityMatrix,lookupDecisionFacts,refreshPlan:lookupSourceRefreshPlan,query:String(result?.query||caseDomain),depth:lookupEvidenceDepth,timing:lookupTiming,onpolicychange:setFreshnessPolicy}}
+          props={{matrix:evidenceQualityMatrix,lookupDecisionFacts,refreshPlan:lookupSourceRefreshPlan,original:result,refreshLedger:sourceRefreshLedger,onrefreshchange:(value:LookupSourceRefreshLedger)=>sourceRefreshLedger=value,caseTarget:{record:caseRecord,ready:caseSourceState==='ready',busy:caseActionBusy,status:caseStatus,oncreate:openLookupCase,onsave:saveRefreshedCheckpoint},depth:lookupEvidenceDepth,timing:lookupTiming,onpolicychange:setFreshnessPolicy}}
         />
         <DeferredSurface
           load={()=>import('$lib/components/LookupOverviewFacts.svelte')}

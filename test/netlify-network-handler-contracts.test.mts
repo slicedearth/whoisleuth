@@ -96,10 +96,16 @@ describe('fixture-injected Netlify network handlers', () => {
     assert.equal(calls.length, 1);
     assert.equal(calls[0]?.[0], 'example.test');
     assert.equal(calls[0]?.[1].fast, true);
+    assert.equal(calls[0]?.[1].observationHostname, undefined);
+
+    const deep = await handler(event({ q: 'sub.example.test' }));
+    assert.equal(deep.statusCode, 200);
+    assert.equal(calls[1]?.[0], 'example.test');
+    assert.equal(calls[1]?.[1].observationHostname, 'sub.example.test');
 
     const notApplicable = await handler(event({ q: '192.0.2.1' }));
     assert.deepEqual(body(notApplicable), { applicable: false, type: 'ipv4' });
-    assert.equal(calls.length, 1);
+    assert.equal(calls.length, 2);
   });
 
   test('projects WHOIS chain and parser output without transport traffic', async () => {

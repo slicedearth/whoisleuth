@@ -5,6 +5,7 @@
 import { domainToUnicode } from 'node:url';
 
 import { cached } from './lookup-cache.mts';
+import { MAX_WHOIS_QUERY_HOPS } from './whois-contracts.mts';
 import {
   registryCapabilityFor,
   registryServiceAdmissionFor,
@@ -29,7 +30,6 @@ export type WhoisChain = WhoisHop[];
 const IANA_WHOIS = 'whois.iana.org';
 const WHOIS_HOP_DEADLINE_MS = 12_000;
 const WHOIS_CHAIN_DEADLINE_MS = 25_000;
-const MAX_WHOIS_QUERY_HOPS = 6;
 
 function incompleteReferralHop(server: string, reason: 'hop_limit' | 'referral_loop'): WhoisHop {
   return {

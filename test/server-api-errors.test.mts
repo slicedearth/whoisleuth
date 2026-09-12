@@ -260,6 +260,19 @@ describe('fixture-injected Express network routes', () => {
     assert.equal(lookupOptions.securityTxt, true);
   });
 
+  test('domain source refresh keeps registration and observation targets distinct in both depths', async () => {
+    for (const fast of [false, true]) {
+      serviceCalls.length = 0;
+      const response = await request(`/api/availability?q=portal.example.test${fast ? '&fast=1' : ''}`);
+      assert.equal(response.status, 200);
+      assert.equal(serviceCalls.length, 1);
+      const call = serviceCalls[0]!;
+      assert.equal(call[0], 'availability');
+      assert.equal(call[1], 'example.test');
+      assert.equal((call[2] as Record<string, unknown>).observationHostname, fast ? undefined : 'portal.example.test');
+    }
+  });
+
   test('POST Lookup admits selected URLs through the same authenticated network guards', async () => {
     const url = 'https://portal.example.test/review?a=private-example#local-fragment';
     const send = (suffix = '', origin = fixtureOrigin, payload = JSON.stringify({ url })) => fetch(`${fixtureOrigin}/api/lookup?q=portal.example.test${suffix}`, {

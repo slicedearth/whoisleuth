@@ -200,7 +200,8 @@ export function buildLookupCheckpointFacts(
   ];
   function registrationFact(field: string, label: string, value: (parsed: JsonObject) => unknown, notes: string[] = []): Omit<CheckpointFact, 'version' | 'sourceSchema'> {
     const candidates = registrationSources.map((source) => ({ ...source, value: factValue(value(source.parsed)) }));
-    const selected = candidates.find((source) => source.value !== null) ?? candidates[0]!;
+    const selected = candidates.find((source) => source.value !== null)
+      ?? candidates.find(source => Object.keys(source.parsed).length > 0) ?? candidates[0]!;
     const observedAt = normalizeExplicitIsoTimestamp(selected.publication.fetchedAt ?? selected.diagnostic.observedAt ?? selected.diagnostic.fetchedAt ?? selected.diagnostic.queriedAt);
     const truncated = selected.parsed.serverTruncated === true || selected.parsed.truncated === true || selected.diagnostic.truncated === true;
     const state = sourceState(selected.diagnostic.status);
@@ -274,6 +275,12 @@ export function buildLookupCheckpointFacts(
   ];
 
   return specifications.map<CheckpointFact>((fact) => {
+    const observation = fact.category === 'dns' ? dns : fact.category === 'tls' ? tls
+      : ['http', 'page_identity'].includes(fact.category) ? http
+      : fact.category === 'network' ? network : fact.category === 'disclosure' ? securityTxt : null;
+    const incomplete = observation?.complete === false;
+    const truncated = fact.truncated === true || observation?.truncated === true
+      || fact.category === 'page_identity' && httpResponse.bodyTruncated === true;
     const observationHostname = lookupObservationHostname({ domain: fact.category === 'registration'
       ? response.registrableDomain
       : fact.category === 'disclosure' ? response.inputHostname : lookupObservationHostname(availability) });
@@ -283,7 +290,8 @@ export function buildLookupCheckpointFacts(
       ...(observationHostname ? { observationHostname } : {}),
       ...(availability.webObservationMode === 'selected_url' && ['http', 'page_identity'].includes(fact.category)
         ? { webObservationMode: 'selected_url' as const } : {}),
-      completeness: fact.observedAt ? fact.completeness : 'unknown',
+      completeness: !fact.observedAt ? 'unknown' : incomplete || truncated ? 'partial' : fact.completeness,
+      truncated: truncated ? true : fact.truncated,
       limitations: sourceLimitations([
         ...(!fact.observedAt ? ['The source observation time is unavailable; this value cannot form a dated checkpoint.'] : []),
         ...fact.limitations,
@@ -437,65 +445,89 @@ export function compareAcquisitionTransitionPins(
     });
 }
 
-export function compareCheckpointPins(
-  pins: readonly CaseEvidencePin[],
-  currentFacts: readonly CheckpointFact[],
-): CheckpointComparison[] {
-  const currentByField = new Map(currentFacts.map((fact) => [fact.field, fact]));
-  return pins
-    .filter((pin) => pin.checkpointId && pin.field)
-    .slice(-MAX_CHECKPOINT_FACTS)
-    .map((pin) => {
-      const current = currentByField.get(pin.field ?? '');
-      let state: CheckpointComparisonState = 'not_recorded';
-      let qualificationLimitation = '';
-      if (current) {
-        if ((pin.observationHostname ?? null) !== (current.observationHostname ?? null)) {
-          state = 'incomparable';
-          qualificationLimitation = 'The observations concern different or unknown hostnames; absence or change cannot be inferred across them.';
-        }
-        else if (pin.webObservationMode === 'selected_url' || current.webObservationMode === 'selected_url') {
-          state = 'incomparable';
-          qualificationLimitation = 'A selected URL was observed, but compact checkpoints omit its path and query; they cannot establish the same website target.';
-        }
-        else if (UNAVAILABLE_STATES.has(current.sourceState)) state = 'unavailable';
-        else if (CONFLICT_STATES.has(current.sourceState)) state = 'conflicting';
-        else if (current.value === null) state = 'missing';
-        else {
-          const sameSchema = Boolean(pin.sourceSchema
-            && pin.sourceSchema.collection === current.sourceSchema.collection
-            && pin.sourceSchema.schema === current.sourceSchema.schema
-            && pin.sourceSchema.version === current.sourceSchema.version);
-          const comparable = pin.completeness === 'complete'
-            && current.completeness === 'complete'
-            && normalizeExplicitIsoTimestamp(current.observedAt) !== null
-            && pin.truncated !== true
-            && current.truncated !== true
-            && pin.source === current.source
-            && pin.category === current.category
-            && pin.collectionDepth === current.collectionDepth
-            && sameSchema;
-          if (!comparable) {
-            state = 'incomparable';
-            qualificationLimitation = 'Both checkpoint sides must retain the same source, scope, schema, collection depth, and complete untruncated evidence before equality or change is verified.';
-          } else {
-            state = current.value === pin.value ? 'equal' : 'changed';
-          }
-        }
+type ComparableCheckpoint = Pick<CaseEvidencePin, 'field' | 'category' | 'label' | 'value' | 'source' | 'observationHostname' | 'webObservationMode' | 'sourceSchema' | 'observedAt' | 'collectionDepth' | 'completeness' | 'truncated' | 'limitations'>;
+
+function compareCheckpointValue(pin: ComparableCheckpoint, current: CheckpointFact | undefined): CheckpointComparison {
+  let state: CheckpointComparisonState = 'not_recorded';
+  let qualificationLimitation = '';
+  if (current) {
+    if ((pin.observationHostname ?? null) !== (current.observationHostname ?? null)) {
+      state = 'incomparable';
+      qualificationLimitation = 'The observations concern different or unknown hostnames; absence or change cannot be inferred across them.';
+    }
+    else if (pin.webObservationMode === 'selected_url' || current.webObservationMode === 'selected_url') {
+      state = 'incomparable';
+      qualificationLimitation = 'A selected URL was observed, but compact checkpoints omit its path and query; they cannot establish the same website target.';
+    }
+    else if (UNAVAILABLE_STATES.has(current.sourceState)) state = 'unavailable';
+    else if (CONFLICT_STATES.has(current.sourceState)) state = 'conflicting';
+    else if (current.value === null) state = 'missing';
+    else {
+      const sameSchema = Boolean(pin.sourceSchema
+        && pin.sourceSchema.collection === current.sourceSchema.collection
+        && pin.sourceSchema.schema === current.sourceSchema.schema
+        && pin.sourceSchema.version === current.sourceSchema.version);
+      const comparable = pin.completeness === 'complete'
+        && current.completeness === 'complete'
+        && normalizeExplicitIsoTimestamp(current.observedAt) !== null
+        && pin.truncated !== true
+        && current.truncated !== true
+        && pin.source === current.source
+        && pin.category === current.category
+        && pin.collectionDepth === current.collectionDepth
+        && sameSchema;
+      if (!comparable) {
+        state = 'incomparable';
+        qualificationLimitation = 'Both checkpoint sides must retain the same source, scope, schema, collection depth, and complete untruncated evidence before equality or change is verified.';
+      } else {
+        state = current.value === pin.value ? 'equal' : 'changed';
       }
-      return {
-        field: pin.field ?? '',
-        category: pin.category ?? 'other',
-        label: pin.label,
-        before: pin.value,
-        after: current?.value ?? null,
-        state,
-        source: current?.source ?? pin.source,
-        observedAt: current ? current.observedAt : pin.observedAt,
-        limitations: [...new Set([
-          ...(current?.limitations ?? pin.limitations),
-          ...(qualificationLimitation ? [qualificationLimitation] : []),
-        ])].slice(0, MAX_CHECKPOINT_LIMITATIONS),
-      };
-    });
+    }
+  }
+  return {
+    field: pin.field ?? '',
+    category: pin.category ?? 'other',
+    label: pin.label,
+    before: pin.value,
+    after: current?.value ?? null,
+    state,
+    source: current?.source ?? pin.source,
+    observedAt: current ? current.observedAt : pin.observedAt,
+    limitations: [...new Set([
+      ...(current?.limitations ?? pin.limitations),
+      ...(qualificationLimitation ? [qualificationLimitation] : []),
+    ])].slice(0, MAX_CHECKPOINT_LIMITATIONS),
+  };
+
+}
+
+export function compareCheckpointPins(
+  pins: readonly CaseEvidencePin[], currentFacts: readonly CheckpointFact[],
+): CheckpointComparison[] {
+  const currentByField = new Map(currentFacts.map(fact => [fact.field, fact]));
+  return pins.filter(pin => pin.checkpointId && pin.field).slice(-MAX_CHECKPOINT_FACTS)
+    .map(pin => compareCheckpointValue(pin, currentByField.get(pin.field ?? '')));
+}
+
+export function compareCheckpointFacts(
+  before: readonly CheckpointFact[], after: readonly CheckpointFact[],
+): CheckpointComparison[] {
+  const beforeByField = new Map(before.map(fact => [fact.field, fact]));
+  const afterByField = new Map(after.map(fact => [fact.field, fact]));
+  return [...new Set([...beforeByField.keys(), ...afterByField.keys()])].slice(0, MAX_CHECKPOINT_FACTS).map(field => {
+    const previous = beforeByField.get(field), current = afterByField.get(field);
+    if (!previous || previous.value === null) return {
+      field, category: current?.category ?? previous?.category ?? 'other',
+      label: current?.label ?? previous?.label ?? field, before: 'Not recorded', after: current?.value ?? null,
+      state: 'not_recorded', source: current?.source ?? previous?.source ?? 'Unknown',
+      observedAt: current?.observedAt ?? null, limitations: current?.limitations ?? [],
+    };
+    const comparison = compareCheckpointValue({ ...previous, value: previous.value }, current);
+    if (comparison.state === 'changed' && (!previous.observedAt || !current?.observedAt
+      || Date.parse(current.observedAt) <= Date.parse(previous.observedAt))) return {
+      ...comparison, state: 'incomparable',
+      limitations: ['The later request did not provide a later source observation time.', ...comparison.limitations].slice(0, MAX_CHECKPOINT_LIMITATIONS),
+    };
+    return comparison;
+  });
 }

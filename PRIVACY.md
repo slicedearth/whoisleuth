@@ -125,6 +125,11 @@ hostname on a new evidence snapshot, analyst
 decision confidence and its basis, and a response route's observation and
 review times. Pins and sightings with unknown observation times retain null;
 saving them does not create a source observation time.
+Individual source refreshes keep minimised facts in page memory, separate from
+the original Lookup. Explicitly selected facts can be saved through the same
+Case checkpoint controls or downloaded in a readable comparison. Raw source
+payloads and contacts are not retained by the refresh review; leaving or
+reloading Lookup clears its transient history.
 Exact public v1 Case schema 12 and published-v2 schemas 13–15
 remain readable and migrate directly; migrated fields can remain null, unknown
 or blank because WHOISleuth does not reconstruct them from weaker evidence.

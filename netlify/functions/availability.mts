@@ -32,7 +32,10 @@ async function handleAvailability(
   const params = event.queryStringParameters || {};
   const fast = params.fast === '1' || params.fast === 'true';
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('availability', { fast }), async () => {
-    const result = await dependencies.checkDomainAvailability(classified.value, { fast, featurePolicy: guard.featurePolicy });
+    const result = await dependencies.checkDomainAvailability(classified.value, {
+      fast, featurePolicy: guard.featurePolicy,
+      ...(!fast ? { observationHostname: classified.inputHostname } : {}),
+    });
     return json(200, {
       applicable: true,
       domain: classified.value,
