@@ -4,6 +4,7 @@ import { CLI_DOMAIN_CONTROL_MONITOR_SCHEMA } from '../packages/contracts/domain-
 import { DOMAIN_CONTROL_REVIEW_SCHEMA } from '../packages/contracts/domain-control-review.mts';
 import { EXTERNAL_FINDINGS_SCHEMA } from '../packages/interchange/external-findings-import.mts';
 import { CLI_LOOKUP_BRIEF_SCHEMA } from './lookup-brief.mts';
+import type { WorkflowArtifactBinding } from '../packages/contracts/investigation-run.mts';
 import {
   INVESTIGATION_PLAN_RECIPES,
   RUNNABLE_INVESTIGATION_PLAN_RECIPES,
@@ -36,6 +37,7 @@ type Recipe = Readonly<{
   subjectRequirement: 'domain' | 'brand_or_domain' | 'review_label';
   objective: string;
   limitations: readonly string[];
+  standardInputs?: readonly WorkflowArtifactBinding[];
   steps(subject: string): readonly Step[];
 }>;
 
@@ -43,6 +45,10 @@ const RECIPES: Readonly<Record<InvestigationPlanRecipe, Recipe>> = Object.freeze
   'domain-triage': Object.freeze({
     id: 'domain-triage',
     label: 'New domain triage',
+    standardInputs: Object.freeze([
+      { stepId: 'export', input: 1, sourceStepId: 'collect' },
+      { stepId: 'verify', input: 1, sourceStepId: 'export' },
+    ]),
     subjectRequirement: 'domain',
     objective: 'Collect and preserve separately attributed registration, DNS, HTTP, TLS, page, and network-context evidence.',
     limitations: Object.freeze([
@@ -51,7 +57,7 @@ const RECIPES: Readonly<Record<InvestigationPlanRecipe, Recipe>> = Object.freeze
     ]),
     steps: (domain: string) => Object.freeze([
       step('collect', 'Collect a Deep lookup', 'lookup', [domain, '--deep', '--json'], 'network', 'network_disclosure', 'whoisleuth.cli.lookup', 'Review source health and limitations before using missing fields.'),
-      step('export', 'Create a portable evidence report', 'export', ['<saved-lookup.json>'], 'offline', 'analyst_selection', 'whoisleuth.lookup-evidence', 'Select a reviewed Lookup file or explicitly bind the collected Lookup output.'),
+      step('export', 'Create a portable evidence report', 'export', ['<saved-lookup.json>'], 'offline', 'analyst_selection', 'whoisleuth.lookup-evidence', 'Reuse the collected Lookup by default, or select a different reviewed Lookup file.'),
       step('verify', 'Verify the exported artefact', 'verify-artifact', ['<evidence.json>', '--json'], 'offline', 'analyst_selection', 'whoisleuth.offline-artifact-verification', 'Keep verification distinct from a claim that the observations are correct or current.'),
     ]),
   }),
@@ -85,6 +91,10 @@ const RECIPES: Readonly<Record<InvestigationPlanRecipe, Recipe>> = Object.freeze
   'historical-comparison': Object.freeze({
     id: 'historical-comparison',
     label: 'Historical observation comparison',
+    standardInputs: Object.freeze([
+      { stepId: 'diff', input: 2, sourceStepId: 'current' },
+      { stepId: 'timeline', input: 3, sourceStepId: 'current' },
+    ]),
     subjectRequirement: 'domain',
     objective: 'Collect a current observation and compare it with analyst-selected saved observations without merging source states.',
     limitations: Object.freeze(['A later observation does not retroactively refresh retained evidence.']),
@@ -121,6 +131,10 @@ const RECIPES: Readonly<Record<InvestigationPlanRecipe, Recipe>> = Object.freeze
   'registry-disagreement': Object.freeze({
     id: 'registry-disagreement',
     label: 'Registry disagreement review',
+    standardInputs: Object.freeze([
+      { stepId: 'compare', input: 1, sourceStepId: 'collect' },
+      { stepId: 'report', input: 1, sourceStepId: 'collect' },
+    ]),
     subjectRequirement: 'domain',
     objective: 'Collect separately attributed registration evidence and review conflicting publications without selecting an arbitrary source as truth.',
     limitations: Object.freeze(['Only authority-aware registration evidence may decide availability; disagreement remains explicit.']),
@@ -133,6 +147,7 @@ const RECIPES: Readonly<Record<InvestigationPlanRecipe, Recipe>> = Object.freeze
   'evidence-handoff': Object.freeze({
     id: 'evidence-handoff',
     label: 'Reviewed evidence handoff',
+    standardInputs: Object.freeze([{ stepId: 'lint', input: 1, sourceStepId: 'package' }]),
     subjectRequirement: 'review_label',
     objective: 'Verify, minimise, and package analyst-selected evidence for a deliberate handoff without transmitting or submitting it.',
     limitations: Object.freeze(['The recipe prepares local material only; sharing remains a separate deliberate action.']),
@@ -169,6 +184,10 @@ const RECIPES: Readonly<Record<InvestigationPlanRecipe, Recipe>> = Object.freeze
 });
 
 export const INVESTIGATION_RECIPE_REGISTRY = RECIPES;
+
+export function workflowStandardInputs(recipe: InvestigationPlanRecipe): readonly WorkflowArtifactBinding[] {
+  return RECIPES[recipe].standardInputs ?? [];
+}
 
 export const INVESTIGATION_PLAN_RECIPE_LABELS = Object.freeze(Object.fromEntries(
   INVESTIGATION_PLAN_RECIPES.map((recipe) => [recipe, RECIPES[recipe].label]),

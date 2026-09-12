@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { EventEmitter } from 'node:events';
 import { runCli } from '../cli/runner.mts';
 import { buildInvestigationPlan, INVESTIGATION_PLAN_RECIPES, workflowReviewDeclarations, type InvestigationPlanRecipe } from '../cli/investigation-plan.mts';
 import { formatInvestigationRun, runInvestigationRecipe } from '../cli/investigation-run.mts';
@@ -46,6 +47,83 @@ function selectedArgs(recipe: InvestigationPlanRecipe) {
   return args;
 }
 
+class WorkflowTerminalInput extends EventEmitter {
+  isTTY = true;
+  isRaw = false;
+  setRawMode(value: boolean) { this.isRaw = value; }
+  resume() {}
+  pause() {}
+}
+
+test('interactive selection preserves literal inputs and never grants network permission', async () => {
+  const input = new WorkflowTerminalInput();
+  let prompts = '', questions = 0;
+  const selected = 'retained inputs/manifest $(literal).json';
+  const result = await execute('post-change-verification', ['--interactive'], {}, {
+    stdin: input, environment: { TERM: 'dumb' },
+    stderr: { isTTY: true, write(value) { prompts += value; } },
+    workflowQuestion: async prompt => { questions++; assert.match(prompt, /<manifest.json>/u); return selected; },
+  });
+  assert.equal(result.code, 0);
+  assert.equal(result.collected, 0);
+  assert.equal(questions, 1);
+  assert.match(prompts, /no approval is implied/u);
+  assert.equal(result.document?.state, 'awaiting_network_approval');
+  assert.equal(result.document.networkApprovedForThisRun, false);
+  assert.deepEqual(result.document.reviewsConfirmedForThisRun, []);
+  assert.deepEqual(result.document.selections, [{ stepId: 'recheck', values: [selected] }]);
+  assert.equal(result.document.currentStep?.arguments[0], selected);
+});
+
+test('interactive selection can pause, rejects redirected terminals and bounds supplied answers', async () => {
+  const input = new WorkflowTerminalInput();
+  const tty: CliDependencies = { stdin: input, environment: { TERM: 'dumb' }, stderr: { isTTY: true, write() {} } };
+  const paused = await execute('post-change-verification', ['--interactive'], {}, { ...tty, workflowQuestion: async () => '' });
+  assert.equal(paused.document?.state, 'awaiting_analyst_selection');
+  assert.deepEqual(paused.document.selections, []);
+  assert.equal(paused.collected, 0);
+  const redirected = await execute('post-change-verification', ['--interactive', '--approve-network'], {}, {
+    stdin: { isTTY: false }, workflowQuestion: async () => assert.fail('No prompting on a redirected stream.'),
+  });
+  assert.equal(redirected.code, 2);
+  assert.equal(redirected.collected, 0);
+  assert.match(redirected.stderr, /terminal input and terminal stderr/u);
+  for (const answer of ['x'.repeat(1025), '\u001b[2J', '--output']) {
+    const rejected = await execute('post-change-verification', ['--interactive', '--approve-network'], {}, { ...tty, workflowQuestion: async () => answer });
+    assert.equal(rejected.code, 2);
+    assert.equal(rejected.collected, 0);
+  }
+});
+
+test('interactive handoff selections still require independent per-step review confirmations', async () => {
+  const input = new WorkflowTerminalInput();
+  const answers = ['evidence.json', 'cases.json'];
+  const result = await execute('evidence-handoff', ['--interactive'], workflowRecipeInputs(), {
+    stdin: input, environment: {}, stderr: { isTTY: true, write() {} }, workflowQuestion: async () => answers.shift() ?? '',
+  });
+  assert.equal(result.document?.state, 'awaiting_review_confirmation');
+  assert.equal(result.document.currentStep?.id, 'package');
+  assert.deepEqual(result.document.completedSteps.map(step => step.id), ['verify']);
+  assert.deepEqual(result.document.reviewsConfirmedForThisRun, []);
+  assert.equal(result.collected, 0);
+});
+
+test('recipe input callbacks reject excessive selections and honour cancellation before execution', async () => {
+  for (const supplied of [['manifest.json', 'extra.json'], ['--output'], ['bad\u0000value']]) {
+    await assert.rejects(() => runInvestigationRecipe('post-change-verification', 'example.test', {
+      approveNetwork: true, resumeInput: null, generatedAt: WORKFLOW_NOW,
+      selectInputs: async () => supplied,
+      execute: async () => assert.fail('Invalid selections must fail before execution.'),
+    }), /selections|invalid value/iu);
+  }
+  const controller = new AbortController();
+  await assert.rejects(() => runInvestigationRecipe('post-change-verification', 'example.test', {
+    approveNetwork: true, resumeInput: null, generatedAt: WORKFLOW_NOW, signal: controller.signal,
+    selectInputs: async () => { controller.abort(); return ['manifest.json']; },
+    execute: async () => assert.fail('Cancellation must precede execution.'),
+  }), { name: 'AbortError' });
+});
+
 for (const recipe of INVESTIGATION_PLAN_RECIPES) test(`fixed recipe ${recipe} reaches every real command with only fixture collection and selected inputs`, async () => {
   const plan = buildInvestigationPlan(recipe, 'example.test', WORKFLOW_NOW);
   const confirmations = plan.steps.filter(step => workflowReviewDeclarations(step).length).flatMap(step => ['--confirm-review', step.id]);
@@ -84,7 +162,16 @@ test('review confirmation is per step, never inherited from a checkpoint, and in
 });
 
 test('registry workflow resumes offline with retained identities and actionable input guidance', async () => {
-  const first = await execute('registry-disagreement', ['--approve-network']);
+  const standard = await execute('registry-disagreement', ['--approve-network']);
+  assert.equal(standard.document?.state, 'complete');
+  assert.equal(standard.collected, 1);
+  assert.deepEqual(standard.document.artifactBindings, [
+    { stepId: 'compare', input: 1, sourceStepId: 'collect' },
+    { stepId: 'report', input: 1, sourceStepId: 'collect' },
+  ]);
+  // A checkpoint without future connections keeps its original selection boundary.
+  const unbound = { ...standard.document, completedSteps: standard.document.completedSteps.slice(0, 1), artifactBindings: [] };
+  const first = await execute('registry-disagreement', ['--resume', 'run.json'], { 'run.json': JSON.stringify(unbound) });
   assert.equal(first.document?.state, 'awaiting_analyst_selection');
   const text = formatInvestigationRun(first.document);
   assert.match(text, /1 of 3 steps retained/u);

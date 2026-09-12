@@ -29,6 +29,9 @@ test('CLI workflow recipes and review confirmation remain reachable without empt
   await expect(command.getByRole('heading', { name: 'workflow-run', exact: true })).toBeVisible();
   await expect(command).toContainText('--confirm-review');
   await expect(command).toContainText('Checkpoints do not grant later approvals.');
+  await expect(command).toContainText('--interactive');
+  await expect(command).toContainText('New runs connect compatible earlier outputs');
+  await expect(command).toContainText('It grants neither network approval nor human-review confirmation.');
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     for (const width of [320, 390, 1024, 1280, 2560]) {

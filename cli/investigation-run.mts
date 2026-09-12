@@ -5,6 +5,7 @@ import {
   buildInvestigationPlan,
   isRunnableInvestigationRecipe,
   workflowReviewDeclarations,
+  workflowStandardInputs,
   type RunnableInvestigationPlanRecipe,
 } from './investigation-plan.mts';
 import { CliUsageError } from './errors.mts';
@@ -344,6 +345,7 @@ export async function runInvestigationRecipe(
     selections?: readonly WorkflowSelection[];
     artifactBindings?: readonly WorkflowArtifactBinding[];
     confirmedReviews?: readonly string[];
+    selectInputs?: (request: Readonly<{ stepId: string; label: string; inputs: readonly string[] }>) => Promise<readonly string[]>;
     generatedAt: string;
     signal?: AbortSignal;
     execute: (command: CliCommand, args: readonly string[], inputs: WorkflowStepInputs) => Promise<ExecutionResult>;
@@ -361,8 +363,15 @@ export async function runInvestigationRecipe(
   }
   const prior = parseResumeState(options.resumeInput, plan);
   const suppliedSelections = normalizeInvocationSelections(plan, options.selections ?? []);
-  const bindings = mergeBindings(plan, prior.bindings, normalizeWorkflowBindings(plan, options.artifactBindings ?? []), prior.completed);
-  const selections = mergeSelections(plan, prior.selections, suppliedSelections, prior.completed, bindings);
+  // A complete explicit input list replaces a not-yet-run step's standard or
+  // retained connections. Partial lists fill the remaining unbound slots.
+  const explicitSteps = new Set(suppliedSelections.filter(selection =>
+    selection.values.length === placeholderCount(plan.steps.find(step => step.id === selection.stepId)!)
+      && !prior.completed.some(step => step.id === selection.stepId)).map(selection => selection.stepId));
+  const initialBindings = options.resumeInput === null ? workflowStandardInputs(recipe) : prior.bindings;
+  const bindings = mergeBindings(plan, initialBindings.filter(binding => !explicitSteps.has(binding.stepId)),
+    normalizeWorkflowBindings(plan, options.artifactBindings ?? []), prior.completed);
+  let selections = mergeSelections(plan, prior.selections, suppliedSelections, prior.completed, bindings);
   validateSelectedInputs(plan, selections, bindings, prior.completed);
   const selectionsByStep = new Map(selections.map((item) => [item.stepId, item.values]));
   const completed = [...prior.completed];
@@ -371,8 +380,22 @@ export async function runInvestigationRecipe(
 
   for (const baseStep of plan.steps) {
     options.signal?.throwIfAborted();
-    const step = selectedStep(baseStep, selectionsByStep.get(baseStep.id) ?? [], bindings, completed);
+    let step = selectedStep(baseStep, selectionsByStep.get(baseStep.id) ?? [], bindings, completed);
     if (completed.some((item) => item.id === step.id)) continue;
+    const missingInputs = step.arguments.filter(argument => PLACEHOLDER_PATTERN.test(argument));
+    if (missingInputs.length && options.selectInputs) {
+      const supplied = await options.selectInputs({ stepId: step.id, label: step.label, inputs: missingInputs });
+      options.signal?.throwIfAborted();
+      if (!Array.isArray(supplied) || supplied.length > missingInputs.length) throw new CliUsageError('Interactive selections exceed the remaining fixed-recipe inputs.');
+      if (supplied.length) {
+        const values = [...(selectionsByStep.get(step.id) ?? []), ...supplied];
+        const added = normalizeRetainedSelections(plan, [{ stepId: step.id, values }], 'Interactive selections');
+        selections = mergeSelections(plan, selections, added, completed, bindings);
+        validateSelectedInputs(plan, selections, bindings, completed);
+        selectionsByStep.set(step.id, values);
+        step = selectedStep(baseStep, values, bindings, completed);
+      }
+    }
     currentStep = step;
     if (step.arguments.some((argument) => /^<[^>]+>$/u.test(argument))) {
       state = 'awaiting_analyst_selection';
@@ -434,7 +457,7 @@ export async function runInvestigationRecipe(
       'Network steps run only with --approve-network for the current invocation. Unresolved analyst selections pause; supplied values replace exact placeholders and are passed as arguments without shell interpretation.',
       'Steps declaring human review require --confirm-review for that exact step in the current invocation. Confirm only after reviewing its selected material and each listed declaration; checkpoint metadata never grants permission to another step.',
       'A resume file is a local checkpoint and can retain selected local paths or values. It is not proof that prior evidence remains current or that a human reviewed each stored result.',
-      'Explicit artefact bindings reuse validated compatible earlier outputs without temporary extraction files. Content digests identify retained JSON; they do not authenticate a source or establish that evidence is true or current.',
+      'Standard and explicit artefact bindings reuse validated compatible earlier outputs without temporary extraction files. Full explicit input lists override uncompleted step connections. Resumes preserve their recorded connections; no new standard inputs are added to an older checkpoint. Content digests identify retained JSON, not source authenticity or currency.',
       'An incomplete collection pauses for review. Resuming retains it without recollection; the run remains partial even after later steps finish. Failed validation or export steps are retried, not accepted as evidence.',
     ]),
   });

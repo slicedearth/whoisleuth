@@ -56,11 +56,11 @@ describe('typed fixed-workflow artefact reuse', () => {
     }
   });
 
-  test('completes real collection, export and verification without extraction files', async () => {
+  test('standard inputs complete real collection, export and verification without extraction files', async () => {
     const stdout = capture();
     const stderr = capture();
     let collections = 0;
-    const code = await runCli(['workflow-run', 'domain-triage', 'example.test', '--approve-network', ...BINDING_ARGS, '--json'], {
+    const code = await runCli(['workflow-run', 'domain-triage', 'example.test', '--approve-network', '--json'], {
       stdout: stdout.stream, stderr: stderr.stream, now: () => NOW,
       runUnifiedLookup: async () => { collections += 1; return { diagnostics: { rdap: { status: 'unsupported' }, whois: { status: 'skipped' } }, availability: {} }; },
       readExportInput: () => assert.fail('No external Lookup selected.'),
@@ -70,6 +70,7 @@ describe('typed fixed-workflow artefact reuse', () => {
     assert.equal(collections, 1);
     const result = JSON.parse(stdout.value());
     assert.equal(result.state, 'complete');
+    assert.deepEqual(result.artifactBindings, BINDINGS);
     assert.deepEqual(result.completedSteps.map((step: { command: string }) => step.command), ['lookup', 'export', 'verify-artifact']);
     assert.equal(result.completedSteps[2].result.artifact.schema, 'whoisleuth.lookup-evidence');
     assert.equal(result.completedSteps[1].result.diagnostics.rdap.status, 'unsupported');

@@ -1251,10 +1251,11 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     await writeFile(handoffCases, JSON.stringify({ version: publicCases.version, exportedAt: publicCases.exportedAt, cases: publicCases.cases }), { flag: 'wx', mode: 0o600 });
     const handoff = record(JSON.parse(await runInstalledCheck(executable, [
       'workflow-run', 'evidence-handoff', 'Example review', '--select', `verify=${handoffEvidence}`,
-      '--select', `package=${handoffCases}`, '--use-artifact', 'lint:1=package', '--confirm-review', 'package', '--json',
+      '--select', `package=${handoffCases}`, '--confirm-review', 'package', '--json',
     ], 'offline handoff review boundary')), 'Installed handoff');
     if (handoff.state !== 'awaiting_review_confirmation' || record(handoff.currentStep, 'Handoff review step').id !== 'lint'
-      || !Array.isArray(handoff.completedSteps) || handoff.completedSteps.length !== 2) {
+      || !Array.isArray(handoff.completedSteps) || handoff.completedSteps.length !== 2
+      || JSON.stringify(handoff.artifactBindings) !== JSON.stringify([{ stepId: 'lint', input: 1, sourceStepId: 'package' }])) {
       throw new TypeError('Installed handoff did not pause before the separately declared sharing review.');
     }
     await writeFile(handoffCheckpoint, JSON.stringify(handoff), { flag: 'wx', mode: 0o600 });

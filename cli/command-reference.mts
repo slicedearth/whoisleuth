@@ -331,6 +331,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--summary': flag(),
   '--verbose': flag(),
   '--browse': flag(),
+  '--interactive': flag(),
   '--save-lookup': file(),
   '--strict-exit': flag(),
   '--fail-on': optionDefinition('policy_list', {
@@ -1449,12 +1450,12 @@ const COMMAND_SEEDS = Object.freeze({
   "workflow-run": commandSeed({
     reference: {
       description: 'Execute approved steps from a fixed investigation recipe and emit a resumable checkpoint.',
-      example: 'whoisleuth workflow-run domain-triage example.test --approve-network --use-artifact export:1=collect --use-artifact verify:1=export --json --output run.json',
-      boundary: 'Only installed recipe commands can run. Network steps require explicit approval for each invocation. Use --use-artifact <step-id>:<input-number>=<earlier-step-id> for compatible retained outputs; input numbers start at 1. Repeat --select for remaining placeholders in order; values stay literal and cannot start with a hyphen or invoke a shell. A step that declares human review pauses until --confirm-review <step-id> is supplied for that invocation, after checking its selected material and listed declarations. Checkpoints do not grant later approvals. Exact schemas, content digests and input bindings identify retained output, not authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.',
+      example: 'whoisleuth workflow-run domain-triage example.test --approve-network --json --output run.json',
+      boundary: 'Only installed recipe commands can run. Network steps require explicit approval for each invocation. New runs connect compatible earlier outputs using the recipe defaults. Use --use-artifact <step-id>:<input-number>=<earlier-step-id> to override a connection; input numbers start at 1. Repeat --select for remaining placeholders in order, or supply every input for a step to replace its connections with files. Values stay literal and cannot start with a hyphen or invoke a shell. Optional --interactive prompts on terminal stderr for missing inputs; a blank answer pauses. It grants neither network approval nor human-review confirmation. A step declaring human review still requires --confirm-review <step-id> for that invocation. Checkpoints do not grant later approvals. Resumes preserve recorded connections. Content digests identify retained output, not authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.',
     },
     collection: { mode: 'network', scope: 'Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause.' },
     summary: 'Execute approved fixed-recipe steps',
-    options: ['--select', '--use-artifact', '--confirm-review', '--approve-network', '--resume', '--json', '--quiet', '--no-color'],
+    options: ['--select', '--use-artifact', '--confirm-review', '--approve-network', '--resume', '--interactive', '--json', '--quiet', '--no-color'],
     positionals: Object.freeze([
     positional('recipe', 'enum', 1, 1, RUNNABLE_INVESTIGATION_PLAN_RECIPES),
     positional('subject', 'text', 1, 1),

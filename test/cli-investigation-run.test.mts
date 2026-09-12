@@ -105,7 +105,7 @@ describe('fixed investigation execution', () => {
 
   test('exposes explicit approval and resume arguments through the runner', async () => {
     assert.deepEqual(parseCliArguments(['workflow-run', 'domain-triage', 'example.test', '--select', 'export=saved.json', '--approve-network', '--resume', 'state.json', '--json']), {
-      action: 'workflow-run', recipe: 'domain-triage', subject: 'example.test', resumeSource: 'state.json', selections: [{ stepId: 'export', value: 'saved.json' }], artifactBindings: [], confirmedReviews: [], approveNetwork: true, output: 'json', quiet: false, color: true,
+      action: 'workflow-run', recipe: 'domain-triage', subject: 'example.test', resumeSource: 'state.json', selections: [{ stepId: 'export', value: 'saved.json' }], artifactBindings: [], confirmedReviews: [], approveNetwork: true, interactive: false, output: 'json', quiet: false, color: true,
     });
     let stdout = '';
     let calls = 0;
@@ -118,7 +118,7 @@ describe('fixed investigation execution', () => {
     });
     assert.equal(code, EXIT_CODES.SUCCESS);
     assert.equal(calls, 1);
-    assert.equal(JSON.parse(stdout).state, 'awaiting_analyst_selection');
+    assert.equal(JSON.parse(stdout).state, 'complete');
   });
 
   test('rejects unknown, excessive, and option-shaped analyst selections', async () => {
@@ -301,13 +301,19 @@ describe('fixed investigation execution', () => {
       assert.equal(result.currentStep?.command, command);
       assert.equal(investigationRunExitCode(result), 4);
       assert.match(formatInvestigationRun(result), /Review\s+Collect/u);
+      const subsequent: string[] = [];
       const resumed = await runInvestigationRecipe(recipe, 'example.test', {
         approveNetwork: false, resumeInput: JSON.stringify(result), generatedAt: NOW,
-        execute: async () => { assert.fail('A retained observation must not be recollected.'); },
+        execute: async next => {
+          assert.ok(['export', 'verify-artifact'].includes(next), 'A retained observation must not be recollected.');
+          subsequent.push(next);
+          return { exitCode: 0, stdout: commandOutput(recipe, 'example.test', next) };
+        },
       });
       assert.equal(investigationRunExitCode(resumed), 4);
-      assert.deepEqual(resumed.completedSteps, result.completedSteps);
-      assert.ok(['awaiting_analyst_selection', 'awaiting_network_approval'].includes(resumed.state));
+      assert.deepEqual(resumed.completedSteps.slice(0, result.completedSteps.length), result.completedSteps);
+      assert.deepEqual(subsequent, recipe === 'domain-triage' ? ['export', 'verify-artifact'] : []);
+      assert.equal(resumed.state, recipe === 'domain-triage' ? 'partial' : recipe === 'owned-domain-review' ? 'awaiting_network_approval' : 'awaiting_analyst_selection');
     }
   });
 

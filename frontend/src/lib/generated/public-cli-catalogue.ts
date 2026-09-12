@@ -3463,9 +3463,9 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Execute approved fixed-recipe steps",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth workflow-run \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison|campaign-review|certificate-anomaly|registry-disagreement|evidence-handoff|planned-domain-change|post-change-verification> \u003csubject> [--select \u003cvalue>] [--use-artifact \u003cvalue>] [--confirm-review \u003cvalue>] [--approve-network] [--resume \u003cfile>] [--json] [--quiet] [--no-color]",
-      "example": "whoisleuth workflow-run domain-triage example.test --approve-network --use-artifact export:1=collect --use-artifact verify:1=export --json --output run.json",
-      "boundary": "Only installed recipe commands can run. Network steps require explicit approval for each invocation. Use --use-artifact \u003cstep-id>:\u003cinput-number>=\u003cearlier-step-id> for compatible retained outputs; input numbers start at 1. Repeat --select for remaining placeholders in order; values stay literal and cannot start with a hyphen or invoke a shell. A step that declares human review pauses until --confirm-review \u003cstep-id> is supplied for that invocation, after checking its selected material and listed declarations. Checkpoints do not grant later approvals. Exact schemas, content digests and input bindings identify retained output, not authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.",
+      "usage": "whoisleuth workflow-run \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison|campaign-review|certificate-anomaly|registry-disagreement|evidence-handoff|planned-domain-change|post-change-verification> \u003csubject> [--select \u003cvalue>] [--use-artifact \u003cvalue>] [--confirm-review \u003cvalue>] [--approve-network] [--resume \u003cfile>] [--interactive] [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth workflow-run domain-triage example.test --approve-network --json --output run.json",
+      "boundary": "Only installed recipe commands can run. Network steps require explicit approval for each invocation. New runs connect compatible earlier outputs using the recipe defaults. Use --use-artifact \u003cstep-id>:\u003cinput-number>=\u003cearlier-step-id> to override a connection; input numbers start at 1. Repeat --select for remaining placeholders in order, or supply every input for a step to replace its connections with files. Values stay literal and cannot start with a hyphen or invoke a shell. Optional --interactive prompts on terminal stderr for missing inputs; a blank answer pauses. It grants neither network approval nor human-review confirmation. A step declaring human review still requires --confirm-review \u003cstep-id> for that invocation. Checkpoints do not grant later approvals. Resumes preserve recorded connections. Content digests identify retained output, not authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.",
       "collection": {
         "mode": "network",
         "scope": "Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause."
@@ -3507,6 +3507,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--confirm-review",
         "--approve-network",
         "--resume",
+        "--interactive",
         "--json",
         "--quiet",
         "--no-color"
@@ -3933,7 +3934,7 @@ export const PUBLIC_CLI_CATALOGUE = {
             "mode": "offline",
             "approval": "analyst_selection",
             "produces": "whoisleuth\u002elookup-evidence",
-            "completion": "Select a reviewed Lookup file or explicitly bind the collected Lookup output."
+            "completion": "Reuse the collected Lookup by default, or select a different reviewed Lookup file."
           },
           {
             "id": "verify",

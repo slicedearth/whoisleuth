@@ -1,4 +1,5 @@
 import { StringDecoder } from 'node:string_decoder';
+import { canReadInteractiveLine, type TerminalInput as LookupBrowserInput } from './terminal-input.mts';
 
 import type { LookupSourceSettlement } from '../lib/lookup.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
@@ -39,23 +40,11 @@ const MAX_PENDING_INPUT_LENGTH = 512;
 const MAX_LOOKUP_BROWSER_INPUT_CHUNK_BYTES = 2_048;
 const COMPLETE_CSI_RE = /^\u001b\[[0-?]*[ -/]*[@-~]/u;
 
-type LookupBrowserInput = {
-  isTTY?: boolean;
-  isRaw?: boolean;
-  setRawMode?(enabled: boolean): unknown;
-  resume?(): unknown;
-  pause?(): unknown;
-  isPaused?(): boolean;
-  on?(event: 'data' | 'end', listener: (chunk?: unknown) => void): unknown;
-  off?(event: 'data' | 'end', listener: (chunk?: unknown) => void): unknown;
-};
-
 type LookupBrowserOutput = WritableTerminal & {
   rows?: number;
   on?(event: 'resize', listener: () => void): unknown;
   off?(event: 'resize', listener: () => void): unknown;
 };
-
 
 type LookupBrowserOptions = Readonly<{
   input: LookupBrowserInput;
@@ -83,18 +72,10 @@ function canBrowseLookup(
   output: LookupBrowserOutput | null | undefined,
   environment: TerminalEnvironment = process.env,
 ): boolean {
-  return input?.isTTY === true
-    && output?.isTTY === true
-    && typeof input.setRawMode === 'function'
-    && typeof input.resume === 'function'
-    && typeof input.pause === 'function'
-    && typeof input.on === 'function'
-    && typeof input.off === 'function'
-    && typeof output.write === 'function'
-    && !(Number.isFinite(output.columns) && Number(output.columns) < 40)
-    && !(Number.isFinite(output.rows) && Number(output.rows) < MIN_LOOKUP_BROWSER_HEIGHT)
-    && environment.TERM !== 'dumb'
-    && !environment.CI;
+  return canReadInteractiveLine(input, output, environment)
+    && !(Number.isFinite(output?.columns) && Number(output?.columns) < 40)
+    && !(Number.isFinite(output?.rows) && Number(output?.rows) < MIN_LOOKUP_BROWSER_HEIGHT)
+    && environment.TERM !== 'dumb';
 }
 
 type InternalLookupBrowserOptions = LookupBrowserOptions & Readonly<{

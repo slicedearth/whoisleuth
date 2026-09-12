@@ -28,6 +28,7 @@ import type { WorkflowStepInputs } from './investigation-artifacts.mts';
 import type { CliCommand } from './command-reference.mts';
 import { createBufferedOutput } from './output-file.mts';
 import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import { boundedInteractiveAnswer, canReadInteractiveLine, readBoundedInteractiveLine } from './terminal-input.mts';
 import { WORKFLOW_INLINE_COMMANDS } from './inline-command-families.mts';
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
 
@@ -144,6 +145,10 @@ async function runWorkflowRecipeCommand(
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Investigation workflow');
+  const input = (dependencies.stdin ?? process.stdin) as Parameters<typeof canReadInteractiveLine>[0];
+  if (args.interactive && !canReadInteractiveLine(input, context.stderr, dependencies.environment)) {
+    throw new CliUsageError('--interactive requires terminal input and terminal stderr. Use --select for unattended workflows.');
+  }
   let resumeInput: string | null = null;
   if (args.resumeSource) {
     try {
@@ -162,6 +167,20 @@ async function runWorkflowRecipeCommand(
     selections: args.selections,
     artifactBindings: args.artifactBindings,
     confirmedReviews: args.confirmedReviews,
+    ...(args.interactive ? { selectInputs: async (request: Readonly<{ stepId: string; label: string; inputs: readonly string[] }>) => {
+      context.writeStderr(`${request.label}\nEnter literal input paths or values. Leave blank to pause; no approval is implied.\n`);
+      const answers: string[] = [];
+      for (const placeholder of request.inputs) {
+        const prompt = `${request.stepId} ${placeholder}: `;
+        const answer = boundedInteractiveAnswer(await (dependencies.workflowQuestion
+          ? dependencies.workflowQuestion(prompt)
+          : readBoundedInteractiveLine(prompt, { input: input!, output: context.stderr,
+            ...(dependencies.signal ? { signal: dependencies.signal } : {}) })));
+        if (!answer) break;
+        answers.push(answer);
+      }
+      return answers;
+    } } : {}),
     resumeInput,
     generatedAt: context.now(),
     ...(dependencies.signal ? { signal: dependencies.signal } : {}),

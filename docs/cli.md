@@ -169,29 +169,29 @@ the run still exits with code 4. Validation, usage and export failures remain
 failures and are retried on resume. Step diagnostics stay on stderr, separate
 from checkpoint JSON. New network steps still need `--approve-network`.
 
-Use `--use-artifact <step-id>:<input-number>=<earlier-step-id>` to reuse a
-compatible retained output. Input numbers start at 1 and refer to placeholders
-shown by `workflow-plan`. For a complete domain-triage hand-off:
+New runs connect compatible earlier outputs for domain triage, registry review,
+historical comparison and handoff linting. For a complete domain-triage hand-off:
 
 ```sh
 whoisleuth workflow-run domain-triage example.test --approve-network \
-  --use-artifact export:1=collect --use-artifact verify:1=export \
   --json --output run.json
 ```
 
 Bindings accept Lookup outputs for export, diff, timeline, comparison, source
 reports and briefs; evidence exports for verification; and Case-pack output
 for sharing review. Remaining placeholders use `--select` in order;
-for example, `--use-artifact diff:2=current --select diff=previous.json`.
+for example, `--select diff=previous.json` keeps the current observation as the
+second input. Supply every input for an uncompleted step to use files instead,
+or override a connection with `--use-artifact <step-id>:<input-number>=<earlier-step-id>`.
+Input numbers start at 1 and refer to the fixed recipe's placeholders.
 `diff` compares saved observations of the same or different domains; `timeline`
 orders observations of one domain. Candidate and domain-control intent inputs
-remain analyst selections. No file is inferred or extracted automatically.
+remain analyst selections. No external file is inferred or extracted automatically.
 
 For example, registry review can reuse its collection without extracting files:
 
 ```sh
 whoisleuth workflow-run registry-disagreement example.test --approve-network \
-  --use-artifact compare:1=collect --use-artifact report:1=collect \
   --json --output registry-run.json
 ```
 
@@ -201,6 +201,12 @@ the selected material and the listed declarations, then use
 Confirmation applies only to the current invocation and is not inferred from
 the checkpoint. A completed recipe means its commands ran, not that an
 investigation is resolved or sharing is authorised.
+
+Optional `--interactive` asks for missing paths or values on terminal stderr,
+keeping checkpoint JSON on stdout or in the selected output file. A blank answer
+pauses. Prompts do not grant network approval or confirm review. Redirected input
+and unattended runs use `--select` instead. Resuming a checkpoint preserves its
+recorded connections; new defaults are not applied to old checkpoints.
 
 Checkpoint version 3 reads versions 1 and 2. Older installations reject version
 3. Checkpoints retain exact output schemas, content digests and input bindings;
