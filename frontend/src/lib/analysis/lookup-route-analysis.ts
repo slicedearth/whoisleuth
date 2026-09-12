@@ -547,6 +547,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   const caseEvidence = {
     inputHostname: typeof result?.inputHostname === 'string' ? result.inputHostname : null,
     ...(typeof availability.observationHostname === 'string' ? { observationHostname: availability.observationHostname } : {}),
+    ...(availability.webObservationMode === 'selected_url' ? { webObservationMode: 'selected_url' as const } : {}),
     availability: boundedTechnologyText(availability.state, 40),
     confidence: boundedTechnologyText(availability.confidence, 40) || null,
     riskModelVersion: risk?.modelVersion ?? null,

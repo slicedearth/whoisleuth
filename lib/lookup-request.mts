@@ -10,6 +10,7 @@ import {
   readJsonResponseCapped,
 } from './bounded-json-response.mts';
 import { scanBoundedJson } from './bounded-json.mts';
+import { prepareSelectedLookupUrl } from '../packages/evidence/lookup-target.mts';
 
 const LOOKUP_CLIENT_TIMEOUT_MS = 40_000;
 
@@ -37,6 +38,7 @@ type LookupRequestOptions = Readonly<{
   fetchImpl?: FetchImplementation;
   signal?: AbortSignal;
   timeoutMs?: number;
+  selectedUrl?: string;
 }>;
 
 const TIMEOUT_REASON = Object.freeze({ type: 'lookup-timeout' });
@@ -65,7 +67,10 @@ async function requestLookup(
 
   try {
     if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
-    const response = await fetchImpl(url, { signal: controller.signal });
+    const response = await fetchImpl(url, {
+      signal: controller.signal,
+      ...(options.selectedUrl ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: prepareSelectedLookupUrl(options.selectedUrl) }) } : {}),
+    });
     if (controller.signal.aborted) {
       await response.body?.cancel(controller.signal.reason).catch(() => {});
       throw new DOMException('Aborted', 'AbortError');

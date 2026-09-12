@@ -87,6 +87,12 @@ describe('fieldLabel', () => {
 });
 
 describe('formatSnapshotValue', () => {
+  test('presents selected-page scope without exposing an internal token', () => {
+    assert.equal(display.fieldLabel('webObservationMode'), 'Website target');
+    assert.equal(display.formatSnapshotValue('webObservationMode', 'selected_url'), 'Selected URL; path and query not retained');
+    assert.ok(display.snapshotFieldGroups(deepSnapshot({ webObservationMode: 'selected_url' }))
+      .some((group) => group.name === 'Observation context' && group.rows.some((row) => row.field === 'webObservationMode')));
+  });
   test('returns "Not observed" for null and undefined', () => {
     assert.equal(display.formatSnapshotValue('availability', null), 'Not observed');
     assert.equal(display.formatSnapshotValue('riskScore', undefined), 'Not observed');

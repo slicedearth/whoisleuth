@@ -20,8 +20,17 @@ test('reference section navigation is available before client hydration', async 
     await page.goto('/cli');
     const sections = page.getByRole('navigation', { name: 'CLI sections' });
     await expect(sections).toBeVisible();
-    await expect(sections.getByRole('link')).toHaveCount(6);
-    await expect(sections.getByRole('link', { name: 'Command reference' })).toHaveAttribute('href', '#commands');
+    const commands = sections.getByRole('link', { name: 'Command reference' });
+    await expect(commands).toHaveAttribute('href', '#commands');
+    await expect(sections.getByRole('link', { name: 'Capture companion' })).toHaveAttribute('href', '#capture-companion');
+    const targets = await sections.getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('href')));
+    expect(new Set(targets).size).toBe(targets.length);
+    for (const target of targets) {
+      expect(target).toMatch(/^#[a-z][a-z0-9-]*$/u);
+      await expect(page.locator(target!)).toHaveCount(1);
+    }
+    await commands.click();
+    await expect(page).toHaveURL(/\/cli#commands$/u);
   } finally {
     await context.close();
   }

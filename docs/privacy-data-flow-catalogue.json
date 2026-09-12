@@ -535,6 +535,7 @@
         "normalised_target",
         "dns_question",
         "homepage_request",
+        "selected_url_request",
         "tls_handshake"
       ],
       "dataDeliberatelyNotSent": [
@@ -542,7 +543,6 @@
         "unselected_local_files",
         "cookies_and_session_data",
         "unrelated_evidence_values",
-        "complete_query_bearing_urls",
         "credentials"
       ],
       "recipientClasses": [
@@ -596,7 +596,8 @@
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Each source retains its own state, observation time, completeness and limitations.",
-        "Fast and Compact never inherit the richer Deep request or storage contract."
+        "Fast and Compact never inherit the richer Deep request or storage contract.",
+        "A URL path and query are sent only after separate selection in a full Deep Lookup."
       ]
     },
     {
@@ -840,6 +841,7 @@
         "dns_question",
         "public_ip_address",
         "homepage_request",
+        "selected_url_request",
         "tls_handshake"
       ],
       "dataDeliberatelyNotSent": [
@@ -847,7 +849,6 @@
         "unselected_local_files",
         "cookies_and_session_data",
         "unrelated_evidence_values",
-        "complete_query_bearing_urls",
         "credentials"
       ],
       "recipientClasses": [
@@ -904,6 +905,7 @@
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Targets are disclosed only to the source families eligible for the selected mode.",
         "Fast, Compact, Deep and monitoring retain distinct request, evidence and storage boundaries.",
+        "Only explicit selected-URL collection in a single full Deep Lookup sends a path and query; fragments are excluded.",
         "A source failure or omission remains explicit and never establishes absence or safety."
       ]
     },
@@ -2255,8 +2257,8 @@
     },
     {
       "id": "website_probe",
-      "title": "Bounded homepage and static page evidence",
-      "requestPurpose": "Observe one bounded homepage and static response workflow.",
+      "title": "Bounded homepage or selected static page evidence",
+      "requestPurpose": "Observe one bounded homepage or explicitly selected URL through the static response workflow.",
       "job": "investigate",
       "executionPlanes": [
         "hosted_bounded_passive"
@@ -2267,14 +2269,14 @@
       "dataSent": [
         "normalised_target",
         "dns_question",
-        "homepage_request"
+        "homepage_request",
+        "selected_url_request"
       ],
       "dataDeliberatelyNotSent": [
         "browser_local_records",
         "unselected_local_files",
         "cookies_and_session_data",
         "unrelated_evidence_values",
-        "complete_query_bearing_urls",
         "credentials"
       ],
       "recipientClasses": [
@@ -2328,6 +2330,7 @@
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Static captured evidence is not a browser execution, vulnerability test or proof of page purpose.",
+        "Selected-URL collection sends the path and query only after explicit selection; retained paths and page-derived text still require privacy review.",
         "Complete query-bearing URLs, cookies, credentials, scripts and raw page content are not retained."
       ]
     },
@@ -4849,7 +4852,7 @@
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Fast is the default. An ICANN-recognised public domain, reserved documentation domain, IP, or ASN may occupy command position as shorthand; it delegates to this same parser and URL-like input requires the explicit lookup command. Deep mode adds bounded WHOIS, DNS, HTTP, TLS, technology, posture, and network context where applicable. A full Deep homepage observation can derive fixed publication and delivery/cache summaries from the same response without retaining raw metadata values or making another request. --browse opens before collection, shows aggregate Fast progress or independently settled planned Deep sources, and then navigates allowlisted retained fields in the completed document. Press ? for help and / to search rendered panel text only. Closing during collection cancels without a partial document. --save-lookup writes the exact completed private JSON only after a normal browser close; it can contain normalised evidence omitted from panels and refuses an existing path.",
+        "Fast is the default. An ICANN-recognised public domain, reserved documentation domain, IP, or ASN may occupy command position as shorthand; it delegates to this same parser and URL-like input requires the explicit lookup command. Deep mode adds bounded WHOIS, DNS, HTTP, TLS, technology, posture, and network context where applicable. --deep --exact-url explicitly sends the input URL path and query to the website, without its fragment; ordinary URL input sends only the hostname. --plan remains offline and omits the selected URL. Retained paths and page-derived text require review before sharing. A full Deep homepage observation can derive fixed publication and delivery/cache summaries from the same response without retaining raw metadata values or making another request. --browse opens before collection, shows aggregate Fast progress or independently settled planned Deep sources, and then navigates allowlisted retained fields in the completed document. Press ? for help and / to search rendered panel text only. Closing during collection cancels without a partial document. --save-lookup writes the exact completed private JSON only after a normal browser close; it can contain normalised evidence omitted from panels and refuses an existing path.",
         "Only the source families eligible for the selected command and mode receive the bounded target representation.",
         "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
       ],
@@ -4873,14 +4876,14 @@
             "dns_question",
             "homepage_request",
             "tls_handshake",
-            "public_ip_address"
+            "public_ip_address",
+            "selected_url_request"
           ],
           "dataDeliberatelyNotSent": [
             "browser_local_records",
             "unselected_local_files",
             "cookies_and_session_data",
             "unrelated_evidence_values",
-            "complete_query_bearing_urls",
             "credentials"
           ],
           "recipientClasses": [

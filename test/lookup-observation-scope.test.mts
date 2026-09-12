@@ -127,6 +127,34 @@ test('replay comparisons do not mistake a changed collection hostname for change
   assert.equal(diff.rows.find((row) => row.id === 'fact:page.title')?.kind, 'collection_quality_difference');
 });
 
+test('selected-page evidence keeps its current scope in both readers and does not fabricate a same-page comparison', async () => {
+  const document = await legacyDocument();
+  document.schemaVersion = 29;
+  Object.assign(document.analysis.availability, { observationHostname: HOST, webObservationMode: 'selected_url',
+    http: { requestUrl: `https://${HOST}/selected/path`, finalUrl: `https://${HOST}/selected/path` } });
+  const raw = JSON.stringify(document);
+  await verifyOfflineArtifact(raw);
+  const before = await parseLookupEvidenceReplay(raw);
+  assert.equal(before.webObservationMode, 'selected_url');
+  document.analysis.availability.pageTitle = 'Another selected page';
+  const after = await parseLookupEvidenceReplay(JSON.stringify(document));
+  const diff = buildLookupEvidenceReplayDiff(before, after);
+  assert.equal(diff.rows.find((row) => row.id === 'fact:page.title')?.kind, 'collection_quality_difference');
+  for (const availability of [
+    { ...document.analysis.availability, webObservationMode: 'unknown' },
+    { ...document.analysis.availability, observationHostname: undefined },
+    { ...document.analysis.availability, http: { requestUrl: `https://${HOST}/selected/path?q=private-example` } },
+    { ...document.analysis.availability, http: { requestUrl: 'https://other.example.test/' } },
+  ]) {
+    const invalid = JSON.stringify({ ...document, analysis: { ...document.analysis, availability } });
+    await assert.rejects(() => verifyOfflineArtifact(invalid));
+    await assert.rejects(() => parseLookupEvidenceReplay(invalid));
+  }
+  const historical = JSON.stringify({ ...document, schemaVersion: 28 });
+  await assert.rejects(() => verifyOfflineArtifact(historical));
+  await assert.rejects(() => parseLookupEvidenceReplay(historical));
+});
+
 test('Case snapshots preserve scope without changing historical fingerprints or comparing different hosts', () => {
   const prior = normalizeSnapshot({ inputHostname: HOST, scanDepth: 'deep', capturedAt: NOW, pageTitle: 'Old', registrar: 'Earlier registrar' }, { caseDomain: ROOT });
   assert.ok(prior);

@@ -25,6 +25,7 @@ import * as crypto from 'node:crypto';
 import { Agent, fetch as undiciFetch } from 'undici';
 
 import { MAX_OUTBOUND_REDIRECTS } from './outbound-request-bounds.mts';
+import { MAX_OUTBOUND_HTTP_URL_CHARACTERS } from '../packages/contracts/http-url.mts';
 
 type PublicAddressRecord = { address: string; family: number };
 type SafeFetchDispatcher = { close?: () => Promise<unknown> | unknown };
@@ -52,7 +53,7 @@ type SafeFetchDetailedResult = {
 type CappedTextOptions = { includeSha256?: boolean; fatalUtf8?: boolean };
 
 const MAX_REDIRECTS = MAX_OUTBOUND_REDIRECTS;
-const MAX_SAFE_FETCH_URL_LENGTH = 4096;
+const MAX_SAFE_FETCH_URL_LENGTH = MAX_OUTBOUND_HTTP_URL_CHARACTERS;
 const MAX_SAFE_FETCH_ADDRESS_CANDIDATES = 64;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 

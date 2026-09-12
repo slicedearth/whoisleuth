@@ -270,6 +270,10 @@ function normalizePin(
       || item.observationHostname !== item.observationHostname.toLowerCase()) return null;
     normalized.observationHostname = item.observationHostname;
   }
+  if ((options.sourceVersion ?? CASE_SCHEMA_VERSION) > PUBLISHED_V2_3_CASE_SCHEMA_VERSION && item.webObservationMode !== undefined) {
+    if (item.webObservationMode !== 'selected_url') return null;
+    normalized.webObservationMode = 'selected_url';
+  }
   // Introduced in Case 15. Older public records must not acquire an identity
   // merely because an unrecognised input field resembles a digest.
   if ((options.sourceVersion ?? CASE_SCHEMA_VERSION) >= 15

@@ -32,6 +32,7 @@ import {
 import { buildUnifiedLookupResponse } from './lookup-response.mts';
 import { createLookupTimingTracker } from './lookup-diagnostics.mts';
 import type { LookupTimingSource } from './lookup-diagnostics.mts';
+import { prepareSelectedLookupUrl } from '../packages/evidence/lookup-target.mts';
 
 type LookupOptions = {
   fetchRdapRecord?: typeof fetchRdapRecord;
@@ -49,6 +50,7 @@ type LookupOptions = {
   sslblNow?: string | number | Date;
   fast?: boolean;
   compact?: boolean;
+  selectedUrl?: string;
   externalIntelligence?: boolean;
   malwareHostIntelligence?: boolean;
   malwareIocIntelligence?: boolean;
@@ -91,6 +93,11 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const websiteProbeEnabled = featureDecision('website_probe', featurePolicy).enabled;
   const dnsIntelligenceEnabled = featureDecision('dns_intelligence', featurePolicy).enabled;
   const skipWhois = fast || !whoisEnabled;
+  const selectedUrl = options.selectedUrl === undefined ? undefined
+    : prepareSelectedLookupUrl(options.selectedUrl, classified.inputHostname ?? classified.value);
+  if (selectedUrl && (classified.type !== 'domain' || fast || compact || !availabilityEnabled || !websiteProbeEnabled)) {
+    throw new TypeError('Selected URL collection requires an enabled full Deep domain lookup.');
+  }
 
   const rdapPromise = rdapEnabled
     ? measure('rdap', () => fetchRdap(classified.type, classified.value, options.signal ? { signal: options.signal } : {}))
@@ -118,6 +125,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
         includeTechnologyProfile: !fast,
         includeSecurityPosture: !compact,
         ...(!fast && !compact ? { observationHostname: classified.inputHostname } : {}),
+        ...(selectedUrl ? { selectedUrl } : {}),
         featurePolicy,
         ...(options.signal ? { signal: options.signal } : {}),
         rdapRecordPromise: rdapPromise,

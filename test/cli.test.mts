@@ -297,7 +297,7 @@ describe('CLI argument parsing', () => {
     assert.equal(await runCli(['export', '--help'], { stdout: exportStdout.stream, stderr: stderr.stream }), EXIT_CODES.SUCCESS);
     assert.match(exportStdout.value(), /Saved Lookup versions 1 and 2/u);
     assert.match(exportStdout.value(), /Current schema-\d+ exports/u);
-    assert.match(exportStdout.value(), /published v2 schema \d+ and exact v1 schema \d+ remain readable/u);
+    assert.match(exportStdout.value(), /published v2 schemas 27, 28 and exact v1 schema 26 remain readable/u);
     assert.match(exportStdout.value(), /other historical and unreleased shapes are unsupported/u);
     assert.equal(stderr.value(), '');
   });
@@ -627,6 +627,39 @@ describe('CLI lookup runner', () => {
     assert.match(stdout.value(), /Target: example\.test/u);
     assert.match(stdout.value(), /Submitted hostname: login\.example\.test/u);
     assert.doesNotMatch(stdout.value(), /Observation hostname:/u);
+  });
+
+  test('explicit URL plans disclose network scope without retaining the input URL or collecting it', async () => {
+    const stdout = capture();
+    const code = await runCli(['lookup', 'https://login.example.test/review?a=private-example#local-fragment', '--deep', '--exact-url', '--plan', '--json'], {
+      stdout: stdout.stream, stderr: capture().stream,
+      runUnifiedLookup: async () => { throw new Error('Plans cannot collect'); },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    const plan = JSON.parse(stdout.value());
+    assert.equal(plan.target.query, 'login.example.test');
+    assert.equal(plan.planning.networkRequestsMade, false);
+    assert.match(plan.planning.sources.find((item: {source:string}) => item.source === 'domain_evidence').disclosure, /selected URL path and query/);
+    assert.doesNotMatch(stdout.value(), /private-example|local-fragment|\/review/);
+    assert.throws(() => parseCliArguments(['lookup', 'https://example.test/path', '--exact-url']), /deep/);
+  });
+
+  test('explicit URL collection passes the selected target only to the collector and saves the hostname as query', async () => {
+    const stdout = capture();
+    let calls = 0;
+    const code = await runCli(['lookup', 'https://login.example.com/review?a=private-example#local-fragment', '--deep', '--exact-url', '--json'], {
+      stdout: stdout.stream, stderr: capture().stream,
+      runUnifiedLookup: async (classified, options) => {
+        calls += 1;
+        assert.equal(classified.value, 'example.com');
+        assert.equal(options?.selectedUrl, 'https://login.example.com/review?a=private-example');
+        return lookupResult();
+      },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(calls, 1);
+    assert.equal(JSON.parse(stdout.value()).query, 'login.example.com');
+    assert.doesNotMatch(stdout.value(), /private-example|local-fragment/);
   });
 
   test('invalid input is a usage error and never calls lookup', async () => {

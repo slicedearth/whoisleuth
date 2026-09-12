@@ -23,14 +23,14 @@ This catalogue describes existing execution, disclosure, retention and assurance
 
 | Capability | Job | Trigger | Planes | Scan modes | Network | Disclosure | Recipients | Credentials | Retention | Export | Scoring | Authorisation |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `lookup` — Unified Lookup and bounded multi-target collection | investigate | explicit browser action | hosted bounded passive | fast<br>compact<br>deep<br>monitor | bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>public ip address<br>homepage request<br>tls handshake | registry service<br>dns resolver<br>target public service | none | transient | deliberate bounded | bounded risk and acquisition input | authenticated explicit action |
+| `lookup` — Unified Lookup and bounded multi-target collection | investigate | explicit browser action | hosted bounded passive | fast<br>compact<br>deep<br>monitor | bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>public ip address<br>homepage request<br>selected url request<br>tls handshake | registry service<br>dns resolver<br>target public service | none | transient | deliberate bounded | bounded risk and acquisition input | authenticated explicit action |
 | `rdap` — RDAP registration and allocation evidence | investigate | authenticated request | hosted bounded passive | fast<br>compact<br>deep<br>monitor | bounded passive | normalised target<br>registry query | registry service | none | transient | deliberate bounded | bounded risk and acquisition input | authenticated request |
 | `rdap_nameserver_search` — Registry-scoped RDAP nameserver search | investigate | explicit browser action | hosted bounded passive | deep | bounded passive | normalised target<br>registry query | registry service | none | transient | none | none | authenticated explicit action |
 | `whois` — Referral-aware WHOIS publication evidence | investigate | authenticated request | hosted bounded passive | deep<br>monitor | bounded passive | normalised target<br>whois query | registry service | none | transient | deliberate bounded | bounded risk and acquisition input | authenticated request |
 | `availability` — Authority-aware registration availability | investigate | authenticated request | hosted bounded passive | fast<br>compact<br>deep<br>monitor | conditional bounded passive | normalised target<br>registry query<br>dns question | registry service<br>dns resolver | none | transient | deliberate bounded | bounded risk and acquisition input | authenticated request |
-| `domain_evidence` — Bounded domain evidence collection | investigate | authenticated request | hosted bounded passive | fast<br>compact<br>deep<br>monitor | conditional bounded passive | normalised target<br>dns question<br>homepage request<br>tls handshake | dns resolver<br>target public service | none | transient | deliberate bounded | bounded risk and acquisition input | authenticated request |
+| `domain_evidence` — Bounded domain evidence collection | investigate | authenticated request | hosted bounded passive | fast<br>compact<br>deep<br>monitor | conditional bounded passive | normalised target<br>dns question<br>homepage request<br>selected url request<br>tls handshake | dns resolver<br>target public service | none | transient | deliberate bounded | bounded risk and acquisition input | authenticated request |
 | `dns_intelligence` — DNS intelligence | investigate | authenticated request | hosted bounded passive | deep<br>monitor | bounded passive | normalised target<br>dns question | dns resolver | none | transient | deliberate bounded | bounded risk input | authenticated request |
-| `website_probe` — Bounded homepage and static page evidence | investigate | authenticated request | hosted bounded passive | deep | bounded passive | normalised target<br>dns question<br>homepage request | dns resolver<br>target public service | none | transient | deliberate bounded | bounded risk and acquisition input | authenticated request |
+| `website_probe` — Bounded homepage or selected static page evidence | investigate | authenticated request | hosted bounded passive | deep | bounded passive | normalised target<br>dns question<br>homepage request<br>selected url request | dns resolver<br>target public service | none | transient | deliberate bounded | bounded risk and acquisition input | authenticated request |
 | `tls_intelligence` — Bounded TLS connection and certificate evidence | assure | authenticated request | hosted bounded passive | deep | bounded passive | normalised target<br>dns question<br>tls handshake | dns resolver<br>target public service | none | transient | deliberate bounded | none | authenticated request |
 | `certificate_transparency` — Certificate Transparency search | investigate | explicit browser action | hosted bounded passive | deep | bounded passive | certificate search term | certificate transparency service | none | transient | deliberate bounded | none | authenticated explicit action |
 | `security_txt` — Optional security.txt collection | respond | explicit browser action | hosted bounded passive | deep | bounded passive | normalised target<br>dns question<br>homepage request | dns resolver<br>target public service | none | transient | deliberate bounded | none | authenticated explicit action |
@@ -122,7 +122,7 @@ Variant rows override the aggregate operation boundary; no-request variants neve
 | `command.cli.lookup` | `plan_fast` | explicit cli command | local cli offline | none | none | none | none | bounded runtime report | none | none | local output deliberate | metadata only | none | explicit action | bounded atomic | all or nothing | complete | None |
 | `command.cli.lookup` | `plan_deep` | explicit cli command | local cli offline | none | none | none | none | bounded runtime report | none | none | local output deliberate | metadata only | none | explicit action | bounded atomic | all or nothing | complete | None |
 | `command.cli.lookup` | `collect_fast` | explicit cli command | local cli network | bounded passive | normalised target<br>registry query<br>dns question | registry service<br>dns resolver | registry light | collector specific | command bounded | none | local output deliberate | local output | bounded risk and acquisition input | explicit action | client stops waiting | explicit per source | complete<br>partial | None |
-| `command.cli.lookup` | `collect_deep` | explicit cli command | local cli network | bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>homepage request<br>tls handshake<br>public ip address | registry service<br>dns resolver<br>target public service | registry deep | collector specific | command bounded | none | local output deliberate | local output | bounded risk and acquisition input | explicit action | client stops waiting | explicit per source | complete<br>partial | None |
+| `command.cli.lookup` | `collect_deep` | explicit cli command | local cli network | bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>homepage request<br>tls handshake<br>public ip address<br>selected url request | registry service<br>dns resolver<br>target public service | registry deep | collector specific | command bounded | none | local output deliberate | local output | bounded risk and acquisition input | explicit action | client stops waiting | explicit per source | complete<br>partial | None |
 | `command.cli.bulk` | `plan_fast` | explicit cli command | local cli offline | none | none | none | none | bounded runtime report | none | none | local output deliberate | metadata only | none | explicit action | bounded atomic | all or nothing | complete | None |
 | `command.cli.bulk` | `plan_deep` | explicit cli command | local cli offline | none | none | none | none | bounded runtime report | none | none | local output deliberate | metadata only | none | explicit action | bounded atomic | all or nothing | complete | None |
 | `command.cli.bulk` | `collect_fast` | explicit cli command | local cli network | bounded passive | normalised target<br>registry query<br>dns question | registry service<br>dns resolver | registry light | collector specific | command bounded | none | local output deliberate | local output | bounded risk and acquisition input | explicit action | queue stops admission | explicit per item | complete<br>partial | None |
@@ -265,6 +265,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 
 - Targets are disclosed only to the source families eligible for the selected mode.
 - Fast, Compact, Deep and monitoring retain distinct request, evidence and storage boundaries.
+- Only explicit selected-URL collection in a single full Deep Lookup sends a path and query; fragments are excluded.
 - A source failure or omission remains explicit and never establishes absence or safety.
 
 ### RDAP registration and allocation evidence
@@ -290,14 +291,16 @@ Runtime configuration and admission remain with their existing enforcement owner
 
 - Each source retains its own state, observation time, completeness and limitations.
 - Fast and Compact never inherit the richer Deep request or storage contract.
+- A URL path and query are sent only after separate selection in a full Deep Lookup.
 
 ### DNS intelligence
 
 - Resolver answers are point-in-time publications and do not prove provider ownership or control.
 
-### Bounded homepage and static page evidence
+### Bounded homepage or selected static page evidence
 
 - Static captured evidence is not a browser execution, vulnerability test or proof of page purpose.
+- Selected-URL collection sends the path and query only after explicit selection; retained paths and page-derived text still require privacy review.
 - Complete query-bearing URLs, cookies, credentials, scripts and raw page content are not retained.
 
 ### Bounded TLS connection and certificate evidence

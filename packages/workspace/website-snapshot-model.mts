@@ -1,5 +1,6 @@
 import { normalizeDomain } from '../cases/case-model.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { validWebObservationMode } from '../evidence/lookup-target.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {
   MAX_WEBSITE_SNAPSHOTS,
@@ -76,6 +77,7 @@ export type WebsiteIdentityValues = Readonly<{
 export type WebsiteProfileSnapshot = Readonly<{
   id: string;
   domain: string;
+  webObservationMode?: 'selected_url';
   observedAt: string;
   savedAt: string;
   complete: boolean;
@@ -313,9 +315,12 @@ export function normalizeWebsiteProfileSnapshot(raw: unknown, sourceVersion?: nu
   const savedAt = timestamp(value?.savedAt);
   const id = text(value?.id, 128);
   if (!domain || !observedAt || !savedAt || !id) return null;
+  const acceptsWebScope = sourceVersion === undefined || sourceVersion >= 6;
+  if (acceptsWebScope && !validWebObservationMode(value?.webObservationMode)) return null;
   return {
     id,
     domain,
+    ...(acceptsWebScope && value?.webObservationMode === 'selected_url' ? { webObservationMode: value.webObservationMode } : {}),
     observedAt,
     savedAt,
     complete: value?.complete === true,
@@ -532,6 +537,7 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
     };
   }
   const technologyVersionBefore = before.profileProvenance.technology.version;
+  const selectedPage = before.webObservationMode === 'selected_url' || after.webObservationMode === 'selected_url';
   const technologyVersionAfter = after.profileProvenance.technology.version;
   const postureVersionBefore = before.profileProvenance.securityPosture.version;
   const postureVersionAfter = after.profileProvenance.securityPosture.version;
@@ -688,7 +694,7 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
   }
   return {
     compatible: true,
-    complete: websiteSnapshotComparisonEvidenceComplete(before)
+    complete: !selectedPage && websiteSnapshotComparisonEvidenceComplete(before)
       && websiteSnapshotComparisonEvidenceComplete(after)
       && technologyComparability === 'comparable'
       && postureComparability === 'comparable'
@@ -698,7 +704,12 @@ export function compareWebsiteSnapshots(beforeRaw: unknown, afterRaw: unknown) {
       securityPosture: postureComparability,
       pageFingerprint: fingerprintComparability,
     },
-    changes,
-    dependencyTransitions,
+    changes: selectedPage ? [
+      { field: 'web.collectionTarget', state: 'incomparable' as const, before: before.webObservationMode ?? 'homepage', after: after.webObservationMode ?? 'homepage' },
+      ...changes.map((change) => change.field.startsWith('certificate.') || change.field.startsWith('source.') || change.field === 'completeness'
+        || /^dependency\.(?:CNAME|HTTPS|NS|MX)(?::|$)/u.test(change.field)
+        ? change : { ...change, state: 'incomparable' as const }),
+    ] : changes,
+    dependencyTransitions: selectedPage ? dependencyTransitions.filter((transition) => transition.recordType !== 'HTTP') : dependencyTransitions,
   };
 }

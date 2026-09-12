@@ -302,13 +302,16 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
   for (const candidate of boundedReviewArray(source.selectedEvidence, MAX_RESPONSE_SELECTED_EVIDENCE, 'Case-response selected evidence')) {
     const evidence = exactReviewRecord(candidate, [
       'id', 'label', 'source', 'observedAt', 'completeness', 'limitations',
-    ], 'Case-response selected evidence item', version > PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION ? ['observationHostname'] : []);
+    ], 'Case-response selected evidence item', version > PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION ? ['observationHostname', 'webObservationMode'] : []);
     reviewText(evidence.id, 64, 'Case-response evidence id');
     reviewText(evidence.label, 80, 'Case-response evidence label');
     reviewText(evidence.source, 120, 'Case-response evidence source');
     if (evidence.observationHostname !== undefined && (typeof evidence.observationHostname !== 'string'
       || !isValidAsciiHostname(evidence.observationHostname) || evidence.observationHostname !== evidence.observationHostname.toLowerCase())) {
       throw new TypeError('Case-response evidence hostname is invalid.');
+    }
+    if (evidence.webObservationMode !== undefined && evidence.webObservationMode !== 'selected_url') {
+      throw new TypeError('Case-response web observation mode is invalid.');
     }
     reviewText(evidence.observedAt, 64, 'Case-response evidence observation time', version > PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION);
     reviewEnum(evidence.completeness, CASE_PIN_COMPLETENESS, 'Case-response evidence completeness');

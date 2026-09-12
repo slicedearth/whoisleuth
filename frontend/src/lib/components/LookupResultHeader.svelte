@@ -9,6 +9,7 @@
     registrableDomain,
     inputHostname,
     observationHostname,
+    selectedUrl = false,
     observedAt,
     depth,
     caseHref,
@@ -24,6 +25,7 @@
     registrableDomain: string;
     inputHostname: string;
     observationHostname: string | null;
+    selectedUrl?: boolean;
     observedAt: string | null;
     depth: 'fast' | 'deep';
     caseHref: string | null;
@@ -52,6 +54,7 @@
     {#if isSubdomain}
       <p>Registration: {registrableDomain}.{' '}{#if depth === 'deep' && observationHostname}DNS, TLS and web observation target: {observationHostname}.{:else}Submitted hostname: {inputHostname}.{/if}</p>
     {/if}
+    {#if selectedUrl}<p>Web evidence concerns the selected URL, not a homepage check. Its request path is shown in HTTP evidence; queries are omitted.</p>{/if}
   </div>
   <div class="result-actions">
     <span class="chip {availability.className}">{availability.label}</span>

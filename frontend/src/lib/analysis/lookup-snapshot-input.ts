@@ -10,6 +10,7 @@ import type { ServiceDependency } from './service-dependency-review.ts';
 export type LookupSnapshotInput = Readonly<{
   id: string;
   domain: string;
+  webObservationMode?: 'selected_url';
   observedAt: string;
   savedAt: string;
   lookupEvidenceDepth: 'fast' | 'deep';
@@ -90,6 +91,7 @@ export function buildLookupWebsiteSnapshot(input: LookupSnapshotInput): WebsiteP
   return {
     id: input.id,
     domain: input.domain,
+    ...(input.webObservationMode ? { webObservationMode: input.webObservationMode } : {}),
     observedAt: input.observedAt,
     savedAt: input.savedAt,
     complete: lookupEvidenceDepth === 'deep'

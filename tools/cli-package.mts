@@ -1121,9 +1121,19 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     const directLookupPlanDocument = record(JSON.parse(directLookupPlan), 'Installed direct Lookup plan');
     if (directLookupPlanDocument.schema !== 'whoisleuth.cli.lookup-plan'
       || record(directLookupPlanDocument.planning, 'Installed direct Lookup plan collection').networkRequestsMade !== false
-      || directLookupPlanDocument.query !== lookupPlanDocument.query
+      || record(directLookupPlanDocument.target, 'Installed direct Lookup target').query !== record(lookupPlanDocument.target, 'Installed Lookup target').query
       || directLookupPlanDocument.mode !== lookupPlanDocument.mode) {
       throw new TypeError('Installed direct target did not preserve the offline Lookup plan contract.');
+    }
+    const selectedUrlPlan = await runInstalledCheck(executable, ['lookup', 'https://portal.example.test/review?item=private-example#local-fragment',
+      '--deep', '--exact-url', '--plan', '--json'], 'selected URL plan');
+    const selectedUrlPlanDocument = record(JSON.parse(selectedUrlPlan), 'Installed selected URL plan');
+    if (selectedUrlPlanDocument.schema !== 'whoisleuth.cli.lookup-plan'
+      || record(selectedUrlPlanDocument.target, 'Installed selected URL target').query !== 'portal.example.test'
+      || record(selectedUrlPlanDocument.planning, 'Installed selected URL planning').networkRequestsMade !== false
+      || !selectedUrlPlan.includes('selected URL path and query')
+      || /private-example|local-fragment|\/review/u.test(selectedUrlPlan)) {
+      throw new TypeError('Installed selected URL plan did not preserve its offline disclosure boundary.');
     }
     const completionChecks = [
       ['bash', '-F _whoisleuth_completion whoisleuth', '--palette', '--save-lookup'],
@@ -1274,6 +1284,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       'commands',
       'lookup-plan',
       'direct-lookup-plan',
+      'selected-url-plan',
       ...completionChecks.map(([shell]) => `${shell}-completion`),
       'manual',
       'registry-support',

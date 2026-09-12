@@ -43,6 +43,7 @@ export type CheckpointFact = Readonly<{
   value: string | null;
   source: string;
   observationHostname?: string;
+  webObservationMode?: 'selected_url';
   sourceState: string;
   observedAt: string | null;
   collectionDepth: 'deep' | 'fast' | 'unknown';
@@ -280,6 +281,8 @@ export function buildLookupCheckpointFacts(
       version: 1,
       ...fact,
       ...(observationHostname ? { observationHostname } : {}),
+      ...(availability.webObservationMode === 'selected_url' && ['http', 'page_identity'].includes(fact.category)
+        ? { webObservationMode: 'selected_url' as const } : {}),
       completeness: fact.observedAt ? fact.completeness : 'unknown',
       limitations: sourceLimitations([
         ...(!fact.observedAt ? ['The source observation time is unavailable; this value cannot form a dated checkpoint.'] : []),
@@ -342,6 +345,8 @@ export function buildLookupReplayCheckpointFacts(
       ...((specification.category === 'registration' ? replay.caseDomain : replay.observationHostname)
         ? { observationHostname: (specification.category === 'registration' ? replay.caseDomain : replay.observationHostname)! } : {}),
       observedAt: source.observedAt,
+      ...(replay.webObservationMode === 'selected_url' && ['http', 'page_identity'].includes(specification.category)
+        ? { webObservationMode: 'selected_url' as const } : {}),
       collectionDepth: 'unknown' as const,
       completeness: replayCompleteness(normalizedState, fact.sourceComplete),
       truncated: null,
@@ -387,6 +392,7 @@ export function checkpointPinInputs(
       source: fact.source,
       sourceState: fact.sourceState,
       ...(fact.observationHostname ? { observationHostname: fact.observationHostname } : {}),
+      ...(fact.webObservationMode ? { webObservationMode: fact.webObservationMode } : {}),
       sourceSchema: fact.sourceSchema,
       observedAt: fact.observedAt,
       collectionDepth: fact.collectionDepth,
@@ -447,6 +453,10 @@ export function compareCheckpointPins(
         if ((pin.observationHostname ?? null) !== (current.observationHostname ?? null)) {
           state = 'incomparable';
           qualificationLimitation = 'The observations concern different or unknown hostnames; absence or change cannot be inferred across them.';
+        }
+        else if (pin.webObservationMode === 'selected_url' || current.webObservationMode === 'selected_url') {
+          state = 'incomparable';
+          qualificationLimitation = 'A selected URL was observed, but compact checkpoints omit its path and query; they cannot establish the same website target.';
         }
         else if (UNAVAILABLE_STATES.has(current.sourceState)) state = 'unavailable';
         else if (CONFLICT_STATES.has(current.sourceState)) state = 'conflicting';

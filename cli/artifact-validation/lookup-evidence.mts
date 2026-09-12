@@ -636,7 +636,7 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
       analysis.availability,
       currentAvailability ? ['registryContactsExcluded'] : [],
       currentAvailability
-        ? [...LOOKUP_AVAILABILITY_ANALYSIS_KEYS, ...(version >= HOSTNAME_SCOPED_LOOKUP_EVIDENCE_SCHEMA_VERSION ? ['observationHostname'] : [])]
+        ? [...LOOKUP_AVAILABILITY_ANALYSIS_KEYS, ...(version >= HOSTNAME_SCOPED_LOOKUP_EVIDENCE_SCHEMA_VERSION ? ['observationHostname', 'webObservationMode'] : [])]
         : PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS,
       'Lookup evidence availability analysis',
     );

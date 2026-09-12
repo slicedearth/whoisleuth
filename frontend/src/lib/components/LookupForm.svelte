@@ -4,11 +4,13 @@
   import { buildLookupCollectionPreflight } from '$lib/analysis/collection-preflight.ts';
   import CollectionPreflight from '$lib/components/CollectionPreflight.svelte';
   import { MAX_DOMAIN_INPUT_CHARACTERS } from '$lib/analysis/utils.ts';
+  import { prepareSelectedLookupUrl } from '../../../../packages/evidence/lookup-target.mts';
 
   let {
     query = $bindable(),
     task,
     lookupMode = $bindable(),
+    collectSelectedUrl = $bindable(false),
     loading,
     loadingElapsedMs,
     loadingDeadlineMs,
@@ -35,6 +37,7 @@
     query: string;
     task: 'general' | 'acquisition' | 'brand' | 'incident' | 'owned';
     lookupMode: 'fast' | 'deep';
+    collectSelectedUrl?: boolean;
     loading: boolean;
     loadingElapsedMs: number;
     loadingDeadlineMs: number;
@@ -66,6 +69,11 @@
   );
   const entryLimit = 2_000;
   const deepMode = $derived(lookupMode === 'deep');
+  const selectedUrlEligible = $derived.by(() => {
+    if (entryCount !== 1 || lookupLimitations.some((item) => ['availability', 'website_probe'].includes(item.id))) return false;
+    try { prepareSelectedLookupUrl(query.trim()); return true; } catch { return false; }
+  });
+  $effect(() => { query; lookupMode; collectSelectedUrl = false; });
   const selectedSourceCount = $derived(Number(includeSecurityTxt) + Number(includeExternalIntelligence)
     + Number(includeMalwareHostIntelligence) + Number(includeMalwareIocIntelligence));
   const preflight = $derived(buildLookupCollectionPreflight({
@@ -76,6 +84,7 @@
     includeExternalIntelligence,
     includeMalwareHostIntelligence,
     includeMalwareIocIntelligence,
+    selectedUrl: collectSelectedUrl && deepMode && selectedUrlEligible,
   }));
   const loadingDetail = $derived(lookupMode === 'fast'
     ? 'Fast lookup is checking authoritative registration evidence and omitting slower web, WHOIS, and enrichment sources.'
@@ -127,7 +136,7 @@
     <span>Press Ctrl+Enter or ⌘+Enter to run.</span>
   </p>
   {#if task === 'incident'}
-    <p class="incident-input-note">An absolute HTTP(S) URL is parsed locally and only its hostname is sent into Lookup. Its path, query and fragment stay only in this tab's current workflow unless you deliberately retain the URL in a Case.</p>
+    <p class="incident-input-note">By default, only the URL's hostname is sent into Lookup. The original URL stays in this tab unless you retain it in a Case or explicitly select URL collection below.</p>
   {/if}
   {#if inputTooLarge}<p class="error" role="alert">The pasted domain list exceeds the 2 MiB or bounded row and cell limit. Reduce it before continuing.</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
@@ -150,6 +159,14 @@
       ? 'Deep adds WHOIS, web, DNS, TLS, registrar RDAP, and selected intelligence requests, so it may take longer.'
       : 'Fast checks registration evidence and skips web, WHOIS and enrichment sources.'}</p>
   </fieldset>
+
+  {#if selectedUrlEligible}
+    <fieldset class="intelligence-options" disabled={loading || !deepMode}>
+      <legend>Website target</legend>
+      <label class="intelligence-option choice"><input type="checkbox" bind:checked={collectSelectedUrl}> <span><strong>Collect the selected URL instead of the homepage</strong> Sends its path and query to the website and follows bounded redirects. The fragment is not sent.</span></label>
+      {#if collectSelectedUrl}<p class="intelligence-hint">Retained HTTP provenance omits queries. Paths and page-derived text can still be sensitive; review evidence before sharing.</p>{/if}
+    </fieldset>
+  {/if}
 
   {#if loading}
     <div class="loading-note">

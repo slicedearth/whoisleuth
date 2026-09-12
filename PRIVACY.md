@@ -168,10 +168,18 @@ security.txt and external intelligence results are not retained as a hosted
 investigation record. Hosting, edge and function providers can retain ordinary
 request or function-log metadata under their own configured policies.
 
-For a URL pasted into Lookup, the browser sends only its full hostname for
+By default, for a URL pasted into Lookup, the browser sends only its full hostname for
 collection, without the port, path, query or fragment. Credential-bearing URLs
 are rejected. Deliberate retention of an exact Incident URL in a Case remains
 separate from that collection request.
+
+Explicit **selected URL** collection in Deep Lookup sends the path and query
+in a request body to the application server, then to the website and its
+followed redirects. Fragments are not sent. CLI `--deep --exact-url` makes the
+same deliberate selection. Retained HTTP provenance omits queries, but paths
+and page-derived text may contain sensitive information. Compact Case facts
+and website snapshots retain the selection mode, not the URL path or query;
+they cannot establish a same-page temporal comparison.
 
 Registration queries use the registrable domain. Deep DNS, TLS and web probes
 use the selected hostname; registration-delegation checks retain their own domain.

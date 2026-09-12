@@ -34,6 +34,13 @@ command position as Lookup shorthand. Use explicit `lookup` where input needs
 supported URL-like normalisation. Credentials, paths, queries, fragments, ports
 and unsupported special-use targets are rejected by the shorthand.
 
+Explicit `lookup` normally uses only a pasted URL's hostname. Add
+`--deep --exact-url` to collect that page's path and query instead of the
+homepage; fragments are not sent. `--plan` discloses this scope without making
+requests or copying the URL into the plan. Use stdin to keep a sensitive URL
+out of shell history. Saved request provenance omits queries, but paths and
+page-derived text still require review before sharing.
+
 `registry-scaffold` has a separate fixture contract: its `--profile` selects one
 fixed fixture profile and shared `--config` profiles are rejected. It produces
 sanitised local fixture material and makes no registry request.

@@ -4,6 +4,7 @@
 // additive evidence object suitable for API responses and exports.
 
 import { createObservation } from '../packages/evidence/observation.mts';
+import { MAX_OUTBOUND_HTTP_URL_CHARACTERS } from '../packages/contracts/http-url.mts';
 import {
   MAX_HTTP_ATTEMPTS,
   MAX_HTTP_ERROR_LENGTH,
@@ -63,7 +64,7 @@ function boundedString(value: unknown, maxLength: number): string | null {
 }
 
 function normalizeProvenanceUrl(value: unknown): NormalizedProvenanceUrl | null {
-  if (typeof value !== 'string' || value.length === 0 || value.length > 4096) return null;
+  if (typeof value !== 'string' || value.length === 0 || value.length > MAX_OUTBOUND_HTTP_URL_CHARACTERS) return null;
   try {
     const parsed = new URL(value);
     if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || !parsed.hostname) return null;

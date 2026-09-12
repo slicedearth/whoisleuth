@@ -135,6 +135,23 @@ describe('website profile snapshots', () => {
     assert.equal(JSON.stringify(normalized).includes('response'), false);
   });
 
+  test('selected-page snapshots retain scope without turning web differences into same-page changes', () => {
+    const before = snapshot('earlier');
+    const after = snapshot('later', LATER, { webObservationMode: 'selected_url', technologies: [], identity: {},
+      requestUrl: 'https://snapshot.invalid/selected/path?item=private-example' });
+    const normalized = normalizeWebsiteProfileSnapshot(after);
+    assert.equal(normalized?.webObservationMode, 'selected_url');
+    assert.equal(normalizeWebsiteProfileSnapshot(after, 5)?.webObservationMode, undefined);
+    assert.equal(normalizeWebsiteProfileSnapshot({ ...after, webObservationMode: 'invalid' }), null);
+    const comparison = compareWebsiteSnapshots(before, after);
+    assert.equal(comparison.complete, false);
+    assert.ok(comparison.changes.some((change) => change.field === 'web.collectionTarget' && change.state === 'incomparable'));
+    const webChanges = comparison.changes.filter((change) => change.field.startsWith('technology.') || change.field.startsWith('identity.'));
+    assert.ok(webChanges.length > 0);
+    assert.ok(webChanges.every((change) => change.state === 'incomparable'));
+    assert.doesNotMatch(JSON.stringify(normalized), /selected\/path|private-example/);
+  });
+
   test('compares compatible observations without inferring compromise', () => {
     const result = compareWebsiteSnapshots(
       snapshot('snapshot-one'),

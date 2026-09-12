@@ -106,6 +106,7 @@ export type CaseEvidenceSnapshot = {
   source: string;
   inputHostname: string | null;
   observationHostname?: string | null;
+  webObservationMode?: 'selected_url';
   scanDepth: string;
   availability: string | null;
   confidence: string | null;
@@ -214,7 +215,7 @@ export type SnapshotOptions = {
 export type EvidenceChange = { field: string; label: string; before: unknown; after: unknown; tone: string };
 export type CompareFieldSpec = {
   field: keyof CaseEvidenceSnapshot;
-  scope: 'registration' | 'hostname';
+  scope: 'registration' | 'hostname' | 'web';
   label: string;
   type: string;
   depthGate?: 'both-deep' | 'comparable';

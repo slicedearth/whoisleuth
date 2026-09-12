@@ -187,6 +187,7 @@ export type CaseEvidencePin = {
   value: string;
   source: string;
   observationHostname?: string;
+  webObservationMode?: 'selected_url';
   sourceState: string | null;
   sourceSchema: {
     collection: string;

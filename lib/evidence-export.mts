@@ -75,7 +75,7 @@ const PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS = new Set([
 const LOOKUP_AVAILABILITY_ANALYSIS_KEYS = new Set([
   ...[...PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS]
     .filter((key) => !['registrar', 'registrant', 'abuse'].includes(key)),
-  'registryContactsExcluded', 'observationHostname',
+  'registryContactsExcluded', 'observationHostname', 'webObservationMode',
 ]);
 const LOOKUP_IDN_ANALYSIS_KEYS = new Set([
   'version', 'mappingVersion', 'asciiDomain', 'unicodeDomain', 'hasIdn',

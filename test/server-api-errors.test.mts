@@ -1,4 +1,4 @@
-import type { Server } from 'node:http';
+import { request as httpRequest, type Server } from 'node:http';
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
@@ -258,6 +258,51 @@ describe('fixture-injected Express network routes', () => {
     assert.equal(lookupOptions.malwareHostIntelligence, true);
     assert.equal(lookupOptions.malwareIocIntelligence, true);
     assert.equal(lookupOptions.securityTxt, true);
+  });
+
+  test('POST Lookup admits selected URLs through the same authenticated network guards', async () => {
+    const url = 'https://portal.example.test/review?a=private-example#local-fragment';
+    const send = (suffix = '', origin = fixtureOrigin, payload = JSON.stringify({ url })) => fetch(`${fixtureOrigin}/api/lookup?q=portal.example.test${suffix}`, {
+      method: 'POST', headers: { Cookie: sessionCookie(), Origin: origin, 'Sec-Fetch-Site': 'same-origin', 'Content-Type': 'application/json' }, body: payload,
+    });
+    serviceCalls.length = 0;
+    const response = await send();
+    assert.equal(response.status, 200);
+    assert.doesNotMatch(await response.text(), /private-example|local-fragment/);
+    assert.equal((serviceCalls[0]?.[2] as Record<string, unknown>).selectedUrl, 'https://portal.example.test/review?a=private-example');
+    for (const response of [await send('&fast=1'), await send('&compact=1'), await send('', 'https://other.invalid'), await send('', fixtureOrigin, '{')]) {
+      assert.ok([400, 403].includes(response.status));
+    }
+    assert.equal(serviceCalls.length, 1);
+  });
+
+  test('selected URL bodies reject declared and streamed excess and invalid UTF-8 before collection', async () => {
+    const { MAX_LOOKUP_SELECTION_BODY_BYTES } = await import('../lib/lookup-selected-request.mts');
+    const send = (bytes: Buffer, declared: boolean) => new Promise<{ status: number; body: string }>((resolve, reject) => {
+      const request = httpRequest(`${fixtureOrigin}/api/lookup?q=portal.example.test`, { method: 'POST', headers: {
+        Cookie: sessionCookie(), Origin: fixtureOrigin, 'Sec-Fetch-Site': 'same-origin', 'Content-Type': 'application/json',
+        ...(declared ? { 'Content-Length': String(bytes.length) } : { 'Transfer-Encoding': 'chunked' }),
+      } }, (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('end', () => resolve({ status: response.statusCode!, body: Buffer.concat(chunks).toString('utf8') }));
+        response.on('error', reject);
+      });
+      request.on('error', reject);
+      request.setTimeout(5_000, () => request.destroy(new Error('Fixture request did not complete.')));
+      if (declared) request.end(bytes);
+      else request.write(bytes);
+    });
+    serviceCalls.length = 0;
+    for (const declared of [true, false]) {
+      const response = await send(Buffer.alloc(MAX_LOOKUP_SELECTION_BODY_BYTES + 1, 'x'), declared);
+      assert.equal(response.status, 413);
+      assert.deepEqual(JSON.parse(response.body), { error: 'Selected URL request is too large.' });
+    }
+    const invalid = await send(Buffer.from([0xc3, 0x28]), true);
+    assert.equal(invalid.status, 400);
+    assert.deepEqual(JSON.parse(invalid.body), { error: 'Invalid request encoding.' });
+    assert.equal(serviceCalls.length, 0);
   });
 
   test('preserves missing-query and non-domain responses without calling services', async () => {

@@ -59,6 +59,7 @@ type CapabilityDataClass =
   | 'dns_question'
   | 'public_ip_address'
   | 'homepage_request'
+  | 'selected_url_request'
   | 'tls_handshake'
   | 'certificate_search_term'
   | 'mail_transport_commands'
@@ -453,7 +454,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     trigger: 'explicit_browser_action',
     networkMode: 'bounded_passive',
     scanModes: ['fast', 'compact', 'deep', 'monitor'],
-    disclosedData: ['normalised_target', 'registry_query', 'whois_query', 'dns_question', 'public_ip_address', 'homepage_request', 'tls_handshake'],
+    disclosedData: ['normalised_target', 'registry_query', 'whois_query', 'dns_question', 'public_ip_address', 'homepage_request', 'selected_url_request', 'tls_handshake'],
     recipients: ['registry_service', 'dns_resolver', 'target_public_service'],
     requestBudget: 'variant_specific',
     responseBudget: 'collector_specific',
@@ -469,6 +470,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     privacyLimitations: [
       'Targets are disclosed only to the source families eligible for the selected mode.',
       'Fast, Compact, Deep and monitoring retain distinct request, evidence and storage boundaries.',
+      'Only explicit selected-URL collection in a single full Deep Lookup sends a path and query; fragments are excluded.',
       'A source failure or omission remains explicit and never establishes absence or safety.',
     ],
     featurePolicyId: 'lookup',
@@ -607,7 +609,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     trigger: 'authenticated_request',
     networkMode: 'conditional_bounded_passive',
     scanModes: ['fast', 'compact', 'deep', 'monitor'],
-    disclosedData: ['normalised_target', 'dns_question', 'homepage_request', 'tls_handshake'],
+    disclosedData: ['normalised_target', 'dns_question', 'homepage_request', 'selected_url_request', 'tls_handshake'],
     recipients: ['dns_resolver', 'target_public_service'],
     requestBudget: 'collector_specific',
     responseBudget: 'collector_specific',
@@ -623,6 +625,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     privacyLimitations: [
       'Each source retains its own state, observation time, completeness and limitations.',
       'Fast and Compact never inherit the richer Deep request or storage contract.',
+      'A URL path and query are sent only after separate selection in a full Deep Lookup.',
     ],
   }),
   freezeCapability({
@@ -654,13 +657,13 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
   }),
   freezeCapability({
     id: CAPABILITY_IDS.WEBSITE_PROBE,
-    title: 'Bounded homepage and static page evidence',
+    title: 'Bounded homepage or selected static page evidence',
     job: 'investigate',
     planes: ['hosted_bounded_passive'],
     trigger: 'authenticated_request',
     networkMode: 'bounded_passive',
     scanModes: ['deep'],
-    disclosedData: ['normalised_target', 'dns_question', 'homepage_request'],
+    disclosedData: ['normalised_target', 'dns_question', 'homepage_request', 'selected_url_request'],
     recipients: ['dns_resolver', 'target_public_service'],
     requestBudget: 'collector_specific',
     responseBudget: 'collector_specific',
@@ -675,6 +678,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     outcomes: COMPLETE_OR_LIMITED,
     privacyLimitations: [
       'Static captured evidence is not a browser execution, vulnerability test or proof of page purpose.',
+      'Selected-URL collection sends the path and query only after explicit selection; retained paths and page-derived text still require privacy review.',
       'Complete query-bearing URLs, cookies, credentials, scripts and raw page content are not retained.',
     ],
     featurePolicyId: 'website_probe',
@@ -1482,7 +1486,7 @@ function lookupCliVariants(command: 'lookup' | 'bulk' | 'discover-scan'): readon
       : [
           'normalised_target', 'registry_query', 'whois_query', 'dns_question',
           'homepage_request', 'tls_handshake',
-          ...(command === 'lookup' ? ['public_ip_address' as const] : []),
+          ...(command === 'lookup' ? ['public_ip_address' as const, 'selected_url_request' as const] : []),
         ],
     recipients: mode === 'fast'
       ? ['registry_service', 'dns_resolver']

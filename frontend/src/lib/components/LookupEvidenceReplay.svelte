@@ -186,7 +186,7 @@
             <div>
               <p class="eyebrow">Browser-local handoff</p>
               <h3 id="replay-case-title">Continue this historical review in a Case</h3>
-              <p class="note">Registration: {replay.caseDomain}. Submitted target: {replay.target}.{' '}{#if replay.observationHostname}DNS, TLS and web collection scope: {replay.observationHostname}.{' '}{/if}Saving retains the export time and imported provenance without contacting a source.</p>
+              <p class="note">Registration: {replay.caseDomain}. Submitted target: {replay.target}.{' '}{#if replay.observationHostname}DNS, TLS and web collection scope: {replay.observationHostname}.{' '}{/if}{#if replay.webObservationMode}Web evidence concerns a selected URL, not the homepage.{' '}{/if}Saving retains the export time and imported provenance without contacting a source.</p>
             </div>
             <button class="btn" type="button" disabled={caseBusy} onclick={() => void saveReplayToCase()}>{caseBusy ? 'Saving…' : caseRecord ? 'Add replay evidence to Case' : 'Create browser-local Case'}</button>
             <p class="case-status" role="status" aria-live="polite" aria-atomic="true">{caseStatus}</p>

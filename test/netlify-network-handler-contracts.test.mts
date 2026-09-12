@@ -60,6 +60,25 @@ function fixtureService<T extends (...args: never[]) => unknown>(
 }
 
 describe('fixture-injected Netlify network handlers', () => {
+  test('selected URL POSTs retain guard and target parity with the local endpoint', async () => {
+    const calls: unknown[] = [];
+    const handler = createLookupHandler({
+      runUnifiedLookup: async (_classified, options) => { calls.push(options?.selectedUrl); return {} as Awaited<ReturnType<LookupHandlerDependencies['runUnifiedLookup']>>; },
+      createLookupHttpResponse: (() => ({ fixture: true })) as unknown as LookupHandlerDependencies['createLookupHttpResponse'],
+    });
+    const request = { ...event({ q: 'portal.example.test' }), httpMethod: 'POST',
+      headers: { ...event({}).headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ url: 'https://portal.example.test/review?a=private-example#local-fragment' }) };
+    const response = await handler(request);
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(calls, ['https://portal.example.test/review?a=private-example']);
+    assert.doesNotMatch(response.body ?? '', /private-example|local-fragment/);
+    assert.equal((await handler({ ...request, queryStringParameters: { q: 'portal.example.test', fast: '1' } })).statusCode, 400);
+    assert.equal((await handler({ ...request, httpMethod: 'DELETE' })).statusCode, 405);
+    assert.equal((await handler({ ...request, headers: { ...request.headers, 'sec-fetch-site': 'cross-site' } })).statusCode, 403);
+    assert.equal(calls.length, 1);
+  });
+
   test('projects availability success and skips service work for non-domain input', async () => {
     const calls: Array<readonly [string, Record<string, unknown>]> = [];
     const checkDomainAvailability = fixtureService<AvailabilityHandlerDependencies['checkDomainAvailability']>(

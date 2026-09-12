@@ -121,7 +121,7 @@ const CAPABILITY_PRIVACY_DETAILS = Object.freeze({
   availability: capabilityPrivacyDetail('Produce an authority-aware registration-availability decision.', ['authority_aware_availability', 'source_health']),
   domain_evidence: capabilityPrivacyDetail('Collect the source-qualified domain evidence eligible for the selected mode.', ['normalised_domain_evidence', 'source_health']),
   dns_intelligence: capabilityPrivacyDetail('Collect bounded public DNS publication evidence.', ['normalised_dns_evidence', 'source_health']),
-  website_probe: capabilityPrivacyDetail('Observe one bounded homepage and static response workflow.', ['bounded_http_and_page_evidence', 'source_health']),
+  website_probe: capabilityPrivacyDetail('Observe one bounded homepage or explicitly selected URL through the static response workflow.', ['bounded_http_and_page_evidence', 'source_health']),
   tls_intelligence: capabilityPrivacyDetail('Observe one bounded TLS connection and certificate presentation.', ['bounded_tls_evidence', 'source_health']),
   certificate_transparency: capabilityPrivacyDetail('Search retained public certificate observations for a bounded term.', ['certificate_observation_leads', 'source_health']),
   security_txt: capabilityPrivacyDetail('Collect one optional bounded security.txt publication.', ['normalised_security_contact_publication', 'source_health']),
@@ -410,6 +410,7 @@ function processingClassesForBoundary(boundary: Readonly<{
 function deliberatelyNotSent(boundary: Readonly<{
   networkMode: string;
   credentialModel: string;
+  disclosedData: readonly string[];
 }>, capabilityFamilyId: CapabilityId): readonly string[] {
   if (boundary.networkMode === 'none') {
     return Object.freeze([
@@ -425,7 +426,7 @@ function deliberatelyNotSent(boundary: Readonly<{
     'unselected_local_files',
     'cookies_and_session_data',
     'unrelated_evidence_values',
-    ...(capabilityFamilyId === 'rendered_web_capture' ? [] : ['complete_query_bearing_urls']),
+    ...(capabilityFamilyId === 'rendered_web_capture' || boundary.disclosedData.includes('selected_url_request') ? [] : ['complete_query_bearing_urls']),
     ...(boundary.credentialModel === 'deployment_optional' ? [] : ['credentials']),
   ]);
 }

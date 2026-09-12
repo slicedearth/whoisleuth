@@ -8,6 +8,7 @@
   <span class="value">{pin.value}</span>
   <span class="provenance">{pin.source}</span>
   {#if pin.observationHostname}<span class="provenance">Observation hostname: {pin.observationHostname}</span>{/if}
+  {#if pin.webObservationMode}<span class="provenance">Selected URL observation; path and query are not retained in this fact.</span>{/if}
   <span class="provenance">{#if pin.observedAt}Observed <time datetime={pin.observedAt}>{pin.observedAt}</time>{:else}Observation time unavailable{/if}</span>
   <span class="provenance">Completeness: {pin.completeness}{pin.truncated ? ' · truncated' : ''}{pin.sourceState ? ` · source state: ${pin.sourceState}` : ''}</span>
   {#each pin.limitations as limitation}<span class="provenance">{limitation}</span>{/each}

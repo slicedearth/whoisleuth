@@ -1,5 +1,6 @@
 import express from 'express';
 import type { IncomingHttpHeaders } from 'node:http';
+import { Readable } from 'node:stream';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,6 +14,7 @@ import { buildWhoisChain, parseWhoisChain } from './lib/whois.mts';
 import { checkDomainAvailability } from './lib/availability.mts';
 import { runUnifiedLookup, LOOKUP_ERROR_CODES } from './lib/lookup.mts';
 import { createLookupHttpResponse } from './lib/lookup-response-contract.mts';
+import { MAX_LOOKUP_SELECTION_BODY_BYTES, parseLookupWebSelection } from './lib/lookup-selected-request.mts';
 import {
   CANONICAL_TRAILING_SLASH_REDIRECTS,
   PERMANENT_ROUTE_REDIRECTS,
@@ -56,7 +58,7 @@ import {
 } from './lib/operation-budget.mts';
 import { featureDisabledError, networkFeaturePolicy } from './lib/feature-policy.mts';
 import type { NetworkFeatureId, NetworkFeaturePolicy } from './lib/feature-policy.mts';
-import { MAX_API_JSON_BODY_BYTES, apiErrorResponseFor, apiUnexpectedErrorResponse } from './lib/http.mts';
+import { MAX_API_JSON_BODY_BYTES, apiErrorResponseFor, apiUnexpectedErrorResponse, readRequestTextCapped } from './lib/http.mts';
 import { HTTP_BASELINE_CONTENT_SECURITY_POLICY } from './lib/security-headers.mts';
 import {
   MAX_CONTACT_ROUTE_BODY_BYTES,
@@ -66,6 +68,7 @@ import {
 } from './lib/contact-route.mts';
 
 type RequestLike = {
+  method?: string;
   protocol: string;
   headers: IncomingHttpHeaders;
   socket?: { remoteAddress?: string | null | undefined } | undefined;
@@ -348,7 +351,7 @@ function registerNetworkApiRoutes(
   target: ExpressApplication,
   services: NetworkRouteServices = DEFAULT_NETWORK_ROUTE_SERVICES,
 ): void {
-  target.get('/api/lookup', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('lookup'), async (req: RequestLike, res: ResponseLike) => {
+  const handleLookup = async (req: RequestLike, res: ResponseLike) => {
     const q = queryText(req.query.q);
     if (!q) return res.status(400).json({ error: 'Missing query parameter "q"', errorCode: LOOKUP_ERROR_CODES.MISSING_QUERY });
 
@@ -365,6 +368,11 @@ function registerNetworkApiRoutes(
     const malwareHostIntelligence = req.query.malware === '1' || req.query.malware === 'true';
     const malwareIocIntelligence = req.query.ioc === '1' || req.query.ioc === 'true';
     const securityTxt = req.query.security_txt === '1' || req.query.security_txt === 'true';
+    const selection = parseLookupWebSelection({
+      method: req.method ?? 'GET', contentType: req.headers['content-type'], body: req.body,
+      classified, fast, compact, featurePolicy: req.networkFeaturePolicy ?? networkFeaturePolicy(),
+    });
+    if (!selection.ok) return res.status(selection.status).json({ error: selection.error });
     return withExpressOperationBudget(req, res, operationBudgetTargetFor('lookup', { fast, compact }), async () => {
       try {
         const result = await services.runUnifiedLookup(classified, {
@@ -374,14 +382,43 @@ function registerNetworkApiRoutes(
           malwareHostIntelligence,
           malwareIocIntelligence,
           securityTxt,
+          ...(selection.selectedUrl ? { selectedUrl: selection.selectedUrl } : {}),
           ...(req.networkFeaturePolicy ? { featurePolicy: req.networkFeaturePolicy } : {}),
         });
-        res.json(services.createLookupHttpResponse(q, classified, result));
+        res.json(services.createLookupHttpResponse(selection.selectedUrl ? classified.inputHostname! : q, classified, result));
       } catch (err) {
         sendUnexpectedApiError(res, LOOKUP_ERROR_CODES.LOOKUP_FAILED);
       }
     });
-  });
+  };
+  const lookupGuards = [apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('lookup')];
+  target.get('/api/lookup', ...lookupGuards, handleLookup);
+  target.post('/api/lookup', ...lookupGuards, async (req, res, next) => {
+    if (req.headers['content-encoding'] && req.headers['content-encoding'] !== 'identity') {
+      res.status(415).json({ error: 'Selected URL requests must use uncompressed JSON.' }); return;
+    }
+    const controller = new AbortController();
+    const aborted = () => controller.abort();
+    req.once('aborted', aborted);
+    try {
+      const body = await readRequestTextCapped({
+        body: Readable.toWeb(req) as ReadableStream<Uint8Array>,
+        headers: new Headers(req.headers['content-length'] ? { 'content-length': req.headers['content-length'] } : {}),
+        signal: controller.signal,
+      }, MAX_LOOKUP_SELECTION_BODY_BYTES);
+      if (body.status !== 'ok') {
+        if (res.destroyed) return;
+        res.setHeader('Connection', 'close');
+        res.once('finish', () => req.destroy());
+        res.status(body.status === 'too_large' ? 413 : body.status === 'invalid_encoding' ? 400 : 408)
+          .json({ error: body.status === 'too_large' ? 'Selected URL request is too large.' : body.status === 'invalid_encoding' ? 'Invalid request encoding.' : 'Request body read timed out.' });
+        return;
+      }
+      req.body = body.body;
+      next();
+    } catch (error) { next(error); }
+    finally { req.off('aborted', aborted); }
+  }, handleLookup);
 
   target.get('/api/rdap', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('rdap'), async (req: RequestLike, res: ResponseLike) => {
     const q = queryText(req.query.q);

@@ -493,9 +493,9 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Collect one domain, IP, or ASN",
       "group": "investigate",
       "common": true,
-      "usage": "whoisleuth lookup [\u003ctarget>] [--json|--junit|--markdown|--html] [--fast|--deep] [--summary|--verbose] [--no-attribution] [--observer \u003cvalue>] [--vantage \u003cvalue>] [--plan] [--browse] [--save-lookup \u003cfile>] [--strict-exit] [--fail-on \u003cpolicy[,policy...]>] [--events] [--quiet] [--no-color]",
+      "usage": "whoisleuth lookup [\u003ctarget>] [--json|--junit|--markdown|--html] [--fast|--deep] [--summary|--verbose] [--no-attribution] [--exact-url] [--observer \u003cvalue>] [--vantage \u003cvalue>] [--plan] [--browse] [--save-lookup \u003cfile>] [--strict-exit] [--fail-on \u003cpolicy[,policy...]>] [--events] [--quiet] [--no-color]",
       "example": "whoisleuth lookup example.test --deep --browse",
-      "boundary": "Fast is the default. An ICANN-recognised public domain, reserved documentation domain, IP, or ASN may occupy command position as shorthand; it delegates to this same parser and URL-like input requires the explicit lookup command. Deep mode adds bounded WHOIS, DNS, HTTP, TLS, technology, posture, and network context where applicable. A full Deep homepage observation can derive fixed publication and delivery/cache summaries from the same response without retaining raw metadata values or making another request. --browse opens before collection, shows aggregate Fast progress or independently settled planned Deep sources, and then navigates allowlisted retained fields in the completed document. Press ? for help and / to search rendered panel text only. Closing during collection cancels without a partial document. --save-lookup writes the exact completed private JSON only after a normal browser close; it can contain normalised evidence omitted from panels and refuses an existing path.",
+      "boundary": "Fast is the default. An ICANN-recognised public domain, reserved documentation domain, IP, or ASN may occupy command position as shorthand; it delegates to this same parser and URL-like input requires the explicit lookup command. Deep mode adds bounded WHOIS, DNS, HTTP, TLS, technology, posture, and network context where applicable. --deep --exact-url explicitly sends the input URL path and query to the website, without its fragment; ordinary URL input sends only the hostname. --plan remains offline and omits the selected URL. Retained paths and page-derived text require review before sharing. A full Deep homepage observation can derive fixed publication and delivery/cache summaries from the same response without retaining raw metadata values or making another request. --browse opens before collection, shows aggregate Fast progress or independently settled planned Deep sources, and then navigates allowlisted retained fields in the completed document. Press ? for help and / to search rendered panel text only. Closing during collection cancels without a partial document. --save-lookup writes the exact completed private JSON only after a normal browser close; it can contain normalised evidence omitted from panels and refuses an existing path.",
       "collection": {
         "mode": "network",
         "scope": "Accepts one target. Fast is the default; deep collection must be selected explicitly."
@@ -521,6 +521,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--no-attribution",
         "--fast",
         "--deep",
+        "--exact-url",
         "--observer",
         "--vantage",
         "--plan",

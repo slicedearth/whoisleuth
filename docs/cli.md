@@ -60,6 +60,11 @@ whoisleuth lookup example.test --deep --browse
 whoisleuth lookup example.test --deep --markdown --output lookup.md
 ```
 
+Pasted URLs normally select only their hostname. To collect one particular
+page, use `whoisleuth lookup 'https://portal.example.test/review' --deep --exact-url`.
+This sends the path and query to the website, without the fragment. Review
+retained paths and page-derived text before sharing the result.
+
 To continue a reviewed terminal Lookup in the browser, save the completed
 private document from the interactive view:
 

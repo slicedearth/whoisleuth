@@ -106,6 +106,11 @@ addresses DNS, TLS and web collectors to the submitted hostname. Delegation
 health declares its registration-domain target separately. Evidence exports,
 Case snapshots and graph projections retain these identities; comparisons do
 not interpret a different collection target as an observed target change.
+Explicit selected-URL requests use a bounded POST body and a shared admission
+parser in both HTTP runtimes. Registration resolution is separate from supporting
+collection. The website collector reuses the outbound transport without a
+homepage or scheme fallback; compact projections preserve the selection mode
+while omitting paths and queries.
 
 ## Outbound trust boundary
 

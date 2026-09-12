@@ -347,6 +347,20 @@ describe('schema source coverage', () => {
     await assert.rejects(discoverSchemaSources(root), /valid UTF-8/iu);
   });
 
+  test('ordinary imports across modules use the repository reference budget rather than one file budget', async (t) => {
+    const root = await fixtureRepository(t);
+    const names = Array.from({ length: 51 }, (_, index) => `consumer-${index}.mts`);
+    await writeFile(path.join(root, 'lib', 'owner.mts'), 'export const value = 1;\n', 'utf8');
+    await Promise.all(names.map((name) => writeFile(path.join(root, 'lib', name),
+      `import { ${Array.from({ length: 200 }, (_, index) => `value as item${index}`).join(', ')} } from './owner.mts';\n`, 'utf8')));
+    const result = await discoverSchemaSources(root);
+    assert.equal(result.imports.length, 10_200);
+    assert.equal(new Set(result.imports.map((item) => item.file)).size, 51);
+    assert.ok(result.imports.every((item) => item.imported === 'value' && item.specifier === './owner.mts'));
+    assert.throws(() => discoverSchemaIdentifiersInSource(
+      `import { ${Array.from({ length: 10_001 }, (_, index) => `value as item${index}`).join(', ')} } from './owner.mts';`, 'oversized-imports.mts'), /exceeds.*bindings/u);
+  });
+
   test('discovers many small modules within aggregate traversal and byte admission', async (t) => {
     const root = await fixtureRepository(t);
     const names = Array.from({ length: 1_025 }, (_, index) => `part-${String(index).padStart(4, '0')}.mts`);

@@ -7,6 +7,7 @@ import { normalizeRiskModelVersion } from '../../lib/risk-scoring.mts';
 import { latestObservationCohort } from '../evidence/latest-observations.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { PUBLISHED_V2_3_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { validWebObservationMode } from '../evidence/lookup-target.mts';
 import {
   MAX_EVIDENCE_CHANGES,
   MAX_EVIDENCE_DETAIL_LENGTH,
@@ -148,6 +149,7 @@ const DEEP_SIGNAL_FIELDS: Array<keyof CaseEvidenceMaterial> = [
 const MATERIAL_FIELD_ORDER: Array<keyof CaseEvidenceMaterial> = [
   'inputHostname',
   'observationHostname',
+  'webObservationMode',
   'scanDepth',
   'availability', 'confidence', 'riskModelVersion', 'riskScore', 'opportunityModelVersion', 'opportunityScore',
   'riskFactors', 'opportunityFactors',
@@ -201,7 +203,7 @@ function isEmptyMaterial(value: unknown): boolean {
 
 // Fields that describe the capture rather than assert evidence, so they never
 // on their own keep an otherwise-empty snapshot alive.
-const NON_EVIDENCE_MATERIAL = new Set(['inputHostname', 'observationHostname', 'scanDepth', 'confidence']);
+const NON_EVIDENCE_MATERIAL = new Set(['inputHostname', 'observationHostname', 'webObservationMode', 'scanDepth', 'confidence']);
 
 // A snapshot with no material evidence (only timestamps/source/depth, or only a
 // bare confidence/unknown-availability) is dropped rather than added to a
@@ -219,10 +221,9 @@ function canonicalMaterialString(snapshot: CaseEvidenceMaterial): string {
   const canonical: Record<string, unknown> = {};
   for (const field of MATERIAL_FIELD_ORDER) {
     const value = materialValue(field, snapshot);
-    // Preserve historical fingerprints when the new v14 observation-context
-    // field is absent. A retained hostname is still material and therefore
-    // separates otherwise-identical captures.
-    if ((field === 'inputHostname' || field === 'observationHostname') && value === null) continue;
+    // Optional collection context does not alter historical fingerprints when
+    // absent; recorded context separates otherwise-identical captures.
+    if ((field === 'inputHostname' || field === 'observationHostname' || field === 'webObservationMode') && value === null) continue;
     canonical[field] = value;
   }
   return JSON.stringify(canonical);
@@ -261,11 +262,13 @@ function buildSnapshot(
     ? normalizeEvidenceHostnameForCase(record.observationHostname, options.caseDomain)
     : null;
   if (acceptsObservationHostname && record.observationHostname != null && !observationHostname) return null;
+  if (acceptsObservationHostname && !validWebObservationMode(record.webObservationMode)) return null;
   const fields: CaseEvidenceMaterial = {
     inputHostname: acceptsInputHostname
       ? normalizeEvidenceHostnameForCase(record.inputHostname, options.caseDomain)
       : null,
     ...(observationHostname ? { observationHostname } : {}),
+    ...(acceptsObservationHostname && scanDepth !== 'fast' && record.webObservationMode === 'selected_url' ? { webObservationMode: record.webObservationMode } : {}),
     scanDepth,
     availability: evidenceString(record.availability),
     confidence: evidenceString(record.confidence),
@@ -547,10 +550,10 @@ export function caseLookupTarget(
 const COMPARE_FIELDS: CompareFieldSpec[] = [
   { field: 'availability', scope: 'registration', label: 'Availability', type: 'availability' },
   { field: 'confidence', scope: 'registration', label: 'Confidence', type: 'token' },
-  { field: 'riskScore', scope: 'hostname', label: 'Risk score', type: 'score', depthGate: 'comparable', modelGate: 'risk', direction: 'risk' },
-  { field: 'riskFactors', scope: 'hostname', label: 'Risk factors', type: 'factors', depthGate: 'comparable', modelGate: 'risk' },
-  { field: 'opportunityScore', scope: 'hostname', label: 'Opportunity score', type: 'score', modelGate: 'opportunity' },
-  { field: 'opportunityFactors', scope: 'hostname', label: 'Opportunity factors', type: 'factors', modelGate: 'opportunity' },
+  { field: 'riskScore', scope: 'web', label: 'Risk score', type: 'score', depthGate: 'comparable', modelGate: 'risk', direction: 'risk' },
+  { field: 'riskFactors', scope: 'web', label: 'Risk factors', type: 'factors', depthGate: 'comparable', modelGate: 'risk' },
+  { field: 'opportunityScore', scope: 'web', label: 'Opportunity score', type: 'score', modelGate: 'opportunity' },
+  { field: 'opportunityFactors', scope: 'web', label: 'Opportunity factors', type: 'factors', modelGate: 'opportunity' },
   { field: 'registrar', scope: 'registration', label: 'Registrar', type: 'registrar' },
   { field: 'createdDate', scope: 'registration', label: 'Creation date', type: 'date' },
   { field: 'expiryDate', scope: 'registration', label: 'Expiry date', type: 'date' },
@@ -558,24 +561,24 @@ const COMPARE_FIELDS: CompareFieldSpec[] = [
   { field: 'hasMx', scope: 'hostname', label: 'MX', type: 'bool', depthGate: 'both-deep' },
   { field: 'hasSpf', scope: 'hostname', label: 'SPF', type: 'bool', depthGate: 'both-deep' },
   { field: 'hasDmarc', scope: 'hostname', label: 'DMARC', type: 'bool', depthGate: 'both-deep' },
-  { field: 'activityStatus', scope: 'hostname', label: 'Website activity', type: 'token', depthGate: 'both-deep' },
-  { field: 'websiteProbeDetail', scope: 'hostname', label: 'Website check detail', type: 'text', depthGate: 'both-deep' },
-  { field: 'pageTitle', scope: 'hostname', label: 'Page title', type: 'text', depthGate: 'both-deep' },
-  { field: 'httpEvidenceStatus', scope: 'hostname', label: 'HTTP evidence status', type: 'token', depthGate: 'both-deep' },
-  { field: 'httpFinalOrigin', scope: 'hostname', label: 'Final website origin', type: 'text', depthGate: 'both-deep' },
-  { field: 'httpResponseStatus', scope: 'hostname', label: 'HTTP response status', type: 'number', depthGate: 'both-deep' },
-  { field: 'httpTransportSecurity', scope: 'hostname', label: 'Website transport', type: 'http-transport', depthGate: 'both-deep' },
-  { field: 'httpRedirectCount', scope: 'hostname', label: 'HTTP redirect count', type: 'number', depthGate: 'both-deep' },
-  { field: 'httpCrossOriginRedirect', scope: 'hostname', label: 'Cross-origin redirect', type: 'http-signal', depthGate: 'both-deep' },
-  { field: 'httpHttpsDowngrade', scope: 'hostname', label: 'HTTPS downgrade', type: 'signal', depthGate: 'both-deep' },
-  { field: 'httpContentType', scope: 'hostname', label: 'Website content type', type: 'token', depthGate: 'both-deep' },
-  { field: 'httpSecurityHeaders', scope: 'hostname', label: 'Observed security headers', type: 'set', depthGate: 'both-deep' },
-  { field: 'faviconMatch', scope: 'hostname', label: 'Official favicon match', type: 'signal', depthGate: 'both-deep' },
-  { field: 'faviconNearMatch', scope: 'hostname', label: 'Official favicon near-match', type: 'signal', depthGate: 'both-deep' },
-  { field: 'reusesOfficialAssets', scope: 'hostname', label: 'Official asset reuse', type: 'signal', depthGate: 'both-deep' },
-  { field: 'hasPasswordField', scope: 'hostname', label: 'Password form', type: 'signal', depthGate: 'both-deep' },
-  { field: 'hasExternalFormAction', scope: 'hostname', label: 'External form action', type: 'signal', depthGate: 'both-deep' },
-  { field: 'phishingLanguageMatch', scope: 'hostname', label: 'Phishing language', type: 'phishing', depthGate: 'both-deep' },
+  { field: 'activityStatus', scope: 'web', label: 'Website activity', type: 'token', depthGate: 'both-deep' },
+  { field: 'websiteProbeDetail', scope: 'web', label: 'Website check detail', type: 'text', depthGate: 'both-deep' },
+  { field: 'pageTitle', scope: 'web', label: 'Page title', type: 'text', depthGate: 'both-deep' },
+  { field: 'httpEvidenceStatus', scope: 'web', label: 'HTTP evidence status', type: 'token', depthGate: 'both-deep' },
+  { field: 'httpFinalOrigin', scope: 'web', label: 'Final website origin', type: 'text', depthGate: 'both-deep' },
+  { field: 'httpResponseStatus', scope: 'web', label: 'HTTP response status', type: 'number', depthGate: 'both-deep' },
+  { field: 'httpTransportSecurity', scope: 'web', label: 'Website transport', type: 'http-transport', depthGate: 'both-deep' },
+  { field: 'httpRedirectCount', scope: 'web', label: 'HTTP redirect count', type: 'number', depthGate: 'both-deep' },
+  { field: 'httpCrossOriginRedirect', scope: 'web', label: 'Cross-origin redirect', type: 'http-signal', depthGate: 'both-deep' },
+  { field: 'httpHttpsDowngrade', scope: 'web', label: 'HTTPS downgrade', type: 'signal', depthGate: 'both-deep' },
+  { field: 'httpContentType', scope: 'web', label: 'Website content type', type: 'token', depthGate: 'both-deep' },
+  { field: 'httpSecurityHeaders', scope: 'web', label: 'Observed security headers', type: 'set', depthGate: 'both-deep' },
+  { field: 'faviconMatch', scope: 'web', label: 'Official favicon match', type: 'signal', depthGate: 'both-deep' },
+  { field: 'faviconNearMatch', scope: 'web', label: 'Official favicon near-match', type: 'signal', depthGate: 'both-deep' },
+  { field: 'reusesOfficialAssets', scope: 'web', label: 'Official asset reuse', type: 'signal', depthGate: 'both-deep' },
+  { field: 'hasPasswordField', scope: 'web', label: 'Password form', type: 'signal', depthGate: 'both-deep' },
+  { field: 'hasExternalFormAction', scope: 'web', label: 'External form action', type: 'signal', depthGate: 'both-deep' },
+  { field: 'phishingLanguageMatch', scope: 'web', label: 'Phishing language', type: 'phishing', depthGate: 'both-deep' },
   { field: 'mutationTypes', scope: 'hostname', label: 'Mutation types', type: 'set' },
 ];
 
@@ -648,9 +651,16 @@ function isPresent(value: unknown): boolean {
   return true;
 }
 
-function sameObservationContext(previous: CaseEvidenceSnapshot, current: CaseEvidenceSnapshot): boolean {
+function sameObservationHostname(previous: CaseEvidenceSnapshot, current: CaseEvidenceSnapshot): boolean {
   return previous.inputHostname === current.inputHostname
     && (previous.observationHostname ?? null) === (current.observationHostname ?? null);
+}
+
+function sameObservationContext(previous: CaseEvidenceSnapshot, current: CaseEvidenceSnapshot): boolean {
+  // Compact Case snapshots deliberately omit URL paths and queries. A selected
+  // page cannot therefore establish a comparable website target here.
+  return sameObservationHostname(previous, current)
+    && previous.webObservationMode !== 'selected_url' && current.webObservationMode !== 'selected_url';
 }
 
 function setsEqual(a: unknown, b: unknown): boolean {
@@ -792,10 +802,12 @@ export function compareCaseEvidence(
   const comparableDepth = depthComparable(previous.scanDepth, current.scanDepth);
   const comparableRiskModel = riskModelComparable(previous, current);
   const comparableOpportunityModel = opportunityModelComparable(previous, current);
-  const sameHostname = sameObservationContext(previous, current);
+  const sameHostname = sameObservationHostname(previous, current);
+  const sameWebContext = sameObservationContext(previous, current);
   const changes: EvidenceChange[] = [];
   for (const spec of COMPARE_FIELDS) {
     if (spec.scope === 'hostname' && !sameHostname) continue;
+    if (spec.scope === 'web' && !sameWebContext) continue;
     if (spec.depthGate === 'both-deep' && !bothDeep) continue;
     if (spec.depthGate === 'comparable' && !comparableDepth) continue;
     if (spec.modelGate === 'risk' && !comparableRiskModel) continue;

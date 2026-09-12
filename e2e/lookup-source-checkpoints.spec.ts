@@ -2,6 +2,82 @@ import { expect, test } from './fixtures';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
 import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, useTheme } from './helpers';
 
+test('selected URL collection is deliberate and retains scope without its path or query in a Case', async ({ page }, testInfo) => {
+  const hostname = 'portal.example.test';
+  const selected = `https://${hostname}/selected/path?item=private-example,one;two#local-fragment`;
+  const requests: string[] = [];
+  await page.route('**/api/lookup?*', async (route) => {
+    const request = route.request();
+    requests.push(request.method());
+    expect(new URL(request.url()).searchParams.get('q')).toBe(hostname);
+    expect(request.url()).not.toContain('private-example');
+    const fixture = sectionedLookupFixture('example.test');
+    Object.assign(fixture, { query: hostname, inputHostname: hostname, isSubdomain: true });
+    Object.assign(fixture.availability, { observationHostname: hostname, deepScanComplete: true });
+    if (request.method() === 'POST') {
+      expect(request.postDataJSON()).toEqual({ url: selected.split('#')[0] });
+      Object.assign(fixture.availability, { webObservationMode: 'selected_url' });
+      Object.assign(fixture.availability.http, { requestUrl: `https://${hostname}/selected/path`,
+        finalUrl: `https://${hostname}/selected/path`, redirectCount: 0, redirects: [],
+        attempts: [{ url: `https://${hostname}/selected/path`, queryOmitted: true, outcome: 'response', httpStatus: 200, error: null }] });
+    } else expect(request.postData()).toBeNull();
+    await route.fulfill({ json: fixture });
+  });
+  await page.goto('/lookup');
+  await page.locator('#query').fill(selected);
+  const selection = page.getByRole('checkbox', { name: /^Collect the selected URL instead of the homepage/u });
+  await expect(selection).toBeVisible();
+  await expect(selection).toBeDisabled();
+  await page.getByRole('radio', { name: /Deep/u }).check();
+  await expect(selection).not.toBeChecked();
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await expect(page.locator('.result-head')).toContainText(hostname);
+  await expect(page.getByRole('button', { name: 'Run lookup', exact: true })).toBeEnabled();
+  await selection.check();
+  await page.locator('#query').fill(`${selected}-changed`);
+  await expect(selection).not.toBeChecked();
+  await page.locator('#query').fill(selected);
+  await selection.check();
+  await page.getByRole('radio', { name: /Fast/u }).check();
+  await expect(selection).not.toBeChecked();
+  await page.getByRole('radio', { name: /Deep/u }).check();
+  await selection.focus();
+  await page.keyboard.press('Space');
+  await expect(selection).toBeChecked();
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280, 2560]) {
+      await page.setViewportSize({ width, height: 900 });
+      await selection.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      await page.screenshot({ path: testInfo.outputPath(`selected-url-form-${theme}-${width}.png`) });
+    }
+  }
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await expect(page.locator('.result-head')).toContainText('Web evidence concerns the selected URL, not a homepage check.');
+  await page.getByRole('button', { name: 'Expand Web and DNS evidence', exact: true }).click();
+  const http = page.locator('.source-checkpoint', { has: page.locator('summary', { hasText: 'Pin HTTP facts to Case' }) });
+  await http.locator('summary').click();
+  await http.getByRole('button', { name: 'Save lookup to Case', exact: true }).click();
+  await http.getByRole('checkbox', { name: /^HTTP response status /u }).check();
+  await http.getByRole('button', { name: 'Save 1 checkpoint fact', exact: true }).click();
+  await expect(http.getByRole('status')).toContainText('Saved 1 analyst-selected checkpoint fact');
+  const saved = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value;
+  expect(saved.evidenceHistory).toEqual([expect.objectContaining({ observationHostname: hostname, webObservationMode: 'selected_url' })]);
+  expect(saved.evidencePins).toEqual([expect.objectContaining({ field: 'http.response_status', webObservationMode: 'selected_url' })]);
+  expect(JSON.stringify(saved)).not.toMatch(/selected\/path|private-example|local-fragment/u);
+  expect(requests).toEqual(['GET', 'POST']);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.locator('.result-head').scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      await page.screenshot({ path: testInfo.outputPath(`selected-url-result-${theme}-${width}.png`) });
+    }
+  }
+});
+
 test('subdomain evidence keeps its collection identity through display, Case storage and selected pins', async ({ page }, testInfo) => {
   const domain = 'example.test';
   const hostname = `portal.${domain}`;

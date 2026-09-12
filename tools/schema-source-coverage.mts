@@ -468,7 +468,9 @@ export async function discoverSchemaSources(
     appendBounded(occurrences, result.occurrences, MAX_SCHEMA_SOURCE_OCCURRENCES, `Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_OCCURRENCES} occurrences.`);
     appendBounded(definitions, result.definitions, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} definitions.`);
     appendBounded(dynamicConstructions, result.dynamicConstructions, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema diagnostics.`);
-    appendBounded(imports, result.imports, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} imports.`);
+    // Imports are whole-repository references, not per-file schema bindings.
+    // Keep the independent 32 MiB source and 100,000-reference resource bounds.
+    appendBounded(imports, result.imports, MAX_SCHEMA_SOURCE_REFERENCES, `Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_REFERENCES} imports.`);
     appendBounded(aliases, result.aliases, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} aliases.`);
     appendBounded(emitters, result.emitters, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} emitters.`);
     appendBounded(localDeclarations, result.localDeclarations, MAX_SCHEMA_SOURCE_REFERENCES, `Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_REFERENCES} local declarations.`);

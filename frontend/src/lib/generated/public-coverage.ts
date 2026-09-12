@@ -87,6 +87,7 @@ export const PUBLIC_COVERAGE = {
       "limitations": [
         "Targets are disclosed only to the source families eligible for the selected mode.",
         "Fast, Compact, Deep and monitoring retain distinct request, evidence and storage boundaries.",
+        "Only explicit selected-URL collection in a single full Deep Lookup sends a path and query; fragments are excluded.",
         "A source failure or omission remains explicit and never establishes absence or safety."
       ]
     },
@@ -241,7 +242,8 @@ export const PUBLIC_COVERAGE = {
       "partialResultContract": "explicit_per_source",
       "limitations": [
         "Each source retains its own state, observation time, completeness and limitations.",
-        "Fast and Compact never inherit the richer Deep request or storage contract."
+        "Fast and Compact never inherit the richer Deep request or storage contract.",
+        "A URL path and query are sent only after separate selection in a full Deep Lookup."
       ]
     },
     {
@@ -275,7 +277,7 @@ export const PUBLIC_COVERAGE = {
     },
     {
       "id": "website_probe",
-      "title": "Bounded homepage and static page evidence",
+      "title": "Bounded homepage or selected static page evidence",
       "job": "investigate",
       "implemented": true,
       "reviewBasis": "Versioned capability contract and deterministic repository verification",
@@ -299,6 +301,7 @@ export const PUBLIC_COVERAGE = {
       "partialResultContract": "explicit_per_source",
       "limitations": [
         "Static captured evidence is not a browser execution, vulnerability test or proof of page purpose.",
+        "Selected-URL collection sends the path and query only after explicit selection; retained paths and page-derived text still require privacy review.",
         "Complete query-bearing URLs, cookies, credentials, scripts and raw page content are not retained."
       ]
     },

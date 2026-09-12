@@ -201,7 +201,8 @@
     {#if comparison}
       <div class="comparison" class:incomparable={!comparison.compatible}>
         <strong>{comparison.compatible ? `${comparison.changes.length} field difference${comparison.changes.length === 1 ? '' : 's'} to review` : 'Snapshots are not comparable'}</strong>
-        {#if comparison.compatible && !comparison.complete}<p>One or both snapshots are incomplete. Apparent absences remain incomparable rather than proving removal.</p>{/if}
+        {#if before?.webObservationMode || after?.webObservationMode}<p>Selected URL snapshots omit paths and queries. Web differences cannot establish a change at the same page; certificate and DNS evidence retain their separate scope.</p>
+        {:else if comparison.compatible && !comparison.complete}<p>One or both snapshots are incomplete. Apparent absences remain incomparable rather than proving removal.</p>{/if}
         {#if comparison.changes.length}
           <ul>{#each comparison.changes as change}<li><span>{change.state}</span><code>{change.field}</code><small>{change.before || 'Unavailable'} → {change.after || 'Unavailable'}</small></li>{/each}</ul>
         {:else if comparison.complete}<p>No curated field changed between these compatible complete snapshots.</p>

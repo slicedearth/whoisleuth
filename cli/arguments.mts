@@ -54,7 +54,7 @@ type CliAction =
   | ({ action: 'map-observations'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'oam-export'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html' | 'junit'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean; includeAttribution: boolean; observerLabel: string | null; vantageLabel: string | null; browse?: true; saveLookup?: string; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
+  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html' | 'junit'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean; includeAttribution: boolean; observerLabel: string | null; vantageLabel: string | null; exactUrl?: true; browse?: true; saveLookup?: string; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'csv_metadata' | 'domains' | 'queries' | 'junit'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; plan: boolean; filter: 'all' | 'registered' | 'inconclusive' | 'errors'; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'ct-search'; keyword: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'ct-intake'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
@@ -207,6 +207,7 @@ function parseLookupArguments(parsed: ParsedCommandArguments): Extract<CliAction
     vantageLabel: normalizedLabel(parsed, '--vantage', 80),
     ...terminalOptions(parsed),
     ...(parsed.hasOption('--browse') ? { browse: true as const } : {}),
+    ...(parsed.hasOption('--exact-url') ? { exactUrl: true as const } : {}),
     ...(parsed.optionValue('--save-lookup') ? { saveLookup: parsed.optionValue('--save-lookup')! } : {}),
     ...(selectedFailPolicies ? { failOn: selectedFailPolicies } : {}),
   };

@@ -50,6 +50,7 @@
   import {
     LOOKUP_CLIENT_TIMEOUT_MS,
   } from '$lib/analysis/lookup-request.ts';
+  import { prepareSelectedLookupUrl } from '../../../../../packages/evidence/lookup-target.mts';
   import {
     buildLookupRequestUrl,
     prepareLookupCollectionTarget,
@@ -92,6 +93,7 @@
 
   let query=$state('');
   let lookupMode=$state<LookupMode>('fast');
+  let collectSelectedUrl=$state(false);
   let loading=$state(false);
   let loadingElapsedMs=$state(0);
   let includeExternalIntelligence=$state(false);
@@ -155,7 +157,7 @@
   const entries=$derived(parsedInput.entries);
   const lookupEntries=$derived.by(()=>{
     const trimmed=query.trim();
-    return taskView==='incident'&&/^[a-z][a-z\d+.-]*:\/\//iu.test(trimmed)?[trimmed]:entries;
+    return /^[a-z][a-z\d+.-]*:\/\//iu.test(trimmed)&&!/[\r\n]/u.test(trimmed)?[trimmed]:entries;
   });
   const securityTxtEligible=$derived.by(()=>{
     if(lookupEntries.length!==1)return false;
@@ -637,6 +639,7 @@
       id:crypto.randomUUID?crypto.randomUUID():`website-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       domain:observationHostname??caseDomain,
       observedAt:lookupObservedAt||now,
+      ...(availability.webObservationMode==='selected_url'?{webObservationMode:'selected_url' as const}:{}),
       savedAt:now,
       lookupEvidenceDepth,
       technologyProfile,
@@ -705,7 +708,14 @@
       return;
     }
     let target:string;
-    try{target=prepareLookupCollectionTarget(submittedEntry);}
+    let selectedUrl:string|undefined;
+    try{
+      target=prepareLookupCollectionTarget(submittedEntry);
+      if(collectSelectedUrl){
+        if(lookupMode!=='deep'||!securityTxtSupported)throw new TypeError('Selected URL collection requires an enabled Deep website observation.');
+        selectedUrl=prepareSelectedLookupUrl(submittedEntry,target);
+      }
+    }
     catch(cause){error=cause instanceof Error?cause.message:'Lookup target could not be prepared.';return;}
     invalidateCaseActions();
     invalidateWatchlistActions();
@@ -734,6 +744,7 @@
         lookupUrl,
         (elapsedMs)=>{loadingElapsedMs=elapsedMs;},
         refreshProfileContext,
+        selectedUrl ? { selectedUrl } : {},
       );
       if(completed.state==='stale'||!requestCurrent())return;
       const outcome=completed.outcome;
@@ -769,6 +780,7 @@
   bind:query
   task={taskView}
   bind:lookupMode
+  bind:collectSelectedUrl
   {loading}
   {loadingElapsedMs}
   loadingDeadlineMs={LOOKUP_CLIENT_TIMEOUT_MS}
@@ -804,7 +816,7 @@
 
 {#if result}
   <section class="result-root" id="result" use:evidenceLinkNavigation>
-    <LookupResultHeader title={show(result.inputHostname||result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} {observationHostname}
+    <LookupResultHeader title={show(result.inputHostname||result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} {observationHostname} selectedUrl={availability.webObservationMode === 'selected_url'}
       observedAt={lookupObservedAt} depth={lookupEvidenceDepth} caseHref={caseDomain ? caseRecord ? caseWorkspaceHref(caseRecord.id) : '#case-response' : null}
       caseLabel={caseRecord ? 'Open saved Case' : caseSourceState === 'ready' ? 'Keep in Case' : 'Case context'} onCaseOpen={preserveLookupReturn}
       onExport={downloadEvidence} onReportExport={downloadReadableReport} onBriefExport={downloadInvestigationBrief} />

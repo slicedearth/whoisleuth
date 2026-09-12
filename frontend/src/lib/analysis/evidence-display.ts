@@ -22,6 +22,7 @@ const SCAN_DEPTH_LABELS = {
 const FIELD_LABELS = {
   inputHostname: 'Submitted hostname',
   observationHostname: 'DNS, TLS and web observation hostname',
+  webObservationMode: 'Website target',
   scanDepth: 'Scan depth',
   availability: 'Availability',
   confidence: 'Confidence',
@@ -75,7 +76,7 @@ type SnapshotGroup = {
 const FIELD_GROUPS: Array<{ name: string; fields: SnapshotField[] }> = [
   {
     name: 'Observation context',
-    fields: ['inputHostname', 'observationHostname'],
+    fields: ['inputHostname', 'observationHostname', 'webObservationMode'],
   },
   {
     name: 'Registration',
@@ -136,6 +137,7 @@ export function fieldLabel(field: string): string {
  */
 export function formatSnapshotValue(field: string, value: unknown): string {
   if (value === null || value === undefined) return 'Not observed';
+  if (field === 'webObservationMode' && value === 'selected_url') return 'Selected URL; path and query not retained';
   if (typeof value === 'boolean') return value ? 'Detected' : 'Not detected';
   if (Array.isArray(value)) {
     if (value.length === 0) return 'None';

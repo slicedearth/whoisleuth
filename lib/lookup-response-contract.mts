@@ -1071,6 +1071,7 @@ function parseCompactLookupHttpResponse(
     || !expectedRegistrableDomain
     || Object.keys(availability).length > MAX_COMPACT_LOOKUP_AVAILABILITY_KEYS
     || availability.observationHostname !== undefined
+    || availability.webObservationMode !== undefined
     || availability.applicable !== true
     || normalizedDomain(availability.domain) !== expectedRegistrableDomain
     || typeof availability.state !== 'string'

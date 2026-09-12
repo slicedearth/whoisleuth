@@ -247,6 +247,7 @@ function formatTerminalLookup(
   if (availability.observationHostname) {
     targetLines.push(`DNS/TLS/web    ${safeTerminalValue(availability.observationHostname)}`);
   }
+  if (availability.webObservationMode === 'selected_url') targetLines.push('Website scope  Explicitly selected URL; query omitted from provenance');
   if (availability.applicable) {
     targetLines.push(`Availability   ${titleCase(availability.state)}`);
     targetLines.push(`Confidence     ${titleCase(availability.confidence)}`);

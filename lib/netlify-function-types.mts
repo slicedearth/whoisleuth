@@ -8,6 +8,7 @@ type NetlifyFunctionEvent = {
   headers?: NetlifyFunctionHeaders | null;
   queryStringParameters?: NetlifyQueryStringParameters | null;
   body?: string | null;
+  isBase64Encoded?: boolean;
 };
 
 type NetlifyFunctionHandler = (

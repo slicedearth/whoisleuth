@@ -5,7 +5,7 @@ import {
 
 type LookupRequest = (
   url: string,
-  options: Readonly<{ signal?: AbortSignal }>,
+  options: Readonly<{ signal?: AbortSignal; selectedUrl?: string }>,
 ) => Promise<LookupRequestOutcome>;
 
 type LookupControllerResult =
@@ -41,6 +41,7 @@ class LookupRequestController {
     url: string,
     onProgress: (elapsedMs: number) => void,
     prepare: () => Promise<void> = async () => {},
+    selection: Readonly<{ selectedUrl?: string }> = {},
   ): Promise<LookupControllerResult> {
     if (this.#disposed) return { state: 'stale' };
 
@@ -60,7 +61,7 @@ class LookupRequestController {
     try {
       await prepare();
       if (sequence !== this.#sequence || this.#disposed) return { state: 'stale' };
-      const outcome = await this.#request(url, { signal: controller.signal });
+      const outcome = await this.#request(url, { signal: controller.signal, ...selection });
       if (sequence !== this.#sequence || this.#disposed) return { state: 'stale' };
       onProgress(Math.max(0, this.#now() - startedAt));
       return { state: 'complete', outcome };

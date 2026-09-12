@@ -100,9 +100,18 @@ time, even when the form has since changed. **Open saved Case** opens the matchi
 retained Case. Its **Return to Lookup** link restores the current result without
 collecting again; this return context lasts only within the current browser session.
 
-A pasted HTTP(S) URL selects its full hostname for collection, not its port,
+By default, a pasted HTTP(S) URL selects its full hostname for collection, not its port,
 path, query or fragment. URLs containing credentials are rejected. Retaining
 an exact Incident URL in a Case is a separate, deliberate choice.
+
+For a specific page, select Deep and **Collect the selected URL instead of the
+homepage**. This sends its path and query to the website, without the fragment.
+Editing the input or depth clears that choice. The request uses default HTTP(S)
+ports and the same bounded redirect and address checks, with no fallback to a
+different path or scheme. The original registration result remains independent.
+Review retained paths and page text before sharing. Compact Case and website
+snapshots identify selected-page observations but omit paths and queries, so
+their web fields cannot establish a same-page change.
 
 Registration queries use the registrable domain. Deep DNS, TLS and web probes
 use the selected hostname; registration-delegation checks keep their own domain.

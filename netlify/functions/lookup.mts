@@ -5,6 +5,7 @@ import { operationBudgetTargetFor } from '../../lib/operation-budget.mts';
 import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../lib/netlify-network-guard.mts';
 import { json, withNetlifyApiErrorBoundary } from '../../lib/http.mts';
 import type { NetlifyFunctionHandler } from '../../lib/netlify-function-types.mts';
+import { parseLookupWebSelection } from '../../lib/lookup-selected-request.mts';
 
 type LookupHandlerDependencies = Readonly<{
   runUnifiedLookup: typeof runUnifiedLookup;
@@ -38,6 +39,11 @@ async function handleLookup(
   const malwareHostIntelligence = params.malware === '1' || params.malware === 'true';
   const malwareIocIntelligence = params.ioc === '1' || params.ioc === 'true';
   const securityTxt = params.security_txt === '1' || params.security_txt === 'true';
+  const selection = parseLookupWebSelection({
+    method: event.httpMethod ?? 'GET', contentType: event.headers?.['content-type'] ?? event.headers?.['Content-Type'],
+    body: event.body, base64: event.isBase64Encoded === true, classified, fast, compact, featurePolicy: guard.featurePolicy,
+  });
+  if (!selection.ok) return json(selection.status, { error: selection.error }, selection.status === 405 ? { Allow: 'GET, POST' } : {});
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('lookup', { fast, compact }), async () => {
     const result = await dependencies.runUnifiedLookup(classified, {
       fast,
@@ -46,9 +52,10 @@ async function handleLookup(
       malwareHostIntelligence,
       malwareIocIntelligence,
       securityTxt,
+      ...(selection.selectedUrl ? { selectedUrl: selection.selectedUrl } : {}),
       featurePolicy: guard.featurePolicy,
     });
-    return json(200, dependencies.createLookupHttpResponse(q, classified, result));
+    return json(200, dependencies.createLookupHttpResponse(selection.selectedUrl ? classified.inputHostname! : q, classified, result));
   });
 }
 

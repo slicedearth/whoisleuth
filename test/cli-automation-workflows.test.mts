@@ -22,6 +22,26 @@ import type { ClassifiedQuery } from '../lib/classify.mts';
 
 const NOW = '2026-08-01T00:00:00.000Z';
 
+test('same-domain timeline and reconciliation cannot compare selected-page values as the homepage', () => {
+  const make = (at: string, selected: boolean, pageTitle: string) => JSON.stringify(buildCliLookupDocument('example.test', classifiedDomain('example.test'), {
+    ...lookupResult('example.test'), availability: {
+      ...lookupResult('example.test').availability, observationHostname: 'example.test',
+      ...(selected ? { webObservationMode: 'selected_url' } : {}),
+      pageTitle, http: { status: 'success', requestUrl: 'https://example.test/selected', finalUrl: 'https://example.test/selected' },
+    },
+  }, at, 'deep'));
+  const left = make(NOW, false, 'Earlier page');
+  const right = make('2026-08-02T00:00:00.000Z', true, 'Different page');
+  const diff = buildCliLookupDiff(left, right, NOW, { domainMode: 'same' });
+  const title = diff.comparison.rows.find((row) => row.id === 'page-title');
+  assert.ok(title);
+  assert.equal(title.state, 'not_recorded');
+  assert.match(title.limitations.join(' '), /selected URL/);
+  assert.equal(buildCliLookupTimeline([left, right]).summary.transitionsWithObservedChanges, 0);
+  const reconciliation = buildCliLookupReconciliation([left, right]);
+  assert.equal(reconciliation.fields.find((field) => field.id === 'page-title')?.state, 'non_comparable');
+});
+
 function capture() {
   let value = '';
   return {

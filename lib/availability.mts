@@ -38,6 +38,7 @@ import { nonEmptyErrorMessage } from './error-detail.mts';
 import { registryServiceAdmissionFor } from './registry-capabilities.mts';
 import { canonicalRegistrableDomain } from './registrable-domain.mts';
 import { isValidAsciiHostname } from './hostname.mts';
+import { prepareSelectedLookupUrl } from '../packages/evidence/lookup-target.mts';
 import {
   HOMEPAGE_FETCH_TIMEOUT_MS,
   MAX_HOMEPAGE_BYTES,
@@ -73,6 +74,7 @@ type HomepageResult = {
   status: string;
   detail: string;
   http: HttpObservation;
+  analysisBaseUrl?: string;
   responsePolicy?: ResponsePolicyAnalysis | null;
   technologyHeaders?: Record<string, string>;
 };
@@ -87,6 +89,7 @@ type HomepageFetchDetail = {
   durationMs: number;
 };
 type HomepageFetcher = (url: string, options: RequestInit) => Promise<Response | HomepageFetchDetail>;
+type HomepageFetchOptions = { fetcher?: HomepageFetcher; timeoutMs?: number; selectedUrl?: string; signal?: AbortSignal };
 type DnsDelegation = {
   delegated: boolean;
   nameservers: string[];
@@ -112,6 +115,7 @@ function rdapEventDate(events: UnknownRecord[], action: string): string | null {
 type AvailabilityOptions = {
   signal?: AbortSignal;
   observationHostname?: string;
+  selectedUrl?: string;
   fast?: boolean;
   includeExtendedDnsContext?: boolean;
   includeInheritedCaa?: boolean;
@@ -124,7 +128,7 @@ type AvailabilityOptions = {
   collectDnsIntelligence?: typeof collectDnsIntelligence;
   dnsResolvers?: Record<string, DnsResolver>;
   collectTlsIntelligence?: typeof collectTlsIntelligence;
-  fetchHomepage?: (domain: string) => Promise<HomepageResult>;
+  fetchHomepage?: (domain: string, options?: HomepageFetchOptions) => Promise<HomepageResult>;
   fetchFaviconHash?: typeof fetchFaviconHash;
   featurePolicy?: ReturnType<typeof networkFeaturePolicy>;
   rdapRecord?: unknown;
@@ -323,21 +327,23 @@ async function checkDnsDelegation(domain: string, options: {
 // avoids turning an inconclusive probe into a false inactivity claim.
 async function fetchHomepage(
   domain: string,
-  { fetcher = safeFetchDetailed as HomepageFetcher, timeoutMs = HOMEPAGE_FETCH_TIMEOUT_MS }: { fetcher?: HomepageFetcher; timeoutMs?: number } = {},
+  { fetcher = safeFetchDetailed as HomepageFetcher, timeoutMs = HOMEPAGE_FETCH_TIMEOUT_MS, selectedUrl, signal }: HomepageFetchOptions = {},
 ): Promise<HomepageResult> {
+  const selected = selectedUrl === undefined ? null : prepareSelectedLookupUrl(selectedUrl, domain);
   const requestTimeoutMs = Number.isInteger(timeoutMs) && timeoutMs >= 10 && timeoutMs <= HOMEPAGE_FETCH_TIMEOUT_MS
     ? timeoutMs
     : HOMEPAGE_FETCH_TIMEOUT_MS;
   const headers = whoisleuthRequestHeaders();
   const failures: HomepageFailure[] = [];
   const probeStartedAt = Date.now();
-  for (const scheme of ['https', 'http']) {
-    const requestUrl = `${scheme}://${domain}`;
+  for (const requestUrl of selected ? [selected] : [`https://${domain}`, `http://${domain}`]) {
+    signal?.throwIfAborted();
+    const scheme = new URL(requestUrl).protocol.slice(0, -1);
     const attemptStartedAt = Date.now();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
     try {
-      const fetched = await fetcher(requestUrl, { signal: controller.signal, headers });
+      const fetched = await fetcher(requestUrl, { signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal, headers });
       const fetchedResponse = fetched instanceof Response ? fetched : fetched.response;
       const detail: HomepageFetchDetail = fetched && typeof fetched === 'object' && 'response' in fetched
         ? fetched as HomepageFetchDetail
@@ -351,6 +357,9 @@ async function fetchHomepage(
             durationMs: Date.now() - attemptStartedAt,
           };
       const res = detail.response;
+      const analysisBase = new URL(detail.finalUrl);
+      analysisBase.search = '';
+      analysisBase.hash = '';
       // Retain an explicitly partial prefix when the body exceeds its bound;
       // downstream analyses must not treat it as a complete page. The
       // timeout stays armed through this read (cleared in `finally` below,
@@ -362,9 +371,10 @@ async function fetchHomepage(
         return {
           text: body.text,
           status: 'fetched',
-          detail: `Homepage responded over ${scheme.toUpperCase()} (HTTP ${res.status}).`,
+          detail: `${selected ? 'Selected URL' : 'Homepage'} responded over ${scheme.toUpperCase()} (HTTP ${res.status}).`,
           responsePolicy: analyzeResponsePolicyHeaders(res.headers),
           technologyHeaders: captureTechnologyResponseHeaders(res.headers),
+          ...(selected ? { analysisBaseUrl: analysisBase.toString() } : {}),
           http: buildHttpObservation({ ...detail, durationMs: Date.now() - attemptStartedAt }, {
             previousAttempts: failures,
             capturedBodyBytes: body.bytesRead,
@@ -384,7 +394,7 @@ async function fetchHomepage(
       return {
         text: null,
         status: 'responded',
-        detail: `Web server responded over ${scheme.toUpperCase()} (HTTP ${res.status}); homepage content was not available for inspection.`,
+        detail: `Web server responded over ${scheme.toUpperCase()} (HTTP ${res.status}); ${selected ? 'selected page' : 'homepage'} content was not available for inspection.`,
         responsePolicy: analyzeResponsePolicyHeaders(res.headers),
         technologyHeaders: captureTechnologyResponseHeaders(res.headers),
         http: buildHttpObservation({ ...detail, durationMs: Date.now() - attemptStartedAt }, {
@@ -394,9 +404,11 @@ async function fetchHomepage(
         }),
       };
     } catch (err) {
+      signal?.throwIfAborted();
       const error = errorRecord(err);
       const reason = error.name === 'AbortError'
         ? `timed out after ${requestTimeoutMs} milliseconds`
+        : selected ? 'request failed; the selected URL was not retried at another path or scheme'
         : nonEmptyErrorMessage(err, 'request failed')
           .replace(/[\u0000-\u001f\u007f]+/g, ' ')
           .slice(0, 180);
@@ -409,7 +421,7 @@ async function fetchHomepage(
     text: null,
     status: 'inconclusive',
     detail: failures.length
-      ? `Could not confirm homepage activity: ${failures.map((attempt) => attempt.error).join('; ')}.`
+      ? `Could not confirm ${selected ? 'selected URL' : 'homepage'} activity: ${failures.map((attempt) => attempt.error).join('; ')}.`
       : 'Could not confirm homepage activity.',
     http: failedHttpObservation(failures, { durationMs: Date.now() - probeStartedAt }),
   };
@@ -442,30 +454,12 @@ function registryPolicyDetail(domain: string, fast: boolean): string {
 // large sourcing candidate lists quickly and gently on registry rate
 // limits; anything it can't resolve (state "unknown") is meant to get a
 // follow-up deep check (fast: false, the default) on the shortlist only.
-async function checkDomainAvailability(domain: string, options: AvailabilityOptions = {}) {
+async function resolveDomainRegistration(domain: string, options: AvailabilityOptions, featurePolicy: ReturnType<typeof networkFeaturePolicy>) {
   options.signal?.throwIfAborted();
   const fast = options.fast === true;
-  const observationHostname = fast ? domain : options.observationHostname ?? domain;
-  if (options.observationHostname !== undefined && (!isValidAsciiHostname(options.observationHostname)
-    || options.observationHostname !== options.observationHostname.toLowerCase()
-    || canonicalRegistrableDomain(options.observationHostname) !== domain)) {
-    throw new TypeError('The observation hostname must belong to the registration target.');
-  }
-  const collectDns = options.collectDnsIntelligence || collectDnsIntelligence;
-  const collectTls = options.collectTlsIntelligence || collectTlsIntelligence;
-  const fetchHomepageForDomain = options.fetchHomepage || fetchHomepage;
-  const fetchFaviconForDomain = options.fetchFaviconHash || fetchFaviconHash;
-  const featurePolicy = options.featurePolicy || networkFeaturePolicy();
   const rdapEnabled = featureDecision('rdap', featurePolicy).enabled;
   const whoisEnabled = featureDecision('whois', featurePolicy).enabled;
   const dnsIntelligenceEnabled = featureDecision('dns_intelligence', featurePolicy).enabled;
-  const websiteProbeEnabled = featureDecision('website_probe', featurePolicy).enabled;
-  const tlsIntelligenceEnabled = featureDecision('tls_intelligence', featurePolicy).enabled;
-  const deepScanComplete = rdapEnabled
-    && whoisEnabled
-    && dnsIntelligenceEnabled
-    && websiteProbeEnabled
-    && tlsIntelligenceEnabled;
   const hasPreloadedRdap = Object.prototype.hasOwnProperty.call(options, 'rdapRecord');
   const hasPreloadedWhois = Object.prototype.hasOwnProperty.call(options, 'whoisChain');
   const hasPreloadedRdapPromise = Object.prototype.hasOwnProperty.call(options, 'rdapRecordPromise');
@@ -486,6 +480,9 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
   let registrationConfidence: RegistrationConfidence = 'high';
   let dnssec: string | null = null;
   let registryDnsEvidence: unknown = null;
+  const assessment = <T extends { state: string; confidence: string; detail: string }>(registration: T) => ({
+    registration, registryDnsEvidence, nameservers, dnssec,
+  });
 
   if (rdapEnabled) {
     try {
@@ -505,13 +502,13 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       if (Object.keys(record).length) {
         rdapServer = recordRdapServer;
         if (upstreamStatus === 404) {
-          return {
+          return assessment({
             state: 'available',
             confidence: 'high',
             detail: 'The registry\'s RDAP service has no record for this domain.',
             source: 'rdap',
             rdapServer: recordRdapServer,
-          };
+          });
         }
         const parsed = errorRecord(record.parsed);
         if (Object.keys(parsed).length) {
@@ -579,12 +576,12 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       const parsed = parseWhoisChain(whoisChain);
       whoisParsed = parsed;
       if (parsed.notFound) {
-        return {
+        return assessment({
           state: 'available',
           confidence: 'medium',
           detail: `WHOIS reports no matching record for this domain${parsed.notFoundSource ? ` (per ${parsed.notFoundSource})` : ''}.`,
           source: 'whois',
-        };
+        });
       }
       if (parsed.registrationStatus === 'registered') {
         if (parsed.nameservers.length) nameservers = parsed.nameservers;
@@ -651,7 +648,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       ? ` ${disabledSources.join(', ')} ${disabledSources.length === 1 ? 'is' : 'are'} disabled by deployment policy.`
       : '';
     const policyDetail = registryPolicyDetail(domain, fast);
-    return {
+    return assessment({
       state: 'unknown',
       confidence: 'low',
       detail: fast
@@ -660,7 +657,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         ? `WHOIS was inconclusive - a referral hop did not answer conclusively (${whoisParsed.failedHop}).${policyDetail}`
         : `No enabled registration source returned conclusive data or an authoritative DNS delegation.${disabledDetail}${policyDetail}`,
       ...(!fast && whoisEnabled ? { source: 'whois' } : {}),
-    };
+    });
   }
 
   const domainAgeDays = computeAgeDays(createdDateIso || createdDate);
@@ -691,30 +688,53 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     const normalizedStatus = registryStatusToken(status);
     return normalizedStatus.includes('pendingdelete') || normalizedStatus.includes('redemptionperiod');
   })) {
-    return {
+    return assessment({
       state: 'expiring',
       confidence: 'medium',
       detail: 'Domain is in redemption/pending-delete status and may become available soon.',
       ...baseInfo,
-    };
+    });
   }
 
-  if (fast) {
-    return {
+  return assessment({
       state: 'registered',
       confidence: registrationConfidence,
       detail: registrationSource === 'dns'
         ? 'Authoritative DNS delegation confirms the domain is registered, but RDAP/WHOIS registration details were unavailable.'
         : 'Domain is registered. Run a deep check for parking/for-sale detection.',
       ...baseInfo,
-    };
+    });
+}
+
+async function checkDomainAvailability(domain: string, options: AvailabilityOptions = {}) {
+  options.signal?.throwIfAborted();
+  const fast = options.fast === true;
+  const observationHostname = fast ? domain : options.observationHostname ?? domain;
+  if (options.observationHostname !== undefined && (!isValidAsciiHostname(options.observationHostname)
+    || options.observationHostname !== options.observationHostname.toLowerCase()
+    || canonicalRegistrableDomain(options.observationHostname) !== domain)) {
+    throw new TypeError('The observation hostname must belong to the registration target.');
   }
+  const selectedUrl = options.selectedUrl === undefined ? undefined : prepareSelectedLookupUrl(options.selectedUrl, observationHostname);
+  const featurePolicy = options.featurePolicy || networkFeaturePolicy();
+  const websiteProbeEnabled = featureDecision('website_probe', featurePolicy).enabled;
+  if (selectedUrl && (fast || !websiteProbeEnabled)) throw new TypeError('Selected URL collection requires an enabled Deep website observation.');
+  const { registration, registryDnsEvidence, nameservers, dnssec } = await resolveDomainRegistration(domain, options, featurePolicy);
+  if (fast || registration.state !== 'registered' && !selectedUrl) return registration;
+  const collectDns = options.collectDnsIntelligence || collectDnsIntelligence;
+  const collectTls = options.collectTlsIntelligence || collectTlsIntelligence;
+  const fetchHomepageForDomain = options.fetchHomepage || fetchHomepage;
+  const fetchFaviconForDomain = options.fetchFaviconHash || fetchFaviconHash;
+  const dnsIntelligenceEnabled = featureDecision('dns_intelligence', featurePolicy).enabled;
+  const tlsIntelligenceEnabled = featureDecision('tls_intelligence', featurePolicy).enabled;
+  const deepScanComplete = (['rdap', 'whois', 'dns_intelligence', 'website_probe', 'tls_intelligence'] as const)
+    .every((feature) => featureDecision(feature, featurePolicy).enabled);
 
   // Registered - look for for-sale/parked/website signals (homepage fetch,
   // deep mode only), and check for a configured mail exchanger as a
   // phishing-risk signal (a lookalike domain that can receive/send mail is
   // capable of running credential-harvesting or BEC campaigns).
-  const nsSignal = nameservers.find((ns) => PARKING_NS_PATTERNS.some((re) => re.test(ns)));
+  const nsSignal = registration.state === 'registered' ? nameservers.find((ns) => PARKING_NS_PATTERNS.some((re) => re.test(ns))) : undefined;
   let forSaleSignal = nsSignal ? `parking nameserver (${nsSignal})` : null;
   let activityStatus = nsSignal && observationHostname === domain ? 'parked' : 'unknown';
 
@@ -724,12 +744,15 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
   // extra round-trip on the already-slow deep path, in exchange for finding
   // favicons the bare /favicon.ico probe would miss.
   const [homepage, dnsIntelligence, tlsIntelligence] = await Promise.all([
-    websiteProbeEnabled ? fetchHomepageForDomain(observationHostname).catch((err): HomepageResult => ({
+    websiteProbeEnabled ? fetchHomepageForDomain(observationHostname, {
+      ...(selectedUrl ? { selectedUrl } : {}), ...(options.signal ? { signal: options.signal } : {}),
+    }).catch((err): HomepageResult => ({
       text: null,
       status: 'inconclusive',
-      detail: `Could not confirm homepage activity: ${String(err && err.message ? err.message : 'request failed').slice(0, 180)}.`,
+      detail: selectedUrl ? 'Could not confirm selected URL activity.'
+        : `Could not confirm homepage activity: ${String(err && err.message ? err.message : 'request failed').slice(0, 180)}.`,
       http: failedHttpObservation([
-        { url: `https://${observationHostname}`, error: String(err && err.message ? err.message : 'request failed') },
+        { url: selectedUrl ?? `https://${observationHostname}`, error: selectedUrl ? 'request failed' : String(err && err.message ? err.message : 'request failed') },
       ]),
     })) : Promise.resolve<HomepageResult>({
       text: null,
@@ -756,8 +779,9 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       ? collectTls(observationHostname)
       : Promise.resolve(skippedTlsObservation()),
   ]);
+  options.signal?.throwIfAborted();
   const page = homepage.text;
-  const pageBaseUrl = typeof homepage.http?.finalUrl === 'string' ? homepage.http.finalUrl : `https://${observationHostname}/`;
+  const pageBaseUrl = homepage.analysisBaseUrl ?? (typeof homepage.http?.finalUrl === 'string' ? homepage.http.finalUrl : `https://${observationHostname}/`);
   let pageAnalysis = page ? analyzeStaticHtml(page, { baseUrl: pageBaseUrl, includeVisibleText: true }) : undefined;
 
   let htmlSignals: HtmlSignals = {
@@ -784,7 +808,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
         || /^(?:text\/html|application\/xhtml\+xml)(?:\s*;|$)/i.test(responseContentType.trim());
       htmlSignals = extractHtmlSignals(page, observationHostname, {
         ...(pageAnalysis ? { htmlAnalysis: pageAnalysis } : {}),
-        ...(typeof homepage.http?.finalUrl === 'string' ? { baseUrl: homepage.http.finalUrl } : {}),
+        baseUrl: pageBaseUrl,
         ...(typeof homepage.http?.observedAt === 'string' ? { observedAt: homepage.http.observedAt } : {}),
         sourceTruncated: homepage.http?.response?.bodyTruncated === true,
         exactBodyHash: homepage.http?.response?.bodyHash,
@@ -804,7 +828,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
           : {}),
       });
       if (pageIdentityEligible && htmlSignals.domainSaleSignal) {
-        if (observationHostname === domain) forSaleSignal = forSaleSignal || htmlSignals.domainSaleSignal;
+        if (!selectedUrl && observationHostname === domain) forSaleSignal = forSaleSignal || htmlSignals.domainSaleSignal;
         activityStatus = 'parked';
       }
     }
@@ -850,65 +874,47 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
   });
 
   const redirectSaleSignal = forSaleRedirectSignal(homepage.http);
-  if (observationHostname === domain && !forSaleSignal && redirectSaleSignal) {
+  if (!selectedUrl && observationHostname === domain && !forSaleSignal && redirectSaleSignal) {
     forSaleSignal = redirectSaleSignal;
     activityStatus = 'parked';
   }
 
-  const faviconProvedActive = homepage.status === 'inconclusive' && Boolean(favicon);
+  const faviconProvedActive = !selectedUrl && homepage.status === 'inconclusive' && Boolean(favicon);
   const websiteProbeStatus = faviconProvedActive ? 'responded' : homepage.status;
   const websiteProbeDetail = faviconProvedActive
     ? `${homepage.detail} A favicon responded successfully, confirming an active web service.`
     : homepage.detail;
   if (websiteProbeEnabled) {
-    activityStatus = deriveWebsiteActivity(homepage.status, Boolean(favicon), activityStatus === 'parked');
+    activityStatus = deriveWebsiteActivity(homepage.status, !selectedUrl && Boolean(favicon), activityStatus === 'parked');
   }
 
-  if (!forSaleSignal) {
-    return {
-      state: 'registered',
-      confidence: registrationConfidence,
-      detail: registrationSource === 'dns'
+  const registrationResult = registration.state !== 'registered' ? registration
+    : !forSaleSignal ? {
+      ...registration,
+      detail: 'source' in registration && registration.source === 'dns'
         ? 'Authoritative DNS delegation confirms the domain is registered, but RDAP/WHOIS registration details were unavailable.'
+        : selectedUrl ? 'The domain is registered. Website observations concern the explicitly selected URL.'
         : observationHostname === domain ? 'Domain is registered and shows no for-sale signals.'
           : 'The domain is registered. Website observations concern the separately identified hostname.',
-      activityStatus,
-      websiteProbeStatus,
-      websiteProbeDetail,
-      http: retainedHttp,
-      ...(options.observationHostname !== undefined ? { observationHostname } : {}),
-      deepScanComplete,
-      faviconHash,
-      faviconPHash,
-      ...retainedHtmlSignals,
-      securityPosture,
-      ...baseInfo,
-      nameservers: nameservers.length || observationHostname !== domain ? nameservers : dnsIntelligence.records.ns,
-      dns: dnsIntelligence,
-      tls: tlsIntelligence,
-      hasMx: dnsIntelligence.hasMx,
-      hasNullMx: dnsIntelligence.hasNullMx,
-      mxHosts: dnsIntelligence.mxHosts,
-      hasSpf: dnsIntelligence.hasSpf,
-      hasDmarc: dnsIntelligence.hasDmarc,
-    };
-  }
-
-  return {
+    } : {
+    ...registration,
     state: 'for_sale',
     confidence: 'medium',
     detail: `Detected a for-sale listing (${forSaleSignal}).`,
+  };
+  return {
+    ...registrationResult,
     activityStatus,
     websiteProbeStatus,
     websiteProbeDetail,
     http: retainedHttp,
-    ...(options.observationHostname !== undefined ? { observationHostname } : {}),
+    ...(options.observationHostname !== undefined || selectedUrl ? { observationHostname } : {}),
+    ...(selectedUrl ? { webObservationMode: 'selected_url' as const } : {}),
     deepScanComplete,
     faviconHash,
     faviconPHash,
     ...retainedHtmlSignals,
     securityPosture,
-    ...baseInfo,
     nameservers: nameservers.length || observationHostname !== domain ? nameservers : dnsIntelligence.records.ns,
     dns: dnsIntelligence,
     tls: tlsIntelligence,

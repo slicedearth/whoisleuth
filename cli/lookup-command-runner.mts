@@ -3,7 +3,7 @@ import { classifyQuery } from '../lib/classify.mts';
 import { runUnifiedLookup } from '../lib/lookup.mts';
 import { plannedLookupProgressSources } from '../lib/lookup-source-progress.mts';
 import type { CliArguments } from './arguments.mts';
-import { CliUsageError, boundedCliErrorMessage } from './errors.mts';
+import { CliUsageError } from './errors.mts';
 import EXIT_CODES from './exit-codes.mts';
 import { buildCliEvidenceExport } from './export-evidence.mts';
 import { formatLookupEvidenceHtml } from './formatters/html.mts';
@@ -19,6 +19,7 @@ import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.m
 import { formatCliJunit } from './ci-report.mts';
 import { browseLookupOperation, canBrowseLookup } from './lookup-browser.mts';
 import { writePrivateFile } from './output-file.mts';
+import { prepareLookupCollectionTarget, prepareSelectedLookupUrl } from '../packages/evidence/lookup-target.mts';
 
 type LookupCommandArguments = Extract<CliArguments, { action: 'lookup' }>;
 
@@ -43,22 +44,29 @@ async function runLookupCommand(
   });
   context.setEventProgress(eventProgress);
   eventProgress.emit({ event: 'started' });
-  const query = args.query || await context.readSingleInput();
-  if (!query) throw new CliUsageError('lookup requires one domain, IP address, or ASN as an argument or on stdin.');
+  const input = args.query || await context.readSingleInput();
+  if (!input) throw new CliUsageError('lookup requires one domain, IP address, or ASN as an argument or on stdin.');
   const classify = dependencies.classifyQuery || classifyQuery;
   const executeLookup = dependencies.runUnifiedLookup || runUnifiedLookup;
   let classified;
+  let query: string;
+  let selectedUrl: string | undefined;
   try {
+    query = prepareLookupCollectionTarget(input);
     classified = classify(query);
-  } catch (error) {
-    throw new CliUsageError(boundedCliErrorMessage(error, 'Invalid query'));
+    if (args.exactUrl) {
+      if (!args.deep || classified.type !== 'domain') throw new TypeError();
+      selectedUrl = prepareSelectedLookupUrl(input, classified.inputHostname);
+    }
+  } catch {
+    throw new CliUsageError(args.exactUrl ? '--exact-url requires --deep and an HTTP(S) domain URL without credentials or a custom port.' : 'Invalid domain, IP address, ASN or credential-free HTTP(S) URL.');
   }
   if ((args.output === 'markdown' || args.output === 'html') && classified.type !== 'domain') {
     throw new CliUsageError('Markdown and HTML reports support domain lookups only.');
   }
 
   if (args.plan) {
-    const plan = buildCliLookupPlan(query, classified, args.deep);
+    const plan = buildCliLookupPlan(query, classified, args.deep, Boolean(selectedUrl));
     context.writeStdout(args.output === 'json'
       ? formatJsonDocument(plan)
       : context.terminal(formatCliLookupPlan(plan), args.color));
@@ -98,6 +106,7 @@ async function runLookupCommand(
           ? {
               fast: false,
               compact: false,
+              ...(selectedUrl ? { selectedUrl } : {}),
               signal,
               onSourceSettled: (settlement) => {
                 onSourceSettled(settlement);
@@ -133,6 +142,7 @@ async function runLookupCommand(
         ? {
             fast: false,
             compact: false,
+            ...(selectedUrl ? { selectedUrl } : {}),
             ...(dependencies.signal ? { signal: dependencies.signal } : {}),
             onSourceSettled: (settlement) => {
               settledSources += 1;

@@ -70,6 +70,7 @@ export type LookupEvidenceReplay = Readonly<{
   generatorVersion: string | null;
   target: string;
   observationHostname?: string | null;
+  webObservationMode?: 'selected_url';
   caseDomain: string | null;
   targetType: string;
   availability: string;
@@ -259,6 +260,7 @@ export function buildLookupReplayCaseEvidence(
     inputHostname: replay.target,
     ...(replay.schemaVersion >= HOSTNAME_SCOPED_LOOKUP_EVIDENCE_SCHEMA_VERSION && replay.observationHostname
       ? { observationHostname: replay.observationHostname } : {}),
+    ...(replay.webObservationMode ? { webObservationMode: replay.webObservationMode } : {}),
     scanDepth: 'unknown',
     availability: replay.availability,
     confidence: replay.confidence,
@@ -390,7 +392,7 @@ export async function parseLookupEvidenceReplay(
   const sources = record(document.sources);
   const analysis = record(document.analysis);
   const availability = record(analysis.availability);
-  if ((availability.observationHostname !== undefined && schemaVersion < HOSTNAME_SCOPED_LOOKUP_EVIDENCE_SCHEMA_VERSION)
+  if (((availability.observationHostname !== undefined || availability.webObservationMode !== undefined) && schemaVersion < HOSTNAME_SCOPED_LOOKUP_EVIDENCE_SCHEMA_VERSION)
     || !validLookupObservationScope(availability, query)) {
     throw new Error('Lookup evidence observation hostname does not match its collection contract.');
   }
@@ -663,6 +665,7 @@ export async function parseLookupEvidenceReplay(
     exportedAt,
     generatorVersion,
     target: text(query.inputHostname ?? query.submitted ?? query.registrableDomain, 253) || 'Unknown target',
+    ...(availability.webObservationMode === 'selected_url' ? { webObservationMode: 'selected_url' as const } : {}),
     observationHostname: lookupObservationHostname({
       ...availability, domain: availability.domain ?? query.registrableDomain,
     }),

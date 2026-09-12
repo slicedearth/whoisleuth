@@ -1,9 +1,30 @@
 // Ordinary collection retains a hostname, not a pasted URL's private path or query.
 // Registration classification and network-address safety remain separate.
 import { isValidAsciiHostname } from '../contracts/domain-name.mts';
+import { MAX_OUTBOUND_HTTP_URL_CHARACTERS } from '../contracts/http-url.mts';
 export const MAX_LOOKUP_INPUT_CHARACTERS = 2 * 1024 * 1024;
 const URL_SCHEME = /^[a-z][a-z\d+.-]*:\/\//iu;
 const CONTROL = /[\u0000-\u001f\u007f]/u;
+export type WebObservationMode = 'selected_url';
+
+export function validWebObservationMode(value: unknown): value is WebObservationMode | undefined {
+  return value === undefined || value === 'selected_url';
+}
+
+/** A separate deliberate action; ordinary URL input never selects its path. */
+export function prepareSelectedLookupUrl(value: unknown, hostname?: string): string {
+  if (typeof value !== 'string' || value.includes('\\')) throw new TypeError('Select a valid HTTP(S) URL.');
+  const parsed = parseCredentialFreeHttpUrl(value, MAX_OUTBOUND_HTTP_URL_CHARACTERS);
+  if (!parsed || parsed.port || !isValidAsciiHostname(parsed.hostname)
+    || /^\d+\.\d+\.\d+\.\d+$/u.test(parsed.hostname)
+    || hostname !== undefined && parsed.hostname !== hostname) {
+    throw new TypeError('Selected URL must use the submitted hostname and a default HTTP(S) port, without credentials.');
+  }
+  parsed.hash = '';
+  const url = parsed.toString();
+  if (url.length > MAX_OUTBOUND_HTTP_URL_CHARACTERS) throw new TypeError('Selected URL exceeds the request bound.');
+  return url;
+}
 
 /** Older results collected supporting evidence at the registrable domain. */
 export function lookupObservationHostname(availability: Readonly<{ observationHostname?: unknown; domain?: unknown }>): string | null {
@@ -23,10 +44,18 @@ function validLookupObservationHostname(
 
 /** Bind collection identities without treating an omitted historical identity as new evidence. */
 export function validLookupObservationScope(
-  availability: Readonly<{ observationHostname?: unknown; dns?: unknown }>,
+  availability: Readonly<{ observationHostname?: unknown; webObservationMode?: unknown; http?: unknown; dns?: unknown }>,
   query: Readonly<{ inputHostname?: unknown; registrableDomain?: unknown; submitted?: unknown }>,
 ): boolean {
   if (availability.observationHostname !== undefined && !validLookupObservationHostname(availability.observationHostname, query)) return false;
+  if (!validWebObservationMode(availability.webObservationMode)) return false;
+  if (availability.webObservationMode === 'selected_url') {
+    if (!validLookupObservationHostname(availability.observationHostname, query)) return false;
+    const http = availability.http;
+    const requestUrl = http && typeof http === 'object' && !Array.isArray(http) ? Reflect.get(http, 'requestUrl') : null;
+    const parsed = parseCredentialFreeHttpUrl(requestUrl, MAX_OUTBOUND_HTTP_URL_CHARACTERS);
+    if (!parsed || parsed.hostname !== availability.observationHostname || parsed.port || parsed.search || parsed.hash) return false;
+  }
   const dns = availability.dns;
   const delegation = dns && typeof dns === 'object' && !Array.isArray(dns) ? Reflect.get(dns, 'delegation') : null;
   const registrationDomain = delegation && typeof delegation === 'object' && !Array.isArray(delegation) ? Reflect.get(delegation, 'domain') : null;

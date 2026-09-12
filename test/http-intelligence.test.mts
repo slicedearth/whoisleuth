@@ -31,10 +31,14 @@ describe('HTTP provenance URL normalization', () => {
     assert.equal(normalizeProvenanceUrl('file:///etc/passwd'), null);
   });
 
-  test('replaces an overlong path with a bounded origin URL', () => {
-    const result = requiredValue(normalizeProvenanceUrl(`https://example.com/${'a'.repeat(MAX_HTTP_PROVENANCE_URL)}`));
-    assert.equal(result.url, 'https://example.com/');
-    assert.equal(result.pathTruncated, true);
+  test('retains the complete maximum admitted path and rejects a larger input', () => {
+    const prefix = 'https://example.test/';
+    const url = prefix + 'a'.repeat(MAX_HTTP_PROVENANCE_URL - prefix.length);
+    assert.deepEqual(normalizeProvenanceUrl(url), { url, queryOmitted: false, pathTruncated: false });
+    assert.equal(normalizeProvenanceUrl(`${url}a`), null);
+    const expanded = requiredValue(normalizeProvenanceUrl(prefix + 'é'.repeat(1_000)));
+    assert.equal(expanded.url, prefix);
+    assert.equal(expanded.pathTruncated, true);
   });
 });
 
