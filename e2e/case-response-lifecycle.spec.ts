@@ -103,7 +103,7 @@ test('packet handoffs reject inputs changed during hashing and a stale delivery 
   await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
     writeText: () => (window as typeof window & { countFixtureCopy: () => Promise<void> }).countFixtureCopy(),
   } }));
-  for (const [index, button] of [exportButton, packet.getByRole('button', { name: 'Copy email draft', exact: true }), packet.getByRole('button', { name: 'Preview manual complaint', exact: true })].entries()) {
+  for (const [index, button] of [exportButton, packet.getByRole('button', { name: 'Copy email draft', exact: true }), packet.getByRole('button', { name: 'Preview manual complaint', exact: true }), packet.getByRole('button', { name: 'Preview printable report', exact: true })].entries()) {
     await openPacketWizardStep(packet, 'Export and record');
     await page.evaluate(() => {
       const target = window as typeof window & { heldDigest?: boolean; releaseDigest?: () => void };
@@ -131,9 +131,13 @@ test('packet handoffs reject inputs changed during hashing and a stale delivery 
     expect(downloads).toBe(0);
     expect(copies).toBe(0);
     await expect(packet.getByRole('textbox', { name: /^Exact manual complaint/ })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: record.domain, exact: true })).toHaveCount(0);
   }
   await openPacketWizardStep(packet, 'Export and record');
   await expect(packet.getByRole('button', { name: 'Continue to record delivery' })).toHaveCount(0);
+  await openPacketWizardStep(packet, 'Prepare');
+  await packet.getByRole('combobox', { name: 'Case action for this packet', exact: true }).selectOption('action-b');
+  await openPacketWizardStep(packet, 'Export and record');
   const downloadPromise = page.waitForEvent('download');
   await exportButton.click();
   const downloaded = await downloadPromise;

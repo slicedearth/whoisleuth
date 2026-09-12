@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
+  import CasePacketPrintPreview from './CasePacketPrintPreview.svelte';
   import { caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
   import {
     caseInvestigationContext,
@@ -104,6 +105,8 @@
     generatedAt: string;
   }>;
   let manualPreview = $state.raw<PreparedPacket | null>(null);
+  let printPreview = $state.raw<PreparedPacket | null>(null);
+  let printTrigger = $state<HTMLButtonElement>();
   let previewFreshnessChanged = $state(false);
   const previewIsCurrent = $derived(Boolean(manualPreview && !previewFreshnessChanged && manualPreview.signature === packetHandoffSignature()));
 
@@ -150,6 +153,12 @@
   });
 
   $effect(() => onstagechange(stage));
+  $effect(() => {
+    if (printPreview && (!visible || printPreview.signature !== packetHandoffSignature() || previewFreshnessChanged)) {
+      void closePrintablePacket();
+      onmessage('The prepared report is no longer current. Review the packet inputs and prepare it again.');
+    }
+  });
   $effect(() => {
     if (!visible) return;
     if (defaultsAppliedRecordId !== record.id) {
@@ -359,6 +368,31 @@
     }
   }
 
+  async function previewPrintablePacket() {
+    if (packetBusy) return;
+    packetBusy = true;
+    try {
+      const prepared = await prepareManualPacket(true);
+      manualPreview = prepared;
+      printPreview = prepared;
+    } catch (cause) {
+      onmessage(cause instanceof Error ? cause.message : 'Could not prepare the printable packet.');
+    } finally {
+      packetBusy = false;
+    }
+  }
+
+  async function validatePrintablePacket(prepared: PreparedPacket) {
+    const current = await prepareManualPacket(true);
+    if (current !== prepared || printPreview !== prepared) throw new Error('The prepared report changed. Open the current report before printing.');
+  }
+
+  async function closePrintablePacket() {
+    printPreview = null;
+    await tick();
+    if (!printPreview && visible && packetWizardStep === 3 && printTrigger?.isConnected) printTrigger.focus();
+  }
+
   async function copyEmail() {
     if (packetBusy) return;
     packetBusy = true;
@@ -481,6 +515,7 @@
           <header><div><p class="eyebrow">Export and record</p><h4 id={`packet-wizard-title-${record.id}-8`}>Local handoff</h4></div><span>Phase 3</span></header>
           <p class="notice">Export stays local. WHOISleuth does not submit a packet, send mail, test the recipient, promise removal or remediation, or treat provider action as an independently observed effect.</p>
           <button class="btn" type="button" onclick={() => void previewManualComplaint()} disabled={packetBusy || !packetPreflight.canExport}>{manualPreview ? 'Refresh manual complaint preview' : 'Preview manual complaint'}</button>
+          <button class="btn" type="button" bind:this={printTrigger} onclick={() => void previewPrintablePacket()} disabled={packetBusy || !packetPreflight.canExport}>Preview printable report</button>
           {#if manualPreview}
             {#if previewIsCurrent}
               <label class="field">Exact manual complaint <small>Prepared {manualPreview.generatedAt} · {manualPreview.built.json.authorisation.status}. Copy and export use this prepared packet while its inputs and freshness remain unchanged.</small><textarea id={`manual-complaint-${record.id}`} class="manual-complaint" value={manualPreview.built.email} readonly rows="16" spellcheck="false"></textarea></label>
@@ -502,6 +537,10 @@
       <div class="wizard-controls"><button class="btn" type="button" onclick={() => void setPacketWizardStep(packetWizardStep - 1)} disabled={packetWizardStep === 1}>Previous phase</button><span>Phase {packetWizardStep} of {packetWizardSteps.length}</span><button class="btn" type="button" onclick={() => void setPacketWizardStep(packetWizardStep + 1)} disabled={packetWizardStep === packetWizardSteps.length}>Next phase</button></div>
     </form>
   </details>
+{/if}
+
+{#if printPreview}
+  <CasePacketPrintPreview packet={printPreview.built.json} onvalidate={() => validatePrintablePacket(printPreview!)} onclose={() => void closePrintablePacket()} />
 {/if}
 
 <style>

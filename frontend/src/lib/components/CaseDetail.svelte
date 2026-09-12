@@ -84,9 +84,15 @@
     const article = navigation.closest<HTMLElement>('[data-case-detail]');
     if (!article) return;
     let width = window.innerWidth;
+    let pointerActive = false;
+    const startPointer = () => { pointerActive = true; };
+    const endPointer = () => { pointerActive = false; };
     const exposeFocus = () => {
       const target = document.activeElement;
-      if (!(target instanceof HTMLElement) || !article.contains(target) || navigation.contains(target)) return;
+      // Pointer activation must not move its release target. A modal owns its
+      // own scroll container rather than the Case behind it.
+      if (pointerActive || !(target instanceof HTMLElement) || !article.contains(target)
+        || navigation.contains(target) || target.closest('dialog[open]')) return;
       const boundary = navigation.getBoundingClientRect();
       const position = target.getBoundingClientRect();
       if (position.top < boundary.bottom + 12 && position.bottom > boundary.top) {
@@ -99,8 +105,20 @@
       exposeFocus();
     });
     resize.observe(navigation);
+    article.addEventListener('pointerdown', startPointer, true);
+    window.addEventListener('pointerup', endPointer, true);
+    window.addEventListener('pointercancel', endPointer, true);
+    window.addEventListener('blur', endPointer);
     article.addEventListener('focusin', exposeFocus);
-    return { destroy() { resize.disconnect(); article.removeEventListener('focusin', exposeFocus); article.style.removeProperty('--case-navigation-height'); } };
+    return { destroy() {
+      resize.disconnect();
+      article.removeEventListener('pointerdown', startPointer, true);
+      window.removeEventListener('pointerup', endPointer, true);
+      window.removeEventListener('pointercancel', endPointer, true);
+      window.removeEventListener('blur', endPointer);
+      article.removeEventListener('focusin', exposeFocus);
+      article.style.removeProperty('--case-navigation-height');
+    } };
   }
   $effect(() => {
     const targetId = deepLinkTargetId;

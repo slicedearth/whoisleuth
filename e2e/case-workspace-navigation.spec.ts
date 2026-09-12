@@ -91,6 +91,32 @@ test('Case section changes preserve independent drafts and browser history witho
   expect(requests).toEqual([]);
 });
 
+test('pointer activation is not displaced when an enclosing Case section receives focus', async ({ page }) => {
+  await seedCases(page, '/cases?case=workspace-first&section=response&response=1');
+  const phases = page.getByRole('navigation', { name: 'Response-packet phases', exact: true });
+  const target = phases.getByRole('button', { name: /Export and record/u });
+  await target.evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await expect(target).toBeInViewport();
+  const point = await target.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  });
+  const response = page.locator('.response-workspace');
+  expect(await response.evaluate(element => element.getBoundingClientRect().top
+    < document.querySelector('.case-sections')!.getBoundingClientRect().bottom)).toBe(true);
+  await page.mouse.move(point.x, point.y);
+  await page.mouse.down();
+  try {
+    const before = await page.evaluate(() => scrollY);
+    // Some engines focus an enclosing section during a button's pointer press.
+    await response.evaluate(element => (element as HTMLElement).focus({ preventScroll: true }));
+    expect(await page.evaluate(() => scrollY)).toBe(before);
+    expect(await target.evaluate((element, point) => element.contains(document.elementFromPoint(point.x, point.y)), point)).toBe(true);
+  } finally { await page.mouse.up(); }
+  await expect(target).toHaveAttribute('aria-current', 'step');
+  await expect(page.locator('#packet-wizard-step-workspace-first-8')).toBeFocused();
+});
+
 test('Case sections retain reading position and keep the assessment evidence and keyboard focus usable', async ({ page }, testInfo) => {
   const pin = {
     id: 'continuity-pin', checkpointId: null, field: 'http.status', category: 'http', label: 'Observed response',

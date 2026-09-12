@@ -456,6 +456,11 @@ local export; WHOISleuth does not send it or promise a provider outcome.
 **Preview manual complaint** shows the exact text used by Copy and the email
 download. JSON and Markdown describe the same prepared packet. Changed inputs
 or freshness require a new preview; receipt recording remains a separate action.
+**Preview printable report** presents the same audience-filtered packet with
+incident context, source references, UTC times, readiness and response state.
+Print or save it as PDF through the browser, optionally including the exact JSON
+appendix. Printing rechecks the prepared inputs; it does not confirm a saved file
+or record delivery. The report digest identifies the packet JSON, not the PDF.
 
 Provider acknowledgement or reported resolution remains analyst-recorded state,
 not independently observed remediation.

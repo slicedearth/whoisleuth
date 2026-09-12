@@ -13,6 +13,7 @@ const specifications = [
   'encrypted-workspaces.spec.ts',
   'case-draft-recovery.spec.ts',
   'case-review-return.spec.ts',
+  'case-packet-print.spec.ts',
   'capture-attachment-review.spec.ts',
   'investigation-package.spec.ts',
   'lookup-replay.spec.ts',
