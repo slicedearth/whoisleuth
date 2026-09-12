@@ -1,5 +1,4 @@
 import { defineConfig, devices } from '@playwright/test';
-import path from 'node:path';
 import base from '../playwright.config.ts';
 import { PLAYWRIGHT_FUNCTIONAL_PROJECT } from '../tools/playwright-execution-contract.mts';
 
@@ -25,7 +24,6 @@ const specifications = [
 export default defineConfig({
   ...base,
   testDir: __dirname,
-  outputDir: path.resolve(__dirname, '..', base.outputDir ?? 'test-results'),
   projects: [
     ...base.projects!.filter(project => functional.dependencies?.includes(project.name ?? '')),
     ...(['Desktop Firefox', 'Desktop Safari'] as const).map(device => ({

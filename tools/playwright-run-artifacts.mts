@@ -59,11 +59,25 @@ export function playwrightRunArtifacts(environment: Environment = process.env): 
   });
 }
 
+export function resolvePlaywrightRunArtifacts(
+  repositoryRoot: string,
+  environment: Environment = process.env,
+): PlaywrightRunArtifacts {
+  const relative = playwrightRunArtifacts(environment);
+  return Object.freeze({
+    identity: relative.identity,
+    authFile: path.resolve(repositoryRoot, relative.authFile),
+    jsonResults: path.resolve(repositoryRoot, relative.jsonResults),
+    htmlReport: path.resolve(repositoryRoot, relative.htmlReport),
+    testResults: path.resolve(repositoryRoot, relative.testResults),
+  });
+}
+
 export function playwrightJsonResultsPath(
   repositoryRoot: string,
   environment: Environment = process.env,
 ): string {
-  return path.resolve(repositoryRoot, playwrightRunArtifacts(environment).jsonResults);
+  return resolvePlaywrightRunArtifacts(repositoryRoot, environment).jsonResults;
 }
 
 export function playwrightJsonReporterEnvironment(

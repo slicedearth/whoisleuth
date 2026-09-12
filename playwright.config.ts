@@ -1,14 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
 import { BASE_URL, PORT, TEST_SESSION_SECRET, TEST_SITE_PASSWORD } from './e2e/constants.ts';
 import { resolvePlaywrightExecutionContract } from './tools/playwright-execution-contract.mts';
-import { playwrightRunArtifacts } from './tools/playwright-run-artifacts.mts';
+import { resolvePlaywrightRunArtifacts } from './tools/playwright-run-artifacts.mts';
 import { assertFrontendBuildIntegrity } from './tools/frontend-build-integrity.mts';
 
 // Playwright's CommonJS configuration loader owns this file's directory;
 // resolve server inputs from it, including when a wrapper imports the config.
 const execution = resolvePlaywrightExecutionContract(process.env, __dirname);
 if (execution.useExistingBuild) assertFrontendBuildIntegrity();
-const artifacts = playwrightRunArtifacts();
+const artifacts = resolvePlaywrightRunArtifacts(__dirname);
 const chromiumProject = {
   name: execution.functionalProject.name,
   use: { ...devices['Desktop Chrome'], storageState: artifacts.authFile },
