@@ -21,7 +21,7 @@
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
-  import { compareCaseEvidence, DEFAULT_DISPOSITION, dispositionLabel as caseDispositionLabel, isReviewedCaseDisposition, parseIncidentUrlContext, statusLabel as caseStatusLabel, type CaseRecord, type CaseTransitionExpectation, type EvidenceChange } from '$lib/cases';
+  import { compareCaseEvidence, DEFAULT_DISPOSITION, dispositionLabel as caseDispositionLabel, isReviewedCaseDisposition, parseIncidentUrlContext, statusLabel as caseStatusLabel, type CaseRecord, type CaseTransitionExpectation } from '$lib/cases';
   import { caseEvidenceIncomparableReasons, latestCaseEvidence } from '$lib/analysis/case-model.ts';
   import { loadWatchlists, saveSingleDomainWatchlist } from '$lib/watchlists';
   import type { LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
@@ -82,7 +82,7 @@
   import { preloadBestEffort } from '$lib/idle-preload';
   import { LookupRequestController } from '$lib/controllers/lookup-request-controller';
   import type { LookupProgressUpdate } from '../../../../../lib/lookup-progress-http.mts';
-  import { LookupCaseController, type LookupCaseActionResult, type LookupConclusionEvidenceSelection } from '$lib/controllers/lookup-case-controller';
+  import { LookupCaseController, type LookupCaseActionResult, type LookupConclusionEvidenceSelection, type LookupRecheckComparison, type LookupRecheckOutcomeInput } from '$lib/controllers/lookup-case-controller';
   import { LookupAnchorController } from '$lib/controllers/lookup-anchor-controller';
   import {
     MAX_OBSERVATION_LIMITATIONS,
@@ -122,7 +122,7 @@
   let caseCandidates=$state.raw<CaseRecord[]>([]);
   let caseSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let caseDisposition=$state(DEFAULT_DISPOSITION);let caseReviewReason=$state('');
-  let caseRecheckComparison=$state<Readonly<{available:boolean;changes:EvidenceChange[];observedAt:string;detail:string}>|null>(null);
+  let caseRecheckComparison=$state<LookupRecheckComparison|null>(null);
   let caseActionBusy=$state(false);
   let caseActionGeneration=0;
   let linkedWatchlistNames=$state<string[]>([]);
@@ -359,7 +359,7 @@
   async function addLookupNote(){const record=caseRecord;const note=caseNote;await performCaseAction(()=>lookupCaseController.appendNote(record,note),(next)=>{if(next.clearNote)caseNote='';});}
   async function recordLookupConclusion(rationale:string,selections:readonly LookupConclusionEvidenceSelection[]){const record=caseRecord;const disposition=caseDisposition;const reason=caseReviewReason;return performCaseAction(()=>lookupCaseController.recordConclusion(record,checkpointFacts,disposition,reason,rationale,selections),(next)=>{caseDisposition=next.record?.disposition??DEFAULT_DISPOSITION;caseReviewReason=next.record?.reviewReasonCode??'';});}
   async function recordLookupInvestigationContext(objective:string,retainExactUrl:boolean){const record=caseRecord;const incidentUrl=completedIncidentUrl;return performCaseAction(()=>lookupCaseController.recordInvestigationContext(record,{objective,incidentUrl,retainExactUrl}));}
-  async function recordLookupRecheckOutcome(input:Readonly<{state:string;completeness:string;source:string;followUpAt:string|null;limitations:readonly string[];comparisonSummary:string}>):Promise<LocalMutationOutcome>{const record=caseRecord;const comparison=caseRecheckComparison;if(!comparison?.available)return 'rejected';return performCaseAction(()=>lookupCaseController.recordRecheckOutcome(record,{...input,observedAt:comparison.observedAt,collectionDepth:lookupEvidenceDepth}));}
+  async function recordLookupRecheckOutcome(input:LookupRecheckOutcomeInput):Promise<LocalMutationOutcome>{const record=caseRecord;const comparison=caseRecheckComparison;if(!comparison?.available)return 'rejected';return performCaseAction(()=>lookupCaseController.recordRecheckOutcome(record,{...input,observedAt:comparison.observedAt,collectionDepth:lookupEvidenceDepth,observationHostname:caseObservationTarget}));}
   async function recordAbuseRecipient(route:Parameters<LookupCaseController['recordRecipient']>[1]){const record=caseRecord;await performCaseAction(()=>lookupCaseController.recordRecipient(record,route));}
   async function saveLookupWatchlist(){
     if(watchlistActionBusy)return;

@@ -276,6 +276,7 @@ export type CaseObservedEffectReview = {
   evidencePinId: string | null;
   sightingId: string | null;
   followUpAt: string | null;
+  recheck?: import('./case-recheck-model.mts').CaseRecheckAnswerContext;
   createdAt: string;
 };
 
@@ -329,6 +330,7 @@ export type CaseAssertionRecord = {
   createdAt: string;
   updatedAt: string;
   provenance?: CaseAssertionExternalProvenance;
+  recheck?: import('./case-recheck-model.mts').CaseRecheckContext;
 };
 
 export type CaseManualTrailEvent = {

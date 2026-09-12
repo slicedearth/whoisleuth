@@ -8,7 +8,9 @@
   import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseRecheckReview from './CaseRecheckReview.svelte';
+  import CaseRecheckQuestions from './CaseRecheckQuestions.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
+  import { CASE_RECHECK_CONDITIONS } from '../../../../packages/cases/case-recheck-model.mts';
 
   let { record, mode, mutationBusy, persist }: {
     record: CaseRecord;
@@ -60,7 +62,7 @@
     <summary>{mode === 'quick' ? 'Record recheck outcome and closure' : 'Verify remediation independently and close deliberately'}</summary>
     <div class="response-form remediation-review">
       <p class="notice">Provider responses, independent observations and analyst closure are separate records.</p>
-      <a class="btn" href={`/lookup?q=${encodeURIComponent(caseLookupTarget(record))}`}>Prepare a recheck for {caseLookupTarget(record)}</a>
+      <a class="btn" href={`/lookup?q=${encodeURIComponent(caseLookupTarget(record))}&case=${encodeURIComponent(record.id)}`}>Prepare a recheck for {caseLookupTarget(record)}</a>
       <dl class="separate-times">
         <div><dt>Provider outcome time</dt><dd>{responseLifecycle.latestProviderOutcome ? `${responseLifecycle.latestProviderOutcome.occurredAt} · ${responseLifecycle.latestProviderOutcome.outcome.replaceAll('_', ' ')}` : `Withheld — ${responseLifecycle.providerOutcomeState}`}</dd></div>
         <div><dt>Independently observed change time</dt><dd>{responseLifecycle.latestObservedChangeAt ?? `Withheld — ${responseLifecycle.observedChangeState}`}</dd></div>
@@ -71,11 +73,14 @@
       {#if record.observedEffects.preV13HistoryUnavailable || record.closures.preV13HistoryUnavailable}
         <p class="history-warning">This Case predates v13. Earlier independent review or deliberate closure history is unavailable and was not reconstructed.</p>
       {/if}
+      <CaseRecheckQuestions {record} {mutationBusy} {persist} />
       <CaseRecheckReview {record} {mode} {mutationBusy} {persist} />
       {#if record.observedEffects.reviews.length}
         <ol class="records embedded-records" aria-label="Independent observed-effect reviews">
           {#each [...record.observedEffects.reviews].reverse() as review}
-            <li><strong>{review.state.replaceAll('_', ' ')}</strong><p>{review.source}</p><small>Review ID {review.id} · {review.observedAt} · {review.sourceClass} · {review.completeness}</small>{#if review.evidencePinId}<CaseLinkedEvidence pins={record.evidencePins} ids={[review.evidencePinId]} />{/if}{#if review.sightingId}<small>Sighting: {review.sightingId}</small>{/if}{#if review.followUpAt}<small>Scheduled follow-up: {review.followUpAt}</small>{/if}{#if review.limitations.length}<small>Limitations: {review.limitations.join('; ')}</small>{/if}</li>
+            <li><strong>{review.state.replaceAll('_', ' ')}</strong><p>{review.source}</p>
+              {#if review.recheck}<p><strong>{review.recheck.question}</strong><br>{review.recheck.targetHostname} · {review.recheck.conditions}<br><small>Conditions: {CASE_RECHECK_CONDITIONS[review.recheck.conditionsMatch]} · question {review.recheck.questionId}</small></p>{/if}
+              <small>Review ID {review.id} · {review.observedAt} · {review.sourceClass} · {review.completeness}</small>{#if review.evidencePinId}<CaseLinkedEvidence pins={record.evidencePins} ids={[review.evidencePinId]} />{/if}{#if review.sightingId}<small>Sighting: {review.sightingId}</small>{/if}{#if review.followUpAt}<small>Scheduled follow-up: {review.followUpAt}</small>{/if}{#if review.limitations.length}<small>Limitations: {review.limitations.join('; ')}</small>{/if}</li>
           {/each}
         </ol>
       {/if}

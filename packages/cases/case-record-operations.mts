@@ -37,6 +37,7 @@ import {
 } from './case-record-contracts.mts';
 import { PUBLISHED_V2_3_CASE_SCHEMA_VERSION, INCIDENT_CASE_SCHEMA_VERSION, MAX_CASE_OBJECTIVE_LENGTH } from '../contracts/case-portability.mts';
 import { readCaseAttachments } from './case-attachment-model.mts';
+import { assertCurrentRecheckQuestion, assertRecheckNonReproduction, readCaseRecheckAnswerContext } from './case-recheck-model.mts';
 import {
   caseDispositionSupportsDefensiveResponse,
   caseStatusIsClosed,
@@ -334,6 +335,12 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
         new Set(sightings.map((item) => item.id)),
       )
     : normalizeCaseObservedEffectHistory(undefined, now);
+  for (const review of observedEffects.reviews) {
+    if (!review.recheck) continue;
+    assertCurrentRecheckQuestion(review.recheck, assertions);
+    assertRecheckNonReproduction(review.state, review.recheck, review.completeness, evidencePins,
+      evidencePins.find(pin => pin.id === review.evidencePinId), review.observedAt);
+  }
   const closures = input.closure !== undefined
     ? appendCaseClosure(normalizeCaseClosureHistory(undefined, now), input.closure, now, observedEffects, actions)
     : normalizeCaseClosureHistory(undefined, now);
@@ -514,6 +521,13 @@ export function updateCase(
     new Set(sightings.map((item) => item.id)),
   );
   if (patch.observedEffectReview !== undefined) {
+    const review = objectRecord(patch.observedEffectReview);
+    const context = readCaseRecheckAnswerContext(review.recheck);
+    if (context) {
+      assertCurrentRecheckQuestion(context, assertions);
+      assertRecheckNonReproduction(review.state as import('./case-response-records.mts').CaseObservedEffectState, context,
+        String(review.completeness), evidencePins, evidencePins.find(pin => pin.id === review.evidencePinId), typeof review.observedAt === 'string' ? review.observedAt : null);
+    }
     observedEffects = appendCaseObservedEffectReview(
       observedEffects,
       patch.observedEffectReview,
@@ -722,12 +736,15 @@ export function recordCaseRecheckOutcome(
     followUpAt?: unknown;
     limitations?: unknown;
     collectionDepth?: unknown;
+    recheck?: import('./case-recheck-model.mts').CaseRecheckAnswerContext;
+    observationHostname?: unknown;
   }>,
   nowIso?: string,
 ): { cases: CaseRecord[]; record: CaseRecord } {
   const now = caseTimestampOrNull(nowIso) || new Date().toISOString();
   const current = cases.find((item) => item.id === id);
   if (!current) throw new Error('That case no longer exists.');
+  if (input.recheck && input.observationHostname !== input.recheck.targetHostname) throw new Error('This recheck concerns a different or unknown hostname. Recollect the saved question target before recording its answer.');
   const beforePinIds = new Set(current.evidencePins.map((pin) => pin.id));
   const withPin = updateCase(cases, id, {
     evidencePin: {
@@ -739,6 +756,7 @@ export function recordCaseRecheckOutcome(
       sourceState: 'reviewed',
       observedAt: input.observedAt,
       collectionDepth: input.collectionDepth,
+      observationHostname: input.observationHostname,
       completeness: input.completeness,
       truncated: false,
       limitations: input.limitations,
@@ -756,6 +774,7 @@ export function recordCaseRecheckOutcome(
       evidencePinId: comparisonPin.id,
       followUpAt: input.followUpAt,
       limitations: input.limitations,
+      ...(input.recheck ? { recheck: input.recheck } : {}),
     },
   }, now);
 }

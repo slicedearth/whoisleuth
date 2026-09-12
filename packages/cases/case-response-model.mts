@@ -70,6 +70,7 @@ import {
   uniqueIds,
 } from './case-response-values.mts';
 import { isValidAsciiHostname } from '../../lib/hostname.mts';
+import { readCaseRecheckContext } from './case-recheck-model.mts';
 
 export * from './case-response-records.mts';
 export * from './case-response-actions.mts';
@@ -473,6 +474,10 @@ function normalizeAssertion(
   const provenance = normalizeAssertionProvenance(item.provenance, options);
   const legacyIds = uniqueIds(item.evidencePinIds, validPinIds);
   const evidenceRelations = normalizeEvidenceRelations(item.evidenceRelations, legacyIds, validPinIds);
+  const recheck = readCaseRecheckContext(item.recheck, options.sourceVersion);
+  if (recheck && item.kind !== 'next_step') {
+    throw new TypeError('A recheck question must remain a next step.');
+  }
   return {
     id: safeId(item.id, 'assertion', { statement, createdAt }),
     kind: typeof item.kind === 'string' && ASSERTION_KINDS.has(item.kind)
@@ -488,6 +493,7 @@ function normalizeAssertion(
     createdAt,
     updatedAt: iso(item.updatedAt, createdAt, options),
     ...(provenance ? { provenance } : {}),
+    ...(recheck ? { recheck } : {}),
   };
 }
 
@@ -542,6 +548,7 @@ export function updateCaseAssertion(
   const id = typeof patch.id === 'string' && SAFE_ID_RE.test(patch.id) ? patch.id : '';
   const existing = current.find((item) => item.id === id);
   if (!existing) throw new Error('That analyst assertion no longer exists.');
+  if (patch.expectedUpdatedAt !== undefined && patch.expectedUpdatedAt !== existing.updatedAt) throw new Error('The analyst assertion changed in another tab. Refresh before updating it.');
   const updated = normalizeAssertion({
     ...existing,
     ...patch,

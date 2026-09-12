@@ -9,6 +9,7 @@ import {
 import {
   latestObservationCohort,
 } from '../evidence/latest-observations.mts';
+import { readCaseRecheckAnswerContext } from './case-recheck-model.mts';
 import {
   CASE_CLOSURE_REASONS,
   CASE_OBSERVED_EFFECT_SOURCE_CLASSES,
@@ -61,6 +62,10 @@ function normalizeObservedEffectReview(
   const observedAt = optionalIso(item.observedAt, options);
   if (!source || !observedAt) return null;
   const createdAt = iso(item.createdAt, observedAt || fallback, options);
+  const recheck = readCaseRecheckAnswerContext(item.recheck, options.sourceVersion);
+  if (recheck && item.state === 'not_reproduced' && (item.completeness !== 'complete' || recheck.conditionsMatch !== 'comparable')) {
+    throw new TypeError('A question cannot be marked not reproduced from incomplete evidence or unconfirmed comparison conditions.');
+  }
   const evidencePinId = typeof item.evidencePinId === 'string'
     && SAFE_ID_RE.test(item.evidencePinId)
     && (!validPinIds || validPinIds.has(item.evidencePinId))
@@ -88,6 +93,7 @@ function normalizeObservedEffectReview(
     evidencePinId,
     sightingId,
     followUpAt: optionalIso(item.followUpAt, options),
+    ...(recheck ? { recheck } : {}),
     createdAt,
   };
 }

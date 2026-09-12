@@ -424,6 +424,15 @@ a recheck. Clear **Use selected source details** to link the pin as context for
 a separate manual observation. **Enter a manual observation** restores that
 draft without a pin link.
 
+**Recheck questions** saves a next step with a target hostname, optional baseline
+pin and comparison conditions. Select that question when recording a Case or
+Lookup recheck. Each answer keeps the question and conditions as they were when
+answered; resolving the question does not rewrite those answers. Non-reproduction
+requires a complete observation under comparable conditions. A failed source,
+different target or another review of the baseline cannot establish it. Lookup
+leaves the outcome and completeness for the analyst to select; unchanged fields
+do not select a verdict. Follow-up times are entered in UTC.
+
 The saved reporting-route review includes platform reports. Filter by source
 review state or search by domain, recipient or source; pagination exposes all
 routes in the admitted Case store. Source observation and review dates remain

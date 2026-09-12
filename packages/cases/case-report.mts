@@ -20,6 +20,7 @@ import {
 } from '../../lib/portable-generator.mts';
 import { buildCaseResponseLifecycleSummary, CASE_EVIDENCE_RELATION_STANCES } from './case-response-model.mts';
 import { normalizeCaseBrandProfileIds } from './case-brand-profile-references.mts';
+import { CASE_RECHECK_CONDITIONS } from './case-recheck-model.mts';
 import {
   CASE_REPORT_SCHEMA,
   CASE_REPORT_SCHEMA_VERSION,
@@ -588,6 +589,10 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
       for (const assertion of assertions) {
         lines.push(`- **${escapeMarkdownInline(assertion.state)}:** ${escapeMarkdownInline(assertion.statement)}`);
         if (assertion.rationale) lines.push(`  ${escapeMarkdownInline(assertion.rationale)}`);
+        if (assertion.recheck) {
+          lines.push(`  Recheck target: ${escapeMarkdownInline(assertion.recheck.targetHostname)}; comparison conditions: ${escapeMarkdownInline(assertion.recheck.conditions)}`);
+          if (assertion.recheck.baselinePinId) lines.push(`  Baseline evidence pin: ${escapeMarkdownInline(assertion.recheck.baselinePinId)}`);
+        }
         if (assertion.provenance) {
           lines.push(`  External provenance: ${escapeMarkdownInline(assertion.provenance.format.toUpperCase())}; source ${escapeMarkdownInline(assertion.provenance.sourceName)}; file SHA-256 ${escapeMarkdownInline(assertion.provenance.sourceDigestSha256)}.`);
           if (assertion.provenance.publisher) lines.push(`  Publisher: ${escapeMarkdownInline(assertion.provenance.publisher)}`);
@@ -675,6 +680,12 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
   if (!response.observedEffects.reviews.length) lines.push('- No independent observed-effect review recorded.');
   for (const review of response.observedEffects.reviews) {
     lines.push(`- **${escapeMarkdownInline(review.state.replaceAll('_', ' '))}** (${escapeMarkdownInline(review.observedAt)}): ${escapeMarkdownInline(review.source)}; class ${escapeMarkdownInline(review.sourceClass)}; completeness ${escapeMarkdownInline(review.completeness)}.`);
+    if (review.recheck) {
+      lines.push(`  Question ${escapeMarkdownInline(review.recheck.questionId)}: ${escapeMarkdownInline(review.recheck.question)}`);
+      lines.push(`  Recheck target: ${escapeMarkdownInline(review.recheck.targetHostname)}; retained comparison conditions: ${escapeMarkdownInline(review.recheck.conditions)}`);
+      lines.push(`  Condition comparison: ${escapeMarkdownInline(CASE_RECHECK_CONDITIONS[review.recheck.conditionsMatch])}`);
+      if (review.recheck.baselinePinId) lines.push(`  Baseline evidence pin: ${escapeMarkdownInline(review.recheck.baselinePinId)}`);
+    }
     if (review.evidencePinId) lines.push(`  Evidence pin: ${escapeMarkdownInline(review.evidencePinId)}`);
     if (review.sightingId) lines.push(`  Sighting: ${escapeMarkdownInline(review.sightingId)}`);
     if (review.followUpAt) lines.push(`  Scheduled local follow-up: ${escapeMarkdownInline(review.followUpAt)}`);

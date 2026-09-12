@@ -73,6 +73,63 @@ test('a recheck across hostnames retains registration changes without offering a
   await expectNoHorizontalOverflow(page);
 });
 
+test('Lookup recheck owns an explicit outcome draft and retains a saved question without granting another collection', async ({ page }, testInfo) => {
+  const question = 'Does the selected page still show the reported form?', conditions = 'Same selected page and unauthenticated session.';
+  const record = { ...caseRecord({ domain: CASE_DOMAIN, assertions: [{ id: 'lookup-question', kind: 'next_step', statement: question, state: 'open',
+    createdAt: '2026-08-01T10:00:00.000Z', updatedAt: '2026-08-01T10:00:00.000Z',
+    recheck: { targetHostname: LOOKUP_TARGET, baselinePinId: null, conditions } }] }),
+    evidenceHistory: [{ ...snapshot({ inputHostname: LOOKUP_TARGET, pageTitle: 'Earlier page' }), observationHostname: LOOKUP_TARGET }] };
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: 16, cases: [record] } }, { destination: '/lookup' });
+  let requests = 0;
+  await page.route('**/api/lookup?*', route => { requests += 1; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(responseLoopFixture(requests)) }); });
+  await runDeepLookup(page);
+  const card = page.locator('.case-card'), recollect = card.getByRole('button', { name: 'Recheck and refresh Case' });
+  await expect(recollect).toBeEnabled(); await recollect.click();
+  const comparison = card.locator('.recheck-comparison'), form = comparison.getByRole('form', { name: 'Record Lookup recheck' });
+  await expect(form).toBeVisible();
+  const save = form.getByRole('button', { name: 'Record reviewed recheck outcome' });
+  await expect(save).toBeDisabled();
+  await expect(form.getByRole('combobox', { name: 'Completeness', exact: true })).toHaveValue('unknown');
+  await form.getByRole('combobox', { name: 'Saved question', exact: true }).selectOption('lookup-question');
+  await expect(form.locator('p strong')).toHaveText(question);
+  await form.getByRole('combobox', { name: 'Observed outcome', exact: true }).selectOption('unavailable');
+  await form.getByLabel('Follow up at (UTC)', { exact: true }).fill('2026-10-01T12:34:56.123');
+  await form.getByRole('textbox', { name: 'Limitations one per line', exact: true }).fill('The comparison does not establish whether the form remains available.');
+  page.once('dialog', dialog => dialog.dismiss()); await recollect.click();
+  expect(requests).toBe(2); await expect(form.getByRole('combobox', { name: 'Observed outcome', exact: true })).toHaveValue('unavailable');
+  await save.focus(); await page.keyboard.press('Enter');
+  await expect(card.getByRole('status')).toContainText('Recorded the analyst-reviewed recheck outcome');
+  await expect(save).toBeFocused();
+  const saved = (await readBrowserLocalCollection(page, 'cases')).records[0]!.value;
+  expect(saved.observedEffects.reviews).toEqual([expect.objectContaining({ state: 'unavailable', followUpAt: '2026-10-01T12:34:56.123Z', completeness: 'unknown',
+    recheck: { questionId: 'lookup-question', question, targetHostname: LOOKUP_TARGET, baselinePinId: null, conditions, conditionsMatch: 'unknown' } })]);
+  expect(requests).toBe(2);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280, 2560]) {
+      await page.setViewportSize({ width, height: width < 500 ? 844 : 900 }); await form.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page); await expect(save).toBeVisible();
+      const clipped = await form.locator('input, select, textarea, button').evaluateAll(controls => controls.flatMap(control => {
+        const box = control.getBoundingClientRect(), container = control.closest('form')!.getBoundingClientRect();
+        return box.width > 0 && box.left >= container.left && box.right <= container.right ? []
+          : [{ control: control.tagName, left: box.left, right: box.right, containerLeft: container.left, containerRight: container.right }];
+      }));
+      expect(clipped, `Recheck controls stay within their card at ${width}px in ${theme}`).toEqual([]);
+      if (width >= 1024) {
+        const formBox = await form.boundingBox(), columns = await card.locator('.case-tools').boundingBox();
+        expect(formBox && columns && formBox.width >= columns.width - 2, 'The recheck uses the full working width').toBe(true);
+        const unusedCardSpace = await card.locator('.conclusion-tool,.monitoring-tool').evaluateAll(cards => cards.map(element => {
+          const style = getComputedStyle(element), children = [...element.children].filter(child => child.getBoundingClientRect().height > 0);
+          const contentBottom = Math.max(...children.map(child => child.getBoundingClientRect().bottom + parseFloat(getComputedStyle(child).marginBottom)));
+          return element.getBoundingClientRect().bottom - contentBottom - parseFloat(style.paddingBottom) - parseFloat(style.borderBottomWidth);
+        }));
+        expect(unusedCardSpace.every(space => space < 2), 'Independent cards end after their own content').toBe(true);
+      }
+      await page.screenshot({ path: testInfo.outputPath(`lookup-recheck-${theme}-${width}.png`) });
+    }
+  }
+});
+
 test('an Incident URL sends only its hostname and retains exact Case context only by choice', async ({ page }, testInfo) => {
   const incidentUrl = 'https://login.incident.invalid/sign-in?reference=fixture,secondary;third#review';
   const lookupTarget = 'login.incident.invalid';

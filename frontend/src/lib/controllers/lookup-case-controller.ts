@@ -12,6 +12,8 @@ import {
   type CaseRecord,
 } from '../cases.ts';
 import type { CaseOpenSelection } from '../analysis/case-model.ts';
+import type { EvidenceChange } from '../cases.ts';
+import type { CaseRecheckAnswerContext } from '../../../../packages/cases/case-recheck-model.mts';
 import { CaseSelectionError } from '../../../../packages/cases/case-selection.mts';
 import { MAX_CASE_OBJECTIVE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
 import {
@@ -68,6 +70,12 @@ const DEFAULT_CASE_API: LookupCaseApi = {
 export type LookupConclusionEvidenceSelection = Readonly<{
   field: string;
   stance: 'supports' | 'contradicts' | 'unresolved';
+}>;
+
+export type LookupRecheckComparison = Readonly<{ available: boolean; changes: EvidenceChange[]; observedAt: string; detail: string }>;
+export type LookupRecheckOutcomeInput = Readonly<{
+  state: string; completeness: string; source: string; followUpAt: string | null;
+  limitations: readonly string[]; comparisonSummary: string; recheck?: CaseRecheckAnswerContext;
 }>;
 
 function pruneSuffix(pruned: number): string {
@@ -340,16 +348,7 @@ export class LookupCaseController {
 
   async recordRecheckOutcome(
     record: CaseRecord | null,
-    input: Readonly<{
-      state: string;
-      observedAt: string;
-      completeness: string;
-      comparisonSummary: string;
-      source: string;
-      followUpAt: string | null;
-      limitations: readonly string[];
-      collectionDepth: 'fast' | 'deep';
-    }>,
+    input: LookupRecheckOutcomeInput & Readonly<{ observedAt: string; collectionDepth: 'fast' | 'deep'; observationHostname?: string }>,
   ): Promise<LookupCaseActionResult> {
     if (!record) return { record: null, status: 'Create or open the analyst case before recording a recheck outcome.', mutationOutcome: 'rejected' };
     try {

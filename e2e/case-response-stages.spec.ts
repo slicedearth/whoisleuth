@@ -307,9 +307,11 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
   await expect(actions.getByLabel('Outcome detail', { exact: true })).toHaveValue('');
 
   const recheck = workspace.getByRole('link', { name: 'Prepare a recheck for quick-stages.invalid', exact: true });
+  const caseId = new URL(page.url()).searchParams.get('case');
+  expect(caseId).toBeTruthy();
   await recheck.focus();
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/\/lookup\?q=quick-stages\.invalid$/u);
+  await expect(page).toHaveURL(url => url.pathname === '/lookup' && url.searchParams.get('q') === 'quick-stages.invalid' && url.searchParams.get('case') === caseId);
   const selectedContext = page.getByRole('region', { name: 'Selected Case', exact: true });
   await expect(selectedContext).toContainText('quick-stages.invalid');
   expect(collectionRequests).toBe(0);

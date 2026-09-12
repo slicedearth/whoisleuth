@@ -6,6 +6,7 @@
   import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
+  import { CASE_RECHECK_CONDITIONS, caseRecheckQuestions, caseRecheckAnswerContext, caseRecheckComparisonWarnings, assertRecheckNonReproduction, type CaseRecheckAnswerContext } from '../../../../packages/cases/case-recheck-model.mts';
 
   let { record, mode, mutationBusy, persist }: {
     record: CaseRecord;
@@ -19,10 +20,15 @@
     effectSource: 'Analyst review', effectCompleteness: 'unknown', effectEvidencePinId: '',
     effectSightingId: '', effectFollowUpAt: '', effectLimitations: '',
     effectUsePinMetadata: false,
+    questionId: '', questionUpdatedAt: '', conditionsMatch: 'unknown',
   });
   const sourceClasses = CASE_OBSERVED_EFFECT_SOURCE_CLASSES.filter(value => value !== 'import');
   const selected = $derived(record.evidencePins.find(pin => pin.id === draft.value.effectEvidencePinId));
   const retained = $derived(selected && draft.value.effectUsePinMetadata ? caseRecheckEvidence(selected) : null);
+  const questions = $derived(caseRecheckQuestions(record.assertions));
+  const question = $derived(questions.find(item => item.id === draft.value.questionId));
+  const recheck = $derived(question ? caseRecheckAnswerContext(question, draft.value.conditionsMatch as CaseRecheckAnswerContext['conditionsMatch']) : undefined);
+  const comparisonWarnings = $derived(recheck ? caseRecheckComparisonWarnings(recheck, record.evidencePins, retained ? selected : undefined) : []);
   const evidenceProblem = $derived(!draft.value.effectEvidencePinId ? null
     : !selected ? 'The selected evidence is no longer available. Choose another pin or record a manual observation.'
     : retained && !retained.observedAt ? 'This evidence has no observation time. It cannot date a recheck. Keep the pin as evidence, or record a separate dated observation.' : null);
@@ -30,7 +36,13 @@
 
   async function save() {
     error = '';
+    if (draft.value.questionId && (!question || question.updatedAt !== draft.value.questionUpdatedAt)) { error = 'The selected question changed or was resolved. Choose a current question.'; return; }
     if (evidenceProblem) { error = evidenceProblem; return; }
+    if (recheck) {
+      try { assertRecheckNonReproduction(draft.value.effectState as import('$lib/analysis/case-response-model.ts').CaseObservedEffectState, recheck,
+        retained?.completeness ?? draft.value.effectCompleteness, record.evidencePins, retained ? selected : undefined, retained?.observedAt ?? isoFromUtcInput(draft.value.effectObservedAt) ?? new Date().toISOString()); }
+      catch (cause) { error = cause instanceof Error ? cause.message : 'Review the comparison conditions.'; return; }
+    }
     const manualTime = isoFromUtcInput(draft.value.effectObservedAt);
     const followUpAt = isoFromUtcInput(draft.value.effectFollowUpAt);
     if ((!retained && draft.value.effectObservedAt && !manualTime) || (draft.value.effectFollowUpAt && !followUpAt)) {
@@ -50,6 +62,7 @@
         followUpAt,
         // Source limitations remain on the linked pin; this field records the analyst's additional qualifications.
         limitations: list(draft.value.effectLimitations),
+        ...(recheck ? { recheck } : {}),
       },
     }, `Recorded an independent observed-effect review for ${record.domain}.`) || !unchanged()) return;
     draft.value.effectLimitations = '';
@@ -62,6 +75,14 @@
 <form class="stack" data-recovery-form={draft.form} aria-labelledby={`effect-review-title-${record.id}`}
   oninput={() => { error = ''; draft.changed(); }} onsubmit={event => { event.preventDefault(); void save(); }}>
   <strong id={`effect-review-title-${record.id}`}>Record a recheck</strong>
+  {#if questions.length || draft.value.questionId}
+    <label class="field">Saved question<select bind:value={draft.value.questionId} onchange={event => { draft.value.questionUpdatedAt = questions.find(item => item.id === event.currentTarget.value)?.updatedAt ?? ''; draft.changed(); }}><option value="">Independent review without a saved question</option>{#each questions as item}<option value={item.id}>{item.statement}</option>{/each}</select></label>
+    {#if recheck}
+      <p class="notice"><strong>{recheck.question}</strong><br>Target: {recheck.targetHostname}<br>Compare: {recheck.conditions}</p>
+      <label class="field">Comparison conditions<select bind:value={draft.value.conditionsMatch}>{#each Object.entries(CASE_RECHECK_CONDITIONS) as [value, label]}<option {value}>{label}</option>{/each}</select></label>
+      {#if comparisonWarnings.length}<ul class="notice" aria-label="Recheck comparison limitations">{#each comparisonWarnings as warning}<li>{warning}</li>{/each}</ul>{/if}
+    {/if}
+  {/if}
   <CaseEvidencePinSelect label={mode === 'quick' ? 'Current evidence' : 'Evidence pin'}
     pins={record.evidencePins} bind:value={draft.value.effectEvidencePinId} emptyLabel="Enter a manual observation"
     onselect={id => { draft.value.effectUsePinMetadata = Boolean(id); draft.changed(); }} />

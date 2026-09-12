@@ -134,6 +134,10 @@ hostname on a new evidence snapshot, analyst
 decision confidence and its basis, and a response route's observation and
 review times. Pins and sightings with unknown observation times retain null;
 saving them does not create a source observation time.
+Saved recheck questions retain an analyst-entered hostname, comparison conditions
+and optional baseline reference. Answers retain the question context as reviewed.
+These remain browser-local until exported and are excluded from public Case
+packs with other analyst assertions and independent review records.
 Individual source refreshes keep minimised facts in page memory, separate from
 the original Lookup. Explicitly selected facts can be saved through the same
 Case checkpoint controls or downloaded in a readable comparison. Raw source
