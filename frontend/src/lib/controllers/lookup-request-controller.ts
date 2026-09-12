@@ -1,11 +1,12 @@
 import {
   requestLookup,
   type LookupRequestOutcome,
+  type LookupRequestOptions,
 } from '../../../../lib/lookup-request.mts';
 
 type LookupRequest = (
   url: string,
-  options: Readonly<{ signal?: AbortSignal; selectedUrl?: string }>,
+  options: Pick<LookupRequestOptions, 'signal' | 'selectedUrl' | 'onProgress'>,
 ) => Promise<LookupRequestOutcome>;
 
 type LookupControllerResult =
@@ -41,7 +42,7 @@ class LookupRequestController {
     url: string,
     onProgress: (elapsedMs: number) => void,
     prepare: () => Promise<void> = async () => {},
-    selection: Readonly<{ selectedUrl?: string }> = {},
+    selection: Pick<LookupRequestOptions, 'selectedUrl' | 'onProgress'> = {},
   ): Promise<LookupControllerResult> {
     if (this.#disposed) return { state: 'stale' };
 
@@ -61,7 +62,11 @@ class LookupRequestController {
     try {
       await prepare();
       if (sequence !== this.#sequence || this.#disposed) return { state: 'stale' };
-      const outcome = await this.#request(url, { signal: controller.signal, ...selection });
+      const outcome = await this.#request(url, { signal: controller.signal, ...selection,
+        ...(selection.onProgress ? { onProgress: update => {
+          if (sequence === this.#sequence && this.#activeController === controller && !this.#disposed && !controller.signal.aborted) selection.onProgress?.(update);
+        } } : {}),
+      });
       if (sequence !== this.#sequence || this.#disposed) return { state: 'stale' };
       onProgress(Math.max(0, this.#now() - startedAt));
       return { state: 'complete', outcome };

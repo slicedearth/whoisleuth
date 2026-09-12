@@ -2,6 +2,8 @@
 // presentation-only; only a validated final ordinary Lookup result may cross
 // the persistence boundary.
 
+import { scanBoundedJson, MAX_BOUNDED_JSON_DEPTH, MAX_BOUNDED_JSON_KEYS, MAX_BOUNDED_JSON_VALUES } from './bounded-json.mts';
+
 export const LOOKUP_PROGRESS_SCHEMA = 'whoisleuth.lookup-progress';
 export const LOOKUP_PROGRESS_VERSION = 1;
 export const MAX_LOOKUP_PROGRESS_SOURCES = 16;
@@ -364,6 +366,13 @@ export function createLookupProgressNdjsonDecoder(
     }
     let parsed: unknown;
     try {
+      // The ordinary result keeps its original limits after decoding. Allow
+      // only the fixed progress envelope overhead around that same document.
+      scanBoundedJson(line, {
+        maximumDepth: MAX_BOUNDED_JSON_DEPTH + 1,
+        maximumKeys: MAX_BOUNDED_JSON_KEYS + 8,
+        maximumValues: MAX_BOUNDED_JSON_VALUES + MAX_LOOKUP_PROGRESS_SOURCES + 16,
+      });
       parsed = JSON.parse(line);
     } catch {
       throw new TypeError('Lookup progress stream contains malformed JSON.');

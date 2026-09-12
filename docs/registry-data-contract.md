@@ -139,12 +139,18 @@ arbitrary attributes; they do not fetch referenced scripts or execute code.
 Their classifications are review aids rather than proof of purpose,
 legitimacy, vulnerability, tracking, intent, safety, or maliciousness.
 
-The browser waits for this single final response. It shows elapsed time and
-eligible branches as pending, without polling, streaming, or claiming that a
-source has completed early. Analyst cancellation, navigation away, or the
-40-second browser deadline stops the local wait and retains no incomplete
-response. Work already admitted by the server may still finish within its
-existing source and operation bounds.
+Full Deep clients may request `application/x-ndjson`. The versioned progress
+contract carries one start frame, one bounded state summary per planned source,
+and the ordinary final response. It excludes raw payloads from progress summaries
+and makes no additional requests. Duplicate, unplanned, out-of-order, malformed,
+over-bound or incomplete streams cannot become a result. The final envelope
+retains the ordinary 8 MiB and structural limits; the complete stream is bounded
+to 12 MiB. Fast, Compact and default clients use JSON. Unsupported streaming
+adapters return JSON without a second collection request.
+
+Cancellation, navigation away or the 40-second browser deadline retains no
+incomplete response. Already-admitted work may finish within its source bounds;
+the operation lease covers its remaining lifetime.
 
 For a deep, non-compact domain Lookup only, a successful registry RDAP object
 may publish a complete `rel="related"` HTTPS domain-object link at the

@@ -3,6 +3,8 @@
   import type { Capability } from '$lib/capabilities';
   import { buildLookupCollectionPreflight } from '$lib/analysis/collection-preflight.ts';
   import CollectionPreflight from '$lib/components/CollectionPreflight.svelte';
+  import LookupSourceProgress from '$lib/components/LookupSourceProgress.svelte';
+  import type { LookupProgressUpdate } from '../../../../lib/lookup-progress-http.mts';
   import { MAX_DOMAIN_INPUT_CHARACTERS } from '$lib/analysis/utils.ts';
   import { prepareSelectedLookupUrl } from '../../../../packages/evidence/lookup-target.mts';
 
@@ -14,6 +16,7 @@
     loading,
     loadingElapsedMs,
     loadingDeadlineMs,
+    sourceProgress = null,
     entryCount,
     duplicateCount,
     inputTooLarge,
@@ -41,6 +44,7 @@
     loading: boolean;
     loadingElapsedMs: number;
     loadingDeadlineMs: number;
+    sourceProgress?: LookupProgressUpdate | null;
     entryCount: number;
     duplicateCount: number;
     inputTooLarge: boolean;
@@ -88,7 +92,7 @@
   }));
   const loadingDetail = $derived(lookupMode === 'fast'
     ? 'Fast lookup is checking authoritative registration evidence and omitting slower web, WHOIS, and enrichment sources.'
-    : 'Deep lookup is waiting for one final response covering registry, WHOIS, domain, web, TLS, and eligible enrichment branches. Some registries can take several seconds to answer.');
+    : 'Collecting registry, WHOIS, domain, web, TLS and eligible enrichment evidence.');
   const elapsedLabel = $derived(loadingElapsedMs < 1_000
     ? `${Math.max(0, Math.round(loadingElapsedMs))} ms elapsed`
     : `${(loadingElapsedMs / 1_000).toFixed(1)} s elapsed`);
@@ -174,10 +178,11 @@
       <div class="loading-copy">
         <p role="status">{loadingDetail}</p>
         <p class="loading-meta"><strong>{elapsedLabel}</strong><span>{deadlineLabel}</span></p>
-        <p class="loading-caveat">Sources remain pending until the final response reports their state. Cancelling stops this browser from waiting; work already admitted by the server may continue within its existing bounds.</p>
+        <p class="loading-caveat">Only the final validated response can be retained. Cancelling stops this browser from waiting; requests already admitted by the server may finish within their existing bounds.</p>
       </div>
       <button type="button" class="btn cancel-lookup" onclick={oncancel}>Cancel lookup</button>
     </div>
+    {#if deepMode}<LookupSourceProgress progress={sourceProgress} />{/if}
   {/if}
 
   {#if securityTxtSupported || intelligenceOptionCount}

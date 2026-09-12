@@ -1,6 +1,8 @@
 import express from 'express';
 import type { IncomingHttpHeaders } from 'node:http';
 import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import type { Request, Response } from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,7 +16,9 @@ import { buildWhoisChain, parseWhoisChain } from './lib/whois.mts';
 import { checkDomainAvailability } from './lib/availability.mts';
 import { runUnifiedLookup, LOOKUP_ERROR_CODES } from './lib/lookup.mts';
 import { createLookupHttpResponse } from './lib/lookup-response-contract.mts';
-import { MAX_LOOKUP_SELECTION_BODY_BYTES, parseLookupWebSelection } from './lib/lookup-selected-request.mts';
+import { MAX_LOOKUP_SELECTION_BODY_BYTES } from './lib/lookup-selected-request.mts';
+import { prepareLookupHttpOperation } from './lib/lookup-http-operation.mts';
+import { createLookupProgressBody, LOOKUP_PROGRESS_CONTENT_TYPE } from './lib/lookup-progress-http.mts';
 import {
   CANONICAL_TRAILING_SLASH_REDIRECTS,
   PERMANENT_ROUTE_REDIRECTS,
@@ -351,45 +355,29 @@ function registerNetworkApiRoutes(
   target: ExpressApplication,
   services: NetworkRouteServices = DEFAULT_NETWORK_ROUTE_SERVICES,
 ): void {
-  const handleLookup = async (req: RequestLike, res: ResponseLike) => {
-    const q = queryText(req.query.q);
-    if (!q) return res.status(400).json({ error: 'Missing query parameter "q"', errorCode: LOOKUP_ERROR_CODES.MISSING_QUERY });
-
-    let classified;
-    try {
-      classified = classifyQuery(q);
-    } catch {
-      return res.status(400).json({ error: 'Invalid query', errorCode: LOOKUP_ERROR_CODES.INVALID_QUERY });
-    }
-
-    const fast = req.query.fast === '1' || req.query.fast === 'true';
-    const compact = req.query.compact === '1' || req.query.compact === 'true';
-    const externalIntelligence = req.query.intelligence === '1' || req.query.intelligence === 'true';
-    const malwareHostIntelligence = req.query.malware === '1' || req.query.malware === 'true';
-    const malwareIocIntelligence = req.query.ioc === '1' || req.query.ioc === 'true';
-    const securityTxt = req.query.security_txt === '1' || req.query.security_txt === 'true';
-    const selection = parseLookupWebSelection({
-      method: req.method ?? 'GET', contentType: req.headers['content-type'], body: req.body,
-      classified, fast, compact, featurePolicy: req.networkFeaturePolicy ?? networkFeaturePolicy(),
-    });
-    if (!selection.ok) return res.status(selection.status).json({ error: selection.error });
-    return withExpressOperationBudget(req, res, operationBudgetTargetFor('lookup', { fast, compact }), async () => {
+  const handleLookup = async (req: Request & { networkFeaturePolicy?: NetworkFeaturePolicy }, res: Response) => {
+    const operation = prepareLookupHttpOperation({ params: req.query, method: req.method,
+      contentType: req.headers['content-type'], accept: req.headers.accept, body: req.body,
+      featurePolicy: req.networkFeaturePolicy ?? networkFeaturePolicy() });
+    if (!operation.ok) return res.status(operation.status).json(operation.body);
+    const controller = new AbortController();
+    const closed = () => controller.abort();
+    res.once('close', closed);
+    try { return await withExpressOperationBudget(req, res, operationBudgetTargetFor('lookup', operation.options), async () => {
       try {
-        const result = await services.runUnifiedLookup(classified, {
-          fast,
-          compact,
-          externalIntelligence,
-          malwareHostIntelligence,
-          malwareIocIntelligence,
-          securityTxt,
-          ...(selection.selectedUrl ? { selectedUrl: selection.selectedUrl } : {}),
-          ...(req.networkFeaturePolicy ? { featurePolicy: req.networkFeaturePolicy } : {}),
-        });
-        res.json(services.createLookupHttpResponse(selection.selectedUrl ? classified.inputHostname! : q, classified, result));
-      } catch (err) {
-        sendUnexpectedApiError(res, LOOKUP_ERROR_CODES.LOOKUP_FAILED);
+        if (operation.streaming) {
+          const stream = createLookupProgressBody({ sources: operation.sources, signal: controller.signal,
+            run: (settled, signal) => operation.run(services, signal, settled) });
+          res.setHeader('Content-Type', `${LOOKUP_PROGRESS_CONTENT_TYPE}; charset=utf-8`);
+          res.setHeader('Cache-Control', 'no-store');
+          res.flushHeaders();
+          try { await pipeline(Readable.fromWeb(stream.body as import('node:stream/web').ReadableStream<Uint8Array>), res); }
+          finally { controller.abort(); await stream.completion; }
+        } else res.json(await operation.run(services, controller.signal));
+      } catch {
+        if (!res.headersSent && !res.destroyed) sendUnexpectedApiError(res, LOOKUP_ERROR_CODES.LOOKUP_FAILED);
       }
-    });
+    }); } finally { res.off('close', closed); }
   };
   const lookupGuards = [apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('lookup')];
   target.get('/api/lookup', ...lookupGuards, handleLookup);

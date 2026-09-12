@@ -18,6 +18,7 @@ import {
 } from '../lib/operation-budget.mts';
 import { withNetlifyOperationBudget } from '../lib/netlify-network-guard.mts';
 import { requiredValue } from './value-assertions.mts';
+import { eventFixtureForFetch } from './netlify-fetch-fixture.mts';
 
 let cookie = '';
 before(() => {
@@ -35,7 +36,7 @@ function sameOriginHeaders() {
 }
 
 const [
-  { handler: lookupHandler },
+  { default: nativeLookupHandler },
   { handler: rdapHandler },
   { handler: rdapNameserverSearchHandler },
   { handler: whoisHandler },
@@ -52,6 +53,7 @@ const [
   import('../netlify/functions/domain-posture.mts'),
 ]);
 
+const lookupHandler = eventFixtureForFetch(nativeLookupHandler);
 type NetworkHandler = typeof lookupHandler;
 type NetworkHandlerEntry = readonly [string, NetworkHandler];
 type DisabledNetworkHandlerEntry = readonly [string, string, NetworkHandler];

@@ -48,6 +48,28 @@ const FINDING = Object.freeze({
 });
 
 describe('Lookup source progress settlements', () => {
+  test('never turns malformed, incomplete or unsupported source responses into successful progress', () => {
+    const rows = [
+      ['rdap', { upstreamStatus: 200 }, 'error', false],
+      ['rdap', { upstreamStatus: 200, parsed: { domain: 'example.test', serverTruncated: true } }, 'partial', true],
+      ['rdap', { upstreamStatus: 200, parsed: { domain: 'example.test', entitiesTruncated: true } }, 'partial', true],
+      ['rdap', { upstreamStatus: 404 }, 'not_found', false],
+      ['whois', [], 'error', false],
+      ['whois', [{ server: 'whois.iana.org', response: 'refer: whois.nic.test' }, { server: 'whois.nic.test', error: 'Fixture failure' }], 'partial', false],
+      ['whois', [{ server: 'whois.iana.org', response: 'No referral' }], 'unsupported', false],
+      ['domain_evidence', { state: 'unknown' }, 'partial', false],
+      ['registrar_rdap', {}, 'error', false],
+      ['network_context', { status: 'success', complete: false }, 'partial', false],
+      ['security_txt', { status: 'unsupported' }, 'unsupported', false],
+      ['reverse_dns', { status: 'skipped' }, 'skipped', false],
+    ] as const;
+    for (const [source, value, state, truncated] of rows) {
+      const result = normalizeLookupSourceSettlement(source, 'fulfilled', value);
+      assert.equal(result.state, state); assert.equal(result.truncated, truncated);
+      assert.equal(result.complete, state === 'not_found');
+      assert.doesNotMatch(JSON.stringify(result.fragment), /example\.test|Fixture failure|refer:/u);
+    }
+  });
   test('preserves every canonical optional-intelligence state and nested observation quality', () => {
     const sources = [
       'external_intelligence',

@@ -59,6 +59,8 @@ type LookupOptions = {
   now?: () => number;
   onSourceSettled?: (settlement: LookupSourceSettlement) => void;
   signal?: AbortSignal;
+  /** HTTP operation leases outlive cancelled delivery while started collectors drain. */
+  waitForStartedCollectors?: boolean;
   dnsResolverServers?: readonly string[];
 };
 async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOptions = {}) {
@@ -84,8 +86,13 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const securityTxtRequested = options.securityTxt === true;
   const featurePolicy = options.featurePolicy || networkFeaturePolicy();
   const timing = createLookupTimingTracker(!fast && !compact, options.now || Date.now);
+  const startedCollectors: Promise<unknown>[] = [];
   const measure = <T,>(source: LookupTimingSource, operation: () => Promise<T> | T) => (
-    timing.measure(source, () => abortable(operation, options.signal))
+    timing.measure(source, () => abortable(() => {
+      const running = Promise.resolve(operation());
+      if (options.waitForStartedCollectors) startedCollectors.push(running.catch(() => {}));
+      return running;
+    }, options.signal))
   );
   const rdapEnabled = featureDecision('rdap', featurePolicy).enabled;
   const whoisEnabled = featureDecision('whois', featurePolicy).enabled;
@@ -254,7 +261,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     }
   }
 
-  return buildUnifiedLookupResponse({
+  try { return await buildUnifiedLookupResponse({
     availabilityEnabled,
     availabilityPromise,
     classified,
@@ -277,7 +284,9 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     urlscanIntelligencePromise,
     whoisEnabled,
     whoisPromise,
-  });
+  }); } finally {
+    if (options.waitForStartedCollectors) await Promise.all(startedCollectors);
+  }
 }
 
 export { runUnifiedLookup };

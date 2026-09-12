@@ -254,9 +254,10 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
   const pending = page.locator('.loading-note');
-  await expect(pending).toContainText('Deep lookup is waiting for one final response');
+  await expect(pending).toContainText('Collecting registry, WHOIS, domain, web, TLS');
   await expect(pending.locator('.loading-meta')).toContainText(/elapsed/u);
-  await expect(pending).toContainText('Sources remain pending until the final response reports their state.');
+  await expect(pending).toContainText('Only the final validated response can be retained.');
+  await expect(page.getByRole('region', { name: 'Lookup source progress' })).toContainText('Waiting for source updates');
   await expect(page.getByRole('button', { name: 'Cancel lookup' })).toBeVisible();
   releaseLookup?.();
 

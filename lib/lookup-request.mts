@@ -11,6 +11,7 @@ import {
 } from './bounded-json-response.mts';
 import { scanBoundedJson } from './bounded-json.mts';
 import { prepareSelectedLookupUrl } from '../packages/evidence/lookup-target.mts';
+import { LOOKUP_PROGRESS_CONTENT_TYPE, readLookupProgressResponse, type LookupProgressUpdate } from './lookup-progress-http.mts';
 
 const LOOKUP_CLIENT_TIMEOUT_MS = 40_000;
 
@@ -39,6 +40,7 @@ type LookupRequestOptions = Readonly<{
   signal?: AbortSignal;
   timeoutMs?: number;
   selectedUrl?: string;
+  onProgress?: (update: LookupProgressUpdate) => void;
 }>;
 
 const TIMEOUT_REASON = Object.freeze({ type: 'lookup-timeout' });
@@ -69,7 +71,11 @@ async function requestLookup(
     if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
     const response = await fetchImpl(url, {
       signal: controller.signal,
-      ...(options.selectedUrl ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: prepareSelectedLookupUrl(options.selectedUrl) }) } : {}),
+      ...(options.onProgress || options.selectedUrl ? { headers: {
+        ...(options.onProgress ? { Accept: `${LOOKUP_PROGRESS_CONTENT_TYPE}, application/json` } : {}),
+        ...(options.selectedUrl ? { 'Content-Type': 'application/json' } : {}),
+      } } : {}),
+      ...(options.selectedUrl ? { method: 'POST', body: JSON.stringify({ url: prepareSelectedLookupUrl(options.selectedUrl) }) } : {}),
     });
     if (controller.signal.aborted) {
       await response.body?.cancel(controller.signal.reason).catch(() => {});
@@ -77,14 +83,21 @@ async function requestLookup(
     }
     let body: unknown;
     try {
-      body = await readJsonResponseCapped(
-        response,
-        LARGE_JSON_RESPONSE_BYTES,
-        controller.signal,
-        (raw) => scanBoundedJson(raw, {
-          maximumContainerItems: MAX_LOOKUP_RESPONSE_CONTAINER_ITEMS,
-        }),
-      );
+      if (response.ok && response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() === LOOKUP_PROGRESS_CONTENT_TYPE) {
+        body = await readLookupProgressResponse(response, controller.signal, options.onProgress);
+      } else {
+        if (response.ok) {
+          try { options.onProgress?.({ transport: 'buffered', snapshot: null }); } catch { /* Presentation only. */ }
+        }
+        body = await readJsonResponseCapped(
+          response,
+          LARGE_JSON_RESPONSE_BYTES,
+          controller.signal,
+          (raw) => scanBoundedJson(raw, {
+            maximumContainerItems: MAX_LOOKUP_RESPONSE_CONTAINER_ITEMS,
+          }),
+        );
+      }
     } catch (cause) {
       // Preserve the HTTP status when an adapter supplies a malformed bounded
       // error page. Successful malformed or over-bound responses remain typed

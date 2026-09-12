@@ -10,6 +10,7 @@ import type { RdapHandlerDependencies } from '../netlify/functions/rdap.mts';
 import type { WhoisHandlerDependencies } from '../netlify/functions/whois.mts';
 import type { NetlifyFunctionEvent } from '../lib/netlify-function-types.mts';
 import { requiredValue } from './value-assertions.mts';
+import { eventFixtureForFetch } from './netlify-fetch-fixture.mts';
 
 process.env.SITE_PASSWORD ||= 'test-only-secret';
 process.env.SESSION_SECRET ||= 'test-only-session-signing-secret';
@@ -19,7 +20,7 @@ const [
   { createAvailabilityHandler },
   { createCtSearchHandler },
   { createDomainPostureHandler },
-  { createLookupHandler },
+  { createLookupHandler: createNativeLookupHandler },
   { createRdapNameserverSearchHandler },
   { createRdapHandler },
   { createWhoisHandler },
@@ -37,6 +38,7 @@ const [
 ]);
 
 let cookie = '';
+const createLookupHandler = (dependencies: LookupHandlerDependencies) => eventFixtureForFetch(createNativeLookupHandler(dependencies));
 before(() => {
   cookie = requiredValue(buildSessionCookie(createSessionToken(), { secure: true }).split(';')[0]);
 });

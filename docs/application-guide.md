@@ -71,12 +71,11 @@ Lookup accepts one domain, IP address or ASN. URL-like input is normalised only
 under the explicit supported rules; credentials, unsupported schemes and
 ambiguous targets are rejected.
 
-Before collection, Lookup shows the selected target and source families. During
-collection it displays elapsed time and keeps source states pending. Current Express and
-Netlify deployments return one buffered final envelope, so pending sources
-settle together when that envelope arrives. Cancelling stops the browser from
-waiting and discards an incomplete response; already-admitted server work may
-finish inside its existing bounds.
+Before collection, Lookup shows the selected target and source families. Deep
+Lookup reports source states as they arrive; connections that buffer responses
+show them together. A finished source can still be partial, failed or unsupported.
+Only the final validated result can be saved. Cancelling discards the incomplete
+response; already-admitted requests may finish within their existing bounds.
 
 ### Fast and Deep collection
 

@@ -179,6 +179,8 @@ Single and Bulk lookups send the selected target and requested mode to the
 WHOISleuth deployment. The server performs only the declared bounded requests
 to relevant public sources and target services. It returns a bounded response
 and does not write ordinary investigation results to a server-side workspace.
+Deep Lookup may stream source-state summaries before its final response. These
+updates make no additional requests and are not saved as partial evidence.
 
 Selected registration bootstrap and public registration responses can remain
 briefly in server memory to reduce duplicate upstream requests. Optional

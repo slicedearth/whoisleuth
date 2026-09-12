@@ -83,11 +83,13 @@ A hosted request passes through one protected pipeline:
 8. derive evidence, availability and scoring projections; and
 9. return one bounded response envelope.
 
-Express and Netlify currently return one buffered response. Browser progress
-shows the planned source families and elapsed time but does not persist partial
-source fragments. Cancellation stops the browser waiting and propagates an
-abort signal where supported; already-admitted work can finish within its
-existing deadline. Only a validated final envelope can become a result.
+Full Deep Lookup can negotiate bounded NDJSON source updates and one final
+response through the shared HTTP operation owner. Fast, Compact and ordinary
+JSON clients retain buffered responses. Source updates are presentation-only;
+only the validated final envelope becomes a result. Cancellation closes delivery
+and propagates where supported; started collectors keep their operation lease
+until they finish. The native function uses its lifecycle extension for this
+cleanup and falls back to JSON when that extension is unavailable.
 
 ### Collection profiles
 

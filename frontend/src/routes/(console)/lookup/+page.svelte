@@ -81,6 +81,7 @@
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import { preloadBestEffort } from '$lib/idle-preload';
   import { LookupRequestController } from '$lib/controllers/lookup-request-controller';
+  import type { LookupProgressUpdate } from '../../../../../lib/lookup-progress-http.mts';
   import { LookupCaseController, type LookupCaseActionResult, type LookupConclusionEvidenceSelection } from '$lib/controllers/lookup-case-controller';
   import { LookupAnchorController } from '$lib/controllers/lookup-anchor-controller';
   import {
@@ -96,6 +97,7 @@
   let collectSelectedUrl=$state(false);
   let loading=$state(false);
   let loadingElapsedMs=$state(0);
+  let sourceProgress=$state<LookupProgressUpdate|null>(null);
   let includeExternalIntelligence=$state(false);
   let includeMalwareHostIntelligence=$state(false);
   let includeMalwareIocIntelligence=$state(false);
@@ -421,6 +423,7 @@
     lookupRequestController.invalidate();
     loading=false;
     loadingElapsedMs=0;
+    sourceProgress=null;
   }
   function clearCompletedLookupContext(){
     invalidateCaseActions();
@@ -748,6 +751,7 @@
     lookupAnchorController?.stop();
     caseSourceState='loading';
     loading=true;loadingElapsedMs=0;error='';result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseCandidates=[];caseNote='';caseStatus='';caseDisposition=DEFAULT_DISPOSITION;caseReviewReason='';caseRecheckComparison=null;linkedWatchlistNames=[];watchlistSourceState='loading';watchlistStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;evidenceExportStatus='';
+    sourceProgress=null;
     const requestedLookupMode=lookupMode;
     const requestRevision=++lookupRevision;
     const revealIntent=lookupAnchorController?.captureRevealIntent();
@@ -770,7 +774,9 @@
         lookupUrl,
         (elapsedMs)=>{loadingElapsedMs=elapsedMs;},
         refreshProfileContext,
-        selectedUrl ? { selectedUrl } : {},
+        { ...(selectedUrl ? { selectedUrl } : {}),
+          ...(requestedLookupMode==='deep' ? { onProgress:(update:LookupProgressUpdate)=>{if(requestCurrent())sourceProgress=update;} } : {}),
+        },
       );
       if(completed.state==='stale'||!requestCurrent())return;
       const outcome=completed.outcome;
@@ -790,7 +796,7 @@
       if(pageActive&&requestRevision===lookupRevision)error='Lookup request could not be prepared.';
     }finally{
       revealIntent?.dispose();
-      if(pageActive&&requestRevision===lookupRevision)loading=false;
+      if(pageActive&&requestRevision===lookupRevision){loading=false;sourceProgress=null;}
     }
   }
   async function submit(event:SubmitEvent){
@@ -809,6 +815,7 @@
   bind:collectSelectedUrl
   {loading}
   {loadingElapsedMs}
+  {sourceProgress}
   loadingDeadlineMs={LOOKUP_CLIENT_TIMEOUT_MS}
   entryCount={lookupEntries.length}
   duplicateCount={parsedInput.duplicates}

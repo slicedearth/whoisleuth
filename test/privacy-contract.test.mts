@@ -44,6 +44,7 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   { id: 'no-general-database', pattern: /no general (?:user, )?Case,? or workspace database/iu },
   { id: 'explicit-network', pattern: /deliberately started network(?:-capable)? operation sends (?:only )?its declared bounded target or evidence/iu },
   { id: 'single-bulk-network', pattern: /Single and Bulk lookups send the selected target/iu },
+  { id: 'lookup-progress-custody', pattern: /Deep Lookup may stream source-state summaries before its final response.*make no additional requests and are not saved as partial evidence/iu },
   { id: 'lookup-url-minimisation', pattern: /By default, for a URL pasted into Lookup, the browser sends only its full hostname for collection, without the port, path, query or fragment/iu },
   { id: 'lookup-selected-url', pattern: /selected URL.*Deep Lookup sends the path and query in a request body to the application server.*Fragments are not sent.*provenance omits queries.*page-derived text may contain sensitive information/iu },
   { id: 'lookup-url-credentials', pattern: /Credential-bearing URLs are rejected/iu },

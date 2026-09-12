@@ -79,6 +79,39 @@ const classifiedDomain: Extract<ClassifiedQuery, { type: 'domain' }> = {
 };
 
 describe('runUnifiedLookup', () => {
+  test('cancellation during one collector cannot start another queued collector', async () => {
+    const controller = new AbortController(); let laterCalls = 0;
+    const running = runUnifiedLookup(classifiedDomain, {
+      signal: controller.signal, waitForStartedCollectors: true,
+      fetchRdapRecord: async () => { controller.abort(); return null; },
+      buildWhoisChain: async () => { laterCalls++; return []; },
+      checkDomainAvailability: async () => { laterCalls++; return { state: 'unknown', confidence: 'low', detail: 'Fixture source' }; },
+    });
+    await assert.rejects(running, { name: 'AbortError' });
+    assert.equal(laterCalls, 0);
+  });
+  test('an HTTP lease drains started collectors after cancellation without starting dependent enrichment', async () => {
+    const started = deferred<void>();
+    const drained = deferred<null>();
+    const controller = new AbortController();
+    let complete = false;
+    let dependentCalls = 0;
+    const running = runUnifiedLookup(classifiedDomain, {
+      signal: controller.signal, waitForStartedCollectors: true,
+      fetchRdapRecord: async () => { started.resolve(); return drained.promise; },
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => { await drained.promise; return { state: 'unknown', confidence: 'low', detail: 'Fixture source' }; },
+      collectObservedNetworkContext: async () => { dependentCalls++; throw new Error('Must not start'); },
+    }).finally(() => { complete = true; });
+    const rejected = assert.rejects(running, { name: 'AbortError' });
+    await started.promise; controller.abort();
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.equal(complete, false);
+    assert.equal(dependentCalls, 0);
+    drained.resolve(null);
+    await rejected;
+    assert.equal(dependentCalls, 0);
+  });
   test('fast compact cancellation reaches registry collection and cannot return an incomplete observation', async () => {
     const started = deferred<void>();
     const controller = new AbortController();
