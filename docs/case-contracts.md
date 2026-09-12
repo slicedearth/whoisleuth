@@ -57,7 +57,7 @@ workspace or embedded Case version.
 Release 2.3.0 is the immediately preceding public writer. It emitted
 Case schema 15, Case report schema 11, response-packet schema
 9, review-input digest material version 3, and workspace
-archive schema 8. Version 2.3.1 is the current writer in this
+archive schema 8. Version 2.4.0 is the current writer in this
 checkout. It emits Case schema 16, report schema 12,
 response-packet schema 10, review-input version 4, and workspace
 archive schema 8.
