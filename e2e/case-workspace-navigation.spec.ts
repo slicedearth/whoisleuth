@@ -91,6 +91,66 @@ test('Case section changes preserve independent drafts and browser history witho
   expect(requests).toEqual([]);
 });
 
+test('Case sections retain reading position and keep the assessment evidence and keyboard focus usable', async ({ page }, testInfo) => {
+  const pin = {
+    id: 'continuity-pin', checkpointId: null, field: 'http.status', category: 'http', label: 'Observed response',
+    value: 'The retained observation supports review, not a new collection.', source: 'Fixture observation',
+    sourceState: 'complete', sourceSchema: null, observedAt: '2026-09-01T00:00:00.000Z', collectionDepth: 'deep',
+    completeness: 'complete', truncated: false, transitionExpectation: null, limitations: [], createdAt: '2026-09-01T00:00:00.000Z',
+  };
+  await page.goto('/cases');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [caseRecord({
+      id: 'continuity-case', domain: 'continuity.invalid', evidencePins: [pin],
+      notes: Array.from({ length: 30 }, (_, index) => ({ createdAt: '2026-09-01T00:00:00.000Z', body: `Review ${index + 1}: ${'Retained source context. '.repeat(15)}` })),
+    })] }),
+  }, { destination: '/cases?case=continuity-case&section=history' });
+  const note = page.locator('.notes li').nth(10);
+  await note.evaluate(element => element.scrollIntoView({ block: 'center' }));
+  const position = await page.evaluate(() => window.scrollY);
+  const nav = page.getByRole('navigation', { name: 'Case sections', exact: true });
+  await expect(nav).toBeInViewport({ ratio: 1 });
+  await openCaseSection(page, 'Assessment');
+  const summary = page.getByRole('textbox', { name: 'Conclusion summary', exact: true });
+  await summary.fill('Keep this draft while reading');
+  await openCaseSection(page, 'History');
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(position, 0);
+  await expect(note).toBeInViewport();
+  await openCaseSection(page, 'Assessment');
+  await expect(summary).toHaveValue('Keep this draft while reading');
+  const evidence = page.getByRole('group', { name: 'Evidence considered', exact: true });
+  const draft = page.locator('.assessment-draft');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720], [2560, 1440]] as const) {
+      await page.setViewportSize({ width, height });
+      await expect(evidence).toBeVisible();
+      expect(await nav.getByRole('link').evaluateAll(links => links.every(link => {
+        const range = document.createRange();
+        range.selectNodeContents(link);
+        return range.getClientRects().length === 1 && link.scrollWidth <= link.clientWidth;
+      }))).toBe(true);
+      const layout = await evidence.evaluate(element => {
+        const evidence = element.getBoundingClientRect();
+        const draft = document.querySelector('.assessment-draft')!.getBoundingClientRect();
+        return { evidenceX: evidence.x, evidenceY: evidence.y, draftRight: draft.right, draftBottom: draft.bottom, draftY: draft.y };
+      });
+      if (width >= 1200) { expect(layout.evidenceX).toBeGreaterThan(layout.draftRight); expect(Math.abs(layout.evidenceY - layout.draftY)).toBeLessThan(2); }
+      else expect(layout.evidenceY).toBeGreaterThan(layout.draftBottom);
+      await summary.focus();
+      await page.keyboard.press('Tab');
+      const rationale = page.getByRole('textbox', { name: 'Evidence-based rationale', exact: true });
+      await expect(rationale).toBeFocused();
+      const focus = await rationale.boundingBox();
+      const navigation = await nav.boundingBox();
+      expect(focus && navigation && focus.y >= navigation.y + navigation.height).toBe(true);
+      await expectNoHorizontalOverflow(page);
+      await page.screenshot({ path: testInfo.outputPath(`case-continuity-${theme}-${width}.png`), animations: 'disabled' });
+    }
+  }
+  await expect(draft).toContainText('Analyst confidence');
+});
+
 test('a committed Case history write with a failed reread is not offered as a failed save', async ({ page }) => {
   await seedCases(page, '/cases?case=workspace-first&section=history');
   await expect(page.getByRole('textbox', { name: 'What did you do or decide?', exact: true })).toBeVisible();

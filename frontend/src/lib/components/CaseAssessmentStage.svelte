@@ -124,6 +124,8 @@
   <details id={`case-response-assessment-${record.id}`} bind:open={expanded}>
     <summary>{mode === 'quick' ? 'Record conclusion' : 'Record an analyst decision'}</summary>
     <form class="response-form" data-recovery-form={decisionDraft.form} oninput={decisionDraft.changed} onsubmit={(event) => { event.preventDefault(); void addDecision(); }}>
+      <div class="assessment-review">
+      <div class="assessment-draft">
       <div class="two-columns">
         <label class="field">Disposition<select value={decisionDraft.value.decisionDisposition} onchange={(event) => { decisionDraft.value.decisionDisposition = event.currentTarget.value; decisionDraft.value.decisionClassificationDirty = true; if (!isReviewedCaseDisposition(decisionDraft.value.decisionDisposition)) decisionDraft.value.decisionReviewReason = ''; }}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{isReviewedCaseDisposition(option.value) ? option.label : 'Select a reviewed disposition'}</option>{/each}</select></label>
         <label class="field">Review reason<select value={decisionDraft.value.decisionReviewReason} onchange={(event) => { decisionDraft.value.decisionReviewReason = event.currentTarget.value; decisionDraft.value.decisionClassificationDirty = true; }} disabled={decisionDraft.value.decisionDisposition === 'unreviewed'}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
@@ -134,11 +136,13 @@
         <label class="field">Analyst confidence<select bind:value={decisionDraft.value.decisionConfidence}>{#each CASE_DECISION_CONFIDENCE_LEVELS as value}<option {value}>{value[0]?.toUpperCase()}{value.slice(1)}</option>{/each}</select><small>Separate from Risk, source health and evidence completeness.</small></label>
         <label class="field">Confidence basis<textarea bind:value={decisionDraft.value.decisionConfidenceBasis} maxlength="2000" rows="2" required={decisionDraft.value.decisionConfidence !== 'unknown'}></textarea></label>
       </div>
+      </div>
       {#if record.evidencePins.length}
         <fieldset class="pin-references"><legend>{mode === 'quick' ? 'Evidence considered' : 'Supporting evidence pins'}</legend>{#each record.evidencePins as pin, index}<label class="choice"><input type="checkbox" aria-label={caseEvidenceChoiceName(pin, index)} checked={decisionDraft.value.decisionPinIds.includes(pin.id)} onchange={(event) => decisionDraft.value.decisionPinIds = event.currentTarget.checked ? [...decisionDraft.value.decisionPinIds, pin.id] : decisionDraft.value.decisionPinIds.filter((id) => id !== pin.id)}><CaseEvidenceFact {pin} /></label>{/each}</fieldset>
       {:else}
         <p class="notice">Pin an observation in Evidence before recording a conclusion. An unsupported hypothesis can be retained separately as an assertion.</p>
       {/if}
+      </div>
       <button class="btn" type="submit" disabled={decisionDraft.state.busy || mutationBusy || decisionDraft.value.decisionDisposition === 'unreviewed' || !decisionDraft.value.decisionReviewReason || !decisionDraft.value.decisionSummary.trim() || !decisionDraft.value.decisionRationale.trim() || !decisionDraft.value.decisionPinIds.length || (decisionDraft.value.decisionConfidence !== 'unknown' && !decisionDraft.value.decisionConfidenceBasis.trim())}>{mode === 'quick' ? 'Record conclusion' : 'Record decision'}</button>
       <CaseDraftRecovery draft={decisionDraft} />
     </form>
@@ -187,3 +191,12 @@
   {/if}
   <CaseInvestigationBranches {record} {mutationBusy} {persist} visible={mode === 'advanced'} />
 </section>
+
+<style>
+  .assessment-review { display: grid; align-items: start; gap: 24px; min-width: 0; }
+  .assessment-draft { display: grid; gap: 14px; min-width: 0; }
+  .assessment-review > :global(.pin-references) { border: 0; border-inline-start: 1px solid var(--border); padding: 0 0 0 20px; }
+  .assessment-review > :global(.pin-references legend) { padding: 0 0 12px; font-weight: 650; }
+  @media(min-width: 1200px) { .assessment-review { grid-template-columns: minmax(0, 1.2fr) minmax(19rem, 1fr); } }
+  @media(max-width: 1199px) { .assessment-review > :global(.pin-references) { border-inline-start: 0; border-top: 1px solid var(--border); padding: 16px 0 0; } }
+</style>

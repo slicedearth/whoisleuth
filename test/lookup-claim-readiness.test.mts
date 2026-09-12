@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildLookupClaimReadiness } from '../frontend/src/lib/analysis/lookup-claim-readiness.ts';
+import { buildLookupClaimReadiness, lookupQuestionsNeedingEvidence } from '../frontend/src/lib/analysis/lookup-claim-readiness.ts';
 import type { EvidenceCoverageLedger } from '../frontend/src/lib/analysis/evidence-coverage-ledger.ts';
 import type { LookupDecisionSupport } from '../frontend/src/lib/analysis/lookup-decision-support.ts';
 
@@ -33,6 +33,27 @@ const decisionSupport: LookupDecisionSupport = {
   actions: [],
   counts: { conflicts: 0, uncertainties: 0 },
 };
+
+test('unanswered questions use the task readiness and preserve local review versus collection', () => {
+  const readiness = buildLookupClaimReadiness({
+    targetType: 'domain', task: 'incident',
+    coverage: ledger({ availability: 'complete', http: 'partial', tls: 'complete', 'page-identity': 'complete' }),
+    decisionSupport, availabilityState: 'registered', hasReviewedCaseRecipient: false,
+  });
+  const before = structuredClone(readiness);
+  const questions = lookupQuestionsNeedingEvidence(readiness);
+  assert.deepEqual(questions.map((item) => item.id), ['current-web-observation', 'incident-response']);
+  const web = questions.find((item) => item.id === 'current-web-observation');
+  assert.match(web?.question ?? '', /observed time/u);
+  assert.deepEqual(web?.requirements.map((item) => [item.id, item.mode, item.state, item.href]), [
+    ['http-observation', 'network_collection', 'partial', '#evidence-http'],
+  ]);
+  const recipient = questions.find((item) => item.id === 'incident-response')?.requirements.find((item) => item.id === 'reviewed-case-recipient');
+  assert.equal(recipient?.mode, 'local_review');
+  assert.equal(recipient?.href, '#case-response');
+  assert.deepEqual(readiness, before);
+  assert.deepEqual(lookupQuestionsNeedingEvidence({ ...readiness, entries: [] }), []);
+});
 
 test('claim readiness keeps evidence sufficiency separate for each statement', () => {
   const readiness = buildLookupClaimReadiness({

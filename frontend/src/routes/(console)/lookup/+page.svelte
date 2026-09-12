@@ -872,6 +872,7 @@
         reviewActions={lookupReviewActionModel}
         {lookupDecisionFacts}
         signals={lookupSummary.signals}
+        readiness={lookupClaimReadiness}
       />
 
       {#if availability.applicable!==false}

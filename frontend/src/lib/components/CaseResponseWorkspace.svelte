@@ -190,6 +190,7 @@
   async function openStage(stage: CaseResponseStageId) {
     await selectSection(CASE_STAGE_SECTION[stage]);
     await tick();
+    if (activeSection !== CASE_STAGE_SECTION[stage]) return;
     const targets: Record<CaseResponseStageId, string> = {
       observation: `case-response-observation-${record.id}`,
       assessment: `case-response-assessment-${record.id}`,
@@ -223,6 +224,10 @@
     presentationMode = 'quick';
     await selectSection('response');
     await tick();
+    if (activeSection !== 'response') {
+      onmessage('The delivery draft was saved, but Response could not be opened. Open that section to review the retained draft; do not repeat the export.');
+      return;
+    }
     document.getElementById(`quick-action-advance-${record.id}`)?.focus({ preventScroll: true });
     onmessage(action.state === 'authorised'
       ? 'Prepared the delivery record with the exported packet digest. Select Mark sent only after actual delivery.'

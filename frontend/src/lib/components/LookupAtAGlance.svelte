@@ -8,15 +8,18 @@
   import { formatDate } from '$lib/analysis/lookup-display-shared.ts';
   import type { LookupPresentedReviewAction, LookupReviewActionModel } from '$lib/analysis/lookup-review-action-model.ts';
   import type { LookupSummarySignal } from '$lib/analysis/lookup-summary-model.ts';
+  import { lookupQuestionsNeedingEvidence, type LookupClaimReadiness } from '$lib/analysis/lookup-claim-readiness.ts';
 
   let {
     reviewActions,
     lookupDecisionFacts,
     signals,
+    readiness,
   }: {
     reviewActions: LookupReviewActionModel;
     lookupDecisionFacts: readonly DecisionFact[];
     signals: readonly LookupSummarySignal[];
+    readiness: LookupClaimReadiness;
   } = $props();
 
   const notableSignals = $derived.by(() => {
@@ -27,6 +30,7 @@
   const furtherReviews = $derived(nextReviews.rankedItems.slice(nextReviews.displayedCount));
   let allReviewsOpen = $state(false);
   const glance = $derived(buildLookupAtAGlanceModel(lookupDecisionFacts));
+  const openQuestions = $derived(lookupQuestionsNeedingEvidence(readiness));
   const metricGroups = $derived(glance.groups);
   const factsById = $derived(new Map(glance.items.map((item) => [item.factId, item])));
   let selectedMetricId = $state<LookupAtAGlanceGroupId | null>(null);
@@ -145,6 +149,24 @@
     </div>
   </header>
 
+  {#if openQuestions.length}
+    <details class="open-questions">
+      <summary>Questions needing evidence ({openQuestions.length})</summary>
+      <ul>
+        {#each openQuestions as question (question.id)}
+          <li>
+            <strong>{question.question}</strong>
+            {#if question.requirements.length}
+              <ul>{#each question.requirements as requirement (requirement.id)}
+                <li><a href={requirement.href}>{requirement.label}</a><span> — {requirement.mode === 'local_review' ? 'local review' : 'source evidence'} · {requirement.state.replaceAll('_', ' ')}</span></li>
+              {/each}</ul>
+            {:else}<a href={question.href}>Review the conflicting or limited sources</a>{/if}
+          </li>
+        {/each}
+      </ul>
+    </details>
+  {/if}
+
   {#if selectedMetric}
     <section
       class={`metric-detail tone-${selectedMetric.presentation.tone}`}
@@ -229,6 +251,12 @@
 </section>
 
 <style>
+  .open-questions { margin-block: 16px; border-block: 1px solid var(--border); }
+  .open-questions summary { min-height: 44px; padding-block: 12px; cursor: pointer; font-weight: 650; font-size: var(--text-sm); }
+  .open-questions ul { display: grid; gap: 12px; padding-inline-start: 20px; font-size: var(--text-sm); }
+  .open-questions ul ul { gap: 8px; margin-top: 8px; }
+  .open-questions li { min-width: 0; overflow-wrap: anywhere; }
+  .open-questions span { color: var(--muted); }
   .at-a-glance{container-type:inline-size;min-width:0;padding:var(--card-pad)}
   .glance-header{display:grid;grid-template-columns:minmax(240px,.7fr) minmax(0,2fr);align-items:start;gap:18px}
   .glance-intro{min-width:0}

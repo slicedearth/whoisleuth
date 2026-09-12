@@ -107,6 +107,33 @@ test('task guidance recommends evidence depth without submitting a lookup', asyn
   await expectNoHorizontalOverflow(page);
 });
 
+test('unanswered Lookup questions link to existing evidence without initiating collection', async ({ page }) => {
+  const requests: string[] = [];
+  await page.route('**/api/lookup?*', async route => {
+    requests.push(route.request().url());
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      query: 'questions.invalid', type: 'domain', registrableDomain: 'questions.invalid',
+      availability: { applicable: true, state: 'registered', confidence: 'high', domain: 'questions.invalid' },
+      rdap: { parsed: { domain: 'questions.invalid', registrar: { name: 'Fixture registrar' } } },
+      whois: { parsed: {}, chain: [] },
+      diagnostics: { version: 8, rdap: { status: 'success' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+    }) });
+  });
+  await page.getByLabel('Analyst question').selectOption('incident');
+  await page.locator('#query').fill('questions.invalid');
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  const questions = page.locator('.open-questions');
+  await expect(questions).toBeVisible();
+  await questions.locator('summary').click();
+  await expect(questions).toContainText('What was the website doing at the observed time?');
+  const route = questions.getByRole('link', { name: 'Reviewed case and recipient route', exact: true });
+  await expect(route).toHaveAttribute('href', '#case-response');
+  await route.click();
+  await expect(page.locator('#case-response-title')).toBeInViewport();
+  expect(requests).toHaveLength(1);
+  await expectNoHorizontalOverflow(page);
+});
+
 test('acquisition deep-link guidance preserves the route and permits deliberate override', async ({ page }) => {
   await page.goto('/lookup?task=acquisition&depth=fast#query');
   const guidance = page.locator('.task-guidance');

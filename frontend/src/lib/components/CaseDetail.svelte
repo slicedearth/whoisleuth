@@ -51,8 +51,56 @@
     ? `case-response-preflight-${record.id}`
     : page.url.hash.startsWith('#case-response-') ? page.url.hash.slice(1) : null);
 
+  // Reading positions are transient and belong only to this mounted Case.
+  const readingPositions = new Map<CaseWorkspaceSection, number>();
+  let navigationGeneration = 0;
+  const caseIdentity = $derived(record.id);
+  $effect(() => {
+    caseIdentity;
+    readingPositions.clear();
+    navigationGeneration += 1;
+    return () => { navigationGeneration += 1; readingPositions.clear(); };
+  });
+
   async function selectSection(section: CaseWorkspaceSection) {
-    if (section !== activeSection) await goto(caseWorkspaceHref(record.id, section), { noScroll: true, keepFocus: true });
+    if (section === activeSection) return;
+    const caseId = record.id;
+    const generation = ++navigationGeneration;
+    readingPositions.set(activeSection, window.scrollY);
+    try {
+      await goto(caseWorkspaceHref(caseId, section), { noScroll: true, keepFocus: true });
+      await tick();
+      if (generation !== navigationGeneration || record.id !== caseId || activeSection !== section) return;
+      const navigation = document.querySelector<HTMLElement>('[data-case-detail] .case-sections');
+      const startMarker = navigation?.previousElementSibling;
+      const start = navigation && startMarker ? startMarker.getBoundingClientRect().top + window.scrollY - (Number.parseFloat(getComputedStyle(navigation).top) || 0) : 0;
+      window.scrollTo({ top: readingPositions.get(section) ?? Math.max(0, start), behavior: 'instant' });
+    } catch {
+      setMessage('The Case section could not be opened. Your drafts are unchanged.');
+    }
+  }
+
+  function keepCaseControlsVisible(navigation: HTMLElement) {
+    const article = navigation.closest<HTMLElement>('[data-case-detail]');
+    if (!article) return;
+    let width = window.innerWidth;
+    const exposeFocus = () => {
+      const target = document.activeElement;
+      if (!(target instanceof HTMLElement) || !article.contains(target) || navigation.contains(target)) return;
+      const boundary = navigation.getBoundingClientRect();
+      const position = target.getBoundingClientRect();
+      if (position.top < boundary.bottom + 12 && position.bottom > boundary.top) {
+        window.scrollBy({ top: position.top - boundary.bottom - 12, behavior: 'instant' });
+      }
+    };
+    const resize = new ResizeObserver(() => {
+      article.style.setProperty('--case-navigation-height', `${navigation.getBoundingClientRect().height}px`);
+      if (width !== window.innerWidth) { readingPositions.clear(); width = window.innerWidth; }
+      exposeFocus();
+    });
+    resize.observe(navigation);
+    article.addEventListener('focusin', exposeFocus);
+    return { destroy() { resize.disconnect(); article.removeEventListener('focusin', exposeFocus); article.style.removeProperty('--case-navigation-height'); } };
   }
   $effect(() => {
     const targetId = deepLinkTargetId;
@@ -93,7 +141,8 @@
       <div><span>Source: {sourceLabel(record.source)}</span><span>Opened {formatDate(record.createdAt)}</span><span class="complete-id">{caseNumber(record.id)}</span><button id={`case-delete-${record.id}`} class="btn danger" onclick={() => void removeCase(record)}>Delete case</button></div>
     </details>
   </div>
-  <nav class="case-sections workspace-view-nav" aria-label="Case sections">
+  <div aria-hidden="true"></div>
+  <nav class="case-sections workspace-view-nav" aria-label="Case sections" use:keepCaseControlsVisible>
     {#each CASE_WORKSPACE_SECTIONS as section}
       <a href={caseWorkspaceHref(record.id, section.id)} aria-current={activeSection === section.id ? 'page' : undefined}
         onclick={(event) => { if (handlesLocalLink(event)) { event.preventDefault(); void selectSection(section.id); } }}>{section.label}</a>
@@ -136,6 +185,8 @@
 
 <style>
   .case-detail { min-width: 0; }
+  .case-sections { position: sticky; top: var(--console-toolbar-height, 0px); z-index: 16; margin-top: 0; padding-block: 4px; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .case-detail :global(:is(input, select, textarea, button, summary, [tabindex])) { scroll-margin-top: calc(var(--console-toolbar-height, 0px) + var(--case-navigation-height, 96px) + 12px); }
   .case-return, .case-actions, .case-identity { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
   .case-return { margin-bottom: 12px; font-size: var(--text-sm); }
   .case-heading { margin-bottom: 16px; scroll-margin-top: 90px; }
@@ -159,5 +210,5 @@
   .notes time { color: var(--muted); font-size: var(--text-xs); }
   .notes p { margin: 6px 0 0; font-size: var(--text-sm); line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
   @media(max-width: 720px) { .field-grid { grid-template-columns: minmax(0,1fr); } }
-  @media(max-width: 480px) { .case-sections { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; } .case-sections a { grid-column: span 2; justify-content: center; padding-inline: 4px; } .case-sections a:nth-last-child(-n+2) { grid-column: span 3; } .tags-edit > div { flex-wrap: wrap; } }
+  @media(max-width: 480px) { .case-sections { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; } .case-sections a { grid-column: span 2; justify-content: center; padding-inline: 4px; font-size: var(--text-xs); white-space: nowrap; } .case-sections a:nth-last-child(-n+2) { grid-column: span 3; } .tags-edit > div { flex-wrap: wrap; } }
 </style>

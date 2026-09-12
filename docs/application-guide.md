@@ -99,6 +99,9 @@ time, even when the form has since changed. **Open saved Case** opens the matchi
 retained Case. Its **Return to Lookup** link restores the current result without
 collecting again; this return context lasts only within the current browser session.
 
+**Questions needing evidence** links the selected analyst question to incomplete
+sources and local reviews. Opening a link does not collect another observation.
+
 By default, a pasted HTTP(S) URL selects its full hostname for collection, not its port,
 path, query or fragment. URLs containing credentials are rejected. Retaining
 an exact Incident URL in a Case is a separate, deliberate choice.
@@ -330,7 +333,9 @@ unambiguous.
 pins and relationships; **Assessment** holds conclusions and branches;
 **Response** contains recipient review, packets, delivery and outcome records;
 **History** holds notes and manual investigation steps. Section links support
-browser back and forward. Case response forms save workspace-local recovery
+browser back and forward and remember reading positions while that Case remains
+open; resizing the viewport clears those positions. On wide screens, Assessment
+places retained evidence beside the conclusion form. Case response forms save workspace-local recovery
 drafts. Their status distinguishes a recovery copy from a submitted Case
 record. After reopening a Case, restore a saved draft explicitly and review it
 before submitting. Copies from other tabs are not silently overwritten.
