@@ -430,8 +430,11 @@ not independently observed remediation.
 
 A retained exact Incident URL can also be handed to the [optional capture companion](../packages/web-capture/README.md).
 The browser validates the selected manifest and can
-import its sanitised metadata and declared digests into that Case; screenshots
-and other capture artefact bytes remain in the local output directory.
+import its sanitised metadata and declared digests into that Case. Optionally
+select the screenshot and DOM-digest files to check their byte counts and
+digests, then view matched JSON or PNG files locally. These checks and file
+bytes are not saved with the Case metadata. Existing capture manifests can be
+reviewed even when the Case has no retained exact URL.
 
 ### Retained change and review
 
@@ -562,8 +565,11 @@ and observation times. Unknown times stay blank; packaging time is separate.
 
 Review shows all entries, their digests and the local packaging event before any
 import. It does not upload files or change saved data. Verified workspace files
-open the existing merge preview; other files can be downloaded without being
-rendered. Browser import support and CLI format verification are separate.
+open the existing merge preview. JSON text is fully reachable in paged inline
+review; PNGs can be decoded locally, and all verified files remain downloadable.
+No document scripts or links run. Capture manifests are checked against every
+included attachment's exact bytes. Browser import and CLI format verification
+remain separate from those byte checks.
 Packaging keeps selected bytes unchanged and does not encrypt or redact them.
 
 Use the same short sequence for each handoff: export deliberately, verify the

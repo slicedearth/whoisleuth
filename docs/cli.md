@@ -146,8 +146,10 @@ whoisleuth verify-artifact evidence.zip --package --json --strict-exit
 Packages contain up to 128 files and 64 MiB of payload plus bounded metadata.
 They use generated entry names, not original paths. They are private and
 unencrypted; packaging does not redact selected files. The report distinguishes
-file identity, supported source formats, opaque content and exact capsule/source
-links. It does not import files or establish source truth, signature trust or a
+file identity, supported source formats, opaque content, exact capsule/source
+links and capture-manifest attachment matches. Include the capture manifest and
+its screenshot/DOM-digest files together to check their declared bytes; original
+filenames are not needed to establish a match. It does not import files or establish source truth, signature trust or a
 trusted timestamp. Unsupported or rejected entries produce a partial report;
 `--strict-exit` returns 4. Without `--package`, `manifest` still produces a
 standalone JSON manifest; exact public version-2 manifests remain readable.

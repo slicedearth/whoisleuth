@@ -6,6 +6,8 @@
   import { runInvestigationPackageWorker } from '$lib/investigation-package-worker.ts';
   import type { BrowserInvestigationPackageReview, SelectedInvestigationFile } from '$lib/investigation-package-worker-model.ts';
   import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import ArtifactPreview from './ArtifactPreview.svelte';
+  import { supportsArtifactPreview } from '$lib/artifact-preview.ts';
 
   let { onworkspace }: { onworkspace?: (file: Blob) => Promise<void> } = $props();
   type Selection = SelectedInvestigationFile & { name: string; key: number };
@@ -15,6 +17,8 @@
   let selectedPage = $state(0);
   let review = $state.raw<BrowserInvestigationPackageReview | null>(null);
   let reviewPage = $state(0);
+  let activeArtifact = $state('');
+  let artifactTrigger: HTMLButtonElement | null = null;
   let workflow = $state('Evidence handoff');
   let busy = $state(false);
   let message = $state('');
@@ -80,7 +84,7 @@
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0]; input.value = '';
     if (!file || busy) return;
-    review = null; reviewPage = 0; error = ''; message = '';
+    review = null; reviewPage = 0; activeArtifact = ''; error = ''; message = '';
     if (file.size < 22 || file.size > MAX_INVESTIGATION_PACKAGE_BYTES) { error = `The selected ZIP exceeds the ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES / 1024 / 1024} MiB payload plus metadata boundary, or is empty.`; return; }
     busy = true;
     operation = 'inspect';
@@ -97,9 +101,13 @@
   }
   async function closeReview() {
     review = null;
+    activeArtifact = '';
     message = 'Package review closed. No saved records were changed.';
     await tick();
     packageInput?.focus();
+  }
+  async function closeArtifact() {
+    activeArtifact = ''; await tick(); artifactTrigger?.focus();
   }
   async function openWorkspace(id: string) {
     const file = review?.contents.get(id);
@@ -158,8 +166,15 @@
       <h3 bind:this={reviewHeading} tabindex="-1">Evidence package review</h3>
       <p>{review.manifest.artifacts.length} file{review.manifest.artifacts.length === 1 ? '' : 's'} · {review.manifest.summary.totalBytes.toLocaleString()} bytes · Private audience · No storage changes</p>
       <dl class="review-facts"><div><dt>File identity</dt><dd>{review.identityVerified ? 'Every file matches its manifest' : 'Some files were rejected'}</dd></div><div><dt>Packaging event</dt><dd>{review.manifest.generatedAt} (local clock)</dd></div><div><dt>Trusted signatures and timestamps</dt><dd>Not checked</dd></div><div><dt>Factual accuracy</dt><dd>Not established by file identity</dd></div></dl>
-      <p>Byte identity is separate from source-format validation. Workspace files open their existing import preview; other formats have no browser importer here. Use the CLI’s <code>verify-artifact --package</code> for supported format checks. Opaque files are not rendered or executed.</p>
+      <p>Byte identity is separate from source-format validation. Workspace files open their existing import preview; use <code>verify-artifact --package</code> in the CLI for other supported format checks. Inline review shows JSON as text and PNGs as decoded pixels. Other files remain download-only; no document scripts or links run.</p>
       {#if review.links.length}<ul class="links">{#each review.links as link}<li>Capsule {link.capsuleEntryId}: {link.state === 'linked' ? `exact source identity linked to ${link.sourceEntryId}` : `source identity ${link.state}`}</li>{/each}</ul>{/if}
+      {#if review.captureManifests.length}<section aria-label="Capture attachment checks">
+        <h4>Capture attachment checks</h4>
+        <p>These checks match selected bytes to a manifest declaration; they do not authenticate the capture.</p>
+        <ul class="links">{#each review.captureManifests as capture}<li>Manifest {capture.entryId}: {capture.state.replaceAll('_', ' ')}
+          {#if capture.artifacts.length}<ul>{#each capture.artifacts as artifact}<li>Capture {artifact.capture} · {artifact.kind === 'screenshot' ? 'Screenshot' : 'DOM digest'}: {artifact.state === 'matched' ? `bytes match ${artifact.matchingIds.join(', ')}` : 'matching bytes not found'}</li>{/each}</ul>{/if}
+        </li>{/each}</ul>
+      </section>{/if}
       <ul class="entries review-entries">
         {#each reviewRows as item (item.entry.id)}
           {@const workspace = item.entry.schema === WORKSPACE_ARCHIVE_SCHEMA || item.entry.schema === ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA}
@@ -170,13 +185,18 @@
             <details><summary>Digests and custody</summary><p class="digest">Raw bytes: {item.entry.contentDigestSha256}</p>{#if item.entry.canonicalDigestSha256}<p class="digest">Canonical JSON: {item.entry.canonicalDigestSha256}</p>{/if}<p>{review.manifest.version === 3 ? `Packaged as entry ${item.entry.sequence} at ${review.manifest.generatedAt}. No earlier custody is established.` : 'The historical manifest records ordering, not a custody time.'}</p></details>
             {#if item.issue}<p class="error">{item.issue}</p>{/if}
             {#if item.state === 'identity_verified'}
-              <p>{workspace ? 'Workspace import requires a separate section and merge review.' : item.interpretation === 'opaque' ? 'Opaque file: download only; content format not validated.' : 'Browser import unsupported here. The CLI can check supported source formats.'}</p>
               <div class="entry-actions"><button class="btn" type="button" onclick={() => downloadEntry(item.entry.id, item.interpretation !== 'opaque')} disabled={busy}>Download {item.entry.id}</button>{#if workspace && onworkspace}<button class="primary" type="button" onclick={() => void openWorkspace(item.entry.id)} disabled={busy}>Review workspace {item.entry.id}</button>{/if}</div>
+              {@const mediaType = 'mediaType' in item.entry ? item.entry.mediaType : 'application/json'}
+              {#if supportsArtifactPreview(mediaType) && review.contents.has(item.entry.id)}
+                <button class="btn" type="button" aria-expanded={activeArtifact === item.entry.id}
+                  onclick={event => { artifactTrigger = event.currentTarget; if (activeArtifact === item.entry.id) void closeArtifact(); else activeArtifact = item.entry.id; }}>{activeArtifact === item.entry.id ? 'Close inline review' : 'View'} {item.entry.id}</button>
+                {#if activeArtifact === item.entry.id}<ArtifactPreview file={review.contents.get(item.entry.id)!} {mediaType} label={item.entry.id} />{/if}
+              {/if}
             {/if}
           </li>
         {/each}
       </ul>
-      <nav class="paging" aria-label="Package entries"><button class="btn" type="button" onclick={() => reviewPage--} disabled={busy || reviewPage === 0}>Previous entries</button><span>Page {reviewPage + 1} of {Math.ceil(review.entries.length / PAGE_SIZE)}</span><button class="btn" type="button" onclick={() => reviewPage++} disabled={busy || (reviewPage + 1) * PAGE_SIZE >= review.entries.length}>Next entries</button></nav>
+      <nav class="paging" aria-label="Package entries"><button class="btn" type="button" onclick={() => { activeArtifact = ''; reviewPage--; }} disabled={busy || reviewPage === 0}>Previous entries</button><span>Page {reviewPage + 1} of {Math.ceil(review.entries.length / PAGE_SIZE)}</span><button class="btn" type="button" onclick={() => { activeArtifact = ''; reviewPage++; }} disabled={busy || (reviewPage + 1) * PAGE_SIZE >= review.entries.length}>Next entries</button></nav>
       <button class="btn" type="button" onclick={closeReview} disabled={busy}>Close package review</button>
     </div>
   {/if}

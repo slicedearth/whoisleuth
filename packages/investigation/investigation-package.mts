@@ -2,6 +2,8 @@ import { zipSync } from 'fflate';
 import { extractBoundedZipEntries } from '../interchange/bounded-zip-extraction.mts';
 import { canonicalArtifactJsonV2, sha256ArtifactBytes, sha256ArtifactDigestV2 } from '../evidence/artifact-integrity.mts';
 import { INVESTIGATION_CAPSULE_SCHEMA, investigationCapsuleSourceIdentity } from './investigation-capsule.mts';
+import { matchCaptureArtifacts, readWebCaptureManifest, type CaptureArtifactDeclaration, type CaptureArtifactMatch } from '../interchange/web-capture-import.mts';
+import { MAX_WEB_CAPTURE_MANIFEST_BYTES, WEB_CAPTURE_MANIFEST_SCHEMA } from '../contracts/web-capture.mts';
 import {
   MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES,
   MAX_INVESTIGATION_MANIFEST_DOCUMENT_BYTES, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES,
@@ -60,6 +62,11 @@ export type InvestigationPackageSourceLink = Readonly<{
   sourceEntryId: string | null;
   state: 'linked' | 'missing' | 'ambiguous' | 'mismatch';
 }>;
+export type InvestigationPackageCaptureReview = Readonly<{
+  entryId: string;
+  state: 'matched' | 'missing_attachments' | 'rejected';
+  artifacts: readonly CaptureArtifactMatch[];
+}>;
 
 export async function inspectInvestigationPackage(input: Uint8Array) {
   if (!(input instanceof Uint8Array) || input.byteLength < 22 || input.byteLength > MAX_INVESTIGATION_PACKAGE_BYTES) throw new TypeError(`Investigation package input must fit within ${MAX_INVESTIGATION_PACKAGE_BYTES} bytes.`);
@@ -84,6 +91,7 @@ export async function inspectInvestigationPackage(input: Uint8Array) {
   if (extracted.files.size !== manifest.artifacts.length + 1) throw new TypeError('Investigation package has missing or unlisted files.');
   const entries: InvestigationPackageEntryReview[] = [];
   const contents = new Map<string, Uint8Array>();
+  const captureDeclarations = new Map<string, readonly CaptureArtifactDeclaration[] | null>();
   const jsonSources = new Map<string, { schema: string | null; version: number | null; digest: string | null; query: unknown; target: unknown; references: unknown }>();
   for (const entry of manifest.artifacts) {
     const content = extracted.files.get(investigationPackageEntryPath(entry.id));
@@ -104,6 +112,12 @@ export async function inspectInvestigationPackage(input: Uint8Array) {
         version = metadata.version === entry.version;
         if (!metadata.object) interpretation = 'unsupported_json_value';
         if (metadata.object && byteLength && rawDigest && canonicalDigest && schema && version) {
+          if (metadata.schema === WEB_CAPTURE_MANIFEST_SCHEMA) {
+            try {
+              if (content.byteLength > MAX_WEB_CAPTURE_MANIFEST_BYTES) throw new TypeError('Capture manifest is oversized.');
+              captureDeclarations.set(entry.id, readWebCaptureManifest(metadata.object).artifacts);
+            } catch { captureDeclarations.set(entry.id, null); }
+          }
           const query = metadata.object.query;
           const queryObject = query && typeof query === 'object' && !Array.isArray(query) ? query as Record<string, unknown> : null;
           jsonSources.set(entry.id, {
@@ -126,6 +140,13 @@ export async function inspectInvestigationPackage(input: Uint8Array) {
     if (verified) contents.set(entry.id, content);
   }
   const links: InvestigationPackageSourceLink[] = [];
+  const captureManifests: InvestigationPackageCaptureReview[] = [...captureDeclarations].map(([entryId, declarations]) => {
+    if (!declarations) return { entryId, state: 'rejected', artifacts: [] };
+    const artifacts = matchCaptureArtifacts(declarations, entries
+      .filter(candidate => candidate.entry.id !== entryId && candidate.state === 'identity_verified')
+      .map(candidate => ({ id: candidate.entry.id, bytes: candidate.entry.byteLength, sha256: candidate.entry.contentDigestSha256 })));
+    return { entryId, state: artifacts.every(artifact => artifact.state === 'matched') ? 'matched' : 'missing_attachments', artifacts };
+  });
   for (const [id, capsule] of jsonSources) {
     if (capsule.schema !== INVESTIGATION_CAPSULE_SCHEMA) continue;
     const references = Array.isArray(capsule.references) && capsule.references.length <= 4
@@ -142,7 +163,7 @@ export async function inspectInvestigationPackage(input: Uint8Array) {
     const identity = investigationCapsuleSourceIdentity(capsule.target, reference, source);
     links.push({ capsuleEntryId: id, sourceEntryId, state: identity.linked ? 'linked' : 'mismatch' });
   }
-  return Object.freeze({ manifest, entries: Object.freeze(entries), contents, links: Object.freeze(links),
+  return Object.freeze({ manifest, entries: Object.freeze(entries), contents, links: Object.freeze(links), captureManifests: Object.freeze(captureManifests),
     identityVerified: entries.every((entry) => entry.state === 'identity_verified'),
     storageEffect: 'none' as const,
     signatureTrust: 'not_checked' as const, timestampAssurance: 'not_checked' as const, factualAccuracy: 'not_established' as const,

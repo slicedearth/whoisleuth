@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy, tick } from 'svelte';
   import { parseBoundedJson } from '$lib/bounded-json';
   import {
     importExternalFindingsIntoCase,
@@ -13,6 +14,11 @@
     parseWebCaptureManifest,
   } from '$lib/analysis/web-capture-import.ts';
   import CopyableCommand from '$lib/components/CopyableCommand.svelte';
+  import ArtifactPreview from './ArtifactPreview.svelte';
+  import { runInvestigationPackageWorker } from '$lib/investigation-package-worker.ts';
+  import type { BrowserCaptureAttachmentReview } from '$lib/investigation-package-worker-model.ts';
+  import { supportsArtifactPreview } from '$lib/artifact-preview.ts';
+  import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../../../../packages/investigation/investigation-manifest.mts';
 
   let {
     record,
@@ -32,7 +38,21 @@
   let previewTargets = $state<readonly string[]>([]);
   let parsing = $state(false);
   let importing = $state(false);
+  let manifestFile = $state.raw<Blob | null>(null);
+  let attachments = $state.raw<BrowserCaptureAttachmentReview | null>(null);
+  let checking = $state(false);
+  let activeArtifact = $state('');
+  let manifestInput = $state<HTMLInputElement>();
+  let attachmentInput = $state<HTMLInputElement>();
+  let artifactTrigger: HTMLButtonElement | null = null;
+  let attachmentController: AbortController | null = null;
   let selectionGeneration = 0;
+  $effect(() => {
+    record.id;
+    selectionGeneration++; attachmentController?.abort(); attachmentController = null;
+    preview = null; previewTargets = []; manifestFile = null; attachments = null; activeArtifact = ''; checking = false; parsing = false;
+  });
+  onDestroy(() => { selectionGeneration++; attachmentController?.abort(); });
   const handoff = $derived.by(() => {
     if (!exactIncidentUrl) return null;
     try {
@@ -52,6 +72,7 @@
     const generation = ++selectionGeneration;
     preview = null;
     previewTargets = [];
+    manifestFile = null; attachments = null; activeArtifact = ''; attachmentController?.abort(); checking = false;
     parsing = Boolean(file);
     if (!file) return;
     try {
@@ -73,6 +94,7 @@
       if (generation !== selectionGeneration) return;
       preview = document;
       previewTargets = targets;
+      manifestFile = file;
       onmessage(`Validated ${countLabel(document.findings.length, 'capture finding')} for this Case. Review the manifest summary before importing.`);
     } catch (cause) {
       if (generation === selectionGeneration) {
@@ -84,12 +106,49 @@
     }
   }
 
+  async function selectAttachments(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    if ((input.files?.length ?? 0) > MAX_INVESTIGATION_MANIFEST_ARTIFACTS) {
+      input.value = ''; onmessage(`Select no more than ${MAX_INVESTIGATION_MANIFEST_ARTIFACTS} attachment files.`); return;
+    }
+    const files = Array.from(input.files ?? []); input.value = '';
+    if (!files.length || !manifestFile || importing) return;
+    attachmentController?.abort();
+    const controller = new AbortController(); attachmentController = controller;
+    const generation = selectionGeneration, caseId = record.id;
+    checking = true; attachments = null; activeArtifact = '';
+    try {
+      const reviewed = await runInvestigationPackageWorker('capture', { manifest: manifestFile, files }, { signal: controller.signal });
+      if (controller.signal.aborted || generation !== selectionGeneration || record.id !== caseId) return;
+      externalFindingsCaseTargets(reviewed.document, record.domain);
+      attachments = reviewed;
+      const matched = reviewed.matches.filter(match => match.state === 'matched').length;
+      onmessage(`${matched} of ${reviewed.matches.length} capture attachments match their declared bytes and digest. Nothing was saved.`);
+    } catch (cause) {
+      if (!controller.signal.aborted && generation === selectionGeneration) onmessage(cause instanceof Error ? cause.message : 'Attachment review failed. Nothing was saved.');
+    } finally {
+      if (attachmentController === controller) { attachmentController = null; checking = false; }
+    }
+  }
+
+  async function cancelAttachments() {
+    attachmentController?.abort(); checking = false;
+    onmessage('Attachment review cancelled. Nothing was saved.');
+    await tick(); attachmentInput?.focus();
+  }
+  async function clearPreview() {
+    selectionGeneration++; attachmentController?.abort(); attachmentController = null;
+    preview = null; previewTargets = []; manifestFile = null; attachments = null; activeArtifact = ''; checking = false;
+    await tick(); manifestInput?.focus();
+  }
+  async function closeArtifact() { activeArtifact = ''; await tick(); artifactTrigger?.focus(); }
+
   async function importManifest() {
     if (!preview || importing) return;
     importing = true;
     try {
       const result = await importExternalFindingsIntoCase(record.id, preview);
-      const success = `Imported ${countLabel(result.findingsAdded, 'rendered-capture finding')} into ${record.domain}${result.duplicatesSkipped ? `; skipped ${countLabel(result.duplicatesSkipped, 'duplicate')}` : ''}. Artifact bytes remained outside the app.`;
+      const success = `Imported ${countLabel(result.findingsAdded, 'rendered-capture finding')} into ${record.domain}${result.duplicatesSkipped ? `; skipped ${countLabel(result.duplicatesSkipped, 'duplicate')}` : ''}. The Case retains manifest metadata only.`;
       try {
         await onsaved();
         onmessage(success);
@@ -101,8 +160,7 @@
           onmessage(`${success} The change was saved, but Cases could not be reread or reconciled. Reload before importing another manifest.`);
         }
       }
-      preview = null;
-      previewTargets = [];
+      clearPreview();
     } catch (cause) {
       onmessage(cause instanceof Error ? cause.message : 'Could not import the rendered-capture manifest.');
     } finally {
@@ -112,15 +170,20 @@
 </script>
 
 <details class="capture-workspace">
-  <summary>Capture the retained Incident URL locally</summary>
+  <summary>Rendered capture and attachment review</summary>
   <div class="capture-body">
     {#if handoff}
       <p>From the directory where you installed the <a href="/cli#capture-companion">optional capture companion</a>, this command opens the retained URL in a disposable local browser and writes a new private output directory. The browser app does not run it.</p>
       <CopyableCommand command={handoff.command} label="Rendered-capture command" />
       <p class="manifest-path">Then select <code>{handoff.manifestPath}</code>. Review the URL first: its path and query are sent to the target and may contain sensitive values.</p>
-      <label class="file-btn btn" aria-disabled={parsing || importing}>
+    {:else if exactIncidentUrl}
+      <p class="notice">The retained Incident URL uses a target form that the bounded local capture tool does not support. Use an HTTP(S) URL without credentials or a non-default port.</p>
+    {:else}
+      <p>Save an Incident objective and deliberately retain the exact URL from Lookup to prepare a rendered capture. You can still review an existing capture manifest below.</p>
+    {/if}
+      <label class="file-btn btn" aria-disabled={parsing || importing || checking}>
         {parsing ? 'Checking manifest…' : 'Select capture manifest'}
-        <input type="file" accept="application/json,.json" onchange={selectManifest} disabled={parsing || importing}>
+        <input bind:this={manifestInput} type="file" accept="application/json,.json" onchange={selectManifest} disabled={parsing || importing || checking}>
       </label>
       {#if preview}
         <section class="capture-preview" aria-labelledby={`capture-preview-${record.id}`}>
@@ -136,15 +199,35 @@
               <li><strong>{finding.category} · {finding.completeness}</strong><p>{finding.summary}</p><small>{finding.observedAt}{finding.limitations.length ? ` · ${finding.limitations.join('; ')}` : ''}</small></li>
             {/each}
           </ol>
-          <p>Only sanitised manifest metadata and declared digests enter this Case. Screenshot and DOM-digest files stay in the local capture directory and their bytes are not verified by this import.</p>
-          <div class="actions"><button class="primary" type="button" onclick={() => void importManifest()} disabled={importing}>{importing ? 'Importing…' : 'Import into this Case'}</button><button class="btn" type="button" onclick={() => { preview = null; previewTargets = []; }} disabled={importing}>Cancel</button></div>
+          <label class="file-btn btn" aria-disabled={checking || importing}>
+            {checking ? 'Checking attachment bytes…' : 'Select capture attachments to check'}
+            <input bind:this={attachmentInput} type="file" multiple onchange={selectAttachments} disabled={checking || importing}>
+          </label>
+          {#if checking}<button class="btn" type="button" onclick={cancelAttachments}>Cancel attachment check</button>{/if}
+          {#if attachments}
+            <section aria-label="Selected capture attachment checks">
+              <h4>Attachment bytes</h4>
+              <ol>{#each attachments.matches as match, index}
+                {@const declaration = attachments.artifacts[index]!}
+                <li><strong>Capture {match.capture} · {declaration.kind === 'screenshot' ? 'Screenshot' : 'DOM digest'}</strong>
+                  <p>{declaration.fileName} · {match.state === 'matched' ? 'Byte count and digest match' : 'Matching bytes not found'}</p>
+                  {#each match.matchingIds as id}
+                    {@const key = `${index}:${id}`}
+                    {#if supportsArtifactPreview(declaration.mimeType)}
+                      <button class="btn" type="button" aria-expanded={activeArtifact === key}
+                        onclick={event => { artifactTrigger = event.currentTarget; if (activeArtifact === key) void closeArtifact(); else activeArtifact = key; }}>{activeArtifact === key ? 'Close inline review' : 'View'} {id}</button>
+                      {#if activeArtifact === key}<ArtifactPreview file={attachments.contents.get(id)!} mediaType={declaration.mimeType} label={id} />{/if}
+                    {/if}
+                  {/each}
+                </li>
+              {/each}</ol>
+              {#if attachments.unusedIds.length}<p>{attachments.unusedIds.length} selected file{attachments.unusedIds.length === 1 ? '' : 's'} did not match a declared attachment.</p>{/if}
+            </section>
+          {/if}
+          <p>Only sanitised metadata and declared digests enter this Case. Attachment bytes and these separate checks stay in page memory. Matching bytes do not authenticate the capture or establish that its contents are accurate.</p>
+          <div class="actions"><button class="primary" type="button" onclick={() => void importManifest()} disabled={importing || checking}>{importing ? 'Importing…' : 'Import into this Case'}</button><button class="btn" type="button" onclick={clearPreview} disabled={importing}>Cancel</button></div>
         </section>
       {/if}
-    {:else if exactIncidentUrl}
-      <p class="notice">The retained Incident URL uses a target form that the bounded local capture tool does not support. Use an HTTP(S) URL without credentials or a non-default port.</p>
-    {:else}
-      <p>Save an Incident objective and deliberately retain the exact URL from Lookup before preparing a rendered capture. An origin-only Case does not preserve the path needed for this handoff.</p>
-    {/if}
   </div>
 </details>
 

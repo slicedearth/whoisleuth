@@ -18,7 +18,11 @@ export function runInvestigationPackageWorker<Kind extends InvestigationPackageK
     readResponse(value) {
       const reply = value as InvestigationPackageResponse | null;
       if (reply?.kind === 'error') throw new Error(reply.detail);
-      if (reply?.kind !== kind || !reply.result?.manifest || !Array.isArray(reply.result.manifest.artifacts)
+      if (reply?.kind !== kind) throw new Error('Evidence package processing returned an unexpected result.');
+      if (reply.kind === 'capture') {
+        if (!reply.result?.document || !Array.isArray(reply.result.artifacts) || !Array.isArray(reply.result.matches)
+          || !Array.isArray(reply.result.unusedIds) || !(reply.result.contents instanceof Map)) throw new Error('Capture processing returned an unexpected result.');
+      } else if (!reply.result?.manifest || !Array.isArray(reply.result.manifest.artifacts)
         || (reply.kind === 'inspect' ? !(reply.result.contents instanceof Map) : !(reply.result.file instanceof Blob))) throw new Error('Evidence package processing returned an unexpected result.');
       return reply.result as InvestigationPackageResults[Kind];
     },

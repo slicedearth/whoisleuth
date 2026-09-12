@@ -6,6 +6,8 @@ import { createCase } from '../packages/cases/case-model.mts';
 import { unzipSync, zipSync } from 'fflate';
 import { rm, writeFile } from 'node:fs/promises';
 import { MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../packages/investigation/investigation-manifest.mts';
+import { captureReviewFixture } from '../test/capture-review-fixture.mts';
+import { expectedIconPixels } from '../test/favicon-image-fixtures.mts';
 
 const NOW = '2026-09-11T00:00:00.000Z';
 const makePackage = (artifacts: Parameters<typeof buildInvestigationPackage>[0]['artifacts']) => buildInvestigationPackage({ workflow: 'Evidence review', configurationDigestSha256: null, artifacts }, NOW, '2.3.1');
@@ -16,6 +18,77 @@ async function openPackages(page: import('@playwright/test').Page) {
   return page.getByRole('region', { name: 'Package and review evidence files' });
 }
 const asFile = (bytes: Uint8Array) => ({ name: 'evidence.zip', mimeType: 'application/zip', buffer: Buffer.from(bytes) });
+
+test('inline package review exposes all JSON text and actual PNG pixels without executing file content', async ({ page }, testInfo) => {
+  const panel = await openPackages(page);
+  const before = await readBrowserLocalCollection(page, 'cases');
+  const requests: string[] = [];
+  page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) requests.push(request.url()); });
+  const { manifestBytes, screenshot, dom } = captureReviewFixture();
+  const hostileText = JSON.stringify({ html: '<script>window.sourceExecuted=true</script><a href="https://external.invalid/">External link</a>',
+    text: 'x'.repeat(70_000), final: 'Last content remains reachable' });
+  const built = await makePackage([
+    { content: hostileText }, { content: screenshot, mediaType: 'image/png' },
+    { content: manifestBytes, mediaType: 'application/json' }, { content: dom, mediaType: 'application/json' },
+    { content: new TextEncoder().encode('<svg><script>window.sourceExecuted=true</script></svg>'), mediaType: 'application/octet-stream' },
+  ]);
+  await panel.getByLabel('Review evidence package', { exact: true }).setInputFiles(asFile(built.bytes));
+  await expect(panel.getByRole('region', { name: 'Capture attachment checks', exact: true })).toContainText('bytes match artifact-2');
+  await expect(panel.getByRole('region', { name: 'Capture attachment checks', exact: true })).toContainText('bytes match artifact-4');
+  const textTrigger = panel.getByRole('button', { name: 'View artifact-1', exact: true });
+  await textTrigger.focus(); await page.keyboard.press('Enter');
+  const textReview = panel.getByRole('region', { name: 'Inline review of artifact-1', exact: true });
+  await expect(textReview).toBeFocused();
+  await expect(textReview.locator('pre')).toContainText('<script>window.sourceExecuted=true</script>');
+  await expect(textReview.locator('script, a')).toHaveCount(0);
+  const scroller = textReview.getByRole('region', { name: 'artifact-1 text', exact: true });
+  await scroller.focus(); await page.keyboard.press('PageDown');
+  await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  await textReview.getByRole('button', { name: 'Next text part' }).click();
+  await textReview.getByRole('button', { name: 'Next text part' }).click();
+  await expect(textReview.locator('pre')).toContainText('Last content remains reachable');
+  await expect(textReview.getByRole('button', { name: 'Next text part' })).toBeDisabled();
+  await panel.getByRole('button', { name: 'Close inline review artifact-1', exact: true }).click();
+  await expect(textTrigger).toBeFocused();
+  await panel.getByRole('button', { name: 'View artifact-2', exact: true }).click();
+  const image = panel.getByRole('img', { name: 'Selected screenshot artifact-2, 32 by 32 pixels', exact: true });
+  await expect(image).toBeVisible();
+  expect(await image.locator('canvas').evaluate(element => Array.from((element as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, 32, 32).data)))
+    .toEqual(expectedIconPixels());
+  await expect(panel.getByRole('button', { name: 'View artifact-5', exact: true })).toHaveCount(0);
+  expect(await page.evaluate(() => Reflect.get(window, 'sourceExecuted'))).toBeUndefined();
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280, 2560]) {
+      await page.setViewportSize({ width, height: 900 });
+      await image.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+      if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`package-review-${theme}-${width}.png`) });
+    }
+  }
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  expect(requests).toEqual([]);
+  await panel.getByRole('button', { name: 'Close package review', exact: true }).click();
+  await expect(image).toHaveCount(0);
+});
+
+test('oversized decoded images are rejected before native decoding while verified bytes remain downloadable', async ({ page }) => {
+  await page.addInitScript(() => {
+    const decode = window.createImageBitmap;
+    let calls = 0;
+    window.createImageBitmap = ((...args: Parameters<typeof createImageBitmap>) => { calls++; return Reflect.apply(decode, window, args); }) as typeof createImageBitmap;
+    Object.defineProperty(window, 'imageDecodeCount', { get: () => calls });
+  });
+  const panel = await openPackages(page);
+  const { screenshot } = captureReviewFixture();
+  const large = Buffer.from(screenshot); large.writeUInt32BE(100_000, 16);
+  const built = await makePackage([{ content: large, mediaType: 'image/png' }]);
+  await panel.getByLabel('Review evidence package', { exact: true }).setInputFiles(asFile(built.bytes));
+  await panel.getByRole('button', { name: 'View artifact-1', exact: true }).click();
+  await expect(panel.getByRole('alert')).toContainText('The original file is unchanged.');
+  expect(await page.evaluate(() => Reflect.get(window, 'imageDecodeCount'))).toBe(0);
+  await expect(panel.getByRole('img')).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: 'Download artifact-1', exact: true })).toBeEnabled();
+});
 
 test('selected JSON and opaque files round-trip without requests, redaction or automatic retention', async ({ page }) => {
   const panel = await openPackages(page);
@@ -43,8 +116,9 @@ test('selected JSON and opaque files round-trip without requests, redaction or a
   await expect(panel.getByRole('heading', { name: 'Evidence package review' })).toBeFocused();
   await expect(panel.getByText('Every file matches its manifest')).toBeVisible();
   await expect(panel.getByText('Analyst-supplied capture', { exact: true })).toBeVisible();
-  await expect(panel.getByText('Browser import unsupported here.', { exact: false })).toBeVisible();
-  await expect(panel.getByText('Opaque file: download only; content format not validated.')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'View artifact-1', exact: true })).toBeEnabled();
+  await expect(panel.getByRole('button', { name: 'View artifact-2', exact: true })).toBeEnabled();
+  await expect(panel.getByRole('region', { name: /Inline review/u })).toHaveCount(0);
   const restoredPromise = page.waitForEvent('download');
   await panel.getByRole('button', { name: 'Download artifact-2', exact: true }).click();
   const restored = await restoredPromise;

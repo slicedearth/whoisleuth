@@ -26,6 +26,7 @@ function responseLoopFixture(sequence: number) {
     availability: {
       ...base.availability,
       domain: CASE_DOMAIN,
+      observationHostname: LOOKUP_TARGET,
       deepScanComplete: true,
       pageTitle: sequence === 1 ? 'Fixture sign-in review' : 'Fixture account review',
       nameservers: sequence === 1
@@ -43,7 +44,8 @@ async function runDeepLookup(page: Page): Promise<void> {
   await page.getByRole('radio', { name: /Deep/u }).check();
   await page.locator('#query').fill(LOOKUP_TARGET);
   await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
-  await expect(page.getByRole('heading', { name: CASE_DOMAIN, exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: LOOKUP_TARGET, exact: true })).toBeVisible();
+  await expect(page.locator('.result-head')).toContainText(`Registration: ${CASE_DOMAIN}. DNS, TLS and web observation target: ${LOOKUP_TARGET}.`);
   await expandLookupFamilies(page);
 }
 
@@ -86,7 +88,7 @@ test('an Incident URL sends only its hostname and retains exact Case context onl
       body: JSON.stringify({
         ...base,
         ...lookupDomainIdentity(lookupTarget),
-        availability: { ...base.availability, domain: caseDomain, deepScanComplete: true },
+        availability: { ...base.availability, domain: caseDomain, observationHostname: lookupTarget, deepScanComplete: true },
         rdap: { ...base.rdap, parsed: { ...base.rdap.parsed, domain: caseDomain } },
       }),
     });
@@ -95,7 +97,8 @@ test('an Incident URL sends only its hostname and retains exact Case context onl
   await page.goto('/lookup?task=incident&depth=deep');
   await page.locator('#query').fill(incidentUrl);
   await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
-  await expect(page.getByRole('heading', { name: caseDomain, exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: lookupTarget, exact: true })).toBeVisible();
+  await expect(page.locator('.result-head')).toContainText(`Registration: ${caseDomain}. DNS, TLS and web observation target: ${lookupTarget}.`);
   expect(requests).toEqual([lookupTarget]);
   await expect(page.locator('#query')).toHaveValue(incidentUrl);
   await expandLookupFamilies(page);
@@ -197,7 +200,7 @@ test('partial Lookup evidence can be classified, monitored, rechecked, and revie
   await monitorCase.getByLabel('Status').selectOption('monitoring');
   await expect(monitorCase.getByLabel('Status')).toHaveValue('monitoring');
   await page.goBack();
-  await expect(page.getByRole('heading', { name: CASE_DOMAIN, exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: LOOKUP_TARGET, exact: true })).toBeVisible();
   await expandLookupFamilies(page);
   await expect(page.locator('.monitoring-warning')).toContainText(
     `This Case is marked Monitoring, but no readable watchlist currently contains ${LOOKUP_TARGET}.`,
@@ -222,7 +225,7 @@ test('partial Lookup evidence can be classified, monitored, rechecked, and revie
 
   await caseCard.getByRole('button', { name: 'Recheck and refresh Case' }).click();
   await expect.poll(() => lookupRequests).toBe(2);
-  await expect(page.getByRole('heading', { name: CASE_DOMAIN, exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: LOOKUP_TARGET, exact: true })).toBeVisible();
   await expect(page).toHaveURL(/#case-response$/u);
   await expect(page.locator('.case-card')).toContainText(`Refreshed the retained Case evidence for ${CASE_DOMAIN}.`);
 

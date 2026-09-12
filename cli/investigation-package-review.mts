@@ -1,5 +1,5 @@
 import { sha256ArtifactBytes } from '../packages/evidence/artifact-integrity.mts';
-import { MAX_INVESTIGATION_PACKAGE_BYTES, inspectInvestigationPackage, type InvestigationPackageSourceLink } from '../packages/investigation/investigation-package.mts';
+import { MAX_INVESTIGATION_PACKAGE_BYTES, inspectInvestigationPackage, type InvestigationPackageSourceLink, type InvestigationPackageCaptureReview } from '../packages/investigation/investigation-package.mts';
 import { INVESTIGATION_MANIFEST_SCHEMA } from '../packages/investigation/investigation-manifest.mts';
 import {
   OFFLINE_ARTIFACT_VERIFICATION_SCHEMA, OFFLINE_ARTIFACT_VERIFICATION_VERSION,
@@ -25,6 +25,7 @@ export type OfflineInvestigationPackageDetails = Readonly<{
     issue: string | null;
   }>[];
   links: readonly InvestigationPackageSourceLink[];
+  captureManifests: readonly InvestigationPackageCaptureReview[];
 }>;
 
 export async function verifyOfflineInvestigationPackage(input: Uint8Array): Promise<OfflineArtifactVerificationReport> {
@@ -54,7 +55,8 @@ export async function verifyOfflineInvestigationPackage(input: Uint8Array): Prom
       state, identity: reviewed.state === 'identity_verified' ? 'verified' : 'failed', verification, issue });
   }
   const complete = entries.every((entry) => entry.state === 'admitted' || entry.state === 'opaque')
-    && inspected.links.every((link) => link.state === 'linked');
+    && inspected.links.every((link) => link.state === 'linked')
+    && inspected.captureManifests.every(capture => capture.state === 'matched');
   return Object.freeze({
     schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA, version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
     artifact: Object.freeze({ kind: 'investigation_package' as const, schema: INVESTIGATION_MANIFEST_SCHEMA, version: inspected.manifest.version }),
@@ -65,10 +67,11 @@ export async function verifyOfflineInvestigationPackage(input: Uint8Array): Prom
     manifestIdentity: null,
     package: Object.freeze({ digestSha256: await sha256ArtifactBytes(bytes), audience: 'private', storageEffect: 'none',
       signatureTrust: 'not_checked', timestampAssurance: 'not_checked', factualAccuracy: 'not_established',
-      entries: Object.freeze(entries), links: inspected.links }),
+      entries: Object.freeze(entries), links: inspected.links, captureManifests: inspected.captureManifests }),
     limitations: Object.freeze([
       'The manifest and selected file bytes are checked independently. Re-compressing the ZIP can change its archive digest without changing its verified file content.',
       'Opaque files are retained byte-for-byte, not rendered, executed or validated as images or documents. Unsupported JSON remains separate from admitted source formats.',
+      'Capture attachment checks bind selected bytes to the capture manifest declaration, not to a trusted publisher or real website observation.',
       'Source declarations and packaging times are not authenticated. Signatures and timestamp tokens require their own verification and trust decisions.',
       'This command does not import, overwrite or collect evidence. Unchanged bytes and valid source structure do not establish factual accuracy, currentness or safe sharing.',
     ]),

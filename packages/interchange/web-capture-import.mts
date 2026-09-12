@@ -239,7 +239,19 @@ function partitionSummary(fragments: readonly string[]): string[] {
   return summaries;
 }
 
-export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocument {
+export type CaptureArtifactDeclaration = Readonly<{
+  capture: number;
+  kind: 'screenshot' | 'dom_digest';
+  fileName: string;
+  mimeType: string;
+  sha256: string;
+  bytes: number;
+}>;
+
+export function readWebCaptureManifest(value: unknown): Readonly<{
+  document: ExternalFindingsDocument;
+  artifacts: readonly CaptureArtifactDeclaration[];
+}> {
   const root = record(value);
   if (
     !root
@@ -258,6 +270,7 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
     throw new Error(`Web capture manifests must contain between 1 and ${MAX_WEB_CAPTURE_SUMMARIES} captures.`);
   }
   const findings: Array<Record<string, unknown>> = [];
+  const artifacts: CaptureArtifactDeclaration[] = [];
   const domainCounts = new Map<string, number>();
   const findingCounts = new Map<string, number>();
   for (const [index, raw] of root.captures.entries()) {
@@ -328,6 +341,7 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
         }
         artifactSummaries.push(`DOM digest ${fileName}: application/json, ${bytes} bytes, SHA-256 ${sha256}.`);
       }
+      artifacts.push({ capture: index + 1, kind, fileName, mimeType: mimeType!, sha256, bytes });
     }
     const summaryFragments = [
       pageTitle || finalOrigin
@@ -352,17 +366,44 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
         observedAt,
         completeness,
         limitations: [
-          'Imported sanitised capture manifest metadata; WHOISleuth did not receive artefact bytes or independently verify their digests.',
+          'Imported capture metadata, not independently collected website evidence; artefact bytes and separate byte checks are not retained in these findings.',
           ...limitations,
         ].slice(0, 8),
         reference: sourceReference,
       });
     }
   }
-  return parseExternalFindingsDocument({
+  const document = parseExternalFindingsDocument({
     schema: EXTERNAL_FINDINGS_SCHEMA,
     schemaVersion: EXTERNAL_FINDINGS_VERSION,
     source: { name: sourceName, reference: sourceReference, collectedAt: sourceCollectedAt },
     findings,
+  });
+  return { document, artifacts };
+}
+
+export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocument {
+  return readWebCaptureManifest(value).document;
+}
+
+export type CaptureArtifactMatch = Readonly<{
+  capture: number;
+  kind: CaptureArtifactDeclaration['kind'];
+  state: 'matched' | 'not_found';
+  matchingIds: readonly string[];
+}>;
+
+// Candidates must describe bytes already read and hashed by the caller. File
+// names and MIME declarations never establish identity; equal copies are all
+// reported rather than choosing an arbitrary file.
+export function matchCaptureArtifacts(
+  artifacts: readonly CaptureArtifactDeclaration[],
+  candidates: readonly Readonly<{ id: string; bytes: number; sha256: string }>[],
+): CaptureArtifactMatch[] {
+  return artifacts.map(artifact => {
+    const matchingIds = candidates.filter(candidate => candidate.bytes === artifact.bytes
+      && candidate.sha256.replace(/^sha256:/u, '') === artifact.sha256)
+      .map(candidate => candidate.id);
+    return { capture: artifact.capture, kind: artifact.kind, state: matchingIds.length ? 'matched' : 'not_found', matchingIds };
   });
 }

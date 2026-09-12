@@ -335,6 +335,11 @@ and changes no saved records. A workspace file requires its separate import
 preview and confirmation. Checksum identity, supported format, signature trust,
 timestamp assurance and factual accuracy remain separate results. Downloaded
 packages remain until the operator deletes them.
+Explicit inline review shows paged JSON text or locally decoded PNG pixels,
+without running document scripts, following links or making page requests.
+Capture attachment checks compare selected bytes with manifest declarations;
+matching bytes do not authenticate the capture. Review state is held in page
+memory and cleared when closed or when the page is left.
 
 Imports and exports are deliberate local actions. Importers validate bounded
 envelopes before preview or merge; omission never deletes destination data.
@@ -400,9 +405,10 @@ visibility or page-identity claims.
 
 When an analyst selects a local capture manifest for one Case, the browser
 validates it before preview and imports only sanitised manifest metadata and
-declared digests. Screenshot, DOM-digest and other capture artefact bytes are
-not read or verified by that Case import. Selecting them for a portable evidence
-package is a separate local file action.
+declared digests. A separate optional attachment selection reads and checks
+screenshot and DOM-digest bytes in page memory, without uploading them. That
+check and the file bytes are not saved by the Case metadata import. A portable
+evidence package can preserve the explicitly selected files separately.
 
 ## Retention and deletion
 

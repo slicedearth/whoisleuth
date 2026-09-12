@@ -149,7 +149,7 @@ describe('sanitised web-capture import', () => {
     });
     assert.equal(document.findings.length, 1);
     assert.match(document.findings[0]?.summary || '', /api\.example\.test.*1440x900.*DOM digest/isu);
-    assert.match(document.findings[0]?.limitations.join(' ') || '', /did not receive artefact bytes/iu);
+    assert.match(document.findings[0]?.limitations.join(' ') || '', /artefact bytes and separate byte checks are not retained/iu);
   });
 
   test('partitions maximum bounded manifest metadata without slicing supported evidence', () => {

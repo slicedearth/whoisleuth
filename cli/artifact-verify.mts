@@ -778,6 +778,10 @@ export function formatOfflineArtifactVerification(
       'Signature trust: not checked', 'Trusted timestamp: not checked', 'Factual accuracy: not established');
     for (const entry of report.package.entries) lines.push(`${entry.id}: ${entry.state} · ${entry.byteLength} bytes · ${entry.mediaType}${entry.issue ? ` · ${entry.issue}` : ''}`);
     for (const link of report.package.links) lines.push(`Source link ${link.capsuleEntryId}: ${link.state}${link.sourceEntryId ? ` (${link.sourceEntryId})` : ''}`);
+    for (const capture of report.package.captureManifests) {
+      lines.push(`Capture manifest ${capture.entryId}: ${capture.state}`);
+      for (const artifact of capture.artifacts) lines.push(`Capture ${artifact.capture} ${artifact.kind}: ${artifact.state}${artifact.matchingIds.length ? ` (${artifact.matchingIds.join(', ')})` : ''}`);
+    }
   }
   for (const limitation of report.limitations) lines.push(`Limitation: ${limitation}`);
   return `${lines.join('\n')}\n`;
