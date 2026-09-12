@@ -158,7 +158,7 @@ test('completes the guided synthetic workflow without investigation requests or 
   await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Watchlist activity' })).toHaveCount(0);
 
-  await page.getByLabel('Status').selectOption('reviewing');
+  await page.getByRole('combobox', { name: /^Status/u }).selectOption('reviewing');
   await expect(page.getByRole('status')).toHaveText('Synthetic case updated.');
   await page.getByLabel('Analyst note').fill('Fixture reviewed for demonstration.');
   await page.getByRole('button', { name: 'Load later synthetic observation' }).click();

@@ -267,20 +267,8 @@ test('the console command palette filters destinations and remains keyboard oper
   const search = dialog.getByRole('combobox', { name: 'Search pages and tools' });
   await expect(dialog).toBeVisible();
   await expect(search).toBeFocused();
-  const searchFrame = dialog.locator('.command-search');
-  await expect(search).toHaveCSS('box-shadow', 'none');
-  await expect.poll(() => dialog.getByRole('status').evaluate((element) => {
-    const styles = getComputedStyle(element);
-    return `${styles.width} ${styles.height} ${styles.clip}`;
-  })).toBe('1px 1px rect(0px, 0px, 0px, 0px)');
-  await expect.poll(() => searchFrame.evaluate((element) => {
-    const probe = document.createElement('span');
-    probe.style.color = 'var(--accent)';
-    document.body.append(probe);
-    const matchesAccent = getComputedStyle(element).borderColor === getComputedStyle(probe).color;
-    probe.remove();
-    return matchesAccent;
-  })).toBe(true);
+  await expect(dialog.getByRole('listbox', { name: 'Console destinations' })).toBeVisible();
+  await expect(dialog.getByRole('status')).toContainText(/Dashboard.*current page/u);
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
   await expect(dialog.getByRole('option', { name: /Dashboard/ })).toHaveAttribute('aria-current', 'page');
   await expect.poll(() => dialog.getByRole('option').evaluateAll((options) =>
@@ -493,8 +481,12 @@ test('Lookup describes pending collection without implying staged completion', a
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
   const loadingStatus = page.locator('.loading-note');
-  await expect(loadingStatus).toContainText('Deep lookup is waiting for one final response');
-  await expect(loadingStatus).toContainText('Sources remain pending until the final response reports their state.');
+  await expect(loadingStatus.getByRole('status')).toContainText('Collecting');
+  await expect(loadingStatus).toContainText('Only the final validated response can be retained.');
+  const progress = page.getByRole('region', { name: 'Lookup source progress' });
+  await expect(progress.getByRole('status')).toContainText('Waiting for source updates');
+  await expect(progress.getByRole('listitem')).toHaveCount(0);
+  await expect(page.locator('#result')).toHaveCount(0);
   await expect(loadingStatus.getByRole('button', { name: 'Cancel lookup' })).toBeVisible();
   releaseLookup?.();
   await expect(page.locator('#result')).toBeVisible();

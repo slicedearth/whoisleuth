@@ -231,10 +231,13 @@ test('a tampered IndexedDB record stops the console instead of presenting an emp
     });
     database.close();
   });
+  const tampered = await rawLocalDataSnapshot(page);
   await page.reload();
 
   await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
-  await expect(page.getByText('Shortlist contains a record that could not be verified.')).toBeVisible();
+  await expect(page.getByText(/^Shortlist .+verif/iu)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Clear shortlist', exact: true })).toHaveCount(0);
+  expect(await rawLocalDataSnapshot(page)).toBe(tampered);
 });
 
 test('a retired local-only IndexedDB schema remains preserved and unavailable', async ({ page }) => {

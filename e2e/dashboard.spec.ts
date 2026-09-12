@@ -830,20 +830,33 @@ test('workspace selection reuses verified content while preview and merge see pe
     await peer.goto('/monitor?view=cases');
     await createCaseInBrowser(peer, 'archive-case.invalid');
     const original = (await readBrowserLocalCollection(peer, 'cases', { minimumRecords: 1 })).records[0]!;
+    expect(original.value.id).not.toBe(archive.sections.cases.cases[0]?.id);
     await cases.getByRole('checkbox').uncheck();
+    await expect(cases).toContainText('1 new');
+    await expect(cases).toContainText('0 existing matches');
+    expect(await checksumCalls()).toBe(archive.manifest.sectionCount);
+
+    await peer.getByRole('link', { name: 'All Cases', exact: true }).click();
+    await peer.getByLabel('Import JSON', { exact: true }).setInputFiles({
+      name: 'same-incident.json', mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(archive.sections.cases)),
+    });
+    await expect(peer.getByRole('status', { name: 'Case workspace action status' })).toContainText('Imported 1 new');
+    await readBrowserLocalCollection(peer, 'cases', { minimumRecords: 2 });
+    await cases.getByRole('checkbox').check();
     await expect(cases).toContainText('0 new');
     await expect(cases).toContainText('1 existing match');
-    await cases.getByRole('checkbox').check();
     await expect(preview.getByRole('button', { name: 'Add selected data' })).toBeEnabled();
     expect(await checksumCalls()).toBe(archive.manifest.sectionCount);
 
     await createCaseInBrowser(peer, 'peer-added.invalid');
-    await readBrowserLocalCollection(peer, 'cases', { minimumRecords: 2 });
+    await readBrowserLocalCollection(peer, 'cases', { minimumRecords: 3 });
     await preview.getByRole('button', { name: 'Add selected data' }).click();
     await expect(workspaceArchiveStatus(page)).toContainText('Added backup data from 13 sections');
-    const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
-    expect(stored.records.map((record) => record.value.domain).sort()).toEqual(['archive-case.invalid', 'peer-added.invalid']);
-    expect(stored.records.find((record) => record.value.domain === 'archive-case.invalid')?.value.id).toBe(original.value.id);
+    const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 3 });
+    expect(stored.records.map((record) => record.value.domain).sort()).toEqual(['archive-case.invalid', 'archive-case.invalid', 'peer-added.invalid']);
+    expect(stored.records.find((record) => record.value.id === original.value.id)?.value).toEqual(original.value);
+    expect(stored.records.filter((record) => record.value.id === archive.sections.cases.cases[0]?.id)).toHaveLength(1);
     expect(await checksumCalls()).toBe(archive.manifest.sectionCount);
   } finally {
     await peer.close();

@@ -1220,7 +1220,8 @@ test('only deliberate Case creation and refresh retain the exact submitted hostn
   const runLookup = async (hostname: string) => {
     await page.locator('#query').fill(hostname);
     await page.getByRole('button', { name: 'Run lookup' }).click();
-    await expect(page.getByRole('heading', { name: 'scope.test', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: hostname, exact: true })).toBeVisible();
+    await expect(page.getByText(`Registration: scope.test. Submitted hostname: ${hostname}.`, { exact: true })).toBeVisible();
     await expandLookupFamilies(page);
   };
   const retainedCase = async (minimumRevision = 1) => {

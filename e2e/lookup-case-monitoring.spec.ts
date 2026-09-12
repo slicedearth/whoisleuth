@@ -197,8 +197,9 @@ test('partial Lookup evidence can be classified, monitored, rechecked, and revie
   const monitorCase = page.locator('article.case-detail');
   await expect(monitorCase).toContainText(CASE_DOMAIN);
   await openCaseMetadata(page);
-  await monitorCase.getByLabel('Status').selectOption('monitoring');
-  await expect(monitorCase.getByLabel('Status')).toHaveValue('monitoring');
+  const status = monitorCase.getByRole('combobox', { name: /^Status/u });
+  await status.selectOption('monitoring');
+  await expect(status).toHaveValue('monitoring');
   await page.goBack();
   await expect(page.getByRole('heading', { name: LOOKUP_TARGET, exact: true })).toBeVisible();
   await expandLookupFamilies(page);
