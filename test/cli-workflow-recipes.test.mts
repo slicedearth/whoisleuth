@@ -108,6 +108,14 @@ test('mismatched report families cannot be reused and malformed evidence cannot 
   assert.equal(invalid.document.completedSteps[0]?.artifact, null);
 });
 
+test('campaign briefs require a selected saved Lookup rather than a discovery aggregate', async () => {
+  const result = await execute('campaign-review', ['--use-artifact', 'review:1=collect'], {});
+  assert.equal(result.code, 2);
+  assert.equal(result.collected, 0);
+  assert.equal(result.document, null);
+  assert.match(result.stderr, /compatible earlier output and file input/u);
+});
+
 test('every networked recipe pauses without collection when approval is absent', async () => {
   for (const recipe of INVESTIGATION_PLAN_RECIPES) {
     const plan = buildInvestigationPlan(recipe, 'example.test', WORKFLOW_NOW);

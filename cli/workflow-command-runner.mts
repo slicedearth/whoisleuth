@@ -49,8 +49,6 @@ function boundWorkflowInputs(command: CliCommand, inputs: WorkflowStepInputs, de
       MAX_SAVED_LOOKUP_INPUT_BYTES, 'Evidence export input') };
     case 'verify-artifact': return { readArtifactInput: (source) => read(source, dependencies.readArtifactInput,
       MAX_OFFLINE_ARTIFACT_BYTES, 'Artefact input') };
-    case 'brief': return { readArtifactInput: (source) => read(source, dependencies.readArtifactInput,
-      MAX_SAVED_LOOKUP_INPUT_BYTES, 'Lookup brief input') };
     case 'sharing-review': return { readArtifactInput: (source) => read(source, dependencies.readArtifactInput,
       MAX_SHARING_REVIEW_BYTES, 'Sharing review input') };
     case 'compare': return { readCompareInput: (source) => read(source, dependencies.readCompareInput,

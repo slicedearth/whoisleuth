@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { normalizeLookupSourceSettlement } from '../lib/lookup-source-progress.mts';
+import { LOOKUP_SOURCE_LABELS } from '../frontend/src/lib/analysis/lookup-source-labels.ts';
 import {
   createThreatIntelligenceResult,
   defineThreatIntelligenceProvider,
@@ -48,6 +49,18 @@ const FINDING = Object.freeze({
 });
 
 describe('Lookup source progress settlements', () => {
+  test('labels preserve source authority and distinguish archived intelligence from current collection', () => {
+    assert.match(LOOKUP_SOURCE_LABELS.rdap, /registry/iu);
+    assert.match(LOOKUP_SOURCE_LABELS.registrar_rdap, /registrar/iu);
+    assert.notEqual(LOOKUP_SOURCE_LABELS.rdap, LOOKUP_SOURCE_LABELS.registrar_rdap);
+    assert.match(LOOKUP_SOURCE_LABELS.external_intelligence, /archived/iu);
+    assert.equal(Object.isFrozen(LOOKUP_SOURCE_LABELS), true);
+    for (const label of Object.values(LOOKUP_SOURCE_LABELS)) {
+      assert.equal(label, label.trim());
+      assert.ok(label.length > 0);
+    }
+  });
+
   test('never turns malformed, incomplete or unsupported source responses into successful progress', () => {
     const rows = [
       ['rdap', { upstreamStatus: 200 }, 'error', false],
