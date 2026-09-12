@@ -19,6 +19,12 @@ export const PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPEC_PATTERN = new RegExp(
 export const PLAYWRIGHT_NETWORK_GUARD_ROUTE_PATTERN = '**/*';
 export const PLAYWRIGHT_AUTOMATIC_GUARD_OPTIONS = Object.freeze({ auto: true as const });
 
+/** Firefox can report layout reads made by the injected automation script. */
+export function isInjectedBrowserLayoutDiagnostic(browserName: string, type: string, text: string, url: string): boolean {
+  return browserName === 'firefox' && type === 'warning' && url === 'debugger eval code'
+    && /^\[JavaScript Warning: "Layout was forced before the page was fully loaded\. If stylesheets are not yet loaded this may cause a flash of unstyled content\." \{file: "debugger eval code" line: \d+\}\]$/u.test(text);
+}
+
 export function isPlaywrightPerformanceAuthoritySpec(file: string): boolean {
   const normalized = file.replaceAll('\\', '/');
   return PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS.some((candidate) => (

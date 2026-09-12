@@ -3,6 +3,7 @@ import type { BrowserContext, ConsoleMessage, Route } from '@playwright/test';
 import {
   PLAYWRIGHT_AUTOMATIC_GUARD_OPTIONS,
   PLAYWRIGHT_NETWORK_GUARD_ROUTE_PATTERN,
+  isInjectedBrowserLayoutDiagnostic,
 } from '../tools/playwright-execution-contract.mts';
 import { ALLOWED_ORIGIN } from './constants.ts';
 
@@ -123,18 +124,26 @@ export const test = base.extend<Options & Fixtures>({
     async ({
       page,
       context,
+      browserName,
       allowExpectedBulkLookup400Noise,
       allowExpectedLookup429Noise,
       allowExpectedLookup504Noise,
       allowExpectedLogout500Noise,
-    }, use) => {
+    }, use, testInfo) => {
       const guard = await installNetworkGuard(context);
       const consoleIssues: string[] = [];
+      const injectedDiagnostics: string[] = [];
+      let injectedDiagnosticCount = 0;
 
       const onConsole = (message: ConsoleMessage) => {
         const type = message.type();
         if (type !== 'error' && type !== 'warning') return;
         const text = message.text();
+        if (isInjectedBrowserLayoutDiagnostic(browserName, type, text, message.location().url)) {
+          injectedDiagnosticCount++;
+          if (injectedDiagnostics.length < 8) injectedDiagnostics.push(text);
+          return;
+        }
         if (
           type === 'error' &&
           ((isLookupEndpointUrl(message.location().url)
@@ -161,6 +170,10 @@ export const test = base.extend<Options & Fixtures>({
       page.off('console', onConsole);
       page.off('pageerror', onPageError);
       await guard.dispose();
+
+      if (injectedDiagnostics.length) await testInfo.attach('injected-browser-layout-diagnostics', {
+        body: JSON.stringify({ count: injectedDiagnosticCount, samples: injectedDiagnostics }), contentType: 'application/json',
+      });
 
       expect(guard.offOriginRequests, 'requests must stay within the local test server origin').toEqual([]);
       expect(consoleIssues, 'no console errors/warnings or uncaught page errors').toEqual([]);

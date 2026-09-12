@@ -253,8 +253,11 @@ test('package composition and review retain usable controls at supported widths 
       await create.click();
       await panel.getByLabel('Choose evidence files', { exact: true }).setInputFiles({ name: 'selected-long-evidence-filename.json', mimeType: 'application/json', buffer: Buffer.from('{}') });
       const source = panel.getByLabel(/^Declared source for selected-long-evidence-filename\.json, selection \d+$/u);
+      await panel.getByLabel('Choose evidence files', { exact: true }).focus();
+      await page.keyboard.press('Tab');
+      await expect(source).toBeFocused();
+      await expect(source).toBeInViewport();
       await source.fill('Selected source');
-      await source.focus();
       await expect(source).toBeInViewport();
       await expectNoHorizontalOverflow(page);
       await testInfo.attach(`package-create-${theme}-${viewport.width}`, { body: await page.screenshot(), contentType: 'image/png' });
@@ -264,7 +267,7 @@ test('package composition and review retain usable controls at supported widths 
   }
 });
 
-test('the complete package payload remains usable through the browser worker without losing any file bytes', async ({ page }, testInfo) => {
+test('the complete package payload remains usable through the browser worker without losing any file bytes', async ({ page, browserName }, testInfo) => {
   test.slow();
   const panel = await openPackages(page);
   const sourcePath = testInfo.outputPath('capacity.bin');
@@ -275,8 +278,8 @@ test('the complete package payload remains usable through the browser worker wit
   try {
     await panel.getByText('Create a package from files', { exact: true }).click();
     await panel.getByLabel('Choose evidence files', { exact: true }).setInputFiles(sourcePath);
-    const memory = await page.context().newCDPSession(page);
-    const before = await memory.send('Runtime.getHeapUsage');
+    const memory = browserName === 'chromium' ? await page.context().newCDPSession(page) : null;
+    const before = memory ? await memory.send('Runtime.getHeapUsage') : null;
     const probe = await page.evaluateHandle(() => {
       const startedAt = performance.now();
       let frames = 0;
@@ -308,14 +311,15 @@ test('the complete package payload remains usable through the browser worker wit
       const restoredBytes = Buffer.concat(await (await restored.createReadStream()).toArray());
       expect(restoredBytes.equals(Buffer.from(source))).toBe(true);
       const result = await probe.evaluate(value => value.finish());
-      const after = await memory.send('Runtime.getHeapUsage');
+      const after = memory ? await memory.send('Runtime.getHeapUsage') : null;
       await testInfo.attach('package-capacity-measurement', { body: JSON.stringify({
-        ...result, bytes: source.byteLength, heapBeforeBytes: before.usedSize, heapAfterBytes: after.usedSize,
+        ...result, bytes: source.byteLength, browserName, heapBeforeBytes: before?.usedSize ?? null, heapAfterBytes: after?.usedSize ?? null,
         scope: 'one production browser build, main JavaScript isolate snapshots, not peak or worker/process memory',
+        memoryAvailability: memory ? 'Chromium protocol snapshots' : 'unavailable in this engine',
         timingAcceptance: 'informational; includes browser, download and test-host work',
       }), contentType: 'application/json' });
       expect(result.animationFrames).toBeGreaterThan(0);
       await expectNoHorizontalOverflow(page);
-    } finally { await probe.evaluate(value => value.finish()); await probe.dispose(); await memory.detach(); }
+    } finally { await probe.evaluate(value => value.finish()); await probe.dispose(); await memory?.detach(); }
   } finally { await rm(sourcePath, { force: true }); await rm(packagePath, { force: true }); }
 });

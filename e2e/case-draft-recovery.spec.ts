@@ -166,9 +166,14 @@ test('recovery saves retain a full-capacity Case workspace without rewriting its
   for (let sample = 0; sample < 3; sample++) {
     const tasks = await page.evaluateHandle(() => {
       const durations: number[] = [];
-      const observer = new PerformanceObserver(list => { durations.push(...list.getEntries().map(entry => entry.duration)); });
-      observer.observe({ type: 'longtask' });
-      return { finish() { durations.push(...observer.takeRecords().map(entry => entry.duration)); observer.disconnect(); return durations; } };
+      const observer = PerformanceObserver.supportedEntryTypes.includes('longtask')
+        ? new PerformanceObserver(list => { durations.push(...list.getEntries().map(entry => entry.duration)); }) : null;
+      observer?.observe({ type: 'longtask' });
+      return { finish() {
+        durations.push(...(observer?.takeRecords() ?? []).map(entry => entry.duration));
+        observer?.disconnect();
+        return observer ? durations : null;
+      } };
     });
     await beginBrowserInteractionReadiness(page, {
       start: { event: 'input', selector: 'form[data-recovery-form="evidence-pin"] input' },

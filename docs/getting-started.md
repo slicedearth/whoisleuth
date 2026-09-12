@@ -130,6 +130,22 @@ npm run test:e2e:stress
 
 Diagnose a failure before retrying it.
 
+The targeted cross-browser packet reuses complete functional specifications in
+Firefox and WebKit: authentication, workspace isolation and encryption, Case
+recovery and returns, offline evidence, source progress and public navigation.
+It keeps the same production server, fixture guards and zero-retry policy:
+
+```bash
+npx playwright install firefox webkit
+npm run test:e2e:cross-browser
+```
+
+Use `-- --project=firefox` or `-- --project=webkit` to diagnose one engine.
+With an already verified production build, set `WHOISLEUTH_E2E_USE_BUILD=1`.
+These desktop engines with narrow viewports do not certify real mobile devices
+or every released browser version. The complete Chromium suite remains required
+at the full verification boundary.
+
 Failed or interrupted local suites print the location of their retained private
 diagnostics directory. It keeps bounded reports, traces and screenshots, without
 the temporary checkout, build, dependencies or authentication files. The summary

@@ -12,7 +12,6 @@ async function seed(page: Page) {
     evidence: { capturedAt: BEFORE, scanDepth: 'deep', availability: 'registered' },
   }, BEFORE), id: 'review-primary' };
   const other = { ...createCase({ domain: current.domain, title: 'Different incident' }, BEFORE), id: 'review-other' };
-  await page.goto('/cases');
   await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [current, other] }) }, {
     clearStorage: true, destination: '/cases?case=review-primary&section=response',
   });
