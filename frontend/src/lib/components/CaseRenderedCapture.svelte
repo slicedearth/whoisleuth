@@ -19,18 +19,22 @@
   import type { BrowserCaptureAttachmentReview } from '$lib/investigation-package-worker-model.ts';
   import { supportsArtifactPreview } from '$lib/artifact-preview.ts';
   import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../../../../packages/investigation/investigation-manifest.mts';
+  import { retainCaseAttachments, type SelectedCaseAttachment } from '$lib/case-attachments.ts';
+  import { readCaseAttachment } from '../../../../packages/cases/case-attachment-model.mts';
+  import { sha256ArtifactBytes } from '../../../../packages/evidence/artifact-integrity.mts';
+  import type { PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
 
   let {
     record,
     exactIncidentUrl,
-    onsaved,
-    oncommitted,
+    persistOperation,
+    mutationBusy,
     onmessage,
   }: {
     record: CaseRecord;
     exactIncidentUrl: string | null;
-    onsaved: () => void | Promise<void>;
-    oncommitted: (cases: CaseRecord[]) => void;
+    persistOperation: PersistCaseOperation;
+    mutationBusy: boolean;
     onmessage: (message: string) => void;
   } = $props();
 
@@ -38,6 +42,7 @@
   let previewTargets = $state<readonly string[]>([]);
   let parsing = $state(false);
   let importing = $state(false);
+  let retainMatching = $state(false);
   let manifestFile = $state.raw<Blob | null>(null);
   let attachments = $state.raw<BrowserCaptureAttachmentReview | null>(null);
   let checking = $state(false);
@@ -47,10 +52,12 @@
   let artifactTrigger: HTMLButtonElement | null = null;
   let attachmentController: AbortController | null = null;
   let selectionGeneration = 0;
+  let activeCaseId: string | undefined;
   $effect(() => {
-    record.id;
+    if (record.id === activeCaseId) return;
+    activeCaseId = record.id;
     selectionGeneration++; attachmentController?.abort(); attachmentController = null;
-    preview = null; previewTargets = []; manifestFile = null; attachments = null; activeArtifact = ''; checking = false; parsing = false;
+    preview = null; previewTargets = []; manifestFile = null; attachments = null; activeArtifact = ''; checking = false; parsing = false; retainMatching = false;
   });
   onDestroy(() => { selectionGeneration++; attachmentController?.abort(); });
   const handoff = $derived.by(() => {
@@ -72,7 +79,7 @@
     const generation = ++selectionGeneration;
     preview = null;
     previewTargets = [];
-    manifestFile = null; attachments = null; activeArtifact = ''; attachmentController?.abort(); checking = false;
+    manifestFile = null; attachments = null; activeArtifact = ''; attachmentController?.abort(); checking = false; retainMatching = false;
     parsing = Boolean(file);
     if (!file) return;
     try {
@@ -144,23 +151,34 @@
   async function closeArtifact() { activeArtifact = ''; await tick(); artifactTrigger?.focus(); }
 
   async function importManifest() {
-    if (!preview || importing) return;
+    if (!preview || importing || mutationBusy) return;
+    const document = preview, caseId = record.id, reviewed = attachments, manifest = manifestFile;
+    const generation = selectionGeneration, retainFiles = retainMatching;
     importing = true;
     try {
-      const result = await importExternalFindingsIntoCase(record.id, preview);
-      const success = `Imported ${countLabel(result.findingsAdded, 'rendered-capture finding')} into ${record.domain}${result.duplicatesSkipped ? `; skipped ${countLabel(result.duplicatesSkipped, 'duplicate')}` : ''}. The Case retains manifest metadata only.`;
-      try {
-        await onsaved();
-        onmessage(success);
-      } catch {
+      const files: SelectedCaseAttachment[] = [];
+      if (retainFiles) {
+        if (!manifest) throw new Error('Select the capture manifest again before retaining its original bytes.');
+        const bytes = new Uint8Array(await manifest.arrayBuffer());
         try {
-          oncommitted(result.cases);
-          onmessage(`${success} The change was saved, but Cases could not be reread; the committed Case snapshot is shown locally.`);
-        } catch {
-          onmessage(`${success} The change was saved, but Cases could not be reread or reconciled. Reload before importing another manifest.`);
+          files.push({ file: manifest, attachment: readCaseAttachment({ id: crypto.randomUUID(), fileName: manifest instanceof File ? manifest.name : 'capture-manifest.json',
+            mediaType: 'application/json', source: document.source.name, observedAt: null, retainedAt: new Date().toISOString(), byteLength: bytes.length, digestSha256: await sha256ArtifactBytes(bytes) }) });
+        } finally { bytes.fill(0); }
+        for (const [index, match] of (reviewed?.matches ?? []).entries()) {
+          if (match.state !== 'matched') continue;
+          const declaration = reviewed!.artifacts[index]!;
+          for (const id of match.matchingIds) {
+            const file = reviewed!.contents.get(id);
+            if (!file) throw new Error('A reviewed capture file is no longer available. Select the files again.');
+            files.push({ file, attachment: readCaseAttachment({ id: crypto.randomUUID(), fileName: declaration.fileName, mediaType: declaration.mimeType,
+              source: document.source.name, observedAt: declaration.observedAt, retainedAt: new Date().toISOString(), byteLength: declaration.bytes, digestSha256: `sha256:${declaration.sha256}` }) });
+          }
         }
       }
-      clearPreview();
+      if (generation !== selectionGeneration || record.id !== caseId) return;
+      const success = retainFiles ? 'Imported capture metadata and retained the manifest and matching original files.' : 'Imported capture metadata. Original files were not retained.';
+      if (await persistOperation(() => retainFiles ? retainCaseAttachments(caseId, files, document) : importExternalFindingsIntoCase(caseId, document), success, () => manifestInput ?? null)
+        && generation === selectionGeneration) await clearPreview();
     } catch (cause) {
       onmessage(cause instanceof Error ? cause.message : 'Could not import the rendered-capture manifest.');
     } finally {
@@ -224,8 +242,9 @@
               {#if attachments.unusedIds.length}<p>{attachments.unusedIds.length} selected file{attachments.unusedIds.length === 1 ? '' : 's'} did not match a declared attachment.</p>{/if}
             </section>
           {/if}
-          <p>Only sanitised metadata and declared digests enter this Case. Attachment bytes and these separate checks stay in page memory. Matching bytes do not authenticate the capture or establish that its contents are accurate.</p>
-          <div class="actions"><button class="primary" type="button" onclick={() => void importManifest()} disabled={importing || checking}>{importing ? 'Importing…' : 'Import into this Case'}</button><button class="btn" type="button" onclick={clearPreview} disabled={importing}>Cancel</button></div>
+          <label class="retain-files"><input type="checkbox" bind:checked={retainMatching} disabled={importing || checking || mutationBusy}> Retain this manifest and verified matching files in this workspace</label>
+          <p>{retainMatching ? 'The selected originals are stored unchanged using this workspace’s storage and encryption. Unmatched files are not included; you can retain them separately under Retained files.' : 'Only sanitised metadata and declared digests enter the Case; original files stay in page memory.'} Matching bytes do not authenticate the capture or establish its accuracy.</p>
+          <div class="actions"><button class="primary" type="button" onclick={() => void importManifest()} disabled={importing || checking || mutationBusy}>{importing ? 'Importing…' : 'Import into this Case'}</button><button class="btn" type="button" onclick={clearPreview} disabled={importing}>Cancel</button></div>
         </section>
       {/if}
   </div>
@@ -236,6 +255,7 @@
   summary{padding:11px 12px;cursor:pointer;font:700 var(--text-xs) var(--mono)}details[open]>summary{border-bottom:1px solid var(--border)}
   .capture-body{display:grid;gap:10px;padding:12px}.capture-body>p{max-width:880px;margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.manifest-path code{overflow-wrap:anywhere;color:var(--accent)}
   .capture-body a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
+  .retain-files{display:flex;align-items:center;gap:9px;min-height:44px;font-size:var(--text-xs)}.retain-files input{flex:none;width:18px;height:18px}
   .file-btn{justify-self:start}.file-btn input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.file-btn:focus-within{outline:2px solid var(--focus);outline-offset:3px}
   .capture-preview{display:grid;gap:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.capture-preview header{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px}.capture-preview h4{margin:0}.capture-preview header>span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}
   dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--border)}dl>div{min-width:0;padding:8px;background:var(--panel)}dt{color:var(--muted);font:650 var(--text-2xs) var(--mono)}dd{margin:3px 0 0;overflow-wrap:anywhere;font-size:var(--text-xs)}

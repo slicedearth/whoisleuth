@@ -3,6 +3,41 @@ import { createCase, openCasesView } from './case-test-fixtures';
 import { openCaseSection } from './console-navigation';
 import { readBrowserLocalCollection, failNextBrowserLocalManifestWrite, expectNoHorizontalOverflow, useTheme } from './helpers';
 import { captureReviewFixture } from '../test/capture-review-fixture.mts';
+import { storedFiles, openRetainedFiles, failNextFileWrite } from './case-attachment-fixtures';
+
+test('explicit capture retention commits matching original files with the imported evidence, excluding unmatched selections', async ({ page }) => {
+  await openCasesView(page); await createCase(page, 'capture.example'); await openCaseSection(page, 'Evidence');
+  const capture = page.locator('.capture-workspace'); await capture.locator(':scope > summary').click();
+  const { manifestBytes, screenshot, dom } = captureReviewFixture();
+  const before = await readBrowserLocalCollection(page, 'cases');
+  await capture.getByLabel('Select capture manifest', { exact: true }).setInputFiles({ name: 'manifest.json', mimeType: 'application/json', buffer: manifestBytes });
+  await capture.getByLabel('Select capture attachments to check', { exact: true }).setInputFiles([
+    { name: 'renamed.png', mimeType: 'image/png', buffer: Buffer.from(screenshot) },
+    { name: 'renamed.json', mimeType: 'application/json', buffer: dom },
+    { name: 'unmatched.txt', mimeType: 'text/plain', buffer: Buffer.from('Unmatched bytes must not be retained by this action.') },
+  ]);
+  await expect(capture.getByRole('region', { name: 'Selected capture attachment checks', exact: true })).toContainText('1 selected file did not match');
+  const retain = capture.getByRole('checkbox', { name: 'Retain this manifest and verified matching files in this workspace', exact: true });
+  await expect(retain).not.toBeChecked(); await retain.check();
+  expect(await storedFiles(page)).toEqual([]);
+  await failNextFileWrite(page);
+  await capture.getByRole('button', { name: 'Import into this Case', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'out of storage space' })).toBeVisible();
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before); expect(await storedFiles(page)).toEqual([]);
+  await expect(retain).toBeChecked();
+  await capture.getByRole('button', { name: 'Import into this Case', exact: true }).click();
+  await expect(capture.getByRole('heading', { name: 'Manifest evidence', exact: true })).toHaveCount(0);
+  const saved = await readBrowserLocalCollection(page, 'cases', { minimumRevision: before.manifest.revision + 1 });
+  expect(saved.manifest.revision).toBe(before.manifest.revision + 1);
+  const references = saved.records[0]!.value.attachments!;
+  expect(references.map(item => item.fileName).sort()).toEqual(['dom-digest.json', 'manifest.json', 'screenshot.png']);
+  expect(references.filter(item => item.fileName !== 'manifest.json').every(item => item.observedAt === '2026-09-01T00:00:00.000Z')).toBe(true);
+  expect(references.find(item => item.fileName === 'manifest.json')!.observedAt).toBeNull();
+  const bodies = (await storedFiles(page)).map(row => Buffer.from(row.bytes).toString('base64')).sort();
+  expect(bodies).toEqual([manifestBytes, Buffer.from(screenshot), dom].map(bytes => bytes.toString('base64')).sort());
+  const files = await openRetainedFiles(page);
+  await files.getByRole('button', { name: 'Preview screenshot.png', exact: true }).click(); await expect(files.getByRole('img')).toBeVisible();
+});
 
 test('Case capture attachments are checked separately and metadata import preserves its failure and retention boundaries', async ({ page }, testInfo) => {
   await openCasesView(page); await createCase(page, 'capture.example'); await openCaseSection(page, 'Evidence');

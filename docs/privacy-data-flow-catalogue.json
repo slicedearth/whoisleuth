@@ -76,7 +76,7 @@
     {
       "id": "analyst_cases",
       "title": "Browser-local analyst cases and Review Item lifecycle",
-      "requestPurpose": "Retain analyst-selected Case material and the separately bounded Review Item lifecycle overlay in the browser profile.",
+      "requestPurpose": "Retain analyst-selected Case material and separately selected original files using the current workspace codec; Review Item lifecycle state remains separately bounded.",
       "job": "respond",
       "executionPlanes": [
         "browser_local"
@@ -99,6 +99,7 @@
       ],
       "returnedDataCategories": [
         "bounded_case_state",
+        "selected_original_files_and_provenance",
         "bounded_analyst_review_state"
       ],
       "processingClasses": [

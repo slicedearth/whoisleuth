@@ -15,6 +15,7 @@ const specifications = [
   'case-review-return.spec.ts',
   'case-packet-print.spec.ts',
   'capture-attachment-review.spec.ts',
+  'case-attachments.spec.ts',
   'investigation-package.spec.ts',
   'lookup-replay.spec.ts',
   'lookup-source-progress.spec.ts',

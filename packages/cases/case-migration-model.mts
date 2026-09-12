@@ -45,6 +45,7 @@ import {
   CLI_CASE_PACK_VERSION,
 } from '../contracts/case-portability.mts';
 import { canonicalArtifactJsonV2 } from '../evidence/artifact-integrity.mts';
+import { readCaseAttachments, mergeCaseAttachments, type CaseAttachment } from './case-attachment-model.mts';
 import { assertBoundedJsonStructure } from '../../lib/bounded-json.mts';
 import {
   inspectCaseBrandProfileIds,
@@ -111,6 +112,7 @@ type ImportPatch = {
   observedEffects: CaseObservedEffectHistory;
   closures: CaseClosureHistory;
   branches: CaseInvestigationBranch[];
+  attachments: CaseAttachment[] | undefined;
   tags: string[];
   notes: CaseNote[];
   createdAt: string | null;
@@ -194,6 +196,9 @@ export function normalizeCaseStore(raw: unknown): CaseStore {
 function assertModernCaseShape(raw: unknown, sourceVersion: number): void {
   for (const item of boundedCaseList(raw).items) {
     const itemRecord = objectRecord(item);
+    if (sourceVersion < INCIDENT_CASE_SCHEMA_VERSION && Object.hasOwn(itemRecord, 'attachments')) {
+      throw new TypeError('Retained file references require the current Case schema; no data was changed.');
+    }
     const evidenceHistory = itemRecord.evidenceHistory;
     for (const snapshot of Array.isArray(evidenceHistory) ? evidenceHistory : []) {
       const record = objectRecord(snapshot);
@@ -353,6 +358,7 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
     branches: importedVersion >= 11
       ? normalizeCaseInvestigationBranches(record.branches, normalizedFallback, branchReferences, timestampOptions)
       : [],
+    attachments: importedVersion >= INCIDENT_CASE_SCHEMA_VERSION ? readCaseAttachments(record.attachments) : undefined,
     tags: normalizeTags(record.tags),
     // Imported notes fall back only to the imported record's own timestamps
     // (never "now"), so a timestamp-less note gets a stable, deterministic time
@@ -429,6 +435,7 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
     observedEffects: patch.observedEffects,
     closures: patch.closures,
     branches: patch.branches,
+    ...(patch.attachments === undefined ? {} : { attachments: patch.attachments }),
     createdAt: patch.createdAt || patch.updatedAt || now,
     updatedAt: patch.updatedAt || patch.createdAt || now,
   };
@@ -479,6 +486,7 @@ function applyImportPatch(
   const decisions = normalizeCaseDecisions(decisionSelection.records, fallback, pinIds);
   const trailSelection = retainLocalAuthoredRecords(local.manualTrail, patch.manualTrail, MAX_CASE_MANUAL_TRAIL_EVENTS);
   const manualTrail = normalizeCaseManualTrail(trailSelection.records, fallback);
+  const attachments = mergeCaseAttachments(local.attachments, patch.attachments);
   const authoredHistoryOmitted = patch.authoredHistoryOmitted
     + pinSelection.omitted
     + decisionSelection.omitted
@@ -503,6 +511,7 @@ function applyImportPatch(
     observedEffects,
     closures,
     branches: mergeCaseInvestigationBranches(local.branches ?? [], patch.branches, fallback, branchReferences),
+    ...(attachments === undefined ? {} : { attachments }),
     tags: normalizeTags([...local.tags, ...patch.tags]),
     notes: unionNotes(local.notes, patch.notes),
     createdAt: patch.createdAt && Date.parse(patch.createdAt) < Date.parse(local.createdAt) ? patch.createdAt : local.createdAt,

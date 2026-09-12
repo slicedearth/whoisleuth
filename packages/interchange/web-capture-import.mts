@@ -241,6 +241,7 @@ function partitionSummary(fragments: readonly string[]): string[] {
 
 export type CaptureArtifactDeclaration = Readonly<{
   capture: number;
+  observedAt: string | null;
   kind: 'screenshot' | 'dom_digest';
   fileName: string;
   mimeType: string;
@@ -341,7 +342,7 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
         }
         artifactSummaries.push(`DOM digest ${fileName}: application/json, ${bytes} bytes, SHA-256 ${sha256}.`);
       }
-      artifacts.push({ capture: index + 1, kind, fileName, mimeType: mimeType!, sha256, bytes });
+      artifacts.push({ capture: index + 1, observedAt, kind, fileName, mimeType: mimeType!, sha256, bytes });
     }
     const summaryFragments = [
       pageTitle || finalOrigin

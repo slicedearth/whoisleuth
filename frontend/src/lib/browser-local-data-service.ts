@@ -1,6 +1,7 @@
 import {
   BrowserLocalDataError,
   BrowserLocalDataProvider,
+  captureBrowserLocalDataUpdateOptions,
   type AnyLocalDataCollectionDefinition,
   type BrowserLocalDataInitialization,
   type BrowserLocalDataCommitListener,
@@ -176,6 +177,7 @@ export function createBrowserLocalDataService(
     updater: BrowserLocalDataUpdater<BrowserLocalCollectionDocumentMap[Collection], Result>,
     options: BrowserLocalDataUpdateOptions = {},
   ): Promise<Result> {
+    options = captureBrowserLocalDataUpdateOptions(options);
     const [provider, definition] = await Promise.all([activeProvider(), collection(id)]);
     return provider.update(definition, updater, options);
   }

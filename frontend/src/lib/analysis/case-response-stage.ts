@@ -1,4 +1,4 @@
-import type { CasePatch } from './case-model.ts';
+import type { CasePatch, CaseRecord } from './case-model.ts';
 import type { CaseDraftReceipt } from '../../../../packages/contracts/case-drafts.mts';
 
 export const CASE_RESPONSE_STAGE_DEFINITIONS = Object.freeze({
@@ -58,4 +58,10 @@ export type PersistCaseResponse = (
   success: string,
   focusFallback?: (() => HTMLElement | null) | null,
   draft?: CaseDraftReceipt,
+) => Promise<boolean>;
+
+export type PersistCaseOperation = (
+  operation: () => Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }>,
+  success: string,
+  focusFallback: (() => HTMLElement | null) | null,
 ) => Promise<boolean>;

@@ -145,3 +145,38 @@ test('invalid codec resource and integrity declarations cannot bypass provider b
   }
   await assert.rejects(prepareLocalDataContent(definition, [], { ...unlocked.codec, digestCollection: async () => 'invalid' }), /invalid integrity value/);
 });
+
+test('retained files use independently verifiable binary encryption and separate keyed lookup context', async () => {
+  const bytes = Buffer.from('Private original file\0\r\n', 'utf8');
+  const reference = { digestSha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`, byteLength: bytes.length };
+  const codec = unlocked.codec.binary!;
+  const lookupKey = await codec.lookupKey('cases', reference);
+  const input = { collection: 'cases', lookupKey, reference, file: new Blob([bytes]) };
+  const first = Buffer.from(await codec.encode(input));
+  const second = Buffer.from(await codec.encode(input));
+  assert.equal(first.length, bytes.length + 28); assert.notDeepEqual(first, second);
+  assert.ok(!first.includes(bytes)); assert.ok(!lookupKey.includes(reference.digestSha256));
+  const material = pbkdf2Sync(PASSPHRASE, Buffer.from(encryption.salt, 'base64url'), 600_000, 64, 'sha256');
+  assert.equal(lookupKey, createHmac('sha256', material.subarray(32)).update(JSON.stringify(['aes-gcm-hmac-v1', ID, 'file-lookup', 'cases', reference.digestSha256])).digest('base64url'));
+  const cipher = createDecipheriv('aes-256-gcm', material.subarray(0, 32), first.subarray(0, 12));
+  cipher.setAAD(Buffer.from(JSON.stringify(['aes-gcm-hmac-v1', ID, 'file', 'cases', lookupKey, bytes.length])));
+  cipher.setAuthTag(first.subarray(-16));
+  assert.deepEqual(Buffer.concat([cipher.update(first.subarray(12, -16)), cipher.final()]), bytes);
+  material.fill(0);
+  const payload = Uint8Array.from(first).buffer;
+  assert.deepEqual(Buffer.from(await (await codec.decode({ ...input, payload })).arrayBuffer()), bytes);
+  const altered = Buffer.from(first); altered[12] = altered[12]! ^ 1;
+  for (const change of [{ collection: 'other' }, { lookupKey: 'other' }, { payload: Uint8Array.from(altered).buffer }, { payload: Uint8Array.from(Buffer.concat([first, Buffer.from('x')])).buffer },
+    { reference: { ...reference, byteLength: bytes.length - 1 } }, { reference: { ...reference, digestSha256: `sha256:${'0'.repeat(64)}` } }]) {
+    await assert.rejects(codec.decode({ ...input, payload, ...change }));
+  }
+  const captured = Uint8Array.from(first).buffer;
+  const pending = codec.decode({ ...input, payload: captured });
+  new Uint8Array(captured).fill(0);
+  assert.deepEqual(Buffer.from(await (await pending).arrayBuffer()), bytes);
+  const locked = await unlockBrowserWorkspaceEncryption(ID, encryption, PASSPHRASE);
+  locked.lock();
+  await assert.rejects(locked.codec.binary!.lookupKey('cases', reference), /Unlock/);
+  await assert.rejects(locked.codec.binary!.encode(input), /Unlock/);
+  await assert.rejects(locked.codec.binary!.decode({ ...input, payload }), /Unlock/);
+});

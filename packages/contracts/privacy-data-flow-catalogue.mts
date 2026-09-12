@@ -138,7 +138,7 @@ const CAPABILITY_PRIVACY_DETAILS = Object.freeze({
   rendered_web_capture: capabilityPrivacyDetail('Capture one explicitly authorised rendered page within the local-tool budget.', ['bounded_rendered_capture', 'capture_manifest']),
   rendered_capture_comparison: capabilityPrivacyDetail('Compare selected rendered-capture artefacts without another request.', ['bounded_capture_comparison']),
   idn_confusables: capabilityPrivacyDetail('Derive bounded Unicode and confusable context from the current target.', ['confusable_analysis']),
-  analyst_cases: capabilityPrivacyDetail('Retain analyst-selected Case material and the separately bounded Review Item lifecycle overlay in the browser profile.', ['bounded_case_state', 'bounded_analyst_review_state']),
+  analyst_cases: capabilityPrivacyDetail('Retain analyst-selected Case material and separately selected original files using the current workspace codec; Review Item lifecycle state remains separately bounded.', ['bounded_case_state', 'selected_original_files_and_provenance', 'bounded_analyst_review_state']),
   watchlists: capabilityPrivacyDetail('Retain analyst-selected watchlist and monitoring-view state in the browser profile.', ['bounded_watchlist_state']),
   offline_review: capabilityPrivacyDetail('Review or derive from deliberately selected bounded local evidence without a request.', ['bounded_offline_review']),
   portable_evidence: capabilityPrivacyDetail('Build, verify or review bounded portable evidence under operator control.', ['bounded_portable_evidence', 'integrity_or_compatibility_state']),

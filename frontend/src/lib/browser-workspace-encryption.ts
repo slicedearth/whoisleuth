@@ -2,6 +2,8 @@ import { decodeBase64url, encodeBase64url } from '../../../lib/base64url.mts';
 import { BrowserLocalDataError, decodeLocalDataJsonRecord, plaintextJsonCodec, type BrowserLocalDataCodec } from './browser-local-data.ts';
 import { BROWSER_WORKSPACE_ENCRYPTION_CODEC, MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES, MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS, readBrowserWorkspaceEncryption, type BrowserWorkspaceEncryption } from './browser-workspace-encryption-model.ts';
 import { DEFAULT_BROWSER_WORKSPACE, requireBrowserWorkspaceId } from './browser-workspace-context.ts';
+import { readRetainedFileReference, readVerifiedRetainedFileBytes, verifyRetainedFile } from '../../../packages/evidence/retained-file.mts';
+import type { BrowserLocalBinaryCodec } from './browser-local-binaries.ts';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -66,6 +68,45 @@ export async function unlockBrowserWorkspaceEncryption(id: string, metadata: Bro
     id: BROWSER_WORKSPACE_ENCRYPTION_CODEC,
     encodedBytes,
     digestCollection: input => authenticate('collection', input.collection, input.schemaVersion, input.serializedBytes, input.content),
+    binary: Object.freeze<BrowserLocalBinaryCodec>({
+      async lookupKey(collection, reference) {
+        const expected = readRetainedFileReference(reference);
+        return authenticate('file-lookup', collection, expected.digestSha256);
+      },
+      async encode(input) {
+        active();
+        const reference = readRetainedFileReference(input.reference);
+        const { collection, lookupKey, file } = input;
+        if (await authenticate('file-lookup', collection, reference.digestSha256) !== lookupKey) throw new Error('Encrypted file lookup identity does not match.');
+        const bytes = await readVerifiedRetainedFileBytes(reference, file);
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        try {
+          const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, tagLength: 128,
+            additionalData: context(id, 'file', collection, lookupKey, reference.byteLength) }, active().cipher, bytes);
+          active();
+          const envelope = new Uint8Array(iv.length + ciphertext.byteLength);
+          envelope.set(iv); envelope.set(new Uint8Array(ciphertext), iv.length);
+          return envelope.buffer;
+        } finally { bytes.fill(0); }
+      },
+      async decode(input) {
+        active();
+        const reference = readRetainedFileReference(input.reference);
+        const { collection, lookupKey, payload } = input;
+        if (!(payload instanceof ArrayBuffer) || payload.byteLength !== reference.byteLength + 28) throw new Error('Encrypted file has an invalid byte length.');
+        const envelope = new Uint8Array(payload.slice(0));
+        if (await authenticate('file-lookup', collection, reference.digestSha256) !== lookupKey) throw new Error('Encrypted file lookup identity does not match.');
+        const bytes = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: envelope.subarray(0, 12), tagLength: 128,
+          additionalData: context(id, 'file', collection, lookupKey, reference.byteLength) }, active().cipher, envelope.subarray(12)));
+        try {
+          active();
+          const file = new Blob([bytes]);
+          await verifyRetainedFile(reference, file);
+          active();
+          return file;
+        } finally { bytes.fill(0); }
+      },
+    }),
     async encode(input) {
       active();
       const plaintext = await plaintextJsonCodec.encode(input);

@@ -33,6 +33,7 @@ import {
   MAX_TAGS_PER_CASE,
 } from '../contracts/case-portability.mts';
 import type { CaseInvestigationBranch } from './case-investigation-branch-model.mts';
+import type { CaseAttachment } from './case-attachment-model.mts';
 import {
   CASE_DISPOSITIONS,
   CASE_STATUSES,
@@ -177,6 +178,7 @@ export type CaseRecord = {
   observedEffects: CaseObservedEffectHistory;
   closures: CaseClosureHistory;
   branches?: CaseInvestigationBranch[];
+  attachments?: CaseAttachment[];
   createdAt: string;
   updatedAt: string;
 };

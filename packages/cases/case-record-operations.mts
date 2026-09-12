@@ -36,6 +36,7 @@ import {
   type CaseRecord,
 } from './case-record-contracts.mts';
 import { PUBLISHED_V2_3_CASE_SCHEMA_VERSION, INCIDENT_CASE_SCHEMA_VERSION, MAX_CASE_OBJECTIVE_LENGTH } from '../contracts/case-portability.mts';
+import { readCaseAttachments } from './case-attachment-model.mts';
 import {
   caseDispositionSupportsDefensiveResponse,
   caseStatusIsClosed,
@@ -266,6 +267,7 @@ export function normalizeCase(
   );
   const normalizedStatus = normalizeStatus(record.status);
   const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
+  const attachments = readCaseAttachments(record.attachments);
   return {
     id: existing ? existing.id : safeId(record.id) || deterministicId(domain),
     domain,
@@ -290,6 +292,7 @@ export function normalizeCase(
     observedEffects,
     closures,
     branches: normalizeCaseInvestigationBranches(record.branches, updatedAt, branchReferences, timestampOptions),
+    ...(attachments === undefined ? {} : { attachments }),
     createdAt,
     updatedAt,
   };

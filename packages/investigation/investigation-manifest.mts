@@ -2,19 +2,19 @@ import { boundedJsonLimitsForBytes, parseBoundedJson, parseBoundedJsonObject } f
 import { normalizeBoundedSemanticVersion } from '../../lib/semantic-version.mts';
 import { canonicalArtifactJsonV2, sha256ArtifactBytes, sha256ArtifactDigestV2, SORTED_JSON_V2 } from '../evidence/artifact-integrity.mts';
 import { array, digest, enumeration, exact, fail, integer, iso, strings, text, validateIntegrity, type UnknownRecord } from '../evidence/artifact-structure.mts';
+import {
+  MAX_SELECTED_FILES as MAX_INVESTIGATION_MANIFEST_ARTIFACTS,
+  MAX_SELECTED_FILE_TOTAL_BYTES as MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES,
+  MAX_SELECTED_FILE_BYTES as MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES,
+  SELECTED_FILE_MEDIA_TYPES as INVESTIGATION_FILE_MEDIA_TYPES,
+} from '../contracts/selected-file-limits.mts';
+export { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, INVESTIGATION_FILE_MEDIA_TYPES };
 
 export const INVESTIGATION_MANIFEST_SCHEMA = 'whoisleuth.investigation-manifest';
 export const INVESTIGATION_MANIFEST_VERSION = 3;
 export const SUPPORTED_INVESTIGATION_MANIFEST_VERSIONS = [2, INVESTIGATION_MANIFEST_VERSION] as const;
-export const MAX_INVESTIGATION_MANIFEST_ARTIFACTS = 128;
-// A complete 32-MiB workspace's encrypted JSON exceeds 42 MiB. The 64-MiB
-// payload allowance accommodates either form plus supporting evidence. A
-// single selected file can use the whole allowance without being split.
-export const MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES = 64 * 1024 * 1024;
-export const MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES = MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES;
 // Independently bounds the path-free metadata, not the selected file content.
 export const MAX_INVESTIGATION_MANIFEST_DOCUMENT_BYTES = 512 * 1024;
-export const INVESTIGATION_FILE_MEDIA_TYPES = ['application/json', 'application/octet-stream', 'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'application/pdf'] as const;
 type FileMediaType = typeof INVESTIGATION_FILE_MEDIA_TYPES[number];
 
 /** A filename suggests a declaration only; it never validates file contents. */

@@ -24,6 +24,20 @@ Anyone able to use the browser profile, a privileged extension or the device
 may be able to read them. Named workspaces can instead use the encrypted codec
 described below. Clearing site data removes every local workspace.
 
+Case attachment references contain filenames, declared sources and observation
+times, retention times, byte counts and SHA-256 digests. Database version 2 adds
+a `files` object store to the existing `records` and `manifests` stores. Original
+bytes use binary `ArrayBuffer` values, deduplicated by content within the Case collection;
+independent references preserve their own provenance. A metadata revision and
+its file writes or removals commit in one transaction. Bytes are removed only
+when no Case still references them. Ordinary collection reads do not load file
+bodies; selected reads verify both the byte count and digest. Missing or
+damaged bodies remain explicit and do not erase their references.
+
+Selection is limited to 128 files and 64 MiB in one operation; the browser's
+origin quota also applies. File retention never prunes existing evidence to
+make room. JSON backups carry references, not original bytes.
+
 Small tab-scoped handoffs and transient preferences use `sessionStorage` or
 `localStorage` only under their documented limits. They are not silently
 promoted into workspace evidence.
@@ -70,6 +84,12 @@ also binds schema, byte count, record membership and order. Metadata and codec
 versions fail closed. Ciphertext encoding overhead has separate bounds and
 does not increase decoded evidence limits.
 
+Retained file bodies use the same keys with distinct file-lookup and file
+authentication contexts. Their binary envelope contains a 12-byte nonce,
+ciphertext and 16-byte tag, without JSON/base64 expansion. Workspace, collection,
+content identity and declared byte length are authenticated. A file-only repair
+also advances the collection revision so its transaction can be acknowledged.
+
 Creation initialises all encrypted collections before publishing the directory
 entry. Opening an existing encrypted workspace requires its collection manifests;
 missing manifests are not silently recreated as empty data. Adding collections
@@ -102,7 +122,8 @@ truncation and limitations. Imported, analyst-authored, provider-reported and
 collected evidence remain distinct. Missing or unreadable storage is reported
 as unavailable; it does not become an empty collection or evidence of absence.
 
-Cases remain keyed by canonical registrable domain while schema 16 can retain
+Cases have individual UUIDs and can share a canonical registrable domain.
+Schema 16 can retain
 the exact normalised submitted hostname on each new evidence snapshot and the
 observation time and explicit review deadline of a response route. Analyst
 decisions can retain confidence and its basis. Cases migrated from supported

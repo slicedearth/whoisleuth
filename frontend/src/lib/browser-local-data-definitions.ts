@@ -121,6 +121,7 @@ import {
 import { BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID } from '../../../packages/contracts/browser-local-collection-manifest.mts';
 import { CASE_DRAFT_SCHEMA, type CaseDraftRecord, type CaseDraftStore } from '../../../packages/contracts/case-drafts.mts';
 import { emptyCaseDraftStore, normalizeCaseDraftStore, serializeCaseDraftStore, caseDraftStoreVersion } from '../../../packages/cases/case-drafts.mts';
+import { caseAttachmentReferences } from '../../../packages/cases/case-attachment-model.mts';
 
 export type BrowserLocalCollectionValueMap = Readonly<{
   case_drafts: CaseDraftRecord;
@@ -213,6 +214,7 @@ export const CASES_COLLECTION: LocalDataCollectionDefinition<CaseRecord[]> = Obj
   version: parseStoreVersion,
   serialize: serializeCaseStore,
   split: (cases) => recordsFromArray(cases, (record) => record.id),
+  binaryReferences: caseAttachmentReferences,
   join: (records, schemaVersion) => ({ version: schemaVersion, cases: arrayFromRecords(records) }),
 });
 

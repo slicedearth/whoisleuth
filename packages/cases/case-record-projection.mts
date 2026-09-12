@@ -18,7 +18,7 @@ type CaseFieldRule<K extends CaseField> = Readonly<{
   treatment: Readonly<Record<CaseProjectionProfile, CaseFieldTreatment>>;
   nestedSensitiveFields: readonly string[];
   audienceExclusions: Readonly<Partial<Record<CaseAudience, CaseAudienceExclusion>>>;
-  value: (record: CaseRecord, profile: CaseProjectionProfile) => CompleteCaseRecord[K];
+  value: (record: CaseRecord, profile: CaseProjectionProfile) => CaseRecord[K];
 }>;
 type CaseFieldRuleOptions = Readonly<{
   nestedSensitiveFields?: readonly string[];
@@ -197,22 +197,32 @@ const CASE_FIELD_RULES = Object.freeze({
   ), {
     audienceExclusions: { public: { label: 'Investigation branches', order: 5 } },
   }),
+  attachments: fieldRule('attachments', SHARED_EXCLUDE, (record, profile) => (
+    profile === 'trusted' || profile === 'public' ? undefined : structuredClone(record.attachments)
+  ), {
+    audienceExclusions: {
+      trusted: { label: 'Retained file references and provenance', order: 5, sinceVersion: INCIDENT_CASE_SCHEMA_VERSION },
+      public: { label: 'Retained file references and provenance', order: 5, sinceVersion: INCIDENT_CASE_SCHEMA_VERSION },
+    },
+  }),
   createdAt: preservedField('createdAt'),
   updatedAt: preservedField('updatedAt'),
 } satisfies { [K in CaseField]: CaseFieldRule<K> });
 
-function projectCase(record: CaseRecord, profile: CaseProjectionProfile): CompleteCaseRecord {
+function projectCase(record: CaseRecord, profile: CaseProjectionProfile): CaseRecord {
   const projected: Partial<CompleteCaseRecord> = {};
   for (const key of Object.keys(CASE_FIELD_RULES) as CaseField[]) {
     const rule = CASE_FIELD_RULES[key] as CaseFieldRule<typeof key>;
+    const value = rule.value(record, profile);
+    if (value === undefined) continue;
     Object.defineProperty(projected, key, {
       configurable: true,
       enumerable: true,
-      value: rule.value(record, profile),
+      value,
       writable: true,
     });
   }
-  return projected as CompleteCaseRecord;
+  return projected as CaseRecord;
 }
 
 export function projectCaseForDurableWrite(record: CaseRecord): CaseRecord {

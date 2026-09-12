@@ -9,12 +9,43 @@ import { buildWorkspaceArchive, readWorkspaceArchive } from '../packages/workspa
 import { decryptWorkspaceArchive, encryptWorkspaceArchive } from '../packages/workspace/workspace-archive-crypto.mts';
 import { createCase as createCaseThroughForm, openCaseResponseWorkspace } from './case-test-fixtures';
 import { openCaseSection } from './console-navigation';
+import { FILE_BYTES, FILE_NAME, openRetainedFiles, selectOriginal, storedFiles } from './case-attachment-fixtures';
 
 const WORKSPACE_PASSWORD = '<synthetic workspace fixture>';
 const BACKUP_PASSWORD = '<separate archive fixture>';
 const DOMAIN = 'private-investigation.example';
 const NOTE = 'This retained observation belongs only to the protected fixture.';
 const NOW = '2026-09-01T00:00:00.000Z';
+
+test('retained original bytes use the encrypted workspace keys and remain unavailable while locked', async ({ page }) => {
+  await page.goto('/dashboard');
+  const row = await createEncrypted(page, 'Protected original files'); await unlock(page, row.name);
+  await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
+  await createCaseThroughForm(page, 'encrypted-file.example');
+  let files = await selectOriginal(page);
+  await files.getByRole('button', { name: 'Retain selected files', exact: true }).click();
+  await expect(files.getByRole('button', { name: `Preview ${FILE_NAME}`, exact: true })).toBeVisible();
+  const persisted = await storedFiles(page, namedDatabase(row.id));
+  expect(persisted).toHaveLength(1);
+  expect(persisted[0]!.codec).toBe('aes-gcm-hmac-v1');
+  expect(persisted[0]!.bytes).toHaveLength(FILE_BYTES.length + 28);
+  expect(persisted[0]!.bytes).not.toEqual([...FILE_BYTES]);
+  expect(persisted[0]!.lookupKey).not.toContain('sha256:');
+  for (const secret of [FILE_NAME, 'A deliberately retained original', 'encrypted-file.example']) {
+    expect(JSON.stringify(await storedBytes(page, namedDatabase(row.id)))).not.toContain(secret);
+    expect(Buffer.from(persisted[0]!.bytes).toString('utf8')).not.toContain(secret);
+  }
+  await page.reload();
+  await expect(page.getByRole('heading', { name: `Unlock ${row.name}`, exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: `Preview ${FILE_NAME}`, exact: true })).toHaveCount(0);
+  expect(await storedFiles(page, namedDatabase(row.id))).toEqual(persisted);
+  await unlock(page, row.name); files = await openRetainedFiles(page);
+  await files.getByRole('button', { name: `Preview ${FILE_NAME}`, exact: true }).click();
+  await expect(files.locator('pre')).toContainText('A deliberately retained original');
+  await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
+  await expect(page.locator('pre')).toHaveCount(0);
+  expect(await storedFiles(page, namedDatabase(row.id))).toEqual(persisted);
+});
 
 async function createEncrypted(page: Page, name: string) {
   const panel = await openManager(page);

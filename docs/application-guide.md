@@ -469,9 +469,19 @@ A retained exact Incident URL can also be handed to the [optional capture compan
 The browser validates the selected manifest and can
 import its sanitised metadata and declared digests into that Case. Optionally
 select the screenshot and DOM-digest files to check their byte counts and
-digests, then view matched JSON or PNG files locally. These checks and file
-bytes are not saved with the Case metadata. Existing capture manifests can be
-reviewed even when the Case has no retained exact URL.
+digests, then view matched JSON or PNG files locally. Metadata import does not
+save originals by default. Select **Retain this manifest and verified matching
+files** to save them together; unmatched selections remain excluded. Existing
+capture manifests can be reviewed without a retained Incident URL.
+
+**Retained files** also accepts deliberately selected originals without a
+capture manifest. Review the filename, optional source and observation time,
+then choose **Retain selected files**. The workspace stores exact bytes and
+separate provenance references, using its encryption when enabled. Shared
+content remains until its last Case reference is removed. Downloads verify the
+full byte count and digest. A missing file is not evidence of absence; restore
+or retain its matching original. JSON backups carry references only, so keep
+the original files separately.
 
 ### Retained change and review
 

@@ -9,6 +9,7 @@
   import CaseActionStage from '$lib/components/CaseActionStage.svelte';
   import CaseOutcomeStage from '$lib/components/CaseOutcomeStage.svelte';
   import CaseRenderedCapture from '$lib/components/CaseRenderedCapture.svelte';
+  import CaseAttachments from '$lib/components/CaseAttachments.svelte';
   import CaseWorkflowDetails from '$lib/components/CaseWorkflowDetails.svelte';
   import CaseTitleForm from '$lib/components/CaseTitleForm.svelte';
   import CaseReviewReturn from '$lib/components/CaseReviewReturn.svelte';
@@ -299,11 +300,12 @@
       <div class="case-section" role="group" hidden={activeSection !== 'evidence'} aria-label="Case evidence">
       {@render evidence()}
       <CaseObservationStage {record} {mutationBusy} {persist} mode={presentationMode} />
+      <CaseAttachments {record} {mutationBusy} {persistOperation} {onmessage} />
       <CaseRenderedCapture
         {record}
         exactIncidentUrl={investigationContext?.urlRetention === 'exact' ? investigationContext.incidentUrl : null}
-        {onsaved}
-        {oncommitted}
+        {persistOperation}
+        {mutationBusy}
         {onmessage}
       />
       </div>

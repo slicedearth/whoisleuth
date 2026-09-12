@@ -68,6 +68,15 @@ relationship observations, saved Bulk sessions, website snapshots,
 investigation templates, Bulk review state and Analyst Review Item state. They
 are visible to anyone able to use the browser profile.
 
+Retained files require a separate explicit save. Selected originals are stored
+unchanged in the current workspace, using its encryption when enabled. Case
+references include filenames, declared sources and observation times, retention
+times, byte counts and digests; filesystem paths are not stored. Originals can
+contain sensitive content that ordinary Case metadata excludes. Public and
+trusted CLI Case packs exclude these references. JSON backups contain references
+only, not original bytes. Removing a reference deletes its bytes only when no
+other Case in the workspace references them. No file is uploaded automatically.
+
 Unfinished Case response forms are saved automatically as bounded recovery
 drafts in the selected workspace. They remain separate from submitted Case
 records, use the workspace's encryption when enabled, and are excluded from
@@ -424,8 +433,10 @@ When an analyst selects a local capture manifest for one Case, the browser
 validates it before preview and imports only sanitised manifest metadata and
 declared digests. A separate optional attachment selection reads and checks
 screenshot and DOM-digest bytes in page memory, without uploading them. That
-check and the file bytes are not saved by the Case metadata import. A portable
-evidence package can preserve the explicitly selected files separately.
+check and the file bytes are not saved by the Case metadata import by default.
+An explicit retention option saves the manifest and matching original files
+with the Case in one transaction. Unmatched files are excluded from that action.
+A portable evidence package can preserve explicitly selected files separately.
 
 ## Retention and deletion
 
