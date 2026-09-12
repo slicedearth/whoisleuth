@@ -225,7 +225,7 @@ interface WorkspaceSectionDefinition {
   version: number;
   supportedVersions?: readonly number[];
   count: (data: unknown) => number;
-  merge: ((local: NormalizedWorkspaceInput, data: unknown, now: string | null) => WorkspaceMergeResult) | null;
+  merge: ((local: NormalizedWorkspaceInput, data: unknown, now: string | null) => WorkspaceMergeResult & { document: unknown }) | null;
 }
 
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
@@ -378,7 +378,7 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     merge: (local, data) => {
       const result = mergeCases(local.cases, data);
       const bounded = enforceStoreBudget(result.cases);
-      return { ...result, cases: bounded.cases, pruned: bounded.pruned };
+      return { ...result, document: bounded.cases, pruned: bounded.pruned };
     },
   },
   {
@@ -386,7 +386,7 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     count: (data) => arrayCount(data, 'campaigns'),
     merge: (local, data) => {
       const result = mergeCampaigns(local.campaigns, data);
-      return { ...result, campaigns: assertCampaignStoreBudget(result.campaigns).campaigns };
+      return { ...result, document: assertCampaignStoreBudget(result.campaigns).campaigns };
     },
   },
   {
@@ -394,7 +394,8 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     count: (data) => arrayCount(data, 'profiles'),
     merge: (local, data, now) => {
       const result = mergeBrandProfiles(local.brandProfiles, data, { nowIso: now });
-      return { ...result, profiles: assertBrandProfileStoreBudget(result.profiles).profiles };
+      const profiles = assertBrandProfileStoreBudget(result.profiles).profiles;
+      return { ...result, profiles, document: profiles };
     },
   },
   {
@@ -402,7 +403,7 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     count: (data) => objectCount(data, 'watchlists'),
     merge: (local, data) => {
       const result = mergeWatchlistStores(local.watchlists, data);
-      return { ...result, watchlists: assertWatchlistStoreBudget(result.watchlists).watchlists };
+      return { ...result, document: assertWatchlistStoreBudget(result.watchlists).watchlists };
     },
   },
   {
@@ -410,7 +411,7 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     count: (data) => arrayCount(data, 'entries'),
     merge: (local, data) => {
       const result = mergeShortlistStores(local.shortlist, data);
-      return { ...result, entries: assertShortlistStoreBudget(result.entries).entries };
+      return { ...result, document: assertShortlistStoreBudget(result.entries).entries };
     },
   },
   {
@@ -418,14 +419,17 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     count: (data) => arrayCount(data, 'rules'),
     merge: (local, data) => {
       const result = mergeDetectionRules(local.detectionRules, data);
-      return { ...result, rules: assertDetectionRuleStoreBudget(result.rules).rules };
+      return { ...result, document: assertDetectionRuleStoreBudget(result.rules).rules };
     },
   },
   {
     ...sectionContract('relationshipObservations'),
     label: 'Retained relationship observations',
     count: (data) => arrayCount(data, 'observations'),
-    merge: (local, data) => mergeRelationshipObservations(local.relationshipObservations, data),
+    merge: (local, data) => {
+      const result = mergeRelationshipObservations(local.relationshipObservations, data);
+      return { ...result, document: result.observations };
+    },
   },
   {
     ...sectionContract('bulkSessions'),
@@ -433,27 +437,36 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     count: (data) => arrayCount(data, 'sessions'),
     merge: (local, data) => {
       const result = mergeBulkSessions(local.bulkSessions, data);
-      enforceBulkSessionStoreBudget(result.sessions);
-      return result;
+      const bounded = enforceBulkSessionStoreBudget(result.sessions);
+      return { ...result, document: bounded.store.sessions };
     },
   },
   {
     ...sectionContract('websiteSnapshots'),
     label: 'Website profile snapshots',
     count: (data) => arrayCount(data, 'snapshots'),
-    merge: (local, data) => mergeWebsiteSnapshots(local.websiteSnapshots, data),
+    merge: (local, data) => {
+      const result = mergeWebsiteSnapshots(local.websiteSnapshots, data);
+      return { ...result, document: result.snapshots };
+    },
   },
   {
     ...sectionContract('investigationTemplates'),
     label: 'Investigation templates',
     count: (data) => arrayCount(data, 'templates'),
-    merge: (local, data) => mergeInvestigationTemplates(local.investigationTemplates, data),
+    merge: (local, data) => {
+      const result = mergeInvestigationTemplates(local.investigationTemplates, data);
+      return { ...result, document: result.templates };
+    },
   },
   {
     ...sectionContract('bulkReview'),
     label: 'Bulk saved views and review queue',
     count: (data) => arrayCount(data, 'presets') + arrayCount(data, 'rows'),
-    merge: (local, data) => mergeBulkReviewStores(local.bulkReview, data),
+    merge: (local, data) => {
+      const result = mergeBulkReviewStores(local.bulkReview, data);
+      return { ...result, document: result.store };
+    },
   },
   {
     id: 'analystReviewState',
@@ -462,13 +475,19 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     version: ANALYST_REVIEW_STATE_COMPATIBILITY.currentVersion,
     supportedVersions: ANALYST_REVIEW_STATE_COMPATIBILITY.supportedVersions,
     count: (data) => arrayCount(data, 'records'),
-    merge: (local, data) => mergeAnalystReviewStateStores(local.analystReviewState, data),
+    merge: (local, data) => {
+      const result = mergeAnalystReviewStateStores(local.analystReviewState, data);
+      return { ...result, document: result.store };
+    },
   },
   {
     id: 'caseViews', label: 'Saved Case views', schema: compatibilitySchema(CASE_VIEWS_COMPATIBILITY),
     version: CASE_VIEWS_COMPATIBILITY.currentVersion, supportedVersions: CASE_VIEWS_COMPATIBILITY.supportedVersions,
     count: (data) => arrayCount(data, 'views'),
-    merge: (local, data) => mergeCaseViews(local.caseViews, data),
+    merge: (local, data) => {
+      const result = mergeCaseViews(local.caseViews, data);
+      return { ...result, document: result.store };
+    },
   },
   {
     id: 'settings', label: 'Workspace settings', schema: compatibilitySchema(WORKSPACE_SETTINGS_COMPATIBILITY),
@@ -482,6 +501,23 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
 const DEFINITION_BY_ID = new Map<string, WorkspaceSectionDefinition>(
   SECTION_DEFINITIONS.map((definition) => [definition.id, definition]),
 );
+
+/** Apply previously verified data sections through the same owners as preview. */
+export function mergeReadyWorkspaceArchiveData(
+  localInput: unknown,
+  sections: readonly Pick<WorkspaceArchivePreviewSection, 'id' | 'data' | 'status'>[],
+  generatedAt: string | null,
+): readonly Readonly<WorkspaceMergeResult & { id: string; document: unknown }>[] {
+  if (sections.length > MAX_WORKSPACE_ARCHIVE_SECTIONS || new Set(sections.map(section => section.id)).size !== sections.length) {
+    throw new Error('Workspace data sections exceed their count or contain duplicate identities.');
+  }
+  const local = normalizedInput(localInput);
+  return sections.map(section => {
+    const definition = DEFINITION_BY_ID.get(section.id);
+    if (section.status !== 'ready' || !definition?.merge) throw new Error('Only verified, supported workspace data sections can be merged.');
+    return { ...definition.merge(local, section.data, generatedAt), id: section.id };
+  });
+}
 const SECTION_ORDER = new Map<string, number>(WORKSPACE_ARCHIVE_SECTION_IDS.map((id, index) => [id, index]));
 
 function canonicalSectionOrder(left: { id: string }, right: { id: string }): number {

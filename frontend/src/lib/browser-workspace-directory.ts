@@ -205,13 +205,13 @@ export function createBrowserWorkspaceDirectory(options: DirectoryOptions = {}) 
     });
   }
 
-  async function acquire(id: string): Promise<Readonly<{ workspace: BrowserWorkspace; release: () => Promise<void> }>> {
+  async function acquire(id: string, mode: 'shared' | 'exclusive' = 'shared'): Promise<Readonly<{ workspace: BrowserWorkspace; release: () => Promise<void> }>> {
     const manager = requireLocks();
     return new Promise((resolve, reject) => {
       let release!: () => void;
       const held = new Promise<void>(done => { release = done; });
-      const request = manager.request(lockName(id), { mode: 'shared', ifAvailable: true }, async lock => {
-        if (!lock) throw new Error('The workspace is being deleted. Refresh before opening it.');
+      const request = manager.request(lockName(id), { mode, ifAvailable: true }, async lock => {
+        if (!lock) throw new Error('The workspace is in use or being deleted. Close its other tabs or finish its recovery rehearsal before opening it.');
         const workspace = await ready(id);
         resolve({ workspace, release: async () => { release(); await request; } });
         await held;

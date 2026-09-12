@@ -502,7 +502,20 @@ separate provenance references, using its encryption when enabled. Shared
 content remains until its last Case reference is removed. Downloads verify the
 full byte count and digest. A missing file is not evidence of absence; restore
 or retain its matching original. JSON backups carry references only, so keep
-the original files separately.
+the original files separately. After preparing a workspace backup, open
+**Back up referenced files separately** and export every listed group. Groups
+retain all required content across bounded operations; shared bytes are exported
+once while each Case's provenance remains in the JSON. File packages are
+unencrypted even when the JSON backup is encrypted.
+
+To test recovery, review the downloaded JSON and open **Rehearse recovery in a
+separate workspace**. Create a destination, then restore the downloaded evidence
+packages or original files. The active workspace is not switched or modified.
+Section checksums and Case identities are compared with the selected backup;
+every referenced file must match before recovery is reported as verified.
+Migrated formats are labelled for review rather than claimed byte-equivalent.
+Preferences are reviewed but not applied. Keep the rehearsal workspace, or
+explicitly delete it after checking the result. Leaving the page preserves it.
 
 Use **Select files for export** to package selected retained originals or
 derivatives with their declared sources and observation times. Missing bytes

@@ -1,6 +1,7 @@
 import {
   MAX_WORKSPACE_ARCHIVE_BYTES,
   buildWorkspaceArchive,
+  mergeReadyWorkspaceArchiveData,
   prepareWorkspaceArchive,
   WORKSPACE_ARCHIVE_SECTION_IDS,
 } from './analysis/workspace-archive.ts';
@@ -10,20 +11,6 @@ import {
   decryptWorkspaceArchive,
   encryptWorkspaceArchive,
 } from './analysis/workspace-archive-crypto.ts';
-import { enforceStoreBudget, mergeCases } from './analysis/case-model.ts';
-import type { CaseRecord } from './analysis/case-model.ts';
-import { assertCampaignStoreBudget, mergeCampaigns } from './analysis/campaign-model.ts';
-import { assertBrandProfileStoreBudget, mergeBrandProfiles } from './analysis/brand-profile-model.ts';
-import { assertWatchlistStoreBudget, mergeWatchlistStores } from './analysis/watchlist-store.ts';
-import { assertShortlistStoreBudget, mergeShortlistStores } from './analysis/shortlist-model.ts';
-import { assertDetectionRuleStoreBudget, mergeDetectionRules } from './analysis/detection-rule-model.ts';
-import { mergeRelationshipObservations } from './analysis/relationship-observation-model.ts';
-import { enforceBulkSessionStoreBudget, mergeBulkSessions } from './analysis/bulk-session-model.ts';
-import { mergeWebsiteSnapshots } from './analysis/website-snapshot-model.ts';
-import { mergeInvestigationTemplates } from './analysis/investigation-template-model.ts';
-import { mergeBulkReviewStores } from './analysis/bulk-review-model.ts';
-import { mergeAnalystReviewStateStores } from './analysis/analyst-review-state.ts';
-import { mergeCaseViews } from '../../../packages/workspace/case-views.mts';
 import { ACTIVE_PROFILE_KEY, activeProfileId, loadProfiles, setActiveProfile } from './brand-profiles';
 import { workspacePreferenceStorage } from './browser-workspace-context.ts';
 import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY, applyThemePreference, normalizeThemePreference, readThemePreference, setThemePreference } from './theme';
@@ -137,6 +124,7 @@ export async function prepareLocalWorkspaceArchive(raw: unknown) {
     return archive.preview(await localInput(), selectedSectionIds ? { selectedSectionIds } : {});
   }
   return Object.freeze({
+    read: archive.read,
     preview,
     merge: async (selectedIds: string[]) => mergeWorkspacePreview(await preview(selectedIds), selectedIds),
   });
@@ -220,64 +208,12 @@ async function mergeWorkspacePreview(
         previousDocuments = new Map(documents);
         const next = new Map(documents);
         const summaries: WorkspaceImportSummary[] = [];
-        for (const section of dataSections) {
-          if (section.id === 'cases') {
-            const currentCases = Array.isArray(documents.get('cases'))
-              ? documents.get('cases') as CaseRecord[]
-              : [];
-            const merged = mergeCases(currentCases, section.data);
-            const bounded = enforceStoreBudget(merged.cases);
-            next.set('cases', bounded.cases);
-            summaries.push(importSummary(section.id, { ...merged, pruned: bounded.pruned }));
-          } else if (section.id === 'campaigns') {
-            const result = mergeCampaigns(documents.get('campaigns'), section.data);
-            next.set('campaigns', assertCampaignStoreBudget(result.campaigns).campaigns);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'brandProfiles') {
-            const result = mergeBrandProfiles(documents.get('brand_profiles'), section.data);
-            next.set('brand_profiles', assertBrandProfileStoreBudget(result.profiles).profiles);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'watchlists') {
-            const result = mergeWatchlistStores(documents.get('watchlists'), section.data);
-            next.set('watchlists', assertWatchlistStoreBudget(result.watchlists).watchlists);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'shortlist') {
-            const result = mergeShortlistStores(documents.get('shortlist'), section.data);
-            next.set('shortlist', assertShortlistStoreBudget(result.entries).entries);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'detectionRules') {
-            const result = mergeDetectionRules(documents.get('detection_rules'), section.data);
-            next.set('detection_rules', assertDetectionRuleStoreBudget(result.rules).rules);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'relationshipObservations') {
-            const result = mergeRelationshipObservations(documents.get('relationship_observations'), section.data);
-            next.set('relationship_observations', result.observations);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'bulkSessions') {
-            const result = mergeBulkSessions(documents.get('bulk_sessions'), section.data);
-            next.set('bulk_sessions', enforceBulkSessionStoreBudget(result.sessions).store.sessions);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'websiteSnapshots') {
-            const result = mergeWebsiteSnapshots(documents.get('website_snapshots'), section.data);
-            next.set('website_snapshots', result.snapshots);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'investigationTemplates') {
-            const result = mergeInvestigationTemplates(documents.get('investigation_templates'), section.data);
-            next.set('investigation_templates', result.templates);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'bulkReview') {
-            const result = mergeBulkReviewStores(documents.get('bulk_review'), section.data);
-            next.set('bulk_review', result.store);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'analystReviewState') {
-            const result = mergeAnalystReviewStateStores(documents.get('analyst_review_state'), section.data);
-            next.set('analyst_review_state', result.store);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'caseViews') {
-            const result = mergeCaseViews(documents.get('case_views'), section.data);
-            next.set('case_views', result.store);
-            summaries.push(importSummary(section.id, result));
-          } else continue;
+        const input = Object.fromEntries(SECTION_COLLECTIONS.map(([section, collection]) => [section, documents.get(collection)]));
+        for (const result of mergeReadyWorkspaceArchiveData(input, dataSections, preview.generatedAt)) {
+          const definition = definitionBySection.get(result.id);
+          if (!definition) throw new Error('The selected workspace section has no storage owner.');
+          next.set(definition.id, result.document);
+          summaries.push(importSummary(result.id, result));
         }
         appliedDocuments = new Map(next);
         return { documents: next, result: summaries };

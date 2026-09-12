@@ -412,6 +412,15 @@ encryption. The passphrase and derived key are not persisted or sent. Encryption
 protects the downloaded file while locked, not an open Console or an unencrypted working workspace,
 malicious extension, compromised device or weak passphrase.
 
+Recovery rehearsal restores a reviewed backup into a new, separately named
+browser-local workspace without switching the active workspace. An encrypted
+backup requires an encrypted rehearsal destination. Selected original files or
+evidence packages are matched by complete byte length and digest; filenames do
+not establish a match. Rehearsal checks restored data and referenced files, but
+does not apply preferences to the active tab. Its data remains until deliberately
+deleted, including after leaving the page. File-backup groups use the existing
+unencrypted evidence package format; encrypting the JSON does not encrypt them.
+
 Different exports have different sensitivity:
 
 - a full saved Lookup can contain targets, bounded source endpoints and timings,

@@ -19,6 +19,7 @@
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
   import AnalystUndo from '$lib/components/AnalystUndo.svelte';
+  import { keepFocusBelow } from '$lib/visible-focus';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import { reloadDeferredModulePage } from '$lib/deferred-module';
   import { initializeBrowserLocalData, type BrowserLocalDataServiceState } from '$lib/browser-local-data-service';
@@ -306,7 +307,7 @@
       <div class="session"><ThemeSelector /><div class="session-row"><span role="note" title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span></div></div>
     </aside>
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
-    <main id="main-content" class:wide-workspace={wideWorkspace} tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>
+    <main id="main-content" use:keepFocusBelow={() => consoleHeader} class:wide-workspace={wideWorkspace} tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>
       <BrowserWorkspaceIndicator />
       {#if showCaseContext && selectedCaseId}<DeferredSurface load={() => import('$lib/components/SelectedCaseContext.svelte')} props={{caseId:selectedCaseId}} loadingLabel="Reading selected Case…" unavailableLabel="Selected Case context could not be loaded." />{/if}
       {#if investigationGuideRequested}<DeferredSurface load={() => import('$lib/components/InvestigationGuide.svelte')} props={{revealOnMount:revealInvestigationGuideOnMount}} loadingLabel="Loading the investigation guide." unavailableLabel="The investigation guide could not be loaded." placeholder="workspace" />{/if}

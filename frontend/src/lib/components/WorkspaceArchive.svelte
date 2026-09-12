@@ -2,6 +2,9 @@
   import { onMount, tick } from 'svelte';
   import BrowserWorkspaceIndicator from '$lib/components/BrowserWorkspaceIndicator.svelte';
   import BrowserStorageHealth from './BrowserStorageHealth.svelte';
+  import WorkspaceRecovery from './WorkspaceRecovery.svelte';
+  import WorkspaceFileBackup from './WorkspaceFileBackup.svelte';
+  import { hasUnlockedBrowserWorkspace } from '$lib/browser-workspace-unlock.ts';
   import { currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE } from '$lib/browser-workspace-context.ts';
   import { boundedJsonLimitsForBytes, parseBoundedJson } from '$lib/bounded-json';
   import {
@@ -24,6 +27,8 @@
 
   let { onimport, importOnly = false }:{onimport?:(message:string)=>void|Promise<void>;importOnly?:boolean}=$props();
   let archiveReview=$state.raw<ArchiveReview|null>(null);
+  let encryptedSource=$state(false);
+  let preparedBackup=$state.raw<Awaited<ReturnType<typeof createWorkspaceArchiveDownload>>['archive'] | null>(null);
   let preview=$state<WorkspacePreview|null>(null);
   let selectedIds=$state<string[]>([]);
   let message=$state('');
@@ -66,6 +71,7 @@
     try{
       const output=await createWorkspaceArchiveDownload();
       downloadFile(output);
+      preparedBackup=output.archive;
       preparedAt=new Date().toISOString();
       message=`Prepared an unencrypted workspace backup with ${output.archive.manifest.sectionCount} verified data sections. Check the downloaded file.`;
     }catch(cause){message=cause instanceof Error?cause.message:'Could not create the workspace archive.';}
@@ -78,6 +84,7 @@
       if(exportPassphrase!==confirmPassphrase)throw new Error('The backup passphrases do not match.');
       const output=await createEncryptedWorkspaceArchiveDownload(exportPassphrase);
       downloadFile(output);
+      preparedBackup=output.archive;
       showEncryptionForm=false;
       preparedAt=new Date().toISOString();
       message=`Prepared an encrypted workspace backup with ${output.archive.manifest.sectionCount} verified data sections. Check the downloaded file and keep its passphrase separately.`;
@@ -99,12 +106,13 @@
 
   export async function reviewFile(file:Blob):Promise<void>{
     if(busy)throw new Error('Finish the current workspace operation before opening another file.');
-    archiveReview=null;preview=null;selectedIds=[];encryptedImportValue=null;importPassphrase='';message='';
+    archiveReview=null;preview=null;selectedIds=[];encryptedImportValue=null;importPassphrase='';message='';encryptedSource=false;
     busy=true;
     try{
       if(file.size>MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES)throw new Error(`Encrypted workspace archive imports are limited to ${MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES} bytes.`);
       const value=parseBoundedJson(await file.text(),{label:'Workspace archive',maximumBytes:MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES,limits:boundedJsonLimitsForBytes(MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES)});
       if(isEncryptedWorkspaceArchive(value)){
+        encryptedSource=true;
         const inspected=inspectEncryptedWorkspaceArchive(value);
         encryptedImportValue=value;
         message=`Encrypted backup selected (${inspected.ciphertextBytes.toLocaleString()} encrypted bytes). Enter its passphrase to review the contents locally.`;
@@ -185,6 +193,7 @@
   </header>
   <BrowserWorkspaceIndicator destination />
   {#if !importOnly}<BrowserStorageHealth {preparedAt} />{/if}
+  {#if preparedBackup}{#key preparedBackup}<WorkspaceFileBackup archive={preparedBackup} />{/key}{/if}
 
   {#if showEncryptionForm}
     <form id="workspace-encryption-form" class="encryption-form" onsubmit={(event)=>{event.preventDefault();void downloadEncrypted();}}>
@@ -259,6 +268,7 @@
         <button class="primary" type="button" onclick={apply} disabled={busy||!selectedIds.length}>Add selected data</button>
         <button class="btn" type="button" onclick={()=>{archiveReview=null;preview=null;selectedIds=[];message='Preview cancelled.';}} disabled={busy}>Cancel</button>
       </div>
+      {#if archiveReview}{#key archiveReview}<WorkspaceRecovery readArchive={archiveReview.read} requireEncryption={encryptedSource || hasUnlockedBrowserWorkspace()} onbusy={value => { busy = value; }} />{/key}{/if}
     </div>
   {/if}
 

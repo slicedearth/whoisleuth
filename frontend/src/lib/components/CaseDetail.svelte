@@ -10,6 +10,7 @@
   import CaseBrandAssociations from '$lib/components/CaseBrandAssociations.svelte';
   import { readCaseNavigationContext } from '$lib/console-workflow-state';
   import { handlesLocalLink } from '$lib/link-activation';
+  import { keepFocusBelow } from '$lib/visible-focus';
   import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
   import { CASE_WORKSPACE_SECTIONS, caseWorkspaceHref, caseWorkspaceSection, type CaseWorkspaceSection } from '$lib/analysis/case-response-stage.ts';
   import type { BrandProfile } from '$lib/brand-profiles';
@@ -84,39 +85,16 @@
     const article = navigation.closest<HTMLElement>('[data-case-detail]');
     if (!article) return;
     let width = window.innerWidth;
-    let pointerActive = false;
-    const startPointer = () => { pointerActive = true; };
-    const endPointer = () => { pointerActive = false; };
-    const exposeFocus = () => {
-      const target = document.activeElement;
-      // Pointer activation must not move its release target. A modal owns its
-      // own scroll container rather than the Case behind it.
-      if (pointerActive || !(target instanceof HTMLElement) || !article.contains(target)
-        || navigation.contains(target) || target.closest('dialog[open]')) return;
-      const boundary = navigation.getBoundingClientRect();
-      const position = target.getBoundingClientRect();
-      if (position.top < boundary.bottom + 12 && position.bottom > boundary.top) {
-        window.scrollBy({ top: position.top - boundary.bottom - 12, behavior: 'instant' });
-      }
-    };
+    const focus = keepFocusBelow(article, () => navigation);
     const resize = new ResizeObserver(() => {
       article.style.setProperty('--case-navigation-height', `${navigation.getBoundingClientRect().height}px`);
       if (width !== window.innerWidth) { readingPositions.clear(); width = window.innerWidth; }
-      exposeFocus();
+      focus.reveal();
     });
     resize.observe(navigation);
-    article.addEventListener('pointerdown', startPointer, true);
-    window.addEventListener('pointerup', endPointer, true);
-    window.addEventListener('pointercancel', endPointer, true);
-    window.addEventListener('blur', endPointer);
-    article.addEventListener('focusin', exposeFocus);
     return { destroy() {
       resize.disconnect();
-      article.removeEventListener('pointerdown', startPointer, true);
-      window.removeEventListener('pointerup', endPointer, true);
-      window.removeEventListener('pointercancel', endPointer, true);
-      window.removeEventListener('blur', endPointer);
-      article.removeEventListener('focusin', exposeFocus);
+      focus.destroy();
       article.style.removeProperty('--case-navigation-height');
     } };
   }
