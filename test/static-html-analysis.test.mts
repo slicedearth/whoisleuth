@@ -86,6 +86,26 @@ describe('bounded native document evidence', () => {
     assert.equal(extractHtmlSignals('<p>This domain is for sale</p>', 'example.test').domainSaleSignal, 'explicit domain-sale landing-page content');
   });
 
+  test('domain-sale wording matches the literal hostname rather than a wildcard or a longer name', () => {
+    const domain = 'login.example.test';
+    for (const wording of [
+      'login.example.test is for sale',
+      'LOGIN.EXAMPLE.TEST for sale.',
+      'login.example.test may be available for lease',
+      'This domain is for sale',
+    ]) {
+      assert.equal(extractHtmlSignals(`<main>${wording}</main>`, domain).domainSaleSignal,
+        'explicit domain-sale landing-page content', wording);
+    }
+    for (const wording of [
+      'loginXexample.test is for sale',
+      'login.exampleXtest is for sale',
+      'login.example.test.evil.test is for sale',
+      'otherlogin.example.test is for sale',
+      'login.example.test is for saleable goods',
+    ]) assert.equal(extractHtmlSignals(`<main>${wording}</main>`, domain).domainSaleSignal, null, wording);
+  });
+
   test('bounded metadata and multi-candidate resource output satisfy the public child contract', () => {
     const html = '<meta property=og:title content="' + 'x'.repeat(400) + '">' + Array.from({ length: 60 }, (_, index) =>
       `<img srcset="${Array.from({ length: 20 }, (_, candidate) => `/image-${index}-${candidate}.png ${candidate + 1}w`).join(',')}">`).join('');

@@ -661,14 +661,18 @@ function domainSaleLandingPage(analysis: StaticHtmlAnalysis, domain: string): bo
   if (analysis.inputLimitReached || analysis.tagLimitReached || analysis.visibleTextLimitReached) return false;
   const title = analysis.title?.trim().toLowerCase() ?? '';
   const content = analysis.visibleText.trim().toLowerCase();
-  const escapedDomain = domain.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-  const explicitSale = new RegExp(`^(?:(?:this|the) domain(?: name)?|domain(?: name)?|${escapedDomain})\\s+(?:(?:is|may be)\\s+)?(?:for sale|available for purchase|available for lease)(?:[.!?:\\s]|$)`, 'u');
+  const saleSuffix = /^\s+(?:(?:is|may be)\s+)?(?:for sale|available for purchase|available for lease)(?:[.!?:\s]|$)/u;
+  const explicitSale = (value: string): boolean => {
+    const genericSubject = /^(?:(?:this|the) domain(?: name)?|domain(?: name)?)/u.exec(value)?.[0];
+    return (genericSubject !== undefined && saleSuffix.test(value.slice(genericSubject.length)))
+      || (value.startsWith(domain) && saleSuffix.test(value.slice(domain.length)));
+  };
   const explicitPurchase = /^(?:buy|purchase|own|bid on|inquire about) (?:this|the) domain(?: name)?(?:[.!?:\s]|$)/u;
   // A short, directly worded landing page is sufficient. Long articles need
   // corroborating page-title and transaction-control evidence; a generic
   // commerce CTA or quoted example cannot classify the domain for sale.
-  if (content.length <= 240 && (explicitSale.test(content) || explicitPurchase.test(content))) return true;
-  if (!explicitSale.test(title) && !explicitPurchase.test(title)) return false;
+  if (content.length <= 240 && (explicitSale(content) || explicitPurchase.test(content))) return true;
+  if (!explicitSale(title) && !explicitPurchase.test(title)) return false;
   if (!/(?:this domain(?: name)? (?:is )?for sale|buy this domain|purchase this domain|domain name for sale)/u.test(content)) return false;
   return analysis.elements.some((element) => element.html
     && ['form', 'button', 'a'].includes(element.name));

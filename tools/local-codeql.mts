@@ -135,9 +135,8 @@ const KNOWN_CODEQL_FINDINGS: readonly KnownCodeqlFinding[] = Object.freeze([
   // Every authenticated network GET below places apiRateLimit before both
   // authentication and cross-site request admission. CodeQL models the new
   // admission middleware as authorization but does not recognize the earlier
-  // project-local limiter. Exact fingerprints plus a source-order regression
+  // project-local limiter. Exact fingerprints plus runtime admission regressions
   // keep this review narrow and make any route edit require re-review.
-  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'e5df0635a7fe0562:1', primaryLocationStartColumnFingerprint: '53', reason: 'false_positive' as const }),
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'f9955890d8802dc7:1', primaryLocationStartColumnFingerprint: '51', reason: 'false_positive' as const }),
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'd958752a942a1329:1', primaryLocationStartColumnFingerprint: '69', reason: 'false_positive' as const }),
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'bee55061202d551f:1', primaryLocationStartColumnFingerprint: '52', reason: 'false_positive' as const }),

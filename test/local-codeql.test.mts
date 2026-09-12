@@ -222,7 +222,6 @@ describe('local CodeQL SARIF parsing', () => {
       { ruleId: 'js/disabling-certificate-validation', file: 'lib/smtp-transport-review.mts', primaryLocationLineHash: '5cfcbf6f51b434cf:1', primaryLocationStartColumnFingerprint: '0', reason: 'accepted_behavior' },
       { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'c95b56b6acb3e65b:1', primaryLocationStartColumnFingerprint: '23', reason: 'false_positive' },
       { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'e98683a11c64bf47:1', primaryLocationStartColumnFingerprint: '26', reason: 'false_positive' },
-      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'e5df0635a7fe0562:1', primaryLocationStartColumnFingerprint: '53', reason: 'false_positive' },
       { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'f9955890d8802dc7:1', primaryLocationStartColumnFingerprint: '51', reason: 'false_positive' },
       { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'd958752a942a1329:1', primaryLocationStartColumnFingerprint: '69', reason: 'false_positive' },
       { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'bee55061202d551f:1', primaryLocationStartColumnFingerprint: '52', reason: 'false_positive' },
