@@ -504,6 +504,16 @@ full byte count and digest. A missing file is not evidence of absence; restore
 or retain its matching original. JSON backups carry references only, so keep
 the original files separately.
 
+Preview a retained PNG to compare it with another retained image. Source,
+observation time, dimensions and byte identity remain separate; an appearance
+change is not proof of a site change when capture conditions are unknown.
+Choose **Create edited PNG** to draw or enter rectangular redactions and
+outlines. Add each region, prepare the image, review its pixels, then retain it
+as a separate file. Redactions are opaque, not blur effects. The original stays
+unchanged, and the derivative records its source fingerprint and region
+instructions. Image edits stay in memory until retained; leaving the Case or
+closing the preview requires confirming their loss.
+
 ### Retained change and review
 
 Timelines, watchlists, certificate review, evidence-gap queues and Analyst

@@ -1,4 +1,4 @@
-import { addCaseAttachments, readCaseAttachment, removeCaseAttachment, type CaseAttachment } from '../../../packages/cases/case-attachment-model.mts';
+import { addCaseAttachments, assertDerivedCaseAttachmentSource, readCaseAttachment, removeCaseAttachment, type CaseAttachment } from '../../../packages/cases/case-attachment-model.mts';
 import { enforceStoreBudget, type CaseRecord } from '../../../packages/cases/case-model.mts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../packages/contracts/selected-file-limits.mts';
 import { captureRetainedFiles } from '../../../packages/evidence/retained-file.mts';
@@ -53,6 +53,7 @@ export async function retainCaseAttachments(caseId: string, input: readonly Sele
   return updateBrowserLocalData('cases', current => {
     const original = current.find(record => record.id === caseId);
     if (!original) throw new Error('The Case is no longer available. No files were retained.');
+    for (const item of selected) assertDerivedCaseAttachmentSource(original, item.attachment);
     const merged = imported ? mergeExternalFindingsIntoCase(current, caseId, imported) : { cases: current, record: original };
     const record = addCaseAttachments(merged.record, selected.map(item => item.attachment), now);
     const { cases } = preserveExistingEvidence(merged.cases.map(item => item.id === caseId ? record : item));

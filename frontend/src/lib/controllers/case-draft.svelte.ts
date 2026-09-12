@@ -8,6 +8,15 @@ import { createCaseDraftRecovery, restoreCaseDraftFields, INITIAL_CASE_DRAFT_REC
 
 const unprotected = new Set<object>();
 export function hasUnprotectedCaseDrafts(): boolean { return unprotected.size > 0; }
+
+/** File selections and pixel edits remain in memory until an explicit save. */
+export function trackTransientCaseDraft(dirty: () => boolean): void {
+  const owner = {};
+  $effect(() => {
+    if (dirty()) unprotected.add(owner); else unprotected.delete(owner);
+    return () => { unprotected.delete(owner); };
+  });
+}
 export type CaseDraftValues<T extends CaseDraftFields> = {
   [K in keyof T]: T[K] extends boolean ? boolean : T[K];
 };

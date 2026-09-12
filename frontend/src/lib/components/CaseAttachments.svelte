@@ -7,7 +7,9 @@
   import { prepareCaseAttachmentFiles, readRetainedCaseFile, removeRetainedCaseAttachment, retainCaseAttachments, type SelectedCaseAttachment } from '$lib/case-attachments.ts';
   import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { supportsArtifactPreview } from '$lib/artifact-preview.ts';
+  import { trackTransientCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
   import ArtifactPreview from './ArtifactPreview.svelte';
+  import CaseImageReview from './CaseImageReview.svelte';
 
   let { record, mutationBusy, persistOperation, onmessage }: {
     record: CaseRecord; mutationBusy: boolean; persistOperation: PersistCaseOperation; onmessage: (message: string) => void;
@@ -22,9 +24,12 @@
   let preview = $state.raw<{ attachment: CaseAttachment; file: Blob } | null>(null);
   let removing = $state<CaseAttachment | null>(null);
   let error = $state('');
+  let imageReview = $state<CaseImageReview>();
+  let imageBusy = $state(false);
   let generation = 0;
   let activeCaseId: string | undefined;
   let previewTrigger: HTMLButtonElement | null = null;
+  trackTransientCaseDraft(() => pending.length > 0 || preparing);
   $effect(() => {
     if (record.id === activeCaseId) return;
     activeCaseId = record.id;
@@ -35,7 +40,8 @@
   async function select(event: Event) {
     const selected = event.currentTarget as HTMLInputElement;
     const files = Array.from(selected.files ?? []); selected.value = '';
-    if (!files.length || mutationBusy || preparing || loading) return;
+    if (!files.length || mutationBusy || preparing || loading || imageBusy || (imageReview && !imageReview.confirmDiscard())) return;
+    if (pending.length && !window.confirm('Replace the unsaved file selection? Retained files will not change.')) return;
     const current = ++generation;
     preparing = true; error = ''; preview = null;
     try {
@@ -59,22 +65,28 @@
   }
 
   async function open(attachment: CaseAttachment, download: boolean, trigger: HTMLButtonElement) {
-    if (mutationBusy || preparing || loading) return;
+    if (mutationBusy || preparing || loading || imageBusy) return;
+    if (!download && imageReview && !imageReview.confirmDiscard()) return;
     const current = ++generation;
-    preview = null; loading = attachment.id; error = ''; previewTrigger = trigger;
+    if (!download) { preview = null; previewTrigger = trigger; }
+    loading = attachment.id; error = '';
     try {
       const file = await readRetainedCaseFile(attachment);
       if (current !== generation || !record.attachments?.some(item => item.id === attachment.id)) return;
-      if (download) { downloadLocalFile(file, attachment.fileName); onmessage('Prepared the verified original file download.'); }
+      if (download) { downloadLocalFile(file, attachment.fileName); onmessage(`Prepared the verified ${attachment.derivation ? 'derived' : 'original'} file download.`); }
       else preview = { attachment, file };
     } catch (cause) { if (current === generation) error = cause instanceof Error ? cause.message : 'The original file could not be read.'; }
     finally { if (current === generation) loading = ''; }
   }
 
-  async function closePreview() { preview = null; await tick(); previewTrigger?.focus(); }
+  async function closePreview() {
+    if (imageReview && !imageReview.confirmDiscard()) return;
+    preview = null; await tick(); previewTrigger?.focus();
+  }
   async function remove() {
     const expected = removing;
     if (!expected || mutationBusy) return;
+    if (preview?.attachment.id === expected.id && imageReview && !imageReview.confirmDiscard()) return;
     if (await persistOperation(() => removeRetainedCaseAttachment(record.id, expected), 'Removed the file reference. Shared original bytes remain while another Case references them.', () => summary ?? null)) {
       if (preview?.attachment.id === expected.id) preview = null;
       removing = null;
@@ -86,7 +98,7 @@
   <summary bind:this={summary}>Retained files <span>{record.attachments?.length ?? 0}</span></summary>
   <div class="files-body">
     <p>Keep selected originals in this workspace. File digests identify bytes, not their source or accuracy. Ordinary JSON backups contain references only; keep a separate copy of the originals.</p>
-    <label class="file-select btn">{preparing ? 'Checking selected files…' : 'Choose original files'}<input bind:this={input} type="file" multiple disabled={preparing || mutationBusy || Boolean(loading)} onchange={select}></label>
+    <label class="file-select btn">{preparing ? 'Checking selected files…' : 'Choose original files'}<input bind:this={input} type="file" multiple disabled={preparing || mutationBusy || Boolean(loading) || imageBusy} onchange={select}></label>
     {#if pending.length}
       <section aria-label="Files selected for retention" class="pending-files">
         <h4>{pending.length} selected · not saved</h4>
@@ -104,17 +116,27 @@
           <p>{attachment.source ?? 'Source not declared'} · {#if attachment.observedAt}Observed <time datetime={attachment.observedAt}>{attachment.observedAt.replace('T', ' ').replace('Z', ' UTC')}</time>{:else}Observation time unknown{/if}</p>
           <p>Retained <time datetime={attachment.retainedAt}>{attachment.retainedAt.replace('T', ' ').replace('Z', ' UTC')}</time></p>
           <p class="file-digest"><code>{attachment.digestSha256}</code></p>
+          {#if attachment.derivation}<details class="derivation"><summary>Derived image details</summary><p>Edited from attachment <code>{attachment.derivation.sourceAttachmentId}</code> using {attachment.derivation.method}. The observation time belongs to the source, not the edit.</p><p>Source digest: <code>{attachment.derivation.source.digestSha256}</code></p><ol>{#each attachment.derivation.plan.regions as region}<li>{region.kind === 'redact' ? 'Redact' : 'Outline'}: left {region.x}, top {region.y}, {region.width} × {region.height} source pixels</li>{/each}</ol></details>{/if}
           <div class="file-actions">
-            {#if supportsArtifactPreview(attachment.mediaType)}<button class="btn" type="button" aria-label={`Preview ${attachment.fileName}`} disabled={mutationBusy || Boolean(loading) || preparing} onclick={event => void open(attachment, false, event.currentTarget)}>Preview</button>{/if}
-            <button class="btn" type="button" aria-label={`Download original ${attachment.fileName}`} disabled={mutationBusy || Boolean(loading) || preparing} onclick={event => void open(attachment, true, event.currentTarget)}>Download original</button>
-            <button class="btn" type="button" aria-label={`Remove ${attachment.fileName}`} disabled={mutationBusy || Boolean(loading) || preparing} onclick={() => removing = attachment}>Remove</button>
+            {#if supportsArtifactPreview(attachment.mediaType)}<button class="btn" type="button" aria-label={`Preview ${attachment.fileName}`} disabled={mutationBusy || Boolean(loading) || preparing || imageBusy} onclick={event => void open(attachment, false, event.currentTarget)}>Preview</button>{/if}
+            <button class="btn" type="button" aria-label={`Download ${attachment.derivation ? 'derivative' : 'original'} ${attachment.fileName}`} disabled={mutationBusy || Boolean(loading) || preparing || imageBusy} onclick={event => void open(attachment, true, event.currentTarget)}>Download {attachment.derivation ? 'derivative' : 'original'}</button>
+            <button class="btn" type="button" aria-label={`Remove ${attachment.fileName}`} disabled={mutationBusy || Boolean(loading) || preparing || imageBusy} onclick={() => removing = attachment}>Remove</button>
           </div>
           {#if loading === attachment.id}<p role="status">Verifying retained bytes…</p>{/if}
-          {#if removing?.id === attachment.id}<div class="remove-file"><p>Remove this reference and its original bytes if no other Case references them?</p><button class="btn" type="button" disabled={mutationBusy} onclick={() => void remove()}>Confirm removal</button><button class="btn" type="button" disabled={mutationBusy} onclick={() => removing = null}>Keep file</button></div>{/if}
-          {#if preview?.attachment.id === attachment.id}<section aria-label={`Original file preview: ${attachment.fileName}`}><button class="btn" type="button" onclick={() => void closePreview()}>Close file preview</button><ArtifactPreview file={preview.file} mediaType={attachment.mediaType} label={attachment.fileName} /></section>{/if}
+          {#if removing?.id === attachment.id}<div class="remove-file"><p>Remove this reference and its original bytes if no other Case references them?</p>{#if record.attachments.some(item => item.derivation?.sourceAttachmentId === attachment.id)}<p>Retained derivatives will keep their source fingerprint, but will no longer retain this source file.</p>{/if}<button class="btn" type="button" disabled={mutationBusy || imageBusy} onclick={() => void remove()}>Confirm removal</button><button class="btn" type="button" disabled={mutationBusy} onclick={() => removing = null}>Keep file</button></div>{/if}
         </li>
       {/each}</ul>
     {:else}<p>No file references are retained in this Case.</p>{/if}
+    {#if preview}
+      <section aria-label={`File preview: ${preview.attachment.fileName}`} class="file-preview">
+        <button class="btn" type="button" disabled={mutationBusy || imageBusy} onclick={() => void closePreview()}>Close file preview</button>
+        {#key preview.attachment.id}
+          {#if preview.attachment.mediaType === 'image/png'}
+            <CaseImageReview bind:this={imageReview} {record} attachment={preview.attachment} file={preview.file} {mutationBusy} {persistOperation} onbusy={value => imageBusy = value} />
+          {:else}<ArtifactPreview file={preview.file} mediaType={preview.attachment.mediaType} label={preview.attachment.fileName} />{/if}
+        {/key}
+      </section>
+    {/if}
   </div>
 </details>
 
@@ -128,5 +150,6 @@
   .source-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.source-fields label{display:grid;gap:5px;min-width:0;font-size:var(--text-xs)}.source-fields input{width:100%;min-width:0}.primary{justify-self:start}
   .retained-files>li{display:grid;gap:8px;min-width:0;padding:15px 0;border-top:1px solid var(--border)}.file-heading{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:baseline;min-width:0}.file-heading span{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
   .file-digest code{font:400 var(--text-2xs)/1.5 var(--mono);overflow-wrap:anywhere}.file-actions,.remove-file{display:flex;flex-wrap:wrap;gap:8px}.remove-file{align-items:center}.file-actions button{white-space:normal;overflow-wrap:anywhere;max-width:100%}.file-error{color:var(--danger)}
+  .file-preview{display:grid;gap:14px;min-width:0;border-top:1px solid var(--border);padding-top:14px}.file-preview>button{justify-self:start}.derivation{min-width:0}.derivation summary{padding:8px 0}.derivation p,.derivation li{font-size:var(--text-xs);overflow-wrap:anywhere}.derivation ol{padding-left:1.5em}
   @media(max-width:600px){.source-fields{grid-template-columns:minmax(0,1fr)}.files-body{padding:12px}.file-actions{align-items:stretch}.file-actions button{flex:1 1 100%}}
 </style>

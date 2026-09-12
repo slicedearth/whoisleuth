@@ -1,6 +1,7 @@
 import { MAX_SELECTED_FILES, SELECTED_FILE_MEDIA_TYPES, type SelectedFileMediaType } from '../contracts/selected-file-limits.mts';
-import { array, enumeration, exact, iso, text } from '../evidence/artifact-structure.mts';
+import { array, enumeration, exactOptional, iso, text } from '../evidence/artifact-structure.mts';
 import { readRetainedFileReference, type RetainedFileReference } from '../evidence/retained-file.mts';
+import { readImageDerivation, type ImageDerivation } from '../evidence/image-regions.mts';
 import type { CaseRecord } from './case-record-contracts.mts';
 
 export type CaseAttachment = RetainedFileReference & Readonly<{
@@ -10,19 +11,23 @@ export type CaseAttachment = RetainedFileReference & Readonly<{
   source: string | null;
   observedAt: string | null;
   retainedAt: string;
+  derivation?: ImageDerivation;
 }>;
 
 /** Case provenance is independent of deduplicated immutable content. */
 export function readCaseAttachment(value: unknown): CaseAttachment {
-  const item = exact(value, ['id', 'fileName', 'mediaType', 'source', 'observedAt', 'retainedAt', 'digestSha256', 'byteLength'], 'Case attachment');
+  const item = exactOptional(value, ['id', 'fileName', 'mediaType', 'source', 'observedAt', 'retainedAt', 'digestSha256', 'byteLength'], ['derivation'], 'Case attachment');
   const id = text(item.id, 'Attachment ID', 128);
   const fileName = text(item.fileName, 'Attachment filename', 240);
   if (/[/\\]/u.test(fileName) || fileName === '.' || fileName === '..') throw new TypeError('Attachment filenames cannot contain a path.');
   const mediaType = enumeration(item.mediaType, SELECTED_FILE_MEDIA_TYPES, 'Attachment media type');
   const source = item.source === null ? null : text(item.source, 'Attachment source', 240);
+  const derivation = Object.hasOwn(item, 'derivation') ? readImageDerivation(item.derivation) : undefined;
+  if (derivation && (mediaType !== 'image/png' || derivation.sourceAttachmentId === id)) throw new TypeError('A derived PNG must identify a different source attachment.');
   iso(item.observedAt, 'Attachment observation time', true); iso(item.retainedAt, 'Attachment retention time');
   return Object.freeze({ id, fileName, mediaType, source, observedAt: item.observedAt as string | null, retainedAt: item.retainedAt as string,
-    ...readRetainedFileReference({ digestSha256: item.digestSha256, byteLength: item.byteLength }) });
+    ...readRetainedFileReference({ digestSha256: item.digestSha256, byteLength: item.byteLength }),
+    ...(derivation === undefined ? {} : { derivation }) });
 }
 
 export function readCaseAttachments(value: unknown): CaseAttachment[] | undefined {
@@ -56,6 +61,25 @@ export function caseAttachmentReferences(cases: readonly CaseRecord[]): Retained
 export function addCaseAttachments(record: CaseRecord, attachments: readonly CaseAttachment[], updatedAt: string): CaseRecord {
   iso(updatedAt, 'Case update time');
   return { ...record, attachments: mergeCaseAttachments(record.attachments, attachments) ?? [], updatedAt };
+}
+
+/** A new local derivative must still refer to the observation the analyst reviewed. */
+export class CaseAttachmentSourceChangedError extends TypeError {
+  constructor() {
+    super('The source image or its observation changed or was removed. Review the current source before retaining a derivative.');
+    this.name = 'CaseAttachmentSourceChangedError';
+  }
+}
+
+export function assertDerivedCaseAttachmentSource(record: CaseRecord, input: CaseAttachment): void {
+  const attachment = readCaseAttachment(input), derivation = attachment.derivation;
+  if (!derivation) return;
+  const source = record.attachments?.find(candidate => candidate.id === derivation.sourceAttachmentId);
+  if (!source || source.mediaType !== 'image/png'
+    || source.digestSha256 !== derivation.source.digestSha256 || source.byteLength !== derivation.source.byteLength
+    || source.source !== attachment.source || source.observedAt !== attachment.observedAt) {
+    throw new CaseAttachmentSourceChangedError();
+  }
 }
 
 export function removeCaseAttachment(record: CaseRecord, id: string, expected: CaseAttachment, updatedAt: string): CaseRecord {

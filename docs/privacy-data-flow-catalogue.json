@@ -76,7 +76,7 @@
     {
       "id": "analyst_cases",
       "title": "Browser-local analyst cases and Review Item lifecycle",
-      "requestPurpose": "Retain analyst-selected Case material, recheck questions and original files using the workspace codec; saved Case filters and Review Item state remain separate bounded collections.",
+      "requestPurpose": "Retain analyst-selected Case material, recheck questions, original files and separate image derivatives using the workspace codec; saved Case filters and Review Item state remain separate bounded collections.",
       "job": "respond",
       "executionPlanes": [
         "browser_local"
@@ -101,6 +101,7 @@
         "bounded_case_state",
         "recheck_question_context",
         "selected_original_files_and_provenance",
+        "selected_image_derivatives_and_regions",
         "saved_case_filters",
         "bounded_analyst_review_state"
       ],

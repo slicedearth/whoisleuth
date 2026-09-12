@@ -1,9 +1,10 @@
 import { MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES } from '../../../packages/investigation/investigation-manifest.mts';
+import { MAX_EVIDENCE_IMAGE_DIMENSION, MAX_EVIDENCE_IMAGE_PIXELS, readEvidenceImageDimensions } from '../../../packages/evidence/image-regions.mts';
 
 export const ARTIFACT_TEXT_PAGE_BYTES = 32 * 1024;
 // One decoded RGBA image uses at most 64 MiB, independently of compressed size.
-export const MAX_ARTIFACT_PREVIEW_PIXELS = 16 * 1024 * 1024;
-export const MAX_ARTIFACT_PREVIEW_DIMENSION = 10_000;
+export const MAX_ARTIFACT_PREVIEW_PIXELS = MAX_EVIDENCE_IMAGE_PIXELS;
+export const MAX_ARTIFACT_PREVIEW_DIMENSION = MAX_EVIDENCE_IMAGE_DIMENSION;
 export const supportsArtifactPreview = (mediaType: string) => mediaType === 'application/json' || mediaType === 'image/png';
 
 let imageDecodeTail: Promise<void> = Promise.resolve();
@@ -64,10 +65,6 @@ export async function readArtifactPngDimensions(file: Blob) {
     || String.fromCharCode(...bytes.subarray(12, 16)) !== 'IHDR') throw new TypeError('The selected bytes do not contain a PNG header.');
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (view.getUint32(8) !== 13) throw new TypeError('The PNG header is malformed.');
-  const width = view.getUint32(16), height = view.getUint32(20);
-  if (!width || !height || width > MAX_ARTIFACT_PREVIEW_DIMENSION || height > MAX_ARTIFACT_PREVIEW_DIMENSION
-    || width * height > MAX_ARTIFACT_PREVIEW_PIXELS) {
-    throw new TypeError('This PNG exceeds the inline decoded-image bound. Its original bytes remain available to download.');
-  }
-  return { width, height };
+  try { return readEvidenceImageDimensions(view.getUint32(16), view.getUint32(20)); }
+  catch { throw new TypeError('The PNG exceeds the supported decoded-image bound. The original file is unchanged.'); }
 }

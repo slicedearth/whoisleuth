@@ -77,6 +77,12 @@ trusted CLI Case packs exclude these references. JSON backups contain references
 only, not original bytes. Removing a reference deletes its bytes only when no
 other Case in the workspace references them. No file is uploaded automatically.
 
+Image comparison and region editing run in page memory. Explicitly retained
+edits are separate PNG files with their own digests, source-file fingerprints
+and region instructions. They keep the source observation time; originals are
+not overwritten. Unsaved image edits are not recovery drafts. Removing a source
+can leave its derivative and fingerprint without the original bytes.
+
 Unfinished Case response forms are saved automatically as bounded recovery
 drafts in the selected workspace. They remain separate from submitted Case
 records, use the workspace's encryption when enabled, and are excluded from

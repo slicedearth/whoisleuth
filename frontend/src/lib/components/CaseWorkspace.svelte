@@ -73,7 +73,7 @@
     const sameCase = !willUnload && from?.url.pathname === to?.url.pathname
       && from?.url.searchParams.get('case') && from.url.searchParams.get('case') === to?.url.searchParams.get('case');
     if (!sameCase && (hasUnprotectedCaseDrafts() || incidentDraftDirty)
-      && (willUnload || !window.confirm('A Case form has not finished saving for recovery. Leave and lose any unprotected edits?'))) {
+      && (willUnload || !window.confirm('Some Case edits are not saved. Leave and lose those edits?'))) {
       navigationCancelled = true;
       cancel();
     }
