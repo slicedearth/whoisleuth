@@ -90,55 +90,76 @@ test('a recheck uses selected evidence without advancing its clock or discarding
   await expectNoHorizontalOverflow(page);
 });
 
-for (const viewport of [
-  { width: 1280, height: 720 }, { width: 1024, height: 768 },
-  { width: 390, height: 844 }, { width: 320, height: 700 },
-]) {
-  for (const theme of ['light', 'dark'] as const) {
-    test(`undated Case observations remain usable at ${viewport.width}px in ${theme}`, async ({ page }, testInfo) => {
-      const savedAt = '2026-09-10T10:00:00.000Z';
-      await page.clock.setFixedTime(savedAt);
-      await page.setViewportSize(viewport);
-      await useTheme(page, theme);
-      await openCasesView(page);
-      await createCase(page, 'undated.invalid');
-      const workspace = await openCaseResponseWorkspace(page, '', 'quick');
-      await openCaseSection(page, 'Evidence');
-      const observation = workspace.getByRole('region', { name: 'Case observations', exact: true });
-      await observation.getByLabel('Label', { exact: true }).fill('Retained undated evidence');
-      await observation.getByLabel('Fact', { exact: true }).fill('The source fact is retained independently of its unknown date.');
-      const sourceTime = observation.getByLabel('Observed at', { exact: true });
-      await expect(sourceTime).toHaveValue('');
-      await expect(sourceTime).toHaveAccessibleDescription('Optional; leave blank if unknown.');
-      const pin = observation.getByRole('button', { name: 'Pin evidence', exact: true });
-      await pin.focus();
-      await page.keyboard.press('Enter');
-      await expect(caseWorkspaceActionStatus(page)).toContainText('Pinned analyst-selected evidence');
-      await expect(observation.locator('ol.records').first()).toContainText('Observation time unavailable');
-      await observation.getByText('Record a source-qualified sighting', { exact: true }).click();
-      await observation.getByRole('combobox', { name: 'Sighting state', exact: true }).selectOption('reported_by_provider');
-      await observation.getByLabel('Source', { exact: true }).nth(1).fill('Retained provider report');
-      const sightingTime = observation.getByLabel('Observed or reviewed at', { exact: true });
-      await expect(sightingTime).toHaveValue('');
-      await expect(sightingTime).toHaveAccessibleDescription('Optional; leave blank if unknown.');
-      const sighting = observation.getByRole('button', { name: 'Record sighting', exact: true });
-      await sighting.focus();
-      await page.keyboard.press('Enter');
-      await expect(observation.getByRole('region', { name: 'Observation chronology', exact: true })).toContainText('Time unavailable');
-      const stored = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value;
-      expect(stored.evidencePins).toEqual([expect.objectContaining({ observedAt: null, createdAt: savedAt })]);
-      expect(stored.sightings).toEqual([expect.objectContaining({ observedAt: null, createdAt: savedAt })]);
-      await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`undated-observations-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
-      await page.reload();
-      await openCaseResponseWorkspace(page, '', 'quick');
-      await expect(observation.locator('ol.records').first()).toContainText('Observation time unavailable');
-      const restored = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value;
-      expect(restored.evidencePins).toEqual(stored.evidencePins);
-      expect(restored.sightings).toEqual(stored.sightings);
-    });
+test('undated Case observations persist once and remain usable across viewport and theme changes', async ({ page }, testInfo) => {
+  const savedAt = '2026-09-10T10:00:00.000Z';
+  await page.clock.setFixedTime(savedAt);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await useTheme(page, 'light');
+  await openCasesView(page);
+  await createCase(page, 'undated.invalid');
+  const workspace = await openCaseResponseWorkspace(page, '', 'quick');
+  await openCaseSection(page, 'Evidence');
+  const observation = workspace.getByRole('region', { name: 'Case observations', exact: true });
+  await observation.getByLabel('Label', { exact: true }).fill('Retained undated evidence');
+  await observation.getByLabel('Fact', { exact: true }).fill('The source fact is retained independently of its unknown date.');
+  const sourceTime = observation.getByLabel('Observed at', { exact: true });
+  await expect(sourceTime).toHaveValue('');
+  await expect(sourceTime).toHaveAccessibleDescription('Optional; leave blank if unknown.');
+  const pin = observation.getByRole('button', { name: 'Pin evidence', exact: true });
+  await pin.focus();
+  await page.keyboard.press('Enter');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Pinned analyst-selected evidence');
+  await expect(observation.locator('ol.records').first()).toContainText('Observation time unavailable');
+  await observation.getByText('Record a source-qualified sighting', { exact: true }).click();
+  await observation.getByRole('combobox', { name: 'Sighting state', exact: true }).selectOption('reported_by_provider');
+  await observation.getByLabel('Source', { exact: true }).nth(1).fill('Retained provider report');
+  const sightingTime = observation.getByLabel('Observed or reviewed at', { exact: true });
+  await expect(sightingTime).toHaveValue('');
+  await expect(sightingTime).toHaveAccessibleDescription('Optional; leave blank if unknown.');
+  const sighting = observation.getByRole('button', { name: 'Record sighting', exact: true });
+  await sighting.focus();
+  await page.keyboard.press('Enter');
+  await expect(observation.getByRole('region', { name: 'Observation chronology', exact: true })).toContainText('Time unavailable');
+  const stored = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value;
+  expect(stored.evidencePins).toEqual([expect.objectContaining({ observedAt: null, createdAt: savedAt })]);
+  expect(stored.sightings).toEqual([expect.objectContaining({ observedAt: null, createdAt: savedAt })]);
+  await page.reload();
+  await openCaseResponseWorkspace(page, '', 'quick');
+  await expect(observation.locator('ol.records').first()).toContainText('Observation time unavailable');
+  const restored = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value;
+  expect(restored.evidencePins).toEqual(stored.evidencePins);
+  expect(restored.sightings).toEqual(stored.sightings);
+  await observation.getByText('Record a source-qualified sighting', { exact: true }).click();
+  for (const viewport of [
+    { width: 1280, height: 720 }, { width: 1024, height: 768 },
+    { width: 390, height: 844 }, { width: 320, height: 700 },
+  ]) {
+    for (const theme of ['light', 'dark'] as const) {
+      await test.step(`render and keyboard operation at ${viewport.width}px in ${theme}`, async () => {
+        await page.setViewportSize(viewport);
+        await useTheme(page, theme);
+        await expect(sourceTime).toHaveValue('');
+        await expect(sourceTime).toHaveAccessibleDescription('Optional; leave blank if unknown.');
+        await expect(sightingTime).toHaveValue('');
+        await expect(sightingTime).toHaveAccessibleDescription('Optional; leave blank if unknown.');
+        await pin.focus();
+        await page.keyboard.press('Enter');
+        await expect(observation.getByLabel('Label', { exact: true })).toBeFocused();
+        await sighting.locator('..').getByRole('textbox', { name: /^Limitations/u }).focus();
+        await page.keyboard.press('Tab');
+        await expect(sighting).toBeFocused();
+        await expect(sighting).toBeInViewport({ ratio: 1 });
+        await expect(observation.locator('ol.records').first()).toContainText('Observation time unavailable');
+        await expect(observation.getByRole('region', { name: 'Observation chronology', exact: true })).toContainText('Time unavailable');
+        await expectNoHorizontalOverflow(page);
+        await testInfo.attach(`undated-observations-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      });
+    }
   }
-}
+  const afterRendering = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value;
+  expect(afterRendering.evidencePins).toEqual(stored.evidencePins);
+  expect(afterRendering.sightings).toEqual(stored.sightings);
+});
 
 for (const timezoneId of ['Australia/Melbourne', 'America/New_York']) {
   test.describe(`Case UTC entry in ${timezoneId}`, () => {

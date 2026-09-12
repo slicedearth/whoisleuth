@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { openInboxReview } from './console-navigation';
 import { caseRecord, createCase, snapshot } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION } from '../packages/cases/case-model.mts';
 import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, holdBrowserLocalTransaction, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, useTheme } from './helpers';
@@ -131,6 +132,7 @@ test('a selected Dashboard review opens Case assessment and returns to the same 
   const selected = page.getByRole('region', { name: 'Review inbox', exact: true }).locator('.items > li').filter({
     has: page.getByRole('heading', { name: title, exact: true }),
   });
+  await openInboxReview(selected);
   const review = selected.getByRole('link', { name: 'Review', exact: true });
   await expect(review).toHaveAttribute('href', '/cases?case=navigation-case&section=assessment');
   await review.click();

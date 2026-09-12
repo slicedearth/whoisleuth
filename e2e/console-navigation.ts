@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect } from './fixtures';
 
 type ConsoleView = 'cases' | 'inbox' | 'campaigns' | 'relationships' | 'timeline' | 'certificates' | 'watchlists' | 'rules';
@@ -59,5 +59,15 @@ export async function openCasePacket(page: Page) {
   const details = page.locator('details[id^="case-response-preflight-"]');
   await expect(details).toBeVisible();
   if (await details.getAttribute('open') === null) await details.locator(':scope > summary').click();
+  return details;
+}
+
+/** Open the selected review without changing its queue or lifecycle decision. */
+export async function openInboxReview(item: Locator) {
+  const details = item.locator(':scope > details');
+  const summary = details.locator(':scope > summary');
+  await expect(summary).toBeVisible();
+  if (await details.getAttribute('open') === null) await summary.click();
+  await expect(details).toHaveAttribute('open', '');
   return details;
 }

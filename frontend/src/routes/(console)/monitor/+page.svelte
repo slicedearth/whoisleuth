@@ -268,10 +268,10 @@
     await reconcileCommittedCaseMutation(committed,`Recorded a separately typed website-profile review lead for ${domain}.`);
   }
   async function dismissEvidenceGap(item:AnalystReviewItem,reason:AnalystReviewDismissalReason){
-    if(item.kind!=='evidence_gap'||!item.caseId||!item.dismissalTarget)return;
+    if(item.kind!=='evidence_gap'||!item.caseId||!item.dismissalTarget)throw new Error('That evidence-gap review is no longer available.');
     const record=cases.find((candidate)=>candidate.id===item.caseId);
     const reasonLabel=analystReviewDismissalReasonLabel(reason);
-    if(!record||!reasonLabel){caseMessage='That evidence-gap review is no longer available.';return;}
+    if(!record||!reasonLabel){caseMessage='That evidence-gap review is no longer available.';throw new Error(caseMessage);}
     let committed:Awaited<ReturnType<typeof editCase>>;
     try{
       committed=await editCase(record.id,{trailEvent:{
@@ -279,7 +279,7 @@
         summary:`Dismissed the current evidence-gap review: ${reasonLabel}.`,
         target:item.dismissalTarget,
       }});
-    }catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not record the evidence-gap review.';return;}
+    }catch(cause){caseMessage=cause instanceof Error?cause.message:'Could not record the evidence-gap review.';throw cause;}
     await reconcileCommittedCaseMutation(
       committed,
       `Recorded the reviewed evidence-gap dismissal for ${record.domain}. The underlying evidence and assertions were not changed.`,

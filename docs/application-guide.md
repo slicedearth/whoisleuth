@@ -379,6 +379,11 @@ retained history appear as local activity, with links to the review and its
 currently associated Cases. Unavailable Case identifiers remain visible.
 The review inbox explains each queue assignment; **Earlier decisions** shows
 the retained rationale and dates. Historic omissions are stated explicitly.
+Expand an item to review its evidence and decision, or use **Previous item** and
+**Next item** within the current page. Switching between items preserves their
+open drafts. Changing pages or filters discards drafts for items that leave the
+view. Displayed review times use UTC. **Copy** keeps the exact stored timestamp,
+including fractional seconds.
 
 Bulk saved views apply their filters, grouping and sort order to the currently
 loaded results. They do not retain targets, select a Brand Profile or authorise

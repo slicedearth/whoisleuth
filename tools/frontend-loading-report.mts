@@ -146,7 +146,7 @@ export const FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES: Readonly<Record<string,
   '/login': 68.78,
   '/lookup': 570.91, // Three clean builds, 2026-09-11: maximum 584,609 gzip bytes.
   '/methodology': 72.42,
-  '/monitor': 454.16,
+  '/monitor': 525.27, // Three clean builds, 2026-09-13: retained review forms and evidence workflows.
   '/privacy': 73.75,
   '/registry-support': 112.57,
   '/request-policy': 69.13,
