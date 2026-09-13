@@ -394,9 +394,16 @@ currently associated Cases. Unavailable Case identifiers remain visible.
 The review inbox explains each queue assignment; **Earlier decisions** shows
 the retained rationale and dates. Historic omissions are stated explicitly.
 Expand an item to review its evidence and decision, or use **Previous item** and
-**Next item** within the current page. Switching between items preserves their
-open drafts. Changing pages or filters discards drafts for items that leave the
-view. Displayed review times use UTC. **Copy** keeps the exact stored timestamp,
+**Next item** across the complete filtered queue. Switching items, pages or
+filters preserves unfinished decision forms for this visit. Use **Review
+position → Save current position** to retain the selection, filters and open
+review forms in this workspace. Later navigation does not update that checkpoint.
+**Resume saved review** restores it against current records, keeps newer open
+drafts and flags changed or unavailable evidence. Changed-evidence drafts require
+explicit review before submission. A draft with an uncertain write outcome stays
+blocked until the current decision is inspected and the draft is discarded.
+Saved positions are not included in backups or exports. Case form recovery is
+separate. Review date inputs and displayed review times use UTC. **Copy** keeps the exact stored timestamp,
 including fractional seconds.
 
 Bulk saved views apply their filters, List columns, grouping and sort order to the currently

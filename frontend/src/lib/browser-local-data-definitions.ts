@@ -124,8 +124,11 @@ import { emptyCaseDraftStore, normalizeCaseDraftStore, serializeCaseDraftStore, 
 import { caseAttachmentReferences } from '../../../packages/cases/case-attachment-model.mts';
 import { CASE_VIEWS_SCHEMA, type CaseViewsStore, type SavedCaseView } from '../../../packages/contracts/case-views-contract.mts';
 import { caseViewsStoreVersion, emptyCaseViewsStore, normalizeCaseViewsStore, serializeCaseViewsStore } from '../../../packages/workspace/case-views.mts';
+import { REVIEW_SESSION_SCHEMA, type ReviewSessionRecord, type ReviewSessionStore } from '../../../packages/contracts/review-session-contract.mts';
+import { emptyReviewSessionStore, normalizeReviewSessionStore, reviewSessionStoreVersion, serializeReviewSessionStore } from '../../../packages/workspace/review-session.mts';
 
 export type BrowserLocalCollectionValueMap = Readonly<{
+  review_session: ReviewSessionRecord;
   case_drafts: CaseDraftRecord;
   case_views: SavedCaseView;
   cases: CaseRecord;
@@ -144,6 +147,7 @@ export type BrowserLocalCollectionValueMap = Readonly<{
 }>;
 
 export type BrowserLocalCollectionDocumentMap = Readonly<{
+  review_session: ReviewSessionStore;
   case_drafts: CaseDraftStore;
   case_views: CaseViewsStore;
   cases: CaseRecord[];
@@ -428,7 +432,18 @@ export const CASE_VIEWS_COLLECTION: LocalDataCollectionDefinition<CaseViewsStore
   join: (records, version) => ({ schema: CASE_VIEWS_SCHEMA, version, views: records.map(item => item.value) }),
 });
 
+export const REVIEW_SESSION_COLLECTION: LocalDataCollectionDefinition<ReviewSessionStore> = Object.freeze({
+  ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.review_session,
+  legacyKey: 'whoisleuth-review-session-v1', legacyRollback: false,
+  empty: emptyReviewSessionStore,
+  acceptLegacyRoot: raw => record(raw)?.schema === REVIEW_SESSION_SCHEMA && positiveVersion(record(raw)?.version) && Array.isArray(record(raw)?.records),
+  normalize: normalizeReviewSessionStore, version: reviewSessionStoreVersion, serialize: serializeReviewSessionStore,
+  split: store => store.records.map(value => ({ id: value.id, value })),
+  join: (records, version) => ({ schema: REVIEW_SESSION_SCHEMA, version, records: records.map(item => item.value) }),
+});
+
 export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
+  REVIEW_SESSION_COLLECTION,
   CASE_DRAFTS_COLLECTION,
   CASE_VIEWS_COLLECTION,
   CASES_COLLECTION,

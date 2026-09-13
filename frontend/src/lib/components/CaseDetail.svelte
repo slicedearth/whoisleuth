@@ -9,6 +9,7 @@
   import CaseResponseWorkspace from '$lib/components/CaseResponseWorkspace.svelte';
   import CaseBrandAssociations from '$lib/components/CaseBrandAssociations.svelte';
   import { readCaseNavigationContext } from '$lib/console-workflow-state';
+  import { loadReviewSession } from '$lib/review-session';
   import { handlesLocalLink } from '$lib/link-activation';
   import { keepFocusBelow } from '$lib/visible-focus';
   import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
@@ -48,6 +49,14 @@
   } = $props();
   const activeSection = $derived(caseWorkspaceSection(page.url));
   const returnContext = $derived(readCaseNavigationContext(record.id));
+  let hasSavedReviewReturn = $state(false);
+  $effect(() => {
+    const id = record.id;
+    let current = true;
+    hasSavedReviewReturn = false;
+    void loadReviewSession().then(saved => { if (current) hasSavedReviewReturn = saved?.selected?.caseId === id; }).catch(() => {});
+    return () => { current = false; };
+  });
   const deepLinkTargetId = $derived(page.url.searchParams.get('response') === '1'
     ? `case-response-preflight-${record.id}`
     : page.url.hash.startsWith('#case-response-') ? page.url.hash.slice(1) : null);
@@ -118,7 +127,8 @@
 <article class="case-detail" data-case-detail={record.id}>
   <div class="case-return">
     <a href="/cases" onclick={(event) => { if (handlesLocalLink(event)) { event.preventDefault(); void returnToList(); } }}>All Cases</a>
-    {#if returnContext && returnContext.href !== '/cases'}<a href={returnContext.href}>Return to {returnContext.label}</a>{/if}
+    {#if returnContext && returnContext.href !== '/cases'}<a href={returnContext.href}>Return to {returnContext.label}</a>
+    {:else if hasSavedReviewReturn}<a href="/monitor?view=inbox&resume=1">Return to saved review</a>{/if}
   </div>
   <div id={`case-head-${record.id}`} class="case-heading" tabindex="-1">
     <PageHeading eyebrow="Case" title={record.title || record.domain} description={record.title ? record.domain : ''} />

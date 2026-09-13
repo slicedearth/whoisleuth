@@ -148,6 +148,7 @@ describe('browser-local collection definitions', () => {
       analyst_review_state: { schema: 'whoisleuth.analyst-review-state', version: ANALYST_REVIEW_STATE_COLLECTION.schemaVersion + 1, records: [] },
       case_drafts: { schema: 'whoisleuth.case-drafts', version: futureVersion('case_drafts'), records: [] },
       case_views: { schema: 'whoisleuth.case-views', version: futureVersion('case_views'), views: [] },
+      review_session: { schema: 'whoisleuth.review-session', version: futureVersion('review_session'), records: [] },
     };
     const definitions = BROWSER_LOCAL_COLLECTIONS.filter(({ id }) => id !== 'cases');
     assert.deepEqual(

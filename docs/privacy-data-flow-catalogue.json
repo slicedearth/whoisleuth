@@ -14,10 +14,10 @@
       "version": 1
     },
     "schemaLifecycleRegistry": {
-      "familyCount": 20,
-      "compatibilityCount": 87,
-      "privacyProfileCount": 47,
-      "consumerFlowCount": 145,
+      "familyCount": 21,
+      "compatibilityCount": 88,
+      "privacyProfileCount": 48,
+      "consumerFlowCount": 146,
       "metadataVersions": [
         4
       ]
@@ -7618,6 +7618,19 @@
       ]
     },
     {
+      "id": "review-session",
+      "privacyClass": "analyst_authored_sensitive",
+      "compatibilityIds": [
+        "browser.review-session"
+      ],
+      "privacyProfileIds": [
+        "review-session.privacy"
+      ],
+      "consumerFlowIds": [
+        "review-session.browser-review-session.consumer"
+      ]
+    },
+    {
       "id": "risk-calibration",
       "privacyClass": "analyst_authored_sensitive",
       "compatibilityIds": [
@@ -7951,6 +7964,24 @@
       "migration": "normalize_to_current",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 786432,
+      "storageClass": "browser_profile_storage",
+      "retentionControl": "browser_profile_and_user_controlled"
+    },
+    {
+      "id": "browser.review-session",
+      "familyId": "review-session",
+      "kind": "browser_store",
+      "schema": "whoisleuth.review-session",
+      "lifecycleSchema": "whoisleuth.review-session",
+      "coverageClass": "registered_schema",
+      "currentVersion": 1,
+      "supportedVersions": [
+        1
+      ],
+      "futureVersionBehavior": "preserve_without_write",
+      "migration": "exact_current_only",
+      "writeSemantics": "optimistic_replace",
+      "byteBudget": 4194304,
       "storageClass": "browser_profile_storage",
       "retentionControl": "browser_profile_and_user_controlled"
     },
@@ -10479,6 +10510,32 @@
       "consumerFlowIds": [
         "relationship-portability.export-relationship-graph.consumer",
         "relationship-portability.export-reviewed-relationship-clusters.consumer"
+      ]
+    },
+    {
+      "id": "review-session.privacy",
+      "familyId": "review-session",
+      "classification": "analyst_authored_sensitive",
+      "projection": "browser_import",
+      "includedCategories": [
+        "review-filters",
+        "selected-review-reference",
+        "evidence-fingerprint",
+        "unfinished-review-forms",
+        "local-revision",
+        "save-time"
+      ],
+      "excludedCategories": [
+        "collected-source-payloads",
+        "session-credentials",
+        "public-export"
+      ],
+      "notePolicy": "allowed_bounded",
+      "retention": "browser_indexeddb",
+      "network": "none",
+      "sharingReview": "not_applicable",
+      "consumerFlowIds": [
+        "review-session.browser-review-session.consumer"
       ]
     },
     {
@@ -13577,6 +13634,36 @@
       "processingClasses": [
         "transient_processing",
         "deliberate_local_file_export",
+        "offline_processing_no_request"
+      ],
+      "policyState": "current"
+    },
+    {
+      "id": "review-session.browser-review-session.consumer",
+      "familyId": "review-session",
+      "plane": "browser",
+      "operation": "validate-and-produce",
+      "acceptedContracts": [
+        {
+          "schema": "whoisleuth.review-session",
+          "versions": [
+            1
+          ],
+          "mode": "direct",
+          "discriminator": null
+        }
+      ],
+      "emittedContract": {
+        "schema": "whoisleuth.review-session",
+        "version": 1,
+        "discriminator": null
+      },
+      "privacyProfileId": "review-session.privacy",
+      "requestMode": "none",
+      "retentionEffect": "browser_indexeddb",
+      "processingClasses": [
+        "transient_processing",
+        "browser_local_retention",
         "offline_processing_no_request"
       ],
       "policyState": "current"

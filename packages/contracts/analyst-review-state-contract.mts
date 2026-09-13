@@ -60,19 +60,24 @@ export type AnalystReviewEvidenceFamily = typeof ANALYST_REVIEW_EVIDENCE_FAMILIE
 
 export const ANALYST_REVIEW_DISPOSITIONS = Object.freeze(['open', 'expected', 'suppressed', 'resolved'] as const);
 export type AnalystReviewDisposition = typeof ANALYST_REVIEW_DISPOSITIONS[number];
-export type AnalystReviewPriority = 'urgent' | 'high' | 'normal';
+export const ANALYST_REVIEW_PRIORITIES = ['urgent', 'high', 'normal'] as const;
+export type AnalystReviewPriority = typeof ANALYST_REVIEW_PRIORITIES[number];
 export type AnalystReviewCompleteness = 'complete' | 'partial' | 'inconclusive';
-export type AnalystReviewAge = 'current' | 'aging' | 'stale' | 'unknown';
-export type AnalystReviewNextAction = 'review' | 'refresh' | 'follow_up' | 'resume';
-export type AnalystReviewLifecycleState =
-  | 'open'
-  | 'expected'
-  | 'suppressed'
-  | 'resolved'
-  | 'expired'
-  | 'invalidated'
-  | 'recurred'
-  | 'orphaned';
+export const ANALYST_REVIEW_AGES = ['current', 'aging', 'stale', 'unknown'] as const;
+export type AnalystReviewAge = typeof ANALYST_REVIEW_AGES[number];
+export const ANALYST_REVIEW_NEXT_ACTIONS = ['review', 'refresh', 'follow_up', 'resume'] as const;
+export type AnalystReviewNextAction = typeof ANALYST_REVIEW_NEXT_ACTIONS[number];
+export const ANALYST_REVIEW_LIFECYCLE_STATES = ['open', 'expected', 'suppressed', 'resolved', 'expired', 'invalidated', 'recurred', 'orphaned'] as const;
+export type AnalystReviewLifecycleState = typeof ANALYST_REVIEW_LIFECYCLE_STATES[number];
+
+export const ANALYST_REVIEW_QUEUE_OPTIONS = [
+  { value: 'needs_action', label: 'Needs action' },
+  { value: 'waiting', label: 'Waiting / follow-up' },
+  { value: 'changed', label: 'Changed since review' },
+  { value: 'reviewed', label: 'Reviewed' },
+  { value: 'all', label: 'Everything' },
+] as const;
+export type AnalystReviewQueue = typeof ANALYST_REVIEW_QUEUE_OPTIONS[number]['value'];
 
 export const ANALYST_REVIEW_DISPOSITION_OPTIONS = Object.freeze([
   { value: 'open', label: 'Open' },

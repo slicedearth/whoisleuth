@@ -1,0 +1,1 @@
+{"schema":"whoisleuth.review-session","version":1,"records":[{"id":"inbox","revision":"00000000-0000-4000-8000-000000000001","updatedAt":"2026-09-13T00:00:00.000Z","filters":{"queue":"all","attentionOnly":false,"focusedCaseId":"","kind":"","source":"","age":"","caseQuery":"","priority":"","nextAction":"","evidenceFamily":"","lifecycle":""},"selected":null,"drafts":[]}]}

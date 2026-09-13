@@ -8,7 +8,7 @@ import { createCase } from '../packages/cases/case-model.mts';
 import { buildWorkspaceArchive, readWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
 import { decryptWorkspaceArchive, encryptWorkspaceArchive } from '../packages/workspace/workspace-archive-crypto.mts';
 import { createCase as createCaseThroughForm, openCaseResponseWorkspace } from './case-test-fixtures';
-import { openCaseSection } from './console-navigation';
+import { openCaseSection, openInboxReview } from './console-navigation';
 import { FILE_BYTES, FILE_NAME, openRetainedFiles, selectOriginal, storedFiles } from './case-attachment-fixtures';
 
 const WORKSPACE_PASSWORD = '<synthetic workspace fixture>';
@@ -16,6 +16,41 @@ const BACKUP_PASSWORD = '<separate archive fixture>';
 const DOMAIN = 'private-investigation.example';
 const NOTE = 'This retained observation belongs only to the protected fixture.';
 const NOW = '2026-09-01T00:00:00.000Z';
+
+test('saved inbox positions protect review drafts and stay outside encrypted portable backups', async ({ page }) => {
+  await page.clock.setFixedTime('2026-09-13T10:00:00.000Z');
+  await page.goto('/dashboard');
+  const row = await createEncrypted(page, 'Encrypted review position'); await unlock(page, row.name);
+  await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
+  await createCaseThroughForm(page, 'private-review.example');
+  await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Review inbox', exact: true }).click();
+  let item = page.locator('.review-inbox .items > li').first();
+  await openInboxReview(item); await item.locator('details.lifecycle-controls > summary').click();
+  await item.getByLabel('Rationale', { exact: true }).fill('This unfinished review must remain in the encrypted working workspace.');
+  let position = page.locator('.review-session'); await position.locator('summary').click();
+  await position.getByRole('button', { name: 'Save current position', exact: true }).click();
+  await expect(position.getByRole('status')).toContainText('Review position saved');
+  const raw = await storedBytes(page, namedDatabase(row.id));
+  expect(raw.manifests.find(manifest => manifest.collection === 'review_session')).toMatchObject({ codec: 'aes-gcm-hmac-v1', recordCount: 1 });
+  expect(JSON.stringify(raw)).not.toContain('This unfinished review');
+  await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Dashboard', exact: true }).click();
+  const backup = await downloadEncryptedWorkspaceArchive(page, BACKUP_PASSWORD);
+  const decrypted = await decryptWorkspaceArchive(JSON.parse(backup.content), BACKUP_PASSWORD);
+  expect(JSON.stringify(decrypted)).not.toContain('This unfinished review');
+  expect(JSON.stringify(decrypted)).not.toContain('review_session');
+  await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Review inbox', exact: true }).click();
+  await expect(page).toHaveURL(/\/monitor(?:\?|$)/u);
+  await expect(page.locator('.review-session')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: `Unlock ${row.name}`, exact: true })).toBeVisible();
+  await expect(page.locator('.review-session')).toHaveCount(0);
+  await unlock(page, row.name);
+  position = page.locator('.review-session'); await position.locator('summary').click();
+  await position.getByRole('button', { name: 'Resume saved review', exact: true }).click();
+  item = page.locator('.review-inbox .items > li').first();
+  await item.locator('details.lifecycle-controls > summary').click();
+  await expect(item.getByLabel('Rationale', { exact: true })).toHaveValue('This unfinished review must remain in the encrypted working workspace.');
+});
 
 test('retained original bytes use the encrypted workspace keys and remain unavailable while locked', async ({ page }) => {
   await page.goto('/dashboard');

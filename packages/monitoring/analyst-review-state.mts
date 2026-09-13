@@ -39,6 +39,7 @@ export function analystReviewCanResolve(item: Pick<AnalystReviewItem, 'completen
 type UnknownRecord = Record<string, unknown>;
 
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
+const RATIONALE_INPUT_CONTROL_RE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u;
 const SAFE_REFERENCE_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const SAFE_SUBJECT_RE = /^review:[a-z0-9_]{1,40}:[a-f0-9]{64}$/u;
 const SAFE_FINGERPRINT_RE = /^material:[a-f0-9]{64}$/u;
@@ -145,13 +146,15 @@ export function assertAnalystReviewInputGraph(value: unknown): void {
   }
 }
 
-function boundedText(value: unknown, maximum: number, label: string, required = true): string {
-  if (typeof value !== 'string' || value.length > maximum * 4 || CONTROL_RE.test(value)) {
-    if (!required && (value === null || value === undefined || value === '')) return '';
+function boundedRationale(value: unknown, label: string, formInput = false): string {
+  const maximum = MAX_ANALYST_REVIEW_RATIONALE_LENGTH;
+  const controls = formInput ? RATIONALE_INPUT_CONTROL_RE : CONTROL_RE;
+  if (typeof value !== 'string' || value.length > maximum * 4 || controls.test(value)) {
     throw inputError(`${label} is invalid`);
   }
+  // Forms may contain ordinary line breaks; stored rationale remains single-line.
   const normalized = value.replace(/\s+/gu, ' ').trim();
-  if ((required && !normalized) || normalized.length > maximum) throw inputError(`${label} is invalid`);
+  if (!normalized || normalized.length > maximum) throw inputError(`${label} is invalid`);
   return normalized;
 }
 
@@ -196,7 +199,7 @@ function normalizeSnapshot(raw: unknown, label: string): AnalystReviewDecisionSn
   const normalized: AnalystReviewDecisionSnapshot = {
     reviewedFingerprint: fingerprint(value.reviewedFingerprint, `${label}.reviewedFingerprint`),
     disposition: normalizedDisposition,
-    rationale: boundedText(value.rationale, MAX_ANALYST_REVIEW_RATIONALE_LENGTH, `${label}.rationale`),
+    rationale: boundedRationale(value.rationale, `${label}.rationale`),
     reviewedAt: timestamp(value.reviewedAt, `${label}.reviewedAt`)!,
     reviewDueAt: timestamp(value.reviewDueAt, `${label}.reviewDueAt`, true),
     expiresAt: timestamp(value.expiresAt, `${label}.expiresAt`, true),
@@ -419,7 +422,7 @@ export function setAnalystReviewDecision(
   if (input.disposition === 'resolved' && !analystReviewCanResolve(item)) {
     throw new Error('Partial, inconclusive, stale or undated evidence cannot resolve a Review Item. Refresh or attach current complete evidence first.');
   }
-  const rationale = boundedText(input.rationale, MAX_ANALYST_REVIEW_RATIONALE_LENGTH, 'rationale');
+  const rationale = boundedRationale(input.rationale, 'rationale', true);
   const reviewedAt = timestamp(input.reviewedAt ?? new Date().toISOString(), 'reviewedAt')!;
   const expiresAt = timestamp(input.expiresAt, 'expiresAt', true);
   const reviewDueAt = timestamp(input.reviewDueAt, 'reviewDueAt', true);
@@ -600,7 +603,7 @@ function normalizeDevelopmentSnapshot(raw: unknown, label: string): AnalystRevie
   return {
     reviewedFingerprint: developmentFingerprint(value.reviewedFingerprint, `${label}.reviewedFingerprint`),
     disposition: disposition(value.disposition, `${label}.disposition`),
-    rationale: boundedText(value.rationale, MAX_ANALYST_REVIEW_RATIONALE_LENGTH, `${label}.rationale`),
+    rationale: boundedRationale(value.rationale, `${label}.rationale`),
     reviewedAt,
     reviewDueAt: reviewDueAt && Date.parse(reviewDueAt) > Date.parse(reviewedAt) ? reviewDueAt : null,
     expiresAt: expiresAt && Date.parse(expiresAt) > Date.parse(reviewedAt) ? expiresAt : null,

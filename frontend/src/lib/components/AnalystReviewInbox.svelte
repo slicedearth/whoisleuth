@@ -8,6 +8,10 @@
   import { analystReviewNeedsAttention } from '../analysis/analyst-review-attention.ts';
   import Pagination from './Pagination.svelte';
   import AnalystReviewInboxItem from './AnalystReviewInboxItem.svelte';
+  import ReviewSessionControl from './ReviewSessionControl.svelte';
+  import type { ReviewFormDraft, ReviewSessionPosition } from '../../../../packages/contracts/review-session-contract.mts';
+  import { resolveReviewSessionSelection } from '../../../../packages/workspace/review-session.mts';
+  import { MAX_ANALYST_REVIEW_ITEMS } from '../../../../packages/contracts/analyst-review-state-contract.mts';
   import {
     ANALYST_REVIEW_EVIDENCE_FAMILIES,
     ANALYST_REVIEW_KINDS,
@@ -54,8 +58,12 @@
   let lifecycleFilter = $state<AnalystReviewLifecycleState | ''>('');
   let page = $state(1);
   let expandedId = $state<string | null | undefined>(undefined);
+  let reviewDrafts = $state<ReviewFormDraft[]>([]);
+  let restoreRevision = $state(0);
+  let showDrafts = $state(false);
   let itemsElement = $state<HTMLOListElement>();
   let inboxElement = $state<HTMLElement>();
+  let draftsSummary = $state<HTMLElement>();
   const focusedCaseId = $derived(route.url.searchParams.get('case-review') ?? '');
   const scopedItems = $derived(focusedCaseId ? inbox.items.filter(item => item.caseId === focusedCaseId) : inbox.items);
   const sourceOptions = $derived([...new Set(inbox.items.flatMap((item) => item.sourceIds))].sort());
@@ -84,8 +92,15 @@
   const visible = $derived(filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE));
   const expanded = $derived(expandedId === undefined ? visible[0]?.id : expandedId);
   const filterKey = $derived(JSON.stringify([attentionOnly, queue, focusedCaseId, selectedSubjectKey, kindFilter,
-    sourceFilter, ageFilter, caseFilter, priorityFilter, nextActionFilter, evidenceFamilyFilter, lifecycleFilter, currentPage]));
-  $effect(() => { filterKey; expandedId = undefined; });
+    sourceFilter, ageFilter, caseFilter, priorityFilter, nextActionFilter, evidenceFamilyFilter, lifecycleFilter]));
+  $effect(() => { filterKey; page = 1; expandedId = undefined; });
+  const currentItem = $derived(filtered.find(item => item.id === expanded));
+  const position = $derived<ReviewSessionPosition>({
+    filters: { queue, attentionOnly, focusedCaseId, kind: kindFilter, source: sourceFilter, age: ageFilter, caseQuery: caseFilter,
+      priority: priorityFilter, nextAction: nextActionFilter, evidenceFamily: evidenceFamilyFilter, lifecycle: lifecycleFilter },
+    selected: currentItem ? { id: currentItem.id, subjectKey: currentItem.subjectKey, materialFingerprint: currentItem.materialFingerprint, caseId: currentItem.caseId } : null,
+    drafts: reviewDrafts,
+  });
   const admissionRows = $derived(ANALYST_REVIEW_EVIDENCE_FAMILIES
     .map((family) => ({ family, ...inbox.admission.byEvidenceFamily[family] }))
     .filter((row) => row.totalAtLeast > 0));
@@ -123,12 +138,41 @@
   }
 
   async function focusReview(index: number) {
-    const item = visible[index];
+    const item = filtered[index];
     if (!item) return;
+    page = Math.floor(index / PAGE_SIZE) + 1;
     expandedId = item.id;
     await tick();
-    if (visible[index]?.id !== item.id || expandedId !== item.id) return;
-    itemsElement?.querySelectorAll<HTMLElement>(':scope > li > details > summary')[index]?.focus();
+    const visibleIndex = visible.findIndex(current => current.id === item.id);
+    if (visibleIndex < 0 || expandedId !== item.id) return;
+    itemsElement?.querySelectorAll<HTMLElement>(':scope > li > details > summary')[visibleIndex]?.focus();
+  }
+
+  async function resumeReview(saved: ReviewSessionPosition): Promise<string> {
+    const retained = new Map(reviewDrafts.map(draft => [draft.id, draft]));
+    for (const draft of saved.drafts) if (!retained.has(draft.id)) retained.set(draft.id, draft);
+    if (retained.size > MAX_ANALYST_REVIEW_ITEMS) return 'Saved and current forms exceed one admitted review queue. Finish or discard current drafts before resuming; no forms were removed.';
+    reviewDrafts = [...retained.values()];
+    restoreRevision += 1;
+    const url = new URL(route.url);
+    url.searchParams.delete('review');
+    url.searchParams.delete('resume');
+    url.searchParams.delete('attention');
+    url.searchParams.delete('case-review');
+    url.searchParams.set('queue', saved.filters.queue);
+    if (saved.filters.attentionOnly) url.searchParams.set('attention', '1');
+    if (saved.filters.focusedCaseId) url.searchParams.set('case-review', saved.filters.focusedCaseId);
+    await goto(`${url.pathname}${url.search}${url.hash}`, { noScroll: true, keepFocus: true });
+    kindFilter = saved.filters.kind; sourceFilter = saved.filters.source; ageFilter = saved.filters.age;
+    caseFilter = saved.filters.caseQuery; priorityFilter = saved.filters.priority; nextActionFilter = saved.filters.nextAction;
+    evidenceFamilyFilter = saved.filters.evidenceFamily; lifecycleFilter = saved.filters.lifecycle;
+    await tick();
+    const selected = resolveReviewSessionSelection(saved, filtered);
+    if (selected.index >= 0) await focusReview(selected.index);
+    else { page = 1; expandedId = null; }
+    if (selected.state === 'changed') return 'Position restored. The selected review has changed since this checkpoint; inspect the current evidence before deciding.';
+    if (selected.state === 'unavailable' || selected.state === 'ambiguous') return 'Filters restored, but the saved item is unavailable or ambiguous in the current results. No other item was substituted.';
+    return 'Review position restored against current results. No decision or collection was replayed.';
   }
 
   async function reviewMutation(item: AnalystReviewItem, operation: () => void | Promise<void>) {
@@ -140,9 +184,33 @@
       if (origin && !origin.isConnected) restoreSubmittedFocus(origin, inboxElement?.querySelector<HTMLElement>('#review-inbox-title'), inboxElement);
     }
   }
+
+  async function discardDraft(id: string, origin: EventTarget | null) {
+    reviewDrafts = reviewDrafts.filter(current => current.id !== id);
+    restoreRevision += 1;
+    await tick();
+    restoreSubmittedFocus(origin instanceof Element ? origin : null,
+      draftsSummary?.isConnected ? draftsSummary : inboxElement?.querySelector<HTMLElement>('#review-inbox-title'), inboxElement);
+  }
 </script>
 
 <section class="review-inbox card" aria-label="Review inbox" bind:this={inboxElement}>
+  {#if !selectedSubjectKey}<ReviewSessionControl {position} onresume={resumeReview} resumeRequested={route.url.searchParams.get('resume') === '1'} />{/if}
+  {#if reviewDrafts.length}
+    <details class="current-drafts" bind:open={showDrafts}>
+      <summary bind:this={draftsSummary}>Unfinished review forms ({reviewDrafts.length})</summary>
+      {#if showDrafts}
+        <p class="notice">Discarding here clears the form for this visit. Save the current position again to replace any checkpoint copy.</p>
+        <ol>{#each reviewDrafts as draft, index (draft.id)}
+          {@const label = inbox.items.find(item => item.id === draft.id)?.title ?? 'Review no longer in the current inbox'}
+          <li><strong>{label}</strong><p>{draft.rationale || 'No rationale entered.'}</p>
+            {#if draft.uncertain}<p>This decision may already have been saved. Check its current state; discarding the form does not cancel or undo a write.</p>{/if}
+            <button type="button" class="btn" aria-label={`Discard ${draft.uncertain ? 'uncertain ' : ''}draft ${index + 1}: ${label}`} onclick={event => void discardDraft(draft.id, event.currentTarget)}>{draft.uncertain ? 'Discard uncertain draft' : 'Discard draft'}</button>
+          </li>
+        {/each}</ol>
+      {/if}
+    </details>
+  {/if}
   {#if inbox.items.length || inbox.truncated}
   <div class="inbox-heading">
     <div>
@@ -219,19 +287,24 @@
 
   {#if visible.length}
     <ol class="items" bind:this={itemsElement}>
+      {#key restoreRevision}
       {#each visible as item, index (item.id)}
         <li>
           <AnalystReviewInboxItem {item} {now} expanded={expanded === item.id}
             onexpand={() => expandedId = item.id} oncollapse={() => expandedId = null}
-            {...(index > 0 ? { onprevious: () => void focusReview(index - 1) } : {})}
-            {...(index + 1 < visible.length ? { onnext: () => void focusReview(index + 1) } : {})}
+            {...(reviewDrafts.find(draft => draft.id === item.id) ? { restoredDraft: reviewDrafts.find(draft => draft.id === item.id)! } : {})}
+            draftCapacityReached={reviewDrafts.length >= MAX_ANALYST_REVIEW_ITEMS && !reviewDrafts.some(draft => draft.id === item.id)}
+            ondraft={draft => { reviewDrafts = [...reviewDrafts.filter(current => current.id !== item.id), ...(draft ? [draft] : [])]; }}
+            {...((currentPage - 1) * PAGE_SIZE + index > 0 ? { onprevious: () => void focusReview((currentPage - 1) * PAGE_SIZE + index - 1) } : {})}
+            {...((currentPage - 1) * PAGE_SIZE + index + 1 < filtered.length ? { onnext: () => void focusReview((currentPage - 1) * PAGE_SIZE + index + 1) } : {})}
             {...(ondismiss ? { ondismiss: (current, reason) => reviewMutation(current, () => ondismiss?.(current, reason)) } : {})}
             {...(onreview ? { onreview: (current, input) => reviewMutation(current, () => onreview?.(current, input)) } : {})}
             onopen={(event) => retainCaseReturn(event, item)} />
         </li>
       {/each}
+      {/key}
     </ol>
-    <Pagination currentPage={currentPage} {pageCount} setPage={(value) => { page = value; }} ariaLabel="Review inbox pages" />
+    <Pagination currentPage={currentPage} {pageCount} setPage={(value) => { page = value; expandedId = undefined; }} ariaLabel="Review inbox pages" />
   {:else if !inbox.items.length && !inbox.truncated}
     <div class="empty-start">
       <h2 id="review-inbox-title" tabindex="-1">No retained review items</h2>
@@ -263,6 +336,7 @@
 
 <style>
   .review-inbox{padding:var(--card-pad)}
+  .current-drafts{margin-block:12px}.current-drafts li{overflow-wrap:anywhere;margin-block:12px}.current-drafts p{white-space:pre-wrap}
   .empty-start{max-width:70ch;margin:20px 0}
   .empty-start h2{font-size:var(--text-lg)}
   .empty-start p{color:var(--muted);font-size:var(--text-sm);line-height:1.5}

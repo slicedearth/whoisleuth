@@ -9,7 +9,7 @@
   import ReviewLifecycleControls from './ReviewLifecycleControls.svelte';
   import EvidenceTimestamp from './EvidenceTimestamp.svelte';
 
-  let { item, now, expanded, onexpand, oncollapse, onprevious, onnext, onreview, ondismiss, onopen }: {
+  let { item, now, expanded, onexpand, oncollapse, onprevious, onnext, onreview, ondismiss, onopen, restoredDraft, ondraft, draftCapacityReached = false }: {
     item: AnalystReviewInboxItem;
     now: string;
     expanded: boolean;
@@ -18,6 +18,9 @@
     onprevious?: () => void;
     onnext?: () => void;
     onreview?: ComponentProps<typeof ReviewLifecycleControls>['onreview'];
+    restoredDraft?: ComponentProps<typeof ReviewLifecycleControls>['restoredDraft'];
+    ondraft?: ComponentProps<typeof ReviewLifecycleControls>['ondraft'];
+    draftCapacityReached?: boolean;
     ondismiss?: (item: AnalystReviewInboxItem, reason: AnalystReviewDismissalReason) => void | Promise<void>;
     onopen: (event: MouseEvent) => void;
   } = $props();
@@ -53,6 +56,8 @@
 
 <details class="review-item" class:urgent={item.priority === 'urgent'} class:high={item.priority === 'high'} open={expanded}
   ontoggle={(event) => {
+    // Native toggle events can arrive after a page change removed this item.
+    if (!event.currentTarget.isConnected) return;
     if (event.currentTarget.open && !expanded) onexpand();
     else if (!event.currentTarget.open && expanded) oncollapse();
   }}>
@@ -94,7 +99,7 @@
         {#if message}<p bind:this={statusElement} tabindex="-1" role="status">{message}</p>{/if}
       </form>
     {/if}
-    <ReviewLifecycleControls {item} lifecycle={item.lifecycle} {...(onreview ? { onreview } : {})} />
+    <ReviewLifecycleControls {item} lifecycle={item.lifecycle} {draftCapacityReached} {...(onreview ? { onreview } : {})} {...(restoredDraft ? { restoredDraft } : {})} {...(ondraft ? { ondraft } : {})} />
   </div>
   {/if}
 </details>

@@ -6,6 +6,8 @@ import {
 import { caseStatusIsClosed, isReviewedCaseDisposition } from './case-record-decisions.ts';
 import type { BulkSession } from './bulk-session-model.ts';
 import type { WatchlistCollection } from './watchlist-store.ts';
+import type { AnalystReviewQueue } from '../../../../packages/contracts/analyst-review-state-contract.mts';
+export { ANALYST_REVIEW_QUEUE_OPTIONS, type AnalystReviewQueue } from '../../../../packages/contracts/analyst-review-state-contract.mts';
 import { normalizeExplicitIsoTimestamp as timestamp } from '../../../../packages/evidence/observation.mts';
 import { latestObservationCohort } from '../../../../packages/evidence/latest-observations.mts';
 import {
@@ -58,15 +60,6 @@ export const ANALYST_REVIEW_DISMISSAL_REASONS = [
 export type AnalystReviewDismissalReason = typeof ANALYST_REVIEW_DISMISSAL_REASONS[number]['value'];
 
 export type AnalystReviewInboxItem = AnalystReviewItem & Readonly<{ lifecycle: AnalystReviewLifecycle }>;
-
-export const ANALYST_REVIEW_QUEUE_OPTIONS = [
-  { value: 'needs_action', label: 'Needs action' },
-  { value: 'waiting', label: 'Waiting / follow-up' },
-  { value: 'changed', label: 'Changed since review' },
-  { value: 'reviewed', label: 'Reviewed' },
-  { value: 'all', label: 'Everything' },
-] as const;
-export type AnalystReviewQueue = typeof ANALYST_REVIEW_QUEUE_OPTIONS[number]['value'];
 
 export type AnalystReviewProjectionAdmission = Readonly<{
   omittedAtLeast: Readonly<Partial<Record<AnalystReviewEvidenceFamily, number>>>;

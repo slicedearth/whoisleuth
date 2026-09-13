@@ -12,7 +12,7 @@ The catalogue is fixed metadata. Reading this document or its JSON counterpart d
 
 - Capability input: `whoisleuth.capability-manifest` version 1.
 - CLI input: `whoisleuth.cli.command-catalogue` version 1.
-- Schema lifecycle input: 20 registered families and metadata version 4.
+- Schema lifecycle input: 21 registered families and metadata version 4.
 - Outside-registry inventory: **not applicable**. Schema-like inventory entries outside the canonical lifecycle registry are not assigned fabricated privacy semantics by this catalogue.
 
 ## Processing classes
@@ -165,6 +165,7 @@ The machine-readable catalogue contains every exact compatibility, privacy-profi
 | `offline-comparison` | analyst authored sensitive | 2 | 1 | 2 |
 | `privacy-data-flow-catalogue` | metadata only | 1 | 1 | 1 |
 | `relationship-portability` | analyst authored sensitive | 2 | 1 | 2 |
+| `review-session` | analyst authored sensitive | 1 | 1 | 1 |
 | `risk-calibration` | analyst authored sensitive | 2 | 6 | 9 |
 | `tab-portability` | analyst authored sensitive | 3 | 1 | 3 |
 | `workspace-portability` | analyst authored sensitive | 21 | 3 | 31 |

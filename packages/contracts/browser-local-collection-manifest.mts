@@ -50,6 +50,8 @@ import type { SchemaCompatibilityDescriptor } from './schema-compatibility.mts';
 import { CASE_DRAFT_COMPATIBILITY, MAX_CASE_DRAFT_RECORDS, MAX_CASE_DRAFT_STORE_BYTES } from './case-drafts.mts';
 import { CASE_VIEWS_COMPATIBILITY } from './case-views.mts';
 import { MAX_CASE_VIEWS, MAX_CASE_VIEWS_BYTES } from './case-views-contract.mts';
+import { REVIEW_SESSION_COMPATIBILITY } from './review-session.mts';
+import { MAX_REVIEW_SESSION_BYTES } from './review-session-contract.mts';
 
 export type BrowserLocalCollectionStaticDefinition = Readonly<{
   id: string;
@@ -83,6 +85,7 @@ function definition(value: Omit<BrowserLocalCollectionStaticDefinition, 'schemaV
 }
 
 export const BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID = Object.freeze({
+  review_session: definition({ id: 'review_session', label: 'Saved review position', compatibility: REVIEW_SESSION_COMPATIBILITY, maximumBytes: MAX_REVIEW_SESSION_BYTES, maximumRecords: 1 }),
   case_drafts: definition({ id: 'case_drafts', label: 'Unfinished Case forms', compatibility: CASE_DRAFT_COMPATIBILITY, maximumBytes: MAX_CASE_DRAFT_STORE_BYTES, maximumRecords: MAX_CASE_DRAFT_RECORDS }),
   case_views: definition({ id: 'case_views', label: 'Saved Case views', compatibility: CASE_VIEWS_COMPATIBILITY, maximumBytes: MAX_CASE_VIEWS_BYTES, maximumRecords: MAX_CASE_VIEWS }),
   cases: definition({ id: 'cases', label: 'Cases', compatibility: CASE_BROWSER_COMPATIBILITY, maximumBytes: MAX_CASE_STORE_BYTES, maximumRecords: MAX_CASES }),
@@ -111,6 +114,7 @@ export const BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID = Object.freeze({
 } as const);
 
 export const BROWSER_LOCAL_COLLECTION_MANIFEST = Object.freeze([
+  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.review_session,
   BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.case_drafts,
   BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.case_views,
   BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.cases,
@@ -129,7 +133,7 @@ export const BROWSER_LOCAL_COLLECTION_MANIFEST = Object.freeze([
 ]);
 
 // Archive membership is distinct from browser persistence. Recovery drafts and
-// transient certificate searches remain local and are not portable sections.
+// saved review positions and transient certificate searches remain local and are not portable sections.
 export const WORKSPACE_ARCHIVE_COLLECTIONS = [
   ['cases', 'cases'],
   ['campaigns', 'campaigns'],

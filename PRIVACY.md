@@ -93,6 +93,14 @@ site-wide estimates; a persistence request happens only when selected and does
 not create a backup. Backup preparation is remembered only during that visit;
 the app cannot confirm that a file was kept or restored.
 
+Saved review positions retain filters, search text, selected Review Item and
+Case references, evidence fingerprints, unfinished review forms and save time in the current workspace,
+using its encryption when enabled. Saving is explicit; later navigation does
+not update that checkpoint. Positions are excluded from backups, exports and
+legacy rollback copies. Resume re-evaluates current records without collection
+or submission. Discarding a position removes its saved review-form copies;
+Cases and currently open forms are unchanged.
+
 Tab-scoped dictionaries, candidate handoffs, guided-investigation progress and
 similar transient state use bounded memory or `sessionStorage`. The one-use
 candidate handoff uses a random token and is removed when accepted. Appearance

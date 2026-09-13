@@ -53,6 +53,17 @@ function item(overrides: Partial<AnalystReviewItem> = {}): AnalystReviewItem {
 }
 
 describe('canonical analyst Review Item lifecycle', () => {
+  test('ordinary form line breaks keep the existing canonical stored rationale without admitting unsafe controls', () => {
+    const save = (rationale: string) => setAnalystReviewDecision(emptyAnalystReviewStateStore(), item(), {
+      disposition: 'open', rationale, reviewedAt: NOW,
+    });
+    const saved = save('First observation.\r\n\tContrary observation.');
+    assert.equal(saved.records[0]!.rationale, 'First observation. Contrary observation.');
+    assert.deepEqual(normalizeAnalystReviewStateStore(saved), saved);
+    for (const control of ['\u0000', '\u001b', '\u007f']) assert.throws(() => save(`First${control}second`), /rationale is invalid/u);
+    assert.throws(() => save('x'.repeat(1001)), /rationale is invalid/u);
+    assert.throws(() => normalizeAnalystReviewStateStore({ ...saved, records: [{ ...saved.records[0], rationale: 'Noncanonical\nrecord' }] }), /rationale is invalid/u);
+  });
   test('validates calendar dates independently and keeps an unavailable review clock open', () => {
     for (const reviewedAt of ['2026-02-30T00:00:00Z', '2026-08-23T24:00:00Z', '2026-08-23T01:00:00', 'Sun, 23 Aug 2026 01:00:00 GMT']) {
       assert.throws(() => setAnalystReviewDecision(emptyAnalystReviewStateStore(), item(), {
