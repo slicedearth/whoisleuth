@@ -319,8 +319,10 @@ test('privacy policy offers concise section navigation at desktop and mobile wid
 
   const sectionNavigation = page.getByRole('navigation', { name: 'Privacy policy sections' });
   await expect(sectionNavigation).toBeVisible();
-  await expect(sectionNavigation.getByRole('link')).toHaveCount(8);
   const headingIds = await page.locator('.policy h2[id]').evaluateAll((headings) => headings.map((heading) => heading.id));
+  expect(headingIds.length).toBeGreaterThan(0);
+  expect(new Set(headingIds).size).toBe(headingIds.length);
+  await expect(sectionNavigation.getByRole('link')).toHaveCount(headingIds.length);
   const indexedIds = await sectionNavigation.getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('href')?.slice(1)));
   expect(indexedIds).toEqual(headingIds);
   const security = sectionNavigation.getByRole('link', { name: 'Security' });

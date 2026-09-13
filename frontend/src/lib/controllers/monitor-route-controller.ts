@@ -1,4 +1,4 @@
-// Pure Monitor route, workflow and browser-local collection ownership.
+// Pure Monitor route, workflow and workspace collection ownership.
 
 import { parseDomainInput } from '../analysis/utils.ts';
 
@@ -167,13 +167,13 @@ function appendUnavailableCollectionStatus(
   current: string,
   label: string,
 ): string {
-  const prefix = 'Some browser-local context could not be loaded (';
+  const prefix = 'Some saved context could not be loaded (';
   const closingIndex = current.indexOf(').');
   const labels = current.startsWith(prefix) && closingIndex > prefix.length
     ? current.slice(prefix.length, closingIndex).split(', ').filter(Boolean)
     : [];
   if (!labels.includes(label)) labels.push(label);
-  return `Some browser-local context could not be loaded (${labels.join(', ')}). Successfully loaded collections remain available; reload to retry the missing context.`;
+  return `${prefix}${labels.join(', ')}). Successfully loaded collections remain available; reload to retry the missing context.`;
 }
 
 function createMonitorCollectionLoader() {

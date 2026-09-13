@@ -106,6 +106,8 @@ describe('Monitor route controller', () => {
     assert.equal(calls, 1);
 
     const firstStatus = appendUnavailableCollectionStatus('', 'cases');
+    assert.match(firstStatus, /^Some saved context could not be loaded \(cases\)/u);
+    assert.doesNotMatch(firstStatus, /browser|filesystem/iu);
     assert.equal(
       appendUnavailableCollectionStatus(firstStatus, 'cases'),
       firstStatus,

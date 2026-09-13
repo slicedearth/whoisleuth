@@ -37,7 +37,8 @@ test('privacy guidance stays concise, request-free and responsive', async ({ pag
 
     await expect(page.getByRole('heading', { name: 'Privacy policy', exact: true })).toBeVisible();
     const sections = page.getByRole('navigation', { name: 'Privacy policy sections' });
-    await expect(sections.getByRole('link')).toHaveCount(8);
+    await expect(sections).toBeVisible();
+    await expect(sections.getByRole('link', { name: 'Local application', exact: true })).toHaveAttribute('href', '#privacy-local-application');
     const compatibility = page.locator('p').filter({ has: page.getByText('Compatibility.', { exact: true }) });
     await expect(compatibility).toBeVisible();
     await expect(compatibility).toContainText('remain readable');
