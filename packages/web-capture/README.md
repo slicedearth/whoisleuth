@@ -53,6 +53,9 @@ text or HTML, and a version 2 `whoisleuth.web-capture-manifest` that can be
 reviewed before import into Cases. The manifest also retains one
 control-sanitised page title of up to 300 characters. File permissions are
 private where the platform supports POSIX modes.
+Capture conditions record the browser version, 1024 × 768 viewport, scale 1,
+`en-US` locale, UTC timezone and light colour scheme. Optional `--observer` and
+`--vantage` labels are declarations, not verified identities or locations.
 The structured manifest and DOM-digest fields exclude resource paths, queries,
 raw DOM, and body text as dedicated fields, but the page-controlled title may
 itself reproduce a path or query. The screenshot necessarily preserves visible
@@ -80,6 +83,16 @@ paths, reports only the page-title equality state rather than either title,
 emits `whoisleuth.web-capture-comparison` version 3, and produces no combined
 similarity or maliciousness score. Version-2 comparison documents remain
 listed as historical read-only output in the schema inventory.
+
+The comparison also checks every decoded screenshot pixel on a white background,
+reporting changed counts and a grid of source-pixel coordinates. It never resizes
+different-sized images. Repeat `--mask left,top,width,height` to exclude up to 64
+rectangles from both images; overlaps count once and original files stay unchanged.
+Excluding every pixel produces no agreement result. Masks, capture times and
+declared conditions appear in the report. Older captures without conditions remain
+unknown. Browser, timing, locale and shared-cache differences can affect appearance;
+neither matching pixels nor distinct labels establish independent collection or
+worldwide takedown.
 
 Collection executes page JavaScript. Each admitted resource operator receives
 the exact requested URL, including path and query, and ordinary allowlisted

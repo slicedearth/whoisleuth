@@ -3,7 +3,6 @@
   import { parseBoundedJson } from '$lib/bounded-json';
   import {
     importExternalFindingsIntoCase,
-    MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
     type CaseRecord,
     type ExternalFindingsDocument,
   } from '$lib/cases';
@@ -23,6 +22,8 @@
   import { readCaseAttachment } from '../../../../packages/cases/case-attachment-model.mts';
   import { sha256ArtifactBytes } from '../../../../packages/evidence/artifact-integrity.mts';
   import type { PersistCaseOperation } from '$lib/analysis/case-response-stage.ts';
+  import { MAX_WEB_CAPTURE_MANIFEST_BYTES } from '../../../../packages/contracts/web-capture.mts';
+  import CaptureComparison from './CaptureComparison.svelte';
 
   let {
     record,
@@ -83,14 +84,14 @@
     parsing = Boolean(file);
     if (!file) return;
     try {
-      if (file.size > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) {
-        throw new Error('Rendered-capture manifests are limited to 384 KiB.');
+      if (file.size > MAX_WEB_CAPTURE_MANIFEST_BYTES) {
+        throw new Error('Rendered-capture manifests are limited to 1 MiB.');
       }
       const decoded = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer());
       if (generation !== selectionGeneration) return;
       const value = parseBoundedJson(decoded, {
         label: 'Rendered-capture manifest',
-        maximumBytes: MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
+        maximumBytes: MAX_WEB_CAPTURE_MANIFEST_BYTES,
       });
       if (!value || typeof value !== 'object' || Array.isArray(value)
         || (value as Record<string, unknown>).schema !== WEB_CAPTURE_MANIFEST_SCHEMA) {
@@ -241,6 +242,7 @@
               {/each}</ol>
               {#if attachments.unusedIds.length}<p>{attachments.unusedIds.length} selected file{attachments.unusedIds.length === 1 ? '' : 's'} did not match a declared attachment.</p>{/if}
             </section>
+            <CaptureComparison left={attachments} />
           {/if}
           <label class="retain-files"><input type="checkbox" bind:checked={retainMatching} disabled={importing || checking || mutationBusy}> Retain this manifest and verified matching files in this workspace</label>
           <p>{retainMatching ? 'The selected originals are stored unchanged using this workspace’s storage and encryption. Unmatched files are not included; you can retain them separately under Retained files.' : 'Only sanitised metadata and declared digests enter the Case; original files stay in page memory.'} Matching bytes do not authenticate the capture or establish its accuracy.</p>

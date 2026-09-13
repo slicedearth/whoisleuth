@@ -199,6 +199,7 @@ function fakeBrowser(options: {
   };
   return {
     newContext: async () => context,
+    version: () => '151.0.0.0',
     close: async () => {},
   } as unknown as Browser;
 }
@@ -568,6 +569,22 @@ describe('optional local rendered capture package', () => {
     );
   });
 
+  test('bounds explicit observer declarations and repeatable comparison exclusions', () => {
+    const capture = ['https://example.test', '--output-dir', 'selected', '--authorize-rendered-capture'];
+    assert.deepEqual(Object.fromEntries(Object.entries(parseCaptureArguments([...capture, '--observer', 'Analyst A', '--vantage', 'Office'])).filter(([key]) => key.endsWith('Label'))), { observerLabel: 'Analyst A', vantageLabel: 'Office' });
+    for (const tail of [['--observer'], ['--observer', 'a'.repeat(81)], ['--vantage', 'A', '--vantage', 'B'], ['--observer', 'A\u0000B']]) {
+      assert.throws(() => parseCaptureArguments([...capture, ...tail]));
+    }
+    assert.deepEqual(parseCaptureCompareArguments(['left.json', 'right.json', '--mask', '0,0,1,1', '--mask', '1,2,3,4']).masks, [
+      { kind: 'redact', x: 0, y: 0, width: 1, height: 1 }, { kind: 'redact', x: 1, y: 2, width: 3, height: 4 },
+    ]);
+    for (const coordinates of ['0,0,0,1', '-1,0,1,1', '0,0,1.5,1', '0,0,10001,1', '0,0,1,1,1']) {
+      assert.throws(() => parseCaptureCompareArguments(['left.json', 'right.json', '--mask', coordinates]));
+    }
+    assert.equal(parseCaptureCompareArguments(['left.json', 'right.json', ...Array.from({ length: 64 }, () => ['--mask', '0,0,1,1']).flat()]).masks?.length, 64);
+    assert.throws(() => parseCaptureCompareArguments(['left.json', 'right.json', ...Array.from({ length: 65 }, () => ['--mask', '0,0,1,1']).flat()]));
+  });
+
   test('writes import-compatible private metadata without retaining DOM text or request paths', async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-test-'));
     const destination = path.join(parent, 'capture');
@@ -600,6 +617,7 @@ describe('optional local rendered capture package', () => {
       assert.deepEqual(resolved, ['example.test', 'example.test', 'static.example.test']);
       const capture = manifest.captures[0]!;
       assert.equal(capture.completeness, 'complete');
+      assert.deepEqual(capture.conditions, { browser: 'chromium', browserVersion: '151.0.0.0', viewport: { width: 1024, height: 768 }, deviceScaleFactor: 1, locale: 'en-US', timezone: 'UTC', colourScheme: 'light' });
       assert.equal(capture.artifacts[0]?.perceptualHash?.length, 16);
       const imported = parseWebCaptureManifest(manifest);
       assert.equal(imported.findings.length, 1);
@@ -709,10 +727,27 @@ describe('optional local rendered capture package', () => {
       assert.equal(comparison.renderedDom.counts.elements.delta, 1);
       assert.deepEqual(comparison.integrity.left, { screenshot: true, perceptualHash: true, domDigest: true });
       assert.match(formatRenderedCaptureComparison(comparison), /Rendered capture comparison/u);
+      assert.equal(comparison.pixelChanges.state, 'same_pixels');
+      assert.equal(comparison.pixelChanges.comparedPixels, 1024 * 768);
+      assert.equal(comparison.observationContext.time.spanMilliseconds, 300000);
+      assert.equal(comparison.observationContext.independence, 'not_verified');
+      assert.equal(comparison.observationContext.labels, 'incomplete');
+      const excluded = await compareRenderedCaptures(leftManifest, rightManifest, '2026-08-01T00:10:00.000Z', [{ kind: 'redact', x: 0, y: 0, width: 1024, height: 768 }]);
+      assert.equal(excluded.pixelChanges.state, 'all_excluded');
+      assert.equal(excluded.pixelChanges.changedPercent, null);
+      assert.match(formatRenderedCaptureComparison(excluded), /Excluded region: 0,0,1024,768/u);
+      await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest, undefined, [{ kind: 'redact', x: 1024, y: 0, width: 1, height: 1 }]));
       assert.doesNotMatch(JSON.stringify(comparison), /private text|capture-compare-test|manifest\.json|Account|Review/u);
 
       const originalLeftManifest = await readFile(leftManifest, 'utf8');
       const originalRightManifest = await readFile(rightManifest, 'utf8');
+      const legacy = JSON.parse(originalRightManifest);
+      delete legacy.captures[0].conditions;
+      await writeFile(rightManifest, JSON.stringify(legacy));
+      const legacyComparison = await compareRenderedCaptures(leftManifest, rightManifest);
+      assert.equal(legacyComparison.observationContext.rows.find(row => row.id === 'viewport')?.state, 'unknown');
+      assert.equal(legacyComparison.pixelChanges.state, 'same_pixels');
+      await writeFile(rightManifest, originalRightManifest);
       await assert.rejects(
         () => compareRenderedCaptures(leftManifest, rightManifest, '2026-08-01T00:10:00'),
         /explicit timezone/u,

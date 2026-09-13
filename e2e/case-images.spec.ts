@@ -7,6 +7,87 @@ import { readBrowserLocalCollection, failNextBrowserLocalCollectionReadAfterWrit
 import { failNextFileWrite, openRetainedFiles } from './case-attachment-fixtures';
 import { IMAGE_NAME, openImageReview, addImageRegion, expectEditedPixels } from './case-image-fixtures';
 
+test('changed-region review counts pixels, masks overlaps once and never mutates retained evidence', async ({ page }, testInfo) => {
+  const { review } = await openImageReview(page);
+  const before = await readBrowserLocalCollection(page, 'cases');
+  await review.getByRole('button', { name: 'Create edited PNG', exact: true }).click();
+  await addImageRegion(review, 'redact');
+  await review.getByRole('button', { name: 'Prepare edited PNG', exact: true }).click();
+  await expect(review.getByRole('region', { name: 'Prepared edited image', exact: true }).getByRole('img')).toBeVisible();
+  const comparison = review.locator('.image-change-review');
+  await comparison.locator(':scope > summary').click();
+  const calculate = comparison.getByRole('button', { name: 'Calculate image changes', exact: true });
+  await calculate.focus(); await page.keyboard.press('Enter');
+  const result = comparison.getByRole('heading', { name: 'Image comparison: different', exact: true });
+  await expect(result).toBeFocused();
+  await expect(comparison.getByRole('status')).toContainText('12,800 of 230,400 compared pixels differ');
+  await comparison.getByText(/Changed-region coordinates \(/u).click();
+  const next = comparison.getByRole('button', { name: 'Next regions', exact: true });
+  await expect(next).toBeEnabled(); await next.click();
+  await expect(comparison.locator('ol[start]')).toHaveAttribute('start', '17');
+  await comparison.getByText('Exclude rectangular regions (0)', { exact: true }).click();
+  for (const [name, value] of Object.entries({ Left: 64, Top: 40, Width: 160, Height: 80 })) await comparison.getByRole('spinbutton', { name, exact: true }).fill(String(value));
+  await comparison.getByRole('button', { name: 'Add exclusion', exact: true }).click();
+  await expect(result).toHaveCount(0);
+  await comparison.getByRole('button', { name: 'Add exclusion', exact: true }).click();
+  await calculate.click();
+  await expect(comparison.getByRole('status')).toHaveText('0 of 217,600 compared pixels differ (0.00%). 12,800 pixels excluded.');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280, 1920, 2560, 3840]) {
+      await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
+      await comparison.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+      expect(await comparison.locator('input,button,svg').evaluateAll(elements => elements.filter(element => element.getClientRects().length).every(element => {
+        const bounds = element.getBoundingClientRect(); return bounds.left >= 0 && bounds.right <= innerWidth;
+      }))).toBe(true);
+      if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`pixel-review-${theme}-${width}.png`) });
+    }
+    expect((await new AxeBuilder({ page }).include('.image-change-review').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+  }
+  for (const [name, value] of Object.entries({ Left: 0, Top: 0, Width: 640, Height: 360 })) await comparison.getByRole('spinbutton', { name, exact: true }).fill(String(value));
+  await comparison.getByRole('button', { name: 'Add exclusion', exact: true }).click(); await calculate.click();
+  await expect(comparison.getByRole('status')).toHaveText('Every pixel was excluded. No agreement can be assessed.');
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+});
+
+test('cancelled pixel workers cannot deliver a late result and return focus to their action', async ({ page }) => {
+  await page.addInitScript(() => {
+    const post = Worker.prototype.postMessage, terminate = Worker.prototype.terminate;
+    const held = new Set<Worker>(); let stopped = 0;
+    Worker.prototype.postMessage = function(message: unknown, ...rest: unknown[]) {
+      if ((message as { kind?: string } | null)?.kind === 'imageCompare') { held.add(this); return; }
+      return Reflect.apply(post, this, [message, ...rest]);
+    };
+    Worker.prototype.terminate = function() { if (held.delete(this)) stopped++; return terminate.call(this); };
+    Object.defineProperty(window, 'pixelWorkerState', { get: () => ({ held: held.size, stopped }) });
+  });
+  const { review } = await openImageReview(page, 2);
+  const before = await readBrowserLocalCollection(page, 'cases');
+  const other = before.records[0]!.value.attachments!.find(item => item.fileName !== IMAGE_NAME)!;
+  await review.getByRole('combobox', { name: 'Compare with another retained PNG', exact: true }).selectOption(other.id);
+  const comparison = review.locator('.image-change-review'); await comparison.locator(':scope > summary').click();
+  await comparison.getByRole('button', { name: 'Calculate image changes', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, 'pixelWorkerState'))).toEqual({ held: 1, stopped: 0 });
+  await comparison.getByRole('button', { name: 'Cancel image comparison', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, 'pixelWorkerState'))).toEqual({ held: 0, stopped: 1 });
+  await expect(comparison.getByRole('button', { name: 'Calculate image changes', exact: true })).toBeFocused();
+  await expect(comparison.getByRole('heading')).toHaveCount(0);
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+});
+
+test('the full admitted PNG dimensions can be compared without silently sampling pixels', async ({ page }, testInfo) => {
+  const { review } = await openImageReview(page, 2, { width: 4096, height: 4096 });
+  const before = await readBrowserLocalCollection(page, 'cases');
+  const other = before.records[0]!.value.attachments!.find(item => item.fileName !== IMAGE_NAME)!;
+  await review.getByRole('combobox', { name: 'Compare with another retained PNG', exact: true }).selectOption(other.id);
+  const comparison = review.locator('.image-change-review'); await comparison.locator(':scope > summary').click();
+  const started = performance.now();
+  await comparison.getByRole('button', { name: 'Calculate image changes', exact: true }).click();
+  await expect(comparison.getByRole('status')).toHaveText('0 of 16,777,216 compared pixels differ (0.00%). 0 pixels excluded.');
+  await testInfo.attach('maximum-pixel-comparison', { contentType: 'application/json', body: JSON.stringify({ width: 4096, height: 4096, comparedPixels: 16777216, hostElapsedMs: performance.now() - started, timing: 'advisory, includes host assertions' }) });
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+});
+
 test('edited PNGs preserve originals and source context, verify every output pixel, and use the existing atomic save', async ({ page }) => {
   const { review, files, bytes } = await openImageReview(page, 2);
   const before = await readBrowserLocalCollection(page, 'cases');

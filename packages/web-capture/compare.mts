@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto';
 import { isIP } from 'node:net';
 import path from 'node:path';
 
-import { hammingDistanceHex, inspectDecodedImage } from '../../lib/perceptual-hash.mts';
+import { hammingDistanceHex, decodeBoundedImagePixels, imagePixelsPerceptualHash } from '../../lib/perceptual-hash.mts';
+import { compareImagePixels, type PixelImage } from '../comparison/image-change.mts';
+import { compareObservationContexts, readCaptureConditions, readObservationLabel, type CaptureConditions } from '../comparison/capture-context.mts';
+import { MAX_EVIDENCE_IMAGE_REGIONS, type ImageRegion } from '../evidence/image-regions.mts';
 import { isValidAsciiHostname } from '../../lib/hostname.mts';
 import { decodeBoundedUtf8, readBoundedRegularFile } from '../../lib/bounded-file.mts';
 import { parseBoundedJson } from '../../lib/bounded-json.mts';
@@ -31,7 +34,7 @@ const SHA256_RE = /^[a-f0-9]{64}$/iu;
 const PERCEPTUAL_HASH_RE = /^[a-f0-9]{16}$/iu;
 const ROOT_KEYS = new Set(['schema', 'schemaVersion', 'source', 'captures']);
 const SOURCE_KEYS = new Set(['name', 'reference', 'collectedAt']);
-const CAPTURE_KEYS = new Set(['domain', 'capturedAt', 'completeness', 'limitations', 'page', 'requestDomains', 'technologies', 'artifacts']);
+const CAPTURE_KEYS = new Set(['domain', 'capturedAt', 'completeness', 'limitations', 'page', 'requestDomains', 'technologies', 'artifacts', 'conditions', 'observerLabel', 'vantageLabel']);
 const PAGE_KEYS = new Set(['title', 'finalOrigin']);
 const ARTIFACT_KEYS = new Set(['kind', 'fileName', 'mimeType', 'sha256', 'perceptualHash', 'bytes', 'width', 'height']);
 const DOM_ROOT_KEYS = new Set(['schema', 'version', 'capturedAt', 'domain', 'counts', 'structure', 'visibleText', 'limitations']);
@@ -41,7 +44,7 @@ const TEXT_KEYS = new Set(['algorithm', 'value', 'bytes', 'truncated']);
 
 type UnknownRecord = Record<string, unknown>;
 type CompareOutput = 'json' | 'terminal';
-type CompareArguments = Readonly<{ leftManifest: string; rightManifest: string; output: CompareOutput }>;
+type CompareArguments = Readonly<{ leftManifest: string; rightManifest: string; output: CompareOutput; masks?: readonly ImageRegion[] }>;
 type Artifact = Readonly<{
   kind: 'screenshot' | 'dom_digest';
   fileName: string;
@@ -55,6 +58,9 @@ type Artifact = Readonly<{
 type CaptureManifest = Readonly<{
   domain: string;
   capturedAt: string;
+  conditions: CaptureConditions | null;
+  observerLabel: string | null;
+  vantageLabel: string | null;
   completeness: 'complete' | 'partial';
   title: string | null;
   finalOrigin: string | null;
@@ -71,6 +77,7 @@ type DomDigest = Readonly<{
 }>;
 type LoadedCapture = Readonly<{
   manifest: CaptureManifest;
+  pixels: PixelImage;
   dom: DomDigest;
   screenshotHashVerified: boolean;
   screenshotPerceptualHashVerified: boolean;
@@ -248,6 +255,8 @@ function parseManifest(value: unknown): CaptureManifest {
   return {
     domain: captureDomain(capture.domain, 'Rendered capture domain'),
     capturedAt,
+    conditions: readCaptureConditions(capture.conditions),
+    observerLabel: readObservationLabel(capture.observerLabel), vantageLabel: readObservationLabel(capture.vantageLabel),
     completeness,
     title: boundedText(page.title, 300, 'Rendered capture title', true),
     finalOrigin: origin(page.finalOrigin, 'Rendered capture final origin'),
@@ -333,13 +342,13 @@ async function loadCapture(manifestPath: string): Promise<LoadedCapture> {
   const screenshotBytes = await boundedFile(path.join(directory, manifest.screenshot.fileName), MAX_SCREENSHOT_BYTES, manifest.screenshot.bytes, 'Rendered screenshot');
   const domBytes = await boundedFile(path.join(directory, manifest.domDigest.fileName), MAX_DOM_DIGEST_BYTES, manifest.domDigest.bytes, 'Rendered DOM digest');
   const screenshotHashVerified = sha256(screenshotBytes) === manifest.screenshot.sha256;
-  const screenshotInspection = inspectDecodedImage(screenshotBytes);
-  const screenshotPerceptualHashVerified = screenshotInspection.decodable
-    && screenshotInspection.width === manifest.screenshot.width
-    && screenshotInspection.height === manifest.screenshot.height
-    && screenshotInspection.perceptualHash === manifest.screenshot.perceptualHash;
+  const pixels = decodeBoundedImagePixels(screenshotBytes);
+  const screenshotPerceptualHashVerified = pixels !== null
+    && pixels.width === manifest.screenshot.width
+    && pixels.height === manifest.screenshot.height
+    && imagePixelsPerceptualHash(pixels) === manifest.screenshot.perceptualHash;
   const domHashVerified = sha256(domBytes) === manifest.domDigest.sha256;
-  if (!screenshotHashVerified || !screenshotPerceptualHashVerified || !domHashVerified) {
+  if (!screenshotHashVerified || !screenshotPerceptualHashVerified || !domHashVerified || !pixels) {
     throw new Error('Rendered capture artefact integrity verification failed.');
   }
   let domValue: unknown;
@@ -351,7 +360,7 @@ async function loadCapture(manifestPath: string): Promise<LoadedCapture> {
   } catch {
     throw new Error('Rendered DOM digest is not valid JSON.');
   }
-  return { manifest, dom: parseDomDigest(domValue, manifest.domain, manifest.capturedAt), screenshotHashVerified, screenshotPerceptualHashVerified, domHashVerified };
+  return { manifest, pixels, dom: parseDomDigest(domValue, manifest.domain, manifest.capturedAt), screenshotHashVerified, screenshotPerceptualHashVerified, domHashVerified };
 }
 
 function setComparison(left: readonly string[], right: readonly string[]) {
@@ -381,6 +390,7 @@ export async function compareRenderedCaptures(
   leftPath: string,
   rightPath: string,
   generatedAt = new Date().toISOString(),
+  masks: readonly ImageRegion[] = [],
 ) {
   const leftManifest = boundedPath(leftPath, 'Left capture manifest');
   const rightManifest = boundedPath(rightPath, 'Right capture manifest');
@@ -408,6 +418,10 @@ export async function compareRenderedCaptures(
     left: { domain: left.manifest.domain, capturedAt: left.manifest.capturedAt, completeness: left.manifest.completeness },
     right: { domain: right.manifest.domain, capturedAt: right.manifest.capturedAt, completeness: right.manifest.completeness },
     partial,
+    observationContext: compareObservationContexts([left, right].map(({ manifest }) => ({
+      observedAt: manifest.capturedAt, observerLabel: manifest.observerLabel, vantageLabel: manifest.vantageLabel, conditions: manifest.conditions,
+    }))),
+    pixelChanges: compareImagePixels(left.pixels, right.pixels, masks),
     integrity: {
       left: { screenshot: left.screenshotHashVerified, perceptualHash: left.screenshotPerceptualHashVerified, domDigest: left.domHashVerified },
       right: { screenshot: right.screenshotHashVerified, perceptualHash: right.screenshotPerceptualHashVerified, domDigest: right.domHashVerified },
@@ -460,14 +474,23 @@ export async function compareRenderedCaptures(
 
 export function parseCaptureCompareArguments(argv: readonly string[]): CompareArguments {
   const inputs: string[] = [];
+  const masks: ImageRegion[] = [];
   let output: CompareOutput = 'terminal';
-  for (const argument of argv) {
+  for (let index = 0; index < argv.length; index++) {
+    const argument = argv[index]!;
     if (argument === '--json') output = 'json';
+    else if (argument === '--mask') {
+      const coordinates = argv[++index];
+      if (!coordinates || !/^[0-9]{1,5},[0-9]{1,5},[0-9]{1,5},[0-9]{1,5}$/u.test(coordinates) || masks.length >= MAX_EVIDENCE_IMAGE_REGIONS) throw new Error('--mask requires left,top,width,height; at most 64 masks are supported.');
+      const [x, y, width, height] = coordinates.split(',').map(Number) as [number, number, number, number];
+      if (width < 1 || height < 1 || [x, y, width, height].some(value => value > 10000)) throw new Error('Mask coordinates are outside the image bound.');
+      masks.push({ kind: 'redact', x, y, width, height });
+    }
     else if (argument.startsWith('-')) throw new Error(`Unknown rendered comparison option "${argument}".`);
     else inputs.push(argument);
   }
-  if (inputs.length !== 2) throw new Error('Usage: whoisleuth-capture compare <left-manifest.json> <right-manifest.json> [--json]');
-  return { leftManifest: boundedPath(inputs[0], 'Left capture manifest'), rightManifest: boundedPath(inputs[1], 'Right capture manifest'), output };
+  if (inputs.length !== 2) throw new Error('Usage: whoisleuth-capture compare <left-manifest.json> <right-manifest.json> [--json] [--mask left,top,width,height]');
+  return { leftManifest: boundedPath(inputs[0], 'Left capture manifest'), rightManifest: boundedPath(inputs[1], 'Right capture manifest'), output, ...(masks.length ? { masks } : {}) };
 }
 
 export function formatRenderedCaptureComparison(document: Awaited<ReturnType<typeof compareRenderedCaptures>>): string {
@@ -477,8 +500,14 @@ export function formatRenderedCaptureComparison(document: Awaited<ReturnType<typ
     `Left              ${document.left.domain} · ${document.left.completeness}`,
     `Right             ${document.right.domain} · ${document.right.completeness}`,
     `Evidence          ${document.partial ? 'Partial' : 'Complete'}`,
+    `Capture times     ${document.left.capturedAt} → ${document.right.capturedAt}`,
+    `Declared labels   ${document.observationContext.labels}; collection independence not verified`,
     '',
     `Screenshot        ${document.screenshot.state}${document.screenshot.agreementPercent === null ? '' : ` · ${document.screenshot.agreementPercent}% bit agreement`}`,
+    `Image pixels      ${document.pixelChanges.state} · ${document.pixelChanges.changedPixels} changed of ${document.pixelChanges.comparedPixels} compared · ${document.pixelChanges.excludedPixels} excluded`,
+    ...document.observationContext.rows.map(row => `  ${row.label}: ${row.values.map(value => value ?? 'unknown').join(' → ')} (${row.state})`),
+    ...document.pixelChanges.masks.map(mask => `  Excluded region: ${mask.x},${mask.y},${mask.width},${mask.height}`),
+    ...document.pixelChanges.tiles.map(tile => `  Changed region: ${tile.x},${tile.y},${tile.width},${tile.height} · ${tile.changedPixels}/${tile.comparedPixels} pixels`),
     `Element tags      ${document.renderedDom.structure.state}`,
     `Body text nodes   ${document.renderedDom.visibleText.state}`,
     `Page title        ${document.page.title.state}`,
@@ -491,6 +520,8 @@ export function formatRenderedCaptureComparison(document: Awaited<ReturnType<typ
     '',
     'Limitations:',
     ...document.limitations.map((limitation) => `  - ${limitation}`),
+    ...document.observationContext.limitations.map(limitation => `  - ${limitation}`),
+    ...document.pixelChanges.limitations.map(limitation => `  - ${limitation}`),
   ];
   return `${lines.join('\n')}\n`;
 }

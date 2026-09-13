@@ -438,5 +438,6 @@ function inspectDecodedImage(buf: Buffer): DecodedImageInspection {
 // alias so the evidence contract does not imply that a screenshot is a favicon.
 const imagePerceptualHash = faviconPerceptualHash;
 
-export { faviconPerceptualHash, hammingDistanceHex, imagePerceptualHash, inspectDecodedImage };
-export type { DecodedImageInspection };
+// Pixel consumers share the same strict byte/dimension admission as hashing.
+export { faviconPerceptualHash, hammingDistanceHex, imagePerceptualHash, inspectDecodedImage, decodeImage as decodeBoundedImagePixels, dHash as imagePixelsPerceptualHash };
+export type { DecodedImageInspection, DecodedImage };

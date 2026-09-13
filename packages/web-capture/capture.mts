@@ -7,6 +7,7 @@ import type { Browser, BrowserContext, Page, Route } from 'playwright';
 
 import { WHOISLEUTH_USER_AGENT } from '../../lib/outbound-identity.mts';
 import { inspectDecodedImage } from '../../lib/perceptual-hash.mts';
+import { readCaptureConditions, readObservationLabel } from '../comparison/capture-context.mts';
 import { readBytesCapped, resolvePublicAddresses, safeFetchDetailed } from '../../lib/safe-fetch.mts';
 import {
   startAnchoredArtifactWriter,
@@ -66,6 +67,8 @@ type CaptureArguments = Readonly<{
   targetUrl: string;
   outputDirectory: string;
   timeoutMs: number;
+  observerLabel?: string;
+  vantageLabel?: string;
 }>;
 
 type CaptureDependencies = Readonly<{
@@ -244,12 +247,19 @@ export function parseCaptureArguments(argv: readonly string[]): CaptureArguments
   let destination: string | null = null;
   let authorised = false;
   let timeoutMs = 20_000;
+  const labels: { observerLabel?: string; vantageLabel?: string } = {};
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === '--output-dir') {
       if (destination !== null) throw new Error('--output-dir may be supplied only once.');
       destination = argv[++index] ?? null;
       if (!destination || destination.startsWith('-')) throw new Error('--output-dir requires one new directory path.');
+    } else if (argument === '--observer' || argument === '--vantage') {
+      const key = argument === '--observer' ? 'observerLabel' : 'vantageLabel';
+      if (labels[key] !== undefined) throw new Error(`${argument} may be supplied only once.`);
+      const value = argv[++index];
+      if (!value || value.startsWith('-')) throw new Error(`${argument} requires one declared label.`);
+      labels[key] = readObservationLabel(value)!;
     } else if (argument === '--timeout-ms') {
       const value = Number(argv[++index]);
       if (!Number.isInteger(value) || value < 1_000 || value > MAX_CAPTURE_TIMEOUT_MS) {
@@ -270,7 +280,7 @@ export function parseCaptureArguments(argv: readonly string[]): CaptureArguments
   if (!targetUrl || !destination || !authorised) {
     throw new Error('Usage: whoisleuth-capture <url> --output-dir <new-directory> --authorize-rendered-capture [--timeout-ms <1000-30000>]');
   }
-  return { targetUrl: captureTargetUrl(targetUrl).toString(), outputDirectory: outputDirectory(destination), timeoutMs };
+  return { targetUrl: captureTargetUrl(targetUrl).toString(), outputDirectory: outputDirectory(destination), timeoutMs, ...labels };
 }
 
 async function projectDom(page: Page): Promise<NormalizedDomProjection> {
@@ -747,6 +757,7 @@ export async function captureRenderedPage(
     throw new Error(`Rendered capture total-run timeout must be between 1000 and ${MAX_CAPTURE_TIMEOUT_MS} ms.`);
   }
   const target = captureTargetUrl(argumentsValue.targetUrl);
+  const observerLabel = readObservationLabel(argumentsValue.observerLabel), vantageLabel = readObservationLabel(argumentsValue.vantageLabel);
   const targetDirectory = outputDirectory(argumentsValue.outputDirectory);
   const parentDirectory = path.dirname(targetDirectory);
   await mkdir(parentDirectory, { recursive: true, mode: 0o700 });
@@ -823,6 +834,7 @@ export async function captureRenderedPage(
     browser = await deadline.run(browserAcquisition);
     context = await deadline.run(browser.newContext({
       viewport: VIEWPORT,
+      deviceScaleFactor: 1, locale: 'en-US', timezoneId: 'UTC', colorScheme: 'light',
       serviceWorkers: 'block',
       acceptDownloads: false,
       ignoreHTTPSErrors: false,
@@ -912,6 +924,9 @@ export async function captureRenderedPage(
       captures: [{
         domain: canonicalUrlHost(target),
         capturedAt,
+        conditions: readCaptureConditions({ browser: 'chromium', browserVersion: browser.version(), viewport: VIEWPORT,
+          deviceScaleFactor: 1, locale: 'en-US', timezone: 'UTC', colourScheme: 'light' }),
+        ...(observerLabel ? { observerLabel } : {}), ...(vantageLabel ? { vantageLabel } : {}),
         completeness: requestStats.blockedRequestCount || dom.structureTruncated || dom.textTruncated ? 'partial' : 'complete',
         limitations,
         page: { title: title || null, finalOrigin: finalUrl.origin.toLowerCase() },

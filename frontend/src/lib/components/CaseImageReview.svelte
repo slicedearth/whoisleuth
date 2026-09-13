@@ -10,6 +10,7 @@
   import { failedLocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
   import ArtifactPreview from './ArtifactPreview.svelte';
   import EvidenceTimestamp from './EvidenceTimestamp.svelte';
+  import ImageChangeReview from './ImageChangeReview.svelte';
 
   let { record, attachment, file, mutationBusy, persistOperation, onbusy }: {
     record: CaseRecord; attachment: CaseAttachment; file: Blob; mutationBusy: boolean;
@@ -161,6 +162,10 @@
     </section>{/if}
   </div>
   {#if !editing}<button class="btn" type="button" disabled={busy || !dimensions || !sourcePresent || uncertain} onclick={() => editing = true}>Create edited PNG</button>{/if}
+  {#if right}<ImageChangeReview left={file} right={right.file} contexts={[
+    { observedAt: attachment.observedAt, observerLabel: null, vantageLabel: null },
+    { observedAt: right.attachment.observedAt, observerLabel: null, vantageLabel: null },
+  ]} />{/if}
   {#if editing}
     <div class="image-edit">
       <h5>Image regions</h5>

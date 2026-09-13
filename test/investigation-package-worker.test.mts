@@ -7,8 +7,24 @@ import { MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, MAX_INVESTIGATION_MANIFEST_A
 import { inspectInvestigationPackage } from '../packages/investigation/investigation-package.mts';
 import { buildLookupEvidence } from '../lib/evidence-export.mts';
 import { lookupGraphCapacityFixture } from './lookup-graph-capacity-fixture.mts';
+import { captureReviewFixture } from './capture-review-fixture.mts';
 
 const NOW = '2026-09-11T00:00:00.000Z';
+
+test('capture metadata can be reviewed before files are selected without relaxing package or byte bounds', async () => {
+  const { manifestBytes, screenshot } = captureReviewFixture();
+  const manifest = new Blob([manifestBytes, ' '.repeat(1024 * 1024 - manifestBytes.length)]);
+  const metadata = await runInvestigationPackageOperation({ kind: 'capture', input: { manifest, files: [] } });
+  if (metadata.kind !== 'capture') assert.fail('Expected metadata-only capture review.');
+  assert.equal(metadata.result.captures.length, 1);
+  assert.equal(metadata.result.contents.size, 0);
+  assert.ok(metadata.result.matches.every(match => match.matchingIds.length === 0));
+  const selected = await runInvestigationPackageOperation({ kind: 'capture', input: { manifest, files: [new Blob([new Uint8Array(screenshot)])] } });
+  if (selected.kind !== 'capture') assert.fail('Expected selected attachment checks.');
+  assert.equal(selected.result.contents.size, 1);
+  assert.equal((await runInvestigationPackageOperation({ kind: 'capture', input: { manifest: new Blob([manifest, ' ']), files: [] } })).kind, 'error');
+  assert.throws(() => assertInvestigationFileSelection([]));
+});
 const request: InvestigationPackageRequest = { kind: 'build', input: { workflow: 'Evidence review', generatedAt: NOW, applicationVersion: '2.3.1', files: [
   { file: new Blob(['{"retained":"exactly"}\n']), mediaType: 'application/json', source: { identity: 'Declared source', observedAt: null } },
   { file: new Blob([new Uint8Array([0, 255, 128])]), mediaType: 'image/png', source: { identity: null, observedAt: null } },

@@ -99,6 +99,8 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   { id: 'registrar-standing-network', pattern: /Registrar standing is matched locally using only the numeric IANA ID.*Lookup makes no additional IANA or ICANN request/iu },
   { id: 'integrity-limits', pattern: /Checksums and signatures.*do not prove evidence accuracy, authorship, signer identity/iu },
   { id: 'capture-disclosure', pattern: /executes remote page JavaScript.*exact requested URL, including its path and query/iu },
+  { id: 'image-comparison-retention', pattern: /Changed-pixel results and comparison exclusions stay in page memory.*Exclusions do not redact files.*Comparing another capture does not save or import it/iu },
+  { id: 'capture-condition-retention', pattern: /manifests retain browser version, viewport, scale, locale, timezone and colour scheme.*declarations can enter imported metadata and shared exports.*do not verify identity, location or independent collection/iu },
   { id: 'capture-manifest-import', pattern: /capture manifest.*imports only sanitised (?:manifest )?metadata and declared digests.*check and the file bytes are not saved by the Case metadata import/iu },
   { id: 'capture-attachment-check', pattern: /separate optional attachment selection reads and checks screenshot and DOM-digest bytes in page memory,? without uploading them/iu },
   { id: 'retained-originals', pattern: /Retained files require a separate explicit save.*stored unchanged in the current workspace, using its encryption when enabled.*filenames, declared sources and observation times, retention times, byte counts and digests; filesystem paths are not stored.*sensitive content that ordinary Case metadata excludes.*No file is uploaded automatically/iu },

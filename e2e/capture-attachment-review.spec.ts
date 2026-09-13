@@ -4,6 +4,77 @@ import { openCaseSection } from './console-navigation';
 import { readBrowserLocalCollection, failNextBrowserLocalManifestWrite, expectNoHorizontalOverflow, useTheme } from './helpers';
 import { captureReviewFixture } from '../test/capture-review-fixture.mts';
 import { storedFiles, openRetainedFiles, failNextFileWrite } from './case-attachment-fixtures';
+import { createHash } from 'node:crypto';
+import AxeBuilder from '@axe-core/playwright';
+import { sourceImage } from './case-image-fixtures';
+
+test('capture comparison exposes declared conditions, handles unmatched and different-sized images, and saves nothing', async ({ page }, testInfo) => {
+  await openCasesView(page); await createCase(page, 'capture.example'); await openCaseSection(page, 'Evidence');
+  const capture = page.locator('.capture-workspace'); await capture.locator(':scope > summary').click();
+  const { manifest, screenshot, manifestBytes } = captureReviewFixture();
+  const before = await readBrowserLocalCollection(page, 'cases');
+  // The manifest parser's existing 1 MiB byte boundary also applies to this UI.
+  await capture.getByLabel('Select capture manifest', { exact: true }).setInputFiles({ name: 'manifest.json', mimeType: 'application/json', buffer: Buffer.concat([manifestBytes, Buffer.alloc(1024 * 1024 - manifestBytes.length, 32)]) });
+  await capture.getByLabel('Select capture attachments to check', { exact: true }).setInputFiles({ name: 'left.png', mimeType: 'image/png', buffer: Buffer.from(screenshot) });
+  const comparison = capture.locator('.capture-comparison'); await comparison.locator(':scope > summary').click();
+  const second = { ...manifest, captures: [{ ...manifest.captures[0]!, capturedAt: '2026-09-01T00:05:00.000Z', observerLabel: 'Analyst B', vantageLabel: 'Selected network',
+    conditions: { browser: 'chromium', browserVersion: '151', viewport: { width: 1024, height: 768 }, deviceScaleFactor: 1, locale: 'en-AU', timezone: 'UTC', colourScheme: 'light' } }] };
+  const manifestInput = comparison.getByLabel('Comparison capture manifest', { exact: true });
+  await manifestInput.setInputFiles({ name: 'second.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(second)) });
+  const attachments = comparison.getByLabel('Comparison capture attachments', { exact: true });
+  await expect(attachments).toBeEnabled();
+  await attachments.setInputFiles({ name: 'wrong.png', mimeType: 'image/png', buffer: Buffer.from('Not the selected screenshot') });
+  await expect(attachments).toBeEnabled();
+  await expect(comparison).toContainText('No comparison PNG has matching selected bytes yet.');
+  await attachments.setInputFiles([
+    { name: 'first.png', mimeType: 'image/png', buffer: Buffer.from(screenshot) },
+    { name: 'second.png', mimeType: 'image/png', buffer: Buffer.from(screenshot) },
+  ]);
+  const select = comparison.getByRole('combobox', { name: 'Second screenshot', exact: true });
+  await expect(select).toHaveValue('');
+  await expect(comparison.getByRole('region', { name: 'Second capture image', exact: true })).toHaveCount(0);
+  await select.selectOption({ index: 1 });
+  const pixels = comparison.locator('.image-change-review'); await pixels.locator(':scope > summary').click();
+  await pixels.getByRole('button', { name: 'Calculate image changes', exact: true }).click();
+  await expect(pixels.getByRole('status')).toHaveText('0 of 1,024 compared pixels differ (0.00%). 0 pixels excluded.');
+  await expect(pixels.getByRole('img')).toHaveCount(0);
+  await pixels.getByText('Observation times and capture conditions', { exact: true }).click();
+  await expect(pixels).toContainText('300 seconds apart'); await expect(pixels).toContainText('Declared viewport · unknown');
+  await expect(pixels).toContainText('Analyst B'); await expect(pixels).toContainText('collection independence is not verified');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280, 1920, 2560, 3840]) {
+      await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
+      await pixels.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+      if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`capture-context-${theme}-${width}.png`) });
+    }
+    expect((await new AxeBuilder({ page }).include('.capture-comparison').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+  }
+  const different = sourceImage();
+  second.captures[0]!.artifacts = [{ ...second.captures[0]!.artifacts[0]!, bytes: different.length, sha256: createHash('sha256').update(different).digest('hex'), width: 640, height: 360 }];
+  await manifestInput.setInputFiles({ name: 'different.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(second)) });
+  await expect(pixels).toHaveCount(0);
+  await attachments.setInputFiles({ name: 'different.png', mimeType: 'image/png', buffer: different });
+  await pixels.locator(':scope > summary').click(); await pixels.getByRole('button', { name: 'Calculate image changes', exact: true }).click();
+  await expect(pixels.getByRole('status')).toHaveText('The dimensions differ; pixels were not resized or compared.');
+  await page.evaluate(() => {
+    const post = Worker.prototype.postMessage, terminate = Worker.prototype.terminate;
+    let held: Worker | null = null, stopped = 0;
+    Worker.prototype.postMessage = function(message: unknown, ...rest: unknown[]) {
+      if ((message as { kind?: string } | null)?.kind === 'capture') { held = this; return; }
+      return Reflect.apply(post, this, [message, ...rest]);
+    };
+    Worker.prototype.terminate = function() { if (held === this) { held = null; stopped++; } return terminate.call(this); };
+    Object.defineProperty(window, 'heldComparison', { get: () => ({ held: held !== null, stopped }) });
+  });
+  await attachments.setInputFiles({ name: 'waiting.png', mimeType: 'image/png', buffer: different });
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, 'heldComparison'))).toEqual({ held: true, stopped: 0 });
+  await expect(pixels).toHaveCount(0);
+  await comparison.getByRole('button', { name: 'Cancel comparison capture', exact: true }).click();
+  await expect(attachments).toBeFocused();
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, 'heldComparison'))).toEqual({ held: false, stopped: 1 });
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before); expect(await storedFiles(page)).toEqual([]);
+});
 
 test('explicit capture retention commits matching original files with the imported evidence, excluding unmatched selections', async ({ page }) => {
   await openCasesView(page); await createCase(page, 'capture.example'); await openCaseSection(page, 'Evidence');

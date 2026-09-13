@@ -9,6 +9,9 @@ import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES, hasEncryptedInvestigationPac
 import { decryptInvestigationPackage, encryptInvestigationPackage } from '../../../packages/investigation/investigation-package-crypto.mts';
 import { buildInvestigationBagIt, prepareInvestigationBagIt } from '../../../packages/investigation/investigation-bagit.mts';
 import { assertBagItSelection, inspectBagItEntries, readBagItZip, MAX_BAGIT_ZIP_BYTES, MAX_BAGIT_ENTRIES, type BagItReview } from '../../../packages/interchange/bagit.mts';
+import { compareLocalPngs } from './image-change.ts';
+import type { ImageRegion } from '../../../packages/evidence/image-regions.mts';
+import type { ImageChange } from '../../../packages/comparison/image-change.mts';
 
 export type SelectedInvestigationFile = Readonly<{
   file: Blob;
@@ -28,6 +31,7 @@ export type BrowserCaptureAttachmentReview = ReturnType<typeof readWebCaptureMan
   unusedIds: readonly string[];
 }>;
 export type InvestigationPackageInputs = {
+  imageCompare: { left: Blob; right: Blob; masks: readonly ImageRegion[] };
   build: { files: readonly SelectedInvestigationFile[]; workflow: string; generatedAt: string; applicationVersion: string; passphrase?: string };
   folder: Omit<InvestigationPackageInputs['build'], 'passphrase'>;
   bagitBuild: Omit<InvestigationPackageInputs['build'], 'passphrase'>;
@@ -39,7 +43,7 @@ export type InvestigationPackageInputs = {
   inspectFolder: { files: readonly InvestigationFolderFile[] };
   capture: { manifest: Blob; files: readonly Blob[] };
 };
-export type InvestigationPackageResults = { build: BuildResult; folder: BrowserInvestigationFolder; capsule: BuildResult; inspect: BrowserInvestigationPackageReview; inspectFolder: BrowserInvestigationPackageReview; capture: BrowserCaptureAttachmentReview;
+export type InvestigationPackageResults = { imageCompare: ImageChange; build: BuildResult; folder: BrowserInvestigationFolder; capsule: BuildResult; inspect: BrowserInvestigationPackageReview; inspectFolder: BrowserInvestigationPackageReview; capture: BrowserCaptureAttachmentReview;
   bagitBuild: BuildResult; bagitFolder: BrowserInvestigationFolder; bagitInspect: BrowserBagItReview; bagitInspectFolder: BrowserBagItReview };
 export type InvestigationPackageKind = keyof InvestigationPackageInputs;
 export type InvestigationPackageRequest = { [Kind in InvestigationPackageKind]: { kind: Kind; input: InvestigationPackageInputs[Kind] } }[InvestigationPackageKind];
@@ -78,6 +82,7 @@ export function assertInvestigationFolderSelection(files: readonly Investigation
 export async function runInvestigationPackageOperation(request: InvestigationPackageRequest): Promise<InvestigationPackageResponse> {
   try {
     if (!request?.input) throw new TypeError('Missing package input.');
+    if (request.kind === 'imageCompare') return { kind: 'imageCompare', result: await compareLocalPngs(request.input.left, request.input.right, request.input.masks) };
     if (request.kind === 'bagitInspect' || request.kind === 'bagitInspectFolder') {
       let files: ReadonlyMap<string, Uint8Array>;
       if (request.kind === 'bagitInspect') {
@@ -100,7 +105,9 @@ export async function runInvestigationPackageOperation(request: InvestigationPac
       const { manifest, files } = request.input;
       if (!(manifest instanceof Blob) || !manifest.size || manifest.size > MAX_WEB_CAPTURE_MANIFEST_BYTES) throw new TypeError('Capture manifest exceeds its input limit.');
       if (!Array.isArray(files) || files.length > MAX_INVESTIGATION_MANIFEST_ARTIFACTS) throw new TypeError('Too many capture attachment files.');
-      assertInvestigationFileSelection(files.map(file => ({ file, mediaType: 'application/octet-stream', source: { identity: null, observedAt: null } })));
+      // A manifest may be reviewed before any attachment is selected. Actual
+      // attachments retain the same per-file and aggregate admission as packages.
+      if (files.length) assertInvestigationFileSelection(files.map(file => ({ file, mediaType: 'application/octet-stream', source: { identity: null, observedAt: null } })));
       const decoded = new TextDecoder('utf-8', { fatal: true }).decode(await manifest.arrayBuffer());
       const parsed = readWebCaptureManifest(parseBoundedJson(decoded, { label: 'Capture manifest', maximumBytes: MAX_WEB_CAPTURE_MANIFEST_BYTES }));
       const candidates: Array<{ id: string; bytes: number; sha256: string }> = [];
@@ -185,6 +192,7 @@ export async function runInvestigationPackageOperation(request: InvestigationPac
     }
     throw new TypeError('Unsupported package operation.');
   } catch {
+    if (request?.kind === 'imageCompare') return { kind: 'error', detail: 'These PNGs or excluded regions could not be compared within the supported image bounds. No file was changed.' };
     if (request?.kind?.startsWith('bagit')) return { kind: 'error', detail: 'BagIt processing could not finish. Select a BagIt 1.0 ZIP or folder with UTF-8 tags, safe relative paths and supported file limits. Empty payload folders must be selected as a ZIP. Nothing was fetched or saved.' };
     const unlocking = request?.kind === 'inspect' && typeof request.input?.passphrase === 'string';
     return { kind: 'error', detail: unlocking

@@ -27,7 +27,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PACKAGE_SOURCE = 'packages/web-capture/package.json';
 const ENTRY = 'packages/web-capture/bin/whoisleuth-capture.mts';
 const ENTRY_OUTPUT = ENTRY.replace(/\.mts$/u, '.mjs');
-const SOURCE = /^(?:package\.json|(?:lib|packages\/(?:contracts|evidence|web-capture))\/[A-Za-z0-9._/-]+\.(?:mts|ts|json))$/u;
+const SOURCE = /^(?:package\.json|(?:lib|packages\/(?:comparison|contracts|evidence|web-capture))\/[A-Za-z0-9._/-]+\.(?:mts|ts|json))$/u;
 const SUPPORT = [['packages/web-capture/README.md', 'README.md'], ['LICENSE', 'LICENSE'], ['NOTICE', 'NOTICE'], ['DISCLOSURE', 'DISCLOSURE']] as const;
 type Json = Record<string, unknown>;
 function object(value: unknown, label: string): Json {

@@ -15,14 +15,14 @@ const graph = (sources: string[]) => ({ modules: sources.map(source => ({ source
 
 describe('independent capture package', () => {
   test('discovers helper modules without a maintained source inventory', () => {
-    const sources = [entry, ...Array.from({ length: 600 }, (_, index) => `lib/helper-${index}.mts`)];
+    const sources = [entry, ...Array.from({ length: 300 }, (_, index) => `lib/helper-${index}.mts`), ...Array.from({ length: 300 }, (_, index) => `packages/comparison/helper-${index}.mts`)];
     const inputs = capturePackageInputs(graph([...sources, 'node_modules/playwright/index.mjs', 'node_modules/undici/index.js']));
     assert.deepEqual(inputs.sources, sources.sort());
     assert.deepEqual(inputs.dependencies, ['playwright', 'undici']);
   });
 
   test('rejects unrelated, unresolved, traversing and excessive graph inputs', () => {
-    for (const source of ['frontend/src/lib/private.ts', 'cli/private.mts', 'lib/../outside.mts', 'node_modules/unreviewed/index.js']) {
+    for (const source of ['frontend/src/lib/private.ts', 'cli/private.mts', 'packages/unreviewed-adapter/runtime.mts', 'lib/../outside.mts', 'node_modules/unreviewed/index.js']) {
       assert.throws(() => capturePackageInputs(graph([entry, source])));
     }
     assert.throws(() => capturePackageInputs({ modules: [{ source: entry, dependencies: [{ couldNotResolve: true }] }] }), /could not be resolved/u);

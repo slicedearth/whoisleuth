@@ -333,6 +333,9 @@ Input numbers start at 1 and refer to the fixed recipe's placeholders.
 `diff` compares saved observations of the same or different domains; `timeline`
 orders observations of one domain. Candidate and domain-control intent inputs
 remain analyst selections. No external file is inferred or extracted automatically.
+`reconcile` lists each observation time and declared observer/vantage, keeping
+disagreement and unavailable evidence separate. Distinct labels do not verify
+independent collection; timing and shared caches can affect the comparison.
 
 For example, registry review can reuse its collection without extracting files:
 

@@ -17,6 +17,7 @@ import {
   WEB_CAPTURE_SUMMARY_VERSION,
 } from '../contracts/web-capture.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { readCaptureConditions, readObservationLabel, type ObservationContext } from '../comparison/capture-context.mts';
 export {
   WEB_CAPTURE_MANIFEST_SCHEMA,
   WEB_CAPTURE_MANIFEST_VERSION,
@@ -44,6 +45,7 @@ const CAPTURE_KEYS = new Set([
   'networkOrigins',
 ]);
 const MANIFEST_CAPTURE_KEYS = new Set([
+  'conditions', 'observerLabel', 'vantageLabel',
   'domain',
   'capturedAt',
   'completeness',
@@ -252,6 +254,7 @@ export type CaptureArtifactDeclaration = Readonly<{
 export function readWebCaptureManifest(value: unknown): Readonly<{
   document: ExternalFindingsDocument;
   artifacts: readonly CaptureArtifactDeclaration[];
+  captures: readonly (ObservationContext & Readonly<{ domain: string; completeness: string }>)[];
 }> {
   const root = record(value);
   if (
@@ -272,6 +275,7 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
   }
   const findings: Array<Record<string, unknown>> = [];
   const artifacts: CaptureArtifactDeclaration[] = [];
+  const contexts: Array<ObservationContext & Readonly<{ domain: string; completeness: string }>> = [];
   const domainCounts = new Map<string, number>();
   const findingCounts = new Map<string, number>();
   for (const [index, raw] of root.captures.entries()) {
@@ -290,10 +294,13 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
       throw new Error(`Web capture manifests exceed the ${MAX_EXTERNAL_FINDING_DOMAINS}-domain limit.`);
     }
     const observedAt = timestamp(capture.capturedAt, `Web capture manifest ${index + 1} time`);
+    const conditions = readCaptureConditions(capture.conditions);
+    const observerLabel = readObservationLabel(capture.observerLabel), vantageLabel = readObservationLabel(capture.vantageLabel);
     const completeness = ['complete', 'inconclusive', 'partial', 'unknown'].includes(String(capture.completeness))
       ? capture.completeness
       : 'unknown';
     const limitations = stringList(capture.limitations, 8, 240, `Web capture manifest ${index + 1} limitations`);
+    contexts.push({ domain, observedAt, completeness: String(completeness), conditions, observerLabel, vantageLabel });
     const page = record(capture.page);
     if (page && !onlyKeys(page, PAGE_KEYS)) throw new Error(`Web capture manifest ${index + 1} page metadata contains unsupported fields.`);
     const pageTitle = text(page?.title, 300, `Web capture manifest ${index + 1} title`, true);
@@ -345,6 +352,8 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
       artifacts.push({ capture: index + 1, observedAt, kind, fileName, mimeType: mimeType!, sha256, bytes });
     }
     const summaryFragments = [
+      ...(conditions ? [`Declared capture conditions: ${conditions.browser} ${conditions.browserVersion}; viewport ${conditions.viewport.width}x${conditions.viewport.height}; scale ${conditions.deviceScaleFactor}; locale ${conditions.locale}; timezone ${conditions.timezone}; ${conditions.colourScheme}.`] : []),
+      ...(observerLabel || vantageLabel ? [`Declared observer: ${observerLabel ?? 'unknown'}; vantage: ${vantageLabel ?? 'unknown'}. These labels do not verify collection independence.`] : []),
       pageTitle || finalOrigin
         ? `Sanitised page capture${pageTitle ? ` titled "${pageTitle}"` : ''}${finalOrigin ? ` ended at origin ${finalOrigin}` : ''}.`
         : '',
@@ -380,7 +389,7 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
     source: { name: sourceName, reference: sourceReference, collectedAt: sourceCollectedAt },
     findings,
   });
-  return { document, artifacts };
+  return { document, artifacts, captures: contexts };
 }
 
 export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocument {

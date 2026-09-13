@@ -11,7 +11,7 @@ import { createBulkCheckpointWriter, parseBulkCheckpoint } from '../cli/bulk-che
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliLookupDocument } from '../cli/formatters/json.mts';
 import { buildCliLookupDiff } from '../cli/lookup-diff.mts';
-import { buildCliLookupReconciliation } from '../cli/lookup-reconcile.mts';
+import { buildCliLookupReconciliation, formatCliLookupReconciliation } from '../cli/lookup-reconcile.mts';
 import { buildCliLookupTimeline } from '../cli/lookup-timeline.mts';
 import { MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../cli/investigation-manifest.mts';
 import { CLI_PROGRESS_EVENT_SCHEMA, CLI_PROGRESS_EVENT_VERSION, createCliProgressEvents } from '../cli/progress-events.mts';
@@ -782,6 +782,12 @@ describe('direct reports and saved Lookup diff', () => {
     assert.equal(direct.independence.state, 'verified_distinct_labels');
     assert.ok(direct.summary.disagreement > 0);
     assert.equal(direct.privacy.filenamesRetained, 0);
+    const terminal = formatCliLookupReconciliation(direct);
+    assert.match(terminal, /Capture time span\s+60 seconds/u);
+    assert.match(terminal, /2026-06-01T00:00:00.000Z.*observer Office.*vantage Resolver A/u);
+    assert.match(terminal, /2026-06-01T00:01:00.000Z.*observer Mobile.*vantage Resolver B/u);
+    assert.match(terminal, /Declared labels\s+distinct; collection independence not verified/u);
+    assert.doesNotMatch(terminal, /Independence\s+verified/u);
 
     const stdout = capture();
     const inputs: Record<string, string> = { 'office.json': office, 'mobile.json': mobile };

@@ -569,6 +569,13 @@ same manifest and files without importing them or granting ongoing access.
 Preview a retained PNG to compare it with another retained image. Source,
 observation time, dimensions and byte identity remain separate; an appearance
 change is not proof of a site change when capture conditions are unknown.
+**Compare image regions** checks every pixel without resizing. The map groups
+changes; its coordinate list gives exact changed counts in each cell. Exclude
+rectangles explicitly to ignore selected areas in both images, then calculate
+again. Exclusions do not redact files or become saved evidence. **Compare another
+capture** accepts a second manifest and matching PNG without importing it into the
+Case. Review its observation times and declared browser, viewport, locale and
+vantage alongside the images; missing conditions remain unknown.
 Choose **Create edited PNG** to draw or enter rectangular redactions and
 outlines. Add each region, prepare the image, review its pixels, then retain it
 as a separate file. Redactions are opaque, not blur effects. The original stays

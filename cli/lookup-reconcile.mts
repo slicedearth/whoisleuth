@@ -1,6 +1,7 @@
 import { CliUsageError } from './errors.mts';
 import { buildCliLookupDiff } from './lookup-diff.mts';
 import { parseSavedLookupDocument, type SavedLookupDocument, type UnknownRecord } from './saved-lookup.mts';
+import { compareObservationContexts } from '../packages/comparison/capture-context.mts';
 
 const CLI_LOOKUP_RECONCILIATION_SCHEMA = 'whoisleuth.cli.lookup-reconciliation';
 const CLI_LOOKUP_RECONCILIATION_VERSION = 1;
@@ -141,17 +142,11 @@ function buildCliLookupReconciliation(
   });
 
   const observations = documents.map(observationContext);
-  const identities = observations.map((observation) => (
-    observation.observerLabel && observation.vantageLabel
-      ? `${observation.observerLabel}\u0000${observation.vantageLabel}`
-      : null
-  ));
-  const labelsComplete = identities.every((identity): identity is string => identity !== null);
-  const labelsDistinct = labelsComplete && new Set(identities).size === identities.length;
-  const independence = labelsDistinct
+  const context = compareObservationContexts(observations.map(observation => ({ ...observation, observedAt: observation.generatedAt })));
+  const independence = context.labels === 'distinct'
     ? {
         state: 'verified_distinct_labels' as const,
-        reason: 'Every observation carries a different analyst-supplied observer and vantage label.',
+        reason: 'Every observation carries a distinct analyst-supplied observer/vantage label pair. Actual collection independence is not verified.',
       }
     : {
         state: 'unverified' as const,
@@ -182,14 +177,18 @@ function buildCliLookupReconciliation(
 }
 
 function formatCliLookupReconciliation(document: CliLookupReconciliationDocument): string {
+  const context = compareObservationContexts(document.observations.map(observation => ({ ...observation, observedAt: observation.generatedAt })));
   const output = [
     'Lookup observation reconciliation',
     `Domain             ${document.domain}`,
     `Observations       ${document.summary.observationCount}`,
-    `Independence       ${document.independence.state.replaceAll('_', ' ')}`,
+    `Declared labels    ${context.labels}; collection independence not verified`,
+    `Capture time span  ${context.time.spanMilliseconds === null ? 'unknown' : `${context.time.spanMilliseconds / 1000} seconds`}`,
     `Agreement          ${document.summary.agreement}`,
     `Disagreement       ${document.summary.disagreement}`,
     `Non-comparable     ${document.summary.nonComparable}`,
+    '',
+    ...document.observations.map((observation, index) => `Observation ${index + 1}: ${observation.generatedAt} · ${observation.mode} · observer ${observation.observerLabel ?? 'not declared'} · vantage ${observation.vantageLabel ?? 'not declared'}`),
     '',
   ];
   for (const field of document.fields.filter((candidate) => candidate.state !== 'agreement')) {
@@ -200,6 +199,7 @@ function formatCliLookupReconciliation(document: CliLookupReconciliationDocument
   }
   output.push('', 'Limitations:');
   for (const limitation of document.limitations) output.push(`  - ${limitation}`);
+  output.push('  - These selected observations do not establish worldwide availability, removal or takedown.');
   return `${output.join('\n')}\n`;
 }
 

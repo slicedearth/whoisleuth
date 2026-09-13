@@ -85,6 +85,8 @@ edits are separate PNG files with their own digests, source-file fingerprints
 and region instructions. They keep the source observation time; originals are
 not overwritten. Unsaved image edits are not recovery drafts. Removing a source
 can leave its derivative and fingerprint without the original bytes.
+Changed-pixel results and comparison exclusions stay in page memory. Exclusions
+do not redact files. Comparing another capture does not save or import it.
 
 Unfinished Case response forms are saved automatically as bounded recovery
 drafts in the selected workspace. They remain separate from submitted Case
@@ -508,6 +510,11 @@ page-reflected path or query until the operator deletes it. Captures remain
 local, are not uploaded to WHOISleuth and persist until the operator deletes
 them. Bounded text and tag-sequence digests are comparison aids, not exact DOM,
 visibility or page-identity claims.
+Manifests retain browser version, viewport, scale, locale, timezone and colour
+scheme, plus optional analyst-declared observer and vantage labels. These
+declarations can enter imported metadata and shared exports; they do not verify
+identity, location or independent collection. Older missing declarations stay
+unknown.
 
 When an analyst selects a local capture manifest for one Case, the browser
 validates it before preview and imports only sanitised manifest metadata and

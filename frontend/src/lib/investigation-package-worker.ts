@@ -19,8 +19,10 @@ export function runInvestigationPackageWorker<Kind extends InvestigationPackageK
       const reply = value as InvestigationPackageResponse | null;
       if (reply?.kind === 'error') throw new Error(reply.detail);
       if (reply?.kind !== kind) throw new Error('Evidence package processing returned an unexpected result.');
-      if (reply.kind === 'capture') {
-        if (!reply.result?.document || !Array.isArray(reply.result.artifacts) || !Array.isArray(reply.result.matches)
+      if (reply.kind === 'imageCompare') {
+        if (reply.result?.method !== 'rgba-white-pixel-grid-v1' || !Array.isArray(reply.result.tiles) || reply.result.tiles.length > 1024) throw new Error('Image comparison returned an unexpected result.');
+      } else if (reply.kind === 'capture') {
+        if (!reply.result?.document || !Array.isArray(reply.result.captures) || !Array.isArray(reply.result.artifacts) || !Array.isArray(reply.result.matches)
           || !Array.isArray(reply.result.unusedIds) || !(reply.result.contents instanceof Map)) throw new Error('Capture processing returned an unexpected result.');
       } else if (reply.kind === 'bagitInspect' || reply.kind === 'bagitInspectFolder') {
         if (!reply.result?.review || !['valid', 'invalid', 'incomplete', 'unsupported'].includes(reply.result.review.state)

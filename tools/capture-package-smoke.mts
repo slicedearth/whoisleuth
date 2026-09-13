@@ -54,6 +54,7 @@ function fixtureBrowser(): Browser {
     screenshot: async () => screenshot(), close: async () => {},
   };
   return {
+    version: () => '151.0.0.0',
     newContext: async () => ({ addInitScript: async () => {}, route: async (_pattern: string, handler: typeof route) => { route = handler; }, routeWebSocket: async () => {}, newPage: async () => page, close: async () => {} }),
     close: async () => {},
   } as unknown as Browser;
@@ -79,6 +80,7 @@ try {
     }, now: () => '2026-08-01T00:00:00.000Z',
   });
   assert.equal(requests, 1); assert.equal(manifest.captures[0]?.completeness, 'complete');
+  assert.deepEqual(manifest.captures[0]?.conditions, { browser: 'chromium', browserVersion: '151.0.0.0', viewport: { width: 1024, height: 768 }, deviceScaleFactor: 1, locale: 'en-US', timezone: 'UTC', colourScheme: 'light' });
   const manifestPath = path.join(output, 'manifest.json');
   const original = await readFile(manifestPath, 'utf8');
   const dom = await readFile(path.join(output, 'dom-digest.json'), 'utf8');
@@ -100,6 +102,12 @@ try {
   const command = execFileSync(process.execPath, [...process.execArgv, executable, 'compare', manifestPath, otherManifest, '--json'], { encoding: 'utf8', timeout: 15_000, maxBuffer: 1024 * 1024 });
   assert.equal(JSON.parse(command).screenshot.state, 'same');
   checks.push('offline comparison and installed JSON command');
+  const maskedCommand = execFileSync(process.execPath, [...process.execArgv, executable, 'compare', manifestPath, otherManifest, '--mask', '0,0,1024,768', '--json'], { encoding: 'utf8', timeout: 15_000, maxBuffer: 1024 * 1024 });
+  const masked = JSON.parse(maskedCommand);
+  assert.equal(masked.pixelChanges.state, 'all_excluded'); assert.equal(masked.pixelChanges.changedPercent, null);
+  assert.equal(masked.observationContext.independence, 'not_verified');
+  assert.equal(masked.observationContext.rows.find((row: { id: string }) => row.id === 'viewport').state, 'same');
+  checks.push('declared capture conditions and full exclusion without a false agreement');
 
   for (const [name, mutate, expected] of [
     ['future manifest', (value: typeof manifest) => { value.schemaVersion = 999 as typeof value.schemaVersion; }, /version|unsupported/iu],
