@@ -342,7 +342,10 @@ pins and relationships; **Assessment** holds conclusions and branches;
 **History** holds notes and manual investigation steps. Section links support
 browser back and forward and remember reading positions while that Case remains
 open; resizing the viewport clears those positions. On wide screens, Assessment
-places retained evidence beside the conclusion form. Case response forms save workspace-local recovery
+places retained evidence beside the conclusion form. In Advanced, **Compare
+explanations** shows two retained assertions against their linked observations,
+including opposing or unresolved relationships and shared source context.
+Case response forms save workspace-local recovery
 drafts. Their status distinguishes a recovery copy from a submitted Case
 record. After reopening a Case, restore a saved draft explicitly and review it
 before submitting. Copies from other tabs are not silently overwritten.

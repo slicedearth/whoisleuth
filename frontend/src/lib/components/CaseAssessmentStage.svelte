@@ -10,6 +10,7 @@
   import CaseInvestigationBranches from '$lib/components/CaseInvestigationBranches.svelte';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
+  import CaseAssessmentComparison from './CaseAssessmentComparison.svelte';
   import { caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
 
   let { record, mode, mutationBusy, persist, onmessage }: {
@@ -152,6 +153,7 @@
   </details>
 
   {#if mode === 'advanced'}
+    <CaseAssessmentComparison {record} />
     <details id={`case-response-assessment-assertions-${record.id}`}>
       <summary>Structure facts, hypotheses, unknowns, and next steps</summary>
       <form class="stack" data-recovery-form={assertionDraft.form} oninput={assertionDraft.changed} onsubmit={(event) => { event.preventDefault(); void addAssertion(); }}>
