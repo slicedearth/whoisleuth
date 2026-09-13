@@ -3,6 +3,7 @@
   import { browserWorkspaceDirectory, MAX_BROWSER_WORKSPACE_NAME, type BrowserWorkspace } from '$lib/browser-workspace-directory.ts';
   import { BROWSER_WORKSPACE_DIRECTORY_EVENT, currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE, DEFAULT_BROWSER_WORKSPACE_NAME, navigateToBrowserWorkspace } from '$lib/browser-workspace-context.ts';
   import { MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES, MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS } from '$lib/browser-workspace-encryption-model.ts';
+  import BrowserWorkspaceCopy from './BrowserWorkspaceCopy.svelte';
 
   const PAGE_SIZE = 10;
   type Intent = { kind: 'switch'; id: string; name: string } | { kind: 'rename' | 'delete'; workspace: BrowserWorkspace };
@@ -147,7 +148,7 @@
   {/if}
   <p bind:this={statusNode} class:error={Boolean(error)} role={error ? 'alert' : 'status'} tabindex="-1">{error || status}</p>
   <p class="recovery">Backups contain the selected workspace’s supported collections, not the workspace directory or tab state. Restore into the workspace you explicitly open. Clearing site data in browser settings removes all workspaces.</p>
-  <details><summary>Move existing work into an encrypted workspace</summary><ol><li>Download an encrypted backup from the original workspace.</li><li>Create and unlock a new encrypted workspace, then review and add the backup there.</li><li>Check the restored records before deleting the original workspace or its data. Creating an encrypted workspace does not remove any unencrypted copies.</li></ol><p>The backup and working workspace may use different passphrases. Test a backup restore before relying on it for recovery.</p></details>
+  <BrowserWorkspaceCopy disabled={busy || !available || !supported} onbusy={value => busy = value} onchange={() => void load()} />
 </section>
 
 <style>
@@ -168,8 +169,6 @@
   .workspace-manager .encryption-choice input{width:auto}
   .encryption-fields{display:grid;gap:12px;min-width:0;flex:1 1 100%;border:1px solid var(--border);padding:12px}
   .encryption-fields legend{font-size:var(--text-sm)}
-  .workspace-manager details{margin-top:16px}.workspace-manager summary{cursor:pointer;font-size:var(--text-sm);padding:8px 0}
-  .workspace-manager ol{padding-left:22px;font-size:var(--text-sm);line-height:1.6}.workspace-manager ol li{display:list-item;border:0;background:none;padding:4px 0}
   .workspace-manager ul { list-style: none; padding: 0; display: grid; gap: 10px; }
   .workspace-manager h3 { margin: 0; font-size: var(--text-sm); }
   .workspace-manager li p { margin: 5px 0 0; }

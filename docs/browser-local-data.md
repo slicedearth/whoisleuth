@@ -106,12 +106,27 @@ Encryption does not prevent deletion or rollback to an older valid copy, and
 does not protect an unlocked page or a compromised device. There is no key
 escrow or passphrase reset.
 
-Conversion is an explicit backup transfer: export an encrypted backup, create
-and unlock a new encrypted workspace, review the import, then check its records.
-The original workspace remains unchanged until deliberately deleted. Portable
-backups use their existing independent envelope and passphrase, not working
-workspace keys. A tested backup can restore into a new workspace if the working
-passphrase is lost; no backup means those encrypted records cannot be recovered.
+Manual locking reloads the document; its `pagehide` handler discards the keys.
+Cancelling a leave-page prompt leaves the document and keys usable. Optional idle
+locking is off by default and uses a workspace-scoped, tab-local minute preference.
+Trusted input refreshes the deadline; visibility changes recheck elapsed time.
+Suspension can delay execution. Saved encrypted drafts survive locking; other
+unsaved page state does not.
+
+An encrypted replacement captures every collection through its existing owner,
+including local recovery collections, and writes a fresh encrypted destination.
+An exclusive destination lease prevents other tabs opening it during verification.
+Original files use bounded provider batches; digest duplicates share bytes without
+merging provenance. Read-back compares every collection and original with the
+capture and rechecks the source records. Missing files, changed records and
+uncertain writes remain explicit. Metadata is attempted once; only missing file
+bytes can be retried. Interrupted copies remain available for inspection.
+
+The original workspace remains unchanged until deliberately deleted, and its old
+passphrase still works. Portable backups use their independent envelope and
+passphrase, not working workspace keys. A tested external backup can restore into
+a new workspace if the working passphrase is lost; no backup means those encrypted
+records cannot be recovered.
 
 The selected Case identifier lives only in the current page's memory. Its
 read-only context uses the canonical Case store, refreshes after Case writes in

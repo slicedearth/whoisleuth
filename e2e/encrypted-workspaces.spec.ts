@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
-import { directoryRows, indicator, namedDatabase, openArchive, openManager, SELECTION } from './browser-workspace-fixtures';
+import { DEFAULT_DATABASE, directoryRows, indicator, namedDatabase, openArchive, openManager, SELECTION } from './browser-workspace-fixtures';
 import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, useTheme } from './helpers';
 import { downloadEncryptedWorkspaceArchive } from './workspace-backup';
 import { createCase } from '../packages/cases/case-model.mts';
@@ -117,6 +117,167 @@ async function storedBytes(page: Page, databaseName: string) {
     } finally { db.close(); }
   }, databaseName);
 }
+
+async function recoveryPinForm(page: Page) {
+  await openCaseResponseWorkspace(page); await openCaseSection(page, 'Evidence');
+  const form = page.locator('details').filter({ has: page.getByText('Pin an observed fact', { exact: true }) });
+  if (await form.getAttribute('open') === null) await form.locator(':scope > summary').click();
+  return form;
+}
+
+async function replacementForm(page: Page, name: string) {
+  const manager = await openManager(page), copy = manager.locator('.workspace-copy');
+  await copy.locator(':scope > summary').click();
+  await copy.getByLabel('Replacement workspace name', { exact: true }).fill(name);
+  await copy.getByLabel('Replacement passphrase', { exact: true }).fill(BACKUP_PASSWORD);
+  await copy.getByLabel('Confirm replacement passphrase', { exact: true }).fill(BACKUP_PASSWORD);
+  return copy;
+}
+
+for (const encryptedSource of [false, true]) {
+  test(`workspace lifecycle copies ${encryptedSource ? 'encrypted' : 'unencrypted'} saved work and originals without changing the source`, async ({ page }, testInfo) => {
+    test.slow(); // Complete copy, key separation, recovery and responsive presentation.
+    await page.goto('/dashboard');
+    const source = encryptedSource ? await createEncrypted(page, 'Source protected workspace') : null;
+    if (source) await unlock(page, source.name);
+    await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
+    await createCaseThroughForm(page, 'replacement-source.example');
+    const selectedCaseUrl = page.url();
+    let originals = await selectOriginal(page);
+    await originals.getByRole('button', { name: 'Retain selected files', exact: true }).click();
+    await expect(originals.getByRole('button', { name: `Preview ${FILE_NAME}`, exact: true })).toBeVisible();
+    let draft = await recoveryPinForm(page);
+    await draft.getByLabel('Label', { exact: true }).fill('Retain this unfinished private draft');
+    await draft.getByLabel('Fact', { exact: true }).fill('This unsubmitted fact must survive the encrypted replacement.');
+    await expect(draft.getByRole('status')).toContainText('Draft saved in this workspace');
+    await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Dashboard', exact: true }).click();
+    const sourceDatabase = source ? namedDatabase(source.id) : DEFAULT_DATABASE;
+    const before = await storedBytes(page, sourceDatabase), sourceFiles = await storedFiles(page, sourceDatabase);
+    const copy = await replacementForm(page, 'Verified encrypted replacement');
+    if (encryptedSource) {
+      for (const theme of ['light', 'dark'] as const) {
+        await useTheme(page, theme);
+        for (const width of [320, 390, 1024, 1280, 1920, 2560, 3840]) {
+          await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
+          await copy.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+          const controls = copy.locator('input,button'); expect(await controls.count()).toBeGreaterThan(0);
+          expect(await controls.evaluateAll(elements => elements.every(element => {
+            const box = element.getBoundingClientRect(); return box.width > 0 && box.left >= 0 && box.right <= innerWidth + 1;
+          }))).toBe(true);
+          await copy.screenshot({ path: testInfo.outputPath(`replacement-${theme}-${width}.png`) });
+        }
+        expect((await new AxeBuilder({ page }).include('.workspace-copy').analyze()).violations).toEqual([]);
+      }
+    }
+    const start = copy.getByRole('button', { name: 'Create and verify encrypted copy', exact: true });
+    await start.focus(); await page.keyboard.press('Enter');
+    await expect(copy.getByRole('status')).toContainText('Encrypted copy verified');
+    await expect(copy.getByRole('status')).toBeFocused();
+    await expect(copy.locator('.copy-result')).toContainText('1 of 1 originals verified · 0 missing');
+    const replacement = (await directoryRows(page)).find(item => item.name === 'Verified encrypted replacement');
+    expect(replacement).toBeDefined();
+    expect(await page.evaluate(id => navigator.locks.request(`whoisleuth-workspace:whoisleuth-workspace-${id}-v1`, { mode: 'shared', ifAvailable: true }, lock => Boolean(lock)), replacement!.id)).toBe(false);
+    const stored = await storedBytes(page, namedDatabase(replacement!.id)), files = await storedFiles(page, namedDatabase(replacement!.id));
+    expect(stored.records.length).toBeGreaterThan(0); expect(stored.records.every(item => item.codec === 'aes-gcm-hmac-v1')).toBe(true);
+    expect(stored.manifests.find(item => item.collection === 'case_drafts')?.recordCount).toBeGreaterThan(0);
+    for (const value of ['replacement-source.example', 'Retain this unfinished', FILE_NAME, WORKSPACE_PASSWORD, BACKUP_PASSWORD]) expect(JSON.stringify(stored)).not.toContain(value);
+    expect(files).toHaveLength(1); expect(files[0]!.codec).toBe('aes-gcm-hmac-v1'); expect(files[0]!.bytes).not.toEqual([...FILE_BYTES]);
+    const after = await storedBytes(page, sourceDatabase);
+    expect(after.records).toEqual(before.records); expect(after.manifests).toEqual(before.manifests); expect(await storedFiles(page, sourceDatabase)).toEqual(sourceFiles);
+    await copy.getByRole('button', { name: 'Finish verification and keep copy', exact: true }).click();
+    await expect(copy.getByRole('status')).toContainText('The original remains available');
+    const manager = await openManager(page);
+    await manager.getByRole('button', { name: `Open workspace ${replacement!.name}`, exact: true }).click();
+    await Promise.all([page.waitForEvent('load'), manager.getByRole('button', { name: 'Switch workspace', exact: true }).click()]);
+    await page.getByLabel('Workspace passphrase', { exact: true }).fill(WORKSPACE_PASSWORD);
+    await page.getByRole('button', { name: 'Unlock workspace', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('incorrect or');
+    await page.getByLabel('Workspace passphrase', { exact: true }).fill(BACKUP_PASSWORD);
+    await page.getByRole('button', { name: 'Unlock workspace', exact: true }).click();
+    await expect(indicator(page)).toHaveText(replacement!.name);
+    // Same-origin navigation retains the selected workspace; a direct document
+    // navigation deliberately requires its passphrase again.
+    await page.goto(selectedCaseUrl);
+    await page.getByLabel('Workspace passphrase', { exact: true }).fill(BACKUP_PASSWORD);
+    await page.getByRole('button', { name: 'Unlock workspace', exact: true }).click();
+    originals = await openRetainedFiles(page);
+    await originals.getByRole('button', { name: `Preview ${FILE_NAME}`, exact: true }).click();
+    await expect(originals.locator('pre')).toContainText('A deliberately retained original');
+    draft = await recoveryPinForm(page);
+    await draft.getByText('1 saved draft for this form', { exact: true }).click();
+    await draft.getByRole('button', { name: 'Restore draft', exact: true }).click();
+    await expect(draft.getByLabel('Fact', { exact: true })).toHaveValue('This unsubmitted fact must survive the encrypted replacement.');
+    await expectNoHorizontalOverflow(page);
+    await page.setViewportSize({ width: 1280, height: 720 });
+  });
+}
+
+test('workspace lifecycle keeps the active key usable when an unsaved-draft lock is cancelled', async ({ page }) => {
+  await page.goto('/dashboard'); const row = await createEncrypted(page, 'Cancellable lock'); await unlock(page, row.name);
+  await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
+  await createCaseThroughForm(page, 'cancel-lock.example'); const form = await recoveryPinForm(page), url = page.url();
+  await failNextBrowserLocalManifestWrite(page, 'case_drafts');
+  await form.getByLabel('Label', { exact: true }).fill('Keep this draft after cancelling lock');
+  await expect(form.getByRole('status')).toContainText('could not be saved for recovery');
+  let cancelled = false;
+  page.once('dialog', async dialog => { expect(dialog.type()).toBe('beforeunload'); await dialog.dismiss(); cancelled = true; });
+  await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
+  await expect.poll(() => cancelled).toBe(true); await expect(page).toHaveURL(url);
+  await expect(form.getByLabel('Label', { exact: true })).toHaveValue('Keep this draft after cancelling lock');
+  await form.getByRole('button', { name: 'Retry recovery save', exact: true }).click();
+  await expect(form.getByRole('status')).toContainText('Draft saved in this workspace');
+  await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
+  await expect(page.getByRole('heading', { name: `Unlock ${row.name}`, exact: true })).toBeVisible();
+  await unlock(page, row.name); const restored = await recoveryPinForm(page);
+  await restored.getByText('1 saved draft for this form', { exact: true }).click();
+  await restored.getByRole('button', { name: 'Restore draft', exact: true }).click();
+  await expect(restored.getByLabel('Label', { exact: true })).toHaveValue('Keep this draft after cancelling lock');
+});
+
+test('workspace lifecycle idle lock is opt-in, responds to activity and persists only its tab-local interval', async ({ page }) => {
+  await page.goto('/dashboard'); const row = await createEncrypted(page, 'Idle lock fixture'); await unlock(page, row.name);
+  const choice = page.getByRole('combobox', { name: 'Auto-lock', exact: true }); await expect(choice).toHaveValue('0');
+  await page.clock.install(); await choice.selectOption('5');
+  await page.clock.fastForward(240_000); await page.keyboard.press('Shift');
+  await page.clock.fastForward(240_000); await expect(indicator(page)).toHaveText(row.name);
+  await page.clock.fastForward(60_000);
+  await expect(page.getByRole('heading', { name: `Unlock ${row.name}`, exact: true })).toBeVisible();
+  await unlock(page, row.name); await expect(choice).toHaveValue('5');
+  const preferences = await page.evaluate(() => Object.entries(sessionStorage).filter(([key]) => key.includes('idle-lock')));
+  expect(preferences).toHaveLength(1); expect(preferences[0]![1]).toBe('5');
+  await choice.selectOption('0');
+  expect(await page.evaluate(() => Object.keys(sessionStorage).filter(key => key.includes('idle-lock')))).toEqual([]);
+  await page.clock.fastForward(600_000); await expect(indicator(page)).toHaveText(row.name);
+});
+
+test('workspace lifecycle preserves an incomplete destination after its metadata write is refused', async ({ page }) => {
+  await page.goto('/cases'); await createCaseThroughForm(page, 'copy-quota.example');
+  await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Dashboard', exact: true }).click();
+  const before = await storedBytes(page, DEFAULT_DATABASE), copy = await replacementForm(page, 'Incomplete replacement');
+  await page.evaluate(() => {
+    const original = IDBObjectStore.prototype.put; let pending = true;
+    IDBObjectStore.prototype.put = function(value: unknown, key?: IDBValidKey) {
+      if (pending && this.name === 'manifests' && value && typeof value === 'object'
+        && Reflect.get(value, 'collection') === 'cases' && Reflect.get(value, 'recordCount') > 0
+        && this.transaction.db.name.startsWith('whoisleuth-workspace-')) {
+        pending = false; throw new DOMException('Synthetic copy quota failure', 'QuotaExceededError');
+      }
+      return key === undefined ? original.call(this, value) : original.call(this, value, key);
+    };
+  });
+  await copy.getByRole('button', { name: 'Create and verify encrypted copy', exact: true }).click();
+  await expect(copy.getByRole('alert')).toContainText('write outcome is unconfirmed');
+  await expect(copy.getByRole('alert')).toBeFocused();
+  await expect(copy.getByRole('button', { name: 'Create and verify encrypted copy', exact: true })).toHaveCount(0);
+  const created = (await directoryRows(page)).find(item => item.name === 'Incomplete replacement'); expect(created).toBeDefined();
+  await copy.getByRole('button', { name: 'Verify encrypted copy', exact: true }).click();
+  await expect(copy.getByRole('status')).toContainText('not fully verified');
+  await copy.getByRole('button', { name: 'Copy missing originals', exact: true }).click();
+  await expect(copy.getByRole('alert')).toContainText('Destination records do not match');
+  const after = await storedBytes(page, DEFAULT_DATABASE); expect(after.records).toEqual(before.records); expect(after.manifests).toEqual(before.manifests);
+  await copy.getByRole('button', { name: 'Finish verification and keep copy', exact: true }).click();
+  expect((await directoryRows(page)).some(item => item.id === created!.id)).toBe(true);
+});
 
 test('unfinished Case forms use the encrypted workspace and remain outside its portable backup', async ({ page }) => {
   await page.goto('/dashboard');

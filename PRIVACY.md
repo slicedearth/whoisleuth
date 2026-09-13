@@ -129,9 +129,19 @@ another tab unlocks independently. Guide progress, candidate handoffs and Brand
 selection stay in memory in an encrypted workspace, not session storage.
 Names, collection counts, sizes and timestamps remain visible. Encryption does
 not protect an unlocked page, a compromised device, weak passphrases, deletion
-or rollback to an older valid database. There is no passphrase reset. Transfer
-existing work through a reviewed encrypted backup into a new workspace; the
-original unencrypted data remains until explicitly deleted.
+or rollback to an older valid database. There is no passphrase reset. An
+encrypted replacement copies saved collections, recovery drafts and referenced
+original files into a new workspace with a separately chosen passphrase. It
+verifies records and available original bytes without changing the source;
+missing files and changed records prevent a complete verification. The original
+unencrypted data remains until explicitly deleted; an encrypted original still
+accepts its old passphrase. This copy is not an independent backup.
+
+Optional idle locking is off by default. Its minute setting stays in
+workspace-scoped session storage for this tab; it contains no investigation
+data. Locking reloads the page, keeping saved encrypted drafts but discarding
+other unsaved page state. Cancelling a leave-page prompt keeps the tab unlocked.
+Suspended browser execution can delay an automatic lock until execution resumes.
 
 Selected Case context uses only page memory and the existing local Case store.
 The selection clears on reload or sign-out and does not initiate collection.

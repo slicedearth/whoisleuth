@@ -133,7 +133,7 @@ export const FRONTEND_ROUTE_BUDGET_BASIS = Object.freeze({
 export const FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES: Readonly<Record<string, number>> = Object.freeze({
   '/': 85.5,
   '/brands': 377.30, // Three clean builds, 2026-09-09: maximum 386,347 gzip bytes.
-  '/bulk': 381.51,
+  '/bulk': 440.84, // Three production builds, 2026-09-13: maximum 451,412 gzip bytes, including shared workspace lock controls.
   '/cases': 375.09, // Three clean builds, 2026-09-09: maximum 384,092 gzip bytes.
   '/cli': 82.98,
   '/contact': 71.52,
@@ -148,7 +148,7 @@ export const FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES: Readonly<Record<string,
   '/methodology': 72.42,
   '/monitor': 525.27, // Three clean builds, 2026-09-13: retained review forms and evidence workflows.
   '/privacy': 73.75,
-  '/registry-support': 112.57,
+  '/registry-support': 131.24, // Three production builds, 2026-09-13: maximum 134,380 gzip bytes, including shared workspace lock controls.
   '/request-policy': 69.13,
   '/resources': 85.63,
   '/resources/[slug]': 72.61,
@@ -422,6 +422,9 @@ export function formatFrontendLoadingReport(report: ReturnType<typeof buildFront
     `Browser-local workspace: ${(report.browserLocalWorkspace.gzipBytes / 1024).toFixed(2)} KiB gzip`,
     `Public-route exposure: ${report.summary.publicRouteLeak ? 'FAILED' : 'none'}`,
     `Route budgets: ${report.summary.missingBudgetPaths.length || report.summary.overBudgetPaths.length ? 'FAILED' : 'within reviewed ceilings'}`,
+    ...(report.summary.missingBudgetPaths.length ? [`Missing route budgets: ${report.summary.missingBudgetPaths.join(', ')}`] : []),
+    ...report.routes.filter(route => route.budgetGzipBytes !== null && route.overBudget).map(route =>
+      `Exceeded route budget: ${route.path} by ${route.gzipBytes - route.budgetGzipBytes!} bytes (${(route.gzipBytes / 1024).toFixed(2)} KiB measured; ${(route.budgetGzipBytes! / 1024).toFixed(0)} KiB ceiling)`),
     '',
     'Route                         Access      Gzip KiB  Budget KiB  Workspace',
   ];

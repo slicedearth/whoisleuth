@@ -52,13 +52,24 @@ record. This does not recreate the deleted identity or restore campaign membersh
 **Browser workspaces** separates saved work without moving the default workspace.
 Choose **Encrypt saved workspace records** when creating a named workspace to
 require a passphrase in each tab. **Lock workspace**, reloading or leaving the
-Console clears its unlocked state. Names and storage counts remain visible;
-there is no passphrase reset.
+Console clears its unlocked state. **Auto-lock** is off by default; choose an
+idle interval for this tab and workspace if needed. Locking keeps saved encrypted
+drafts but loses other unsaved page state. Cancelling a leave-page prompt keeps
+the tab unlocked; suspended browser execution can delay automatic locking.
+Names and storage counts remain visible; there is no passphrase reset.
 
-To move existing work, download an encrypted backup, create and unlock the new
-workspace, then review and add the backup. Verify its contents before deleting
-the original. Backup and workspace passphrases are independent, so a tested
-backup remains a recovery path if a workspace passphrase is lost.
+Use **Create an encrypted replacement** to protect existing saved work or change
+its passphrase. This makes a new workspace, including saved recovery drafts and
+original files, then checks it independently. Missing files or changed source
+records prevent a fully verified result. **Copy missing originals** retries only
+missing file bytes, not the saved records. Finish verification, then open the new
+workspace with its new passphrase. The old workspace remains unchanged and its
+passphrase still works.
+
+Keep a separate, tested encrypted backup before deleting the original. A copy in
+the same browser shares its quota and deletion risks. Backup and workspace
+passphrases are independent, so a tested backup remains a recovery path if a
+workspace passphrase is lost.
 
 ### Guided investigations
 

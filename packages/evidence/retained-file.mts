@@ -13,6 +13,27 @@ export function readRetainedFileReference(value: unknown): RetainedFileReference
   return Object.freeze({ digestSha256: record.digestSha256 as string, byteLength });
 }
 
+/** Partition already bounded collection references without capping the entire workspace at one batch. */
+export function retainedFileGroups<T extends RetainedFileReference>(references: readonly T[]): readonly (readonly T[])[] {
+  const unique = new Map<string, T>();
+  for (const item of references) {
+    const checked = readRetainedFileReference({ digestSha256: item.digestSha256, byteLength: item.byteLength });
+    const previous = unique.get(checked.digestSha256);
+    if (previous && previous.byteLength !== checked.byteLength) throw new Error('File references have conflicting byte lengths.');
+    if (!previous) unique.set(checked.digestSha256, item);
+  }
+  const groups: T[][] = [];
+  let group: T[] = [], bytes = 0;
+  for (const item of unique.values()) {
+    if (group.length === MAX_SELECTED_FILES || item.byteLength > MAX_SELECTED_FILE_TOTAL_BYTES - bytes) {
+      groups.push(group); group = []; bytes = 0;
+    }
+    group.push(item); bytes += item.byteLength;
+  }
+  if (group.length) groups.push(group);
+  return groups;
+}
+
 /** Capture declarations synchronously; Blob contents are immutable. */
 export function captureRetainedFiles(input: readonly RetainedFileInput[]): readonly RetainedFileInput[] {
   if (!Array.isArray(input) || input.length > MAX_SELECTED_FILES) throw new TypeError(`Select at most ${MAX_SELECTED_FILES} files per operation.`);

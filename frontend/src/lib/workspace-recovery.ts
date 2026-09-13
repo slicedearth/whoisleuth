@@ -1,9 +1,9 @@
 import { WORKSPACE_ARCHIVE_COLLECTIONS } from '../../../packages/contracts/browser-local-collection-manifest.mts';
 import { buildWorkspaceArchive, mergeReadyWorkspaceArchiveData, readWorkspaceArchive } from '../../../packages/workspace/workspace-archive.mts';
 import { compareRecoveredWorkspace, matchRecoveryFiles, workspaceAttachmentGroups, type ReviewedWorkspaceArchive } from '../../../packages/workspace/workspace-recovery.mts';
-import { BrowserLocalDataProvider } from './browser-local-data.ts';
-import { browserWorkspaceDirectory, type BrowserWorkspace } from './browser-workspace-directory.ts';
-import { browserWorkspaceDatabaseName, namedWorkspaceLegacyStorage } from './browser-workspace-storage.ts';
+import { browserWorkspaceDirectory } from './browser-workspace-directory.ts';
+import { openBrowserWorkspaceDestination } from './browser-workspace-destination.ts';
+export { WorkspaceDestinationStartError as WorkspaceRecoveryStartError } from './browser-workspace-destination.ts';
 import { currentBrowserWorkspaceId } from './browser-workspace-context.ts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../packages/contracts/selected-file-limits.mts';
 import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../../../packages/contracts/investigation-package-limits.mts';
@@ -15,14 +15,6 @@ export type WorkspaceRecoveryReport = ReturnType<typeof compareRecoveredWorkspac
   omissions: number;
   verified: boolean;
 }>;
-
-export class WorkspaceRecoveryStartError extends Error {
-  readonly workspace: BrowserWorkspace;
-  constructor(workspace: BrowserWorkspace) {
-    super('The rehearsal workspace was created but could not be opened. The active workspace was not changed. Remove the new workspace through Browser workspaces before starting again.');
-    this.workspace = workspace;
-  }
-}
 
 /** Own one fresh destination, its exclusive lease and its in-memory key. */
 export async function openWorkspaceRecovery(input: ReviewedWorkspaceArchive, options: Readonly<{ name: string; passphrase?: string; requireEncryption: boolean }>) {
@@ -47,29 +39,15 @@ export async function openWorkspaceRecovery(input: ReviewedWorkspaceArchive, opt
   }
   const omissions = merged.reduce((total, result) => total + result.skipped + (result.pruned ?? 0)
     + (result.brandProfileReferencesOmitted ?? 0) + (result.authoredHistoryOmitted ?? 0), 0);
-  const workspace = await browserWorkspaceDirectory.create(options.name, options.passphrase ? { passphrase: options.passphrase } : undefined);
-  let lease: Awaited<ReturnType<typeof browserWorkspaceDirectory.acquire>> | undefined;
-  let protection: Awaited<ReturnType<typeof import('./browser-workspace-encryption.ts')['unlockBrowserWorkspaceEncryption']>> | undefined;
-  let provider: BrowserLocalDataProvider;
-  try {
-    lease = await browserWorkspaceDirectory.acquire(workspace.id, 'exclusive');
-    if (JSON.stringify(lease.workspace) !== JSON.stringify(workspace)) throw new Error('The rehearsal workspace changed before it could be opened.');
-    if (workspace.encryption) protection = await (await import('./browser-workspace-encryption.ts')).unlockBrowserWorkspaceEncryption(workspace.id, workspace.encryption, options.passphrase!);
-    provider = new BrowserLocalDataProvider({ databaseName: browserWorkspaceDatabaseName(workspace.id), storage: namedWorkspaceLegacyStorage,
-      ...(protection ? { codec: protection.codec, requireExistingCollections: true } : {}) });
-  } catch {
-    protection?.lock(); await lease?.release();
-    throw new WorkspaceRecoveryStartError(workspace);
-  }
+  const destination = await openBrowserWorkspaceDestination(options);
+  const { workspace, provider } = destination;
+  options = { name: options.name, requireEncryption: options.requireEncryption };
   let attempted = false, closing = false, pending: Promise<unknown> | null = null, closed: Promise<void> | null = null;
   let writeState: 'not_started' | 'unconfirmed' | 'committed' = 'not_started';
-  async function unchangedDirectory() {
-    if (JSON.stringify(await browserWorkspaceDirectory.ready(workspace.id)) !== JSON.stringify(workspace)) throw new Error('The rehearsal workspace directory changed. Close this rehearsal and inspect the workspace; no new write was started.');
-  }
   function run<T>(operation: () => Promise<T>): Promise<T> {
     if (closing || pending) return Promise.reject(new Error('Finish the current recovery operation before starting another.'));
     writeState = 'not_started';
-    const result = (async () => { await unchangedDirectory(); return operation(); })();
+    const result = (async () => { await destination.assertCurrent(); return operation(); })();
     pending = result;
     void result.finally(() => { if (pending === result) pending = null; }).catch(() => {});
     return result;
@@ -94,7 +72,7 @@ export async function openWorkspaceRecovery(input: ReviewedWorkspaceArchive, opt
       closing = true;
       closed = (async () => {
         await pending?.catch(() => {});
-        try { await provider.close(); } finally { protection?.lock(); await lease?.release(); }
+        await destination.close();
       })();
     }
     return closed;

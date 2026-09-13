@@ -2,7 +2,7 @@ import { MAX_CASES } from '../contracts/case-portability.mts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../contracts/selected-file-limits.mts';
 import { readCaseAttachments, type CaseAttachment } from '../cases/case-attachment-model.mts';
 import { sha256ArtifactBytes } from '../evidence/artifact-integrity.mts';
-import type { RetainedFileInput } from '../evidence/retained-file.mts';
+import { retainedFileGroups, type RetainedFileInput } from '../evidence/retained-file.mts';
 import type { readWorkspaceArchive } from './workspace-archive.mts';
 
 export type ReviewedWorkspaceArchive = Awaited<ReturnType<typeof readWorkspaceArchive>>;
@@ -13,24 +13,7 @@ export function workspaceAttachmentGroups(archive: ReviewedWorkspaceArchive): re
   if (!section || section.status !== 'ready') throw new Error('Required file coverage cannot be determined from an unsupported Case section.');
   const rows = (section.data as { cases?: unknown })?.cases;
   if (!Array.isArray(rows) || rows.length > MAX_CASES) throw new Error('Backup Case records cannot be inspected for required files.');
-  const unique = new Map<string, CaseAttachment>();
-  for (const row of rows) {
-    for (const attachment of readCaseAttachments(row?.attachments) ?? []) {
-      const existing = unique.get(attachment.digestSha256);
-      if (existing && existing.byteLength !== attachment.byteLength) throw new Error('Backup file references have conflicting byte lengths.');
-      if (!existing) unique.set(attachment.digestSha256, attachment);
-    }
-  }
-  const groups: CaseAttachment[][] = [];
-  let group: CaseAttachment[] = [], bytes = 0;
-  for (const item of unique.values()) {
-    if (group.length === MAX_SELECTED_FILES || item.byteLength > MAX_SELECTED_FILE_TOTAL_BYTES - bytes) {
-      groups.push(group); group = []; bytes = 0;
-    }
-    group.push(item); bytes += item.byteLength;
-  }
-  if (group.length) groups.push(group);
-  return groups;
+  return retainedFileGroups(rows.flatMap(row => readCaseAttachments(row?.attachments) ?? []));
 }
 
 /** Match complete selected bytes to the downloaded backup, never filenames. */

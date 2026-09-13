@@ -223,6 +223,12 @@ passphrase-derived keys remain in the unlocked document. The provider retains
 ownership of atomic writes, conflict checks and recovery. Ciphertext overhead
 is accounted for separately from decoded collection limits.
 
+Workspace replacement and archive recovery share the fresh-destination lease
+and key lifecycle. Replacement copies the existing collection-owner inventory,
+including local recovery state, and verifies source records and original-file
+batches separately. The provider remains the atomic-write owner; replacement
+does not add a second persistence coordinator or rewrite the source in place.
+
 The provider captures bounded records and manifests in one readonly
 transaction. Larger standard plaintext collections are then decoded,
 digest-checked and reconstructed in a one-shot same-origin worker using the
