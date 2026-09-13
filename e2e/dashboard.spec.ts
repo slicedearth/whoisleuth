@@ -566,8 +566,15 @@ test('the dashboard reports bounded browser-local counts and recent saved work',
   await expect(recent.getByRole('link', { name: /^Brand profiles/ })).toContainText('2');
   await expect(page.getByRole('heading', { name: 'Attention needed' })).toBeVisible();
   await openDashboardSecondaryWorkspaces(page);
-  const recentWork = page.getByRole('list', { name: 'Recent local investigation work' });
-  await expect(page.getByRole('heading', { name: 'Recent saved work' })).toBeVisible();
+  const recentWork = page.getByRole('list', { name: 'Recent local investigation work', includeHidden: true });
+  const recentToggle = page.getByRole('region', { name: 'Search saved work', exact: true })
+    .locator('summary').filter({ hasText: /^Recent saved work$/u });
+  await expect(recentToggle).toBeVisible();
+  await expect(recentWork).toHaveCount(1);
+  await expect(recentWork).toBeHidden();
+  await recentToggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(recentWork).toBeVisible();
   await expect(recentWork.locator(':scope > li')).toHaveCount(6);
   await expect(recentWork).toContainText('open.invalid');
   await expect(recentWork).toContainText('First profile');
