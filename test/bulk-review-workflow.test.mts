@@ -27,6 +27,16 @@ function manifestInput(rows: readonly unknown[]): Parameters<typeof buildBulkRev
   };
 }
 
+test('saved column choices cannot remove evidence from the independently versioned review manifest', async () => {
+  const input = manifestInput([result('columns.example')]);
+  const all = await buildBulkReviewManifest(input);
+  const hidden = await buildBulkReviewManifest({ ...input, view: { ...input.view, columns: [] } });
+  assert.deepEqual(hidden.document, all.document);
+  assert.equal(hidden.document.selection.count, 1);
+  assert.equal(Object.hasOwn(hidden.document.view, 'columns'), false);
+  assert.equal((await verifyOfflineArtifact(hidden.content)).checks.contentIntegrity, 'verified');
+});
+
 test('selected review manifests preserve separate unknown, offset and future source times without export-clock fallback', async () => {
   const samples: Array<[unknown, string | null]> = [
     [undefined, null], [null, null], ['', null], [0, null], ['2026-07-20', null],

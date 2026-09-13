@@ -76,7 +76,7 @@
   <div>
     <p class="eyebrow">Review results</p>
     <h2 id="bulk-review-views-title">Saved views and review queue</h2>
-    <p>Save filters, grouping and sort order for the currently loaded Bulk results. Views do not retain a target list, Brand Profile or scan authorisation. Per-domain review state stays separate from Case disposition.</p>
+    <p>Save filters, List columns, grouping and sort order for the currently loaded Bulk results. Choose columns in the List view. Views do not retain a target list, Brand Profile or scan authorisation. Per-domain review state stays separate from Case disposition.</p>
   </div>
   {#if sourceState === 'ready'}
   <div class="controls">

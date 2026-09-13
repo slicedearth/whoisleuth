@@ -65,7 +65,7 @@ The default workspace and unencrypted named workspaces store bounded
 collections in IndexedDB as plaintext JSON. These include Cases, Brand Profiles, watchlists, shortlist
 entries, campaigns, certificate-search history, custom rules, retained
 relationship observations, saved Bulk sessions, website snapshots,
-investigation templates, Bulk review state, saved Case views and Analyst Review Item state. They
+investigation templates, Bulk review state and saved List column choices, saved Case views and Analyst Review Item state. They
 are visible to anyone able to use the browser profile.
 
 Retained files require a separate explicit save. Selected originals are stored

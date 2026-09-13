@@ -30,7 +30,7 @@ function reviewStateMap(values: readonly ReviewStateInput[]): Map<string, BulkRe
 export async function buildBulkReviewManifest(input: Readonly<{
   rows: readonly unknown[];
   reviewStates: readonly ReviewStateInput[];
-  view: BulkReviewPresetView;
+  view: Omit<BulkReviewPresetView, 'columns'> & Partial<Pick<BulkReviewPresetView, 'columns'>>;
   lookupProfile: 'deep' | 'fast';
   observedAt?: unknown;
   generatedAt?: unknown;
@@ -41,6 +41,8 @@ export async function buildBulkReviewManifest(input: Readonly<{
   const generatedAt = normalizeExplicitIsoTimestamp(input.generatedAt) ?? new Date().toISOString();
   const observedAt = normalizeExplicitIsoTimestamp(input.observedAt);
   const states = reviewStateMap(input.reviewStates);
+  // Display choices do not change the separately versioned evidence manifest.
+  const { columns: _columns, ...view } = input.view;
   const rows = input.rows.map((row) => {
     const item = normalizeBulkSessionResult(row);
     if (!item) throw new TypeError('A selected Bulk row could not be verified. No rows were exported.');
@@ -64,7 +66,7 @@ export async function buildBulkReviewManifest(input: Readonly<{
       count: rows.length,
       domains: rows.map((item) => item.domain),
     },
-    view: input.view,
+    view,
     rows,
     limitations: [
       'This manifest records the explicit review selection and view context for a separate CSV export.',

@@ -154,9 +154,9 @@ export const MAX_INVESTIGATION_TEMPLATE_STORE_BYTES = 256 * 1024;
 export const MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES = 384 * 1024;
 
 export const BULK_REVIEW_SCHEMA = 'whoisleuth.bulk-review';
-export const BULK_REVIEW_SCHEMA_VERSION = 1;
-export const BULK_REVIEW_BROWSER_SUPPORTED_VERSIONS = Object.freeze([BULK_REVIEW_SCHEMA_VERSION]);
-export const BULK_REVIEW_EXPORT_SUPPORTED_VERSIONS = Object.freeze([BULK_REVIEW_SCHEMA_VERSION]);
+export const BULK_REVIEW_SCHEMA_VERSION = 2;
+export const BULK_REVIEW_BROWSER_SUPPORTED_VERSIONS = Object.freeze([1, BULK_REVIEW_SCHEMA_VERSION]);
+export const BULK_REVIEW_EXPORT_SUPPORTED_VERSIONS = Object.freeze([1, BULK_REVIEW_SCHEMA_VERSION]);
 export const MAX_BULK_REVIEW_PRESETS = 24;
 export const MAX_BULK_REVIEW_ROWS = 1_900;
 export const MAX_BULK_REVIEW_STORE_BYTES = 512 * 1024;
@@ -330,7 +330,7 @@ export const INVESTIGATION_TEMPLATE_BROWSER_COMPATIBILITY = defineSchemaCompatib
 export const BULK_REVIEW_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.bulk-review', kind: 'browser_store', schema: null, currentVersion: BULK_REVIEW_SCHEMA_VERSION,
   supportedVersions: BULK_REVIEW_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
-  futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite',
+  futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_BULK_REVIEW_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
   note: 'Bounded saved Bulk filter views and per-domain review states only; scan results, contacts, notes, and case disposition remain separate.',
 });
@@ -401,7 +401,7 @@ export const INVESTIGATION_TEMPLATE_EXPORT_COMPATIBILITY = defineSchemaCompatibi
 export const BULK_REVIEW_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.bulk-review', kind: 'export', schema: BULK_REVIEW_SCHEMA, currentVersion: BULK_REVIEW_SCHEMA_VERSION,
   supportedVersions: BULK_REVIEW_EXPORT_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
-  futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge',
+  futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_BULK_REVIEW_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
   note: 'Workspace-archive section for saved Bulk views and explicit review states; network collection and case disposition are never changed by import.',
 });
@@ -809,6 +809,14 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly Pick<SchemaLifecycleFixture, 
     "version": 1
   },
   {
+    "id": "workspace.browser.review.v2",
+    "path": "test/fixtures/workspace-lifecycle/browser-review-v2.json",
+    "bytes": 88,
+    "sha256": "2e22d70101443016b12803835d29ce35cd61a513c70976af1fca1c5de18e222d",
+    "schema": "whoisleuth.browser.bulk-review-store",
+    "version": 2
+  },
+  {
     "id": "workspace.browser.shortlist.v3",
     "path": "test/fixtures/workspace-lifecycle/browser-shortlist-v3.json",
     "bytes": 72,
@@ -927,6 +935,14 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly Pick<SchemaLifecycleFixture, 
     "sha256": "9da86165eee183509ad3770b4f7bcf5296040c16ac108024e10b97c54c653609",
     "schema": "whoisleuth.bulk-review",
     "version": 1
+  },
+  {
+    "id": "workspace.portable.review.v2",
+    "path": "test/fixtures/workspace-lifecycle/portable-review-v2.json",
+    "bytes": 88,
+    "sha256": "2e22d70101443016b12803835d29ce35cd61a513c70976af1fca1c5de18e222d",
+    "schema": "whoisleuth.bulk-review",
+    "version": 2
   },
   {
     "id": "workspace.portable.shortlist.v3",

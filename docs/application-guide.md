@@ -392,9 +392,11 @@ open drafts. Changing pages or filters discards drafts for items that leave the
 view. Displayed review times use UTC. **Copy** keeps the exact stored timestamp,
 including fractional seconds.
 
-Bulk saved views apply their filters, grouping and sort order to the currently
+Bulk saved views apply their filters, List columns, grouping and sort order to the currently
 loaded results. They do not retain targets, select a Brand Profile or authorise
-a scan. Loading a view makes no collection request.
+a scan. Loading a view makes no collection request. Choose **List columns** in
+the List view, then save the view to reuse the selection. Domain and actions
+remain available. Hidden columns do not remove evidence or alter exports.
 
 Evidence gaps uses each retained source's own date. Equal-time disagreements
 and undated observations remain available; session-save times do not establish

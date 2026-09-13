@@ -77,6 +77,7 @@
   import { loadDeferredModule } from '$lib/deferred-module';
   import type { BulkSession } from '$lib/bulk-sessions';
   import type { BulkReviewFilter, BulkReviewPreset, BulkReviewPresetView, BulkReviewState, BulkReviewStore } from '$lib/bulk-review';
+  import { DEFAULT_BULK_RESULT_COLUMNS, type BulkResultColumn } from '../../../../../packages/workspace/bulk-columns.mts';
   import { BULK_LIFECYCLE_FILTERS, BULK_REVIEW_SCHEMA, BULK_REVIEW_SCHEMA_VERSION } from '$lib/analysis/bulk-review-model.ts';
   import { buildBulkDomainComparison, buildBulkDomainComparisonExport } from '$lib/analysis/bulk-domain-comparison.ts';
   import { buildBulkRetryPlan } from '$lib/analysis/bulk-retry-plan.ts';
@@ -458,7 +459,8 @@
   function setFilter(next:BulkPrimaryFilter){filter=next;page=1;}
   function toggleSignal(signal:string){const next=new Set(signalFilters);next.has(signal)?next.delete(signal):next.add(signal);signalFilters=next;page=1;}
   function clearFilters(){filter='all';mutationFilter='';signalFilters=new Set();sourceFilter='';lifecycleFilter='';ageFilter='';mailFilter='';registrarFilter='';caseDispositionFilter='';reviewStateFilter='';page=1;}
-  function currentBulkReviewView():BulkReviewPresetView{return{primaryFilter:filter,mutationFilter,signalFilters:[...signalFilters],sourceFilter,lifecycleFilter,ageFilter,mailFilter,registrarFilter,caseDispositionFilter,reviewStateFilter,groupBy,sortKey,sortDirection};}
+  let resultColumns = $state<BulkResultColumn[]>([...DEFAULT_BULK_RESULT_COLUMNS]);
+  function currentBulkReviewView():BulkReviewPresetView{return{primaryFilter:filter,mutationFilter,signalFilters:[...signalFilters],sourceFilter,lifecycleFilter,ageFilter,mailFilter,registrarFilter,caseDispositionFilter,reviewStateFilter,groupBy,sortKey,sortDirection,columns:[...resultColumns]};}
   async function saveCurrentBulkReviewView(name:string,view:BulkReviewPresetView):Promise<LocalMutationOutcome>{
     await ensureBulkReviewContext();
     if(bulkReviewSourceState!=='ready'||!bulkReviewApi){bulkReviewStatus='Saved review state is unavailable. Reload before changing saved views.';return'rejected';}
@@ -471,7 +473,7 @@
       return failedLocalMutationOutcome(cause);
     }
   }
-  function loadBulkReviewView(preset:BulkReviewPreset){const view=preset.view;filter=view.primaryFilter as BulkPrimaryFilter;mutationFilter=view.mutationFilter;signalFilters=new Set(view.signalFilters);sourceFilter=view.sourceFilter as BulkSourceFilter;lifecycleFilter=view.lifecycleFilter;ageFilter=view.ageFilter as BulkAgeFilter;mailFilter=view.mailFilter as BulkMailFilter;registrarFilter=view.registrarFilter;caseDispositionFilter=view.caseDispositionFilter;reviewStateFilter=view.reviewStateFilter;groupBy=view.groupBy as BulkGroupBy;sortKey=normalizeBulkPresentationSortKey(view.sortKey);sortDirection=view.sortDirection;page=1;bulkReviewStatus=`Loaded the ${preset.name} review view for the current Bulk results. No scan was started.`;}
+  function loadBulkReviewView(preset:BulkReviewPreset){const view=preset.view;filter=view.primaryFilter as BulkPrimaryFilter;mutationFilter=view.mutationFilter;signalFilters=new Set(view.signalFilters);sourceFilter=view.sourceFilter as BulkSourceFilter;lifecycleFilter=view.lifecycleFilter;ageFilter=view.ageFilter as BulkAgeFilter;mailFilter=view.mailFilter as BulkMailFilter;registrarFilter=view.registrarFilter;caseDispositionFilter=view.caseDispositionFilter;reviewStateFilter=view.reviewStateFilter;groupBy=view.groupBy as BulkGroupBy;sortKey=normalizeBulkPresentationSortKey(view.sortKey);sortDirection=view.sortDirection;resultColumns=[...view.columns];page=1;bulkReviewStatus=`Loaded the ${preset.name} review view for the current Bulk results. No scan was started.`;}
   async function removeBulkReviewView(preset:BulkReviewPreset){const submitted=$state.snapshot(preset);await ensureBulkReviewContext();if(bulkReviewSourceState!=='ready'||!bulkReviewApi){bulkReviewStatus='Saved review state is unavailable. Reload before deleting saved views.';return;}try{bulkReviewStore=await bulkReviewApi.deleteBulkReviewPreset(submitted.id,submitted);bulkReviewStatus=`Deleted the ${submitted.name} review view.`;}catch(cause){bulkReviewStatus=cause instanceof Error?cause.message:'Could not delete the review view.';}}
   async function setBulkReviewState(row:ScanResult,state:string){
     await ensureBulkReviewContext();
@@ -817,7 +819,7 @@
       {#if mobileResultView==='list'}
       <DeferredSurface
         load={()=>import('$lib/components/BulkResultsTable.svelte')}
-        props={{rows:resultRows,caseRecords:cases,selectIncident:selectIncidentCase,sortKey,sortDirection,setSort,toggleSaved:toggleSavedAt,caseOptions,setDisposition:setDispositionAt,trackCase:trackCaseAt,inspectDomain:inspectAt,copyDraft,currentPage,pageCount,setPage:(value:number)=>page=value,draftStatus,caseStatus,setReviewState:setReviewStateAt,shortlistSourceState,caseSourceState:casesSourceState,reviewSourceState:bulkReviewSourceState}}
+        props={{rows:resultRows,columns:resultColumns,setColumns:(value:BulkResultColumn[])=>resultColumns=value,caseRecords:cases,selectIncident:selectIncidentCase,sortKey,sortDirection,setSort,toggleSaved:toggleSavedAt,caseOptions,setDisposition:setDispositionAt,trackCase:trackCaseAt,inspectDomain:inspectAt,copyDraft,currentPage,pageCount,setPage:(value:number)=>page=value,draftStatus,caseStatus,setReviewState:setReviewStateAt,shortlistSourceState,caseSourceState:casesSourceState,reviewSourceState:bulkReviewSourceState}}
         loadingLabel="Loading the primary Bulk result list."
         unavailableLabel="The primary Bulk result list could not be loaded. Collected results remain in this tab."
       />

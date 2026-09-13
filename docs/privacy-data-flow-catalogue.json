@@ -7774,12 +7774,13 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.bulk-review-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 524288,
       "storageClass": "browser_profile_storage",
@@ -8465,12 +8466,13 @@
       "schema": "whoisleuth.bulk-review",
       "lifecycleSchema": "whoisleuth.bulk-review",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 524288,
       "storageClass": "deliberate_local_file",
@@ -14123,7 +14125,8 @@
         {
           "schema": "whoisleuth.browser.bulk-review-store",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -14131,7 +14134,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.bulk-review-store",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.browser-state",
@@ -14515,7 +14518,8 @@
         {
           "schema": "whoisleuth.bulk-review",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -14540,7 +14544,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.bulk-review",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.portable-output",
