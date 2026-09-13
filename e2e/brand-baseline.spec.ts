@@ -944,6 +944,7 @@ test('creating a new active profile clears ownership of an older in-flight postu
 });
 
 test('defensive mail settings, retired selectors, and expiring reviewed controls persist locally', async ({ page }) => {
+  await page.clock.setFixedTime(ISO);
   await cleanBrandStorage(page);
   await openProfileForm(page, 'Matching and mail settings');
   await page.getByLabel('Mail posture profile').selectOption('defensive_no_mail');
@@ -1652,6 +1653,7 @@ test('Brand Profile v6 change windows migrate to stable v7 identities and round-
 });
 
 test('requires an explicit official-domain choice before enabling new-domain passport fields', async ({ page }) => {
+  await page.clock.setFixedTime(ISO);
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, {
     [PROFILES_KEY]: currentBrandProfileBrowserStore([profileFixture()]),
@@ -1695,6 +1697,16 @@ test('requires an explicit official-domain choice before enabling new-domain pas
   await expect(entrySelection).not.toBeChecked();
   await expect(nameservers).toBeDisabled();
   await expect(region.getByRole('button', { name: 'Import selected fields' })).toBeDisabled();
+
+  const beforeExpiry = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  await page.clock.setFixedTime(new Date(Date.parse(passport.expiresAt!) + 1));
+  await region.getByLabel('Review passport').setInputFiles({
+    name: 'expired-domain-passport.json', mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(passport)),
+  });
+  await expect(region.getByRole('status')).toContainText('Domain control passport has expired.');
+  await expect(region.getByRole('heading', { name: 'Import preview' })).toHaveCount(0);
+  expect(await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).toEqual(beforeExpiry);
 });
 
 test('a future Brand Profile schema is never overwritten by an older app', async ({ page }) => {
