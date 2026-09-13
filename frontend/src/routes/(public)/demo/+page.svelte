@@ -2,6 +2,8 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import PublicConsoleCta from '$lib/components/PublicConsoleCta.svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
+  import DeferredSurface from '$lib/components/DeferredSurface.svelte';
+  import { preloadBestEffort } from '$lib/idle-preload';
   import {
     DEFERRED_MODULE_RECOVERY_DETAIL,
     loadDeferredModule,
@@ -26,6 +28,15 @@
   let demoState:ReturnType<typeof createSyntheticDemoState>=$state(createSyntheticDemoState());
   let view=$state<View>('dashboard');
   let message=$state('');
+  let practiceOpen=$state(false);
+  let practiceStarted=$state(false);
+  let practiceGeneration=$state(0);
+  function preloadCasePractice(){preloadBestEffort(()=>import('$lib/components/CasePractice.svelte'));}
+  onMount(()=>{
+    const reveal=()=>{if(window.location.hash==='#case-practice'){practiceOpen=true;practiceStarted=true;}};
+    reveal();window.addEventListener('hashchange',reveal);
+    return ()=>window.removeEventListener('hashchange',reveal);
+  });
   let candidateFilter=$state<CandidateFilter>('all');
   let relatedDomains=$state<string[]>([]);
   let demoVisualView=$state<DemoVisualView>('evidence');
@@ -331,6 +342,11 @@
   <div class="synthetic-flag">Synthetic demo · State resets with this tab</div>
 </section>
 
+<details id="case-practice" class="case-practice-entry card" bind:open={practiceOpen} ontoggle={event=>{if(event.currentTarget.isConnected&&event.currentTarget.open)practiceStarted=true;}}>
+  <summary onpointerenter={preloadCasePractice} onfocus={preloadCasePractice}>Practise with real Case forms</summary>
+  {#if practiceStarted}{#key practiceGeneration}<DeferredSurface load={()=>import('$lib/components/CasePractice.svelte')} props={{onreset:()=>{practiceGeneration+=1;}}} onready={()=>{if(practiceGeneration>0)document.getElementById('case-practice-title')?.focus();}} loadingLabel="Opening the isolated Case practice." unavailableLabel="Case practice could not be loaded." />{/key}{/if}
+</details>
+
 <nav class="demo-steps card" bind:this={demoSteps} aria-label="Synthetic tool substeps">
   {#each SYNTHETIC_DEMO_STAGES as item,index}
     <button
@@ -562,6 +578,7 @@
 <section class="demo-footer"><div><p>Ready for live investigation?</p><PublicConsoleCta /></div><p><a href="/">Return to the public overview</a></p></section>
 
 <style>
+  .case-practice-entry{padding:16px 22px;margin-bottom:24px;min-width:0}.case-practice-entry>summary{min-height:44px;align-content:center;font-weight:650}.case-practice-entry[open]>summary{margin-bottom:18px}
   .scenario-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:22px;margin-top:24px}
   .scenario-grid article{min-width:0;padding-top:16px;border-top:1px solid var(--border)}
   .scenario-grid h3{margin:0;font-size:var(--text-md)}

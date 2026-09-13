@@ -67,6 +67,7 @@
         <h4>{scenario.label}</h4>
         <p>You preserved source authority, uncertainty, and analyst responsibility through all {scenario.steps.length} decisions.</p>
         <button class="btn" type="button" onclick={reset}>Replay scenario</button>
+        <a class="btn" href="/demo#case-practice">Practise with real Case forms</a>
       </div>
     {:else if step}
       <div class="step-heading">

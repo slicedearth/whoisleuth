@@ -58,6 +58,9 @@ registrant database.
 
 The public synthetic demo uses fixed fictional evidence on reserved domains and
 does not query a live target or write protected workspace data.
+Its Case-form practice keeps edits and unfinished forms only in page memory.
+Restarting, reloading or leaving discards them; it does not open the saved-work
+database, export practice files or expose collection and reporting controls.
 
 ## Browser-local processing
 

@@ -1,7 +1,7 @@
 import { caseDraftFields, replaceCaseDraft, removeCaseDraft } from '../../../../packages/cases/case-drafts.mts';
 import type { CaseDraftFields, CaseDraftRecord, CaseDraftStore, CaseDraftReceipt } from '../../../../packages/contracts/case-drafts.mts';
 
-type DraftStorage = Readonly<{
+export type DraftStorage = Readonly<{
   read: () => Promise<CaseDraftStore>;
   update: (change: (store: CaseDraftStore) => CaseDraftStore) => Promise<void>;
 }>;
@@ -45,6 +45,7 @@ export function createCaseDraftRecovery(options: Readonly<{
   restoreFields: (fields: CaseDraftFields) => void;
   resetFields: () => void;
   storage: DraftStorage;
+  retention?: 'workspace' | 'document';
   notify: (state: CaseDraftRecoveryState, unprotected: boolean) => void;
   uuid?: () => string;
 }>) {
@@ -62,7 +63,9 @@ export function createCaseDraftRecovery(options: Readonly<{
     state = { ...state, ...patch };
     if (!destroyed) options.notify(state, submitting || editRevision !== storedRevision);
   };
-  const failure = () => emit({ status: 'error', message: 'This form could not be saved for recovery. Keep it open and retry; existing drafts were not replaced.' });
+  const failure = () => emit({ status: 'error', message: options.retention === 'document'
+    ? 'This practice draft could not be retained. Keep the form open and retry.'
+    : 'This form could not be saved for recovery. Keep it open and retry; existing drafts were not replaced.' });
   const resumePending = () => {
     if (!destroyed && !submitting && editRevision !== storedRevision) queueMicrotask(() => { void flush().catch(failure); });
   };
@@ -87,7 +90,9 @@ export function createCaseDraftRecovery(options: Readonly<{
     writing = options.storage.update(store => replaceCaseDraft(store, draft, previous?.revision ?? null)).then(() => {
       identity = { id: draft.id, revision: draft.revision };
       storedRevision = revision;
-      emit({ status: 'saved', message: 'Draft saved in this workspace. Not yet added to the Case.' });
+      emit({ status: 'saved', message: options.retention === 'document'
+        ? 'Practice draft retained on this page only. Not yet added to the practice Case.'
+        : 'Draft saved in this workspace. Not yet added to the Case.' });
     }).catch(cause => { failure(); throw cause; }).finally(() => { writing = null; });
     await writing;
   }

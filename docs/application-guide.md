@@ -13,6 +13,12 @@ recipient, retention and export boundaries.
 The public demo uses fixed fictional evidence and does not write protected
 workspace data.
 
+Use **Practise with real Case forms** in the demo to pin a supplied observation,
+record an evidence-linked conclusion and review an incomplete later capture.
+The forms and validation match the Console, but the practice Case and drafts
+remain only on that page. Restarting, reloading or leaving discards them. The
+exercise offers no collection, reporting or export controls.
+
 ## Dashboard
 
 Dashboard is the authenticated starting point. It waits for the required

@@ -1,8 +1,118 @@
 import type { Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
 
 test.use({ storageState: { cookies: [], origins: [] } });
+
+async function isolateCasePractice(page: Page) {
+  const requests: string[] = [];
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/api/') && path !== '/api/session') requests.push(path);
+  });
+  await page.addInitScript(() => {
+    const accesses: string[] = [];
+    Object.defineProperty(window, '__practiceStorageAccess', { value: accesses });
+    IDBFactory.prototype.open = function(name) { accesses.push(`open:${name}`); throw new Error('Practice must not open saved work.'); };
+    IDBFactory.prototype.deleteDatabase = function(name) { accesses.push(`delete:${name}`); throw new Error('Practice must not delete saved work.'); };
+    localStorage.setItem('saved-work-sentinel', 'Keep this saved value.');
+    sessionStorage.setItem('saved-work-sentinel', 'Keep this tab value.');
+  });
+  return async () => {
+    expect(requests).toEqual([]);
+    expect(await page.evaluate(() => (window as unknown as { __practiceStorageAccess: string[] }).__practiceStorageAccess)).toEqual([]);
+    expect(await page.evaluate(() => [localStorage.getItem('saved-work-sentinel'), sessionStorage.getItem('saved-work-sentinel')])).toEqual(['Keep this saved value.', 'Keep this tab value.']);
+    const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+    await expect(practice.locator('a[href], input[type=file]')).toHaveCount(0);
+  };
+}
+
+test('real Case forms practise evidence, conclusions and inconclusive rechecks without saved-work access', async ({ page }) => {
+  const verifyIsolation = await isolateCasePractice(page);
+  await page.goto('/demo#case-practice');
+  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  await expect(practice).toBeVisible();
+  const pin = practice.locator('form[data-recovery-form="evidence-pin"]');
+  await pin.getByLabel('Label', { exact: true }).fill('Practice fact');
+  await pin.getByLabel('Fact', { exact: true }).fill('The fictional page asks for an email address and password.');
+  await pin.getByLabel('Source', { exact: true }).fill('Fictional supplied capture');
+  await pin.getByLabel('Observed at', { exact: true }).fill('2026-09-01T12:00');
+  await expect(pin.getByRole('status')).toContainText('page only');
+  await practice.getByRole('button', { name: '2. Record a conclusion', exact: true }).click();
+  await expect(practice.locator('#practice-assessment')).toBeFocused();
+  await practice.getByRole('button', { name: '1. Pin a fact', exact: true }).click();
+  await expect(pin.getByLabel('Label', { exact: true })).toHaveValue('Practice fact');
+  await pin.getByRole('button', { name: 'Pin evidence', exact: true }).click();
+  await expect(pin.getByLabel('Fact', { exact: true })).toHaveValue('');
+  await expect(practice.locator('.practice-status')).toContainText('nothing was written to your saved workspace');
+
+  await practice.getByRole('button', { name: '2. Record a conclusion', exact: true }).click();
+  const decision = practice.locator('form[data-recovery-form="decision"]');
+  await decision.getByRole('combobox', { name: 'Disposition', exact: true }).selectOption('suspicious');
+  await decision.getByRole('combobox', { name: 'Review reason', exact: true }).selectOption('other_reviewed');
+  await decision.getByLabel('Conclusion summary', { exact: true }).fill('The claimed identity needs verification');
+  await decision.getByLabel('Evidence-based rationale', { exact: true }).fill('The form requests credentials, but its operator and purpose are not established.');
+  await decision.getByRole('checkbox', { name: /Practice fact/u }).check();
+  await decision.getByRole('button', { name: 'Record conclusion', exact: true }).click();
+  await expect(decision.getByLabel('Conclusion summary', { exact: true })).toHaveValue('');
+  await expect(practice.getByRole('region', { name: 'Case assessment' })).toContainText('The claimed identity needs verification');
+
+  await practice.getByRole('button', { name: '3. Review a later capture', exact: true }).click();
+  const recheck = practice.locator('form[data-recovery-form="observed-effect"]');
+  await recheck.getByRole('combobox', { name: 'Saved question', exact: true }).selectOption({ label: 'Is the credential form still present?' });
+  const laterId = await recheck.getByRole('combobox', { name: 'Current evidence', exact: true }).locator('option').filter({ hasText: 'Later capture did not complete' }).getAttribute('value');
+  expect(laterId).toBeTruthy();
+  await recheck.getByRole('combobox', { name: 'Current evidence', exact: true }).selectOption(laterId!);
+  await recheck.getByRole('combobox', { name: 'Comparison conditions', exact: true }).selectOption('comparable');
+  await recheck.getByRole('combobox', { name: 'Observed effect', exact: true }).selectOption('not_reproduced');
+  await recheck.getByRole('button', { name: 'Record independent outcome', exact: true }).click();
+  await expect(recheck.getByRole('alert')).toContainText('requires a complete observation');
+  await expect(practice.getByRole('list', { name: 'Practice recheck records' })).toHaveCount(0);
+  await recheck.getByRole('combobox', { name: 'Observed effect', exact: true }).selectOption('unavailable');
+  await recheck.getByRole('button', { name: 'Record independent outcome', exact: true }).click();
+  await expect(practice.getByRole('list', { name: 'Practice recheck records' })).toContainText('unavailable · partial · Fictional later capture');
+  await expect(recheck.getByRole('button', { name: 'Record independent outcome', exact: true })).toBeFocused();
+  await verifyIsolation();
+});
+
+test('Case practice is reachable, responsive and discarded on restart or reload', async ({ page }, testInfo) => {
+  const verifyIsolation = await isolateCasePractice(page);
+  await page.goto('/resources');
+  await page.getByRole('link', { name: 'practise an evidence-to-recheck workflow with the real Case forms' }).click();
+  await expect(page).toHaveURL(/\/demo#case-practice$/u);
+  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const form = practice.locator('form[data-recovery-form="evidence-pin"]');
+  await expect(form).toBeVisible();
+  await form.getByLabel('Label', { exact: true }).fill('Discard this practice draft');
+  await expect(form.getByRole('status')).toContainText('page only');
+  await practice.getByRole('button', { name: 'Discard practice and restart', exact: true }).click();
+  await expect(practice.getByRole('heading', { name: 'Practise a Case review', exact: true })).toBeFocused();
+  await expect(form.getByLabel('Label', { exact: true })).toHaveValue('');
+  await form.getByLabel('Label', { exact: true }).fill('Discard this on reload too');
+  await expect(form.getByRole('status')).toContainText('page only');
+  await page.reload();
+  await expect(form.getByLabel('Label', { exact: true })).toHaveValue('');
+  for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720], [2560, 1440]] as const) {
+    await page.setViewportSize({ width, height });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const name of ['1. Pin a fact', '2. Record a conclusion', '3. Review a later capture']) {
+        await practice.getByRole('button', { name, exact: true }).click();
+        const ids = ['practice-evidence', 'practice-assessment', 'practice-recheck'];
+        for (const [index, id] of ids.entries()) {
+          const heading = practice.locator(`#${id}`);
+          await expect(heading).toHaveCount(1);
+          if (index === Number(name[0]) - 1) await expect(heading).toBeVisible(); else await expect(heading).toBeHidden();
+        }
+        await expectNoHorizontalOverflow(page);
+        if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`case-practice-${name[0]}-${theme}-${width}.png`) });
+      }
+      if (width === 320 || width === 1280) expect((await new AxeBuilder({ page }).include('#case-practice').analyze()).violations).toEqual([]);
+    }
+  }
+  await verifyIsolation();
+});
 
 test('the suspicious-domain and change-review scenarios can start directly', async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });

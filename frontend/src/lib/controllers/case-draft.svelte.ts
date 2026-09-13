@@ -1,10 +1,16 @@
-import { onMount, tick } from 'svelte';
+import { getContext, onMount, setContext, tick } from 'svelte';
 import { restoreSubmittedFocus } from './submitted-draft.ts';
 import { readBrowserLocalData, subscribeBrowserLocalData, browserLocalDataProvider, browserLocalDataCollection } from '../browser-local-data-service.ts';
 import type { CaseDraftFields, CaseDraftStore } from '../../../../packages/contracts/case-drafts.mts';
 import type { CaseRecord } from '../analysis/case-model.ts';
 import type { PersistCaseResponse } from '../analysis/case-response-stage.ts';
-import { createCaseDraftRecovery, restoreCaseDraftFields, INITIAL_CASE_DRAFT_RECOVERY_STATE, type CaseDraftRecoveryState } from './case-draft-recovery.ts';
+import { createCaseDraftRecovery, restoreCaseDraftFields, INITIAL_CASE_DRAFT_RECOVERY_STATE, type CaseDraftRecoveryState, type DraftStorage } from './case-draft-recovery.ts';
+
+const documentDraftStorage = Symbol('document-case-drafts');
+/** A component subtree can rehearse the real forms without opening saved work. */
+export function provideDocumentCaseDraftStorage(storage: DraftStorage): void {
+  setContext(documentDraftStorage, storage);
+}
 
 const unprotected = new Set<object>();
 export function hasUnprotectedCaseDrafts(): boolean { return unprotected.size > 0; }
@@ -30,13 +36,16 @@ export function createCaseDraft<T extends CaseDraftFields>(
   const defaults = structuredClone(initial) as CaseDraftValues<T>;
   let value = $state<CaseDraftValues<T>>(structuredClone(defaults));
   let state = $state<CaseDraftRecoveryState>(INITIAL_CASE_DRAFT_RECOVERY_STATE);
+  const transient = getContext<DraftStorage | undefined>(documentDraftStorage);
+  const retention = transient ? 'document' as const : 'workspace' as const;
   const owner = {};
   const recovery = createCaseDraftRecovery({
     caseId: caseId(), form,
     readFields: () => $state.snapshot(value) as CaseDraftValues<T>,
     restoreFields: fields => { value = restoreCaseDraftFields(fields, defaults, objectLists); },
     resetFields: () => { value = structuredClone(defaults); },
-    storage: {
+    retention,
+    storage: transient ?? {
       read: () => readBrowserLocalData('case_drafts'),
       update: async change => {
         const [provider, cases, drafts] = await Promise.all([browserLocalDataProvider(), browserLocalDataCollection('cases'), browserLocalDataCollection('case_drafts')]);
@@ -46,15 +55,15 @@ export function createCaseDraft<T extends CaseDraftFields>(
         });
       },
     },
-    notify: (next, unsafe) => { state = next; if (unsafe) unprotected.add(owner); else unprotected.delete(owner); },
+    notify: (next, unsafe) => { state = next; if (unsafe && !transient) unprotected.add(owner); else unprotected.delete(owner); },
   });
   onMount(() => {
     void recovery.refresh();
-    const unsubscribe = subscribeBrowserLocalData('case_drafts', () => { void recovery.refresh(); });
+    const unsubscribe = transient ? () => {} : subscribeBrowserLocalData('case_drafts', () => { void recovery.refresh(); });
     return () => { unsubscribe(); recovery.destroy(); unprotected.delete(owner); };
   });
   return {
-    form,
+    form, retention,
     get value() { return value; }, get state() { return state; },
     ...recovery,
     persist: async (persist: PersistCaseResponse, ...args: Parameters<PersistCaseResponse>) => {

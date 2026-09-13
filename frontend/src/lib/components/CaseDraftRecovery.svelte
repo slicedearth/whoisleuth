@@ -24,7 +24,7 @@
     </div>
     {#if draft.state.candidates.length}
       <details><summary>{draft.state.candidates.length} saved draft{draft.state.candidates.length === 1 ? '' : 's'} for this form</summary>
-        <p>Recovery copies stay in this workspace and are not included in exports. Discard the current form before restoring another copy.</p>
+        <p>{draft.retention === 'document' ? 'Practice copies stay on this page only.' : 'Recovery copies stay in this workspace and are not included in exports.'} Discard the current form before restoring another copy.</p>
         <ul>{#each draft.state.candidates as candidate (candidate.id)}
           <li><span>{new Date(candidate.updatedAt).toLocaleString()}</span>
             <button type="button" class="btn small" disabled={draft.state.busy || draft.state.edited || candidate.formVersion !== 1} onclick={(event) => void recover(event, () => draft.restore(candidate))}>Restore draft</button>
