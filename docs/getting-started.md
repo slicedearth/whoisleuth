@@ -99,6 +99,11 @@ floors. Exclusions must identify their type, build, browser or process check.
 Tests use local fixtures; deliberate source-refresh and deployment checks have
 separate network modes. Do not run those for an unrelated edit.
 
+[External evaluation examples](../fixtures/risk-evaluation/README.md) retain
+licensed, minimised source features separately from synthetic tests. Their
+development and evaluation groups are disjoint; the report distinguishes
+historical labels, missing inputs and unmeasured accuracy.
+
 ## Browser end-to-end tests
 
 Install the supported browser once if necessary:

@@ -64,7 +64,7 @@
     </label>
   </header>
 
-  <p class="boundary">This review describes only the supplied analyst-labelled sample. It does not recommend a threshold, tune Risk, prove maliciousness or safety, make a request, or retain the file.</p>
+  <p class="boundary">This review describes only the supplied labelled sample. It does not recommend a threshold, tune Risk, prove maliciousness or safety, make a request, or retain the file.</p>
 
   {#if error}
     <div class="report-message error" role="alert"><strong>Summary not loaded</strong><span>{error}</span></div>
@@ -84,7 +84,9 @@
       <article><strong>{report.summary.excluded}</strong><span>Excluded context</span></article>
     </div>
     <p class="sample-state" data-state={dashboard.sampleSufficiency}>
-      {dashboard.sampleSufficiency === 'reviewed'
+      {report.summary.total > 0 && report.summary.scoreBands.not_scored === report.summary.total
+        ? 'No records are eligible for Risk scoring. Source labels alone do not establish the required registration context; review the supplied evidence before interpreting metrics.'
+        : dashboard.sampleSufficiency === 'reviewed'
         ? 'Both metric classes contain at least 20 reviewed labels. This local sample can still be unrepresentative.'
         : 'Insufficient class balance: both positive and negative classes need at least 20 reviewed labels before treating this as more than a small local sample.'}
     </p>

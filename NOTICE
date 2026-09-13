@@ -38,6 +38,12 @@ distributed as third-party-notices.txt. The website inventory is served at
 only the CLI runtime dependency closure. Both are generated from the reviewed
 lockfile, and the website inventory is checked for lockfile drift in CI.
 
+The development-only fixtures/risk-evaluation/rows.json is a minimised,
+stratified adaptation of PhiUSIIL Phishing URL (Website), Arvind Prasad and
+Shalini Chandra (2024), licensed under CC BY 4.0 without warranties. The source
+and licence links, modifications and reproduction instructions are in that
+directory's README.md. This dataset is not included in the website or CLI.
+
 The generated Unicode confusable projection is derived from Unicode UTS #39
 data file confusables.txt, Unicode version 17.0.0.
 

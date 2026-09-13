@@ -1,4 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
 
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
@@ -13,6 +15,46 @@ import { buildRiskCalibrationSummaryReport } from '../lib/risk-calibration-summa
 import { explainRiskScore, explainRiskScoreV7, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
 
 const NOW = '2026-08-10T00:00:00.000Z';
+
+test('external evaluation with missing authority stays unmeasured in the console', async ({ page }, testInfo) => {
+  const output = JSON.parse(execFileSync(process.execPath, [path.resolve(__dirname, '../tools/risk-evaluation.mts')], {
+    encoding: 'utf8', timeout: 30_000, maxBuffer: 512 * 1024,
+  }));
+  const evaluation = output.reports.find((report: { split: string }) => report.split === 'evaluation');
+  expect(evaluation).toBeTruthy();
+  await page.goto('/monitor?view=cases');
+  await page.locator('details.advanced-case-tools > summary').click();
+  const dashboard = page.locator('.calibration-dashboard');
+  await expect(dashboard.getByRole('heading', { name: 'Reviewed Risk calibration' })).toBeVisible();
+  const requests: string[] = [];
+  page.on('request', request => requests.push(request.url()));
+  await dashboard.locator('input[type="file"]').setInputFiles({
+    name: 'external-evaluation-summary.json', mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(evaluation.calibration)),
+  });
+  await expect(dashboard.locator('.summary-grid article').nth(0).locator('strong')).toHaveText('64');
+  await expect(dashboard.locator('.summary-grid article').nth(1).locator('strong')).toHaveText('0');
+  await expect(dashboard.locator('.summary-grid article').nth(3).locator('strong')).toHaveText('64');
+  await expect(dashboard.locator('.sample-state')).toHaveAttribute('data-state', 'insufficient');
+  await expect(dashboard.locator('.sample-state')).toContainText('No records are eligible for Risk scoring');
+  await expect(dashboard.locator('.sample-state')).not.toContainText('Insufficient class balance');
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(value => document.documentElement.dataset.theme = value, theme);
+      const metrics = width < 640 ? dashboard.locator('.threshold-cards') : dashboard.locator('table');
+      await expect(metrics).toBeVisible();
+      await expect(metrics.getByText('Unmeasured', { exact: true }).first()).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      const results = await new AxeBuilder({ page }).include('.calibration-dashboard').analyze();
+      expect(results.violations).toEqual([]);
+      await dashboard.screenshot({ path: testInfo.outputPath(`external-evaluation-${theme}-${width}.png`) });
+    }
+  }
+  expect(requests).toEqual([]);
+  await dashboard.getByRole('button', { name: 'Clear summary' }).click();
+  await expect(dashboard.locator('.summary-grid')).toHaveCount(0);
+});
 
 function reports(explain: ExplainRiskScore = explainRiskScore) {
   const dataset = parseRiskCalibrationDataset(JSON.stringify({
