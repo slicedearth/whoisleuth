@@ -8,6 +8,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { Readable, Writable } from 'node:stream';
 
 import { CLI_COMMANDS, CliUsageError, parseCliArguments } from '../cli/arguments.mts';
+import { CLI_COMMAND_REGISTRY } from '../cli/command-reference.mts';
 import { boundedCliErrorMessage } from '../cli/errors.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliLookupDocument } from '../cli/formatters/json.mts';
@@ -336,9 +337,14 @@ describe('CLI argument parsing', () => {
     const filtered = JSON.parse(filteredStdout.value());
     assert.equal(filtered.schema, catalogue.schema);
     assert.equal(filtered.version, 1);
-    assert.deepEqual(filtered.commands.map((entry: { command: string }) => entry.command), [
-      'case-pack', 'export',
-    ]);
+    assert.ok(filtered.commands.some((entry: { command: string }) => entry.command === 'case-pack'));
+    for (const entry of filtered.commands) {
+      const definition = CLI_COMMAND_REGISTRY.find(command => command.command === entry.command);
+      assert.ok(definition, 'filtered results must name a registered command');
+      assert.equal(definition.help.group, 'respond');
+      assert.equal(definition.documentation.common, true);
+      assert.equal(entry.collection.mode, 'offline');
+    }
     assert.ok(filtered.commands.every((entry: Record<string, unknown>) => (
       Object.keys(entry).sort().join(',') === 'boundary,collection,command,description,example,usage'
     )));

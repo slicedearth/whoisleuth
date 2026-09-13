@@ -706,6 +706,14 @@ and the [interchange fidelity report](https://www.whoisleuth.com/cli#command-int
 
 ### Browser and CLI handoffs
 
+On Dashboard, **Package and review evidence files** also offers **BagIt 1.0**
+under **Export format** and **Review format**. BagIt keeps selected bytes
+unchanged in an unencrypted ZIP or new folder with SHA-512 manifests.
+Verification accepts SHA-256 or SHA-512 and distinguishes complete, missing,
+mismatched and unsupported checks. It never retrieves files from `fetch.txt`.
+File integrity does not establish factual accuracy. Use the ordinary encrypted
+package option when the handoff needs encryption.
+
 Lookup's **Download evidence package** includes the capsule and its exact
 linked Lookup JSON together. **Download capsule** retains the standalone format.
 In Dashboard saved-work tools, **Package and review evidence files** can also

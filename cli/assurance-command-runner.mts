@@ -2,7 +2,8 @@ import { Buffer } from 'node:buffer';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { buildInvestigationPackage } from '../packages/investigation/investigation-package.mts';
 import { encryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
-import { writeInvestigationFolder } from './investigation-folder.mts';
+import { writeInvestigationFolder, writePreparedEvidenceFolder } from './investigation-folder.mts';
+import { buildInvestigationBagIt, prepareInvestigationBagIt } from '../packages/investigation/investigation-bagit.mts';
 
 import { scanBoundedJson } from '../lib/bounded-json.mts';
 import {
@@ -110,7 +111,7 @@ async function runManifestCommand(
   let document;
   try {
     if (args.package) {
-      const built = await buildInvestigationPackage({ workflow: args.workflow, configurationDigestSha256: args.configurationDigestSha256, artifacts }, context.now(), context.packageVersion);
+      const built = await (args.bagit ? buildInvestigationBagIt : buildInvestigationPackage)({ workflow: args.workflow, configurationDigestSha256: args.configurationDigestSha256, artifacts }, context.now(), context.packageVersion);
       dependencies.signal?.throwIfAborted();
       if (!context.writeBinaryOutput) throw new CliUsageError('Package output requires an explicit file destination.');
       const output = args.passphraseSource
@@ -125,7 +126,11 @@ async function runManifestCommand(
       configurationDigestSha256: args.configurationDigestSha256,
       artifacts,
     };
-    document = args.folder
+    if (args.bagit && args.folder) {
+      const prepared = await prepareInvestigationBagIt(input, context.now(), context.packageVersion);
+      await writePreparedEvidenceFolder(args.folder, prepared.files, 'data', 'tagmanifest-sha512.txt', dependencies.signal);
+      document = prepared.manifest;
+    } else document = args.folder
       ? await writeInvestigationFolder(args.folder, input, context.now(), context.packageVersion, dependencies.signal)
       : await buildInvestigationManifest(input, context.now(), context.packageVersion);
   } catch (error) {

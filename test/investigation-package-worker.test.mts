@@ -26,6 +26,22 @@ class ControlledWorker {
   factory = () => this as unknown as Worker;
 }
 
+test('BagIt worker builds a separately selected format and returns only validated download-only bytes', async () => {
+  const built = await runInvestigationPackageOperation({ kind: 'bagitBuild', input: request.input });
+  if (built.kind !== 'bagitBuild') assert.fail('Expected BagIt');
+  const inspected = await runInvestigationPackageOperation({ kind: 'bagitInspect', input: { file: built.result.file } });
+  if (inspected.kind !== 'bagitInspect') assert.fail('Expected BagIt review');
+  assert.equal(inspected.result.review.state, 'valid');
+  assert.equal(await inspected.result.contents.get('artifact-1')!.text(), '{"retained":"exactly"}\n');
+  assert.equal(inspected.result.contents.get('artifact-2')!.type, 'application/octet-stream');
+  assert.equal((await runInvestigationPackageOperation({ kind: 'inspect', input: { file: built.result.file } })).kind, 'error');
+  const illegal = { kind: 'bagitBuild', input: { ...request.input, passphrase: 'fixture package passphrase' } } as InvestigationPackageRequest;
+  assert.equal((await runInvestigationPackageOperation(illegal)).kind, 'error');
+  const worker = new ControlledWorker(), abort = new AbortController();
+  const pending = runInvestigationPackageWorker('bagitInspect', { file: built.result.file }, { createWorker: worker.factory, signal: abort.signal });
+  const rejected = assert.rejects(pending, /cancelled/u); abort.abort(); await rejected; assert.equal(worker.terminated, 1);
+});
+
 test('package worker uses immutable file inputs and returns download-only verified blobs', async () => {
   const built = await runInvestigationPackageOperation(request);
   assert.equal(built.kind, 'build');

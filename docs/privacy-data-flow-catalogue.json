@@ -5514,7 +5514,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Ordinary output contains metadata only. ZIP and folder output include unchanged selected bytes and are private until reviewed for sharing. Folders must be new; existing destinations are never replaced and a failed write may leave explicit partial output. Filenames ending in .json are parsed as JSON; other files are opaque and never executed. Original paths are omitted. No network request is made.",
+        "Ordinary output contains metadata only. ZIP and folder output include unchanged selected bytes and are private until reviewed for sharing. Folders must be new; existing destinations are never replaced and a failed write may leave explicit partial output. BagIt output is unencrypted; its checksums do not authenticate evidence. Filenames ending in .json are parsed as JSON; other files are opaque and never executed. Original paths are omitted. No network request is made.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -6904,7 +6904,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Case exports are checked without repairing content; package review also counts original references with matching bytes. Folders reject symbolic links, nested trees and unlisted files; their package digest describes a canonical ZIP representation, not filesystem metadata. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 for incomplete verification, including missing Case originals, unsupported entries or unlinked capsule sources.",
+        "Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Case exports are checked without repairing content; ordinary package review also counts original references with matching bytes. Ordinary folders allow only the declared layout; BagIt allows bounded nested payloads and checks SHA-256/SHA-512 manifests without interpreting payloads. Symbolic links are refused. BagIt fetch.txt is never fetched; missing files, mismatches and unsupported algorithms remain explicit. Package digests describe bytes, not filesystem metadata or authenticity. --strict-exit returns 4 for incomplete verification.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],

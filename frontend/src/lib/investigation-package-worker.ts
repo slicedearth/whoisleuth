@@ -22,9 +22,12 @@ export function runInvestigationPackageWorker<Kind extends InvestigationPackageK
       if (reply.kind === 'capture') {
         if (!reply.result?.document || !Array.isArray(reply.result.artifacts) || !Array.isArray(reply.result.matches)
           || !Array.isArray(reply.result.unusedIds) || !(reply.result.contents instanceof Map)) throw new Error('Capture processing returned an unexpected result.');
+      } else if (reply.kind === 'bagitInspect' || reply.kind === 'bagitInspectFolder') {
+        if (!reply.result?.review || !['valid', 'invalid', 'incomplete', 'unsupported'].includes(reply.result.review.state)
+          || !Array.isArray(reply.result.review.entries) || !(reply.result.contents instanceof Map)) throw new Error('BagIt processing returned an unexpected result.');
       } else if (!reply.result?.manifest || !Array.isArray(reply.result.manifest.artifacts)
         || (reply.kind === 'inspect' || reply.kind === 'inspectFolder' ? !(reply.result.contents instanceof Map) || !['verified', 'not_applicable'].includes(reply.result.encryption)
-          : reply.kind === 'folder' ? !Array.isArray(reply.result.files) : !(reply.result.file instanceof Blob))) throw new Error('Evidence package processing returned an unexpected result.');
+          : reply.kind === 'folder' || reply.kind === 'bagitFolder' ? !Array.isArray(reply.result.files) : !(reply.result.file instanceof Blob))) throw new Error('Evidence package processing returned an unexpected result.');
       return reply.result as InvestigationPackageResults[Kind];
     },
   });

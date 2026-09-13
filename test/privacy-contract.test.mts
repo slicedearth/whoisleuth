@@ -40,6 +40,7 @@ function compact(value: string): string {
 }
 
 const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
+  { id: 'bagit-local-files', pattern: /BagIt exports include unchanged selected files and source declarations.*unencrypted ZIP or new folder.*review reads only selected local files.*fetch.txt locations are never requested.*File paths and fetch locations are omitted from review reports.*Checksums do not establish source identity, trusted time or factual accuracy.*No file is imported or executed.*files remain until deliberately deleted/iu },
   { id: 'workspace-replacement', pattern: /encrypted replacement copies saved collections, recovery drafts and referenced original files.*separately chosen passphrase.*without changing the source.*missing files and changed records prevent a complete verification.*encrypted original still accepts its old passphrase.*not an independent backup/iu },
   { id: 'workspace-idle-lock', pattern: /Optional idle locking is off by default.*minute setting stays in workspace-scoped session storage for this tab.*no investigation data.*keeping saved encrypted drafts but discarding other unsaved page state.*Cancelling a leave-page prompt keeps the tab unlocked.*Suspended browser execution can delay an automatic lock/iu },
   { id: 'case-handoff', pattern: /Encrypted Case handoffs include one full private Case and explicitly selected original bytes.*unfinished forms, authentication state and other Cases are excluded.*does not import file bytes, status, actions, authorisations or closures/iu },

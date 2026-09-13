@@ -1253,6 +1253,26 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       || !Array.isArray(folderReview.limitations) || !folderReview.limitations.some(value => typeof value === 'string' && value.includes('not filesystem metadata'))) {
       throw new TypeError('Installed folder output did not preserve exact files and separate container identity.');
     }
+    const bagItZip = path.join(temporaryRoot, 'bagit.zip'), bagItFolder = path.join(temporaryRoot, 'bagit-folder');
+    if (await runInstalledCheck(executable, ['manifest', packageSource, packageOpaque, '--workflow', 'Evidence review',
+      '--bagit', '--package', '--output', bagItZip], 'BagIt ZIP creation') !== '') throw new TypeError('BagIt creation emitted terminal binary content.');
+    await runInstalledCheck(executable, ['manifest', packageSource, packageOpaque, '--workflow', 'Evidence review',
+      '--bagit', '--folder', bagItFolder, '--quiet'], 'BagIt folder creation');
+    for (const [label, selection] of [['ZIP', [bagItZip, '--package']], ['folder', ['--folder', bagItFolder]]] as const) {
+      const reviewed = record(JSON.parse(await runInstalledCheck(executable, ['verify-artifact', ...selection,
+        '--bagit', '--json', '--strict-exit'], `BagIt ${label} verification`)), 'Installed BagIt review');
+      const bag = record(reviewed.bagit, 'Installed BagIt details');
+      if (reviewed.state !== 'integrity_valid' || bag.state !== 'valid' || bag.checksumsVerified !== true || bag.complete !== true
+        || !Array.isArray(bag.entries) || bag.entries.length !== 2 || record(bag.entries[1], 'BagIt binary').byteLength !== 4
+        || record(reviewed.checks, 'BagIt checks').authenticatedEncryption !== 'not_applicable'
+        || JSON.stringify(reviewed).includes('package-source')) throw new TypeError('Installed BagIt verification did not preserve bounded, redacted integrity semantics.');
+    }
+    const bagItBytes = await readBoundedRegularFileWithin(bagItFolder, 'data/artifact-2', { maximumBytes: 4, expectedBytes: 4, label: 'Installed BagIt binary' });
+    if (!bagItBytes.equals(Buffer.from([0, 255, 128, 1]))) throw new TypeError('Installed BagIt output changed selected file bytes.');
+    await rm(path.join(bagItFolder, 'data/artifact-2'));
+    const missingBag = record(JSON.parse(await runInstalledCheck(executable, ['verify-artifact', '--folder', bagItFolder,
+      '--bagit', '--json', '--strict-exit'], 'BagIt incomplete verification', 4)), 'Installed incomplete BagIt review');
+    if (missingBag.state !== 'partial' || record(missingBag.bagit, 'Incomplete BagIt details').state !== 'incomplete') throw new TypeError('Installed BagIt verification concealed an absent original.');
     const originalManifestBytes = await readBoundedRegularFileWithin(folderOutput, 'manifest.json', {
       maximumBytes: 512 * 1024, minimumBytes: 1, label: 'Installed folder manifest',
     });
@@ -1405,6 +1425,11 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       'evidence-folder-creation',
       'evidence-folder-verification',
       'evidence-folder-replacement-refusal',
+      'bagit-zip-creation',
+      'bagit-zip-verification',
+      'bagit-folder-creation',
+      'bagit-folder-verification',
+      'bagit-incomplete-verification',
       ...signingChecks,
       'domain-control-deep-imports',
       ...installedHandlerChecks,

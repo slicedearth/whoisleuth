@@ -7,6 +7,8 @@ import { MAX_WEB_CAPTURE_MANIFEST_BYTES } from '../../../packages/contracts/web-
 import { readWebCaptureManifest, matchCaptureArtifacts, type CaptureArtifactMatch } from '../../../packages/interchange/web-capture-import.mts';
 import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES, hasEncryptedInvestigationPackagePrefix } from '../../../packages/contracts/investigation-package-limits.mts';
 import { decryptInvestigationPackage, encryptInvestigationPackage } from '../../../packages/investigation/investigation-package-crypto.mts';
+import { buildInvestigationBagIt, prepareInvestigationBagIt } from '../../../packages/investigation/investigation-bagit.mts';
+import { assertBagItSelection, inspectBagItEntries, readBagItZip, MAX_BAGIT_ZIP_BYTES, MAX_BAGIT_ENTRIES, type BagItReview } from '../../../packages/interchange/bagit.mts';
 
 export type SelectedInvestigationFile = Readonly<{
   file: Blob;
@@ -19,6 +21,7 @@ export type InvestigationFolderFile = Readonly<{ path: string; file: Blob }>;
 export type BrowserInvestigationFolder = Readonly<{ files: readonly InvestigationFolderFile[]; manifest: BuildResult['manifest'] }>;
 type Inspection = Awaited<ReturnType<typeof inspectInvestigationPackage>>;
 export type BrowserInvestigationPackageReview = Omit<Inspection, 'contents'> & Readonly<{ contents: ReadonlyMap<string, Blob>; encryption: 'verified' | 'not_applicable' }>;
+export type BrowserBagItReview = Readonly<{ review: BagItReview; contents: ReadonlyMap<string, Blob> }>;
 export type BrowserCaptureAttachmentReview = ReturnType<typeof readWebCaptureManifest> & Readonly<{
   matches: readonly CaptureArtifactMatch[];
   contents: ReadonlyMap<string, Blob>;
@@ -27,12 +30,17 @@ export type BrowserCaptureAttachmentReview = ReturnType<typeof readWebCaptureMan
 export type InvestigationPackageInputs = {
   build: { files: readonly SelectedInvestigationFile[]; workflow: string; generatedAt: string; applicationVersion: string; passphrase?: string };
   folder: Omit<InvestigationPackageInputs['build'], 'passphrase'>;
+  bagitBuild: Omit<InvestigationPackageInputs['build'], 'passphrase'>;
+  bagitFolder: Omit<InvestigationPackageInputs['build'], 'passphrase'>;
+  bagitInspect: { file: Blob };
+  bagitInspectFolder: { files: readonly InvestigationFolderFile[] };
   capsule: { capsule: CapsuleInput; generatedAt: string; passphrase?: string };
   inspect: { file: Blob; passphrase?: string };
   inspectFolder: { files: readonly InvestigationFolderFile[] };
   capture: { manifest: Blob; files: readonly Blob[] };
 };
-export type InvestigationPackageResults = { build: BuildResult; folder: BrowserInvestigationFolder; capsule: BuildResult; inspect: BrowserInvestigationPackageReview; inspectFolder: BrowserInvestigationPackageReview; capture: BrowserCaptureAttachmentReview };
+export type InvestigationPackageResults = { build: BuildResult; folder: BrowserInvestigationFolder; capsule: BuildResult; inspect: BrowserInvestigationPackageReview; inspectFolder: BrowserInvestigationPackageReview; capture: BrowserCaptureAttachmentReview;
+  bagitBuild: BuildResult; bagitFolder: BrowserInvestigationFolder; bagitInspect: BrowserBagItReview; bagitInspectFolder: BrowserBagItReview };
 export type InvestigationPackageKind = keyof InvestigationPackageInputs;
 export type InvestigationPackageRequest = { [Kind in InvestigationPackageKind]: { kind: Kind; input: InvestigationPackageInputs[Kind] } }[InvestigationPackageKind];
 export type InvestigationPackageResponse = { [Kind in InvestigationPackageKind]: { kind: Kind; result: InvestigationPackageResults[Kind] } }[InvestigationPackageKind]
@@ -70,6 +78,24 @@ export function assertInvestigationFolderSelection(files: readonly Investigation
 export async function runInvestigationPackageOperation(request: InvestigationPackageRequest): Promise<InvestigationPackageResponse> {
   try {
     if (!request?.input) throw new TypeError('Missing package input.');
+    if (request.kind === 'bagitInspect' || request.kind === 'bagitInspectFolder') {
+      let files: ReadonlyMap<string, Uint8Array>;
+      if (request.kind === 'bagitInspect') {
+        if (!(request.input.file instanceof Blob) || request.input.file.size < 22 || request.input.file.size > MAX_BAGIT_ZIP_BYTES) throw new TypeError('BagIt ZIP exceeds its input limit.');
+        files = readBagItZip(new Uint8Array(await request.input.file.arrayBuffer()));
+      } else {
+        if (!Array.isArray(request.input.files) || request.input.files.length > MAX_BAGIT_ENTRIES
+          || request.input.files.some(item => !(item?.file instanceof Blob))) throw new TypeError('BagIt requires bounded selected files.');
+        assertBagItSelection(request.input.files.map(item => ({ path: item.path, byteLength: item.file.size })));
+        const selected = request.input.files.map(item => ({ path: item.path, file: item.file }));
+        const read = new Map<string, Uint8Array>();
+        for (const item of selected) read.set(item.path, new Uint8Array(await item.file.arrayBuffer()));
+        files = read;
+      }
+      const inspected = await inspectBagItEntries(files);
+      return { kind: request.kind, result: { review: inspected.review,
+        contents: new Map([...inspected.contents].map(([id, bytes]) => [id, localBlob(bytes, 'application/octet-stream')])) } };
+    }
     if (request.kind === 'capture') {
       const { manifest, files } = request.input;
       if (!(manifest instanceof Blob) || !manifest.size || manifest.size > MAX_WEB_CAPTURE_MANIFEST_BYTES) throw new TypeError('Capture manifest exceeds its input limit.');
@@ -118,12 +144,22 @@ export async function runInvestigationPackageOperation(request: InvestigationPac
       }
       return { kind: request.kind, result: { ...inspected, contents, encryption } };
     }
-    if (request.kind === 'build' || request.kind === 'folder') {
+    if (request.kind === 'build' || request.kind === 'folder' || request.kind === 'bagitBuild' || request.kind === 'bagitFolder') {
       const { files, workflow, generatedAt, applicationVersion } = request.input;
       assertInvestigationFileSelection(files);
       const selection = files.map(item => ({ file: item.file, mediaType: item.mediaType, source: { ...item.source } }));
       const artifacts: InvestigationManifestArtifactInput[] = [];
       for (const selected of selection) artifacts.push({ content: new Uint8Array(await selected.file.arrayBuffer()), mediaType: selected.mediaType, source: selected.source });
+      if (request.kind === 'bagitBuild' || request.kind === 'bagitFolder') {
+        if ('passphrase' in request.input) throw new TypeError('BagIt exports are not encrypted.');
+        const input = { workflow, configurationDigestSha256: null, artifacts };
+        if (request.kind === 'bagitFolder') {
+          const prepared = await prepareInvestigationBagIt(input, generatedAt, applicationVersion);
+          return { kind: 'bagitFolder', result: { manifest: prepared.manifest, files: [...prepared.files].map(([path, bytes]) => ({ path, file: localBlob(bytes, 'application/octet-stream') })) } };
+        }
+        const prepared = await buildInvestigationBagIt(input, generatedAt, applicationVersion);
+        return { kind: 'bagitBuild', result: { manifest: prepared.manifest, file: localBlob(prepared.bytes, 'application/zip') } };
+      }
       if (request.kind === 'folder') {
         if ('passphrase' in request.input) throw new TypeError('Folder exports are not encrypted.');
         const prepared = await prepareInvestigationPackageEntries({ workflow, configurationDigestSha256: null, artifacts }, generatedAt, applicationVersion);
@@ -149,6 +185,7 @@ export async function runInvestigationPackageOperation(request: InvestigationPac
     }
     throw new TypeError('Unsupported package operation.');
   } catch {
+    if (request?.kind?.startsWith('bagit')) return { kind: 'error', detail: 'BagIt processing could not finish. Select a BagIt 1.0 ZIP or folder with UTF-8 tags, safe relative paths and supported file limits. Empty payload folders must be selected as a ZIP. Nothing was fetched or saved.' };
     const unlocking = request?.kind === 'inspect' && typeof request.input?.passphrase === 'string';
     return { kind: 'error', detail: unlocking
       ? 'The package could not be unlocked and verified. Check the passphrase and file integrity. No saved records were changed.'

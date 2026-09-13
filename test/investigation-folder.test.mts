@@ -11,6 +11,7 @@ import {
   buildInvestigationPackage, encodeInvestigationPackageEntries, inspectInvestigationPackageEntries,
   prepareInvestigationPackageEntries, MAX_INVESTIGATION_PACKAGE_ENTRIES,
 } from '../packages/investigation/investigation-package.mts';
+import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../packages/contracts/investigation-package-limits.mts';
 
 const NOW = '2026-09-12T00:00:00.000Z';
 const VERSION = '2.4.0';
@@ -42,7 +43,7 @@ test('entry inspection captures bytes and listing before its first asynchronous 
 
 test('folder entry admission rejects unexpected paths, types, counts and missing files', async () => {
   const prepared = await prepareInvestigationPackageEntries(input, NOW, VERSION);
-  for (const name of ['../artifact-1', '/manifest.json', 'artifacts/../manifest.json', 'artifacts/artifact-129', 'artifacts/artifact-01', 'extra']) {
+  for (const name of ['../artifact-1', '/manifest.json', 'artifacts/../manifest.json', `artifacts/artifact-${MAX_INVESTIGATION_MANIFEST_ARTIFACTS + 1}`, 'artifacts/artifact-01', 'extra']) {
     await assert.rejects(inspectInvestigationPackageEntries(new Map([...prepared.files, [name, new Uint8Array([1])]])), /path|identity/);
   }
   await assert.rejects(inspectInvestigationPackageEntries(new Map()), /count/);

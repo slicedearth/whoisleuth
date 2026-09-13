@@ -398,6 +398,13 @@ and changes no saved records. A workspace file requires its separate import
 preview and confirmation. Checksum identity, supported format, signature trust,
 timestamp assurance and factual accuracy remain separate results. Downloaded
 packages remain until the operator deletes them.
+BagIt exports include unchanged selected files and source declarations in an
+unencrypted ZIP or new folder. BagIt review reads only selected local files;
+fetch.txt locations are never requested. File paths and fetch locations are
+omitted from review reports. Checksums do not establish source identity,
+trusted time or factual accuracy. No file is imported or executed. Exported
+files remain until deliberately deleted.
+
 Ordinary ZIPs and evidence folders are unencrypted. Optional encrypted packages
 protect the whole manifest and files with AES-256-GCM and PBKDF2-SHA-256
 (600,000 iterations). Their version-1 header contains only format parameters,

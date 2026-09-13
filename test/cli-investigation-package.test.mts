@@ -9,7 +9,7 @@ import { parseCliArguments } from '../cli/arguments.mts';
 import { verifyOfflineInvestigationPackage } from '../cli/investigation-package-review.mts';
 import { hasVerifiedApplicableIntegrity, hasVerifiedWholeArtifactIntegrity, isCompleteOfflineArtifactVerification } from '../cli/artifact-verify.mts';
 import { buildInvestigationPackage, inspectInvestigationPackage } from '../packages/investigation/investigation-package.mts';
-import { MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../packages/investigation/investigation-manifest.mts';
+import { MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../packages/investigation/investigation-manifest.mts';
 import { decryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
 
 const NOW = '2026-09-11T00:00:00.000Z';
@@ -95,12 +95,12 @@ test('package argument rules prevent terminal binary output, conflicting trust i
   assert.throws(() => parseCliArguments(['manifest', 'file.json', '--workflow', 'review', '--passphrase-file', 'passphrase.txt']), /--package/u);
   assert.throws(() => parseCliArguments(['verify-artifact', '--folder', 'files', '--passphrase-file', 'passphrase.txt']), /combined|--passphrase-file/u);
   assert.throws(() => parseCliArguments(['verify-artifact', '--package']), /source|file/u);
-  const lastEntry = parseCliArguments(['verify-artifact', 'source.json', '--manifest', 'manifest.json', '--manifest-entry', 'artifact-128']);
+  const lastEntry = parseCliArguments(['verify-artifact', 'source.json', '--manifest', 'manifest.json', '--manifest-entry', `artifact-${MAX_INVESTIGATION_MANIFEST_ARTIFACTS}`]);
   assert.equal(lastEntry.action, 'verify-artifact');
-  const many = parseCliArguments(['manifest', ...Array.from({ length: 128 }, (_, index) => `file-${index}.bin`), '--workflow', 'review', '--package', '--output', 'out.zip']);
+  const many = parseCliArguments(['manifest', ...Array.from({ length: MAX_INVESTIGATION_MANIFEST_ARTIFACTS }, (_, index) => `file-${index}.bin`), '--workflow', 'review', '--package', '--output', 'out.zip']);
   assert.equal(many.action, 'manifest');
-  if (many.action === 'manifest') assert.equal(many.sources.length, 128);
-  assert.throws(() => parseCliArguments(['manifest', ...Array.from({ length: 129 }, (_, index) => `file-${index}.bin`), '--workflow', 'review', '--package', '--output', 'out.zip']), /128/u);
+  if (many.action === 'manifest') assert.equal(many.sources.length, MAX_INVESTIGATION_MANIFEST_ARTIFACTS);
+  assert.throws(() => parseCliArguments(['manifest', ...Array.from({ length: MAX_INVESTIGATION_MANIFEST_ARTIFACTS + 1 }, (_, index) => `file-${index}.bin`), '--workflow', 'review', '--package', '--output', 'out.zip']));
 });
 
 test('invalid or cancelled package preparation leaves the destination absent', async () => {
@@ -151,15 +151,15 @@ test('the installed-style encrypted file path admits one full payload plus wrapp
   const errors: string[] = [];
   const dependencies = { stdout: { write(value: string) { output += value; } }, stderr: { write(value: string) { errors.push(value); } }, now: () => NOW };
   try {
-    const bytes = new Uint8Array(MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES);
+    const bytes = new Uint8Array(MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES);
     bytes[0] = 255; bytes[bytes.length - 1] = 127;
     await writeFile(input, bytes);
     await writeFile(passphraseFile, passphrase, { mode: 0o600 });
     assert.equal(await runCli(['manifest', input, '--workflow', 'capacity', '--package', '--output', destination, '--passphrase-file', passphraseFile], dependencies), 0, errors.join(''));
-    assert.ok((await stat(destination)).size > MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES);
+    assert.ok((await stat(destination)).size > MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES);
     assert.equal(await runCli(['verify-artifact', destination, '--package', '--passphrase-file', passphraseFile, '--json', '--strict-exit'], dependencies), 0, errors.join(''));
     const report = JSON.parse(output);
-    assert.equal(report.package.entries[0].byteLength, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES);
+    assert.equal(report.package.entries[0].byteLength, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES);
     assert.equal(report.package.entries[0].state, 'opaque');
     assert.equal(report.checks.contentIntegrity, 'verified');
     assert.equal(report.checks.authenticatedEncryption, 'verified');

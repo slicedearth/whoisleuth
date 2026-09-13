@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { selectedInvestigationFolderFiles, readBrowserInvestigationFolder, writeBrowserInvestigationFolder, supportsEvidenceFolderWrite } from '../frontend/src/lib/investigation-folder.ts';
+import { selectedInvestigationFolderFiles, selectedBagItFolderFiles, readBrowserInvestigationFolder, writeBrowserInvestigationFolder, supportsEvidenceFolderWrite } from '../frontend/src/lib/investigation-folder.ts';
 import { runInvestigationPackageOperation, type BrowserInvestigationFolder } from '../frontend/src/lib/investigation-package-worker-model.ts';
 import { MAX_INVESTIGATION_PACKAGE_ENTRIES } from '../packages/investigation/investigation-package.mts';
 
@@ -54,6 +54,28 @@ class MemoryDirectory {
   async getFileHandle(name: string, options?: { create?: boolean }) { return this.select(name, 'file', options?.create) as MemoryFile; }
   get handle() { return this as unknown as FileSystemDirectoryHandle; }
 }
+
+test('BagIt browser folder output shares the fresh-folder coordinator and independent read-back verifier', async () => {
+  const result = await runInvestigationPackageOperation({ kind: 'bagitFolder', input: { workflow: 'Selected files', generatedAt: NOW, applicationVersion: '2.4.0', files: [
+    { file: source, mediaType: 'image/png', source: { identity: null, observedAt: null } },
+  ] } });
+  if (result.kind !== 'bagitFolder') assert.fail('Expected BagIt folder');
+  const parent = new MemoryDirectory('selected-parent');
+  const written = await writeBrowserInvestigationFolder(parent.handle, result.result, undefined, 'bagit');
+  assert.equal(parent.children.size, 1); assert.equal(parent.writes.at(-1), 'tagmanifest-sha512.txt');
+  const checked = await runInvestigationPackageOperation({ kind: 'bagitInspectFolder', input: { files: written.files } });
+  if (checked.kind !== 'bagitInspectFolder') assert.fail('Expected BagIt review');
+  assert.equal(checked.result.review.state, 'valid');
+  assert.deepEqual(new Uint8Array(await checked.result.contents.get('artifact-1')!.arrayBuffer()), new Uint8Array(await source.arrayBuffer()));
+  const selected = written.files.filter(item => !item.path.endsWith('/')).map(item => {
+    const file = new File([item.file], item.path.split('/').at(-1)!);
+    Object.defineProperty(file, 'webkitRelativePath', { value: `selected-parent/${item.path}` }); return file;
+  });
+  assert.equal(selectedBagItFolderFiles(selected).length, selected.length);
+  assert.throws(() => selectedBagItFolderFiles([...selected, selected[0]!]), /collid/u);
+  const wrong = new File(['x'], 'extra'); Object.defineProperty(wrong, 'webkitRelativePath', { value: 'another-parent/data/extra' });
+  assert.throws(() => selectedBagItFolderFiles([...selected, wrong]), /one BagIt folder/u);
+});
 
 test('browser folder preparation and inspection use the same manifest and admit only verified opaque bytes', async () => {
   const folder = await prepared();

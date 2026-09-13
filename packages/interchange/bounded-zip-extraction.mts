@@ -14,7 +14,7 @@ type BoundedZipSelection = Readonly<{
 }>;
 
 type BoundedZipExtractionOptions = Readonly<{
-  inspect: (entry: UnzipFileInfo) => BoundedZipSelection;
+  inspect: (entry: UnzipFileInfo, metadata: Readonly<{ kind: 'file' | 'directory' | 'special' | 'unspecified' }>) => BoundedZipSelection;
   keyForName: (name: string) => string;
   maximumEntries: number;
   maximumSelectedBytes: number;
@@ -36,6 +36,7 @@ const DATA_DESCRIPTOR_SIGNATURE = 0x08074b50;
 const MAX_ZIP_COMMENT_BYTES = 0xffff;
 
 type ZipDirectoryEntry = Readonly<{
+  kind: 'file' | 'directory' | 'special' | 'unspecified';
   crc32: number;
   compression: number;
   compressedSize: number;
@@ -113,6 +114,11 @@ function inspectZipDirectory(
     const extraBytes = view.getUint16(offset + 30, true);
     const commentBytes = view.getUint16(offset + 32, true);
     const startingDisk = view.getUint16(offset + 34, true);
+    const host = view.getUint16(offset + 4, true) >>> 8;
+    const attributes = view.getUint32(offset + 38, true);
+    const unixType = host === 3 ? (attributes >>> 16) & 0xf000 : 0;
+    const kind = unixType === 0x8000 ? 'file' : unixType === 0x4000 ? 'directory'
+      : unixType !== 0 ? 'special' : (attributes & 0x10) !== 0 ? 'directory' : 'unspecified';
     const localHeaderOffset = view.getUint32(offset + 42, true);
     const nextOffset = offset + 46 + nameBytes + extraBytes + commentBytes;
     if ((flags & 1) !== 0
@@ -171,6 +177,7 @@ function inspectZipDirectory(
     }
 
     entries.push(Object.freeze({
+      kind,
       crc32,
       compression,
       compressedSize,
@@ -218,7 +225,7 @@ function extractBoundedZipEntries(
         || info.originalSize !== directoryEntry.originalSize) {
         throw new Error(options.metadataMismatchMessage);
       }
-      const selection = options.inspect(info);
+      const selection = options.inspect(info, { kind: directoryEntry.kind });
       if (!selection
         || typeof selection.key !== 'string'
         || !selection.key

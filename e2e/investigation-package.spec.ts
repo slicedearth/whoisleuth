@@ -7,12 +7,14 @@ import { unzipSync, zipSync } from 'fflate';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { writeInvestigationFolder } from '../cli/investigation-folder.mts';
-import { MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../packages/investigation/investigation-manifest.mts';
+import { MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES } from '../packages/investigation/investigation-manifest.mts';
 import { captureReviewFixture } from '../test/capture-review-fixture.mts';
 import { expectedIconPixels } from '../test/favicon-image-fixtures.mts';
 import { productionChunkPath } from './production-build';
 import { decryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
 import { BROWSER_WORKER_OPERATION_TIMEOUT_MS } from '../frontend/src/lib/browser-worker-operation.ts';
+import AxeBuilder from '@axe-core/playwright';
+import { encodeBagItEntries, inspectBagItEntries, prepareBagItEntries, readBagItZip } from '../packages/interchange/bagit.mts';
 
 const NOW = '2026-09-11T00:00:00.000Z';
 const makePackage = (artifacts: Parameters<typeof buildInvestigationPackage>[0]['artifacts']) => buildInvestigationPackage({ workflow: 'Evidence review', configurationDigestSha256: null, artifacts }, NOW, '2.3.1');
@@ -23,6 +25,97 @@ async function openPackages(page: import('@playwright/test').Page) {
   return page.getByRole('region', { name: 'Package and review evidence files' });
 }
 const asFile = (bytes: Uint8Array) => ({ name: 'evidence.zip', mimeType: 'application/zip', buffer: Buffer.from(bytes) });
+
+test('BagIt export and review preserve selected bytes, explicit encryption choices and accessible layouts', async ({ page }, testInfo) => {
+  test.slow();
+  const panel = await openPackages(page), before = await readBrowserLocalCollection(page, 'cases');
+  const requests: string[] = [];
+  page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) requests.push(request.url()); });
+  await panel.getByText('Create a package from files', { exact: true }).click();
+  await panel.getByLabel('Choose evidence files', { exact: true }).setInputFiles({ name: 'selected.bin', mimeType: 'application/octet-stream', buffer: Buffer.from([0, 128, 255, 10]) });
+  await panel.getByRole('checkbox', { name: 'Encrypt package download', exact: true }).check();
+  await expect(panel.getByRole('combobox', { name: 'Export format', exact: true })).toBeDisabled();
+  await panel.getByRole('checkbox', { name: 'Encrypt package download', exact: true }).uncheck();
+  await panel.getByRole('combobox', { name: 'Export format', exact: true }).selectOption('bagit');
+  await expect(panel.getByLabel('Package passphrase', { exact: true })).toHaveCount(0);
+  const downloadPromise = page.waitForEvent('download');
+  await panel.getByRole('button', { name: 'Download BagIt ZIP', exact: true }).click();
+  const download = await downloadPromise, destination = testInfo.outputPath('export-bag.zip');
+  await download.saveAs(destination);
+  const { readFile } = await import('node:fs/promises');
+  const files = readBagItZip(await readFile(destination));
+  expect((await inspectBagItEntries(files)).review.state).toBe('valid');
+  expect(files.get('data/artifact-1')).toEqual(new Uint8Array([0, 128, 255, 10]));
+  await panel.getByRole('combobox', { name: 'Review format', exact: true }).selectOption('bagit');
+  const input = panel.getByLabel('Review BagIt ZIP', { exact: true }); await input.setInputFiles(destination);
+  const heading = panel.getByRole('heading', { name: 'BagIt result: valid', exact: true });
+  await expect(heading).toBeFocused();
+  await expect(panel.getByRole('button', { name: 'Download artifact-1', exact: true })).toBeVisible();
+  for (const theme of ['light', 'dark'] as const) for (const width of [320, 390, 1024, 1280, 1920, 2560, 3840]) {
+    await useTheme(page, theme); await page.setViewportSize({ width, height: width < 700 ? 844 : 900 });
+    await expectNoHorizontalOverflow(page); await expect(heading).toBeVisible();
+    expect((await new AxeBuilder({ page }).include('.bagit-review').analyze()).violations).toEqual([]);
+    if (width === 320 || width === 1280) {
+      await heading.scrollIntoViewIfNeeded();
+      await testInfo.attach(`bagit-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    }
+  }
+  const close = panel.getByRole('button', { name: 'Close BagIt review', exact: true });
+  await close.focus(); await page.keyboard.press('Enter'); await expect(input).toBeFocused();
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before); expect(requests).toEqual([]);
+});
+
+test('BagIt browser verification distinguishes absent, corrupt and unsupported checks and never follows fetch declarations', async ({ page }, testInfo) => {
+  const panel = await openPackages(page), before = await readBrowserLocalCollection(page, 'cases');
+  await panel.getByRole('combobox', { name: 'Review format', exact: true }).selectOption('bagit');
+  const base = await prepareBagItEntries(new Map([['data/private-file.bin', new TextEncoder().encode('retained')]]));
+  let external = 0;
+  await page.route('https://files.example.test/**', async route => { external++; await route.abort(); });
+  const input = panel.getByLabel('Review BagIt ZIP', { exact: true });
+  for (const state of ['incomplete', 'invalid', 'unsupported'] as const) {
+    const files = new Map(base);
+    if (state === 'incomplete') { files.delete('data/private-file.bin'); files.set('fetch.txt', new TextEncoder().encode('https://files.example.test/private?selected=1 - data/private-file.bin\n')); }
+    if (state === 'invalid') files.set('data/private-file.bin', new TextEncoder().encode('changed'));
+    if (state === 'unsupported') { files.delete('tagmanifest-sha512.txt'); files.set('manifest-md5.txt', new TextEncoder().encode(`${'0'.repeat(32)} data/private-file.bin\n`)); }
+    await input.setInputFiles(asFile(encodeBagItEntries(files)));
+    await expect(panel.getByRole('heading', { name: `BagIt result: ${state}`, exact: true })).toBeFocused();
+    await expect(panel.locator('.bagit-review')).not.toContainText('private-file.bin');
+    await expect(panel.getByRole('button', { name: 'Download artifact-1', exact: true })).toHaveCount(0);
+  }
+  const folder = testInfo.outputPath('selected-bag'); await mkdir(`${folder}/data`, { recursive: true });
+  try {
+    for (const [path, bytes] of base) if (!path.endsWith('/')) await writeFile(`${folder}/${path}`, bytes);
+    await panel.getByLabel('Review BagIt folder', { exact: true }).setInputFiles(folder);
+    await expect(panel.getByRole('heading', { name: 'BagIt result: valid', exact: true })).toBeFocused();
+    const empty = await prepareBagItEntries(new Map());
+    await input.setInputFiles(asFile(encodeBagItEntries(empty)));
+    await expect(panel.getByRole('heading', { name: 'BagIt result: valid', exact: true })).toBeFocused();
+    await expect(panel.locator('.bagit-review')).toContainText('0 of 0 files');
+    const future = new Map(base); future.set('bagit.txt', new TextEncoder().encode('BagIt-Version: 2.0\nTag-File-Character-Encoding: UTF-8\n'));
+    await input.setInputFiles(asFile(encodeBagItEntries(future)));
+    await expect(panel.getByRole('alert')).toContainText('BagIt 1.0');
+    await expect(panel.getByRole('heading', { name: /^BagIt result:/u })).toHaveCount(0);
+    expect(external).toBe(0); expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  } finally { await rm(folder, { recursive: true, force: true }); }
+});
+
+test('cancelling held BagIt processing restores file selection without a late result or saved mutation', async ({ page }) => {
+  const panel = await openPackages(page), before = await readBrowserLocalCollection(page, 'cases');
+  await panel.getByRole('combobox', { name: 'Review format', exact: true }).selectOption('bagit');
+  let release = () => {}, held = false;
+  const wait = new Promise<void>(resolve => { release = resolve; });
+  await page.route(`**${productionChunkPath('src/lib/workers/investigation-package.worker.ts')}`, async route => { held = true; await wait; await route.fallback().catch(() => {}); });
+  try {
+    const input = panel.getByLabel('Review BagIt ZIP', { exact: true });
+    await input.setInputFiles(asFile(encodeBagItEntries(await prepareBagItEntries(new Map([['data/file', new Uint8Array([1])]])))));
+    await expect.poll(() => held).toBe(true);
+    await expect(panel.getByRole('combobox', { name: 'Review format', exact: true })).toBeDisabled();
+    await panel.getByRole('button', { name: 'Cancel BagIt review', exact: true }).click();
+    await expect(input).toBeFocused(); await expect(input).toBeEnabled(); release();
+    await expect(panel.getByRole('heading', { name: /^BagIt result:/u })).toHaveCount(0);
+    expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  } finally { release(); }
+});
 
 test('encrypted package creation and unlock preserve exact files, private state and keyboard recovery', async ({ page }, testInfo) => {
   test.slow();
@@ -432,13 +525,13 @@ test('package composition and review retain usable controls at supported widths 
   }
 });
 
-for (const encrypted of [false, true]) test(`the complete ${encrypted ? 'encrypted' : 'ordinary'} package payload remains usable through the browser worker without losing any file bytes`, async ({ page, browserName }, testInfo) => {
+for (const encrypted of [false, true]) test(`a full per-file ${encrypted ? 'encrypted' : 'ordinary'} package payload remains usable through the browser worker without losing any file bytes`, async ({ page, browserName }, testInfo) => {
   test.slow();
   const panel = await openPackages(page);
   const sourcePath = testInfo.outputPath('capacity.bin');
   const packagePath = testInfo.outputPath(encrypted ? 'capacity.wlep' : 'capacity.zip');
   const passphrase = 'maximum package fixture passphrase';
-  const source = new Uint8Array(MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES);
+  const source = new Uint8Array(MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES);
   source[0] = 255; source[source.length - 1] = 127;
   await writeFile(sourcePath, source, { flag: 'wx' });
   try {

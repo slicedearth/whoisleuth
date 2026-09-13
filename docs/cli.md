@@ -251,7 +251,32 @@ trusted timestamp. Unsupported or rejected entries produce a partial report;
 `--strict-exit` returns 4. Without `--package` or `--folder`, `manifest` produces a
 standalone JSON manifest; exact public version-2 manifests remain readable.
 
-For an encrypted package, supply a local passphrase file to both commands:
+For [BagIt 1.0](https://www.rfc-editor.org/rfc/rfc8493.html) interchange, use
+`--bagit` with `--package` or `--folder` on both commands:
+
+```sh
+whoisleuth manifest evidence.json screenshot.png --workflow "Evidence review" \
+  --bagit --package --output bag.zip
+whoisleuth verify-artifact bag.zip --bagit --package --json --strict-exit
+whoisleuth manifest evidence.json --workflow "Evidence review" --bagit --folder ./bag
+whoisleuth verify-artifact --bagit --folder ./bag --json --strict-exit
+```
+
+BagIt output contains unchanged files under `data/`, SHA-512 payload and tag
+manifests, and the existing source-declaration manifest as a tag file. It is
+unencrypted and cannot be combined with `--passphrase-file`. Verification also
+accepts SHA-256. It checks every manifest, reports absent files and unsupported
+algorithms, and never downloads `fetch.txt` locations. A valid result establishes
+declared byte integrity, not source-format validity, authenticity or factual
+accuracy. Unchecked tags remain explicit; reported entry names are generated.
+
+The bounded reader accepts UTF-8 tags, safe relative paths up to 1,024 UTF-8
+bytes and 16 levels, and the same payload byte/file allowances as evidence
+packages. Tags have a separate allowance of 32 files, 512 KiB each and 2 MiB
+combined. Symbolic links, special files, path collisions and unsupported ZIP
+features are refused. BagIt itself does not impose these implementation limits.
+
+For an encrypted ordinary package, supply a local passphrase file:
 
 ```sh
 whoisleuth manifest evidence.json screenshot.png --workflow "Evidence review" \

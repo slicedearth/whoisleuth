@@ -181,7 +181,14 @@ CLI package review applies the existing source-format validators after byte
 verification. Opaque files have byte identity only; explicit inline previews
 use bounded JSON-text and PNG decoders, not executable document rendering.
 
-Optional encrypted evidence packages wrap this ZIP in a version-1 binary
+BagIt is a separate unencrypted layout owned by `packages/interchange/bagit.mts`;
+it uses the shared bounded ZIP reader and checksum-verifies payload and tag
+files without interpreting payload content. The investigation adapter includes
+the existing source manifest as a tag. Browser operations use the package
+worker; CLI folder operations share the fresh-directory writer and add bounded
+recursive, symlink-refusing reads. No fetch declaration triggers a request.
+
+Optional encrypted evidence packages wrap the ordinary ZIP in a version-1 binary
 envelope. `packages/investigation/investigation-package-crypto.mts` owns the
 wrapper; `packages/evidence/passphrase-encryption.mts` shares the native key
 derivation and passphrase policy with encrypted workspace archives. The 58-byte

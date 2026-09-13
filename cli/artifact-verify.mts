@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import type { OfflineInvestigationPackageDetails } from './investigation-package-review.mts';
+import type { BagItReview } from '../packages/interchange/bagit.mts';
 import { readEditableCaseExport } from '../packages/cases/case-export-input.mts';
 
 import { boundedJsonLimitsForBytes, parseBoundedJsonObject } from './bounded-json.mts';
@@ -103,6 +104,7 @@ export class UnsupportedOfflineArtifactError extends TypeError {
 type ArtifactKind =
   | 'case_export'
   | 'investigation_package'
+  | 'bagit'
   | 'workspace_archive'
   | 'encrypted_workspace_archive'
   | 'case_response_packet'
@@ -123,13 +125,17 @@ export type OfflineArtifactVerificationReport = Readonly<{
   schema: typeof OFFLINE_ARTIFACT_VERIFICATION_SCHEMA;
   version: typeof OFFLINE_ARTIFACT_VERIFICATION_VERSION;
   artifact: Readonly<{
-    kind: Exclude<ArtifactKind, 'case_export'>;
+    kind: Exclude<ArtifactKind, 'case_export' | 'bagit'>;
     schema: string;
     version: number;
   } | {
     kind: 'case_export';
     schema: null;
     version: number;
+  } | {
+    kind: 'bagit';
+    schema: null;
+    version: '1.0';
   }>;
   state: OfflineArtifactVerificationState;
   checks: Readonly<{
@@ -171,9 +177,13 @@ export type OfflineArtifactVerificationReport = Readonly<{
   }> | null;
   limitations: readonly string[];
   package?: OfflineInvestigationPackageDetails;
+  bagit?: BagItReview;
 }>;
 
-type OfflineArtifactVerificationCore = Omit<OfflineArtifactVerificationReport, 'manifestIdentity'>;
+type JsonOfflineArtifactVerificationReport = OfflineArtifactVerificationReport & Readonly<{
+  artifact: Exclude<OfflineArtifactVerificationReport['artifact'], { kind: 'bagit' }>;
+}>;
+type OfflineArtifactVerificationCore = Omit<JsonOfflineArtifactVerificationReport, 'manifestIdentity'>;
 
 function currentCanonicalizationRoutes(versions: readonly number[]): readonly ArtifactCanonicalizationRoute[] {
   return Object.freeze(versions.map((version) => Object.freeze({
@@ -289,6 +299,8 @@ export function offlineArtifactSatisfiesAssurance(
 }
 
 export function isCompleteOfflineArtifactVerification(report: OfflineArtifactVerificationReport): boolean {
+  if (report.artifact.kind === 'bagit') return report.state === 'integrity_valid' && report.bagit?.state === 'valid'
+    && report.checks.structure === 'verified' && report.checks.contentIntegrity === 'verified';
   return (report.state === 'verified' || report.state === 'structure_valid')
     && (report.manifestIdentity === null || report.manifestIdentity.state === 'identity_verified');
 }
@@ -741,7 +753,7 @@ export async function verifyOfflineArtifact(
     passphrase?: string | null;
     manifest?: Readonly<{ raw: string; entryId: string }> | null;
   }> = {},
-): Promise<OfflineArtifactVerificationReport> {
+): Promise<JsonOfflineArtifactVerificationReport> {
   const report = await verifyOfflineArtifactCore(raw, options);
   const manifestIdentity = options.manifest
     ? await verifyManifestIdentity(raw, options.manifest.raw, options.manifest.entryId)
@@ -793,6 +805,15 @@ export function formatOfflineArtifactVerification(
     lines.push(`Schema identity: ${report.manifestIdentity.checks.schema}`);
     lines.push(`Version identity: ${report.manifestIdentity.checks.version}`);
     for (const limitation of report.manifestIdentity.limitations) lines.push(`Manifest limitation: ${limitation}`);
+  }
+  if (report.bagit) {
+    const bag = report.bagit;
+    lines.push(`BagIt: ${bag.state}`, `Payload: ${bag.entries.length} files; ${bag.payloadBytes} present bytes`,
+      `Tag checksums: ${bag.verifiedTagFiles} of ${bag.tagFiles} tag files checked`,
+      `Fetch declarations: ${bag.fetchEntries}; ${bag.fetchMissing} files missing; no requests made`,
+      `Unsupported manifests: ${bag.unsupportedManifests}`);
+    for (const entry of bag.entries) lines.push(`${entry.id}: ${entry.state} · ${entry.byteLength ?? 'unknown'} bytes`);
+    for (const issue of bag.issues) lines.push(`BagIt issue: ${issue}`);
   }
   if (report.package) {
     lines.push(`Package bytes: ${report.package.digestSha256}`, 'Storage: unchanged; inspection only',

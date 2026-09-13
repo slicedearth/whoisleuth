@@ -3,6 +3,9 @@ import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../packages/contracts/investigation-package-limits.mts';
 import { verifyOfflineInvestigationFolder, verifyOfflineInvestigationPackage } from './investigation-package-review.mts';
 import { readInvestigationFolder } from './investigation-folder.mts';
+import { readBagItFolder } from './bagit-folder.mts';
+import { verifyOfflineBagIt } from './bagit-review.mts';
+import { MAX_BAGIT_ZIP_BYTES } from '../packages/interchange/bagit.mts';
 import {
   MAX_OFFLINE_ARTIFACT_BYTES,
   formatOfflineArtifactVerification,
@@ -66,13 +69,13 @@ async function runVerifyArtifactCommand(
   context.setFailureLabel('Artefact verification');
   if (args.folder) {
     let files: Map<string, Uint8Array>;
-    try { files = await readInvestigationFolder(args.folder, dependencies.signal); }
+    try { files = await (args.bagit ? readBagItFolder : readInvestigationFolder)(args.folder, dependencies.signal); }
     catch (cause) {
       dependencies.signal?.throwIfAborted();
       const reason = cause instanceof TypeError ? boundedCliErrorMessage(cause) : 'The selected folder is unavailable or could not be read.';
       throw new CliUsageError(`Could not read evidence folder: ${reason}`);
     }
-    const report = await verifyOfflineInvestigationFolder(files);
+    const report = await (args.bagit ? verifyOfflineBagIt : verifyOfflineInvestigationFolder)(files);
     dependencies.signal?.throwIfAborted();
     if (!args.quiet) context.writeStdout(args.output === 'json' ? formatJsonDocument(report) : context.terminal(formatOfflineArtifactVerification(report), args.color));
     return args.strictExit && !isCompleteOfflineArtifactVerification(report) ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
@@ -82,13 +85,13 @@ async function runVerifyArtifactCommand(
     let bytes: Uint8Array;
     try {
       bytes = dependencies.readBinaryArtifactInput ? await dependencies.readBinaryArtifactInput(args.source)
-        : await readBoundedRegularFile(args.source, { maximumBytes: MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES, minimumBytes: 22, label: 'Investigation package', ...(dependencies.signal ? { signal: dependencies.signal } : {}) });
+        : await readBoundedRegularFile(args.source, { maximumBytes: args.bagit ? MAX_BAGIT_ZIP_BYTES : MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES, minimumBytes: 22, label: 'Investigation package', ...(dependencies.signal ? { signal: dependencies.signal } : {}) });
     } catch (error) {
       if (error instanceof CliUsageError) throw error;
       throw new CliUsageError(`Could not read package input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
     }
     const passphrase = args.passphraseSource ? await context.readPassphraseSource(args.passphraseSource) : undefined;
-    const report = await verifyOfflineInvestigationPackage(bytes, passphrase);
+    const report = args.bagit ? await verifyOfflineBagIt(bytes) : await verifyOfflineInvestigationPackage(bytes, passphrase);
     dependencies.signal?.throwIfAborted();
     if (!args.quiet) context.writeStdout(args.output === 'json' ? formatJsonDocument(report) : context.terminal(formatOfflineArtifactVerification(report), args.color));
     return args.strictExit && !isCompleteOfflineArtifactVerification(report) ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;

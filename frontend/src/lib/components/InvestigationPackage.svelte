@@ -11,6 +11,7 @@
   import EvidenceFileExport from './EvidenceFileExport.svelte';
   import EvidencePackageInput from './EvidencePackageInput.svelte';
   import { readPackagedCaseReview } from '$lib/case-review-package.ts';
+  import BagItEvidenceReview from './BagItEvidenceReview.svelte';
 
   let { onworkspace }: { onworkspace?: (file: Blob) => Promise<void> } = $props();
   type Selection = SelectedInvestigationFile & { name: string; key: number };
@@ -25,6 +26,7 @@
   let artifactTrigger: HTMLButtonElement | null = null;
   let workflow = $state('Evidence handoff');
   let busy = $state(false);
+  let reviewFormat = $state<'evidence' | 'bagit'>('evidence');
   let message = $state('');
   let error = $state('');
   let reviewHeading = $state<HTMLHeadingElement>();
@@ -163,17 +165,19 @@
         </ul>
         <nav class="paging" aria-label="Selected evidence files"><button class="btn" type="button" onclick={() => selectedPage--} disabled={busy || selectedPage === 0}>Previous files</button><span>Page {selectedPage + 1} of {Math.ceil(selected.length / PAGE_SIZE)}</span><button class="btn" type="button" onclick={() => selectedPage++} disabled={busy || (selectedPage + 1) * PAGE_SIZE >= selected.length}>Next files</button></nav>
         <p>Leave unknown source times blank. Packaging records the local clock, not a trusted timestamp or earlier custody.</p>
-        <EvidenceFileExport {workflow} getFiles={async () => selected.map(item => ({ file: item.file, mediaType: item.mediaType, source: { ...item.source } }))}
+        <EvidenceFileExport {workflow} allowBagIt getFiles={async () => selected.map(item => ({ file: item.file, mediaType: item.mediaType, source: { ...item.source } }))}
           disabled={busy || !workflow.trim()} onbusy={value => { busy = value; if (value) { message = ''; error = ''; } }} onmessage={value => message = value} />
       {/if}
     </div>
   </details>
+  {#if error}<p class="error" role="alert">{error}</p>{/if}
+  <p class="status" role="status" aria-live="polite">{message}</p>
+  <label class="review-format">Review format<select bind:value={reviewFormat} disabled={busy} onchange={() => { review = null; caseReview = null; message = ''; error = ''; packageSelector?.reset(); }}><option value="evidence">Evidence package</option><option value="bagit">BagIt 1.0</option></select></label>
+  {#if reviewFormat === 'bagit'}<BagItEvidenceReview disabled={busy} onbusy={value => busy = value} />
+  {:else}
   <EvidencePackageInput bind:this={packageSelector} bind:control={packageInput} label="Review evidence package" disabled={busy} onreview={choosePackage} onselect={() => { review = null; caseReview = null; reviewPage = 0; activeArtifact = ''; error = ''; message = ''; }} />
   <label class="file-label review-file">Review evidence folder<input bind:this={folderInput} type="file" webkitdirectory multiple onchange={chooseFolder} disabled={busy}></label>
   {#if busy && controller}<button class="btn cancel-package" type="button" onclick={cancel}>Cancel package processing</button>{/if}
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
-  <p class="status" role="status" aria-live="polite">{message}</p>
-
   {#if review}
     <div class="package-review">
       <h3 bind:this={reviewHeading} tabindex="-1">Evidence {reviewKind === 'folder' ? 'folder' : 'package'} review</h3>
@@ -221,9 +225,11 @@
       <button class="btn" type="button" onclick={closeReview} disabled={busy}>Close package review</button>
     </div>
   {/if}
+  {/if}
 </section>
 
 <style>
+  .review-format{margin-block:18px 12px;max-width:28rem}.review-format select{min-width:0;max-width:100%}
   .package{margin-top:28px;padding:21px;min-width:0;overflow-wrap:anywhere}.package h2{margin:3px 0 0;font:700 var(--text-lg) var(--mono)}.package p,.package dd,.package dt{font-size:var(--text-xs);line-height:1.55}.package p{color:var(--muted)}.package summary{font-weight:700}.create-package{margin-top:18px}.package-form{padding-top:8px}.package label{display:grid;gap:5px;min-width:0;font-size:var(--text-xs)}.package input{min-width:0;width:100%}.file-label{margin:14px 0}.entries{list-style:none;display:grid;gap:12px;margin:16px 0;padding:0}.entries>li{min-width:0;padding:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.entry-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px}.entry-head h4{margin:0}.entry-head span{color:var(--muted);font-size:var(--text-xs)}.source-fields,.review-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.source-fields{margin:12px 0}.review-facts>div,.source-facts>div{min-width:0}.package dt{font-weight:700}.package dd{margin:0;color:var(--muted);overflow-wrap:anywhere}.source-facts{display:grid;gap:8px}.paging,.entry-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0}.paging{justify-content:space-between}.paging span{font-size:var(--text-xs)}.package-review{margin-top:20px;border-top:1px solid var(--border);padding-top:14px}.package-review h3{margin-top:0}.package-review h3:focus{outline:2px solid var(--focus);outline-offset:4px}.digest{font-family:var(--mono);overflow-wrap:anywhere}.links{padding-left:20px;font-size:var(--text-xs);line-height:1.55}.rejected{border-color:var(--danger)}.status:empty{display:none}.cancel-package{margin:8px 0}.package .error{color:var(--danger)}
   @media(max-width:700px){.package{padding:16px}.source-fields,.review-facts{grid-template-columns:minmax(0,1fr)}.entry-actions{align-items:stretch;flex-direction:column}.entry-actions button{width:100%}.paging{display:grid;grid-template-columns:minmax(0,1fr)}.paging span{text-align:center}.entries>li{padding:12px}}
 </style>
