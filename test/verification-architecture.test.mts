@@ -34,7 +34,7 @@ import {
   browserSpecsForPrefixes,
   checkVerificationOwnershipMap,
   createVerificationOwnershipPlan,
-  importedUnitTests,
+  importedTestConsumers,
   FULL_BATCH_RELEASE_GATES,
 } from '../tools/verification-ownership.mts';
 
@@ -505,13 +505,13 @@ describe('verification architecture contracts', () => {
       { source: 'test/consumer.test.mts', dependencies: [{ resolved: 'packages/example/owner.mts', module: '../packages/example/owner.mts' }] },
       { source: 'packages/example/owner.mts', dependencies: [{ resolved: 'packages/example/helper.mts', module: './helper.mts' }] },
       { source: 'packages/example/helper.mts', dependencies: [{ resolved: 'packages/example/owner.mts', module: './owner.mts' }] },
-    ] } as Parameters<typeof importedUnitTests>[1];
-    const selected = importedUnitTests(['packages/example/helper.mts', 'test/consumer.test.mts', 'packages/example/deleted.mts'], graph, inventory);
+    ] } as Parameters<typeof importedTestConsumers>[1];
+    const selected = importedTestConsumers(['packages/example/helper.mts', 'test/consumer.test.mts', 'packages/example/deleted.mts'], graph, inventory);
     assert.deepEqual(selected.get('packages/example/helper.mts'), ['test/consumer.test.mts']);
     assert.deepEqual(selected.get('test/consumer.test.mts'), ['test/consumer.test.mts']);
     assert.deepEqual(selected.get('packages/example/deleted.mts'), inventory);
     graph.modules[0]!.dependencies[0]!.couldNotResolve = true;
-    assert.deepEqual(importedUnitTests(['packages/example/helper.mts'], graph, inventory).get('packages/example/helper.mts'), inventory);
+    assert.deepEqual(importedTestConsumers(['packages/example/helper.mts'], graph, inventory).get('packages/example/helper.mts'), inventory);
     assert.equal(buildVerificationOwnershipPlan(['test/helpers/subprocess-environment.mts']).focusedUnitChecks.includes('test/helpers/subprocess-environment.mts'), false);
   });
 
@@ -527,7 +527,8 @@ describe('verification architecture contracts', () => {
     assert.ok(plan.focusedUnitChecks.includes('test/public-product-catalogue.test.mts'));
     assert.ok(plan.interpretation.some((line) => line.includes('current imports')));
     assert.ok(plan.focusedUnitChecks.length < readVerificationTestInventory().filter((file) => file.startsWith('test/')).length);
-    assert.deepEqual(plan.focusedBrowserChecks, []);
+    assert.ok(plan.focusedBrowserChecks.includes('e2e/dashboard.spec.ts'));
+    assert.equal(plan.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
   });
 
   test('selects one owner while aggregating every matching verification impact', () => {
@@ -583,6 +584,11 @@ describe('verification architecture contracts', () => {
     const execution = buildFocusedVerificationExecution(ownership);
     const ids = execution.commands.map((command) => command.id);
 
+    assert.equal(ids[0], 'browser-discovery');
+    assert.equal(execution.commands[0]!.args.includes('--list'), true);
+    assert.deepEqual(execution.commands[0]!.environment, { CI: '', WHOISLEUTH_E2E_USE_BUILD: '0' });
+    assert.ok(execution.commands.slice(1).every(command => command.environment === undefined));
+
     assert.equal(ids.filter((id) => id === 'typecheck (e2e/tsconfig.json)').length, 1);
     assert.equal(ids.includes('typecheck (tsconfig.json)'), false);
     assert.equal(ids.filter((id) => id === 'check').length, 1);
@@ -598,6 +604,54 @@ describe('verification architecture contracts', () => {
     assert.ok(!ids.includes('test:e2e:built'));
     assert.ok(!ids.includes('verification:ci'));
     assert.deepEqual(execution.deferredSpecialisedChecks, []);
+  });
+
+  test('browser discovery catches import failures without running setup, tests or a server', () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'whoisleuth-test-discovery-'));
+    try {
+      const config = path.join(directory, 'playwright.config.cjs');
+      const spec = path.join(directory, 'discovery.spec.cjs');
+      writeFileSync(config, `module.exports = {
+        testDir: ${JSON.stringify(directory)}, testMatch: '**/*.spec.cjs',
+        projects: [{ name: 'chromium' }],
+        webServer: { command: 'this-command-must-never-start', port: 4199 },
+      };`);
+      const execution = buildFocusedVerificationExecution(buildVerificationOwnershipPlan(['e2e/review-session.spec.ts']));
+      const command = execution.commands[0]!;
+      const args = [...command.args.filter(arg => !arg.endsWith('.spec.ts')), `--config=${config}`];
+      const run = () => spawnSync(command.executable, args, {
+        cwd: REPOSITORY_ROOT, env: { ...process.env, ...command.environment },
+        encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024,
+      });
+      writeFileSync(spec, "require('./missing-support.cjs');");
+      const broken = run();
+      assert.ifError(broken.error);
+      assert.notEqual(broken.status, 0);
+      assert.match(broken.stdout + broken.stderr, /missing-support/u);
+      writeFileSync(spec, `const { test } = require(${JSON.stringify(path.join(REPOSITORY_ROOT, 'node_modules/@playwright/test'))});
+        test.beforeAll(() => { throw new Error('setup must not run'); });
+        test('discovered but not executed', () => { throw new Error('test must not run'); });`);
+      const valid = run();
+      assert.ifError(valid.error);
+      assert.equal(valid.status, 0, valid.stdout + valid.stderr);
+      assert.match(valid.stdout, /Total: 1 test in 1 file/u);
+      assert.doesNotMatch(valid.stdout + valid.stderr, /Error: (setup|test) must not run/u);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  test('documentation-only plans do not acquire browser discovery or build work', () => {
+    const execution = buildFocusedVerificationExecution(buildVerificationOwnershipPlan(['CONTRIBUTING.md']));
+    assert.equal(execution.browserSpecs.length, 0);
+    assert.equal(execution.commands.some(command => ['browser-discovery', 'build'].includes(command.id)), false);
+  });
+
+  test('a current fixture discovers both unit and browser consumers without another ownership declaration', async () => {
+    const plan = await createVerificationOwnershipPlan(['test/support/current-case.mts']);
+    assert.ok(plan.focusedUnitChecks.includes('test/current-case.test.mts'));
+    assert.ok(plan.focusedBrowserChecks.includes('e2e/review-session.spec.ts'));
+    assert.equal(plan.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
+    assert.equal(plan.userFacingBrowserRequired, true);
+    assert.equal(buildFocusedVerificationExecution(plan).commands[0]!.id, 'browser-discovery');
   });
 
   test('binds lowercase workflow facades and shared browser storage to their dedicated suites', () => {

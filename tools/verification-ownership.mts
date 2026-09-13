@@ -660,6 +660,7 @@ function uniqueSorted<T extends string>(values: readonly T[]): readonly T[] {
 export function buildVerificationOwnershipPlan(
   rawPaths: readonly string[],
   importedTests: ReadonlyMap<string, readonly string[]> = new Map(),
+  importedBrowserTests: ReadonlyMap<string, readonly string[]> = new Map(),
 ): VerificationOwnershipPlan {
   validateRules();
   if (!Array.isArray(rawPaths) || rawPaths.length < 1 || rawPaths.length > MAX_VERIFICATION_CHANGED_PATHS) {
@@ -682,9 +683,11 @@ export function buildVerificationOwnershipPlan(
     const focusedBrowserChecks = uniqueSorted([
       ...impacts.flatMap((rule) => rule.focusedBrowser),
       ...exactBrowserChecks(changedPath),
+      ...(importedBrowserTests.get(changedPath) ?? []),
       ...(unexplainedInterface ? FUNCTIONAL_BROWSER_INVENTORY : []),
     ]);
-    const browserRequired = impacts.some((rule) => rule.browserRequired);
+    const browserRequired = impacts.some((rule) => rule.browserRequired)
+      || (importedBrowserTests.get(changedPath)?.length ?? 0) > 0;
     if (browserRequired && focusedBrowserChecks.length === 0) {
       throw new TypeError(`User-facing ownership for ${changedPath} has no focused browser check.`);
     }
@@ -721,10 +724,11 @@ export function buildVerificationOwnershipPlan(
 
 // Reuse the architecture resolver rather than maintain another import parser or
 // source-to-test register. The graph is rebuilt once for the current edit plan.
-export function importedUnitTests(
+export function importedTestConsumers(
   changedPaths: readonly string[],
   graph: Pick<ICruiseResult, 'modules'>,
   inventory: readonly string[],
+  fallbackWhenUnused = true,
 ): ReadonlyMap<string, readonly string[]> {
   if (graph.modules.length > MAX_VERIFICATION_INVENTORY_FILES) throw new TypeError('Dependency graph exceeds the inventory bound.');
   const dependents = new Map<string, Set<string>>();
@@ -743,9 +747,9 @@ export function importedUnitTests(
       for (const dependent of dependents.get(source) ?? []) visited.add(dependent);
     }
     const tests = inventory.filter((file) => visited.has(file));
-    // No import evidence is not evidence of no impact: deleted files, dynamic
-    // loading and file-reading tests use the complete unit inventory fallback.
-    return [changedPath, unresolved || !tests.length ? inventory : tests];
+    // Unit coverage includes a fallback for dynamic loading and file-reading
+    // tests. Browser selection combines positive imports with workflow owners.
+    return [changedPath, unresolved || (!tests.length && fallbackWhenUnused) ? inventory : tests];
   }));
 }
 
@@ -755,26 +759,34 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
     && !file.startsWith('e2e/'));
   if (!importedPaths.length) return initial;
   const inventory = readVerificationTestInventory().filter((file) => file.startsWith('test/'));
+  const browserInventory = functionalBrowserInventory();
   let selection: ReadonlyMap<string, readonly string[]>;
+  let browserSelection: ReadonlyMap<string, readonly string[]>;
   let explanation: string;
   try {
     const { cruise } = await import('dependency-cruiser');
     const config = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, '.dependency-cruiser.json'), 'utf8')) as { options: IOptions };
-    const { output } = await cruise([...inventory], {
+    const { output } = await cruise([...inventory, ...browserInventory], {
       ...config.options, baseDir: REPOSITORY_ROOT, outputType: 'json', tsPreCompilationDeps: true, validate: false,
       tsConfig: { fileName: path.join(REPOSITORY_ROOT, 'tsconfig.dependency-cruiser.json') },
     });
     const graph = typeof output === 'string' ? JSON.parse(output) as ICruiseResult : output;
-    selection = importedUnitTests(importedPaths, graph, inventory);
+    selection = importedTestConsumers(importedPaths, graph, inventory);
+    // Known owners retain their conservative browser coverage. Positive import
+    // evidence additionally follows shared support into its browser consumers;
+    // a complete graph with no browser consumer does not turn CLI-only helpers
+    // into application changes. Unresolved local imports still fail broadly.
+    browserSelection = importedTestConsumers(importedPaths, graph, browserInventory, false);
     const fallback = importedPaths.filter((file) => selection.get(file)?.length === inventory.length);
     explanation = fallback.length
       ? `Complete unit fallback where import evidence is missing or uncertain: ${fallback.join(', ')}.`
       : 'Unit dependents are discovered from current imports, including transitive helpers and newly added tests.';
   } catch {
     selection = new Map(importedPaths.map((file) => [file, inventory]));
-    explanation = 'Dependency analysis was unavailable: the focused plan falls back to the complete unit inventory.';
+    browserSelection = new Map(importedPaths.map((file) => [file, browserInventory]));
+    explanation = 'Dependency analysis was unavailable: the focused plan falls back to the complete unit and functional browser inventories.';
   }
-  const plan = buildVerificationOwnershipPlan(rawPaths, selection);
+  const plan = buildVerificationOwnershipPlan(rawPaths, selection, browserSelection);
   return Object.freeze({ ...plan, interpretation: Object.freeze([...plan.interpretation, explanation]) });
 }
 

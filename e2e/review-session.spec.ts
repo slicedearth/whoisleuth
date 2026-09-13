@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { caseRecord } from './case-test-fixtures';
+import { currentCaseFixture, currentCaseCollection } from '../test/support/current-case.mts';
 import { openCaseMetadata, openInboxReview } from './console-navigation';
 import { migrateLegacyBrowserData, readBrowserLocalCollection, expectNoHorizontalOverflow, useTheme } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
@@ -10,10 +10,10 @@ const NOW = '2026-09-13T10:00:00.000Z';
 test.use({ timezoneId: 'America/New_York' });
 async function seed(page: Page, count = 30) {
   await page.clock.setFixedTime(NOW);
-  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION,
-    cases: Array.from({ length: count }, (_, index) => caseRecord({ id: `resume-${String(index).padStart(2, '0')}`, domain: `resume${String(index).padStart(2, '0')}.example`,
-      status: 'new', evidenceHistory: [], createdAt: NOW, updatedAt: NOW })),
-  } }, { clearStorage: true, destination: '/monitor?view=inbox&queue=all' });
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': currentCaseCollection(
+    Array.from({ length: count }, (_, index) => currentCaseFixture({ id: `resume-${String(index).padStart(2, '0')}`, domain: `resume${String(index).padStart(2, '0')}.example`,
+      status: 'new', createdAt: NOW, updatedAt: NOW })),
+  ) }, { clearStorage: true, destination: '/monitor?view=inbox&queue=all' });
 }
 async function checkpoint(page: Page) {
   const control = page.locator('.review-session');

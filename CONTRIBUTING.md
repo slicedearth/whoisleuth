@@ -45,12 +45,22 @@ npm run verification:focused
 ```
 
 The default scope is the working diff. For a committed or smaller change, pass
-its paths explicitly after `--`. Read the plan: import analysis finds unit
-consumers and domain rules select browser checks. Browser families discover new
+its paths explicitly after `--`. Read the plan: import analysis finds unit and
+browser consumers, while domain rules preserve workflow checks. Browser families discover new
 specifications by filename; Case stage forms use their form and workspace suites.
 Missing import evidence falls back to all unit tests, and unexplained interface
 changes select all functional browser tests. A full run remains available for infrastructure
 changes and reproducing CI; see [verification](docs/getting-started.md#verification).
+
+Selected browser specifications are loaded before expensive checks. This catches
+test-discovery and import errors without starting a server or browser; it is not
+a substitute for the subsequent verified-build execution.
+
+For ordinary Case setup, `test/support/current-case.mts` supplies a deterministic,
+detached current record and collection envelope. Invalid overrides fail at setup
+instead of being silently normalised. Keep the expected behaviour in the test
+independent. Historical-format and hostile-input tests must retain their own
+explicit inputs, not regenerate them through a current fixture builder.
 
 Before submitting a feature branch, run proportionate local checks and state
 any omissions. Merge requires complete fresh hosted checks against the current

@@ -36,6 +36,7 @@ type FocusedCommand = Readonly<{
   id: string;
   executable: string;
   args: readonly string[];
+  environment?: Readonly<Record<string, string>>;
 }>;
 
 export type FocusedVerificationOptions = Readonly<{
@@ -131,6 +132,17 @@ export function buildFocusedVerificationExecution(
   plan: VerificationOwnershipPlan,
 ): FocusedVerificationExecution {
   const commands: FocusedCommand[] = [];
+  if (plan.focusedBrowserChecks.length) {
+    // Discovery loads the real configuration and selected specifications but
+    // does not start the server, setup, or a browser. A broken import should
+    // fail before unit coverage, package assembly, or a production build.
+    commands.push(Object.freeze({
+      id: 'browser-discovery', executable: process.execPath,
+      args: Object.freeze([PLAYWRIGHT_CLI, 'test', ...plan.focusedBrowserChecks,
+        `--project=${PLAYWRIGHT_FUNCTIONAL_PROJECT}`, '--list', '--reporter=list']),
+      environment: Object.freeze({ CI: '', WHOISLEUTH_E2E_USE_BUILD: '0' }),
+    }));
+  }
   if (plan.focusedUnitChecks.length) {
     commands.push(Object.freeze({
       id: 'focused-unit',
@@ -215,7 +227,7 @@ function runCommand(command: FocusedCommand): void {
   process.stdout.write(`\n> ${command.id}\n`);
   const child = spawnSync(command.executable, command.args, {
     cwd: REPOSITORY_ROOT,
-    env: process.env,
+    env: { ...process.env, ...command.environment },
     stdio: 'inherit',
   });
   if (child.error) throw child.error;
