@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { test } from 'node:test';
+import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../packages/contracts/selected-file-limits.mts';
 
 import {
   BrowserLocalDataError,
@@ -53,6 +54,37 @@ test('explicit empty-collection creation rejects undeclared and duplicate identi
       (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'INVALID_LOCAL_DATA_DEFINITION');
   }
   assert.equal(opened, 0);
+});
+
+test('invalid collection policies fail before storage opens or migration can begin', async () => {
+  let opens = 0;
+  const provider = new BrowserLocalDataProvider({
+    indexedDB: { open: () => { opens++; throw new Error('Unexpected database open'); } } as unknown as IDBFactory,
+    storage: NULL_STORAGE,
+  });
+  for (const policy of [
+    { schemaVersion: 0 }, { minimumReadableVersion: 0 }, { minimumReadableVersion: 2 },
+    { acceptsUnversionedLegacy: 'yes' }, { legacyRollback: 'yes' },
+    { maximumBytes: 0 }, { maximumRecords: -1 }, { acceptLegacyRoot: null }, { binaryReferences: [] },
+  ]) {
+    await assert.rejects(provider.initialize([{ ...DEFINITION, ...policy } as unknown as AnyLocalDataCollectionDefinition]),
+      (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'INVALID_LOCAL_DATA_DEFINITION');
+  }
+  assert.equal(opens, 0);
+});
+
+test('retained-file selection bounds fail before opening storage or resolving a collection', async () => {
+  let opens = 0;
+  const provider = new BrowserLocalDataProvider({
+    indexedDB: { open: () => { opens++; throw new Error('Unexpected database open'); } } as unknown as IDBFactory,
+    storage: NULL_STORAGE,
+  });
+  const reference = { digestSha256: `sha256:${'a'.repeat(64)}`, byteLength: MAX_SELECTED_FILE_TOTAL_BYTES };
+  await assert.rejects(provider.readFiles(DEFINITION, Array.from({ length: MAX_SELECTED_FILES + 1 }, () => reference)),
+    (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'INVALID_LOCAL_DATA_UPDATE');
+  await assert.rejects(provider.readFiles(DEFINITION, [reference, reference]),
+    (cause: unknown) => cause instanceof BrowserLocalDataError && cause.code === 'LOCAL_DATA_QUOTA');
+  assert.equal(opens, 0);
 });
 
 test('a late database upgrade is aborted after its opening deadline', async () => {
