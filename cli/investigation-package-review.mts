@@ -1,6 +1,8 @@
 import { sha256ArtifactBytes } from '../packages/evidence/artifact-integrity.mts';
 import { MAX_INVESTIGATION_PACKAGE_BYTES, encodeInvestigationPackageEntries, inspectInvestigationPackage, type InvestigationPackageSourceLink, type InvestigationPackageCaptureReview } from '../packages/investigation/investigation-package.mts';
 import { INVESTIGATION_MANIFEST_SCHEMA } from '../packages/investigation/investigation-manifest.mts';
+import { hasEncryptedInvestigationPackagePrefix, MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../packages/contracts/investigation-package-limits.mts';
+import { decryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
 import {
   OFFLINE_ARTIFACT_VERIFICATION_SCHEMA, OFFLINE_ARTIFACT_VERIFICATION_VERSION,
   UnsupportedOfflineArtifactError, isCompleteOfflineArtifactVerification, verifyOfflineArtifact,
@@ -36,7 +38,21 @@ export type OfflineInvestigationPackageDetails = Readonly<{
   captureManifests: readonly InvestigationPackageCaptureReview[];
 }>;
 
-export async function verifyOfflineInvestigationPackage(input: Uint8Array): Promise<OfflineArtifactVerificationReport> {
+export async function verifyOfflineInvestigationPackage(input: Uint8Array, passphrase?: string): Promise<OfflineArtifactVerificationReport> {
+  if (!(input instanceof Uint8Array) || input.byteLength > MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES) throw new TypeError('Investigation package exceeds its input limit.');
+  if (hasEncryptedInvestigationPackagePrefix(input)) {
+    if (typeof passphrase !== 'string') throw new TypeError('Encrypted evidence packages require --passphrase-file. No content was decrypted.');
+    const decrypted = await decryptInvestigationPackage(input, passphrase);
+    try {
+      const report = await verifyOfflineInvestigationPackage(decrypted.bytes);
+      return Object.freeze({ ...report,
+        checks: Object.freeze({ ...report.checks, authenticatedEncryption: 'verified' }),
+        summary: Object.freeze({ ...report.summary, inputBytes: input.byteLength, ciphertextBytes: decrypted.ciphertextBytes }),
+        limitations: Object.freeze(['The complete encrypted container authenticated. Its package digest identifies the decrypted ZIP, not the encrypted file. Encryption does not establish source identity or factual accuracy.', ...report.limitations]),
+      });
+    } finally { decrypted.bytes.fill(0); }
+  }
+  if (passphrase !== undefined) throw new TypeError('A passphrase was supplied for an unencrypted evidence package. No encrypted-container assurance can be given.');
   if (!(input instanceof Uint8Array) || input.byteLength > MAX_INVESTIGATION_PACKAGE_BYTES) throw new TypeError('Investigation package exceeds its input limit.');
   const bytes = new Uint8Array(input);
   const inspected = await inspectInvestigationPackage(bytes);

@@ -46,7 +46,8 @@ test('missing retained bytes stop a selected export without clearing selection o
   const before = await readBrowserLocalCollection(page, 'cases');
   await files.locator('.file-export-selection > summary').click();
   const selected = files.locator('.file-export-selection');
-  await selected.getByRole('checkbox').check();
+  const selection = selected.getByRole('checkbox', { name: new RegExp(`^${IMAGE_NAME.replace('.', '\\.')}`) });
+  await selection.check();
   await page.evaluate(async () => {
     const request = indexedDB.open('whoisleuth-browser-data-v1');
     const database = await new Promise<IDBDatabase>((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
@@ -58,7 +59,7 @@ test('missing retained bytes stop a selected export without clearing selection o
   let downloads = 0; page.on('download', () => downloads++);
   await selected.getByRole('button', { name: 'Download private package', exact: true }).click();
   await expect(selected.getByRole('alert')).toContainText('original bytes are missing');
-  await expect(selected.getByRole('checkbox')).toBeChecked();
+  await expect(selection).toBeChecked();
   await expect(selected.getByRole('button', { name: 'Download private package', exact: true })).toBeEnabled();
   expect(downloads).toBe(0); expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
 });

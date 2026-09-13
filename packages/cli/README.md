@@ -75,6 +75,12 @@ or domain-only output only where declared. `--output` writes a private local
 file atomically and refuses an existing path unless `--force` is selected.
 `--strict-exit` and `--fail-on` expose selected evidence states to automation.
 
+`manifest --package --output evidence.wlep --passphrase-file ./passphrase.txt`
+encrypts selected evidence files and their manifest. Use the same explicit
+passphrase file with `verify-artifact --package` to authenticate and verify it
+offline. Ordinary ZIPs and folder exports remain unencrypted; see `docs/cli.md`
+for complete examples and file-handling boundaries.
+
 `workflow-run` pauses on a partial collection. Resume retains it without
 recollection and keeps exit code 4 even if later steps finish. Failed validation
 or export steps remain retryable. See `docs/cli.md` for checkpoint compatibility.

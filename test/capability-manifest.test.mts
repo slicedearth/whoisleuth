@@ -316,7 +316,7 @@ describe('canonical capability manifest', () => {
     assert.ok(bulkPlan.action === 'bulk' && bulkPlan.plan);
     assert.ok(discoveryPlan.action === 'discover-scan' && discoveryPlan.plan);
 
-    for (const command of ['verify-artifact', 'interchange-report', 'inspect-archive'] as const) {
+    for (const command of ['manifest', 'verify-artifact', 'interchange-report', 'inspect-archive'] as const) {
       assert.equal(cliOperationForCommand(command)?.credentialModel, 'optional_secret_passphrase_file');
     }
     assert.equal(cliOperationForCommand('verify-signature')?.credentialModel, 'optional_public_key_file');

@@ -880,7 +880,7 @@ export const PUBLIC_COVERAGE = {
         "Integrity, structure, signature and content assurance remain separate checks.",
         "Browser exports require an explicit browser action; CLI exports, verification and review require an explicit CLI command.",
         "Sharing a generated artefact is a deliberate action outside the collection runtime.",
-        "Evidence packages retain selected JSON, screenshots and opaque file bytes unchanged, without automatic redaction or encryption. Review uploads nothing and changes no saved records; workspace import requires a separate preview and confirmation."
+        "Evidence packages retain selected JSON, screenshots and opaque file bytes unchanged, without redaction. Whole-package encryption is optional; ordinary ZIPs and folders remain unencrypted. Review uploads nothing and changes no saved records; workspace import requires a separate preview and confirmation."
       ]
     },
     {

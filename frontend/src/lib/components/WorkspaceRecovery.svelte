@@ -5,6 +5,7 @@
   import { MAX_BROWSER_WORKSPACE_NAME } from '$lib/browser-workspace-directory.ts';
   import { MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS, MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES } from '$lib/browser-workspace-encryption-model.ts';
   import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../../packages/contracts/selected-file-limits.mts';
+  import EvidencePackageInput from './EvidencePackageInput.svelte';
 
   let { readArchive, requireEncryption = false, onbusy = () => {} }: {
     readArchive: () => ReviewedWorkspaceArchive; requireEncryption?: boolean; onbusy?: (value: boolean) => void;
@@ -24,14 +25,15 @@
   onDestroy(() => { disposed = true; passphrase = ''; confirmation = ''; void recovery?.close(); onbusy(false); });
 
   async function operation(work: () => Promise<void>) {
-    if (busy) return;
+    if (busy) return false;
     const origin = document.activeElement;
     busy = true; onbusy(true); message = ''; error = '';
-    try { await work(); }
+    try { await work(); return true; }
     catch (cause) {
       error = cause instanceof Error ? cause.message : 'Recovery could not be completed.';
       if (recovery?.writeState === 'committed') error += ' The write completed, but this operation did not verify the restored state. Verify the destination before using it; do not repeat the restore.';
       else if (recovery?.writeState === 'unconfirmed') error += ' The write outcome is unconfirmed. Verify the destination or remove the rehearsal; do not repeat the restore.';
+      return false;
     } finally {
       busy = false; onbusy(false); passphrase = ''; confirmation = '';
       await tick();
@@ -93,11 +95,11 @@
       </ul>{#if report.omissions}<p>{report.omissions} skipped or omitted records prevent complete recovery verification.</p>{/if}</details>
     {/if}
     <div class="actions">
-      <label class="btn file-btn">Restore evidence package<input type="file" accept="application/zip,.zip" disabled={busy} onchange={event => void addFiles(event, 'package')}></label>
       <label class="btn file-btn">Restore original files<input type="file" multiple disabled={busy} onchange={event => void addFiles(event, 'originals')}></label>
       <button class="btn" type="button" disabled={busy} onclick={() => void operation(async () => { showReport(await recovery!.verify()); })}>Verify restored data</button>
     </div>
-    <p>Up to {MAX_SELECTED_FILES} files and {MAX_SELECTED_FILE_TOTAL_BYTES / 1024 / 1024} MiB per operation. Add further groups as needed; matches use content, not filenames.</p>
+    <EvidencePackageInput label="Restore evidence package" disabled={busy} onreview={(file, secret) => operation(async () => { showReport(await recovery!.addFiles([file], 'package', secret)); })} />
+    <p>Up to {MAX_SELECTED_FILES} files and {MAX_SELECTED_FILE_TOTAL_BYTES / 1024 / 1024} MiB per operation, plus package metadata and encryption overhead. Add further groups as needed; matches use content, not filenames.</p>
     <div class="actions">
       <button class="btn" type="button" disabled={busy} onclick={() => void operation(async () => { const saved = recovery!; await saved.close(); recovery = null; report = null; message = `Kept ${saved.workspace.name}. Open it from Browser workspaces when needed.`; })}>Keep rehearsal workspace</button>
       <button class="btn" type="button" disabled={busy} aria-expanded={confirmDelete} onclick={() => { confirmDelete = !confirmDelete; }}>Delete rehearsal workspace</button>

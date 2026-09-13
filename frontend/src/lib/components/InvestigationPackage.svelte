@@ -2,7 +2,6 @@
   import { onDestroy, tick } from 'svelte';
   import { WORKSPACE_ARCHIVE_SCHEMA, ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA } from '../../../../packages/contracts/case-portability.mts';
   import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES, investigationFileMediaType } from '../../../../packages/investigation/investigation-manifest.mts';
-  import { MAX_INVESTIGATION_PACKAGE_BYTES } from '../../../../packages/investigation/investigation-package.mts';
   import { runInvestigationPackageWorker } from '$lib/investigation-package-worker.ts';
   import type { BrowserInvestigationPackageReview, SelectedInvestigationFile } from '$lib/investigation-package-worker-model.ts';
   import { downloadLocalFile } from '$lib/download-local-file.ts';
@@ -10,6 +9,7 @@
   import { supportsArtifactPreview } from '$lib/artifact-preview.ts';
   import { selectedInvestigationFolderFiles } from '$lib/investigation-folder.ts';
   import EvidenceFileExport from './EvidenceFileExport.svelte';
+  import EvidencePackageInput from './EvidencePackageInput.svelte';
 
   let { onworkspace }: { onworkspace?: (file: Blob) => Promise<void> } = $props();
   type Selection = SelectedInvestigationFile & { name: string; key: number };
@@ -28,6 +28,7 @@
   let reviewHeading = $state<HTMLHeadingElement>();
   let sourceInput = $state<HTMLInputElement>();
   let packageInput = $state<HTMLInputElement>();
+  let packageSelector = $state<{ reset(): void }>();
   let folderInput = $state<HTMLInputElement>();
   let reviewKind = $state<'ZIP' | 'folder'>('ZIP');
   let selectedList = $state<HTMLUListElement>();
@@ -40,6 +41,7 @@
   async function cancel() {
     const cancelled = operation;
     controller?.abort(); controller = null; busy = false;
+    if (cancelled === 'inspect') packageSelector?.reset();
     operation = null;
     message = 'Package processing cancelled. No saved records were changed.';
     await tick();
@@ -66,29 +68,28 @@
   function setSource(key: number, field: 'identity' | 'observedAt', value: string) {
     selected = selected.map(item => item.key === key ? { ...item, source: { ...item.source, [field]: value.trim() || null } } : item);
   }
-  async function choosePackage(event: Event) {
-    const input = event.currentTarget as HTMLInputElement;
-    const file = input.files?.[0]; input.value = '';
-    if (!file || busy) return;
+  async function choosePackage(file: Blob, passphrase?: string): Promise<boolean> {
+    if (busy) return false;
     review = null; reviewPage = 0; activeArtifact = ''; error = ''; message = '';
     reviewKind = 'ZIP';
-    if (file.size < 22 || file.size > MAX_INVESTIGATION_PACKAGE_BYTES) { error = `The selected ZIP exceeds the ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES / 1024 / 1024} MiB payload plus metadata boundary, or is empty.`; return; }
     busy = true;
     operation = 'inspect';
     const current = new AbortController(); controller = current;
     try {
-      const result = await runInvestigationPackageWorker('inspect', { file }, { signal: current.signal });
-      if (current.signal.aborted) return;
+      const result = await runInvestigationPackageWorker('inspect', { file, ...(passphrase === undefined ? {} : { passphrase }) }, { signal: current.signal });
+      if (current.signal.aborted) return false;
       review = result;
       message = `Reviewed all ${result.entries.length} package ${result.entries.length === 1 ? 'entry' : 'entries'}. Nothing has been imported.`;
       await tick();
       if (!current.signal.aborted) reviewHeading?.focus();
-    } catch (cause) { if (!current.signal.aborted) error = cause instanceof Error ? cause.message : 'Package review failed.'; }
+      return true;
+    } catch (cause) { if (!current.signal.aborted) error = cause instanceof Error ? cause.message : 'Package review failed.'; return false; }
     finally { if (controller === current) { controller = null; busy = false; operation = null; } }
   }
   async function chooseFolder(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     if (!input.files?.length || busy) { input.value = ''; return; }
+    packageSelector?.reset();
     review = null; reviewPage = 0; activeArtifact = ''; error = ''; message = ''; reviewKind = 'folder';
     busy = true; operation = 'inspectFolder';
     const current = new AbortController(); controller = current;
@@ -137,7 +138,7 @@
   <details class="create-package">
     <summary>Create a package from files</summary>
     <div class="package-form">
-      <p>Files are included unchanged, without redaction or encryption. Review their contents before sharing. Original filenames are shown here only; the package uses generated entry names.</p>
+      <p>Files are included unchanged, without redaction. Choose encryption below when needed. Review contents before sharing. Original filenames are shown here only; the package uses generated entry names.</p>
       <label>Package purpose<input maxlength="160" bind:value={workflow} disabled={busy}></label>
       <label class="file-label">Choose evidence files<input bind:this={sourceInput} type="file" multiple onchange={chooseSources} disabled={busy}></label>
       <p>{selected.length} of {MAX_INVESTIGATION_MANIFEST_ARTIFACTS} files · {totalBytes.toLocaleString()} bytes. Up to {MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES / 1024 / 1024} MiB per file and {MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES / 1024 / 1024} MiB in total.</p>
@@ -160,7 +161,7 @@
       {/if}
     </div>
   </details>
-  <label class="file-label review-file">Review evidence package<input bind:this={packageInput} type="file" accept="application/zip,.zip" onchange={choosePackage} disabled={busy}></label>
+  <EvidencePackageInput bind:this={packageSelector} bind:control={packageInput} label="Review evidence package" disabled={busy} onreview={choosePackage} onselect={() => { review = null; reviewPage = 0; activeArtifact = ''; error = ''; message = ''; }} />
   <label class="file-label review-file">Review evidence folder<input bind:this={folderInput} type="file" webkitdirectory multiple onchange={chooseFolder} disabled={busy}></label>
   {#if busy && controller}<button class="btn cancel-package" type="button" onclick={cancel}>Cancel package processing</button>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
@@ -170,6 +171,7 @@
     <div class="package-review">
       <h3 bind:this={reviewHeading} tabindex="-1">Evidence {reviewKind === 'folder' ? 'folder' : 'package'} review</h3>
       <p>{review.manifest.artifacts.length} file{review.manifest.artifacts.length === 1 ? '' : 's'} · {review.manifest.summary.totalBytes.toLocaleString()} bytes · Private audience · No storage changes</p>
+      {#if review.encryption === 'verified'}<p>Encrypted container authenticated. Downloading an individual entry below produces its original, unencrypted bytes.</p>{/if}
       <dl class="review-facts"><div><dt>File identity</dt><dd>{review.identityVerified ? 'Every file matches its manifest' : 'Some files were rejected'}</dd></div><div><dt>Packaging event</dt><dd>{review.manifest.generatedAt} (local clock)</dd></div><div><dt>Trusted signatures and timestamps</dt><dd>Not checked</dd></div><div><dt>Factual accuracy</dt><dd>Not established by file identity</dd></div></dl>
       <p>Byte identity is separate from source-format validation. Workspace files open their existing import preview; use <code>verify-artifact --package</code> in the CLI for other supported format checks. Inline review shows JSON as text and PNGs as decoded pixels. Other files remain download-only; no document scripts or links run.</p>
       {#if review.links.length}<ul class="links">{#each review.links as link}<li>Capsule {link.capsuleEntryId}: {link.state === 'linked' ? `exact source identity linked to ${link.sourceEntryId}` : `source identity ${link.state}`}</li>{/each}</ul>{/if}

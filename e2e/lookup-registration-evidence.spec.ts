@@ -12,6 +12,7 @@ import { INVESTIGATION_CAPSULE_VERSION, LOOKUP_INVESTIGATION_BRIEF_VERSION } fro
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
 import { parseRdap } from '../lib/rdap.mts';
 import { inspectInvestigationPackage } from '../packages/investigation/investigation-package.mts';
+import { decryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
 import { verifyOfflineInvestigationPackage } from '../cli/investigation-package-review.mts';
 
 const packageVersion = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;
@@ -243,7 +244,7 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   await expect(capsule.getByText('Portable investigation capsule')).toBeVisible();
   await capsule.locator(':scope > summary').click();
   await expect(capsule.getByRole('button', { name: 'Download capsule' })).toBeEnabled();
-  await expect(capsule.getByRole('checkbox')).toBeDisabled();
+  await expect(capsule.getByRole('checkbox', { name: /Include 0 analyst decision and assertion records/u })).toBeDisabled();
   const capsuleDownloadPromise = page.waitForEvent('download');
   await capsule.getByRole('button', { name: 'Download capsule' }).click();
   const capsuleDownload = await capsuleDownloadPromise;
@@ -269,6 +270,24 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   expect(sourceFile.schemaVersion).toBe(LOOKUP_EVIDENCE_SCHEMA_VERSION);
   expect(sourceFile.query.submitted).toBe(capsuleArtifact.target.value);
   expect((await verifyOfflineInvestigationPackage(packageBytes)).state).toBe('verified');
+  const packagePassphrase = 'capsule package fixture passphrase';
+  await capsule.getByRole('checkbox', { name: 'Encrypt package download', exact: true }).check();
+  await capsule.getByLabel('Package passphrase', { exact: true }).fill(packagePassphrase);
+  await capsule.getByLabel('Confirm package passphrase', { exact: true }).fill('different capsule fixture passphrase');
+  await capsule.getByRole('button', { name: 'Download evidence package', exact: true }).click();
+  await expect(capsule.getByRole('alert')).toContainText('passphrases do not match');
+  await expect(capsule.getByLabel('Package passphrase', { exact: true })).toHaveValue(packagePassphrase);
+  await capsule.getByLabel('Confirm package passphrase', { exact: true }).fill(packagePassphrase);
+  const encryptedDownloadPromise = page.waitForEvent('download');
+  await capsule.getByRole('button', { name: 'Download evidence package', exact: true }).click();
+  const encryptedDownload = await encryptedDownloadPromise;
+  expect(encryptedDownload.suggestedFilename()).toMatch(/\.wlep$/u);
+  const encryptedBytes = Buffer.concat(await (await encryptedDownload.createReadStream()).toArray());
+  const encryptedReview = (await decryptInvestigationPackage(encryptedBytes, packagePassphrase)).review;
+  expect(encryptedReview.links).toEqual(packageReview.links);
+  expect(encryptedReview.contents.get('artifact-2')).toEqual(packageReview.contents.get('artifact-2'));
+  expect((await verifyOfflineInvestigationPackage(encryptedBytes, packagePassphrase)).checks.authenticatedEncryption).toBe('verified');
+  await expect(capsule.getByLabel('Package passphrase', { exact: true })).toHaveValue('');
   const comparison = page.locator('.comparison');
   await expect(comparison.getByText(/0 source-only · 0 redacted · 4 unavailable\/incomplete/)).toBeVisible();
   await comparison.locator('summary').click();

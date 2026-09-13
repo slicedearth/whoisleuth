@@ -1141,7 +1141,7 @@
     {
       "id": "portable_evidence",
       "title": "Portable evidence, verification and reviewed hand-off",
-      "requestPurpose": "Build, verify or review bounded portable ZIP or folder evidence under operator control; folder handles are not retained for background access.",
+      "requestPurpose": "Build, verify or review bounded portable ZIP, optionally encrypted package or folder evidence under operator control; package passphrases and folder handles are not retained for background access.",
       "job": "assure",
       "executionPlanes": [
         "browser_local",
@@ -1211,7 +1211,7 @@
         "Integrity, structure, signature and content assurance remain separate checks.",
         "Browser exports require an explicit browser action; CLI exports, verification and review require an explicit CLI command.",
         "Sharing a generated artefact is a deliberate action outside the collection runtime.",
-        "Evidence packages retain selected JSON, screenshots and opaque file bytes unchanged, without automatic redaction or encryption. Review uploads nothing and changes no saved records; workspace import requires a separate preview and confirmation."
+        "Evidence packages retain selected JSON, screenshots and opaque file bytes unchanged, without redaction. Whole-package encryption is optional; ordinary ZIPs and folders remain unencrypted. Review uploads nothing and changes no saved records; workspace import requires a separate preview and confirmation."
       ]
     },
     {
@@ -5426,8 +5426,8 @@
           "bounded_user_initiated_export"
         ]
       },
-      "credentialModel": "none",
-      "credentialUse": "No operation credential is required.",
+      "credentialModel": "optional_secret_passphrase_file",
+      "credentialUse": "A selected local passphrase file is read only for the requested local operation and is not emitted.",
       "cancellation": "bounded_atomic",
       "partialResults": "all_or_nothing",
       "outcomes": [

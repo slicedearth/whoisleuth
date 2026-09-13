@@ -363,7 +363,7 @@ TLSA/DANE, PKIX, STARTTLS and address-authentication states remain separate.
 ## Imports, exports and sensitive files
 
 Portable evidence packages process selected JSON, screenshots and opaque files
-locally. File bytes are unchanged, unredacted and unencrypted by packaging;
+locally. File bytes are unchanged and unredacted by packaging;
 original filenames and paths are not retained in the manifest. Declared source
 identities, source times and local packaging events can be included. Unknown
 source times remain unknown. Package review uploads nothing, executes no file
@@ -371,6 +371,15 @@ and changes no saved records. A workspace file requires its separate import
 preview and confirmation. Checksum identity, supported format, signature trust,
 timestamp assurance and factual accuracy remain separate results. Downloaded
 packages remain until the operator deletes them.
+Ordinary ZIPs and evidence folders are unencrypted. Optional encrypted packages
+protect the whole manifest and files with AES-256-GCM and PBKDF2-SHA-256
+(600,000 iterations). Their version-1 header contains only format parameters,
+random salt and IV, and byte length. Passphrases and keys are not saved or sent;
+the CLI reads a passphrase only from an explicitly selected local file. Unlocking
+authenticates the container before checking its ZIP and file identities. It does
+not establish who created the package. Downloading an unlocked entry produces
+its original, unencrypted bytes. Encryption does not protect an unlocked page,
+compromised device or weak passphrase.
 Evidence folders use the same manifest and file identities. Folder review reads
 only the selected files. Direct browser output requires a folder picker grant,
 creates a new child folder and reads its files back for verification; handles
@@ -418,8 +427,8 @@ backup requires an encrypted rehearsal destination. Selected original files or
 evidence packages are matched by complete byte length and digest; filenames do
 not establish a match. Rehearsal checks restored data and referenced files, but
 does not apply preferences to the active tab. Its data remains until deliberately
-deleted, including after leaving the page. File-backup groups use the existing
-unencrypted evidence package format; encrypting the JSON does not encrypt them.
+deleted, including after leaving the page. File-backup groups have their own
+optional package encryption; encrypting the JSON does not encrypt those groups.
 
 Different exports have different sensitivity:
 

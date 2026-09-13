@@ -598,17 +598,18 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   manifest: commandSeed({
     reference: {
-      description: `Record an ordered, path-free manifest for up to ${MAX_INVESTIGATION_MANIFEST_ARTIFACTS} local JSON artefacts. Use --package --output evidence.zip for a ZIP, or --folder ./evidence for a new folder containing unchanged selected files.`,
+      description: `Record an ordered, path-free manifest for up to ${MAX_INVESTIGATION_MANIFEST_ARTIFACTS} local files. Use --package --output evidence.zip for a ZIP, add --passphrase-file to encrypt the entire package, or use --folder ./evidence for a new unencrypted folder containing unchanged selected files.`,
       example: 'whoisleuth manifest lookup.json comparison.json --workflow "domain review" --json',
       boundary: 'Ordinary output contains metadata only. ZIP and folder output include unchanged selected bytes and are private until reviewed for sharing. Folders must be new; existing destinations are never replaced and a failed write may leave explicit partial output. Filenames ending in .json are parsed as JSON; other files are opaque and never executed. Original paths are omitted. No network request is made.',
     },
     collection: { mode: 'offline', scope: `Reads 1 to ${MAX_INVESTIGATION_MANIFEST_ARTIFACTS} local files, at most ${MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES / 1024 / 1024} MiB each and ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES / 1024 / 1024} MiB combined; retains no source paths.` },
     summary: 'Build an evidence manifest offline',
-    options: ['--workflow', '--configuration-digest', '--package', '--folder', '--json', '--quiet', '--no-color'],
+    options: ['--workflow', '--configuration-digest', '--package', '--passphrase-file', '--folder', '--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('artefacts', 'file', 1, MAX_INVESTIGATION_MANIFEST_ARTIFACTS)]),
     constraints: Object.freeze([
     constraint({ kind: 'required', options: ['--workflow'] }),
     constraint({ kind: 'requires_all', option: '--package', requiredOptions: ['--output'] }),
+    constraint({ kind: 'requires_all', option: '--passphrase-file', requiredOptions: ['--package'] }),
     constraint({ kind: 'mutually_exclusive', options: ['--package', '--json'] }),
     constraint({ kind: 'excludes_all', option: '--folder', excludedOptions: ['--package', '--output', '--force'] }),
   ]),
@@ -1043,7 +1044,7 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "verify-artifact": commandSeed({
     reference: {
-      description: 'Validate a supported archive, claim passport, packet, manifest, saved Lookup or Lookup-evidence export without printing evidence contents. Use --package for a portable evidence ZIP or --folder ./evidence for an explicit local evidence folder.',
+      description: 'Validate a supported archive, claim passport, packet, manifest, saved Lookup or Lookup-evidence export without printing evidence contents. Use --package for a portable evidence ZIP or encrypted package, with --passphrase-file to unlock it; use --folder ./evidence for an explicit unencrypted evidence folder.',
       example: 'whoisleuth verify-artifact report.json --manifest manifest.json --manifest-entry artifact-2 --json --strict-exit',
       boundary: 'Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Folders reject symbolic links, nested trees and unlisted files; their package digest describes a canonical ZIP representation, not filesystem metadata. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 for incomplete verification, including unsupported entries or unlinked capsule sources.',
     },
@@ -1054,7 +1055,7 @@ const COMMAND_SEEDS = Object.freeze({
     constraints: Object.freeze([
     constraint({ kind: 'requires_all', option: '--manifest', requiredOptions: ['--manifest-entry'] }),
     constraint({ kind: 'requires_all', option: '--manifest-entry', requiredOptions: ['--manifest'] }),
-    constraint({ kind: 'excludes_all', option: '--package', excludedOptions: ['--manifest', '--manifest-entry', '--passphrase-file'] }),
+    constraint({ kind: 'excludes_all', option: '--package', excludedOptions: ['--manifest', '--manifest-entry'] }),
     constraint({ kind: 'excludes_all', option: '--folder', excludedOptions: ['--package', '--manifest', '--manifest-entry', '--passphrase-file'] }),
   ]),
     handlerOwner: 'inline',

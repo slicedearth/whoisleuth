@@ -66,7 +66,7 @@ The public command catalogue keeps its version 1 offline/network label for all 4
 | `command.cli.doctor` | `runtime_diagnostics` | network | explicit cli command | local cli offline<br>local cli network | conditional bounded passive | fixed diagnostic probe | dns resolver<br>target public service<br>registry service | none | local output deliberate | metadata only | none | explicit network approval |
 | `command.cli.commands` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | metadata only | none | explicit action |
 | `command.cli.manual` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | metadata only | none | explicit action |
-| `command.cli.manifest` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
+| `command.cli.manifest` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | optional secret passphrase file | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.map-observations` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.oam-export` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.lookup` | `lookup` | network | explicit cli command | local cli offline<br>local cli network | conditional bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>homepage request<br>tls handshake<br>public ip address | registry service<br>dns resolver<br>target public service | none | local output deliberate | local output | bounded risk and acquisition input | explicit action |
@@ -395,7 +395,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 - Integrity, structure, signature and content assurance remain separate checks.
 - Browser exports require an explicit browser action; CLI exports, verification and review require an explicit CLI command.
 - Sharing a generated artefact is a deliberate action outside the collection runtime.
-- Evidence packages retain selected JSON, screenshots and opaque file bytes unchanged, without automatic redaction or encryption. Review uploads nothing and changes no saved records; workspace import requires a separate preview and confirmation.
+- Evidence packages retain selected JSON, screenshots and opaque file bytes unchanged, without redaction. Whole-package encryption is optional; ordinary ZIPs and folders remain unencrypted. Review uploads nothing and changes no saved records; workspace import requires a separate preview and confirmation.
 
 ### CLI runtime diagnostics
 

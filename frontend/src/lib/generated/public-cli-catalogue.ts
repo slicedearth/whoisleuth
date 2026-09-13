@@ -266,7 +266,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "summary": "Build an evidence manifest offline",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth manifest \u003cartefacts...> [--package|--json] --workflow \u003cvalue> [--configuration-digest \u003cvalue>] [--folder \u003cfile>] [--quiet] [--no-color]",
+      "usage": "whoisleuth manifest \u003cartefacts...> [--package|--json] --workflow \u003cvalue> [--configuration-digest \u003cvalue>] [--passphrase-file \u003cfile>] [--folder \u003cfile>] [--quiet] [--no-color]",
       "example": "whoisleuth manifest lookup.json comparison.json --workflow \"domain review\" --json",
       "boundary": "Ordinary output contains metadata only. ZIP and folder output include unchanged selected bytes and are private until reviewed for sharing. Folders must be new; existing destinations are never replaced and a failed write may leave explicit partial output. Filenames ending in .json are parsed as JSON; other files are opaque and never executed. Original paths are omitted. No network request is made.",
       "collection": {
@@ -288,6 +288,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--workflow",
         "--configuration-digest",
         "--package",
+        "--passphrase-file",
         "--folder",
         "--json",
         "--quiet",

@@ -5,7 +5,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 
 import { CliUsageError } from './errors.mts';
 import type { WritableTerminal } from './terminal-presentation.mts';
-import { MAX_INVESTIGATION_PACKAGE_BYTES } from '../packages/investigation/investigation-package.mts';
+import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../packages/contracts/investigation-package-limits.mts';
 
 export const MAX_CLI_OUTPUT_BYTES = 32 * 1024 * 1024;
 const MAX_CLI_OUTPUT_PATH_LENGTH = 4096;
@@ -71,7 +71,7 @@ function createBufferedOutput(options: { binary: boolean } = { binary: false }):
   let bytes = 0;
   const writeBinary = (chunk: Uint8Array): void => {
     if (!options.binary || !(chunk instanceof Uint8Array)) throw new CliUsageError('Binary output requires an explicit package destination.');
-    if (chunk.byteLength > MAX_INVESTIGATION_PACKAGE_BYTES - bytes) throw new CliUsageError('Binary package output exceeds its byte limit.');
+    if (chunk.byteLength > MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES - bytes) throw new CliUsageError('Binary package output exceeds its byte limit.');
     bytes += chunk.byteLength;
     binaryChunks.push(new Uint8Array(chunk));
   };
@@ -108,7 +108,7 @@ async function writePrivateFile(
   operations: OutputFileOperations = OUTPUT_FILE_OPERATIONS,
 ): Promise<string> {
   const target = safeOutputPath(pathValue);
-  const maximumBytes = typeof content === 'string' ? MAX_CLI_OUTPUT_BYTES : MAX_INVESTIGATION_PACKAGE_BYTES;
+  const maximumBytes = typeof content === 'string' ? MAX_CLI_OUTPUT_BYTES : MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES;
   if ((typeof content === 'string' ? Buffer.byteLength(content, 'utf8') : content.byteLength) > maximumBytes) {
     throw new CliUsageError(`Generated output is limited to ${maximumBytes} bytes.`);
   }

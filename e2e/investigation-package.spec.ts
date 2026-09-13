@@ -11,6 +11,7 @@ import { MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../packages/investigatio
 import { captureReviewFixture } from '../test/capture-review-fixture.mts';
 import { expectedIconPixels } from '../test/favicon-image-fixtures.mts';
 import { productionChunkPath } from './production-build';
+import { decryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
 
 const NOW = '2026-09-11T00:00:00.000Z';
 const makePackage = (artifacts: Parameters<typeof buildInvestigationPackage>[0]['artifacts']) => buildInvestigationPackage({ workflow: 'Evidence review', configurationDigestSha256: null, artifacts }, NOW, '2.3.1');
@@ -21,6 +22,60 @@ async function openPackages(page: import('@playwright/test').Page) {
   return page.getByRole('region', { name: 'Package and review evidence files' });
 }
 const asFile = (bytes: Uint8Array) => ({ name: 'evidence.zip', mimeType: 'application/zip', buffer: Buffer.from(bytes) });
+
+test('encrypted package creation and unlock preserve exact files, private state and keyboard recovery', async ({ page }, testInfo) => {
+  test.slow();
+  const panel = await openPackages(page), before = await readBrowserLocalCollection(page, 'cases');
+  const requests: string[] = [];
+  const recordPackageRequest = (request: import('@playwright/test').Request) => {
+    if (new URL(request.url()).pathname.startsWith('/api/')) requests.push(new URL(request.url()).pathname);
+  };
+  page.on('request', recordPackageRequest);
+  const passphrase = 'browser package fixture passphrase', content = '{"selected":"private unchanged bytes"}\n';
+  await panel.locator('.create-package > summary').click();
+  await panel.getByLabel('Choose evidence files', { exact: true }).setInputFiles({ name: 'selected.json', mimeType: 'application/json', buffer: Buffer.from(content) });
+  await panel.getByRole('checkbox', { name: 'Encrypt package download', exact: true }).check();
+  const password = panel.getByLabel('Package passphrase', { exact: true }), confirmation = panel.getByLabel('Confirm package passphrase', { exact: true });
+  await password.fill(passphrase); await confirmation.fill('different fixture passphrase');
+  const download = panel.getByRole('button', { name: 'Download private package', exact: true });
+  await download.click(); await expect(panel.getByRole('alert')).toContainText('do not match');
+  await expect(password).toHaveValue(passphrase);
+  await confirmation.fill(passphrase);
+  for (const theme of ['light', 'dark'] as const) for (const width of [320, 390, 1024, 1280, 2560, 3840]) {
+    await page.setViewportSize({ width, height: width < 500 ? 844 : 900 }); await useTheme(page, theme);
+    await password.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+    expect(await password.evaluate(element => { const parent = element.parentElement!.getBoundingClientRect(), rect = element.getBoundingClientRect(); return rect.width > 0 && rect.left >= parent.left - 1 && rect.right <= parent.right + 1; })).toBe(true);
+    if ([320, 1280, 3840].includes(width)) await testInfo.attach(`encrypted-export-${width}-${theme}`, { body: await panel.locator('.evidence-export').screenshot(), contentType: 'image/png' });
+  }
+  const pending = page.waitForEvent('download'); await download.focus(); await page.keyboard.press('Enter');
+  const downloaded = await pending, archive = Buffer.concat(await (await downloaded.createReadStream()).toArray());
+  expect(downloaded.suggestedFilename()).toMatch(/\.wlep$/u);
+  expect(new TextDecoder().decode((await decryptInvestigationPackage(archive, passphrase)).review.contents.get('artifact-1'))).toBe(content);
+  await expect(password).toHaveValue(''); await expect(confirmation).toHaveValue(''); await expect(download).toBeFocused();
+  const input = panel.getByLabel('Review evidence package', { exact: true });
+  const selected = { name: 'private.wlep', mimeType: 'application/octet-stream', buffer: archive };
+  await input.setInputFiles(selected);
+  const unlockPassword = panel.getByLabel('Unlock package passphrase', { exact: true });
+  await expect(unlockPassword).toBeFocused(); await expect(panel.getByRole('heading', { name: 'Evidence package review', exact: true })).toHaveCount(0);
+  await unlockPassword.fill('incorrect browser fixture passphrase'); await page.keyboard.press('Enter');
+  await expect(panel.getByRole('alert')).toContainText('could not be unlocked and verified');
+  await expect(unlockPassword).toBeFocused(); await expect(unlockPassword).toHaveValue('');
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  await unlockPassword.fill(passphrase); await page.keyboard.press('Enter');
+  await expect(panel.getByRole('heading', { name: 'Evidence package review', exact: true })).toBeFocused();
+  await expect(unlockPassword).toHaveCount(0); await expect(panel).toContainText('Encrypted container authenticated');
+  await panel.getByRole('button', { name: 'View artifact-1', exact: true }).click(); await expect(panel.locator('pre')).toHaveText(content.trimEnd());
+  await panel.getByRole('button', { name: 'Close package review', exact: true }).click(); await expect(input).toBeFocused();
+  await input.setInputFiles(selected); await expect(unlockPassword).toBeFocused(); await unlockPassword.fill(passphrase);
+  await panel.getByRole('button', { name: 'Cancel encrypted package', exact: true }).click(); await expect(input).toBeFocused(); await expect(unlockPassword).toHaveCount(0);
+  await input.setInputFiles(selected); await expect(unlockPassword).toHaveValue(''); await unlockPassword.fill(passphrase);
+  expect(await page.evaluate(secret => JSON.stringify({ ...localStorage, ...sessionStorage }).includes(secret), passphrase)).toBe(false);
+  expect(requests).toEqual([]);
+  page.off('request', recordPackageRequest);
+  await page.goto('/cases'); await page.goto('/dashboard'); await openDashboardSecondaryWorkspaces(page);
+  await expect(page.getByLabel('Unlock package passphrase', { exact: true })).toHaveCount(0);
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+});
 
 test('idle search indexing cannot displace a pressed package disclosure', async ({ page }, testInfo) => {
   let release = () => {};

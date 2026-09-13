@@ -14,7 +14,8 @@ export const INVESTIGATION_MANIFEST_SCHEMA = 'whoisleuth.investigation-manifest'
 export const INVESTIGATION_MANIFEST_VERSION = 3;
 export const SUPPORTED_INVESTIGATION_MANIFEST_VERSIONS = [2, INVESTIGATION_MANIFEST_VERSION] as const;
 // Independently bounds the path-free metadata, not the selected file content.
-export const MAX_INVESTIGATION_MANIFEST_DOCUMENT_BYTES = 512 * 1024;
+import { MAX_INVESTIGATION_MANIFEST_DOCUMENT_BYTES } from '../contracts/investigation-package-limits.mts';
+export { MAX_INVESTIGATION_MANIFEST_DOCUMENT_BYTES } from '../contracts/investigation-package-limits.mts';
 type FileMediaType = typeof INVESTIGATION_FILE_MEDIA_TYPES[number];
 
 /** A filename suggests a declaration only; it never validates file contents. */

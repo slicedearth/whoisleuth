@@ -12,7 +12,7 @@ import { buildWorkspaceArchive } from '../packages/workspace/workspace-archive.m
 import { encryptWorkspaceArchive } from '../packages/workspace/workspace-archive-crypto.mts';
 import { createCase } from '../packages/cases/case-model.mts';
 import type { CaseAttachment } from '../packages/cases/case-attachment-model.mts';
-import { inspectInvestigationPackage } from '../packages/investigation/investigation-package.mts';
+import { decryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
 
 const NOW = '2026-09-01T00:00:00.000Z', PASSWORD = '<synthetic recovery fixture>';
 const panel = (page: Page) => page.locator('details.recovery');
@@ -54,10 +54,14 @@ test('downloaded backup and file packages rehearse independently without switchi
   const fileBackup = page.locator('.file-backup');
   await expect(fileBackup.locator(':scope > summary')).toContainText('1 referenced file separately');
   await fileBackup.locator(':scope > summary').click();
+  const packagePassphrase = 'independent recovery package passphrase';
+  await fileBackup.getByRole('checkbox', { name: 'Encrypt package download', exact: true }).check();
+  await fileBackup.getByLabel('Package passphrase', { exact: true }).fill(packagePassphrase);
+  await fileBackup.getByLabel('Confirm package passphrase', { exact: true }).fill(packagePassphrase);
   const pending = page.waitForEvent('download');
   await fileBackup.getByRole('button', { name: 'Download private package', exact: true }).click();
   const filePackage = await readFile((await (await pending).path())!);
-  const independent = await inspectInvestigationPackage(filePackage);
+  const independent = (await decryptInvestigationPackage(filePackage, packagePassphrase)).review;
   expect(independent.identityVerified).toBe(true); expect(independent.contents.size).toBe(1);
   expect(Buffer.from(independent.contents.get('artifact-1')!)).toEqual(bytes);
   expect(independent.manifest.artifacts[0]).toMatchObject({ source: { identity: null, observedAt: null } });
@@ -68,7 +72,15 @@ test('downloaded backup and file packages rehearse independently without switchi
   const destination = namedDatabase(row!.id);
   expect((await readBrowserLocalCollection(page, 'cases', { databaseName: destination })).records.map(item => item.value)).toEqual(before.records.map(item => item.value));
   expect(await page.evaluate(id => navigator.locks.request(`whoisleuth-workspace:whoisleuth-workspace-${id}-v1`, { mode: 'shared', ifAvailable: true }, lock => Boolean(lock)), row!.id)).toBe(false);
-  await recovery.getByLabel('Restore evidence package', { exact: true }).setInputFiles({ name: 'files.zip', mimeType: 'application/zip', buffer: filePackage });
+  await recovery.getByLabel('Restore evidence package', { exact: true }).setInputFiles({ name: 'files.wlep', mimeType: 'application/octet-stream', buffer: filePackage });
+  const packagePassword = recovery.getByLabel('Unlock package passphrase', { exact: true });
+  await expect(packagePassword).toBeFocused();
+  expect(await storedFiles(page, destination)).toHaveLength(0);
+  await packagePassword.fill('wrong recovery package passphrase'); await page.keyboard.press('Enter');
+  await expect(recovery.getByRole('alert')).toContainText('could not be unlocked and verified');
+  expect(await storedFiles(page, destination)).toHaveLength(0);
+  await expect(packagePassword).toBeFocused(); await expect(packagePassword).toHaveValue('');
+  await packagePassword.fill(packagePassphrase); await page.keyboard.press('Enter');
   await expect(recovery.getByRole('status')).toContainText('Recovery verified for the selected backup data and every referenced file.');
   expect((await storedFiles(page, destination))[0]!.bytes).toEqual([...bytes]);
   await recovery.getByLabel('Restore original files', { exact: true }).setInputFiles({ name: 'renamed.png', mimeType: 'image/png', buffer: bytes });

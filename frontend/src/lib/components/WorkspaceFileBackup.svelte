@@ -34,7 +34,7 @@
     <p>The JSON backup retains references and provenance, not file bodies. Keep every file group with that backup. Rehearse from the downloaded JSON and packages to confirm coverage.</p>
     <label>Backup file group <select bind:value={selected} disabled={busy}>{#each groups as group, index}<option value={index}>Group {index + 1} of {groups.length} · {group.length} files · {group.reduce((sum, file) => sum + file.byteLength, 0).toLocaleString()} bytes</option>{/each}</select></label>
     <EvidenceFileExport {getFiles} workflow={`Workspace file backup group ${selected + 1} of ${groups.length}`} onbusy={value => { busy = value; }} />
-    <p>These evidence packages are unencrypted, including when the JSON backup is encrypted. Protect them separately; no completed download is assumed.</p>
+    <p>Package encryption is a separate choice from JSON backup encryption. Enable it for each protected file group and keep its passphrase separately; no completed download is assumed.</p>
   </details>
 {/if}
 {#if error}<p role="alert">{error}</p>{/if}

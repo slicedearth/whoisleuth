@@ -6,7 +6,7 @@ import { browserWorkspaceDirectory, type BrowserWorkspace } from './browser-work
 import { browserWorkspaceDatabaseName, namedWorkspaceLegacyStorage } from './browser-workspace-storage.ts';
 import { currentBrowserWorkspaceId } from './browser-workspace-context.ts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../packages/contracts/selected-file-limits.mts';
-import { MAX_INVESTIGATION_PACKAGE_BYTES } from '../../../packages/investigation/investigation-package.mts';
+import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../../../packages/contracts/investigation-package-limits.mts';
 import type { AnyLocalDataCollectionDefinition } from './browser-local-data.ts';
 import type { CaseRecord } from '../../../packages/cases/case-model.mts';
 
@@ -117,9 +117,9 @@ export async function openWorkspaceRecovery(input: ReviewedWorkspaceArchive, opt
       return verify();
     }),
     verify: () => run(verify),
-    addFiles: (input: readonly Blob[], kind: 'originals' | 'package') => {
+    addFiles: (input: readonly Blob[], kind: 'originals' | 'package', passphrase?: string) => {
       // Capture immutable bodies before directory reads or package parsing.
-      const maximum = kind === 'package' ? MAX_INVESTIGATION_PACKAGE_BYTES : MAX_SELECTED_FILE_TOTAL_BYTES;
+      const maximum = kind === 'package' ? MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES : MAX_SELECTED_FILE_TOTAL_BYTES;
       if (!Array.isArray(input) || !input.length || input.length > (kind === 'package' ? 1 : MAX_SELECTED_FILES)
         || input.some(file => !(file instanceof Blob) || !file.size) || input.reduce((sum, file) => sum + file.size, 0) > maximum) {
         return run(async () => { throw new Error('Selected recovery files exceed the count or byte limit for this operation.'); });
@@ -129,8 +129,8 @@ export async function openWorkspaceRecovery(input: ReviewedWorkspaceArchive, opt
         let files = selected;
         if (kind === 'package') {
           const { runInvestigationPackageWorker } = await import('./investigation-package-worker.ts');
-          if (selected.length !== 1 || !selected[0]!.size || selected[0]!.size > MAX_INVESTIGATION_PACKAGE_BYTES) throw new Error('Select one bounded evidence package.');
-          const reviewed = await runInvestigationPackageWorker('inspect', { file: selected[0]! });
+          if (selected.length !== 1 || !selected[0]!.size || selected[0]!.size > MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES) throw new Error('Select one bounded evidence package.');
+          const reviewed = await runInvestigationPackageWorker('inspect', { file: selected[0]!, ...(passphrase === undefined ? {} : { passphrase }) });
           if (!reviewed.identityVerified) throw new Error('The evidence package contains an unverified file. Nothing was added.');
           files = [...reviewed.contents.values()];
         }

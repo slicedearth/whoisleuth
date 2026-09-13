@@ -150,8 +150,8 @@ whoisleuth verify-artifact --folder ./evidence-project --json --strict-exit
 ```
 
 Packages contain up to 128 files and 64 MiB of payload plus bounded metadata.
-They use generated entry names, not original paths. They are private and
-unencrypted; packaging does not redact selected files. The report distinguishes
+They use generated entry names, not original paths. Ordinary ZIPs and folders
+are private and unencrypted; packaging does not redact selected files. The report distinguishes
 file identity, supported source formats, opaque content, exact capsule/source
 links and capture-manifest attachment matches. Include the capture manifest and
 its screenshot/DOM-digest files together to check their declared bytes; original
@@ -159,6 +159,25 @@ filenames are not needed to establish a match. It does not import files or estab
 trusted timestamp. Unsupported or rejected entries produce a partial report;
 `--strict-exit` returns 4. Without `--package` or `--folder`, `manifest` produces a
 standalone JSON manifest; exact public version-2 manifests remain readable.
+
+For an encrypted package, supply a local passphrase file to both commands:
+
+```sh
+whoisleuth manifest evidence.json screenshot.png --workflow "Evidence review" \
+  --package --passphrase-file ./package-passphrase.txt --output evidence.wlep
+whoisleuth verify-artifact evidence.wlep --package \
+  --passphrase-file ./package-passphrase.txt --json --strict-exit
+```
+
+The file contains one UTF-8 line of at least 12 characters, at most 1,024 bytes.
+Keep it private and separate from the package. Neither command uploads it or
+includes it in its report. Version-1 encrypted packages protect the entire ZIP,
+including its manifest. Unlocking authenticates the container before validating
+file identities. The report's package digest identifies the decrypted ZIP;
+its input byte count identifies the encrypted file. Wrong passphrases, corrupted
+containers and unsupported versions exit 3 without a verification report.
+Encryption does not establish authorship, factual accuracy or redaction, and
+does not apply to folder exports or separately downloaded JSON backups.
 
 Folders contain `manifest.json` and generated `artifacts/artifact-N` files.
 Creation requires a new destination and never replaces an existing folder.

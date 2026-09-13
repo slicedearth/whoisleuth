@@ -1,4 +1,6 @@
 import { zipSync } from 'fflate';
+import { MAX_INVESTIGATION_PACKAGE_ENTRIES, MAX_INVESTIGATION_PACKAGE_BYTES } from '../contracts/investigation-package-limits.mts';
+export { MAX_INVESTIGATION_PACKAGE_ENTRIES, MAX_INVESTIGATION_PACKAGE_BYTES } from '../contracts/investigation-package-limits.mts';
 import { extractBoundedZipEntries } from '../interchange/bounded-zip-extraction.mts';
 import { canonicalArtifactJsonV2, sha256ArtifactBytes, sha256ArtifactDigestV2 } from '../evidence/artifact-integrity.mts';
 import { INVESTIGATION_CAPSULE_SCHEMA, investigationCapsuleSourceIdentity } from './investigation-capsule.mts';
@@ -13,13 +15,7 @@ import {
 
 export const INVESTIGATION_PACKAGE_MANIFEST_PATH = 'manifest.json';
 const MANIFEST_PATH = INVESTIGATION_PACKAGE_MANIFEST_PATH;
-export const MAX_INVESTIGATION_PACKAGE_ENTRIES = MAX_INVESTIGATION_MANIFEST_ARTIFACTS + 1;
 const MAX_PACKAGE_ENTRIES = MAX_INVESTIGATION_PACKAGE_ENTRIES;
-// Stored ZIP entries use 76 header bytes plus two copies of the generated ASCII
-// path (at most 21 bytes). 128 bytes per entry also covers the fixed writer's
-// header overhead; the end record is 22 bytes. Payload admission is independent.
-export const MAX_INVESTIGATION_PACKAGE_BYTES = MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES
-  + MAX_INVESTIGATION_MANIFEST_DOCUMENT_BYTES + MAX_PACKAGE_ENTRIES * 128 + 22;
 
 export function investigationPackageEntryPath(id: string): string {
   const match = /^artifact-([1-9]\d{0,2})$/u.exec(id);

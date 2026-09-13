@@ -178,7 +178,22 @@ ordered packaging events. Its ZIP container uses generated paths and the shared
 bounded ZIP reader. Browser preparation and inspection run in a cancellable
 one-shot worker; workspace imports use the existing preview and save coordinator.
 CLI package review applies the existing source-format validators after byte
-verification. Opaque files have byte identity only and are never rendered.
+verification. Opaque files have byte identity only; explicit inline previews
+use bounded JSON-text and PNG decoders, not executable document rendering.
+
+Optional encrypted evidence packages wrap this ZIP in a version-1 binary
+envelope. `packages/investigation/investigation-package-crypto.mts` owns the
+wrapper; `packages/evidence/passphrase-encryption.mts` shares the native key
+derivation and passphrase policy with encrypted workspace archives. The 58-byte
+header contains the 21-byte magic `WHOISLEUTH-ENCRYPTED` terminated with NUL,
+a version byte, big-endian 32-bit iteration count, 16-byte salt, 12-byte IV and
+big-endian 32-bit plaintext length. AES-256-GCM authenticates the complete header
+and ciphertext with a 16-byte tag. PBKDF2-SHA-256 uses 600,000 iterations. Readers
+reject unsupported parameters and inconsistent lengths before key derivation,
+authenticate before ZIP parsing, then use the ordinary file-identity checks.
+The wrapper adds 74 bytes without reducing the admitted payload. Browser
+preparation and unlocking run in the one-shot worker; unlocking does not persist
+a package.
 
 The generated [capability contract](capability-manifest.md),
 [privacy/data-flow catalogue](privacy-data-flow-catalogue.md),

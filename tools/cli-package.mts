@@ -1225,6 +1225,21 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       throw new TypeError('Installed package round trip did not preserve file identity and separate assurance.');
     }
     const folderOutput = path.join(temporaryRoot, 'evidence-folder');
+    const encryptedOutput = path.join(temporaryRoot, 'evidence.wlep');
+    const packagePassphrase = path.join(temporaryRoot, 'package-passphrase.txt');
+    await writeFile(packagePassphrase, 'selected package fixture passphrase\n', { flag: 'wx', mode: 0o600 });
+    const encryptedCreation = await runInstalledCheck(executable, ['manifest', packageSource, packageOpaque,
+      '--workflow', 'Evidence review', '--package', '--passphrase-file', packagePassphrase, '--output', encryptedOutput], 'encrypted evidence package creation');
+    const encryptedReview = record(JSON.parse(await runInstalledCheck(executable,
+      ['verify-artifact', encryptedOutput, '--package', '--passphrase-file', packagePassphrase, '--json', '--strict-exit'], 'encrypted evidence package verification')), 'Installed encrypted package review');
+    if (encryptedCreation !== '' || encryptedReview.state !== 'verified'
+      || record(encryptedReview.checks, 'Encrypted package checks').authenticatedEncryption !== 'verified'
+      || JSON.stringify(record(encryptedReview.package, 'Encrypted package details').entries) !== JSON.stringify(packageDetails.entries)
+      || JSON.stringify(encryptedReview).includes('selected package fixture passphrase')) {
+      throw new TypeError('Installed encrypted package round trip did not authenticate unchanged files privately.');
+    }
+    await runInstalledCheck(executable, ['verify-artifact', encryptedOutput, '--package', '--json'],
+      'encrypted evidence package locked refusal', 3, /^Artefact verification failed: [^\r\n]+\n$/u);
     const folderManifest = record(JSON.parse(await runInstalledCheck(executable, ['manifest', packageSource, packageOpaque,
       '--workflow', 'Evidence review', '--folder', folderOutput, '--json'], 'evidence folder creation')), 'Installed folder manifest');
     const folderReview = record(JSON.parse(await runInstalledCheck(executable,
@@ -1380,6 +1395,9 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       ...incidentChecks,
       'evidence-package-creation',
       'evidence-package-verification',
+      'encrypted-evidence-package-creation',
+      'encrypted-evidence-package-verification',
+      'encrypted-evidence-package-locked-refusal',
       'evidence-folder-creation',
       'evidence-folder-verification',
       'evidence-folder-replacement-refusal',

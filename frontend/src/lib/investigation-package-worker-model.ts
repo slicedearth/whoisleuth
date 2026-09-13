@@ -1,10 +1,12 @@
 import { canonicalArtifactJsonV2, sha256ArtifactBytes } from '../../../packages/evidence/artifact-integrity.mts';
 import { buildInvestigationCapsule, serializeInvestigationCapsule } from '../../../packages/investigation/investigation-capsule.mts';
-import { buildInvestigationPackage, inspectInvestigationPackage, inspectInvestigationPackageEntries, prepareInvestigationPackageEntries, investigationPackagePath, INVESTIGATION_PACKAGE_MANIFEST_PATH, MAX_INVESTIGATION_PACKAGE_ENTRIES, MAX_INVESTIGATION_PACKAGE_BYTES } from '../../../packages/investigation/investigation-package.mts';
+import { buildInvestigationPackage, inspectInvestigationPackage, inspectInvestigationPackageEntries, prepareInvestigationPackageEntries, investigationPackagePath, INVESTIGATION_PACKAGE_MANIFEST_PATH, MAX_INVESTIGATION_PACKAGE_ENTRIES } from '../../../packages/investigation/investigation-package.mts';
 import { MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES, MAX_INVESTIGATION_MANIFEST_DOCUMENT_BYTES, type InvestigationManifestArtifactInput } from '../../../packages/investigation/investigation-manifest.mts';
 import { parseBoundedJson } from '../../../lib/bounded-json.mts';
 import { MAX_WEB_CAPTURE_MANIFEST_BYTES } from '../../../packages/contracts/web-capture.mts';
 import { readWebCaptureManifest, matchCaptureArtifacts, type CaptureArtifactMatch } from '../../../packages/interchange/web-capture-import.mts';
+import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES, hasEncryptedInvestigationPackagePrefix } from '../../../packages/contracts/investigation-package-limits.mts';
+import { decryptInvestigationPackage, encryptInvestigationPackage } from '../../../packages/investigation/investigation-package-crypto.mts';
 
 export type SelectedInvestigationFile = Readonly<{
   file: Blob;
@@ -16,17 +18,17 @@ type BuildResult = Readonly<{ file: Blob; manifest: Awaited<ReturnType<typeof bu
 export type InvestigationFolderFile = Readonly<{ path: string; file: Blob }>;
 export type BrowserInvestigationFolder = Readonly<{ files: readonly InvestigationFolderFile[]; manifest: BuildResult['manifest'] }>;
 type Inspection = Awaited<ReturnType<typeof inspectInvestigationPackage>>;
-export type BrowserInvestigationPackageReview = Omit<Inspection, 'contents'> & Readonly<{ contents: ReadonlyMap<string, Blob> }>;
+export type BrowserInvestigationPackageReview = Omit<Inspection, 'contents'> & Readonly<{ contents: ReadonlyMap<string, Blob>; encryption: 'verified' | 'not_applicable' }>;
 export type BrowserCaptureAttachmentReview = ReturnType<typeof readWebCaptureManifest> & Readonly<{
   matches: readonly CaptureArtifactMatch[];
   contents: ReadonlyMap<string, Blob>;
   unusedIds: readonly string[];
 }>;
 export type InvestigationPackageInputs = {
-  build: { files: readonly SelectedInvestigationFile[]; workflow: string; generatedAt: string; applicationVersion: string };
-  folder: InvestigationPackageInputs['build'];
-  capsule: { capsule: CapsuleInput; generatedAt: string };
-  inspect: { file: Blob };
+  build: { files: readonly SelectedInvestigationFile[]; workflow: string; generatedAt: string; applicationVersion: string; passphrase?: string };
+  folder: Omit<InvestigationPackageInputs['build'], 'passphrase'>;
+  capsule: { capsule: CapsuleInput; generatedAt: string; passphrase?: string };
+  inspect: { file: Blob; passphrase?: string };
   inspectFolder: { files: readonly InvestigationFolderFile[] };
   capture: { manifest: Blob; files: readonly Blob[] };
 };
@@ -87,6 +89,7 @@ export async function runInvestigationPackageOperation(request: InvestigationPac
     }
     if (request.kind === 'inspect' || request.kind === 'inspectFolder') {
       let inspected: Inspection;
+      let encryption: BrowserInvestigationPackageReview['encryption'] = 'not_applicable';
       if (request.kind === 'inspectFolder') {
         assertInvestigationFolderSelection(request.input.files);
         const selected = request.input.files.map(item => ({ path: item.path, file: item.file }));
@@ -95,15 +98,25 @@ export async function runInvestigationPackageOperation(request: InvestigationPac
         inspected = await inspectInvestigationPackageEntries(files);
       } else {
         const file = request.input.file;
-        if (!(file instanceof Blob) || file.size < 22 || file.size > MAX_INVESTIGATION_PACKAGE_BYTES) throw new TypeError('The selected package exceeds its input limit.');
-        inspected = await inspectInvestigationPackage(new Uint8Array(await file.arrayBuffer()));
+        if (!(file instanceof Blob) || file.size < 22 || file.size > MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES) throw new TypeError('The selected package exceeds its input limit.');
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        if (hasEncryptedInvestigationPackagePrefix(bytes)) {
+          if (typeof request.input.passphrase !== 'string') throw new TypeError('A package passphrase is required.');
+          const decrypted = await decryptInvestigationPackage(bytes, request.input.passphrase);
+          inspected = decrypted.review;
+          decrypted.bytes.fill(0);
+          encryption = 'verified';
+        } else {
+          if (request.input.passphrase !== undefined) throw new TypeError('The package is not encrypted.');
+          inspected = await inspectInvestigationPackage(bytes);
+        }
       }
       const contents = new Map<string, Blob>();
       for (const entry of inspected.entries) {
         const bytes = inspected.contents.get(entry.entry.id);
         if (bytes) contents.set(entry.entry.id, localBlob(bytes, 'application/octet-stream'));
       }
-      return { kind: request.kind, result: { ...inspected, contents } };
+      return { kind: request.kind, result: { ...inspected, contents, encryption } };
     }
     if (request.kind === 'build' || request.kind === 'folder') {
       const { files, workflow, generatedAt, applicationVersion } = request.input;
@@ -112,11 +125,14 @@ export async function runInvestigationPackageOperation(request: InvestigationPac
       const artifacts: InvestigationManifestArtifactInput[] = [];
       for (const selected of selection) artifacts.push({ content: new Uint8Array(await selected.file.arrayBuffer()), mediaType: selected.mediaType, source: selected.source });
       if (request.kind === 'folder') {
+        if ('passphrase' in request.input) throw new TypeError('Folder exports are not encrypted.');
         const prepared = await prepareInvestigationPackageEntries({ workflow, configurationDigestSha256: null, artifacts }, generatedAt, applicationVersion);
         return { kind: 'folder', result: { manifest: prepared.manifest, files: [...prepared.files].map(([path, bytes]) => ({ path, file: localBlob(bytes, 'application/octet-stream') })) } };
       }
       const built = await buildInvestigationPackage({ workflow, configurationDigestSha256: null, artifacts }, generatedAt, applicationVersion);
-      return { kind: 'build', result: { file: localBlob(built.bytes, 'application/zip'), manifest: built.manifest } };
+      const encrypted = typeof request.input.passphrase === 'string';
+      const bytes = encrypted ? await encryptInvestigationPackage(built.bytes, request.input.passphrase!) : built.bytes;
+      return { kind: 'build', result: { file: localBlob(bytes, encrypted ? 'application/octet-stream' : 'application/zip'), manifest: built.manifest } };
     }
     if (request.kind === 'capsule') {
       const { capsule: input, generatedAt } = request.input;
@@ -127,10 +143,15 @@ export async function runInvestigationPackageOperation(request: InvestigationPac
       ] }, generatedAt, input.applicationVersion);
       const inspected = await inspectInvestigationPackage(built.bytes);
       if (!inspected.identityVerified || inspected.links.length !== 1 || inspected.links[0]?.state !== 'linked') throw new TypeError('The capsule does not match the selected Lookup source.');
-      return { kind: 'capsule', result: { file: localBlob(built.bytes, 'application/zip'), manifest: built.manifest } };
+      const encrypted = typeof request.input.passphrase === 'string';
+      const bytes = encrypted ? await encryptInvestigationPackage(built.bytes, request.input.passphrase!) : built.bytes;
+      return { kind: 'capsule', result: { file: localBlob(bytes, encrypted ? 'application/octet-stream' : 'application/zip'), manifest: built.manifest } };
     }
     throw new TypeError('Unsupported package operation.');
   } catch {
-    return { kind: 'error', detail: 'The evidence package could not be prepared or verified. Check the file sizes, declared source times and supported manifest format. No saved records were changed.' };
+    const unlocking = request?.kind === 'inspect' && typeof request.input?.passphrase === 'string';
+    return { kind: 'error', detail: unlocking
+      ? 'The package could not be unlocked and verified. Check the passphrase and file integrity. No saved records were changed.'
+      : 'The evidence package could not be prepared or verified. Check the file sizes, passphrase, declared source times and supported manifest format. No saved records were changed.' };
   }
 }

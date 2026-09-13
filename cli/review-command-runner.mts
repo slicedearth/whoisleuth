@@ -1,6 +1,6 @@
 import type { CliArguments } from './arguments.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
-import { MAX_INVESTIGATION_PACKAGE_BYTES } from '../packages/investigation/investigation-package.mts';
+import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../packages/contracts/investigation-package-limits.mts';
 import { verifyOfflineInvestigationFolder, verifyOfflineInvestigationPackage } from './investigation-package-review.mts';
 import { readInvestigationFolder } from './investigation-folder.mts';
 import {
@@ -81,12 +81,13 @@ async function runVerifyArtifactCommand(
     let bytes: Uint8Array;
     try {
       bytes = dependencies.readBinaryArtifactInput ? await dependencies.readBinaryArtifactInput(args.source)
-        : await readBoundedRegularFile(args.source, { maximumBytes: MAX_INVESTIGATION_PACKAGE_BYTES, minimumBytes: 22, label: 'Investigation package', ...(dependencies.signal ? { signal: dependencies.signal } : {}) });
+        : await readBoundedRegularFile(args.source, { maximumBytes: MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES, minimumBytes: 22, label: 'Investigation package', ...(dependencies.signal ? { signal: dependencies.signal } : {}) });
     } catch (error) {
       if (error instanceof CliUsageError) throw error;
       throw new CliUsageError(`Could not read package input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
     }
-    const report = await verifyOfflineInvestigationPackage(bytes);
+    const passphrase = args.passphraseSource ? await context.readPassphraseSource(args.passphraseSource) : undefined;
+    const report = await verifyOfflineInvestigationPackage(bytes, passphrase);
     dependencies.signal?.throwIfAborted();
     if (!args.quiet) context.writeStdout(args.output === 'json' ? formatJsonDocument(report) : context.terminal(formatOfflineArtifactVerification(report), args.color));
     return args.strictExit && !isCompleteOfflineArtifactVerification(report) ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;

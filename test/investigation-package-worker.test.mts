@@ -34,12 +34,50 @@ test('package worker uses immutable file inputs and returns download-only verifi
   assert.equal(response.kind, 'inspect');
   if (response.kind !== 'inspect') assert.fail('Expected package review.');
   assert.equal(response.result.identityVerified, true);
+  assert.equal(response.result.encryption, 'not_applicable');
   assert.equal(response.result.contents.size, 2);
   assert.equal(await response.result.contents.get('artifact-1')!.text(), '{"retained":"exactly"}\n');
   assert.deepEqual(new Uint8Array(await response.result.contents.get('artifact-2')!.arrayBuffer()), new Uint8Array([0, 255, 128]));
   assert.equal(response.result.contents.get('artifact-2')!.type, 'application/octet-stream');
   assert.equal(response.result.storageEffect, 'none');
   assert.equal(response.result.signatureTrust, 'not_checked');
+});
+
+test('encrypted worker builds authenticate before exposing exact files, with redacted failures and no downgrade', async () => {
+  const passphrase = 'worker fixture package passphrase';
+  const built = await runInvestigationPackageOperation({ ...request, input: { ...request.input, passphrase } });
+  if (built.kind !== 'build') assert.fail('Expected an encrypted package.');
+  assert.equal(built.result.file.type, 'application/octet-stream');
+  for (const secret of [undefined, '', 'different fixture passphrase']) {
+    const result = await runInvestigationPackageOperation({ kind: 'inspect', input: { file: built.result.file, ...(secret === undefined ? {} : { passphrase: secret }) } });
+    assert.equal(result.kind, 'error');
+    assert.doesNotMatch(JSON.stringify(result), /worker fixture|retained|Declared source|different fixture/u);
+    assert.equal(Object.hasOwn(result, 'result'), false);
+  }
+  const result = await runInvestigationPackageOperation({ kind: 'inspect', input: { file: built.result.file, passphrase } });
+  if (result.kind !== 'inspect') assert.fail('Expected authenticated review.');
+  assert.equal(result.result.encryption, 'verified');
+  assert.equal(await result.result.contents.get('artifact-1')!.text(), '{"retained":"exactly"}\n');
+  assert.deepEqual([...new Uint8Array(await result.result.contents.get('artifact-2')!.arrayBuffer())], [0, 255, 128]);
+  assert.equal(result.result.storageEffect, 'none');
+  const plain = await runInvestigationPackageOperation(request);
+  if (plain.kind !== 'build') assert.fail('Expected plaintext package.');
+  assert.equal((await runInvestigationPackageOperation({ kind: 'inspect', input: { file: plain.result.file, passphrase } })).kind, 'error');
+  assert.equal((await runInvestigationPackageOperation({ ...request, input: { ...request.input, passphrase: '' } })).kind, 'error');
+  assert.equal((await runInvestigationPackageOperation({ kind: 'folder', input: { ...request.input, passphrase } } as InvestigationPackageRequest)).kind, 'error');
+});
+
+test('package worker rejects ambiguous encryption status before showing a review', async () => {
+  const built = await runInvestigationPackageOperation(request);
+  if (built.kind !== 'build') assert.fail('Expected a package.');
+  const reviewed = await runInvestigationPackageOperation({ kind: 'inspect', input: { file: built.result.file } });
+  if (reviewed.kind !== 'inspect') assert.fail('Expected review.');
+  const worker = new ControlledWorker();
+  const pending = runInvestigationPackageWorker('inspect', { file: built.result.file }, { createWorker: worker.factory });
+  const failure = assert.rejects(pending, /unexpected result/u);
+  worker.reply({ ...reviewed, result: { ...reviewed.result, encryption: 'maybe' } });
+  await failure;
+  assert.equal(worker.terminated, 1);
 });
 
 test('worker capsules include the actual Lookup source and preserve source clocks without inventing an aggregate clock', async () => {

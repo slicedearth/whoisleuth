@@ -50,7 +50,7 @@ type CliAction =
   | { action: 'completion'; shell: CompletionShell }
   | ({ action: 'commands'; output: 'terminal' | 'json'; common: boolean; group: CliHelpGroup | null; mode: 'offline' | 'network' | null } & TerminalOptions)
   | { action: 'manual' }
-  | ({ action: 'manifest'; sources: readonly string[]; workflow: string; configurationDigestSha256: string | null; package?: true; folder?: string; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'manifest'; sources: readonly string[]; workflow: string; configurationDigestSha256: string | null; package?: true; folder?: string; passphraseSource?: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'map-observations'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'oam-export'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions)
@@ -226,6 +226,7 @@ function parseManifestArguments(parsed: ParsedCommandArguments): Extract<CliActi
     sources,
     workflow: parsed.optionValue('--workflow')!,
     configurationDigestSha256,
+    ...(parsed.optionValue('--passphrase-file') ? { passphraseSource: parsed.optionValue('--passphrase-file')! } : {}),
     ...(parsed.hasOption('--package') ? { package: true as const } : {}),
     ...(parsed.optionValue('--folder') ? { folder: parsed.optionValue('--folder')! } : {}),
     output: jsonOutput(parsed),

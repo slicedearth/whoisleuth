@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { buildInvestigationPackage } from '../packages/investigation/investigation-package.mts';
+import { encryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
 import { writeInvestigationFolder } from './investigation-folder.mts';
 
 import { scanBoundedJson } from '../lib/bounded-json.mts';
@@ -112,7 +113,11 @@ async function runManifestCommand(
       const built = await buildInvestigationPackage({ workflow: args.workflow, configurationDigestSha256: args.configurationDigestSha256, artifacts }, context.now(), context.packageVersion);
       dependencies.signal?.throwIfAborted();
       if (!context.writeBinaryOutput) throw new CliUsageError('Package output requires an explicit file destination.');
-      context.writeBinaryOutput(built.bytes);
+      const output = args.passphraseSource
+        ? await encryptInvestigationPackage(built.bytes, await context.readPassphraseSource(args.passphraseSource))
+        : built.bytes;
+      dependencies.signal?.throwIfAborted();
+      context.writeBinaryOutput(output);
       return EXIT_CODES.SUCCESS;
     }
     const input = {

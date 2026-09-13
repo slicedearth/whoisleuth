@@ -353,7 +353,7 @@ const CLI_OPERATION_POLICY = Object.freeze({
   doctor: Object.freeze({ kind: 'doctor' }),
   commands: Object.freeze({ kind: 'static' }),
   manual: Object.freeze({ kind: 'static' }),
-  manifest: OFFLINE_ALL_OR_NOTHING,
+  manifest: offlinePolicy('all_or_nothing', STATIC_OUTCOMES, 'optional_secret_passphrase_file'),
   'map-observations': OFFLINE_PER_ITEM,
   'oam-export': OFFLINE_PER_ITEM,
   lookup: Object.freeze({ kind: 'lookup', command: 'lookup' }),
@@ -1174,7 +1174,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
       'Integrity, structure, signature and content assurance remain separate checks.',
       'Browser exports require an explicit browser action; CLI exports, verification and review require an explicit CLI command.',
       'Sharing a generated artefact is a deliberate action outside the collection runtime.',
-      'Evidence packages retain selected JSON, screenshots and opaque file bytes unchanged, without automatic redaction or encryption. Review uploads nothing and changes no saved records; workspace import requires a separate preview and confirmation.',
+      'Evidence packages retain selected JSON, screenshots and opaque file bytes unchanged, without redaction. Whole-package encryption is optional; ordinary ZIPs and folders remain unencrypted. Review uploads nothing and changes no saved records; workspace import requires a separate preview and confirmation.',
     ],
   }),
   freezeCapability({

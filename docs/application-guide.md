@@ -507,8 +507,8 @@ or retain its matching original. JSON backups carry references only, so keep
 the original files separately. After preparing a workspace backup, open
 **Back up referenced files separately** and export every listed group. Groups
 retain all required content across bounded operations; shared bytes are exported
-once while each Case's provenance remains in the JSON. File packages are
-unencrypted even when the JSON backup is encrypted.
+once while each Case's provenance remains in the JSON. Enable **Encrypt package
+download** for each file group when needed; JSON backup encryption is separate.
 
 To test recovery, review the downloaded JSON and open **Rehearse recovery in a
 separate workspace**. Create a destination, then restore the downloaded evidence
@@ -673,6 +673,12 @@ linked Lookup JSON together. **Download capsule** retains the standalone format.
 In Dashboard saved-work tools, **Package and review evidence files** can also
 include selected screenshots and opaque files, with optional source declarations
 and observation times. Unknown times stay blank; packaging time is separate.
+
+**Encrypt package download** protects the manifest and every selected file in
+one `.wlep` download. Keep its passphrase separately; it cannot be reset. Review
+asks for the passphrase before showing contents, and clears it after the attempt.
+Ordinary ZIPs, folder exports and capsule-only JSON remain unencrypted. Downloading
+an entry after unlocking produces the original, unencrypted file.
 
 Review shows all entries, their digests and the local packaging event before any
 import. It does not upload files or change saved data. Verified workspace files
