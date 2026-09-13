@@ -212,7 +212,7 @@ test('disabled hosted monitoring stays read-only and makes no management request
   await page.goto('/monitor?view=watchlists');
   const hosted = page.getByRole('region', { name: 'Scheduled watchlists' });
   await expect(hosted).toContainText('Disabled');
-  await expect(hosted).toContainText('Ordinary watchlists stay in this browser');
+  await expect(hosted).toContainText('Ordinary watchlists stay in this workspace');
   await expect(page.locator('.watchlists', { hasText: 'Priority domains' })).toBeVisible();
   expect(managementRequests).toBe(0);
 });
@@ -226,7 +226,7 @@ test('a signed-in user explicitly schedules, pauses, resumes, replaces, restores
   await page.goto('/monitor?view=watchlists');
   const hosted = page.getByRole('region', { name: 'Scheduled watchlists' });
   await expect(hosted).toContainText('No watchlists are scheduled');
-  await hosted.getByLabel('Browser-local watchlist').selectOption('Priority domains');
+  await hosted.getByLabel('Saved watchlist').selectOption('Priority domains');
   await hosted.getByLabel('Interval').selectOption('12');
   await hosted.getByRole('button', { name: 'Schedule watchlist' }).click();
 
@@ -293,7 +293,7 @@ test('announces plural count-only corrections and whether canonical recovery is 
   await expect(recovery).toContainText('No malformed values were included in this status or displayed');
   await expect(recovery).not.toContainText('private-target.invalid');
 
-  await hosted.getByLabel('Browser-local watchlist').selectOption('Priority domains');
+  await hosted.getByLabel('Saved watchlist').selectOption('Priority domains');
   await hosted.getByRole('button', { name: 'Schedule watchlist' }).click();
   await expect(recovery).toContainText('These corrections were saved with the successful hosted change');
   await expect(hosted.getByRole('status').filter({ hasText: 'Scheduled "Priority domains"' })).toBeVisible();
@@ -361,7 +361,7 @@ test('announces a hosted restore only after browser-local persistence succeeds',
   await holdBrowserLocalReads(page, 2_000, '.hosted-list .actions button:nth-child(3)');
   await expect(restore).toBeDisabled();
   await expect(hosted.getByRole('status')).toHaveCount(0);
-  await expect(hosted.getByRole('status')).toContainText('browser-local watchlist', { timeout: 8_000 });
+  await expect(hosted.getByRole('status')).toContainText('saved watchlist', { timeout: 8_000 });
   await expect(restore).toBeEnabled();
 
   const localTable = page.locator('table').filter({ hasText: 'Latest changes' });
@@ -392,7 +392,7 @@ test('disables every mutation while a hosted refresh is pending', async ({ page 
   await hosted.getByRole('button', { name: 'Refresh' }).click();
   await refreshStarted;
   await expect(hosted.getByRole('button', { name: 'Refreshing…' })).toBeDisabled();
-  await expect(hosted.getByLabel('Browser-local watchlist')).toBeDisabled();
+  await expect(hosted.getByLabel('Saved watchlist')).toBeDisabled();
   await expect(item.getByRole('button', { name: 'Pause' })).toBeDisabled();
   await expect(item.getByRole('button', { name: 'Replace from browser' })).toBeDisabled();
   await expect(item.getByRole('button', { name: 'Restore to browser' })).toBeDisabled();

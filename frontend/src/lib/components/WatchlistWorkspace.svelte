@@ -98,7 +98,7 @@
 {#if names.length}
   <section class="watchlists card"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Domains</th><th>Checks</th><th>Latest changes</th><th>Updated</th><th>Actions</th></tr></thead><tbody>{#each pagedNames as name}{@const item=watchlists[name]}{#if item}{@const latest=item.history.at(-1)}<tr><td><strong>{name}</strong></td><td>{item.results.length}</td><td>{item.history.length}</td><td><span class:changed={(latest?.changeCount || 0) > 0}>{latest?.changeCount || 0}</span></td><td>{formatDate(item.updatedAt)}</td><td><div class="actions toolbar"><button class="btn small" onclick={() => rescan(name)}>Rescan in Bulk</button><button class="btn small" onclick={() => { focusedDomain=''; setSelected(name); setChangedOnly(false); }}>History</button><button id={`watchlist-delete-${name}`} class="btn small danger" onclick={() => void removeAndFocus(name)}>Delete</button></div></td></tr>{/if}{/each}</tbody></table></div><Pagination {currentPage} {pageCount} {setPage} ariaLabel="Watchlist pages" /></section>
 {:else}
-  <section class="empty-state card"><h2>No watchlists saved</h2><p>Run a Bulk scan, then save its results to begin a browser-local monitoring timeline.</p><a id="empty-watchlist-open-bulk" href="/bulk">Open Bulk →</a></section>
+  <section class="empty-state card"><h2>No watchlists saved</h2><p>Run a Bulk scan, then save its results to begin a saved monitoring timeline.</p><a id="empty-watchlist-open-bulk" href="/bulk">Open Bulk →</a></section>
 {/if}
 
 {#if entry}

@@ -1,5 +1,8 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { isLocalApplication } from '$lib/local-application-context.ts';
+  let localApplication = $state(false);
+  onMount(() => { localApplication = isLocalApplication(); });
   import { goto } from '$app/navigation';
   import IntelligenceIcon from '$lib/components/IntelligenceIcon.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
@@ -84,8 +87,8 @@
     let nextAttentionUnavailable = false;
     if (results.some(result => result.status === 'rejected')) {
       nextError = nextWorkspaceState === 'unavailable'
-        ? 'One or more required browser-local collections are unavailable. WHOISleuth cannot classify this workspace as empty.'
-        : 'Some browser-local collections are unavailable. Available saved work is still shown below.';
+        ? 'One or more required saved collections are unavailable. WHOISleuth cannot classify this workspace as empty.'
+        : 'Some saved collections are unavailable. Available saved work is still shown below.';
     }
     if (nextWorkspaceState === 'returning') {
       if (ANALYST_REVIEW_REQUIRED_COLLECTION_IDS.some((source) => !documents.has(source))) {
@@ -220,7 +223,7 @@
 {#if summaryPending && workspaceState !== 'loading'}<p role="status">Refreshing the saved-work summary…</p>{/if}
 {#if summaryPending && workspaceState === 'loading'}
 <section class="dashboard-state card" aria-live="polite" aria-busy="true">
-  <p class="eyebrow">Browser-local workspace</p>
+  <p class="eyebrow">Saved workspace</p>
   <h2>Preparing your Dashboard</h2>
   <p>Waiting for every required local collection before deciding whether this is a first-use or returning workspace.</p>
 </section>
@@ -269,8 +272,8 @@
 {/if}
 
 <details id="workspaces" class="workspace-directory card" ontoggle={event => { if (event.currentTarget.open) workspaceManagerRequested=true; }}>
-  <summary>Manage browser workspaces</summary>
-  {#if workspaceManagerRequested}<div class="workspace-directory-body"><DeferredSurface load={() => import('$lib/components/BrowserWorkspaceManager.svelte')} props={{}} loadingLabel="Reading browser workspaces." unavailableLabel="The workspace directory could not be loaded." /></div>{/if}
+  <summary>{localApplication ? 'Workspace details' : 'Manage browser workspaces'}</summary>
+  {#if workspaceManagerRequested}<div class="workspace-directory-body"><DeferredSurface load={() => import('$lib/components/BrowserWorkspaceManager.svelte')} props={{}} loadingLabel="Reading workspace information." unavailableLabel="Workspace information could not be loaded." /></div>{/if}
 </details>
 
 <!-- Open tools keep their drafts and import results when summary classification changes. -->

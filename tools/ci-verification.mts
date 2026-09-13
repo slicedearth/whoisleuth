@@ -49,6 +49,7 @@ export const CI_BROWSER_BUILD_SCRIPTS = Object.freeze([
   'frontend:loading-report',
   'security:retire',
   'frontend:build:integrity',
+  'local:package:check',
 ] as const);
 
 export const CI_HOSTED_ONLY_BROWSER_SCRIPTS = Object.freeze([
@@ -68,8 +69,10 @@ export const CI_BROWSER_HEALTH_SCRIPTS = Object.freeze([
 
 export const CI_CLI_RUNTIME_NODE_MAJOR = 26;
 export const CI_CLI_RUNTIME_SCRIPTS = Object.freeze([
+  'frontend:build:integrity',
   'cli:package:check',
   'capture:package:check',
+  'local:package:check',
 ] as const);
 export const CI_COMMAND_GROUPS = Object.freeze([
   'preflight',
@@ -328,29 +331,34 @@ export function readHostedCiScriptPlan(workflow: string): HostedCiScriptPlan {
 
 function assertFrontendBuildArtifactFlow(workflow: Workflow): void {
   const build = workflowJob(workflow, 'browser-build');
-  const browser = workflowJob(workflow, 'browser');
   const upload = build.steps.find((step) => step.uses?.startsWith('actions/upload-artifact@')
-    && step.with?.name === CI_FRONTEND_BUILD_ARTIFACT_NAME);
-  const download = browser.steps.find((step) => step.uses?.startsWith('actions/download-artifact@')
     && step.with?.name === CI_FRONTEND_BUILD_ARTIFACT_NAME);
   const paths = String(upload?.with?.path ?? '').trim().split(/\r?\n/u).map((value) => value.trim()).sort();
   if (!upload || condition(upload.if) || upload.with?.['if-no-files-found'] !== 'error'
     || JSON.stringify(paths) !== JSON.stringify([...FRONTEND_BROWSER_ARTIFACT_PATHS].sort())) {
     throw new Error('Hosted browser-build artifact publication must contain the served build and its identity only.');
   }
-  if (!download || condition(download.if) || download.with?.path !== 'frontend'
-    || download.with?.pattern !== undefined || download.with?.['merge-multiple'] !== undefined
-    || !dependencies(browser).includes('browser-build')) {
-    throw new Error('Hosted browser build download must use the exact verified build artifact.');
-  }
   const buildVerification = build.steps.findIndex((step) => stepScripts(step).includes('frontend:build:integrity'));
-  const integrity = browser.steps.findIndex((step) => stepScripts(step).includes('frontend:build:integrity'));
-  const consumers = browser.steps.flatMap((step, index) => stepScripts(step).some((script) =>
-    ['test:e2e:shard', 'frontend:authenticated-loading-report'].includes(script)) ? [index] : []);
-  if (buildVerification < 0 || buildVerification >= build.steps.indexOf(upload)
-    || integrity <= browser.steps.indexOf(download) || consumers.some((index) => index <= integrity)
-    || npmScripts(browser).includes('build')) {
-    throw new Error('Browser tests must consume the downloaded, verified build without rebuilding it.');
+  if (buildVerification < 0 || buildVerification >= build.steps.indexOf(upload)) {
+    throw new Error('The frontend build must be verified before publication.');
+  }
+  for (const name of ['browser', 'cli-runtime']) {
+    const consumer = workflowJob(workflow, name);
+    const download = consumer.steps.find((step) => step.uses?.startsWith('actions/download-artifact@')
+      && step.with?.name === CI_FRONTEND_BUILD_ARTIFACT_NAME);
+    if (!download || condition(download.if) || download.with?.path !== 'frontend'
+      || download.with?.pattern !== undefined || download.with?.['merge-multiple'] !== undefined
+      || !dependencies(consumer).includes('browser-build')) {
+      throw new Error('Hosted browser build download must use the exact verified build artifact.');
+    }
+    const execution = consumer.steps.flatMap((step, index) => stepScripts(step).map(script => ({ script, index })));
+    const integrity = execution.findIndex(({ script }) => script === 'frontend:build:integrity');
+    const users = execution.flatMap(({ script }, index) =>
+      ['test:e2e:shard', 'frontend:authenticated-loading-report', 'local:package:check'].includes(script) ? [index] : []);
+    if (integrity < 0 || execution[integrity]!.index <= consumer.steps.indexOf(download)
+      || users.some(index => index <= integrity) || npmScripts(consumer).includes('build')) {
+      throw new Error('Browser and local package checks must consume the downloaded, verified build without rebuilding it.');
+    }
   }
 }
 
@@ -427,7 +435,7 @@ export function formatLocalCiPlan(): string {
     ...CI_BROWSER_BUILD_SCRIPTS,
     'test:e2e:install',
     'test:e2e:built (performance, functional shards, browser-health aggregation and timing candidate)',
-    `cli:package:check (Node ${CI_CLI_RUNTIME_NODE_MAJOR} compatibility runtime)`,
+    ...CI_CLI_RUNTIME_SCRIPTS.map(script => `${script} (Node ${CI_CLI_RUNTIME_NODE_MAJOR} compatibility runtime)`),
     'verification:artifacts cleanup=all',
   ].join('\n');
 }

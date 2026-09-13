@@ -264,9 +264,9 @@ test('partial Lookup evidence can be classified, monitored, rechecked, and revie
     `This Case is marked Monitoring, but no readable watchlist currently contains ${LOOKUP_TARGET}.`,
   );
 
-  await expect(caseCard.getByLabel('Browser-local watchlist name')).toHaveValue(WATCHLIST_NAME);
+  await expect(caseCard.getByLabel('Saved watchlist name')).toHaveValue(WATCHLIST_NAME);
   await caseCard.getByRole('button', { name: 'Save current observation' }).click();
-  await expect(caseCard).toContainText(`Created the browser-local watchlist “${WATCHLIST_NAME}”`);
+  await expect(caseCard).toContainText(`Created the watchlist “${WATCHLIST_NAME}”`);
 
   const firstWatchlist = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });
   expect(firstWatchlist.records).toHaveLength(1);

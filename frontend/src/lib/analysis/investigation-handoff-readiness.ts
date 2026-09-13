@@ -89,7 +89,7 @@ export function buildInvestigationHandoffReadiness(input: Readonly<{
       label: 'Case retained',
       state: retained ? 'pass' : 'block',
       detail: retained
-        ? 'A browser-local case is available for the current investigation target.'
+        ? 'A saved Case is available for the current investigation target.'
         : 'Open a case only if this investigation needs a durable local decision or follow-up record.',
     },
     {
@@ -164,7 +164,7 @@ export function buildInvestigationHandoffReadiness(input: Readonly<{
     },
     checks,
     limitations: [
-      'This readiness view describes browser-local workflow structure only; it is not a finding about the target.',
+      'This readiness view describes the saved workflow structure only; it is not a finding about the target.',
       'A passing check does not validate the accuracy, sufficiency, or legal basis of an analyst decision.',
       `${blocks} blocking workflow gap${blocks === 1 ? '' : 's'} and ${cautions} caution${cautions === 1 ? '' : 's'} were counted from bounded current records.`,
     ],

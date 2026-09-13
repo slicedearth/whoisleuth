@@ -104,7 +104,7 @@
 
   {#if current}
     <div class="review-progress"><strong>{cursor + 1} of {rows.length}</strong><span>{reviewAvailable ? `${unresolved} unresolved` : 'Review state unavailable'}</span></div>
-    {#if !shortlistAvailable || !caseAvailable || !reviewAvailable}<p class="source-warning">Some browser-local actions are unavailable. Review, shortlist, and Case controls are disabled independently while result inspection remains available.</p>{/if}
+    {#if !shortlistAvailable || !caseAvailable || !reviewAvailable}<p class="source-warning">Some workspace actions are unavailable. Review, shortlist, and Case controls are disabled independently while result inspection remains available.</p>{/if}
     <article class="current">
       <div class="identity">
         <div><small>Current domain</small><h3>{current.domain}</h3></div>

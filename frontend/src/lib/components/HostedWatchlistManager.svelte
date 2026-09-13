@@ -120,11 +120,11 @@
 
   async function scheduleSelected() {
     if (!selectedLocal || !selectedEntry) {
-      error = 'Choose a browser-local watchlist to schedule.';
+      error = 'Choose a saved watchlist to schedule.';
       return;
     }
     if (selectedHosted) {
-      if (!confirm(`Replace the hosted snapshot for "${selectedHosted.name}" with the current browser-local watchlist?`)) return;
+      if (!confirm(`Replace the hosted snapshot for "${selectedHosted.name}" with the current saved watchlist?`)) return;
       await execute({
         action: 'update',
         id: selectedHosted.id,
@@ -149,7 +149,7 @@
   async function replace(item: ScheduledWatchlist) {
     const local = localEntryFor(item.name);
     if (!local) return;
-    if (!confirm(`Replace the hosted snapshot for "${item.name}" with the current browser-local watchlist?`)) return;
+    if (!confirm(`Replace the hosted snapshot for "${item.name}" with the current saved watchlist?`)) return;
     await execute({ action: 'update', id: item.id, entry: local },
       `Updated the hosted snapshot for "${item.name}".`);
   }
@@ -158,8 +158,8 @@
     if (busy || loading) return;
     const existing = Boolean(localEntryFor(item.name));
     const prompt = existing
-      ? `Replace the browser-local watchlist "${item.name}" with the hosted snapshot?`
-      : `Restore the hosted snapshot "${item.name}" into this browser?`;
+      ? `Replace the saved watchlist "${item.name}" with the hosted snapshot?`
+      : `Restore the hosted snapshot "${item.name}" into this workspace?`;
     if (!confirm(prompt)) return;
     const generation = ++requestGeneration;
     busy = true;
@@ -168,7 +168,7 @@
     try {
       await restoreHosted(item.name, item.entry);
       if (generation !== requestGeneration) return;
-      message = `${existing ? 'Replaced' : 'Restored'} the browser-local watchlist "${item.name}".`;
+      message = `${existing ? 'Replaced' : 'Restored'} the saved watchlist "${item.name}".`;
     } catch (cause) {
       if (generation !== requestGeneration) return;
       error = cause instanceof Error ? cause.message : 'Could not restore the hosted snapshot.';
@@ -178,7 +178,7 @@
   }
 
   async function remove(item: ScheduledWatchlist) {
-    if (!confirm(`Delete the hosted copy of "${item.name}" and its hosted history? The browser-local watchlist is not deleted.`)) return;
+    if (!confirm(`Delete the hosted copy of "${item.name}" and its hosted history? The saved watchlist is not deleted.`)) return;
     await execute({ action: 'delete', id: item.id }, `Deleted the hosted copy of "${item.name}".`);
   }
 
@@ -193,7 +193,7 @@
     <div>
       <p class="eyebrow">Optional hosted monitoring</p>
       <h2 id="hosted-monitoring-title">Scheduled watchlists</h2>
-      <p>Ordinary watchlists stay in this browser. Only a watchlist you schedule here is copied as compact encrypted evidence to the hosted store. Scheduled runs use Fast compact collection: registration-led RDAP and the bounded authoritative DNS fallback where required, without WHOIS, HTTP, TLS, page, or optional intelligence collection.</p>
+      <p>Ordinary watchlists stay in this workspace. Only a watchlist you schedule here is copied as compact encrypted evidence to the hosted store. Scheduled runs use Fast compact collection: registration-led RDAP and the bounded authoritative DNS fallback where required, without WHOIS, HTTP, TLS, page, or optional intelligence collection.</p>
     </div>
     {#if capability?.status === 'supported'}
       <button class="btn" onclick={refresh} disabled={loading || busy}>{loading ? 'Refreshing…' : 'Refresh'}</button>
@@ -215,7 +215,7 @@
     {/if}
 
     <div class="schedule-form">
-      <label>Browser-local watchlist
+      <label>Saved watchlist
         <select bind:value={selectedLocal} disabled={loading || busy || localSourceState !== 'ready' || !localNames.length}>
           <option value="">Choose a watchlist</option>
           {#each localNames as name}<option value={name}>{name} ({localWatchlists[name]?.results.length ?? 0})</option>{/each}
@@ -233,9 +233,9 @@
         {selectedHosted ? 'Replace hosted snapshot' : 'Schedule watchlist'}
       </button>
     </div>
-    {#if localSourceState === 'unavailable'}<p class="hint">Browser-local watchlists are unavailable. Hosted status, pause, resume, and deletion remain available; scheduling, replacement, and restore are disabled.</p>
-    {:else if localSourceState === 'loading'}<p class="hint">Browser-local watchlists are still loading. Hosted status remains available.</p>
-    {:else if !localNames.length}<p class="hint">Save a Bulk result as a browser-local watchlist before scheduling it.</p>{/if}
+    {#if localSourceState === 'unavailable'}<p class="hint">Saved watchlists are unavailable. Hosted status, pause, resume, and deletion remain available; scheduling, replacement, and restore are disabled.</p>
+    {:else if localSourceState === 'loading'}<p class="hint">Saved watchlists are still loading. Hosted status remains available.</p>
+    {:else if !localNames.length}<p class="hint">Save a Bulk result as a watchlist before scheduling it.</p>{/if}
 
     {#if error}<p class="error" role="alert">{error}</p>{/if}
     {#if recoveryMessage}<p class="recovery" role="status" aria-live="polite">{recoveryMessage} No malformed values were included in this status or displayed.</p>{/if}
@@ -266,7 +266,7 @@
         {/each}
       </div>
     {:else if loaded && !loading}
-      <p class="empty">No watchlists are scheduled. Browser-local monitoring is unchanged.</p>
+      <p class="empty">No watchlists are scheduled. Saved monitoring is unchanged.</p>
     {/if}
   {/if}
 </section>

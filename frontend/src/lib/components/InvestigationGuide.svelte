@@ -173,8 +173,8 @@
         !caseContextAvailable ? 'Cases' : '',
       ].filter(Boolean).join(', ');
       localContextError = expectedFailure
-        ? `Some browser-local investigation context is unavailable (${unavailable}). Healthy sources remain available, and unreadable saved data is not treated as absent.`
-        : `Browser-local investigation context could not be refreshed (${unavailable}). Healthy sources remain available, and unreadable saved data is not treated as absent.`;
+        ? `Some saved investigation context is unavailable (${unavailable}). Healthy sources remain available, and unreadable saved data is not treated as absent.`
+        : `Saved investigation context could not be refreshed (${unavailable}). Healthy sources remain available, and unreadable saved data is not treated as absent.`;
     }
   }
 
@@ -661,9 +661,9 @@
                 <section class="handoff-readiness unavailable" aria-label="Case handoff readiness">
                   <div>
                     <span>Case handoff</span>
-                    <strong>{localContextPending ? 'Checking browser-local context' : 'Handoff context unavailable'}</strong>
+                    <strong>{localContextPending ? 'Checking saved context' : 'Handoff context unavailable'}</strong>
                   </div>
-                  <p>{localContextPending ? 'The readiness check will appear after browser-local case and evidence context settles.' : 'Browser-local case or evidence context could not be read. No handoff check is inferred from unavailable saved data.'}</p>
+                  <p>{localContextPending ? 'The readiness check will appear after saved case and evidence context settles.' : 'Saved case or evidence context could not be read. No handoff check is inferred from unavailable saved data.'}</p>
                 </section>
               {/if}
             {/if}
@@ -754,9 +754,9 @@
           <section class="handoff-readiness complete-handoff unavailable" aria-label="Completed guide handoff readiness">
             <div>
               <span>Decision handoff</span>
-              <strong>{localContextPending ? 'Checking browser-local context' : 'Handoff context unavailable'}</strong>
+              <strong>{localContextPending ? 'Checking saved context' : 'Handoff context unavailable'}</strong>
             </div>
-            <p>{localContextPending ? 'The readiness summary will appear after browser-local case and evidence context settles.' : 'Browser-local case or evidence context could not be read. No completed handoff state is inferred from unavailable saved data.'}</p>
+            <p>{localContextPending ? 'The readiness summary will appear after saved case and evidence context settles.' : 'Saved case or evidence context could not be read. No completed handoff state is inferred from unavailable saved data.'}</p>
           </section>
         {/if}
       </article>
@@ -797,7 +797,7 @@
     <div class="secondary-details">
       <details class="evidence-checkpoint">
         <summary>{localContextPending ? 'Checking saved evidence' : evidenceContextAvailable ? `Saved evidence · ${evidence.observations} observation${evidence.observations === 1 ? '' : 's'} · ${evidence.relationships} relationship${evidence.relationships === 1 ? '' : 's'}` : 'Saved evidence unavailable'}</summary>
-        <p>{localContextPending ? 'Browser-local evidence context is still loading, so no retained-evidence conclusion is available yet.' : evidenceContextAvailable ? evidence.observations || evidence.relationships ? 'These retained records are a checkpoint, not proof that a step is complete.' : 'No saved observation in this browser currently links to this domain. This does not mean evidence is absent elsewhere.' : 'Browser-local evidence could not be read. Continue with the guide, but do not interpret this state as an empty evidence history.'}{!localContextPending && evidenceContextAvailable && evidence.partial ? ' Some retained evidence is partial.' : ''}{!localContextPending && evidenceContextAvailable && evidence.truncated ? ' A saved-data or source limit was reached.' : ''}</p>
+        <p>{localContextPending ? 'Saved evidence context is still loading, so no retained-evidence conclusion is available yet.' : evidenceContextAvailable ? evidence.observations || evidence.relationships ? 'These retained records are a checkpoint, not proof that a step is complete.' : 'No saved observation in this workspace currently links to this domain. This does not mean evidence is absent elsewhere.' : 'Saved evidence could not be read. Continue with the guide, but do not interpret this state as an empty evidence history.'}{!localContextPending && evidenceContextAvailable && evidence.partial ? ' Some retained evidence is partial.' : ''}{!localContextPending && evidenceContextAvailable && evidence.truncated ? ' A saved-data or source limit was reached.' : ''}</p>
       </details>
       <details class="guide-options">
         <summary>Guide options</summary>

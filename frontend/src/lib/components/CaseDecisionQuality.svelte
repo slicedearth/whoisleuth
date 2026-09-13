@@ -25,7 +25,7 @@
 
 <section class="quality card" aria-labelledby="case-quality-title">
   <header>
-    <div><p class="eyebrow">Decision quality</p><h2 id="case-quality-title">Case consistency audit</h2><p>Review evidence linkage and inconsistent treatment across browser-local cases.</p></div>
+    <div><p class="eyebrow">Decision quality</p><h2 id="case-quality-title">Case consistency audit</h2><p>Review evidence linkage and inconsistent treatment across saved cases.</p></div>
     <span><strong>{report.findingCount}</strong> finding{report.findingCount === 1 ? '' : 's'}</span>
   </header>
   {#if report.findings.length}

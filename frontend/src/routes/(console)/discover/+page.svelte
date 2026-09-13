@@ -200,7 +200,7 @@
     else{profile=null;profileSourceState='unavailable';}
     if(historyResult.status==='fulfilled')ctHistory=historyResult.value;
     const unavailable=unavailableLocalContextLabels([profileResult,historyResult],['profile','certificate history']);
-    if(unavailable.length)localContextStatus=`Some browser-local context could not be loaded (${unavailable.join(', ')}). Candidate generation remains available; reload to retry the missing context.`;
+    if(unavailable.length)localContextStatus=`Some saved context could not be loaded (${unavailable.join(', ')}). Candidate generation remains available; reload to retry the missing context.`;
     if (candidates.length) candidateMetadata = buildCandidateMetadata(candidates);
     const guidedDomain = normalizeInvestigationGuideDomain(new URL(window.location.href).searchParams.get('q'));
     if (guidedDomain) seed = guidedDomain;

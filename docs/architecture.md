@@ -210,6 +210,25 @@ exhaustive metadata.
 
 ## Data ownership and persistence
 
+The shared workspace provider owns collection validation, preparation,
+reconciliation and revision checks. Its transaction adapter supplies record and
+file I/O. The browser adapter uses IndexedDB. The optional local application
+uses an authenticated loopback adapter and a dedicated Node SQLite worker;
+there is no browser-database fallback in that mode. SQLite commits include all
+changed collections, original files and an operation receipt in one transaction.
+A missing acknowledgement is resolved against that receipt before another
+write. The selected filesystem workspace has its own stable random identity
+and format version. It is plaintext at rest. The existing server owns explicit
+collection; offline mode rejects it before dispatch.
+
+`packages/local-application/` owns startup arguments and package entry. Its
+package includes the verified static build and the server/worker dependency
+closure. Optional packages bundle the runtime dependencies installed from their
+derived production lock; platform-specific optional dependencies are omitted.
+Installed file digests must match the reviewed package inputs. Application
+source maps, private build identity and development output are not packaged;
+third-party packages retain their distributed files and notices.
+
 Ordinary workspace data is stored in IndexedDB in the current browser profile.
 Collection owners declare schema, limits, migration and future-version
 behaviour. Browser adapters perform version admission, transactions,

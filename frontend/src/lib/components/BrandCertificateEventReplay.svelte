@@ -29,7 +29,7 @@
     <span class="count">{replay.retainedEventCount} retained event{replay.retainedEventCount === 1 ? '' : 's'}</span>
   </header>
 
-  {#if unavailable}<p class="notice">Browser-local cases could not be read, so retained certificate-event comparisons are unavailable. No missing event is treated as alignment.</p>{/if}
+  {#if unavailable}<p class="notice">Saved cases could not be read, so retained certificate-event comparisons are unavailable. No missing event is treated as alignment.</p>{/if}
   {#if replay.truncated}<p class="notice">Only the newest {replay.retainedEventCount} bounded event groups are shown.</p>{/if}
   <div class="domain-list">
     {#each replay.domains as domainReview}

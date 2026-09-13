@@ -283,7 +283,7 @@ test('calendar reaches and exports every matching event beyond the former five-h
   await calendar.getByRole('combobox', { name: 'Event type', exact: true }).selectOption('action_follow_up');
   await expect(calendar.getByRole('button', { name: 'Select matching (600)', exact: true })).toBeEnabled();
   const pages = calendar.getByRole('navigation', { name: 'Lifecycle event pages', exact: true });
-  const timeline = calendar.getByRole('list', { name: 'Browser-local lifecycle review timeline', exact: true });
+  const timeline = calendar.getByRole('list', { name: 'Saved lifecycle review timeline', exact: true });
   const owners = new Set<string>();
   for (let pageNumber = 1; pageNumber <= 25; pageNumber++) {
     await expect(pages.getByRole('status')).toHaveText(`Page ${pageNumber} of 25`);
@@ -309,7 +309,7 @@ test('calendar reaches and exports every matching event beyond the former five-h
   expect(new Set(exported.match(/^UID:.+$/gmu)).size).toBe(600);
   expect(exported).not.toMatch(/Private calendar owner|full-calendar-\d+/u);
   await expect(exportButton).toBeFocused();
-  await expect(calendar.getByRole('status').filter({ hasText: /^Exported 600 selected/ })).toHaveText('Exported 600 selected browser-local review events.');
+  await expect(calendar.getByRole('status').filter({ hasText: /^Exported 600 selected/ })).toHaveText('Exported 600 selected review events.');
   await calendar.getByRole('combobox', { name: 'Event type', exact: true }).selectOption('action_due');
   await expect(calendar.getByRole('button', { name: 'Export selected (0)', exact: true })).toBeDisabled();
   await calendar.getByRole('combobox', { name: 'Event type', exact: true }).selectOption('action_follow_up');
@@ -377,7 +377,7 @@ test('calendar qualifies conflicting dates and exposes superseded follow-ups onl
   await disclosure.focus(); await disclosure.press('Enter');
   await expect(calendar.getByText(/latest observations disagree; no calendar date was selected/)).toBeVisible();
   await calendar.getByLabel('Include completed actions and earlier effect reviews').check();
-  await expect(calendar.getByRole('list', { name: 'Browser-local lifecycle review timeline' }).getByRole('listitem')).toHaveCount(1);
+  await expect(calendar.getByRole('list', { name: 'Saved lifecycle review timeline' }).getByRole('listitem')).toHaveCount(1);
   await calendar.getByLabel('Include completed actions and earlier effect reviews').uncheck();
   await expect(calendar.getByRole('button', { name: 'Export selected (0)' })).toBeDisabled();
   await page.setViewportSize({ width: 320, height: 700 });
@@ -438,7 +438,7 @@ test('saved reporting routes remain reachable across pages with explicit local f
   await expect(routes.getByRole('article').getByRole('link', { name: 'Open case', exact: true })).toHaveAttribute('href', '/cases?case=routes-5&section=response');
   await routes.getByRole('combobox', { name: 'Source review', exact: true }).selectOption('current');
   await expect(routes.getByRole('article')).toHaveCount(1);
-  await expect(lifecycle.getByRole('list', { name: 'Browser-local lifecycle review timeline' }).getByRole('listitem')).toHaveCount(1);
+  await expect(lifecycle.getByRole('list', { name: 'Saved lifecycle review timeline' }).getByRole('listitem')).toHaveCount(1);
   await page.clock.setFixedTime('2026-09-10T14:00:00.000Z');
   await lifecycle.getByRole('button', { name: 'Refresh local review', exact: true }).click();
   await expect(lifecycle.getByText('Re-evaluated saved dates and routes. No collection was performed.')).toBeVisible();

@@ -40,7 +40,7 @@ describe('fixed investigation plans', () => {
 
   test('hands executable collection plans back to the browser Case and selected comparison workflows', () => {
     const triage = buildInvestigationPlan('domain-triage', 'example.test', NOW);
-    assert.match(triage.limitations.join(' '), /browser-local Case workspace/iu);
+    assert.match(triage.limitations.join(' '), /saved Case workspace/iu);
     assert.match(triage.limitations.join(' '), /does not submit reports/iu);
 
     const lookalike = buildInvestigationPlan('lookalike-review', 'Example Brand', NOW);

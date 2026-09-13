@@ -223,7 +223,7 @@
       caseMessage = `${success}${prunedNote(committed.pruned)}`;
     } catch {
       installCommittedCaseSnapshot(committed.cases, 'partial');
-      caseMessage = `${success} The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.${prunedNote(committed.pruned)}`;
+      caseMessage = `${success} The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.${prunedNote(committed.pruned)}`;
     }
   }
   async function reconcileCommittedCaseMutation(committed: Awaited<ReturnType<typeof editCase>>, success: string) {
@@ -389,7 +389,7 @@
     <UnifiedAnalystReviewInbox {cases} {watchlists} {bulkSessions} profiles={brandProfiles} {detectionRules} {websiteSnapshots} reviewState={analystReviewState} selectedSubjectKey={page.url.searchParams.get('review')??''} ondismiss={dismissEvidenceGap} onreview={recordAnalystReviewDecision} oncount={(count:number)=>reviewInboxCount=count} />
     {#if caseMessage}<p class="case-message" role="status" aria-live="polite">{caseMessage}</p>{/if}
   {:else}
-    <LocalCollectionState state={reviewInboxSourceState} title="Review inbox evidence unavailable" detail="Cases, watchlists, saved Bulk sessions, Brand Profiles, custom rules, website snapshots, and the analyst lifecycle overlay must all be readable before the combined inbox can distinguish zero review items from missing browser-local state. Fulfilled collections remain available in their own views." />
+    <LocalCollectionState state={reviewInboxSourceState} title="Review inbox evidence unavailable" detail="Cases, watchlists, saved Bulk sessions, Brand Profiles, custom rules, website snapshots, and the analyst lifecycle overlay must all be readable before the combined inbox can distinguish zero review items from missing saved state. Fulfilled collections remain available in their own views." />
   {/if}
   {#if cases.length || bulkSessions.length || casesSourceState==='unavailable' || bulkSessionsSourceState==='unavailable'}
     <div class="retained-preparation" aria-busy={debtPreparation?.state==='loading'}>
@@ -444,7 +444,7 @@
   {#if campaignsSourceState==='ready'}
     <DeferredSurface load={()=>import('$lib/components/CampaignManager.svelte')} loadingLabel="Loading campaign workspace…" unavailableLabel="The campaign workspace could not be loaded." props={{records:cases,profiles:brandProfiles,relationshipSummary,cohortSourceStates:{cases:casesSourceState,profiles:brandProfilesSourceState,relationships:relationshipsSourceState},parentDomainSourceState:parentDomainCasesSourceState,initialCampaigns:campaigns,focusId:page.url.searchParams.get('campaign')||'',onselect:openRelatedCase,oncount:(count:number)=>campaignCount=count,onchange:(nextCampaigns:CampaignRecord[])=>campaigns=nextCampaigns}} placeholder="workspace" />
   {:else}
-    <LocalCollectionState state={campaignsSourceState} title="Campaigns unavailable" detail="The browser-local campaign collection could not be read, so its count and mutation controls remain unavailable. Reload to retry without treating the collection as empty." />
+    <LocalCollectionState state={campaignsSourceState} title="Campaigns unavailable" detail="The saved campaign collection could not be read, so its count and mutation controls remain unavailable. Reload to retry without treating the collection as empty." />
   {/if}
 </div>
 {/if}
@@ -479,7 +479,7 @@
   {#if detectionRulesSourceState==='ready'}
     <DeferredSurface load={()=>import('$lib/components/DetectionRuleManager.svelte')} loadingLabel="Loading detection-rule workspace…" unavailableLabel="The detection-rule workspace could not be loaded." props={{records:cases,caseSourceState:casesSourceState,initialRules:detectionRules,onselect:openRelatedCase,oncount:(count:number)=>customRuleCount=count,onchange:(nextRules:DetectionRule[])=>detectionRules=nextRules}} placeholder="workspace" />
   {:else}
-    <LocalCollectionState state={detectionRulesSourceState} title="Custom rules unavailable" detail="The browser-local rule collection could not be read, so its count and mutation controls remain unavailable. No empty rule collection is inferred." />
+    <LocalCollectionState state={detectionRulesSourceState} title="Custom rules unavailable" detail="The saved rule collection could not be read, so its count and mutation controls remain unavailable. No empty rule collection is inferred." />
   {/if}
 </div>
 {/if}
@@ -491,7 +491,7 @@
     <DeferredSurface load={()=>import('$lib/components/MonitorActivityHeatmap.svelte')} loadingLabel="Loading watchlist activity…" unavailableLabel="Watchlist activity could not be loaded." props={{events:watchlistActivity}} />
     <DeferredSurface load={()=>import('$lib/components/WatchlistWorkspace.svelte')} loadingLabel="Loading watchlist workspace…" unavailableLabel="The watchlist workspace could not be loaded." onready={restoreWatchlistTarget} props={{watchlists,names,entry,selected,setSelected:(value:string)=>selected=value,history,changedOnly,setChangedOnly:(value:boolean)=>changedOnly=value,message,downloadWatchlists,importFile,clearAll,rescan,remove,openCase:openWatchlistCase,formatDate:date}} placeholder="workspace" />
   {:else}
-    <LocalCollectionState state={watchlistsSourceState} title="Watchlists unavailable" detail="Browser-local watchlists could not be read, so their count, empty state, imports, and local mutations remain unavailable. Reload to retry without overwriting unknown saved work." />
+    <LocalCollectionState state={watchlistsSourceState} title="Watchlists unavailable" detail="Saved watchlists could not be read, so their count, empty state, imports, and local mutations remain unavailable. Reload to retry without overwriting unknown saved work." />
   {/if}
   <DeferredSurface load={()=>import('$lib/components/HostedWatchlistManager.svelte')} loadingLabel="Loading hosted watchlist controls…" unavailableLabel="Hosted watchlist controls could not be loaded." props={{capability:scheduledCapability,localWatchlists:watchlists,localNames:names,localSourceState:watchlistsSourceState,restoreHosted:restoreHostedWatchlist,formatDate:date}} />
 </div>

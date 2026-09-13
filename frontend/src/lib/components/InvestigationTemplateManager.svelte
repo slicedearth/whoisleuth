@@ -266,7 +266,7 @@
   {#if refreshRequired}<button id="refresh-investigation-templates" class="btn" type="button" onclick={retryRefresh} disabled={saving}>Refresh saved templates</button>{/if}
 
   {#if loadState === 'unavailable'}
-    <p class="empty warn" role="status">Saved investigation templates are unavailable. The standard guides remain available; reload the Dashboard to retry browser-local storage.</p>
+    <p class="empty warn" role="status">Saved investigation templates are unavailable. The standard guides remain available; reload the Dashboard to retry workspace storage.</p>
   {:else if loadState === 'loading'}
     <p class="empty" role="status">Loading saved investigation templates.</p>
   {:else if templates.length}

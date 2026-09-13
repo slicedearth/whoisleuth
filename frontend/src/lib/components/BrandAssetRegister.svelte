@@ -150,7 +150,7 @@
     <div class="empty-state"><h3>Active profile unresolved</h3><p>The saved active-profile reference does not match a readable local Brand Profile. It has not been cleared or reassigned.</p></div>
   {:else}
     {#if projection.state === 'loading'}
-      <p class="loading-state" role="status" aria-live="polite">Loading browser-local Cases and retained relationship observations. Readable direct rows may update as each source settles.</p>
+      <p class="loading-state" role="status" aria-live="polite">Loading saved Cases and retained relationship observations. Readable direct rows may update as each source settles.</p>
     {/if}
     {#if projection.sources.cases.state === 'unavailable'}
       <p class="source-alert" role="alert">Cases could not be read. Direct profile rows remain visible with partial coverage; the associated-Case count is Unavailable, not zero.</p>

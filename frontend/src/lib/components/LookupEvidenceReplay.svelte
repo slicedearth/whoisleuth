@@ -192,12 +192,12 @@
         {#if replay.caseDomain}
           <section class="case-handoff" aria-labelledby="replay-case-title">
             <div>
-              <p class="eyebrow">Browser-local handoff</p>
+              <p class="eyebrow">Saved handoff</p>
               <h3 id="replay-case-title">Continue this historical review in a Case</h3>
               <p class="note">Registration: {replay.caseDomain}. Submitted target: {replay.target}.{' '}{#if replay.observationHostname}DNS, TLS and web collection scope: {replay.observationHostname}.{' '}{/if}{#if replay.webObservationMode}Web evidence concerns a selected URL, not the homepage.{' '}{/if}Saving retains the export time and imported provenance without contacting a source.</p>
             </div>
             {#if caseCandidates.length > 1}<CasePicker id="replay-incident-case" records={caseCandidates} selectedId={caseRecord?.id ?? ''} disabled={caseBusy} select={(id) => { caseRecord = caseCandidates.find(record => record.id === id) ?? null; caseStatus = ''; }} />{/if}
-            <button class="btn" type="button" disabled={caseBusy || (caseCandidates.length > 0 && !caseRecord)} onclick={() => void saveReplayToCase()}>{caseBusy ? 'Saving…' : caseRecord ? 'Add replay evidence to Case' : 'Create browser-local Case'}</button>
+            <button class="btn" type="button" disabled={caseBusy || (caseCandidates.length > 0 && !caseRecord)} onclick={() => void saveReplayToCase()}>{caseBusy ? 'Saving…' : caseRecord ? 'Add replay evidence to Case' : 'Create Case'}</button>
             <p class="case-status" role="status" aria-live="polite" aria-atomic="true">{caseStatus}</p>
             {#if caseRecord}<a class="case-link" href={`/monitor?case=${encodeURIComponent(caseRecord.id)}`}>Open Case in Respond →</a>{/if}
           </section>

@@ -278,7 +278,7 @@
 {/if}
 
 {#if campaigns.length}
-  <p class="summary">{campaigns.length} browser-local campaign{campaigns.length===1?'':'s'} · domain membership only</p>
+  <p class="summary">{campaigns.length} saved campaign{campaigns.length===1?'':'s'} · domain membership only</p>
   <p class="privacy-note">Campaign exports include their labels and descriptions. Review the file before sharing it.</p>
   <section class="campaign-list">
     {#each pagedCampaigns as campaign (campaign.id)}
@@ -295,7 +295,7 @@
               <header><div><p class="eyebrow">Members</p><h3>{campaign.domains.length} case domain{campaign.domains.length===1?'':'s'}</h3></div></header>
               {#if campaign.domains.length}
                 {#if !casesReady}<p class="source-state" role="alert">Case evidence could not be read. Retained campaign membership remains available, but linkage and missing-case states are unavailable.</p>{/if}
-                <ul>{#each pagedMembers as domain}{@const linked=casesReady?casesForDomain(records,domain):[]}<li><div><strong>{domain}</strong>{#if casesReady&&!linked.length}<small>Case unavailable in this browser</small>{:else if !casesReady}<small>Case evidence unavailable</small>{/if}</div><div>{#each linked as record (record.id)}<button class="btn small" type="button" onclick={()=>onselect?.(record)}>{linked.length===1&&!record.title?'Open case':`${record.title||'Open Case'} · …${caseNumber(record.id).slice(-8)}`}</button>{/each}<button class="btn small danger" type="button" onclick={()=>removeDomain(campaign,domain)} disabled={mutating || refreshRequired}>Remove</button></div></li>{/each}</ul>
+                <ul>{#each pagedMembers as domain}{@const linked=casesReady?casesForDomain(records,domain):[]}<li><div><strong>{domain}</strong>{#if casesReady&&!linked.length}<small>Case unavailable in this workspace</small>{:else if !casesReady}<small>Case evidence unavailable</small>{/if}</div><div>{#each linked as record (record.id)}<button class="btn small" type="button" onclick={()=>onselect?.(record)}>{linked.length===1&&!record.title?'Open case':`${record.title||'Open Case'} · …${caseNumber(record.id).slice(-8)}`}</button>{/each}<button class="btn small danger" type="button" onclick={()=>removeDomain(campaign,domain)} disabled={mutating || refreshRequired}>Remove</button></div></li>{/each}</ul>
                 <Pagination currentPage={currentMemberPage} pageCount={memberPageCount} setPage={setMemberPage} ariaLabel={`Case pages for ${campaign.name}`} />
               {:else}<p>No domains have been added to this campaign.</p>{/if}
             </section>
@@ -320,7 +320,7 @@
                 {/each}
               </div>
               <details><summary>Interpretation limits</summary><ul>{#each reviewSummary.limitations as limitation}<li>{limitation}</li>{/each}</ul></details>
-            </section>{:else}<p class="source-state" role="alert">Campaign review and temporal counts are unavailable until the browser-local Case collection can be read. No zero or unreviewed state is inferred.</p>{/if}
+            </section>{:else}<p class="source-state" role="alert">Campaign review and temporal counts are unavailable until the saved Case collection can be read. No zero or unreviewed state is inferred.</p>{/if}
 
             <CampaignCohortReview campaign={campaign} {records} {profiles} {relationshipSummary} sourceStates={cohortSourceStates} {onselect} />
 
@@ -332,7 +332,7 @@
               <label for={`campaign-case-${campaign.id}`}>Add a retained domain</label>
               <div><select id={`campaign-case-${campaign.id}`} bind:value={selectedDomain} disabled={!availableDomains.length}><option value="">{availableDomains.length?'Choose a domain':'All retained domains are included'}</option>{#each availableDomains as domain}<option value={domain}>{domain}</option>{/each}</select><button class="btn" type="submit" disabled={mutating || refreshRequired || !selectedDomain}>Add domain</button></div>
             </form>{/if}
-            <details><summary>Campaign data</summary><p>Campaigns store a label, description and normalised domain membership in this browser. Membership organises review; it is not attribution.</p></details>
+            <details><summary>Campaign data</summary><p>Campaigns store a label, description and normalised domain membership in this workspace. Membership organises review; it is not attribution.</p></details>
             <button id={`campaign-delete-${campaign.id}`} class="btn danger delete" type="button" onclick={()=>void remove(campaign)} disabled={mutating || refreshRequired}>Delete campaign</button>
           </div>
         {/if}
@@ -341,7 +341,7 @@
   </section>
   <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Campaign pages" />
 {:else if !orphanedDraft}
-  <section class="empty-state card"><h2>No campaigns yet</h2><p>Group existing analyst cases into a browser-local investigation without copying their evidence or notes.</p></section>
+  <section class="empty-state card"><h2>No campaigns yet</h2><p>Group existing analyst cases into a saved investigation without copying their evidence or notes.</p></section>
 {/if}
 
 <style>

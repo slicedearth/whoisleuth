@@ -13,6 +13,7 @@
     { href: '#commands', label: 'Command reference' },
     { href: '#browser-handoff', label: 'Browser and CLI handoffs' },
     { href: '#capture-companion', label: 'Capture companion' },
+    { href: '#local-application', label: 'Local application' },
     { href: '#behaviour', label: 'CLI behaviour' },
     { href: '#more', label: 'More documentation' },
   ] as const;
@@ -119,6 +120,14 @@
   <div class="section-intro"><h2 id="capture-companion-title">Optional rendered capture</h2><p>A separate local companion captures an explicitly authorised page or compares two captures offline. It is not included in the main CLI or hosted application.</p></div>
   <p>Install it from a verified local archive, then install its browser explicitly. Cases can prepare a command for a retained Incident URL and import reviewed manifest metadata. Screenshots remain local files.</p>
   <a class="btn" href={`${WHOISLEUTH_SOURCE_REPOSITORY_URL}/blob/main/packages/web-capture/README.md`}>Capture installation, output and limits</a>
+</section>
+
+<section class="cli-section" id="local-application" aria-labelledby="local-application-title">
+  <div class="section-intro"><h2 id="local-application-title">Console with a filesystem workspace</h2><p>The separate local application serves the Console on your machine and saves records, drafts and original files in a folder you choose. It requires Node.js 24.19 or newer and a verified local package archive.</p></div>
+  <CopyableCommand command="whoisleuth-local --workspace ./review-workspace --init --offline" label="new offline local workspace command" />
+  <p>Open the private launch link printed in the terminal. Omit <code>--init</code> when reopening the folder. The workspace is plaintext at rest; use operating-system protection and encrypted portable backups. Browser preferences remain browser-local.</p>
+  <p>It listens only on loopback. Starting it makes no collection request; omitting <code>--offline</code> enables the existing explicit collection actions from your machine.</p>
+  <a class="btn" href={`${WHOISLEUTH_SOURCE_REPOSITORY_URL}/blob/main/packages/local-application/README.md`}>Local installation, backup and recovery</a>
 </section>
 
 <section class="cli-section" id="behaviour" aria-labelledby="behaviour-title">

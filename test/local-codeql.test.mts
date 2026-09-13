@@ -228,6 +228,9 @@ describe('local CodeQL SARIF parsing', () => {
       { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '3580829fea761be5:1', primaryLocationStartColumnFingerprint: '59', reason: 'false_positive' },
       { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'b269a7c62be7cb18:1', primaryLocationStartColumnFingerprint: '56', reason: 'false_positive' },
       { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'e8481cbf82455fde:1', primaryLocationStartColumnFingerprint: '61', reason: 'false_positive' },
+      { ruleId: 'js/missing-rate-limiting', file: 'lib/local-application-host.mts', primaryLocationLineHash: '6bb59177a3517719:1', primaryLocationStartColumnFingerprint: '48', reason: 'false_positive' },
+      { ruleId: 'js/missing-rate-limiting', file: 'lib/local-application-host.mts', primaryLocationLineHash: '71a68c64e71dbe16:1', primaryLocationStartColumnFingerprint: '38', reason: 'false_positive' },
+      { ruleId: 'js/missing-rate-limiting', file: 'lib/local-application-host.mts', primaryLocationLineHash: '1a22ab95f51e0b68:1', primaryLocationStartColumnFingerprint: '30', reason: 'false_positive' },
       { ruleId: 'js/incomplete-url-substring-sanitization', file: 'test/ct-search.test.mts', primaryLocationLineHash: '396838f0aee3b68c:1', primaryLocationStartColumnFingerprint: '13', reason: 'false_positive' },
     ];
     assert.deepEqual(KNOWN_CODEQL_FINDINGS, expected);

@@ -37,6 +37,7 @@ export const FULL_BATCH_RELEASE_GATES = Object.freeze([
   'production-dependency-audit',
   'cli-package',
   'capture-package',
+  'local-package',
   'release-contract',
   'browser-complete',
   'browser-timing-stress-when-affected',
@@ -52,6 +53,7 @@ export type SpecialisedCheck =
   | 'schema-inventory'
   | 'cli-package'
   | 'capture-package'
+  | 'local-package'
   | 'release-contract'
   | 'licences'
   | 'production-dependency-audit'
@@ -202,9 +204,17 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   }),
   Object.freeze({
     id: 'capture-package-impact', area: 'optional capture package', priority: 0, impactOnly: true,
-    matches: (value: string) => value.startsWith('packages/web-capture/') || value.startsWith('tools/capture-package'),
+    matches: (value: string) => value.startsWith('packages/web-capture/') || value.startsWith('tools/capture-package') || value === 'tools/optional-package.mts',
     focusedUnit: unit('test/local-web-capture.test.mts', 'test/capture-package.test.mts'),
     focusedBrowser: browser(), specialised: specialised('capture-package'), browserRequired: false,
+  }),
+  Object.freeze({
+    id: 'local-application-impact', area: 'local application and filesystem workspace', priority: 0, impactOnly: true,
+    matches: (value: string) => /(?:^|\/)local-application(?:[/.\-]|$)/u.test(value)
+      || value === 'tools/optional-package.mts' || value === 'frontend/src/lib/components/LocalApplicationWorkspace.svelte',
+    focusedUnit: unit('test/local-application-store.test.mts', 'test/local-application-host.test.mts', 'test/local-application-package.test.mts'),
+    focusedBrowser: browserSpecsForPrefixes(['local-application']),
+    specialised: specialised('local-package', 'privacy-catalogue', 'schema-inventory'), browserRequired: true,
   }),
   Object.freeze({
     id: 'shared-runtime', area: 'shared runtime and evidence orchestration', priority: 30,
@@ -554,6 +564,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     specialised: specialised(
       'cli-package',
       'capture-package',
+      'local-package',
       'release-contract',
       'schema-inventory',
       'documentation',

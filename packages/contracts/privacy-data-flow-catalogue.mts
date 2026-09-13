@@ -78,6 +78,8 @@ export const PRIVACY_PROCESSING_CLASSES = Object.freeze([
 export type PrivacyProcessingClassId = typeof PRIVACY_PROCESSING_CLASSES[number]['id'];
 
 export const PRIVACY_CATALOGUE_INVARIANTS = Object.freeze([
+  'Browser-profile retention describes the browser deployment. The optional standalone local application instead stores saved collections, recovery drafts and original files in an explicitly selected plaintext filesystem workspace; appearance and tab preferences remain browser-local.',
+  'Standalone workspace traffic stays between the browser and its authenticated loopback process. Starting it makes no collection request; explicit collection uses the existing request policy from this machine, and offline mode disables collection. Clearing browser data or signing out does not delete the filesystem workspace. Encrypted portable backups remain separate.',
   'The catalogue contains fixed contract metadata only; it contains no target, evidence value, personal data, raw contact, credential, cookie, authorisation value, runtime secret, complete query-bearing URL, unnecessary path or local filesystem detail.',
   'Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.',
   'Offline operations make no request and do not inherit a capability family\'s possible network disclosure.',

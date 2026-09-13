@@ -138,7 +138,7 @@ test('dashboard local search reports an unavailable store without remaining in a
 
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('.summary-error')).toContainText(
-    'One or more required browser-local collections are unavailable.',
+    'One or more required saved collections are unavailable.',
     { timeout: 15_000 },
   );
   await expect(page.getByRole('navigation', { name: 'New investigation', exact: true })).toBeVisible();
@@ -189,11 +189,11 @@ test('dashboard search retains matches and discloses one unavailable search prov
   await expect(page.locator('.search-details > summary')).toHaveText('Search incomplete');
   await page.locator('.search-details > summary').click();
   await expect(warning).toContainText('1 saved-data warning');
-  await expect(warning.getByText(/Campaigns: unavailable in browser-local storage and not searched/u)).toBeVisible();
+  await expect(warning.getByText(/Campaigns: unavailable in workspace storage and not searched/u)).toBeVisible();
 
   await search.fill('not-retained.invalid');
   await expect(page.getByRole('status').filter({ hasText: 'No match was found in the searchable subset. Local search coverage is partial.' })).toBeVisible();
-  await expect(warning.getByText(/Campaigns: unavailable in browser-local storage and not searched/u)).toBeVisible();
+  await expect(warning.getByText(/Campaigns: unavailable in workspace storage and not searched/u)).toBeVisible();
 });
 
 test('dashboard does not expose template controls when their collection is unavailable', async ({ page }) => {
@@ -202,7 +202,7 @@ test('dashboard does not expose template controls when their collection is unava
   await failBrowserLocalCollectionReads(page, 'investigation_templates');
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
 
-  await expect(page.locator('.summary-error')).toContainText('One or more required browser-local collections are unavailable.');
+  await expect(page.locator('.summary-error')).toContainText('One or more required saved collections are unavailable.');
   await expect(page.getByText(/No custom templates are saved/)).toHaveCount(0);
   await expect(page.locator('#guide-template')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Start guide' })).toHaveCount(0);

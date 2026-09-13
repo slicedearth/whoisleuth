@@ -294,7 +294,7 @@ export function normalizeAnalystReviewStateStore(raw: unknown): AnalystReviewSta
     records,
   };
   if (byteLength(JSON.stringify(store)) > MAX_ANALYST_REVIEW_STATE_BYTES) {
-    throw new Error('Analyst review state exceeds the 512 KiB browser-local storage limit.');
+    throw new Error('Analyst review state exceeds the 512 KiB workspace storage limit.');
   }
   return store;
 }

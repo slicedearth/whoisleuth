@@ -9,8 +9,8 @@
     { label: 'Overdue', value: summary.overdue, detail: 'Review Items whose explicit due time has arrived.' },
     { label: 'Changed since review', value: summary.changedSinceReview, detail: 'Current fingerprints differ from an explicit reviewed fingerprint, or an explicit review-due time has arrived.' },
     { label: 'Expired decisions', value: summary.expired, detail: 'Time-bounded expectations or suppressions that have returned to review.' },
-    { label: 'Open Cases', value: summary.openCases, detail: 'Browser-local Cases whose Case status is not resolved.' },
-    { label: 'Watchlists', value: summary.watchlists, detail: 'Browser-local change-tracking lists, whether or not they currently project a change.' },
+    { label: 'Open Cases', value: summary.openCases, detail: 'Saved Cases whose Case status is not resolved.' },
+    { label: 'Watchlists', value: summary.watchlists, detail: 'Saved change-tracking lists, whether or not they currently project a change.' },
   ]);
 </script>
 

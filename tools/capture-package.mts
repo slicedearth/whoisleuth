@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { execFile as execFileCallback } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
-import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,13 +14,13 @@ import { normalizeBoundedStableSemanticVersion } from '../lib/semantic-version.m
 import { WHOISLEUTH_PROJECT_URL, WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL } from '../lib/project-metadata.mts';
 import {
   assertCliPackageSourceSnapshot, captureCliPackageSourceSnapshot, compilePackageSources,
-  discoverPackageCompilerClosure, materializeCliPackageSourceSnapshot, validatePackedCliFiles,
+  discoverPackageCompilerClosure, materializeCliPackageSourceSnapshot,
   MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES, MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES,
-  MAX_CLI_PACKAGE_GRAPH_BYTES, MAX_CLI_PACKAGE_PROCESSING_ITEMS, MAX_CLI_PACKAGE_PACKED_BYTES,
-  MAX_CLI_PACKAGE_UNPACKED_BYTES, CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
+  MAX_CLI_PACKAGE_GRAPH_BYTES, CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
 } from './cli-package.mts';
-import { buildThirdPartyNotices, productionDependencyInstallPaths } from './third-party-notices.mts';
+import { buildThirdPartyNotices } from './third-party-notices.mts';
 import { playwrightBrowserCacheDirectory } from './ci-verification.mts';
+import { optionalPackageInputs, assertInstalledPackageDependencies, emittedPackageFiles, optionalPackageLock, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles } from './optional-package.mts';
 
 const execFile = promisify(execFileCallback);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -29,6 +29,10 @@ const ENTRY = 'packages/web-capture/bin/whoisleuth-capture.mts';
 const ENTRY_OUTPUT = ENTRY.replace(/\.mts$/u, '.mjs');
 const SOURCE = /^(?:package\.json|(?:lib|packages\/(?:comparison|contracts|evidence|web-capture))\/[A-Za-z0-9._/-]+\.(?:mts|ts|json))$/u;
 const SUPPORT = [['packages/web-capture/README.md', 'README.md'], ['LICENSE', 'LICENSE'], ['NOTICE', 'NOTICE'], ['DISCLOSURE', 'DISCLOSURE']] as const;
+// This package includes its reviewed automation runtime, but no browser binary.
+// Its processing bounds are independent of the main CLI's source-only archive.
+export const MAX_CAPTURE_PACKAGE_PACKED_BYTES = 32 * 1024 * 1024;
+export const MAX_CAPTURE_PACKAGE_UNPACKED_BYTES = 128 * 1024 * 1024;
 type Json = Record<string, unknown>;
 function object(value: unknown, label: string): Json {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label} must be an object.`);
@@ -37,36 +41,7 @@ function object(value: unknown, label: string): Json {
 function parse(bytes: Buffer | string): Json { return object(parseBoundedJson(bytes.toString(), { label: 'Package input', maximumBytes: MAX_CLI_PACKAGE_GRAPH_BYTES }), 'Package input'); }
 
 export function capturePackageInputs(value: unknown): Readonly<{ sources: readonly string[]; dependencies: readonly string[] }> {
-  const graph = object(value, 'Capture graph');
-  if (!Array.isArray(graph.modules) || !graph.modules.length || graph.modules.length > MAX_CLI_PACKAGE_PROCESSING_ITEMS) throw new Error('Capture graph exceeds its processing bound.');
-  const sources = new Set<string>();
-  const dependencies = new Set<string>();
-  const externalDependency = (source: string) => {
-    const segments = source.split('/');
-    const name = segments[1]?.startsWith('@') ? segments.slice(1, 3).join('/') : segments[1]!;
-    if (!['playwright', 'undici'].includes(name)) throw new Error(`Unreviewed capture runtime dependency: ${name}.`);
-    dependencies.add(name);
-  };
-  for (const item of graph.modules) {
-    const module = object(item, 'Capture module');
-    if (!Array.isArray(module.dependencies) || module.dependencies.length > 512) throw new Error('Invalid capture dependency list.');
-    for (const value of module.dependencies) {
-      const dependency = object(value, 'Capture dependency');
-      if (dependency.couldNotResolve) throw new Error('A capture dependency could not be resolved.');
-      // The architecture resolver deliberately does not visit dependency
-      // internals; their resolved edges still declare the runtime closure.
-      if (typeof dependency.resolved === 'string' && dependency.resolved.startsWith('node_modules/')) externalDependency(dependency.resolved);
-    }
-    if (module.coreModule === true) continue;
-    const source = module.source;
-    if (typeof source !== 'string' || source.length > 512 || source.split('/').some(part => !part || part === '.' || part === '..')) throw new Error('Invalid capture module path.');
-    if (source.startsWith('node_modules/')) {
-      externalDependency(source);
-    } else if (SOURCE.test(source)) sources.add(source);
-    else throw new Error(`Capture package contains an unexpected source: ${source}.`);
-  }
-  if (!sources.has(ENTRY)) throw new Error('Capture graph is missing its executable.');
-  return Object.freeze({ sources: [...sources].sort(), dependencies: [...dependencies].sort() });
+  return optionalPackageInputs(value, { requiredSources: [ENTRY], acceptsSource: source => SOURCE.test(source), dependencies: ['playwright', 'undici'] });
 }
 
 export function capturePackageManifest(sourceValue: unknown, lockValue: unknown, dependencies: readonly string[]): Json {
@@ -93,45 +68,14 @@ export function capturePackageManifest(sourceValue: unknown, lockValue: unknown,
   return {
     name: source.name, version: normalizeBoundedStableSemanticVersion(source.version), private: true,
     type: 'module', license: source.license, description: source.description,
-    bin: { 'whoisleuth-capture': `runtime/${ENTRY_OUTPUT}` }, engines: { node: '>=24' }, dependencies: pinned,
+    bin: { 'whoisleuth-capture': `runtime/${ENTRY_OUTPUT}` }, engines: { node: '>=24' }, dependencies: pinned, bundleDependencies: [...dependencies],
     contentPolicy: { class: 'dual-use' },
     repository: { type: 'git', url: WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL }, homepage: WHOISLEUTH_PROJECT_URL,
   };
 }
 
 export function assertCaptureInstalledDependencies(installedValue: unknown, reviewedValue: unknown, direct: readonly string[]): number {
-  const installed = object(object(installedValue, 'Installed lockfile').packages, 'Installed packages');
-  const reviewed = object(object(reviewedValue, 'Reviewed lockfile').packages, 'Reviewed packages');
-  const allowed = new Set(productionDependencyInstallPaths(reviewedValue, direct).map(location => {
-    const entry = object(reviewed[location], 'Reviewed dependency');
-    return JSON.stringify([location.split('node_modules/').at(-1), entry.version, entry.integrity]);
-  }));
-  const entries = Object.entries(installed);
-  if (entries.length > MAX_CLI_PACKAGE_PROCESSING_ITEMS) throw new Error('Installed capture dependencies exceed their processing bound.');
-  let count = 0;
-  for (const [location, value] of entries) {
-    if (!location || location === 'node_modules/@slicedearth/whoisleuth-web-capture') continue;
-    const entry = object(value, 'Installed dependency');
-    if (!allowed.has(JSON.stringify([location.split('node_modules/').at(-1), entry.version, entry.integrity]))) throw new Error('Installed capture dependency differs from the reviewed lockfile.');
-    count++;
-  }
-  for (const name of direct) if (!installed[`node_modules/${name}`]) throw new Error('An installed capture dependency is missing.');
-  return count;
-}
-
-async function emittedFiles(directory: string, prefix = ''): Promise<string[]> {
-  const files: string[] = [];
-  async function visit(relative: string) {
-    for (const item of await readdir(path.join(directory, relative), { withFileTypes: true })) {
-      const name = path.posix.join(relative, item.name);
-      if (item.isDirectory()) await visit(name);
-      else if (item.isFile()) files.push(name);
-      else throw new Error('Capture package contains a non-regular output.');
-      if (files.length > MAX_CLI_PACKAGE_PROCESSING_ITEMS) throw new Error('Capture package exceeds its processing bound.');
-    }
-  }
-  await visit(prefix);
-  return files.sort();
+  return assertInstalledPackageDependencies(installedValue, reviewedValue, direct, '@slicedearth/whoisleuth-web-capture');
 }
 
 export async function checkCapturePackage(repositoryRoot = ROOT, candidateDirectory?: string, browserSmoke = false) {
@@ -167,7 +111,7 @@ export async function checkCapturePackage(repositoryRoot = ROOT, candidateDirect
     for (const file of verified.sources) if (!sources.has(file)) throw new Error('Materialised capture source closure changed.');
     for (const file of verified.contextFiles) if (!compiler.has(file)) throw new Error('Materialised capture compiler context changed.');
     await compilePackageSources(root, temporary, runtime, sourceRoot, [ENTRY], { compilerRoot: sourceRoot, dependencyRoot: sourceRoot });
-    const runtimeFiles = await emittedFiles(staged);
+    const runtimeFiles = await emittedPackageFiles(staged);
     if (!runtimeFiles.includes('runtime/packages/web-capture/anchored-artifact-writer.mjs')) throw new Error('Capture package is missing its isolated artefact writer.');
     const notices = await buildThirdPartyNotices(root, { directDependencyNames: inputs.dependencies, scopeLabel: 'Capture companion', lockfileValue: parse(metadata.get('package-lock.json')!.bytes) });
     for (const [source, destination] of SUPPORT) await writeFile(path.join(staged, destination), metadata.get(source)!.bytes);
@@ -175,25 +119,29 @@ export async function checkCapturePackage(repositoryRoot = ROOT, candidateDirect
     const applicationVersion = normalizeBoundedStableSemanticVersion(parse(metadata.get('package.json')!.bytes).version);
     await writeFile(path.join(runtime, 'package.json'), JSON.stringify({ name: 'whoisleuth', version: applicationVersion, type: 'module' }) + '\n');
     await writeFile(path.join(staged, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
+    await writeFile(path.join(staged, 'package-lock.json'), JSON.stringify(optionalPackageLock(manifest, parse(metadata.get('package-lock.json')!.bytes)), null, 2) + '\n');
+    await run('npm', ['ci', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund'], staged);
+    assertCaptureInstalledDependencies(parse(await readFile(path.join(staged, 'package-lock.json'))), parse(metadata.get('package-lock.json')!.bytes), inputs.dependencies);
     await writeFile(path.join(staged, 'third-party-notices.txt'), notices);
     await chmod(path.join(runtime, ENTRY_OUTPUT), 0o755);
+    const expected = await emittedPackageFiles(staged);
+    const fileIdentity = await captureOptionalPackageFiles(staged, expected);
     const result = JSON.parse((await run('npm', ['pack', '--json', '--ignore-scripts', '--pack-destination', packed], staged)).stdout) as unknown;
     if (!Array.isArray(result) || result.length !== 1) throw new Error('Expected exactly one capture archive.');
     const pack = object(result[0], 'Packed capture');
-    const expected = [...new Set([...runtimeFiles, `runtime/${PACKAGE_SOURCE}`, 'runtime/package.json', 'package.json', 'third-party-notices.txt', ...SUPPORT.map(([, destination]) => destination)])].sort();
-    const entries = validatePackedCliFiles(pack, expected);
+    const entries = validateOptionalPackageFiles(pack, expected);
     assert.deepEqual([...entries].sort(), expected, 'Capture package must contain only its reviewed closure and support files.');
-    if (!Number.isSafeInteger(pack.size) || Number(pack.size) < 1 || Number(pack.size) > MAX_CLI_PACKAGE_PACKED_BYTES || !Number.isSafeInteger(pack.unpackedSize) || Number(pack.unpackedSize) > MAX_CLI_PACKAGE_UNPACKED_BYTES) throw new Error('Capture archive exceeds its byte bounds.');
+    if (!Number.isSafeInteger(pack.size) || Number(pack.size) < 1 || Number(pack.size) > MAX_CAPTURE_PACKAGE_PACKED_BYTES || !Number.isSafeInteger(pack.unpackedSize) || Number(pack.unpackedSize) > MAX_CAPTURE_PACKAGE_UNPACKED_BYTES) throw new Error('Capture archive exceeds its byte bounds.');
     if (typeof pack.filename !== 'string' || !/^[A-Za-z0-9._-]+\.tgz$/u.test(pack.filename)) throw new Error('Invalid capture archive filename.');
-    const archive = await readBoundedRegularFileWithin(packed, pack.filename, { maximumBytes: MAX_CLI_PACKAGE_PACKED_BYTES, minimumBytes: 1, label: 'Capture archive' });
+    const archive = await readBoundedRegularFileWithin(packed, pack.filename, { maximumBytes: MAX_CAPTURE_PACKAGE_PACKED_BYTES, minimumBytes: 1, label: 'Capture archive' });
     await assertCliPackageSourceSnapshot(root, sources);
     await assertCliPackageSourceSnapshot(root, metadata);
     await assertCliPackageSourceSnapshot(root, compiler, MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES);
     assert.equal(await buildThirdPartyNotices(root, { directDependencyNames: inputs.dependencies, scopeLabel: 'Capture companion', lockfileValue: parse(metadata.get('package-lock.json')!.bytes) }), notices, 'Capture licence inputs changed.');
     await writeFile(path.join(installed, 'package.json'), '{"private":true}\n');
-    await run('npm', ['install', '--package-lock=true', '--ignore-scripts', '--no-audit', '--no-fund', path.join(packed, pack.filename)], installed);
-    const dependencyCount = assertCaptureInstalledDependencies(parse(await readFile(path.join(installed, 'package-lock.json'))), parse(metadata.get('package-lock.json')!.bytes), inputs.dependencies);
+    await run('npm', ['install', '--offline', '--package-lock=true', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund', path.join(packed, pack.filename)], installed);
     const packageRoot = path.join(installed, 'node_modules', ...String(manifest.name).split('/'));
+    const dependencyCount = await assertInstalledOptionalPackage(packageRoot, fileIdentity, parse(await readFile(path.join(installed, 'package-lock.json'))), parse(metadata.get('package-lock.json')!.bytes), inputs.dependencies, String(manifest.name));
     assert.deepEqual(parse(await readFile(path.join(packageRoot, 'package.json'))), manifest);
     const executable = path.join(packageRoot, 'runtime', ENTRY_OUTPUT);
     const offlineGuard = ['--import', path.join(root, 'tools/browser-server-egress-guard.mts')];

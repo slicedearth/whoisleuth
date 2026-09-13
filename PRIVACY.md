@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 13 September 2026.
+Last updated: 14 September 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -61,6 +61,26 @@ does not query a live target or write protected workspace data.
 Its Case-form practice keeps edits and unfinished forms only in page memory.
 Restarting, reloading or leaving discards them; it does not open the saved-work
 database, export practice files or expose collection and reporting controls.
+
+## Standalone local application
+
+The optional local application stores saved collections, recovery drafts and
+retained original files in the explicitly selected filesystem workspace, not
+IndexedDB. The workspace is plaintext at rest; protect it with operating-system
+access controls and disk encryption. Encrypted portable backups remain separate.
+The browser exchanges saved data only with its authenticated loopback process.
+The selected folder is displayed locally and is not included in exports.
+
+Appearance preferences and tab state remain browser-local. Clearing site data
+or signing out does not delete the filesystem workspace. Stop every application
+instance using the folder before copying, moving or deleting it. Unsupported
+future workspace formats are preserved without writing. Browser-workspace
+switching, browser-quota controls and in-place workspace encryption are not
+available in this mode.
+
+The private launch link grants a local session; do not share it. Starting the
+application makes no collection request. Explicit collection runs from this
+machine under the existing request policy; `--offline` disables collection.
 
 ## Browser-local processing
 

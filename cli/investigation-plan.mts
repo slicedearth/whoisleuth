@@ -53,7 +53,7 @@ const RECIPES: Readonly<Record<InvestigationPlanRecipe, Recipe>> = Object.freeze
     objective: 'Collect and preserve separately attributed registration, DNS, HTTP, TLS, page, and network-context evidence.',
     limitations: Object.freeze([
       'Collection remains analyst-triggered and source limitations remain explicit.',
-      'Disposition, reviewed response actions, monitoring, and closure continue in the browser-local Case workspace; this CLI recipe does not submit reports.',
+      'Disposition, reviewed response actions, monitoring, and closure continue in the saved Case workspace; this CLI recipe does not submit reports.',
     ]),
     steps: (domain: string) => Object.freeze([
       step('collect', 'Collect a Deep lookup', 'lookup', [domain, '--deep', '--json'], 'network', 'network_disclosure', 'whoisleuth.cli.lookup', 'Review source health and limitations before using missing fields.'),

@@ -52,6 +52,10 @@ export interface LocalDataStorage {
   close(): Promise<void>;
 }
 
+export function localDataRecordContent(records: readonly LocalDataStoredRecord[]): string {
+  return JSON.stringify(records.map(record => [record.lookupKey, record.ordinal, record.codec, record.payload, record.payloadBytes]));
+}
+
 export function localDataManifestMatches(manifest: LocalDataManifest | undefined, expected: LocalDataManifest | null): boolean {
   if (expected === null) return manifest === undefined;
   return manifest?.collection === expected.collection

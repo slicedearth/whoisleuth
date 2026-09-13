@@ -21,12 +21,13 @@ function memoryStorage() {
   const collections = new Map<string, LocalDataCapture>();
   const binaries = new Map<string, LocalDataStoredBinary>();
   const changes: LocalDataStorageCommit[] = [];
+  const captures: string[][] = [];
   let beforeCommit: (() => Promise<void>) | undefined;
   let failure: Error | undefined;
   let closed = 0;
   const adapter: LocalDataStorage = {
     async manifests(ids) { return structuredClone(ids.map(id => collections.get(id)?.manifest)); },
-    async capture(ids) { return structuredClone(ids.map(id => {
+    async capture(ids) { captures.push([...ids]); return structuredClone(ids.map(id => {
       const collection = collections.get(id);
       if (!collection) throw new BrowserLocalDataError('LOCAL_DATA_MISSING', 'Missing fixture.');
       return collection;
@@ -48,7 +49,7 @@ function memoryStorage() {
     },
     async close() { closed++; },
   };
-  return { adapter, collections, binaries, changes, get closed() { return closed; },
+  return { adapter, collections, binaries, changes, captures, get closed() { return closed; },
     beforeCommit(value: () => Promise<void>) { beforeCommit = value; }, fail(value: Error) { failure = value; } };
 }
 
@@ -65,6 +66,46 @@ test('an explicit storage adapter does not open, inspect or migrate browser stor
   assert.equal(provider.createdDatabase, false);
   await assert.rejects(provider.restoreLegacyCopies([DEFINITION]), { code: 'LOCAL_DATA_LEGACY_UNAVAILABLE' });
   await provider.close(); assert.equal(store.closed, 1);
+});
+
+test('opening saved collections uses one verified snapshot without rewriting or caching records', async () => {
+  const store = memoryStorage(), first = new BrowserLocalDataProvider({ storageAdapter: store.adapter });
+  await first.initialize([DEFINITION, SECOND]);
+  await first.updateMany([DEFINITION, SECOND], () => ({ documents: new Map([['fixture', ['first']], ['second', ['second']]]), result: null }));
+  const commits = store.changes.length;
+  store.captures.length = 0;
+  const reopened = new BrowserLocalDataProvider({ storageAdapter: store.adapter });
+  await reopened.initialize([DEFINITION, SECOND]);
+  assert.deepEqual(store.captures, [['fixture', 'second']]);
+  assert.equal(store.changes.length, commits);
+  await first.update(SECOND, () => ({ document: ['later'], result: null }));
+  assert.deepEqual([...await reopened.readMany([DEFINITION, SECOND])], [['fixture', ['first']], ['second', ['later']]]);
+});
+
+test('creating a missing collection captures existing revisions together and preserves their records', async () => {
+  const store = memoryStorage(), first = new BrowserLocalDataProvider({ storageAdapter: store.adapter });
+  await first.initialize([DEFINITION, SECOND]);
+  await first.update(DEFINITION, () => ({ document: ['keep'], result: null }));
+  const before = structuredClone([...store.collections]);
+  store.captures.length = 0;
+  const third = { ...DEFINITION, id: 'third', legacyKey: 'third-legacy' };
+  const reopened = new BrowserLocalDataProvider({ storageAdapter: store.adapter });
+  await reopened.initialize([DEFINITION, SECOND, third]);
+  assert.deepEqual(store.captures, [['fixture', 'second'], ['fixture', 'second', 'third']]);
+  for (const [id, value] of before) assert.deepEqual(store.collections.get(id), value);
+  assert.deepEqual(await reopened.read(third), []);
+});
+
+test('batched initialisation rejects a corrupt later collection without changing any saved record', async () => {
+  const store = memoryStorage(), first = new BrowserLocalDataProvider({ storageAdapter: store.adapter });
+  await first.initialize([DEFINITION, SECOND]);
+  await first.update(SECOND, () => ({ document: ['retained'], result: null }));
+  const invalid = store.collections.get('second')!;
+  store.collections.set('second', { ...invalid, manifest: { ...invalid.manifest, digest: 'a'.repeat(43) } });
+  const before = structuredClone([...store.collections]), commits = store.changes.length;
+  await assert.rejects(new BrowserLocalDataProvider({ storageAdapter: store.adapter }).initialize([DEFINITION, SECOND]),
+    cause => cause instanceof BrowserLocalDataError && cause.code === 'LOCAL_DATA_INTEGRITY');
+  assert.deepEqual([...store.collections], before); assert.equal(store.changes.length, commits);
 });
 
 test('adapter updates retain the existing pure updater, full-revision conflict retry and observer isolation', async () => {

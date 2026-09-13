@@ -4,6 +4,7 @@ import { captureRetainedFiles, readRetainedFileReference, type RetainedFileInput
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../packages/contracts/selected-file-limits.mts';
 import {
   localDataManifestMatches as manifestMatchesExpected,
+  localDataRecordContent as canonicalRecordContent,
   type LocalDataStoredRecord as BrowserLocalStoredRecord,
   type LocalDataManifest as BrowserLocalCollectionManifest,
   type LocalDataCapture as CapturedLocalDataCollection,
@@ -253,16 +254,6 @@ function byteLength(value: string): number {
 
 function isDigest(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/u.test(value);
-}
-
-function canonicalRecordContent(records: readonly BrowserLocalStoredRecord[]): string {
-  return JSON.stringify(records.map((record) => [
-    record.lookupKey,
-    record.ordinal,
-    record.codec,
-    record.payload,
-    record.payloadBytes,
-  ]));
 }
 
 function encodedByteLimit(codec: BrowserLocalDataCodec, plaintextBytes: number, records: number): number {
@@ -1069,11 +1060,10 @@ export class BrowserLocalDataProvider {
     const retainedLegacyKeys: string[] = [];
     if (missing.length) {
       const existingSnapshots = new Map<string, CollectionSnapshot<unknown>>();
-      for (let index = 0; index < definitions.length; index++) {
-        const definition = definitions[index];
-        if (!definition) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local definition is missing.');
-        if (!manifests[index]) continue;
-        existingSnapshots.set(definition.id, await this.#readSnapshot(definition));
+      const existing = definitions.filter((_definition, index) => manifests[index]);
+      if (existing.length) {
+        const snapshots = await this.#readSnapshots(existing);
+        for (const [index, definition] of existing.entries()) existingSnapshots.set(definition.id, snapshots[index]!);
       }
       const prepared: PreparedCollection[] = [];
       for (const definition of missing) {
@@ -1105,8 +1095,11 @@ export class BrowserLocalDataProvider {
       }
     }
 
-    for (const definition of definitions) {
-      const snapshot = await this.#readSnapshot(definition);
+    // The same bounded transaction used by readMany verifies every collection
+    // without serial transport round trips or a retained snapshot cache.
+    const snapshots = await this.#readSnapshots(definitions);
+    for (const [index, definition] of definitions.entries()) {
+      const snapshot = snapshots[index]!;
       if (snapshot.manifest.schemaVersion < definition.schemaVersion) {
         const prepared = await this.#prepare(definition, snapshot.document, 'application', snapshot.manifest.legacyDigest);
         try { await this.#commit([prepared], new Map([[definition.id, snapshot.manifest]])); }
@@ -1230,7 +1223,7 @@ export class BrowserLocalDataProvider {
       if (cause instanceof BrowserLocalDataError) throw cause;
       throw new BrowserLocalDataError(
         'LOCAL_DATA_READ_FAILED',
-        `${label} could not be read from browser-local storage.`,
+        `${label} could not be read from workspace storage.`,
         { cause },
       );
     }
@@ -1304,7 +1297,7 @@ export class BrowserLocalDataProvider {
       }
       for (let index = 0; index < prepared.length; index++) {
         const item = prepared[index];
-        if (!item) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A prepared browser-local collection is missing.');
+        if (!item) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A prepared workspace collection is missing.');
         const proposedManifest = proposedManifests.get(item.definition.id);
         if (!proposedManifest) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A proposed browser-local manifest is missing.');
         records.delete(IDBKeyRange.bound([item.definition.id], [item.definition.id, []]));

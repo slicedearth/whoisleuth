@@ -138,15 +138,15 @@ type MutableOmissions = {
 };
 
 const BASE_LIMITATIONS = Object.freeze([
-  'This review uses only exact hostnames deliberately retained in browser-local Cases and makes no request.',
+  'This review uses only exact hostnames deliberately retained in saved Cases and makes no request.',
   'A snapshot capture time is a point-in-time local observation, not global first-seen, service activation, ownership, or continuous monitoring.',
   'Namespace hierarchy does not establish common ownership, operator, authorship, coordination, intent, compromise, safety, or maliciousness.',
   'Certificate coverage, shared addresses, nameservers, HTTP behaviour, page similarity, official-asset relationships, tracking identifiers, and analyst assertions do not create or strengthen this relationship.',
 ] as const);
 
 const NON_READY_LIMITATIONS: Readonly<Record<Exclude<ParentDomainCampaignSourceState, 'partial' | 'ready'>, string>> = Object.freeze({
-  loading: 'Browser-local Case evidence is still loading; no hostname absence or count is inferred.',
-  unavailable: 'Browser-local Case evidence is unavailable; no hostname absence or count is inferred.',
+  loading: 'Saved Case evidence is still loading; no hostname absence or count is inferred.',
+  unavailable: 'Saved Case evidence is unavailable; no hostname absence or count is inferred.',
   unsupported: 'The available Case source does not support this review; no hostname absence or count is inferred.',
   future_schema: 'The Case source uses a future schema and remains untouched; no hostname evidence was interpreted.',
 });

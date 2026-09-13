@@ -84,7 +84,7 @@ export function buildCampaignReviewSummary(
     )).length,
     cues,
     limitations: [
-      'Counts use only uniquely latest bounded evidence already retained in linked browser-local cases and make no request. Equal-time or undated snapshots remain limited evidence.',
+      'Counts use only uniquely latest bounded evidence already retained in linked saved Cases and make no request. Equal-time or undated snapshots remain limited evidence.',
       'Several incident Cases can share one domain. Case counts do not imply independent sources or corroboration.',
       'Cue overlap is expected. Counts are not a score, campaign-attribution finding, ownership claim, or maliciousness determination.',
       'A campaign member without a linked case or usable snapshot remains unavailable rather than becoming a negative observation.',

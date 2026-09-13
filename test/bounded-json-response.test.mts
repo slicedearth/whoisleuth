@@ -6,11 +6,33 @@ import {
   LARGE_JSON_RESPONSE_BYTES,
   STANDARD_JSON_RESPONSE_BYTES,
   readJsonResponseCapped,
+  readResponseBytesCapped,
   requestJsonCapped,
 } from '../lib/bounded-json-response.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
 
 describe('bounded JSON response reader', () => {
+  test('binary reads use an explicit bound without relaxing the existing JSON ceiling', async () => {
+    const bytes = new Uint8Array(LARGE_JSON_RESPONSE_BYTES + 1).fill(73);
+    assert.deepEqual(await readResponseBytesCapped(new Response(bytes), bytes.length), bytes);
+    await assert.rejects(readJsonResponseCapped(new Response(bytes), bytes.length), { code: 'response_too_large' });
+    for (const limit of [0, -1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) await assert.rejects(readResponseBytesCapped(new Response('x'), limit));
+  });
+
+  test('tiny binary chunks remain ordered and an already cancelled reader cancels its body', async () => {
+    let offset = 0, cancelled = false;
+    const size = 70_000;
+    const stream = new ReadableStream<Uint8Array>({ pull(controller) {
+      if (offset === size) controller.close(); else controller.enqueue(Uint8Array.of(offset++ % 251));
+    } });
+    const bytes = await readResponseBytesCapped(new Response(stream), size);
+    assert.equal(bytes?.length, size);
+    assert.ok(bytes?.every((value, index) => value === index % 251));
+    const controller = new AbortController(); controller.abort();
+    await assert.rejects(readResponseBytesCapped(new Response(new ReadableStream({ cancel() { cancelled = true; } })), 32, controller.signal));
+    assert.equal(cancelled, true);
+  });
+
   test('parses a response within the declared and streamed byte ceiling', async () => {
     const response = new Response(JSON.stringify({ state: 'ok' }), {
       headers: { 'content-type': 'application/json' },

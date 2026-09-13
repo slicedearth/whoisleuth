@@ -496,7 +496,7 @@ test('deep results present bounded relationship evidence including exact native 
   await expect(admission).toContainText('Exact leaf-certificate SHA-256');
   await expect(admission.getByText('2 requests', { exact: false })).toHaveCount(0);
   await expect(admission).toContainText('0 requests · no external service receives the target');
-  await expect(admission).toContainText('One bounded browser-local relationship observation');
+  await expect(admission).toContainText('One bounded saved relationship observation');
   await expect(admission).toContainText('does not establish shared ownership, control, actor identity, coordination, intent, safety, or maliciousness');
 
   await page.locator('.bulk-sessions article', { hasText: 'Complete relationship review' }).getByRole('button', { name: 'Load' }).click();
@@ -511,7 +511,7 @@ test('deep results present bounded relationship evidence including exact native 
   await section.getByRole('dialog', { name: 'Retain this relationship observation?' })
     .getByRole('button', { name: 'Retain reviewed observation' }).click();
   await expect(certificateRelationship.getByRole('button', { name: 'Retained in Monitor' })).toBeDisabled();
-  await expect(section.getByRole('status')).toContainText('Retained shared tls certificate for 2 domains in this browser');
+  await expect(section.getByRole('status')).toContainText('Retained shared tls certificate for 2 domains in this workspace');
   const storedRelationship = await readBrowserLocalCollection(page, 'relationship_observations', { minimumRecords: 1 });
   expect(storedRelationship.records).toHaveLength(1);
   expect(storedRelationship.records[0]?.value).toMatchObject({ complete: true, truncated: false });

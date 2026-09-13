@@ -66,7 +66,7 @@
     <div>
       <p class="eyebrow">Saved website profiles</p>
       <h2 id="profile-clusters-title">Cross-domain website pivots</h2>
-      <p>Find exact and weighted, explainable relationships across compact website observations saved in this browser.</p>
+      <p>Find exact and weighted, explainable relationships across compact website observations saved in this workspace.</p>
     </div>
     <span>{summary.clusters.length} cluster{summary.clusters.length === 1 ? '' : 's'}</span>
   </header>

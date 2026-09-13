@@ -133,7 +133,7 @@
         onmessage(`${success} The change was saved, but Cases could not be reread or reconciled in the current view. Reload before recording another response.${prunedNote(committed.pruned)}`);
         return;
       }
-      onmessage(`${success} The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.${prunedNote(committed.pruned)}`);
+      onmessage(`${success} The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.${prunedNote(committed.pruned)}`);
       return;
     }
     onmessage(`${success}${prunedNote(committed.pruned)}`);

@@ -59,6 +59,7 @@ const SPECIALISED_SCRIPTS: Readonly<Partial<Record<SpecialisedCheck, string>>> =
   'schema-inventory': 'schema:inventory',
   'cli-package': 'cli:package:check',
   'capture-package': 'capture:package:check',
+  'local-package': 'local:package:check',
   'release-contract': 'release:check',
   licences: 'licenses:check',
   'production-dependency-audit': 'dependencies:audit',
@@ -183,6 +184,7 @@ export function buildFocusedVerificationExecution(
     }
     const script = SPECIALISED_SCRIPTS[check];
     if (!script) throw new TypeError(`Focused verification has no execution owner for ${check}.`);
+    if (check === 'local-package' && !commands.some(command => command.id === 'build')) commands.push(npmCommand('build'));
     if (!commands.some((command) => command.id === script)) commands.push(npmCommand(script));
   }
 

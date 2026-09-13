@@ -73,7 +73,7 @@ export function buildDisclosureRouteReview(
     sourceActionsOmitted,
     truncated: sourceCasesOmitted > 0 || sourceActionsOmitted > 0,
     limitations: [
-      'Route review uses only contact sources and actions deliberately saved in browser-local cases. It performs no discovery or reachability check.',
+      'Route review uses only contact sources and actions deliberately saved in Cases. It performs no discovery or reachability check.',
       'Route freshness uses its source observation and review deadline, not the action follow-up date. Current evidence does not prove that the recipient is monitored, appropriate, responsive, or responsible.',
     ],
   };

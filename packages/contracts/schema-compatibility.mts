@@ -1,4 +1,4 @@
-type ContractKind = 'browser_store' | 'tab_store' | 'hosted_store' | 'export' | 'cli_document' | 'derived';
+type ContractKind = 'browser_store' | 'tab_store' | 'hosted_store' | 'filesystem_store' | 'export' | 'cli_document' | 'derived';
 type CompatibilityTier = 'durable_interchange' | 'published_output' | 'internal';
 type FutureVersionBehavior = 'reject' | 'preserve_without_write' | 'discard' | 'not_applicable';
 type MigrationBehavior = 'normalize_to_current' | 'exact_current_only' | 'read_only' | 'none';
@@ -34,7 +34,7 @@ const LOCAL_SCHEMA_IDENTIFIER_SOURCE = String.raw`whoisleuth\.[a-z0-9](?:[a-z0-9
 const LOCAL_SCHEMA_IDENTIFIER_PATTERN = new RegExp(`^${LOCAL_SCHEMA_IDENTIFIER_SOURCE}$`, 'u');
 const COMPATIBILITY_SCHEMA_IDENTIFIER_PATTERN = /^[-a-z0-9.]+$/u;
 
-const CONTRACT_KINDS = new Set<ContractKind>(['browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived']);
+const CONTRACT_KINDS = new Set<ContractKind>(['browser_store', 'tab_store', 'hosted_store', 'filesystem_store', 'export', 'cli_document', 'derived']);
 const COMPATIBILITY_TIERS = new Set<CompatibilityTier>(['durable_interchange', 'published_output', 'internal']);
 const FUTURE_VERSION_BEHAVIORS = new Set<FutureVersionBehavior>(['reject', 'preserve_without_write', 'discard', 'not_applicable']);
 const MIGRATION_BEHAVIORS = new Set<MigrationBehavior>(['normalize_to_current', 'exact_current_only', 'read_only', 'none']);

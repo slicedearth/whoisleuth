@@ -103,7 +103,7 @@ test('Cases and monitoring report unreadable collections without false empty sta
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Dashboard', exact: true }).click();
   await expect(page).toHaveURL('/dashboard');
   await openConsoleView(page, 'inbox');
-  await expect(page.locator('.local-context-status')).toContainText('Some browser-local context could not be loaded');
+  await expect(page.locator('.local-context-status')).toContainText('Some saved context could not be loaded');
   await openConsoleView(page, 'cases');
   await expect(page.getByRole('heading', { name: 'Cases unavailable' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'No cases yet' })).toHaveCount(0);

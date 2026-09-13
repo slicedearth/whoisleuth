@@ -133,7 +133,7 @@ describe('Lookup case controller', () => {
       records: [],
       sourceState: 'unavailable',
       status:
-        'Browser-local case context is unavailable. The collected lookup evidence remains available.',
+        'Saved Case context is unavailable. The collected lookup evidence remains available.',
     });
   });
 
@@ -226,7 +226,7 @@ describe('Lookup case controller', () => {
     };
 
     const created = await controller.openReplay('example.test', evidence);
-    assert.match(created.status, /Created a browser-local Case/u);
+    assert.match(created.status, /Created a Case/u);
     assert.equal(created.record?.source, 'manual');
     assert.equal(created.record?.evidenceHistory[0]?.source, 'import');
     assert.equal(created.record?.evidenceHistory[0]?.capturedAt, '2026-07-31T00:00:00.000Z');

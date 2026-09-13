@@ -91,7 +91,7 @@
 <section class="bulk-sessions card" aria-labelledby="bulk-sessions-title" bind:this={componentRoot}>
   <div class="section-heading">
     <div>
-      <p class="eyebrow">Browser-local workspace</p>
+      <p class="eyebrow">Saved workspace</p>
       <h2 id="bulk-sessions-title" tabindex="-1">Saved Bulk sessions</h2>
       <p>Save compact results and source states so an incomplete investigation can be resumed or compared later. Raw source payloads and contact records are excluded.</p>
     </div>
@@ -182,7 +182,7 @@
       </details>
     {/if}
   {:else}
-    <p class="empty">No Bulk sessions have been saved in this browser.</p>
+    <p class="empty">No Bulk sessions have been saved in this workspace.</p>
   {/if}
   {/if}
 </section>

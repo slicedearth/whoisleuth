@@ -218,7 +218,7 @@
     {#if caseSourceState === 'loading'}
       <p class="case-hint" role="status">Loading saved Case context…</p>
     {:else if caseSourceState === 'unavailable'}
-      <div class="case-body"><p class="case-hint" role="alert">Saved Case context could not be read. Existing work may still be retained in this browser.</p><button class="btn" type="button" onclick={() => void retryCaseRead()}>Retry Case read</button></div>
+      <div class="case-body"><p class="case-hint" role="alert">Saved Case context could not be read. Existing work may still be retained in this workspace.</p><button class="btn" type="button" onclick={() => void retryCaseRead()}>Retry Case read</button></div>
     {:else if record}
       <div class="case-body">
         <form class="note-edit" onsubmit={(event) => { event.preventDefault(); addNote(); }}>
@@ -229,7 +229,7 @@
         <div class="case-tools independent-grid">
           {#if task === 'incident' && incidentUrlDetails}
             <form class="case-tool incident-context-tool" onsubmit={(event) => { event.preventDefault(); void recordInvestigationContext(contextObjective, retainExactIncidentUrl); }}>
-              <div><strong>Incident context</strong><p>Lookup sent only <code>{incidentUrlDetails.hostname}</code>. Decide what this browser-local Case should retain before the URL can enter an export.</p></div>
+              <div><strong>Incident context</strong><p>Lookup sent only <code>{incidentUrlDetails.hostname}</code>. Decide what this saved Case should retain before the URL can enter an export.</p></div>
               <p class="incident-url"><span>Current URL</span><code>{incidentUrlDetails.exactUrl}</code></p>
               {#if incidentUrlDetails.hasQuery || incidentUrlDetails.hasFragment}
                 <p class="privacy-warning">This URL contains {incidentUrlDetails.hasQuery ? 'a query' : ''}{incidentUrlDetails.hasQuery && incidentUrlDetails.hasFragment ? ' and ' : ''}{incidentUrlDetails.hasFragment ? 'a fragment' : ''}. Review it for tokens, personal data or unnecessary identifiers before retaining the exact value.</p>
@@ -276,21 +276,21 @@
           </form>
 
           <section class="case-tool monitoring-tool" aria-labelledby="lookup-case-monitoring-title">
-            <div><strong id="lookup-case-monitoring-title">Monitoring and recheck</strong><p>Keep a browser-local baseline, or deliberately recollect the displayed observation target with the current Lookup settings.</p></div>
+            <div><strong id="lookup-case-monitoring-title">Monitoring and recheck</strong><p>Keep a saved baseline, or deliberately recollect the displayed observation target with the current Lookup settings.</p></div>
             {#if watchlistSourceState === 'loading'}
-              <p class="field-note" role="status">Checking browser-local watchlists…</p>
+              <p class="field-note" role="status">Checking saved watchlists…</p>
             {:else if watchlistSourceState === 'unavailable'}
-              <p class="field-note warn-text">Browser-local watchlists could not be read. Existing membership is unknown and no empty state is inferred.</p>
+              <p class="field-note warn-text">Saved watchlists could not be read. Existing membership is unknown and no empty state is inferred.</p>
             {:else if linkedWatchlistNames.length}
               <p class="linked-watchlists">Linked watchlist{linkedWatchlistNames.length === 1 ? '' : 's'}: {#each linkedWatchlistNames as name, index}<a href={`/monitor?view=watchlists&watchlist=${encodeURIComponent(name)}`}>{name}</a>{index < linkedWatchlistNames.length - 1 ? ', ' : ''}{/each}</p>
             {:else}
-              <p class="field-note">This observation target is not in a readable browser-local watchlist.</p>
+              <p class="field-note">This observation target is not in a readable saved watchlist.</p>
             {/if}
             {#if record.status === 'monitoring' && watchlistSourceState === 'ready' && !linkedWatchlistNames.length}
               <p class="monitoring-warning" role="note">This Case is marked Monitoring, but no readable watchlist currently contains {lookupTarget}. Add a local baseline or change its status in Cases.</p>
             {/if}
             <form class="watchlist-form" onsubmit={(event) => { event.preventDefault(); saveToWatchlist(); }}>
-              <label class="field" for="lookup-case-watchlist-name">Browser-local watchlist name<input id="lookup-case-watchlist-name" value={watchlistName} oninput={(event) => setWatchlistName(event.currentTarget.value)} maxlength="100" autocomplete="off" disabled={watchlistBusy}></label>
+              <label class="field" for="lookup-case-watchlist-name">Saved watchlist name<input id="lookup-case-watchlist-name" value={watchlistName} oninput={(event) => setWatchlistName(event.currentTarget.value)} maxlength="100" autocomplete="off" disabled={watchlistBusy}></label>
               <button class="btn small" type="submit" disabled={watchlistBusy || !watchlistName.trim()}>Save current observation</button>
             </form>
             <div class="recheck-row"><button class="btn small" type="button" onclick={startRecheck} disabled={actionBusy || watchlistBusy}>Recheck and refresh Case</button><span>Runs a new {lookupDepth === 'deep' ? 'Deep' : 'Fast'} Lookup for {lookupTarget}; any selected optional sources keep their current settings. The watchlist is unchanged until you save the new observation.</span></div>

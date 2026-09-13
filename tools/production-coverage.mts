@@ -85,11 +85,13 @@ export const PRODUCTION_COVERAGE_EXCLUSIONS: readonly CoverageExclusion[] = Obje
   Object.freeze({ source: 'frontend/src/lib/shortlist.ts', category: 'browser_adapter', owner: 'e2e/shortlist-storage.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/website-snapshots.ts', category: 'browser_adapter', owner: 'e2e/hosted-monitoring.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/workers/investigation-package.worker.ts', category: 'browser_adapter', owner: 'e2e/investigation-package.spec.ts' }),
+  Object.freeze({ source: 'frontend/src/lib/workers/local-application.worker.ts', category: 'browser_adapter', owner: 'e2e/local-application.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/workspace-archive.ts', category: 'browser_adapter', owner: 'e2e/dashboard.spec.ts' }),
   Object.freeze({ source: 'frontend/src/routes/(public)/guide/+page.ts', category: 'framework_entry', owner: 'e2e/public-guide.spec.ts' }),
   Object.freeze({ source: 'frontend/src/routes/(public)/resources/[slug]/+page.ts', category: 'framework_entry', owner: 'e2e/public-guide.spec.ts' }),
   Object.freeze({ source: 'frontend/src/routes/+layout.ts', category: 'framework_entry', owner: 'frontend/src/routes/+layout.svelte' }),
   Object.freeze({ source: 'lib/netlify-function-types.mts', category: 'type_only', owner: 'tsconfig.json' }),
+  Object.freeze({ source: 'lib/local-application-worker.mts', category: 'executable_entry', owner: 'test/local-application-host.test.mts' }),
   Object.freeze({ source: 'packages/investigation/lookup-artefact-inputs.mts', category: 'type_only', owner: 'tsconfig.json' }),
 ]);
 

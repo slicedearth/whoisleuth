@@ -238,7 +238,7 @@ export function buildCampaignTemporalReview(domainsValue: unknown, recordsValue:
     transitions: Object.freeze(transitions),
     truncated: allEvents.length > events.length,
     limitations: Object.freeze([
-      'This sequence uses only analyst-selected, source-qualified evidence already retained in browser-local cases and makes no request.',
+      'This sequence uses only analyst-selected, source-qualified evidence already retained in saved Cases and makes no request.',
       'Dates are retained observation or publication times, not global first-seen or service-activation dates.',
       'Several incident Cases can contribute retained records for one domain; record counts are not independent-source counts.',
       'Temporal proximity, shared infrastructure, and event order do not prove common ownership, coordination, intent, compromise, or maliciousness.',

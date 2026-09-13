@@ -268,7 +268,7 @@
     catch {
       installCommittedCaseSnapshot(committedCases, 'partial');
       if (expandedId === persisted.id) showCasePage(persisted);
-      caseMessage = `Brand Profile association saved for ${persisted.domain}, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.${prunedNote(pruned)}`;
+      caseMessage = `Brand Profile association saved for ${persisted.domain}, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.${prunedNote(pruned)}`;
     }
     return true;
   }
@@ -388,7 +388,7 @@
     }
     catch {
       installCommittedCaseSnapshot(committed.cases, 'partial');
-      caseMessage = `Deleted the case for ${record.domain}. The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.`;
+      caseMessage = `Deleted the case for ${record.domain}. The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.`;
     }
     if (mounted && returnAfterDeletion && (!expandedId || expandedId === record.id)) {
       const next = currentCasePage < previousPage ? pagedCases.at(-1) : pagedCases[Math.min(Math.max(0, previousIndex), pagedCases.length - 1)];
@@ -491,7 +491,7 @@
       installCommittedCaseSnapshot(committed.cases, 'partial');
       if (record && expandedId === record.id)
         showCasePage(record);
-      caseMessage = `${success} The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.${prunedNote(committed.pruned)}`;
+      caseMessage = `${success} The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.${prunedNote(committed.pruned)}`;
     }
   }
   async function reconcileCommittedCaseMutation(committed: Awaited<ReturnType<typeof editCase>>, success: string) {
@@ -511,7 +511,7 @@
       if (!record) {
         expandedId = '';
         selectConsoleCase(null);
-        caseMessage = 'That Case is not available in this browser workspace. Choose a retained Case or import its workspace archive.';
+        caseMessage = 'That Case is not available in this workspace. Choose a retained Case or import its workspace archive.';
         return;
       }
       if (expandedId === record.id) return;
@@ -561,7 +561,7 @@
     const preloadController = new AbortController();
     preloadBestEffort(() => import('$lib/components/CaseDetail.svelte'), preloadController.signal);
     void refreshCases().catch(cause => {
-      caseMessage = cause instanceof Error ? cause.message : 'Could not read browser-local Cases.';
+      caseMessage = cause instanceof Error ? cause.message : 'Could not read saved Cases.';
     });
     void loadProfiles().then(profiles => {
       brandProfiles = profiles;
@@ -644,7 +644,7 @@
       props={{ cases, oncomplete: refreshCases, oncommitted: installCommittedCaseSnapshot, onmessage: (value: string) => caseMessage = value }} />
     {/if}
   {:else}
-    <LocalCollectionState state={casesSourceState} title="Cases unavailable" detail="Browser-local cases could not be read, so the count, empty state, imports, and mutations remain unavailable. Reload to retry without overwriting unknown saved work." />
+    <LocalCollectionState state={casesSourceState} title="Cases unavailable" detail="Saved cases could not be read, so the count, empty state, imports, and mutations remain unavailable. Reload to retry without overwriting unknown saved work." />
   {/if}
 </section>
 

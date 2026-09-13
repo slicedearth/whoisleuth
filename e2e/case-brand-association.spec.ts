@@ -217,7 +217,7 @@ test('adds and removes exact associations by keyboard, restores focus, and prese
   await page.locator('#console-navigation').getByRole('link', { name: /^Brands/u }).click();
   const inbox = page.getByRole('region', { name: 'Brand review inbox' });
   await expect(inbox).toContainText('Review associated.invalid');
-  await expect(inbox).toContainText('Browser-local case');
+  await expect(inbox).toContainText('Saved Case');
   await expect(inbox).toContainText('inconclusive');
 
   const profileCard = page.locator('article.profile').filter({ has: page.getByRole('heading', { name: 'Fixture profile', exact: true }) });

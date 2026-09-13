@@ -180,7 +180,7 @@ export function collectCaseLifecycleEvents(
           sourceLabel: 'Saved case action',
           startsAt: dueAt,
           summary: `Review ${action.type.replaceAll('_', ' ')} for ${record.domain}`,
-          description: `Case action state: ${action.state}. Open the browser-local case to review the recorded recipient and evidence.`,
+          description: `Case action state: ${action.state}. Open the saved Case to review the recorded recipient and evidence.`,
         });
       }
       if (followUpAt && followUpAt !== dueAt) {
@@ -193,7 +193,7 @@ export function collectCaseLifecycleEvents(
           sourceLabel: 'Saved case action',
           startsAt: followUpAt,
           summary: `Follow up ${action.type.replaceAll('_', ' ')} for ${record.domain}`,
-          description: `Case action state: ${action.state}. Open the browser-local case before contacting any recipient.`,
+          description: `Case action state: ${action.state}. Open the saved Case before contacting any recipient.`,
         });
       }
     }
@@ -209,7 +209,7 @@ export function collectCaseLifecycleEvents(
         sourceLabel: 'Independent observed-effect review',
         startsAt: followUpAt,
         summary: `Review independently observed effect for ${record.domain}`,
-        description: `The prior independent review state was ${review.state}. Open the browser-local case and deliberately decide whether to collect or attach new evidence; this calendar event performs no request.`,
+        description: `The prior independent review state was ${review.state}. Open the saved Case and deliberately decide whether to collect or attach new evidence; this calendar event performs no request.`,
       });
     }
     if (snapshotsOmitted) dateLimitations.push({ caseId: record.id, domain: record.domain, detail: 'Domain expiry: source snapshots exceed the Case bound; no latest expiry was selected.' });
@@ -372,7 +372,7 @@ export function serializeCaseLifecycleCalendarEvents(
     seen.add(event.uid);
     const summaryParts = [EVENT_LABELS[event.kind], event.caseReference];
     if (disclosure.includeDomain) summaryParts.push(event.domain);
-    const descriptions = ['Open the browser-local Case before acting. This calendar event makes no request.'];
+    const descriptions = ['Open the saved Case before acting. This calendar event makes no request.'];
     if (disclosure.includeRecipient && event.recipient) descriptions.push(`Recipient or internal owner: ${event.recipient}.`);
     if (disclosure.includeContext) {
       if (event.classification) descriptions.push(`Case types: ${event.classification}.`);

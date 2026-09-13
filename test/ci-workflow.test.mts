@@ -7,6 +7,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parse, stringify } from 'yaml';
+import ts from 'typescript';
 
 import {
   isPlaywrightFunctionalSpec,
@@ -202,6 +203,8 @@ describe('continuous integration workflow', () => {
         browser.steps.push(requiredValue(browser.steps.splice(integrity, 1)[0]));
       },
       (workflow) => { fixtureJob(workflow, 'browser').steps.push({ run: 'npm run build' }); },
+      (workflow) => { fixtureJob(workflow, 'cli-runtime').steps = fixtureJob(workflow, 'cli-runtime').steps.filter(step => !step.uses?.startsWith('actions/download-artifact@')); },
+      (workflow) => { fixtureJob(workflow, 'cli-runtime').needs = []; },
       (workflow) => { fixtureJob(workflow, 'verify').needs = ['quality']; },
       (workflow) => { fixtureJob(workflow, 'verify').if = 'success()'; },
     ];
@@ -296,7 +299,8 @@ describe('continuous integration workflow', () => {
       'verification:timing:update-candidate',
     ]);
     assert.equal(CI_CLI_RUNTIME_NODE_MAJOR, 26);
-    assert.deepEqual(CI_CLI_RUNTIME_SCRIPTS, ['cli:package:check', 'capture:package:check']);
+    assert.ok(CI_CLI_RUNTIME_SCRIPTS.includes('cli:package:check'));
+    assert.ok(CI_CLI_RUNTIME_SCRIPTS.includes('capture:package:check'));
     assert.match(localPlan, /^cli:package:check \(Node 26 compatibility runtime\)$/mu);
     assert.equal(
       selectNodeRuntimeExecutable(26, ['/fixture/node-24', '/fixture/node-26'], (candidate) => (
@@ -696,9 +700,25 @@ describe('continuous integration workflow', () => {
   });
 
   test('browser tests synchronize on observable state instead of fixed delays', () => {
+    function fixedDelays(source: string): string[] {
+      const found: string[] = [];
+      const visit = (node: ts.Node): void => {
+        if (ts.isCallExpression(node)) {
+          const expression = node.expression;
+          const name = ts.isIdentifier(expression) ? expression.text : ts.isPropertyAccessExpression(expression) ? expression.name.text : '';
+          const testDeadline = ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)
+            && ['test', 'testInfo'].includes(expression.expression.text) && name === 'setTimeout';
+          if (['setTimeout', 'waitForTimeout'].includes(name) && !testDeadline) found.push(name);
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(ts.createSourceFile('browser-test.ts', source, ts.ScriptTarget.Latest, true));
+      return found;
+    }
+    assert.deepEqual(fixedDelays('test.setTimeout(90_000); testInfo.setTimeout(90_000); // setTimeout(20)'), []);
+    assert.deepEqual(fixedDelays('await page.waitForTimeout(10); window.setTimeout(done, 10); setTimeout(done, 10);'), ['waitForTimeout', 'setTimeout', 'setTimeout']);
     for (const { entry, source } of E2E_SOURCES) {
-      assert.doesNotMatch(source, /\bwaitForTimeout\s*\(/u, `${entry} uses a fixed Playwright delay`);
-      assert.doesNotMatch(source, /\bsetTimeout\s*\(/u, `${entry} uses a fixed timer delay`);
+      assert.deepEqual(fixedDelays(source), [], `${entry} uses a fixed delay rather than observable state`);
       assert.doesNotMatch(
         source,
         /frontend\/\.svelte-kit\/output/u,

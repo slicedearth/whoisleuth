@@ -64,7 +64,7 @@
   >{open ? 'Close saved context' : 'Open saved context'}</button>
 
   <div id="lookup-saved-context-results" class="preview-results" hidden={!open}>
-    <p class="query-note">Matching Cases, campaigns, Brand Profiles and relationships already saved in this browser. No collection request is made.</p>
+    <p class="query-note">Matching Cases, campaigns, Brand Profiles and relationships already saved in this workspace. No collection request is made.</p>
     {#if activated}
       {#if opening}
         <p class="state" role="status">Opening the bounded saved-context preview…</p>

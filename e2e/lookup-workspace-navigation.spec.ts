@@ -94,7 +94,7 @@ test('explicit Lookup Case context can be cleared and invalid references do not 
   await expect(page.getByRole('status').filter({ hasText: 'The Case reference is invalid.' })).toBeVisible();
   await expect(selected).toHaveCount(0);
   await page.goto('/lookup?case=missing-workspace-case');
-  await expect(selected).toContainText('no longer in this browser workspace');
+  await expect(selected).toContainText('no longer in this workspace');
   expect((await readBrowserLocalCollection(page, 'cases')).records).toHaveLength(1);
 });
 

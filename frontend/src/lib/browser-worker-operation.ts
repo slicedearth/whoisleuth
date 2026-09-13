@@ -5,6 +5,7 @@ export function runBrowserWorkerOperation<Request, Result>(request: Request, opt
   createWorker: () => Worker;
   readResponse: (value: unknown) => Result;
   signal?: AbortSignal;
+  transfer?: readonly Transferable[];
   messages: Readonly<{
     cancelled: string;
     unavailable: string;
@@ -41,7 +42,7 @@ export function runBrowserWorkerOperation<Request, Result>(request: Request, opt
     worker.onmessageerror = () => fail(new Error(messages.unreadable));
     options.signal?.addEventListener('abort', abort, { once: true });
     if (options.signal?.aborted) { abort(); return; }
-    try { worker.postMessage(request); }
+    try { if (options.transfer) worker.postMessage(request, [...options.transfer]); else worker.postMessage(request); }
     catch { fail(new Error(messages.send)); }
   });
 }

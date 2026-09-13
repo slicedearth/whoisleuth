@@ -278,7 +278,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(inventory.generatedAt, NOW);
     assert.equal(new Set(inventory.entries.map((entry) => entry.id)).size, inventory.entries.length);
     assert.deepEqual(new Set(inventory.entries.map((entry) => entry.kind)), new Set([
-      'browser_store', 'tab_store', 'hosted_store', 'export', 'cli_document', 'derived',
+      'browser_store', 'tab_store', 'hosted_store', 'filesystem_store', 'export', 'cli_document', 'derived',
     ]));
     assert.ok(inventory.entries.length <= MAX_SCHEMA_COMPATIBILITY_ENTRIES);
     const lifecycleDescriptors = SCHEMA_LIFECYCLE_REGISTRY.flatMap((family) => family.compatibility);

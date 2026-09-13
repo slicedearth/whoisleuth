@@ -34,7 +34,7 @@ export async function runLocalDataWorkerRequest(request: LocalDataWorkerRequest)
       case 'decode': return await decodeLocalDataWorkerRequest(request.input);
       case 'prepare': {
         const definition: AnyLocalDataCollectionDefinition | undefined = BROWSER_LOCAL_COLLECTIONS.find((candidate) => candidate.id === request.collection);
-        if (!definition) throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', 'The browser-local collection is unavailable.');
+        if (!definition) throw new BrowserLocalDataError('INVALID_LOCAL_DATA_DEFINITION', 'The workspace collection is unavailable.');
         return { kind: 'prepared', collection: definition.id, content: await prepareLocalDataContent(definition, request.input, plaintextJsonCodec) };
       }
       case 'import-profiles': {

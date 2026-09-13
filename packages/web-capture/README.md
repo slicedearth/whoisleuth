@@ -22,12 +22,16 @@ repository advisory check also covers them without adding them to the applicatio
 Install the generated archive in a separate directory:
 
 ```sh
-npm install --ignore-scripts /path/to/generated-archive.tgz
+npm install --offline --ignore-scripts --omit=optional /path/to/generated-archive.tgz
 ./node_modules/.bin/whoisleuth-capture --help
-./node_modules/.bin/playwright install chromium
+node ./node_modules/@slicedearth/whoisleuth-web-capture/node_modules/playwright/cli.js install chromium
 ./node_modules/.bin/whoisleuth-capture https://example.test --output-dir ./capture-example --authorize-rendered-capture
 ./node_modules/.bin/whoisleuth-capture compare ./official/manifest.json ./candidate/manifest.json --json
 ```
+
+The archive bundles its reviewed runtime dependencies. Optional file-watching
+dependencies are omitted; capture and comparison do not use them. Installation
+can stay offline without selecting newer transitive versions.
 
 Browser installation is explicit and downloads the matching browser; help and
 offline comparison do not need it. The browser sandbox remains enabled. On

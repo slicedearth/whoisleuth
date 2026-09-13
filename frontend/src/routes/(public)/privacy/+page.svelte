@@ -17,6 +17,7 @@
     <p class="eyebrow">On this page</p>
     <a href="#privacy-introduction">Introduction</a>
     <a href="#privacy-information">Information processed</a>
+    <a href="#privacy-local-application">Local application</a>
     <a href="#privacy-browser">Browser-local data</a>
     <a href="#privacy-network">Network processing</a>
     <a href="#privacy-files">Files and exports</a>
@@ -27,7 +28,7 @@
 
   <article class="policy card" aria-labelledby="privacy-title">
     <h2 id="privacy-introduction">1. Introduction</h2>
-    <p id="privacy-title"><strong>Last updated: 13 September 2026.</strong></p>
+    <p id="privacy-title"><strong>Last updated: 14 September 2026.</strong></p>
     <p>WHOISleuth is local-first. Ordinary investigation state stays in this browser profile, and the service has no general user, Case, or workspace database. Network collection, local retention, export, and active review are separate deliberate actions.</p>
     <p>Only a deliberately started network-capable operation sends its declared bounded target or evidence fields. WHOISleuth does not automatically submit reports, contact recipients, acquire domains, apply defensive controls, or change external infrastructure. Missing, blocked, stale, malformed, partial, unavailable, or unsupported evidence never becomes absence, safety, ownership, control, intent, or remediation.</p>
     <p>This policy describes the public deployment. A self-hosted operator must adapt it when hosting, authentication, enabled providers, retention, or contact routes differ.</p>
@@ -39,6 +40,11 @@
     <p>Public registration sources can expose contact names, organisations, addresses, email addresses, and telephone numbers. WHOISleuth relays or normalises what the selected source publishes rather than building a separate registrant database. Many sources redact those fields.</p>
     <p>The public synthetic demo uses fixed fictional evidence on reserved domains. It performs no live investigation request and writes no protected workspace data. The deployment has no individual user-account database and no advertising or behavioural audience measurement.</p>
     <p>Case-form practice keeps edits and unfinished forms only in page memory. Restarting, reloading or leaving discards them; it does not open the saved-work database, export practice files or expose collection and reporting controls.</p>
+
+    <h2 id="privacy-local-application">Standalone local application</h2>
+    <p>The optional local application stores saved collections, recovery drafts and retained original files in the explicitly selected filesystem workspace, not IndexedDB. The workspace is plaintext at rest; protect it with operating-system access controls and disk encryption. Encrypted portable backups remain separate. The browser exchanges saved data only with its authenticated loopback process. The selected folder is displayed locally and is not included in exports.</p>
+    <p>Appearance preferences and tab state remain browser-local. Clearing site data or signing out does not delete the filesystem workspace. Stop every application instance using the folder before copying, moving or deleting it. Unsupported future workspace formats are preserved without writing. Browser-workspace switching, browser-quota controls and in-place workspace encryption are not available in this mode.</p>
+    <p>The private launch link grants a local session; do not share it. Starting the application makes no collection request. Explicit collection runs from this machine under the existing request policy; <code>--offline</code> disables collection.</p>
 
     <h2 id="privacy-browser">3. Browser-local data</h2>
     <p>The default workspace and unencrypted named workspaces store bounded collections in IndexedDB as plaintext JSON. They include Cases, Brand Profiles, watchlists, shortlist entries, campaigns, certificate-search history, custom rules, retained relationships, saved Bulk sessions, website snapshots, investigation templates, Bulk review state and saved List column choices, saved Case views and Analyst Review Item state. Anyone able to use this browser profile may be able to read them.</p>

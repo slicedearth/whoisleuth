@@ -6,6 +6,7 @@
   import WorkspaceFileBackup from './WorkspaceFileBackup.svelte';
   import { hasUnlockedBrowserWorkspace } from '$lib/browser-workspace-unlock.ts';
   import { currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE } from '$lib/browser-workspace-context.ts';
+  import { isLocalApplication } from '$lib/local-application-context.ts';
   import { boundedJsonLimitsForBytes, parseBoundedJson } from '$lib/bounded-json';
   import {
     MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES,
@@ -41,8 +42,9 @@
   let importHeading=$state<HTMLHeadingElement>();
   let importStatus=$state<HTMLParagraphElement>();
   let defaultWorkspace=$state(true);
+  let localApplication=$state(false);
   let preparedAt=$state<string|null>(null);
-  onMount(() => { defaultWorkspace=currentBrowserWorkspaceId()===DEFAULT_BROWSER_WORKSPACE; });
+  onMount(() => { localApplication=isLocalApplication(); defaultWorkspace=!localApplication && currentBrowserWorkspaceId()===DEFAULT_BROWSER_WORKSPACE; });
 
   function selected(id:string){return selectedIds.includes(id);}
   async function toggle(id:string,checked:boolean){
@@ -163,7 +165,7 @@
       try {
         await onimport?.(resultMessage);
       } catch {
-        message=`${resultMessage} The Dashboard summary could not be refreshed; reload it to reread the committed browser-local state.`;
+        message=`${resultMessage} The Dashboard summary could not be refreshed; reload it to reread the saved workspace.`;
       }
     }catch(cause){message=cause instanceof Error?cause.message:'Workspace archive import failed.';}
     finally{busy=false;await tick();importStatus?.focus();}
@@ -184,7 +186,7 @@
     <div>
       <p class="eyebrow">{importOnly ? 'Bring existing work' : 'Manage saved data'}</p>
       <h2 id="workspace-archive-title" bind:this={importHeading} tabindex="-1">{importOnly ? 'Import a workspace' : 'Back up or move saved work'}</h2>
-      <p>{importOnly ? 'Review a supported workspace backup before adding its selected records to this browser.' : 'Download supported work from this browser, or review a previous backup before adding it here.'}</p>
+      <p>{importOnly ? 'Review a supported workspace backup before adding its selected records to this workspace.' : 'Download supported work from this workspace, or review a previous backup before adding it here.'}</p>
     </div>
     <div class="top-actions toolbar">
       {#if !importOnly}<button class="primary" type="button" onclick={()=>showEncryptionForm=!showEncryptionForm} aria-expanded={showEncryptionForm} aria-controls={showEncryptionForm?'workspace-encryption-form':undefined} disabled={busy}>Download encrypted backup</button>{/if}
@@ -192,7 +194,8 @@
     </div>
   </header>
   <BrowserWorkspaceIndicator destination />
-  {#if !importOnly}<BrowserStorageHealth {preparedAt} />{/if}
+  {#if !importOnly && !localApplication}<BrowserStorageHealth {preparedAt} />{/if}
+  {#if localApplication && preparedAt}<p>Backup prepared during this visit: {new Date(preparedAt).toLocaleString()}. Check the downloaded file; a prepared download is not a verified restore.</p>{/if}
   {#if preparedBackup}{#key preparedBackup}<WorkspaceFileBackup archive={preparedBackup} />{/key}{/if}
 
   {#if showEncryptionForm}
@@ -242,6 +245,7 @@
     {#if defaultWorkspace}
       <p>WHOISleuth keeps the original local-storage documents after its one-time IndexedDB migration. If you intend to return to an older build after making changes here, update those legacy copies first. This does not replace a downloaded backup and can fail when the workspace no longer fits within local-storage limits.</p>
       <button class="btn rollback-copy" type="button" onclick={prepareRollbackCopy} disabled={busy}>Update legacy rollback copy</button>
+    {:else if localApplication}<p>This filesystem workspace has no browser-storage rollback copy. Download a portable backup for recovery.</p>
     {:else}<p>Named workspaces have no historical local-storage copy. Download a portable backup for recovery; the default workspace is unchanged.</p>{/if}
   </details>{/if}
 
@@ -268,7 +272,9 @@
         <button class="primary" type="button" onclick={apply} disabled={busy||!selectedIds.length}>Add selected data</button>
         <button class="btn" type="button" onclick={()=>{archiveReview=null;preview=null;selectedIds=[];message='Preview cancelled.';}} disabled={busy}>Cancel</button>
       </div>
-      {#if archiveReview}{#key archiveReview}<WorkspaceRecovery readArchive={archiveReview.read} requireEncryption={encryptedSource || hasUnlockedBrowserWorkspace()} onbusy={value => { busy = value; }} />{/key}{/if}
+      {#if localApplication}
+        <details class="archive-details"><summary>Rehearse filesystem recovery</summary><p>Start a separate local application with a new empty folder and <code>--init --offline</code>. Review and import this backup there, then restore its original files or evidence package. Compare the restored records and file verification results before relying on the backup. Keep the original folder unchanged.</p><a href="/cli#local-application">Local recovery instructions</a></details>
+      {:else if archiveReview}{#key archiveReview}<WorkspaceRecovery readArchive={archiveReview.read} requireEncryption={encryptedSource || hasUnlockedBrowserWorkspace()} onbusy={value => { busy = value; }} />{/key}{/if}
     </div>
   {/if}
 

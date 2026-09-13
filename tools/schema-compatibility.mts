@@ -396,6 +396,7 @@ import {
   MAX_CODEQL_TEMP_MARKER_BYTES,
 } from './local-codeql.mts';
 import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
+import { LOCAL_WORKSPACE_COMPATIBILITY } from '../packages/contracts/local-application.mts';
 import { RDAP_NAMESERVER_SEARCH_COMPATIBILITY } from '../packages/contracts/rdap-nameserver-search.mts';
 import { SSLBL_SNAPSHOT_COMPATIBILITY } from '../packages/contracts/sslbl-snapshot.mts';
 import {
@@ -506,6 +507,7 @@ function lifecycleEntry(value: SchemaCompatibilityDescriptor): SchemaCompatibili
 const standardsCoverage = registryStandardsCoverageSnapshot();
 
 const ENTRIES: SchemaCompatibilityEntry[] = [
+  entry(LOCAL_WORKSPACE_COMPATIBILITY),
   entry({ id: 'maintainer.case-supported-contract-baseline', kind: 'cli_document', schema: CASE_SUPPORTED_CONTRACT_BASELINE_SCHEMA, currentVersion: CASE_SUPPORTED_CONTRACT_BASELINE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'packages/contracts/case-supported-contract-baseline.mts', note: 'Lifecycle-derived durable Case compatibility commitment and reviewed-removal ledger.' }),
   entry({ id: 'maintainer.evidence-storage-measurement-fixture', kind: 'cli_document', schema: EVIDENCE_STORAGE_MEASUREMENT_FIXTURE_SCHEMA, currentVersion: EVIDENCE_STORAGE_MEASUREMENT_FIXTURE_VERSION, supportedVersions: [EVIDENCE_STORAGE_MEASUREMENT_FIXTURE_VERSION], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: MAX_MEASUREMENT_FIXTURE_BYTES, owner: 'tools/evidence-storage-measurement.mts', note: 'Bounded reserved synthetic corpus for local evidence-storage measurement.' }),
   entry({ id: 'maintainer.evidence-storage-measurement', kind: 'cli_document', schema: EVIDENCE_STORAGE_MEASUREMENT_SCHEMA, currentVersion: EVIDENCE_STORAGE_MEASUREMENT_VERSION, supportedVersions: [EVIDENCE_STORAGE_MEASUREMENT_VERSION], acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/evidence-storage-measurement.mts', note: 'Deterministic target-free serialised storage, portable export and duplicate-payload measurement.' }),

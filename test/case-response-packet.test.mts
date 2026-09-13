@@ -572,7 +572,7 @@ describe('case response packet', () => {
         'recipient_routes', 'case_disposition', 'case_actions',
       ],
       lookupDecisionFacts: 'unavailable',
-      limitation: 'Lookup Decision Facts are transient and are not copied into browser-local cases. Case-response preflight evaluates only explicit case-owned records and analyst-entered incident context; it does not reconstruct Decision Facts from weaker saved fields.',
+      limitation: 'Lookup Decision Facts are transient and are not copied into saved Cases. Case-response preflight evaluates only explicit case-owned records and analyst-entered incident context; it does not reconstruct Decision Facts from weaker saved fields.',
     });
     const input = {
       category: '', affectedParty: '', abusiveUrls: [], observedHarm: '', observedAt: null, contacts: [],

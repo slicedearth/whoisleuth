@@ -1,3 +1,5 @@
+import { isLocalApplication, localApplicationWorkspaceId } from './local-application-context.ts';
+
 export const DEFAULT_BROWSER_WORKSPACE = 'default';
 export const DEFAULT_BROWSER_WORKSPACE_NAME = 'Default';
 export const BROWSER_WORKSPACE_SELECTION_KEY = 'whoisleuth:workspace-selection:v1';
@@ -36,6 +38,7 @@ const volatileStorage: StorageAccess = {
 export function protectBrowserWorkspaceSession(): void { encryptedSession = true; }
 export function clearProtectedBrowserWorkspaceSession(): void { volatileValues.clear(); }
 export function currentBrowserWorkspaceId(): string {
+  if (isLocalApplication()) return requireBrowserWorkspaceId(localApplicationWorkspaceId());
   return typeof window === 'undefined' ? DEFAULT_BROWSER_WORKSPACE : pageWorkspace();
 }
 
@@ -59,6 +62,7 @@ export function workspacePreferenceStorage(): StorageAccess {
 }
 
 export function navigateToBrowserWorkspace(id: string): void {
+  if (isLocalApplication()) throw new Error('Select a filesystem workspace when starting the local application. Browser workspaces are separate.');
   sessionStorage.setItem(BROWSER_WORKSPACE_SELECTION_KEY, requireBrowserWorkspaceId(id));
   window.location.assign('/dashboard');
 }

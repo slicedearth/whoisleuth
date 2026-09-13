@@ -105,7 +105,7 @@
   {#if review.sources.cases === 'loading'}
     <p class="source-state" role="status">Case associations are still loading. No cohort count is available yet.</p>
   {:else if review.sources.cases === 'unavailable'}
-    <p class="source-state unavailable" role="alert">Cases could not be read. Cohort membership and counts are unavailable; reload to retry browser-local storage.</p>
+    <p class="source-state unavailable" role="alert">Cases could not be read. Cohort membership and counts are unavailable; reload to retry workspace storage.</p>
   {:else if !review.scopeOptions.length}
     <p class="source-state">No campaign member Case has an explicit Brand Profile association. Add associations in Cases before reviewing a Brand scope.</p>
   {:else}
@@ -130,7 +130,7 @@
     <p class="empty">Select a Brand Profile scope to derive cohorts. No selection is inferred from the active profile.</p>
   {:else if review.selectedScope && review.state !== 'loading'}
     {#if review.selectedScope.state === 'unresolved'}
-      <p class="source-state unavailable" role="status">This exact identifier is retained by Cases, but no matching saved Brand Profile is available in this browser.</p>
+      <p class="source-state unavailable" role="status">This exact identifier is retained by Cases, but no matching saved Brand Profile is available in this workspace.</p>
     {/if}
     {#if review.sources.relationships === 'unavailable'}
       <p class="source-state unavailable" role="alert">Retained relationship observations could not be read. Case-derived links remain reviewable, but these results are partial.</p>

@@ -4,6 +4,9 @@
   import { BROWSER_WORKSPACE_DIRECTORY_EVENT, currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE, DEFAULT_BROWSER_WORKSPACE_NAME, navigateToBrowserWorkspace } from '$lib/browser-workspace-context.ts';
   import { MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES, MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS } from '$lib/browser-workspace-encryption-model.ts';
   import BrowserWorkspaceCopy from './BrowserWorkspaceCopy.svelte';
+  import { isLocalApplication } from '$lib/local-application-context.ts';
+  import LocalApplicationWorkspace from './LocalApplicationWorkspace.svelte';
+  let localApplication = $state(false);
 
   const PAGE_SIZE = 10;
   type Intent = { kind: 'switch'; id: string; name: string } | { kind: 'rename' | 'delete'; workspace: BrowserWorkspace };
@@ -49,6 +52,8 @@
     finally { busy = false; }
   }
   onMount(() => {
+    localApplication = isLocalApplication();
+    if (localApplication) return;
     try { currentId = currentBrowserWorkspaceId(); } catch { currentId = null; }
     supported = browserWorkspaceDirectory.supported();
     void load();
@@ -101,6 +106,7 @@
   }
 </script>
 
+{#if localApplication}<LocalApplicationWorkspace />{:else}
 <section class="workspace-manager" aria-labelledby="workspace-manager-title">
   <h2 id="workspace-manager-title" bind:this={heading} tabindex="-1">Browser workspaces</h2>
   <p>Each workspace has separate Cases, Brands, saved collections and review history. They share this browser profile’s storage quota. Named workspaces can optionally encrypt their saved records with a passphrase.</p>
@@ -150,6 +156,7 @@
   <p class="recovery">Backups contain the selected workspace’s supported collections, not the workspace directory or tab state. Restore into the workspace you explicitly open. Clearing site data in browser settings removes all workspaces.</p>
   <BrowserWorkspaceCopy disabled={busy || !available || !supported} onbusy={value => busy = value} onchange={() => void load()} />
 </section>
+{/if}
 
 <style>
   .workspace-manager { min-width: 0; overflow-wrap: anywhere; }

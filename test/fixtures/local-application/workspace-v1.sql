@@ -1,0 +1,9 @@
+PRAGMA application_id=1464619825;
+PRAGMA user_version=1;
+PRAGMA journal_mode=DELETE;
+CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
+CREATE TABLE collections (id TEXT PRIMARY KEY, manifest TEXT NOT NULL) STRICT;
+CREATE TABLE records (collection TEXT NOT NULL REFERENCES collections(id), key TEXT NOT NULL, ordinal INTEGER NOT NULL, payload TEXT NOT NULL, bytes INTEGER NOT NULL, PRIMARY KEY(collection,key), UNIQUE(collection,ordinal)) STRICT;
+CREATE TABLE files (key TEXT PRIMARY KEY, content BLOB NOT NULL) STRICT;
+CREATE TABLE receipts (id TEXT PRIMARY KEY, digest TEXT NOT NULL, sequence INTEGER NOT NULL UNIQUE) STRICT;
+INSERT INTO metadata VALUES ('workspaceId','00000000-0000-4000-8000-000000000001');

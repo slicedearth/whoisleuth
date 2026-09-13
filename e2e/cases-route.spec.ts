@@ -56,7 +56,7 @@ test('missing direct Cases are explicit without selecting an unrelated record', 
       cases: [caseRecord({ id: 'retained-case', domain: 'retained-case.example' })],
     }),
   }, { destination: '/cases?case=missing-case#case-response-missing-case' });
-  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('That Case is not available in this browser workspace.');
+  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('That Case is not available in this workspace.');
   await expect(page.locator('#case-head-retained-case')).toHaveAttribute('href', '/cases?case=retained-case');
   await expect(page.locator('.response-workspace')).toHaveCount(0);
 });

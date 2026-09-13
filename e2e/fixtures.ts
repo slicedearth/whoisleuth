@@ -86,6 +86,9 @@ export async function installNetworkGuard(context: BrowserContext, allowedOrigin
 }
 
 type Options = {
+  // A fixture-owned loopback server may replace the primary static server.
+  // The automatic guard still admits exactly one origin, never public hosts.
+  networkGuardOrigin: string;
   // Opt-in, defaults to false: only the Bulk analysis specifications'
   // invalid-domain scans (see runBulkScan) legitimately produce Chrome's
   // 400-response console noise as expected, handled behavior. Every other
@@ -115,6 +118,7 @@ type Fixtures = {
 // traffic" - individual specs choosing deterministic, locally-rejected
 // input values is necessary but not sufficient without this backstop.
 export const test = base.extend<Options & Fixtures>({
+  networkGuardOrigin: [ALLOWED_ORIGIN, { option: true }],
   allowExpectedBulkLookup400Noise: [false, { option: true }],
   allowExpectedLookup429Noise: [false, { option: true }],
   allowExpectedLookup504Noise: [false, { option: true }],
@@ -125,12 +129,16 @@ export const test = base.extend<Options & Fixtures>({
       page,
       context,
       browserName,
+      networkGuardOrigin,
       allowExpectedBulkLookup400Noise,
       allowExpectedLookup429Noise,
       allowExpectedLookup504Noise,
       allowExpectedLogout500Noise,
     }, use, testInfo) => {
-      const guard = await installNetworkGuard(context);
+      const selectedOrigin = new URL(networkGuardOrigin);
+      if (selectedOrigin.origin !== networkGuardOrigin || selectedOrigin.protocol !== 'http:'
+        || selectedOrigin.hostname !== '127.0.0.1' || !selectedOrigin.port) throw new Error('Browser fixtures require one exact loopback origin.');
+      const guard = await installNetworkGuard(context, networkGuardOrigin);
       const consoleIssues: string[] = [];
       const injectedDiagnostics: string[] = [];
       let injectedDiagnosticCount = 0;
@@ -146,12 +154,12 @@ export const test = base.extend<Options & Fixtures>({
         }
         if (
           type === 'error' &&
-          ((isLookupEndpointUrl(message.location().url)
+          ((isLookupEndpointUrl(message.location().url, networkGuardOrigin)
             && ((allowExpectedBulkLookup400Noise && CHROME_HTTP_400_NOISE_RE.test(text))
               || (allowExpectedLookup429Noise && CHROME_HTTP_429_NOISE_RE.test(text))
               || (allowExpectedLookup504Noise && CHROME_HTTP_504_NOISE_RE.test(text))))
             || (allowExpectedLogout500Noise
-              && isLogoutEndpointUrl(message.location().url)
+              && isLogoutEndpointUrl(message.location().url, networkGuardOrigin)
               && CHROME_HTTP_500_NOISE_RE.test(text)))
         ) {
           return;

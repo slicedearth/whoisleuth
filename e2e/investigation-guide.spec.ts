@@ -410,7 +410,7 @@ test('a response playbook reaches focused local packet preflight without a reque
   await expect(preflight).toHaveAttribute('open', '');
   await expect(preflight.getByText('Prepare a reviewed abuse evidence packet', { exact: true })).toBeFocused();
   await expect(preflight).toContainText('This prepares local drafts only; nothing is sent.');
-  await expect(preflight).toContainText('Lookup Decision Facts are transient and are not copied into browser-local cases');
+  await expect(preflight).toContainText('Lookup Decision Facts are transient and are not copied into saved Cases');
   const allowedStartupReads = new Set(['/api/session', '/api/capabilities']);
   for (const request of observedRequests) {
     expect(request.origin).toBe(expectedOrigin);
@@ -663,7 +663,7 @@ test('a browser-local context failure does not block or misstate a guided invest
   const guide = page.locator('.guide');
   await expect(guide).toBeFocused();
   await expect(currentAction(page)).toContainText('Collect domain evidence');
-  await expect(guide.getByRole('status').filter({ hasText: 'Some browser-local investigation context is unavailable' })).toContainText('unreadable saved data is not treated as absent');
+  await expect(guide.getByRole('status').filter({ hasText: 'Some saved investigation context is unavailable' })).toContainText('unreadable saved data is not treated as absent');
   await expect(guide.getByText('Unavailable', { exact: true })).toHaveCount(3);
   await guide.getByText('Saved evidence unavailable', { exact: true }).click();
   await expect(guide).toContainText('do not interpret this state as an empty evidence history');
@@ -744,7 +744,7 @@ test('an unavailable active-profile preference does not hide a healthy retained 
   const guide = page.locator('.guide');
   await expect(guide.getByText('Unavailable', { exact: true })).toHaveCount(1);
   await expect(guide.locator('.context-tray').getByText('reviewing · unreviewed', { exact: true })).toBeVisible();
-  const unavailableContext = guide.getByRole('status').filter({ hasText: 'Some browser-local investigation context is unavailable' });
+  const unavailableContext = guide.getByRole('status').filter({ hasText: 'Some saved investigation context is unavailable' });
   await expect(unavailableContext).toContainText('active-profile preference');
   await expect(unavailableContext).not.toContainText('Cases');
   await page.evaluate((key) => {

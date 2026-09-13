@@ -107,7 +107,7 @@ export class LookupCaseController {
         records: [],
         sourceState: 'unavailable',
         status:
-          'Browser-local case context is unavailable. The collected lookup evidence remains available.',
+          'Saved Case context is unavailable. The collected lookup evidence remains available.',
       };
     }
   }
@@ -182,7 +182,7 @@ export class LookupCaseController {
       }
       return {
         record,
-        status: `Created a browser-local Case for ${record.domain} from historical replay evidence.${pruneSuffix(pruned)}`,
+        status: `Created a Case for ${record.domain} from historical replay evidence.${pruneSuffix(pruned)}`,
         mutationOutcome: 'committed',
       };
     } catch (cause) {

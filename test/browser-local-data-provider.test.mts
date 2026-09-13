@@ -520,7 +520,7 @@ test('multi-collection reads use one captured transaction and reject invalid sel
     },
   });
   await provider.initialize(definitions);
-  assert.equal(decodes, definitions.length, 'Current collections are each verified once during initialisation.');
+  assert.equal(decodes, 1, 'All current collections are verified in one captured initialisation batch.');
   transactions.length = 0;
   decodes = 0;
   const documents = await provider.readMany(definitions);

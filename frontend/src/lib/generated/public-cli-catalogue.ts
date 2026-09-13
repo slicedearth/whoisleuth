@@ -4106,7 +4106,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         ],
         "limitations": [
           "Collection remains analyst-triggered and source limitations remain explicit.",
-          "Disposition, reviewed response actions, monitoring, and closure continue in the browser-local Case workspace; this CLI recipe does not submit reports."
+          "Disposition, reviewed response actions, monitoring, and closure continue in the saved Case workspace; this CLI recipe does not submit reports."
         ]
       },
       {

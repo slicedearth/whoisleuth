@@ -44,6 +44,8 @@
     "capture:local": "node packages/web-capture/bin/whoisleuth-capture.mts",
     "capture:compare": "node packages/web-capture/bin/whoisleuth-capture.mts compare",
     "capture:package:check": "node tools/capture-package.mts",
+    "local:app": "node packages/local-application/bin/whoisleuth-local.mts",
+    "local:package:check": "node tools/local-application-package.mts",
     "cli:package:check": "node tools/cli-package.mts",
     "cli:package:release": "node tools/cli-package.mts --release-candidate",
     "cli:package:verify-published": "node tools/published-cli-check.mts",

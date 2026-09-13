@@ -94,7 +94,7 @@
   const brandReviewInbox=$derived(buildBrandReviewInbox({cases,profiles,activeProfileId:activeId,sourceStates:{cases:caseSourceState,profiles:profileSourceState,activePreference:activePreferenceSourceState}}));
   const brandAssetRegister=$derived(buildBrandAssetRegister({profiles,activeProfileId:activeId,cases,relationships,sourceStates:{profiles:profileSourceState,activePreference:activePreferenceSourceState,cases:caseSourceState,relationships:relationshipSourceState}}));
   const localContextStatus=$derived([
-    profileSourceState==='unavailable'?'Browser-local Brand Profiles could not be read.':null,
+    profileSourceState==='unavailable'?'Saved Brand Profiles could not be read.':null,
     activePreferenceSourceState==='unavailable'?'The active-profile preference could not be read; profile-scoped tools are suppressed.':null,
     caseSourceState==='unavailable'?'Cases could not be read, so linked-case context cannot be checked or displayed.':null,
     relationshipSourceState==='unavailable'?'Retained relationship observations could not be read, so Brand asset relationship coverage is partial.':null,
@@ -107,7 +107,7 @@
   function closeProfileSource(){cancelAudit();cancelIdentityCapture();profiles=[];profileSourceState='unavailable';profileRefreshRequired=true;}
   function closeCaseSource(){cases=[];caseSourceState='unavailable';certificateReplayUnavailable=true;}
   function closeRelationshipSource(){relationships=[];relationshipSourceState='unavailable';}
-  function profileFailureMessage(cause:unknown,fallback:string){if(cause instanceof BrowserLocalDataError){closeProfileSource();return `${fallback} ${cause.message} Browser-local Brand Profiles are unavailable; reload to retry.`;}return cause instanceof Error?cause.message:fallback;}
+  function profileFailureMessage(cause:unknown,fallback:string){if(cause instanceof BrowserLocalDataError){closeProfileSource();return `${fallback} ${cause.message} Saved Brand Profiles are unavailable; reload to retry.`;}return cause instanceof Error?cause.message:fallback;}
   async function refreshProfiles(){
     cancelAudit();
     refreshingProfiles=true;
@@ -525,7 +525,7 @@
 {/if}
 {#snippet profilesList()}<BrandProfileList {profiles} {activeId} busy={profileWriteDisabled} activationDisabled={profileMutationPending||profileSourceState!=='ready'} focusId={page.url.searchParams.get('profile') || ''} {activate} {edit} {remove} formatDate={baselineDate} />{/snippet}
 {#if profileSourceState === 'loading'}
-  <section class="profile-source-state card" role="status" aria-busy="true">Loading browser-local Brand Profiles…</section>
+  <section class="profile-source-state card" role="status" aria-busy="true">Loading saved Brand Profiles…</section>
 {:else if profileSourceState === 'unavailable'}
   <section id="brand-profile-source-state" tabindex="-1" class="profile-source-state unavailable card" role="alert">Brand Profiles could not be read. No empty-profile conclusion has been drawn. Refresh saved profiles to retry; open drafts are retained.</section>
 {:else}

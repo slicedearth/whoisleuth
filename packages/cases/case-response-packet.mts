@@ -122,7 +122,7 @@ export const CASE_RESPONSE_PREFLIGHT_EVIDENCE_SCOPE = Object.freeze({
     'case_actions',
   ] as const),
   lookupDecisionFacts: 'unavailable' as const,
-  limitation: 'Lookup Decision Facts are transient and are not copied into browser-local cases. Case-response preflight evaluates only explicit case-owned records and analyst-entered incident context; it does not reconstruct Decision Facts from weaker saved fields.',
+  limitation: 'Lookup Decision Facts are transient and are not copied into saved Cases. Case-response preflight evaluates only explicit case-owned records and analyst-entered incident context; it does not reconstruct Decision Facts from weaker saved fields.',
 });
 
 export const RESPONSE_PACKET_PROFILES: readonly ResponsePacketProfile[] = Object.freeze([

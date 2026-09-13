@@ -25,6 +25,8 @@
   import { initializeBrowserLocalData, type BrowserLocalDataServiceState } from '$lib/browser-local-data-service';
   import { clearConsoleWorkflowState, subscribeSelectedConsoleCase } from '$lib/console-workflow-state';
   import { hasUnlockedBrowserWorkspace, lockBrowserWorkspace } from '$lib/browser-workspace-unlock';
+  import { isLocalApplication } from '$lib/local-application-context.ts';
+  let localApplication = $state(false);
   import {
     hasStoredInvestigationGuide,
     INVESTIGATION_GUIDE_EVENT,
@@ -62,6 +64,7 @@
     }
   });
   onMount(() => {
+    localApplication = isLocalApplication();
     const cancelNavigationPreload = preloadOnIdle(() => preloadBestEffort(() => import('$lib/console-command-navigation')));
     const unsubscribeCase = subscribeSelectedConsoleCase((id) => { selectedCaseId = id; });
     void checkSession();
@@ -107,6 +110,7 @@
       const authenticated=record.authenticated===true;
       if(!authenticated){
         clearConsoleWorkflowState();
+        if (localApplication) { window.location.replace('/login'); return; }
         try{await goto(signInTarget(),{replaceState:true});}
         finally{clearConsoleWorkflowState();}
         return;
@@ -142,6 +146,7 @@
       const {response}=await requestJsonCapped('/api/logout',{method:'POST'},{maximumBytes:SMALL_JSON_RESPONSE_BYTES,timeoutMs:10_000});
       if(!response.ok)throw new Error('The protected session could not be ended.');
       clearConsoleWorkflowState();
+      if (localApplication) { window.location.replace('/login'); return; }
       try{await goto('/login',{replaceState:true});}
       finally{clearConsoleWorkflowState();}
     }
@@ -231,7 +236,7 @@
   }
   function runtimeLabel(){return capabilities?.runtime==='netlify'?'Netlify':capabilities?.runtime==='express'?'Express':'Hosted';}
   function capabilityStatus(){return capabilitiesChecked?(capabilities?`Backend · ${runtimeLabel()}`:'Backend unavailable'):'Checking backend…';}
-  function capabilityStatusDetail(){return capabilitiesChecked?(capabilities?`Hosted network capabilities reported by the ${runtimeLabel()} runtime.`:'The backend capability report is unavailable.'):'Checking the backend capability report.';}
+  function capabilityStatusDetail(){return capabilitiesChecked?(capabilities?`Network capabilities reported by the ${runtimeLabel()} runtime.`:'The backend capability report is unavailable.'):'Checking the backend capability report.';}
 </script>
 
 <svelte:head><meta name="robots" content="noindex, nofollow"></svelte:head>
@@ -242,7 +247,7 @@
   <ConsoleLoading
     stage="session"
     title="Opening WHOISleuth"
-    detail="Confirming the protected session before loading any browser-local investigation data."
+    detail="Confirming the protected session before loading saved investigation data."
   />
 {:else if session==='unavailable'}
   <div class="center"><section class="login card"><h1>Session service unavailable</h1><p class="muted">The protected console could not confirm your session.</p><button class="primary" onclick={checkSession}>Retry</button><p class="login-links"><a href="/">Return home</a></p></section></div>
@@ -250,7 +255,7 @@
   <ConsoleLoading
     stage="workspace"
     title="Preparing your workspace"
-    detail="Opening bounded browser-local collections and checking the capabilities available to this deployment."
+    detail="Opening saved collections and checking the available capabilities."
   />
 {:else if localData.state==='error'}
   <div class="workspace-error">
@@ -258,7 +263,7 @@
       {#if localData.code === 'LOCAL_DATA_WORKSPACE_LOCKED'}
         <DeferredSurface load={() => import('$lib/components/BrowserWorkspaceUnlock.svelte')} props={{onunlock:retryLocalData}} loadingLabel="Loading workspace unlock." unavailableLabel="Workspace unlock could not be loaded. Reload the page to retry." />
       {:else}
-        <h1 tabindex="-1" bind:this={storageErrorHeading}>Browser-local data unavailable</h1>
+        <h1 tabindex="-1" bind:this={storageErrorHeading}>{localApplication ? 'Filesystem workspace unavailable' : 'Browser-local data unavailable'}</h1>
         <p class="muted">{localData.detail}</p>
         {#if localData.code === 'DEFERRED_MODULE_UNAVAILABLE'}
           <button class="primary" onclick={reloadDeferredModulePage}>Reload page</button>

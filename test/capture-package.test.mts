@@ -26,7 +26,7 @@ describe('independent capture package', () => {
       assert.throws(() => capturePackageInputs(graph([entry, source])));
     }
     assert.throws(() => capturePackageInputs({ modules: [{ source: entry, dependencies: [{ couldNotResolve: true }] }] }), /could not be resolved/u);
-    assert.throws(() => capturePackageInputs(graph(['lib/helper.mts'])), /missing its executable/u);
+    assert.throws(() => capturePackageInputs(graph(['lib/helper.mts'])), /missing.*whoisleuth-capture/u);
     assert.throws(() => capturePackageInputs(graph(Array.from({ length: 4097 }, () => entry))), /processing bound/u);
   });
 

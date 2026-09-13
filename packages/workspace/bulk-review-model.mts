@@ -231,7 +231,7 @@ export function enforceBulkReviewBudget(raw: unknown): BulkReviewStore {
   while (byteLength(JSON.stringify(store)) > MAX_BULK_REVIEW_STORE_BYTES && store.rows.length) store.rows.pop();
   while (byteLength(JSON.stringify(store)) > MAX_BULK_REVIEW_STORE_BYTES && store.presets.length > 1) store.presets.pop();
   if (byteLength(JSON.stringify(store)) > MAX_BULK_REVIEW_STORE_BYTES) {
-    throw new Error('Bulk review preferences exceed the browser-local storage limit.');
+    throw new Error('Bulk review preferences exceed the workspace storage limit.');
   }
   return store;
 }

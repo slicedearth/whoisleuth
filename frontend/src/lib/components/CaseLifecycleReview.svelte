@@ -99,7 +99,7 @@
       } finally {
         URL.revokeObjectURL(url);
       }
-      message = `Exported ${selectedEvents.length} selected browser-local review event${selectedEvents.length === 1 ? '' : 's'}.`;
+      message = `Exported ${selectedEvents.length} selected review event${selectedEvents.length === 1 ? '' : 's'}.`;
     } catch (error) {
       message = `Calendar was not exported. ${error instanceof Error ? error.message : 'Review the selected events and try again.'}`;
     }
@@ -148,7 +148,7 @@
     </details>
   </div>
   {#if visibleEvents.length}
-    <ol class="timeline" aria-label="Browser-local lifecycle review timeline">
+    <ol class="timeline" aria-label="Saved lifecycle review timeline">
       {#each pagedEvents as event, index (event.uid)}
         <li>
           <label class="event-select"><input type="checkbox" checked={selectedEventSet.has(event.uid)} onchange={(input) => toggleEvent(event.uid, input.currentTarget.checked)} aria-label={`Select event ${(eventPage - 1) * eventPageSize + index + 1}: ${event.summary}${event.recipient ? ` · ${event.recipient}` : ''} · ${event.startsAt}`}><time datetime={event.startsAt}>{new Date(event.startsAt).toLocaleString()}</time></label>
@@ -157,7 +157,7 @@
       {/each}
     </ol>
     <Pagination currentPage={eventPage} pageCount={eventPageCount} setPage={(page) => eventPage = page} ariaLabel="Lifecycle event pages" />
-    <p class="note">Showing {(eventPage - 1) * eventPageSize + 1}–{Math.min(eventPage * eventPageSize, visibleEvents.length)} of {visibleEvents.length} matching browser-local review events. Times use your browser’s time zone. Export includes all {selectedEvents.length} explicitly selected event{selectedEvents.length === 1 ? '' : 's'} in this matching view.</p>
+    <p class="note">Showing {(eventPage - 1) * eventPageSize + 1}–{Math.min(eventPage * eventPageSize, visibleEvents.length)} of {visibleEvents.length} matching saved review events. Times use your browser’s time zone. Export includes all {selectedEvents.length} explicitly selected event{selectedEvents.length === 1 ? '' : 's'} in this matching view.</p>
   {:else}
     <p class="empty">No lifecycle review events match these filters.</p>
   {/if}

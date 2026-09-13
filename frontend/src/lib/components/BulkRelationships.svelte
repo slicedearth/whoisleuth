@@ -184,14 +184,14 @@
           <div><dt>Source identities</dt><dd>{preview.sourceIdentities.join(' · ')}</dd></div>
           <div><dt>Completeness</dt><dd>{preview.completeness}{preview.truncated ? ' · truncated' : ' · not truncated'}</dd></div>
           <div><dt>Estimated admission</dt><dd>{preview.estimatedNewNodes} newly visible or retained nodes · {preview.estimatedNewEdges} edges</dd></div>
-          <div><dt>Persistence</dt><dd>{preview.persistence === 'none' ? 'None; only the local scan queue changes.' : 'One bounded browser-local relationship observation.'}</dd></div>
+          <div><dt>Persistence</dt><dd>{preview.persistence === 'none' ? 'None; only the local scan queue changes.' : 'One bounded saved relationship observation.'}</dd></div>
           <div><dt>Network and disclosure</dt><dd>{preview.networkRequests} requests · no external service receives the target</dd></div>
         </dl>
         <RelationshipSourceEvidence sources={preview.sourceEvidence} />
         <p class="shared-warning">{preview.sharedInfrastructureWarning}</p>
         <p><strong>Why this may help:</strong> {preview.usefulness}</p>
         <ul>{#each preview.limitations as limitation}<li>{limitation}</li>{/each}</ul>
-        {#if !admissionCurrent}<p class="admission-state" role="status">The current scan evidence changed after this preview opened. Close it and open a fresh preview before continuing.</p>{:else if preview.action === 'retain' && !retentionAvailable}<p class="admission-state" role="status">Relationship retention became unavailable. Reload its browser-local context before trying again.</p>{/if}
+        {#if !admissionCurrent}<p class="admission-state" role="status">The current scan evidence changed after this preview opened. Close it and open a fresh preview before continuing.</p>{:else if preview.action === 'retain' && !retentionAvailable}<p class="admission-state" role="status">Relationship retention became unavailable. Reload its saved context before trying again.</p>{/if}
         <div class="preview-actions"><button class="primary" type="button" disabled={!admissionCurrent || admissionBusy || (preview.action === 'retain' && !retentionAvailable)} onclick={() => void admitRelationship()}>{admissionBusy ? 'Retaining…' : preview.action === 'expand' ? 'Load reviewed domains' : 'Retain reviewed observation'}</button><button class="btn" type="button" disabled={admissionBusy} onclick={() => void closeAdmissionPreview()}>Cancel</button></div>
       </div>
     {/if}

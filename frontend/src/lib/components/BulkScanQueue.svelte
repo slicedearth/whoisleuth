@@ -88,7 +88,7 @@
 <section class="queue card">
   {#if lookupDisabledReason}<p class="feature-disabled" role="note">{lookupDisabledReason}</p>{/if}
   {#if !lookupDisabledReason && scanLimitations.length}<p class="feature-disabled" role="note">Some {mode} scan sources are disabled by deployment policy: {scanLimitations.join(', ')}. {mode === 'deep' ? 'Saved evidence will not claim a complete deep scan.' : 'Results will identify unevaluated evidence.'}</p>{/if}
-  {#if profileContextState === 'loading'}<p class="profile-context" role="status" aria-live="polite">Loading browser-local Brand Profile context. Scanning and retries remain unavailable until this read settles.</p>
+  {#if profileContextState === 'loading'}<p class="profile-context" role="status" aria-live="polite">Loading saved Brand Profile context. Scanning and retries remain unavailable until this read settles.</p>
   {:else if profileContextState === 'unavailable'}<p class="profile-context limitation" role="alert">Brand Profile context is unavailable. A scan may continue with trust, allowlist, profile matches, and profile-dependent conclusions retained as inconclusive.</p>
   {:else if profileName}<p class="profile-context">Active profile: <strong>{profileName}</strong>. Official, partner, and allowlisted domains remain visible but are excluded from high-risk triage and Monitor saves.</p>
   {:else}<p class="profile-context">No active Brand Profile.</p>{/if}

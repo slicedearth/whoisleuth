@@ -284,7 +284,7 @@
         return;
       }
       packetAuthorisationConfirmedAt = utcInputFromIso(new Date().toISOString());
-      onmessage('Authorised the exact browser-local inputs bound to the retained review digest. Nothing was submitted.');
+      onmessage('Authorised the exact saved inputs bound to the retained review digest. Nothing was submitted.');
       await setPacketWizardStep(3);
     } catch (cause) {
       packetAuthorisationConfirmedAt = '';

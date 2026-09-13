@@ -45,6 +45,14 @@ passwords, session secrets, provider credentials or production configuration.
 
 ## Frontend development
 
+For the Console with a filesystem workspace, see the separate
+[local application](../packages/local-application/README.md). Build the frontend,
+then run `npm run local:app -- --workspace ../review-workspace --init --offline`.
+Choose a folder outside the checkout for real work. This mode uses a private
+launch link rather than the hosting password and does not use IndexedDB for
+saved collections. `npm run local:package:check` verifies an installed package
+against the current production build.
+
 The SvelteKit frontend is under `frontend/`. Root scripts invoke the workspace
 commands. Run `npm run check` for Svelte validation or `npm run build` for a
 standalone production build from the repository root.

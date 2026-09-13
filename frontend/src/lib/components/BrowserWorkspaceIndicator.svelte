@@ -2,16 +2,25 @@
   import { onMount } from 'svelte';
   import { BROWSER_WORKSPACE_DIRECTORY_EVENT, currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE, DEFAULT_BROWSER_WORKSPACE_NAME } from '$lib/browser-workspace-context.ts';
   import BrowserWorkspaceLock from './BrowserWorkspaceLock.svelte';
+  import { isLocalApplication } from '$lib/local-application-context.ts';
   let { destination = false }: { destination?: boolean } = $props();
   let name = $state('Loading…');
   let encrypted = $state(false);
   let selectedId = $state<string | null>(null);
+  let localApplication = $state(false);
   onMount(() => {
+    localApplication = isLocalApplication();
     let active = true;
     let generation = 0;
     const refresh = async () => {
       const request = ++generation;
       try {
+        if (localApplication) {
+          const { localApplicationInfo } = await import('$lib/local-application-storage.ts');
+          await localApplicationInfo();
+          if (active && request === generation) name = 'Filesystem workspace';
+          return;
+        }
         const id = currentBrowserWorkspaceId();
         if (id === DEFAULT_BROWSER_WORKSPACE) { name = DEFAULT_BROWSER_WORKSPACE_NAME; return; }
         const { browserWorkspaceDirectory } = await import('$lib/browser-workspace-directory.ts');
@@ -30,7 +39,7 @@
   });
 </script>
 
-<p class="workspace-scope">{destination ? 'Backup and import workspace:' : 'Workspace:'} <strong>{name}</strong>{#if !destination}{#if encrypted && selectedId}<BrowserWorkspaceLock id={selectedId} />{/if} <a href="/dashboard#workspaces">Manage workspaces</a>{/if}</p>
+<p class="workspace-scope">{destination ? 'Backup and import workspace:' : 'Workspace:'} <strong>{name}</strong>{#if !destination}{#if encrypted && selectedId}<BrowserWorkspaceLock id={selectedId} />{/if} <a href="/dashboard#workspaces">{localApplication ? 'Workspace details' : 'Manage workspaces'}</a>{/if}</p>
 
 <style>
   .workspace-scope{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 8px;margin:0 0 12px;font-size:var(--text-xs);color:var(--muted);overflow-wrap:anywhere;min-width:0}.workspace-scope strong{color:var(--text);min-width:0}.workspace-scope a{margin-left:auto;color:var(--accent);text-underline-offset:3px}

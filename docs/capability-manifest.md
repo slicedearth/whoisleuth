@@ -47,8 +47,8 @@ This catalogue describes existing execution, disclosure, retention and assurance
 | `rendered_web_capture` — Explicit local rendered web capture | investigate | explicit local tool | local tool authorised active | active | bounded authorised active | admitted resource request<br>dns question | target public service<br>dns resolver | none | local output deliberate | local output | none | authorised capture acknowledgement |
 | `rendered_capture_comparison` — Offline rendered capture comparison | investigate | explicit local tool | local tool offline | offline | none | none | none | none | transient | local output | none | explicit action |
 | `idn_confusables` — Browser-local IDN and confusable analysis | investigate | derived from current evidence | browser local | fast<br>deep<br>offline | none | none | none | none | transient | deliberate bounded | bounded risk input | inherited parent action |
-| `analyst_cases` — Browser-local analyst cases and Review Item lifecycle | respond | explicit browser action | browser local | offline | none | none | none | none | browser deliberate | deliberate bounded | none | explicit action |
-| `watchlists` — Browser-local watchlists and monitoring views | assure | explicit browser action | browser local | fast<br>deep<br>offline<br>monitor | none | none | none | none | browser deliberate | deliberate bounded | none | explicit action |
+| `analyst_cases` — Saved analyst Cases and Review Item lifecycle | respond | explicit browser action | browser local | offline | none | none | none | none | browser deliberate | deliberate bounded | none | explicit action |
+| `watchlists` — Saved watchlists and monitoring views | assure | explicit browser action | browser local | fast<br>deep<br>offline<br>monitor | none | none | none | none | browser deliberate | deliberate bounded | none | explicit action |
 | `offline_review` — Bounded local CLI review and derivation | investigate | explicit cli command | local cli offline | offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `portable_evidence` — Portable evidence, verification and reviewed hand-off | assure | variant specific | browser local<br>local cli offline | offline | none | none | none | variant specific | local output deliberate | deliberate bounded | none | explicit action |
 | `runtime_diagnostics` — CLI runtime diagnostics | platform | explicit cli command | local cli offline<br>local cli network | offline | conditional bounded passive | fixed diagnostic probe | dns resolver<br>target public service<br>registry service | none | local output deliberate | metadata only | none | explicit network approval |
@@ -376,16 +376,16 @@ Runtime configuration and admission remain with their existing enforcement owner
 
 - Local string similarity and script analysis do not establish impersonation, intent or maliciousness.
 
-### Browser-local analyst cases and Review Item lifecycle
+### Saved analyst Cases and Review Item lifecycle
 
-- Cases and the bounded analyst Review Item lifecycle overlay remain in the current browser profile unless deliberately exported.
+- Cases and Review Items remain in the selected workspace unless deliberately exported: the current browser profile for the browser deployment, or the selected filesystem folder in the standalone local application.
 - Review decisions retain stable subject identity, the reviewed material fingerprint, rationale, timestamps, expiry and bounded associations; current titles, evidence summaries and source values remain derived.
 - Analyst assertions, response actions and Review Item lifecycle decisions never rewrite their source evidence or start collection, reporting, monitoring or enforcement.
 - Missing, partial, stale, truncated or unavailable evidence cannot resolve a Review Item; changed material evidence and expired decisions return it to review.
 
-### Browser-local watchlists and monitoring views
+### Saved watchlists and monitoring views
 
-- Browser-local monitoring state is not refreshed automatically unless a separately configured worker is used.
+- Saved monitoring state is not refreshed automatically unless a separately configured worker is used.
 
 ### Bounded local CLI review and derivation
 

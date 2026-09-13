@@ -34,7 +34,7 @@ async function readLocalInvestigationCollections() {
     loadRelationshipObservations(),
   ]);
   if (results.every((result) => result.status === 'rejected')) {
-    throw new Error('Saved context is unavailable because browser-local collections could not be read.');
+    throw new Error('Saved context is unavailable because workspace collections could not be read.');
   }
   const [cases, campaigns, brandProfiles, relationshipObservations] = results;
   const unavailableStores: InvestigationStoreName[] = [];

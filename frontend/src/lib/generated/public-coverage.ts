@@ -762,7 +762,7 @@ export const PUBLIC_COVERAGE = {
     },
     {
       "id": "analyst_cases",
-      "title": "Browser-local analyst cases and Review Item lifecycle",
+      "title": "Saved analyst Cases and Review Item lifecycle",
       "job": "respond",
       "implemented": true,
       "reviewBasis": "Versioned capability contract and deterministic repository verification",
@@ -785,7 +785,7 @@ export const PUBLIC_COVERAGE = {
       ],
       "partialResultContract": "explicit_document",
       "limitations": [
-        "Cases and the bounded analyst Review Item lifecycle overlay remain in the current browser profile unless deliberately exported.",
+        "Cases and Review Items remain in the selected workspace unless deliberately exported: the current browser profile for the browser deployment, or the selected filesystem folder in the standalone local application.",
         "Review decisions retain stable subject identity, the reviewed material fingerprint, rationale, timestamps, expiry and bounded associations; current titles, evidence summaries and source values remain derived.",
         "Analyst assertions, response actions and Review Item lifecycle decisions never rewrite their source evidence or start collection, reporting, monitoring or enforcement.",
         "Missing, partial, stale, truncated or unavailable evidence cannot resolve a Review Item; changed material evidence and expired decisions return it to review."
@@ -793,7 +793,7 @@ export const PUBLIC_COVERAGE = {
     },
     {
       "id": "watchlists",
-      "title": "Browser-local watchlists and monitoring views",
+      "title": "Saved watchlists and monitoring views",
       "job": "assure",
       "implemented": true,
       "reviewBasis": "Versioned capability contract and deterministic repository verification",
@@ -819,7 +819,7 @@ export const PUBLIC_COVERAGE = {
       ],
       "partialResultContract": "explicit_per_source",
       "limitations": [
-        "Browser-local monitoring state is not refreshed automatically unless a separately configured worker is used."
+        "Saved monitoring state is not refreshed automatically unless a separately configured worker is used."
       ]
     },
     {

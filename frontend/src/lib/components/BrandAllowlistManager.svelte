@@ -149,7 +149,7 @@
   </div>
 
   <footer>
-    <span>{dirty ? 'Unsaved allowlist changes' : domainInput || registrarInput ? 'Entered text has not been added to the list' : writeDisabled ? 'Saved profile is not ready' : 'Saved in this browser'}</span>
+    <span>{dirty ? 'Unsaved allowlist changes' : domainInput || registrarInput ? 'Entered text has not been added to the list' : writeDisabled ? 'Saved profile is not ready' : 'Saved in this workspace'}</span>
     <div><button class="btn" type="button" disabled={busy || writeDisabled || (!dirty && !domainInput && !registrarInput)} onclick={discard}>Discard</button><button class="primary" type="button" disabled={busy || writeDisabled || !dirty} onclick={() => void save()}>{busy ? 'Saving…' : 'Save allowlist'}</button></div>
   </footer>
 </section>

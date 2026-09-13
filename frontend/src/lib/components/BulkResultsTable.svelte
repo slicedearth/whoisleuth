@@ -124,8 +124,8 @@
   }
 </script>
 
-{#if unavailableSources.length}<p class="local-source-warning">Some browser-local actions are unavailable ({unavailableSources.join(', ')}). Controls are disabled only where their saved collection could not be read; result inspection remains available.</p>
-{:else if loadingSources.length}<p class="local-source-warning" role="status" aria-live="polite">Loading browser-local {loadingSources.join(' and ')} actions. Result inspection remains available.</p>
+{#if unavailableSources.length}<p class="local-source-warning">Some workspace actions are unavailable ({unavailableSources.join(', ')}). Controls are disabled only where their saved collection could not be read; result inspection remains available.</p>
+{:else if loadingSources.length}<p class="local-source-warning" role="status" aria-live="polite">Loading workspace {loadingSources.join(' and ')} actions. Result inspection remains available.</p>
 {:else if reviewSourceState === 'idle'}<p class="local-source-warning" role="note">Review state loads only when the Review view is selected. Primary result inspection remains available.</p>{/if}
 <details class="column-picker">
   <summary>List columns</summary>

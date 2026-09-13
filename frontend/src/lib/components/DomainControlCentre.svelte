@@ -17,7 +17,7 @@
     <div>
       <p class="eyebrow">Owned domains</p>
       <h2 id="domain-control-centre-title">Domain controls</h2>
-      <p>Review lifecycle intent, expected settings, planned changes and shared dependencies across official domains. These records are browser-local and analyst-authored.</p>
+      <p>Review lifecycle intent, expected settings, planned changes and shared dependencies across official domains. These workspace records are analyst-authored.</p>
     </div>
   </header>
 

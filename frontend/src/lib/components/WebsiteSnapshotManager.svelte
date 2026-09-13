@@ -191,7 +191,7 @@
   {#if operation === 'loading'}
     <p role="status">Loading retained website snapshots…</p>
   {:else if operation === 'unavailable'}
-    <p role="alert">Saved website snapshots could not be read. Existing snapshots may still be retained in this browser.</p>
+    <p role="alert">Saved website snapshots could not be read. Existing snapshots may still be retained in this workspace.</p>
     <button class="btn" type="button" onclick={() => void refresh(domain)}>Retry snapshot read</button>
   {:else if domainSnapshots.length}
     <div class="comparison-controls">
@@ -238,7 +238,7 @@
       </div>
       <span>{certificateSnapshots.length} observation{certificateSnapshots.length === 1 ? '' : 's'} · {certificateDomains} domain{certificateDomains === 1 ? '' : 's'}</span>
     </header>
-    <p>Built from leaf certificates in analyst-saved Deep Lookups on this browser. Records are point-in-time observations.</p>
+    <p>Built from leaf certificates in analyst-saved Deep Lookups in this workspace. Records are point-in-time observations.</p>
     {#if certificateInventory.length}
       <ul>
         {#each certificateInventory as item}

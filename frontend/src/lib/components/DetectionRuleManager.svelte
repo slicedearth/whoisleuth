@@ -174,7 +174,7 @@
 </script>
 
 <section class="rule-builder card">
-  <header class="section-head"><div><p class="eyebrow">Custom detection</p><h2>Browser-local rules</h2><p>Combine bounded case-evidence checks without changing the built-in risk model.</p></div><div class="top-actions toolbar"><button class="btn" type="button" onclick={download} disabled={!rules.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile} disabled={mutating || refreshRequired}></label></div></header>
+  <header class="section-head"><div><p class="eyebrow">Custom detection</p><h2>Saved rules</h2><p>Combine bounded case-evidence checks without changing the built-in risk model.</p></div><div class="top-actions toolbar"><button class="btn" type="button" onclick={download} disabled={!rules.length}>Export JSON</button><label class="btn file-btn">Import JSON<input type="file" accept="application/json,.json" onchange={importFile} disabled={mutating || refreshRequired}></label></div></header>
   <form oninput={draft.changed} onchange={draft.changed} onsubmit={(event)=>{event.preventDefault();void create();}}>
     <div class="rule-fields">
       <label class="field">Name<input bind:this={nameInput} bind:value={name} maxlength={MAX_RULE_NAME_LENGTH} placeholder="Login page with copied assets" required></label>
@@ -248,7 +248,7 @@
 <section class="test-results card">
   <header class="section-head"><div><p class="eyebrow">Current cases</p><h2>Rule test results</h2></div><span>{caseSourceState === 'ready' ? `${matchingEvaluations.length} of ${records.length} matched` : 'Unavailable'}</span></header>
   {#if caseSourceState !== 'ready'}
-    <p class="source-unavailable">Browser-local cases {caseSourceState === 'loading' ? 'are still loading' : 'could not be read'}. Saved rules remain available, but no current match count or absence is inferred.</p>
+    <p class="source-unavailable">Saved cases {caseSourceState === 'loading' ? 'are still loading' : 'could not be read'}. Saved rules remain available, but no current match count or absence is inferred.</p>
   {:else if matchingEvaluations.length}
     <ul>{#each matchingEvaluations as result}<li><div><strong>{result.domain}</strong><small>{result.matchedRules.map((item)=>item.name).join(' · ')}</small>{#if result.suggestedTags.length}<small>Suggested: {result.suggestedTags.join(', ')}</small>{/if}</div><div class="scores"><span>Built-in {result.builtInRiskScore??'—'}</span><span>Custom +{result.customRiskDelta}</span><span>Context {result.contextualRiskScore??'—'}</span><button type="button" class="btn small" onclick={()=>openCase(result.caseId)}>Open case</button></div></li>{/each}</ul>
   {:else}<p>No enabled custom rule matches the latest evidence in the current case collection.</p>{/if}

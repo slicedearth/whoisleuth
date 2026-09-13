@@ -52,6 +52,11 @@ The public [Resources hub](https://www.whoisleuth.com/resources) is the shortest
 user guide. [Application documentation](docs/application-guide.md) covers the
 browser tools and saved work.
 
+The optional [local application](packages/local-application/README.md) runs the
+same Console on loopback with an explicitly selected filesystem workspace.
+Saved records, drafts and original files stay in that folder, not IndexedDB.
+Its plaintext workspace and encrypted portable backups are separate.
+
 ## Privacy and safety
 
 Ordinary retained work stays in IndexedDB in the current browser profile.

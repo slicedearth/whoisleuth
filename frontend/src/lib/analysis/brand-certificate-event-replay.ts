@@ -235,7 +235,7 @@ export function buildBrandCertificateEventReplay(
     retainedEventCount: reviews.length,
     truncated: uniqueRelevant.length > MAX_REPLAY_EVENTS,
     limitations: [
-      'Only source-qualified certificate events deliberately retained in browser-local cases are replayed.',
+      'Only source-qualified certificate events deliberately retained in saved Cases are replayed.',
       'Dates are retained observation or publication times, not proof of issuance, deployment, activation, ownership, or control.',
       'Certificate digests are not public-key digests and are never compared with an expected SPKI value.',
     ],

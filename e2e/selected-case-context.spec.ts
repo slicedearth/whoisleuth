@@ -97,7 +97,7 @@ test('Case context rereads on focus, reports failed reads and recovers without a
     await expect(peer.getByRole('status', { name: 'Case workspace action status' })).toContainText(`Deleted the case for ${DOMAIN}`);
   } finally { await peer.close(); }
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(context).toContainText('no longer in this browser workspace');
+  await expect(context).toContainText('no longer in this workspace');
   await expect(context.getByRole('link', { name: 'other-context.example', exact: true })).toHaveCount(0);
 });
 

@@ -89,7 +89,7 @@ test('keeps the Bulk queue available when browser-local context cannot be loaded
   await navigation.getByRole('link', { name: /^Bulk/u }).click();
   await expect(page.getByRole('heading', { name: 'Bulk', exact: true })).toBeVisible();
 
-  await expect(page.locator('.local-context-status')).toContainText('Some browser-local context could not be loaded');
+  await expect(page.locator('.local-context-status')).toContainText('Some saved context could not be loaded');
   await expect(page.locator('.local-context-status')).toContainText('profile');
   await expect(page.locator('#domains')).toBeEditable();
   await expect(page.getByText(/Saved Bulk sessions could not be read/u)).toHaveCount(0);
@@ -99,7 +99,7 @@ test('keeps the Bulk queue available when browser-local context cannot be loaded
   const savedSessions = page.getByRole('region', { name: 'Saved Bulk sessions', exact: true });
   await expect(savedSessions).toBeVisible();
   await expect(savedSessions.getByRole('article')).toHaveCount(0);
-  await expect(page.getByText('No Bulk sessions have been saved in this browser.', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('No Bulk sessions have been saved in this workspace.', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Export sessions' })).toHaveCount(0);
   await expect(page.getByLabel('Session name')).toHaveCount(0);
   await openBulkWorkspaceTools(page, 'review');
@@ -141,7 +141,7 @@ for (const width of [320, 1_280]) {
       const savedSessions = page.getByRole('region', { name: 'Saved Bulk sessions', exact: true });
       await expect(savedSessions).toBeVisible();
       await expect(savedSessions.getByRole('article')).toHaveCount(0);
-      await expect(page.getByText('No Bulk sessions have been saved in this browser.', { exact: true })).toBeVisible();
+      await expect(page.getByText('No Bulk sessions have been saved in this workspace.', { exact: true })).toBeVisible();
       await expect(page.getByText(/still loading|could not be read/u)).toHaveCount(0);
       await expectNoHorizontalOverflow(page);
       await page.screenshot({ path: testInfo.outputPath('ready-collections.png'), fullPage: true });

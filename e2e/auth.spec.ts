@@ -18,7 +18,7 @@ test('sign-in retains a direct Case response link without creating the missing C
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(destination);
   await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
-  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('That Case is not available in this browser workspace.');
+  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('That Case is not available in this workspace.');
   await expect(page.locator('.case-head')).toHaveCount(0);
 });
 

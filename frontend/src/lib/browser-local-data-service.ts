@@ -17,6 +17,7 @@ import type {
 import { isDeferredModuleLoadError, loadDeferredModule } from './deferred-module.ts';
 import { decodeBrowserLocalDataSnapshots, loadBrowserLocalDataPreparation } from './browser-local-data-worker.ts';
 import { currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE } from './browser-workspace-context.ts';
+import { isLocalApplication } from './local-application-context.ts';
 
 export type BrowserLocalDataServiceState =
   | Readonly<{ state: 'idle' | 'initializing' }>
@@ -67,6 +68,12 @@ export function createBrowserLocalDataService(
         return prepareBrowserLocalDataContent(...args);
       },
     };
+    if (isLocalApplication()) {
+      const { createLocalApplicationStorage, localApplicationInfo } = await loadDeferredModule(() => import('./local-application-storage.ts'));
+      const info = await localApplicationInfo();
+      return new BrowserLocalDataProvider({ ...options, databaseName: `local-workspace-${info.workspaceId}`, timeoutMs: 60_000,
+        storageAdapter: createLocalApplicationStorage(location.origin, info.workspaceId) });
+    }
     if (currentBrowserWorkspaceId() === DEFAULT_BROWSER_WORKSPACE) return new BrowserLocalDataProvider(options);
     const { createNamedWorkspaceProvider } = await loadDeferredModule(() => import('./browser-workspace-provider.ts'));
     return createNamedWorkspaceProvider(options);

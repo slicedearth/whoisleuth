@@ -375,14 +375,14 @@
       if(generation!==watchlistActionGeneration||revision!==lookupRevision||target!==caseObservationTarget)return;
       watchlistName=saved.name;
       watchlistStatus=saved.created
-        ? `Created the browser-local watchlist “${saved.name}” with this ${lookupEvidenceDepth} observation.`
+        ? `Created the watchlist “${saved.name}” with this ${lookupEvidenceDepth} observation.`
         : saved.changes.length
           ? `Updated “${saved.name}” and retained ${saved.changes.length} material change${saved.changes.length===1?'':'s'}.`
           : `Updated “${saved.name}”; no comparable material change was observed.`;
       await refreshWatchlistContext(revision);
     }catch(cause){
       if(generation!==watchlistActionGeneration||revision!==lookupRevision||target!==caseObservationTarget)return;
-      watchlistStatus=cause instanceof Error?cause.message:'Could not save the browser-local watchlist observation.';
+      watchlistStatus=cause instanceof Error?cause.message:'Could not save the watchlist observation.';
     }finally{
       if(generation===watchlistActionGeneration)watchlistActionBusy=false;
     }

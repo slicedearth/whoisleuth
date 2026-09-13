@@ -171,7 +171,7 @@
     spellcheck="false"
     placeholder="Domain, case, brand, or IP"
   >
-  <p class="search-note">This searches only data already retained in this browser. It does not contact a provider or start a new check.</p>
+  <p class="search-note">This searches only data already retained in this workspace. It does not contact a provider or start a new check.</p>
 
   <details class="search-details">
     <summary aria-live="polite">{loadError || (index && index.state !== 'ready') ? 'Search unavailable' : sourceWarnings.length || index?.truncated ? 'Search incomplete' : 'Search details'}</summary>
@@ -191,7 +191,7 @@
             <li>{storeLabels[store] || store}: {source.state === 'unsupported'
               ? 'created by a newer version and not searched'
               : source.state === 'unavailable'
-                ? 'unavailable in browser-local storage and not searched'
+                ? 'unavailable in workspace storage and not searched'
                 : 'could not be read safely'}.</li>
           {/each}
         </ul>

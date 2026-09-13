@@ -205,7 +205,7 @@
             <p>Registration {refreshPlan.freshnessPolicy.thresholdsDays.registration} days · network {refreshPlan.freshnessPolicy.thresholdsDays.network} days · web {refreshPlan.freshnessPolicy.thresholdsDays.web} days.</p>
           {/if}
         </div>
-        <p class="note">Thresholds organise source-refresh suggestions for results in this open Lookup page. They are not retained in browser-local storage. A deliberately downloaded investigation brief records the policy used. Thresholds do not make older evidence false or newer evidence complete.</p>
+        <p class="note">Thresholds organise source-refresh suggestions for results in this open Lookup page. They are not retained in workspace storage. A deliberately downloaded investigation brief records the policy used. Thresholds do not make older evidence false or newer evidence complete.</p>
       </details>
       <LookupSourceRefresh plan={refreshPlan} {original} {depth} ledger={refreshLedger} onledgerchange={onrefreshchange} {caseTarget} />
     </details>
