@@ -1,3 +1,20 @@
+import type {
+  ResponseContactKind,
+  ResponsePacketProfileId,
+  ResponseAuthorisationConfirmationId,
+  ResponseReadinessInput,
+  ResponsePacketProfile,
+  CaseResponsePacketInput,
+  CaseResponsePreflightCheck,
+  CaseResponsePreflight,
+  CaseResponseReadinessRow,
+  CaseResponseAuthorisation,
+  CaseResponsePacket,
+} from './case-response-packet-types.mts';
+import { renderCaseResponsePacket } from './case-response-packet-render.mts';
+import { responseContactLabel as contactLabel } from './case-response-packet-vocabulary.mts';
+export type * from './case-response-packet-types.mts';
+
 // Pure abuse-evidence packet builder. It creates local review artifacts only:
 // no network requests, mailto links, submissions, or provider side effects.
 
@@ -40,13 +57,10 @@ import {
 import {
   buildCaseActionOutcomeSummary,
   buildCaseResponseLifecycleSummary,
-  type CaseObservedEffectState,
 } from './case-response-model.mts';
 import {
   RESPONSE_AUTHORISATION_CONFIRMATION_IDS,
-  RESPONSE_CONTACT_KINDS,
   RESPONSE_PACKET_PROFILE_IDS,
-  RESPONSE_READINESS_ROW_IDS,
   RESPONSE_READINESS_STATES,
   type ResponseReadinessState,
 } from './case-response-packet-vocabulary.mts';
@@ -110,53 +124,6 @@ export const CASE_RESPONSE_PREFLIGHT_EVIDENCE_SCOPE = Object.freeze({
   lookupDecisionFacts: 'unavailable' as const,
   limitation: 'Lookup Decision Facts are transient and are not copied into browser-local cases. Case-response preflight evaluates only explicit case-owned records and analyst-entered incident context; it does not reconstruct Decision Facts from weaker saved fields.',
 });
-
-export type ResponseContactKind = typeof RESPONSE_CONTACT_KINDS[number];
-
-export type ResponsePacketProfileId = typeof RESPONSE_PACKET_PROFILE_IDS[number];
-
-export type ResponseReadinessRowId = typeof RESPONSE_READINESS_ROW_IDS[number];
-
-export type ResponseAuthorisationConfirmationId = typeof RESPONSE_AUTHORISATION_CONFIRMATION_IDS[number];
-
-export type ResponseReadinessInput = Readonly<{
-  infrastructureResponsibility?: unknown;
-  authorityReview?: unknown;
-  contradictionsReview?: unknown;
-  sourceLimitations?: unknown;
-}>;
-
-export type ResponseArtefactReferenceInput = Readonly<{
-  id?: unknown;
-  label?: unknown;
-  mediaType?: unknown;
-  capturedAt?: unknown;
-  source?: unknown;
-  digestSha256?: unknown;
-  byteLength?: unknown;
-  limitations?: unknown;
-}>;
-
-export type ResponseAuthorisationInput = Readonly<{
-  reviewedInputDigestSha256?: unknown;
-  confirmedAt?: unknown;
-  confirmations?: unknown;
-}>;
-
-export type ResponsePacketProfile = Readonly<{
-  id: ResponsePacketProfileId;
-  label: string;
-  audience: string;
-  subjectPrefix: string;
-  requiredContactKind: ResponseContactKind | null;
-  checklist: readonly string[];
-  evidenceOrder: readonly string[];
-  includedEvidence: readonly string[];
-  excludedEvidence: readonly string[];
-  redactions: readonly string[];
-  attachments: readonly string[];
-  followUpFields: readonly string[];
-}>;
 
 export const RESPONSE_PACKET_PROFILES: readonly ResponsePacketProfile[] = Object.freeze([
   {
@@ -258,237 +225,6 @@ export const RESPONSE_PACKET_PROFILES: readonly ResponsePacketProfile[] = Object
     followUpFields: ['Internal owner', 'Due date', 'Decision', 'Control or escalation outcome'],
   },
 ]);
-
-export type ResponseContactInput = {
-  kind?: unknown;
-  contact?: unknown;
-  source?: unknown;
-  observedAt?: unknown;
-  limitations?: unknown;
-};
-
-export type CaseResponsePacketInput = {
-  profile?: unknown;
-  category?: unknown;
-  affectedParty?: unknown;
-  abusiveUrls?: unknown;
-  observedHarm?: unknown;
-  observedAt?: unknown;
-  contacts?: unknown;
-  actionId?: unknown;
-  selectedEvidencePinIds?: unknown;
-  readiness?: ResponseReadinessInput | unknown;
-  artefactReferences?: readonly ResponseArtefactReferenceInput[] | unknown;
-  authorisation?: ResponseAuthorisationInput | unknown;
-};
-
-export type CaseResponsePreflightCheck = Readonly<{
-  id: string;
-  label: string;
-  state: 'block' | 'caution' | 'pass';
-  detail: string;
-}>;
-
-export type CaseResponsePreflight = Readonly<{
-  version: 3;
-  status: 'needs_input' | 'ready_for_review' | 'review_cautions';
-  canExport: boolean;
-  counts: Readonly<{ block: number; caution: number; pass: number }>;
-  checks: readonly CaseResponsePreflightCheck[];
-  actionSummary: ReturnType<typeof buildCaseActionOutcomeSummary>;
-}>;
-
-export type CaseResponseReadinessRow = Readonly<{
-  id: ResponseReadinessRowId;
-  label: string;
-  state: ResponseReadinessState;
-  detail: string;
-  requiredForAuthorisation: boolean;
-  limitations: readonly string[];
-}>;
-
-export type CaseResponseAuthorisation = Readonly<{
-  status: 'draft' | 'authorised';
-  reviewedInputDigestSha256: string;
-  suppliedReviewDigestSha256: string | null;
-  digestMatches: boolean;
-  confirmedAt: string | null;
-  confirmations: Readonly<Record<ResponseAuthorisationConfirmationId, boolean>>;
-  missingConfirmations: readonly ResponseAuthorisationConfirmationId[];
-  limitations: readonly string[];
-}>;
-
-export type CaseResponsePacket = {
-  schema: typeof CASE_RESPONSE_PACKET_SCHEMA;
-  schemaVersion: typeof CASE_RESPONSE_PACKET_VERSION;
-  generatedAt: string;
-  reviewRequired: true;
-  submissionPerformed: false;
-  profile: {
-    id: ResponsePacketProfileId;
-    label: string;
-    audience: string;
-    subject: string;
-    checklist: string[];
-    evidenceOrder: string[];
-    includedEvidence: string[];
-    excludedEvidence: string[];
-    redactions: string[];
-    attachments: string[];
-    followUpFields: string[];
-  };
-  case: {
-    id: string;
-    domain: string;
-    status: CaseRecord['status'];
-    disposition: CaseRecord['disposition'];
-    updatedAt: string;
-  };
-  incident: {
-    category: string;
-    affectedParty: string;
-    abusiveUrls: string[];
-    observedHarm: string;
-    observedAt: string;
-  };
-  contacts: Array<{
-    kind: ResponseContactKind;
-    contact: string;
-    source: string;
-    observedAt: string | null;
-    reviewAfter: string | null;
-    freshness: 'current' | 'stale' | 'unknown';
-    limitations: string[];
-  }>;
-  recipientRoute: {
-    actionId: string;
-    kind: ResponseContactKind | 'manual';
-    contact: string;
-    source: string;
-    observedAt: string | null;
-    reviewAfter: string | null;
-    freshness: 'current' | 'stale' | 'unknown';
-    limitations: string[];
-  } | null;
-  actionBinding: {
-    state: 'selected' | 'not_selected';
-    selectedActionId: string | null;
-    lineageActionIds: string[];
-    limitations: string[];
-  };
-  selectedEvidence: Array<{
-    id: string;
-    label: string;
-    source: string;
-    observationHostname?: string;
-    webObservationMode?: 'selected_url';
-    observedAt: string | null;
-    completeness: string;
-    limitations: string[];
-  }>;
-  contradictions: Array<{
-    id: string;
-    statement: string;
-    state: string;
-    limitations: string[];
-  }>;
-  readiness: {
-    profileId: ResponsePacketProfileId;
-    rows: CaseResponseReadinessRow[];
-    counts: Record<ResponseReadinessState, number>;
-    limitations: string[];
-  };
-  artefactReferences: Array<{
-    id: string;
-    label: string;
-    mediaType: string;
-    capturedAt: string;
-    source: string;
-    digestSha256: string;
-    byteLength: number | null;
-    limitations: string[];
-  }>;
-  authorisation: CaseResponseAuthorisation;
-  preflight: CaseResponsePreflight;
-  escalationHistory: Array<{
-    actionId: string;
-    type: string;
-    recipient: string;
-    contactSource: string;
-    routeObservedAt: string | null;
-    routeReviewAfter: string | null;
-    state: string;
-    reference: string | null;
-    providerOutcome: string | null;
-    outcomeDetail: string | null;
-    originActionId: string | null;
-    historyOmitted: number;
-    historyLimitations: string[];
-    transitions: Array<{
-      id: string;
-      previousState: string | null;
-      nextState: string;
-      occurredAt: string;
-      sourceClass: string;
-      provenance: string;
-      reference: string | null;
-      evidencePinId: string | null;
-      limitations: string[];
-      providerOutcome: string | null;
-      outcomeDetail: string | null;
-      originActionId: string | null;
-      applied: boolean;
-    }>;
-    createdAt: string;
-    updatedAt: string;
-  }>;
-  escalationHistoryOmitted: number;
-  escalationHistoryLimitations: string[];
-  responseLifecycle: {
-    providerOutcomeState: 'available' | 'missing' | 'ambiguous';
-    latestProviderOutcome: {
-      actionId: string;
-      eventId: string;
-      outcome: string;
-      occurredAt: string;
-      reference: string | null;
-    } | null;
-    observedChangeState: 'available' | 'missing' | 'ambiguous';
-    latestObservedEffect: {
-      reviewId: string;
-      state: CaseObservedEffectState;
-      observedAt: string;
-      sourceClass: string;
-      source: string;
-    } | null;
-    latestObservedChangeAt: string | null;
-    closure: {
-      id: string;
-      reason: string;
-      createdAt: string;
-      limitations: string[];
-    } | null;
-    limitations: string[];
-  };
-  provenance: {
-    latestEvidenceCapturedAt: string | null;
-    evidencePinCount: number;
-    decisionCount: number;
-    assertionCount: number;
-    observationAge: {
-      ageSeconds: number;
-      band: 'future_or_clock_skew' | 'one_to_seven_days' | 'over_seven_days' | 'under_24_hours';
-      refreshRecommended: boolean;
-    };
-    limitations: string[];
-  };
-  integrity: {
-    algorithm: 'SHA-256';
-    canonicalization: typeof SORTED_JSON_V2;
-    scope: 'packet excluding integrity';
-    digestSha256: string;
-  };
-};
 
 const RESPONSE_PROFILE_IDS = new Set<string>(RESPONSE_PACKET_PROFILE_IDS);
 
@@ -1319,18 +1055,6 @@ export async function verifyCaseResponsePacketIntegrity(packet: unknown): Promis
   return integrity.digestSha256 === await sha256(canonicalArtifactJsonV2(unsigned));
 }
 
-function escapeMarkdown(value: string): string {
-  return value.replace(/([\\`*_[\]<>|])/gu, '\\$1').replace(/\r?\n/gu, ' ');
-}
-
-function contactLabel(value: ResponseContactKind | 'manual'): string {
-  if (value === 'network_hosting') return 'Observed endpoint network registration';
-  if (value === 'security_txt') return 'security.txt';
-  if (value === 'application_platform') return 'Application platform';
-  if (value === 'manual') return 'Manual submission';
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
 export async function buildCaseResponsePacket(
   caseRecord: CaseRecord,
   input: CaseResponsePacketInput,
@@ -1437,151 +1161,7 @@ export async function buildCaseResponsePacket(
     },
   };
 
-  const lines = [
-    `# ${escapeMarkdown(profile.label)} packet`,
-    '',
-    `**Domain:** ${escapeMarkdown(caseRecord.domain)}`,
-    `**Category:** ${escapeMarkdown(category)}`,
-    `**Affected party:** ${escapeMarkdown(affectedParty)}`,
-    `**Observed at (UTC):** ${observedAt}`,
-    `**Generated at (UTC):** ${normalizedGeneratedAt}`,
-    `**Audience:** ${escapeMarkdown(profile.audience)}`,
-    `**Suggested subject:** ${escapeMarkdown(profile.subject)}`,
-    '',
-    '## Observed harm',
-    '',
-    escapeMarkdown(observedHarm),
-    '',
-    '## Exact abusive URLs',
-    '',
-    ...abusiveUrls.map((url) => `- ${escapeMarkdown(url)}`),
-    '',
-    '## Selected response route',
-    '',
-    ...(recipientRoute
-      ? [
-          `### ${contactLabel(recipientRoute.kind)}`,
-          '',
-          `- Case action: ${escapeMarkdown(recipientRoute.actionId)}`,
-          `- Contact: ${escapeMarkdown(recipientRoute.contact)}`,
-          `- Source: ${escapeMarkdown(recipientRoute.source)}`,
-          `- Route observed: ${recipientRoute.observedAt ?? 'Not provided'} (${recipientRoute.freshness})`,
-          `- Route review after: ${recipientRoute.reviewAfter ?? 'Not provided'}`,
-          `- Limitations: ${recipientRoute.limitations.length ? recipientRoute.limitations.map(escapeMarkdown).join('; ') : 'None recorded'}`,
-          '',
-        ]
-      : ['No profile-appropriate response route was bound to this packet.', '']),
-    '## Selected action lineage',
-    '',
-    ...(escalationHistory.length
-      ? escalationHistory.flatMap((action) => [
-          `- ${escapeMarkdown(action.type.replaceAll('_', ' '))} to ${escapeMarkdown(action.recipient)} · ${escapeMarkdown(action.state.replaceAll('_', ' '))} · updated ${action.updatedAt}`,
-          `  - Route observed: ${action.routeObservedAt ?? 'Not provided'}`,
-          ...(action.reference ? [`  - Reference: ${escapeMarkdown(action.reference)}`] : []),
-          ...(action.providerOutcome ? [`  - Typed provider outcome: ${escapeMarkdown(action.providerOutcome.replaceAll('_', ' '))}`] : []),
-          ...(action.outcomeDetail ? [`  - Outcome detail: ${escapeMarkdown(action.outcomeDetail)}`] : []),
-          ...(action.originActionId ? [`  - Originating action: ${escapeMarkdown(action.originActionId)}`] : []),
-          ...action.transitions.flatMap((event) => [
-            `  - ${event.occurredAt}: ${escapeMarkdown(event.previousState ?? 'none')} → ${escapeMarkdown(event.nextState)} · ${escapeMarkdown(event.sourceClass)} · ${escapeMarkdown(event.provenance)}${event.providerOutcome ? ` · ${escapeMarkdown(event.providerOutcome.replaceAll('_', ' '))}` : ''}${event.applied ? '' : ' · retained conflict'}`,
-            ...(event.reference ? [`    - Reference: ${escapeMarkdown(event.reference)}`] : []),
-            ...(event.evidencePinId ? [`    - Evidence pin: ${escapeMarkdown(event.evidencePinId)}`] : []),
-            ...(event.originActionId ? [`    - Originating action: ${escapeMarkdown(event.originActionId)}`] : []),
-            ...event.limitations.map((limitation) => `    - Limitation: ${escapeMarkdown(limitation)}`),
-          ]),
-          ...(action.historyOmitted ? [`  - ${action.historyOmitted} earlier transition event${action.historyOmitted === 1 ? '' : 's'} omitted by bound.`] : []),
-          ...action.historyLimitations.map((limitation) => `  - History limitation: ${escapeMarkdown(limitation)}`),
-        ])
-      : ['No Case action was selected.']),
-    ...(escalationHistoryOmitted ? [`- Unrelated Case actions excluded from packet: ${escalationHistoryOmitted}`] : []),
-    ...escalationHistoryLimitations.map((limitation) => `- Packet history limitation: ${escapeMarkdown(limitation)}`),
-    '',
-    '## Readiness and authorisation',
-    '',
-    `- Packet state: ${authorisation.status}`,
-    `- Reviewed-input SHA-256: ${authorisation.reviewedInputDigestSha256}`,
-    `- Supplied review digest matches: ${authorisation.digestMatches ? 'yes' : 'no'}`,
-    ...RESPONSE_AUTHORISATION_CONFIRMATION_IDS.map((id) => `- Confirmation ${id}: ${authorisation.confirmations[id] ? 'yes' : 'no'}`),
-    ...readiness.rows.flatMap((row) => [
-      `- ${escapeMarkdown(row.label)} [${row.state}]: ${escapeMarkdown(row.detail)}`,
-      ...row.limitations.map((limitation) => `  - Limitation: ${escapeMarkdown(limitation)}`),
-    ]),
-    ...authorisation.limitations.map((limitation) => `- ${escapeMarkdown(limitation)}`),
-    '',
-    '## Selected evidence and integrity references',
-    '',
-    ...(selectedEvidence.length ? selectedEvidence.map((item) => `- ${escapeMarkdown(item.id)} · ${escapeMarkdown(item.label)} · ${escapeMarkdown(item.source)}${item.observationHostname ? ` · ${escapeMarkdown(item.observationHostname)}` : ''}${item.webObservationMode ? ' · selected URL' : ''} · ${item.observedAt ?? 'Observation time unavailable'} · ${escapeMarkdown(item.completeness)}`) : ['- No evidence pin was explicitly selected.']),
-    ...artefactReferences.map((item) => `- ${escapeMarkdown(item.id)} · ${escapeMarkdown(item.label)} · SHA-256 ${item.digestSha256} · captured ${item.capturedAt}`),
-    '',
-    '## Provider outcome and independent effect',
-    '',
-    responseLifecycle.latestProviderOutcome
-      ? `- Provider outcome time: ${responseLifecycle.latestProviderOutcome.occurredAt} (${escapeMarkdown(responseLifecycle.latestProviderOutcome.outcome.replaceAll('_', ' '))})`
-      : `- Provider outcome time: Withheld because the typed event state is ${responseLifecycle.providerOutcomeState}.`,
-    responseLifecycle.latestObservedChangeAt
-      ? `- Independently observed change time: ${responseLifecycle.latestObservedChangeAt}`
-      : `- Independently observed change time: Withheld because the independent change state is ${responseLifecycle.observedChangeState}.`,
-    ...(responseLifecycle.latestObservedEffect ? [`- Latest independent review: ${escapeMarkdown(responseLifecycle.latestObservedEffect.state.replaceAll('_', ' '))} · ${responseLifecycle.latestObservedEffect.observedAt} · ${escapeMarkdown(responseLifecycle.latestObservedEffect.source)}`] : []),
-    ...responseLifecycle.limitations.map((limitation) => `- ${escapeMarkdown(limitation)}`),
-    '',
-    '## Review and provenance',
-    '',
-    `- Preflight: ${preflight.status.replaceAll('_', ' ')} (${preflight.counts.pass} pass, ${preflight.counts.caution} caution, ${preflight.counts.block} block)`,
-    ...preflight.checks.map((check) => `- ${escapeMarkdown(check.label)} [${check.state}]: ${escapeMarkdown(check.detail)}`),
-    ...limitations.map((limitation) => `- ${escapeMarkdown(limitation)}`),
-    `- Case evidence pins: ${caseRecord.evidencePins.length}`,
-    `- Case decision records: ${caseRecord.decisions.length}`,
-    `- Case structured assertions: ${caseRecord.assertions.length}`,
-    `- Observation-age band at export: ${age.band.replaceAll('_', ' ')}`,
-    `- Canonical packet SHA-256: ${digestSha256}`,
-    '- Digest scope: canonical sorted JSON packet excluding the integrity object',
-    '',
-    '## Audience profile',
-    '',
-    ...profile.checklist.map((item) => `- Checklist: ${escapeMarkdown(item)}`),
-    ...profile.includedEvidence.map((item) => `- Included: ${escapeMarkdown(item)}`),
-    ...profile.excludedEvidence.map((item) => `- Excluded: ${escapeMarkdown(item)}`),
-    ...profile.redactions.map((item) => `- Redaction to confirm: ${escapeMarkdown(item)}`),
-    ...profile.attachments.map((item) => `- Attachment expectation: ${escapeMarkdown(item)}`),
-    ...profile.followUpFields.map((item) => `- Follow-up field: ${escapeMarkdown(item)}`),
-  ];
-  const markdown = `${lines.join('\n').trim()}\n`;
-  const email = [
-    `Subject: ${profile.subject}`,
-    '',
-    'Hello,',
-    '',
-    `I am reporting observed ${category} activity involving ${caseRecord.domain}.`,
-    `Affected party: ${affectedParty}`,
-    `Observed at (UTC): ${observedAt}`,
-    '',
-    'Observed harm:',
-    observedHarm,
-    '',
-    'Exact URLs:',
-    ...abusiveUrls.map((url) => `- ${url}`),
-    '',
-    'Selected evidence:',
-    ...(selectedEvidence.length
-      ? selectedEvidence.map((item) => `- ${item.label} — ${item.source}${item.observationHostname ? ` for ${item.observationHostname}` : ''}${item.webObservationMode ? ' · selected URL' : ''}, observed ${item.observedAt ?? 'time unavailable'} (${item.completeness})`)
-      : ['- No Case evidence pin was selected.']),
-    '',
-    `Reviewed packet SHA-256: ${digestSha256}`,
-    'Attach the reviewed packet (and any separately reviewed evidence files) through the recipient’s approved submission channel; this message does not embed or transmit attachments.',
-    '',
-    responseLifecycle.latestProviderOutcome
-      ? `Provider outcome time: ${responseLifecycle.latestProviderOutcome.occurredAt} (${responseLifecycle.latestProviderOutcome.outcome.replaceAll('_', ' ')})`
-      : `Provider outcome time: Withheld because the typed event state is ${responseLifecycle.providerOutcomeState}.`,
-    responseLifecycle.latestObservedChangeAt
-      ? `Independently observed change time: ${responseLifecycle.latestObservedChangeAt}`
-      : `Independently observed change time: Withheld because the independent change state is ${responseLifecycle.observedChangeState}.`,
-    '',
-    'Please review this report under the applicable abuse and acceptable-use policies.',
-    '',
-    authorisation.status === 'authorised'
-      ? 'This locally prepared packet is bound to explicit review confirmations. It was not submitted automatically and does not promise any provider outcome.'
-      : 'This is an unauthorised local draft with cautions. It was not submitted automatically and does not promise any provider outcome.',
-  ].join('\n');
-  return { json, markdown, email: `${email}\n` };
+  return { json, ...renderCaseResponsePacket(json) };
 }
 
 export function caseResponsePacketFilename(

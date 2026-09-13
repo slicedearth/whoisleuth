@@ -41,3 +41,11 @@ export const RESPONSE_AUTHORISATION_CONFIRMATION_IDS = [
   'analystAuthority',
   'evidenceFreshness',
 ] as const;
+
+export function responseContactLabel(value: typeof RESPONSE_CONTACT_KINDS[number] | 'manual'): string {
+  if (value === 'network_hosting') return 'Observed endpoint network registration';
+  if (value === 'security_txt') return 'security.txt';
+  if (value === 'application_platform') return 'Application platform';
+  if (value === 'manual') return 'Manual submission';
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
