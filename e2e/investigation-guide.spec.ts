@@ -884,9 +884,23 @@ test('shows retained Case context without treating a record update as evidence o
   });
   await openDashboardSecondaryWorkspaces(page);
   await page.getByRole('textbox', { name: 'Domain', exact: true }).fill('portal.example.test');
-  await page.getByRole('button', { name: 'Start guide' }).click();
-  await page.getByText(/^Saved evidence/).click();
-  await expect(page.locator('.evidence-checkpoint')).toContainText('0 observations');
+  const checkpoint = page.locator('details.evidence-checkpoint');
+  const summary = checkpoint.locator(':scope > summary');
+  const explanation = checkpoint.locator(':scope > p');
+  const release = await holdBrowserLocalTransaction(page);
+  try {
+    await page.getByRole('button', { name: 'Start guide' }).click();
+    await expect(summary).toHaveText('Checking saved evidence');
+    await expect(explanation).toContainText('Saved evidence context is still loading');
+    await expect(explanation).toBeHidden();
+    await summary.click();
+    await expect(checkpoint).toHaveJSProperty('open', true);
+    await expect(explanation).toBeVisible();
+  } finally {
+    await release();
+  }
+  await expect(summary).toContainText('Saved evidence · 0 observations');
+  await expect(checkpoint).toHaveJSProperty('open', true);
   await expect(page.locator('.context-tray')).toContainText('Retained context only; no evidence captures');
   await expect(page.locator('.guide')).toContainText('0 of 3 steps reviewed');
 });
