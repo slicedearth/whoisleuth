@@ -339,7 +339,11 @@ unambiguous.
 **Summary** shows retained records and next work; **Evidence** contains captures,
 pins and relationships; **Assessment** holds conclusions and branches;
 **Response** contains recipient review, packets, delivery and outcome records;
-**History** holds notes and manual investigation steps. Section links support
+**History** holds notes and manual investigation steps, including
+an optional **Record lessons from this investigation** form for useful or
+misleading evidence, delays, returned complaints and changes for next time.
+It saves a normal Case note; unanswered questions are omitted.
+Section links support
 browser back and forward and remember reading positions while that Case remains
 open; resizing the viewport clears those positions. On wide screens, Assessment
 places retained evidence beside the conclusion form. In Advanced, **Compare

@@ -4,6 +4,7 @@
   import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';
+  import CaseAfterActionStage from './CaseAfterActionStage.svelte';
 
   let { record, mutationBusy, persist }: {
     record: CaseRecord;
@@ -44,3 +45,5 @@
     {/if}
   </details>
 </section>
+
+<CaseAfterActionStage {record} {mutationBusy} {persist} />
