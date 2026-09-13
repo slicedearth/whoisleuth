@@ -91,7 +91,8 @@
         : 'Insufficient class balance: both positive and negative classes need at least 20 reviewed labels before treating this as more than a small local sample.'}
     </p>
 
-    <h3>Threshold replay</h3>
+    <details class="threshold-replay" open={report.summary.scoreBands.not_scored < report.summary.total}>
+    <summary><h3>Threshold replay{#if report.summary.scoreBands.not_scored === report.summary.total} · no scored records{/if}</h3></summary>
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -- scrollable threshold table must be keyboard reachable -->
     <div class="threshold-table-shell" role="region" tabindex="0" aria-label="Scrollable threshold metrics">
       <table>
@@ -129,8 +130,9 @@
       {/each}
     </div>
 
+    </details>
     <details class="strata">
-      <summary>Review {dashboard.strata.length} bounded strata</summary>
+      <summary><h3>Review {dashboard.strata.length} bounded strata</h3></summary>
       <div class="strata-grid">
         {#each dashboard.strata as stratum}
           <article>
@@ -165,10 +167,13 @@
   .report-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:14px 0;min-width:0}.report-file{min-width:0;color:var(--muted);font-size:var(--text-xs);overflow-wrap:anywhere}
   .model-state,.sample-state{padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);line-height:1.5;overflow-wrap:anywhere}
   .model-state[data-compatibility='older'],.model-state[data-compatibility='newer'],.sample-state[data-state='insufficient']{border-color:var(--amber);color:var(--amber)}
-  .summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}.summary-grid article{min-width:0;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.summary-grid strong{display:block;font-size:var(--text-lg);overflow-wrap:anywhere}.summary-grid span{display:block;margin-top:4px;color:var(--muted);font-size:var(--text-2xs)}
+  .summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0;padding-block:12px;border-block:1px solid var(--border)}.summary-grid article{min-width:0;padding:4px 0}.summary-grid strong{display:block;font-size:var(--text-lg);overflow-wrap:anywhere}.summary-grid span{display:block;margin-top:4px;color:var(--muted);font-size:var(--text-xs)}
+  .threshold-replay{margin-top:20px}.threshold-replay>summary{padding-block:10px;cursor:pointer;font-size:var(--text-md);font-weight:650}.threshold-replay>summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  summary h3{display:inline;margin:0;font:inherit}
   h3{margin:20px 0 10px}.threshold-table-shell{max-width:100%;overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-sm)}table{width:100%;min-width:980px;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top;font-size:var(--text-xs)}thead th{background:var(--panel);font-family:var(--mono)}tbody tr:last-child th,tbody tr:last-child td{border-bottom:0}tr.current{background:rgb(var(--accent-rgb) / .06)}td small{display:block;margin-top:4px;color:var(--muted)}
   .threshold-cards{display:none}.threshold-cards article,.strata-grid article{min-width:0;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.threshold-cards article.current{border-color:var(--accent)}h4{margin:0 0 8px;overflow-wrap:anywhere}.threshold-cards p,.strata-grid p{color:var(--muted);overflow-wrap:anywhere}dl{margin:0}dl>div{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--border)}dt{color:var(--muted)}dd{margin:0;text-align:right;overflow-wrap:anywhere}dd small{display:block;color:var(--muted)}
   .strata{margin-top:18px}.strata summary{cursor:pointer;font-weight:700}.strata-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}.comparison{margin-top:18px}.comparison p{overflow-wrap:anywhere}
+  .threshold-table-shell td:nth-child(n+3){white-space:nowrap}dd{flex-shrink:0;overflow-wrap:normal}
   .visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
   @media(max-width:900px){.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.strata-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media(max-width:640px){.calibration-dashboard{padding:14px}.dashboard-header{flex-direction:column}.report-picker{width:100%;text-align:center}.threshold-table-shell{display:none}.threshold-cards{display:grid;grid-template-columns:1fr;gap:10px}.strata-grid{grid-template-columns:1fr}.report-meta{align-items:flex-start;flex-direction:column}.summary-grid{grid-template-columns:1fr 1fr}}

@@ -107,7 +107,7 @@
 <style>
   .review-item{min-width:0;border-block-end:1px solid var(--border);border-inline-start:3px solid var(--border)}
   .review-item.high{border-inline-start-color:var(--amber)}.review-item.urgent{border-inline-start-color:var(--danger)}
-  summary{display:list-item;padding:12px 14px;cursor:pointer;color:var(--text);overflow-wrap:anywhere}
+  summary{display:list-item;padding:var(--review-row-padding);cursor:pointer;color:var(--text);overflow-wrap:anywhere}
   summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   h3{display:inline;margin:0;font-family:inherit;font-size:var(--text-sm);font-weight:650}
   .summary-meta{display:block;margin-top:4px;color:var(--muted);font-size:var(--text-xs)}

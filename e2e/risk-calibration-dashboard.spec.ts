@@ -38,6 +38,12 @@ test('external evaluation with missing authority stays unmeasured in the console
   await expect(dashboard.locator('.sample-state')).toHaveAttribute('data-state', 'insufficient');
   await expect(dashboard.locator('.sample-state')).toContainText('No records are eligible for Risk scoring');
   await expect(dashboard.locator('.sample-state')).not.toContainText('Insufficient class balance');
+  const replay = dashboard.locator('.threshold-replay');
+  const replayToggle = replay.locator(':scope > summary');
+  await expect(replay).not.toHaveAttribute('open', '');
+  await expect(replayToggle).toContainText('no scored records');
+  await replayToggle.focus(); await replayToggle.press('Enter');
+  await expect(replay).toHaveAttribute('open', '');
   for (const width of [390, 1280]) {
     await page.setViewportSize({ width, height: 844 });
     for (const theme of ['light', 'dark']) {
@@ -45,6 +51,13 @@ test('external evaluation with missing authority stays unmeasured in the console
       const metrics = width < 640 ? dashboard.locator('.threshold-cards') : dashboard.locator('table');
       await expect(metrics).toBeVisible();
       await expect(metrics.getByText('Unmeasured', { exact: true }).first()).toBeVisible();
+      const value = metrics.getByText('Unmeasured', { exact: true }).first();
+      expect(await value.evaluate(element => {
+        const text = [...element.childNodes].find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim() === 'Unmeasured');
+        if (!text) throw new Error('Expected the displayed metric value.');
+        const range = document.createRange(); range.selectNodeContents(text);
+        return range.getClientRects().length;
+      })).toBe(1);
       await expectNoHorizontalOverflow(page);
       const results = await new AxeBuilder({ page }).include('.calibration-dashboard').analyze();
       expect(results.violations).toEqual([]);
@@ -52,6 +65,9 @@ test('external evaluation with missing authority stays unmeasured in the console
     }
   }
   expect(requests).toEqual([]);
+  await replayToggle.focus(); await replayToggle.press('Enter');
+  await expect(replayToggle).toBeFocused();
+  await expect(replay).not.toHaveAttribute('open', '');
   await dashboard.getByRole('button', { name: 'Clear summary' }).click();
   await expect(dashboard.locator('.summary-grid')).toHaveCount(0);
 });
@@ -127,9 +143,10 @@ test('target-free calibration review stays tab-local, exact, accessible, and mob
   await expect(dashboard).not.toContainText('private-calibration-0');
   await expect(dashboard).not.toContainText('example.test');
 
-  const strata = dashboard.getByText(/Review 4 bounded strata/iu);
+  const strata = dashboard.locator('summary').filter({ hasText: /Review 4 bounded strata/iu });
   await strata.focus();
-  await page.keyboard.press('Enter');
+  await expect(strata).toBeFocused();
+  await strata.press('Enter');
   await expect(dashboard.locator('.strata-grid article')).toHaveCount(4);
   await expect(dashboard.getByText('Deep Scan')).toBeVisible();
   expect(requests).toEqual([]);

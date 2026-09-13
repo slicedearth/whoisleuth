@@ -146,6 +146,8 @@
   --radius-md: 10px;
   --radius-lg: 13px;
   --card-pad: clamp(16px, 2.2vw, 22px);
+  --table-cell-padding: 11px 10px;
+  --review-row-padding: 12px 14px;
   --control-h: 38px;
 }
 
@@ -260,12 +262,9 @@
 }
 
 :root[data-density='compact'] {
-  --text-2xs: .7rem;
-  --text-xs: .77rem;
-  --text-sm: .84rem;
-  --text-md: .92rem;
-  --text-lg: 1.05rem;
   --card-pad: clamp(12px, 1.6vw, 18px);
+  --table-cell-padding: 8px 10px;
+  --review-row-padding: 8px 12px;
 }
 
 :root[data-effects='minimal'] {
@@ -591,7 +590,7 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 /* ---------- Tables ---------- */
 .table-wrap { min-width: 0; overflow-x: auto; }
 .table-wrap table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
-.table-wrap th, .table-wrap td { padding: 11px 10px; border-top: 1px solid var(--border); text-align: left; vertical-align: top; }
+.table-wrap th, .table-wrap td { padding: var(--table-cell-padding); border-top: 1px solid var(--border); text-align: left; vertical-align: top; }
 .table-wrap thead th { color: var(--muted); font: 600 var(--text-2xs) var(--mono); letter-spacing: .06em; text-transform: uppercase; }
 
 /* ---------- Toolbars and empty states ---------- */
@@ -665,6 +664,10 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 
 /* ---------- Application shell ---------- */
 .shell { --console-toolbar-height: 54px; display: grid; grid-template: "sidebar header" var(--console-toolbar-height) "sidebar main" minmax(0,1fr) / 232px minmax(0,1fr); min-height: 100vh; overflow-x: clip; }
+.shell .card { background: var(--panel); box-shadow: none; }
+.shell a.card:hover, .shell a.card:focus-visible { transform: none; }
+.shell .heading::after { display: none; }
+.shell .heading h1 { font-family: var(--font-sans); letter-spacing: -.025em; }
 .shell .local-nav-shell { top: calc(var(--console-toolbar-height) + 8px); }
 .shell .result-section { --local-nav-anchor-offset: calc(var(--console-toolbar-height) + 76px); }
 .shell > aside {
