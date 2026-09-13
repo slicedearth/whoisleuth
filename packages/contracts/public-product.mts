@@ -86,6 +86,7 @@ const CLI_PUBLIC_GUIDANCE = Object.freeze({
     Object.freeze({ label: 'Review supplied evidence offline', command: 'whoisleuth review-evidence evidence.json --json' }),
     Object.freeze({ label: 'Compare retained observations', command: 'whoisleuth diff earlier.json later.json --json' }),
     Object.freeze({ label: 'Discover fixed workflow recipes', command: 'whoisleuth workflow-plan --list --json' }),
+    Object.freeze({ label: 'Create an offline Case file', command: 'whoisleuth case open --domain example.test --output cases.json' }),
     Object.freeze({ label: 'Explain one recipe', command: 'whoisleuth workflow-plan --explain evidence-handoff' }),
     Object.freeze({ label: 'Prepare a reviewed public handoff', command: 'whoisleuth case-pack cases.json --audience public --reviewed --json' }),
   ]),

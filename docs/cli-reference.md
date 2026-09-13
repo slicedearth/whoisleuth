@@ -187,8 +187,9 @@ own retention policy. No automatic key discovery, key storage or trust refresh o
 - Bulk applies one declared collection contract per target. Fast accepts up to
   500 targets and Deep up to 50; each target remains a separate request.
 - Respond commands package browser-created Cases and prepare local packets,
-  reports and sharing reviews. They do not create durable Cases, submit,
-  publish, notify or grant recipient authorisation.
+  reports and sharing reviews. The offline [`case` workflow](cli.md#local-case-files)
+  also creates and updates ordinary local Case files through explicit, conflict-checked
+  output. Neither workflow submits, publishes, notifies or grants recipient authorisation.
 - Assurance, comparison and calibration commands describe supplied or retained
   evidence. They do not tune the running model, change infrastructure or turn an
   analyst label into observed truth.

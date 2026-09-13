@@ -41,6 +41,7 @@ function publicCliCatalogue() {
     return Object.freeze({
       id: definition.command,
       summary: definition.help.summary,
+      description: definition.reference.description,
       group: definition.help.group,
       common: definition.documentation.common,
       usage: definition.reference.usage,

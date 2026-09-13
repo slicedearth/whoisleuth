@@ -273,6 +273,7 @@
         <p class="command-purpose">{command.summary}</p>
       </header>
       <div class="command-detail" id={`command-detail-${command.id}`}>
+        <p class="command-description">{detail.description}</p>
         <div class="command-examples">
           <section><h4>Usage</h4><CopyableCommand command={detail.usage} label={`${command.id} usage`} compact /></section>
           <section><h4>Example</h4><CopyableCommand command={detail.example} label={`${command.id} example`} compact /></section>
@@ -282,7 +283,7 @@
           <div><dt>Authorisation</dt><dd>{labelToken(detail.capability.authorisation)}{detail.explicitAuthorisationRequired ? ' · dedicated acknowledgement required' : ''}</dd></div>
           <div><dt>Produced artefact</dt><dd>{detail.primaryEvidenceArtefacts.length ? detail.primaryEvidenceArtefacts.join(', ') : 'No evidence artefact is declared.'}</dd></div>
           <div><dt>Presentation options</dt><dd>{#if detail.presentationOptions.length}<ul>{#each detail.presentationOptions as format}<li><code>{format.option}</code> · {format.format}</li>{/each}</ul>{:else}No alternate presentation flag; the command writes its native output.{/if}</dd></div>
-          <div><dt>Output destination</dt><dd>{#if detail.fileOutput}Standard output, or <code>--output &lt;file&gt;</code> for atomic file output. Replacing a file requires <code>--force</code>.{:else}No common <code>--output</code> option. See usage for command-specific files.{/if}</dd></div>
+          <div><dt>Output destination</dt><dd>{#if detail.fileOutput}<code>--output &lt;file&gt;</code> writes a local file atomically. Replacing a file requires <code>--force</code>. The command instructions state when file output is required.{:else}No common <code>--output</code> option. See usage for command-specific files.{/if}</dd></div>
           <div><dt>Exit behaviour</dt><dd>{exitBehaviour(detail)}</dd></div>
         </dl>
         <div class="command-inputs">
@@ -358,6 +359,7 @@
 </section>
 
 <style>
+  .command-description{margin:0 0 20px;max-width:75ch;font-size:var(--text-sm);line-height:1.65;overflow-wrap:anywhere}
   .catalogue-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:24px}.catalogue-heading>div{max-width:720px}.catalogue-heading h2,.recipes h3{margin:.3rem 0 .55rem;font:700 clamp(1.45rem,3vw,2rem) var(--mono);letter-spacing:-.04em}.catalogue-heading p:not(.eyebrow),.recipes p{margin:0;color:var(--muted);line-height:1.6}.catalogue-heading>span{flex:0 0 auto;color:var(--interface-accent);font:700 var(--text-xs) var(--mono)}
   .filters{display:grid;position:sticky;z-index:6;top:8px;grid-template-columns:minmax(200px,1fr) 145px 130px auto;gap:8px;align-items:end;margin-top:22px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.filters label{display:grid;gap:6px;min-width:0}.filters label>span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.filters input[type='search'],.filters select{width:100%;min-width:0;padding:9px 10px}.filters .check{display:flex;min-height:40px;align-items:center;gap:8px;padding:0 5px}.filters .check input{width:18px;height:18px;margin:0}.filters .check span{color:var(--text)}
   .filter-status{margin:10px 0;color:var(--muted);font-size:var(--text-2xs)}.load-error{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:12px;padding:10px;border-left:2px dotted var(--muted);background:var(--panel-raised);color:var(--muted);font-size:var(--text-xs)}.load-error p,.load-error small{margin:0;overflow-wrap:anywhere}.load-error p{color:var(--danger)}.load-error small{flex:1}.load-error button{flex:0 0 auto}

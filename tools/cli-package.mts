@@ -24,6 +24,7 @@ import {
 import { normalizeSemanticVersion } from './release-version-check.mts';
 import { buildThirdPartyNotices } from './third-party-notices.mts';
 import { checkInstalledSigningTrust } from './cli-signing-package-check.mts';
+import { checkInstalledCaseFiles } from './cli-case-package-check.mts';
 import {
   boundedPositiveInteger as positiveInteger,
   requireJsonRecord as record,
@@ -1308,6 +1309,8 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       || reviewedHandoff.completedSteps.length !== 3 || reviewedHandoff.networkApprovedForThisRun !== false) {
       throw new TypeError('Installed handoff did not finish offline after the selected review confirmation.');
     }
+    const caseFileChecks = await checkInstalledCaseFiles(temporaryRoot, (args, label, code, diagnostics) =>
+      runInstalledCheck(executable, args, label, code, diagnostics));
     const incidentChecks: string[] = [];
     const currentPack = record(JSON.parse((await readBoundedRegularFileWithin(repositoryRoot,
       `test/fixtures/case-lifecycle/${CLI_CASE_PACK_WRITER_FIXTURE_ID}.json`, {
@@ -1393,6 +1396,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       'offline-handoff-checkpoint-approval-isolation',
       'offline-handoff-completion',
       ...incidentChecks,
+      ...caseFileChecks,
       'evidence-package-creation',
       'evidence-package-verification',
       'encrypted-evidence-package-creation',

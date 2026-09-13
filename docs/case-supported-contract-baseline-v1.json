@@ -133,7 +133,7 @@
         "futureVersionBehavior": "reject",
         "migration": "normalize_to_current",
         "writeSemantics": "non_destructive_merge",
-        "byteBudget": 2097152,
+        "byteBudget": 16777216,
         "owner": "packages/contracts/case-portability.mts"
       },
       {
@@ -148,7 +148,7 @@
         "futureVersionBehavior": "reject",
         "migration": "read_only",
         "writeSemantics": "read_only",
-        "byteBudget": 2097152,
+        "byteBudget": 16777216,
         "owner": "packages/contracts/case-portability.mts"
       },
       {
@@ -535,7 +535,7 @@
           "version": 16
         },
         "canonicalisation": null,
-        "byteBudget": 2097152,
+        "byteBudget": 16777216,
         "fixtureIds": [
           "case-export-v12-public"
         ]
@@ -555,7 +555,7 @@
           "version": 16
         },
         "canonicalisation": null,
-        "byteBudget": 2097152,
+        "byteBudget": 16777216,
         "fixtureIds": [
           "case-export-v13"
         ]
@@ -575,7 +575,7 @@
           "version": 16
         },
         "canonicalisation": null,
-        "byteBudget": 2097152,
+        "byteBudget": 16777216,
         "fixtureIds": [
           "case-export-v14"
         ]
@@ -595,7 +595,7 @@
           "version": 16
         },
         "canonicalisation": null,
-        "byteBudget": 2097152,
+        "byteBudget": 16777216,
         "fixtureIds": [
           "case-export-v15"
         ]
@@ -612,7 +612,7 @@
         "futureVersionBehaviour": "reject",
         "migrationTarget": null,
         "canonicalisation": null,
-        "byteBudget": 2097152,
+        "byteBudget": 16777216,
         "fixtureIds": [
           "case-export-v16"
         ]
@@ -629,7 +629,7 @@
         "futureVersionBehaviour": "reject",
         "migrationTarget": null,
         "canonicalisation": "sorted-json-v2",
-        "byteBudget": 2097152,
+        "byteBudget": 16777216,
         "fixtureIds": [
           "cli-case-pack-v2-case-v12-public",
           "cli-case-pack-v2-case-v13",
@@ -1502,7 +1502,7 @@
             "phase": "raw_intake",
             "unit": "bytes",
             "minimum": 1,
-            "maximum": 2097152,
+            "maximum": 16777216,
             "handling": "reject"
           },
           {
@@ -1511,7 +1511,39 @@
             "phase": "serialised",
             "unit": "bytes",
             "minimum": 1,
-            "maximum": 2097152,
+            "maximum": 16777216,
+            "handling": "reject"
+          }
+        ]
+      },
+      {
+        "id": "case.editable.bounds",
+        "bounds": [
+          {
+            "id": "raw-bytes",
+            "path": "$",
+            "phase": "raw_intake",
+            "unit": "bytes",
+            "minimum": 1,
+            "maximum": 16777216,
+            "handling": "reject"
+          },
+          {
+            "id": "canonical-store-bytes",
+            "path": "$",
+            "phase": "normalised",
+            "unit": "bytes",
+            "minimum": 1,
+            "maximum": 4194304,
+            "handling": "reject"
+          },
+          {
+            "id": "output-bytes",
+            "path": "$",
+            "phase": "serialised",
+            "unit": "bytes",
+            "minimum": 1,
+            "maximum": 4194560,
             "handling": "reject"
           }
         ]
@@ -2281,6 +2313,44 @@
         "serialisationProfileId": null,
         "privacyProfileId": "case.privacy.portable-input",
         "retentionEffect": "deliberate_local_file",
+        "requestMode": "none"
+      },
+      {
+        "id": "case.consumer.cli-edit",
+        "plane": "cli",
+        "operation": "review-and-edit-local-file",
+        "acceptedContracts": [
+          {
+            "compatibilityId": "export.cases",
+            "versions": [
+              15,
+              16
+            ],
+            "mode": "direct",
+            "discriminator": null
+          }
+        ],
+        "emittedContract": {
+          "compatibilityId": "export.cases",
+          "version": 16,
+          "discriminator": null
+        },
+        "shapeIds": [
+          "case.export.v15",
+          "case.export.v16"
+        ],
+        "boundProfileIds": [
+          "case.editable.bounds",
+          "case.portable.bounds"
+        ],
+        "hookIds": [
+          "case.editable.read",
+          "case.export.build",
+          "case.browser.serialise"
+        ],
+        "serialisationProfileId": null,
+        "privacyProfileId": "case.privacy.portable-output",
+        "retentionEffect": "operator_controlled_output",
         "requestMode": "none"
       },
       {

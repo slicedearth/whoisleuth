@@ -73,6 +73,8 @@ export const CASE_PORTABILITY_BOUND_CONSTANTS = Object.freeze([
   'MAX_TAGS_PER_CASE',
   'MAX_CASE_IMPORT_BYTES',
   'MAX_CASE_STORE_BYTES',
+  'MAX_EDITABLE_CASE_INPUT_BYTES',
+  'MAX_EDITABLE_CASE_OUTPUT_BYTES',
   'MAX_EVIDENCE_SNAPSHOTS_PER_CASE',
   'MAX_EVIDENCE_FACTORS',
   'MAX_EVIDENCE_NAMESERVERS',
@@ -312,8 +314,12 @@ export const MAX_NOTE_LENGTH = 2000;
 export const MAX_TAGS_PER_CASE = 20;
 export const MAX_TAG_LENGTH = 40;
 export const MAX_DOMAIN_LENGTH = MAX_DOMAIN_NAME_LENGTH;
-export const MAX_CASE_IMPORT_BYTES = 2 * 1024 * 1024;
 export const MAX_CASE_STORE_BYTES = 4 * 1024 * 1024;
+// Formatting and JSON escaping may enlarge an admitted canonical Case store.
+// Editable files retain the store budget; the envelope adds bounded metadata.
+export const MAX_CASE_IMPORT_BYTES = MAX_CASE_STORE_BYTES * 4;
+export const MAX_EDITABLE_CASE_INPUT_BYTES = MAX_CASE_IMPORT_BYTES;
+export const MAX_EDITABLE_CASE_OUTPUT_BYTES = MAX_CASE_STORE_BYTES + 256;
 export const MAX_EVIDENCE_SNAPSHOTS_PER_CASE = 25;
 export const MAX_EVIDENCE_FACTORS = 20;
 export const MAX_EVIDENCE_NAMESERVERS = 12;
@@ -1233,6 +1239,13 @@ const CASE_LIFECYCLE_HOOKS = Object.freeze([
     exportName: 'validateCaseResponseReviewInputs',
   },
   {
+    id: 'case.editable.read',
+    role: 'structure_validator',
+    runtime: 'shared',
+    module: 'packages/cases/case-export-input.mts',
+    exportName: 'readEditableCaseExport',
+  },
+  {
     id: 'case.cli-pack.build',
     role: 'builder',
     runtime: 'cli',
@@ -1296,6 +1309,14 @@ const CASE_LIFECYCLE_BOUNDS = Object.freeze([
     bounds: [
       { id: 'raw-bytes', path: '$', phase: 'raw_intake', unit: 'bytes', minimum: 1, maximum: MAX_CASE_IMPORT_BYTES, handling: 'reject' },
       { id: 'serialised-bytes', path: '$', phase: 'serialised', unit: 'bytes', minimum: 1, maximum: MAX_CASE_IMPORT_BYTES, handling: 'reject' },
+    ],
+  },
+  {
+    id: 'case.editable.bounds',
+    bounds: [
+      { id: 'raw-bytes', path: '$', phase: 'raw_intake', unit: 'bytes', minimum: 1, maximum: MAX_EDITABLE_CASE_INPUT_BYTES, handling: 'reject' },
+      { id: 'canonical-store-bytes', path: '$', phase: 'normalised', unit: 'bytes', minimum: 1, maximum: MAX_CASE_STORE_BYTES, handling: 'reject' },
+      { id: 'output-bytes', path: '$', phase: 'serialised', unit: 'bytes', minimum: 1, maximum: MAX_EDITABLE_CASE_OUTPUT_BYTES, handling: 'reject' },
     ],
   },
   {
@@ -1645,6 +1666,25 @@ const CASE_LIFECYCLE_CONSUMERS = Object.freeze([
     serialisationProfileId: null,
     privacyProfileId: 'case.privacy.portable-input',
     retentionEffect: 'deliberate_local_file',
+    ...sharedEdge,
+  },
+  {
+    id: 'case.consumer.cli-edit',
+    plane: 'cli',
+    operation: 'review-and-edit-local-file',
+    acceptedContracts: [{
+      schema: CASE_EXPORT_LIFECYCLE_SCHEMA,
+      versions: [...CLI_CASE_PACK_INPUT_CASE_VERSIONS],
+      mode: 'direct',
+      discriminator: null,
+    }],
+    emittedContract: { schema: CASE_EXPORT_LIFECYCLE_SCHEMA, version: CASE_SCHEMA_VERSION, discriminator: null },
+    shapeIds: CLI_CASE_PACK_INPUT_CASE_VERSIONS.map(version => `case.export.v${version}`),
+    boundProfileIds: ['case.editable.bounds', 'case.portable.bounds'],
+    hookIds: ['case.editable.read', 'case.export.build', 'case.browser.serialise'],
+    serialisationProfileId: null,
+    privacyProfileId: 'case.privacy.portable-output',
+    retentionEffect: 'operator_controlled_output',
     ...sharedEdge,
   },
   {

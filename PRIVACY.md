@@ -332,6 +332,12 @@ deliberately selects a local file. Existing files are refused unless replacement
 is explicit. CLI files are not uploaded to WHOISleuth and remain under the
 operator's retention and deletion control.
 
+The offline `case` command creates and updates ordinary local Case files only
+through explicit output. Working files retain private analyst content and file
+references, not attached file bytes. Source/output locks contain only a local
+process ID and are removed after use; interruption can leave a lock for deliberate
+recovery. Case files are unencrypted unless packaged separately with encryption.
+
 An optional signer trust file is read only when explicitly selected. It contains
 public-key fingerprints, labels and review notes, not private keys. Trust reports
 include only the matching entry and the file digest, without its path or other

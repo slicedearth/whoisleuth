@@ -135,6 +135,8 @@ function minimumArguments(command: CliCommand): readonly string[] {
   // Recipe discovery is a purpose-specific mode: the mechanical grammar permits
   // either two positional values or one of these discovery options.
   if (command === 'workflow-plan') argv.push('--list');
+  // Case creation can omit a source; the minimal read operation cannot.
+  if (command === 'case') argv.push('cases.json');
   return Object.freeze(argv);
 }
 
@@ -593,7 +595,7 @@ describe('canonical CLI command registry', () => {
       group: 'respond',
       mode: 'offline',
     });
-    assert.deepEqual(filtered, ['case-pack', 'export']);
+    assert.deepEqual(filtered, ['case', 'case-pack', 'export']);
     assert.deepEqual(selectCliCommands(CLI_COMMAND_REGISTRY, {
       common: true,
       group: 'investigate',

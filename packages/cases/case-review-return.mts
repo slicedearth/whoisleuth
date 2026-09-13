@@ -43,7 +43,7 @@ export function previewCaseReviewReturn(current: CaseRecord, input: unknown, fil
   if (!/^sha256:[a-f0-9]{64}$/u.test(fileDigest)) throw new Error('The selected review file needs a SHA-256 content digest.');
   assertBoundedJsonStructure(input, 'Case review return', boundedJsonLimitsForBytes(MAX_CASE_IMPORT_BYTES));
   if (new TextEncoder().encode(JSON.stringify(input)).length > MAX_CASE_IMPORT_BYTES) {
-    throw new Error('Case review files are limited to 2 MiB. Export a single Case without silently omitting records.');
+    throw new Error(`Case review files are limited to ${MAX_CASE_IMPORT_BYTES} bytes. Export a single Case without silently omitting records.`);
   }
   const admitted = mergeCases([], input);
   const root = input as { version: unknown; cases: Record<string, unknown>[]; packet?: unknown };

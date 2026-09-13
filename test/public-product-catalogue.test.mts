@@ -66,6 +66,7 @@ describe('public product catalogue', () => {
 
     for (const [index, command] of catalogue.commands.entries()) {
       const definition = CLI_COMMAND_REGISTRY[index]!;
+      assert.equal(command.description, definition.reference.description);
       assert.equal(command.group, definition.help.group);
       assert.equal(command.common, definition.documentation.common);
       assert.equal(command.networkEffect, definition.execution.networkEffect);

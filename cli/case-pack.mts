@@ -43,6 +43,7 @@ import {
   caseReportVersionMatchesCase,
 } from '../packages/contracts/case-portability.mts';
 import { CliUsageError } from './errors.mts';
+import { canonicalCaseExportProjection as canonicalPackProjection } from '../packages/cases/case-export-input.mts';
 
 export {
   CLI_CASE_PACK_SCHEMA,
@@ -206,21 +207,6 @@ function assertCurrentCaseProjection(rawCases: readonly unknown[], normalised: r
   })) {
     throw new TypeError(`${label} contains a schema ${caseVersion} Case that would be repaired, truncated, or otherwise changed during normalisation.`);
   }
-}
-
-function canonicalPackProjection(cases: readonly CaseRecord[], caseVersion: number): CaseRecord[] {
-  if (caseVersion !== PUBLISHED_V2_3_CASE_SCHEMA_VERSION) return [...cases];
-  return cases.map((value) => {
-    if ([...value.evidencePins, ...value.sightings].some((item) => item.observedAt === null)) {
-      throw new TypeError('The published Case 15 format requires a known observation time on each retained pin and sighting.');
-    }
-    const { title: _title, ...published } = value;
-    return {
-      ...published,
-      sightings: [...value.sightings].sort((left, right) => Date.parse(left.observedAt!) - Date.parse(right.observedAt!)
-        || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0)),
-    };
-  });
 }
 
 /** Historical packs keep their immutable wire shape, so only their retained audience guarantees are checked here. */
@@ -390,7 +376,7 @@ export function buildCliCasePack(
     }),
   });
   if (Buffer.byteLength(JSON.stringify(document), 'utf8') > MAX_CASE_IMPORT_BYTES) {
-    throw new CliUsageError('The generated case pack exceeds the browser 2 MiB import limit. Select fewer cases or a more restrictive audience so no evidence is silently omitted.');
+    throw new CliUsageError(`The generated case pack exceeds the browser import limit of ${MAX_CASE_IMPORT_BYTES} bytes. Select fewer cases or a more restrictive audience so no evidence is silently omitted.`);
   }
   return document;
 }

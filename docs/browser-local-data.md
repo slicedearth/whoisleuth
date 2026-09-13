@@ -257,6 +257,11 @@ Brand Profiles can retain up to 100 profiles in a 4-MiB collection; profile-file
 imports allow 32 MiB, including formatting and export metadata. Imports also
 enforce record, nesting and text limits.
 
+Cases retain up to 500 records in a 4-MiB collection. Case-file imports allow
+16 MiB for formatting and export metadata, without increasing the stored-data
+allowance. CLI working files use this same Case format and reject mutations
+that would shorten earlier evidence to fit.
+
 Histories are stored in the same atomic collection records. Normalisation and
 storage-pressure reporting perform no network operation.
 

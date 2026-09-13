@@ -205,6 +205,22 @@ describe('case creation and updates', () => {
     assert.equal(concluded.record.updatedAt, LATER);
   });
 
+  test('conclusions reference retained pins without copying them and reject missing or duplicate identities', () => {
+    const opened = model.openOrCreateCase([], { domain: 'conclusion.example', evidencePin: {
+      label: 'Retained observation', value: 'Review this observation.', source: 'Supplied record', observedAt: ISO,
+    } }, ISO);
+    const pin = requiredValue(opened.record.evidencePins[0]);
+    const input = { disposition: 'suspicious', reviewReasonCode: 'other_reviewed', summary: 'A reviewed assessment',
+      rationale: 'The selected observation needs corroboration.', evidence: [{ pinId: pin.id, stance: 'supports' as const }] };
+    const concluded = model.recordCaseConclusion(opened.cases, opened.record.id, input, LATER);
+    assert.deepEqual(concluded.record.evidencePins, [pin]);
+    assert.deepEqual(concluded.record.decisions[0]?.evidencePinIds, [pin.id]);
+    for (const evidence of [[{ pinId: 'missing', stance: 'supports' as const }], [...input.evidence, ...input.evidence]]) {
+      assert.throws(() => model.recordCaseConclusion(opened.cases, opened.record.id, { ...input, evidence }, LATER), /retained|once/iu);
+    }
+    assert.deepEqual(opened.record.decisions, []);
+  });
+
   test('rejects conclusions without a reviewed reason, rationale-compatible decision, or evidence', () => {
     const opened = model.openOrCreateCase([], { domain: 'invalid-conclusion.example' }, ISO);
     const input = {

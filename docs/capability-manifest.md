@@ -58,7 +58,7 @@ This catalogue describes existing execution, disclosure, retention and assurance
 
 ## CLI operation catalogue
 
-The public command catalogue keeps its version 1 offline/network label for all 48 installed CLI operations. These operation records retain the more precise plane, activation, credential, export and scoring contract.
+The public command catalogue keeps its version 1 offline/network label for all 49 installed CLI operations. These operation records retain the more precise plane, activation, credential, export and scoring contract.
 
 | Operation | Capability family | Legacy collection | Trigger | Planes | Network | Disclosure | Recipients | Credentials | Retention | Export | Scoring | Authorisation |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -98,6 +98,7 @@ The public command catalogue keeps its version 1 offline/network label for all 4
 | `command.cli.mail-headers` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.review-evidence` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.brief` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
+| `command.cli.case` | `analyst_cases` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.case-pack` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.domain-control` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.monitor-once` | `lookup` | network | explicit cli command | local cli network | bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>public ip address<br>homepage request<br>tls handshake | registry service<br>dns resolver<br>target public service | none | local output deliberate | local output | none | explicit action |
@@ -246,6 +247,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.mail-headers` | none | bounded local input | none | bounded atomic | explicit per item | complete<br>partial | None |
 | `command.cli.review-evidence` | none | bounded portable document | none | bounded atomic | explicit document | complete<br>partial<br>blocked | None |
 | `command.cli.brief` | none | bounded local input | none | bounded atomic | explicit per source | complete<br>partial | None |
+| `command.cli.case` | none | bounded local input | none | bounded atomic | all or nothing | complete | None |
 | `command.cli.case-pack` | none | bounded portable document | none | bounded atomic | all or nothing | complete | None |
 | `command.cli.domain-control` | none | bounded portable document | none | bounded atomic | explicit per source | complete<br>partial | None |
 | `command.cli.monitor-once` | collector specific | collector specific | command bounded | queue stops admission | explicit per item | complete<br>partial | None |
@@ -456,6 +458,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.mail-headers` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.review-evidence` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.brief` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
+| `command.cli.case` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.case-pack` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.domain-control` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.monitor-once` | The one-shot monitor reads selected local control state and performs only the bounded scheduled review collection.<br>Its checkpoint and review evidence do not calculate Risk or Opportunity scores. |

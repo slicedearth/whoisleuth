@@ -6,7 +6,7 @@
       "schema": "whoisleuth.capability-manifest",
       "version": 1,
       "capabilityCount": 32,
-      "cliOperationCount": 48,
+      "cliOperationCount": 49,
       "cliVariantCount": 16
     },
     "cliCommandCatalogue": {
@@ -17,7 +17,7 @@
       "familyCount": 21,
       "compatibilityCount": 88,
       "privacyProfileCount": 48,
-      "consumerFlowCount": 146,
+      "consumerFlowCount": 147,
       "metadataVersions": [
         4
       ]
@@ -3024,6 +3024,77 @@
           ]
         }
       ]
+    },
+    {
+      "id": "command.cli.case",
+      "command": "case",
+      "capabilityFamilyId": "analyst_cases",
+      "title": "Review and update ordinary local Case files",
+      "requestPurpose": "Reads exact Case schemas 15 or 16. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 16.",
+      "collectionMode": "offline",
+      "executionPlanes": [
+        "local_cli_offline"
+      ],
+      "trigger": "explicit_cli_command",
+      "networkMode": "none",
+      "authorisation": "explicit_action",
+      "dataSent": [
+        "none"
+      ],
+      "dataDeliberatelyNotSent": [
+        "no_network_request",
+        "no_third_party_disclosure",
+        "credentials",
+        "cookies_and_session_data",
+        "local_paths"
+      ],
+      "recipientClasses": [
+        "none"
+      ],
+      "returnedDataCategories": [
+        "bounded_local_derivation"
+      ],
+      "processingClasses": [
+        "transient_processing",
+        "deliberate_local_file_export",
+        "offline_processing_no_request"
+      ],
+      "requestBudget": "none",
+      "responseBudget": "bounded_local_input",
+      "concurrency": "none",
+      "retention": {
+        "mode": "local_output_deliberate",
+        "storageClass": "operator_controlled_local_output",
+        "durationControl": "no_automatic_retention_beyond_process_unless_operator_saves_output"
+      },
+      "exports": {
+        "mode": "local_output",
+        "classes": [
+          "operator_selected_local_output"
+        ]
+      },
+      "credentialModel": "none",
+      "credentialUse": "No operation credential is required.",
+      "cancellation": "bounded_atomic",
+      "partialResults": "all_or_nothing",
+      "outcomes": [
+        "complete"
+      ],
+      "normalisedOutcomes": {
+        "unavailable": "not_declared_for_boundary",
+        "blocked": "not_declared_for_boundary",
+        "partial": "not_declared_for_boundary",
+        "unsupported": "not_declared_for_boundary"
+      },
+      "documentStates": [],
+      "scoringEffect": "none",
+      "nonInferences": [
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:<digest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
+        "The command reads only selected bounded local input and makes no network request.",
+        "Output remains under the operator's local retention and deletion control."
+      ],
+      "variants": []
     },
     {
       "id": "command.cli.case-pack",
@@ -7331,6 +7402,7 @@
       ],
       "consumerFlowIds": [
         "case.browser.read-write",
+        "case.consumer.cli-edit",
         "case.consumer.cli-pack-build",
         "case.consumer.cli-pack-verify",
         "case.consumer.encrypted-workspace-build",
@@ -8644,7 +8716,7 @@
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
       "writeSemantics": "non_destructive_merge",
-      "byteBudget": 2097152,
+      "byteBudget": 16777216,
       "storageClass": "deliberate_local_file",
       "retentionControl": "operator_controlled_after_export"
     },
@@ -8662,7 +8734,7 @@
       "futureVersionBehavior": "reject",
       "migration": "read_only",
       "writeSemantics": "read_only",
-      "byteBudget": 2097152,
+      "byteBudget": 16777216,
       "storageClass": "deliberate_local_file",
       "retentionControl": "operator_controlled_after_export"
     },
@@ -9584,6 +9656,7 @@
       "network": "none",
       "sharingReview": "required",
       "consumerFlowIds": [
+        "case.consumer.cli-edit",
         "case.consumer.cli-pack-build",
         "case.consumer.encrypted-workspace-build",
         "case.consumer.export-build",
@@ -11286,6 +11359,37 @@
       "processingClasses": [
         "transient_processing",
         "browser_local_retention",
+        "offline_processing_no_request"
+      ],
+      "policyState": "current"
+    },
+    {
+      "id": "case.consumer.cli-edit",
+      "familyId": "case-portability",
+      "plane": "cli",
+      "operation": "review-and-edit-local-file",
+      "acceptedContracts": [
+        {
+          "schema": "whoisleuth.case-export",
+          "versions": [
+            15,
+            16
+          ],
+          "mode": "direct",
+          "discriminator": null
+        }
+      ],
+      "emittedContract": {
+        "schema": "whoisleuth.case-export",
+        "version": 16,
+        "discriminator": null
+      },
+      "privacyProfileId": "case.privacy.portable-output",
+      "requestMode": "none",
+      "retentionEffect": "operator_controlled_output",
+      "processingClasses": [
+        "transient_processing",
+        "deliberate_local_file_export",
         "offline_processing_no_request"
       ],
       "policyState": "current"

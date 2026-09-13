@@ -7,8 +7,38 @@ import { createCase, openCaseResponseWorkspace, openCasesView } from './case-tes
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import { EXTERNAL_FINDINGS_VERSION } from '../packages/interchange/external-findings-import.mts';
 import { caseWorkspaceActionStatus } from './case-response-fixtures';
+import { caseStoreAtCapacity } from '../test/workspace-backup-capacity-fixture.mts';
+import { buildCaseExport, serializeCaseStore } from '../packages/cases/case-storage-model.mts';
+import { MAX_CASE_IMPORT_BYTES, MAX_CASE_STORE_BYTES } from '../packages/contracts/case-portability.mts';
 
 // Bounded external evidence imports, Case management and Bulk handoff coverage.
+
+test('a complete maximum-size Case file imports without losing records or notes', async ({ page }, testInfo) => {
+  const source = caseStoreAtCapacity();
+  const raw = JSON.stringify(buildCaseExport(source.cases, '2026-09-13T00:00:00.000Z'), null, 2);
+  expect(Buffer.byteLength(serializeCaseStore(source.cases))).toBe(MAX_CASE_STORE_BYTES);
+  expect(Buffer.byteLength(raw)).toBeGreaterThan(MAX_CASE_STORE_BYTES);
+  expect(Buffer.byteLength(raw)).toBeLessThan(MAX_CASE_IMPORT_BYTES);
+  await openCasesView(page);
+  const input = page.getByRole('region', { name: 'Case workspace controls' }).getByLabel('Import JSON', { exact: true });
+  const start = performance.now();
+  await input.setInputFiles({ name: 'complete-cases.json', mimeType: 'application/json', buffer: Buffer.from(raw) });
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Imported 500 new and 0 merged cases.');
+  const imported = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 500 });
+  const retained = imported.records.map(record => record.value);
+  const byId = new Map(retained.map(record => [record.id, record]));
+  expect(byId.size).toBe(source.cases.length);
+  for (const record of source.cases) expect(byId.get(record.id)).toEqual(record);
+  await testInfo.attach('complete-case-import-measurement', { contentType: 'application/json', body: Buffer.from(JSON.stringify({
+    sourceBytes: Buffer.byteLength(raw), canonicalBytes: Buffer.byteLength(serializeCaseStore(retained)), records: retained.length,
+    notes: retained.reduce((sum, record) => sum + record.notes.length, 0), hostElapsedMs: performance.now() - start,
+  })) });
+  await input.setInputFiles({ name: 'over-bound-cases.json', mimeType: 'application/json', buffer: Buffer.alloc(MAX_CASE_IMPORT_BYTES + 1, 32) });
+  await expect(caseWorkspaceActionStatus(page)).toContainText(`Case imports are limited to ${MAX_CASE_IMPORT_BYTES} bytes.`);
+  const after = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 500 });
+  expect(after.records).toEqual(imported.records);
+  await expectNoHorizontalOverflow(page);
+});
 
 function pagedFindingFile(count = 100, longFields = false) {
   return {

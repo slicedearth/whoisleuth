@@ -75,6 +75,12 @@ or domain-only output only where declared. `--output` writes a private local
 file atomically and refuses an existing path unless `--force` is selected.
 `--strict-exit` and `--fail-on` expose selected evidence states to automation.
 
+`case open --domain example.test --output cases.json` creates an ordinary local
+Case file. `case show`, `note`, `pin`, `assess` and `recheck` review or update it
+offline. Mutations require explicit output and preserve earlier retained evidence;
+see `docs/cli.md#local-case-files` for JSON inputs and conflict handling. Working
+files contain private analyst content, not attached file bytes.
+
 `manifest --package --output evidence.wlep --passphrase-file ./passphrase.txt`
 encrypts selected evidence files and their manifest. Use the same explicit
 passphrase file with `verify-artifact --package` to authenticate and verify it

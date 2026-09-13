@@ -90,6 +90,7 @@ export const CLI_COMMAND_SEMANTICS = Object.freeze({
   'mail-headers': semantic('investigate', CAPABILITY_IDS.OFFLINE_REVIEW),
   'review-evidence': semantic('investigate', CAPABILITY_IDS.PORTABLE_EVIDENCE),
   brief: semantic('investigate', CAPABILITY_IDS.OFFLINE_REVIEW),
+  case: semantic('respond', CAPABILITY_IDS.ANALYST_CASES),
   'case-pack': semantic('respond', CAPABILITY_IDS.PORTABLE_EVIDENCE),
   'domain-control': semantic('assure', CAPABILITY_IDS.PORTABLE_EVIDENCE),
   'monitor-once': semantic('assure', CAPABILITY_IDS.LOOKUP),

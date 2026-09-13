@@ -376,10 +376,21 @@ describe('CLI case pack', () => {
         createdAt: NOW,
       })),
     }));
-    assert.throws(
-      () => buildCliCasePack(JSON.stringify(source), { audience: 'internal', reviewed: true }, NOW),
-      /exceeds the browser 2 MiB import limit.*no evidence is silently omitted/iu,
-    );
+    const internal = buildCliCasePack(JSON.stringify(source), { audience: 'internal', reviewed: true }, NOW);
+    assert.equal(internal.cases.length, MAX_CASE_PACK_CASES);
+    assert.equal(internal.cases[0]!.notes.length, 50);
+    assert.deepEqual(verifyCliCasePack(internal), { caseCount: MAX_CASE_PACK_CASES });
+    const rich = structuredClone(source);
+    for (const record of rich.cases) {
+      for (let batch = 0; batch < 2; batch += 1) {
+        record.evidencePins = updateCase([record], record.id, { evidencePins: Array.from({ length: 20 }, (_, index) => ({
+          label: `Retained evidence ${batch * 20 + index}`, value: 'e'.repeat(1000), source: 'Supplied observation', observedAt: NOW,
+        })) }, NOW).record.evidencePins;
+      }
+    }
+    const richPack = buildCliCasePack(JSON.stringify(rich), { audience: 'internal', reviewed: true }, NOW);
+    assert.equal(richPack.cases[0]!.evidencePins.length, 40);
+    assert.deepEqual(verifyCliCasePack(richPack), { caseCount: MAX_CASE_PACK_CASES });
     const trusted = buildCliCasePack(JSON.stringify(source), { audience: 'trusted', reviewed: true }, NOW);
     assert.equal(trusted.cases.length, MAX_CASE_PACK_CASES);
     assert.deepEqual(verifyCliCasePack(trusted), { caseCount: MAX_CASE_PACK_CASES });

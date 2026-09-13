@@ -1,6 +1,6 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
 export const PUBLIC_CLI_CATALOGUE = {
-  "commandCount": 48,
+  "commandCount": 49,
   "groups": [
     "investigate",
     "respond",
@@ -15,6 +15,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "completion",
       "summary": "Print shell completion",
+      "description": "Print a static shell-completion script for the installed CLI.",
       "group": "utilities",
       "common": false,
       "usage": "whoisleuth completion \u003cbash|zsh|fish|powershell>",
@@ -82,6 +83,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "doctor",
       "summary": "Check the local CLI runtime",
+      "description": "Check the supported runtime and local terminal capabilities.",
       "group": "utilities",
       "common": true,
       "usage": "whoisleuth doctor [--network] [--json] [--quiet] [--no-color]",
@@ -148,6 +150,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "commands",
       "summary": "List installed command contracts",
+      "description": "List the installed command contracts in terminal or versioned JSON form.",
       "group": "utilities",
       "common": true,
       "usage": "whoisleuth commands [--common] [--group \u003cinvestigate|respond|assure|utilities>] [--mode \u003coffline|network>] [--json] [--quiet] [--no-color]",
@@ -213,6 +216,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "manual",
       "summary": "Print the generated manual page",
+      "description": "Print a generated roff manual page for local installation.",
       "group": "utilities",
       "common": false,
       "usage": "whoisleuth manual",
@@ -264,6 +268,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "manifest",
       "summary": "Build an evidence manifest offline",
+      "description": "Record an ordered, path-free manifest for up to 128 local files. Use --package --output evidence.zip for a ZIP, add --passphrase-file to encrypt the entire package, or use --folder ./evidence for a new unencrypted folder containing unchanged selected files.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth manifest \u003cartefacts...> [--package|--json] --workflow \u003cvalue> [--configuration-digest \u003cvalue>] [--passphrase-file \u003cfile>] [--folder \u003cfile>] [--quiet] [--no-color]",
@@ -343,6 +348,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "map-observations",
       "summary": "Apply a declarative observation map offline",
+      "description": "Apply one bounded declarative field-mapping profile to local source observations.",
       "group": "respond",
       "common": false,
       "usage": "whoisleuth map-observations [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -418,6 +424,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "oam-export",
       "summary": "Project external findings to Open Asset Model",
+      "description": "Project browser-compatible external findings into a bounded Open Asset Model bridge document.",
       "group": "respond",
       "common": false,
       "usage": "whoisleuth oam-export [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -493,6 +500,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "lookup",
       "summary": "Collect one domain, IP, or ASN",
+      "description": "Collect registration evidence for one domain, IP, or ASN.",
       "group": "investigate",
       "common": true,
       "usage": "whoisleuth lookup [\u003ctarget>] [--json|--junit|--markdown|--html] [--fast|--deep] [--summary|--verbose] [--no-attribution] [--exact-url] [--observer \u003cvalue>] [--vantage \u003cvalue>] [--plan] [--browse] [--save-lookup \u003cfile>] [--strict-exit] [--fail-on \u003cpolicy[,policy...]>] [--events] [--quiet] [--no-color]",
@@ -611,6 +619,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "bulk",
       "summary": "Run bounded multi-target collection",
+      "description": "Triage newline-delimited domains, IPs, or ASNs with bounded concurrency.",
       "group": "investigate",
       "common": true,
       "usage": "whoisleuth bulk [\u003csource>] [--json|--jsonl|--junit|--csv|--csv-with-metadata|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency \u003cinteger>] [--checkpoint \u003cfile>] [--resume] [--events] [--plan] [--fail-on \u003cpolicy[,policy...]>] [--quiet] [--no-color]",
@@ -739,6 +748,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "ct-search",
       "summary": "Search certificate observations",
+      "description": "Search certificate-transparency observations for one bounded keyword.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth ct-search [\u003ckeyword>] [--json] [--quiet] [--no-color]",
@@ -813,6 +823,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "ct-intake",
       "summary": "Normalise certificate observations offline",
+      "description": "Normalise source-qualified local certificate events into browser-compatible findings.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth ct-intake [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -889,6 +900,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "discover",
       "summary": "Generate lookalike candidates offline",
+      "description": "Generate bounded lookalike-domain candidates from local mutation rules.",
       "group": "investigate",
       "common": true,
       "usage": "whoisleuth discover [\u003csubject>] [--json|--jsonl|--domains] [--preset \u003ccommon|impersonation|all>|--families \u003cvalue>] [--tlds \u003cvalue>] [--keyboard \u003cqwerty|azerty|qwertz|all>] [--dictionary \u003cfile>] [--snapshot \u003cfile>] [--quiet] [--no-color]",
@@ -985,6 +997,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "discover-scan",
       "summary": "Collect a supervised candidate review queue",
+      "description": "Generate a bounded candidate set, collect a selected subset, and produce a supervised review queue.",
       "group": "investigate",
       "common": true,
       "usage": "whoisleuth discover-scan [\u003csubject>] [--json|--jsonl|--csv|--csv-with-metadata|--domains] [--preset \u003ccommon|impersonation|all>|--families \u003cvalue>] [--fast|--deep] [--registered-only|--inconclusive-only|--acquisition-only|--suppressed-only] [--tlds \u003cvalue>] [--keyboard \u003cqwerty|azerty|qwertz|all>] [--dictionary \u003cfile>] [--scan-limit \u003cinteger>] [--chunk-size \u003cinteger>] [--concurrency \u003cinteger>] [--resolver \u003cvalue>] [--allowlist \u003cfile>] [--checkpoint \u003cfile>] [--resume] [--observation-snapshot \u003cfile>] [--events] [--plan] [--fail-on \u003cpolicy[,policy...]>] [--quiet] [--no-color]",
@@ -1114,6 +1127,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "posture",
       "summary": "Review DNS and mail posture",
+      "description": "Review bounded DNS mail, delegation, and domain-control posture.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth posture [\u003cdomain>] [--json|--sarif] [--selectors \u003cvalue>] [--retired-selectors \u003cvalue>] [--mail-profile \u003cstandard|defensive-no-mail|parked>] [--owned-domain] [--quiet] [--no-color]",
@@ -1202,6 +1216,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "http",
       "summary": "Inspect one homepage request",
+      "description": "Inspect one homepage request, redirects, and bounded response metadata.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth http [\u003cdomain>] [--json] [--quiet] [--no-color]",
@@ -1279,6 +1294,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "tls",
       "summary": "Inspect one TLS connection",
+      "description": "Inspect one hostname certificate through a bounded TLS connection.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth tls [\u003chostname>] [--json] [--quiet] [--no-color]",
@@ -1356,6 +1372,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "dnssec-validate",
       "summary": "Validate an authorised DNSSEC chain",
+      "description": "Cryptographically validate one authorised DNSSEC chain from a supplied trust anchor through one selected public resolver.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth dnssec-validate \u003cdomain> --resolver \u003cvalue> --trust-anchor \u003cfile> --owned-or-authorized [--json] [--quiet] [--no-color]",
@@ -1436,6 +1453,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "mail-transport",
       "summary": "Review selected authorised SMTP transports",
+      "description": "Review selected authorised MX endpoints, DNSSEC-qualified TLSA evidence, SMTP capabilities, and optional STARTTLS certificates.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth mail-transport [\u003csource>] --resolver \u003cvalue> --trust-anchor \u003cfile> --owned-or-authorized --active-probe [--json] [--quiet] [--no-color]",
@@ -1520,6 +1538,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "registry-support",
       "summary": "Explain local registry coverage",
+      "description": "Explain the local registry capability profile for one domain or suffix.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth registry-support [\u003cdomain-or-suffix>] [--json] [--quiet] [--no-color]",
@@ -1595,6 +1614,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "registry-doctor",
       "summary": "Diagnose saved registry collection",
+      "description": "Compare a saved Lookup registry result with the reviewed local capability profile.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth registry-doctor [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -1670,6 +1690,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "registry-cohort",
       "summary": "Build target-free registry quality timelines",
+      "description": "Build privacy-safe suffix and capability-profile timelines from saved observations or retained cohort reports.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth registry-cohort [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -1745,6 +1766,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "registry-scaffold",
       "summary": "Create a sanitised registry fixture scaffold",
+      "description": "Create a bounded synthetic WHOIS fixture scaffold for one existing capability profile.",
       "group": "utilities",
       "common": false,
       "usage": "whoisleuth registry-scaffold --profile \u003cvalue> --suffix \u003cvalue> --scenario \u003cregistered|not_found|inconclusive>",
@@ -1801,6 +1823,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "risk-calibrate",
       "summary": "Replay reviewed Risk labels offline",
+      "description": "Replay reviewed labels against the current explainable Risk model.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth risk-calibrate [\u003csource>] [--json|--summary-json] [--quiet] [--no-color]",
@@ -1881,6 +1904,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "lookalike-calibrate",
       "summary": "Summarise reviewed lookalike yield offline",
+      "description": "Summarise reviewed candidate dispositions by mutation family without retaining domains.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth lookalike-calibrate [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -1956,6 +1980,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "verify-artifact",
       "summary": "Validate saved evidence offline",
+      "description": "Validate a supported archive, claim passport, packet, manifest, saved Lookup or Lookup-evidence export without printing evidence contents. Use --package for a portable evidence ZIP or encrypted package, with --passphrase-file to unlock it; use --folder ./evidence for an explicit unencrypted evidence folder.",
       "group": "assure",
       "common": true,
       "usage": "whoisleuth verify-artifact [\u003csource>] [--passphrase-file \u003cfile>] [--manifest \u003cfile>] [--manifest-entry \u003cartifact-1|artifact-2|artifact-3|artifact-4|artifact-5|artifact-6|artifact-7|artifact-8|artifact-9|artifact-10|artifact-11|artifact-12|artifact-13|artifact-14|artifact-15|artifact-16|artifact-17|artifact-18|artifact-19|artifact-20|artifact-21|artifact-22|artifact-23|artifact-24|artifact-25|artifact-26|artifact-27|artifact-28|artifact-29|artifact-30|artifact-31|artifact-32|artifact-33|artifact-34|artifact-35|artifact-36|artifact-37|artifact-38|artifact-39|artifact-40|artifact-41|artifact-42|artifact-43|artifact-44|artifact-45|artifact-46|artifact-47|artifact-48|artifact-49|artifact-50|artifact-51|artifact-52|artifact-53|artifact-54|artifact-55|artifact-56|artifact-57|artifact-58|artifact-59|artifact-60|artifact-61|artifact-62|artifact-63|artifact-64|artifact-65|artifact-66|artifact-67|artifact-68|artifact-69|artifact-70|artifact-71|artifact-72|artifact-73|artifact-74|artifact-75|artifact-76|artifact-77|artifact-78|artifact-79|artifact-80|artifact-81|artifact-82|artifact-83|artifact-84|artifact-85|artifact-86|artifact-87|artifact-88|artifact-89|artifact-90|artifact-91|artifact-92|artifact-93|artifact-94|artifact-95|artifact-96|artifact-97|artifact-98|artifact-99|artifact-100|artifact-101|artifact-102|artifact-103|artifact-104|artifact-105|artifact-106|artifact-107|artifact-108|artifact-109|artifact-110|artifact-111|artifact-112|artifact-113|artifact-114|artifact-115|artifact-116|artifact-117|artifact-118|artifact-119|artifact-120|artifact-121|artifact-122|artifact-123|artifact-124|artifact-125|artifact-126|artifact-127|artifact-128>] [--package] [--folder \u003cfile>] [--json] [--strict-exit] [--quiet] [--no-color]",
@@ -2041,6 +2066,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "interchange-report",
       "summary": "Report portable artefact fidelity offline",
+      "description": "Report what one recognised portable artefact preserves, excludes, and supports across browser and CLI workflows.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth interchange-report [\u003csource>] [--passphrase-file \u003cfile>] [--json] [--quiet] [--no-color]",
@@ -2119,6 +2145,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "inspect-archive",
       "summary": "Inspect an archive locally",
+      "description": "Summarise or search one current version-9 workspace archive, with exact version-5 and version-6 and version-7 and version-8 support and redacted output by default.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth inspect-archive [\u003csource>] [--passphrase-file \u003cfile>] [--search \u003cvalue>] [--require-match] [--reveal] [--expect-content-digest \u003cvalue>] [--json] [--quiet] [--no-color]",
@@ -2200,6 +2227,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "sign-artifact",
       "summary": "Sign a reviewed artefact locally",
+      "description": "Sign one reviewed response packet or supported manifest with a local private key.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth sign-artifact [\u003csource>] --private-key-file \u003cfile>",
@@ -2267,6 +2295,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "verify-signature",
       "summary": "Verify a signed evidence package",
+      "description": "Verify one signed package and report embedded-artefact assurance separately. --trust-store-file also checks an explicit local fingerprint policy and emits a signer-trust report; unknown, retired, revoked or future-reviewed entries exit 4.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth verify-signature [\u003csource>] [--public-key-file \u003cfile>] [--trust-store-file \u003cfile>] [--json] [--quiet] [--no-color]",
@@ -2347,6 +2376,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "source-report",
       "summary": "Build a target-free source report",
+      "description": "Create a target-free reliability summary from a saved lookup.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth source-report [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -2422,6 +2452,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "compare",
       "summary": "Compare registry publications in one lookup",
+      "description": "Compare separately attributed registry publications in a saved lookup.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth compare [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -2497,6 +2528,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "page-compare",
       "summary": "Compare saved static page evidence",
+      "description": "Compare static page identity, favicon, technology, and TLS evidence in two saved deep lookups.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth page-compare \u003csources...> [--json] [--quiet] [--no-color]",
@@ -2572,6 +2604,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "mail-review",
       "summary": "Review saved passive mail evidence",
+      "description": "Review passive MX, null MX, SPF, DMARC, and shared mail-provider evidence from saved Bulk results.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth mail-review [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -2647,6 +2680,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "mail-headers",
       "summary": "Review message headers offline",
+      "description": "Review identity, reported authentication, domain alignment, and Received routing from selected message headers.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth mail-headers [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -2722,6 +2756,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "review-evidence",
       "summary": "Review supplied evidence offline",
+      "description": "Review one versioned DNS, domain-change, routing, GeoIP, RDAP, or trust-store document offline.",
       "group": "investigate",
       "common": true,
       "usage": "whoisleuth review-evidence [\u003csource>] [--mmdb \u003cfile>] [--json] [--strict-exit] [--quiet] [--no-color]",
@@ -2806,6 +2841,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "brief",
       "summary": "Build a decision brief from a saved lookup",
+      "description": "Turn one saved Lookup into a compact decision brief with facts, unknowns, contradictions, and next actions.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth brief [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -2879,8 +2915,110 @@ export const PUBLIC_CLI_CATALOGUE = {
       }
     },
     {
+      "id": "case",
+      "summary": "Review and update ordinary local Case files",
+      "description": "Show or open a local Case, append a note or evidence pin, record an assessment, or retain an offline recheck. Use --input for pin, assessment and recheck JSON; --text or --note-file for a note. Mutations require --output and always write the complete current Case export.",
+      "group": "respond",
+      "common": true,
+      "usage": "whoisleuth case \u003cshow|open|note|pin|assess|recheck> [\u003csource>] [--text \u003cvalue>|--note-file \u003cfile>] [--case-id \u003cvalue>] [--domain \u003cvalue>] [--title \u003cvalue>] [--new-incident] [--input \u003cfile>] [--expect-file-digest \u003cvalue>] [--json] [--no-color]",
+      "example": "whoisleuth case open --domain example.test --output cases.json\n  whoisleuth case show cases.json\n  whoisleuth case note cases.json --text \"Review the retained observation\" --output cases.json --force",
+      "boundary": "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:\u003cdigest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
+      "collection": {
+        "mode": "offline",
+        "scope": "Reads exact Case schemas 15 or 16. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 16."
+      },
+      "inputs": [
+        {
+          "name": "operation",
+          "valueKind": "enum",
+          "minimum": 1,
+          "maximum": 1,
+          "values": [
+            "show",
+            "open",
+            "note",
+            "pin",
+            "assess",
+            "recheck"
+          ],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        },
+        {
+          "name": "source",
+          "valueKind": "file",
+          "minimum": 0,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--case-id",
+        "--domain",
+        "--title",
+        "--new-incident",
+        "--text",
+        "--note-file",
+        "--input",
+        "--expect-file-digest",
+        "--json",
+        "--no-color"
+      ],
+      "networkEffect": "offline",
+      "disclosureClass": "none",
+      "explicitAuthorisationRequired": false,
+      "planSupport": false,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002ecase-export"
+      ],
+      "inputLimits": [
+        "Reads exact Case schemas 15 or 16. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 16.",
+        "operation: 1-1 enum value",
+        "source: 0-1 file value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
+      ],
+      "fileOutput": true,
+      "primaryEvidenceArtefacts": [
+        "Case export"
+      ],
+      "capability": {
+        "familyId": "analyst_cases",
+        "networkMode": "none",
+        "dataSent": [
+          "none"
+        ],
+        "recipients": [
+          "none"
+        ],
+        "authorisation": "explicit_action",
+        "retention": "local_output_deliberate",
+        "export": "local_output",
+        "outcomes": [
+          "complete"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "The command reads only selected bounded local input and makes no network request.",
+          "Output remains under the operator's local retention and deletion control."
+        ]
+      }
+    },
+    {
       "id": "case-pack",
       "summary": "Build a reviewed case package",
+      "description": "Package browser-created Case records from schemas 15 or 16 as a reviewed, audience-specific Case-pack v2 with current schema 16.",
       "group": "respond",
       "common": true,
       "usage": "whoisleuth case-pack [\u003csource>] --audience \u003cinternal|trusted|public> --reviewed [--json] [--quiet] [--no-color]",
@@ -2960,6 +3098,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "domain-control",
       "summary": "Build or review a domain control manifest",
+      "description": "Build an integrity-protected desired-state manifest or compare one with supplied observations.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth domain-control [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -3036,6 +3175,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "monitor-once",
       "summary": "Run one bounded domain control review",
+      "description": "Collect one bounded owned-domain review and compare it with an optional prior checkpoint.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth monitor-once [\u003csource>] [--json|--junit] [--previous \u003cfile>] [--limit \u003cinteger>] [--concurrency \u003cinteger>] [--fail-on \u003cpolicy[,policy...]>] [--quiet] [--no-color]",
@@ -3129,6 +3269,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "assurance",
       "summary": "Review domain change, recovery, or retirement plans",
+      "description": "Review a versioned domain change, recovery-dependency, or retirement plan.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth assurance [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -3205,6 +3346,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "change-packet",
       "summary": "Build a reviewed change packet offline",
+      "description": "Assemble pre-change, post-change, and planning evidence into one integrity-protected packet.",
       "group": "respond",
       "common": false,
       "usage": "whoisleuth change-packet [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -3282,6 +3424,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "sharing-review",
       "summary": "Lint an artefact before deliberate sharing",
+      "description": "Lint one reviewed artefact against local integrity, marking, recipient, personal-data, and redaction controls.",
       "group": "respond",
       "common": false,
       "usage": "whoisleuth sharing-review [\u003csource>] --marking \u003cclear|green|amber|amber-strict|red> --recipient-scope \u003cpublic|community|organization|named-recipients> --purpose \u003cvalue> [--human-reviewed] [--personal-data-reviewed] [--redactions-confirmed] [--json] [--quiet] [--no-color]",
@@ -3364,6 +3507,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "workflow-plan",
       "summary": "Plan a fixed investigation recipe",
+      "description": "Build a fixed domain-investigation plan from existing bounded CLI commands.",
       "group": "assure",
       "common": true,
       "usage": "whoisleuth workflow-plan [\u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison|campaign-review|certificate-anomaly|registry-disagreement|evidence-handoff|planned-domain-change|post-change-verification>] [\u003csubject>] [--list|--explain \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison|campaign-review|certificate-anomaly|registry-disagreement|evidence-handoff|planned-domain-change|post-change-verification>] [--json] [--quiet] [--no-color]",
@@ -3464,6 +3608,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "workflow-run",
       "summary": "Execute approved fixed-recipe steps",
+      "description": "Execute approved steps from a fixed investigation recipe and emit a resumable checkpoint.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth workflow-run \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison|campaign-review|certificate-anomaly|registry-disagreement|evidence-handoff|planned-domain-change|post-change-verification> \u003csubject> [--select \u003cvalue>] [--use-artifact \u003cvalue>] [--confirm-review \u003cvalue>] [--approve-network] [--resume \u003cfile>] [--interactive] [--json] [--quiet] [--no-color]",
@@ -3586,6 +3731,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "diff",
       "summary": "Compare two compatible retained artefacts",
+      "description": "Compare an earlier and later artefact from the same retained Lookup, Bulk-session, or domain-portfolio family.",
       "group": "assure",
       "common": true,
       "usage": "whoisleuth diff \u003csources...> [--left-session \u003cvalue>] [--right-session \u003cvalue>] [--json] [--quiet] [--no-color]",
@@ -3665,6 +3811,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "reconcile",
       "summary": "Reconcile independently labelled observations",
+      "description": "Reconcile bounded values across independently labelled observations of one domain.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth reconcile \u003csources...> [--json] [--quiet] [--no-color]",
@@ -3740,6 +3887,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "timeline",
       "summary": "Build same-domain history from saved lookups",
+      "description": "Build an ordered same-domain history from saved Lookup observations.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth timeline \u003csources...> [--json] [--quiet] [--no-color]",
@@ -3817,6 +3965,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "export",
       "summary": "Convert a lookup to an evidence report",
+      "description": "Convert one saved lookup into a versioned evidence report.",
       "group": "respond",
       "common": true,
       "usage": "whoisleuth export [\u003csource>] [--markdown|--html] [--compact] [--no-attribution]",

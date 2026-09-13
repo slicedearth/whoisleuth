@@ -84,6 +84,7 @@ Every operation below is joined to the exact installed command identity. Variant
 | ↳ `collect_fast` | Accepts at most 500 fast or 50 deep targets, with concurrency capped at 8 fast or 3 deep. Variant: collect fast. | bounded passive<br>explicit action | normalised target<br>registry query<br>dns question<br>Recipients: registry service<br>dns resolver | source attributed lookup evidence<br>source health<br>bounded assessments | local output deliberate<br>Export: local output | complete<br>partial |
 | ↳ `plan_deep` | Accepts at most 500 fast or 50 deep targets, with concurrency capped at 8 fast or 3 deep. Variant: plan deep. | none<br>explicit action | none<br>Recipients: none | bounded runtime metadata | local output deliberate<br>Export: metadata only | complete |
 | ↳ `plan_fast` | Accepts at most 500 fast or 50 deep targets, with concurrency capped at 8 fast or 3 deep. Variant: plan fast. | none<br>explicit action | none<br>Recipients: none | bounded runtime metadata | local output deliberate<br>Export: metadata only | complete |
+| `command.cli.case`<br>Review and update ordinary local Case files | Reads exact Case schemas 15 or 16. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 16. | none<br>explicit action | none<br>Recipients: none | bounded local derivation | local output deliberate<br>Export: local output | complete |
 | `command.cli.case-pack`<br>Build a reviewed case package | Reads one bounded Case export from schemas 15 or 16 and writes a separate audience-specific Case-pack v2. | none<br>explicit action | none<br>Recipients: none | bounded portable document<br>integrity or compatibility state | local output deliberate<br>Export: deliberate bounded | complete |
 | `command.cli.change-packet`<br>Build a reviewed change packet offline | Reads one versioned packet input capped at 6 MiB and makes no request or configuration change. | none<br>explicit action | none<br>Recipients: none | bounded portable document<br>integrity or compatibility state | local output deliberate<br>Export: deliberate bounded | complete<br>partial<br>blocked |
 | `command.cli.commands`<br>List installed command contracts | Reads the embedded command catalogue and performs no collection. | none<br>explicit action | none<br>Recipients: none | bounded runtime metadata | local output deliberate<br>Export: metadata only | complete |
@@ -151,7 +152,7 @@ The machine-readable catalogue contains every exact compatibility, privacy-profi
 | `analyst-interchange` | analyst authored sensitive | 13 | 1 | 13 |
 | `analyst-review-state` | analyst authored sensitive | 1 | 1 | 1 |
 | `case-drafts` | analyst authored sensitive | 1 | 1 | 1 |
-| `case-portability` | analyst authored sensitive | 9 | 3 | 17 |
+| `case-portability` | analyst authored sensitive | 9 | 3 | 18 |
 | `case-views` | analyst authored sensitive | 1 | 1 | 1 |
 | `cli-lookup` | analyst authored sensitive | 1 | 4 | 6 |
 | `domain-control-flight-recorder` | analyst authored sensitive | 2 | 3 | 7 |

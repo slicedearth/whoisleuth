@@ -47,7 +47,7 @@
     // The Case baseline belongs to this selection, not to the later read result.
     const baseline = JSON.parse(JSON.stringify(record)) as CaseRecord;
     try {
-      if (file.size > MAX_CASE_IMPORT_BYTES) throw new Error('Review files are limited to 2 MiB. Select an export containing one Case.');
+      if (file.size > MAX_CASE_IMPORT_BYTES) throw new Error(`Review files are limited to ${MAX_CASE_IMPORT_BYTES} bytes. Select an export containing one Case.`);
       const bytes = new Uint8Array(await file.arrayBuffer());
       const value = parseBoundedJson(new TextDecoder('utf-8', { fatal: true }).decode(bytes), {
         label: 'Case review return', maximumBytes: MAX_CASE_IMPORT_BYTES, limits: boundedJsonLimitsForBytes(MAX_CASE_IMPORT_BYTES),
@@ -67,7 +67,7 @@
   function exportCopy() {
     try {
       const text = JSON.stringify(buildCaseExport([record]), null, 2);
-      if (new TextEncoder().encode(text).length > MAX_CASE_IMPORT_BYTES) throw new Error('This Case exceeds the 2 MiB review-file limit. Use a workspace backup for its complete contents; no shortened review copy was created.');
+      if (new TextEncoder().encode(text).length > MAX_CASE_IMPORT_BYTES) throw new Error(`This Case exceeds the ${MAX_CASE_IMPORT_BYTES}-byte review-file limit. Use a workspace backup for its complete contents; no shortened review copy was created.`);
       const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
       const anchor = document.createElement('a'); anchor.href = url; anchor.download = `case-review-${record.id}.json`; anchor.click();
       URL.revokeObjectURL(url);

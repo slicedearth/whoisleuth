@@ -74,8 +74,9 @@ whoisleuth lookup example.test --deep --browse --save-lookup lookup.json
 
 In Console Lookup, open **Replay exported evidence**, select the file, verify
 its digest and source states, then create or update a browser-local Case. The
-file is not uploaded. Case classification, exact incident links, response
-actions and packet preparation remain deliberate browser steps.
+file is not uploaded. Case classification, exact incident links and response
+actions remain deliberate analyst steps. Ordinary Case files also support the
+offline CLI workflow below.
 When several incident Cases share a domain, select the intended Case before
 retaining replay evidence. Case packs preserve each current Case ID separately;
 trusted and public packs exclude analyst-entered incident titles.
@@ -135,6 +136,91 @@ Authentication states are header claims, not an independent DNS or
 cryptographic validation, and alignment differences can be legitimate.
 
 ## Output and automation
+
+### Local Case files
+
+Create a working file, inspect its Case IDs, then append a note:
+
+```sh
+whoisleuth case open --domain example.test --title "Review the selected form" --output cases.json
+whoisleuth case show cases.json
+whoisleuth case note cases.json --note-file note.txt --output cases.json --force
+```
+
+Use `--case-id` when the file contains several Cases. `open` reuses the selected
+Case; `--new-incident --title "Another incident"` creates a distinct ID for the
+same domain. It does not open a browser or collect anything.
+
+`pin`, `assess` and `recheck` read a selected JSON file with `--input`:
+
+```sh
+whoisleuth case pin cases.json --input pin.json --output cases.json --force
+whoisleuth case assess cases.json --input assessment.json --output cases.json --force
+whoisleuth case recheck cases.json --input recheck.json --output cases.json --force
+```
+
+A pin describes the supplied observation, not a new collection. For example:
+
+```json
+{
+  "label": "Selected page observation",
+  "value": "A form was retained in the supplied capture.",
+  "source": "Analyst supplied capture",
+  "observedAt": "2026-09-01T12:00:00.000Z",
+  "completeness": "complete",
+  "sourceState": "complete",
+  "observationHostname": "example.test"
+}
+```
+
+Supply an observation time only when known; use `null` otherwise. Describe
+partial or unavailable evidence honestly. IDs and creation times are allocated
+locally. Unknown fields, truncated values and unsupported formats are rejected.
+
+An assessment includes a reviewed disposition and reason, a summary, a rationale,
+and evidence relationships. Replace `selected-pin-id` with an ID from `case show`:
+
+```json
+{
+  "disposition": "suspicious",
+  "reviewReasonCode": "other_reviewed",
+  "summary": "Review the apparent credential request",
+  "rationale": "The supplied observation needs independent corroboration.",
+  "evidence": [{ "pinId": "selected-pin-id", "stance": "supports" }]
+}
+```
+
+Each fact selects one retained `pinId` or a new `pin` object. Stances are
+`supports`, `contradicts` or `unresolved`; at least one must support the decision.
+Counterevidence and unresolved evidence remain linked, not discarded. Assessment
+summary and rationale use single-line text; note files can contain paragraphs.
+
+A recheck input contains `state`, `observedAt`, `completeness`, `source` and
+`comparisonSummary`, with optional limitations and follow-up time. For example,
+use `state: "unavailable"` and `completeness: "partial"` when a supplied capture
+did not complete. `not_reproduced` requires a saved recheck question from the
+Case's console workflow, its exact `recheck` context, the target
+`observationHostname`, a complete later observation where a baseline exists,
+and `conditionsMatch: "comparable"`. It never means global removal or takedown.
+
+Mutations require an explicit output path and write the complete current Case
+export. They never prune old evidence to fit. Input formatting may use up to
+16 MiB; the canonical store remains limited to 4 MiB and 500 Cases. `show --json`
+can export a selected subset to a **different** path. Ordinary Case imports also
+allow 16 MiB for formatting and export metadata; the stored-data limit remains
+4 MiB. Case packs retain their separate 25-Case selection and 4-MiB source-file
+limits, and include generated reports within the bounded import allowance.
+
+`show` reports the exact file digest. Add `--expect-file-digest sha256:<digest>`
+to reject a file changed since that review. Source/output locks and atomic
+replacement also detect changes during execution. After an interrupted process,
+inspect its adjacent `.workflow.lock` before deliberately removing it. Validation
+or conflict failures leave the Case file unchanged and return 2. Filesystem
+publication failures return 3.
+
+Working files contain private analyst content and file references, not attachment
+bytes. Use `case-pack` for a reviewed audience projection and a separate evidence
+package for selected original files. Nothing is uploaded or reported automatically.
 
 ### Portable evidence files
 

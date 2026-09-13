@@ -26,7 +26,7 @@
     {
       id: 'respond',
       label: 'Respond',
-      description: 'Prepare reviewed local material for a deliberate handoff.',
+      description: 'Maintain local Case files and prepare reviewed handoffs.',
     },
     {
       id: 'assure',
@@ -91,6 +91,7 @@
       <section aria-labelledby={`task-group-${group.id}`}>
         <header><h3 id={`task-group-${group.id}`}>{group.label}</h3><p>{group.description}</p></header>
         <ul>{#each group.tasks as task}<li><strong>{task.label}</strong><CopyableCommand command={task.command} label={`${task.label} command`} compact /></li>{/each}</ul>
+        {#if group.id === 'respond'}<p><a href={`${WHOISLEUTH_SOURCE_REPOSITORY_URL}/blob/main/docs/cli.md#local-case-files`}>Case file inputs and examples</a></p>{/if}
       </section>
     {/each}
   </div>

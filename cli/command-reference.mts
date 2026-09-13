@@ -11,6 +11,8 @@ import {
 import {
   CASE_SCHEMA_VERSION,
   CLI_CASE_PACK_INPUT_CASE_VERSIONS,
+  MAX_CASE_STORE_BYTES,
+  MAX_EDITABLE_CASE_INPUT_BYTES,
   SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
   WORKSPACE_ARCHIVE_VERSION,
 } from '../packages/contracts/case-portability.mts';
@@ -158,6 +160,7 @@ const INVESTIGATION_PLAN_RECIPES = Object.freeze([
 ] as const);
 
 const RUNNABLE_INVESTIGATION_PLAN_RECIPES = INVESTIGATION_PLAN_RECIPES;
+const CLI_CASE_OPERATIONS = ['show', 'open', 'note', 'pin', 'assess', 'recheck'] as const;
 
 const CLI_META_ACTIONS: readonly CliMetaAction[] = Object.freeze([
   Object.freeze({
@@ -409,6 +412,14 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--left-session': text(true),
   '--right-session': text(true),
   '--compact': flag(),
+  '--case-id': text(),
+  '--domain': text(),
+  '--title': text(),
+  '--new-incident': flag(),
+  '--text': text(),
+  '--note-file': file(),
+  '--input': file(),
+  '--expect-file-digest': text(),
 } as const satisfies Readonly<Record<string, CliOptionDefinition>>);
 
 type CliOption = keyof typeof CLI_OPTION_DEFINITIONS;
@@ -1300,6 +1311,22 @@ const COMMAND_SEEDS = Object.freeze({
     additionalOutputFormats: Object.freeze([]),
     bootstrapProfile: 'allowed',
   }),
+  case: commandSeed({
+    reference: {
+      description: 'Show or open a local Case, append a note or evidence pin, record an assessment, or retain an offline recheck. Use --input for pin, assessment and recheck JSON; --text or --note-file for a note. Mutations require --output and always write the complete current Case export.',
+      example: 'whoisleuth case open --domain example.test --output cases.json\n  whoisleuth case show cases.json\n  whoisleuth case note cases.json --text "Review the retained observation" --output cases.json --force',
+      boundary: 'No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:<digest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.',
+    },
+    collection: { mode: 'offline', scope: `Reads exact Case schemas ${CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(' or ')}. Input is bounded to ${MAX_EDITABLE_CASE_INPUT_BYTES / 1024 / 1024} MiB including formatting; the complete canonical Case store must fit ${MAX_CASE_STORE_BYTES / 1024 / 1024} MiB without pruning. Writes current schema ${CASE_SCHEMA_VERSION}.` },
+    summary: 'Review and update ordinary local Case files',
+    options: ['--case-id', '--domain', '--title', '--new-incident', '--text', '--note-file', '--input', '--expect-file-digest', '--json', '--no-color'],
+    positionals: Object.freeze([positional('operation', 'enum', 1, 1, CLI_CASE_OPERATIONS), positional('source', 'file', 0, 1)]),
+    constraints: Object.freeze([constraint({ kind: 'mutually_exclusive', options: ['--text', '--note-file'] })]),
+    handlerOwner: 'inline', networkEffect: 'offline', common: true,
+    schemaIdentifiers: Object.freeze(['whoisleuth.case-export']),
+    primaryArtefacts: Object.freeze(['Case export']), planSupport: false,
+    additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
+  }),
   "case-pack": commandSeed({
     reference: {
       description: `Package browser-created Case records from schemas ${CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(' or ')} as a reviewed, audience-specific Case-pack v2 with current schema ${CASE_SCHEMA_VERSION}.`,
@@ -1848,6 +1875,7 @@ function commandHelp(command: CliCommand): string {
 
 export {
   CLI_COMMAND_REGISTRY,
+  CLI_CASE_OPERATIONS,
   CLI_COMMANDS,
   CLI_META_ACTIONS,
   COMMAND_COLLECTION,

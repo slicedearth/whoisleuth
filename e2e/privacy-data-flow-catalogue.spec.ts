@@ -94,6 +94,13 @@ test('privacy guidance stays concise, request-free and responsive', async ({ pag
     await test.info().attach(`signer-privacy-${surface.width}-${surface.theme}`, {
       body: await page.screenshot(), contentType: 'image/png',
     });
+    const cases = page.locator('p').filter({ hasText: 'The offline case command creates and updates ordinary local Case files' });
+    await expect(cases).toContainText('private analyst content');
+    await expect(cases).toContainText('Case files are unencrypted unless packaged separately with encryption.');
+    await cases.scrollIntoViewIfNeeded();
+    await expect(cases).toBeInViewport();
+    await expectNoHorizontalOverflow(page);
+    if (surface.width === 320 || surface.width === 1280) await page.screenshot({ path: test.info().outputPath(`case-file-privacy-${surface.width}-${surface.theme}.png`) });
   }
 });
 

@@ -42,6 +42,34 @@ test('CLI workflow recipes and review confirmation remain reachable without empt
   }
 });
 
+test('offline Case file guidance is reachable from tasks and direct command links', async ({ page }, testInfo) => {
+  const investigationRequests = collectInvestigationRequests(page);
+  await page.goto('/cli#command-case');
+  const command = page.locator('article[data-command-detail="case"]');
+  await expect(command.getByRole('heading', { name: 'case', exact: true })).toBeVisible();
+  await expect(command).toContainText('Mutations require --output');
+  await command.getByText('Operational boundary', { exact: true }).click();
+  await expect(command).toContainText('Not reproduced requires an existing saved question');
+  await command.getByText('Limits and contracts', { exact: true }).click();
+  await expect(command).toContainText('without pruning');
+  await expect(page.getByRole('link', { name: 'Case file inputs and examples' })).toHaveAttribute('href', /docs\/cli\.md#local-case-files$/u);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280, 2560]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expectNoHorizontalOverflow(page);
+      if (width === 320 || width === 1280) {
+        const skip = page.getByRole('link', { name: 'Skip to main content', exact: true });
+        await expect(skip).not.toBeFocused();
+        expect(await skip.evaluate(element => element.getBoundingClientRect().bottom)).toBeLessThanOrEqual(0);
+        await command.screenshot({ path: testInfo.outputPath(`case-files-${theme}-${width}.png`) });
+        await page.screenshot({ path: testInfo.outputPath(`case-files-viewport-${theme}-${width}.png`) });
+      }
+    }
+  }
+  expect(investigationRequests).toEqual([]);
+});
+
 test('keeps desktop and narrow public navigation complete and request-free', async ({ page }) => {
   const investigationRequests = collectInvestigationRequests(page);
   await page.setViewportSize({ width: 1280, height: 820 });

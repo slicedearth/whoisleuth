@@ -334,26 +334,40 @@ async function runCliCommand(argv: unknown, dependencies: CliDependencies = {}):
   }
   if (!args.destination) return runParsedCli(args, dependencies);
   const buffered = createBufferedOutput({ binary: args.action === 'manifest' && args.package === true });
-  let checkpoint: Awaited<ReturnType<typeof import('./investigation-checkpoint.mts').prepareInvestigationCheckpoint>> | null = null;
+  let checkpoint: Readonly<{ publish(content: string): Promise<void>; release(): Promise<number> }> | null = null;
+  let capturedSource: string | null = null;
   try {
     if (args.action === 'workflow-run') {
       const { prepareInvestigationCheckpoint } = await import('./investigation-checkpoint.mts');
-      checkpoint = await prepareInvestigationCheckpoint({
+      const workflowCheckpoint = await prepareInvestigationCheckpoint({
         destination: args.destination, resumeSource: args.resumeSource, force: args.force === true,
         ...(dependencies.signal ? { signal: dependencies.signal } : {}),
       });
+      checkpoint = workflowCheckpoint;
+      capturedSource = workflowCheckpoint.resumeInput;
+    } else if (args.action === 'case') {
+      const { prepareLocalDocumentWrite } = await import('./local-document-checkpoint.mts');
+      const { MAX_EDITABLE_CASE_INPUT_BYTES, MAX_EDITABLE_CASE_OUTPUT_BYTES } = await import('../packages/contracts/case-portability.mts');
+      const caseCheckpoint = await prepareLocalDocumentWrite({
+        destination: args.destination, source: args.source, force: args.force === true, label: 'Case',
+        allowSourceReplacement: args.operation !== 'show',
+        maximumInputBytes: MAX_EDITABLE_CASE_INPUT_BYTES, maximumOutputBytes: MAX_EDITABLE_CASE_OUTPUT_BYTES,
+        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      });
+      checkpoint = caseCheckpoint;
+      capturedSource = caseCheckpoint.sourceInput;
     }
-    const resumeInput = checkpoint?.resumeInput;
     const code = await runParsedCli(args, {
       ...dependencies, stdout: buffered.stream,
-      ...(args.action === 'workflow-run' && args.resumeSource && resumeInput !== null && resumeInput !== undefined
-        ? { workflowResumeInput: resumeInput }
+      ...(args.action === 'workflow-run' && args.resumeSource && capturedSource !== null
+        ? { workflowResumeInput: capturedSource }
         : {}),
+      ...(args.action === 'case' && capturedSource !== null ? { caseFileInput: capturedSource } : {}),
     }, buffered.writeBinary);
     if (code !== EXIT_CODES.SUCCESS && code !== EXIT_CODES.PARTIAL_FAILURE) return code;
     const content = buffered.value();
     if (checkpoint) {
-      if (typeof content !== 'string') throw new TypeError('Workflow checkpoint output must be text.');
+      if (typeof content !== 'string') throw new TypeError('Local document output must be text.');
       await checkpoint.publish(content);
     } else await writePrivateFile(args.destination, content, {
       force: args.force === true,
@@ -373,7 +387,7 @@ async function runCliCommand(argv: unknown, dependencies: CliDependencies = {}):
     return EXIT_CODES.LOOKUP_FAILED;
   } finally {
     if (checkpoint && await checkpoint.release() > 0) {
-      write(stderr, 'Workflow cleanup warning: File ownership changed or a lease could not be removed. Inspect the selected directory before resuming.\n');
+      write(stderr, `${args.action === 'case' ? 'Case' : 'Workflow'} cleanup warning: File ownership changed or a lease could not be removed. Inspect the selected directory before resuming.\n`);
     }
   }
 }

@@ -24,6 +24,7 @@ import {
   formatOfflineEvidenceReview,
 } from './offline-evidence-review.mts';
 import { buildCliLookupBrief, formatCliLookupBrief } from './lookup-brief.mts';
+import { runCaseCommand } from './case-command.mts';
 import {
   MAX_MAIL_REVIEW_INPUT_BYTES,
   buildCliMailReview,
@@ -384,6 +385,7 @@ const REVIEW_COMMAND_HANDLERS = Object.freeze({
   'mail-headers': runMailHeadersCommand,
   'review-evidence': runOfflineEvidenceReviewCommand,
   'brief': runBriefOrCasePackCommand,
+  'case': runCaseCommand,
   'case-pack': runBriefOrCasePackCommand,
 } satisfies DiscriminatedCommandHandlerMap<
   ReviewCommandArguments,

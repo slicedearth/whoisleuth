@@ -7,6 +7,7 @@ import { isDirectLookupTarget } from '../lib/classify.mts';
 import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../packages/investigation/investigation-manifest.mts';
 import {
   CLI_COMMANDS,
+  CLI_CASE_OPERATIONS,
   cliMetaActionForInvocation,
   isCliCommand,
   type CliCommand,
@@ -83,6 +84,7 @@ type CliAction =
   | ({ action: 'mail-headers'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'review-evidence'; source: string | null; mmdbSource: string | null; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
   | ({ action: 'brief'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'case'; operation: typeof CLI_CASE_OPERATIONS[number]; source: string | null; caseId: string | null; domain: string | null; title: string | null; newIncident: boolean; text: string | null; noteSource: string | null; inputSource: string | null; expectedFileDigest: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'case-pack'; source: string | null; output: 'terminal' | 'json'; audience: 'internal' | 'trusted' | 'public'; reviewed: true } & TerminalOptions)
   | ({ action: 'domain-control'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'monitor-once'; source: string | null; previousSource: string | null; output: 'terminal' | 'json' | 'junit'; limit: number; concurrency: number; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
@@ -479,6 +481,35 @@ function uniqueSources(parsed: ParsedCommandArguments, command: 'reconcile' | 't
   return sources;
 }
 
+function parseCaseArguments(parsed: ParsedCommandArguments): Extract<CliAction, { action: 'case' }> {
+  const operation = parsed.positionalValue('operation') as typeof CLI_CASE_OPERATIONS[number];
+  const source = parsed.positionalValue('source');
+  const domain = parsed.optionValue('--domain');
+  const caseId = parsed.optionValue('--case-id');
+  const title = parsed.optionValue('--title');
+  const newIncident = parsed.hasOption('--new-incident');
+  const text = parsed.optionValue('--text');
+  const noteSource = parsed.optionValue('--note-file');
+  const inputSource = parsed.optionValue('--input');
+  const expectedFileDigest = parsed.optionValue('--expect-file-digest');
+  if (source === '-' || inputSource === '-' || noteSource === '-') throw new CliUsageError('Case operations require selected files, not stdin.');
+  if (operation !== 'open' && !source) throw new CliUsageError(`${operation} requires a Case file.`);
+  if (operation !== 'show' && !parsed.hasOption('--output')) throw new CliUsageError('Case mutations require --output; nothing was changed.');
+  if (operation === 'open' && !domain) throw new CliUsageError('case open requires --domain.');
+  if (operation !== 'open' && (title || newIncident)) throw new CliUsageError('--title and --new-incident belong to case open.');
+  if (newIncident && (!title || caseId)) throw new CliUsageError('--new-incident requires a distinguishing --title and cannot select an existing --case-id.');
+  if (operation === 'note' ? (text === null && !noteSource) : (text !== null || noteSource !== null)) {
+    throw new CliUsageError('Only case note accepts and requires --text or --note-file.');
+  }
+  if (['pin', 'assess', 'recheck'].includes(operation) ? !inputSource : inputSource !== null) {
+    throw new CliUsageError('Only case pin, assess and recheck accept and require --input.');
+  }
+  if (expectedFileDigest !== null && (!source || !/^sha256:[a-f0-9]{64}$/u.test(expectedFileDigest))) {
+    throw new CliUsageError('--expect-file-digest requires a source file and sha256:<64 lowercase hexadecimal characters>.');
+  }
+  return { action: 'case', operation, source, caseId, domain, title, newIncident, text, noteSource, inputSource, expectedFileDigest, output: jsonOutput(parsed), ...terminalOptions(parsed) };
+}
+
 const CLI_PARSERS = Object.freeze({
   completion: (parsed) => ({ action: 'completion', shell: parsed.positionalValue('shell') as CompletionShell }),
   doctor: (parsed) => ({ action: 'doctor', network: parsed.hasOption('--network'), output: jsonOutput(parsed), ...terminalOptions(parsed) }),
@@ -537,6 +568,7 @@ const CLI_PARSERS = Object.freeze({
     output: jsonOutput(parsed), strictExit: parsed.hasOption('--strict-exit'), ...terminalOptions(parsed),
   }),
   brief: (parsed) => singleInputAction('brief', parsed),
+  case: parseCaseArguments,
   'case-pack': (parsed) => ({
     action: 'case-pack', source: parsed.positionalValue('source'), output: jsonOutput(parsed),
     audience: parsed.optionValue('--audience') as 'internal' | 'trusted' | 'public', reviewed: true, ...terminalOptions(parsed),

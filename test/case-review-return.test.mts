@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { buildCaseExport, createCase, updateCase, serializeCaseStore, CASE_SCHEMA_VERSION } from '../packages/cases/case-model.mts';
 import { applyCaseReviewReturn, previewCaseReviewReturn, selectedCaseReviewRows } from '../packages/cases/case-review-return.mts';
-import { MAX_CASE_MANUAL_TRAIL_EVENTS, MAX_NOTES_PER_CASE, MAX_CASE_STORE_BYTES } from '../packages/contracts/case-portability.mts';
+import { MAX_CASE_MANUAL_TRAIL_EVENTS, MAX_NOTES_PER_CASE, MAX_CASE_STORE_BYTES, MAX_CASE_IMPORT_BYTES } from '../packages/contracts/case-portability.mts';
 import { buildCliCasePack, verifyCliCasePack } from '../cli/case-pack.mts';
 
 const BEFORE = '2026-08-20T00:00:00.000Z';
@@ -144,7 +144,7 @@ test('return admission fails closed for wrong identities, future versions, malfo
     { ...file, cases: [{ ...file.cases[0], notes: [{ id: 'note', body: 'x'.repeat(2001), createdAt: AFTER }] }] },
   ]) assert.throws(() => previewCaseReviewReturn(current, changed, DIGEST));
   assert.throws(() => previewCaseReviewReturn(current, file, 'missing'), /digest/u);
-  assert.throws(() => previewCaseReviewReturn(current, { padding: 'x'.repeat(2 * 1024 * 1024 + 1) }, DIGEST));
+  assert.throws(() => previewCaseReviewReturn(current, { ...file, padding: 'x'.repeat(MAX_CASE_IMPORT_BYTES + 1) }, DIGEST), /limit|exceed/iu);
 });
 
 test('quota and trail capacity failures leave the complete source unchanged without evicting history', () => {

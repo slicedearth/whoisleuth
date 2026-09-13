@@ -40,6 +40,7 @@ function compact(value: string): string {
 }
 
 const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
+  { id: 'local-case-files', pattern: /offline \u0060?case\u0060? command creates and updates ordinary local Case files only through explicit output.*private analyst content and file references, not attached file bytes.*locks contain only a local process ID.*Case files are unencrypted unless packaged separately with encryption/iu },
   { id: 'date', pattern: /Last updated: \d{1,2} [A-Z][a-z]+ \d{4}/u },
   { id: 'local-first', pattern: /local-first.*ordinary investigation state stays.*browser profile/iu },
   { id: 'no-general-database', pattern: /no general (?:user, )?Case,? or workspace database/iu },

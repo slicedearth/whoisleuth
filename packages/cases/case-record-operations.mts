@@ -583,10 +583,9 @@ export function updateCase(
   return { cases: next, record };
 }
 
-export type CaseConclusionEvidence = Readonly<{
-  pin: unknown;
-  stance: CaseEvidenceRelationStance;
-}>;
+export type CaseConclusionEvidence = Readonly<{ stance: CaseEvidenceRelationStance } & (
+  { pin: unknown; pinId?: never } | { pinId: string; pin?: never }
+)>;
 
 export type CaseConclusionInput = Readonly<{
   disposition: unknown;
@@ -598,8 +597,8 @@ export type CaseConclusionInput = Readonly<{
 
 /**
  * Records one reviewed conclusion as a single pure Case mutation. The selected
- * observations become bounded Case pins before the decision is created, so the
- * decision cannot point at absent evidence. Counterevidence is retained as a
+ * observations become bounded Case pins or reference existing retained pins,
+ * so the decision cannot point at absent evidence. Counterevidence is retained as a
  * separate resolved contradiction assertion rather than being hidden inside a
  * favourable disposition.
  */
@@ -632,15 +631,33 @@ export function recordCaseConclusion(
   const current = cases.find((item) => item.id === id);
   if (!current) throw new Error('That case no longer exists.');
   const existingPinIds = new Set(current.evidencePins.map((pin) => pin.id));
-  const withPins = updateCase(cases, id, {
-    evidencePins: input.evidence.map((item) => item.pin),
-  }, now);
+  const selectedExisting = new Set<string>();
+  for (const item of input.evidence) {
+    if (Object.hasOwn(item, 'pin') === Object.hasOwn(item, 'pinId')) throw new Error('Select one new pin or one retained pin ID for each conclusion fact.');
+    if (Object.hasOwn(item, 'pinId')) {
+      if (typeof item.pinId !== 'string' || !existingPinIds.has(item.pinId)) throw new Error('The selected conclusion pin is no longer retained in this Case.');
+      if (selectedExisting.has(item.pinId)) throw new Error('Select each retained conclusion pin once.');
+      selectedExisting.add(item.pinId);
+    }
+  }
+  const newEvidence = input.evidence.filter(item => Object.hasOwn(item, 'pin'));
+  const withPins = newEvidence.length
+    ? updateCase(cases, id, { evidencePins: newEvidence.map(item => item.pin) }, now)
+    : { cases, record: current };
   const addedPins = withPins.record.evidencePins.filter((pin) => !existingPinIds.has(pin.id));
-  if (addedPins.length !== input.evidence.length) {
+  if (addedPins.length !== newEvidence.length) {
     throw new Error('The selected conclusion evidence could not be retained completely.');
   }
+  let nextAdded = 0;
+  const selectedPins = input.evidence.map(item => {
+    const pin = Object.hasOwn(item, 'pinId')
+      ? withPins.record.evidencePins.find(pin => pin.id === item.pinId)
+      : addedPins[nextAdded++];
+    if (!pin) throw new Error('The selected conclusion evidence could not be retained completely.');
+    return pin;
+  });
 
-  const supportingPinIds = addedPins.flatMap((pin, index) => (
+  const supportingPinIds = selectedPins.flatMap((pin, index) => (
     input.evidence[index]?.stance === 'supports' ? [pin.id] : []
   ));
   let concluded = updateCase(withPins.cases, id, {
@@ -653,7 +670,7 @@ export function recordCaseConclusion(
     },
   }, now);
 
-  const contradictionRelations = addedPins.flatMap((pin, index) => (
+  const contradictionRelations = selectedPins.flatMap((pin, index) => (
     input.evidence[index]?.stance === 'contradicts'
       ? [{ evidencePinId: pin.id, stance: 'contradicts' as const }]
       : []
@@ -670,7 +687,7 @@ export function recordCaseConclusion(
       },
     }, now);
   }
-  const unresolvedRelations = addedPins.flatMap((pin, index) => (
+  const unresolvedRelations = selectedPins.flatMap((pin, index) => (
     input.evidence[index]?.stance === 'unresolved'
       ? [{ evidencePinId: pin.id, stance: 'unresolved' as const }]
       : []

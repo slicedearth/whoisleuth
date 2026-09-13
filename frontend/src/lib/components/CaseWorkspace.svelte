@@ -407,7 +407,7 @@
       return;
     try {
       if (file.size > MAX_CASE_IMPORT_BYTES)
-        throw new Error('Case imports are limited to 2 MB.');
+        throw new Error(`Case imports are limited to ${MAX_CASE_IMPORT_BYTES} bytes.`);
       const result = await importCases(parseBoundedJson(await file.text(), { label: 'Case import', maximumBytes: MAX_CASE_IMPORT_BYTES }));
       const success = `Imported ${result.added} new and ${result.updated} merged cases${result.skipped ? `; skipped ${result.skipped} invalid or over-limit record${result.skipped === 1 ? '' : 's'}` : ''}${result.brandProfileReferencesOmitted ? `; omitted ${result.brandProfileReferencesOmitted} Brand Profile reference${result.brandProfileReferencesOmitted === 1 ? '' : 's'} beyond the retained bounds` : ''}${result.authoredHistoryOmitted ? `; omitted ${result.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${result.authoredHistoryOmitted === 1 ? '' : 's'}` : ''}.`;
       await reconcileCommittedCaseSnapshot(result, success);
