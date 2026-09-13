@@ -6,8 +6,9 @@ import { test } from 'node:test';
 import { runCli } from '../cli/runner.mts';
 import { checkInstalledCaseFiles } from '../tools/cli-case-package-check.mts';
 
-test('the installed Case packet detects evidence loss, changed authority and missing output identity', async () => {
-  for (const diagnostic of ['none', 'dropped-note', 'wrong-authority', 'missing-digest']) {
+test('the installed Case packet independently checks retained evidence and handoff integrity', async (context) => {
+  for (const diagnostic of ['none', 'dropped-note', 'wrong-authority', 'missing-digest', 'false-structure-integrity',
+    'unauthenticated-handoff', 'false-completeness']) await context.test(diagnostic, async () => {
     const directory = await mkdtemp(join(tmpdir(), 'whoisleuth-case-packet-'));
     try {
       const packet = checkInstalledCaseFiles(directory, async (args, label, expected = 0, diagnostics) => {
@@ -23,10 +24,28 @@ test('the installed Case packet detects evidence loss, changed authority and mis
           else result.cases[0].observedEffects.reviews[0].sourceClass = 'verified';
           return JSON.stringify(result);
         }
+        if (label === 'offline ordinary Case verification' && diagnostic === 'false-structure-integrity') {
+          const result = JSON.parse(stdout);
+          result.checks.contentIntegrity = 'verified';
+          return JSON.stringify(result);
+        }
+        if (label === 'offline encrypted Case handoff verification' && diagnostic === 'unauthenticated-handoff') {
+          const result = JSON.parse(stdout);
+          result.checks.authenticatedEncryption = 'not_checked';
+          return JSON.stringify(result);
+        }
+        if (label === 'offline missing Case original refusal' && diagnostic === 'false-completeness') {
+          const result = JSON.parse(stdout);
+          result.state = 'verified';
+          result.package.caseFiles[0].missing = 0;
+          return JSON.stringify(result);
+        }
         return label === 'offline Case terminal review' && diagnostic === 'missing-digest' ? 'No identity.' : stdout;
       });
-      if (diagnostic === 'none') assert.equal((await packet).length, 9);
-      else await assert.rejects(packet, /Installed Case (?:journey|review)/u);
+      if (diagnostic === 'none') await packet;
+      else await assert.rejects(packet, diagnostic === 'false-structure-integrity' ? /Installed ordinary Case verification/u
+        : diagnostic === 'unauthenticated-handoff' ? /Installed encrypted Case handoff verification/u
+          : diagnostic === 'false-completeness' ? /Installed package verification/u : /Installed Case (?:journey|review)/u);
     } finally { await rm(directory, { recursive: true, force: true }); }
-  }
+  });
 });
