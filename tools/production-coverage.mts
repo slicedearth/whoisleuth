@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeBoundedUtf8, readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
-import { MAX_FORWARDING_SOURCE_BYTES, moduleForwardingSpecifier } from './module-forwarding.mts';
+import { MAX_FORWARDING_SOURCE_BYTES, moduleForwardingSpecifier, moduleIsTypeOnly } from './module-forwarding.mts';
 
 export const MAX_PRODUCTION_COVERAGE_BYTES = 16 * 1024 * 1024;
 export const MAX_PRODUCTION_COVERAGE_FILES = 2_000;
@@ -59,7 +59,6 @@ export type CoverageExclusion = Readonly<{
 // filters. A file that becomes measured contributes normally to every coverage
 // threshold; its browser/framework owner can remain without a declaration edit.
 export const PRODUCTION_COVERAGE_EXCLUSIONS: readonly CoverageExclusion[] = Object.freeze([
-  Object.freeze({ source: 'cli/runner-types.mts', category: 'type_only', owner: 'tsconfig.json' }),
   Object.freeze({ source: 'frontend/src/lib/analyst-review-state.ts', category: 'browser_adapter', owner: 'e2e/analyst-operations.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/analyst-undo.ts', category: 'browser_adapter', owner: 'e2e/analyst-operations.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/browser-workspace-provider.ts', category: 'browser_adapter', owner: 'e2e/browser-workspaces.spec.ts' }),
@@ -82,6 +81,7 @@ export const PRODUCTION_COVERAGE_EXCLUSIONS: readonly CoverageExclusion[] = Obje
   Object.freeze({ source: 'frontend/src/lib/investigation-templates.ts', category: 'browser_adapter', owner: 'e2e/dashboard.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/local-data-platform-probe.ts', category: 'browser_adapter', owner: 'e2e/local-data-platform.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/relationship-observations.ts', category: 'browser_adapter', owner: 'e2e/case-relationship-workflows.spec.ts' }),
+  Object.freeze({ source: 'frontend/src/lib/review-session.ts', category: 'browser_adapter', owner: 'e2e/review-session.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/shortlist.ts', category: 'browser_adapter', owner: 'e2e/shortlist-storage.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/website-snapshots.ts', category: 'browser_adapter', owner: 'e2e/hosted-monitoring.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/workers/investigation-package.worker.ts', category: 'browser_adapter', owner: 'e2e/investigation-package.spec.ts' }),
@@ -90,9 +90,7 @@ export const PRODUCTION_COVERAGE_EXCLUSIONS: readonly CoverageExclusion[] = Obje
   Object.freeze({ source: 'frontend/src/routes/(public)/guide/+page.ts', category: 'framework_entry', owner: 'e2e/public-guide.spec.ts' }),
   Object.freeze({ source: 'frontend/src/routes/(public)/resources/[slug]/+page.ts', category: 'framework_entry', owner: 'e2e/public-guide.spec.ts' }),
   Object.freeze({ source: 'frontend/src/routes/+layout.ts', category: 'framework_entry', owner: 'frontend/src/routes/+layout.svelte' }),
-  Object.freeze({ source: 'lib/netlify-function-types.mts', category: 'type_only', owner: 'tsconfig.json' }),
   Object.freeze({ source: 'lib/local-application-worker.mts', category: 'executable_entry', owner: 'test/local-application-host.test.mts' }),
-  Object.freeze({ source: 'packages/investigation/lookup-artefact-inputs.mts', category: 'type_only', owner: 'tsconfig.json' }),
 ]);
 
 export const PRODUCTION_COVERAGE_POLICY: CoveragePolicy = Object.freeze({
@@ -216,8 +214,8 @@ export function readProductionCoverageInventory(repositoryRoot = REPOSITORY_ROOT
   return Object.freeze(unique);
 }
 
-/** A pure forwarding chain is qualified only by a measured implementation. */
-export async function discoverForwardingCoverageExclusions(
+/** Erased types use their compiler; forwarding chains require a measured owner. */
+export async function discoverStructuralCoverageExclusions(
   report: ProductionCoverageReport,
   inventory: readonly string[],
   repositoryRoot = REPOSITORY_ROOT,
@@ -228,17 +226,23 @@ export async function discoverForwardingCoverageExclusions(
   const measured = new Set(report.records.map((record) => record.source));
   const explicit = new Set(explicitExclusions.map((item) => item.source));
   const forwards = new Map<string, string>();
+  const exclusions: CoverageExclusion[] = [];
   for (const source of inventory) {
     if (measured.has(source) || explicit.has(source)) continue;
     const bytes = await readBoundedRegularFileWithin(repositoryRoot, source, {
-      maximumBytes: MAX_FORWARDING_SOURCE_BYTES, label: 'Production forwarding candidate',
+      maximumBytes: MAX_FORWARDING_SOURCE_BYTES, label: 'Production structural candidate',
     });
-    const specifier = moduleForwardingSpecifier(decodeBoundedUtf8(bytes, 'Production source'), source);
+    const content = decodeBoundedUtf8(bytes, 'Production source');
+    if (moduleIsTypeOnly(content, source)) {
+      exclusions.push(Object.freeze({ source, category: 'type_only',
+        owner: source.startsWith('frontend/') ? 'frontend/tsconfig.json' : 'tsconfig.json' }));
+      continue;
+    }
+    const specifier = moduleForwardingSpecifier(content, source);
     if (!specifier?.startsWith('.')) continue;
     const owner = path.posix.normalize(path.posix.join(path.posix.dirname(source), specifier));
     if (sources.has(owner)) forwards.set(source, owner);
   }
-  const exclusions: CoverageExclusion[] = [];
   for (const [source, firstOwner] of forwards) {
     let owner: string | undefined = firstOwner;
     const seen = new Set([source]);
@@ -474,8 +478,8 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     // both sets of failures from this run instead of hiding later omissions.
     try {
       const sources = readProductionCoverageInventory();
-      const forwarding = await discoverForwardingCoverageExclusions(report, sources);
-      inventory = validateProductionCoverageInventory(report, sources, [...PRODUCTION_COVERAGE_EXCLUSIONS, ...forwarding]);
+      const structural = await discoverStructuralCoverageExclusions(report, sources);
+      inventory = validateProductionCoverageInventory(report, sources, [...PRODUCTION_COVERAGE_EXCLUSIONS, ...structural]);
     } catch (error) { problems.push(error instanceof Error ? error.message : 'Production coverage inventory failed.'); }
     if (problems.length) throw new Error(problems.join('\n'));
     process.stdout.write(`${formatProductionCoverage(report, inventory)}\n`);

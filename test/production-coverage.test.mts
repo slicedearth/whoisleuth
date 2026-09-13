@@ -9,7 +9,7 @@ import { describe, test } from 'node:test';
 import {
   PRODUCTION_COVERAGE_EXCLUSIONS,
   PRODUCTION_COVERAGE_POLICY,
-  discoverForwardingCoverageExclusions,
+  discoverStructuralCoverageExclusions,
   parseProductionCoverage,
   productionCoverageArguments,
   readProductionCoverageInventory,
@@ -17,7 +17,7 @@ import {
   validateProductionCoverageInventory,
   type CoveragePolicy,
 } from '../tools/production-coverage.mts';
-import { MAX_FORWARDING_SOURCE_BYTES, moduleForwardingSpecifier } from '../tools/module-forwarding.mts';
+import { MAX_FORWARDING_SOURCE_BYTES, moduleForwardingSpecifier, moduleIsTypeOnly } from '../tools/module-forwarding.mts';
 
 function lcovRecord(source: string, values = [10, 9, 8, 6, 5, 5]): string {
   const [linesFound, linesHit, branchesFound, branchesHit, functionsFound, functionsHit] = values;
@@ -42,6 +42,52 @@ const FOCUSED_COVERAGE_POLICY: CoveragePolicy = Object.freeze({
 });
 
 describe('production coverage policy', () => {
+  test('recognises erased declarations without excusing runtime statements or imports', () => {
+    for (const source of [
+      'export type Value = Readonly<{ id: string }>;',
+      '/* Contract */ ; export interface Value { id: string };',
+      "import type { Value } from './owner.mts'; export type Result = Value | null;",
+      "export type { Value } from './owner.mts';", "export type * from './owner.mts';",
+    ]) assert.equal(moduleIsTypeOnly(source), true, source);
+    for (const source of [
+      '', ';', 'export type Value =', 'export const value = 1;',
+      "import './effect.mts'; export type Value = string;",
+      "import { type Value } from './effect.mts'; export type Result = Value;",
+      "export { type Value } from './effect.mts';", "export * from './owner.mts';",
+      'export type Value = string; globalThis.effect = true;',
+      'export enum State { Ready }', 'export class Value {}',
+      'namespace State { export const ready = true; }',
+      'declare const value: string;', ' '.repeat(MAX_FORWARDING_SOURCE_BYTES + 1),
+    ]) assert.equal(moduleIsTypeOnly(source, 'named-types.mts'), false, source.slice(0, 120));
+  });
+
+  test('discovers type-only files but requires coverage immediately when runtime code is added', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'whoisleuth-type-coverage-'));
+    try {
+      await mkdir(path.join(root, 'lib'));
+      await mkdir(path.join(root, 'frontend/src/lib'), { recursive: true });
+      const source = 'export interface Result { value: string }';
+      await writeFile(path.join(root, 'lib/owner.mts'), 'export const value = 1;');
+      await writeFile(path.join(root, 'lib/new-contract.mts'), source);
+      await writeFile(path.join(root, 'frontend/src/lib/new-contract.ts'), source);
+      const sources = ['lib/owner.mts', 'lib/new-contract.mts', 'frontend/src/lib/new-contract.ts'];
+      const report = parseProductionCoverage(lcovRecord('lib/owner.mts'));
+      const exclusions = await discoverStructuralCoverageExclusions(report, sources, root, []);
+      assert.deepEqual(exclusions, [
+        { source: 'lib/new-contract.mts', category: 'type_only', owner: 'tsconfig.json' },
+        { source: 'frontend/src/lib/new-contract.ts', category: 'type_only', owner: 'frontend/tsconfig.json' },
+      ]);
+      assert.equal(validateProductionCoverageInventory(report, sources, exclusions, () => true).excludedFiles, 2);
+      assert.throws(() => validateProductionCoverageInventory(report, sources, exclusions, () => false), /owner is missing/u);
+      const instrumented = parseProductionCoverage(`${lcovRecord('lib/owner.mts')}\n${lcovRecord('lib/new-contract.mts')}`);
+      assert.deepEqual(await discoverStructuralCoverageExclusions(instrumented, sources, root, []), [exclusions[1]]);
+      await writeFile(path.join(root, 'lib/new-contract.mts'), `${source}\nexport const initial = { value: 'runtime' };`);
+      const changed = await discoverStructuralCoverageExclusions(report, sources, root, []);
+      assert.deepEqual(changed, [exclusions[1]]);
+      assert.throws(() => validateProductionCoverageInventory(report, sources, changed, () => true), /unreviewed source omissions: lib\/new-contract.mts/u);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   test('recognises only an exact value-forwarding module without constraining formatting', () => {
     for (const source of ["export * from './owner.mts';", '// A comment.\n; export * from "./owner.mts";\n;']) {
       assert.equal(moduleForwardingSpecifier(source), './owner.mts');
@@ -66,18 +112,18 @@ describe('production coverage policy', () => {
       await writeFile(path.join(root, 'lib/new-helper.mts'), "export * from './forward.mts';");
       const sources = ['lib/owner.mts', 'lib/forward.mts', 'lib/new-helper.mts'];
       const report = parseProductionCoverage(lcovRecord('lib/owner.mts'));
-      const exclusions = await discoverForwardingCoverageExclusions(report, sources, root, []);
+      const exclusions = await discoverStructuralCoverageExclusions(report, sources, root, []);
       assert.deepEqual(exclusions, [
         { source: 'lib/forward.mts', category: 'compatibility_re_export', owner: 'lib/owner.mts' },
         { source: 'lib/new-helper.mts', category: 'compatibility_re_export', owner: 'lib/owner.mts' },
       ]);
       assert.equal(validateProductionCoverageInventory(report, sources, exclusions, () => true).excludedFiles, 2);
       const instrumented = parseProductionCoverage(`${lcovRecord('lib/owner.mts')}\n${lcovRecord('lib/forward.mts')}`);
-      assert.deepEqual(await discoverForwardingCoverageExclusions(instrumented, sources, root, []), [
+      assert.deepEqual(await discoverStructuralCoverageExclusions(instrumented, sources, root, []), [
         { source: 'lib/new-helper.mts', category: 'compatibility_re_export', owner: 'lib/forward.mts' },
       ]);
       await writeFile(path.join(root, 'lib/new-helper.mts'), "export * from './forward.mts'; export const extra = 2;");
-      const changed = await discoverForwardingCoverageExclusions(report, sources, root, []);
+      const changed = await discoverStructuralCoverageExclusions(report, sources, root, []);
       assert.equal(changed.length, 1);
       assert.throws(() => validateProductionCoverageInventory(report, sources, changed, () => true), /unreviewed source omissions: lib\/new-helper.mts/u);
     } finally { await rm(root, { recursive: true, force: true }); }
@@ -98,13 +144,13 @@ describe('production coverage policy', () => {
       for (const [filename, source] of Object.entries(contents)) await writeFile(path.join(root, 'lib', filename), source);
       const inventory = Object.keys(contents).map((filename) => `lib/${filename}`);
       const report = parseProductionCoverage(lcovRecord('lib/measured.mts'));
-      assert.deepEqual(await discoverForwardingCoverageExclusions(report, inventory, root, []), []);
+      assert.deepEqual(await discoverStructuralCoverageExclusions(report, inventory, root, []), []);
       assert.throws(() => validateProductionCoverageInventory(report, inventory, [], () => true), /unreviewed source omissions/u);
       await symlink(path.join(root, 'lib/measured.mts'), path.join(root, 'lib/link.mts'));
-      await assert.rejects(discoverForwardingCoverageExclusions(report, [...inventory, 'lib/link.mts'], root, []), /symbolic link/u);
-      await assert.rejects(discoverForwardingCoverageExclusions(report, ['../escape.mts'], root, []), /safe relative/u);
+      await assert.rejects(discoverStructuralCoverageExclusions(report, [...inventory, 'lib/link.mts'], root, []), /symbolic link/u);
+      await assert.rejects(discoverStructuralCoverageExclusions(report, ['../escape.mts'], root, []), /safe relative/u);
       await writeFile(path.join(root, 'lib/oversized.mts'), ' '.repeat(MAX_FORWARDING_SOURCE_BYTES + 1));
-      await assert.rejects(discoverForwardingCoverageExclusions(report, ['lib/oversized.mts'], root, []), /byte maximum/u);
+      await assert.rejects(discoverStructuralCoverageExclusions(report, ['lib/oversized.mts'], root, []), /byte maximum/u);
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
