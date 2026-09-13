@@ -8,8 +8,9 @@ import {
   RUNNABLE_INVESTIGATION_PLAN_RECIPES,
 } from '../cli/investigation-plan.mts';
 import { runInvestigationRecipe } from '../cli/investigation-run.mts';
+import { runCli } from '../cli/runner.mts';
 import { buildCliLookupDocument } from '../cli/saved-lookup.mts';
-import { CLI_DISCOVER_SCHEMA_VERSION, CLI_POSTURE_SCHEMA_VERSION } from '../cli/formatters/json.mts';
+import { CLI_CT_SEARCH_SCHEMA_VERSION, CLI_DISCOVER_SCHEMA_VERSION, CLI_POSTURE_SCHEMA_VERSION } from '../cli/formatters/json.mts';
 import { CLI_DISCOVERY_SCAN_VERSION } from '../cli/discovery-scan.mts';
 import { requestLookup, type LookupRequestOptions } from '../lib/lookup-request.mts';
 import { buildBulkSessionExport, mergeBulkSessions, normalizeBulkSessionStore, serializeBulkSessionStore } from '../packages/workspace/bulk-session-model.mts';
@@ -233,35 +234,63 @@ describe('bounded verification state machines', () => {
         const subject = recipe === 'lookalike-review' ? 'Example Organisation' : 'workflow-state.example';
         const plan = buildInvestigationPlan(recipe, subject, NOW);
         const calls: Array<{ command: string; arguments: readonly string[]; mode: string }> = [];
+        const outputs: string[] = [];
         const result = await runInvestigationRecipe(recipe, subject, {
           approveNetwork,
           resumeInput: null,
           generatedAt: NOW,
-          execute: async (command, args) => {
-            const step = plan.steps.find((item) => item.command === command
-              && item.arguments.length === args.length
-              && item.arguments.every((argument, index) => argument === args[index]));
+          execute: async (command, args, inputs) => {
+            const step = plan.steps[calls.length];
             assert.ok(step);
+            assert.equal(command, step.command);
+            assert.equal(args.length, step.arguments.length);
+            step.arguments.forEach((argument, index) => {
+              if (/^<[^>]+>$/u.test(argument)) {
+                const reused = inputs.get(args[index]!);
+                assert.ok(reused !== undefined && outputs.includes(reused), 'Substituted inputs must be exact earlier outputs.');
+              } else assert.equal(args[index], argument);
+            });
+            for (const reference of inputs.keys()) assert.ok(args.includes(reference), 'No undeclared input may enter a command.');
+            assert.ok(step.mode !== 'network' || approveNetwork, 'Network steps require this invocation to approve them.');
             calls.push({ command, arguments: args, mode: step.mode });
+            if (step.mode === 'offline' && command !== 'discover') {
+              let stdout = '', stderr = '';
+              const read = (name?: string | null) => {
+                assert.ok(name && inputs.has(name), 'Offline workflow steps may read only their supplied evidence.');
+                return inputs.get(name)!;
+              };
+              const exitCode = await runCli([command, ...args], {
+                now: () => NOW, stdout: { write(value) { stdout += value; } }, stderr: { write(value) { stderr += value; } },
+                readArtifactInput: read, readExportInput: read, readCompareInput: read, readSourceReliabilityInput: read, readDiffInput: read,
+              });
+              assert.equal(stderr, '');
+              outputs.push(JSON.stringify(JSON.parse(stdout)));
+              return { exitCode, stdout };
+            }
+            assert.ok(['lookup', 'discover', 'posture', 'discover-scan', 'ct-search'].includes(command), 'New collection seams need an explicit fixture.');
             const output = command === 'lookup' ? buildCliLookupDocument(subject, {
               type: 'domain', value: subject, inputHostname: subject, registrableDomain: subject, isSubdomain: false,
             }, { diagnostics: { rdap: { status: 'unsupported' }, whois: { status: 'skipped' } }, availability: {} }, NOW, 'deep') : {
               schema: step.produces,
               version: command === 'discover' ? CLI_DISCOVER_SCHEMA_VERSION
-                : command === 'posture' ? CLI_POSTURE_SCHEMA_VERSION : CLI_DISCOVERY_SCAN_VERSION,
+                : command === 'posture' ? CLI_POSTURE_SCHEMA_VERSION
+                  : command === 'ct-search' ? CLI_CT_SEARCH_SCHEMA_VERSION : CLI_DISCOVERY_SCAN_VERSION,
             };
-            return { exitCode: 0, stdout: JSON.stringify(output) };
+            const stdout = JSON.stringify(output); outputs.push(stdout);
+            return { exitCode: 0, stdout };
           },
         });
         assert.deepEqual(result.completedSteps.map((item) => item.id), plan.steps.slice(0, result.completedSteps.length).map((item) => item.id));
         assert.equal(result.currentStep?.id, plan.steps[result.completedSteps.length]?.id);
-        assert.ok(result.state === 'awaiting_network_approval' || result.state === 'awaiting_analyst_selection');
+        assert.ok(result.state === 'complete' || result.state === 'awaiting_network_approval' || result.state === 'awaiting_analyst_selection');
         assert.equal(calls.some((call) => call.mode === 'network') && !approveNetwork, false);
         assert.equal(result.networkApprovedForThisRun, approveNetwork);
         if (result.state === 'awaiting_network_approval') assert.equal(result.currentStep?.mode, 'network');
-        else assert.ok(result.currentStep?.arguments.some((argument) => /^<[^>]+>$/u.test(argument)));
+        else if (result.state === 'awaiting_analyst_selection') assert.ok(result.currentStep?.arguments.some((argument) => /^<[^>]+>$/u.test(argument)));
+        else { assert.equal(result.currentStep, null); assert.equal(result.completedSteps.length, plan.steps.length); }
       },
-    ), PROPERTY_PARAMETERS);
+    ), { ...PROPERTY_PARAMETERS, examples: RUNNABLE_INVESTIGATION_PLAN_RECIPES.flatMap(recipe =>
+      [false, true].map(approval => [recipe, approval] as [typeof recipe, boolean])) });
   });
 });
 

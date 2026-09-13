@@ -12,6 +12,7 @@ import { captureReviewFixture } from '../test/capture-review-fixture.mts';
 import { expectedIconPixels } from '../test/favicon-image-fixtures.mts';
 import { productionChunkPath } from './production-build';
 import { decryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
+import { BROWSER_WORKER_OPERATION_TIMEOUT_MS } from '../frontend/src/lib/browser-worker-operation.ts';
 
 const NOW = '2026-09-11T00:00:00.000Z';
 const makePackage = (artifacts: Parameters<typeof buildInvestigationPackage>[0]['artifacts']) => buildInvestigationPackage({ workflow: 'Evidence review', configurationDigestSha256: null, artifacts }, NOW, '2.3.1');
@@ -431,17 +432,23 @@ test('package composition and review retain usable controls at supported widths 
   }
 });
 
-test('the complete package payload remains usable through the browser worker without losing any file bytes', async ({ page, browserName }, testInfo) => {
+for (const encrypted of [false, true]) test(`the complete ${encrypted ? 'encrypted' : 'ordinary'} package payload remains usable through the browser worker without losing any file bytes`, async ({ page, browserName }, testInfo) => {
   test.slow();
   const panel = await openPackages(page);
   const sourcePath = testInfo.outputPath('capacity.bin');
-  const packagePath = testInfo.outputPath('capacity.zip');
+  const packagePath = testInfo.outputPath(encrypted ? 'capacity.wlep' : 'capacity.zip');
+  const passphrase = 'maximum package fixture passphrase';
   const source = new Uint8Array(MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES);
   source[0] = 255; source[source.length - 1] = 127;
   await writeFile(sourcePath, source, { flag: 'wx' });
   try {
     await panel.getByText('Create a package from files', { exact: true }).click();
     await panel.getByLabel('Choose evidence files', { exact: true }).setInputFiles(sourcePath);
+    if (encrypted) {
+      await panel.getByRole('checkbox', { name: 'Encrypt package download', exact: true }).check();
+      await panel.getByLabel('Package passphrase', { exact: true }).fill(passphrase);
+      await panel.getByLabel('Confirm package passphrase', { exact: true }).fill(passphrase);
+    }
     const memory = browserName === 'chromium' ? await page.context().newCDPSession(page) : null;
     const before = memory ? await memory.send('Runtime.getHeapUsage') : null;
     const probe = await page.evaluateHandle(() => {
@@ -465,8 +472,18 @@ test('the complete package payload remains usable through the browser worker wit
       await panel.getByRole('button', { name: 'Download private package' }).click();
       const download = await downloadPromise;
       await download.saveAs(packagePath);
-      await expect(panel.getByRole('status')).toContainText('Prepared a private package of 1 unchanged file for download');
+      await expect(panel.getByRole('status')).toContainText('1 unchanged file for download');
       await panel.getByLabel('Review evidence package', { exact: true }).setInputFiles(packagePath);
+      if (encrypted) {
+        await panel.getByLabel('Unlock package passphrase', { exact: true }).fill(passphrase);
+        await panel.getByRole('button', { name: 'Unlock evidence package', exact: true }).click();
+      }
+      const reviewed = panel.getByRole('heading', { name: 'Evidence package review', exact: true });
+      // Capacity work has the worker's bounded lifecycle, not a small-control assertion deadline.
+      await expect(reviewed.or(panel.getByRole('alert'))).toBeVisible({ timeout: BROWSER_WORKER_OPERATION_TIMEOUT_MS });
+      await expect(panel.getByRole('alert')).toHaveCount(0);
+      await expect(reviewed).toBeVisible();
+      if (encrypted) await expect(panel).toContainText('Encrypted container authenticated');
       await expect(panel.getByText('Every file matches its manifest')).toBeVisible();
       await expect(panel.getByRole('button', { name: 'Download artifact-1', exact: true })).toBeEnabled();
       const restoredPromise = page.waitForEvent('download');
@@ -477,7 +494,7 @@ test('the complete package payload remains usable through the browser worker wit
       const result = await probe.evaluate(value => value.finish());
       const after = memory ? await memory.send('Runtime.getHeapUsage') : null;
       await testInfo.attach('package-capacity-measurement', { body: JSON.stringify({
-        ...result, bytes: source.byteLength, browserName, heapBeforeBytes: before?.usedSize ?? null, heapAfterBytes: after?.usedSize ?? null,
+        ...result, bytes: source.byteLength, encrypted, browserName, heapBeforeBytes: before?.usedSize ?? null, heapAfterBytes: after?.usedSize ?? null,
         scope: 'one production browser build, main JavaScript isolate snapshots, not peak or worker/process memory',
         memoryAvailability: memory ? 'Chromium protocol snapshots' : 'unavailable in this engine',
         timingAcceptance: 'informational; includes browser, download and test-host work',

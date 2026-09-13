@@ -21,15 +21,20 @@ import {
   isReviewedCaseDisposition,
 } from '../packages/cases/case-record-decisions.mts';
 import { RULE_FIELD_DEFINITIONS } from '../packages/workspace/detection-rule-model.mts';
+import { addCaseAttachments } from '../packages/cases/case-attachment-model.mts';
 
 const NOW = '2026-08-22T00:00:00.000Z';
-const CURRENT_CASE_FIXTURE = new URL('./fixtures/case-lifecycle/case-export-v15.json', import.meta.url);
+const PUBLISHED_CASE_FIXTURE = new URL('./fixtures/case-lifecycle/case-export-v15.json', import.meta.url);
 
 async function currentCase() {
-  const document = JSON.parse(await readFile(CURRENT_CASE_FIXTURE, 'utf8')) as unknown;
+  const document = JSON.parse(await readFile(PUBLISHED_CASE_FIXTURE, 'utf8')) as unknown;
   const record = normalizeCaseStore(document).cases[0];
   assert.ok(record);
-  return record;
+  // Published records intentionally lack optional retained-file metadata.
+  // Supply it independently so the complete field/projection contract is exercised.
+  return addCaseAttachments(record, [{ id: 'selected-file', fileName: 'private-selected.png', mediaType: 'image/png',
+    source: 'Private selected-file provenance', observedAt: null, retainedAt: NOW,
+    byteLength: 123, digestSha256: `sha256:${'a'.repeat(64)}` }], NOW);
 }
 
 describe('Case decision and projection ownership', () => {
@@ -91,7 +96,10 @@ describe('Case decision and projection ownership', () => {
     assert.deepEqual(buildCaseExport([record], NOW).cases[0], durable);
     for (const audience of ['internal', 'trusted', 'public'] as const) {
       const projected = projectCaseForAudience(record, audience);
-      assert.deepEqual(Object.keys(projected).sort(), fields);
+      assert.deepEqual(Object.keys(projected).sort(), audience === 'internal' ? fields : fields.filter(field => field !== 'attachments'));
+      if (audience !== 'internal') {
+        assert.doesNotMatch(JSON.stringify(projected), /private-selected\.png|Private selected-file provenance|selected-file|sha256:aaaaaaaa/u);
+      }
       assert.deepEqual(projectCaseForAudience(projected, audience), projected);
     }
   });
