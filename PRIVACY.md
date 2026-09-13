@@ -397,6 +397,13 @@ authenticates the container before checking its ZIP and file identities. It does
 not establish who created the package. Downloading an unlocked entry produces
 its original, unencrypted bytes. Encryption does not protect an unlocked page,
 compromised device or weak passphrase.
+Encrypted Case handoffs include one full private Case and explicitly selected
+original bytes. Notes, incident links, filenames and saved response records are
+included; unfinished forms, authentication state and other Cases are excluded. The
+container is verified before download, and missing originals remain explicit.
+Returned packages are reviewed in page memory. Accepting selected new notes,
+pins, decisions or assertions does not import file bytes, status, actions,
+authorisations or closures, and does not authenticate the reviewer.
 Evidence folders use the same manifest and file identities. Folder review reads
 only the selected files. Direct browser output requires a folder picker grant,
 creates a new child folder and reads its files back for verification; handles

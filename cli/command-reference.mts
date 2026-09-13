@@ -613,7 +613,7 @@ const COMMAND_SEEDS = Object.freeze({
       example: 'whoisleuth manifest lookup.json comparison.json --workflow "domain review" --json',
       boundary: 'Ordinary output contains metadata only. ZIP and folder output include unchanged selected bytes and are private until reviewed for sharing. Folders must be new; existing destinations are never replaced and a failed write may leave explicit partial output. Filenames ending in .json are parsed as JSON; other files are opaque and never executed. Original paths are omitted. No network request is made.',
     },
-    collection: { mode: 'offline', scope: `Reads 1 to ${MAX_INVESTIGATION_MANIFEST_ARTIFACTS} local files, at most ${MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES / 1024 / 1024} MiB each and ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES / 1024 / 1024} MiB combined; retains no source paths.` },
+    collection: { mode: 'offline', scope: `Reads 1 to ${MAX_INVESTIGATION_MANIFEST_ARTIFACTS} local files, at most ${MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES / 1024 / 1024} MiB each and ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES.toLocaleString('en-AU')} bytes combined; retains no source paths.` },
     summary: 'Build an evidence manifest offline',
     options: ['--workflow', '--configuration-digest', '--package', '--passphrase-file', '--folder', '--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('artefacts', 'file', 1, MAX_INVESTIGATION_MANIFEST_ARTIFACTS)]),
@@ -1055,9 +1055,9 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "verify-artifact": commandSeed({
     reference: {
-      description: 'Validate a supported archive, claim passport, packet, manifest, saved Lookup or Lookup-evidence export without printing evidence contents. Use --package for a portable evidence ZIP or encrypted package, with --passphrase-file to unlock it; use --folder ./evidence for an explicit unencrypted evidence folder.',
+      description: 'Validate a supported archive, ordinary Case export, claim passport, packet, manifest, saved Lookup or Lookup-evidence export without printing evidence contents. Use --package for a portable evidence ZIP or encrypted package, with --passphrase-file to unlock it; use --folder ./evidence for an explicit unencrypted evidence folder.',
       example: 'whoisleuth verify-artifact report.json --manifest manifest.json --manifest-entry artifact-2 --json --strict-exit',
-      boundary: 'Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Folders reject symbolic links, nested trees and unlisted files; their package digest describes a canonical ZIP representation, not filesystem metadata. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 for incomplete verification, including unsupported entries or unlinked capsule sources.',
+      boundary: 'Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Case exports are checked without repairing content; package review also counts original references with matching bytes. Folders reject symbolic links, nested trees and unlisted files; their package digest describes a canonical ZIP representation, not filesystem metadata. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 for incomplete verification, including missing Case originals, unsupported entries or unlinked capsule sources.',
     },
     collection: { mode: 'offline', scope: 'Reads one selected bounded artefact, ZIP or explicit evidence folder and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.' },
     summary: 'Validate saved evidence offline',

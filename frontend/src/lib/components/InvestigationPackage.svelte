@@ -10,6 +10,7 @@
   import { selectedInvestigationFolderFiles } from '$lib/investigation-folder.ts';
   import EvidenceFileExport from './EvidenceFileExport.svelte';
   import EvidencePackageInput from './EvidencePackageInput.svelte';
+  import { readPackagedCaseReview } from '$lib/case-review-package.ts';
 
   let { onworkspace }: { onworkspace?: (file: Blob) => Promise<void> } = $props();
   type Selection = SelectedInvestigationFile & { name: string; key: number };
@@ -18,6 +19,7 @@
   let selected = $state<Selection[]>([]);
   let selectedPage = $state(0);
   let review = $state.raw<BrowserInvestigationPackageReview | null>(null);
+  let caseReview = $state.raw<Awaited<ReturnType<typeof readPackagedCaseReview>> | null>(null);
   let reviewPage = $state(0);
   let activeArtifact = $state('');
   let artifactTrigger: HTMLButtonElement | null = null;
@@ -56,7 +58,7 @@
     const candidate = [...selected, ...files.map(file => ({ file, name: file.name, key: nextKey++, mediaType: investigationFileMediaType(file.name), source: { identity: null, observedAt: null } }))];
     if (candidate.length > MAX_INVESTIGATION_MANIFEST_ARTIFACTS) { error = `Select no more than ${MAX_INVESTIGATION_MANIFEST_ARTIFACTS} files.`; return; }
     if (candidate.some(item => !item.file.size || item.file.size > MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES)) { error = `Each file must contain 1 byte to ${MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES / 1024 / 1024} MiB.`; return; }
-    if (candidate.reduce((sum, item) => sum + item.file.size, 0) > MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES) { error = `The files exceed ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES / 1024 / 1024} MiB in total.`; return; }
+    if (candidate.reduce((sum, item) => sum + item.file.size, 0) > MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES) { error = `The files exceed ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES.toLocaleString('en-AU')} bytes in total.`; return; }
     selected = candidate;
   }
   async function removeFile(key: number) {
@@ -70,15 +72,17 @@
   }
   async function choosePackage(file: Blob, passphrase?: string): Promise<boolean> {
     if (busy) return false;
-    review = null; reviewPage = 0; activeArtifact = ''; error = ''; message = '';
+    review = null; caseReview = null; reviewPage = 0; activeArtifact = ''; error = ''; message = '';
     reviewKind = 'ZIP';
     busy = true;
     operation = 'inspect';
     const current = new AbortController(); controller = current;
     try {
       const result = await runInvestigationPackageWorker('inspect', { file, ...(passphrase === undefined ? {} : { passphrase }) }, { signal: current.signal });
+      const checkedCase = await readPackagedCaseReview(result).catch(() => null);
       if (current.signal.aborted) return false;
       review = result;
+      caseReview = checkedCase;
       message = `Reviewed all ${result.entries.length} package ${result.entries.length === 1 ? 'entry' : 'entries'}. Nothing has been imported.`;
       await tick();
       if (!current.signal.aborted) reviewHeading?.focus();
@@ -90,14 +94,16 @@
     const input = event.currentTarget as HTMLInputElement;
     if (!input.files?.length || busy) { input.value = ''; return; }
     packageSelector?.reset();
-    review = null; reviewPage = 0; activeArtifact = ''; error = ''; message = ''; reviewKind = 'folder';
+    review = null; caseReview = null; reviewPage = 0; activeArtifact = ''; error = ''; message = ''; reviewKind = 'folder';
     busy = true; operation = 'inspectFolder';
     const current = new AbortController(); controller = current;
     try {
       const files = selectedInvestigationFolderFiles(input.files); input.value = '';
       const result = await runInvestigationPackageWorker('inspectFolder', { files }, { signal: current.signal });
+      const checkedCase = await readPackagedCaseReview(result).catch(() => null);
       if (current.signal.aborted) return;
       review = result;
+      caseReview = checkedCase;
       message = `Reviewed all ${result.entries.length} folder entries. Nothing has been imported.`;
       await tick(); if (!current.signal.aborted) reviewHeading?.focus();
     } catch (cause) { if (!current.signal.aborted) error = cause instanceof Error ? cause.message : 'Folder review failed.'; }
@@ -105,6 +111,7 @@
   }
   async function closeReview() {
     review = null;
+    caseReview = null;
     activeArtifact = '';
     message = 'Package review closed. No saved records were changed.';
     await tick();
@@ -141,7 +148,7 @@
       <p>Files are included unchanged, without redaction. Choose encryption below when needed. Review contents before sharing. Original filenames are shown here only; the package uses generated entry names.</p>
       <label>Package purpose<input maxlength="160" bind:value={workflow} disabled={busy}></label>
       <label class="file-label">Choose evidence files<input bind:this={sourceInput} type="file" multiple onchange={chooseSources} disabled={busy}></label>
-      <p>{selected.length} of {MAX_INVESTIGATION_MANIFEST_ARTIFACTS} files · {totalBytes.toLocaleString()} bytes. Up to {MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES / 1024 / 1024} MiB per file and {MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES / 1024 / 1024} MiB in total.</p>
+      <p>{selected.length} of {MAX_INVESTIGATION_MANIFEST_ARTIFACTS} files · {totalBytes.toLocaleString()} bytes. Up to {MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES / 1024 / 1024} MiB per file and {MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES.toLocaleString('en-AU')} bytes in total.</p>
       {#if selected.length}
         <ul bind:this={selectedList} class="entries selected-entries">
           {#each selectedRows as item (item.key)}
@@ -161,7 +168,7 @@
       {/if}
     </div>
   </details>
-  <EvidencePackageInput bind:this={packageSelector} bind:control={packageInput} label="Review evidence package" disabled={busy} onreview={choosePackage} onselect={() => { review = null; reviewPage = 0; activeArtifact = ''; error = ''; message = ''; }} />
+  <EvidencePackageInput bind:this={packageSelector} bind:control={packageInput} label="Review evidence package" disabled={busy} onreview={choosePackage} onselect={() => { review = null; caseReview = null; reviewPage = 0; activeArtifact = ''; error = ''; message = ''; }} />
   <label class="file-label review-file">Review evidence folder<input bind:this={folderInput} type="file" webkitdirectory multiple onchange={chooseFolder} disabled={busy}></label>
   {#if busy && controller}<button class="btn cancel-package" type="button" onclick={cancel}>Cancel package processing</button>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
@@ -174,6 +181,13 @@
       {#if review.encryption === 'verified'}<p>Encrypted container authenticated. Downloading an individual entry below produces its original, unencrypted bytes.</p>{/if}
       <dl class="review-facts"><div><dt>File identity</dt><dd>{review.identityVerified ? 'Every file matches its manifest' : 'Some files were rejected'}</dd></div><div><dt>Packaging event</dt><dd>{review.manifest.generatedAt} (local clock)</dd></div><div><dt>Trusted signatures and timestamps</dt><dd>Not checked</dd></div><div><dt>Factual accuracy</dt><dd>Not established by file identity</dd></div></dl>
       <p>Byte identity is separate from source-format validation. Workspace files open their existing import preview; use <code>verify-artifact --package</code> in the CLI for other supported format checks. Inline review shows JSON as text and PNGs as decoded pixels. Other files remain download-only; no document scripts or links run.</p>
+      {#if caseReview}<section aria-label="Case handoff completeness">
+        <h4>Case handoff completeness</h4>
+        <p>One exact current Case in {caseReview.entryId}. {caseReview.attachments.length - caseReview.missing.length} of {caseReview.attachments.length} original file references have matching bytes. This does not establish who reviewed the Case or whether its conclusions are correct.</p>
+        <button class="btn" type="button" onclick={() => downloadEntry(caseReview!.entryId, true)}>Download Case JSON</button>
+        <p>Import the Case JSON into a separate workspace before reviewing. Unfinished forms are not included. Accepting returned entries in an existing Case never imports response authority, status or file bytes.</p>
+        {#if caseReview.attachments.length}<details><summary>Original file matches</summary><ul>{#each caseReview.attachments as item}<li>{item.attachment.fileName}: {item.entries.length ? item.entries.join(', ') : 'matching bytes absent'}</li>{/each}</ul></details>{/if}
+      </section>{/if}
       {#if review.links.length}<ul class="links">{#each review.links as link}<li>Capsule {link.capsuleEntryId}: {link.state === 'linked' ? `exact source identity linked to ${link.sourceEntryId}` : `source identity ${link.state}`}</li>{/each}</ul>{/if}
       {#if review.captureManifests.length}<section aria-label="Capture attachment checks">
         <h4>Capture attachment checks</h4>

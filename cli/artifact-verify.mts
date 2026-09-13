@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import type { OfflineInvestigationPackageDetails } from './investigation-package-review.mts';
+import { readEditableCaseExport } from '../packages/cases/case-export-input.mts';
 
 import { boundedJsonLimitsForBytes, parseBoundedJsonObject } from './bounded-json.mts';
 import {
@@ -100,6 +101,7 @@ export class UnsupportedOfflineArtifactError extends TypeError {
 }
 
 type ArtifactKind =
+  | 'case_export'
   | 'investigation_package'
   | 'workspace_archive'
   | 'encrypted_workspace_archive'
@@ -121,8 +123,12 @@ export type OfflineArtifactVerificationReport = Readonly<{
   schema: typeof OFFLINE_ARTIFACT_VERIFICATION_SCHEMA;
   version: typeof OFFLINE_ARTIFACT_VERIFICATION_VERSION;
   artifact: Readonly<{
-    kind: ArtifactKind;
+    kind: Exclude<ArtifactKind, 'case_export'>;
     schema: string;
+    version: number;
+  } | {
+    kind: 'case_export';
+    schema: null;
     version: number;
   }>;
   state: OfflineArtifactVerificationState;
@@ -471,6 +477,22 @@ async function verifyOfflineArtifactCore(
     });
   }
 
+  if (value.schema === undefined && Array.isArray(value.cases)) {
+    const cases = readEditableCaseExport(raw);
+    return Object.freeze({
+      schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA, version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
+      artifact: Object.freeze({ kind: 'case_export', schema: null, version: artifactVersion(value) }),
+      state: 'structure_valid',
+      checks: Object.freeze({ structure: 'verified', contentIntegrity: 'not_checked', contentIntegrityScope: 'not_applicable', authenticatedEncryption: 'not_applicable' }),
+      summary: Object.freeze({ inputBytes: inputBytes(raw), sectionCount: 1, recordCount: cases.length, ciphertextBytes: null }),
+      limitations: Object.freeze([
+        'The ordinary Case export matches its exact supported structure without repairing or removing retained records. It has no embedded checksum or signature.',
+        'Original-file references do not include original bytes. Verify a selected evidence package to check which references have matching bytes.',
+        'The Case includes private analyst content. Structural validity does not authenticate its author or establish factual accuracy, currentness or response authority.',
+      ]),
+    });
+  }
+
   if (isEncryptedWorkspaceArchive(value)) {
     if (!options.passphrase) {
       const inspected = inspectEncryptedWorkspaceArchive(value);
@@ -732,7 +754,7 @@ export function formatOfflineArtifactVerification(
 ): string {
   const lines = [
     'WHOISleuth offline artefact verification',
-    `Artifact: ${report.artifact.kind} · ${report.artifact.schema} v${report.artifact.version}`,
+    `Artifact: ${report.artifact.kind} · ${report.artifact.schema ?? 'no schema identifier'} v${report.artifact.version}`,
     `State: ${report.state}`,
     `Structure: ${report.checks.structure}`,
     `Content integrity: ${report.checks.contentIntegrity}`,
@@ -782,6 +804,7 @@ export function formatOfflineArtifactVerification(
       lines.push(`Capture manifest ${capture.entryId}: ${capture.state}`);
       for (const artifact of capture.artifacts) lines.push(`Capture ${artifact.capture} ${artifact.kind}: ${artifact.state}${artifact.matchingIds.length ? ` (${artifact.matchingIds.join(', ')})` : ''}`);
     }
+    for (const item of report.package.caseFiles) lines.push(`Case files ${item.entryId} (${item.caseCount} Case${item.caseCount === 1 ? '' : 's'}): ${item.matched} of ${item.references} references matched; ${item.missing} missing`);
   }
   for (const limitation of report.limitations) lines.push(`Limitation: ${limitation}`);
   return `${lines.join('\n')}\n`;

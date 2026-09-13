@@ -40,6 +40,7 @@ function compact(value: string): string {
 }
 
 const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
+  { id: 'case-handoff', pattern: /Encrypted Case handoffs include one full private Case and explicitly selected original bytes.*unfinished forms, authentication state and other Cases are excluded.*does not import file bytes, status, actions, authorisations or closures/iu },
   { id: 'case-practice', pattern: /Case-form practice keeps edits and unfinished forms only in page memory.*Restarting, reloading or leaving discards them.*does not open the saved-work database, export practice files or expose collection and reporting controls/iu },
   { id: 'local-case-files', pattern: /offline \u0060?case\u0060? command creates and updates ordinary local Case files only through explicit output.*private analyst content and file references, not attached file bytes.*locks contain only a local process ID.*Case files are unencrypted unless packaged separately with encryption/iu },
   { id: 'date', pattern: /Last updated: \d{1,2} [A-Z][a-z]+ \d{4}/u },

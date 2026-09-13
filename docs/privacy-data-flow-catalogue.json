@@ -5453,7 +5453,7 @@
       "command": "manifest",
       "capabilityFamilyId": "portable_evidence",
       "title": "Build an evidence manifest offline",
-      "requestPurpose": "Reads 1 to 128 local files, at most 64 MiB each and 64 MiB combined; retains no source paths.",
+      "requestPurpose": "Reads 1 to 129 local files, at most 64 MiB each and 71,303,424 bytes combined; retains no source paths.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -6904,7 +6904,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Folders reject symbolic links, nested trees and unlisted files; their package digest describes a canonical ZIP representation, not filesystem metadata. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 for incomplete verification, including unsupported entries or unlinked capsule sources.",
+        "Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Case exports are checked without repairing content; package review also counts original references with matching bytes. Folders reject symbolic links, nested trees and unlisted files; their package digest describes a canonical ZIP representation, not filesystem metadata. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 for incomplete verification, including missing Case originals, unsupported entries or unlinked capsule sources.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],

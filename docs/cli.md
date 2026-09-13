@@ -235,7 +235,12 @@ whoisleuth manifest evidence.json screenshot.png --workflow "Evidence review" \
 whoisleuth verify-artifact --folder ./evidence-project --json --strict-exit
 ```
 
-Packages contain up to 128 files and 64 MiB of payload plus bounded metadata.
+Packages admit the 128-file, 64-MiB original selection plus one bounded Case
+export, with a separate manifest allowance. Original-file limits remain unchanged.
+`verify-artifact` uses the same exact ordinary Case reader as `case show`,
+without repairing content. Package verification also reports original-reference
+completeness for each Case file; `--strict-exit` returns 4 when a referenced original is missing.
+An ordinary Case JSON file alone provides structural validity, not a checksum.
 They use generated entry names, not original paths. Ordinary ZIPs and folders
 are private and unencrypted; packaging does not redact selected files. The report distinguishes
 file identity, supported source formats, opaque content, exact capsule/source

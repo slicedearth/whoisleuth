@@ -6,6 +6,10 @@
   import { canonicalArtifactJsonV2, sha256ArtifactBytes } from '../../../../packages/evidence/artifact-integrity.mts';
   import { CASE_REVIEW_KINDS, previewCaseReviewReturn, selectedCaseReviewRows, type CaseReviewReturn, type CaseReviewRow } from '../../../../packages/cases/case-review-return.mts';
   import { parseBoundedJson, boundedJsonLimitsForBytes } from '$lib/bounded-json';
+  import CaseReviewPackage from './CaseReviewPackage.svelte';
+  import EvidencePackageInput from './EvidencePackageInput.svelte';
+  import { runInvestigationPackageWorker } from '$lib/investigation-package-worker.ts';
+  import { readPackagedCaseReview } from '$lib/case-review-package.ts';
 
   let { record, mutationBusy, persist }: {
     record: CaseRecord;
@@ -15,6 +19,9 @@
   let preview = $state.raw<CaseReviewReturn | null>(null);
   let selected = $state<string[]>([]);
   let parsing = $state(false);
+  let exporting = $state(false);
+  let packageMessage = $state('');
+  let packageController: AbortController | null = null;
   let message = $state('');
   let page = $state(1);
   let filter = $state<'changed' | 'all'>('changed');
@@ -29,7 +36,7 @@
     try { selectedCaseReviewRows(preview, selected); return ''; }
     catch (cause) { return cause instanceof Error ? cause.message : 'Review this selection.'; }
   });
-  onDestroy(() => { generation++; });
+  onDestroy(() => { generation++; packageController?.abort(); });
 
   function title(row: CaseReviewRow): string {
     const entry = row.returned;
@@ -42,6 +49,7 @@
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     const revision = ++generation;
+    packageController?.abort(); packageMessage = '';
     preview = null; selected = []; page = 1; message = ''; parsing = Boolean(file);
     if (!file) return;
     // The Case baseline belongs to this selection, not to the later read result.
@@ -63,6 +71,23 @@
     } finally {
       if (revision === generation) { parsing = false; input.value = ''; }
     }
+  }
+  async function selectPackage(file: Blob, passphrase?: string): Promise<boolean> {
+    if (parsing || mutationBusy || exporting) return false;
+    const revision = ++generation, baseline = JSON.parse(JSON.stringify(record)) as CaseRecord;
+    const current = new AbortController(); packageController = current;
+    preview = null; selected = []; page = 1; message = ''; packageMessage = ''; parsing = true;
+    try {
+      const reviewed = await runInvestigationPackageWorker('inspect', { file, ...(passphrase === undefined ? {} : { passphrase }) }, { signal: current.signal });
+      const packaged = await readPackagedCaseReview(reviewed);
+      const checked = previewCaseReviewReturn(baseline, JSON.parse(packaged.document), packaged.digest);
+      if (revision !== generation || current.signal.aborted) return false;
+      preview = checked;
+      packageMessage = `${packaged.encryption === 'verified' ? 'Encrypted container authenticated. ' : 'Unencrypted package. '}Every packaged file matches its manifest. ${packaged.attachments.length - packaged.missing.length} of ${packaged.attachments.length} Case file references have matching bytes. Originals remain in the selected package and are not imported by accepting entries.`;
+      message = `Review ${checked.rows.filter(row => row.state === 'new').length} new entries and ${checked.rows.filter(row => row.state === 'conflict').length} conflicts. Nothing has been saved.`;
+      return true;
+    } catch (cause) { if (revision === generation && !current.signal.aborted) message = cause instanceof Error ? cause.message : 'The package could not be verified.'; return false; }
+    finally { passphrase = undefined; if (packageController === current) { packageController = null; parsing = false; } }
   }
   function exportCopy() {
     try {
@@ -92,14 +117,18 @@
   <details>
     <summary>Share a copy or review returned entries</summary>
     <div class="stack">
-      <p>Export this Case, have the reviewer import it into a separate workspace and return its Case export. A full copy includes retained notes, incident links and evidence; it is not redacted or encrypted.</p>
-      <button class="btn" type="button" onclick={exportCopy} disabled={mutationBusy || parsing}>Export this Case for review</button>
+      <CaseReviewPackage {record} disabled={mutationBusy || parsing} onbusy={value => exporting = value} />
+      <details><summary>Unencrypted Case-only copy</summary><p>This JSON contains the full private Case and file references, not original file bytes. It is neither redacted nor encrypted.</p>
+      <button class="btn" type="button" onclick={exportCopy} disabled={mutationBusy || parsing || exporting}>Export this Case for review</button></details>
+      <EvidencePackageInput label="Returned Case package" disabled={mutationBusy || parsing || exporting} onreview={selectPackage}
+        onselect={() => { generation++; preview = null; selected = []; page = 1; message = ''; packageMessage = ''; }} />
       <label for={`case-review-file-${record.id}`}>Returned Case file (JSON)</label>
-      <input id={`case-review-file-${record.id}`} type="file" accept="application/json,.json" onchange={selectFile} disabled={mutationBusy || parsing}>
+      <input id={`case-review-file-${record.id}`} type="file" accept="application/json,.json" onchange={selectFile} disabled={mutationBusy || parsing || exporting}>
+      {#if packageMessage}<p class="muted">{packageMessage}</p>{/if}
       <p class="muted">Review stays in page memory. Only selected new notes, pins, decisions and assertions are added. Status, authorisations, actions, closures and observations are not inherited. Matching IDs do not authenticate the reviewer.</p>
       <p role="status" aria-label="Case review return status">{parsing ? 'Reading the selected review file…' : message}</p>
       {#if preview}
-        <p class="digest">File: <code>{preview.fileDigest}</code></p>
+        <p class="digest">Case file: <code>{preview.fileDigest}</code></p>
         {#if preview.isCliPack}<p>This preview checks Case data, not the CLI pack's checksum or report binding. Verify the pack separately before relying on those claims.</p>{/if}
         {#if stale}<p role="alert">This Case changed after the preview. Reload it and select the returned file again before applying entries.</p>{/if}
         <div class="toolbar">

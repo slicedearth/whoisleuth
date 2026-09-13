@@ -361,13 +361,20 @@ record. After reopening a Case, restore a saved draft explicitly and review it
 before submitting. Copies from other tabs are not silently overwritten.
 
 For a second opinion, open **Response → Review with another analyst** and
-export this Case for review. The full copy includes notes, incident links and
-evidence: share it deliberately. The reviewer imports it into a separate
-workspace, adds notes, pins, decisions or assertions, then exports that Case.
-Select the returned file in the original Case and review each addition before
-saving. Linked new pins must be selected with their claims; conflicting IDs
-never overwrite retained content. Status, actions, authorisations, closures and
-snapshots are not copied back. A changed destination requires another preview.
+select the required originals. **Check handoff contents** verifies those bytes
+and the complete Case, identifies missing selections, and enables an encrypted
+package download. The full Case includes notes, incident links, filenames and
+response records; unfinished forms are excluded. A changed Case requires a new
+check. Send the passphrase separately.
+
+The reviewer unlocks the package in Dashboard’s saved-work tools, checks the original-file matches
+and downloads its Case JSON for a separate workspace. Keep needed originals
+alongside that workspace. Return a current Case export or encrypted package.
+The unencrypted Case-only copy remains available when deliberately needed.
+Select the return in the original Case and review each addition before saving.
+Linked new pins must be selected with their claims; conflicting IDs
+never overwrite retained content. Status, actions, authorisations, closures,
+snapshots and file bytes are not copied back. A changed destination requires another preview.
 Preview selections survive changing Case sections, but not leaving the page.
 The handoff trail identifies the file and selected entries, not the reviewer's
 identity. CLI packs can supply Case data; use CLI verification separately for

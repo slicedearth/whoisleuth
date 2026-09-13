@@ -150,7 +150,7 @@ test('ZIP and manifest failures are distinct from file-identity rejection', asyn
   delete missing['artifacts/artifact-2'];
   await assert.rejects(inspectInvestigationPackage(zipSync(missing)), /missing or unlisted/u);
   await assert.rejects(inspectInvestigationPackage(zipSync({ ...files, 'artifacts/artifact-3': new Uint8Array([7]) })), /missing or unlisted/u);
-  for (const name of ['../manifest.json', '/manifest.json', 'artifacts/../artifact-1', 'artifacts\\artifact-1', 'artifacts/artifact-0', 'artifacts/artifact-129']) {
+  for (const name of ['../manifest.json', '/manifest.json', 'artifacts/../artifact-1', 'artifacts\\artifact-1', 'artifacts/artifact-0', `artifacts/artifact-${MAX_INVESTIGATION_MANIFEST_ARTIFACTS + 1}`]) {
     await assert.rejects(inspectInvestigationPackage(zipSync({ ...files, [name]: new Uint8Array([7]) })), /path|identity/u);
   }
   const corrupt = built.bytes.slice();
@@ -197,9 +197,9 @@ test('full supported file and aggregate capacities retain every byte and reject 
   await assert.rejects(buildInvestigationPackage({ ...options, artifacts: [{ content: block }, { content: block }, { content: new Uint8Array([1]) }] }, NOW, VERSION), /combined limit/u);
   const small = Array.from({ length: MAX_INVESTIGATION_MANIFEST_ARTIFACTS }, () => ({ content: '{}' }));
   const maximum = await inspectInvestigationPackage((await buildInvestigationPackage({ ...options, artifacts: small }, NOW, VERSION)).bytes);
-  assert.equal(maximum.entries.length, 128);
-  assert.equal(maximum.contents.size, 128);
+  assert.equal(maximum.entries.length, small.length);
+  assert.equal(maximum.contents.size, small.length);
   assert.equal(maximum.identityVerified, true);
-  await assert.rejects(buildInvestigationPackage({ ...options, artifacts: [...small, { content: '{}' }] }, NOW, VERSION), /128/u);
-  assert.equal(investigationPackageEntryPath('artifact-128'), 'artifacts/artifact-128');
+  await assert.rejects(buildInvestigationPackage({ ...options, artifacts: [...small, { content: '{}' }] }, NOW, VERSION), /artefacts/u);
+  assert.equal(investigationPackageEntryPath(`artifact-${small.length}`), `artifacts/artifact-${small.length}`);
 });

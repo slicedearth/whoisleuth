@@ -6,9 +6,10 @@
   import { downloadLocalFile } from '$lib/download-local-file.ts';
   import EvidencePackageEncryption from './EvidencePackageEncryption.svelte';
 
-  let { getFiles, workflow, disabled = false, onbusy = () => {}, onmessage }: {
+  let { getFiles, workflow, disabled = false, onbusy = () => {}, onmessage, requireEncryption = false, validateSelection }: {
     getFiles: (signal: AbortSignal) => Promise<readonly SelectedInvestigationFile[]>;
     workflow: string; disabled?: boolean; onbusy?: (value: boolean) => void; onmessage?: (value: string) => void;
+    requireEncryption?: boolean; validateSelection?: () => Promise<void>;
   } = $props();
   let folderSupported = $state(false), busy = $state(false), stopping = $state(false);
   let message = $state(''), error = $state('');
@@ -22,8 +23,9 @@
 
   async function exportFiles(kind: 'build' | 'folder') {
     if (busy || disabled) return;
-    if (kind === 'folder' && encrypted) { error = 'Choose a package download to keep the selected files encrypted.'; return; }
-    const protect = encrypted;
+    if (kind === 'folder' && (encrypted || requireEncryption)) { error = 'Choose a package download to keep the selected files encrypted.'; return; }
+    const verifyEncrypted = requireEncryption;
+    const protect = encrypted || verifyEncrypted;
     let submittedPassphrase: string | undefined;
     try { submittedPassphrase = encryptionOptions?.takePassphrase(); }
     catch (cause) { error = cause instanceof Error ? cause.message : 'Enter and confirm the package passphrase.'; return; }
@@ -44,6 +46,7 @@
       const input = { files, workflow: purpose, generatedAt, applicationVersion: __WHOISLEUTH_VERSION__ };
       if (kind === 'folder' && parent) {
         const prepared = await runInvestigationPackageWorker('folder', input, { signal: current.signal });
+        await validateSelection?.(); current.signal.throwIfAborted();
         const saved = await writeBrowserInvestigationFolder(parent, prepared, current.signal);
         writtenFolder = saved.name;
         const review = await runInvestigationPackageWorker('inspectFolder', { files: saved.files }, { signal: current.signal });
@@ -52,16 +55,23 @@
         message = `Created ${saved.name} and verified ${count} file${count === 1 ? '' : 's'} by reading ${count === 1 ? 'it' : 'them'} back. This is a selected evidence export, not a complete workspace backup.`;
       } else {
         const prepared = await runInvestigationPackageWorker('build', { ...input, ...(submittedPassphrase === undefined ? {} : { passphrase: submittedPassphrase }) }, { signal: current.signal });
+        if (verifyEncrypted) {
+          if (submittedPassphrase === undefined) throw new Error('The encrypted handoff passphrase is unavailable. Nothing was downloaded.');
+          const checked = await runInvestigationPackageWorker('inspect', { file: prepared.file, passphrase: submittedPassphrase }, { signal: current.signal });
+          if (checked.encryption !== 'verified' || !checked.identityVerified || checked.manifest.integrity.digestSha256 !== prepared.manifest.integrity.digestSha256) throw new Error('The encrypted handoff did not pass its independent read-back check. Nothing was downloaded.');
+        }
+        await validateSelection?.();
         current.signal.throwIfAborted();
         downloadLocalFile(prepared.file, `whoisleuth-evidence-${generatedAt.slice(0, 10)}.${protect ? 'wlep' : 'zip'}`);
         const count = prepared.manifest.artifacts.length;
-        message = `Prepared ${protect ? 'an encrypted' : 'a private'} package of ${count} unchanged file${count === 1 ? '' : 's'} for download. Confirm that the download completed; this is not a complete workspace backup.`;
+        message = `Prepared ${protect ? 'an encrypted' : 'a private'} package of ${count} unchanged file${count === 1 ? '' : 's'} for download.${verifyEncrypted ? ' The encrypted container and every file passed read-back verification.' : ''} Confirm that the download completed; this is not a complete workspace backup.`;
       }
     } catch (cause) {
       if (writtenFolder) error = `Folder ${writtenFolder} was written, but verification did not complete. Inspect it before using or sharing it. No browser records were changed.`;
       else if (cause instanceof DOMException && cause.name === 'AbortError') message = 'Export cancelled. No browser records were changed.';
       else error = cause instanceof Error ? cause.message : 'Evidence export failed. No browser records were changed.';
     } finally {
+      submittedPassphrase = undefined;
       if (message) onmessage?.(message);
       if (controller === current) { controller = null; busy = false; stopping = false; onbusy(false); }
       await tick();
@@ -71,13 +81,13 @@
 </script>
 
 <div class="evidence-export">
-  <EvidencePackageEncryption bind:this={encryptionOptions} bind:encrypted disabled={disabled || busy} />
+  <EvidencePackageEncryption bind:this={encryptionOptions} bind:encrypted disabled={disabled || busy} required={requireEncryption} />
   <div class="export-actions">
-    <button class="primary" bind:this={downloadButton} type="button" disabled={disabled || busy} onclick={() => void exportFiles('build')}>Download private package</button>
-    {#if folderSupported}<button class="btn" bind:this={folderButton} type="button" disabled={disabled || busy || encrypted} onclick={() => void exportFiles('folder')}>Write new evidence folder</button>{/if}
+    <button class="primary" bind:this={downloadButton} type="button" disabled={disabled || busy} onclick={() => void exportFiles('build')}>{requireEncryption ? 'Download encrypted Case handoff' : 'Download private package'}</button>
+    {#if folderSupported && !requireEncryption}<button class="btn" bind:this={folderButton} type="button" disabled={disabled || busy || encrypted} onclick={() => void exportFiles('folder')}>Write new evidence folder</button>{/if}
     {#if busy}<button class="btn" type="button" disabled={stopping} onclick={() => { stopping = true; controller?.abort(); }}>{stopping ? 'Stopping export…' : 'Cancel export'}</button>{/if}
   </div>
-  <p>File contents stay unchanged. Ordinary ZIPs and folder exports are unencrypted. A folder export creates a new child inside the folder you choose; it never synchronises in the background.{#if !folderSupported} For an unencrypted folder, extract the downloaded ZIP locally.{/if}</p>
+  {#if !requireEncryption}<p>File contents stay unchanged. Ordinary ZIPs and folder exports are unencrypted. A folder export creates a new child inside the folder you choose; it never synchronises in the background.{#if !folderSupported} For an unencrypted folder, extract the downloaded ZIP locally.{/if}</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if !onmessage}<p class="export-status" role="status">{message}</p>{/if}
 </div>

@@ -3,6 +3,8 @@ import { MAX_INVESTIGATION_PACKAGE_BYTES, encodeInvestigationPackageEntries, ins
 import { INVESTIGATION_MANIFEST_SCHEMA } from '../packages/investigation/investigation-manifest.mts';
 import { hasEncryptedInvestigationPackagePrefix, MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../packages/contracts/investigation-package-limits.mts';
 import { decryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
+import { readEditableCaseExport } from '../packages/cases/case-export-input.mts';
+import { matchCaseReviewFiles } from '../packages/cases/case-review-package.mts';
 import {
   OFFLINE_ARTIFACT_VERIFICATION_SCHEMA, OFFLINE_ARTIFACT_VERIFICATION_VERSION,
   UnsupportedOfflineArtifactError, isCompleteOfflineArtifactVerification, verifyOfflineArtifact,
@@ -36,6 +38,7 @@ export type OfflineInvestigationPackageDetails = Readonly<{
   }>[];
   links: readonly InvestigationPackageSourceLink[];
   captureManifests: readonly InvestigationPackageCaptureReview[];
+  caseFiles: readonly Readonly<{ entryId: string; caseCount: number; references: number; matched: number; missing: number }>[];
 }>;
 
 export async function verifyOfflineInvestigationPackage(input: Uint8Array, passphrase?: string): Promise<OfflineArtifactVerificationReport> {
@@ -57,6 +60,7 @@ export async function verifyOfflineInvestigationPackage(input: Uint8Array, passp
   const bytes = new Uint8Array(input);
   const inspected = await inspectInvestigationPackage(bytes);
   const entries: Array<OfflineInvestigationPackageDetails['entries'][number]> = [];
+  const caseFiles: Array<OfflineInvestigationPackageDetails['caseFiles'][number]> = [];
   for (const reviewed of inspected.entries) {
     let state: EntryState = reviewed.state === 'rejected' ? 'rejected' : reviewed.interpretation === 'opaque' ? 'opaque' : 'unsupported';
     let verification: OfflineInvestigationPackageDetails['entries'][number]['verification'] = null;
@@ -69,6 +73,19 @@ export async function verifyOfflineInvestigationPackage(input: Uint8Array, passp
         verification = { artifact: result.artifact, state: result.state, checks: result.checks, summary: result.summary };
         state = isCompleteOfflineArtifactVerification(result) ? 'admitted' : 'review_required';
         if (state === 'review_required') issue = 'The supported reader requires additional verification before complete assurance.';
+        if (result.artifact.kind === 'case_export') {
+          const candidates = inspected.entries.filter(item => item.entry.id !== reviewed.entry.id && item.state === 'identity_verified')
+            .map(item => ({ id: item.entry.id, digestSha256: item.entry.contentDigestSha256, byteLength: item.entry.byteLength }));
+          const cases = readEditableCaseExport(raw);
+          let references = 0, missing = 0;
+          for (const record of cases) {
+            const matched = matchCaseReviewFiles(record, candidates);
+            references += matched.length;
+            missing += matched.filter(item => !item.entries.length).length;
+          }
+          // Keep incident identifiers and filenames out of redacted reports.
+          caseFiles.push({ entryId: reviewed.entry.id, caseCount: cases.length, references, matched: references - missing, missing });
+        }
       } catch (cause) {
         state = cause instanceof UnsupportedOfflineArtifactError ? 'unsupported' : 'rejected';
         issue = state === 'unsupported' ? 'No supported offline reader accepts this declared source format.' : 'The source file failed its independent format or integrity checks.';
@@ -80,7 +97,8 @@ export async function verifyOfflineInvestigationPackage(input: Uint8Array, passp
   }
   const complete = entries.every((entry) => entry.state === 'admitted' || entry.state === 'opaque')
     && inspected.links.every((link) => link.state === 'linked')
-    && inspected.captureManifests.every(capture => capture.state === 'matched');
+    && inspected.captureManifests.every(capture => capture.state === 'matched')
+    && caseFiles.every(item => item.missing === 0);
   return Object.freeze({
     schema: OFFLINE_ARTIFACT_VERIFICATION_SCHEMA, version: OFFLINE_ARTIFACT_VERIFICATION_VERSION,
     artifact: Object.freeze({ kind: 'investigation_package' as const, schema: INVESTIGATION_MANIFEST_SCHEMA, version: inspected.manifest.version }),
@@ -91,11 +109,12 @@ export async function verifyOfflineInvestigationPackage(input: Uint8Array, passp
     manifestIdentity: null,
     package: Object.freeze({ digestSha256: await sha256ArtifactBytes(bytes), audience: 'private', storageEffect: 'none',
       signatureTrust: 'not_checked', timestampAssurance: 'not_checked', factualAccuracy: 'not_established',
-      entries: Object.freeze(entries), links: inspected.links, captureManifests: inspected.captureManifests }),
+      entries: Object.freeze(entries), links: inspected.links, captureManifests: inspected.captureManifests, caseFiles: Object.freeze(caseFiles) }),
     limitations: Object.freeze([
       'The manifest and selected file bytes are checked independently. Re-compressing the ZIP can change its archive digest without changing its verified file content.',
       'Opaque files are retained byte-for-byte, not rendered, executed or validated as images or documents. Unsupported JSON remains separate from admitted source formats.',
       'Capture attachment checks bind selected bytes to the capture manifest declaration, not to a trusted publisher or real website observation.',
+      'Case-file checks match original references to other verified package bytes by length and digest, not by filename or claimed source. Missing originals make the package partial; no file is fetched or imported.',
       'Source declarations and packaging times are not authenticated. Signatures and timestamp tokens require their own verification and trust decisions.',
       'This command does not import, overwrite or collect evidence. Unchanged bytes and valid source structure do not establish factual accuracy, currentness or safe sharing.',
     ]),

@@ -2,12 +2,8 @@ import { boundedJsonLimitsForBytes, parseBoundedJson, parseBoundedJsonObject } f
 import { normalizeBoundedSemanticVersion } from '../../lib/semantic-version.mts';
 import { canonicalArtifactJsonV2, sha256ArtifactBytes, sha256ArtifactDigestV2, SORTED_JSON_V2 } from '../evidence/artifact-integrity.mts';
 import { array, digest, enumeration, exact, fail, integer, iso, strings, text, validateIntegrity, type UnknownRecord } from '../evidence/artifact-structure.mts';
-import {
-  MAX_SELECTED_FILES as MAX_INVESTIGATION_MANIFEST_ARTIFACTS,
-  MAX_SELECTED_FILE_TOTAL_BYTES as MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES,
-  MAX_SELECTED_FILE_BYTES as MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES,
-  SELECTED_FILE_MEDIA_TYPES as INVESTIGATION_FILE_MEDIA_TYPES,
-} from '../contracts/selected-file-limits.mts';
+import { SELECTED_FILE_MEDIA_TYPES as INVESTIGATION_FILE_MEDIA_TYPES } from '../contracts/selected-file-limits.mts';
+import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES } from '../contracts/investigation-package-limits.mts';
 export { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, INVESTIGATION_FILE_MEDIA_TYPES };
 
 export const INVESTIGATION_MANIFEST_SCHEMA = 'whoisleuth.investigation-manifest';

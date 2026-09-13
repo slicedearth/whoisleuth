@@ -49,7 +49,7 @@ export function assertInvestigationFileSelection(files: readonly SelectedInvesti
   for (const selected of files) {
     if (!(selected.file instanceof Blob) || !selected.file.size || selected.file.size > MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES) throw new TypeError(`Each selected file must contain 1 byte to ${MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES / 1024 / 1024} MiB.`);
     total += selected.file.size;
-    if (total > MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES) throw new TypeError(`Selected files exceed ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES / 1024 / 1024} MiB in total.`);
+    if (total > MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES) throw new TypeError(`Selected files exceed ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES.toLocaleString('en-AU')} bytes in total.`);
   }
 }
 

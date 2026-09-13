@@ -52,6 +52,33 @@ export async function checkInstalledCaseFiles(temporaryRoot: string, run: RunIns
   await writeFile(inputFile, JSON.stringify({ label: 'New pin', value: 'Observation', unexpected: true }));
   await run(['case', 'pin', file, '--input', inputFile, '--output', file, '--force'], 'offline Case lossy-input refusal', 2, /Pin field unexpected/u);
   if (!(await bytes()).equals(original)) throw new TypeError('Installed Case refusal modified its source.');
+  const verifiedCase = JSON.parse(await run(['verify-artifact', file, '--json', '--strict-exit'], 'offline ordinary Case verification'));
+  if (verifiedCase.artifact?.kind !== 'case_export' || verifiedCase.state !== 'structure_valid' || verifiedCase.checks?.contentIntegrity !== 'not_checked') {
+    throw new TypeError('Installed ordinary Case verification confused structure and byte integrity.');
+  }
+  const handoff = join(temporaryRoot, 'handoff-case.json'), originalFile = join(temporaryRoot, 'handoff-original.bin');
+  const packageFile = join(temporaryRoot, 'case-handoff.wlep'), partialFile = join(temporaryRoot, 'case-without-original.zip');
+  const passphraseFile = join(temporaryRoot, 'case-handoff-passphrase.txt');
+  const body = Buffer.from('Selected original file bytes.');
+  const exported = JSON.parse(original.toString('utf8'));
+  exported.cases[0].attachments = [{ id: 'handoff-original', fileName: 'original.bin', mediaType: 'application/octet-stream', source: 'Supplied file', observedAt: null,
+    retainedAt: '2026-09-13T00:00:00.000Z', digestSha256: `sha256:${createHash('sha256').update(body).digest('hex')}`, byteLength: body.length }];
+  await writeFile(handoff, JSON.stringify(exported), { flag: 'wx', mode: 0o600 });
+  await writeFile(originalFile, body, { flag: 'wx', mode: 0o600 });
+  await writeFile(passphraseFile, 'Installed handoff fixture phrase', { flag: 'wx', mode: 0o600 });
+  await run(['manifest', handoff, originalFile, '--workflow', 'Case review', '--package', '--output', packageFile, '--passphrase-file', passphraseFile], 'offline encrypted Case handoff creation');
+  const complete = JSON.parse(await run(['verify-artifact', '--package', packageFile, '--passphrase-file', passphraseFile, '--json', '--strict-exit'], 'offline encrypted Case handoff verification'));
+  if (complete.state !== 'verified' || complete.checks?.authenticatedEncryption !== 'verified' || complete.package?.caseFiles?.length !== 1
+    || complete.package.caseFiles[0].references !== 1 || complete.package.caseFiles[0].matched !== 1 || complete.package.caseFiles[0].missing !== 0) {
+    throw new TypeError('Installed encrypted Case handoff verification did not match its original bytes.');
+  }
+  await run(['manifest', handoff, '--workflow', 'Case review', '--package', '--output', partialFile], 'offline partial Case handoff creation');
+  const incomplete = JSON.parse(await run(['verify-artifact', '--package', partialFile, '--json', '--strict-exit'], 'offline missing Case original refusal', 4));
+  if (incomplete.state !== 'partial' || incomplete.checks?.contentIntegrity !== 'verified' || incomplete.package?.caseFiles?.[0]?.missing !== 1) {
+    throw new TypeError('Installed package verification treated a missing Case original as complete.');
+  }
   return ['offline-case-create', 'offline-case-note', 'offline-case-pin', 'offline-case-assessment', 'offline-case-recheck',
-    'offline-case-json-review', 'offline-case-terminal-review', 'offline-case-stale-refusal', 'offline-case-lossy-input-refusal'];
+    'offline-case-json-review', 'offline-case-terminal-review', 'offline-case-stale-refusal', 'offline-case-lossy-input-refusal',
+    'offline-case-structure-verification', 'offline-case-encrypted-handoff-creation', 'offline-case-encrypted-handoff-verification',
+    'offline-case-partial-handoff-creation', 'offline-case-missing-original-refusal'];
 }
