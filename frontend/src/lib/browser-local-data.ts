@@ -2,6 +2,19 @@ import { assertBoundedJsonStructure, boundedJsonLimitsForBytes, scanBoundedJson 
 import { plaintextLocalBinaryCodec, type BrowserLocalBinaryCodec, type BrowserLocalStoredBinary } from './browser-local-binaries.ts';
 import { captureRetainedFiles, readRetainedFileReference, type RetainedFileInput, type RetainedFileReference } from '../../../packages/evidence/retained-file.mts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../packages/contracts/selected-file-limits.mts';
+import {
+  localDataManifestMatches as manifestMatchesExpected,
+  type LocalDataStoredRecord as BrowserLocalStoredRecord,
+  type LocalDataManifest as BrowserLocalCollectionManifest,
+  type LocalDataCapture as CapturedLocalDataCollection,
+  type LocalDataBinaryChanges as PreparedBinaryChanges,
+  type LocalDataStorage,
+} from '../../../packages/workspace/local-data-storage.mts';
+export type {
+  LocalDataStoredRecord as BrowserLocalStoredRecord,
+  LocalDataManifest as BrowserLocalCollectionManifest,
+  LocalDataCapture as CapturedLocalDataCollection,
+} from '../../../packages/workspace/local-data-storage.mts';
 
 export const LOCAL_DATA_DATABASE_NAME = 'whoisleuth-browser-data-v1';
 export const LOCAL_DATA_DATABASE_VERSION = 2;
@@ -104,30 +117,6 @@ export interface BrowserLocalDataCodec {
   decode(input: Readonly<{ collection: string; lookupKey: string; payload: string; maximumBytes: number }>): Promise<DecodedLocalDataRecord>;
 }
 
-export type BrowserLocalStoredRecord = Readonly<{
-  key: [string, string];
-  collection: string;
-  lookupKey: string;
-  ordinal: number;
-  codec: string;
-  payload: string;
-  payloadBytes: number;
-}>;
-
-export type BrowserLocalCollectionManifest = Readonly<{
-  collection: string;
-  schemaVersion: number;
-  codec: string;
-  revision: number;
-  recordCount: number;
-  serializedBytes: number;
-  digest: string;
-  source: 'empty' | 'legacy-localstorage' | 'application';
-  updatedAt: string;
-  legacyKey: string;
-  legacyDigest: string | null;
-}>;
-
 export type PreparedLocalDataContent = Readonly<{
   records: BrowserLocalStoredRecord[];
   serializedBytes: number;
@@ -155,7 +144,6 @@ export function captureBrowserLocalDataUpdateOptions(options: BrowserLocalDataUp
   return Object.freeze({ ...options, ...(options.files ? { files: captureRetainedFiles(options.files) } : {}) });
 }
 
-type PreparedBinaryChanges = Readonly<{ collection: string; writes: readonly BrowserLocalStoredBinary[]; remove: readonly string[] }>;
 type PreparedBinaryFiles = ReadonlyMap<string, Readonly<{ reference: RetainedFileReference; record: BrowserLocalStoredBinary }>>;
 export type BrowserLocalDataBatchUpdateOptions = Readonly<{ files?: ReadonlyMap<string, readonly RetainedFileInput[]> }>;
 
@@ -190,11 +178,6 @@ type CollectionSnapshot<T> = Readonly<{
   manifest: BrowserLocalCollectionManifest;
 }>;
 
-export type CapturedLocalDataCollection = Readonly<{
-  manifest: BrowserLocalCollectionManifest;
-  records: BrowserLocalStoredRecord[];
-}>;
-
 export type BrowserLocalDataSnapshotDecoder = <T>(
   definitions: readonly LocalDataCollectionDefinition<T>[],
   captured: readonly CapturedLocalDataCollection[],
@@ -216,22 +199,15 @@ function collectionContentMatches(
     && manifest.digest === prepared.digest;
 }
 
-function manifestMatchesExpected(
-  manifest: BrowserLocalCollectionManifest | undefined,
-  expected: ExpectedManifest,
-): boolean {
-  if (expected === null) return manifest === undefined;
-  return manifest?.collection === expected.collection
-    && manifest.schemaVersion === expected.schemaVersion
-    && manifest.codec === expected.codec
-    && manifest.revision === expected.revision
-    && manifest.recordCount === expected.recordCount
-    && manifest.serializedBytes === expected.serializedBytes
-    && manifest.digest === expected.digest
-    && manifest.source === expected.source
-    && manifest.updatedAt === expected.updatedAt
-    && manifest.legacyKey === expected.legacyKey
-    && manifest.legacyDigest === expected.legacyDigest;
+function proposedManifest(item: PreparedCollection, revision: number, codec: string, updatedAt: string): BrowserLocalCollectionManifest {
+  const manifest = Object.freeze({
+    collection: item.definition.id, schemaVersion: item.definition.schemaVersion,
+    codec, revision: revision + 1, recordCount: item.records.length,
+    serializedBytes: item.serializedBytes, digest: item.digest, source: item.source,
+    updatedAt, legacyKey: item.definition.legacyKey, legacyDigest: item.legacyDigest,
+  });
+  assertLocalDataManifest(item.definition, manifest);
+  return manifest;
 }
 
 export type BrowserLocalDataInitialization = Readonly<{
@@ -665,8 +641,9 @@ export class BrowserLocalDataProvider {
   readonly codec: BrowserLocalDataCodec;
   readonly timeoutMs: number;
 
-  #factory: IDBFactory;
-  #storage: BrowserStorage;
+  #factory: IDBFactory | undefined;
+  #storage: BrowserStorage | undefined;
+  #storageAdapter: LocalDataStorage | undefined;
   #now: () => Date;
   #databasePromise: Promise<IDBDatabase> | null = null;
   #initializationPromise: Promise<BrowserLocalDataInitialization> | null = null;
@@ -686,6 +663,8 @@ export class BrowserLocalDataProvider {
     databaseName?: string;
     indexedDB?: IDBFactory;
     storage?: BrowserStorage;
+    /** An explicit non-browser store never reads or migrates this origin's data. */
+    storageAdapter?: LocalDataStorage;
     codec?: BrowserLocalDataCodec;
     requireExistingCollections?: boolean;
     timeoutMs?: number;
@@ -697,13 +676,15 @@ export class BrowserLocalDataProvider {
     let factory: IDBFactory | undefined;
     let storage: BrowserStorage | undefined;
     try {
-      factory = options.indexedDB || globalThis.indexedDB;
-      storage = options.storage || globalThis.localStorage;
+      if (!options.storageAdapter) {
+        factory = options.indexedDB || globalThis.indexedDB;
+        storage = options.storage || globalThis.localStorage;
+      }
     } catch (cause) {
       throw new BrowserLocalDataError('LOCAL_DATA_UNSUPPORTED', 'Browser-local storage is unavailable in this context.', { cause });
     }
-    if (!factory) throw new BrowserLocalDataError('LOCAL_DATA_UNSUPPORTED', 'IndexedDB is unavailable in this browser.');
-    if (!storage) throw new BrowserLocalDataError('LOCAL_DATA_UNSUPPORTED', 'Legacy browser storage is unavailable for safe migration.');
+    if (!options.storageAdapter && !factory) throw new BrowserLocalDataError('LOCAL_DATA_UNSUPPORTED', 'IndexedDB is unavailable in this browser.');
+    if (!options.storageAdapter && !storage) throw new BrowserLocalDataError('LOCAL_DATA_UNSUPPORTED', 'Legacy browser storage is unavailable for safe migration.');
     this.databaseName = boundedIdentifier(options.databaseName || LOCAL_DATA_DATABASE_NAME, 'Database name', 160);
     this.codec = options.codec || plaintextJsonCodec;
     boundedIdentifier(this.codec.id, 'Codec identifier', MAX_LOCAL_DATA_CODEC_ID_LENGTH);
@@ -717,6 +698,7 @@ export class BrowserLocalDataProvider {
     this.timeoutMs = timeoutMs;
     this.#factory = factory;
     this.#storage = storage;
+    this.#storageAdapter = options.storageAdapter;
     this.#now = options.now || (() => new Date());
     this.#oncommit = options.oncommit;
     this.#decodeSnapshots = options.decodeSnapshots ?? decodeLocalDataSnapshots;
@@ -775,18 +757,8 @@ export class BrowserLocalDataProvider {
     }
     const unique = [...new Map(selected.map(reference => [reference.digestSha256, reference])).values()];
     const keys = await Promise.all(unique.map(reference => codec.lookupKey(definition.id, reference)));
-    const database = await this.#database();
-    const transaction = database.transaction(LOCAL_DATA_BINARY_STORE, 'readonly');
-    const done = transactionComplete(transaction, 'Reading retained files', this.timeoutMs);
-    let stored: (BrowserLocalStoredBinary | undefined)[];
-    try {
-      stored = await Promise.all(keys.map(key => requestResult(transaction.objectStore(LOCAL_DATA_BINARY_STORE).get([definition.id, key]) as IDBRequest<BrowserLocalStoredBinary | undefined>, 'Reading a retained file', this.timeoutMs)));
-      await done;
-    } catch (cause) {
-      try { transaction.abort(); } catch { /* already terminal */ }
-      await done.catch(() => undefined);
-      throw new BrowserLocalDataError('LOCAL_DATA_READ_FAILED', 'Selected retained files could not be read. No saved data was changed.', { cause });
-    }
+    const stored = this.#storageAdapter ? await this.#storageAdapter.files(definition.id, keys) : await this.#readStoredFiles(definition.id, keys);
+    if (stored.length !== keys.length) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'The retained-file response is incomplete.');
     const result = new Map<string, Blob | null>();
     for (const [index, reference] of unique.entries()) {
       const record = stored[index];
@@ -803,6 +775,21 @@ export class BrowserLocalDataProvider {
       }
     }
     return result;
+  }
+
+  async #readStoredFiles(collection: string, keys: readonly string[]): Promise<(BrowserLocalStoredBinary | undefined)[]> {
+    const database = await this.#database();
+    const transaction = database.transaction(LOCAL_DATA_BINARY_STORE, 'readonly');
+    const done = transactionComplete(transaction, 'Reading retained files', this.timeoutMs);
+    try {
+      const stored = await Promise.all(keys.map(key => requestResult(transaction.objectStore(LOCAL_DATA_BINARY_STORE).get([collection, key]) as IDBRequest<BrowserLocalStoredBinary | undefined>, 'Reading a retained file', this.timeoutMs)));
+      await done;
+      return stored;
+    } catch (cause) {
+      try { transaction.abort(); } catch { /* already terminal */ }
+      await done.catch(() => undefined);
+      throw new BrowserLocalDataError('LOCAL_DATA_READ_FAILED', 'Selected retained files could not be read. No saved data was changed.', { cause });
+    }
   }
 
   #binaryCodec(definition: AnyLocalDataCollectionDefinition): BrowserLocalBinaryCodec {
@@ -982,8 +969,10 @@ export class BrowserLocalDataProvider {
   }
 
   async close(): Promise<void> {
-    if (!this.#databasePromise) return;
-    try { (await this.#databasePromise).close(); } finally {
+    try {
+      await this.#storageAdapter?.close();
+      if (this.#databasePromise) (await this.#databasePromise).close();
+    } finally {
       this.#databasePromise = null;
       this.#initializationPromise = null;
       this.#databaseInvalidated = false;
@@ -1004,6 +993,8 @@ export class BrowserLocalDataProvider {
   }
 
   async restoreLegacyCopies(definitions: readonly AnyLocalDataCollectionDefinition[]): Promise<LegacyRollbackCopyResult> {
+    const storage = this.#storage;
+    if (!storage) throw new BrowserLocalDataError('LOCAL_DATA_LEGACY_UNAVAILABLE', 'This workspace is stored outside the browser. Use a workspace backup instead of a legacy browser copy.');
     this.#assertDefinitionBatch(definitions);
     definitions = definitions.filter(definition => definition.legacyRollback !== false);
     if (!definitions.length) return Object.freeze({ collectionCount: 0, serializedBytes: 0, keys: Object.freeze([]) });
@@ -1017,14 +1008,14 @@ export class BrowserLocalDataProvider {
       };
     });
     let snapshot: Map<string, string | null>;
-    try { snapshot = new Map(copies.map((copy) => [copy.key, this.#storage.getItem(copy.key)])); }
+    try { snapshot = new Map(copies.map((copy) => [copy.key, storage.getItem(copy.key)])); }
     catch (cause) {
       throw new BrowserLocalDataError('LOCAL_DATA_LEGACY_UNAVAILABLE', 'Could not read the legacy rollback copy before updating it.', { cause });
     }
     const applied: Array<{ key: string; value: string }> = [];
     try {
       for (const copy of copies) {
-        this.#storage.setItem(copy.key, copy.value);
+        storage.setItem(copy.key, copy.value);
         applied.push({ key: copy.key, value: copy.value });
       }
     } catch (cause) {
@@ -1032,13 +1023,13 @@ export class BrowserLocalDataProvider {
       try {
         for (let index = applied.length - 1; index >= 0; index -= 1) {
           const copy = applied[index]!;
-          if (this.#storage.getItem(copy.key) !== copy.value) {
+          if (storage.getItem(copy.key) !== copy.value) {
             concurrentChange = true;
             continue;
           }
           const previous = snapshot.get(copy.key) ?? null;
-          if (previous === null) this.#storage.removeItem(copy.key);
-          else this.#storage.setItem(copy.key, previous);
+          if (previous === null) storage.removeItem(copy.key);
+          else storage.setItem(copy.key, previous);
         }
       } catch (rollbackCause) {
         throw new BrowserLocalDataError('LOCAL_DATA_LEGACY_ROLLBACK_FAILED', 'Could not save or fully restore the legacy rollback copy. Download a workspace backup before changing this browser data.', { cause: rollbackCause });
@@ -1067,16 +1058,8 @@ export class BrowserLocalDataProvider {
   }
 
   async #initialize(definitions: readonly AnyLocalDataCollectionDefinition[], approved: ReadonlySet<string>): Promise<BrowserLocalDataInitialization> {
-    const database = await this.#database();
-    const transaction = database.transaction(LOCAL_DATA_MANIFEST_STORE, 'readonly');
-    const done = transactionComplete(transaction, 'Reading local-data manifests', this.timeoutMs);
-    const manifestStore = transaction.objectStore(LOCAL_DATA_MANIFEST_STORE);
-    const manifests = await Promise.all(definitions.map((definition) => requestResult(
-      manifestStore.get(definition.id) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
-      `Reading the ${definition.label} manifest`,
-      this.timeoutMs,
-    )));
-    await done;
+    const manifestState = await this.#readManifestState(definitions, 'Reading');
+    const manifests = definitions.map(definition => manifestState.get(definition.id));
 
     const missing = definitions.filter((_definition, index) => !manifests[index]);
     if (this.#requireExistingCollections && missing.some(definition => !approved.has(definition.id))) {
@@ -1095,7 +1078,7 @@ export class BrowserLocalDataProvider {
       const prepared: PreparedCollection[] = [];
       for (const definition of missing) {
         let raw: string | null;
-        try { raw = this.#storage.getItem(definition.legacyKey); }
+        try { raw = this.#storage?.getItem(definition.legacyKey) ?? null; }
         catch (cause) {
           throw new BrowserLocalDataError('LOCAL_DATA_LEGACY_UNAVAILABLE', `Could not read legacy ${definition.label} data for migration.`, { cause });
         }
@@ -1204,6 +1187,17 @@ export class BrowserLocalDataProvider {
   }
 
   async #readSnapshots<T>(definitions: readonly LocalDataCollectionDefinition<T>[]): Promise<CollectionSnapshot<T>[]> {
+    const captured = this.#storageAdapter
+      ? await this.#storageAdapter.capture(definitions.map(definition => definition.id))
+      : await this.#captureIndexedDbSnapshots(definitions);
+    const documents = await this.#decodeSnapshots(definitions, captured, this.codec);
+    if (documents.length !== captured.length) {
+      throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local snapshot is incomplete.');
+    }
+    return documents.map((document, index) => Object.freeze({ document, manifest: captured[index]!.manifest }));
+  }
+
+  async #captureIndexedDbSnapshots<T>(definitions: readonly LocalDataCollectionDefinition<T>[]): Promise<CapturedLocalDataCollection[]> {
     const database = await this.#database();
     const transaction = database.transaction([LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE], 'readonly');
     const label = definitions.length === 1 ? definitions[0]!.label : 'workspace collections';
@@ -1240,11 +1234,7 @@ export class BrowserLocalDataProvider {
         { cause },
       );
     }
-    const documents = await this.#decodeSnapshots(definitions, captured, this.codec);
-    if (documents.length !== captured.length) {
-      throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'A browser-local snapshot is incomplete.');
-    }
-    return documents.map((document, index) => Object.freeze({ document, manifest: captured[index]!.manifest }));
+    return captured;
   }
 
   async #commit(
@@ -1254,6 +1244,7 @@ export class BrowserLocalDataProvider {
     createEmptyCollections: ReadonlySet<string> = new Set(),
   ): Promise<void> {
     this.#requireConfirmedCommitState();
+    if (this.#storageAdapter) return this.#commitToAdapter(prepared, expectedManifests, binaryChanges, createEmptyCollections);
     const database = await this.#database();
     const changedFiles = binaryChanges.filter(change => change.writes.length || change.remove.length);
     const transaction = database.transaction([LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE, ...(changedFiles.length || createEmptyCollections.size ? [LOCAL_DATA_BINARY_STORE] : [])], 'readwrite');
@@ -1309,19 +1300,7 @@ export class BrowserLocalDataProvider {
       this.#requireConfirmedCommitState();
       for (const item of prepared) {
         const currentRevision = currentByCollection.get(item.definition.id)?.revision || 0;
-        proposedManifests.set(item.definition.id, Object.freeze({
-          collection: item.definition.id,
-          schemaVersion: item.definition.schemaVersion,
-          codec: this.codec.id,
-          revision: currentRevision + 1,
-          recordCount: item.records.length,
-          serializedBytes: item.serializedBytes,
-          digest: item.digest,
-          source: item.source,
-          updatedAt,
-          legacyKey: item.definition.legacyKey,
-          legacyDigest: item.legacyDigest,
-        } satisfies BrowserLocalCollectionManifest));
+        proposedManifests.set(item.definition.id, proposedManifest(item, currentRevision, this.codec.id, updatedAt));
       }
       for (let index = 0; index < prepared.length; index++) {
         const item = prepared[index];
@@ -1368,6 +1347,34 @@ export class BrowserLocalDataProvider {
     }
   }
 
+  async #commitToAdapter(
+    prepared: readonly PreparedCollection[], expected: ReadonlyMap<string, ExpectedManifest>,
+    binaries: readonly PreparedBinaryChanges[], createEmpty: ReadonlySet<string>,
+  ): Promise<void> {
+    const adapter = this.#storageAdapter!;
+    const updatedAt = this.#now().toISOString();
+    binaries = binaries.filter(change => change.writes.length || change.remove.length);
+    for (const item of prepared) if (!expected.has(item.definition.id)) {
+      throw new BrowserLocalDataError('INVALID_LOCAL_DATA_UPDATE', 'A workspace update is missing its expected revision.');
+    }
+    for (const change of binaries) if (!prepared.some(item => item.definition.id === change.collection)) {
+      throw new BrowserLocalDataError('INVALID_LOCAL_DATA_UPDATE', 'Retained files require an atomic collection update.');
+    }
+    const collections = prepared.map(item => ({
+      manifest: proposedManifest(item, expected.get(item.definition.id)?.revision ?? 0, this.codec.id, updatedAt),
+      records: item.records,
+    }));
+    try {
+      await adapter.commit({ expected, collections, binaries, createEmpty });
+    } catch (cause) {
+      if (!(cause instanceof BrowserLocalDataError) || ['LOCAL_DATA_TIMEOUT', 'LOCAL_DATA_COMMIT_UNKNOWN'].includes(cause.code)) {
+        this.#commitState = 'unknown';
+        throw new BrowserLocalDataError('LOCAL_DATA_COMMIT_UNKNOWN', 'The workspace write may have succeeded, but its outcome could not be confirmed. Reload and review the saved record before making another change.', { cause });
+      }
+      throw cause;
+    }
+  }
+
   async #classifyTimedOutCommit(
     prepared: readonly PreparedCollection[],
     expectedManifests: ReadonlyMap<string, ExpectedManifest>,
@@ -1403,7 +1410,17 @@ export class BrowserLocalDataProvider {
 
   async #readManifestState(
     definitions: readonly AnyLocalDataCollectionDefinition[],
+    action: 'Reading' | 'Reconciling' = 'Reconciling',
   ): Promise<Map<string, BrowserLocalCollectionManifest | undefined>> {
+    if (this.#storageAdapter) {
+      const manifests = await this.#storageAdapter.manifests(definitions.map(definition => definition.id));
+      if (manifests.length !== definitions.length) throw new BrowserLocalDataError('LOCAL_DATA_INTEGRITY', 'The workspace manifest response is incomplete.');
+      return new Map(definitions.map((definition, index) => {
+        const manifest = manifests[index];
+        if (manifest !== undefined) assertLocalDataManifest(definition, manifest);
+        return [definition.id, manifest];
+      }));
+    }
     const database = await this.#database();
     const transaction = database.transaction(LOCAL_DATA_MANIFEST_STORE, 'readonly');
     const done = transactionComplete(transaction, 'Reconciling browser-local data', this.timeoutMs);
@@ -1411,7 +1428,7 @@ export class BrowserLocalDataProvider {
       const store = transaction.objectStore(LOCAL_DATA_MANIFEST_STORE);
       const manifests = await Promise.all(definitions.map((definition) => requestResult(
         store.get(definition.id) as IDBRequest<BrowserLocalCollectionManifest | undefined>,
-        `Reconciling the ${definition.label} manifest`,
+        `${action} the ${definition.label} manifest`,
         this.timeoutMs,
       )));
       await done;
@@ -1433,12 +1450,14 @@ export class BrowserLocalDataProvider {
   }
 
   async #database(): Promise<IDBDatabase> {
+    const factory = this.#factory;
+    if (!factory) throw new BrowserLocalDataError('LOCAL_DATA_UNSUPPORTED', 'This workspace does not use IndexedDB.');
     if (this.#databaseInvalidated) {
       throw new BrowserLocalDataError('LOCAL_DATA_VERSION_CHANGED', 'Browser-local data changed in another tab. Reload this page before continuing.');
     }
     if (this.#databasePromise) return this.#databasePromise;
     this.#databasePromise = new Promise<IDBDatabase>((resolve, reject) => {
-      const request = this.#factory.open(this.databaseName, LOCAL_DATA_DATABASE_VERSION);
+      const request = factory.open(this.databaseName, LOCAL_DATA_DATABASE_VERSION);
       let settled = false;
       const timer = setTimeout(() => {
         if (settled) return;

@@ -6,9 +6,7 @@ export interface BrowserLocalBinaryCodec {
   decode(input: Readonly<{ collection: string; lookupKey: string; reference: RetainedFileReference; payload: ArrayBuffer }>): Promise<Blob>;
 }
 
-export type BrowserLocalStoredBinary = Readonly<{
-  key: [string, string]; collection: string; lookupKey: string; codec: string; payload: ArrayBuffer;
-}>;
+export type { LocalDataStoredBinary as BrowserLocalStoredBinary } from '../../../packages/workspace/local-data-storage.mts';
 
 export const plaintextLocalBinaryCodec: BrowserLocalBinaryCodec = Object.freeze<BrowserLocalBinaryCodec>({
   async lookupKey(_collection, reference) { return readRetainedFileReference(reference).digestSha256; },
