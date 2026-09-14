@@ -177,11 +177,11 @@ export async function expectFocusedResultsVisible(page: Page, results: Locator, 
 }
 
 export async function expectNoHorizontalOverflow(page: Page) {
-  // A viewport update can complete before the browser has applied its media
-  // queries. Measure the rendered layout, not that intermediate protocol state.
-  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
-  const overflow = await page.evaluate(() => {
+  // Viewport updates can precede media-query layout. Wait for rendered fit
+  // within the normal assertion deadline; persistent overflow still fails.
+  await expect.poll(() => page.evaluate(tolerance => {
     const doc = document.documentElement;
+    if (doc.scrollWidth <= doc.clientWidth + tolerance) return null;
     const offenders = [...document.querySelectorAll<HTMLElement>('body *')]
       .map((element) => {
         const rect = element.getBoundingClientRect();
@@ -192,14 +192,10 @@ export async function expectNoHorizontalOverflow(page: Page) {
           width: Math.round(rect.width),
         };
       })
-      .filter((item) => item.right > doc.clientWidth + 1 || item.left < -1)
+      .filter((item) => item.right > doc.clientWidth + tolerance || item.left < -tolerance)
       .slice(0, 8);
     return { scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth, offenders };
-  });
-  expect(
-    overflow.scrollWidth,
-    `horizontal overflow: ${JSON.stringify(overflow.offenders)}`,
-  ).toBeLessThanOrEqual(overflow.clientWidth + OVERFLOW_TOLERANCE_PX);
+  }, OVERFLOW_TOLERANCE_PX), { message: 'horizontal overflow: rendered content must fit the viewport' }).toBeNull();
 }
 
 export async function openLookupOptionalSources(page: Page): Promise<void> {

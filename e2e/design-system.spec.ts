@@ -539,6 +539,37 @@ test('long untrusted values wrap inside result tiles without page overflow', asy
   await expectNoHorizontalOverflow(page);
 });
 
+test('responsive geometry checks wait for rendered fit and reject persistent overflow', async ({ page }) => {
+  await page.goto('/demo');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const addOverflow = async () => {
+    await page.evaluate(() => {
+      const probe = document.createElement('div');
+      probe.id = 'layout-overflow-probe';
+      probe.setAttribute('aria-hidden', 'true');
+      Object.assign(probe.style, { position: 'absolute', left: '0', top: '0', width: 'calc(100vw + 40px)', height: '1px' });
+      document.body.append(probe);
+    });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeGreaterThan(1);
+  };
+  try {
+    await addOverflow();
+    const settledFit = expectNoHorizontalOverflow(page).then(() => null, error => error);
+    // Adjust real layout after the current render, without a clock-based delay.
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.getElementById('layout-overflow-probe')!.remove();
+      resolve();
+    }))));
+    expect(await settledFit).toBeNull();
+
+    await addOverflow();
+    await expect(expectNoHorizontalOverflow(page)).rejects.toThrow(/horizontal overflow/u);
+  } finally {
+    await page.evaluate(() => document.getElementById('layout-overflow-probe')?.remove());
+  }
+  await expectNoHorizontalOverflow(page);
+});
+
 test('every public and protected page renders without page-level overflow at narrow and wide widths', async ({ page }) => {
   test.slow();
   for (const path of ['/', ...protectedDestinations.map(({ href }) => href), '/privacy']) {
