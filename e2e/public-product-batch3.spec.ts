@@ -351,19 +351,27 @@ test('command and return links preserve open-in-new-tab activation', async ({ pa
     expect(href).toMatch(/^#(?:command-|commands)/u);
     const expectedHref = new URL(href!, page.url()).href;
     const expectedDetail = href!.startsWith('#command-') ? href!.slice('#command-'.length) : null;
-    const opened = context.waitForEvent('page');
-    await link.click({ modifiers: ['ControlOrMeta'] });
-    const destination = await opened;
-    await destination.waitForURL(expectedHref, { waitUntil: 'load' });
-    await expect.poll(() => destination.evaluate(() => ({
-      href: location.href,
-      ready: document.readyState,
-      clientReady: document.querySelector('[data-testid="public-cli-catalogue"]')?.getAttribute('data-client-ready'),
-      detail: document.querySelector('[data-command-detail]')?.getAttribute('data-command-detail') ?? null,
-    }))).toEqual({ href: expectedHref, ready: 'complete', clientReady: 'true', detail: expectedDetail });
+    const [destination] = await Promise.all([
+      context.waitForEvent('page'),
+      link.click({ modifiers: ['ControlOrMeta'] }),
+    ]);
+    try {
+      // Activate the tab before checking its hydrated content; background
+      // load-event timing is not part of the link's navigation contract.
+      await destination.bringToFront();
+      await expect(destination).toHaveURL(expectedHref);
+      await expect.poll(() => destination.evaluate(() => ({
+        href: location.href,
+        ready: document.readyState,
+        clientReady: document.querySelector('[data-testid="public-cli-catalogue"]')?.getAttribute('data-client-ready'),
+        detail: document.querySelector('[data-command-detail]')?.getAttribute('data-command-detail') ?? null,
+      }))).toEqual({ href: expectedHref, ready: 'complete', clientReady: 'true', detail: expectedDetail });
+    } finally {
+      await destination.close();
+      await page.bringToFront();
+    }
     await expect(page).toHaveURL(/#command-lookup$/u);
     await expect(command).toBeVisible();
-    await destination.close();
   }
 });
 
