@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { onDestroy, tick } from 'svelte';
   import type { CaseRecord } from '$lib/cases';
   import { buildCaseExport } from '../../../../packages/cases/case-storage-model.mts';
@@ -93,9 +94,7 @@
     try {
       const text = JSON.stringify(buildCaseExport([record]), null, 2);
       if (new TextEncoder().encode(text).length > MAX_CASE_IMPORT_BYTES) throw new Error(`This Case exceeds the ${MAX_CASE_IMPORT_BYTES}-byte review-file limit. Use a workspace backup for its complete contents; no shortened review copy was created.`);
-      const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
-      const anchor = document.createElement('a'); anchor.href = url; anchor.download = `case-review-${record.id}.json`; anchor.click();
-      URL.revokeObjectURL(url);
+      downloadLocalFile(new Blob([text], { type: 'application/json' }), `case-review-${record.id}.json`);
       message = 'Downloaded a full review copy of this Case. Share it only with the intended reviewer.';
     } catch (cause) { message = cause instanceof Error ? cause.message : 'Could not export the review copy.'; }
   }

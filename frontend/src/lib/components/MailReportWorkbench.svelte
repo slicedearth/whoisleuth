@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { onDestroy } from 'svelte';
   import type { BrandProfile } from '$lib/brand-profiles';
   import MailReportDetails from './MailReportDetails.svelte';
@@ -89,12 +90,7 @@
 
   function download(): void {
     if (!review || busy || !available) return;
-    const url = URL.createObjectURL(new Blob([`${JSON.stringify(review, null, 2)}\n`], { type: 'application/json' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${safeFilename(active.name)}-mail-report-review.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadLocalFile(new Blob([`${JSON.stringify(review, null, 2)}\n`], { type: 'application/json' }), `${safeFilename(active.name)}-mail-report-review.json`);
   }
 
   $effect(() => {

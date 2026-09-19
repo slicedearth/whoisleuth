@@ -1,3 +1,4 @@
+import { downloadLocalFile } from './download-local-file.ts';
 // Browser-local analyst case store. All validation, normalization, bounding,
 // merge, byte-budget, and export shaping live in analysis/case-model.ts (pure +
 // unit tested); this wrapper owns asynchronous provider access and downloads.
@@ -497,12 +498,7 @@ export async function importExternalIntelligence(
 export async function exportCases(): Promise<void> {
   const payload = buildCaseExport(await loadCases());
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `whoisleuth-cases-${new Date().toISOString().slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadLocalFile(blob, `whoisleuth-cases-${new Date().toISOString().slice(0, 10)}.json`);
 }
 
 export async function exportRiskCalibrationDataset(
@@ -516,12 +512,7 @@ export async function exportRiskCalibrationDataset(
   const blob = new Blob([serializeRiskCalibrationDatasetExport(payload)], {
     type: 'application/json;charset=utf-8',
   });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `whoisleuth-risk-calibration-${new Date().toISOString().slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadLocalFile(blob, `whoisleuth-risk-calibration-${new Date().toISOString().slice(0, 10)}.json`);
   return { included: payload.records.length, excluded: payload.export.excluded };
 }
 

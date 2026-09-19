@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { onMount, tick } from 'svelte';
   import BrowserWorkspaceIndicator from '$lib/components/BrowserWorkspaceIndicator.svelte';
   import BrowserStorageHealth from './BrowserStorageHealth.svelte';
@@ -60,12 +61,7 @@
   }
 
   function downloadFile(output:{content:string;mimeType:string;filename:string}){
-    const url=URL.createObjectURL(new Blob([output.content],{type:output.mimeType}));
-    const anchor=document.createElement('a');
-    anchor.href=url;
-    anchor.download=output.filename;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadLocalFile(new Blob([output.content],{type:output.mimeType}), output.filename);
   }
 
   async function downloadUnencrypted(){

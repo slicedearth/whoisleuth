@@ -1,3 +1,4 @@
+import { downloadLocalFile } from './download-local-file.ts';
 import {
   approveInvestigationGuideStage,
   buildInvestigationGuideSummary,
@@ -192,12 +193,7 @@ export function downloadInvestigationGuideSummary(): void {
   if (serializedBytes(content) > MAX_INVESTIGATION_GUIDE_EXPORT_BYTES) {
     throw new Error('Could not export the guided investigation because its summary is too large.');
   }
-  const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = investigationGuideSummaryFilename(guide, generatedAt);
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadLocalFile(new Blob([content], { type: 'application/json' }), investigationGuideSummaryFilename(guide, generatedAt));
 }
 
 export function clearInvestigationGuide() {

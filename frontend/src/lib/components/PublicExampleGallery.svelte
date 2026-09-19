@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { onDestroy } from 'svelte';
   import { PUBLIC_EXAMPLES_INDEX } from '$lib/generated/public-examples-index';
   import {
@@ -80,12 +81,7 @@
   }
 
   function downloadOutput(example: ExampleOutput) {
-    const url = URL.createObjectURL(new Blob([example.content], { type: example.mediaType }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = example.downloadName;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadLocalFile(new Blob([example.content], { type: example.mediaType }), example.downloadName);
     actionStatus = `${example.title} downloaded as a synthetic local example.`;
   }
 

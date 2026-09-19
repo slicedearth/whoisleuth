@@ -1,3 +1,4 @@
+import { downloadLocalFile } from './download-local-file.ts';
 import {
   appendWatchlistScan,
   MAX_WATCHLIST_DOMAINS,
@@ -20,7 +21,6 @@ import type {
 import type {
   WatchlistChange,
   WatchlistComparableRecord,
-  WatchlistDomainHistoryEvent,
   WatchlistHistoryEvent,
   WatchlistHistoryGroup,
 } from './analysis/watchlist-history.ts';
@@ -38,16 +38,7 @@ export type {
   WatchlistHistoryGroup,
 };
 export type Watchlists = WatchlistCollection;
-export interface WatchlistDomainHistory {
-  domain:string;
-  retainedWatchlistChecks:number;
-  watchlistFirstCheckedAt:string|null;
-  watchlistLastCheckedAt:string|null;
-  scanModes:string[];
-  materialChangeCount:number;
-  omittedChanges:number;
-  events:WatchlistDomainHistoryEvent[];
-}
+export type WatchlistDomainHistory = NonNullable<ReturnType<typeof projectDomainHistory>>;
 
 export async function loadWatchlists(): Promise<Watchlists> {
   return readBrowserLocalData('watchlists');
@@ -152,9 +143,9 @@ export async function deleteWatchlist(name:string):Promise<void>{await updateBro
 
 export async function importWatchlists(value:unknown){return updateBrowserLocalData('watchlists',(current)=>{const result=mergeWatchlistStores(current,value);const watchlists=boundedWatchlists(result.watchlists as Watchlists);return{document:watchlists,result:{added:result.added,updated:result.updated,skipped:result.skipped}};});}
 
-export async function exportWatchlists(){const blob=new Blob([serialiseWorkspacePortableJson(buildWatchlistExport(await loadWatchlists()))],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`whoisleuth-watchlists-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(url);}
+export async function exportWatchlists(){const blob=new Blob([serialiseWorkspacePortableJson(buildWatchlistExport(await loadWatchlists()))],{type:'application/json'});downloadLocalFile(blob, `whoisleuth-watchlists-${new Date().toISOString().slice(0,10)}.json`);}
 
 export const fieldLabels:Record<string,string>={availability:'Availability',registrarName:'Registrar',nameservers:'Nameservers',createdDate:'Creation date',expiryDate:'Expiry date',privacyProtected:'WHOIS privacy',hasMx:'MX',hasSpf:'SPF',hasDmarc:'DMARC',activityStatus:'Website activity',pageTitle:'Page title',httpEvidenceStatus:'HTTP evidence status',httpFinalOrigin:'Final website origin',httpResponseStatus:'HTTP response status',httpTransportSecurity:'Website transport',httpRedirectCount:'HTTP redirect count',httpCrossOriginRedirect:'Cross-origin redirect',httpHttpsDowngrade:'HTTPS downgrade',httpContentType:'Website content type',httpSecurityHeaders:'Observed security headers',faviconHash:'Favicon',faviconMatch:'Official favicon match',faviconNearMatch:'Official favicon near-match',hasPasswordField:'Password form',phishingLanguageMatch:'Phishing language',reusesOfficialAssets:'Official asset reuse',riskScore:'Risk score'};
 export function formatValue(value:unknown,field=''){if(Array.isArray(value))return (field==='httpSecurityHeaders'?value.map(item=>httpSecurityHeaderLabel(String(item))):value).join(', ')||'None';if(typeof value==='boolean')return value?'Yes':'No';return value==null||value===''?'None':String(value);}
 export function watchlistHistoryDomains(entry:WatchlistEntry|null){return historyDomains(entry);}
-export function projectWatchlistDomainHistory(entry:WatchlistEntry|null,domain:string):WatchlistDomainHistory|null{return projectDomainHistory(entry,domain) as WatchlistDomainHistory|null;}
+export function projectWatchlistDomainHistory(entry:WatchlistEntry|null,domain:string):WatchlistDomainHistory|null{return projectDomainHistory(entry,domain);}

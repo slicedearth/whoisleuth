@@ -1,3 +1,4 @@
+import { downloadLocalFile } from './download-local-file.ts';
 import {
   buildWebsiteSnapshotExport,
   deleteWebsiteSnapshot as removeSnapshot,
@@ -40,10 +41,5 @@ export async function importWebsiteSnapshots(raw: unknown) {
 }
 export async function exportWebsiteSnapshots(): Promise<void> {
   const body = serialiseWorkspacePortableJson(buildWebsiteSnapshotExport(await loadWebsiteSnapshots()));
-  const url = URL.createObjectURL(new Blob([body], { type: 'application/json' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `whoisleuth-website-snapshots-${new Date().toISOString().slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadLocalFile(new Blob([body], { type: 'application/json' }), `whoisleuth-website-snapshots-${new Date().toISOString().slice(0, 10)}.json`);
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { tick } from 'svelte';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CasePacketPrintPreview from './CasePacketPrintPreview.svelte';
@@ -344,14 +345,9 @@
         : format === 'md'
           ? built.markdown
           : built.email;
-      const url = URL.createObjectURL(new Blob([content], {
+      downloadLocalFile(new Blob([content], {
         type: format === 'json' ? 'application/json' : format === 'md' ? 'text/markdown' : 'text/plain',
-      }));
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = caseResponsePacketFilename(domain, format, generatedAt);
-      anchor.click();
-      URL.revokeObjectURL(url);
+      }), caseResponsePacketFilename(domain, format, generatedAt));
       lastPacketExport = actionId && actionSignature ? {
         caseId,
         actionId,

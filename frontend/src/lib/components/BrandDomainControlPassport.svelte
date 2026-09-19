@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { parseBoundedJson } from '$lib/bounded-json';
   import {
     applyVerifiedDomainControlPassport,
@@ -88,12 +89,7 @@
       const expiresAt = new Date(generatedAt.getTime() + Number(expiryDays) * 86_400_000).toISOString();
       const input = buildBrandProfilePassportInput(active, selectedExports, expiresAt);
       const passport = await buildDomainControlPassport(input, generatedAt.toISOString());
-      const url = URL.createObjectURL(new Blob([serializeDomainControlManifest(passport)], { type: 'application/json' }));
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = `whoisleuth-domain-control-passport-${generatedAt.toISOString().slice(0, 10)}.json`;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      downloadLocalFile(new Blob([serializeDomainControlManifest(passport)], { type: 'application/json' }), `whoisleuth-domain-control-passport-${generatedAt.toISOString().slice(0, 10)}.json`);
       message = `Exported ${passport.entries.length} verified domain-control entr${passport.entries.length === 1 ? 'y' : 'ies'}.`;
     } catch (cause) {
       message = cause instanceof Error ? cause.message : 'Could not export the domain-control passport.';

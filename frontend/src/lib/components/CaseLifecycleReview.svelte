@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import type { CaseRecord } from '$lib/cases';
   import { buildDisclosureRouteReview } from '$lib/analysis/disclosure-route-review.ts';
@@ -90,15 +91,7 @@
         includeRecipient,
         includeContext,
       }, generatedAt);
-      const url = URL.createObjectURL(new Blob([content], { type: 'text/calendar;charset=utf-8' }));
-      try {
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = `whoisleuth-case-follow-ups-${generatedAt.slice(0, 10)}.ics`;
-        anchor.click();
-      } finally {
-        URL.revokeObjectURL(url);
-      }
+      downloadLocalFile(new Blob([content], { type: 'text/calendar;charset=utf-8' }), `whoisleuth-case-follow-ups-${generatedAt.slice(0, 10)}.ics`);
       message = `Exported ${selectedEvents.length} selected review event${selectedEvents.length === 1 ? '' : 's'}.`;
     } catch (error) {
       message = `Calendar was not exported. ${error instanceof Error ? error.message : 'Review the selected events and try again.'}`;

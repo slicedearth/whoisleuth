@@ -1,3 +1,4 @@
+import { downloadLocalFile } from './download-local-file.ts';
 import {
   buildBrandProfileExport,
   createBrandProfileId,
@@ -192,12 +193,7 @@ export async function importProfileFile(file: Blob, signal?: AbortSignal) {
 
 export async function exportProfiles() {
   const blob = new Blob([serialiseWorkspacePortableJson(buildBrandProfileExport(await loadProfiles()))], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `whoisleuth-brand-profiles-${new Date().toISOString().slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadLocalFile(blob, `whoisleuth-brand-profiles-${new Date().toISOString().slice(0, 10)}.json`);
 }
 
 export function parseList(raw: string, lower = false) {

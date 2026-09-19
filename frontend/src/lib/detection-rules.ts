@@ -1,3 +1,4 @@
+import { downloadLocalFile } from './download-local-file.ts';
 // Browser-only custom-rule persistence. The pure model owns every validation,
 // evaluation, import/export, collection bound, and byte-budget decision.
 import {
@@ -82,12 +83,7 @@ export async function importDetectionRules(raw: unknown): Promise<{ rules: Detec
 
 export async function exportDetectionRules(): Promise<void> {
   const blob = new Blob([serialiseWorkspacePortableJson(buildDetectionRuleExport(await loadDetectionRules()))], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `whoisleuth-custom-rules-${new Date().toISOString().slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadLocalFile(blob, `whoisleuth-custom-rules-${new Date().toISOString().slice(0, 10)}.json`);
 }
 
 export function evaluateCaseRules(record: CaseRecord, rules: DetectionRule[] = []): DetectionRuleEvaluation {

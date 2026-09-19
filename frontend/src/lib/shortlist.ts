@@ -1,3 +1,4 @@
+import { downloadLocalFile } from './download-local-file.ts';
 import {
   buildShortlistExport,
   MAX_SHORTLIST_ENTRIES,
@@ -95,10 +96,5 @@ export async function importShortlist(value: unknown) {
 }
 
 export async function exportShortlist() {
-  const url = URL.createObjectURL(new Blob([serialiseWorkspacePortableJson(buildShortlistExport(await loadShortlist()))], { type: 'application/json' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `whoisleuth-shortlist-${new Date().toISOString().slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadLocalFile(new Blob([serialiseWorkspacePortableJson(buildShortlistExport(await loadShortlist()))], { type: 'application/json' }), `whoisleuth-shortlist-${new Date().toISOString().slice(0, 10)}.json`);
 }

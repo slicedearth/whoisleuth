@@ -1,3 +1,4 @@
+import { downloadLocalFile } from './download-local-file.ts';
 import {
   buildInvestigationTemplateExport,
   createInvestigationTemplate,
@@ -77,20 +78,10 @@ export async function importInvestigationTemplates(raw: unknown) {
 
 export async function exportInvestigationTemplates(): Promise<void> {
   const body = serialiseWorkspacePortableJsonLine(buildInvestigationTemplateExport(await loadInvestigationTemplates()));
-  const url = URL.createObjectURL(new Blob([body], { type: 'application/json' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `whoisleuth-investigation-templates-${new Date().toISOString().slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadLocalFile(new Blob([body], { type: 'application/json' }), `whoisleuth-investigation-templates-${new Date().toISOString().slice(0, 10)}.json`);
 }
 
 export function exportCacaoInvestigationTemplate(template: InvestigationTemplate): void {
   const body = `${JSON.stringify(buildCacaoInvestigationPlaybook(template), null, 2)}\n`;
-  const url = URL.createObjectURL(new Blob([body], { type: 'application/json' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `whoisleuth-investigation-playbook-${template.id}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadLocalFile(new Blob([body], { type: 'application/json' }), `whoisleuth-investigation-playbook-${template.id}.json`);
 }

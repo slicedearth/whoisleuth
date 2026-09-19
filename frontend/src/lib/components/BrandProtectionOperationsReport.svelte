@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import type { CaseRecord } from '$lib/cases';
   import {
     brandProtectionOperationsReportFilename,
@@ -28,12 +29,7 @@
       reviewNow = new Date().toISOString();
       const current = buildBrandProtectionOperationsReport(records, { sourceState, window, now: reviewNow });
       const content = serializeBrandProtectionOperationsReport(current);
-      const url = URL.createObjectURL(new Blob([content], { type: 'application/json;charset=utf-8' }));
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = brandProtectionOperationsReportFilename(current.generatedAt);
-      anchor.click();
-      URL.revokeObjectURL(url);
+      downloadLocalFile(new Blob([content], { type: 'application/json;charset=utf-8' }), brandProtectionOperationsReportFilename(current.generatedAt));
       message = 'Exported aggregate recorded-action counts. No response was submitted.';
     } catch (cause) {
       message = cause instanceof Error ? cause.message : 'Could not export the operations report.';

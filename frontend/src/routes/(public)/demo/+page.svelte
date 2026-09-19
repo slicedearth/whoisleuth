@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { onDestroy, onMount, tick } from 'svelte';
   import PublicConsoleCta from '$lib/components/PublicConsoleCta.svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
@@ -312,12 +313,7 @@
   function exportCase(){
     if(!buildSyntheticDemoExportView){message='The synthetic export workspace is unavailable.';return;}
     const payload=buildSyntheticDemoExportView(demoState,new Date().toISOString());
-    const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
-    const anchor=document.createElement('a');
-    anchor.href=url;
-    anchor.download='whoisleuth-synthetic-demo-case.json';
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadLocalFile(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}), 'whoisleuth-synthetic-demo-case.json');
     message='Synthetic case report created. It is clearly marked as demonstration data.';
   }
   onDestroy(()=>{

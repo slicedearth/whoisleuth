@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import {
     DISCLOSURE_FIELD_IDS,
     DISCLOSURE_PURPOSES,
@@ -113,12 +114,7 @@
       requesterMaterialsReady,
       caseReference,
     });
-    const url = URL.createObjectURL(new Blob([`${JSON.stringify(plan, null, 2)}\n`], { type: 'application/json;charset=utf-8' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = registrationDisclosureFilename(plan);
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadLocalFile(new Blob([`${JSON.stringify(plan, null, 2)}\n`], { type: 'application/json;charset=utf-8' }), registrationDisclosureFilename(plan));
     message = 'Downloaded a local review packet. Nothing was submitted.';
   }
 </script>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import {
     buildCampaignTemporalExport,
     type CampaignTemporalLayer,
@@ -33,12 +34,7 @@
   async function download(): Promise<void> {
     try {
       const payload = await buildCampaignTemporalExport(campaign, review);
-      const url = URL.createObjectURL(new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: 'application/json;charset=utf-8' }));
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = `whoisleuth-campaign-source-sequence-${campaign.id}.json`;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      downloadLocalFile(new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: 'application/json;charset=utf-8' }), `whoisleuth-campaign-source-sequence-${campaign.id}.json`);
       onmessage?.('Exported the retained campaign source sequence.');
     } catch (cause) {
       onmessage?.(cause instanceof Error ? cause.message : 'Could not export the retained campaign source sequence.');

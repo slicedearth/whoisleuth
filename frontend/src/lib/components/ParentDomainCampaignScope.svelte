@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { untrack } from 'svelte';
   import {
     buildParentDomainCampaignReviewExport,
@@ -97,21 +98,13 @@
     try {
       const payload = buildParentDomainCampaignReviewExport(campaign, review);
       const serialized = serializeParentDomainCampaignReviewExport(payload);
-      const url = URL.createObjectURL(new Blob([serialized], { type: 'application/json;charset=utf-8' }));
-      const anchor = documentCreateAnchor();
-      anchor.href = url;
-      anchor.download = `whoisleuth-parent-domain-review-${campaign.id}.json`;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      downloadLocalFile(new Blob([serialized], { type: 'application/json;charset=utf-8' }), `whoisleuth-parent-domain-review-${campaign.id}.json`);
       onmessage?.('Exported the bounded parent-domain review. Transient response-scope selection was not included.');
     } catch (cause) {
       onmessage?.(cause instanceof Error ? cause.message : 'Could not export the parent-domain review.');
     }
   }
 
-  function documentCreateAnchor(): HTMLAnchorElement {
-    return document.createElement('a');
-  }
 </script>
 
 <section class="parent-scope" aria-labelledby={`parent-domain-scope-${campaign.id}`}>

@@ -1,3 +1,4 @@
+import { downloadLocalFile } from './download-local-file.ts';
 // Browser-only campaign persistence. The pure campaign model owns validation,
 // bounds, merge semantics, and export shaping; this wrapper owns asynchronous
 // provider access and Blob downloads.
@@ -85,10 +86,5 @@ export async function importCampaigns(raw: unknown): Promise<{ campaigns: Campai
 
 export async function exportCampaigns(): Promise<void> {
   const blob = new Blob([serialiseWorkspacePortableJson(buildCampaignExport(await loadCampaigns()))], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `whoisleuth-campaigns-${new Date().toISOString().slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadLocalFile(blob, `whoisleuth-campaigns-${new Date().toISOString().slice(0, 10)}.json`);
 }
