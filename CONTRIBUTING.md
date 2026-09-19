@@ -45,11 +45,13 @@ npm run verification:focused
 ```
 
 The default scope is the working diff. For a committed or smaller change, pass
-its paths explicitly after `--`. Read the plan: import analysis finds unit and
-browser consumers, while domain rules preserve workflow checks. Browser families discover new
-specifications by filename; Case stage forms use their form and workspace suites.
-Missing import evidence falls back to all unit tests, and unexplained interface
-changes select all functional browser tests. A full run remains available for infrastructure
+its paths explicitly after `--`. Read the plan: runtime imports find unit and
+browser consumers, while domain rules preserve workflow checks. Ordinary Svelte
+components inherit the checks of their consuming routes; known component families
+retain their workflow suites. Shared-code edits keep all compiler projects checked,
+so erased type imports need not select unrelated runtime tests.
+Missing runtime import evidence falls back to all unit tests, and unexplained
+interface changes select all functional browser tests. A full run remains available for infrastructure
 changes and reproducing CI; see [verification](docs/getting-started.md#verification).
 
 Selected browser specifications are loaded before expensive checks. This catches

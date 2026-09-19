@@ -9,8 +9,6 @@ import { recordOrNull } from '../../../../lib/json-record.mts';
 import { MAX_LOOKUP_INPUT_CHARACTERS } from '../../../../packages/evidence/lookup-target.mts';
 import { emailRecipient } from '../../../../packages/evidence/email-recipient.mts';
 
-export { groupBySimilarFavicon } from '../../../../packages/comparison/favicon-similarity.mts';
-
 const MAX_ENTITY_DISPLAY_LENGTH = 300;
 
 export function isValidEmailAddress(value: unknown): value is string {

@@ -156,12 +156,19 @@ export function buildFocusedVerificationExecution(
   }
 
   const typedPaths = plan.changedPaths.filter((value) => /\.(?:[cm]?ts|svelte)$/u.test(value));
+  // Runtime import selection deliberately excludes erased type edges. Shared
+  // source changes therefore retain compiler coverage of every consuming
+  // project, even when those consumers need no behavioural test rerun.
+  const sharedSourceChanged = typedPaths.some(value => !value.startsWith('frontend/src/')
+    && !value.startsWith('test/') && !value.startsWith('e2e/') && value !== 'playwright.config.ts');
   const frontendChanged = typedPaths.some((value) => value.startsWith('frontend/src/'));
   // Svelte check already checks the frontend TypeScript project. Do not also
   // typecheck the server, CLI, test and browser-test projects for a UI edit.
   if (frontendChanged) commands.push(npmCommand('check'));
   const compilerProjects = new Set<string>();
+  if (sharedSourceChanged) commands.push(npmCommand('typecheck'));
   for (const file of typedPaths) {
+    if (sharedSourceChanged) break;
     if (file.startsWith('frontend/src/')) continue;
     if (file.startsWith('e2e/') || file === 'playwright.config.ts') compilerProjects.add('e2e/tsconfig.json');
     else if (file.startsWith('test/')) compilerProjects.add('test/tsconfig.json');

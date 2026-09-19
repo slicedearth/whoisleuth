@@ -515,6 +515,48 @@ describe('verification architecture contracts', () => {
     assert.equal(buildVerificationOwnershipPlan(['test/helpers/subprocess-environment.mts']).focusedUnitChecks.includes('test/helpers/subprocess-environment.mts'), false);
   });
 
+  test('keeps erased type dependencies in compiler checks without treating them as runtime consumers', () => {
+    const inventory = ['test/runtime.test.mts', 'test/type-only.test.mts'];
+    const graph = { modules: [
+      { source: inventory[0], dependencies: [{ resolved: 'packages/example/owner.mts', module: '../packages/example/owner.mts', typeOnly: false, preCompilationOnly: false }] },
+      { source: inventory[1], dependencies: [
+        { resolved: 'packages/example/owner.mts', module: '../packages/example/owner.mts', typeOnly: true },
+        { resolved: './$types', module: './$types', couldNotResolve: true, preCompilationOnly: true },
+      ] },
+    ] } as Parameters<typeof importedTestConsumers>[1];
+    assert.deepEqual(importedTestConsumers(['packages/example/owner.mts'], graph, inventory).get('packages/example/owner.mts'), [inventory[0]]);
+    graph.modules[1]!.dependencies[1]!.preCompilationOnly = false;
+    assert.deepEqual(importedTestConsumers(['packages/example/owner.mts'], graph, inventory).get('packages/example/owner.mts'), inventory);
+    const execution = buildFocusedVerificationExecution(buildVerificationOwnershipPlan(['packages/cases/case-recheck-model.mts']));
+    assert.equal(execution.commands.filter(command => command.id === 'typecheck').length, 1);
+    assert.equal(execution.commands.some(command => command.id.startsWith('typecheck (')), false);
+  });
+
+  test('resolves ordinary components to existing route coverage without registering component names', async () => {
+    const component = 'frontend/src/lib/components/PublicGoalPaths.svelte';
+    const plan = await createVerificationOwnershipPlan([component]);
+    assert.ok(plan.focusedBrowserChecks.includes('e2e/public-guide.spec.ts'));
+    assert.ok(plan.focusedBrowserChecks.includes('e2e/accessibility.spec.ts'));
+    assert.equal(plan.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
+    assert.equal(plan.focusedBrowserChecks.includes('e2e/case-import-workflows.spec.ts'), false);
+    assert.ok(plan.focusedUnitChecks.includes('test/public-guide.test.mts'));
+    assert.equal(plan.focusedUnitChecks.includes('test/cli.test.mts'), false);
+    assert.ok(buildFocusedVerificationExecution(plan).commands.some(command => command.id === 'check'));
+
+    const ordinary = 'frontend/src/lib/components/NewOrdinaryPanel.svelte';
+    const discovered = buildVerificationOwnershipPlan([ordinary], new Map(), new Map(),
+      new Map([[ordinary, ['frontend/src/routes/(public)/resources/+page.svelte']]]));
+    assert.ok(discovered.focusedBrowserChecks.includes('e2e/public-guide.spec.ts'));
+    assert.equal(discovered.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
+    const unexplained = buildVerificationOwnershipPlan([ordinary], new Map(), new Map(),
+      new Map([[ordinary, ['frontend/src/routes/(console)/unclassified/+page.svelte']]]));
+    assert.deepEqual(unexplained.focusedBrowserChecks, readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).sort());
+    const stage = 'frontend/src/lib/components/CaseHistoryStage.svelte';
+    const known = buildVerificationOwnershipPlan([stage], new Map(), new Map(),
+      new Map([[stage, ['frontend/src/routes/(console)/cases/+page.svelte']]]));
+    assert.deepEqual(known.focusedBrowserChecks, buildVerificationOwnershipPlan([stage]).focusedBrowserChecks);
+  });
+
   test('uses the existing resolver to find a real helper through its consumers', async () => {
     const plan = await createVerificationOwnershipPlan(['packages/comparison/favicon-similarity.mts']);
     assert.ok(plan.focusedUnitChecks.includes('test/utils.test.mts'));
