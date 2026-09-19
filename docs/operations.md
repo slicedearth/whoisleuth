@@ -193,6 +193,9 @@ further retries, referrals and enrichment. Its lease remains held until the
 started collector settles; a system DNS lookup that cannot be interrupted
 still has to finish or reach its existing deadline. Posture audits use
 separate resolver instances, so cancelling one does not cancel another.
+Public RDAP bootstrap refreshes share one bounded request per bootstrap kind.
+Cancelling one reader leaves the others running; the final reader's departure
+cancels that transport. Target-specific requests retain independent cancellation.
 
 Exhausted concurrency returns HTTP 429 with
 `NETWORK_CONCURRENCY_LIMITED`. Leases are released after success or failure and

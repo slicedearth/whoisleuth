@@ -23,7 +23,13 @@ const BOOTSTRAP_KINDS = new Set(['dns', 'ipv4', 'ipv6', 'asn']);
 const BOOTSTRAP_FETCH_TIMEOUT_MS = 7000;
 const MAX_RDAP_ENDPOINT_LENGTH = 2048;
 const bootstrapCache = new Map<string, { data: BootstrapData; fetchedAt: number }>();
-const bootstrapInflight = new Map<string, Promise<BootstrapData>>();
+type BootstrapFlight = {
+  request: Promise<BootstrapData>;
+  controller: AbortController;
+  readers: number;
+  settled: boolean;
+};
+const bootstrapInflight = new Map<string, BootstrapFlight>();
 
 function admitRdapEndpoint(value: unknown, options: { allowQuery?: boolean } = {}): string | null {
   if (typeof value !== 'string'
@@ -133,26 +139,21 @@ function validBootstrap(data: unknown): data is BootstrapData {
       && service[1].some((url: unknown) => typeof url === 'string' && /^https?:\/\//i.test(url))));
 }
 
-async function fetchBootstrap(kind: string, options: BootstrapOptions = {}): Promise<BootstrapData> {
-  if (!BOOTSTRAP_KINDS.has(kind)) throw new Error(`Unsupported RDAP bootstrap kind: ${kind}`);
-  options.signal?.throwIfAborted();
-  const now = typeof options.now === 'function' ? options.now : Date.now;
-  const fetchUpstream = options.fetchUpstream || fetchRdapDetailedWithTimeout;
-  const cached = bootstrapCache.get(kind);
-  if (cached && now() - cached.fetchedAt < BOOTSTRAP_TTL_MS) return cached.data;
-  const inflight = bootstrapInflight.get(kind);
-  if (inflight && !options.signal) return inflight;
-
-  const retrieve = async () => {
+function startBootstrap(kind: string, options: BootstrapOptions): BootstrapFlight {
+  const now = options.now ?? Date.now;
+  const fetchUpstream = options.fetchUpstream ?? fetchRdapDetailedWithTimeout;
+  const controller = new AbortController();
+  const { signal } = controller;
+  const request = abortable(async () => {
     try {
-      options.signal?.throwIfAborted();
+      signal.throwIfAborted();
       const requestedEndpoint = `https://data.iana.org/rdap/${kind}.json`;
       const response = await fetchUpstream(
         requestedEndpoint,
-        options.signal ? { signal: options.signal } : {},
+        { signal },
         BOOTSTRAP_FETCH_TIMEOUT_MS,
       );
-      options.signal?.throwIfAborted();
+      signal.throwIfAborted();
       const finalEndpoint = admitRdapEndpoint(response.finalUrl ?? requestedEndpoint);
       if (finalEndpoint !== requestedEndpoint) {
         throw new Error(`IANA bootstrap redirected outside its fixed source endpoint for ${kind}`);
@@ -172,24 +173,67 @@ async function fetchBootstrap(kind: string, options: BootstrapOptions = {}): Pro
       bootstrapCache.set(kind, { data, fetchedAt: now() });
       return data;
     } catch (cause) {
-      options.signal?.throwIfAborted();
+      signal.throwIfAborted();
       const fallback = bootstrapCache.get(kind);
       if (fallback && now() - fallback.fetchedAt <= BOOTSTRAP_STALE_TTL_MS) {
         return fallback.data;
       }
       throw cause;
-    } finally {
-      if (!options.signal) bootstrapInflight.delete(kind);
+    }
+  }, signal);
+  const flight: BootstrapFlight = {
+    controller, readers: 0, settled: false,
+    request: request.finally(() => {
+      flight.settled = true;
+      if (bootstrapInflight.get(kind) === flight) bootstrapInflight.delete(kind);
+    }),
+  };
+  bootstrapInflight.set(kind, flight);
+  return flight;
+}
+
+async function fetchBootstrap(kind: string, options: BootstrapOptions = {}): Promise<BootstrapData> {
+  if (!BOOTSTRAP_KINDS.has(kind)) throw new Error(`Unsupported RDAP bootstrap kind: ${kind}`);
+  options.signal?.throwIfAborted();
+  const now = options.now ?? Date.now;
+  const cached = bootstrapCache.get(kind);
+  if (cached && now() - cached.fetchedAt < BOOTSTRAP_TTL_MS) return cached.data;
+  const flight = bootstrapInflight.get(kind) ?? startBootstrap(kind, options);
+  flight.readers++;
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    // One deadline releases only its reader. The fixed-source transport lives
+    // until the last reader leaves, and never caches a cancelled late response.
+    flight.readers--;
+    if (!flight.readers && !flight.settled) {
+      flight.controller.abort();
+      if (bootstrapInflight.get(kind) === flight) bootstrapInflight.delete(kind);
     }
   };
-  if (options.signal) return abortable(retrieve, options.signal);
-  const request = Promise.resolve().then(retrieve);
-  bootstrapInflight.set(kind, request);
-  return request;
+  const { signal } = options;
+  let cancel = () => {};
+  const result = new Promise<BootstrapData>((resolve, reject) => {
+    // Attach before observing cancellation so even an abandoned queued flight
+    // retains a rejection handler. Release synchronously to avoid starting it.
+    flight.request.then(resolve, reject);
+    cancel = () => { release(); reject(signal?.reason); };
+    signal?.addEventListener('abort', cancel, { once: true });
+    if (signal?.aborted) cancel();
+  });
+  try {
+    return await result;
+  } finally {
+    signal?.removeEventListener('abort', cancel);
+    release();
+    if (flight.controller.signal.aborted) await flight.request.catch(() => {});
+  }
 }
 
 function clearRdapBootstrapCache() {
   bootstrapCache.clear();
+  for (const flight of bootstrapInflight.values()) flight.controller.abort();
   bootstrapInflight.clear();
 }
 

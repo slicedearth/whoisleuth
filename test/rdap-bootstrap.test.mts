@@ -38,11 +38,12 @@ describe('IANA RDAP bootstrap cache', () => {
       clearRdapBootstrapCache();
       const controller = new AbortController();
       const started = deferred<void>();
+      let transportSignal: AbortSignal | null | undefined;
       let calls = 0;
       const pending = fetchRdapRecordWithParser('domain', `${phase}-cancel.example.com`, parseRdap, {
         signal: controller.signal,
         fetchUpstream: async (_url, options) => {
-          assert.equal(options.signal, controller.signal);
+          transportSignal = options.signal;
           calls += 1;
           if (calls === 1 && phase === 'object') {
             return { ok: true, status: 200, text: JSON.stringify({
@@ -56,6 +57,7 @@ describe('IANA RDAP bootstrap cache', () => {
       await started.promise;
       controller.abort();
       await assert.rejects(pending, { name: 'AbortError' });
+      assert.equal(transportSignal?.aborted, true);
       assert.equal(calls, phase === 'bootstrap' ? 1 : 2);
     }
   });
@@ -69,25 +71,24 @@ describe('IANA RDAP bootstrap cache', () => {
     const controller = new AbortController();
     const started = deferred<void>();
     const gate = deferred<void>();
+    let refreshSignal: AbortSignal | null | undefined;
     const independent = fetchBootstrap('dns', {
       now: () => now,
-      fetchUpstream: async () => {
+      fetchUpstream: async (_url, options) => {
+        refreshSignal = options.signal;
+        started.resolve();
         await gate.promise;
         return { ok: true, status: 200, text: JSON.stringify(FIXTURE) };
       },
     });
     const cancelled = fetchBootstrap('dns', {
       now: () => now, signal: controller.signal,
-      fetchUpstream: async (_url, options) => {
-        assert.equal(options.signal, controller.signal);
-        started.resolve();
-        await gate.promise;
-        throw new Error('Refresh interrupted');
-      },
+      fetchUpstream: async () => assert.fail('The refresh must be shared, not duplicated'),
     });
     await started.promise;
     controller.abort();
     await assert.rejects(cancelled, { name: 'AbortError' });
+    assert.equal(refreshSignal?.aborted, false);
     gate.resolve();
     assert.deepEqual(await independent, FIXTURE);
     assert.deepEqual(await fetchBootstrap('dns', { now: () => now }), FIXTURE);
@@ -107,6 +108,72 @@ describe('IANA RDAP bootstrap cache', () => {
     assert.deepEqual(await first, FIXTURE);
     assert.deepEqual(await second, FIXTURE);
     assert.equal(calls, 1);
+  });
+
+  test('shares a cold bootstrap while isolating subscriber cancellation and deadlines', async () => {
+    const gate = deferred<void>(), started = deferred<void>();
+    const firstDeadline = new AbortController(), secondDeadline = new AbortController();
+    let calls = 0, transportSignal: AbortSignal | null | undefined;
+    const fetchUpstream = async (_url: string, options: RequestInit, timeout: number) => {
+      calls++;
+      assert.equal(timeout, 7000);
+      transportSignal = options.signal;
+      started.resolve();
+      await gate.promise;
+      return { ok: true, status: 200, text: JSON.stringify(FIXTURE) };
+    };
+    const first = fetchBootstrap('dns', { fetchUpstream, signal: firstDeadline.signal });
+    const second = fetchBootstrap('dns', { fetchUpstream, signal: secondDeadline.signal });
+    const remaining = fetchBootstrap('dns', { fetchUpstream, signal: new AbortController().signal });
+    await started.promise;
+    const firstReason = new Error('First request deadline'), secondReason = new Error('Second request cancelled');
+    firstDeadline.abort(firstReason); secondDeadline.abort(secondReason);
+    await assert.rejects(first, error => error === firstReason);
+    await assert.rejects(second, error => error === secondReason);
+    assert.equal(transportSignal?.aborted, false);
+    gate.resolve();
+    assert.deepEqual(await remaining, FIXTURE);
+    assert.equal(calls, 1);
+    assert.deepEqual(await fetchBootstrap('dns', { fetchUpstream }), FIXTURE);
+    assert.equal(calls, 1);
+  });
+
+  test('the last cancellation aborts transport without poisoning or deleting a replacement flight', async () => {
+    const oldGate = deferred<void>(), oldStarted = deferred<void>(), newGate = deferred<void>(), newStarted = deferred<void>();
+    let calls = 0, oldSignal: AbortSignal | null | undefined;
+    const deadline = new AbortController();
+    const old = fetchBootstrap('dns', { signal: deadline.signal, fetchUpstream: async (_url, options) => {
+      calls++; oldSignal = options.signal; oldStarted.resolve(); await oldGate.promise;
+      return { ok: true, status: 200, text: JSON.stringify({ services: [[['old'], ['https://old.example/']]] }) };
+    } });
+    await oldStarted.promise;
+    deadline.abort();
+    assert.equal(oldSignal?.aborted, true);
+    const replacement = fetchBootstrap('dns', { signal: new AbortController().signal, fetchUpstream: async () => {
+      calls++; newStarted.resolve(); await newGate.promise;
+      return { ok: true, status: 200, text: JSON.stringify(FIXTURE) };
+    } });
+    await assert.rejects(old, { name: 'AbortError' });
+    await newStarted.promise;
+    oldGate.resolve();
+    const other = fetchBootstrap('dns', { fetchUpstream: async () => assert.fail('Old cleanup must not remove the replacement') });
+    newGate.resolve();
+    assert.deepEqual(await replacement, FIXTURE);
+    assert.deepEqual(await other, FIXTURE);
+    assert.deepEqual(await fetchBootstrap('dns'), FIXTURE);
+    assert.equal(calls, 2);
+  });
+
+  test('shared transport failures reach every reader and the next request can recover', async () => {
+    const gate = deferred<void>(), started = deferred<void>();
+    let calls = 0;
+    const failure = new Error('Bootstrap source unavailable');
+    const fetchUpstream = async () => { calls++; started.resolve(); await gate.promise; throw failure; };
+    const requests = Array.from({ length: 3 }, () => fetchBootstrap('dns', { fetchUpstream, signal: new AbortController().signal }));
+    const rejected = requests.map(request => assert.rejects(request, error => error === failure));
+    await started.promise; gate.resolve(); await Promise.all(rejected);
+    assert.equal(calls, 1);
+    assert.deepEqual(await fetchBootstrap('dns', { fetchUpstream: async () => ({ ok: true, status: 200, text: JSON.stringify(FIXTURE) }) }), FIXTURE);
   });
 
   test('reuses a fresh validated bootstrap without another request', async () => {
