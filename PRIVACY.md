@@ -338,6 +338,10 @@ is required for authentication and is not used for advertising or behavioural
 tracking. Signing out removes the local cookie but does not revoke a captured
 copy; rotating the signing secret invalidates outstanding sessions.
 
+Login burst controls retain bounded in-memory counters keyed by IPv4 address
+or IPv6 /64 for five-minute windows. They are local to each runtime instance,
+not individual-account tracking or a deployment-wide access history.
+
 The public Contact page keeps the subject and message in page memory. To reveal
 a configured privacy or security role address, the browser sends only the fixed
 contact category and a short-lived Turnstile token to this deployment. The

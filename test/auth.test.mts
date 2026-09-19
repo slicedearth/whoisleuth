@@ -6,6 +6,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildSessionCookie,
+  checkPassword,
   createSessionToken,
   isPermittedAuthenticatedNetworkRequest,
   isTrustedLoginOrigin,
@@ -39,6 +40,22 @@ function withSessionTestSecrets(run: () => void): void {
     else process.env.SESSION_SECRET = previousSessionSecret;
   }
 }
+
+test('password equality preserves exact content for short, long and multibyte inputs', () => {
+  withSessionTestSecrets(() => {
+    for (const secret of ['test-only-secret', 'é'.repeat(256), 'x'.repeat(16_384)]) {
+      process.env.SITE_PASSWORD = secret;
+      assert.equal(checkPassword(secret), true);
+      for (const candidate of ['', secret.slice(1), `${secret}x`, ` ${secret}`, null, {}, 1]) {
+        assert.equal(checkPassword(candidate), false);
+      }
+    }
+    process.env.SITE_PASSWORD = 'x'.repeat(1024 * 1024 + 1);
+    assert.equal(checkPassword(process.env.SITE_PASSWORD), false);
+    process.env.SITE_PASSWORD = 'é'.repeat(600_000);
+    assert.equal(checkPassword(process.env.SITE_PASSWORD), false);
+  });
+});
 
 describe('isTrustedOrigin', () => {
   test('accepts a matching HTTPS Origin/Host pair', () => {

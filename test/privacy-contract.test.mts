@@ -40,6 +40,7 @@ function compact(value: string): string {
 }
 
 const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
+  { id: 'login-counter-scope', pattern: /Login burst controls retain bounded in-memory counters keyed by IPv4 address or IPv6 \/64 for five-minute windows.*local to each runtime instance/iu },
   { id: 'local-application-storage', pattern: /local application stores saved collections, recovery drafts and retained original files.*explicitly selected filesystem workspace, not IndexedDB.*plaintext at rest.*Encrypted portable backups remain separate.*authenticated loopback process.*folder is displayed locally and is not included in exports/iu },
   { id: 'local-application-delete', pattern: /Appearance preferences and tab state remain browser-local.*Clearing site data or signing out does not delete the filesystem workspace.*Stop every application instance.*Unsupported future workspace formats are preserved without writing/iu },
   { id: 'local-application-requests', pattern: /private launch link grants a local session.*Starting the application makes no collection request.*Explicit collection runs from this machine.*--offline.*disables collection/iu },

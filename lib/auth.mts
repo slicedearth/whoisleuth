@@ -5,6 +5,7 @@
 // deriving a deliberately expensive signing key from SITE_PASSWORD.
 
 import * as crypto from 'node:crypto';
+import { MAX_API_JSON_BODY_BYTES } from './http.mts';
 
 type HeaderInput = Readonly<Record<string, string | readonly string[] | undefined>>;
 type CookieOptions = { secure?: boolean };
@@ -87,9 +88,10 @@ function sign(payload: string, secret: SigningSecret): string {
 }
 
 function timingSafeStringsEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
+  // Inputs admitted by the request boundary remain bounded; equal-width digests
+  // avoid exposing the configured secret's byte length through an early return.
+  const bufA = crypto.createHash('sha256').update(a).digest();
+  const bufB = crypto.createHash('sha256').update(b).digest();
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
@@ -98,7 +100,10 @@ function timingSafeStringsEqual(a: string, b: string): boolean {
 // not accidentally let everyone in or crash the request handler.
 function checkPassword(candidate: unknown): boolean {
   const secret = getSecret();
-  if (!secret || typeof candidate !== 'string' || !candidate) return false;
+  if (!secret || typeof candidate !== 'string' || !candidate
+    || candidate.length > MAX_API_JSON_BODY_BYTES || secret.length > MAX_API_JSON_BODY_BYTES
+    || Buffer.byteLength(candidate) > MAX_API_JSON_BODY_BYTES
+    || Buffer.byteLength(secret) > MAX_API_JSON_BODY_BYTES) return false;
   return timingSafeStringsEqual(candidate, secret);
 }
 
@@ -112,7 +117,8 @@ function createSessionToken(): string {
 function isValidSessionToken(token: unknown): boolean {
   const secret = getSigningSecret();
   const ttlMs = configuredSessionTtlMs();
-  if (!secret || ttlMs === null || !token || typeof token !== 'string') return false;
+  if (!secret || ttlMs === null || !token || typeof token !== 'string'
+    || token.length > MAX_API_JSON_BODY_BYTES) return false;
   const dot = token.indexOf('.');
   if (dot === -1) return false;
   const payload = token.slice(0, dot);

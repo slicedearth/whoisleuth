@@ -151,13 +151,16 @@ Express and functions share fixed-window request controls:
 
 | Route family | Default ceiling |
 | --- | ---: |
-| Login | 10 attempts per 5 minutes per client IP |
+| Login | 10 attempts per 5 minutes per IPv4 address or IPv6 /64 |
 | Lookup, RDAP, registry-scoped nameserver search, WHOIS, availability, Certificate Transparency, and posture | 1,000 requests per minute per client IP |
 | Scheduled-monitor management | 60 authenticated requests per minute per warm runtime and signed session, plus the general API limit |
 
 An exceeded limit returns HTTP 429 with `Retry-After`. The in-memory limiter is
 global to one Express process but local to each warm serverless instance. It is
 a burst control, not a distributed-abuse boundary or an upstream allowance.
+IPv4-mapped addresses share the ordinary IPv4 bucket. IPv6 /64 aggregation
+limits interface-address rotation but can also group users on one network;
+rotation across prefixes or runtime instances needs deployment-wide controls.
 
 Netlify adds code-based per-IP rules for login and the main Lookup route. Check
 the deploy log to confirm that both rules were applied. Direct function paths

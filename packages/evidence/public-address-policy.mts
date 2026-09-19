@@ -2,6 +2,8 @@
 // evidence. This performs no resolution or network work; transport owners must
 // still revalidate and pin addresses before making a request.
 
+import { ipv6Groups } from '../contracts/ip-address.mts';
+
 const IPV4_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/u;
 const IPV6_RE = /^[0-9a-f:]+$/iu;
 
@@ -46,19 +48,8 @@ function canonicalIpv6(value: unknown): string | null {
   }
 }
 
-function expandedIpv6Groups(value: string): string[] {
-  const [head = '', tail = ''] = value.includes('::') ? value.split('::') : [value, ''];
-  const headGroups = head ? head.split(':') : [];
-  const tailGroups = value.includes('::') && tail ? tail.split(':') : [];
-  if (!value.includes('::')) return headGroups.length === 8 ? headGroups.map((group) => group.padStart(4, '0')) : [];
-  const missing = 8 - headGroups.length - tailGroups.length;
-  if (missing < 1) return [];
-  return [...headGroups, ...new Array(missing).fill('0'), ...tailGroups]
-    .map((group) => group.padStart(4, '0'));
-}
-
 function isPublicIpv6(value: string): boolean {
-  const groups = expandedIpv6Groups(value);
+  const groups = ipv6Groups(value);
   if (groups.length !== 8) return false;
   const [first = '', second = '', third = ''] = groups;
   if (groups.every((group) => group === '0000')) return false;

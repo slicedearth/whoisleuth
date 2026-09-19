@@ -26,6 +26,7 @@ import { Agent, fetch as undiciFetch } from 'undici';
 
 import { MAX_OUTBOUND_REDIRECTS } from './outbound-request-bounds.mts';
 import { MAX_OUTBOUND_HTTP_URL_CHARACTERS } from '../packages/contracts/http-url.mts';
+import { ipv6Groups } from '../packages/contracts/ip-address.mts';
 
 type PublicAddressRecord = { address: string; family: number };
 type SafeFetchDispatcher = { close?: () => Promise<unknown> | unknown };
@@ -93,48 +94,6 @@ function isPrivateIpv4(ip: string): boolean {
   return false;
 }
 
-// Expands a valid IPv6 address string to its full 8-group, zero-padded hex
-// form - e.g. "::1" -> all-zero groups ending in "0001". Needed because the
-// same address can be written multiple ways (a "::" shorthand for a run of
-// zero groups, an embedded IPv4 tail as either dotted-decimal or two hex
-// groups), and a hostile authoritative DNS server - the exact threat this
-// module exists to guard against - is free to choose whichever string form
-// it wants. Checking string prefixes on the as-written form (the previous
-// approach) only catches whichever form happened to be anticipated; e.g.
-// "::ffff:127.0.0.1" and "::ffff:7f00:1" are the same address, but only the
-// first was recognized as IPv4-mapped loopback.
-function expandIpv6Groups(ip: string): string[] {
-  const hasDoubleColon = ip.includes('::');
-  const [headStr, tailStr] = hasDoubleColon ? ip.split('::') : [ip, undefined];
-
-  // A dotted-decimal segment (the tail of "::ffff:127.0.0.1") is two
-  // 16-bit groups' worth of bits - convert it to hex groups first so the
-  // rest of this function only ever deals with plain hex.
-  const toHexGroups = (part: string | undefined): string[] => {
-    if (!part) return [];
-    return part.split(':').flatMap((group) => {
-      if (!group.includes('.')) return [group];
-      const bytes = group.split('.').map(Number);
-      const [first = -1, second = -1, third = -1, fourth = -1] = bytes;
-      if (
-        bytes.length !== 4
-        || [first, second, third, fourth].some((byte) => !Number.isInteger(byte))
-      ) return [];
-      return [
-        (((first << 8) | second) >>> 0).toString(16),
-        (((third << 8) | fourth) >>> 0).toString(16),
-      ];
-    });
-  };
-
-  const headGroups = toHexGroups(headStr);
-  const tailGroups = hasDoubleColon ? toHexGroups(tailStr) : [];
-  if (!hasDoubleColon) return headGroups.map((g) => g.padStart(4, '0').toLowerCase());
-  const missing = 8 - headGroups.length - tailGroups.length;
-  const middleGroups = new Array(Math.max(missing, 0)).fill('0');
-  return [...headGroups, ...middleGroups, ...tailGroups].map((g) => g.padStart(4, '0').toLowerCase());
-}
-
 function groupsToIpv4(hiGroup: string, loGroup: string): string | null {
   const hi = parseInt(hiGroup, 16);
   const lo = parseInt(loGroup, 16);
@@ -143,7 +102,7 @@ function groupsToIpv4(hiGroup: string, loGroup: string): string | null {
 }
 
 function isPrivateIpv6(ip: string): boolean {
-  const groups = expandIpv6Groups(ip.toLowerCase());
+  const groups = ipv6Groups(ip);
   if (groups.length !== 8) return true; // couldn't parse cleanly - fail closed
   const [
     g0 = '',

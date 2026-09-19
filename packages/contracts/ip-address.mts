@@ -1,6 +1,12 @@
 // Syntax and numeric ordering only; outbound address safety is a separate policy.
 export type AddressValue = Readonly<{ family: 4; value: number } | { family: 6; value: bigint }>;
 
+export function ipv6Groups(value: unknown): string[] {
+  const address = addressValue(value);
+  if (address?.family !== 6) return [];
+  return Array.from({ length: 8 }, (_, index) => ((address.value >> BigInt((7 - index) * 16)) & 0xffffn).toString(16).padStart(4, '0'));
+}
+
 export function addressValue(value: unknown): AddressValue | null {
   if (typeof value !== 'string' || value.length > 96) return null;
   if (/^\d{1,3}(?:\.\d{1,3}){3}$/u.test(value)) {

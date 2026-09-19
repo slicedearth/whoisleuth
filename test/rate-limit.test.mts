@@ -6,11 +6,34 @@ import {
   getClientIp,
   getForwardedProtocol,
   CONTACT_ROUTE_RATE_LIMIT,
+  LOGIN_RATE_LIMIT,
   PRERENDERED_HTML_RATE_LIMIT,
   trustsForwardedHeaders,
 } from '../lib/rate-limit.mts';
 
 describe('fixed-window bucket bounds', () => {
+  test('aggregates rotating IPv6 login addresses by /64 without merging adjacent prefixes', () => {
+    const checkers = createScopedRateLimitCheckers();
+    for (let index = 1; index <= LOGIN_RATE_LIMIT.limit; index++) {
+      assert.equal(checkers.login(`2001:db8:1:2::${index.toString(16)}`, 1_000).allowed, true);
+    }
+    assert.equal(checkers.login('2001:0DB8:0001:0002:1234:5678:abcd:ffff', 1_001).allowed, false);
+    assert.equal(checkers.login('2001:db8:1:3::1', 1_001).allowed, true);
+    assert.equal(checkers.api('2001:db8:1:2::1', 1_001).allowed, true);
+    assert.equal(checkers.login('2001:db8:1:2::1', 1_000 + LOGIN_RATE_LIMIT.windowMs).allowed, true);
+  });
+
+  test('maps equivalent IPv4 login identities together without merging neighbouring addresses', () => {
+    const checkers = createScopedRateLimitCheckers();
+    for (let index = 0; index < LOGIN_RATE_LIMIT.limit; index++) {
+      assert.equal(checkers.login('192.0.2.1', 1_000).allowed, true);
+    }
+    assert.equal(checkers.login('::ffff:192.0.2.1', 1_001).allowed, false);
+    assert.equal(checkers.login('::ffff:c000:201', 1_001).allowed, false);
+    assert.equal(checkers.login('192.0.2.2', 1_001).allowed, true);
+    assert.equal(checkers.login('::ffff:192.0.2.2', 1_001).allowed, true);
+  });
+
   test('evicts the oldest identity at capacity instead of locking out every new identity', () => {
     const check = createRateLimitChecker({ limit: 2, windowMs: 60_000 }, 2);
 

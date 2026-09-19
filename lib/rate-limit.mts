@@ -13,8 +13,9 @@
 // globally; on Netlify Functions each container has its own memory, so it
 // only limits bursts within a single warm container rather than across the
 // whole deployment. Still worth having as a cheap first line of defense -
-// just not a substitute for a shared store (e.g. Redis) under serious
-// distributed abuse.
+// just not a substitute for deployment-wide controls under distributed abuse.
+
+import { addressValue } from '../packages/contracts/ip-address.mts';
 
 type EnvironmentInput = Record<string, unknown>;
 type HeaderInput = Readonly<Record<string, string | readonly string[] | undefined>>;
@@ -104,8 +105,9 @@ function createRateLimitChecker(
 function createScopedRateLimitCheckers(
   maximumBucketsPerScope = MAX_RATE_LIMIT_BUCKETS_PER_SCOPE,
 ): ScopedRateLimitCheckers {
+  const login = createRateLimitChecker(LOGIN_RATE_LIMIT, maximumBucketsPerScope);
   return Object.freeze({
-    login: createRateLimitChecker(LOGIN_RATE_LIMIT, maximumBucketsPerScope),
+    login: (key: string, now?: number) => login(loginRateIdentity(key), now),
     api: createRateLimitChecker(API_RATE_LIMIT, maximumBucketsPerScope),
     contactRoute: createRateLimitChecker(CONTACT_ROUTE_RATE_LIMIT, maximumBucketsPerScope),
     scheduledMonitorManagement: createRateLimitChecker(
@@ -117,6 +119,16 @@ function createScopedRateLimitCheckers(
       maximumBucketsPerScope,
     ),
   });
+}
+
+function loginRateIdentity(key: string): string {
+  const address = addressValue(key);
+  if (!address) return key;
+  if (address.family === 4) return `v4:${address.value}`;
+  // Mapped IPv4 and its dotted spelling share a bucket. Ordinary IPv6 login
+  // attempts share their /64 rather than rotating through interface addresses.
+  if (address.value >> 32n === 0xffffn) return `v4:${Number(address.value & 0xffffffffn)}`;
+  return `v6:${(address.value >> 64n).toString(16)}/64`;
 }
 
 // Expired buckets are swept lazily during rate-limit checks. This avoids an
