@@ -9,6 +9,22 @@ const EXECUTABLE = join(ROOT, 'node_modules', 'dependency-cruiser', 'bin', 'depe
 const FIXTURE_ROOT = join(ROOT, 'test', 'fixtures', 'architecture');
 
 describe('architecture boundaries', () => {
+  test('resolves supported package subpaths without hiding invalid imports', () => {
+    const result = spawnSync(process.execPath, [EXECUTABLE, '--config', join(ROOT, '.dependency-cruiser.json'),
+      // Include resolved external nodes in this diagnostic; the application
+      // report normally omits them. The existing no-follow rule still applies.
+      '--exclude', '^$', '--output-type', 'json', join(FIXTURE_ROOT, 'frontend', 'src', 'lib', 'package-exports.mts')],
+    { cwd: ROOT, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout) as { summary: { violations: Array<{ to: string; rule: { name: string } }> }; modules: Array<{ dependencies: Array<{ module: string; couldNotResolve?: boolean }> }> };
+    const dependencies = report.modules.flatMap(module => module.dependencies);
+    const supported = dependencies.find(dependency => dependency.module === 'svelte/store');
+    assert.ok(supported, 'the supported subpath must actually be examined');
+    assert.notEqual(supported.couldNotResolve, true);
+    const unresolved = report.summary.violations.filter(violation => violation.rule.name === 'not-to-unresolvable');
+    assert.deepEqual(unresolved.map(violation => violation.to), ['svelte/not-a-public-export']);
+  });
+
   test('rejects contract, domain, and presentation dependency inversions', () => {
     const result = spawnSync(process.execPath, [
       EXECUTABLE,

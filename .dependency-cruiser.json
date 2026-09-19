@@ -197,7 +197,7 @@
       "severity": "error",
       "comment": "Application imports must resolve under the locked TypeScript and workspace configuration.",
       "from": {
-        "path": "^(?:bin|cli|frontend/src|lib|netlify/functions|packages|tools)(?:/|$)|^server\\.mts$"
+        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|lib|netlify/functions|packages|tools)(?:/|$)|server\\.mts$)"
       },
       "to": {
         "couldNotResolve": true,
@@ -229,6 +229,8 @@
       "fileName": "tsconfig.dependency-cruiser.json"
     },
     "enhancedResolveOptions": {
+      "exportsFields": ["exports"],
+      "conditionNames": ["import", "require", "node", "default"],
       "extensions": [".mts", ".ts", ".svelte", ".mjs", ".js", ".json"]
     }
   }
