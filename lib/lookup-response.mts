@@ -26,6 +26,7 @@ import { buildRegistrarStanding } from './registrar-standing.mts';
 import { resolveRegistrarIanaId } from './registrar-standing-contract.mts';
 import { securityTxtUnavailable } from './security-txt.mts';
 import { parseWhoisChain } from './whois.mts';
+import { whoisCollectionStatus } from './whois-authority.mts';
 import type { checkDomainAvailability } from './availability.mts';
 import type { ClassifiedQuery } from './classify.mts';
 import type { collectReverseDnsIntelligence } from './dns-intelligence.mts';
@@ -245,11 +246,9 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
     ? 'disabled'
     : skipWhois
     ? 'skipped'
-    : whoisResult.status === 'rejected' || !Array.isArray(whoisChain)
+    : whoisResult.status === 'rejected'
       ? 'error'
-      : whoisChain.length === 1
-        ? 'unsupported'
-      : whois.parsed && whois.parsed.chainStatus === 'complete' ? 'complete' : 'partial';
+      : whoisCollectionStatus(whoisChain);
   const availabilityStatus = classified.type !== 'domain'
     ? 'not_applicable'
     : !availabilityEnabled ? 'disabled'

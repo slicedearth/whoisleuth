@@ -6,6 +6,7 @@ import {
 import { rdapAttempt, rdapFailure } from './rdap-attempts.mts';
 import {
   fetchRdapDetailedWithTimeout,
+  RdapBodyAdmissionError,
   type RdapFetch,
 } from './rdap-transport.mts';
 import type {
@@ -159,6 +160,10 @@ export async function fetchRdapFromBasesWithParser<const T extends string>(
       };
     } catch (cause) {
       signal?.throwIfAborted();
+      if (cause instanceof RdapBodyAdmissionError) {
+        attempts.push(rdapAttempt(url, 'invalid_response', { status: cause.status, detail: cause.message }));
+        continue;
+      }
       const detail = String(errorProperty(cause, 'message') || 'request failed');
       const outcome =
         errorProperty(cause, 'name') === 'AbortError' ||

@@ -26,6 +26,20 @@ type RdapTransportDependencies = Readonly<{
 
 const MAX_RDAP_BYTES = 2000000;
 
+export class RdapBodyAdmissionError extends Error {
+  readonly status: number;
+  readonly kind: 'too_large' | 'invalid_encoding' | 'unreadable';
+
+  constructor(status: number, kind: RdapBodyAdmissionError['kind']) {
+    super(kind === 'too_large' ? `RDAP response exceeded ${MAX_RDAP_BYTES} bytes.`
+      : kind === 'invalid_encoding' ? 'RDAP response contains invalid UTF-8 encoding.'
+        : 'RDAP response body could not be read completely.');
+    this.name = 'RdapBodyAdmissionError';
+    this.status = status;
+    this.kind = kind;
+  }
+}
+
 async function fetchRdapTransport(
   url: string,
   options: RequestInit,
@@ -46,10 +60,19 @@ async function fetchRdapTransport(
       if (signal.aborted) { cancelBody(); signal.throwIfAborted(); }
       return result;
     }, signal);
-    const { text, truncated } = await abortable(
-      () => readText(result.response, MAX_RDAP_BYTES, { fatalUtf8: true }), signal,
-    );
-    if (truncated) throw new Error(`Response from ${url} exceeded ${MAX_RDAP_BYTES} bytes`);
+    let body: Awaited<ReturnType<typeof readText>>;
+    try {
+      body = await abortable(
+        () => readText(result.response, MAX_RDAP_BYTES, { fatalUtf8: true }), signal,
+      );
+    } catch (error) {
+      signal.throwIfAborted();
+      const invalidEncoding = error instanceof TypeError && 'code' in error
+        && error.code === 'ERR_ENCODING_INVALID_ENCODED_DATA';
+      throw new RdapBodyAdmissionError(result.response.status, invalidEncoding ? 'invalid_encoding' : 'unreadable');
+    }
+    const { text, truncated } = body;
+    if (truncated) throw new RdapBodyAdmissionError(result.response.status, 'too_large');
     return {
       status: result.response.status, ok: result.response.ok, text,
       ...(result.finalUrl === undefined ? {} : { finalUrl: result.finalUrl }),

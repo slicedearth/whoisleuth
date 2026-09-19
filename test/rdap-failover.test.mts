@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { fetchRdapFromBases, uniqueBases } from '../lib/rdap.mts';
 import type { NormalizedRdapRecordFor, RdapLookupRecord } from '../lib/rdap.mts';
+import { fetchRdapWithTimeout } from '../lib/rdap-transport.mts';
 
 async function fetchFixture<const T extends string>(
   type: T,
@@ -16,6 +17,22 @@ async function fetchFixture<const T extends string>(
 }
 
 describe('RDAP endpoint failover', () => {
+  test('received but inadmissible bodies remain invalid responses with their received status', async () => {
+    for (const bytes of [new Uint8Array([0xff]), new Uint8Array(2_000_001).fill(32)]) {
+      await assert.rejects(fetchRdapFromBases('domain', 'example.test', ['https://rdap.example.test'],
+        (url, options, timeout) => fetchRdapWithTimeout(url, options, timeout, {
+          fetch: async () => new Response(bytes, { status: 200 }),
+        })), (error: unknown) => {
+        assert.ok(error instanceof Error && 'attempts' in error);
+        const attempts = error.attempts as Array<{ outcome: string; status: number; detail: string }>;
+        assert.equal(attempts.length, 1);
+        assert.equal(attempts[0]?.outcome, 'invalid_response');
+        assert.equal(attempts[0]?.status, 200);
+        assert.match(attempts[0]?.detail ?? '', bytes.length === 1 ? /invalid UTF-8/u : /exceeded 2000000/u);
+        return true;
+      });
+    }
+  });
   test('prefers HTTPS and removes duplicate bootstrap endpoints', () => {
     assert.deepEqual(uniqueBases([
       'http://rdap.example/',

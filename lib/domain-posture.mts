@@ -453,7 +453,10 @@ function matchesMtaPattern(host: unknown, pattern: unknown): boolean {
   const normalizedPattern = String(pattern || '').toLowerCase().replace(/\.+$/, '');
   if (normalizedPattern.startsWith('*.')) {
     const suffix = normalizedPattern.slice(1);
-    return normalizedHost.endsWith(suffix) && normalizedHost.length > suffix.length;
+    if (!normalizedHost.endsWith(suffix)) return false;
+    const label = normalizedHost.slice(0, -suffix.length);
+    // MTA-STS permits a wildcard for exactly one leftmost DNS label.
+    return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(label);
   }
   return normalizedHost === normalizedPattern;
 }

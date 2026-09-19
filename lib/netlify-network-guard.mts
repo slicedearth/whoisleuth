@@ -39,6 +39,7 @@ type NetlifyGuardResult = {
 function guardNetlifyNetworkRequest(
   event: NetlifyFunctionEvent | null | undefined,
   feature?: NetworkFeatureId,
+  allowedMethods?: readonly string[],
 ): NetlifyGuardResult {
   const headers = event && event.headers ? event.headers : {};
   const ip = getClientIp(headers);
@@ -63,6 +64,14 @@ function guardNetlifyNetworkRequest(
       response: json(403, {
         error: 'Cross-site network request blocked',
         errorCode: 'CROSS_SITE_REQUEST_BLOCKED',
+      }),
+    };
+  }
+
+  if (allowedMethods && !allowedMethods.includes(event?.httpMethod ?? 'GET')) {
+    return {
+      response: json(405, { error: 'Method not allowed', errorCode: 'METHOD_NOT_ALLOWED' }, {
+        Allow: allowedMethods.join(', '),
       }),
     };
   }

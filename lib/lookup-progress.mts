@@ -352,14 +352,12 @@ export function createLookupProgressNdjsonDecoder(
   if (typeof onEvent !== 'function') throw new TypeError('NDJSON decoder requires an event consumer.');
   const decoder = new TextDecoder('utf-8', { fatal: true });
   let pending = '';
+  let pendingBytes = 0;
   let totalBytes = 0;
   let eventCount = 0;
 
   function consumeLine(line: string): void {
     if (!line) return;
-    if (byteLength(line) > MAX_LOOKUP_PROGRESS_FINAL_BYTES + MAX_LOOKUP_PROGRESS_FRAGMENT_BYTES) {
-      throw new TypeError('Lookup progress line exceeds its byte bound.');
-    }
     eventCount += 1;
     if (eventCount > MAX_LOOKUP_PROGRESS_EVENTS) {
       throw new TypeError('Lookup progress stream contains too many events.');
@@ -386,16 +384,26 @@ export function createLookupProgressNdjsonDecoder(
     if (totalBytes > MAX_LOOKUP_PROGRESS_STREAM_BYTES) {
       throw new TypeError('Lookup progress stream exceeds its total byte bound.');
     }
-    pending += decoder.decode(chunk, { stream: true });
-    let newline = pending.indexOf('\n');
-    while (newline >= 0) {
-      const line = pending.slice(0, newline).replace(/\r$/u, '');
-      pending = pending.slice(newline + 1);
-      consumeLine(line);
-      newline = pending.indexOf('\n');
-    }
-    if (byteLength(pending) > MAX_LOOKUP_PROGRESS_FINAL_BYTES + MAX_LOOKUP_PROGRESS_FRAGMENT_BYTES) {
-      throw new TypeError('Lookup progress line exceeds its byte bound.');
+    // Count incoming bytes once, before decoding or accumulation. LF cannot
+    // occur inside a valid UTF-8 sequence; the fatal decoder still receives
+    // every byte, including framing, so chunk boundaries cannot hide errors.
+    for (let start = 0; start < chunk.length;) {
+      const newline = chunk.indexOf(10, start);
+      const end = newline < 0 ? chunk.length : newline;
+      pendingBytes += end - start;
+      const maximum = MAX_LOOKUP_PROGRESS_FINAL_BYTES + MAX_LOOKUP_PROGRESS_FRAGMENT_BYTES;
+      const trailingCr = end > start ? chunk[end - 1] === 13 : pending.endsWith('\r');
+      if (pendingBytes > maximum + (trailingCr ? 1 : 0)) {
+        throw new TypeError('Lookup progress line exceeds its byte bound.');
+      }
+      const decoded = decoder.decode(chunk.subarray(start, end + (newline < 0 ? 0 : 1)), { stream: true });
+      pending += newline < 0 ? decoded : decoded.slice(0, -1);
+      if (newline >= 0) {
+        consumeLine(pending.replace(/\r$/u, ''));
+        pending = '';
+        pendingBytes = 0;
+      }
+      start = end + 1;
     }
   }
 
@@ -403,6 +411,7 @@ export function createLookupProgressNdjsonDecoder(
     pending += decoder.decode();
     if (pending) consumeLine(pending.replace(/\r$/u, ''));
     pending = '';
+    pendingBytes = 0;
   }
 
   return Object.freeze({ push, finish });

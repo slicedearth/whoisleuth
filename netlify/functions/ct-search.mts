@@ -13,7 +13,7 @@ async function handleCtSearch(
   event: Parameters<NetlifyFunctionHandler>[0],
   dependencies: CtSearchHandlerDependencies = { searchCertificateTransparency },
 ): ReturnType<NetlifyFunctionHandler> {
-  const guard = guardNetlifyNetworkRequest(event, 'certificate_transparency');
+  const guard = guardNetlifyNetworkRequest(event, 'certificate_transparency', ['GET']);
   if (guard.response) return guard.response;
 
   let q: string;

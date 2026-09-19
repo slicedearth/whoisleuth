@@ -68,6 +68,7 @@ describe('Lookup source progress settlements', () => {
       ['rdap', { upstreamStatus: 200, parsed: { domain: 'example.test', entitiesTruncated: true } }, 'partial', true],
       ['rdap', { upstreamStatus: 404 }, 'not_found', false],
       ['whois', [], 'error', false],
+      ['whois', [{ server: 'whois.iana.org', error: 'Fixture failure' }], 'error', false],
       ['whois', [{ server: 'whois.iana.org', response: 'refer: whois.nic.test' }, { server: 'whois.nic.test', error: 'Fixture failure' }], 'partial', false],
       ['whois', [{ server: 'whois.iana.org', response: 'No referral' }], 'unsupported', false],
       ['domain_evidence', { state: 'unknown' }, 'partial', false],

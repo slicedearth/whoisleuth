@@ -89,6 +89,16 @@ async function withEnvironment<T>(name: string, value: string, callback: () => P
 }
 
 describe('direct serverless network paths', () => {
+  for (const [name, handler] of networkHandlers.filter(([name]) => name !== 'lookup')) {
+    test(`${name} refuses write methods before query validation or collection`, async () => {
+      for (const httpMethod of ['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']) {
+        const response = await handler({ httpMethod, headers: sameOriginHeaders(), queryStringParameters: {} });
+        assert.equal(response.statusCode, 405, httpMethod);
+        assert.equal(response.headers.Allow, 'GET');
+        assert.equal(JSON.parse(requiredValue(response.body)).errorCode, 'METHOD_NOT_ALLOWED');
+      }
+    });
+  }
   for (const [name, handler] of networkHandlers) {
     test(`${name} requires authentication before doing network work`, async () => {
       const response = await handler({ headers: {}, queryStringParameters: { q: 'example.com' } });

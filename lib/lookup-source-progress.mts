@@ -4,7 +4,7 @@
 // remains the only authoritative and persistable result.
 
 import type { ClassifiedQuery } from './classify.mts';
-import { analyzeWhoisChainAuthority } from './whois-authority.mts';
+import { whoisCollectionStatus } from './whois-authority.mts';
 import {
   THREAT_INTELLIGENCE_CONTRACT_VERSION,
   THREAT_INTELLIGENCE_RESULT_STATES,
@@ -105,10 +105,8 @@ function normalizedState(
     return sourceTruncated(rdap) ? 'partial' : 'success';
   }
   if (source === 'whois') {
-    if (!Array.isArray(value)) return 'error';
-    if (value.length === 1) return 'unsupported';
-    if (!value.length) return 'error';
-    return analyzeWhoisChainAuthority(value).chainStatus === 'complete' ? 'success' : 'partial';
+    const status = whoisCollectionStatus(value);
+    return status === 'complete' ? 'success' : status;
   }
   if (source === 'domain_evidence') {
     return record(value).deepScanComplete === true ? 'success' : 'partial';

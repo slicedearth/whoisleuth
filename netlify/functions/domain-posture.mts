@@ -13,7 +13,7 @@ async function handleDomainPosture(
   event: Parameters<NetlifyFunctionHandler>[0],
   dependencies: DomainPostureHandlerDependencies = { checkDomainPosture },
 ): ReturnType<NetlifyFunctionHandler> {
-  const guard = guardNetlifyNetworkRequest(event, 'domain_posture');
+  const guard = guardNetlifyNetworkRequest(event, 'domain_posture', ['GET']);
   if (guard.response) return guard.response;
 
   const params = event.queryStringParameters || {};

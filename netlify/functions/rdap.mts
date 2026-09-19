@@ -13,7 +13,7 @@ async function handleRdap(
   event: Parameters<NetlifyFunctionHandler>[0],
   dependencies: RdapHandlerDependencies = { fetchRdapRecord },
 ): ReturnType<NetlifyFunctionHandler> {
-  const guard = guardNetlifyNetworkRequest(event, 'rdap');
+  const guard = guardNetlifyNetworkRequest(event, 'rdap', ['GET']);
   if (guard.response) return guard.response;
 
   const q = ((event.queryStringParameters && event.queryStringParameters.q) || '').trim();

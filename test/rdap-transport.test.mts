@@ -5,6 +5,7 @@ import { deferred } from './deferred.mts';
 import {
   fetchRdapDetailedWithTimeout,
   fetchRdapWithTimeout,
+  RdapBodyAdmissionError,
 } from '../lib/rdap-transport.mts';
 
 test('parent cancellation stops both a pending fetch and a pending response body', async () => {
@@ -143,4 +144,26 @@ test('rejects malformed UTF-8 before RDAP JSON can be interpreted', async () => 
       durationMs: 1,
     }),
   }), /encoded data|encoding|decode|utf-8/iu);
+});
+
+test('body admission retains HTTP status and a bounded cause without exposing transport details', async () => {
+  for (const kind of ['too_large', 'invalid_encoding', 'unreadable'] as const) {
+    await assert.rejects(fetchRdapWithTimeout('https://rdap.example.test/domain/example.test', {}, 1_000, {
+      fetch: async () => kind === 'invalid_encoding'
+        ? new Response(new Uint8Array([0xff]), { status: 200 })
+        : new Response('{}', { status: 200 }),
+      ...(kind === 'invalid_encoding' ? {} : {
+        readText: async () => {
+          if (kind === 'unreadable') throw new Error('private transport detail');
+          return { text: '', truncated: true, bytesRead: 2_000_000 };
+        },
+      }),
+    }), (error: unknown) => {
+      assert.ok(error instanceof RdapBodyAdmissionError);
+      assert.equal(error.status, 200);
+      assert.equal(error.kind, kind);
+      assert.doesNotMatch(error.message, /private transport detail|example\.test/u);
+      return true;
+    });
+  }
 });

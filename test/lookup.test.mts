@@ -374,6 +374,18 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.diagnostics.whois.errorCode, null);
   });
 
+  test('reports an initial WHOIS transport failure as an error, not missing support', async () => {
+    const chain = [{ server: 'whois.iana.org', error: 'Fixture transport failure' }];
+    const result = await runFullLookup(classifiedDomain, {
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => chain,
+      checkDomainAvailability: async () => ({ state: 'unknown', confidence: 'low' }),
+    });
+    assert.equal(result.diagnostics.whois.status, 'error');
+    assert.equal(requiredValue(result.whois.parsed).registrationStatus, 'inconclusive');
+    assert.deepEqual(result.whois.chain, chain);
+  });
+
   test('retains bounded RDAP attempt provenance when every endpoint fails', async () => {
     const attempts = [{
       endpoint: 'https://rdap.example/domain/example.com',

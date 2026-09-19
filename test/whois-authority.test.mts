@@ -179,6 +179,40 @@ describe('analyzeWhoisChainAuthority', () => {
     }
   });
 
+  test('query-frequency policy footers are not evidence of a refused response', () => {
+    for (const footer of [
+      'Please wait 60 seconds between queries.',
+      'Rate limit: this service permits 100 queries per day.',
+      'If the service is busy, try again later.',
+    ]) {
+      const authority = analyzeWhoisChainAuthority([ianaHop, {
+        ...registryPositive, response: `${registryPositive.response}\n${footer}`,
+      }]);
+      assert.equal(authority.registrationStatus, 'registered', footer);
+      assert.equal(authority.chainStatus, 'complete', footer);
+      assert.equal(authority.failedHop, null, footer);
+      const policyOnly = analyzeWhoisChainAuthority([ianaHop, { server: REGISTRY, response: footer }]);
+      assert.equal(policyOnly.registrationStatus, 'inconclusive', footer);
+    }
+  });
+
+  test('explicit refusals remain incomplete even after positive registry fields', () => {
+    for (const refusal of [
+      'Rate limit exceeded. Please retry later.',
+      'Query limit reached.',
+      'Service temporarily unavailable.',
+      'Please wait 60 seconds and try again.',
+      'Try again later.',
+    ]) {
+      const authority = analyzeWhoisChainAuthority([ianaHop, {
+        ...registryPositive, response: `${registryPositive.response}\n${refusal}`,
+      }]);
+      assert.equal(authority.registrationStatus, 'inconclusive', refusal);
+      assert.equal(authority.failedHop, REGISTRY, refusal);
+      assert.equal(authority.chainStatus, 'partial', refusal);
+    }
+  });
+
   test('the first authoritative decision wins over a contradictory later hop', () => {
     const a = analyzeWhoisChainAuthority([ianaHop, registryNoMatch, registrarThick]);
     assert.equal(a.registrationStatus, 'not_found');

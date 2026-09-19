@@ -13,7 +13,7 @@ async function handleAvailability(
   event: Parameters<NetlifyFunctionHandler>[0],
   dependencies: AvailabilityHandlerDependencies = { checkDomainAvailability },
 ): ReturnType<NetlifyFunctionHandler> {
-  const guard = guardNetlifyNetworkRequest(event, 'availability');
+  const guard = guardNetlifyNetworkRequest(event, 'availability', ['GET']);
   if (guard.response) return guard.response;
 
   const q = ((event.queryStringParameters && event.queryStringParameters.q) || '').trim();

@@ -69,6 +69,11 @@ describe('selector and MTA-STS hostname normalization', () => {
     assert.equal(matchesMtaPattern('mail.example.com.', 'mail.example.com'), true);
     assert.equal(matchesMtaPattern('mx1.mail.example.com', '*.mail.example.com'), true);
     assert.equal(matchesMtaPattern('mail.example.com', '*.mail.example.com'), false);
+    assert.equal(matchesMtaPattern('sub.mx1.mail.example.com', '*.mail.example.com'), false);
+    assert.equal(matchesMtaPattern('MAIL.EXAMPLE.TEST.', '*.EXAMPLE.TEST.'), true);
+    assert.equal(matchesMtaPattern('notexample.test', '*.example.test'), false);
+    assert.equal(matchesMtaPattern('.example.test', '*.example.test'), false);
+    assert.equal(matchesMtaPattern('-bad.example.test', '*.example.test'), false);
   });
 });
 
@@ -113,6 +118,17 @@ describe('MTA-STS policy transport', () => {
 });
 
 describe('buildPostureReport', () => {
+  test('does not treat a multi-label MX as covered by a wildcard policy', () => {
+    const input = strongInput();
+    input.mx = query([{ priority: 10, exchange: 'sub.mail.example.test' }]);
+    input.mtaStsPolicy = {
+      text: 'version: STSv1\nmode: enforce\nmx: *.example.test\nmax_age: 86400\n',
+      contentType: 'text/plain', error: null,
+    };
+    const result = byId(buildPostureReport('example.test', input), 'mta_sts');
+    assert.equal(result.status, 'danger');
+    assert.match(result.detail ?? '', /sub\.mail\.example\.test/u);
+  });
   test('reports a fully configured domain without warnings or dangers', () => {
     const report = buildPostureReport('example.com', strongInput());
     assert.equal(report.summary.danger, 0);
