@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
+import { MAX_DISCOVERY_SUFFIX_LENGTH } from '../lib/registrable-domain.mts';
 
 import type { BulkLookupResult, BulkLookupOptions } from './bulk.mts';
 import { runBulkLookups } from './bulk.mts';
@@ -110,7 +111,7 @@ function parseDiscoveryScanAllowlist(
 function normalizedCandidate(candidate: Candidate) {
   const domain = boundedText(candidate.domain, 253).toLowerCase();
   const source = boundedText(candidate.source, 253).toLowerCase();
-  const tld = boundedText(candidate.tld, 63).toLowerCase();
+  const tld = boundedText(candidate.tld, MAX_DISCOVERY_SUFFIX_LENGTH).toLowerCase();
   const mutationTypes = Array.isArray(candidate.mutationTypes)
     ? [...new Set(candidate.mutationTypes.flatMap((value) => {
         const normalized = boundedText(value, 80);

@@ -1,6 +1,7 @@
 // Pure defensive-registration profile-listing aggregation. A candidate can belong
 // to several mutation groups, so group totals intentionally overlap; the
 // summary counts unique domains exactly once.
+import { publicSuffixForAsciiHostname } from '../../../../lib/registrable-domain.mts';
 
 const REGISTERED_STATES = new Set(['registered', 'for_sale', 'expiring']);
 
@@ -133,7 +134,7 @@ export function buildCoverageReport(
     candidatesByDomain.set(domain, {
       domain,
       source: typeof result.sourceDomain === 'string' ? result.sourceDomain : null,
-      tld: typeof result.candidateTld === 'string' ? result.candidateTld : domain.split('.').pop() || null,
+      tld: typeof result.candidateTld === 'string' ? result.candidateTld : publicSuffixForAsciiHostname(domain),
       mutationTypes: result.mutationTypes.filter((value): value is string => typeof value === 'string'),
       availability: result.availability,
     });
@@ -148,7 +149,7 @@ export function buildCoverageReport(
     candidatesByDomain.set(domain, {
       domain,
       source: generated.source || null,
-      tld: generated.tld || domain.split('.').pop() || null,
+      tld: generated.tld || publicSuffixForAsciiHostname(domain),
       mutationTypes: Array.isArray(generated.mutationTypes) ? generated.mutationTypes : [],
       availability: result?.availability || null,
     });

@@ -65,7 +65,7 @@ async function generateDiscoveryCandidates(
     ...(args.preset === 'custom' ? { mutationTypes: mutationFamilies } : {}),
   });
   if (!result.inputValid) {
-    throw new CliUsageError('discover requires a valid brand label or domain with one suffix label.');
+    throw new CliUsageError('discover requires a valid brand label or registrable domain, without a subdomain or URL.');
   }
   const normalizedDictionary = generator.normalizeCustomDictionaryTerms(dictionaryText);
   const metadata = {

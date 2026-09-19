@@ -901,7 +901,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "discover",
       "summary": "Generate lookalike candidates offline",
-      "description": "Generate bounded lookalike-domain candidates from local mutation rules.",
+      "description": "Generate bounded lookalike-domain candidates from a brand or registrable domain, including multi-part public suffixes.",
       "group": "investigate",
       "common": true,
       "usage": "whoisleuth discover [\u003csubject>] [--json|--jsonl|--domains] [--preset \u003ccommon|impersonation|all>|--families \u003cvalue>] [--tlds \u003cvalue>] [--keyboard \u003cqwerty|azerty|qwertz|all>] [--dictionary \u003cfile>] [--snapshot \u003cfile>] [--quiet] [--no-color]",

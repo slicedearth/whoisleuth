@@ -1,6 +1,25 @@
-import { getDomain } from 'tldts';
+import { getDomain, getPublicSuffix } from 'tldts';
 
 import { isValidAsciiDomainName } from './hostname.mts';
+import { MAX_DOMAIN_NAME_LENGTH, MAX_DOMAIN_LABEL_LENGTH } from '../packages/contracts/domain-name.mts';
+
+// Reserve the shortest generated name and its separating dot.
+export const MAX_DISCOVERY_SUFFIX_LENGTH = MAX_DOMAIN_NAME_LENGTH - 2;
+
+/** ICANN suffix rules for a plain ASCII hostname; private suffixes do not change identity. */
+export function publicSuffixForAsciiHostname(value: unknown): string | null {
+  if (!isValidAsciiDomainName(value, { requireDot: false, requireLowercase: true })) return null;
+  return getPublicSuffix(value);
+}
+
+/** Preserve reserved single labels; compound suffixes must match the local ICANN suffix rules. */
+export function normalizeDiscoverySuffix(raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw.length > MAX_DISCOVERY_SUFFIX_LENGTH + 1 || /[\u0000-\u001f\u007f]/u.test(raw)) return null;
+  const value = raw.trim().toLowerCase().replace(/^\./u, '');
+  if (!value || value.length > MAX_DISCOVERY_SUFFIX_LENGTH) return null;
+  if (value.length <= MAX_DOMAIN_LABEL_LENGTH && /^[a-z]{2,}$/u.test(value)) return value;
+  return value.includes('.') && publicSuffixForAsciiHostname(value) === value ? value : null;
+}
 
 // Returns one canonical registrable-domain identity for an already public DNS
 // hostname. Callers retain the original hostname separately when subdomain

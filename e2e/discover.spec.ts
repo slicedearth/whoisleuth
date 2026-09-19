@@ -561,9 +561,9 @@ test('multi-word lookalikes retain separator and reordering provenance', async (
 });
 
 test('lookalike generation rejects ambiguous dotted input and invalid mutation labels', async ({ page }) => {
-  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('example.co.uk');
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('portal.example.co.uk');
   await page.getByRole('button', { name: 'Generate candidates' }).click();
-  await expect(page.getByRole('alert')).toContainText('domain with one suffix label');
+  await expect(page.getByRole('alert')).toContainText('registrable domain, without a subdomain or URL');
   await expect(page.locator('.candidate')).toHaveCount(0);
 
   await page.getByRole('textbox', { name: 'Brand or domain' }).fill('m.com');
@@ -590,6 +590,25 @@ test('domain seeds expand across selected TLDs with combined provenance', async 
   await expect(combined).toContainText('Selected TLD substitution');
   await page.getByRole('textbox', { name: 'Filter candidates' }).fill('acme.test');
   await expect(page.locator('.candidate strong', { hasText: /^acme\.test$/ })).toHaveCount(0);
+});
+
+test('multi-part suffix generation preserves selection and remains offline', async ({ page }) => {
+  const collection: string[] = [];
+  await page.route('**/api/lookup**', async route => { collection.push(route.request().url()); await route.abort(); });
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('example.co.uk');
+  await page.getByRole('textbox', { name: 'TLDs' }).fill('com.au');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+  await page.getByRole('textbox', { name: 'Filter candidates' }).fill('exampl.co.uk');
+  const originalSuffix = page.locator('.candidate').filter({ has: page.locator('strong', { hasText: /^exampl\.co\.uk$/u }) });
+  await expect(originalSuffix).toContainText('Character omission');
+  await page.getByRole('textbox', { name: 'Filter candidates' }).fill('example.com.au');
+  const selectedSuffix = page.locator('.candidate').filter({ has: page.locator('strong', { hasText: /^example\.com\.au$/u }) });
+  await expect(selectedSuffix).toContainText('Selected TLD substitution');
+  await selectedSuffix.getByRole('checkbox').check();
+  await expect(selectedSuffix.getByRole('checkbox')).toBeChecked();
+  await page.setViewportSize({ width: 320, height: 844 });
+  await expectNoHorizontalOverflow(page);
+  expect(collection).toEqual([]);
 });
 
 test('name-idea generation refuses labels that exceed DNS bounds', async ({ page }) => {

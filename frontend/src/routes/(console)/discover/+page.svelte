@@ -25,7 +25,9 @@
     MUTATION_FAMILY_IDS,
     MUTATION_LABELS,
     normalizeCustomDictionaryTerms,
+    normalizeGenerationTlds,
   } from '$lib/analysis/typosquat-generator.ts';
+  import { publicSuffixForAsciiHostname } from '../../../../../lib/registrable-domain.mts';
   import { activeProfile, isDomainAllowlisted, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
   import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
   import {
@@ -214,7 +216,7 @@
     if (/^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/i.test(source) && source.includes('.')) {
       references.push(source);
     } else if (/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(source)) {
-      const tld = candidate.domain.split('.').at(-1);
+      const tld = publicSuffixForAsciiHostname(candidate.domain);
       if (tld) references.push(`${source}.${tld}`);
     }
     if (profile) references.push(...profile.officialDomains);
@@ -289,10 +291,10 @@
 
   function tldSelection() {
     const boundedText = tldText.slice(0, maxTldTextLength);
-    const values = [...new Set(boundedText.split(/[;,\s]+/).map((v) => v.trim().toLowerCase().replace(/^\./, '')).filter((v) => /^[a-z]{2,63}$/.test(v)))];
+    const normalized = normalizeGenerationTlds(boundedText.split(/[;,\s]+/).filter(Boolean));
     return {
-      values,
-      truncated: tldText.length > maxTldTextLength || values.length > MAX_GENERATION_TLDS,
+      values: normalized.values,
+      truncated: tldText.length > maxTldTextLength || normalized.truncated,
     };
   }
 
@@ -365,7 +367,8 @@
     const bases = new Set([joined, words.join('-'), `get${joined}`, `my${joined}`, `${joined}hq`, `${joined}app`, `${joined}online`]);
     return [...bases]
       .filter((base) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(base))
-      .flatMap((base) => selectedTlds.map((tld) => ({ domain: `${base}.${tld}`, source: seed.trim(), mutationTypes: ['keyword'] })));
+      .flatMap((base) => selectedTlds.map((tld) => ({ domain: `${base}.${tld}`, source: seed.trim(), mutationTypes: ['keyword'] })))
+      .filter(candidate => candidate.domain.length <= MAX_GENERATION_INPUT_LENGTH);
   }
 
   function setResults(
@@ -434,7 +437,7 @@
       mutationTypes: customMutationFamilies,
     });
     if (!result.inputValid) {
-      error = 'Enter a valid brand label or a domain with one suffix label.';
+      error = 'Enter a valid brand label or registrable domain, without a subdomain or URL.';
       candidates = []; generatedContext = []; selected = new Set(); status = '';
       return;
     }

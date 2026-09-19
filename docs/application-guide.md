@@ -217,6 +217,10 @@ Discover provides three bounded paths:
 - Certificate Transparency search and local comparison of returned names; and
 - one explicit registry-scoped RDAP nameserver search.
 
+Generation accepts a brand label or registrable domain, including multi-part
+public suffixes such as `co.uk`. Subdomains and URLs are not silently reduced
+to a different seed. The complete suffix remains in candidate provenance.
+
 Generated candidates retain their mutation provenance. A custom dictionary
 stays in the current tab and is not uploaded; only deliberately selected
 candidate domains and bounded provenance continue to Bulk through a one-use

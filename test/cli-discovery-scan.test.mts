@@ -153,6 +153,17 @@ describe('analyst-selected DNS resolvers', () => {
 });
 
 describe('discovery scan allowlists and relationships', () => {
+  test('retains an admitted multi-part suffix beyond a single-label byte limit', () => {
+    const suffix = `${'x'.repeat(63)}.ck`;
+    const domain = `example.${suffix}`;
+    const document = buildDiscoveryScanDocument(
+      [{ domain, source: `original.${suffix}`, tld: suffix, mutationTypes: ['character_omission'] }],
+      [success(0, domain)], metadata({ generatedCandidateCount: 1, selectedCandidateCount: 1 }), new Set(),
+    );
+    assert.equal(document.results[0]?.tld, suffix);
+    assert.equal(document.results[0]?.domain, domain);
+  });
+
   test('bounds and normalizes analyst allowlists without discarding evidence', async () => {
     const text = await readDiscoveryScanListBounded(Readable.from(['# reviewed\nONE.example\n']));
     const allowlist = parseDiscoveryScanAllowlist(text, (value) => classified(value.toLowerCase()));

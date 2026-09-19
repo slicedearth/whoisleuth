@@ -96,6 +96,11 @@ One strict domain, IP address or ASN can occupy command position as Lookup
 shorthand. URL-like or ambiguous input requires the explicit `lookup` command.
 Only `bulk` accepts multiple targets.
 
+`discover` accepts a brand label or registrable domain and supports multi-part
+public suffixes in `--tlds` (for example, `co.uk,com.au`). It preserves the full
+suffix and does not collect candidate evidence; use `discover-scan` only after
+reviewing its separate network plan. Subdomains and URLs are not generation seeds.
+
 ## Command groups
 
 The installed catalogue groups commands under Investigate, Respond, Assure and

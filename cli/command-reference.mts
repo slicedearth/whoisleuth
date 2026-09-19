@@ -775,7 +775,7 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   discover: commandSeed({
     reference: {
-      description: 'Generate bounded lookalike-domain candidates from local mutation rules.',
+      description: 'Generate bounded lookalike-domain candidates from a brand or registrable domain, including multi-part public suffixes.',
       example: 'whoisleuth discover example.test --preset common --jsonl',
       boundary: 'Generation and optional local snapshot comparison are offline. Candidates are leads only and are not resolved, registered, or classified as malicious.',
     },
