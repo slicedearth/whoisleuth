@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { registryServiceAdmissionFor } from '../lib/registry-capabilities.mts';
-import { fetchRdapRecord } from '../lib/rdap.mts';
+import { fetchRdapRecord, rdapUnavailableResponse } from '../lib/rdap.mts';
 import { buildWhoisChainUncached } from '../lib/whois.mts';
 
 describe('registry collection admission', () => {
@@ -58,6 +58,12 @@ describe('registry collection admission', () => {
 
     assert.equal(record, null);
     assert.equal(calls, 0);
+    const diagnostic = rdapUnavailableResponse('domain', 'example.gt');
+    assert.equal(diagnostic.source, 'retained_registry_capability_policy');
+    assert.match(diagnostic.error, /not attempted/u);
+    assert.doesNotMatch(diagnostic.error, /via IANA bootstrap/u);
+    assert.equal(typeof diagnostic.capabilityVersion, 'number');
+    assert.equal(diagnostic.limitation, registryServiceAdmissionFor('example.gt', 'rdap')?.limitation);
   });
 
   test('does not apply domain registry policy to IP or ASN RDAP', async () => {
@@ -76,5 +82,8 @@ describe('registry collection admission', () => {
     });
 
     assert.equal(calls, 2);
+    assert.deepEqual(rdapUnavailableResponse('ipv4', '192.0.2.1'), {
+      error: 'No RDAP registry found for "192.0.2.1" via IANA bootstrap',
+    });
   });
 });

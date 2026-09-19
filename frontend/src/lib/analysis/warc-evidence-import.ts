@@ -229,7 +229,9 @@ export async function parseWarcEvidenceArchive(
   if (!fileName.toLowerCase().endsWith('.warc')) {
     throw new Error('Portable archive import currently accepts uncompressed .warc files only.');
   }
-  const bytes = new Uint8Array(input);
+  // Own the admitted bytes before the first asynchronous digest. Caller aliases
+  // must not change what is parsed after its provenance hash has been recorded.
+  const bytes = new Uint8Array(new Uint8Array(input));
   const archiveDigestSha256 = hex(await sha(bytes, 'SHA-256'));
   const records = parseWarcRecords(bytes);
   const exclusions: string[] = [];

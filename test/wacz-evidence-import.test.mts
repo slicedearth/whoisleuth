@@ -90,6 +90,22 @@ function wacz(options: Readonly<{
 }
 
 describe('portable WACZ evidence import', () => {
+  test('owns the archive before digesting, independent of caller mutation or transfer', async () => {
+    for (const action of ['mutate', 'transfer'] as const) {
+      const input = toArrayBuffer(wacz());
+      const expectedDigest = sha256(new Uint8Array(input));
+      const pending = parseWaczEvidenceArchive(input, 'capture.wacz');
+      if (action === 'mutate') new Uint8Array(input).fill(0);
+      else structuredClone(input, { transfer: [input] });
+      const report = await pending;
+      assert.equal(report.archiveDigestSha256, expectedDigest);
+      assert.equal(report.manifestDigest, 'verified');
+      assert.equal(report.resourcesVerified, 1);
+      assert.equal(report.accepted, 1);
+      assert.match(report.document.findings[0]?.summary ?? '', /Reviewed package/u);
+    }
+  });
+
   test('verifies the package manifest and compressed WARC before bounded normalization', async () => {
     const input = wacz();
     const report = await parseWaczEvidenceArchive(

@@ -66,6 +66,21 @@ function archive(...records: Uint8Array[]): ArrayBuffer {
 }
 
 describe('portable WARC evidence import', () => {
+  test('owns the archive before digesting, independent of caller mutation or transfer', async () => {
+    for (const action of ['mutate', 'transfer'] as const) {
+      const input = archive(record('response', responseBlock({ title: 'Original evidence' }), { target: 'https://example.test/' }));
+      const expectedDigest = createHash('sha256').update(new Uint8Array(input)).digest('hex');
+      const pending = parseWarcEvidenceArchive(input, 'capture.warc');
+      if (action === 'mutate') new Uint8Array(input).fill(0);
+      else structuredClone(input, { transfer: [input] });
+      const report = await pending;
+      assert.equal(report.archiveDigestSha256, expectedDigest);
+      assert.equal(report.accepted, 1);
+      assert.equal(report.document.findings[0]?.completeness, 'complete');
+      assert.match(report.document.findings[0]?.summary ?? '', /Original evidence/u);
+    }
+  });
+
   test('scans unfinished title tags without losing a later bounded title', async () => {
     for (const [body, title] of [
       ['<title '.repeat(145_000), null],

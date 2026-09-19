@@ -33,7 +33,7 @@ const fixtureServices = {
   fetchRdapRecord: async (_type: string, value: string) => {
     serviceFailure(value);
     serviceCalls.push(['rdap', value]);
-    return value === 'missing.test' ? null : { fixtureRdap: true };
+    return value === 'missing.test' || value === 'example.gt' ? null : { fixtureRdap: true };
   },
   searchRdapNameserver: async (nameserver: unknown, scope: unknown) => {
     serviceFailure(nameserver);
@@ -342,6 +342,12 @@ describe('fixture-injected Express network routes', () => {
     const missing = await request('/api/rdap?q=missing.test');
     assert.equal(missing.status, 404);
     assert.match(String(recordValue(await missing.json()).error), /No RDAP registry found/u);
+    const refused = await request('/api/rdap?q=example.gt');
+    assert.equal(refused.status, 404);
+    const refusal = recordValue(await refused.json());
+    assert.equal(refusal.source, 'retained_registry_capability_policy');
+    assert.match(String(refusal.error), /collection was not attempted/u);
+    assert.doesNotMatch(String(refusal.error), /via IANA bootstrap/u);
 
     const routes = [
       '/api/lookup?q=throw.test',

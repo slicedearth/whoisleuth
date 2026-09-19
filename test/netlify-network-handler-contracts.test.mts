@@ -146,6 +146,11 @@ describe('fixture-injected Netlify network handlers', () => {
     const missingResponse = await missing(event({ q: 'example.test' }));
     assert.equal(missingResponse.statusCode, 404);
     assert.match(String(body(missingResponse).error), /No RDAP registry found/u);
+    const refused = await missing(event({ q: 'example.gt' }));
+    assert.equal(refused.statusCode, 404);
+    assert.equal(body(refused).source, 'retained_registry_capability_policy');
+    assert.match(String(body(refused).error), /collection was not attempted/u);
+    assert.doesNotMatch(String(body(refused).error), /via IANA bootstrap/u);
   });
 
   test('normalizes Certificate Transparency and nameserver-search inputs before fixture services', async () => {

@@ -9,6 +9,41 @@ import test from 'node:test';
 import { _storeBytes, _storeSize, cached, MAX_ENTRIES, MAX_TOTAL_BYTES } from '../lib/lookup-cache.mts';
 import { deferred } from './deferred.mts';
 
+test('producer, concurrent consumers and later readers cannot mutate each other', async () => {
+  const source = { observations: [{ status: 'partial', values: ['retained'] }], absent: undefined };
+  const original = structuredClone(source);
+  const work = deferred<typeof source>();
+  let calls = 0;
+  const first = cached('lookup-cache-test:owned', () => { calls++; return work.promise; });
+  const second = cached('lookup-cache-test:owned', () => { calls++; return work.promise; });
+  work.resolve(source);
+  const [one, two] = await Promise.all([first, second]);
+  assert.equal(calls, 1);
+  source.observations[0]!.values.push('producer change');
+  one.observations[0]!.status = 'complete';
+  one.observations[0]!.values.push('consumer change');
+  assert.deepEqual(two, original);
+  const later = await cached('lookup-cache-test:owned', () => { throw new Error('Unexpected cache miss.'); });
+  assert.deepEqual(later, original);
+  assert.notEqual(later, two);
+  assert.ok(Object.hasOwn(later, 'absent'), 'copying must preserve undefined fields rather than using a lossy JSON round trip');
+});
+
+test('cancellable successful callers also receive independent cached values', async () => {
+  const source = { values: ['retained'] };
+  const received = await cached('lookup-cache-test:owned-signal', () => source, new AbortController().signal);
+  source.values.push('producer change');
+  received.values.push('consumer change');
+  assert.deepEqual(await cached('lookup-cache-test:owned-signal', () => source), { values: ['retained'] });
+});
+
+test('non-cloneable values do not enter the shared cache', async () => {
+  let calls = 0;
+  const value = { unsupported: () => 'not retained' };
+  for (let i = 0; i < 2; i++) assert.equal(await cached('lookup-cache-test:noncloneable', () => { calls++; return value; }), value);
+  assert.equal(calls, 2);
+});
+
 test('cancellable work cannot cancel a shared caller or cache a late result', async () => {
   const key = 'lookup-cache-test:independent-cancellation';
   const controller = new AbortController();

@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { classifyQuery } from './lib/classify.mts';
-import { fetchRdapRecord } from './lib/rdap.mts';
+import { fetchRdapRecord, rdapUnavailableResponse } from './lib/rdap.mts';
 import {
   RdapNameserverSearchInputError,
   searchRdapNameserver,
@@ -423,7 +423,7 @@ function registerNetworkApiRoutes(
       try {
         const record = await services.fetchRdapRecord(classified.type, classified.value);
         if (!record) {
-          return res.status(404).json({ error: `No RDAP registry found for "${q}" via IANA bootstrap` });
+          return res.status(404).json(rdapUnavailableResponse(classified.type, classified.value));
         }
 
         res.status(200).json({
