@@ -8,12 +8,12 @@ import {
 import {
   offlineArtifactSatisfiesAssurance,
   MAX_OFFLINE_ARTIFACT_BYTES,
+  parseOfflineArtifactJson,
   verifyOfflineArtifact,
 } from './artifact-verify.mts';
 import {
   mergeBrandProfiles,
 } from '../packages/workspace/brand-profile-model.mts';
-import { parseBoundedJsonObject } from './bounded-json.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 export const INTERCHANGE_FIDELITY_REPORT_SCHEMA = 'whoisleuth.interchange-fidelity-report';
@@ -74,10 +74,7 @@ function parseInput(raw: string): UnknownRecord {
   if (bytes < 1 || bytes > MAX_INTERCHANGE_REPORT_BYTES) {
     throw new TypeError(`Interchange input must be between 1 byte and ${MAX_INTERCHANGE_REPORT_BYTES} bytes.`);
   }
-  return parseBoundedJsonObject(raw.replace(/^\uFEFF/u, ''), {
-    label: 'Interchange input',
-    maximumBytes: MAX_INTERCHANGE_REPORT_BYTES,
-  });
+  return parseOfflineArtifactJson(raw.replace(/^\uFEFF/u, ''));
 }
 
 function nestedRecord(value: UnknownRecord, path: readonly string[]): UnknownRecord | null {

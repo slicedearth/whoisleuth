@@ -260,7 +260,7 @@ function rejectUnsupportedCasePortabilityVersion(
   throw new UnsupportedOfflineArtifactError(`This ${label} version is malformed or unsupported; no data was changed.`);
 }
 
-function parseJson(raw: string): UnknownRecord {
+export function parseOfflineArtifactJson(raw: string): UnknownRecord {
   const value = parseBoundedJsonObject(raw, {
     maximumBytes: MAX_OFFLINE_ARTIFACT_BYTES,
     limits: boundedJsonLimitsForBytes(MAX_OFFLINE_ARTIFACT_BYTES),
@@ -394,7 +394,7 @@ async function verifyWorkspaceArchiveValue(
 
 /** Verify an archive once and retain its sections for bounded offline inspection. */
 export async function verifyOfflineWorkspaceArchive(raw: string, options: Readonly<{ passphrase?: string | null }> = {}) {
-  return verifyWorkspaceArchiveValue(raw, parseJson(raw), options.passphrase);
+  return verifyWorkspaceArchiveValue(raw, parseOfflineArtifactJson(raw), options.passphrase);
 }
 
 async function verifySignedArtifact(
@@ -453,7 +453,7 @@ async function verifyOfflineArtifactCore(
   raw: string,
   options: Readonly<{ passphrase?: string | null }> = {},
 ): Promise<OfflineArtifactVerificationCore> {
-  const value = parseJson(raw);
+  const value = parseOfflineArtifactJson(raw);
   const casePortabilityVerifier = selectCasePortabilityVerifier(value);
 
   if (casePortabilityVerifier?.id === 'cli-case-pack') {
@@ -698,13 +698,13 @@ async function verifyManifestIdentity(
     || manifestReport.checks.contentIntegrityScope !== 'whole_artifact') {
     throw new TypeError('The selected manifest is not a fully integrity-verified investigation manifest.');
   }
-  const manifest = parseJson(manifestRaw);
+  const manifest = parseOfflineArtifactJson(manifestRaw);
   const entries = Array.isArray(manifest.artifacts) ? manifest.artifacts : [];
   const entry = entries.find((candidate) => record(candidate)?.id === entryId);
   const item = record(entry);
   if (!item) throw new TypeError('The requested investigation manifest entry was not found.');
 
-  const artifactValue = parseJson(artifactRaw);
+  const artifactValue = parseOfflineArtifactJson(artifactRaw);
   const metadata = artifactMetadata(artifactValue);
   const actualByteLength = inputBytes(artifactRaw);
   const expectedByteLength = Number(item.byteLength);
