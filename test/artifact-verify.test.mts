@@ -379,6 +379,7 @@ describe('offline artifact verifier', () => {
     assert.ok((report.summary.sectionCount ?? 0) > 0);
     assert.equal(report.summary.unsupportedSectionCount, 0);
     const terminal = formatOfflineArtifactVerification(report);
+    assert.match(terminal, /--strict-exit for exit 4 on incomplete verification; default exit 0 means the report was produced/u);
     assert.doesNotMatch(terminal, /fixture archive passphrase/u);
     assert.doesNotMatch(terminal, /"cases"/u);
   });

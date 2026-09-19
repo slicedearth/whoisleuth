@@ -416,6 +416,11 @@ See the [exit-code reference](cli-reference.md#files-output-and-automation).
 A completed command can still contain partial sources; use the selected
 command's strict-exit policy when automation requires complete evidence.
 
+For scripts, use `whoisleuth verify-artifact evidence.json --json --strict-exit`.
+An incomplete verification returns **4** with that option. Without it, **0**
+means a report was produced, not that the artefact passed verification; inspect
+the report's state and checks.
+
 ## Command details
 
 Run `whoisleuth <command> --help` for exact arguments, input ceilings, network

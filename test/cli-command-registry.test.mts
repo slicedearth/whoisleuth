@@ -62,6 +62,18 @@ import {
 
 const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
+test('large option vocabularies remain complete without overwhelming focused usage', () => {
+  const help = commandHelp('verify-artifact');
+  assert.match(help, /Default exit 0 means the report was produced, not that its checks passed/u);
+  assert.match(COMMAND_USAGE['verify-artifact'], /--manifest-entry <manifest-entry>/u);
+  assert.doesNotMatch(COMMAND_USAGE['verify-artifact'], /artifact-129/u);
+  const specification = commandOptionSpec('verify-artifact', '--manifest-entry')!;
+  const details = help.split('--manifest-entry values:\n')[1];
+  assert.ok(details);
+  for (const value of specification.values) assert.ok(details.split('\n').includes(`  ${value}`));
+  assert.equal(parseCliArguments(['verify-artifact', 'evidence.json', '--manifest', 'manifest.json', '--manifest-entry', specification.values.at(-1)!]).action, 'verify-artifact');
+});
+
 test('export guidance preserves the independently published evidence versions', () => {
   assert.match(COMMAND_DETAILS.export.boundary, /published v2 schemas 27, 28/u);
   assert.match(COMMAND_DETAILS.export.boundary, /exact v1 schema 26/u);

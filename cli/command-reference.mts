@@ -1060,7 +1060,7 @@ const COMMAND_SEEDS = Object.freeze({
     reference: {
       description: 'Validate a supported archive, ordinary Case export, claim passport, packet, manifest, saved Lookup or Lookup-evidence export without printing evidence contents. Use --package for an evidence ZIP or encrypted package, with --passphrase-file to unlock it; use --folder ./evidence for an unencrypted evidence folder. Add --bagit with --package or --folder to verify BagIt 1.0.',
       example: 'whoisleuth verify-artifact report.json --manifest manifest.json --manifest-entry artifact-2 --json --strict-exit',
-      boundary: 'Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Case exports are checked without repairing content; ordinary package review also counts original references with matching bytes. Ordinary folders allow only the declared layout; BagIt allows bounded nested payloads and checks SHA-256/SHA-512 manifests without interpreting payloads. Symbolic links are refused. BagIt fetch.txt is never fetched; missing files, mismatches and unsupported algorithms remain explicit. Package digests describe bytes, not filesystem metadata or authenticity. --strict-exit returns 4 for incomplete verification.',
+      boundary: 'Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Case exports are checked without repairing content; ordinary package review also counts original references with matching bytes. Ordinary folders allow only the declared layout; BagIt allows bounded nested payloads and checks SHA-256/SHA-512 manifests without interpreting payloads. Symbolic links are refused. BagIt fetch.txt is never fetched; missing files, mismatches and unsupported algorithms remain explicit. Package digests describe bytes, not filesystem metadata or authenticity. In scripts, use --strict-exit: incomplete verification returns 4. Default exit 0 means the report was produced, not that its checks passed.',
     },
     collection: { mode: 'offline', scope: 'Reads one selected bounded artefact, ZIP or explicit evidence folder and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.' },
     summary: 'Validate saved evidence offline',
@@ -1646,10 +1646,14 @@ function documentationMetadata(
   });
 }
 
+function expandedOptionValues(specification: CliOptionSpec): boolean {
+  return specification.valueKind === 'enum' && specification.values.join('|').length > 60;
+}
+
 function optionUsage(specification: CliOptionSpec): string {
   if (specification.arity === 0) return specification.option;
   if (specification.valueKind === 'enum') {
-    return `${specification.option} <${specification.values.join('|')}>`;
+    return `${specification.option} <${expandedOptionValues(specification) ? specification.option.slice(2) : specification.values.join('|')}>`;
   }
   if (specification.valueKind === 'policy_list') return `${specification.option} <policy[,policy...]>`;
   if (specification.valueKind === 'integer') return `${specification.option} <integer>`;
@@ -1875,7 +1879,9 @@ function cliInvocationNetworkEffect(
 function commandHelp(command: CliCommand): string {
   const detail = COMMAND_DETAILS[command];
   const collection = COMMAND_COLLECTION[command];
-  return `WHOISleuth ${command}\n${detail.description}\n\nUsage:\n  ${COMMAND_USAGE[command]}\n\nExample:\n  ${detail.example}\n\nCollection:\n  ${collection.mode === 'offline' ? 'Offline' : 'Network'}: ${collection.scope}\n\nBoundary:\n  ${detail.boundary}\n\nRun "whoisleuth --help" to see the grouped command list.\n`;
+  const values = commandDefinition(command).grammar.options.filter(expandedOptionValues)
+    .map(option => `\n${option.option} values:\n${option.values.map(value => `  ${value}`).join('\n')}\n`).join('');
+  return `WHOISleuth ${command}\n${detail.description}\n\nUsage:\n  ${COMMAND_USAGE[command]}\n\nExample:\n  ${detail.example}\n\nCollection:\n  ${collection.mode === 'offline' ? 'Offline' : 'Network'}: ${collection.scope}\n\nBoundary:\n  ${detail.boundary}\n${values}\nRun "whoisleuth --help" to see the grouped command list.\n`;
 }
 
 export {

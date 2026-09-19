@@ -768,6 +768,7 @@ export function formatOfflineArtifactVerification(
     'WHOISleuth offline artefact verification',
     `Artifact: ${report.artifact.kind} · ${report.artifact.schema ?? 'no schema identifier'} v${report.artifact.version}`,
     `State: ${report.state}`,
+    'Automation: use --strict-exit for exit 4 on incomplete verification; default exit 0 means the report was produced.',
     `Structure: ${report.checks.structure}`,
     `Content integrity: ${report.checks.contentIntegrity}`,
     `Content integrity scope: ${report.checks.contentIntegrityScope}`,
