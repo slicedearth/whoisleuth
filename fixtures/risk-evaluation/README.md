@@ -67,6 +67,11 @@ is left unknown, so the current model withholds all scores and its precision
 and recall remain unmeasured. Labels are not injected as intelligence evidence.
 The report's generation timestamp is not a source observation time.
 
+Each split reports selected, scored, withheld and excluded counts separately.
+Its coverage section retains unknown registration, observation time, current
+disposition and same-form linkage counts. Zero score coverage is not zero
+detection accuracy; a split with no eligible labels is `not_evaluable`.
+
 This set supplements the [synthetic reviewed examples](../risk-reviewed-examples.mts)
 and workflow tests. It does not replace independent incident review or an
 actual first-use study with human participants.

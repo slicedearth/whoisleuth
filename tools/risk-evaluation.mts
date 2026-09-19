@@ -201,15 +201,33 @@ export function evaluationReports(rows: readonly SourceRow[], generatedAt = new 
       modelVersion: RISK_MODEL_VERSION, reviewThreshold: RISK_REVIEW_THRESHOLD,
       generatedAt,
     });
+    const summary = buildRiskCalibrationSummaryReport(calibration);
+    const included = summary.summary.positive + summary.summary.negative;
+    const withheld = summary.summary.scoreBands.not_scored;
     return {
       split,
+      coverage: {
+        state: included === 0 ? 'not_evaluable' : included < selected.length ? 'partial' : 'evaluated',
+        selectedRecords: selected.length,
+        scoredRecords: selected.length - withheld,
+        withheldRecords: withheld,
+        includedLabels: included,
+        excludedLabels: summary.summary.excluded,
+        scoredFraction: selected.length ? (selected.length - withheld) / selected.length : null,
+        unknownEvidence: {
+          registration: selected.length,
+          observationTime: selected.length,
+          currentDisposition: selected.length,
+          sameFormLinkage: selected.length,
+        },
+      },
       sourceLabels: { phishing: selected.filter(row => row.label === 0).length, legitimate: selected.filter(row => row.label === 1).length },
       featureOverlap: [false, true].flatMap(passwordField => [false, true].map(externalFormSubmit => ({
         passwordField, externalFormSubmit,
         phishing: selected.filter(row => row.label === 0 && row.passwordField === passwordField && row.externalFormSubmit === externalFormSubmit).length,
         legitimate: selected.filter(row => row.label === 1 && row.passwordField === passwordField && row.externalFormSubmit === externalFormSubmit).length,
       }))),
-      calibration: buildRiskCalibrationSummaryReport(calibration),
+      calibration: summary,
     };
   });
 }

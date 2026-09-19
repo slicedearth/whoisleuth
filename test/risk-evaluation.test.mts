@@ -64,7 +64,12 @@ describe('external Risk evaluation examples', () => {
   });
 
   test('withholds unsupported scores in both CLI and browser reports rather than counting true negatives', () => {
-    for (const { calibration } of evaluationReports(rows, now)) {
+    for (const { calibration, coverage } of evaluationReports(rows, now)) {
+      assert.deepEqual(coverage, {
+        state: 'not_evaluable', selectedRecords: 64, scoredRecords: 0, withheldRecords: 64,
+        includedLabels: 0, excludedLabels: 64, scoredFraction: 0,
+        unknownEvidence: { registration: 64, observationTime: 64, currentDisposition: 64, sameFormLinkage: 64 },
+      });
       assert.equal(calibration.generatedAt, now);
       assert.deepEqual(calibration.summary.scoreBands, { not_scored: 64, '0_39': 0, '40_69': 0, '70_100': 0 });
       assert.equal(calibration.summary.excluded, 64);
@@ -79,6 +84,18 @@ describe('external Risk evaluation examples', () => {
       assert.equal(dashboard.sampleSufficiency, 'insufficient');
       assert.doesNotMatch(JSON.stringify(calibration), /domainGroup|sourceRow|example\.test/u);
     }
+  });
+
+  test('coverage denominators follow each selected split and empty datasets remain invalid', () => {
+    const reports = evaluationReports([
+      ...rows.filter(row => row.split === 'development').slice(0, 2),
+      ...rows.filter(row => row.split === 'evaluation').slice(0, 3),
+    ], now);
+    assert.deepEqual(reports.map(report => [report.coverage.selectedRecords, report.coverage.withheldRecords, report.coverage.scoredFraction]),
+      [[2, 2, 0], [3, 3, 0]]);
+    assert.ok(reports.every(report => report.coverage.state === 'not_evaluable'));
+    assert.equal(reports[1]!.coverage.unknownEvidence.registration, 3);
+    assert.throws(() => evaluationReports([], now), /non-empty records/u);
   });
 
   test('the public offline command accepts the retained evaluation projection without a collection request', async () => {
