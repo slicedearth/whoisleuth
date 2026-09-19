@@ -121,6 +121,9 @@ test('a complete profile collection rejects an over-capacity import without chan
   const before = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 100 });
   expect(isDeepStrictEqual(before.records.map((record) => record.value), store.profiles)).toBe(true);
   const tooLarge = brandProfileStoreAtBytes(MAX_PROFILE_STORE_BYTES + 1);
+  // Same-time imports are skipped before storage admission; exercise a newer write.
+  for (const profile of tooLarge.profiles) profile.updatedAt = '2026-09-09T00:00:01.000Z';
+  expect(Buffer.byteLength(JSON.stringify(tooLarge))).toBe(MAX_PROFILE_STORE_BYTES + 1);
   await selectProfileFile(page, serialiseWorkspacePortableJson(buildBrandProfileExport(tooLarge.profiles, NOW)), () => expect(status).toContainText('storage is full'));
   const after = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 100 });
   expect(isDeepStrictEqual(after, before)).toBe(true);

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { expectFocusedResultsVisible, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, migrateLegacyBrowserData, openBrandProfileList, openBrandWorkbench, readBrowserLocalCollection, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
+import { MAIL_REPORT_VERSION } from '../packages/contracts/analyst-interchange.mts';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
 const ACTIVE_KEY = 'whois-rdap-active-brand-profile-v1';
@@ -216,7 +217,8 @@ test('mail review retains fifty thousand rows, reaches the last row and exports 
     const path = await (await pending).path();
     expect(path).not.toBeNull();
     const exported = JSON.parse(readFileSync(path!, 'utf8'));
-    expect(exported.version).toBe(2);
+    expect(exported.version).toBe(MAIL_REPORT_VERSION);
+    expect(exported.integrity.canonicalization).toBe('sorted-json-v2');
     expect(exported.reports[0].records).toHaveLength(50_000);
     expect(exported.reports[0].recordCoverage).toEqual({ supplied: 50_000, inspected: 50_000, retained: 50_000, rejected: 0 });
     expect(exported.reports[0].records[49_999].headerFrom).toBe('sender-49999.example');
