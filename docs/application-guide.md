@@ -477,7 +477,13 @@ Quick response includes observation, conclusion, recipient review, packet,
 manual delivery record, independent recheck and closure. Stage links open the
 relevant form. Advanced adds assertions, branches, manual investigation steps
 and detailed action transitions. Switching presentations preserves unfinished
-stage drafts for the open Case. Evidence, conclusions, assertions, branches,
+stage drafts. The response queue orders active actions by their next due date,
+keeps receipt references beside recipient provenance and opens the selected
+action or saved recheck question. Completed actions remain available through a
+view filter. Equally timed independent observations remain separate; a provider
+reply never becomes an independent outcome. Route freshness updates while the
+view is open; catalogue review dates do not claim a live contact check.
+Evidence, conclusions, assertions, branches,
 actions, outcomes, closure and manual-step forms support recovery after reload.
 Unfinished drafts are excluded from exports and backups; submit or copy any
 unfinished work before moving to another browser. A failed recovery save warns

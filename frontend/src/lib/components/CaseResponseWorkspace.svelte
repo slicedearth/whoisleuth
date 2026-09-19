@@ -15,6 +15,7 @@
   import CaseWorkflowDetails from '$lib/components/CaseWorkflowDetails.svelte';
   import CaseTitleForm from '$lib/components/CaseTitleForm.svelte';
   import CaseDecisionOverview from '$lib/components/CaseDecisionOverview.svelte';
+  import CaseResponseQueue from '$lib/components/CaseResponseQueue.svelte';
   import CaseReviewReturn from '$lib/components/CaseReviewReturn.svelte';
   import type { CaseReviewReturn as ReviewReturn } from '../../../../packages/cases/case-review-return.mts';
   import CaseResponsePacketWorkspace from '$lib/components/CaseResponsePacketWorkspace.svelte';
@@ -63,6 +64,7 @@
 
   let mutationBusy = $state(false);
   let actionStage = $state<ReturnType<typeof CaseActionStage>>();
+  let outcomeStage = $state<ReturnType<typeof CaseOutcomeStage>>();
   const investigationContext = $derived(caseInvestigationContext(record));
   const evidenceLinkedDecisionCount = $derived(record.decisions.filter((decision) =>
     decision.evidencePinIds.some((evidencePinId) => record.evidencePins.some((pin) => pin.id === evidencePinId))).length);
@@ -217,6 +219,22 @@
     await openStage(stage);
   }
 
+  async function openQueuedAction(id: string) {
+    if (!await actionStage?.selectReceipt(id)) return;
+    presentationMode = 'quick';
+    await openStage('response_decision');
+    if (activeSection === 'response') document.getElementById(`case-response-decision-${record.id}`)
+      ?.querySelector<HTMLElement>('form[aria-label="Record response event"] :is(input,select,button):not(:disabled)')?.focus();
+  }
+
+  async function openQueuedRecheck(id: string) {
+    if (!await outcomeStage?.selectQuestion(id)) return;
+    presentationMode = 'quick';
+    await openStage('outcome_tracking');
+    if (activeSection === 'response') document.getElementById(`case-response-outcome-${record.id}`)
+      ?.querySelector<HTMLElement>('form[data-recovery-form="observed-effect"] select')?.focus();
+  }
+
   async function preparePacketDeliveryRecord(exported: Parameters<ComponentProps<typeof CaseResponsePacketWorkspace>['onpacketexported']>[0]) {
     const action = record.actions.find((item) => item.id === exported.actionId);
     if (record.id !== exported.caseId || !action || !actionStage || JSON.stringify(action) !== exported.actionSignature) {
@@ -319,6 +337,7 @@
         <CaseAssessmentStage {record} {mutationBusy} {persist} {onmessage} mode={presentationMode} />
       </div>
       <div class="case-section" role="group" hidden={activeSection !== 'response'} aria-label="Case response workspace">
+      <CaseResponseQueue {record} {mutationBusy} onaction={openQueuedAction} onrecheck={openQueuedRecheck} />
       <CaseActionStage bind:this={actionStage} {record} {mutationBusy} {persist} mode={presentationMode} onadvanced={() => void openAdvancedStage('response_decision')} />
       <CaseResponsePacketWorkspace
         {record}
@@ -328,7 +347,7 @@
         onpacketexported={preparePacketDeliveryRecord}
       />
 
-      <CaseOutcomeStage {record} {mutationBusy} {persist} mode={presentationMode} />
+      <CaseOutcomeStage bind:this={outcomeStage} {record} {mutationBusy} {persist} mode={presentationMode} />
       {@render exports()}
       <CaseReviewReturn {record} {mutationBusy} persist={persistReviewReturn} />
       </div>

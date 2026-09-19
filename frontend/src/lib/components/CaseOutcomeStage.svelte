@@ -21,6 +21,10 @@
 
   let expanded = $state(false);
   $effect(() => { expanded = mode === 'quick'; });
+  let recheckReview = $state<ReturnType<typeof CaseRecheckReview>>();
+  export async function selectQuestion(id: string): Promise<boolean> {
+    return await recheckReview?.selectQuestion(id) ?? false;
+  }
 
   const closureDraft = createCaseDraft(() => record.id, 'closure', {
     closureReason: 'unable_to_proceed',
@@ -74,7 +78,7 @@
         <p class="history-warning">This Case predates v13. Earlier independent review or deliberate closure history is unavailable and was not reconstructed.</p>
       {/if}
       <CaseRecheckQuestions {record} {mutationBusy} {persist} />
-      <CaseRecheckReview {record} {mode} {mutationBusy} {persist} />
+      <CaseRecheckReview bind:this={recheckReview} {record} {mode} {mutationBusy} {persist} />
       {#if record.observedEffects.reviews.length}
         <ol class="records embedded-records" aria-label="Independent observed-effect reviews">
           {#each [...record.observedEffects.reviews].reverse() as review}

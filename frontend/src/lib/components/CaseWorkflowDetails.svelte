@@ -1,6 +1,7 @@
 <script lang="ts">
   import { recipientMailto } from '../../../../packages/evidence/email-recipient.mts';
   import { tick } from 'svelte';
+  import { reviewClock } from '$lib/review-clock.ts';
   import { createDraftRevision } from '$lib/controllers/submitted-draft';
   import {
     CASE_TYPES,
@@ -17,6 +18,7 @@
   } from '$lib/cases';
   import {
     resolvePlatformReportingRoutes,
+    platformReportingCatalogueHealth,
     type PlatformReportingResolution,
     type PlatformReportingRoute,
   } from '../../../../packages/cases/platform-reporting-routes.mts';
@@ -59,10 +61,11 @@
     return `${labels.slice(0, 2).join(', ')} and ${labels.length - 2} more`;
   });
   const typeReadiness = $derived(buildCaseTypeEvidenceReadiness(record));
+  const catalogueHealth = $derived(platformReportingCatalogueHealth(new Date($reviewClock)));
   const routeGroups = $derived.by<RouteGroup[]>(() => {
     const groups = new Map<string, RouteGroup>();
     for (const target of incidentTargets) {
-      const resolution = resolvePlatformReportingRoutes(target.url, selectedTypes);
+      const resolution = resolvePlatformReportingRoutes(target.url, selectedTypes, new Date($reviewClock));
       let hostname = 'other host';
       try { hostname = new URL(target.url).hostname; } catch { /* already validated */ }
       const key = resolution.platform?.id ?? `unsupported:${hostname}`;
@@ -280,6 +283,7 @@
   {#if routeGroups.length}
     <section class="reporting-routes" aria-labelledby={`reporting-routes-title-${record.id}`}>
       <div class="section-heading"><div><h5 id={`reporting-routes-title-${record.id}`}>Official platform routes</h5><p>Matched from exact incident-link hostnames and the selected Case types.</p></div></div>
+      <p class="empty">Retained catalogue: {catalogueHealth.state === 'limited' ? 'review due soon' : catalogueHealth.state} · reviewed {catalogueHealth.reviewedAt.slice(0, 10)} · review after {catalogueHealth.reviewAfter.slice(0, 10)}. No live route check is performed.</p>
       <div class="route-groups">
         {#each routeGroups as group (JSON.stringify([record.id, group.key, group.targets]))}
           <article>

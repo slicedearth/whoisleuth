@@ -34,6 +34,17 @@
     : retained && !retained.observedAt ? 'This evidence has no observation time. It cannot date a recheck. Keep the pin as evidence, or record a separate dated observation.' : null);
   let error = $state('');
 
+  export async function selectQuestion(id: string): Promise<boolean> {
+    if (draft.value.questionId === id) return true;
+    if (!await draft.leaveForm()) return false;
+    const selectedQuestion = questions.find(item => item.id === id);
+    if (id && !selectedQuestion) { error = 'The selected question changed or was resolved. Choose a current question.'; return false; }
+    draft.value.questionId = id;
+    draft.value.questionUpdatedAt = selectedQuestion?.updatedAt ?? '';
+    draft.changed();
+    return true;
+  }
+
   async function save() {
     error = '';
     if (draft.value.questionId && (!question || question.updatedAt !== draft.value.questionUpdatedAt)) { error = 'The selected question changed or was resolved. Choose a current question.'; return; }
