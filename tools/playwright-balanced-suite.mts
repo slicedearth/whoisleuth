@@ -16,14 +16,13 @@ import {
 import {
   localPortIsFree,
   npmExecutableName,
-  readBoundedStableRegularFileSync,
 } from './maintainer-tool-helpers.mts';
 import {
   aggregatePlaywrightShardTimings,
   renderBrowserShardTimingSummary,
 } from './playwright-shard-aggregate.mts';
 import {
-  MAX_PLAYWRIGHT_RESULTS_BYTES,
+  readPlaywrightResultData,
   summarizePlaywrightResults,
   type PlaywrightResultSummary,
 } from './playwright-results-summary.mts';
@@ -143,13 +142,7 @@ function runEnvironment(
 }
 
 function resultData(executionRoot: string, environment: NodeJS.ProcessEnv): unknown {
-  const filename = playwrightJsonResultsPath(executionRoot, environment);
-  const bytes = readBoundedStableRegularFileSync(
-    filename,
-    MAX_PLAYWRIGHT_RESULTS_BYTES,
-    `Playwright ${playwrightRunArtifacts(environment).identity} result data`,
-  );
-  return JSON.parse(bytes.toString('utf8')) as unknown;
+  return readPlaywrightResultData(playwrightJsonResultsPath(executionRoot, environment));
 }
 
 function resultSummary(environment: NodeJS.ProcessEnv, parsed: unknown): PlaywrightResultSummary {

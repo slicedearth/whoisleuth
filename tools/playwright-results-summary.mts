@@ -5,6 +5,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
+import { readBoundedStableRegularFileSync } from './maintainer-tool-helpers.mts';
 import {
   buildBalancedBrowserShardPlan,
   readVerificationTimingProfile,
@@ -12,6 +13,16 @@ import {
 import { playwrightRunArtifacts } from './playwright-run-artifacts.mts';
 
 export const MAX_PLAYWRIGHT_RESULTS_BYTES = 64 * 1024 * 1024;
+
+/** Full reports contain attachments; compact timing profiles have a separate bound. */
+export function readPlaywrightResultData(filename: string): unknown {
+  const bytes = readBoundedStableRegularFileSync(filename, MAX_PLAYWRIGHT_RESULTS_BYTES, 'Playwright result data');
+  try {
+    return JSON.parse(bytes.toString('utf8')) as unknown;
+  } catch {
+    throw new TypeError('Playwright result data must be valid JSON.');
+  }
+}
 const MAX_TEST_RESULTS = 4_000;
 const MAX_TREE_DEPTH = 32;
 const MAX_TEXT_LENGTH = 180;

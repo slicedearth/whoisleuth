@@ -9,9 +9,9 @@ import { PLAYWRIGHT_FUNCTIONAL_PROJECT } from './playwright-execution-contract.m
 import { runPlaywrightProcess } from './playwright-process.mts';
 import { retainFocusedBrowserDiagnostics } from './hosted-browser-workspace.mts';
 import { assertFrontendBuildIntegrity } from './frontend-build-integrity.mts';
-import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 import { playwrightRunArtifacts } from './playwright-run-artifacts.mts';
 import {
+  readPlaywrightResultData,
   renderPlaywrightResultSummary,
   summarizePlaywrightResults,
 } from './playwright-results-summary.mts';
@@ -28,7 +28,6 @@ const PLAYWRIGHT_CLI = path.join(REPOSITORY_ROOT, 'node_modules', '@playwright',
 const DEFAULT_PLAYWRIGHT_PORT = 4180;
 const MAX_PORT_SEARCH = 100;
 const MAX_GIT_OUTPUT_BYTES = 2 * 1024 * 1024;
-const MAX_PLAYWRIGHT_RESULTS_BYTES = 64 * 1024 * 1024;
 
 class BrowserDiagnosticRetentionError extends Error {}
 
@@ -289,12 +288,7 @@ export async function runFocusedBrowserSpecs(specs: readonly string[]): Promise<
 
     const resultPath = path.join(REPOSITORY_ROOT, playwrightRunArtifacts(environment).jsonResults);
     if (!existsSync(resultPath)) throw new Error('Focused Playwright results were not written.');
-    const source = await readBoundedRegularTextFile(resultPath, {
-      maximumBytes: MAX_PLAYWRIGHT_RESULTS_BYTES,
-      minimumBytes: 1,
-      label: 'focused Playwright result data',
-    });
-    const summary = summarizePlaywrightResults(JSON.parse(source) as unknown, 'focused iteration');
+    const summary = summarizePlaywrightResults(readPlaywrightResultData(resultPath), 'focused iteration');
     process.stdout.write(renderPlaywrightResultSummary(summary));
     if (exitCode !== 0 || summary.failed || summary.flaky || summary.retried) {
       throw new Error(
