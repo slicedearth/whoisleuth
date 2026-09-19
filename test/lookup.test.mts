@@ -79,6 +79,24 @@ const classifiedDomain: Extract<ClassifiedQuery, { type: 'domain' }> = {
 };
 
 describe('runUnifiedLookup', () => {
+  test('bounds availability failure detail while preserving the unknown result and failure diagnostic', async () => {
+    for (const failure of [new Error(`Collector\n\u0000failed ${'x'.repeat(500)}`), null, { message: '\n\t' }]) {
+      const result = await runFullLookup(classifiedDomain, {
+        fast: true,
+        fetchRdapRecord: async () => null,
+        checkDomainAvailability: async () => { throw failure; },
+      });
+      assert.equal(result.availability.state, 'unknown');
+      assert.equal(result.availability.confidence, 'low');
+      assert.equal(result.diagnostics.availability.status, 'error');
+      const detail = result.availability.detail;
+      assert.equal(typeof detail, 'string');
+      assert.ok(String(detail).length <= 240);
+      assert.doesNotMatch(String(detail), /[\u0000-\u001f\u007f]/u);
+      if (failure instanceof Error) assert.match(String(detail), /^Collector failed x/u);
+      else assert.equal(detail, 'Availability lookup failed');
+    }
+  });
   test('cancellation during one collector cannot start another queued collector', async () => {
     const controller = new AbortController(); let laterCalls = 0;
     const running = runUnifiedLookup(classifiedDomain, {

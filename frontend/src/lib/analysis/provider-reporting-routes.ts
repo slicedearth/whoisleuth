@@ -1,4 +1,4 @@
-import { MAX_TECHNOLOGY_FINDINGS, SUPPORTED_TECHNOLOGY_PROFILE_VERSIONS } from '../../../../lib/lookup-child-profile-contract.mts';
+import { technologyProfileContractState } from '../../../../lib/lookup-child-profile-contract.mts';
 import { normalizeExplicitIsoTimestamp as timestamp } from '../../../../packages/evidence/observation.mts';
 
 export type ProviderReportingRole = 'application_platform' | 'observed_edge';
@@ -110,26 +110,11 @@ function profileState(value: unknown): Readonly<{
   findings: readonly Record<string, unknown>[];
 }> {
   if (value == null) return { state: 'not_collected', observedAt: null, findings: [] };
+  if (technologyProfileContractState(value) !== 'supported') {
+    return { state: 'unavailable', observedAt: null, findings: [] };
+  }
   const profile = record(value);
-  const observedAt = timestamp(profile.observedAt);
-  if (
-    typeof profile.profileVersion !== 'number'
-    || !SUPPORTED_TECHNOLOGY_PROFILE_VERSIONS.includes(profile.profileVersion)
-    || profile.source !== 'derived'
-    || !['success', 'partial'].includes(String(profile.status))
-    || !observedAt
-    || !Array.isArray(profile.findings)
-    || profile.findings.length > MAX_TECHNOLOGY_FINDINGS
-  ) {
-    return { state: 'unavailable', observedAt: null, findings: [] };
-  }
-  const findings = profile.findings.filter((finding): finding is Record<string, unknown> => (
-    Boolean(finding) && typeof finding === 'object' && !Array.isArray(finding)
-  ));
-  if (findings.length !== profile.findings.length || new Set(findings.map((finding) => finding.id)).size !== findings.length) {
-    return { state: 'unavailable', observedAt: null, findings: [] };
-  }
-  return { state: 'usable', observedAt, findings };
+  return { state: 'usable', observedAt: timestamp(profile.observedAt), findings: profile.findings as readonly Record<string, unknown>[] };
 }
 
 function matchedFinding(

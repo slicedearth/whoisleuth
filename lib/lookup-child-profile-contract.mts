@@ -928,6 +928,7 @@ function sanitizeLookupChildProfiles<T extends LookupChildProfileEnvelope>(value
 
 export {
   sanitizeLookupChildProfiles,
+  technologyProfileContractState,
   validSecurityPostureFinding,
   validTlsChainCertificate,
   validTlsFinding,

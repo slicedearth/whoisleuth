@@ -11,7 +11,6 @@ import {
   LOOKUP_ERROR_CODES,
   LOOKUP_LEGACY_DIAGNOSTICS_VERSION,
   boundedSourceDetail,
-  errorMessage,
 } from './lookup-diagnostics.mts';
 import { createThreatIntelligenceResult } from './threat-intelligence-contract.mts';
 import {
@@ -230,7 +229,7 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
         domain: classified.value,
         state: 'unknown',
         confidence: 'low',
-        detail: errorMessage(availabilityResult.reason, 'Availability lookup failed'),
+        detail: boundedSourceDetail(availabilityResult.reason, 'Availability lookup failed'),
       };
     }
   }
