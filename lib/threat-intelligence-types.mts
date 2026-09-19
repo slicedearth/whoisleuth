@@ -8,15 +8,14 @@ export const THREAT_INTELLIGENCE_CONTRACT_VERSION = 1;
 export const THREAT_INTELLIGENCE_ENVELOPE_VERSION = 1;
 
 export type ThreatIntelligenceTargetType = 'domain' | 'url';
-export type ThreatIntelligenceTargetExposure =
-  | 'registrable_domain'
-  | 'hostname'
-  | 'origin'
-  | 'full_url';
-export type ThreatIntelligenceCapability =
-  | 'domain_lookup'
-  | 'url_lookup'
-  | 'indicator_search';
+export const THREAT_INTELLIGENCE_TARGET_EXPOSURES = Object.freeze([
+  'registrable_domain', 'hostname', 'origin', 'full_url',
+] as const);
+export type ThreatIntelligenceTargetExposure = (typeof THREAT_INTELLIGENCE_TARGET_EXPOSURES)[number];
+export const THREAT_INTELLIGENCE_CAPABILITIES = Object.freeze([
+  'domain_lookup', 'url_lookup', 'indicator_search',
+] as const);
+export type ThreatIntelligenceCapability = (typeof THREAT_INTELLIGENCE_CAPABILITIES)[number];
 export const THREAT_INTELLIGENCE_CATEGORIES = Object.freeze([
   'phishing',
   'malware',
@@ -163,20 +162,16 @@ export type ThreatIntelligenceProviderMatrixEntry = {
   limits: ThreatIntelligenceProviderLimits;
 };
 
-export type CuratedConnectorKind = 'discovery' | 'enrichment';
-export type CuratedConnectorCollection =
-  | 'passive'
-  | 'active'
-  | 'third_party';
-export type CuratedConnectorCredentialMode = 'none' | 'optional' | 'required';
-export type CuratedConnectorEntityType =
-  | 'domain'
-  | 'hostname'
-  | 'url'
-  | 'ipv4'
-  | 'ipv6'
-  | 'asn'
-  | 'certificate';
+export const CURATED_CONNECTOR_KINDS = Object.freeze(['discovery', 'enrichment'] as const);
+export type CuratedConnectorKind = (typeof CURATED_CONNECTOR_KINDS)[number];
+export const CURATED_CONNECTOR_COLLECTIONS = Object.freeze(['passive', 'active', 'third_party'] as const);
+export type CuratedConnectorCollection = (typeof CURATED_CONNECTOR_COLLECTIONS)[number];
+export const CURATED_CONNECTOR_CREDENTIAL_MODES = Object.freeze(['none', 'optional', 'required'] as const);
+export type CuratedConnectorCredentialMode = (typeof CURATED_CONNECTOR_CREDENTIAL_MODES)[number];
+export const CURATED_CONNECTOR_ENTITY_VALUES = Object.freeze([
+  'domain', 'hostname', 'url', 'ipv4', 'ipv6', 'asn', 'certificate',
+] as const);
+export type CuratedConnectorEntityType = (typeof CURATED_CONNECTOR_ENTITY_VALUES)[number];
 export type CuratedConnectorTargetExposure =
   | 'registrable_domain'
   | 'hostname'
@@ -185,18 +180,38 @@ export type CuratedConnectorTargetExposure =
   | 'ip_address'
   | 'asn'
   | 'certificate_fingerprint';
-export type CuratedConnectorRelationshipType =
-  | 'domain_resolves_to_ip'
-  | 'domain_uses_nameserver'
-  | 'domain_uses_mail_server'
-  | 'domain_presented_certificate'
-  | 'certificate_names_domain'
-  | 'ip_hosts_domain'
-  | 'domain_related_to_domain';
-export type CuratedConnectorRelationshipClassification =
-  | 'direct'
-  | 'normalized'
-  | 'derived';
+export const CURATED_CONNECTOR_RELATIONSHIP_TYPES = Object.freeze([
+  'domain_resolves_to_ip', 'domain_uses_nameserver', 'domain_uses_mail_server',
+  'domain_presented_certificate', 'certificate_names_domain', 'ip_hosts_domain',
+  'domain_related_to_domain',
+] as const);
+export type CuratedConnectorRelationshipType = (typeof CURATED_CONNECTOR_RELATIONSHIP_TYPES)[number];
+export const CURATED_CONNECTOR_RELATIONSHIP_CLASSIFICATIONS = Object.freeze(['direct', 'normalized', 'derived'] as const);
+export type CuratedConnectorRelationshipClassification = (typeof CURATED_CONNECTOR_RELATIONSHIP_CLASSIFICATIONS)[number];
+
+export const CURATED_CONNECTOR_TARGET_EXPOSURES: Readonly<Record<CuratedConnectorEntityType, readonly CuratedConnectorTargetExposure[]>> = Object.freeze({
+  domain: Object.freeze(['registrable_domain'] as const),
+  hostname: Object.freeze(['hostname'] as const),
+  url: THREAT_INTELLIGENCE_TARGET_EXPOSURES,
+  ipv4: Object.freeze(['ip_address'] as const),
+  ipv6: Object.freeze(['ip_address'] as const),
+  asn: Object.freeze(['asn'] as const),
+  certificate: Object.freeze(['certificate_fingerprint'] as const),
+});
+
+function relationshipEndpoints(from: readonly CuratedConnectorEntityType[], to: readonly CuratedConnectorEntityType[]) {
+  return Object.freeze({ from: Object.freeze(from), to: Object.freeze(to) });
+}
+
+export const CURATED_CONNECTOR_RELATIONSHIP_ENDPOINTS: Readonly<Record<CuratedConnectorRelationshipType, ReturnType<typeof relationshipEndpoints>>> = Object.freeze({
+  domain_resolves_to_ip: relationshipEndpoints(['domain', 'hostname'], ['ipv4', 'ipv6']),
+  domain_uses_nameserver: relationshipEndpoints(['domain'], ['hostname']),
+  domain_uses_mail_server: relationshipEndpoints(['domain'], ['hostname']),
+  domain_presented_certificate: relationshipEndpoints(['domain', 'hostname'], ['certificate']),
+  certificate_names_domain: relationshipEndpoints(['certificate'], ['domain', 'hostname']),
+  ip_hosts_domain: relationshipEndpoints(['ipv4', 'ipv6'], ['domain', 'hostname']),
+  domain_related_to_domain: relationshipEndpoints(['domain', 'hostname'], ['domain', 'hostname']),
+});
 
 export type CuratedConnectorInput = Readonly<{
   type: CuratedConnectorEntityType;
