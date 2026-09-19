@@ -52,8 +52,8 @@ describe('technology signature benchmark', () => {
     });
   });
 
-  test('passes the complete bounded fixture corpus with per-category metrics', () => {
-    const report = buildTechnologySignatureBenchmark({ now: () => new Date(GENERATED_AT) });
+  test('passes the complete bounded fixture corpus with per-category metrics', async () => {
+    const report = await buildTechnologySignatureBenchmark({ now: () => new Date(GENERATED_AT) });
     const signatures = TECHNOLOGY_SIGNATURE_CATALOGUE.length;
     const evidenceRules = TECHNOLOGY_SIGNATURE_CATALOGUE.reduce((total, signature) => total + signature.evidence.length, 0);
     const negativeFixtures = TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => fixture.kind === 'negative').length;
@@ -132,8 +132,8 @@ describe('technology signature benchmark', () => {
     assert.ok(report.fixtures.every((fixture) => fixture.status === 'pass'));
   });
 
-  test('does not copy synthetic HTML, headers, origins, or generator strings into output', () => {
-    const report = buildTechnologySignatureBenchmark({ now: () => new Date(GENERATED_AT) });
+  test('does not copy synthetic HTML, headers, origins, or generator strings into output', async () => {
+    const report = await buildTechnologySignatureBenchmark({ now: () => new Date(GENERATED_AT) });
     const serialized = JSON.stringify(report);
     assert.doesNotMatch(serialized, /__NEXT_DATA__|data-mage-init|wixstatic|private-build|WordPress 7\.1/);
     assert.doesNotMatch(serialized, /"resourceOrigins"|"responseHeaders"|"httpServer"|"generator"|"html"|fixture-input/);
@@ -172,8 +172,8 @@ describe('technology signature benchmark', () => {
     ).some((error) => /exceeds the .*evidence bound/.test(error)));
   });
 
-  test('formats concise output and supports a bounded JSON CLI mode', () => {
-    const report = buildTechnologySignatureBenchmark({ now: () => new Date(GENERATED_AT) });
+  test('formats concise output and supports a bounded JSON CLI mode', async () => {
+    const report = await buildTechnologySignatureBenchmark({ now: () => new Date(GENERATED_AT) });
     const output = formatTechnologySignatureBenchmark(report);
     assert.match(output, /technology-signature benchmark/i);
     assert.match(output, /fixtures passed/);
@@ -196,7 +196,7 @@ describe('technology signature benchmark', () => {
 
     const stdout = capture();
     const stderr = capture();
-    assert.equal(main(['--json'], {
+    assert.equal(await main(['--json'], {
       stdout: stdout.stream,
       stderr: stderr.stream,
       now: () => new Date(GENERATED_AT),
@@ -205,7 +205,7 @@ describe('technology signature benchmark', () => {
     assert.equal(stderr.value(), '');
 
     const coverageStdout = capture();
-    assert.equal(main(['--require-reviewed'], {
+    assert.equal(await main(['--require-reviewed'], {
       stdout: coverageStdout.stream,
       stderr: stderr.stream,
       now: () => new Date(GENERATED_AT),

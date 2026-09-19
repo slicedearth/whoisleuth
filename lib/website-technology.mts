@@ -79,6 +79,7 @@ type TechnologyInput = {
   documentOrigin?: unknown;
   observedAt?: unknown;
   sourceTruncated?: unknown;
+  signal?: AbortSignal;
 };
 type MatchContext = TechnologyMarkupContext & {
   generator: string;
@@ -616,7 +617,8 @@ function reconstructTechnologyHtmlEvidence(id: string, description: string, role
   return markup;
 }
 
-function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
+async function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
+  input.signal?.throwIfAborted();
   // Existing direct callers pass minimised, already-derived page evidence rather
   // than the page body. The real collector declares false for header-only
   // responses, while an explicit malformed declaration also fails closed.
@@ -624,10 +626,11 @@ function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
     ? true
     : input.htmlAvailable === true;
   const htmlAnalysis = htmlAvailable ? technologyHtmlAnalysis(input) : analyzeStaticHtml('');
-  const browserLibraryProfile = htmlAvailable ? analyzeBrowserLibraries({
+  const browserLibraryProfile = htmlAvailable ? await analyzeBrowserLibraries({
     htmlAnalysis,
     observedAt: input.observedAt,
     sourceTruncated: input.sourceTruncated,
+    ...(input.signal ? { signal: input.signal } : {}),
   }) : null;
   const context: MatchContext = {
     ...createTechnologyMarkupContext(htmlAnalysis, input.effectiveBaseUrl, input.documentOrigin),

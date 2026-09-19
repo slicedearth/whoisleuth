@@ -4,12 +4,12 @@ import { analyzeWebsiteTechnology, minimiseTechnologyMarkup } from '../lib/websi
 import { analyzeStaticHtml } from '../lib/static-html-analysis.mts';
 import { buildReviewedTechnologyFixture } from '../tools/technology-fixture-review.mts';
 
-const ids = (html: string) => analyzeWebsiteTechnology({ html }).findings.map((finding) => finding.id);
-const roles = (html: string, extra: Record<string, unknown> = {}) => (
-  analyzeWebsiteTechnology({ html, ...extra }).findings.map(({ id, roles }) => [id, roles])
+const ids = async (html: string) => (await analyzeWebsiteTechnology({ html })).findings.map((finding) => finding.id);
+const roles = async (html: string, extra: Record<string, unknown> = {}) => (
+  (await analyzeWebsiteTechnology({ html, ...extra })).findings.map(({ id, roles }) => [id, roles])
 );
 
-test('structural technology markers reject mentions in unrelated attributes, text and tag names', () => {
+test('structural technology markers reject mentions in unrelated attributes, text and tag names', async () => {
   const negatives = [
     '<main title="data-drupal-selector= data-mesh-id= data-wf-page= data-framer-name= ng-version="></main>',
     '<main data-example="data-ghost-search shopify.theme shopify-section squarespace-context stencil-utils"></main>',
@@ -28,12 +28,12 @@ test('structural technology markers reject mentions in unrelated attributes, tex
     '<!-- <main data-wf-site="fixture"></main> --><script>"<astro-island>"</script>',
   ];
   for (const html of negatives) {
-    assert.deepEqual(ids(html), [], html);
+    assert.deepEqual(await ids(html), [], html);
     assert.equal(minimiseTechnologyMarkup({ html }), '', html);
   }
 });
 
-test('real attributes, token boundaries and HTML namespace integration remain recognisable', () => {
+test('real attributes, token boundaries and HTML namespace integration remain recognisable', async () => {
   const cases = [
     ['<main DATA-DRUPAL-SELECTOR="fixture"></main>', 'drupal'],
     ['<button data-ghost-search>Search</button>', 'ghost'],
@@ -54,12 +54,12 @@ test('real attributes, token boundaries and HTML namespace integration remain re
     ['<svg><foreignObject><main data-mage-init="{}"></main></foreignObject></svg>', 'adobe-commerce-magento'],
   ];
   for (const [html, expected] of cases) {
-    assert.deepEqual(ids(html!), [expected], html);
-    assert.deepEqual(ids(minimiseTechnologyMarkup({ html })), [expected], html);
+    assert.deepEqual(await ids(html!), [expected], html);
+    assert.deepEqual(await ids(minimiseTechnologyMarkup({ html })), [expected], html);
   }
 });
 
-test('resource clues use intended URL paths, not queries, fragments, usernames or unrelated elements', () => {
+test('resource clues use intended URL paths, not queries, fragments, usernames or unrelated elements', async () => {
   for (const html of [
     '<script src="/asset.js?example=/_next/static/private"></script>',
     '<link href="/asset.css#/_app/immutable/private">',
@@ -78,35 +78,35 @@ test('resource clues use intended URL paths, not queries, fragments, usernames o
     '<a href="index.php?next=route=common/home"></a>',
     '<a href="index.php?route=common/home&amp;route=other"></a>',
     '<a href="copy-index.php?route=common/home"></a>',
-  ]) assert.deepEqual(ids(html), [], html);
-  assert.deepEqual(ids('<a href="/shop/index.php?locale=en&amp;route=common%2Fhome"></a>'), ['opencart']);
-  assert.deepEqual(ids('<script src="/site/_next/static/fixture.js?discarded=private#part"></script>'), ['nextjs']);
+  ]) assert.deepEqual(await ids(html), [], html);
+  assert.deepEqual(await ids('<a href="/shop/index.php?locale=en&amp;route=common%2Fhome"></a>'), ['opencart']);
+  assert.deepEqual(await ids('<script src="/site/_next/static/fixture.js?discarded=private#part"></script>'), ['nextjs']);
 });
 
-test('off-origin resource attribution does not depend on a retained origin summary', () => {
+test('off-origin resource attribution does not depend on a retained origin summary', async () => {
   const origin = 'https://page.example.test';
   for (const resourceOrigins of [undefined, [], Array.from({ length: 30 }, (_, index) => `https://r${index}.example.test`)]) {
-    assert.deepEqual(roles('<script src="https://assets.example.test/_next/static/fixture.js"></script>', {
+    assert.deepEqual(await roles('<script src="https://assets.example.test/_next/static/fixture.js"></script>', {
       documentOrigin: origin, effectiveBaseUrl: `${origin}/page`, resourceOrigins,
     }), [['nextjs', ['embedded_dependency']]]);
   }
-  assert.deepEqual(roles('<link href="https://assets.example.test/wp-content/fixture.css">'), [['wordpress', ['embedded_dependency']]]);
-  assert.deepEqual(roles('<script src="//assets.example.test/_astro/fixture.js"></script>'), [['astro', ['embedded_dependency']]]);
-  assert.deepEqual(roles('<script src="/_next/static/fixture.js"></script>', { documentOrigin: origin }), [['nextjs', ['framework_runtime']]]);
-  assert.deepEqual(roles(`<script src="${origin}/_next/static/fixture.js"></script>`, { documentOrigin: `${origin}/` }), [['nextjs', ['framework_runtime']]]);
+  assert.deepEqual(await roles('<link href="https://assets.example.test/wp-content/fixture.css">'), [['wordpress', ['embedded_dependency']]]);
+  assert.deepEqual(await roles('<script src="//assets.example.test/_astro/fixture.js"></script>'), [['astro', ['embedded_dependency']]]);
+  assert.deepEqual(await roles('<script src="/_next/static/fixture.js"></script>', { documentOrigin: origin }), [['nextjs', ['framework_runtime']]]);
+  assert.deepEqual(await roles(`<script src="${origin}/_next/static/fixture.js"></script>`, { documentOrigin: `${origin}/` }), [['nextjs', ['framework_runtime']]]);
 });
 
-test('the first effective document base controls relative evidence and remains conservative without an origin', () => {
+test('the first effective document base controls relative evidence and remains conservative without an origin', async () => {
   const html = '<base href="https://assets.example.test/"><script src="_nuxt/fixture.js"></script>';
-  assert.deepEqual(roles(html, { documentOrigin: 'https://page.example.test' }), [['nuxt', ['embedded_dependency']]]);
-  assert.deepEqual(roles('<script src="/_nuxt/fixture.js"></script>', { effectiveBaseUrl: 'https://assets.example.test/' }), [['nuxt', ['embedded_dependency']]]);
-  assert.deepEqual(roles('<script src="/_nuxt/fixture.js"></script>', { documentOrigin: 'invalid' }), [['nuxt', ['embedded_dependency']]]);
+  assert.deepEqual(await roles(html, { documentOrigin: 'https://page.example.test' }), [['nuxt', ['embedded_dependency']]]);
+  assert.deepEqual(await roles('<script src="/_nuxt/fixture.js"></script>', { effectiveBaseUrl: 'https://assets.example.test/' }), [['nuxt', ['embedded_dependency']]]);
+  assert.deepEqual(await roles('<script src="/_nuxt/fixture.js"></script>', { documentOrigin: 'invalid' }), [['nuxt', ['embedded_dependency']]]);
   const analysis = analyzeStaticHtml(html, { baseUrl: 'https://page.example.test' });
-  assert.deepEqual(roles('', { htmlAnalysis: analysis, documentOrigin: 'https://page.example.test' }), [['nuxt', ['embedded_dependency']]]);
+  assert.deepEqual(await roles('', { htmlAnalysis: analysis, documentOrigin: 'https://page.example.test' }), [['nuxt', ['embedded_dependency']]]);
 });
 
-test('a header-only observation never evaluates contradictory page fields', () => {
-  const result = analyzeWebsiteTechnology({
+test('a header-only observation never evaluates contradictory page fields', async () => {
+  const result = await analyzeWebsiteTechnology({
     htmlAvailable: false, html: '<main data-wf-site="fixture"></main>', generator: 'WordPress',
     htmlAnalysis: analyzeStaticHtml('<astro-island></astro-island>'),
     resourceOrigins: ['https://cloudfront.net'], httpServer: 'nginx',
@@ -118,16 +118,16 @@ test('a header-only observation never evaluates contradictory page fields', () =
   assert.equal(result.diagnostics.resourceOriginsEvaluated, 0);
 });
 
-test('minimisation preserves external-resource roles without retaining actual hosts, query strings or paths', () => {
+test('minimisation preserves external-resource roles without retaining actual hosts, query strings or paths', async () => {
   const input = { html: '<script src="https://private.example.test/_next/static/private-build.js?secret=value"></script>' };
   const html = minimiseTechnologyMarkup(input);
-  assert.deepEqual(roles(html), [['nextjs', ['embedded_dependency']]]);
+  assert.deepEqual(await roles(html), [['nextjs', ['embedded_dependency']]]);
   assert.doesNotMatch(html, /private|secret|value/u);
   assert.match(html, /embedded\.invalid/u);
 });
 
-test('contribution review cannot turn a quoted marker into a positive platform fixture', () => {
-  assert.throws(() => buildReviewedTechnologyFixture({
+test('contribution review cannot turn a quoted marker into a positive platform fixture', async () => {
+  await assert.rejects(async () => await buildReviewedTechnologyFixture({
     schema: 'whoisleuth.technology-fixture-review-input', version: 2,
     id: 'structural-control', reviewedAt: '2026-09-09T00:00:00.000Z', observedAt: '2026-09-09T00:00:00.000Z',
     licenseBasis: 'factual-observation', expectedIds: ['wix'], negativeFor: [],
@@ -135,14 +135,14 @@ test('contribution review cannot turn a quoted marker into a positive platform f
   }), /no recognised structural catalogue marker/u);
 });
 
-test('a distinctive platform bundle is only an embedded clue, never an origin-host or application claim', () => {
+test('a distinctive platform bundle is only an embedded clue, never an origin-host or application claim', async () => {
   const html = '<script src="https://assets.squarespace.com/universal/scripts-compressed/bundle-hash-min.en-AU.js"></script>';
-  assert.deepEqual(roles(html), [['squarespace', ['embedded_dependency']]]);
-  assert.deepEqual(roles(minimiseTechnologyMarkup({ html })), [['squarespace', ['embedded_dependency']]]);
+  assert.deepEqual(await roles(html), [['squarespace', ['embedded_dependency']]]);
+  assert.deepEqual(await roles(minimiseTechnologyMarkup({ html })), [['squarespace', ['embedded_dependency']]]);
   for (const invalid of [
     '<script src="https://assets.squarespace.com.example.test/universal/scripts-compressed/fixture.js"></script>',
     '<main title="https://assets.squarespace.com/universal/scripts-compressed/fixture.js"></main>',
     '<script src="https://assets.squarespace.com/other/fixture.js?path=/universal/scripts-compressed/fixture.js"></script>',
-  ]) assert.deepEqual(ids(invalid), []);
-  assert.deepEqual(roles('<main data-marker="squarespace-context"></main>', { resourceOrigins: ['https://static1.squarespace.com'] }), []);
+  ]) assert.deepEqual(await ids(invalid), []);
+  assert.deepEqual(await roles('<main data-marker="squarespace-context"></main>', { resourceOrigins: ['https://static1.squarespace.com'] }), []);
 });

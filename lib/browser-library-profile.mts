@@ -6,6 +6,7 @@
 
 import { createHash } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
+import { createInlineLibraryScanner } from './browser-library-worker.mts';
 
 import { RETIRE_BROWSER_CATALOG } from './generated/retire-browser-catalog.mts';
 import { CISA_KEV_CATALOG } from './generated/cisa-kev-catalog.mts';
@@ -44,6 +45,7 @@ type BrowserLibraryProfileInput = {
   htmlAnalysis?: StaticHtmlAnalysis;
   observedAt?: unknown;
   sourceTruncated?: unknown;
+  signal?: AbortSignal;
 };
 type CatalogVulnerability = {
   below?: unknown;
@@ -153,11 +155,20 @@ parentPort.on('message', (job) => {
   } catch {
     Atomics.store(control, 0, -1);
   }
-  Atomics.notify(control, 0);
+  parentPort.postMessage({ id: job.id });
 });
 `;
 
-let inlineRegexWorker: Worker | null = null;
+const scanInlineLibrary = createInlineLibraryScanner(
+  () => new Worker(INLINE_REGEX_WORKER_SOURCE, { eval: true, workerData: { catalogue: INLINE_EXTRACTOR_CATALOGUE } }),
+  {
+    maximumCharacters: MAX_INLINE_LIBRARY_SCAN_TOTAL_CHARS + MAX_SCRIPT_ELEMENTS,
+    outputBytes: MAX_INLINE_LIBRARY_WORKER_BYTES,
+    deadlineMs: MAX_INLINE_LIBRARY_SCAN_MS,
+    // One worker/output buffer, with at most sixteen bounded pending inputs.
+    pending: 16,
+  },
+);
 
 function record(value: unknown): UnknownRecord {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -284,50 +295,17 @@ function scanFilename(
   }
 }
 
-function scanInlineSignatures(
+async function scanInlineSignatures(
   detected: Map<string, DetectedComponent>,
   value: string,
-): Readonly<{ timedOut: boolean; unavailable: boolean }> {
+  signal?: AbortSignal,
+): Promise<Readonly<{ timedOut: boolean; unavailable: boolean }>> {
   if (!value) return { timedOut: false, unavailable: false };
-  const controlBuffer = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT);
-  const outputBuffer = new SharedArrayBuffer(MAX_INLINE_LIBRARY_WORKER_BYTES);
-  const control = new Int32Array(controlBuffer);
+  const result = await scanInlineLibrary(value, signal);
+  signal?.throwIfAborted();
+  if (result.output === null) return result;
   try {
-    if (!inlineRegexWorker) {
-      const createdWorker = new Worker(INLINE_REGEX_WORKER_SOURCE, {
-        eval: true,
-        workerData: { catalogue: INLINE_EXTRACTOR_CATALOGUE },
-      });
-      inlineRegexWorker = createdWorker;
-      createdWorker.unref();
-      createdWorker.once('exit', () => {
-        if (inlineRegexWorker === createdWorker) inlineRegexWorker = null;
-      });
-      createdWorker.once('error', () => {
-        if (inlineRegexWorker === createdWorker) inlineRegexWorker = null;
-      });
-    }
-    inlineRegexWorker.postMessage({ value, control: controlBuffer, output: outputBuffer });
-  } catch {
-    void inlineRegexWorker?.terminate().catch(() => {});
-    inlineRegexWorker = null;
-    return { timedOut: false, unavailable: true };
-  }
-
-  const wait = Atomics.wait(control, 0, 0, MAX_INLINE_LIBRARY_SCAN_MS);
-  const length = Atomics.load(control, 0);
-  if (wait === 'timed-out') {
-    void inlineRegexWorker?.terminate().catch(() => {});
-    inlineRegexWorker = null;
-    return { timedOut: true, unavailable: false };
-  }
-  if (length < 1 || length > MAX_INLINE_LIBRARY_WORKER_BYTES) {
-    return { timedOut: false, unavailable: true };
-  }
-  try {
-    const parsed: unknown = JSON.parse(Buffer.from(
-      new Uint8Array(outputBuffer, 0, length),
-    ).toString('utf8'));
+    const parsed: unknown = JSON.parse(result.output);
     if (!Array.isArray(parsed)) return { timedOut: false, unavailable: true };
     for (const item of parsed.slice(0, MAX_LIBRARY_FINDINGS * 4)) {
       if (!Array.isArray(item) || item.length !== 2) continue;
@@ -436,7 +414,8 @@ function findingFromDetection(detected: DetectedComponent): { finding: BrowserLi
   return { finding, omittedCveIdentifiers };
 }
 
-function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
+async function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
+  input.signal?.throwIfAborted();
   const htmlAnalysis = input.htmlAnalysis ?? analyzeStaticHtml(input.html);
   const detected = new Map<string, DetectedComponent>();
   let referencesExamined = 0;
@@ -459,7 +438,8 @@ function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
       if (signatureScan.signatureContent) inlineSignatureSamples.push(signatureScan.signatureContent);
     }
   }
-  const inlineSignatureResult = scanInlineSignatures(detected, inlineSignatureSamples.join('\u0000'));
+  const inlineSignatureResult = await scanInlineSignatures(detected, inlineSignatureSamples.join('\u0000'), input.signal);
+  input.signal?.throwIfAborted();
   const inlineSignatureUnavailable = inlineSignatureResult.timedOut || inlineSignatureResult.unavailable;
 
   const projected = [...detected.values()].map(findingFromDetection);

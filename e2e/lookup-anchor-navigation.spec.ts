@@ -18,7 +18,7 @@ test('evidence cards and source labels remain separated across map and mobile la
   Object.assign(fixture.availability, {
     tls,
     structuredDataIdentity: analyzeStructuredDataIdentity({ html, baseUrl: `https://${domain}/`, observedAt }),
-    technologyProfile: analyzeWebsiteTechnology({ html, observedAt }),
+    technologyProfile: await analyzeWebsiteTechnology({ html, observedAt }),
     securityPosture: analyzeWebsiteSecurityPosture({ http: fixture.availability.http, tls, observedAt }),
   });
   await page.route('**/api/lookup?*', (route) => route.fulfill({

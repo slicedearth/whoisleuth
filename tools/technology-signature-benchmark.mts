@@ -227,12 +227,12 @@ export function lintTechnologySignatureBenchmark(
   return errors;
 }
 
-function evaluateFixture(rawFixture: unknown): FixtureResult {
+async function evaluateFixture(rawFixture: unknown): Promise<FixtureResult> {
   const fixture = record(rawFixture);
   const expectedIds = stringArray(fixture.expectedIds).sort();
   const expected = new Set(expectedIds);
   const forbidden = new Set(stringArray(fixture.negativeFor));
-  const result = analyzeWebsiteTechnology(record(fixture.input));
+  const result = await analyzeWebsiteTechnology(record(fixture.input));
   const observedIds = result.findings.map((finding) => finding.id).sort();
   const observed = new Set(observedIds);
   const missingIds = expectedIds.filter((id) => !observed.has(id));
@@ -259,32 +259,34 @@ function evaluateFixture(rawFixture: unknown): FixtureResult {
   });
 }
 
-export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}) {
+export async function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}) {
   const lintErrors = lintTechnologySignatureBenchmark(
     TECHNOLOGY_SIGNATURE_CATALOGUE,
     TECHNOLOGY_SIGNATURE_FIXTURES,
   );
-  const fixtures = Object.freeze(
-    TECHNOLOGY_SIGNATURE_FIXTURES.slice(0, MAX_TECHNOLOGY_BENCHMARK_FIXTURES).map(evaluateFixture),
-  );
+  const fixtureResults: FixtureResult[] = [];
+  for (const fixture of TECHNOLOGY_SIGNATURE_FIXTURES.slice(0, MAX_TECHNOLOGY_BENCHMARK_FIXTURES)) {
+    fixtureResults.push(await evaluateFixture(fixture));
+  }
+  const fixtures = Object.freeze(fixtureResults);
   if (TECHNOLOGY_REVIEWED_FIXTURES.length > MAX_TECHNOLOGY_REVIEWED_BENCHMARK_FIXTURES) {
     lintErrors.push(
       `Reviewed corpus exceeds the ${MAX_TECHNOLOGY_REVIEWED_BENCHMARK_FIXTURES}-fixture bound.`,
     );
   }
-  const reviewedFixtures = Object.freeze(
-    TECHNOLOGY_REVIEWED_FIXTURES
-      .slice(0, MAX_TECHNOLOGY_REVIEWED_BENCHMARK_FIXTURES)
-      .map((fixture) => evaluateFixture({
-        id: fixture.id,
-        label: fixture.label,
-        kind: fixture.kind,
-        expectedIds: fixture.expectedIds,
-        negativeFor: fixture.negativeFor,
-        expectedStatus: 'success',
-        input: fixture.input,
-      })),
-  );
+  const reviewedResults: FixtureResult[] = [];
+  for (const fixture of TECHNOLOGY_REVIEWED_FIXTURES.slice(0, MAX_TECHNOLOGY_REVIEWED_BENCHMARK_FIXTURES)) {
+    reviewedResults.push(await evaluateFixture({
+      id: fixture.id,
+      label: fixture.label,
+      kind: fixture.kind,
+      expectedIds: fixture.expectedIds,
+      negativeFor: fixture.negativeFor,
+      expectedStatus: 'success',
+      input: fixture.input,
+    }));
+  }
+  const reviewedFixtures = Object.freeze(reviewedResults);
   const catalogueById = new Map(TECHNOLOGY_SIGNATURE_CATALOGUE.map((signature) => [signature.id, signature]));
   const categoryNames = [...CATEGORIES].sort();
   const byCategory = Object.freeze(Object.fromEntries(categoryNames.map((category) => {
@@ -344,7 +346,7 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
     .length;
   const reviewedEvidenceRuleIds = new Set<string>();
   for (const fixture of passingReviewedPositiveFixtures) {
-    for (const finding of analyzeWebsiteTechnology(fixture.input).findings) {
+    for (const finding of (await analyzeWebsiteTechnology(fixture.input)).findings) {
       const signature = catalogueById.get(finding.id);
       if (!signature) continue;
       for (const evidence of finding.evidence) {
@@ -572,7 +574,7 @@ export function buildTechnologySignatureBenchmark(options: BenchmarkOptions = {}
 }
 
 export function formatTechnologySignatureBenchmark(
-  report: ReturnType<typeof buildTechnologySignatureBenchmark>,
+  report: Awaited<ReturnType<typeof buildTechnologySignatureBenchmark>>,
 ): string {
   if (
     report.schema !== TECHNOLOGY_SIGNATURE_BENCHMARK_SCHEMA
@@ -630,10 +632,10 @@ export function parseArguments(args: readonly string[]): BenchmarkArguments {
   return { json, requireReviewed };
 }
 
-export function main(args = process.argv.slice(2), options: BenchmarkMainOptions = {}): number {
+export async function main(args = process.argv.slice(2), options: BenchmarkMainOptions = {}): Promise<number> {
   try {
     const { json, requireReviewed } = parseArguments(args);
-    const report = buildTechnologySignatureBenchmark(options);
+    const report = await buildTechnologySignatureBenchmark(options);
     (options.stdout || process.stdout).write(
       json ? `${JSON.stringify(report, null, 2)}\n` : formatTechnologySignatureBenchmark(report),
     );
@@ -650,7 +652,7 @@ export function main(args = process.argv.slice(2), options: BenchmarkMainOptions
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.exitCode = main();
+  process.exitCode = await main();
 }
 
 export type { BenchmarkMainOptions, BenchmarkOptions, FixtureResult };

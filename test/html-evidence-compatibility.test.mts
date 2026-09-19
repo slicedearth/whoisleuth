@@ -42,7 +42,7 @@ test('preserves the exact public page baseline through current profile and archi
 
 test('current native fingerprints survive the whole retained-data boundary', async () => {
   const domain = 'current.example';
-  const signals = extractHtmlSignals('<main><h1>Account centre</h1><form><input type=password></form></main>', domain, { observedAt: NOW });
+  const signals = await extractHtmlSignals('<main><h1>Account centre</h1><form><input type=password></form></main>', domain, { observedAt: NOW });
   const baseline = requiredValue(createPageBaseline(domain, { domain, ...signals }));
   assert.equal(baseline.fingerprintVersion, 2);
   assert.equal(baseline.domStructure.parser, 'html-tree-v2');

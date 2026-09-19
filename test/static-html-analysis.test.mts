@@ -22,9 +22,9 @@ describe('bounded native document evidence', () => {
     assert.equal(limited.inlineLimitReached, true);
   });
 
-  test('large native fingerprints cross the response and retained-baseline boundaries', () => {
+  test('large native fingerprints cross the response and retained-baseline boundaries', async () => {
     const html = '<main>' + '<div>record</div>'.repeat(4_000) + '<section>Later evidence</section></main>';
-    const result = extractHtmlSignals(html, 'example.test', { observedAt: '2026-09-08T00:00:00.000Z' });
+    const result = await extractHtmlSignals(html, 'example.test', { observedAt: '2026-09-08T00:00:00.000Z' });
     assert.ok(result.pageIdentity);
     assert.ok(result.pageIdentity.fingerprints.normalizedHtml.tokenCount > 4_096);
     assert.equal(sanitizeLookupChildProfiles({ availability: { pageIdentity: result.pageIdentity } }).availability.pageIdentity, result.pageIdentity);
@@ -36,11 +36,11 @@ describe('bounded native document evidence', () => {
   });
 
   for (const fixture of HTML_TREE_FIXTURES) {
-    test(fixture.name, () => {
+    test(fixture.name, async () => {
       const analysis = analyzeStaticHtml(fixture.html, { includeVisibleText: true });
       assert.equal(analysis.forms.formsObserved, fixture.forms);
       assert.equal(analysis.forms.categories.password, fixture.passwordInputs);
-      const result = extractHtmlSignals(fixture.html, 'example.test', { observedAt: '2026-09-08T00:00:00.000Z' });
+      const result = await extractHtmlSignals(fixture.html, 'example.test', { observedAt: '2026-09-08T00:00:00.000Z' });
       assert.equal(result.hasPasswordField, fixture.passwordInputs > 0);
       assert.equal(result.pageIdentity?.forms.count, fixture.forms);
       assert.equal(result.clientBehaviorProfile?.indicators.find((item) => item.id === 'inline_event_handlers')?.occurrences ?? 0, fixture.handlers);
@@ -49,8 +49,8 @@ describe('bounded native document evidence', () => {
     });
   }
 
-  test('only actual resource elements contribute credential-free hostnames', () => {
-    const result = extractHtmlSignals(`
+  test('only actual resource elements contribute credential-free hostnames', async () => {
+    const result = await extractHtmlSignals(`
       <!-- <img src="https://user:private@hidden.example/logo.png"> -->
       <script>const example = '<img src="https://script.example/logo.png">';</script>
       <img src="https://user:private@rejected.example/logo.png">
@@ -62,31 +62,31 @@ describe('bounded native document evidence', () => {
     assert.doesNotMatch(JSON.stringify(result.externalAssetHosts), /private|user|hidden|rejected|script|8443|token/u);
   });
 
-  test('entity decoding happens once, without turning quoted text into attributes', () => {
-    const result = extractHtmlSignals('<meta property=og:title content="A &amp; B &amp;quot; C"><form action="https://collect.example/a?one=1&amp;two=2"></form>', 'example.test');
+  test('entity decoding happens once, without turning quoted text into attributes', async () => {
+    const result = await extractHtmlSignals('<meta property=og:title content="A &amp; B &amp;quot; C"><form action="https://collect.example/a?one=1&amp;two=2"></form>', 'example.test');
     assert.equal(result.pageIdentity?.openGraph.title, 'A & B &quot; C');
     assert.deepEqual(result.pageIdentity?.forms.externalActionOrigins, ['https://collect.example']);
   });
 
-  test('body-positioned bases use native document resolution without changing head-only publication scope', () => {
+  test('body-positioned bases use native document resolution without changing head-only publication scope', async () => {
     const html = '<body><base href="https://assets.example/root/"><form action=submit><input type=password></form><img src=logo.png></body>';
     const analysis = analyzeStaticHtml(html, { baseUrl: 'https://example.test/page' });
-    const signals = extractHtmlSignals(html, 'example.test', { baseUrl: 'https://example.test/page', includeCredentialSurfaceProfile: true });
+    const signals = await extractHtmlSignals(html, 'example.test', { baseUrl: 'https://example.test/page', includeCredentialSurfaceProfile: true });
     assert.equal(analysis.effectiveBaseUrl, 'https://assets.example/root/');
     assert.deepEqual(signals.pageIdentity?.forms.externalActionOrigins, ['https://assets.example']);
     assert.equal(signals.credentialSurfaceProfile?.forms.actions.external, 1);
   });
 
-  test('inert fallback text and truncated landing-page prefixes cannot classify a domain for sale', () => {
+  test('inert fallback text and truncated landing-page prefixes cannot classify a domain for sale', async () => {
     for (const tag of ['iframe', 'noembed', 'noframes', 'noscript', 'template']) {
       const html = `<${tag}>This domain is for sale</${tag}>`;
-      assert.equal(extractHtmlSignals(html, 'example.test').domainSaleSignal, null, tag);
+      assert.equal((await extractHtmlSignals(html, 'example.test')).domainSaleSignal, null, tag);
     }
-    assert.equal(extractHtmlSignals('<p>This domain is for sale</p>', 'example.test', { sourceTruncated: true }).domainSaleSignal, null);
-    assert.equal(extractHtmlSignals('<p>This domain is for sale</p>', 'example.test').domainSaleSignal, 'explicit domain-sale landing-page content');
+    assert.equal((await extractHtmlSignals('<p>This domain is for sale</p>', 'example.test', { sourceTruncated: true })).domainSaleSignal, null);
+    assert.equal((await extractHtmlSignals('<p>This domain is for sale</p>', 'example.test')).domainSaleSignal, 'explicit domain-sale landing-page content');
   });
 
-  test('domain-sale wording matches the literal hostname rather than a wildcard or a longer name', () => {
+  test('domain-sale wording matches the literal hostname rather than a wildcard or a longer name', async () => {
     const domain = 'login.example.test';
     for (const wording of [
       'login.example.test is for sale',
@@ -94,7 +94,7 @@ describe('bounded native document evidence', () => {
       'login.example.test may be available for lease',
       'This domain is for sale',
     ]) {
-      assert.equal(extractHtmlSignals(`<main>${wording}</main>`, domain).domainSaleSignal,
+      assert.equal((await extractHtmlSignals(`<main>${wording}</main>`, domain)).domainSaleSignal,
         'explicit domain-sale landing-page content', wording);
     }
     for (const wording of [
@@ -103,13 +103,13 @@ describe('bounded native document evidence', () => {
       'login.example.test.evil.test is for sale',
       'otherlogin.example.test is for sale',
       'login.example.test is for saleable goods',
-    ]) assert.equal(extractHtmlSignals(`<main>${wording}</main>`, domain).domainSaleSignal, null, wording);
+    ]) assert.equal((await extractHtmlSignals(`<main>${wording}</main>`, domain)).domainSaleSignal, null, wording);
   });
 
-  test('bounded metadata and multi-candidate resource output satisfy the public child contract', () => {
+  test('bounded metadata and multi-candidate resource output satisfy the public child contract', async () => {
     const html = '<meta property=og:title content="' + 'x'.repeat(400) + '">' + Array.from({ length: 60 }, (_, index) =>
       `<img srcset="${Array.from({ length: 20 }, (_, candidate) => `/image-${index}-${candidate}.png ${candidate + 1}w`).join(',')}">`).join('');
-    const result = extractHtmlSignals(html, 'example.test', { observedAt: '2026-09-08T00:00:00.000Z' });
+    const result = await extractHtmlSignals(html, 'example.test', { observedAt: '2026-09-08T00:00:00.000Z' });
     assert.equal(result.pageIdentity?.openGraph.title?.length, 200);
     assert.equal(result.pageIdentity?.resources.count, 1024);
     assert.equal(result.pageIdentity?.resources.truncated, true);
@@ -123,8 +123,8 @@ describe('bounded native document evidence', () => {
     assert.deepEqual(implicit.normalizedHtml, explicit.normalizedHtml);
   });
 
-  test('a tag-only bound cannot become complete empty publisher evidence', () => {
-    const result = extractHtmlSignals(`${'<br>'.repeat(MAX_STATIC_HTML_TAGS + 1)}<script type="application/ld+json">{"@type":"Organization","name":"Example publisher"}</script>`, 'example.test');
+  test('a tag-only bound cannot become complete empty publisher evidence', async () => {
+    const result = await extractHtmlSignals(`${'<br>'.repeat(MAX_STATIC_HTML_TAGS + 1)}<script type="application/ld+json">{"@type":"Organization","name":"Example publisher"}</script>`, 'example.test');
     assert.equal(result.structuredDataIdentity?.complete, false);
     assert.equal(result.structuredDataIdentity?.truncated, true);
     assert.equal(result.structuredDataIdentity?.status, 'partial');
@@ -147,12 +147,12 @@ describe('bounded native document evidence', () => {
     }
   });
 
-  test('analyses late evidence through the whole admitted large body and preserves its exact hash', () => {
+  test('analyses late evidence through the whole admitted large body and preserves its exact hash', async () => {
     for (const size of [600 * 1024, MAX_STATIC_HTML_CHARS]) {
       const suffix = '<main data-wf-site="fixture"><h1>Late evidence</h1><form><input type=password></form></main>';
       const html = '<!--' + 'x'.repeat(size - 7 - suffix.length) + '-->' + suffix;
       const analysis = analyzeStaticHtml(html, { includeVisibleText: true });
-      const result = extractHtmlSignals(html, 'example.test', { htmlAnalysis: analysis });
+      const result = await extractHtmlSignals(html, 'example.test', { htmlAnalysis: analysis });
       assert.equal(analysis.inputLimitReached, false);
       assert.equal(analysis.tagLimitReached, false);
       assert.equal(result.hasPasswordField, true);
@@ -174,18 +174,18 @@ describe('bounded native document evidence', () => {
     }
   });
 
-  test('an over-bound source stays partial and does not inspect the suffix', () => {
+  test('an over-bound source stays partial and does not inspect the suffix', async () => {
     const html = ' '.repeat(MAX_STATIC_HTML_CHARS) + '<form><input type=password></form>';
-    const result = extractHtmlSignals(html, 'example.test');
+    const result = await extractHtmlSignals(html, 'example.test');
     assert.equal(result.hasPasswordField, false);
     assert.equal(result.technologyProfile?.complete, false);
     assert.equal(result.pageIdentity?.fingerprints.exact.scope, 'captured-prefix');
     assert.equal(result.pageIdentity?.fingerprints.exact.bytes, MAX_STATIC_HTML_CHARS);
   });
 
-  test('native element evidence is not cut off by the former reconstruction limit', () => {
+  test('native element evidence is not cut off by the former reconstruction limit', async () => {
     const html = '<div></div>'.repeat(2_500) + '<main data-wf-site="fixture"><h1>Later page</h1></main>';
-    const result = extractHtmlSignals(html, 'example.test');
+    const result = await extractHtmlSignals(html, 'example.test');
     assert.deepEqual(result.technologyProfile?.findings.map(({ id }) => id), ['webflow']);
     assert.equal(result.technologyProfile?.complete, true);
     assert.equal(result.pageRoleProfile?.findings.some(({ role }) => role === 'content'), true);
@@ -194,13 +194,13 @@ describe('bounded native document evidence', () => {
     assert.equal(result.pageIdentity?.fingerprints.domStructure.truncated, false);
   });
 
-  test('an oversized drawing attribute limits fingerprints, not independent HTML technology evidence', () => {
+  test('an oversized drawing attribute limits fingerprints, not independent HTML technology evidence', async () => {
     const html = '<svg><path d="' + 'M1 2L3 4 '.repeat(1_000) + '"></path></svg><main data-wf-site="fixture"></main>';
-    const result = extractHtmlSignals(html, 'example.test');
+    const result = await extractHtmlSignals(html, 'example.test');
     assert.equal(result.technologyProfile?.complete, true);
     assert.deepEqual(result.technologyProfile?.findings.map(({ id }) => id), ['webflow']);
     assert.equal(result.pageIdentity?.fingerprints.complete, false);
-    const htmlAttribute = extractHtmlSignals('<main data-description="' + 'x'.repeat(5_000) + '" data-wf-site="fixture"></main>', 'example.test');
+    const htmlAttribute = await extractHtmlSignals('<main data-description="' + 'x'.repeat(5_000) + '" data-wf-site="fixture"></main>', 'example.test');
     assert.equal(htmlAttribute.technologyProfile?.complete, false);
   });
 });

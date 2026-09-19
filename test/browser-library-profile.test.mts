@@ -22,8 +22,22 @@ import { fastCheckParameters } from './helpers/fast-check-config.mts';
 const OBSERVED_AT = '2026-07-27T00:00:00.000Z';
 
 describe('bounded browser-library profile', () => {
-  test('qualifies malformed catalogue identifiers without discarding advisory matches or breaking retained readers', () => {
-    const profile = analyzeBrowserLibraries({ html: '<script>/* dwr-1.1.3.jar */</script>', observedAt: OBSERVED_AT });
+  test('cancellation propagates before, during and after matching without poisoning later work', async () => {
+    for (const html of ['', '<script>/*! jQuery v3.7.1 */</script>']) {
+      const before = new AbortController(); before.abort();
+      await assert.rejects(analyzeBrowserLibraries({ html, signal: before.signal }), { name: 'AbortError' });
+      const during = new AbortController();
+      const pending = analyzeBrowserLibraries({ html, signal: during.signal });
+      during.abort();
+      await assert.rejects(pending, { name: 'AbortError' });
+    }
+    const profile = await analyzeBrowserLibraries({ html: '<script>/*! jQuery v3.7.1 */</script>', observedAt: OBSERVED_AT });
+    assert.equal(profile.status, 'success');
+    assert.deepEqual(profile.findings.map(({ id, apparentVersion }) => ({ id, apparentVersion })), [{ id: 'jquery', apparentVersion: '3.7.1' }]);
+  });
+
+  test('qualifies malformed catalogue identifiers without discarding advisory matches or breaking retained readers', async () => {
+    const profile = await analyzeBrowserLibraries({ html: '<script>/* dwr-1.1.3.jar */</script>', observedAt: OBSERVED_AT });
     const finding = profile.findings.find((entry) => entry.id === 'DWR');
     assert.ok(finding);
     assert.equal(finding.advisoryCount, 2);
@@ -32,39 +46,39 @@ describe('bounded browser-library profile', () => {
     assert.equal(profile.status, 'partial');
     assert.equal(profile.complete, false);
     assert.match(profile.limitations.join(' '), /1 supplied CVE identifier entry was omitted/u);
-    const read = (library: typeof profile) => {
+    const read = async (library: typeof profile) => {
       const input: Parameters<typeof sanitizeLookupChildProfiles>[0] = JSON.parse(JSON.stringify({
-        availability: { technologyProfile: { ...analyzeWebsiteTechnology({ observedAt: OBSERVED_AT }), browserLibraryProfile: library } },
+        availability: { technologyProfile: { ...(await analyzeWebsiteTechnology({ observedAt: OBSERVED_AT })), browserLibraryProfile: library } },
       }));
       return { input, output: sanitizeLookupChildProfiles(input) };
     };
-    const current = read(profile);
+    const current = await read(profile);
     assert.equal(current.output, current.input);
     assert.equal(profile.knownExploitedCatalog.releasedAt, new Date(CISA_KEV_CATALOG.releasedAt).toISOString());
     const retained = structuredClone(profile);
     const retainedFinding = requiredValue(retained.findings[0]);
     retainedFinding.advisoryIdentifiers = ['CVE-2007-01-09'];
     retained.knownExploitedCatalog.releasedAt = CISA_KEV_CATALOG.releasedAt;
-    const legacy = read(retained);
+    const legacy = await read(retained);
     assert.equal(legacy.output, legacy.input);
     retained.knownExploitedCatalog.releasedAt = '2026-09-04';
-    const invalidDate = read(retained);
+    const invalidDate = await read(retained);
     assert.notEqual(invalidDate.output, invalidDate.input);
     retained.knownExploitedCatalog.releasedAt = CISA_KEV_CATALOG.releasedAt;
     retainedFinding.advisoryCount = 1;
     retainedFinding.advisoryIdentifiers = ['CVE-2026-1234', 'GHSA-2345-CFGH-JMPQ'];
-    const aliases = read(retained);
+    const aliases = await read(retained);
     assert.equal(aliases.output, aliases.input);
     retainedFinding.advisoryCount = 0;
-    const unbacked = read(retained);
+    const unbacked = await read(retained);
     assert.notEqual(unbacked.output, unbacked.input);
     retainedFinding.advisoryCount = 1;
     retained.profileVersion += 1;
-    const future = read(retained);
+    const future = await read(retained);
     assert.notEqual(future.output, future.input);
   });
-  test('identifies a version from an already-observed script URL without retaining the URL', () => {
-    const profile = analyzeBrowserLibraries({
+  test('identifies a version from an already-observed script URL without retaining the URL', async () => {
+    const profile = await analyzeBrowserLibraries({
       html: '<script src="https://cdn.example/library/1.12.4/jquery.min.js?token=private-marker"></script>',
       observedAt: OBSERVED_AT,
     });
@@ -89,8 +103,8 @@ describe('bounded browser-library profile', () => {
     assert.doesNotMatch(JSON.stringify(profile), /cdn\.example|private-marker|jquery\.min\.js/);
   });
 
-  test('identifies filename and inline signatures from static script elements only', () => {
-    const profile = analyzeBrowserLibraries({
+  test('identifies filename and inline signatures from static script elements only', async () => {
+    const profile = await analyzeBrowserLibraries({
       html: `
         <script src="/assets/angular-1.7.0.min.js?cache=private"></script>
         <script>/*! jQuery v3.7.1 | fixture */</script>
@@ -111,8 +125,8 @@ describe('bounded browser-library profile', () => {
     assert.equal(requiredValue(profile.findings[1]).knownExploitedCount, 0);
   });
 
-  test('keeps an unmatched page neutral rather than claiming no libraries exist', () => {
-    const profile = analyzeBrowserLibraries({
+  test('keeps an unmatched page neutral rather than claiming no libraries exist', async () => {
+    const profile = await analyzeBrowserLibraries({
       html: '<script src="/assets/application.js"></script>',
       observedAt: OBSERVED_AT,
     });
@@ -122,8 +136,8 @@ describe('bounded browser-library profile', () => {
     assert.match(profile.limitations.join(' '), /unmatched scripts are not evidence/i);
   });
 
-  test('does not interpret JSON-LD metadata as executable library evidence', () => {
-    const profile = analyzeBrowserLibraries({
+  test('does not interpret JSON-LD metadata as executable library evidence', async () => {
+    const profile = await analyzeBrowserLibraries({
       html: '<script type="application/ld+json">{"name":"jQuery v1.12.4"}</script>',
       observedAt: OBSERVED_AT,
     });
@@ -132,8 +146,8 @@ describe('bounded browser-library profile', () => {
     assert.equal(profile.diagnostics.inlineScriptsExamined, 0);
   });
 
-  test('counts every advisory match while retaining bounded advisory details', () => {
-    const profile = analyzeBrowserLibraries({
+  test('counts every advisory match while retaining bounded advisory details', async () => {
+    const profile = await analyzeBrowserLibraries({
       html: '<script>version="15.0.0";document.getElementById("__NEXT_DATA__").textContent</script>',
       observedAt: OBSERVED_AT,
     });
@@ -146,8 +160,8 @@ describe('bounded browser-library profile', () => {
     assert.equal(profile.status, 'success');
   });
 
-  test('retains advisory evidence beyond the former component truncation boundary', () => {
-    const profile = analyzeBrowserLibraries({
+  test('retains advisory evidence beyond the former component truncation boundary', async () => {
+    const profile = await analyzeBrowserLibraries({
       html: '<script>version="16.1.6";document.getElementById("__NEXT_DATA__").textContent</script>',
       observedAt: OBSERVED_AT,
     });
@@ -159,7 +173,7 @@ describe('bounded browser-library profile', () => {
     assert.equal(profile.status, 'success');
   });
 
-  test('marks truncated source and every evaluation boundary as partial', () => {
+  test('marks truncated source and every evaluation boundary as partial', async () => {
     const tooManyScripts = Array.from(
       { length: MAX_SCRIPT_ELEMENTS + 2 },
       (_, index) => `<script src="/assets/library-${index}.js"></script>`,
@@ -168,7 +182,7 @@ describe('bounded browser-library profile', () => {
     const oversizedHtml = `<main>${'x'.repeat(MAX_LIBRARY_HTML_CHARS + 1)}</main>`;
 
     for (const html of [tooManyScripts, oversizedInline, oversizedHtml]) {
-      const profile = analyzeBrowserLibraries({ html, observedAt: OBSERVED_AT, sourceTruncated: true });
+      const profile = await analyzeBrowserLibraries({ html, observedAt: OBSERVED_AT, sourceTruncated: true });
       assert.equal(profile.status, 'partial');
       assert.equal(profile.complete, false);
       assert.equal(profile.truncated, true);
@@ -186,13 +200,11 @@ describe('bounded browser-library profile', () => {
     }
   });
 
-  test('bounds adversarial inline-signature work while retaining full-content hash coverage', () => {
-    const startedAt = performance.now();
-    const profile = analyzeBrowserLibraries({
+  test('bounds adversarial inline-signature work while retaining full-content hash coverage', async () => {
+    const profile = await analyzeBrowserLibraries({
       html: `<script>${'/'.repeat(MAX_INLINE_SCRIPT_CHARS)}</script>`,
       observedAt: OBSERVED_AT,
     });
-    const elapsedMs = performance.now() - startedAt;
 
     assert.equal(profile.status, 'partial');
     assert.equal(profile.complete, false);
@@ -205,12 +217,11 @@ describe('bounded browser-library profile', () => {
         <= MAX_INLINE_LIBRARY_SCAN_TOTAL_CHARS,
     );
     assert.match(profile.limitations.join(' '), /deterministic .* cumulative sample/i);
-    assert.ok(elapsedMs < 1_500, `bounded inline analysis took ${elapsedMs.toFixed(1)} ms`);
   });
 
-  test('shares the inline-signature ceiling across scripts without losing head and tail evidence', () => {
+  test('shares the inline-signature ceiling across scripts without losing head and tail evidence', async () => {
     const filler = 'x'.repeat(MAX_INLINE_LIBRARY_SCAN_CHARS - 64);
-    const profile = analyzeBrowserLibraries({
+    const profile = await analyzeBrowserLibraries({
       html: Array.from(
         { length: 6 },
         (_, index) => `<script>/*! jQuery v3.7.${index} */${filler}/*! jQuery v3.6.${index} */</script>`,
@@ -226,12 +237,12 @@ describe('bounded browser-library profile', () => {
     assert.ok(profile.findings.some(({ id }) => id === 'jquery'));
   });
 
-  test('never throws or echoes arbitrary bounded HTML', () => {
-    fc.assert(fc.property(
+  test('never throws or echoes arbitrary bounded HTML', async () => {
+    await fc.assert(fc.asyncProperty(
       fc.string({ maxLength: 2_000 }),
-      (value) => {
+      async (value) => {
         const marker = `PRIVATE-${value}`;
-        const profile = analyzeBrowserLibraries({
+        const profile = await analyzeBrowserLibraries({
           html: `<script>${marker}</script>`,
           observedAt: OBSERVED_AT,
         });

@@ -26,7 +26,7 @@ test('bounded static evidence agrees with native inert document parsing', async 
       };
     }, fixture.html);
     expect(native, fixture.name).toEqual({ forms: fixture.forms, passwordInputs: fixture.passwordInputs, handlers: fixture.handlers });
-    const evidence = extractHtmlSignals(fixture.html, 'example.test');
+    const evidence = await extractHtmlSignals(fixture.html, 'example.test');
     expect(evidence.pageIdentity?.forms.count, fixture.name).toBe(native.forms);
     expect(evidence.hasPasswordField, fixture.name).toBe(native.passwordInputs > 0);
     expect(evidence.clientBehaviorProfile?.indicators.find((indicator) => indicator.id === 'inline_event_handlers')?.occurrences ?? 0, fixture.name).toBe(native.handlers);
@@ -36,7 +36,7 @@ test('bounded static evidence agrees with native inert document parsing', async 
     const document = new DOMParser().parseFromString(html, 'text/html');
     return { base: document.baseURI, action: document.forms[0]!.action };
   }, withBodyBase);
-  const evidence = extractHtmlSignals(withBodyBase, 'example.test', { baseUrl: 'https://example.test/page' });
+  const evidence = await extractHtmlSignals(withBodyBase, 'example.test', { baseUrl: 'https://example.test/page' });
   expect(nativeBase).toEqual({ base: 'https://assets.example/root/', action: 'https://assets.example/root/submit' });
   expect(evidence.pageIdentity?.forms.externalActionOrigins).toEqual(['https://assets.example']);
 });

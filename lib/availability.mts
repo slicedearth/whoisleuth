@@ -141,8 +141,8 @@ type AvailabilityOptions = {
 type WebsiteActivity = 'parked' | 'active' | 'unreachable';
 type RegistrationSource = 'rdap' | 'whois' | 'dns' | null;
 type RegistrationConfidence = 'high' | 'medium';
-type HtmlSignals = Omit<ReturnType<typeof extractHtmlSignals>, 'cspMetaPolicy'> & Readonly<{
-  cspMetaPolicy: ReturnType<typeof extractHtmlSignals>['cspMetaPolicy'] | null;
+type HtmlSignals = Omit<Awaited<ReturnType<typeof extractHtmlSignals>>, 'cspMetaPolicy'> & Readonly<{
+  cspMetaPolicy: Awaited<ReturnType<typeof extractHtmlSignals>>['cspMetaPolicy'] | null;
 }>;
 
 function withoutHttpDeliveryMetadata(value: unknown): unknown {
@@ -806,7 +806,8 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
       const pageIdentityEligible = typeof responseContentType !== 'string'
         || responseContentType.trim() === ''
         || /^(?:text\/html|application\/xhtml\+xml)(?:\s*;|$)/i.test(responseContentType.trim());
-      htmlSignals = extractHtmlSignals(page, observationHostname, {
+      htmlSignals = await extractHtmlSignals(page, observationHostname, {
+        ...(options.signal ? { signal: options.signal } : {}),
         ...(pageAnalysis ? { htmlAnalysis: pageAnalysis } : {}),
         baseUrl: pageBaseUrl,
         ...(typeof homepage.http?.observedAt === 'string' ? { observedAt: homepage.http.observedAt } : {}),
@@ -836,7 +837,8 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
 
   if (options.includeTechnologyProfile !== false && htmlSignals.technologyProfile === null
     && ['fetched', 'responded'].includes(homepage.status)) {
-    htmlSignals.technologyProfile = analyzeWebsiteTechnology({
+    htmlSignals.technologyProfile = await analyzeWebsiteTechnology({
+      ...(options.signal ? { signal: options.signal } : {}),
       htmlAvailable: false,
       httpServer: homepage.http?.response?.server,
       responseHeaders: homepage.technologyHeaders,
@@ -844,7 +846,7 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     });
   }
 
-  // Complete synchronous consumers before an optional network wait. Only the
+  // Complete document consumers before an optional network wait. Only the
   // small icon projection, not every parsed element/token, crosses that wait.
   const faviconEvidence = pageAnalysis ? {
     iconLinks: pageAnalysis.iconLinks, effectiveBaseUrl: pageAnalysis.effectiveBaseUrl,

@@ -352,7 +352,7 @@ function validateOptions(options: ExampleReviewOptions) {
   });
 }
 
-export function buildTechnologyExampleReview(
+export async function buildTechnologyExampleReview(
   html: string,
   options: ExampleReviewOptions,
   corpus: ExampleReviewCorpus = {
@@ -365,7 +365,7 @@ export function buildTechnologyExampleReview(
   if (!artifactBytes.byteLength || artifactBytes.byteLength > MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES) {
     throw new TypeError(`Reference HTML must be between 1 byte and ${MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES} bytes.`);
   }
-  const signals = extractHtmlSignals(html, 'fixture.invalid', {
+  const signals = await extractHtmlSignals(html, 'fixture.invalid', {
     baseUrl: 'https://fixture.invalid/',
     httpServer: checked.responseMetadata.httpServer,
     responseHeaders: checked.responseMetadata.responseHeaders,
@@ -375,7 +375,7 @@ export function buildTechnologyExampleReview(
   const profile = signals.technologyProfile;
   let reviewInput: Record<string, unknown>;
   if (checked.expectedIds.length) {
-    const reconstructed = reconstructTechnologyReviewProfile(profile, checked.expectedIds);
+    const reconstructed = await reconstructTechnologyReviewProfile(profile, checked.expectedIds);
     // Retain the actual structural alternatives that matched this artefact,
     // not a different marker chosen merely because the final label matched.
     const markup = minimiseTechnologyMarkup({ html, documentOrigin: 'https://fixture.invalid' });
@@ -409,7 +409,7 @@ export function buildTechnologyExampleReview(
       input: { html: buildTechnologyNegativeReviewMarkup(checked.negativeFor) },
     };
   }
-  const fixture = buildReviewedTechnologyFixture(reviewInput);
+  const fixture = await buildReviewedTechnologyFixture(reviewInput);
   const provenance: TechnologyReviewedSource = Object.freeze({
     schema: TECHNOLOGY_REVIEWED_SOURCE_SCHEMA,
     version: TECHNOLOGY_REVIEWED_SOURCE_VERSION,
@@ -527,7 +527,7 @@ export async function main(
   try {
     const { inputPath, ...options } = parseArguments(args);
     const html = await readBoundedHtml(inputPath);
-    output.write(`${JSON.stringify(buildTechnologyExampleReview(html, options), null, 2)}\n`);
+    output.write(`${JSON.stringify(await buildTechnologyExampleReview(html, options), null, 2)}\n`);
     return 0;
   } catch (error) {
     errors.write(`${error instanceof Error ? error.message : 'Technology example review failed.'}\n`);

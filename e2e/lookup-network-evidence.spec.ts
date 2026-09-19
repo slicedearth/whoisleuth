@@ -825,7 +825,7 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
 });
 
 test('real library projection retains advisory aliases and discloses malformed source identifiers', async ({ page }, testInfo) => {
-  const technologyProfile = analyzeWebsiteTechnology({
+  const technologyProfile = await analyzeWebsiteTechnology({
     html: '<script src="/jquery-1.12.4.js"></script><script>/* dwr-1.1.3.jar */</script>',
     observedAt: '2026-09-08T00:00:00.000Z',
   });

@@ -24,6 +24,7 @@ import {
 
 type NormalizedIdentityUrl = { url: string; queryOmitted: boolean; pathTruncated: boolean };
 type HtmlSignalOptions = {
+  signal?: AbortSignal;
   baseUrl?: string;
   effectiveBaseUrl?: string;
   documentOrigin?: string;
@@ -678,7 +679,8 @@ function domainSaleLandingPage(analysis: StaticHtmlAnalysis, domain: string): bo
     && ['form', 'button', 'a'].includes(element.name));
 }
 
-function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOptions = {}) {
+async function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOptions = {}) {
+  options.signal?.throwIfAborted();
   const documentUrl = resolvedBaseUrl(domain, options.baseUrl);
   const htmlAnalysis = options.htmlAnalysis ?? analyzeStaticHtml(html, { baseUrl: documentUrl, includeVisibleText: true });
   const effectiveBaseUrl = htmlAnalysis.effectiveBaseUrl ?? documentUrl;
@@ -731,9 +733,10 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
       observedAt: options.observedAt,
       sourceTruncated: options.sourceTruncated,
     }) : null,
-    technologyProfile: includeTechnologyProfile && htmlAnalysis ? analyzeWebsiteTechnology({
+    technologyProfile: includeTechnologyProfile && htmlAnalysis ? await analyzeWebsiteTechnology({
       htmlAnalysis,
       generator: pageIdentity.generator,
+      ...(options.signal ? { signal: options.signal } : {}),
       httpServer: options.httpServer,
       responseHeaders: options.responseHeaders,
       resourceOrigins: pageIdentity.resources.externalOrigins,

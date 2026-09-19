@@ -166,8 +166,8 @@ function nestedValue(depth: number): unknown {
   return value;
 }
 
-function canonicalPageProfiles() {
-  const signals = extractHtmlSignals(
+async function canonicalPageProfiles() {
+  const signals = await extractHtmlSignals(
     '<html><head><title>Fixture</title></head><body><form><input type="password"></form><script id="__NEXT_DATA__"></script></body></html>',
     'example.test',
     {
@@ -189,8 +189,8 @@ function canonicalPageProfiles() {
   };
 }
 
-function legacyResourceOnlyTechnologyProfile() {
-  const current = canonicalPageProfiles().technologyProfile;
+async function legacyResourceOnlyTechnologyProfile() {
+  const current = (await canonicalPageProfiles()).technologyProfile;
   return {
     ...current,
     profileVersion: 10,
@@ -287,10 +287,10 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(parsed.ok, true);
   });
 
-  test('accepts exact homepage metadata, projects it for display, and rejects malformed children', () => {
+  test('accepts exact homepage metadata, projects it for display, and rejects malformed children', async () => {
     const publicationMetadata = pagePublicationMetadataFixture();
     const deliveryMetadata = httpDeliveryMetadataFixture();
-    const profiles = canonicalPageProfiles();
+    const profiles = await canonicalPageProfiles();
     const raw = response({
       availability: {
         applicable: true,
@@ -502,8 +502,8 @@ describe('Lookup HTTP response contract', () => {
     }
   });
 
-  test('enforces registration, page, observation, and live-container producer bounds', () => {
-    const profiles = canonicalPageProfiles();
+  test('enforces registration, page, observation, and live-container producer bounds', async () => {
+    const profiles = await canonicalPageProfiles();
     const postureFinding = (index: number) => ({
       id: `posture_${index}`,
       category: 'transport',
@@ -653,8 +653,8 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(recordValue(malformed.value.availability.tls).compatibility, 'malformed');
   });
 
-  test('fails closed for malformed and future nested profiles while retaining independent evidence', () => {
-    const profiles = canonicalPageProfiles();
+  test('fails closed for malformed and future nested profiles while retaining independent evidence', async () => {
+    const profiles = await canonicalPageProfiles();
     for (const profileVersion of [999, 1_000, 65_536, Number.MAX_SAFE_INTEGER]) {
       const raw = response({
         availability: {
@@ -755,8 +755,8 @@ describe('Lookup HTTP response contract', () => {
     assert.deepEqual(parseLookupHttpResponse(excessivelyNested), parseLookupHttpResponse(excessivelyNested));
   });
 
-  test('retains supported v10 resource-only technology evidence for compatibility projections', () => {
-    const technologyProfile = legacyResourceOnlyTechnologyProfile();
+  test('retains supported v10 resource-only technology evidence for compatibility projections', async () => {
+    const technologyProfile = await legacyResourceOnlyTechnologyProfile();
     const parsed = parseLookupHttpResponse(response({
       availability: {
         applicable: true,
@@ -773,8 +773,8 @@ describe('Lookup HTTP response contract', () => {
     assert.deepEqual(arrayValue(retained.findings), technologyProfile.findings);
   });
 
-  test('withholds unowned nested profile fields instead of retaining them as current evidence', () => {
-    const profiles = canonicalPageProfiles();
+  test('withholds unowned nested profile fields instead of retaining them as current evidence', async () => {
+    const profiles = await canonicalPageProfiles();
     const credential = structuredClone(profiles.credentialSurfaceProfile);
     recordValue(credential.inputs).unreviewed = { raw: 'x'.repeat(10_000) };
     const credentialResult = parseLookupHttpResponse(response({
@@ -830,8 +830,8 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(recordValue(retainedTechnology.browserLibraryProfile).compatibility, 'malformed');
   });
 
-  test('retains a version-one page fingerprint recorded before optional structure similarity', () => {
-    const profiles = canonicalPageProfiles();
+  test('retains a version-one page fingerprint recorded before optional structure similarity', async () => {
+    const profiles = await canonicalPageProfiles();
     const pageIdentity = structuredClone(profiles.pageIdentity);
     const fingerprints = recordValue(pageIdentity.fingerprints);
     delete recordValue(fingerprints.domStructure).similarity;
@@ -1018,8 +1018,8 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(parseLookupHttpResponse(oversized).ok, false);
   });
 
-  test('projects separately attributed evidence without mutating the response', () => {
-    const profiles = canonicalPageProfiles();
+  test('projects separately attributed evidence without mutating the response', async () => {
+    const profiles = await canonicalPageProfiles();
     const raw = response({
       rdap: { parsed: { domain: 'EXAMPLE.TEST' }, registrarRdap: { parsed: { domain: 'EXAMPLE.TEST' } } },
       availability: {

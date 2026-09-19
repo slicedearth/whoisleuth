@@ -636,7 +636,7 @@ test('public HTML baselines migrate unchanged and a deliberate recapture adopts 
   const publishedIdentity = archive.sections.websiteSnapshots.snapshots[0].identity;
   const domain = 'baseline.example';
   const html = `<main><h1>Current account centre</h1>${'<div>Account information</div>'.repeat(4_000)}<form><input type=password></form></main>`;
-  const signals = extractHtmlSignals(html, domain, { observedAt: ISO });
+  const signals = await extractHtmlSignals(html, domain, { observedAt: ISO });
   const fingerprints = requiredValue(signals.pageIdentity, 'The recaptured page identity is missing.').fingerprints;
   expect(fingerprints.normalizedHtml.tokenCount).toBeGreaterThan(4_096);
   expect(fingerprints.domStructure.nodeCount).toBeGreaterThan(4_096);

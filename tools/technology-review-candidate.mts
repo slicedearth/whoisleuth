@@ -146,10 +146,10 @@ function addEvidence(
   input.responseHeaders = headers;
 }
 
-export function reconstructTechnologyReviewProfile(
+export async function reconstructTechnologyReviewProfile(
   rawProfile: unknown,
   confirmedIds: readonly string[],
-): ReconstructedTechnologyReviewProfile {
+): Promise<ReconstructedTechnologyReviewProfile> {
   const profile = record(rawProfile);
   if (!profile || profile.status !== 'success' || profile.complete !== true || profile.truncated === true) {
     throw new TypeError('Technology review candidates require complete, successful technology evidence.');
@@ -201,7 +201,7 @@ export function reconstructTechnologyReviewProfile(
     ...(reconstructed.resourceOrigins instanceof Set ? { resourceOrigins: [...reconstructed.resourceOrigins].sort() } : {}),
     ...(record(reconstructed.responseHeaders) ? { responseHeaders: Object.fromEntries(Object.entries(record(reconstructed.responseHeaders) ?? {}).sort()) } : {}),
   });
-  const rebuiltIds = analyzeWebsiteTechnology(input).findings.map((finding) => finding.id).sort();
+  const rebuiltIds = (await analyzeWebsiteTechnology(input)).findings.map((finding) => finding.id).sort();
   if (JSON.stringify(rebuiltIds) !== JSON.stringify(expectedIds)) {
     throw new TypeError(`Target-free reconstruction produced [${rebuiltIds.join(', ')}] instead of [${expectedIds.join(', ')}].`);
   }
@@ -212,13 +212,13 @@ export function reconstructTechnologyReviewProfile(
   });
 }
 
-export function buildTechnologyReviewCandidate(
+export async function buildTechnologyReviewCandidate(
   document: SavedLookupDocument,
   options: CandidateOptions,
-): UnknownRecord {
+): Promise<UnknownRecord> {
   if (document.mode !== 'deep') throw new TypeError('Technology review candidates require a saved Deep lookup.');
   const availability = record(document.availability);
-  const reconstructed = reconstructTechnologyReviewProfile(
+  const reconstructed = await reconstructTechnologyReviewProfile(
     availability?.technologyProfile,
     options.expectedIds,
   );
@@ -279,7 +279,7 @@ export async function main(
       label: 'Saved lookup input',
     });
     const document = parseSavedLookupDocument(raw.toString('utf8'));
-    output.write(`${JSON.stringify(buildTechnologyReviewCandidate(document, options), null, 2)}\n`);
+    output.write(`${JSON.stringify(await buildTechnologyReviewCandidate(document, options), null, 2)}\n`);
     return 0;
   } catch (error) {
     errors.write(`${error instanceof Error ? error.message : 'Technology review candidate failed.'}\n`);

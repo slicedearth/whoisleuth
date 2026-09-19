@@ -105,24 +105,24 @@ function text(value: unknown, label: string, maximum: number): string {
   return normalized;
 }
 
-function normalizeHeader(
+async function normalizeHeader(
   value: unknown,
   label: string,
   field: 'generator' | 'httpServer',
-): string | undefined {
+): Promise<string | undefined> {
   if (value === undefined || value === null || value === '') return undefined;
   const header = text(value, label, 160);
   if (EMAIL_RE.test(header) || IPV4_RE.test(header) || /https?:\/\//iu.test(header)) {
     throw new TypeError(`${label} contains target or contact material.`);
   }
-  const findings = analyzeWebsiteTechnology({ [field]: header }).findings;
+  const findings = (await analyzeWebsiteTechnology({ [field]: header })).findings;
   if (findings.length !== 1) {
     throw new TypeError(`${label} must produce exactly one recognised catalogue technology before it can be minimised.`);
   }
   const finding = findings[0];
   if (!finding) throw new TypeError(`${label} could not be minimised.`);
   const candidate = HEADER_CANONICAL_VALUES[finding.id] ?? finding.name;
-  const reconstructed = analyzeWebsiteTechnology({ [field]: candidate }).findings.map((item) => item.id);
+  const reconstructed = (await analyzeWebsiteTechnology({ [field]: candidate })).findings.map((item) => item.id);
   if (reconstructed.length !== 1 || reconstructed[0] !== finding.id) {
     throw new TypeError(`${label} has no privacy-safe canonical reconstruction.`);
   }
@@ -193,7 +193,7 @@ function normalizeOrigins(value: unknown): string[] {
   return [...origins].sort();
 }
 
-function normalizeResponseHeaders(value: unknown): Record<string, string> {
+async function normalizeResponseHeaders(value: unknown): Promise<Record<string, string>> {
   if (value === undefined || value === null) return {};
   const headers = record(value);
   if (!headers || Object.keys(headers).length > MAX_REVIEWED_RESPONSE_HEADERS) {
@@ -208,7 +208,7 @@ function normalizeResponseHeaders(value: unknown): Record<string, string> {
     if (EMAIL_RE.test(headerValue) || IPV4_RE.test(headerValue) || /https?:\/\//iu.test(headerValue)) {
       throw new TypeError(`Response header ${name} contains target or contact material.`);
     }
-    const findings = analyzeWebsiteTechnology({ responseHeaders: { [name]: headerValue } }).findings;
+    const findings = (await analyzeWebsiteTechnology({ responseHeaders: { [name]: headerValue } })).findings;
     if (findings.length !== 1) {
       throw new TypeError(`Response header ${name} must produce exactly one recognised catalogue technology before it can be minimised.`);
     }
@@ -217,7 +217,7 @@ function normalizeResponseHeaders(value: unknown): Record<string, string> {
     if (!finding || !canonical) {
       throw new TypeError(`Response header ${name} has no privacy-safe canonical reconstruction.`);
     }
-    const reconstructed = analyzeWebsiteTechnology({ responseHeaders: { [name]: canonical } }).findings;
+    const reconstructed = (await analyzeWebsiteTechnology({ responseHeaders: { [name]: canonical } })).findings;
     if (reconstructed.length !== 1 || reconstructed[0]?.id !== finding.id) {
       throw new TypeError(`Response header ${name} has no stable canonical reconstruction.`);
     }
@@ -226,7 +226,7 @@ function normalizeResponseHeaders(value: unknown): Record<string, string> {
   return Object.fromEntries(Object.entries(output).sort(([left], [right]) => left.localeCompare(right)));
 }
 
-export function buildReviewedTechnologyFixture(raw: unknown): TechnologyReviewedFixture {
+export async function buildReviewedTechnologyFixture(raw: unknown): Promise<TechnologyReviewedFixture> {
   const source = record(raw);
   const input = record(source?.input);
   if (!source || source.schema !== TECHNOLOGY_REVIEW_INPUT_SCHEMA
@@ -265,8 +265,8 @@ export function buildReviewedTechnologyFixture(raw: unknown): TechnologyReviewed
     throw new TypeError('Reviewed input cannot both expect and forbid a technology id.');
   }
   const label = reviewedFixtureLabel(expectedIds, negativeFor);
-  const generator = normalizeHeader(input.generator, 'Generator value', 'generator');
-  const httpServer = normalizeHeader(input.httpServer, 'HTTP server value', 'httpServer');
+  const generator = await normalizeHeader(input.generator, 'Generator value', 'generator');
+  const httpServer = await normalizeHeader(input.httpServer, 'HTTP server value', 'httpServer');
   const html = expectedIds.length
     ? normalizeMarkup(input.html)
     : (() => {
@@ -278,7 +278,7 @@ export function buildReviewedTechnologyFixture(raw: unknown): TechnologyReviewed
       return canonical;
     })();
   const resourceOrigins = normalizeOrigins(input.resourceOrigins);
-  const responseHeaders = normalizeResponseHeaders(input.responseHeaders);
+  const responseHeaders = await normalizeResponseHeaders(input.responseHeaders);
   const normalizedInput: TechnologyInput = Object.freeze({
     ...(generator ? { generator } : {}),
     ...(httpServer ? { httpServer } : {}),
@@ -287,7 +287,7 @@ export function buildReviewedTechnologyFixture(raw: unknown): TechnologyReviewed
     ...(Object.keys(responseHeaders).length ? { responseHeaders: Object.freeze(responseHeaders) } : {}),
     observedAt,
   });
-  const observedIds = analyzeWebsiteTechnology(normalizedInput).findings.map((finding) => finding.id).sort();
+  const observedIds = (await analyzeWebsiteTechnology(normalizedInput)).findings.map((finding) => finding.id).sort();
   if (JSON.stringify(observedIds) !== JSON.stringify(expectedIds)) {
     throw new TypeError(`Minimised evidence observed [${observedIds.join(', ')}] instead of [${expectedIds.join(', ')}].`);
   }
@@ -337,7 +337,7 @@ export async function main(
     } catch {
       throw new TypeError('Technology review input must be valid JSON.');
     }
-    output.write(`${JSON.stringify(buildReviewedTechnologyFixture(parsed), null, 2)}\n`);
+    output.write(`${JSON.stringify(await buildReviewedTechnologyFixture(parsed), null, 2)}\n`);
     return 0;
   } catch (error) {
     errors.write(`${error instanceof Error ? error.message : 'Technology fixture review failed.'}\n`);
