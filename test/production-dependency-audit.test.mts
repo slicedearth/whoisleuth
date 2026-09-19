@@ -79,6 +79,28 @@ describe('production dependency audit policy', () => {
     assert.deepEqual(report.findings, []);
   });
 
+  test('admits the counted production root without permitting inflated dependency metadata', () => {
+    for (const total of [0, 29]) {
+      const report = auditReport();
+      report.metadata.dependencies = { prod: total + 1, dev: 0, optional: 0, peer: 0, peerOptional: 0, total };
+      assert.equal(assessProductionDependencyAudit({ auditJson: JSON.stringify(report) }).status, 'accepted');
+      report.metadata.dependencies.prod += 1;
+      assert.equal(assessProductionDependencyAudit({ auditJson: JSON.stringify(report) }).findings[0]?.code,
+        'audit_metadata_invalid');
+    }
+    for (const category of ['dev', 'optional', 'peer', 'peerOptional'] as const) {
+      const report = auditReport();
+      report.metadata.dependencies = { prod: 1, dev: 0, optional: 0, peer: 0, peerOptional: 0, total: 29 };
+      report.metadata.dependencies[category] = 30;
+      assert.equal(assessProductionDependencyAudit({ auditJson: JSON.stringify(report) }).findings[0]?.code,
+        'audit_metadata_invalid');
+    }
+    const vulnerable = auditReport({ fixture: vulnerability('fixture') });
+    vulnerable.metadata.dependencies = { prod: 30, dev: 0, optional: 0, peer: 0, peerOptional: 0, total: 29 };
+    assert.deepEqual(assessProductionDependencyAudit({ auditJson: JSON.stringify(vulnerable) }).findings.map(item => item.code),
+      ['production_vulnerability']);
+  });
+
   test('blocks every reported production vulnerability without a tolerance or exception', () => {
     const entries = {
       'fixture-direct': { ...vulnerability('fixture-direct', 'critical'), isDirect: true },

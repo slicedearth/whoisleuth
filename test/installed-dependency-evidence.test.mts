@@ -112,7 +112,7 @@ test('audits the recorded candidate graph rather than silently substituting the 
       assert.deepEqual(lock, evidence.lockfile);
       return { status: 0, signal: null, stderr: '', stdout: JSON.stringify({ auditReportVersion: 2, vulnerabilities: {}, metadata: {
         vulnerabilities: { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 },
-        dependencies: { prod: 3, dev: 0, optional: 0, peer: 0, peerOptional: 0, total: 3 },
+        dependencies: { prod: 4, dev: 0, optional: 0, peer: 0, peerOptional: 0, total: 3 },
       } }) };
     },
   }), 0);

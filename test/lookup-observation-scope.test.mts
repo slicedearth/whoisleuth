@@ -156,16 +156,21 @@ test('selected-page evidence keeps its current scope in both readers and does no
 });
 
 test('Case snapshots preserve scope without changing historical fingerprints or comparing different hosts', () => {
-  const prior = normalizeSnapshot({ inputHostname: HOST, scanDepth: 'deep', capturedAt: NOW, pageTitle: 'Old', registrar: 'Earlier registrar' }, { caseDomain: ROOT });
+  const retained = { inputHostname: HOST, scanDepth: 'deep', capturedAt: NOW, pageTitle: 'Old', registrar: 'Earlier registrar' };
+  const prior = normalizeSnapshot(retained, { caseDomain: ROOT, sourceVersion: 15 });
   assert.ok(prior);
-  const current = normalizeSnapshot({ ...prior, observationHostname: HOST, pageTitle: 'New', registrar: 'Later registrar' }, { caseDomain: ROOT });
+  assert.equal(prior.factorOrder, undefined);
+  const current = normalizeSnapshot({ ...retained, observationHostname: HOST, pageTitle: 'New', registrar: 'Later registrar' }, { caseDomain: ROOT });
   assert.ok(current);
+  assert.equal(current.factorOrder, 'code-unit-v1');
   assert.equal(current.observationHostname, HOST);
   assert.deepEqual(compareCaseEvidence(prior, current).map((change) => change.field), ['registrar']);
   assert.ok(caseEvidenceIncomparableReasons(prior, current).includes('observation-context'));
   const historical = normalizeSnapshot({ ...prior, observationHostname: HOST }, { caseDomain: ROOT, sourceVersion: 15 });
-  assert.equal(historical?.fingerprint, prior.fingerprint);
-  assert.equal(historical?.observationHostname, undefined);
+  assert.ok(historical);
+  assert.equal(historical.fingerprint, prior.fingerprint);
+  assert.equal(historical.observationHostname, undefined);
+  assert.equal(normalizeSnapshot(current, { caseDomain: ROOT, sourceVersion: 15 }), null);
 });
 
 test('the evidence graph connects registration to the parent and DNS evidence to the actual host', () => {
