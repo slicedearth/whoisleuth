@@ -55,6 +55,18 @@ proxy socket's request-limit bucket.
 Do not enable proxy trust on a directly internet-facing Node process, where a
 client could forge forwarded headers.
 
+Deployed network functions use the platform-provided runtime `SITE_ID` (or the
+legacy runtime marker) and a valid edge-assigned client address. Missing or
+ambiguous identity returns
+`503 RUNTIME_IDENTITY_UNAVAILABLE` before collection, rather than combining
+unrelated callers in an unknown-address bucket. Do not supply arbitrary
+forwarded headers to work around a misconfigured deployment.
+
+The standalone local application separates anonymous session checks from
+authenticated API capacity. Valid session fingerprints have bounded counters
+and share the existing aggregate API ceiling; launch-link attempts retain
+their own limit. No forwarded address can allocate a local identity.
+
 ## Emergency feature switches
 
 The generated [capability and data-flow contract](capability-manifest.md)

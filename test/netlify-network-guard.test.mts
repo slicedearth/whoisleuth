@@ -16,7 +16,7 @@ import {
   OPERATION_CLASSES,
   defaultOperationBudget,
 } from '../lib/operation-budget.mts';
-import { withNetlifyOperationBudget } from '../lib/netlify-network-guard.mts';
+import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../lib/netlify-network-guard.mts';
 import { requiredValue } from './value-assertions.mts';
 import { eventFixtureForFetch } from './netlify-fetch-fixture.mts';
 
@@ -89,6 +89,15 @@ async function withEnvironment<T>(name: string, value: string, callback: () => P
 }
 
 describe('direct serverless network paths', () => {
+  test('a missing deployed edge identity fails diagnostically before rate or collection admission', async () => {
+    await withEnvironment('NETLIFY', 'true', async () => {
+      const denied = guardNetlifyNetworkRequest({ headers: sameOriginHeaders() });
+      assert.equal(denied.response?.statusCode, 503);
+      assert.equal(JSON.parse(denied.response?.body ?? '{}').errorCode, 'RUNTIME_IDENTITY_UNAVAILABLE');
+      const admitted = guardNetlifyNetworkRequest({ headers: { ...sameOriginHeaders(), 'x-nf-client-connection-ip': '192.0.2.44' } });
+      assert.equal(admitted.response, null);
+    });
+  });
   for (const [name, handler] of networkHandlers.filter(([name]) => name !== 'lookup')) {
     test(`${name} refuses write methods before query validation or collection`, async () => {
       for (const httpMethod of ['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']) {

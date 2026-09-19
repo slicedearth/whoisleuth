@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import {
@@ -35,11 +35,11 @@ function localError(cause: unknown, response: Response): void {
   response.status(status).json({ error: error.message, code: error.code, committed: error.code === 'LOCAL_DATA_COMMIT_UNKNOWN' ? 'unknown' : false });
 }
 
-function rateLimit(check: RateLimitChecker) {
-  return (_request: Request, response: Response, next: NextFunction) => {
+function rateLimit(check: RateLimitChecker, identity: (request: Request) => string = () => 'loopback') {
+  return (request: Request, response: Response, next: NextFunction) => {
     // Origin admission has already restricted every request to this instance's
     // literal loopback address. No forwarded identity can create another bucket.
-    const result = check('loopback');
+    const result = check(identity(request));
     if (result.allowed) { next(); return; }
     response.setHeader('Retry-After', String(result.retryAfterSeconds));
     localError(new LocalWorkspaceError('LOCAL_DATA_BUSY', 'Too many local requests. Wait before retrying; no transaction was accepted.'), response);
@@ -151,7 +151,18 @@ export async function startLocalApplication(options: Readonly<{
     };
     const sessionCookie = (value: string) => value.replace(`${COOKIE_NAME}=`, `${cookieName}=`);
     const launchRateLimit = rateLimit(createRateLimitChecker(LOGIN_RATE_LIMIT, 1));
+    const anonymousRateLimit = rateLimit(createRateLimitChecker(LOGIN_RATE_LIMIT, 1));
     const apiRateLimit = rateLimit(createRateLimitChecker(API_RATE_LIMIT, 1));
+    // Only authenticated tokens may allocate identities. Store irreversible
+    // fingerprints, never cookies. The aggregate ceiling still applies across
+    // admitted sessions, so rotating sessions cannot increase collection work.
+    const sessionRateLimit = rateLimit(createRateLimitChecker(API_RATE_LIMIT), request =>
+      createHash('sha256').update(parseCookies(request.headers.cookie)[cookieName]!).digest('hex'));
+    const admittedApiRateLimit = (request: Request, response: Response, next: NextFunction) => {
+      const token = parseCookies(request.headers.cookie)[cookieName];
+      if (!isValidSessionToken(token)) { anonymousRateLimit(request, response, next); return; }
+      sessionRateLimit(request, response, () => apiRateLimit(request, response, next));
+    };
     const smallBody = express.raw({ type: 'application/json', inflate: false, limit: LOCAL_APPLICATION_READ_REQUEST_BYTES });
     app.post('/api/local-session', launchRateLimit, sameOrigin, express.raw({ type: 'application/json', inflate: false, limit: 256 }), (request, response) => {
       try {
@@ -161,8 +172,8 @@ export async function startLocalApplication(options: Readonly<{
         response.setHeader('Set-Cookie', sessionCookie(buildSessionCookie(createSessionToken(), { secure: false }))); response.json({ ok: true });
       } catch (cause) { localError(cause, response); }
     });
-    app.get('/api/session', apiRateLimit, sameOrigin, (request, response) => response.json({ authenticated: isValidSessionToken(parseCookies(request.headers.cookie)[cookieName]) }));
-    app.use('/api', apiRateLimit, sameOrigin, authenticated);
+    app.get('/api/session', sameOrigin, admittedApiRateLimit, (request, response) => response.json({ authenticated: isValidSessionToken(parseCookies(request.headers.cookie)[cookieName]) }));
+    app.use('/api', sameOrigin, admittedApiRateLimit, authenticated);
     if (options.offline) app.get('/api/capabilities', (_request, response) => {
       const report = capabilityReport('express');
       const networked = new Set<string>(CAPABILITY_MANIFEST.capabilities.filter(item => item.networkMode !== 'none').map(item => item.id));

@@ -53,6 +53,7 @@ import {
   trustsForwardedHeaders,
 } from './lib/rate-limit.mts';
 import type { RateLimitChecker } from './lib/rate-limit.mts';
+import { strictHeader } from './lib/request-header-facts.mts';
 import {
   defaultOperationBudget,
   operationBudgetError,
@@ -213,8 +214,8 @@ function isHttps(req: RequestLike): boolean {
 // that have not opted into trusting forwarded client identity. A forged
 // value can only add Secure (fail closed); it cannot remove the attribute.
 function usesSecureCookies(req: RequestLike): boolean {
-  const forwarded = req.headers['x-forwarded-proto'];
-  return isHttps(req) || (typeof forwarded === 'string' && forwarded.toLowerCase() === 'https');
+  const forwarded = strictHeader(req.headers, 'x-forwarded-proto');
+  return isHttps(req) || (forwarded.state === 'valid' && forwarded.value?.toLowerCase() === 'https');
 }
 
 function requestOriginContext(req: RequestLike): RequestOriginContext {

@@ -6,8 +6,8 @@
 
 import * as crypto from 'node:crypto';
 import { MAX_API_JSON_BODY_BYTES } from './http.mts';
+import { strictHeader, type HeaderInput, type HeaderFact as StrictHeader } from './request-header-facts.mts';
 
-type HeaderInput = Readonly<Record<string, string | readonly string[] | undefined>>;
 type CookieOptions = { secure?: boolean };
 type SigningSecret = string | Buffer;
 type SessionConfigurationEnvironment = Readonly<Record<string, string | undefined>>;
@@ -182,30 +182,9 @@ function buildClearCookie({ secure = true }: CookieOptions = {}): string {
   return attrs.join('; ');
 }
 
-type StrictHeader = Readonly<{
-  state: 'missing' | 'invalid' | 'valid';
-  value?: string;
-}>;
-
 const NETLIFY_REQUEST_ORIGIN_CONTEXT: RequestOriginContext = Object.freeze({
   protocol: 'https',
 });
-
-function strictHeader(headers: HeaderInput | null | undefined, name: string): StrictHeader {
-  if (!headers) return { state: 'missing' };
-  const matches = Object.entries(headers).filter(([key, value]) => (
-    key.toLowerCase() === name && value !== undefined
-  ));
-  if (matches.length === 0) return { state: 'missing' };
-  if (matches.length !== 1) return { state: 'invalid' };
-  const value = matches[0]?.[1];
-  if (typeof value !== 'string'
-    || value.length === 0
-    || value.length > 2_048
-    || value !== value.trim()
-    || /[\u0000-\u001f\u007f,]/u.test(value)) return { state: 'invalid' };
-  return { state: 'valid', value };
-}
 
 function normalProtocol(value: string): 'http' | 'https' | null {
   const normalized = value.toLowerCase().replace(/:$/u, '');

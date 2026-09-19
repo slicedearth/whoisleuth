@@ -10,7 +10,7 @@ import {
   NETLIFY_REQUEST_ORIGIN_CONTEXT,
   sessionFingerprintFromCookieHeader,
 } from './auth.mts';
-import { checkApiRateLimit, getClientIp } from './rate-limit.mts';
+import { checkApiRateLimit, serverlessClientIdentity } from './rate-limit.mts';
 import {
   featureDisabledError,
   networkFeaturePolicy,
@@ -42,7 +42,9 @@ function guardNetlifyNetworkRequest(
   allowedMethods?: readonly string[],
 ): NetlifyGuardResult {
   const headers = event && event.headers ? event.headers : {};
-  const ip = getClientIp(headers);
+  const identity = serverlessClientIdentity(headers);
+  if (identity.error !== undefined) return { response: json(503, { error: identity.error, errorCode: 'RUNTIME_IDENTITY_UNAVAILABLE' }) };
+  const ip = identity.ip;
   const { allowed, retryAfterSeconds } = checkApiRateLimit(ip);
   if (!allowed) {
     return {

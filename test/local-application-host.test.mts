@@ -61,14 +61,22 @@ function provider(instance: LocalApplicationInstance, fetchImpl: typeof fetch) {
   return new BrowserLocalDataProvider({ storageAdapter: createLocalApplicationStorage(instance.origin, instance.workspaceId, fetchImpl), timeoutMs: 60_000 });
 }
 
-test('local admission bounds authentication before parsing and keeps launch attempts separate', async context => fixture(async options => {
-  const now = Date.now();
+test('anonymous requests cannot consume admitted session capacity; global and launch bounds remain separate', async context => fixture(async options => {
+  let now = Date.now();
   context.mock.method(Date, 'now', () => now);
   const instance = await startLocalApplication({ ...options, create: true, offline: true });
   try {
     const cookie = await session(instance);
-    for (let index = 0; index < API_RATE_LIMIT.limit; index++) {
+    for (let index = 0; index < LOGIN_RATE_LIMIT.limit; index++) {
       const response = await fetch(`${instance.origin}/api/session`, { headers: { Origin: instance.origin } });
+      assert.equal(response.status, 200); await response.arrayBuffer();
+    }
+    const anonymousDenied = await fetch(`${instance.origin}/api/session`, { headers: { Origin: instance.origin } });
+    assert.equal(anonymousDenied.status, 429); await anonymousDenied.arrayBuffer();
+    const send = authenticatedFetch(instance, cookie);
+    // The original aggregate authenticated capacity remains available in full.
+    for (let index = 0; index < API_RATE_LIMIT.limit; index++) {
+      const response = await send(`${instance.origin}/api/session`);
       assert.equal(response.status, 200); await response.arrayBuffer();
     }
     const denied = await authenticatedFetch(instance, cookie)(`${instance.origin}/api/local-workspace/commit`, {
@@ -79,7 +87,12 @@ test('local admission bounds authentication before parsing and keeps launch atte
     assert.equal((await denied.json()).committed, false);
     assert.equal(options.calls(), 0);
     // Storage/session traffic cannot consume the separate launch-link bucket.
-    await session(instance);
+    now += 1;
+    const anotherCookie = await session(instance);
+    assert.notEqual(anotherCookie, cookie);
+    const globallyDenied = await authenticatedFetch(instance, anotherCookie)(`${instance.origin}/api/session`);
+    assert.equal(globallyDenied.status, 429, 'another session cannot bypass the aggregate ceiling');
+    await globallyDenied.arrayBuffer();
     for (let index = 2; index < LOGIN_RATE_LIMIT.limit; index++) {
       const response = await fetch(`${instance.origin}/api/local-session`, { method: 'POST',
         headers: { Origin: instance.origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ token: '0'.repeat(64) }) });
