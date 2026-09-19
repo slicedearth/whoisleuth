@@ -317,19 +317,32 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
   try {
     const { commit, checkOnly } = parseArguments(args);
     const root = path.resolve(options.repositoryRoot ?? process.cwd());
-    const snapshot = await buildCommonInfrastructureSnapshot(commit, options);
-    const output = `${JSON.stringify(snapshot, null, 2)}\n`;
-    if (Buffer.byteLength(output, 'utf8') > MAX_SNAPSHOT_BYTES) {
-      throw new TypeError('Generated Common-infrastructure snapshot exceeds its byte limit.');
-    }
+    const now = options.now?.() ?? new Date();
     const outputPath = path.join(root, SNAPSHOT_PATH);
+    let retainedSnapshot: JsonRecord | null = null;
     if (checkOnly) {
       const retained = await readBoundedRegularTextFile(outputPath, {
         maximumBytes: MAX_SNAPSHOT_BYTES,
         minimumBytes: 1,
         label: 'Retained Common-infrastructure snapshot',
       });
-      const retainedSnapshot = record(JSON.parse(retained), 'Retained Common-infrastructure snapshot');
+      retainedSnapshot = record(JSON.parse(retained), 'Retained Common-infrastructure snapshot');
+      retainedComparisonValue(retainedSnapshot);
+      if (Date.parse(String(retainedSnapshot.generatedAt)) > now.getTime()) {
+        throw new TypeError('Retained Common-infrastructure snapshot generatedAt is in the future.');
+      }
+    }
+    // Reproduce content admission at the retained observation time. Elapsed
+    // source age is checked separately and must not masquerade as content drift.
+    const snapshot = await buildCommonInfrastructureSnapshot(commit, {
+      ...options,
+      now: () => retainedSnapshot ? new Date(String(retainedSnapshot.generatedAt)) : now,
+    });
+    const output = `${JSON.stringify(snapshot, null, 2)}\n`;
+    if (Buffer.byteLength(output, 'utf8') > MAX_SNAPSHOT_BYTES) {
+      throw new TypeError('Generated Common-infrastructure snapshot exceeds its byte limit.');
+    }
+    if (retainedSnapshot) {
       const expectedSnapshot = record(snapshot, 'Generated Common-infrastructure snapshot');
       if (!isDeepStrictEqual(
         retainedComparisonValue(retainedSnapshot),
@@ -337,7 +350,14 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
       )) {
         throw new TypeError('Retained Common-infrastructure snapshot differs from the fully validated source set.');
       }
-      stdout.write(`Validated ${snapshot.entryCount} current Common-infrastructure entries and ${snapshot.excludedSources.length} excluded stale sources without replacing the retained snapshot.\n`);
+      stdout.write(`Validated retained content: ${snapshot.entryCount} Common-infrastructure entries and ${snapshot.excludedSources.length} excluded sources; no snapshot replaced.\n`);
+      const staleSources = snapshot.sources.filter(source => source.id !== 'public-dns-core'
+        && Math.floor((now.getTime() - Date.parse(`${source.sourceDate}T00:00:00.000Z`)) / 86_400_000) > FRESHNESS_DAYS);
+      if (staleSources.length) {
+        stderr.write(`Freshness review required: retained upstream sources exceed ${FRESHNESS_DAYS} days: ${staleSources.map(source => source.id).join(', ')}. Content is unchanged; refresh from reviewed upstream sources.\n`);
+        return 1;
+      }
+      stdout.write('Retained upstream source ages remain within the freshness window. Manually reviewed resolver provenance is unchanged.\n');
       return 0;
     }
     await writePrivateFile(outputPath, output, { force: true });

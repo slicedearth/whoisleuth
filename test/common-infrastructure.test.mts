@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
@@ -270,6 +270,32 @@ describe('Common-infrastructure catalogue', () => {
         stdout: { write: () => true },
         stderr: { write: () => true },
       }), 0);
+
+      let message = '';
+      let diagnostic = '';
+      assert.equal(await main(['--commit', 'c'.repeat(40), '--check-only'], {
+        repositoryRoot: directory,
+        ...buildOptions(),
+        now: () => new Date('2026-08-20T00:00:00.000Z'),
+        stdout: { write: value => { message += value; } },
+        stderr: { write: value => { diagnostic += value; } },
+      }), 1);
+      assert.match(message, /Validated retained content/u);
+      assert.match(diagnostic, /Freshness review required.*amazon-aws, cloudflare, google-gcp/u);
+      assert.doesNotMatch(diagnostic, /differs/u);
+      assert.deepEqual(JSON.parse(await readFile(outputPath, 'utf8')), snapshot, 'a freshness check cannot refresh or remove evidence');
+
+      let futureCalls = 0;
+      diagnostic = '';
+      assert.equal(await main(['--commit', 'c'.repeat(40), '--check-only'], {
+        repositoryRoot: directory,
+        now: () => new Date('2026-07-30T00:00:00.000Z'),
+        fetchImpl: async () => { futureCalls++; throw new Error('Future retained input must fail before fetching'); },
+        stdout: { write: () => true },
+        stderr: { write: value => { diagnostic += value; } },
+      }), 1);
+      assert.match(diagnostic, /generatedAt is in the future/u);
+      assert.equal(futureCalls, 0);
 
       const changed = structuredClone(snapshot);
       const firstSource = changed.sources[0];
