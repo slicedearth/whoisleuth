@@ -1317,6 +1317,24 @@ describe('serialized store byte budget', () => {
     const snapshotsBefore = cases.reduce((sum, c) => sum + c.evidenceHistory.length, 0);
     const result = model.enforceStoreBudget(cases);
     assert.ok(result.pruned > 0);
+    const current = structuredClone(result.cases);
+    const before = structuredClone(cases);
+    const preview = model.prepareCaseStoreSave(current, cases);
+    assert.deepEqual(cases, before, 'preview must not change the proposed or saved records');
+    assert.deepEqual(preview.cases, result.cases);
+    assert.equal(preview.removed.reduce((sum, item) => sum + item.snapshotIds.length, 0), result.pruned);
+    assert.equal(preview.removedBytes, Buffer.byteLength(model.serializeCaseStore(cases)) - Buffer.byteLength(model.serializeCaseStore(result.cases)));
+    for (const item of preview.removed) {
+      const proposed = requiredValue(cases.find(record => record.id === item.caseId));
+      const retained = requiredValue(result.cases.find(record => record.id === item.caseId));
+      assert.deepEqual(item.snapshotIds, proposed.evidenceHistory.filter(snapshot => !retained.evidenceHistory.some(kept => kept.id === snapshot.id)).map(snapshot => snapshot.id));
+      assert.equal(item.remainingSnapshots, retained.evidenceHistory.length);
+    }
+    assert.equal(model.caseStoreSavePreviewIsCurrent(current, preview), true);
+    const peer = structuredClone(current);
+    requiredValue(peer[0]).tags = ['peer-edit'];
+    assert.equal(peer[0]?.updatedAt, current[0]?.updatedAt);
+    assert.equal(model.caseStoreSavePreviewIsCurrent(peer, preview), false, 'same-clock changes must invalidate confirmation');
     assert.ok(new TextEncoder().encode(model.serializeCaseStore(result.cases)).length <= model.MAX_CASE_STORE_BYTES);
     // Analyst-authored notes are all still present.
     const keptNotes = result.cases.reduce((sum, c) => sum + c.notes.length, 0);

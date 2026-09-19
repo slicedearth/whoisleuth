@@ -419,6 +419,11 @@ assertions, decisions, contact routes, actions, observed-effect reviews,
 closures and investigation branches. Analyst-authored records remain separate
 from collected evidence.
 
+If changing a Brand Profile association would exceed Case storage capacity,
+review the affected snapshots before saving. Export the reviewed Cases, cancel,
+or explicitly remove the listed snapshots. A concurrent Case change requires
+a fresh review; notes and decisions are not removed to make space.
+
 Evidence choices show their source and observation time; selecting a pin shows
 its retained value and limitations. **Linked evidence** opens the actual facts
 behind a decision, assertion, response event or sighting. Supporting and

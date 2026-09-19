@@ -112,6 +112,35 @@ export function enforceStoreBudget(
   return { cases: working, pruned };
 }
 
+/** A read-only, ephemeral preview of the exact existing byte-budget policy. */
+export function prepareCaseStoreSave(current: CaseRecord[], proposed: CaseRecord[]) {
+  const result = enforceStoreBudget(proposed);
+  const retainedById = new Map(result.cases.map(record => [record.id, record]));
+  const removed = proposed.flatMap(record => {
+    const retained = retainedById.get(record.id);
+    const ids = new Set(retained?.evidenceHistory.map(snapshot => snapshot.id));
+    const snapshots = record.evidenceHistory.filter(snapshot => !ids.has(snapshot.id));
+    return snapshots.length ? [{
+      caseId: record.id, domain: record.domain,
+      snapshotIds: snapshots.map(snapshot => snapshot.id),
+      remainingSnapshots: retained?.evidenceHistory.length ?? 0,
+    }] : [];
+  });
+  return {
+    ...result,
+    current: normalizeCaseStore(current).cases,
+    removed,
+    removedBytes: Math.max(0, byteLength(serializeCaseStore(proposed)) - byteLength(serializeCaseStore(result.cases))),
+  };
+}
+
+export type CaseStoreSavePreview = ReturnType<typeof prepareCaseStoreSave>;
+
+/** Same-clock peer edits invalidate confirmation, including changes to other Cases. */
+export function caseStoreSavePreviewIsCurrent(current: CaseRecord[], preview: CaseStoreSavePreview): boolean {
+  return serializeCaseStore(current) === serializeCaseStore(preview.current);
+}
+
 export function buildCaseExport(
   cases: CaseRecord[],
   nowIso?: string,

@@ -24,6 +24,7 @@
     exportRiskCalibrationDataset, importCases, loadCases, MAX_CASE_IMPORT_BYTES,
     openCase, createCaseIncident, previewRiskCalibrationDataset, removeCaseBrandProfileAssociation,
     statusLabel, type CaseRecord, type RiskCalibrationExportPreview,
+    CaseAssociationCapacityError, exportCaseSnapshot, type CaseAssociationRetention,
   } from '$lib/cases';
   import LocalCollectionState from '$lib/components/LocalCollectionState.svelte';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
@@ -32,6 +33,7 @@
   import CaseFilters from '$lib/components/CaseFilters.svelte';
   import CaseSavedViews from '$lib/components/CaseSavedViews.svelte';
   import CaseList from '$lib/components/CaseList.svelte';
+  import CaseStorageReview from '$lib/components/CaseStorageReview.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   let { initialCases = null, initialMessage = '', onchange }: {
     initialCases?: CaseRecord[] | null;
@@ -54,6 +56,11 @@
   let expandedId = $state('');
   let listHref = '/cases';
   const selectedCase = $derived(cases.find((record) => record.id === expandedId));
+  let associationRetention = $state.raw<CaseAssociationRetention | null>(null);
+  let retentionSaving = $state(false);
+  $effect(() => {
+    if (associationRetention && selectedCase?.id !== associationRetention.id && !retentionSaving) associationRetention = null;
+  });
   let calibrationMode = $state(false);
   let noteDraft = $state('');
   let tagDraft = $state('');
@@ -244,19 +251,21 @@
       caseMessage = cause instanceof Error ? cause.message : 'Could not update the review reason.';
     }
   }
-  async function changeBrandProfileAssociation(record: CaseRecord, profileId: string, operation: 'add' | 'remove') {
+  async function changeBrandProfileAssociation(record: CaseRecord, profileId: string, operation: 'add' | 'remove', retention?: CaseAssociationRetention) {
+    if (retentionSaving && !retention) return false;
     let persisted: CaseRecord;
     let committedCases: CaseRecord[] = [];
     let pruned = 0;
     try {
       const result = operation === 'add'
-        ? await addCaseBrandProfileAssociation(record.id, profileId)
-        : await removeCaseBrandProfileAssociation(record.id, profileId);
+        ? await addCaseBrandProfileAssociation(record.id, profileId, retention)
+        : await removeCaseBrandProfileAssociation(record.id, profileId, retention);
       persisted = result.record;
       committedCases = result.cases;
       pruned = result.pruned;
     }
     catch (cause) {
+      if (cause instanceof CaseAssociationCapacityError) associationRetention = cause.retention;
       caseMessage = cause instanceof Error ? cause.message : `Could not ${operation} the Brand Profile association.`;
       return false;
     }
@@ -270,7 +279,37 @@
       if (expandedId === persisted.id) showCasePage(persisted);
       caseMessage = `Brand Profile association saved for ${persisted.domain}, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.${prunedNote(pruned)}`;
     }
+    associationRetention = null;
     return true;
+  }
+  async function restoreAssociationFocus(id: string) {
+    await tick();
+    if (selectedCase?.id !== id) return;
+    const select = document.getElementById(`case-brand-profile-${id}`);
+    if (select instanceof HTMLSelectElement && !select.disabled) select.focus();
+    else document.getElementById(`case-brand-associations-region-${id}`)?.focus();
+  }
+  async function cancelAssociationRetention() {
+    if (!associationRetention || retentionSaving) return;
+    const id = associationRetention.id;
+    associationRetention = null;
+    caseMessage = 'Association change cancelled. Saved Cases were not changed.';
+    await restoreAssociationFocus(id);
+  }
+  async function confirmAssociationRetention() {
+    const retention = associationRetention;
+    if (!retention || retentionSaving || selectedCase?.id !== retention.id) return;
+    retentionSaving = true;
+    try {
+      if (await changeBrandProfileAssociation(selectedCase, retention.profileId, retention.operation, retention)) {
+        await restoreAssociationFocus(retention.id);
+      }
+    } finally { retentionSaving = false; }
+  }
+  function exportRetentionSnapshot() {
+    if (!associationRetention) return;
+    try { exportCaseSnapshot(associationRetention.preview.current); caseMessage = 'Exported the reviewed Case snapshot, including evidence awaiting your decision.'; }
+    catch { caseMessage = 'The Case export could not be downloaded. Saved Cases were not changed.'; }
   }
   function addBrandProfileAssociation(record: CaseRecord, profileId: string) {
     return changeBrandProfileAssociation(record, profileId, 'add');
@@ -578,6 +617,10 @@
 <section class="case-workspace" data-case-workspace aria-label="Cases" aria-busy={casesRefreshing}>
   {#if !selectedCase}<PageHeading eyebrow="Respond" title="Cases" description="Review evidence, record decisions and prepare responses." />{/if}
   {#if caseMessage}<p class="message" role="status" aria-label="Case workspace action status" aria-live="polite" aria-atomic="true">{caseMessage}</p>{/if}
+  {#if associationRetention}
+    <CaseStorageReview retention={associationRetention} busy={retentionSaving} confirm={confirmAssociationRetention}
+      cancel={cancelAssociationRetention} exportSnapshot={exportRetentionSnapshot} />
+  {/if}
   {#if casesSourceState === 'ready'}
     {#if casesRefreshing}
       <p class="refresh-status" role="status" aria-live="polite">Refreshing Cases while the last readable snapshot remains available.</p>

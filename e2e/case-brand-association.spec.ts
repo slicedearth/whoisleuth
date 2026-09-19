@@ -1,5 +1,6 @@
 import { openCaseMetadata, openCaseSection, openConsoleView } from './console-navigation';
 import type { Page, Request } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import {
   currentBrandProfileBrowserStore,
@@ -12,6 +13,7 @@ import {
   migrateLegacyBrowserData,
   readBrowserLocalCollection,
   requiredValue,
+  useTheme,
 } from './helpers';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION, MAX_CASE_STORE_BYTES, normalizeCaseStore, serializeCaseStore, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
@@ -316,7 +318,7 @@ test('keeps disjoint association intents across concurrent browser tabs', async 
   await secondPage.close();
 });
 
-test('reconciles a committed association when its immediate Case reread fails', async ({ page }) => {
+test('previews association storage pressure, exports or cancels, and reconciles an explicitly pruned write', async ({ page }, testInfo) => {
   const boundedCases=nearBudgetCaseSnapshot();
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, storageEntries(boundedCases), { clearStorage:true,destination: '/monitor?view=cases&case=post-write-case' });
@@ -324,13 +326,43 @@ test('reconciles a committed association when its immediate Case reread fails', 
   await openCaseMetadata(page);
   const associations = page.getByRole('region', { name: 'Brand Profile associations' });
   await expect(associations).toBeVisible();
-  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: boundedCases.length });
   await associations.getByLabel('Add Brand Profile').selectOption(PROFILE_ID);
   await associations.getByRole('button', { name: 'Add association' }).click();
+
+  const review = page.getByRole('region', { name: 'Review Case storage changes' });
+  await expect(review).toBeVisible();
+  await expect(review.getByRole('heading')).toBeFocused();
+  await expect(review).toContainText('pruned-other.invalid');
+  await expect(review).toContainText('no evidence snapshots would remain');
+  expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: boundedCases.length })).toEqual(before);
+  for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720], [2560, 1440], [3840, 2160]] as const) {
+    await page.setViewportSize({ width, height });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expect(review.getByRole('button', { name: 'Remove listed snapshots and save' })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      await page.screenshot({ path: testInfo.outputPath(`case-storage-${width}-${theme}.png`), fullPage: true });
+    }
+  }
+  const downloadEvent = page.waitForEvent('download');
+  await review.getByRole('button', { name: 'Export current Cases' }).click();
+  const download = await downloadEvent;
+  const exported = JSON.parse(await readFile(requiredValue(await download.path(), 'Case export missing'), 'utf8')) as { cases: CaseRecord[] };
+  expect(exported.cases).toEqual(boundedCases);
+  await review.getByRole('button', { name: 'Cancel change' }).click();
+  await expect(review).toHaveCount(0);
+  await expect(associations.getByLabel('Add Brand Profile')).toBeFocused();
+  expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: boundedCases.length })).toEqual(before);
+  await associations.getByRole('button', { name: 'Add association' }).click();
+  await expect(review).toBeVisible();
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+  await review.getByRole('button', { name: 'Remove listed snapshots and save' }).click();
 
   await expect(page.getByRole('status').filter({ hasText: 'Brand Profile association saved' })).toContainText('complete committed Case snapshot');
   await expect(associations).toContainText('Fixture profile');
   await expect(associations).toBeFocused();
+  await expect(review).toHaveCount(0);
   const stored = requiredValue(
     (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1, minimumRevision: 2 })).records.find((record)=>record.value.id==='post-write-case'),
     'The committed association fixture is missing.',

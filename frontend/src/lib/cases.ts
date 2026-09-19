@@ -8,6 +8,8 @@ import {
   buildCaseExport,
   addCaseBrandProfileId,
   enforceStoreBudget,
+  prepareCaseStoreSave,
+  caseStoreSavePreviewIsCurrent,
   mergeCases,
   casesForDomain,
   createCaseIncident as createCaseIncidentModel,
@@ -19,6 +21,7 @@ import {
   updateCase,
 } from './analysis/case-model.ts';
 import type {
+  CaseStoreSavePreview,
   CaseInput,
   CaseIncidentInput,
   CaseOpenSelection,
@@ -27,6 +30,7 @@ import type {
   CaseRecord,
   ReviewedCaseDisposition,
 } from './analysis/case-model.ts';
+
 import { readBrowserLocalData, updateBrowserLocalData, browserLocalDataProvider, browserLocalDataCollection } from './browser-local-data-service.ts';
 import { removeCaseDraft } from '../../../packages/cases/case-drafts.mts';
 import type { CaseDraftReceipt, CaseDraftStore } from '../../../packages/contracts/case-drafts.mts';
@@ -47,6 +51,19 @@ import {
   buildRiskCalibrationDatasetExport,
   serializeRiskCalibrationDatasetExport,
 } from './analysis/risk-calibration-export.ts';
+
+export type CaseAssociationRetention = Readonly<{
+  id: string; profileId: string; operation: 'add' | 'remove'; preview: CaseStoreSavePreview;
+}>;
+
+export class CaseAssociationCapacityError extends Error {
+  readonly retention: CaseAssociationRetention;
+  constructor(retention: CaseAssociationRetention) {
+    super('Review the evidence snapshots that would be removed before changing this association. Nothing was changed.');
+    this.name = 'CaseAssociationCapacityError';
+    this.retention = retention;
+  }
+}
 
 export type RiskCalibrationExportPreview = Readonly<{
   selected: number;
@@ -334,6 +351,7 @@ async function updateCaseBrandProfileAssociation(
   id: string,
   profileId: string,
   operation: 'add' | 'remove',
+  retention?: CaseAssociationRetention,
 ): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
     const record = current.find((item) => item.id === id);
@@ -346,7 +364,13 @@ async function updateCaseBrandProfileAssociation(
     const result = unchanged
       ? { cases: current, record }
       : updateCase(current, id, { brandProfileIds });
-    const { cases, pruned } = boundedCases(result.cases);
+    const preview = prepareCaseStoreSave(current, result.cases);
+    if (preview.pruned && (!retention || retention.id !== id || retention.profileId !== profileId
+      || retention.operation !== operation || !caseStoreSavePreviewIsCurrent(current, retention.preview)
+      || JSON.stringify(preview.removed) !== JSON.stringify(retention.preview.removed))) {
+      throw new CaseAssociationCapacityError({ id, profileId, operation, preview });
+    }
+    const { cases, pruned } = preview;
     const persisted = cases.find((item) => item.id === id) ?? result.record;
     return { document: cases, result: { record: persisted, cases, pruned } };
   });
@@ -356,16 +380,18 @@ async function updateCaseBrandProfileAssociation(
 export function addCaseBrandProfileAssociation(
   id: string,
   profileId: string,
+  retention?: CaseAssociationRetention,
 ): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
-  return updateCaseBrandProfileAssociation(id, profileId, 'add');
+  return updateCaseBrandProfileAssociation(id, profileId, 'add', retention);
 }
 
 /** Retry-safe browser-local removal intent that preserves concurrent unrelated adds. */
 export function removeCaseBrandProfileAssociation(
   id: string,
   profileId: string,
+  retention?: CaseAssociationRetention,
 ): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
-  return updateCaseBrandProfileAssociation(id, profileId, 'remove');
+  return updateCaseBrandProfileAssociation(id, profileId, 'remove', retention);
 }
 
 export async function addCaseNote(id: string, body: string): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
@@ -496,7 +522,12 @@ export async function importExternalIntelligence(
 }
 
 export async function exportCases(): Promise<void> {
-  const payload = buildCaseExport(await loadCases());
+  exportCaseSnapshot(await loadCases());
+}
+
+/** Export the exact reviewed snapshot, including evidence pending possible removal. */
+export function exportCaseSnapshot(cases: CaseRecord[]): void {
+  const payload = buildCaseExport(cases);
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   downloadLocalFile(blob, `whoisleuth-cases-${new Date().toISOString().slice(0, 10)}.json`);
 }

@@ -21,6 +21,7 @@
   const profileById = $derived(new Map(profiles.slice(0, 100).map((profile) => [profile.id, profile])));
   const available = $derived(profiles.slice(0, 100).filter((profile) => !record.brandProfileIds.includes(profile.id)));
   const atLimit = $derived(record.brandProfileIds.length >= MAX_CASE_BRAND_PROFILE_IDS);
+  $effect(() => { if (selected && record.brandProfileIds.includes(selected)) selected = ''; });
 
   async function add() {
     if (!selected || atLimit || profilesUnavailable) return;
