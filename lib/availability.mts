@@ -570,7 +570,7 @@ async function resolveDomainRegistration(domain: string, options: AvailabilityOp
         ? await abortable(() => options.whoisChainPromise!, options.signal)
         : hasPreloadedWhois
           ? options.whoisChain
-          : await buildWhoisChain(domain)) ?? null;
+          : await buildWhoisChain(domain, options.signal ? { signal: options.signal } : {})) ?? null;
       options.signal?.throwIfAborted();
       if (!Array.isArray(whoisChain)) throw new Error('WHOIS chain unavailable');
       const parsed = parseWhoisChain(whoisChain);

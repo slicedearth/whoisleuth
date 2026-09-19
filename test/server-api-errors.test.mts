@@ -3,6 +3,7 @@ import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import { recordValue, requiredValue, stringValue } from './value-assertions.mts';
+import { deferred } from './deferred.mts';
 import type { NetworkRouteServices } from '../server.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
@@ -10,6 +11,7 @@ process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-si
 
 const { app, apiErrorHandler, registerNetworkApiRoutes } = await import('../server.mts');
 const { buildSessionCookie, createSessionToken } = await import('../lib/auth.mts');
+const { defaultOperationBudget, operationClassFor } = await import('../lib/operation-budget.mts');
 
 let server: Server | null = null;
 let origin = '';
@@ -232,6 +234,65 @@ describe('fixture-injected Express network routes', () => {
       headers: { Cookie: sessionCookie(), Origin: fixtureOrigin, 'Sec-Fetch-Site': 'same-origin' },
     });
   }
+
+  test('disconnected individual routes cancel collectors, retain their lease until settlement and send no late response', async () => {
+    const routes = [
+      { route: 'rdap?q=example.test', feature: 'rdap', service: 'fetchRdapRecord', optionsIndex: 2 },
+      { route: 'rdap-nameserver-search?nameserver=ns.example.test&scope=test', feature: 'rdap_nameserver_search', service: 'searchRdapNameserver', optionsIndex: 2 },
+      { route: 'whois?q=example.test', feature: 'whois', service: 'buildWhoisChain', optionsIndex: 1 },
+      { route: 'availability?q=example.test', feature: 'availability', service: 'checkDomainAvailability', optionsIndex: 1 },
+      { route: 'ct-search?q=example', feature: 'certificate_transparency', service: 'searchCertificateTransparency', optionsIndex: 1 },
+      { route: 'domain-posture?q=example.test', feature: 'domain_posture', service: 'checkDomainPosture', optionsIndex: 1 },
+    ];
+    for (const { route, feature, service, optionsIndex } of routes) {
+      const started = deferred<AbortSignal>(), cancelled = deferred<void>();
+      const complete = deferred<never>();
+      const fixture = express();
+      let lateWrites = 0;
+      fixture.use((_request, response, next) => {
+        const json = response.json.bind(response);
+        response.json = body => { if (response.destroyed) lateWrites += 1; return json(body); };
+        next();
+      });
+      registerNetworkApiRoutes(fixture, { ...fixtureServices,
+        [service]: async (...args: unknown[]) => {
+          const signal = (args[optionsIndex] as { signal: AbortSignal }).signal;
+          assert.ok(signal instanceof AbortSignal, service);
+          signal.addEventListener('abort', () => cancelled.resolve(), { once: true });
+          started.resolve(signal);
+          return complete.promise;
+        },
+      });
+      const listener = await new Promise<Server>(resolve => {
+        const listener = fixture.listen(0, '127.0.0.1', () => resolve(listener));
+      });
+      const address = listener.address(); assert.ok(address && typeof address !== 'string');
+      const localOrigin = `http://127.0.0.1:${address.port}`;
+      const active = async () => (await defaultOperationBudget.status()).find(item => item.id === operationClassFor(feature))!.active;
+      const before = await active(); assert.equal(typeof before, 'number');
+      const request = httpRequest(`${localOrigin}/api/${route}`, { headers: {
+        Cookie: sessionCookie(), Origin: localOrigin, 'Sec-Fetch-Site': 'same-origin',
+      } }, () => assert.fail('disconnected request must not receive a result'));
+      request.on('error', () => {});
+      try {
+        request.end();
+        const signal = await started.promise;
+        assert.equal(await active(), before! + 1, service);
+        request.destroy();
+        await cancelled.promise;
+        assert.equal(signal.aborted, true);
+        assert.equal(await active(), before! + 1, `${service} must retain its capacity while its collector drains`);
+        complete.reject(new Error('fixture collector drained'));
+        // Yield to the completed promise chain, not an elapsed-time guess.
+        await new Promise<void>(resolve => setImmediate(resolve));
+        assert.equal(await active(), before, service);
+        assert.equal(lateWrites, 0, service);
+      } finally {
+        request.destroy(); complete.reject(new Error('fixture cleanup'));
+        await new Promise<void>((resolve, reject) => listener.close(error => error ? reject(error) : resolve()));
+      }
+    }
+  });
 
   test('covers every successful route projection without upstream traffic', async () => {
     serviceCalls.length = 0;

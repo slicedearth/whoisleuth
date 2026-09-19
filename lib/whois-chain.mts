@@ -96,8 +96,10 @@ export async function buildWhoisChainUncached(
     whoisQuery?: WhoisQuery;
     now?: () => number;
     chainDeadlineMs?: number;
+    signal?: AbortSignal;
   } = {},
 ): Promise<WhoisChain> {
+  options.signal?.throwIfAborted();
   const admission = registryServiceAdmissionFor(query, 'whois');
   if (admission && !admission.allowed) {
     return [{
@@ -118,6 +120,7 @@ export async function buildWhoisChainUncached(
   const startedAt = now();
 
   for (let hop = 0; hop < MAX_WHOIS_QUERY_HOPS; hop += 1) {
+    options.signal?.throwIfAborted();
     if (visited.has(currentServer.toLowerCase())) {
       chain.push(incompleteReferralHop(currentServer, 'referral_loop'));
       break;
@@ -143,11 +146,14 @@ export async function buildWhoisChainUncached(
       responseText = await queryWhois(currentServer, transport.query, {
         timeoutMs: Math.min(10_000, remainingMs),
         totalDeadlineMs: Math.min(WHOIS_HOP_DEADLINE_MS, remainingMs),
+        ...(options.signal ? { signal: options.signal } : {}),
         onAddressSelected: (selected) => {
           address = selected;
         },
       });
+      options.signal?.throwIfAborted();
     } catch (cause) {
+      options.signal?.throwIfAborted();
       chain.push({
         server: currentServer,
         queriedAt,
@@ -182,6 +188,7 @@ export async function buildWhoisChainUncached(
   return chain;
 }
 
-export async function buildWhoisChain(query: string): Promise<WhoisChain> {
+export async function buildWhoisChain(query: string, options: { signal?: AbortSignal } = {}): Promise<WhoisChain> {
+  if (options.signal) return buildWhoisChainUncached(query, options);
   return cached(`whois:${query.toLowerCase()}`, () => buildWhoisChainUncached(query));
 }

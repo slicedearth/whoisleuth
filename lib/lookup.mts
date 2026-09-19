@@ -111,7 +111,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     : Promise.resolve(null);
   const whoisPromise = skipWhois
     ? Promise.resolve(null)
-    : measure('whois', () => fetchWhois(classified.value));
+    : measure('whois', () => fetchWhois(classified.value, options.signal ? { signal: options.signal } : {}));
   // Registrar RDAP is a separately attributed deep-lookup enrichment. It may
   // overlap the WHOIS chain, but it never joins the promises used to decide
   // availability and can add up to its own bounded timeout to a deep lookup.

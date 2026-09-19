@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { deferred } from './deferred.mts';
 
 import {
   checkDomainPosture,
@@ -96,6 +97,59 @@ function checkById(
 }
 
 describe('domain-posture collection orchestration', () => {
+  test('cancellation starts no collection or enrichment and drains already-started sources', async () => {
+    const untouched = completeFixture();
+    await assert.rejects(checkDomainPosture('example.test', { signal: AbortSignal.abort(new Error('fixture cancellation')) }, untouched.dependencies), /fixture cancellation/u);
+    assert.deepEqual(untouched.calls, []);
+
+    const controller = new AbortController();
+    const mx = deferred<unknown[]>(), registry = deferred<null>();
+    const started = deferred<void>();
+    const fixture = fixtureDependencies({ mx: mx.promise });
+    let settled = false;
+    const result = checkDomainPosture('example.test', { signal: controller.signal }, {
+      ...fixture.dependencies,
+      fetchRdapRecord: async (_type, _domain, options) => {
+        assert.equal(options?.signal, controller.signal); started.resolve(); return registry.promise;
+      },
+      fetchMtaStsPolicy: async () => assert.fail('cancelled initial collection must not start enrichment'),
+    });
+    void result.then(() => { settled = true; }, () => { settled = true; });
+    const rejected = assert.rejects(result, /fixture cancellation/u);
+    await started.promise;
+    controller.abort(new Error('fixture cancellation'));
+    registry.reject(controller.signal.reason);
+    await Promise.resolve();
+    assert.equal(settled, false);
+    mx.resolve([]);
+    await rejected;
+    assert.equal(fixture.calls.length, 8);
+  });
+
+  test('cancelled policy enrichment waits for the other started source before releasing', async () => {
+    const controller = new AbortController(), started = deferred<void>();
+    const policy = deferred<{ text: string; contentType: string | null; error: string | null }>();
+    const spf = deferred<unknown[]>();
+    const fixture = completeFixture();
+    let settled = false;
+    const result = checkDomainPosture('example.test', { signal: controller.signal }, {
+      ...fixture.dependencies,
+      resolveTxt: name => name === '_spf.example.net' ? spf.promise : fixture.dependencies.resolveTxt(name),
+      fetchMtaStsPolicy: async (_domain, signal) => {
+        assert.equal(signal, controller.signal); started.resolve(); return policy.promise;
+      },
+    });
+    void result.then(() => { settled = true; }, () => { settled = true; });
+    const rejected = assert.rejects(result, /fixture cancellation/u);
+    await started.promise;
+    controller.abort(new Error('fixture cancellation'));
+    policy.reject(controller.signal.reason);
+    await Promise.resolve();
+    assert.equal(settled, false);
+    spf.resolve(['v=spf1 -all']);
+    await rejected;
+  });
+
   test('uses DNS completion and retained registry fetch times without adding requests', async () => {
     const fixture = completeFixture(['ns1.example.net.', 'NS1.EXAMPLE.NET.', 'ns2.example.net.']);
     const original = fixture.dependencies.fetchRdapRecord;

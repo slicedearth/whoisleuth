@@ -188,6 +188,12 @@ Network-heavy authenticated operations also acquire an immediate lease:
 | `certificate_search` | Certificate Transparency | 2 | 4 |
 | `posture_audit` | Official-domain settings review | 3 | 8 |
 
+Closing an Express collection request cancels its active transports and stops
+further retries, referrals and enrichment. Its lease remains held until the
+started collector settles; a system DNS lookup that cannot be interrupted
+still has to finish or reach its existing deadline. Posture audits use
+separate resolver instances, so cancelling one does not cancel another.
+
 Exhausted concurrency returns HTTP 429 with
 `NETWORK_CONCURRENCY_LIMITED`. Leases are released after success or failure and
 use irreversible session fingerprints rather than bearer tokens.

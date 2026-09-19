@@ -93,6 +93,7 @@ type SearchOptions = {
   fetchUpstream?: RdapFetch;
   findBases?: typeof findRdapBases;
   now?: () => number;
+  signal?: AbortSignal;
 };
 
 export class RdapNameserverSearchInputError extends Error {
@@ -319,21 +320,24 @@ export async function searchRdapNameserverFromBases(
   bases: unknown,
   options: SearchOptions = {},
 ): Promise<NameserverSearchResult> {
+  options.signal?.throwIfAborted();
   const fetchUpstream = options.fetchUpstream ?? fetchRdapDetailedWithTimeout;
   const now = options.now ?? Date.now;
   const candidates = uniqueRdapBases(bases).slice(0, MAX_RDAP_SEARCH_ENDPOINTS);
   const startedAt = now();
   const attempts: RdapAttempt[] = [];
   for (const base of candidates) {
+    options.signal?.throwIfAborted();
     const remaining = RDAP_SEARCH_TOTAL_DEADLINE_MS - (now() - startedAt);
     if (remaining <= 0) break;
     const endpoint = `${base.replace(/\/$/u, '')}/domains?nsLdhName=${encodeURIComponent(nameserver)}`;
     try {
       const upstream = await fetchUpstream(
         endpoint,
-        { headers: { Accept: 'application/rdap+json' } },
+        { headers: { Accept: 'application/rdap+json' }, ...(options.signal ? { signal: options.signal } : {}) },
         Math.min(RDAP_SEARCH_TIMEOUT_MS, remaining),
       );
+      options.signal?.throwIfAborted();
       const observedAt = new Date(now()).toISOString();
       const selectedEndpoint = admitNameserverSearchEndpoint(upstream.finalUrl ?? endpoint, nameserver);
       if (!selectedEndpoint) {
@@ -412,6 +416,7 @@ export async function searchRdapNameserverFromBases(
         attempts,
       }, payload);
     } catch (cause) {
+      options.signal?.throwIfAborted();
       const message = cause instanceof Error ? cause.message : 'request failed';
       attempts.push(rdapAttempt(endpoint, cause instanceof Error && cause.name === 'AbortError' ? 'timeout' : 'network_error', {
         detail: message.slice(0, 300),
@@ -435,6 +440,7 @@ export async function searchRdapNameserver(
   registryScopeInput: unknown,
   options: SearchOptions = {},
 ): Promise<NameserverSearchResult> {
+  options.signal?.throwIfAborted();
   const nameserver = normalizeRdapNameserver(nameserverInput);
   const registryScope = normalizeRdapRegistryScope(registryScopeInput);
   const now = options.now ?? Date.now;
@@ -447,8 +453,10 @@ export async function searchRdapNameserver(
       attempts: [],
     });
   }
-  return cached(`rdap-nameserver-search:${registryScope}:${nameserver}`, async () => {
-    const bases = await (options.findBases ?? findRdapBases)('domain', `scope.${registryScope}`);
+  const collect = async () => {
+    const bases = await (options.findBases ?? findRdapBases)('domain', `scope.${registryScope}`,
+      options.signal ? { signal: options.signal } : {});
+    options.signal?.throwIfAborted();
     if (bases.length === 0) {
       return result('unavailable', nameserver, registryScope, new Date(now()).toISOString(), {
         endpoint: null,
@@ -458,7 +466,10 @@ export async function searchRdapNameserver(
       });
     }
     return searchRdapNameserverFromBases(nameserver, registryScope, bases, options);
-  });
+  };
+  // A caller-owned cancellation must not abort a coalesced peer or cache an
+  // incomplete result. Ordinary unscoped requests retain the shared cache.
+  return options.signal ? collect() : cached(`rdap-nameserver-search:${registryScope}:${nameserver}`, collect);
 }
 
 export type {

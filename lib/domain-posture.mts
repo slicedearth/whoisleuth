@@ -64,11 +64,18 @@ type DomainPostureCollectorDependencies = Readonly<{
   resolveNs: (name: string) => Promise<unknown[]>;
   resolveCaa: (name: string) => Promise<unknown[]>;
   fetchRdapRecord: typeof fetchRdapRecord;
-  fetchMtaStsPolicy: (domain: string) => Promise<MtaStsPolicyFetch>;
+  fetchMtaStsPolicy: (domain: string, signal?: AbortSignal) => Promise<MtaStsPolicyFetch>;
   now: () => Date;
   setTimer: (callback: () => void, milliseconds: number) => DomainPostureTimerHandle;
   clearTimer: (handle: DomainPostureTimerHandle) => void;
 }>;
+
+type DomainPostureOptions = {
+  dkimSelectors?: unknown[];
+  retiredDkimSelectors?: unknown[];
+  mailProtectionProfile?: unknown;
+  signal?: AbortSignal;
+};
 
 type DkimQuery = DnsQuery & { selector: string; retired?: boolean };
 type MailProtectionProfile = 'defensive_no_mail' | 'parked' | 'standard';
@@ -795,7 +802,9 @@ function buildPostureReport(domain: string, input: PostureInput) {
 async function fetchMtaStsPolicy(
   domain: string,
   fetcher: typeof safeFetch = safeFetch,
+  signal?: AbortSignal,
 ): Promise<MtaStsPolicyFetch> {
+  signal?.throwIfAborted();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), POLICY_TIMEOUT_MS);
   try {
@@ -804,7 +813,7 @@ async function fetchMtaStsPolicy(
     // following HTTP redirects for policy discovery. A zero-hop safe fetch
     // also keeps the returned body bound to the required policy host/path.
     const res = await fetcher(url, {
-      signal: controller.signal,
+      signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
       headers: whoisleuthRequestHeaders({ Accept: 'text/plain' }),
     }, 0);
     if (res.status !== 200) {
@@ -815,9 +824,11 @@ async function fetchMtaStsPolicy(
       return { text: '', contentType: res.headers.get('content-type'), error: `Policy endpoint returned HTTP ${res.status}.` };
     }
     const body = await readTextCapped(res, MAX_POLICY_BYTES);
+    signal?.throwIfAborted();
     if (body.truncated) return { text: '', contentType: res.headers.get('content-type'), error: `Policy exceeds ${MAX_POLICY_BYTES} bytes.` };
     return { text: body.text, contentType: res.headers.get('content-type'), error: null };
   } catch (err) {
+    signal?.throwIfAborted();
     return {
       text: '',
       contentType: null,
@@ -830,29 +841,17 @@ async function fetchMtaStsPolicy(
   }
 }
 
-async function checkDomainPosture(
+async function collectDomainPosture(
   domain: string,
   {
     dkimSelectors = [],
     retiredDkimSelectors = [],
     mailProtectionProfile = 'standard',
-  }: {
-    dkimSelectors?: unknown[];
-    retiredDkimSelectors?: unknown[];
-    mailProtectionProfile?: unknown;
-  } = {},
-  dependencies: DomainPostureCollectorDependencies = {
-    resolveTxt: (name) => dns.resolveTxt(name),
-    resolveMx: (name) => dns.resolveMx(name),
-    resolveNs: (name) => dns.resolveNs(name),
-    resolveCaa: (name) => dns.resolveCaa(name),
-    fetchRdapRecord,
-    fetchMtaStsPolicy: (name) => fetchMtaStsPolicy(name),
-    now: () => new Date(),
-    setTimer: (callback, milliseconds) => setTimeout(callback, milliseconds),
-    clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
-  },
+    signal,
+  }: DomainPostureOptions,
+  dependencies: DomainPostureCollectorDependencies,
 ) {
+  signal?.throwIfAborted();
   const normalizedDomain = normalizeAuditDomain(domain);
   if (!normalizedDomain) throw new Error('Invalid domain name for posture audit.');
   domain = normalizedDomain;
@@ -882,10 +881,11 @@ async function checkDomainPosture(
         ...await resolveDns(`TXT ${selector}._domainkey.${domain}`, () => dependencies.resolveTxt(`${selector}._domainkey.${domain}`), DNS_TIMEOUT_MS, dependencies),
       })),
     ]),
-    dependencies.fetchRdapRecord('domain', domain).catch((err: unknown) => ({
+    dependencies.fetchRdapRecord('domain', domain, signal ? { signal } : {}).catch((err: unknown) => ({
       error: nonEmptyErrorMessage(err, String(err)),
     })),
   ]);
+  signal?.throwIfAborted();
 
   const parsedMtaDns = mtaStsDns.error ? null : parseMtaStsDnsRecords(mtaStsDns.records);
   const enrichmentStartedAt = dependencies.now();
@@ -894,6 +894,7 @@ async function checkDomainPosture(
   }
   const enrichmentDeadline = enrichmentStartedAt.getTime() + POSTURE_ENRICHMENT_DEADLINE_MS;
   const resolveEnrichmentTxt = (name: string) => {
+    signal?.throwIfAborted();
     const observedAt = dependencies.now();
     if (!(observedAt instanceof Date) || !Number.isFinite(observedAt.getTime())) {
       return Promise.resolve({ records: [], error: 'The bounded posture-enrichment clock was unavailable.' });
@@ -902,11 +903,16 @@ async function checkDomainPosture(
     if (remaining <= 1) return Promise.resolve({ records: [], error: 'The bounded posture-enrichment deadline was reached.' });
     return resolveDns(`TXT ${name}`, () => dependencies.resolveTxt(name), Math.min(DNS_TIMEOUT_MS, remaining), dependencies);
   };
-  const [mtaStsPolicy, spfExpansion, dmarcAuthorizations] = await Promise.all([
-    parsedMtaDns?.valid ? dependencies.fetchMtaStsPolicy(domain) : Promise.resolve(null),
+  const enrichment = [
+    parsedMtaDns?.valid ? dependencies.fetchMtaStsPolicy(domain, signal) : Promise.resolve(null),
     expandSpfPolicy(domain, spf, resolveEnrichmentTxt),
     validateDmarcExternalReporting(domain, dmarc, resolveEnrichmentTxt),
-  ]);
+  ] as const;
+  // A rejected policy request must not release the operation's capacity while
+  // other started enrichment collectors are still settling.
+  const [mtaStsPolicy, spfExpansion, dmarcAuthorizations] = await Promise.all(enrichment)
+    .finally(() => Promise.allSettled(enrichment));
+  signal?.throwIfAborted();
   const dnssec = !rdap
     ? { value: null, error: 'RDAP did not return a domain record.' }
     : 'error' in rdap
@@ -971,6 +977,35 @@ async function checkDomainPosture(
     dmarcAuthorizations,
     externalDependencies,
   };
+}
+
+async function checkDomainPosture(
+  domain: string,
+  options: DomainPostureOptions = {},
+  dependencies?: DomainPostureCollectorDependencies,
+) {
+  options.signal?.throwIfAborted();
+  // Cancelling one audit must never cancel another audit's resolver.
+  const resolver = dependencies ? null : new dns.Resolver();
+  const cancel = () => resolver?.cancel();
+  options.signal?.addEventListener('abort', cancel, { once: true });
+  try {
+    options.signal?.throwIfAborted();
+    return await collectDomainPosture(domain, options, dependencies ?? {
+      resolveTxt: name => resolver!.resolveTxt(name),
+      resolveMx: name => resolver!.resolveMx(name),
+      resolveNs: name => resolver!.resolveNs(name),
+      resolveCaa: name => resolver!.resolveCaa(name),
+      fetchRdapRecord,
+      fetchMtaStsPolicy: (name, signal) => fetchMtaStsPolicy(name, safeFetch, signal),
+      now: () => new Date(),
+      setTimer: (callback, milliseconds) => setTimeout(callback, milliseconds),
+      clearTimer: handle => clearTimeout(handle as ReturnType<typeof setTimeout>),
+    });
+  } finally {
+    options.signal?.removeEventListener('abort', cancel);
+    cancel();
+  }
 }
 
 export {
