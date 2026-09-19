@@ -212,7 +212,7 @@ for (const encryptedSource of [false, true]) {
   });
 }
 
-test('workspace lifecycle keeps the active key usable when an unsaved-draft lock is cancelled', async ({ page }) => {
+for (const relock of ['manual', 'idle'] as const) test(`workspace lifecycle keeps the active key usable after cancellation and completes a later ${relock} lock`, async ({ page }) => {
   await page.goto('/dashboard'); const row = await createEncrypted(page, 'Cancellable lock'); await unlock(page, row.name);
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
   await createCaseThroughForm(page, 'cancel-lock.example'); const form = await recoveryPinForm(page), url = page.url();
@@ -226,7 +226,11 @@ test('workspace lifecycle keeps the active key usable when an unsaved-draft lock
   await expect(form.getByLabel('Label', { exact: true })).toHaveValue('Keep this draft after cancelling lock');
   await form.getByRole('button', { name: 'Retry recovery save', exact: true }).click();
   await expect(form.getByRole('status')).toContainText('Draft saved in this workspace');
-  await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
+  if (relock === 'idle') {
+    await page.clock.install();
+    await page.getByRole('combobox', { name: 'Auto-lock', exact: true }).selectOption('5');
+    await page.clock.fastForward(300_000);
+  } else await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
   await expect(page.getByRole('heading', { name: `Unlock ${row.name}`, exact: true })).toBeVisible();
   await unlock(page, row.name); const restored = await recoveryPinForm(page);
   await restored.getByText('1 saved draft for this form', { exact: true }).click();

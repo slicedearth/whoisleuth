@@ -7,9 +7,12 @@
   let mounted = false;
   function lock() {
     message = 'Lock requested. Cancelling the browser’s leave-page prompt keeps this tab unlocked.';
-    // pagehide owns key disposal. Clearing keys before a cancellable reload
+    // pagehide owns key disposal. Clearing keys before a cancellable navigation
     // would leave a cancelled page visible but unable to save its drafts.
-    window.location.reload();
+    // Use a fresh document navigation, not the reload state left behind by a
+    // cancelled beforeunload. Omitting the fragment prevents same-document
+    // navigation; the route and selected-record query remain intact.
+    window.location.assign(`${window.location.pathname}${window.location.search}`);
   }
   function arm() {
     timer?.dispose();
