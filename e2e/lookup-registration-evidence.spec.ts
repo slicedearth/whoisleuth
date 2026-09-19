@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expandLookupFamilies, expectNoHorizontalOverflow, lookupDomainIdentity, migrateLegacyBrowserData, openLookupOptionalSources, readBrowserLocalCollection } from './helpers';
+import { expandLookupFamilies, expectNoHorizontalOverflow, lookupDomainIdentity, migrateLegacyBrowserData, openLookupOptionalSources, readBrowserLocalCollection, useTheme } from './helpers';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/evidence-export';
@@ -864,7 +864,7 @@ test('registrar RDAP unsupported and error states remain neutral source rows', a
   }
 });
 
-test('registry access constraints remain neutral, explicit, and mobile-safe', async ({ page }) => {
+test('registry access constraints remain neutral, explicit, and mobile-safe', async ({ page }, testInfo) => {
   test.slow();
   await page.route('**/api/lookup?*', async (route) => {
     const query = new URL(route.request().url()).searchParams.get('q') || '';
@@ -882,13 +882,14 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
     const isEs = suffix === 'es';
     const isCh = suffix === 'ch';
     const isDev = suffix === 'dev';
+    const newlyPublished = query === 'new-service.gt';
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         query: `example.${suffix}`, type: 'domain', registrableDomain: `example.${suffix}`,
-        availability: { state: 'unknown', confidence: 'low', domain: `example.${suffix}`, detail: 'Registry sources were inconclusive.' },
-        rdap: isDev
+        availability: { state: newlyPublished ? 'registered' : 'unknown', confidence: newlyPublished ? 'high' : 'low', domain: `example.${suffix}`, detail: newlyPublished ? 'The discovered registry returned this domain.' : 'Registry sources were inconclusive.' },
+        rdap: isDev || newlyPublished
           ? { parsed: { domain: `example.${suffix}` } }
           : { error: 'No RDAP registry found for this query via IANA bootstrap' },
         whois: { parsed: {}, chain: [] },
@@ -917,7 +918,7 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
                   ? 'IANA publishes an RDAP bootstrap service but no domain WHOIS referral for this suffix. Missing WHOIS data is contextual only and is not evidence that the domain is unregistered.'
                   : 'IANA publishes no domain WHOIS or RDAP service for this suffix. The official browser lookup is not integrated, and missing registry data is not evidence that the domain is unregistered.',
           },
-          rdap: { status: isDev ? 'success' : 'unsupported' }, whois: { status: isDev ? 'unsupported' : 'partial' }, availability: { status: 'complete' },
+          rdap: { status: isDev || newlyPublished ? 'success' : 'unsupported' }, whois: { status: isDev ? 'unsupported' : 'partial' }, availability: { status: 'complete' },
         },
       }),
     });
@@ -937,14 +938,15 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
   const chNotice = page.getByRole('region', { name: '.CH collection constraints' });
   await expect(chNotice.getByText('Restricted access')).toBeVisible();
   await expect(chNotice.getByText('Registry policy restricted')).toBeVisible();
-  await expect(chNotice.getByText('No service published by IANA')).toBeVisible();
+  await expect(chNotice.getByText('No service in retained catalogue')).toBeVisible();
 
   await page.locator('#query').fill('example.vn');
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expandLookupFamilies(page);
   const vnNotice = page.getByRole('region', { name: '.VN collection constraints' });
-  await expect(vnNotice.getByText('No IANA service')).toBeVisible();
-  await expect(vnNotice.getByText('No service published by IANA')).toHaveCount(2);
+  await expect(vnNotice.getByText('Catalogue profile', { exact: true })).toBeVisible();
+  await expect(vnNotice.getByText('No service published by IANA', { exact: true })).toBeVisible();
+  await expect(vnNotice.getByText('No service in retained catalogue')).toBeVisible();
   await expect(vnNotice.getByText(/official browser lookup is not integrated/i)).toBeVisible();
   await expect(vnNotice.getByRole('link', { name: /Open official .VN registry lookup/ })).toHaveAttribute('href', 'https://whois.vnnic.vn/');
 
@@ -981,12 +983,26 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expandLookupFamilies(page);
   const devNotice = page.getByRole('region', { name: '.DEV collection constraints' });
-  await expect(devNotice.getByText('RDAP only')).toBeVisible();
-  await expect(devNotice.getByText(/WHOIS absence is expected and does not make the lookup incomplete/i)).toBeVisible();
+  await expect(devNotice.getByText('IANA bootstrap discovery')).toBeVisible();
+  await expect(devNotice.getByText(/Current RDAP discovery may differ from this retained profile/u)).toBeVisible();
   await expect(devNotice).toHaveClass(/expected/);
 
-  await page.setViewportSize({ width: 360, height: 780 });
-  await expectNoHorizontalOverflow(page);
+  await page.locator('#query').fill('new-service.gt');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  const currentNotice = page.getByRole('region', { name: '.GT collection constraints' });
+  await expect(currentNotice.getByText('No service in retained catalogue')).toBeVisible();
+  await expect(currentNotice.getByText(/Current RDAP discovery may differ/u)).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Source diagnostics' }).locator('article')
+    .filter({ hasText: /^rdap\b/iu }).locator(':scope > strong')).toHaveText('success');
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      await currentNotice.screenshot({ path: testInfo.outputPath(`registry-profile-${width}-${theme}.png`) });
+    }
+  }
 });
 
 test('optional external intelligence searches are explicit, attributed, and mobile-safe', async ({ page }) => {

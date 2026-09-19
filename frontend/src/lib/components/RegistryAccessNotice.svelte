@@ -33,47 +33,29 @@
         ? 'No service published by IANA'
         : 'IANA referral discovery');
   const rdapLabel = $derived(rdapAccess === 'no-iana-service'
-    ? 'No service published by IANA'
+    ? 'No service in retained catalogue'
     : 'IANA bootstrap discovery');
   const whoisRestricted = $derived(['source-ip-authorization-required', 'registry-policy-restricted'].includes(whoisAccess));
-  const hasWhoisPath = $derived(whoisAccess !== 'no-iana-service');
-  const hasRdapPath = $derived(rdapAccess !== 'no-iana-service');
   // Navigation is always derived from the locally reviewed catalogue. The
   // response field remains evidence context and cannot choose a destination.
   const officialLookupUrl = $derived(accessMatchesTarget ? officialRegistryLookupFor(expectedSuffix) : null);
   const expectedConstraint = $derived(!whoisRestricted);
-  const stateLabel = $derived(whoisRestricted
-    ? 'Restricted access'
-    : hasRdapPath && !hasWhoisPath
-      ? 'RDAP only'
-      : !hasRdapPath && hasWhoisPath
-        ? 'WHOIS path only'
-        : !hasRdapPath && !hasWhoisPath
-          ? 'No IANA service'
-          : 'Collection constraint');
+  const stateLabel = $derived(whoisRestricted ? 'Restricted access' : 'Catalogue profile');
   const sourceGuidance = $derived(whoisRestricted
-    ? hasRdapPath
-      ? 'WHOIS collection is subject to the stated restriction. RDAP remains the published alternative; a failed WHOIS request remains inconclusive.'
-      : 'WHOIS collection is subject to the stated restriction and IANA publishes no RDAP alternative. A failed request remains inconclusive.'
-    : hasRdapPath && !hasWhoisPath
-      ? 'RDAP is the published machine-readable registry path for this suffix. WHOIS absence is expected and does not make the lookup incomplete.'
-      : !hasRdapPath && hasWhoisPath
-        ? 'WHOIS is the published registry path for this suffix. RDAP absence is expected; a WHOIS restriction or failure remains inconclusive.'
-        : !hasRdapPath && !hasWhoisPath
-          ? 'IANA does not publish RDAP or WHOIS for this suffix. Use a documented registry process where one exists; missing machine data is expected.'
-          : 'Review the stated collection constraint before interpreting missing registry evidence.');
+    ? 'WHOIS collection remains restricted. Current RDAP discovery is independent of this retained profile; a failed request remains inconclusive.'
+    : 'Current RDAP discovery may differ from this retained profile. Missing registry data remains inconclusive.');
 </script>
 
 {#if accessMatchesTarget}
 <section class="registry-access card" class:expected={expectedConstraint} aria-labelledby="registry-access-title">
   <header>
     <div>
-      <p class="eyebrow">Registry access</p>
+      <p class="eyebrow">Retained registry profile</p>
       <h4 id="registry-access-title">{suffix ? `.${suffix} collection constraints` : 'Registry collection constraints'}</h4>
     </div>
     <span class="badge">{stateLabel}</span>
   </header>
-  <p>{text(access.limitation)}</p>
+  <p><strong>Catalogue note:</strong> {text(access.limitation)}</p>
   <dl>
     <div><dt>WHOIS</dt><dd>{whoisLabel}</dd></div>
     <div><dt>RDAP</dt><dd>{rdapLabel}</dd></div>

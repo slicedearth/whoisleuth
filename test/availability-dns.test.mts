@@ -161,7 +161,7 @@ test('privacy is tri-state and requires an explicit marker or usable contact evi
   assert.equal(isPrivacyProtected({ handle: null, name: 'Fixture Registrant', org: null, email: null, phone: null }), false);
 });
 
-test('unknown availability names a registry capability refusal', async () => {
+test('missing current RDAP evidence remains unknown without claiming a retained capability refusal', async () => {
   const result = await availability('example.gt', {
     fast: true,
     rdapRecord: null,
@@ -174,8 +174,8 @@ test('unknown availability names a registry capability refusal', async () => {
   });
 
   assert.equal(result.state, 'unknown');
-  assert.match(stringValue(result.detail), /RDAP was not queried/u);
-  assert.match(stringValue(result.detail), /no IANA-published RDAP service/u);
+  assert.doesNotMatch(stringValue(result.detail), /RDAP was not queried|no IANA-published RDAP service/u);
+  assert.notEqual(result.state, 'available');
 });
 
 test('deep availability names a registry permission requirement', async () => {

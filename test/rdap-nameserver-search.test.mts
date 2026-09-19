@@ -410,7 +410,7 @@ describe('registry-scoped RDAP nameserver search', () => {
     assert.equal(malformedMatches.omittedInvalid, 1);
   });
 
-  test('enforces registry RDAP admission before bootstrap or transport work', async () => {
+  test('current bootstrap discovery takes precedence over retained absence for nameserver search', async () => {
     let bootstrapCalls = 0;
     let transportCalls = 0;
     const response = await searchRdapNameserver('ns1.infra.example', 'ch', {
@@ -424,10 +424,23 @@ describe('registry-scoped RDAP nameserver search', () => {
         return { status: 200, ok: true, text: searchPayload([]) };
       },
     });
-    assert.equal(response.state, 'unsupported');
+    assert.equal(response.state, 'no_results');
+    assert.equal(response.source.endpoint, 'https://registry.example/rdap/domains?nsLdhName=ns1.infra.example');
+    assert.equal(bootstrapCalls, 1);
+    assert.equal(transportCalls, 1);
+  });
+
+  test('missing current bootstrap coverage makes no nameserver-search request or absence claim', async () => {
+    let bootstrapCalls = 0;
+    const response = await searchRdapNameserver('ns2.infra.example', 'ch', {
+      now: () => NOW,
+      findBases: async () => { bootstrapCalls++; return []; },
+      fetchUpstream: async () => assert.fail('No discovered service may be queried'),
+    });
+    assert.equal(bootstrapCalls, 1);
+    assert.equal(response.state, 'unavailable');
     assert.equal(response.source.endpoint, null);
-    assert.equal(bootstrapCalls, 0);
-    assert.equal(transportCalls, 0);
+    assert.deepEqual(response.source.attempts, []);
   });
 
   test('browser normalization rejects malformed or unscoped payloads', () => {

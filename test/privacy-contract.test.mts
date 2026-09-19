@@ -40,6 +40,7 @@ function compact(value: string): string {
 }
 
 const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
+  { id: 'current-rdap-discovery', pattern: /RDAP follows current IANA bootstrap discovery even when a retained catalogue records no service.*newly published endpoint may receive the selected registration query within existing request budgets.*WHOIS access restrictions remain enforced.*missing discovery is not evidence of domain absence/iu },
   { id: 'login-counter-scope', pattern: /Login burst controls retain bounded in-memory counters keyed by IPv4 address or IPv6 \/64 for five-minute windows.*local to each runtime instance/iu },
   { id: 'capture-network-lifetime', pattern: /Only the pinned collector may contact resource operators.*browser-lifetime deny-only proxy refuses direct connections, including teardown attempts, without retaining their destinations or content.*Refused attempts leave the capture partial.*Speculative DNS and direct QUIC are disabled/iu },
   { id: 'local-application-storage', pattern: /local application stores saved collections, recovery drafts and retained original files.*explicitly selected filesystem workspace, not IndexedDB.*plaintext at rest.*Encrypted portable backups remain separate.*authenticated loopback process.*folder is displayed locally and is not included in exports/iu },

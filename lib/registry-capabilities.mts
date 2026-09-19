@@ -142,7 +142,11 @@ function registryServiceAdmissionFor(
   const capability = registryCapabilityFor(value);
   if (!capability || (service !== 'rdap' && service !== 'whois')) return null;
   if (service === 'rdap') {
-    const allowed = capability.rdapAccessProfile === 'iana-bootstrap';
+    // A retained absence is a discovery hint, not an access restriction.
+    // Both current profiles permit bounded bootstrap discovery; unknown or
+    // future restriction profiles remain denied until explicitly handled.
+    const allowed = capability.rdapAccessProfile === 'iana-bootstrap'
+      || capability.rdapAccessProfile === 'no-iana-service';
     return {
       service,
       state: allowed ? 'allowed' : 'unsupported',

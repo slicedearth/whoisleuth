@@ -45,10 +45,12 @@ unlisted suffix uses the explicit discovery-only fallback.
 
 The shared service-admission check runs before domain WHOIS or RDAP transport
 from Express, hosted functions, the CLI, Bulk, availability or monitoring.
-Documented absent services are unsupported without opening a socket or
-resolving a service endpoint. Policy-restricted and source-IP-authorised WHOIS
-profiles are blocked; the current runtime has no configured authorisation
-override. Access metadata cannot establish registration or availability.
+RDAP discovery follows the current IANA bootstrap, within its existing cache,
+deadline and endpoint bounds. A retained no-service hint does not suppress
+discovery or a newly published service; no discovered endpoint means no RDAP
+object request. Documented absent, policy-restricted and source-IP-authorised
+WHOIS profiles remain blocked; the current runtime has no configured
+authorisation override. Access metadata cannot establish registration or availability.
 
 Query profiles apply only to the first registry hop referred by IANA. The root
 query and subsequent referrals receive the canonical plain domain. Each hop

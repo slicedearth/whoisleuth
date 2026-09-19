@@ -267,6 +267,11 @@ Registration queries use the registrable domain. Deep DNS, TLS and web probes
 use the selected hostname; registration-delegation checks retain their own domain.
 Fast, compact, Bulk and monitoring collection scope is unchanged.
 
+RDAP follows current IANA bootstrap discovery even when a retained catalogue
+records no service. A newly published endpoint may receive the selected
+registration query within existing request budgets. WHOIS access restrictions
+remain enforced; missing discovery is not evidence of domain absence.
+
 Deep collection can disclose the target or related bounded query to the
 applicable registry or registrar, public DNS resolver, nameserver, HTTP origin,
 TLS endpoint, certificate-search service, security.txt endpoint or selected

@@ -437,7 +437,7 @@ function registryPolicyDetail(domain: string, fast: boolean): string {
   const details: string[] = [];
   const rdapAdmission = registryServiceAdmissionFor(domain, 'rdap');
   if (rdapAdmission && !rdapAdmission.allowed) {
-    details.push('RDAP was not queried because the registry capability profile records no IANA-published RDAP service for this suffix.');
+    details.push('RDAP was not queried because the registry access policy does not permit collection.');
   }
   const whoisAdmission = fast ? null : registryServiceAdmissionFor(domain, 'whois');
   if (whoisAdmission && !whoisAdmission.allowed) {
