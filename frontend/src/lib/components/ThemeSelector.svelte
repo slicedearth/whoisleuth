@@ -159,6 +159,7 @@
           <option value="comfortable">Comfortable</option>
           <option value="compact">Compact</option>
         </select>
+        <small>Compact uses denser rows and the full width of console workspaces.</small>
       </label>
       <label class="appearance-effects"><input type="checkbox" checked={appearance.effects === 'full'}
         onchange={(event) => chooseAppearance({ ...appearance, effects: event.currentTarget.checked ? 'full' : 'minimal' })} />Decorative effects</label>

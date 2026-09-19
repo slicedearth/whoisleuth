@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow } from './helpers';
+import { expectNoHorizontalOverflow, useTheme } from './helpers';
 
 test('contact handoff keeps the draft local and reveals only the selected role route', async ({ page }) => {
   const submissions: unknown[] = [];
@@ -105,4 +105,29 @@ test('contact handoff fails closed when a deployment is not configured', async (
   await expect(page.getByText('The protected contact route is not available on this deployment.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Verify and prepare email' })).toBeDisabled();
   await expect(page.locator('script[src*="challenges.cloudflare.com"]')).toHaveCount(0);
+});
+
+test('the contact form precedes route guidance on narrow screens without losing disclosures', async ({ page }, testInfo) => {
+  await page.route('**/api/contact-route', route => route.fulfill({ json: { available: false, siteKey: null, categories: [] } }));
+  await page.goto('/contact');
+  await expect(page.getByRole('heading', { name: 'Prepare a contact email' })).toBeVisible();
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 768]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.evaluate(() => scrollTo(0, 0));
+      const form = page.locator('.contact-form');
+      const guidance = page.locator('.contact-notes');
+      await expect(form.getByText('Your draft stays in this browser.')).toBeVisible();
+      await expect(guidance).toContainText('does not submit third-party abuse reports');
+      await expect(page.getByLabel('Subject')).toBeInViewport({ ratio: 1 });
+      const formBox = await form.boundingBox();
+      const guidanceBox = await guidance.boundingBox();
+      expect(formBox).not.toBeNull();
+      expect(guidanceBox).not.toBeNull();
+      expect(formBox!.y + formBox!.height).toBeLessThanOrEqual(guidanceBox!.y);
+      await expectNoHorizontalOverflow(page);
+      await page.screenshot({ path: testInfo.outputPath(`contact-${theme}-${width}.png`) });
+    }
+  }
 });

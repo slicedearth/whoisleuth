@@ -13,6 +13,10 @@ recipient, retention and export boundaries.
 The public demo uses fixed fictional evidence and does not write protected
 workspace data.
 
+Appearance controls offer comfortable or compact reading density. Compact uses
+the full available width for console workspaces; public prose remains constrained.
+Turn off decorative effects for plain card backgrounds without scanlines or glows.
+
 Use **Practise with real Case forms** in the demo to pin a supplied observation,
 record an evidence-linked conclusion and review an incomplete later capture.
 The forms and validation match the Console, but the practice Case and drafts

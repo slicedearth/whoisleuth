@@ -182,11 +182,13 @@ test('long reference labels remain distinct and the mobile navigator works by ke
         await expect(summary.locator('strong')).toHaveText('Reporting and takedown guidance');
         const geometry = await summary.evaluate((element) => {
           const a = element.querySelector('span')!.getBoundingClientRect();
-          const b = element.querySelector('strong')!.getBoundingClientRect();
+          const current = element.querySelector('strong')!;
+          const b = current.getBoundingClientRect();
+          const showsCurrent = getComputedStyle(current).display !== 'none';
           const bounds = element.getBoundingClientRect();
           return {
-            separated: a.right < b.left || a.bottom < b.top,
-            contained: [a, b].every((box) => box.left >= bounds.left && box.right <= bounds.right && box.bottom <= bounds.bottom),
+            separated: !showsCurrent || a.right < b.left || a.bottom < b.top,
+            contained: [a, ...(showsCurrent ? [b] : [])].every((box) => box.left >= bounds.left && box.right <= bounds.right && box.bottom <= bounds.bottom),
           };
         });
         expect(geometry.separated).toBe(true);
@@ -568,6 +570,11 @@ test('opens, filters and downloads a large synthetic example without workspace a
   const gallery = page.getByTestId('public-example-gallery');
   const exampleCards = gallery.locator('article[data-example]');
   await expect(exampleCards).toHaveCount(4);
+  await expect(exampleCards.getByRole('button', { name: 'Open synthetic output' })).toHaveCount(4);
+  for (const button of await exampleCards.getByRole('button', { name: 'Open synthetic output' }).all()) {
+    await expect(button).not.toHaveAttribute('aria-controls');
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
+  }
   await expect(gallery.locator('.example-grid')).toHaveCSS('align-items', 'start');
   const unchangedPeerHeight = (await exampleCards.nth(1).boundingBox())?.height ?? 0;
   await exampleCards.nth(0).getByRole('button', { name: 'Open synthetic output' }).click();
@@ -583,11 +590,16 @@ test('opens, filters and downloads a large synthetic example without workspace a
   await expect(output).toHaveValue(/"schema": "whoisleuth\.cli\.case-pack"/u);
   await expect(output).toHaveValue(/"domain": "example\.test"/u);
   await expect(output).toHaveValue(/"digestSha256": "sha256:[a-f0-9]{64}"/u);
+  await expect(example.getByRole('button', { name: 'Close synthetic output' })).toHaveAttribute('aria-controls', 'example-output-case-handoff');
+  await expect(example.locator('#example-output-case-handoff')).toBeVisible();
 
   const downloadPromise = page.waitForEvent('download');
   await example.getByRole('button', { name: 'Download example' }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe('synthetic-reviewed-case-handoff.json');
+  await example.getByRole('button', { name: 'Close synthetic output' }).click();
+  await expect(example.locator('#example-output-case-handoff')).toHaveCount(0);
+  await expect(example.getByRole('button', { name: 'Open synthetic output' })).not.toHaveAttribute('aria-controls');
 
   const after = await page.evaluate(async () => ({
     local: Object.keys(localStorage).sort(),

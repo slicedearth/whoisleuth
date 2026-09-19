@@ -6,7 +6,7 @@
     reloadDeferredModulePage,
   } from '$lib/deferred-module';
 
-  let { query } = $props<{ query: string }>();
+  let { query }: { query: string } = $props();
   let open = $state(false);
   let activated = $state(false);
   let opening = $state(false);

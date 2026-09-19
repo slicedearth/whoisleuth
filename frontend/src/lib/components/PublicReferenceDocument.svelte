@@ -66,9 +66,9 @@
     <nav class="breadcrumbs" aria-label="Breadcrumb">
       <a href="/">Home</a><span aria-hidden="true">/</span>
       {#if currentHref === '/resources'}
-        <span>Resources</span>
+        <span aria-current="page">Resources</span>
       {:else}
-        <a href="/resources">Resources</a><span aria-hidden="true">/</span><span>{breadcrumbLabel}</span>
+        <a href="/resources">Resources</a><span class="breadcrumb-current-separator" aria-hidden="true">/</span><span class="breadcrumb-current" aria-current="page">{breadcrumbLabel}</span>
       {/if}
     </nav>
 
@@ -109,5 +109,14 @@
   .reference-pagination span{color:var(--muted);font:650 var(--text-2xs) var(--mono);letter-spacing:.07em;text-transform:uppercase}
   .reference-pagination strong{color:var(--accent);font:700 var(--text-xs) var(--mono);overflow-wrap:anywhere}
   @media(max-width:1080px){.reference-shell{grid-template-columns:1fr;gap:0}}
-  @media(max-width:520px){.reference-pagination{grid-template-columns:1fr}.reference-pagination>span{display:none}.reference-pagination a.next{text-align:left}}
+  @media(max-width:520px){
+    .breadcrumbs{margin-bottom:10px}
+    .breadcrumb-current-separator,.reference-heading .eyebrow{display:none}
+    .breadcrumb-current{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+    .reference-heading{padding-bottom:18px}
+    .reference-heading h1{font-size:1.7rem;line-height:1.18;margin:0 0 .6rem}
+    .reference-heading>p:not(.eyebrow){font-size:.9375rem;line-height:1.5}
+    .reference-actions{margin-top:12px}
+    .reference-pagination{grid-template-columns:1fr}.reference-pagination>span{display:none}.reference-pagination a.next{text-align:left}
+  }
 </style>

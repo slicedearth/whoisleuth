@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { CaseRecord } from '$lib/cases';
+  import { evidenceTime } from '$lib/analysis/evidence-time.ts';
   import { currentCaseEvidence } from '$lib/analysis/case-record-model.ts';
   import {
     currentEvidenceSummary,
@@ -43,9 +44,7 @@
   }
 
   function date(value: string | null) {
-    if (!value) return 'Not observed';
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+    return evidenceTime(value)?.readable ?? (value ? 'Time unavailable' : 'Not observed');
   }
 
   function toggleSnapshot(id: string) {

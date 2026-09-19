@@ -12,7 +12,7 @@
   } from '$lib/analysis/investigation-search.ts';
   import type { InvestigationSearchSession } from '$lib/investigation-search-session';
 
-  let { session, loadError = '', compact = false, onopen } = $props<{ session: InvestigationSearchSession | null; loadError?: string; compact?: boolean; onopen?: (href: string) => void | Promise<void> }>();
+  let { session, loadError = '', compact = false, onopen }: { session: InvestigationSearchSession | null; loadError?: string; compact?: boolean; onopen?: (href: string) => void | Promise<void> } = $props();
   let queryInput = $state<HTMLInputElement>();
   const instanceId = $props.id();
   onMount(() => { if (compact) queryInput?.focus(); });

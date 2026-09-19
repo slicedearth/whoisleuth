@@ -1,6 +1,38 @@
 import { expect, test } from './fixtures';
 import type { Route } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
+
+test('minimal decoration exposes measurable contrast on plain reference surfaces', async ({ page }, testInfo) => {
+  await page.goto('/resources');
+  await page.getByRole('button', { name: /^Colour theme,/u }).click();
+  await page.getByLabel('Decorative effects').uncheck();
+  await page.getByLabel('Reading density').press('Escape');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280, 3840]) {
+      await page.setViewportSize({ width, height: width === 320 ? 700 : 1080 });
+      await page.goto('/resources');
+      await expect(page.locator('body')).toHaveCSS('background-image', 'none');
+      const cards = page.locator('.goal-paths article');
+      await expect(cards.first()).toBeVisible();
+      const backgrounds = await cards.evaluateAll(elements => elements.map(element => ({
+        background: getComputedStyle(element).backgroundColor, image: getComputedStyle(element).backgroundImage,
+      })));
+      expect(backgrounds.length).toBeGreaterThan(0);
+      for (const background of backgrounds) {
+        expect(background.image).toBe('none');
+        expect(background.background).toMatch(/^rgb\(/u);
+      }
+      const contrast = await new AxeBuilder({ page }).include('.reference-heading').include('.goal-paths').withRules(['color-contrast']).analyze();
+      await testInfo.attach(`plain-contrast-${theme}-${width}.json`, { body: JSON.stringify({ passes: contrast.passes, incomplete: contrast.incomplete, violations: contrast.violations }), contentType: 'application/json' });
+      expect(contrast.violations).toEqual([]);
+      expect(contrast.incomplete).toEqual([]);
+      expect(contrast.passes.length).toBeGreaterThan(0);
+      await page.screenshot({ path: testInfo.outputPath(`plain-reference-${theme}-${width}.png`) });
+    }
+  }
+});
 
 test('reading preferences persist without touching saved work and synchronise between tabs', async ({ page }) => {
   await page.goto('/resources');

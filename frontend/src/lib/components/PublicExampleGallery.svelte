@@ -103,7 +103,7 @@
         <h3>{example.title}</h3>
         <p>{example.summary}</p>
         <code>{example.command}</code>
-        <button type="button" disabled={Boolean(loadError)} aria-expanded={openedId === example.id} aria-controls={`example-output-${example.id}`} onpointerenter={preloadOutputs} onfocus={preloadOutputs} onclick={() => void toggleOutput(example.id)}>{loadingId === example.id ? 'Loading synthetic output…' : openedId === example.id ? 'Close synthetic output' : 'Open synthetic output'}</button>
+        <button type="button" disabled={Boolean(loadError)} aria-expanded={openedId === example.id} aria-controls={openedId === example.id && outputFor(example.id) ? `example-output-${example.id}` : undefined} onpointerenter={preloadOutputs} onfocus={preloadOutputs} onclick={() => void toggleOutput(example.id)}>{loadingId === example.id ? 'Loading synthetic output…' : openedId === example.id ? 'Close synthetic output' : 'Open synthetic output'}</button>
         {#if openedId === example.id && outputFor(example.id)}
           {@const output = outputFor(example.id)!}
           <div class="example-output" id={`example-output-${example.id}`}>

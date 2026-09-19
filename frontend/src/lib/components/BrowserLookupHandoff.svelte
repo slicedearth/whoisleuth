@@ -171,7 +171,7 @@
           <button type="button" class="btn" disabled={!caseId} onclick={() => void recordHandoff()}>Record handoff locally</button>
         </div>
       {/if}
-      <small>{preview.limitations[1]}</small>
+      <small>{preview.openingNotice}</small>
     </div>
   {/if}
   {#if openError}<p class="message error" role="alert">{openError}</p>{/if}

@@ -1,7 +1,33 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow } from './helpers';
+import { expectNoHorizontalOverflow, useTheme } from './helpers';
 import { PUBLIC_RESOURCES } from '../frontend/src/lib/public-resources';
+import { PUBLIC_REFERENCE_DESTINATIONS } from '../frontend/src/lib/public-reference-navigation';
 import { toolGuides, referenceGuides } from '../frontend/src/lib/public-guide';
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`every reference introduction remains readable on mobile and tablet in ${theme}`, async ({ page }, testInfo) => {
+    test.slow();
+    const measurements: unknown[] = [];
+    await useTheme(page, theme);
+    for (const destination of PUBLIC_REFERENCE_DESTINATIONS) {
+      await page.goto(destination.href);
+      for (const viewport of [{ width: 320, height: 700 }, { width: 390, height: 844 }, { width: 768, height: 1024 }]) {
+        await page.setViewportSize(viewport);
+        await page.evaluate(() => scrollTo(0, 0));
+        await expect(page.locator('main h1')).toHaveCount(1);
+        await expect(page.locator('main h1')).toBeInViewport({ ratio: 1 });
+        await expect(page.getByRole('navigation', { name: 'Breadcrumb', exact: true })).toBeVisible();
+        await expect(page.getByText('Browse documentation', { exact: true })).toBeVisible();
+        await expectNoHorizontalOverflow(page);
+        const bodyTop = await page.locator('.reference-body').evaluate(element => element.getBoundingClientRect().top);
+        measurements.push({ href: destination.href, theme, ...viewport, bodyTop });
+        expect(bodyTop, `${destination.href} places all practical content below the first viewport`).toBeLessThan(viewport.height);
+        if (viewport.width === 320) await page.screenshot({ path: testInfo.outputPath(`${destination.href.replaceAll('/', '-')}-${theme}-320.png`) });
+      }
+    }
+    await testInfo.attach('reference-introductions.json', { body: JSON.stringify(measurements), contentType: 'application/json' });
+  });
+}
 
 test('delivered third-party notices include browser framework code independently of dependency classification', async ({ request }) => {
   const response = await request.get('/third-party-notices.txt');

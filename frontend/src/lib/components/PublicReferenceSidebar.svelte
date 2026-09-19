@@ -135,8 +135,10 @@
   }
   @media(max-width:520px){
     .reference-browser>summary{grid-template-columns:minmax(0,1fr) 14px;row-gap:4px}
-    .reference-browser>summary span,.reference-browser>summary strong{grid-column:1;text-align:left}
-    .reference-browser>summary::after{grid-column:2;grid-row:1 / span 2}
+    .reference-browser{margin-bottom:12px}
+    .reference-browser>summary span{grid-column:1;text-align:left}
+    .reference-browser>summary strong{display:none}
+    .reference-browser>summary::after{grid-column:2;grid-row:1}
     .reference-browser>nav{grid-template-columns:1fr}
   }
 </style>

@@ -16,7 +16,7 @@
   } from '$lib/analysis/investigation-search.ts';
   import type { InvestigationSearchSession } from '$lib/investigation-search-session';
 
-  let { query } = $props<{ query: string }>();
+  let { query }: { query: string } = $props();
   let loadState = $state<'loading' | 'ready' | 'unavailable'>('loading');
   let session = $state.raw<InvestigationSearchSession | null>(null);
   let pageSelection = $state({ query: '', page: 1 });

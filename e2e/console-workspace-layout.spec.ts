@@ -9,6 +9,42 @@ const viewports = [
   { width: 3840, height: 2160 },
 ] as const;
 
+test('overflowing review tabs expose scroll controls without changing the selected view', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  for (const direction of ['ltr', 'rtl']) {
+    await page.goto('/monitor?view=timeline');
+    const tabs = page.getByRole('tablist', { name: 'Monitor views', exact: true });
+    await expect(tabs.getByRole('tab').first()).toHaveAttribute('aria-selected', 'true');
+    await page.locator('.horizontal-navigation').evaluate((element, dir) => { element.setAttribute('dir', dir); }, direction);
+    // A translated label can resize the content after mount; the observer must
+    // update its controls without a page resize or a different selection.
+    await tabs.getByRole('tab').last().evaluate(element => { element.prepend('Long translated navigation label '); });
+    const controls = page.getByRole('group', { name: 'Scroll Monitor views', exact: true });
+    await expect(controls).toBeVisible();
+    const towardsEnd = controls.getByRole('button', { name: `Scroll Monitor views ${direction === 'ltr' ? 'right' : 'left'}`, exact: true });
+    await expect(towardsEnd).toBeEnabled();
+    const before = page.url();
+    await towardsEnd.click();
+    expect(page.url()).toBe(before);
+    await expect(tabs.getByRole('tab').first()).toHaveAttribute('aria-selected', 'true');
+    const towardsStart = controls.getByRole('button', { name: `Scroll Monitor views ${direction === 'ltr' ? 'left' : 'right'}`, exact: true });
+    await expect(towardsStart).toBeEnabled();
+    await tabs.getByRole('tab').first().focus();
+    await page.keyboard.press('End');
+    const last = tabs.getByRole('tab').last();
+    await expect(last).toBeFocused();
+    await expect(last).toHaveAttribute('aria-selected', 'true');
+    // The ordinary label is restored by navigation; assert its real control,
+    // rather than asking an artificially wider-than-viewport label to fit.
+    await page.reload();
+    await expect(tabs.getByRole('tab').last()).toBeInViewport({ ratio: 1 });
+    await expectNoHorizontalOverflow(page);
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await expect(controls).toHaveCount(0);
+    await page.setViewportSize({ width: 320, height: 700 });
+  }
+});
+
 test('an empty Tools destination creates a profile and returns focus to its saved record', async ({ page }) => {
   await migrateLegacyBrowserData(page, {}, { clearStorage: true, destination: '/brands?view=tools' });
   await expect(page.getByRole('tab', { name: 'Tools', exact: true })).toHaveAttribute('aria-selected', 'true');
@@ -154,5 +190,27 @@ test('Bulk keeps collection and result controls readable with a header-aware vie
       }
       await page.screenshot({ path: testInfo.outputPath(`bulk-results-${theme}-${viewport.width}.png`) });
     }
+    await page.setViewportSize({ width: 3840, height: 2160 });
+    await page.evaluate(() => scrollTo(0, 0));
+    const main = page.locator('.shell > main');
+    const comfortableWidth = (await main.boundingBox())!.width;
+    await page.getByRole('button', { name: /^Colour theme,/u }).click();
+    await page.getByLabel('Reading density').selectOption('compact');
+    await page.getByLabel('Reading density').press('Escape');
+    const compactWidth = (await main.boundingBox())!.width;
+    expect(compactWidth).toBeGreaterThan(comfortableWidth);
+    const layout = await main.evaluate(element => ({
+      right: element.getBoundingClientRect().right,
+      tableWidth: element.querySelector('.results-table')?.getBoundingClientRect().width ?? 0,
+      width: element.clientWidth,
+    }));
+    expect(layout.right).toBeLessThanOrEqual(3840);
+    expect(layout.tableWidth).toBeGreaterThan(comfortableWidth - 120);
+    await expect(page.locator('.results-table tbody tr')).toHaveCount(targets.length);
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`bulk-compact-${theme}-3840.png`) });
+    await page.getByRole('button', { name: /^Colour theme,/u }).click();
+    await page.getByLabel('Reading density').selectOption('comfortable');
+    await page.getByLabel('Reading density').press('Escape');
   }
 });

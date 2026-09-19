@@ -5,11 +5,11 @@
     goals,
     linkSteps = false,
     ariaLabel = 'WHOISleuth investigation paths',
-  } = $props<{
+  }: {
     goals: readonly PublicGuideGoal[];
     linkSteps?: boolean;
     ariaLabel?: string;
-  }>();
+  } = $props();
 </script>
 
 <div class="goal-paths" role="region" aria-label={ariaLabel}>
@@ -59,12 +59,13 @@
       linear-gradient(145deg,rgb(var(--overlay-rgb) / .025),transparent 64%),
       rgb(var(--panel-rgb) / .78);
   }
+  :global(:root[data-effects='minimal']) article{background:var(--panel)}
   h3{margin:0;font:700 clamp(1.05rem,2vw,1.28rem) var(--mono);letter-spacing:-.025em}
   p{margin:9px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.6}
   ol{display:flex;align-items:center;flex-wrap:wrap;gap:6px 0;margin:22px 0 0;padding:0;list-style:none}
   li{display:flex;align-items:center;color:var(--text);font:650 var(--text-xs) var(--mono)}
   li:not(:last-child)::after{content:"→";margin:0 9px;color:var(--muted-subtle)}
-  li a{border-bottom:1px solid transparent;color:var(--text)}
+  li a{display:inline-flex;align-items:center;min-height:32px;padding:4px 2px;border-bottom:1px solid transparent;color:var(--text)}
   li a:hover,li a:focus-visible{border-color:var(--accent);color:var(--accent)}
   .path-link{align-self:flex-start;margin-top:auto;padding-top:24px;color:var(--accent);font:700 var(--text-xs) var(--mono)}
   .path-link:hover,.path-link:focus-visible{color:var(--text)}
