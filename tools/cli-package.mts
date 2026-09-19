@@ -25,6 +25,7 @@ import { normalizeSemanticVersion } from './release-version-check.mts';
 import { buildThirdPartyNotices } from './third-party-notices.mts';
 import { checkInstalledSigningTrust } from './cli-signing-package-check.mts';
 import { checkInstalledCaseFiles } from './cli-case-package-check.mts';
+import { installedDependencyEvidence } from './installed-dependency-evidence.mts';
 import {
   boundedPositiveInteger as positiveInteger,
   requireJsonRecord as record,
@@ -997,7 +998,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     }
 
     await writeFile(path.join(installRoot, 'package.json'), '{"private":true}\n', 'utf8');
-    await execFile('npm', ['install', '--package-lock=false', '--ignore-scripts', '--no-audit', '--no-fund', tarball], {
+    await execFile('npm', ['install', '--package-lock=true', '--ignore-scripts', '--no-audit', '--no-fund', tarball], {
       cwd: installRoot,
       encoding: 'utf8',
       timeout: CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
@@ -1384,17 +1385,20 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
 
     let archiveFilename: string | null = null;
     let archiveSha256: string | null = null;
+    const candidateDigest = createHash('sha256').update(await readFile(tarball)).digest('hex');
+    const dependencies = await installedDependencyEvidence(installRoot, packageName, candidateDigest);
     if (publicationEnabled) {
       const artifactDirectory = path.resolve(options.artifactDirectory as string);
       await mkdir(artifactDirectory, { recursive: true });
       archiveFilename = `whoisleuth-cli-${packageVersion}.tgz`;
       const archivePath = path.join(artifactDirectory, archiveFilename);
       await copyFile(tarball, archivePath, fsConstants.COPYFILE_EXCL);
-      archiveSha256 = createHash('sha256').update(await readFile(tarball)).digest('hex');
+      archiveSha256 = candidateDigest;
       await writeFile(path.join(artifactDirectory, `${archiveFilename}.sha256`), `${archiveSha256}  ${archiveFilename}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o644 });
     }
 
     const installedChecks = Object.freeze([
+      'installed-transitive-dependency-identities',
       'help',
       'short-help',
       'zero-argument-help',
@@ -1464,6 +1468,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     if (publicationEnabled) {
       const artifactDirectory = path.resolve(options.artifactDirectory as string);
       await writeFile(path.join(artifactDirectory, 'cli-package-report.json'), `${JSON.stringify(report, null, 2)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o644 });
+      await writeFile(path.join(artifactDirectory, 'installed-dependencies.json'), `${JSON.stringify(dependencies, null, 2)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o644 });
     }
     return report;
   } finally {

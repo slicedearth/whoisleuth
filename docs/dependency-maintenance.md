@@ -64,6 +64,21 @@ identity against the explicitly selected reviewed candidate after publication.
 Registry signature and provenance records are surfaced as metadata, not
 reported as cryptographically verified by this check.
 
+A fresh CLI installation can resolve a transitive range differently from the
+repository lock. CLI candidates retain `installed-dependencies.json` alongside
+the archive: actual versions and registry integrities, checked installed
+manifest hashes, and the candidate archive digest. Audit that recorded graph
+separately before publication:
+
+```bash
+npm run dependencies:audit -- --installed-candidate /tmp/whoisleuth-cli-release/installed-dependencies.json
+```
+
+This command makes the same registry advisory request, without installation.
+It does not claim that later installations will resolve identical transitive
+versions. Optional companions instead retain their existing locked, byte-verified
+bundled dependency policy.
+
 ## SPDX export
 
 GitHub derives an SPDX 2.3 compatible SBOM from the repository dependency

@@ -90,7 +90,7 @@ function reviewedLicense(value: unknown, identifier: string): string {
   return license;
 }
 
-function packageNameFromInstallPath(installPath: string): string {
+export function packageNameFromInstallPath(installPath: string): string {
   boundedSafeRelativePath(installPath, 'Package install path', 1024);
   const segments = installPath.split('/');
   let packageName = '';
@@ -117,7 +117,7 @@ function packageNameFromInstallPath(installPath: string): string {
   return boundedToken(packageName, 'Package name', 214);
 }
 
-function resolveInstalledDependency(
+export function resolveInstalledDependency(
   packages: JsonRecord,
   fromInstallPath: string,
   dependencyName: string,

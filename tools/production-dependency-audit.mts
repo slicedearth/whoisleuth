@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
 import { requireJsonRecord } from './maintainer-tool-helpers.mts';
 import { productionDependencyInstallPaths } from './third-party-notices.mts';
+import { candidateDependencyAuditInput } from './installed-dependency-evidence.mts';
 
 import {
   assessProductionDependencyAudit,
@@ -76,19 +77,22 @@ function commandError(cause: unknown): Error {
   return cause instanceof Error ? cause : new Error('Unknown production dependency audit command error.');
 }
 
-function runNpmAudit(): AuditCommandResult {
+function runNpmAudit(installedLockfile?: Record<string, unknown>): AuditCommandResult {
   let directory: string | undefined;
   try {
-    const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
-    const packageDirectories = readdirSync(path.join(root, 'packages'), { withFileTypes: true });
-    if (packageDirectories.length > 64) throw new Error('Too many package directories for the dependency audit.');
-    const companions = packageDirectories.filter(entry => entry.isDirectory()).flatMap(entry => {
-      const file = path.join(root, 'packages', entry.name, 'package.json');
-      if (!existsSync(file)) return [];
-      const manifest = readAuditInput(file);
-      return manifest.dependencies ? [manifest] : [];
-    });
-    const lock = productionAuditLockfile(readAuditInput(path.join(root, 'package-lock.json')), companions);
+    let lock = installedLockfile;
+    if (!lock) {
+      const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+      const packageDirectories = readdirSync(path.join(root, 'packages'), { withFileTypes: true });
+      if (packageDirectories.length > 64) throw new Error('Too many package directories for the dependency audit.');
+      const companions = packageDirectories.filter(entry => entry.isDirectory()).flatMap(entry => {
+        const file = path.join(root, 'packages', entry.name, 'package.json');
+        if (!existsSync(file)) return [];
+        const manifest = readAuditInput(file);
+        return manifest.dependencies ? [manifest] : [];
+      });
+      lock = productionAuditLockfile(readAuditInput(path.join(root, 'package-lock.json')), companions);
+    }
     const packages = requireJsonRecord(lock.packages, 'Locked packages');
     directory = mkdtempSync(path.join(tmpdir(), 'whoisleuth-production-audit-'));
     writeFileSync(path.join(directory, 'package-lock.json'), JSON.stringify(lock), { mode: 0o600 });
@@ -145,11 +149,20 @@ export function formatProductionDependencyAuditAssessment(
 export function main(options: Readonly<{
   stdout?: WritableLike;
   stderr?: WritableLike;
-  runAudit?: () => AuditCommandResult;
+  installedCandidate?: string;
+  runAudit?: (installedLockfile?: Record<string, unknown>) => AuditCommandResult;
 }> = {}): number {
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
-  const result = (options.runAudit ?? runNpmAudit)();
+  let candidate: ReturnType<typeof candidateDependencyAuditInput> | undefined;
+  try {
+    if (options.installedCandidate) candidate = candidateDependencyAuditInput(readAuditInput(options.installedCandidate));
+  } catch {
+    stderr.write('Installed candidate dependency evidence is unavailable or invalid.\n');
+    return 2;
+  }
+  if (candidate) stdout.write(`Installed candidate archive SHA-256: ${candidate.archiveSha256}\n`);
+  const result = (options.runAudit ?? runNpmAudit)(candidate?.lockfile);
 
   if (result.timedOut) {
     stderr.write(`Production dependency audit timed out after ${PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS}ms.\n`);
@@ -170,5 +183,9 @@ export function main(options: Readonly<{
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.exitCode = main();
+  const args = process.argv.slice(2);
+  if (args.length && (args.length !== 2 || args[0] !== '--installed-candidate' || !args[1])) {
+    process.stderr.write('Usage: dependencies:audit [--installed-candidate <installed-dependencies.json>]\n');
+    process.exitCode = 2;
+  } else process.exitCode = main(args[1] ? { installedCandidate: args[1] } : {});
 }

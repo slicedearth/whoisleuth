@@ -91,6 +91,10 @@ jobs:
           EXPECTED_TAG: v${{ inputs.version }}
           RELEASE_DIRECTORY: ${{ runner.temp }}/whoisleuth-cli-release
         run: npm run cli:package:release -- "$RELEASE_DIRECTORY" --tag "$EXPECTED_TAG" --json
+      - name: Audit installed candidate dependencies
+        env:
+          RELEASE_DIRECTORY: ${{ runner.temp }}/whoisleuth-cli-release
+        run: npm run dependencies:audit -- --installed-candidate "$RELEASE_DIRECTORY/installed-dependencies.json"
       - name: Verify candidate digest
         env:
           RELEASE_DIRECTORY: ${{ runner.temp }}/whoisleuth-cli-release

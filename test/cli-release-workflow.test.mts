@@ -52,7 +52,11 @@ describe('scoped CLI release workflow', () => {
     const auditIndex = WORKFLOW.indexOf('npm run dependencies:audit');
     const installIndex = WORKFLOW.indexOf('npm ci --include=optional --ignore-scripts --audit=false');
     assert.ok(auditIndex > 0 && installIndex > auditIndex && installIndex < uploadIndex);
-    assert.equal((WORKFLOW.match(/npm run dependencies:audit/gu) ?? []).length, 1);
+    const installedAuditIndex = WORKFLOW.indexOf('npm run dependencies:audit -- --installed-candidate');
+    const assemblyIndex = WORKFLOW.indexOf('npm run cli:package:release');
+    assert.ok(assemblyIndex > installIndex && installedAuditIndex > assemblyIndex && installedAuditIndex < uploadIndex);
+    assert.match(WORKFLOW.slice(installedAuditIndex, uploadIndex), /"\$RELEASE_DIRECTORY\/installed-dependencies\.json"/u);
+    assert.equal((WORKFLOW.match(/npm run dependencies:audit/gu) ?? []).length, 2);
     const candidateUpload = WORKFLOW.slice(uploadIndex, environmentIndex);
     assert.match(candidateUpload, /retention-days: 7/u);
     assert.equal((candidateUpload.match(/retention-days:/gu) ?? []).length, 1);
