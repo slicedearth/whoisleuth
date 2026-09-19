@@ -25,6 +25,14 @@ export function isInjectedBrowserLayoutDiagnostic(browserName: string, type: str
     && /^\[JavaScript Warning: "Layout was forced before the page was fully loaded\. If stylesheets are not yet loaded this may cause a flash of unstyled content\." \{file: "debugger eval code" line: \d+\}\]$/u.test(text);
 }
 
+/** WebKit can report a handled same-origin fetch cancelled by navigation. */
+export function isCancelledSessionPageDiagnostic(browserName: string, message: string, origin: string, cancelledSession: boolean, navigated: boolean): boolean {
+  if (browserName !== 'webkit' || !cancelledSession || !navigated) return false;
+  const url = new URL(origin);
+  return url.origin === origin && url.protocol === 'http:' && url.hostname === '127.0.0.1'
+    && message === `/${url.host}/api/session due to access control checks.`;
+}
+
 export function isPlaywrightPerformanceAuthoritySpec(file: string): boolean {
   const normalized = file.replaceAll('\\', '/');
   return PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS.some((candidate) => (

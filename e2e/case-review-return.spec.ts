@@ -112,6 +112,7 @@ test('encrypted Case handoff includes selected originals, excludes recovery draf
   await expect(section).toContainText('1 of 1 Case file references have matching bytes');
   await section.getByRole('checkbox', { name: 'Select note Returned review note', exact: true }).check();
   await section.getByRole('button', { name: 'Add selected review entries', exact: true }).click();
+  await expect(section.getByRole('status', { name: 'Case review return status' })).toContainText('Selected review entries were saved.');
   const saved = (await readBrowserLocalCollection(page, 'cases')).records.find(item => item.value.id === current.id)!.value;
   expect(saved.notes.map(note => note.body)).toEqual(['Keep the original note', 'Returned review note']);
   expect(saved.status).toBe(current.status); expect(saved.title).toBe(current.title); expect(saved.actions).toEqual(current.actions);

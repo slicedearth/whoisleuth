@@ -341,11 +341,12 @@ test('opens a directly linked CLI command without loading unrelated command deta
   expect(investigationRequests).toEqual([]);
 });
 
-test('command and return links preserve open-in-new-tab activation', async ({ page, context }) => {
+test('command and return links preserve open-in-new-tab activation @timing-sensitive', async ({ page, context }) => {
   await page.goto('/cli#command-lookup');
   const command = page.locator('[data-command-detail="lookup"]');
   await expect(command).toBeVisible();
   for (const link of [command.locator('.related-commands a').first(), command.locator('.back-to-results')]) {
+    await page.bringToFront();
     await expect(link).toBeVisible();
     const href = await link.getAttribute('href');
     expect(href).toMatch(/^#(?:command-|commands)/u);
@@ -359,7 +360,9 @@ test('command and return links preserve open-in-new-tab activation', async ({ pa
       // Activate the tab before checking its hydrated content; background
       // load-event timing is not part of the link's navigation contract.
       await destination.bringToFront();
-      await expect(destination).toHaveURL(expectedHref);
+      // Read the actual document and usable destination together. The string
+      // URL matcher also waits for engine navigation bookkeeping, which can
+      // remain pending after this native modified-click destination is ready.
       await expect.poll(() => destination.evaluate(() => ({
         href: location.href,
         ready: document.readyState,

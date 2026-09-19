@@ -421,9 +421,9 @@ test('the console command palette keeps every destination heading readable on mo
     await expect(dialog).toBeVisible();
     const options = dialog.getByRole('option');
     const headings = dialog.locator('.command-copy strong');
-    expect(await options.count()).toBeGreaterThan(0);
-    expect(await headings.count()).toBe(await options.count());
-    expect(await headings.evaluateAll((items) => items.every((heading) =>
+    await expect.poll(() => options.count()).toBeGreaterThan(0);
+    await expect(headings).toHaveCount(await options.count());
+    await expect.poll(() => headings.evaluateAll((items) => items.length > 0 && items.every((heading) =>
       heading.scrollWidth <= heading.clientWidth + 1
     ))).toBe(true);
     await page.keyboard.press('Escape');

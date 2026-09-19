@@ -185,8 +185,8 @@ export function assertAppliedBrowserSafety(options: Readonly<{
 }> = {}): void {
   const temporaryRoot = mkdtempSync(path.join(tmpdir(), 'whoisleuth-browser-contract-'));
   const environment: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: '0', WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1' };
-  // Configuration discovery does not need a build. Fixture probes override
-  // page/context and must never launch a browser, start a server or make network requests.
+  // Configuration discovery does not need a build. Fixture probes supply an
+  // in-memory browser and must never start a server or make network requests.
   for (const name of ['CI', 'WHOISLEUTH_E2E_USE_BUILD', 'NODE_V8_COVERAGE', 'PLAYWRIGHT_JSON_OUTPUT_NAME', 'PLAYWRIGHT_JSON_OUTPUT_FILE', 'PLAYWRIGHT_JSON_OUTPUT_DIR']) {
     delete environment[name];
   }
@@ -257,12 +257,24 @@ export function assertAppliedBrowserSafety(options: Readonly<{
       import { test as original, expect } from ${JSON.stringify(fixtureUrl)};
       import { ALLOWED_ORIGIN } from ${JSON.stringify(constantsUrl)};
       const test = original.extend({
-        browser: async () => { throw new Error('A fixture-contract probe must not launch a browser.'); },
-        context: async ({}, use) => {
-          await use({ handler: null, pattern: null,
-            async route(pattern, handler) { this.pattern = pattern; this.handler = handler; },
-            async unrouteAll() {}
+        browser: async ({}, use) => {
+          const contexts = [];
+          await use({
+            contexts: () => contexts,
+            async newContext() {
+              const context = Object.assign(new EventEmitter(), { handler: null, pattern: null,
+                pages: () => [],
+                async route(pattern, handler) { this.pattern = pattern; this.handler = handler; },
+                async unrouteAll() {},
+                async close() { this.emit('close'); contexts.splice(contexts.indexOf(this), 1); }
+              });
+              contexts.push(context); return context;
+            }
           });
+        },
+        context: async ({browser}, use) => {
+          const context = await browser.newContext();
+          try { await use(context); } finally { await context.close(); }
         },
         page: async ({}, use) => { await use(new EventEmitter()); }
       });

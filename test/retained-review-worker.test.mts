@@ -123,7 +123,12 @@ test('retained worker fails explicitly on its deadline and transport or response
   for (const failure of ['post', 'load', 'message', 'kind', 'empty', 'incomplete', 'error'] as const) {
     const worker = new ControlledWorker();
     worker.failPost = failure === 'post';
-    const pending = assert.rejects(runRetainedReviewWorker('timeline', input, NOW, { createWorker: worker.factory }), /local processing|unavailable|unreadable|unexpected|could not be prepared/u);
+    const pending = assert.rejects(runRetainedReviewWorker('timeline', input, NOW, { createWorker: worker.factory }), (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /local processing|unavailable|unreadable|unexpected|could not be prepared/u);
+      assert.doesNotMatch(error.message, /private transport detail|private path/u);
+      return true;
+    });
     if (failure === 'load') worker.onerror?.({ preventDefault() {} } as ErrorEvent);
     if (failure === 'message') worker.onmessageerror?.();
     if (failure === 'kind') worker.reply({ kind: 'debt', result: {} });
