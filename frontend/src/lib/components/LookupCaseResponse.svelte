@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { recipientMailto } from '../../../../packages/evidence/email-recipient.mts';
   import {
     CASE_DISPOSITIONS,
     isReviewedCaseDisposition,
@@ -190,7 +191,7 @@
   }
 
   function routeHref(route: ResolvedAbuseRecipient): string | null {
-    if (route.channel === 'email') return `mailto:${route.contact}`;
+    if (route.channel === 'email') return recipientMailto(route.contact);
     if (route.channel === 'phone') return `tel:${route.contact.replace(/[^+\d]/gu, '')}`;
     try {
       const parsed = new URL(route.contact);

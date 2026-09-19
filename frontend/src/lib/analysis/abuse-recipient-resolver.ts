@@ -5,6 +5,7 @@
 
 import { resolveProviderReportingRoutes } from './provider-reporting-routes.ts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+import { emailRecipient } from '../../../../packages/evidence/email-recipient.mts';
 
 export type AbuseRecipientKind =
   | 'application_platform'
@@ -47,7 +48,6 @@ export type AbuseRecipientResolution = Readonly<{
 const MAX_RECIPIENTS = 12;
 const MAX_CONTACT_LENGTH = 320;
 const CONTROL_REPLACE_RE = /[\u0000-\u001f\u007f]+/gu;
-const EMAIL_RE = /^[^\s@/:]+@[^\s@/:]+\.[^\s@/:]+$/u;
 const KINDS = [
   'registrar',
   'registry',
@@ -94,15 +94,17 @@ function channelAndContact(value: unknown, hintedChannel: unknown = ''): {
   channel: AbuseRecipientChannel;
   contact: string;
 } | null {
-  if (typeof value === 'string' && value.length > MAX_CONTACT_LENGTH) return null;
+  if (typeof value === 'string' && (value.length > MAX_CONTACT_LENGTH || /[\u0000-\u001f\u007f]/u.test(value))) return null;
   const raw = text(value);
   const hint = text(hintedChannel, 20).toLowerCase();
   if (!raw) return null;
-  if (EMAIL_RE.test(raw)) return { channel: 'email', contact: raw.toLowerCase() };
+  const address = emailRecipient(raw);
+  if (address) return { channel: 'email', contact: address.toLowerCase() };
   try {
     const parsed = new URL(raw);
-    if (parsed.protocol === 'mailto:' && EMAIL_RE.test(parsed.pathname)) {
-      return { channel: 'email', contact: parsed.pathname.toLowerCase() };
+    const recipient = parsed.protocol === 'mailto:' ? emailRecipient(decodeURIComponent(parsed.pathname)) : null;
+    if (recipient) {
+      return { channel: 'email', contact: recipient.toLowerCase() };
     }
     if (parsed.protocol === 'tel:' && /^[+\d][\d ().-]{4,63}$/u.test(parsed.pathname)) {
       return { channel: 'phone', contact: parsed.pathname };

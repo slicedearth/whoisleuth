@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { recipientMailto } from '../../../../packages/evidence/email-recipient.mts';
   import { tick } from 'svelte';
   import { createDraftRevision } from '$lib/controllers/submitted-draft';
   import {
@@ -217,8 +218,8 @@
     }
   }
 
-  function routeHref(route: PlatformReportingRoute): string {
-    return route.channel === 'email' ? `mailto:${route.contact}` : route.contact;
+  function routeHref(route: PlatformReportingRoute): string | undefined {
+    return route.channel === 'email' ? recipientMailto(route.contact) ?? undefined : route.contact;
   }
 </script>
 

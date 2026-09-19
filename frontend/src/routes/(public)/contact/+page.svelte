@@ -4,6 +4,7 @@
   import PageHeading from '$lib/components/PageHeading.svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
   import { normalizeContactAddress } from '../../../../../lib/contact-address.mts';
+  import { recipientMailto } from '../../../../../packages/evidence/email-recipient.mts';
 
   type ContactCategory = 'privacy' | 'outbound' | 'security';
   type TurnstileApi = {
@@ -152,7 +153,7 @@
       '',
       boundedMessage,
     ].join('\n');
-    return `mailto:${route}?subject=${encodeURIComponent(boundedSubject)}&body=${encodeURIComponent(body)}`;
+    return recipientMailto(route, { subject: boundedSubject, body }) ?? '';
   }
 
   async function prepareEmail(event: SubmitEvent) {
