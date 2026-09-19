@@ -1,5 +1,6 @@
 import { caseDraftFields, replaceCaseDraft, removeCaseDraft } from '../../../../packages/cases/case-drafts.mts';
 import type { CaseDraftFields, CaseDraftRecord, CaseDraftStore, CaseDraftReceipt } from '../../../../packages/contracts/case-drafts.mts';
+import { failedLocalMutationOutcome } from '../local-mutation-outcome.ts';
 
 export type DraftStorage = Readonly<{
   read: () => Promise<CaseDraftStore>;
@@ -25,7 +26,7 @@ export function restoreCaseDraftFields<T extends CaseDraftFields>(
   return { ...structuredClone(initial), ...candidate } as T;
 }
 export type CaseDraftRecoveryState = Readonly<{
-  status: 'idle' | 'pending' | 'saved' | 'error';
+  status: 'idle' | 'pending' | 'saved' | 'error' | 'unknown';
   message: string;
   readError: string | null;
   candidates: readonly CaseDraftRecord[];
@@ -61,13 +62,18 @@ export function createCaseDraftRecovery(options: Readonly<{
   const version = options.version ?? 1;
   const emit = (patch: Partial<CaseDraftRecoveryState> = {}) => {
     state = { ...state, ...patch };
-    if (!destroyed) options.notify(state, submitting || editRevision !== storedRevision);
+    if (!destroyed) options.notify(state, state.status === 'unknown' || submitting || editRevision !== storedRevision);
   };
-  const failure = () => emit({ status: 'error', message: options.retention === 'document'
-    ? 'This practice draft could not be retained. Keep the form open and retry.'
-    : 'This form could not be saved for recovery. Keep it open and retry; existing drafts were not replaced.' });
+  const failure = (cause: unknown) => {
+    if (state.status === 'unknown' || failedLocalMutationOutcome(cause) === 'unknown') {
+      clearTimeout(timer);
+      emit({ status: 'unknown', message: 'The write may have succeeded, but could not be confirmed. Keep this form open to copy any unsaved text, then reload and review saved records before another change.' });
+    } else emit({ status: 'error', message: options.retention === 'document'
+      ? 'This practice draft could not be retained. Keep the form open and retry.'
+      : 'This form could not be saved for recovery. Keep it open and retry; existing drafts were not replaced.' });
+  };
   const resumePending = () => {
-    if (!destroyed && !submitting && editRevision !== storedRevision) queueMicrotask(() => { void flush().catch(failure); });
+    if (!destroyed && !submitting && state.status !== 'unknown' && editRevision !== storedRevision) queueMicrotask(() => { void flush().catch(failure); });
   };
 
   async function refresh() {
@@ -76,7 +82,7 @@ export function createCaseDraftRecovery(options: Readonly<{
       if (destroyed) return;
       emit({ readError: null, candidates: store.records.filter(item => item.caseId === options.caseId && item.form === options.form && item.id !== identity?.id) });
     } catch {
-      if (!destroyed) emit({ readError: 'Saved recovery drafts could not be read. This form has not replaced them.' });
+      if (!destroyed) emit({ readError: 'Saved recovery drafts could not be read. Their current contents are unavailable.' });
     }
   }
 
@@ -93,12 +99,13 @@ export function createCaseDraftRecovery(options: Readonly<{
       emit({ status: 'saved', message: options.retention === 'document'
         ? 'Practice draft retained on this page only. Not yet added to the practice Case.'
         : 'Draft saved in this workspace. Not yet added to the Case.' });
-    }).catch(cause => { failure(); throw cause; }).finally(() => { writing = null; });
+    }).catch(cause => { failure(cause); throw cause; }).finally(() => { writing = null; });
     await writing;
   }
 
   async function flush(): Promise<void> {
     clearTimeout(timer);
+    if (state.status === 'unknown') return;
     if (writing) { await writing; if (editRevision !== storedRevision && !submitting) return flush(); return; }
     if (state.busy || submitting || editRevision === storedRevision || destroyed) return;
     await writeSnapshot(caseDraftFields(options.readFields()), editRevision);
@@ -107,13 +114,14 @@ export function createCaseDraftRecovery(options: Readonly<{
 
   function changed() {
     editRevision++;
-    emit({ edited: true, status: 'pending', message: 'Saving recovery draft…' });
     clearTimeout(timer);
+    if (state.status === 'unknown') { emit({ edited: true }); return; }
+    emit({ edited: true, status: 'pending', message: 'Saving recovery draft…' });
     if (!submitting) timer = setTimeout(() => { void flush().catch(failure); }, 250);
   }
 
   async function restore(candidate: CaseDraftRecord) {
-    if (state.edited || state.busy) return;
+    if (state.edited || state.busy || state.status === 'unknown') return;
     const revision = editRevision;
     emit({ busy: true });
     try {
@@ -129,7 +137,7 @@ export function createCaseDraftRecovery(options: Readonly<{
   }
 
   async function discard(candidate?: CaseDraftRecord) {
-    if (state.busy || submitting) return;
+    if (state.busy || submitting || state.status === 'unknown') return;
     const revision = editRevision;
     clearTimeout(timer); emit({ busy: true });
     try {
@@ -143,12 +151,15 @@ export function createCaseDraftRecovery(options: Readonly<{
         } else emit({ status: 'pending', message: 'The previous draft was discarded. Later edits remain in this form.' });
       }
       await refresh();
-    } catch { emit({ status: 'error', message: 'The draft could not be discarded, or changed in another tab. It has not been replaced.' }); }
+    } catch (cause) {
+      if (failedLocalMutationOutcome(cause) === 'unknown') failure(cause);
+      else emit({ status: 'error', message: 'The draft could not be discarded, or changed in another tab. It has not been replaced.' });
+    }
     finally { emit({ busy: false }); if (editRevision !== revision) resumePending(); }
   }
 
   async function leaveForm(): Promise<boolean> {
-    if (submitting || state.busy) return false;
+    if (submitting || state.busy || state.status === 'unknown') return false;
     const revision = editRevision;
     emit({ busy: true });
     try {
@@ -159,12 +170,12 @@ export function createCaseDraftRecovery(options: Readonly<{
       identity = null; editRevision++; storedRevision = editRevision;
       options.resetFields(); emit({ edited: false, status: 'idle', message: '' });
       void refresh(); return true;
-    } catch { failure(); return false; }
+    } catch (cause) { failure(cause); return false; }
     finally { emit({ busy: false }); if (editRevision !== revision) resumePending(); }
   }
 
   async function submit(write: (receipt: CaseDraftReceipt) => Promise<boolean>): Promise<boolean> {
-    if (submitting || state.busy) return false;
+    if (submitting || state.busy || state.status === 'unknown') return false;
     if (!state.edited) emit({ edited: true, status: 'pending' });
     const submittedRevision = editRevision;
     submitting = true; clearTimeout(timer); emit({ busy: true });
@@ -182,7 +193,7 @@ export function createCaseDraftRecovery(options: Readonly<{
         emit({ edited: editRevision !== submittedRevision, status: 'idle', message: 'Added to the Case. The submitted recovery copy was removed.' });
       }
       return committed;
-    } catch { failure(); return false; }
+    } catch (cause) { failure(cause); return false; }
     finally {
       submitting = false; emit({ busy: false });
       if (editRevision !== submittedRevision) resumePending();

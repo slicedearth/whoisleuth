@@ -284,6 +284,9 @@ Retained settings reviews include their target, collection context and the
 observation time and completeness of comparable DNS and registry sources.
 Report completion is not a source observation time. The history preserves
 equal-time records; missing context or ambiguous ordering remains unknown.
+View-only filters show configured expectations, differences or unknown settings;
+history filters separate changed sources from unknown comparisons. All retained
+rows remain available through **All**, and filtering does not change exports.
 
 For nameservers, DS, MX and CAA, choose no expectation, an expected empty set,
 specified records, or observation only. A null MX (`0 .`) is a specified record,
@@ -360,6 +363,10 @@ pins and relationships; **Assessment** holds conclusions and branches;
 an optional **Record lessons from this investigation** form for useful or
 misleading evidence, delays, returned complaints and changes for next time.
 It saves a normal Case note; unanswered questions are omitted.
+The Summary's decision overview keeps the latest analyst conclusion, supporting
+and contrary observations, incomplete evidence and next scheduled review together.
+Evidence added later prompts another review; it does not change the conclusion.
+Due reviews refresh while the view is open without changing observation times.
 Section links support
 browser back and forward and remember reading positions while that Case remains
 open; resizing the viewport clears those positions. On wide screens, Assessment
@@ -370,6 +377,9 @@ Case response forms save workspace-local recovery
 drafts. Their status distinguishes a recovery copy from a submitted Case
 record. After reopening a Case, restore a saved draft explicitly and review it
 before submitting. Copies from other tabs are not silently overwritten.
+If a write cannot be confirmed, the form stays open and further writes are
+blocked. Copy any later edits, then reload and inspect saved records before
+continuing; do not repeat a submission whose outcome is unknown.
 
 For a second opinion, open **Response → Review with another analyst** and
 select the required originals. **Check handoff contents** verifies those bytes

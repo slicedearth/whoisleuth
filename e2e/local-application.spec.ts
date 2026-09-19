@@ -18,6 +18,42 @@ async function pinForm(page: import('@playwright/test').Page) {
   return details.locator('form').first();
 }
 
+test('an unconfirmed filesystem recovery write keeps the form and blocks repeat writes until review', async ({ page, localApplication }) => {
+  await openLocalApplication(page, localApplication);
+  await openCasesView(page); await createCase(page, 'uncertain-recovery.example');
+  let form = await pinForm(page);
+  let commits = 0;
+  page.on('request', request => { if (new URL(request.url()).pathname === '/api/local-workspace/commit') commits++; });
+  await page.route('**/api/local-workspace/commit', async route => {
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    // The real transaction commits, but neither response can prove its digest.
+    // A successful HTTP status alone is deliberately insufficient.
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  }, { times: 1 });
+  await page.route('**/api/local-workspace/receipt/*', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  await form.getByLabel('Label', { exact: true }).fill('Committed recovery copy');
+  await expect(form.getByRole('status')).toContainText('The write may have succeeded');
+  await expect(form.getByRole('button', { name: 'Retry recovery save', exact: true })).toHaveCount(0);
+  await expect(form.getByRole('button', { name: 'Discard this draft', exact: true })).toBeDisabled();
+  await page.clock.install();
+  await form.getByLabel('Fact', { exact: true }).fill('Later text remains only in this form');
+  await page.clock.fastForward(1000);
+  await form.getByRole('button', { name: 'Pin evidence', exact: true }).click();
+  await expect(form.getByRole('status')).toContainText('The write may have succeeded');
+  await expect(form.getByLabel('Fact', { exact: true })).toHaveValue('Later text remains only in this form');
+  expect(commits).toBe(1);
+  await page.unroute('**/api/local-workspace/receipt/*');
+  page.once('dialog', dialog => dialog.accept());
+  await form.getByRole('button', { name: 'Reload and review saved records', exact: true }).click();
+  form = await pinForm(page);
+  await form.getByText('1 saved draft for this form', { exact: true }).click();
+  await form.getByRole('button', { name: 'Restore draft', exact: true }).click();
+  await expect(form.getByLabel('Label', { exact: true })).toHaveValue('Committed recovery copy');
+  await expect(form.getByLabel('Fact', { exact: true })).toHaveValue('');
+  expect(commits).toBe(1);
+});
+
 test('filesystem records, original files and recovery drafts survive restart and browser-data removal', async ({ page, context, localApplication }) => {
   test.slow();
   await openLocalApplication(page, localApplication);

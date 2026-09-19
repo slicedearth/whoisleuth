@@ -2,6 +2,8 @@
   import { tick, type ComponentProps, type Snippet } from 'svelte';
   import { caseInvestigationContext, caseTypeSummary, dispositionLabel, editCase, importCaseReviewReturn, type CaseRecord } from '$lib/cases';
   import { handlesLocalLink } from '$lib/link-activation';
+  import { failedLocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
+  import { reviewClock } from '$lib/review-clock.ts';
   import { buildCaseActionOutcomeSummary } from '$lib/analysis/case-response-model.ts';
   import CaseObservationStage from '$lib/components/CaseObservationStage.svelte';
   import CaseAssessmentStage from '$lib/components/CaseAssessmentStage.svelte';
@@ -12,6 +14,7 @@
   import CaseAttachments from '$lib/components/CaseAttachments.svelte';
   import CaseWorkflowDetails from '$lib/components/CaseWorkflowDetails.svelte';
   import CaseTitleForm from '$lib/components/CaseTitleForm.svelte';
+  import CaseDecisionOverview from '$lib/components/CaseDecisionOverview.svelte';
   import CaseReviewReturn from '$lib/components/CaseReviewReturn.svelte';
   import type { CaseReviewReturn as ReviewReturn } from '../../../../packages/cases/case-review-return.mts';
   import CaseResponsePacketWorkspace from '$lib/components/CaseResponsePacketWorkspace.svelte';
@@ -63,7 +66,7 @@
   const investigationContext = $derived(caseInvestigationContext(record));
   const evidenceLinkedDecisionCount = $derived(record.decisions.filter((decision) =>
     decision.evidencePinIds.some((evidencePinId) => record.evidencePins.some((pin) => pin.id === evidencePinId))).length);
-  const reviewNow = new Date().toISOString();
+  const reviewNow = $derived(new Date($reviewClock).toISOString());
   let evidenceHandoffStage = $state<CaseResponseStage>({
     id: 'evidence_handoff',
     ...CASE_RESPONSE_STAGE_DEFINITIONS.evidence_handoff,
@@ -145,7 +148,7 @@
     focusFallback: (() => HTMLElement | null) | null = null,
     draft?: CaseDraftReceipt,
   ): Promise<boolean> {
-    return persistOperation(() => editCase(record.id, patch, draft), success, focusFallback);
+    return persistOperation(() => editCase(record.id, patch, draft), success, focusFallback, Boolean(draft));
   }
 
   async function persistReviewReturn(preview: ReviewReturn, keys: readonly string[], focus: () => HTMLElement | null): Promise<boolean> {
@@ -156,6 +159,7 @@
     operation: () => ReturnType<typeof editCase>,
     success: string,
     focusFallback: (() => HTMLElement | null) | null,
+    recoveryOwnsFailure = false,
   ): Promise<boolean> {
     if (mutationBusy) return false;
     const focusTarget = document.activeElement instanceof HTMLElement
@@ -168,6 +172,7 @@
         committed = await operation();
       } catch (cause) {
         onmessage(cause instanceof Error ? cause.message : 'Could not update the case response record.');
+        if (recoveryOwnsFailure && failedLocalMutationOutcome(cause) === 'unknown') throw cause;
         return false;
       }
       await reconcileCommitted(committed, success);
@@ -219,7 +224,7 @@
       return;
     }
     if (!await actionStage.prepareDeliveryRecord(action.id, exported.digestSha256)) {
-      onmessage('The packet was exported, but the current receipt draft could not be saved for recovery. Keep this form open and retry its recovery save before preparing another receipt.');
+      onmessage('The packet was exported, but the current receipt draft could not be confirmed for recovery. Keep this form open and review its recovery status before preparing another receipt.');
       return;
     }
     presentationMode = 'quick';
@@ -252,6 +257,7 @@
       <div><dt>Next action</dt><dd>{currentResponseStage?.label ?? 'Review Case'}</dd></div>
     </dl>
   {/if}
+  <CaseDecisionOverview {record} {selectSection} />
   {#if actionSummary.total}
     <div class="action-summary" role="group" aria-label="Case action outcome summary">
       <span><strong>{actionSummary.active}</strong> active</span>

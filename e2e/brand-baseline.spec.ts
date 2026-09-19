@@ -1137,6 +1137,16 @@ test('equal-time posture captures retain both source records and remain unknown 
   const first = requiredValue(history[0], 'The first retained observation is missing.');
   expect(first.context).toMatchObject({ version: 1, domain: 'stored.example', profileId: 'profile-1' });
   expect(requiredValue(first.checks[0], 'The retained check is missing.').sourceContext).toEqual({ version: 1, source: 'dns_ns', observedAt: ISO, state: 'complete', omittedRecords: 0 });
+  await expect(page.getByRole('list', { name: 'Evidence limits for stored.example' })).toContainText('Distinct observations share the latest capture time');
+  const comparison = page.getByRole('region', { name: 'Expected and observed settings for stored.example' });
+  const allComparisons = await comparison.locator('.comparison-grid > article').count();
+  expect(allComparisons).toBeGreaterThan(0);
+  await comparison.getByRole('combobox', { name: 'Show fields for stored.example' }).selectOption('configured');
+  await expect(comparison.locator('.comparison-grid > article')).toHaveCount(1);
+  await comparison.getByRole('combobox', { name: 'Show fields for stored.example' }).selectOption('unknown');
+  await expect(comparison.locator('.comparison-grid > article').first()).toBeVisible();
+  await comparison.getByRole('combobox', { name: 'Show fields for stored.example' }).selectOption('all');
+  await expect(comparison.locator('.comparison-grid > article')).toHaveCount(allComparisons);
   await openBrandWorkbench(page, 'portfolio');
   const matrix = page.getByRole('region', { name: 'Owned-domain comparison' });
   await expect(matrix.locator('tbody tr')).toContainText('Unknown');
@@ -1146,6 +1156,13 @@ test('equal-time posture captures retain both source records and remain unknown 
   await records.locator(':scope > summary').press('Enter');
   await expect(records).toContainText('Distinct observations share the latest capture time');
   await expect(records.locator('summary').filter({ hasText: /^Capture / })).toHaveCount(2);
+  await records.locator('summary').filter({ hasText: /^Source comparisons/u }).click();
+  const comparisonFilter = records.getByRole('combobox', { name: 'Show comparisons' });
+  await comparisonFilter.selectOption('changed');
+  await expect(records.getByRole('status')).toHaveText('Showing 0 of 1 source comparisons. All retained captures remain below.');
+  await comparisonFilter.selectOption('unknown');
+  await expect(records.getByRole('status')).toHaveText('Showing 1 of 1 source comparisons. All retained captures remain below.');
+  expect((await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 })).records[0]!.value).toEqual(saved);
   for (const summary of await records.locator('summary').filter({ hasText: /^Capture / }).all()) { await summary.focus(); await summary.press('Enter'); }
   await expect(records.locator('pre').filter({ hasText: /^ns1\.stored\.example$/ })).toBeVisible();
   await expect(records.locator('pre').filter({ hasText: /^ns2\.stored\.example$/ })).toBeVisible();

@@ -5,6 +5,7 @@ import { caseDraftFields, emptyCaseDraftStore, normalizeCaseDraftStore, removeCa
 import { MAX_CASE_DRAFT_RECORDS, type CaseDraftFields, type CaseDraftRecord } from '../packages/contracts/case-drafts.mts';
 import { CASE_DRAFTS_COLLECTION } from '../frontend/src/lib/browser-local-data-definitions.ts';
 import type { CaseDraftValues } from '../frontend/src/lib/controllers/case-draft.svelte.ts';
+import { BrowserLocalDataError } from '../frontend/src/lib/browser-local-data.ts';
 
 const draft = (overrides: Partial<CaseDraftRecord> = {}): CaseDraftRecord => ({
   id: 'draft-one', revision: 'revision-one', caseId: 'case-one', form: 'decision', formVersion: 1,
@@ -18,6 +19,7 @@ function harness() {
   let unprotected = false;
   let failWrite = false;
   let failRead = false;
+  let unknownWrite: 'before' | 'after' | undefined;
   let hold: ReturnType<typeof gate> | undefined;
   let readHold: ReturnType<typeof gate> | undefined;
   let writes = 0;
@@ -28,7 +30,12 @@ function harness() {
     notify: (next, unsafe) => { state = next; unprotected = unsafe; },
     storage: {
       read: async () => { if (readHold) await readHold.promise; if (failRead) throw new Error('Read unavailable'); return store; },
-      update: async change => { writes++; if (hold) await hold.promise; if (failWrite) throw new Error('Storage unavailable'); store = change(store); },
+      update: async change => {
+        writes++; if (hold) await hold.promise;
+        if (failWrite) throw new Error('Storage unavailable');
+        if (unknownWrite !== 'before') store = change(store);
+        if (unknownWrite) throw new BrowserLocalDataError('LOCAL_DATA_COMMIT_UNKNOWN', 'Private acknowledgement detail');
+      },
     },
   });
   return { controller, get store() { return store; }, set store(next) { store = next; }, get fields() { return fields; },
@@ -36,10 +43,59 @@ function harness() {
     set failWrite(value: boolean) { failWrite = value; }, set hold(value: ReturnType<typeof gate> | undefined) { hold = value; },
     set readHold(value: ReturnType<typeof gate> | undefined) { readHold = value; },
     set failRead(value: boolean) { failRead = value; },
+    set unknownWrite(value: 'before' | 'after' | undefined) { unknownWrite = value; },
   };
 }
 
 describe('bounded Case recovery drafts', () => {
+  for (const timing of ['before', 'after'] as const) test(`unknown recovery acknowledgement ${timing} a write blocks repetition while retaining the form`, async context => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const h = harness();
+    context.after(() => h.controller.destroy());
+    h.unknownWrite = timing;
+    h.fields = { summary: 'Original unsaved reasoning' }; h.controller.changed();
+    await assert.rejects(h.controller.flush(), { code: 'LOCAL_DATA_COMMIT_UNKNOWN' });
+    assert.equal(h.state?.status, 'unknown');
+    assert.match(h.state?.message ?? '', /may have succeeded/u);
+    assert.doesNotMatch(h.state?.message ?? '', /not replaced|retry|Private acknowledgement/u);
+    assert.equal(h.store.records.length, timing === 'after' ? 1 : 0);
+    h.fields = { summary: 'Later reasoning must remain in the form' }; h.controller.changed();
+    context.mock.timers.tick(1000); await Promise.resolve();
+    await h.controller.flush(); await h.controller.discard(); await h.controller.discard(draft());
+    await h.controller.restore(draft());
+    assert.equal(await h.controller.leaveForm(), false);
+    assert.equal(await h.controller.submit(async () => { assert.fail('uncertain write must not be repeated'); }), false);
+    h.failRead = true; await h.controller.refresh();
+    assert.equal(h.state?.status, 'unknown'); assert.ok(h.state?.readError);
+    h.failRead = false; await h.controller.refresh();
+    assert.equal(h.state?.status, 'unknown', 'a read cannot resolve the pending write acknowledgement');
+    assert.equal(h.writes, 1); assert.equal(h.unprotected, true);
+    assert.deepEqual(h.fields, { summary: 'Later reasoning must remain in the form' });
+  });
+  test('an unknown discard never claims the recovery copy is unchanged or clears the form', async () => {
+    const h = harness();
+    try {
+      h.fields = { summary: 'Keep the in-memory copy' }; h.controller.changed(); await h.controller.flush();
+      h.unknownWrite = 'after'; await h.controller.discard();
+      assert.equal(h.store.records.length, 0); assert.equal(h.state?.status, 'unknown');
+      assert.deepEqual(h.fields, { summary: 'Keep the in-memory copy' });
+      assert.equal(h.unprotected, true);
+      await h.controller.discard(); assert.equal(h.writes, 2);
+    } finally { h.controller.destroy(); }
+  });
+  test('an unconfirmed domain write cannot be submitted again after its recovery copy was removed', async () => {
+    const h = harness(); let submissions = 0;
+    try {
+      h.fields = { summary: 'One append only' }; h.controller.changed();
+      assert.equal(await h.controller.submit(async receipt => {
+        submissions++; h.store = removeCaseDraft(h.store, receipt, 'case-one');
+        throw new BrowserLocalDataError('LOCAL_DATA_COMMIT_UNKNOWN', 'No acknowledgement');
+      }), false);
+      assert.equal(h.state?.status, 'unknown'); assert.equal(h.unprotected, true);
+      assert.equal(await h.controller.submit(async () => { submissions++; return true; }), false);
+      assert.equal(submissions, 1); assert.equal(h.writes, 1);
+    } finally { h.controller.destroy(); }
+  });
   test('checkbox defaults admit later values without changing scalar or relation field types', () => {
     const values: CaseDraftValues<{ enabled: false; retained: true; note: string; ids: string[] }> = {
       enabled: true, retained: false, note: 'Retained manual draft', ids: ['pin-one'],

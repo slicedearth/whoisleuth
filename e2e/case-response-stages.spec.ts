@@ -16,6 +16,67 @@ import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts'
 
 test.use({ timezoneId: 'UTC' });
 
+test('an open Case updates due reviews as time advances without changing retained evidence', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-09-10T10:00:00Z') });
+  const action = currentActionFixture({
+    id: 'clock-review', type: 'registrar_report', recipient: 'Fixture reporting route',
+    contactSource: 'Retained reporting route', routeObservedAt: '2026-09-10T09:00:00Z', contactLimitations: [],
+    dueAt: '2026-09-10T10:00:30Z', targetState: 'acknowledged', reference: 'Manual receipt',
+    followUpAt: '2026-09-10T10:00:30Z', outcome: 'Received for review',
+    createdAt: '2026-09-10T09:00:00Z', updatedAt: '2026-09-10T09:30:00Z',
+  });
+  const record = caseRecord({ domain: 'review-clock.example', actions: [action] });
+  await openSeededTimelineCase(page, record.domain, [record], CASE_SCHEMA_VERSION);
+  const workspace = await openCaseResponseWorkspace(page, '', 'quick');
+  await openCaseSection(page, 'Summary');
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  await expect(workspace.getByText('0 overdue', { exact: true })).toBeVisible();
+  await expect(workspace.getByText('0 follow-up due', { exact: true })).toBeVisible();
+  await page.clock.fastForward(60_000);
+  await expect(workspace.getByText('1 overdue', { exact: true })).toBeVisible();
+  await expect(workspace.getByText('1 follow-up due', { exact: true })).toBeVisible();
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+});
+
+test('the decision overview retains opposing evidence and unknowns across responsive layouts', async ({ page }, testInfo) => {
+  const at = '2026-09-10T10:00:00.000Z';
+  const pin = { id: 'supporting-pin', checkpointId: null, field: 'http.status', category: 'http', label: 'Observed page', value: 'A sign-in page was observed',
+    source: 'Direct HTTP observation', sourceState: 'complete', sourceSchema: null, observedAt: at, collectionDepth: 'deep',
+    completeness: 'complete', truncated: false, transitionExpectation: null, limitations: [], createdAt: at };
+  const record = caseRecord({ domain: 'decision-overview.example',
+    evidencePins: [pin, { ...pin, id: 'contrary-pin', label: 'Separate observation', value: 'The supplied screenshot shows a different page', source: 'Analyst-supplied screenshot', observedAt: null, completeness: 'unknown' }],
+    assertions: [{ id: 'assessment', kind: 'hypothesis', statement: 'Does this page imitate the reported service?', rationale: 'Compare the retained observations.', state: 'open',
+      evidencePinIds: ['supporting-pin', 'contrary-pin'], evidenceRelations: [{ evidencePinId: 'supporting-pin', stance: 'supports' }, { evidencePinId: 'contrary-pin', stance: 'contradicts' }], createdAt: at, updatedAt: at }],
+    decisions: [{ id: 'decision', summary: 'Further review needed', rationale: 'The two sources disagree.', confidence: 'low', confidenceBasis: 'The supplied screenshot is undated.', evidencePinIds: ['supporting-pin', 'contrary-pin'], createdAt: at }],
+  });
+  await openSeededTimelineCase(page, record.domain, [record], CASE_SCHEMA_VERSION);
+  await openCaseResponseWorkspace(page, '', 'quick');
+  await openCaseSection(page, 'Summary');
+  const overview = page.getByRole('region', { name: 'Decision overview', exact: true });
+  await expect(overview.getByRole('region', { name: 'Supporting evidence' })).toContainText('Direct HTTP observation');
+  await expect(overview.getByRole('region', { name: 'Contrary evidence' })).toContainText('Observation time unavailable');
+  await expect(overview).toContainText('Further review needed');
+  await overview.getByText('Incomplete or undated pinned evidence · 1', { exact: true }).click();
+  await expect(overview).toContainText('Separate observation');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720], [2560, 1440], [3840, 2160]] as const) {
+      await page.setViewportSize({ width, height });
+      await expectNoHorizontalOverflow(page);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+      await page.screenshot({ path: testInfo.outputPath(`decision-page-${theme}-${width}.png`), fullPage: true });
+      await overview.screenshot({ path: testInfo.outputPath(`decision-overview-${theme}-${width}.png`) });
+    }
+  }
+  await overview.getByRole('button', { name: 'Review assessment', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('navigation', { name: 'Case sections' }).getByRole('link', { name: 'Assessment', exact: true })).toHaveAttribute('aria-current', 'page');
+  const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(stored.records[0]!.value.decisions[0]?.summary).toBe('Further review needed');
+  expect(stored.records[0]!.value.evidencePins).toHaveLength(2);
+});
+
 test('a recheck uses selected evidence without advancing its clock or discarding the manual draft', async ({ page }, testInfo) => {
   const observedAt = '2026-09-01T10:00:00.123Z';
   const pin = {

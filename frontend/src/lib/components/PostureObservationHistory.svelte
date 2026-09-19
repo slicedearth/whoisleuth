@@ -2,11 +2,14 @@
   import { currentDesiredPostureObservation, desiredPostureObservations, type DesiredPostureBaseline } from '$lib/analysis/brand-profile-model.ts';
   import { buildDesiredPostureHistory } from '$lib/analysis/owned-domain-posture-review.ts';
   import { POSTURE_SOURCE_LABELS } from '../../../../packages/evidence/domain-posture-context.mts';
+  import { reviewClock } from '$lib/review-clock.ts';
 
   let { baseline }: { baseline: DesiredPostureBaseline } = $props();
   const observations = $derived(desiredPostureObservations(baseline));
   const selected = $derived(currentDesiredPostureObservation(baseline));
-  const transitions = $derived(buildDesiredPostureHistory(observations));
+  const transitions = $derived(buildDesiredPostureHistory(observations, new Date($reviewClock).toISOString()));
+  let filter = $state<'all' | 'changed' | 'unknown'>('all');
+  const visibleTransitions = $derived(transitions.filter(item => filter === 'all' || filter === 'changed' && item.changedChecks.length > 0 || filter === 'unknown' && item.unknownChecks > 0));
 </script>
 
 <div class="posture-history">
@@ -14,7 +17,9 @@
   {#if transitions.length}
     <details>
       <summary>Source comparisons <span>{transitions.length}</span></summary>
-      <ol>{#each [...transitions].reverse() as transition}
+      <label>Show comparisons <select bind:value={filter}><option value="all">All</option><option value="changed">Changed</option><option value="unknown">Unknown</option></select></label>
+      <p role="status">Showing {visibleTransitions.length} of {transitions.length} source comparisons. All retained captures remain below.</p>
+      <ol>{#each [...visibleTransitions].reverse() as transition}
         <li>
           <span>{transition.previousObservedAt || 'Unknown capture time'} → {transition.observedAt || 'Unknown capture time'}</span>
           <strong>{transition.changedChecks.length} changed · {transition.comparableChecks} comparable · {transition.unknownChecks} unknown</strong>

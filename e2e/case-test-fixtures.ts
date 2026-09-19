@@ -2,6 +2,7 @@ import { openCaseSection, openConsoleView } from './console-navigation';
 import type { Page } from '@playwright/test';
 import { expect } from './fixtures';
 import { migrateLegacyBrowserData } from './helpers';
+import type { CaseRecord } from '../packages/cases/case-record-contracts.mts';
 
 export interface SnapshotOverrides {
   id?: string;
@@ -98,6 +99,7 @@ export interface CaseOverrides {
   evidencePins?: unknown[];
   actions?: unknown[];
   assertions?: unknown[];
+  decisions?: CaseRecord['decisions'];
   manualTrail?: unknown[];
   branches?: unknown[];
   sightings?: unknown[];
@@ -120,6 +122,7 @@ export function caseRecord(overrides: CaseOverrides = {}) {
     evidencePins: overrides.evidencePins ?? [],
     actions: overrides.actions ?? [],
     assertions: overrides.assertions ?? [],
+    decisions: overrides.decisions ?? [],
     manualTrail: overrides.manualTrail ?? [],
     branches: overrides.branches ?? [],
     sightings: overrides.sightings ?? [],

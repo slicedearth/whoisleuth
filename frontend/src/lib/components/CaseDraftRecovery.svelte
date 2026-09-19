@@ -16,19 +16,21 @@
 
 {#if draft.state.message || draft.state.readError || draft.state.candidates.length}
   <div class="draft-recovery" data-recovery-form={draft.form} data-recovery-status={draft.state.status}>
-    {#if draft.state.readError || draft.state.message}<p role="status">{draft.state.readError || draft.state.message}</p>{/if}
+    {#if draft.state.message}<p role="status">{draft.state.message}</p>{/if}
+    {#if draft.state.readError}<p role="status">{draft.state.readError}</p>{/if}
     <div class="draft-actions">
       {#if draft.state.readError}<button type="button" class="btn small" disabled={draft.state.busy} onclick={() => void draft.refresh()}>Reload saved drafts</button>{/if}
       {#if draft.state.status === 'error' && draft.state.edited}<button type="button" class="btn small" disabled={draft.state.busy} onclick={() => void draft.flush().catch(() => {})}>Retry recovery save</button>{/if}
-      {#if draft.state.edited}<button type="button" class="btn small" disabled={draft.state.busy} onclick={(event) => void recover(event, () => draft.discard())}>Discard this draft</button>{/if}
+      {#if draft.state.status === 'unknown'}<button type="button" class="btn small" disabled={draft.state.busy} onclick={() => window.location.assign(`${window.location.pathname}${window.location.search}`)}>Reload and review saved records</button>{/if}
+      {#if draft.state.edited}<button type="button" class="btn small" disabled={draft.state.busy || draft.state.status === 'unknown'} onclick={(event) => void recover(event, () => draft.discard())}>Discard this draft</button>{/if}
     </div>
     {#if draft.state.candidates.length}
       <details><summary>{draft.state.candidates.length} saved draft{draft.state.candidates.length === 1 ? '' : 's'} for this form</summary>
         <p>{draft.retention === 'document' ? 'Practice copies stay on this page only.' : 'Recovery copies stay in this workspace and are not included in exports.'} Discard the current form before restoring another copy.</p>
         <ul>{#each draft.state.candidates as candidate (candidate.id)}
           <li><span>{new Date(candidate.updatedAt).toLocaleString()}</span>
-            <button type="button" class="btn small" disabled={draft.state.busy || draft.state.edited || candidate.formVersion !== 1} onclick={(event) => void recover(event, () => draft.restore(candidate))}>Restore draft</button>
-            <button type="button" class="btn small" disabled={draft.state.busy} onclick={() => void draft.discard(candidate)}>Discard saved draft</button>
+            <button type="button" class="btn small" disabled={draft.state.busy || draft.state.edited || draft.state.status === 'unknown' || candidate.formVersion !== 1} onclick={(event) => void recover(event, () => draft.restore(candidate))}>Restore draft</button>
+            <button type="button" class="btn small" disabled={draft.state.busy || draft.state.status === 'unknown'} onclick={() => void draft.discard(candidate)}>Discard saved draft</button>
             <button type="button" class="btn small" aria-expanded={previewId === candidate.id} onclick={() => previewId = previewId === candidate.id ? null : candidate.id}>View saved values</button>
             {#if previewId === candidate.id}<pre>{JSON.stringify(candidate.fields, null, 2)}</pre>{/if}
           </li>

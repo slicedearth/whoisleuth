@@ -1,10 +1,31 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { buildDesiredPostureHistory, buildOwnedDomainPostureReview } from '../frontend/src/lib/analysis/owned-domain-posture-review.ts';
+import { buildDesiredPostureHistory, buildOwnedDomainPostureReview, filterPostureComparisons, type DesiredPostureComparison } from '../frontend/src/lib/analysis/owned-domain-posture-review.ts';
 import type { BrandProfile } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import type { DomainPostureHttpResponse } from '../frontend/src/lib/analysis/client-response-contracts.ts';
 import { brandPostureObservationContext } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import { postureObservation, postureSource } from './posture-observation-fixture.mts';
+
+test('comparison filters keep unknowns distinct and preserve all source rows', () => {
+  const states: DesiredPostureComparison['state'][] = ['aligned', 'approved_window', 'drift', 'not_configured', 'observed', 'review', 'suppressed', 'unavailable', 'unknown', 'unsupported'];
+  const rows: DesiredPostureComparison[] = states.map(state => ({ field: 'nameservers', label: state, state,
+    desired: state === 'aligned' || state === 'drift' ? ['ns1.example'] : [], observed: [], explanation: 'Fixture comparison', suppressionReason: '', approvedWindowSummary: '' }));
+  const before = structuredClone(rows);
+  const baseline = { nameservers: [], ds: [], mx: [], caa: [] };
+  assert.deepEqual(filterPostureComparisons(rows, 'different', baseline).map(row => row.state), ['approved_window', 'drift', 'suppressed']);
+  assert.deepEqual(filterPostureComparisons(rows, 'unknown', baseline).map(row => row.state), ['unavailable', 'unknown', 'unsupported']);
+  assert.deepEqual(filterPostureComparisons(rows, 'all', baseline), before);
+  assert.deepEqual(rows, before);
+});
+
+test('configured filtering includes expected absence but not observation-only or unconfigured fields', () => {
+  const baseline = { nameservers: [], ds: [], mx: [], caa: ['0 issue "ca.example"'],
+    recordModes: { nameservers: 'unconfigured', ds: 'observe_only', mx: 'expect_none', caa: 'expect_records' } as const };
+  const rows: DesiredPostureComparison[] = (['nameservers', 'ds', 'mx', 'caa'] as const).map(field => ({ field, label: field,
+    state: 'unknown', desired: baseline[field], observed: [], explanation: 'No current observation', suppressionReason: '', approvedWindowSummary: '' }));
+  assert.deepEqual(filterPostureComparisons(rows, 'configured', baseline).map(row => row.field), ['mx', 'caa']);
+  assert.deepEqual(filterPostureComparisons(rows, 'unknown', baseline), rows);
+});
 
 const profile = {
   id: 'profile-1',

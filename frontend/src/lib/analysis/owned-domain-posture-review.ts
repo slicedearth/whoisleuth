@@ -11,6 +11,7 @@ import type {
 } from './client-response-contracts.ts';
 import { brandPostureObservationContext, currentDesiredPostureObservation, MAX_DESIRED_POSTURE_OBSERVATIONS } from './brand-profile-model.ts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+import { DOMAIN_CONTROL_RECORD_LIST_FIELDS } from '../../../../packages/contracts/domain-control-manifest.mts';
 import { canonicalPostureRecords, domainControlRecordMode, domainControlEvidenceAdmission } from '../../../../packages/evidence/domain-control-runtime.mts';
 import { DOMAIN_POSTURE_COMPARISON_VERSION, MAX_POSTURE_CHECKS, MAX_POSTURE_CHECK_RECORDS, postureSourceAdmission, postureTransferRestriction, type DomainPostureProfileContext } from '../../../../packages/evidence/domain-posture-context.mts';
 
@@ -46,7 +47,10 @@ export type OwnedDomainPostureReview = Readonly<{
   baseline: DesiredPostureBaseline | null;
   baselineComparisons: readonly DesiredPostureComparison[];
   previousChanges: readonly DesiredPosturePreviousChange[];
-  limitations: readonly string[];
+  limitations: readonly Readonly<{
+    id: 'configuration' | 'external_dependency' | 'attestation' | 'retained_evidence';
+    text: string;
+  }>[];
 }>;
 
 export type DesiredPostureComparison = Readonly<{
@@ -72,6 +76,25 @@ export type DesiredPosturePreviousChange = Readonly<{
   current: readonly string[];
   limitation?: string;
 }>;
+
+export const POSTURE_COMPARISON_FILTERS = {
+  all: 'All fields', configured: 'Configured expectations', different: 'Different from expected', unknown: 'Unknown or unavailable',
+} as const;
+export type PostureComparisonFilter = keyof typeof POSTURE_COMPARISON_FILTERS;
+
+/** View-only filtering never changes the stored observation or its comparison state. */
+export function filterPostureComparisons(rows: readonly DesiredPostureComparison[], filter: PostureComparisonFilter, baseline: Parameters<typeof domainControlRecordMode>[0]) {
+  const configured = (row: DesiredPostureComparison) => {
+    const field = DOMAIN_CONTROL_RECORD_LIST_FIELDS.find(field => field === row.field);
+    if (!field) return row.desired.length > 0;
+    const mode = domainControlRecordMode(baseline, field);
+    return mode === 'expect_none' || mode === 'expect_records';
+  };
+  return rows.filter(row => filter === 'all'
+    || filter === 'configured' && configured(row)
+    || filter === 'different' && ['drift', 'approved_window', 'suppressed'].includes(row.state)
+    || filter === 'unknown' && ['unknown', 'unavailable', 'unsupported'].includes(row.state));
+}
 
 const PROFILE_LABELS: Record<MailProtectionProfile, string> = {
   standard: 'Active mail domain',
@@ -533,10 +556,10 @@ export function buildOwnedDomainPostureReview(
     baselineComparisons: baseline ? buildDesiredPostureComparisonsFromObservation(baseline, current, now, expected ? { context: expected } : {}) : [],
     previousChanges: retained?.observation ? observationChanges(retained.observation, current, now, profileAdmission(current, expected)) : [],
     limitations: [
-      'The desired-state view organises the selected Brand Profile and this point-in-time audit. It does not change DNS, registrar, mail, or provider configuration.',
-      'An external dependency is a review lead. Unavailable evidence is not proof that a dependency is dangling, claimable, insecure, abandoned, or controlled by another party.',
-      'Protection controls that cannot be observed from public data remain analyst attestations with their own review and expiry dates.',
-      ...(retained?.limitation ? [retained.limitation] : []),
+      { id: 'configuration', text: 'Expected settings do not change DNS, registrar, mail or provider configuration.' },
+      ...(dependencies.length ? [{ id: 'external_dependency' as const, text: 'An external dependency is a review lead. Unavailable evidence does not establish that it is dangling, claimable or controlled by another party.' }] : []),
+      { id: 'attestation', text: 'Account controls remain analyst attestations with their own review and expiry dates.' },
+      ...(retained?.limitation ? [{ id: 'retained_evidence' as const, text: retained.limitation }] : []),
     ],
   };
 }

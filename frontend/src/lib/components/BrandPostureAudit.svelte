@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { BrandProfile } from '$lib/brand-profiles';
   import type { DomainPostureHttpResponse } from '$lib/analysis/client-response-contracts';
-  import { buildOwnedDomainPostureReview, type DomainPostureAuditResult } from '$lib/analysis/owned-domain-posture-review.ts';
+  import { buildOwnedDomainPostureReview, filterPostureComparisons, POSTURE_COMPARISON_FILTERS, type PostureComparisonFilter, type DomainPostureAuditResult } from '$lib/analysis/owned-domain-posture-review.ts';
+  import { reviewClock } from '$lib/review-clock.ts';
   import { desiredPostureObservations } from '$lib/analysis/brand-profile-model.ts';
   import { POSTURE_SOURCE_LABELS } from '../../../../packages/evidence/domain-posture-context.mts';
   import PostureObservationHistory from './PostureObservationHistory.svelte';
@@ -13,6 +14,7 @@
     audit: () => void | Promise<void>;
     retainObservation: (report: DomainPostureHttpResponse) => void | Promise<void>;
   } = $props();
+  let comparisonFilter = $state<PostureComparisonFilter>('all');
 </script>
 
 <section class="audit card">
@@ -35,8 +37,11 @@
           {#if item.error}
             <p class="error">{item.error}</p>
           {:else if item.report}
-            {@const review = buildOwnedDomainPostureReview(active, item.report, new Date().toISOString(), item.context)}
+            {@const review = buildOwnedDomainPostureReview(active, item.report, new Date($reviewClock).toISOString(), item.context)}
             <p class="counts">{item.report.summary.danger || 0} action · {item.report.summary.warning || 0} review · {item.report.summary.pass || 0} pass</p>
+            <ul class="limitation" aria-label={`Evidence limits for ${item.domain}`}>
+              {#each review.limitations as limitation (limitation.id)}<li>{limitation.text}</li>{/each}
+            </ul>
             <section class="desired-state" aria-label={`Expected settings for ${item.domain}`}>
               <header>
                 <div><strong>{review.profileLabel}</strong><span>Expected settings</span></div>
@@ -51,7 +56,6 @@
                   </article>
                 {/each}
               </div>
-              <p class="limitation">{review.limitations[0]}</p>
             </section>
             <section class="baseline-review" aria-label={`Expected and observed settings for ${item.domain}`}>
               <header>
@@ -62,8 +66,13 @@
                 {#if review.baseline}<button class="btn compact" onclick={() => retainObservation(item.report!)}>Retain this observation</button>{/if}
               </header>
               {#if review.baseline}
+                {@const visibleComparisons = filterPostureComparisons(review.baselineComparisons, comparisonFilter, review.baseline)}
+                <label class="comparison-filter">Show fields for {item.domain}
+                  <select bind:value={comparisonFilter}>{#each Object.entries(POSTURE_COMPARISON_FILTERS) as [value, label]}<option {value}>{label}</option>{/each}</select>
+                </label>
+                <p class="limitation" role="status">Showing {visibleComparisons.length} of {review.baselineComparisons.length} comparison fields.</p>
                 <div class="comparison-grid">
-                  {#each review.baselineComparisons as comparison}
+                  {#each visibleComparisons as comparison}
                     <article class={`comparison-${comparison.state}`}>
                       <div><strong>{comparison.label}</strong><span>{comparison.state.replaceAll('_', ' ')}</span></div>
                       <p>{comparison.explanation}</p>
@@ -156,7 +165,6 @@
                     </article>
                   {/each}
                 </div>
-                <p class="limitation">{review.limitations[1]}</p>
               </details>
             {/if}
           {:else}
@@ -208,6 +216,7 @@
   .baseline-review>p,.baseline-review li{color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .baseline-review details{font-size:var(--text-xs)}.baseline-review ul{margin-bottom:0;padding-left:20px}
   .comparison-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .comparison-filter{display:grid;gap:6px;font-size:var(--text-xs);margin-block:10px}.comparison-filter select{width:100%;min-width:0;max-width:420px}
   .comparison-grid article{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .comparison-grid article>div{display:flex;justify-content:space-between;gap:8px}.comparison-grid article>div span{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   .comparison-grid article.comparison-drift>div span{color:var(--danger)}.comparison-grid article.comparison-suppressed>div span{color:var(--amber)}.comparison-grid article.comparison-aligned>div span{color:var(--accent2)}
