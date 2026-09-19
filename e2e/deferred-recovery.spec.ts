@@ -18,6 +18,41 @@ import {
 
 const CASES_KEY = 'whois-rdap-cases-v1';
 
+test('a failed opening action preserves an already loaded panel and does not repeat the action', async ({ page }, testInfo) => {
+  await page.goto('/demo#case-practice');
+  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  await expect(practice).toBeVisible();
+  await page.evaluate(() => {
+    const original = HTMLElement.prototype.focus;
+    let calls = 0;
+    Object.defineProperty(window, '__openingActionCalls', { get: () => calls });
+    HTMLElement.prototype.focus = function (...args) {
+      if (this.id === 'case-practice-title' && ++calls === 1) throw new Error('private opening-action sentinel');
+      return original.apply(this, args);
+    };
+  });
+  await practice.getByRole('button', { name: 'Discard practice and restart', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'This section loaded, but its opening action could not finish.' })).toBeVisible();
+  await expect(practice).toBeVisible();
+  await expect(practice.locator('..')).toHaveAttribute('data-deferred-state', 'ready');
+  const label = practice.locator('form[data-recovery-form="evidence-pin"]').getByLabel('Label', { exact: true });
+  await label.fill('The loaded form is still usable');
+  await expect(label).toHaveValue('The loaded form is still usable');
+  for (const [theme, width] of [['light', 320], ['dark', 1280]] as const) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`opening-action-${theme}-${width}.png`), fullPage: true });
+  }
+  expect(await page.evaluate(() => (window as unknown as { __openingActionCalls: number }).__openingActionCalls)).toBe(1);
+  await expect(page.locator('body')).not.toContainText('private opening-action sentinel');
+  await expect(page.getByRole('button', { name: 'Reload page', exact: true })).toHaveCount(0);
+  await practice.getByRole('button', { name: 'Discard practice and restart', exact: true }).click();
+  await expect(practice.getByRole('heading', { name: 'Practise a Case review', exact: true })).toBeFocused();
+  await expect(label).toHaveValue('');
+  await expect(page.getByText('This section loaded, but its opening action could not finish.', { exact: false })).toHaveCount(0);
+});
+
 function isChunk(route: Route, pathname: string): boolean {
   return new URL(route.request().url()).pathname === pathname;
 }
