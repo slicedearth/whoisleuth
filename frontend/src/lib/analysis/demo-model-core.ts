@@ -627,7 +627,7 @@ export function syntheticDemoLookupView(id: string) {
         parentNameservers: dns.nameservers,
         registryNameservers: dns.nameservers,
         findings: [
-          { id: 'parent_registry_ns', label: 'Parent and registry nameservers', state: 'healthy', summary: 'Parent view and registry publication agree', detail: 'The fixed nameserver sets are equivalent.', remediation: '' },
+          { id: 'parent_registry_ns', label: 'Recursive and registry nameservers', state: 'healthy', summary: 'Recursive observation and registry publication agree', detail: 'The fixed nameserver sets are equivalent.', remediation: '' },
           { id: 'authority_reachability', label: 'Direct nameserver reachability', state: 'healthy', summary: 'Selected nameservers answered direct NS and SOA queries', detail: 'Synthetic fixture only; no DNS query occurred.', remediation: '' },
         ],
         authorities: dns.nameservers.slice(0, 2).map((nameserver) => ({

@@ -65,7 +65,7 @@ describe('DNS delegation health', () => {
     assert.match(result.limitations.join(' '), /no eligible authority/iu);
   });
 
-  test('keeps registry, parent, and direct authority evidence separately attributed', async () => {
+  test('keeps registry, recursive, and direct authority evidence separately attributed', async () => {
     const calls: Array<{ nameserver: string; address: string }> = [];
     const result = await collectDnsDelegationHealth('example.test', PARENT, {
       registryEvidence: REGISTRY,
@@ -105,6 +105,34 @@ describe('DNS delegation health', () => {
     assert.equal(result.authorities.every((authority) => authority.addressSource === 'registry_glue'), true);
     assert.equal(result.findings.every((finding) => finding.state === 'healthy'), true);
     assert.match(result.limitations.join(' '), /does not decide registration availability/i);
+    assert.match(result.limitations.join(' '), /not a direct parent-server query/u);
+    assert.match(result.findings[0]?.detail ?? '', /Recursive resolver:/u);
+    assert.doesNotMatch(result.findings[0]?.summary ?? '', /parent/iu);
+  });
+
+  test('distinguishes complete authority coverage from a bounded sample of eligible nameservers', async () => {
+    for (const count of [MAX_AUTHORITIES, MAX_AUTHORITIES + 2]) {
+      const nameservers = Array.from({ length: count }, (_, index) => `ns${index}.example.test`);
+      const queried: string[] = [];
+      const result = await collectDnsDelegationHealth('example.test', { ...PARENT, records: nameservers }, {
+        registryEvidence: { nameservers },
+        resolve4: async () => ['93.184.216.34'],
+        resolve6: async () => [],
+        queryAuthority: async ({ nameserver }) => {
+          queried.push(nameserver);
+          return { nameservers, soaPrimary: nameservers[0], errorCode: null, error: null };
+        },
+        observedAt: () => OBSERVED_AT,
+      });
+      assert.equal(queried.length, MAX_AUTHORITIES);
+      assert.equal(result.diagnostics.eligibleAuthorityCount, count);
+      assert.equal(result.diagnostics.queriedAuthorityCount, MAX_AUTHORITIES);
+      assert.equal(result.diagnostics.omittedAuthorityCount, count - MAX_AUTHORITIES);
+      assert.equal(result.status, count === MAX_AUTHORITIES ? 'success' : 'partial');
+      assert.equal(result.complete, count === MAX_AUTHORITIES);
+      assert.equal(result.truncated, count !== MAX_AUTHORITIES);
+      if (count > MAX_AUTHORITIES) assert.ok(result.limitations.includes('4 of 6 eligible nameservers were selected; 2 were not queried.'));
+    }
   });
 
   test('compares bounded direct authority record sets without merging their provenance', async () => {

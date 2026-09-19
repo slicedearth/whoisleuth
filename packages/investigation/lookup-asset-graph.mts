@@ -475,7 +475,7 @@ export function buildLookupAssetGraph(input: Readonly<{
   const delegation = record(dnsEvidence.delegation);
   const delegationLimits = limitations(delegation.limitations, 'delegation');
   const registryObservationId = addNode('observation', 'Registry publication', 'Registry nameserver and glue evidence');
-  const parentObservationId = addNode('observation', 'Recursive parent view', 'Point-in-time parent delegation observation');
+  const parentObservationId = addNode('observation', 'Recursive nameserver observation', 'Point-in-time recursive resolver observation, not a direct parent-server query');
   for (const nameserver of textList(record(delegation.registry).nameservers, 'delegation.registry.nameservers')) {
     const nameserverId = addNode('hostname', nameserver, 'Authoritative nameserver');
     if (registryObservationId && nameserverId) {
@@ -496,9 +496,9 @@ export function buildLookupAssetGraph(input: Readonly<{
       addEdge({
         source: parentObservationId,
         target: nameserverId,
-        ...dnsEdge('parent-observes', 'parent view observes', ['delegation']),
+        ...dnsEdge('parent-observes', 'recursive resolver observes', ['delegation']),
         observedAt: isoDate(delegation.observedAt),
-        sourceLabel: 'Recursive parent view',
+        sourceLabel: 'Recursive nameserver observation',
         completeness: sourceCompleteness(delegation),
         limitations: delegationLimits,
       });

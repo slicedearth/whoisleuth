@@ -518,7 +518,10 @@ function boundedDataArray(value: unknown, maximum: number, label: string): unkno
     || Number(length) < 0) {
     throw new TypeError(`${label} must have a stable non-negative length.`);
   }
-  const retainedLength = Math.min(Number(length), maximum);
+  if (Number(length) > maximum) {
+    throw new TypeError(`${label} exceeds its ${maximum}-item admission bound; no partial fact was retained.`);
+  }
+  const retainedLength = Number(length);
   const output: unknown[] = [];
   for (let index = 0; index < retainedLength; index += 1) {
     const descriptor = stableOwnDescriptor(value, String(index), label);

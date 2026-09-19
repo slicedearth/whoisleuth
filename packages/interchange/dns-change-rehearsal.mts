@@ -372,12 +372,12 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
     : finding('intended_input', 'ready', 'Intended values fit the rehearsal contract', 'Every entered DNS record and public address was admitted to the bounded intended configuration.'));
 
   findings.push(!currentComplete
-    ? finding('current_evidence', 'unknown', 'Current evidence is incomplete', 'Refresh and review the registry, parent, and direct nameserver observations before using this rehearsal.')
+    ? finding('current_evidence', 'unknown', 'Current evidence is incomplete', 'Refresh and review the registry, recursive resolver, and direct nameserver observations before using this rehearsal.')
     : current.length && registry.length && sameSet(current, registry)
-      ? finding('current_evidence', 'ready', 'Current delegation agrees', 'The retained parent view and registry nameserver publication are equivalent.')
-      : finding('current_evidence', 'review', 'Resolve the current delegation first', 'The retained parent and registry nameserver sets are unavailable or differ.'));
+      ? finding('current_evidence', 'ready', 'Current nameserver observations agree', 'The retained recursive resolver observation and registry nameserver publication are equivalent; no direct parent-server observation is inferred.')
+      : finding('current_evidence', 'review', 'Resolve the current delegation first', 'The retained recursive and registry nameserver sets are unavailable or differ.'));
   findings.push(proposed.length
-    ? finding('proposed_nameservers', changingNameservers ? 'review' : 'ready', changingNameservers ? 'Nameserver change proposed' : 'Nameserver set is unchanged', changingNameservers ? `${proposed.length} proposed nameserver${proposed.length === 1 ? '' : 's'} will replace the retained parent view.` : 'No parent nameserver change is represented by this input.')
+    ? finding('proposed_nameservers', changingNameservers ? 'review' : 'ready', changingNameservers ? 'Nameserver change proposed' : 'Nameserver set is unchanged', changingNameservers ? `${proposed.length} proposed nameserver${proposed.length === 1 ? '' : 's'} differ from the retained recursive observation.` : 'No nameserver change is represented by this input.')
     : finding('proposed_nameservers', 'blocked', 'Enter the intended nameservers', 'A rehearsal cannot be evaluated until the complete intended nameserver set is entered.'));
   findings.push(!inBailiwick.length
     ? finding('glue', 'ready', 'No proposed in-bailiwick glue dependency', 'None of the proposed nameservers is inside the domain being changed.')

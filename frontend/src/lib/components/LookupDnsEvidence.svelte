@@ -111,7 +111,7 @@
         <p class="delegation-detail">{delegation.detail}</p>
         {#if delegation.domain}<p class="delegation-detail">Registration-delegation target: {delegation.domain}.</p>{/if}
         <div class="delegation-sources">
-          <article><small>Parent resolver view</small><strong>{delegation.parentNameservers.join(' · ') || 'Unavailable'}</strong></article>
+          <article><small>Recursive nameserver observation</small><strong>{delegation.parentNameservers.join(' · ') || 'Unavailable'}</strong></article>
           <article><small>Registry publication</small><strong>{delegation.registryNameservers.join(' · ') || 'Unavailable'}</strong></article>
         </div>
         <div class="delegation-findings">

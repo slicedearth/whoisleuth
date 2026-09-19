@@ -1,5 +1,5 @@
 // Bounded delegation-health evidence for deep single-domain Lookup. Registry
-// publication, recursive parent-view answers, and direct nameserver queries
+// publication, recursive resolver answers, and direct nameserver queries
 // remain separately attributed. The result never participates in registration
 // availability and never treats a failed query as record absence.
 
@@ -415,9 +415,9 @@ async function collectDnsDelegationHealth(
     ? parentQuery.status
     : 'error';
   const parentNameservers = hostnames(parentQuery.records);
-  const candidates = [...new Set([...parentNameservers, ...registry.nameservers])]
-    .sort()
-    .slice(0, MAX_AUTHORITIES);
+  const eligibleAuthorities = [...new Set([...parentNameservers, ...registry.nameservers])].sort();
+  const candidates = eligibleAuthorities.slice(0, MAX_AUTHORITIES);
+  const omittedAuthorityCount = eligibleAuthorities.length - candidates.length;
   const resolve4 = options.resolve4 || dns.resolve4;
   const resolve6 = options.resolve6 || dns.resolve6;
   const queryAuthority = options.queryAuthority || defaultAuthorityQuery;
@@ -578,16 +578,16 @@ async function collectDnsDelegationHealth(
   const findings = [
     finding(
       'parent_registry_ns',
-      'Parent and registry nameservers',
+      'Recursive and registry nameservers',
       !parentNameservers.length || !registry.nameservers.length
         ? 'unknown'
         : sameSet(parentNameservers, registry.nameservers) ? 'healthy' : 'warning',
       !parentNameservers.length || !registry.nameservers.length
         ? 'Comparison is incomplete'
         : sameSet(parentNameservers, registry.nameservers)
-          ? 'Parent view and registry publication agree'
-          : 'Parent view and registry publication differ',
-      `Parent view: ${parentNameservers.join(', ') || 'unavailable'}. Registry publication: ${registry.nameservers.join(', ') || 'unavailable'}.`,
+          ? 'Recursive observation and registry publication agree'
+          : 'Recursive observation and registry publication differ',
+      `Recursive resolver: ${parentNameservers.join(', ') || 'unavailable'}. Registry publication: ${registry.nameservers.join(', ') || 'unavailable'}.`,
       'Confirm the intended delegation with the registry and DNS operator before changing nameservers.',
     ),
     finding(
@@ -617,7 +617,7 @@ async function collectDnsDelegationHealth(
         ? 'No direct authority answer was available'
         : inconsistentAuthoritySets
           ? 'Direct nameserver answers are inconsistent'
-          : 'Direct nameserver answers agree with the observed parent view',
+          : 'Direct nameserver answers agree with the recursive observation',
       successfulAuthorities.map((authority) => `${authority.nameserver}: ${authority.nameservers.join(', ') || 'no NS answer'}`).join(' | ') || 'No direct answers.',
       'Align the NS set served by every authority with the intended parent delegation before cutover.',
     ),
@@ -684,6 +684,7 @@ async function collectDnsDelegationHealth(
   ];
   const collectionIncomplete = parentStatus !== 'success'
     || candidates.length === 0
+    || omittedAuthorityCount > 0
     || parentQuery.truncated === true
     || registry.truncated
     || authorities.some((authority) => authority.state !== 'success')
@@ -704,9 +705,13 @@ async function collectDnsDelegationHealth(
       complete: !collectionIncomplete,
       truncated: parentQuery.truncated === true
         || registry.truncated
+        || omittedAuthorityCount > 0
         || (recordCollectionAttempted && recordMatrix.some((row) => row.observations.some((item) => item.truncated))),
       limitations: [
-        'The parent nameserver set is a point-in-time recursive resolver view; registry nameservers and glue come from the separately attributed RDAP publication.',
+        'The initial nameserver set comes from a recursive resolver, not a direct parent-server query; registry nameservers and glue come from the separately attributed RDAP publication.',
+        ...(omittedAuthorityCount > 0
+          ? [`${candidates.length} of ${eligibleAuthorities.length} eligible nameservers were selected; ${omittedAuthorityCount} were not queried.`]
+          : []),
         'Direct queries use at most four selected nameservers and two validated public addresses per nameserver.',
         'Extended A, AAAA, CAA, and MX comparison uses only one selected validated public address per nameserver and caps each record set at sixteen values.',
         'A direct answer does not prove global reachability, and a failed query is not evidence that the record is absent.',
@@ -718,6 +723,9 @@ async function collectDnsDelegationHealth(
       ],
       diagnostics: {
         authorityCount: authorities.length,
+        eligibleAuthorityCount: eligibleAuthorities.length,
+        queriedAuthorityCount: authorities.filter((authority) => authority.attempts.length > 0).length,
+        omittedAuthorityCount,
         queriedAddressCount: authorities.reduce((sum, authority) => sum + authority.attempts.length, 0),
         successfulAuthorityCount: successfulAuthorities.length,
         partialAuthorityCount: partialAuthorities.length,
@@ -735,7 +743,7 @@ async function collectDnsDelegationHealth(
       ? 'The bounded delegation-health collection completed.'
       : status === 'partial'
         ? 'The delegation-health collection is partial; review each source state before changing DNS.'
-        : 'The delegation-health collection could not confirm a parent or direct authority view.',
+        : 'The delegation-health collection could not confirm a recursive or direct authority observation.',
     parent: {
       state: parentStatus,
       nameservers: parentNameservers,

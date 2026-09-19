@@ -133,7 +133,8 @@ test('bounds untrusted limitation and diagnostic work before accumulation', () =
 
   let diagnosticOwnKeyReads = 0;
   let diagnosticDescriptorReads = 0;
-  const boundedDiagnostics = new Proxy({ attemptCount: 4 }, {
+  const diagnosticInput: Record<string, unknown> = { attemptCount: 4 };
+  const boundedDiagnostics = new Proxy(diagnosticInput, {
     ownKeys() {
       diagnosticOwnKeyReads += 1;
       throw new Error('must not enumerate untrusted diagnostic keys');
@@ -154,7 +155,14 @@ test('bounds untrusted limitation and diagnostic work before accumulation', () =
   assert.equal(bounded.limitations.length, 10);
   assert.deepEqual(bounded.diagnostics, { attemptCount: 4 });
   assert.equal(diagnosticOwnKeyReads, 0);
-  assert.ok(diagnosticDescriptorReads > 0 && diagnosticDescriptorReads <= 92);
+  assert.ok(diagnosticDescriptorReads > 0);
+  const ordinaryReads = diagnosticDescriptorReads;
+  for (let index = 0; index < 10_000; index += 1) diagnosticInput[`unknown${index}`] = 'not retained';
+  diagnosticDescriptorReads = 0;
+  const wide = createObservation({ diagnostics: boundedDiagnostics });
+  assert.equal(diagnosticDescriptorReads, ordinaryReads, 'Input key growth must not increase descriptor work');
+  assert.equal(diagnosticOwnKeyReads, 0);
+  assert.deepEqual(wide.diagnostics, { attemptCount: 4 });
 
   const cyclic: Record<string, unknown> = { status: 'error' };
   cyclic.detail = cyclic;
