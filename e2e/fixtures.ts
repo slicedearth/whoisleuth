@@ -5,6 +5,7 @@ import {
   PLAYWRIGHT_NETWORK_GUARD_ROUTE_PATTERN,
   isInjectedBrowserLayoutDiagnostic,
   isCancelledSessionPageDiagnostic,
+  isPolicyFixtureDiagnostic,
 } from '../tools/playwright-execution-contract.mts';
 import { ALLOWED_ORIGIN } from './constants.ts';
 
@@ -105,6 +106,8 @@ type Options = {
   // Opt-in for the exact failed-sign-out test. Chromium reports the handled
   // fixture 500 at the network layer even though the UI retains the session.
   allowExpectedLogout500Noise: boolean;
+  // Only the native policy-enforcement fixture deliberately generates CSP errors.
+  allowExpectedPolicyFixtureDiagnostics?: boolean;
 };
 
 type Fixtures = {
@@ -115,7 +118,8 @@ type GuardOptions = Options & { browserName: string };
 
 export async function installBrowserGuards(browser: Browser, options: GuardOptions) {
   const { networkGuardOrigin, browserName, allowExpectedBulkLookup400Noise,
-    allowExpectedLookup429Noise, allowExpectedLookup504Noise, allowExpectedLogout500Noise } = options;
+    allowExpectedLookup429Noise, allowExpectedLookup504Noise, allowExpectedLogout500Noise,
+    allowExpectedPolicyFixtureDiagnostics = false } = options;
   const origin = new URL(networkGuardOrigin);
   if (origin.origin !== networkGuardOrigin || origin.protocol !== 'http:'
     || origin.hostname !== '127.0.0.1' || !origin.port) throw new Error('Browser fixtures require one exact loopback origin.');
@@ -144,6 +148,7 @@ export async function installBrowserGuards(browser: Browser, options: GuardOptio
           if (type !== 'error' && type !== 'warning') return;
           const text = message.text(), url = message.location().url;
           if (isInjectedBrowserLayoutDiagnostic(browserName, type, text, url)) { diagnostic(text); return; }
+          if (allowExpectedPolicyFixtureDiagnostics && isPolicyFixtureDiagnostic(browserName, type, text, url, page.url(), networkGuardOrigin)) { diagnostic(text); return; }
           if (type === 'error' && ((isLookupEndpointUrl(url, networkGuardOrigin)
             && ((allowExpectedBulkLookup400Noise && CHROME_HTTP_400_NOISE_RE.test(text))
               || (allowExpectedLookup429Noise && CHROME_HTTP_429_NOISE_RE.test(text))
@@ -206,11 +211,13 @@ export const test = base.extend<Options & Fixtures>({
   allowExpectedLookup429Noise: [false, { option: true }],
   allowExpectedLookup504Noise: [false, { option: true }],
   allowExpectedLogout500Noise: [false, { option: true }],
+  allowExpectedPolicyFixtureDiagnostics: [false, { option: true }],
   networkAndConsoleGuard: [
     async ({ browser, browserName, networkGuardOrigin, allowExpectedBulkLookup400Noise,
-      allowExpectedLookup429Noise, allowExpectedLookup504Noise, allowExpectedLogout500Noise }, use, testInfo) => {
+      allowExpectedLookup429Noise, allowExpectedLookup504Noise, allowExpectedLogout500Noise, allowExpectedPolicyFixtureDiagnostics }, use, testInfo) => {
       const guard = await installBrowserGuards(browser, { browserName, networkGuardOrigin, allowExpectedBulkLookup400Noise,
-        allowExpectedLookup429Noise, allowExpectedLookup504Noise, allowExpectedLogout500Noise });
+        allowExpectedLookup429Noise, allowExpectedLookup504Noise, allowExpectedLogout500Noise,
+        allowExpectedPolicyFixtureDiagnostics: allowExpectedPolicyFixtureDiagnostics ?? false });
       try { await use(); } finally { await guard.dispose(); }
       if (guard.diagnostics.length) await testInfo.attach('browser-engine-diagnostics', {
         body: JSON.stringify({ count: guard.diagnosticCount, samples: guard.diagnostics }), contentType: 'application/json',

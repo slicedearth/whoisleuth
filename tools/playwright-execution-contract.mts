@@ -19,6 +19,15 @@ export const PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPEC_PATTERN = new RegExp(
 export const PLAYWRIGHT_NETWORK_GUARD_ROUTE_PATTERN = '**/*';
 export const PLAYWRIGHT_AUTOMATIC_GUARD_OPTIONS = Object.freeze({ auto: true as const });
 
+/** Only the synthetic policy document deliberately exercises native CSP denials. */
+export function isPolicyFixtureDiagnostic(browser: string, type: string, text: string, messageUrl: string, pageUrl: string, origin: string): boolean {
+  const fixture = `${origin}/__policy-fixture`;
+  if (browser !== 'chromium' || type !== 'error' || pageUrl !== fixture || (messageUrl !== '' && messageUrl !== fixture)) return false;
+  return /^The source list for the Content Security Policy directive '[a-z-]+' contains an invalid source: '[^\n]+'. It will be ignored\.$/u.test(text)
+    || /^Executing inline (?:script|event handler) violates the following Content Security Policy directive '[^\n]+'. [^\n]+The action has been blocked\.$/u.test(text)
+    || /^Ignoring duplicate Content-Security-Policy directive '[a-z-]+'\.$/u.test(text);
+}
+
 /** Firefox can report layout reads made by the injected automation script. */
 export function isInjectedBrowserLayoutDiagnostic(browserName: string, type: string, text: string, url: string): boolean {
   return browserName === 'firefox' && type === 'warning' && url === 'debugger eval code'

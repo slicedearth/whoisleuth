@@ -1,6 +1,18 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { isInjectedBrowserLayoutDiagnostic, isCancelledSessionPageDiagnostic } from '../tools/playwright-execution-contract.mts';
+import { isInjectedBrowserLayoutDiagnostic, isCancelledSessionPageDiagnostic, isPolicyFixtureDiagnostic } from '../tools/playwright-execution-contract.mts';
+
+test('native policy diagnostics cannot suppress application errors or errors from another document', () => {
+  const origin = 'http://127.0.0.1:4173', fixture = `${origin}/__policy-fixture`;
+  const text = "Executing inline script violates the following Content Security Policy directive 'script-src \'none\''. Either a hash or a nonce is required. The action has been blocked.";
+  for (const source of ['', fixture]) assert.equal(isPolicyFixtureDiagnostic('chromium', 'error', text, source, fixture, origin), true);
+  for (const [browser, type, diagnostic, source, page] of [
+    ['webkit', 'error', text, fixture, fixture], ['chromium', 'warning', text, fixture, fixture],
+    ['chromium', 'error', text, '', `${origin}/lookup`], ['chromium', 'error', text, `${origin}/cli`, fixture],
+    ['chromium', 'error', text, fixture, `${fixture}?other`], ['chromium', 'error', 'TypeError: application failed', fixture, fixture],
+    ['chromium', 'error', text + ' unexpected failure', fixture, fixture],
+  ]) assert.equal(isPolicyFixtureDiagnostic(browser!, type!, diagnostic!, source!, page!, origin), false);
+});
 
 test('only the exact injected Firefox layout warning is a retained tool diagnostic', () => {
   const text = '[JavaScript Warning: "Layout was forced before the page was fully loaded. If stylesheets are not yet loaded this may cause a flash of unstyled content." {file: "debugger eval code" line: 393}]';

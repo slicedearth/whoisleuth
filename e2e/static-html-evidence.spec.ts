@@ -92,6 +92,8 @@ test('favicon transparency and exact-only admission agree with native image deco
   }
 });
 
+test.describe('native policy enforcement', () => {
+test.use({ allowExpectedPolicyFixtureDiagnostics: true });
 test('response policy interpretation agrees with native inline-script enforcement', async ({ context }) => {
   // A separate fixture document deliberately produces CSP diagnostics; keep
   // the application page's strict console guard unchanged and inspect every
@@ -130,4 +132,5 @@ test('response policy interpretation agrees with native inline-script enforcemen
   } finally {
     await probe.close();
   }
+});
 });
