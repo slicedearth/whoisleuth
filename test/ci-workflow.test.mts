@@ -527,12 +527,19 @@ describe('continuous integration workflow', () => {
 
   test('discovers critical storage and native navigation behaviours in both secondary engines', () => {
     const root = path.join(__dirname, '..');
+    const environment = environmentWithoutV8Coverage();
+    // Listing never starts a browser or server. Keep this pre-build inspection
+    // independent of the caller's execution mode and report-output settings.
+    // Real browser execution still requires the verified build in CI.
+    for (const name of ['CI', 'WHOISLEUTH_E2E_USE_BUILD', 'PLAYWRIGHT_JSON_OUTPUT_NAME', 'PLAYWRIGHT_JSON_OUTPUT_FILE', 'PLAYWRIGHT_JSON_OUTPUT_DIR']) {
+      delete environment[name];
+    }
     const child = spawnSync(process.execPath, [
       path.join(root, 'node_modules/@playwright/test/cli.js'), 'test',
       '--config=e2e/cross-browser.config.ts', '--grep=@cross-browser-critical', '--list', '--reporter=json',
     ], {
       cwd: root, encoding: 'utf8', timeout: 30_000, maxBuffer: 4 * 1024 * 1024,
-      env: { ...environmentWithoutV8Coverage(), WHOISLEUTH_E2E_USE_BUILD: '0', WHOISLEUTH_PLAYWRIGHT_SHARD: '' },
+      env: { ...environment, WHOISLEUTH_PLAYWRIGHT_SHARD: '' },
     });
     assert.equal(child.status, 0, child.stderr || child.error?.message);
     type Suite = { suites?: Suite[]; specs?: { title: string; tests: { projectName: string; expectedStatus: string }[] }[] };

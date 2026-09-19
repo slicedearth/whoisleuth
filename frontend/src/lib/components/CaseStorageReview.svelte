@@ -28,7 +28,7 @@
 
 <style>
   .storage-review{min-width:0;margin-block:16px;padding:16px;overflow-wrap:anywhere}
-  h2{margin:0;font:650 var(--text-base) var(--mono)}
+  h2{margin:0;font:650 var(--text-md) var(--mono)}
   p,li{font-size:var(--text-sm);line-height:1.5}
   ul{padding-inline-start:20px}
   .actions{display:flex;flex-wrap:wrap;gap:8px}
