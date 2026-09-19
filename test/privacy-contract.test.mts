@@ -40,6 +40,7 @@ function compact(value: string): string {
 }
 
 const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
+  { id: 'explicit-dns-inheritance', pattern: /Inherited DMARC and direct parent delegation are off by default.*separate settings-review checkbox or CLI.*--include-inherited-dns.*seven ancestor TXT questions.*one parent NS question.*at most two parent servers.*registration-domain NS question over pinned public-address DNS\/TCP.*No mail is sent.*not reporting addresses.*checkbox is not saved.*ordinary Lookup, Bulk and monitoring do not enable these requests/iu },
   { id: 'current-rdap-discovery', pattern: /RDAP follows current IANA bootstrap discovery even when a retained catalogue records no service.*newly published endpoint may receive the selected registration query within existing request budgets.*WHOIS access restrictions remain enforced.*missing discovery is not evidence of domain absence/iu },
   { id: 'login-counter-scope', pattern: /Login burst controls retain bounded in-memory counters keyed by IPv4 address or IPv6 \/64 for five-minute windows.*local to each runtime instance/iu },
   { id: 'capture-network-lifetime', pattern: /Only the pinned collector may contact resource operators.*browser-lifetime deny-only proxy refuses direct connections, including teardown attempts, without retaining their destinations or content.*Refused attempts leave the capture partial.*Speculative DNS and direct QUIC are disabled/iu },

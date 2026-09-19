@@ -19,6 +19,7 @@ type ResolverEndpoint = {
 };
 type DnsExchangeOptions = {
   timeoutMs: number;
+  signal?: AbortSignal;
 };
 type DnsExchange = (
   query: Buffer,
@@ -553,6 +554,7 @@ function defaultTcpExchange(
   options: DnsExchangeOptions,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    options.signal?.throwIfAborted();
     const socket = createConnection({
       host: resolver.address,
       port: resolver.port,
@@ -566,10 +568,14 @@ function defaultTcpExchange(
       if (settled) return;
       settled = true;
       if (hardDeadline) clearTimeout(hardDeadline);
+      options.signal?.removeEventListener('abort', abort);
       socket.destroy();
       if (error) reject(error);
       else resolve(response as Buffer);
     };
+    const abort = () => finish(options.signal?.reason ?? new Error('DNS TCP query cancelled'));
+    options.signal?.addEventListener('abort', abort, { once: true });
+    if (options.signal?.aborted) { abort(); return; }
     hardDeadline = setTimeout(
       () => finish(new ServiceBindingDnsError('DNS TCP query timed out', 'ETIMEOUT')),
       options.timeoutMs,

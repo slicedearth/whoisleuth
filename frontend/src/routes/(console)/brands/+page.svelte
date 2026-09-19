@@ -431,7 +431,7 @@
     }
   }
   function baselineDate(value:string){const date=new Date(value);return Number.isNaN(date.getTime())?'Unknown time':date.toLocaleString('en-AU');}
-  async function audit(){
+  async function audit(includeInheritedDns=false){
     if(profileWriteDisabled)return;
     if(postureDisabled){message=postureDisabled.reason||'Official-domain settings review is disabled by deployment policy.';return;}
     if(!active?.officialDomains.length)return;
@@ -455,6 +455,7 @@
         if(domain===undefined)break;
         try{
           const params=new URLSearchParams({q:domain,mailProfile:profileSnapshot.mailProtectionProfile});
+          if(includeInheritedDns)params.set('includeInheritedDns','1');
           if(profileSnapshot.dkimSelectors.length)params.set('selectors',profileSnapshot.dkimSelectors.join(','));
           if(profileSnapshot.retiredDkimSelectors.length)params.set('retiredSelectors',profileSnapshot.retiredDkimSelectors.join(','));
           const{response,body:raw}=await requestJsonCapped(`/api/domain-posture?${params}`,{cache:'no-store',signal:controller.signal},{maximumBytes:STANDARD_JSON_RESPONSE_BYTES,timeoutMs:40_000});

@@ -350,6 +350,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 ### Owned-domain posture review
 
 - Posture findings describe bounded public registry, DNS and MTA-STS publication evidence and never change configuration.
+- Inherited DMARC and direct parent delegation require a separate opt-in: at most seven ancestor TXT questions, one parent NS discovery and A/AAAA discovery for at most two parent servers, followed by one pinned public-address DNS/TCP question per server. No messages are sent; recursive policy and direct referral observations remain separate.
 
 ### Explicit DNSSEC validation
 

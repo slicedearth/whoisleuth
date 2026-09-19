@@ -237,6 +237,15 @@ hostname history.
 
 ## Hosted collection
 
+Inherited DMARC and direct parent delegation are off by default. A separate
+settings-review checkbox or CLI `--include-inherited-dns` sends up to seven
+ancestor TXT questions, one parent NS question and A/AAAA discovery for at most
+two parent servers to the resolver. Each selected parent receives one
+registration-domain NS question over pinned public-address DNS/TCP. No mail is
+sent. Results retain queried owners, source times and normalised policy or
+referral values, not reporting addresses. The checkbox is not saved; ordinary
+Lookup, Bulk and monitoring do not enable these requests.
+
 Single and Bulk lookups send the selected target and requested mode to the
 WHOISleuth deployment. The server performs only the declared bounded requests
 to relevant public sources and target services. It returns a bounded response

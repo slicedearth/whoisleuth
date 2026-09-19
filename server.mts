@@ -27,6 +27,7 @@ import {
 import { searchCertificateTransparency } from './lib/ct-search.mts';
 import { isCtQueryError, normalizeCtQuery } from './lib/ct-query.mts';
 import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors, normalizeMailProtectionProfile } from './lib/domain-posture.mts';
+import { parseInheritedDnsSelection } from './lib/dns-inheritance-review.mts';
 import { capabilityReport } from './lib/capabilities.mts';
 import {
   COOKIE_NAME,
@@ -586,12 +587,16 @@ function registerNetworkApiRoutes(
       .filter((selector) => !selectors.includes(selector))
       .slice(0, Math.max(0, 10 - selectors.length));
     const mailProtectionProfile = normalizeMailProtectionProfile(queryText(req.query.mailProfile));
+    let includeInheritedDns: true | undefined;
+    try { includeInheritedDns = parseInheritedDnsSelection(req.query.includeInheritedDns); }
+    catch { return res.status(400).json({ error: 'includeInheritedDns must be 1 when requested.' }); }
     return withExpressOperationBudget(req, res, operationBudgetTargetFor('domain_posture'), async (signal) => {
       try {
         const result = await services.checkDomainPosture(domain, {
           dkimSelectors: selectors,
           retiredDkimSelectors: retiredSelectors,
           mailProtectionProfile,
+          ...(includeInheritedDns ? { includeInheritedDns } : {}),
           signal,
         });
         if (!signal.aborted) res.json(result);

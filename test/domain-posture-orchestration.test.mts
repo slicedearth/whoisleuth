@@ -97,6 +97,26 @@ function checkById(
 }
 
 describe('domain-posture collection orchestration', () => {
+  test('additional DNS collection requires explicit selection and reuses the exact-name observations', async () => {
+    const fixture = completeFixture();
+    const additional = { id: 'dmarc_inheritance', label: 'Inherited DMARC policy', status: 'info' as const, summary: 'Exact-name policy.', detail: 'Publication only.', records: [], remediation: '' };
+    let calls = 0;
+    const dependencies = { ...fixture.dependencies, collectDnsInheritanceChecks: async (...args: Parameters<NonNullable<DomainPostureCollectorDependencies['collectDnsInheritanceChecks']>>) => {
+      calls++; assert.equal(args[0], 'example.test');
+      assert.deepEqual(args[1].records, ['v=DMARC1; p=reject; sp=reject; np=reject; rua=mailto:aggregate@reports.example.net']);
+      assert.deepEqual(args[2].records, ['ns2.example.net.', 'ns1.example.net.']);
+      assert.equal(args[3]?.signal, controller.signal);
+      return [additional];
+    } };
+    const controller = new AbortController();
+    const ordinary = await checkDomainPosture('example.test', {}, dependencies);
+    assert.equal(calls, 0); assert.equal(ordinary.checks.some(item => item.id === additional.id), false);
+    const selected = await checkDomainPosture('example.test', { includeInheritedDns: true, signal: controller.signal }, dependencies);
+    assert.equal(calls, 1); assert.deepEqual(checkById(selected, additional.id), additional);
+    assert.equal(selected.summary.info, ordinary.summary.info + 1);
+    assert.equal(selected.checks.length, ordinary.checks.length + 1);
+  });
+
   test('cancellation starts no collection or enrichment and drains already-started sources', async () => {
     const untouched = completeFixture();
     await assert.rejects(checkDomainPosture('example.test', { signal: AbortSignal.abort(new Error('fixture cancellation')) }, untouched.dependencies), /fixture cancellation/u);

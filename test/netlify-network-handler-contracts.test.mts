@@ -258,6 +258,19 @@ describe('fixture-injected Netlify network handlers', () => {
     assert.equal(calls.length, callsBeforeRejectedInput);
   });
 
+  test('admits additional posture DNS only for the exact query opt-in', async () => {
+    const calls: unknown[] = [];
+    const handler = createDomainPostureHandler({ checkDomainPosture: fixtureService<DomainPostureHandlerDependencies['checkDomainPosture']>(async (_domain, options) => {
+      calls.push(options?.includeInheritedDns);
+      return {} as Awaited<ReturnType<DomainPostureHandlerDependencies['checkDomainPosture']>>;
+    }) });
+    assert.equal((await handler(event({ q: 'example.test' }))).statusCode, 200);
+    assert.equal((await handler(event({ q: 'example.test', includeInheritedDns: '1' }))).statusCode, 200);
+    assert.deepEqual(calls, [undefined, true]);
+    assert.equal((await handler(event({ q: 'example.test', includeInheritedDns: 'true' }))).statusCode, 400);
+    assert.equal(calls.length, 2);
+  });
+
   test('sanitizes injected service failures at every handler boundary', async () => {
     const failure = new Error('/private/path upstream secret');
     const handlers = [

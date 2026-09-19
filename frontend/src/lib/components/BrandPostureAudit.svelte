@@ -11,10 +11,11 @@
     disabledReason: string;
     auditing: boolean;
     results: DomainPostureAuditResult[];
-    audit: () => void | Promise<void>;
+    audit: (includeInheritedDns?: boolean) => void | Promise<void>;
     retainObservation: (report: DomainPostureHttpResponse) => void | Promise<void>;
   } = $props();
   let comparisonFilter = $state<PostureComparisonFilter>('all');
+  let includeInheritedDns = $state(false);
 </script>
 
 <section class="audit card">
@@ -24,10 +25,12 @@
       <h2>Official-domain settings review</h2>
       <p>Review registration controls, delegation, SPF, DMARC, MTA-STS, TLS-RPT, BIMI, CAA, DNSSEC and supplied DKIM selectors.</p>
     </div>
-    <button class="primary" onclick={audit} disabled={auditing || !active.officialDomains.length || Boolean(disabledReason)}>
+    <button class="primary" onclick={() => audit(includeInheritedDns)} disabled={auditing || !active.officialDomains.length || Boolean(disabledReason)}>
       {auditing ? 'Reviewing…' : 'Review official domains'}
     </button>
   </header>
+  <label class="inheritance-option"><input type="checkbox" bind:checked={includeInheritedDns} disabled={auditing} /> Include inherited DMARC and direct parent delegation</label>
+  <p class="inheritance-detail">Adds up to seven ancestor DMARC queries and a direct sample of two parent DNS servers per domain, with bounded server discovery. Exact-name results remain separate.</p>
   {#if disabledReason}<p class="feature-disabled" role="note">{disabledReason}</p>{/if}
   {#if results.length}
     <div class="audit-results">
@@ -179,6 +182,7 @@
 <style>
   .audit{margin-top:16px;padding:var(--card-pad)}
   .audit h2{margin:0}
+  .inheritance-option{display:flex;align-items:start;gap:8px;min-height:32px;margin-top:12px;font-size:var(--text-sm);line-height:1.5}.inheritance-option input{flex:none;margin-top:5px}.inheritance-detail{color:var(--muted);font-size:var(--text-xs);line-height:1.5;max-width:75ch}
   .audit .section-head p:not(.eyebrow),.counts{color:var(--muted);font-size:var(--text-sm);line-height:1.5}
   .audit .section-head>button{align-self:start}
   .audit-results{display:grid;gap:12px;margin-top:18px}

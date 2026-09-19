@@ -6,6 +6,7 @@ import type { resolvePublicAddresses, safeFetch } from '../lib/safe-fetch.mts';
 import type { whoisQuery } from '../lib/whois-transport.mts';
 import type { validateDnssecChain } from '../lib/dnssec-chain-validation.mts';
 import type { collectMailTransportReview } from '../lib/smtp-transport-review.mts';
+import type { DomainPostureOptions } from '../lib/domain-posture.mts';
 import type { BoundedTextStream } from './bulk.mts';
 import type { createBulkCheckpointWriter } from './bulk-checkpoint.mts';
 import type { CliProgressEvents } from './progress-events.mts';
@@ -76,7 +77,7 @@ type CliDependencies = {
   normalizeDkimSelectors?: (raw: unknown) => string[];
   checkDomainPosture?: (
     domain: string,
-    options?: { dkimSelectors?: unknown[]; retiredDkimSelectors?: unknown[]; mailProtectionProfile?: unknown },
+    options?: DomainPostureOptions,
   ) => unknown | Promise<unknown>;
   fetchHomepage?: (domain: string) => unknown | Promise<unknown>;
   normalizeTlsHostname?: (value: unknown) => string | null;

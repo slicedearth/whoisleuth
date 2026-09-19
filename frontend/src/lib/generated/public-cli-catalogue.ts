@@ -1131,12 +1131,12 @@ export const PUBLIC_CLI_CATALOGUE = {
       "description": "Review bounded DNS mail, delegation, and domain-control posture.",
       "group": "investigate",
       "common": false,
-      "usage": "whoisleuth posture [\u003cdomain>] [--json|--sarif] [--selectors \u003cvalue>] [--retired-selectors \u003cvalue>] [--mail-profile \u003cstandard|defensive-no-mail|parked>] [--owned-domain] [--quiet] [--no-color]",
+      "usage": "whoisleuth posture [\u003cdomain>] [--json|--sarif] [--selectors \u003cvalue>] [--retired-selectors \u003cvalue>] [--mail-profile \u003cstandard|defensive-no-mail|parked>] [--include-inherited-dns] [--owned-domain] [--quiet] [--no-color]",
       "example": "whoisleuth posture example.test --mail-profile standard --json",
-      "boundary": "Missing or failed DNS observations remain inconclusive and are not reported as absent controls.",
+      "boundary": "Missing or failed DNS observations remain inconclusive. --include-inherited-dns explicitly adds a bounded DMARC tree walk and direct parent-delegation sample; records retain their queried owner and source. No message is sent and receiver enforcement is not inferred.",
       "collection": {
         "mode": "network",
-        "scope": "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests."
+        "scope": "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor DMARC questions and direct DNS/TCP to sampled parent servers."
       },
       "inputs": [
         {
@@ -1153,6 +1153,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--selectors",
         "--retired-selectors",
         "--mail-profile",
+        "--include-inherited-dns",
         "--json",
         "--sarif",
         "--owned-domain",
@@ -1168,7 +1169,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecli.posture"
       ],
       "inputLimits": [
-        "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests.",
+        "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor DMARC questions and direct DNS/TCP to sampled parent servers.",
         "domain: 0-1 text value"
       ],
       "outputLimits": [

@@ -609,7 +609,7 @@
     {
       "id": "domain_posture",
       "title": "Owned-domain posture review",
-      "requestPurpose": "Review bounded DNS and mail publication posture without changing configuration.",
+      "requestPurpose": "Review bounded DNS and mail publication posture without changing configuration; a separate opt-in adds inherited DMARC and sampled direct parent referrals.",
       "job": "assure",
       "executionPlanes": [
         "hosted_bounded_passive"
@@ -682,7 +682,8 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
-        "Posture findings describe bounded public registry, DNS and MTA-STS publication evidence and never change configuration."
+        "Posture findings describe bounded public registry, DNS and MTA-STS publication evidence and never change configuration.",
+        "Inherited DMARC and direct parent delegation require a separate opt-in: at most seven ancestor TXT questions, one parent NS discovery and A/AAAA discovery for at most two parent servers, followed by one pinned public-address DNS/TCP question per server. No messages are sent; recursive policy and direct referral observations remain separate."
       ]
     },
     {
@@ -4699,7 +4700,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
-        "Exact matches require --reveal. Retired and future archive versions are rejected without changing data. The archive is read locally and is never uploaded.",
+        "Exact values require --reveal. New content comparisons use the reported sorted-json-v2:sha256 identity with --expect-content-digest; bare sha256 hashes retain their legacy locale-sensitive meaning. Retired and future archives are rejected. The archive is read locally and is never uploaded.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -5897,7 +5898,7 @@
       "command": "posture",
       "capabilityFamilyId": "domain_posture",
       "title": "Review DNS and mail posture",
-      "requestPurpose": "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests.",
+      "requestPurpose": "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor DMARC questions and direct DNS/TCP to sampled parent servers.",
       "collectionMode": "network",
       "executionPlanes": [
         "local_cli_network"
@@ -5965,7 +5966,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
-        "Missing or failed DNS observations remain inconclusive and are not reported as absent controls.",
+        "Missing or failed DNS observations remain inconclusive. --include-inherited-dns explicitly adds a bounded DMARC tree walk and direct parent-delegation sample; records retain their queried owner and source. No message is sent and receiver enforcement is not inferred.",
         "The posture review performs bounded RDAP, DNS and MTA-STS publication checks without changing configuration."
       ],
       "variants": []
@@ -8628,9 +8629,10 @@
       "schema": "whoisleuth.campaign-temporal-review",
       "lifecycleSchema": "whoisleuth.campaign-temporal-review",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "not_applicable",
       "migration": "read_only",
@@ -9003,10 +9005,11 @@
       "schema": "whoisleuth.mail-report-review",
       "lifecycleSchema": "whoisleuth.mail-report-review",
       "coverageClass": "registered_schema",
-      "currentVersion": 2,
+      "currentVersion": 3,
       "supportedVersions": [
         1,
-        2
+        2,
+        3
       ],
       "futureVersionBehavior": "not_applicable",
       "migration": "read_only",
@@ -11075,7 +11078,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.mail-report-review",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "analyst-interchange.privacy",
@@ -13247,7 +13250,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.campaign-temporal-review",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "investigation-projections.privacy",

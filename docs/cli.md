@@ -117,6 +117,12 @@ whoisleuth manual | man -l -
 
 ## Collection boundaries
 
+For an explicit inherited-policy and direct parent-delegation review, use
+`whoisleuth posture example.test --include-inherited-dns --json`. Without that
+option, posture collection keeps its existing exact-name scope. The extra
+results distinguish recursive policy publication from sampled parent referrals;
+they do not establish name existence, message authentication or DNSSEC validity.
+
 | Mode | Behaviour |
 | --- | --- |
 | Fast Lookup | Registration-first triage without WHOIS or deeper website and TLS collection. |

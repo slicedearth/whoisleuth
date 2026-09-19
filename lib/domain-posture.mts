@@ -9,6 +9,7 @@ import { nonEmptyErrorMessage } from './error-detail.mts';
 import { safeFetch, readTextCapped } from './safe-fetch.mts';
 import { whoisleuthRequestHeaders } from './outbound-identity.mts';
 import { classifyMxRecords } from './dns-mx.mts';
+import { collectDnsInheritanceChecks } from './dns-inheritance-review.mts';
 import type { MxRecord } from './dns-mx.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import { DOMAIN_POSTURE_COMPARISON_VERSION, MAX_POSTURE_CHECK_RECORDS, POSTURE_CHECK_SOURCES, type DomainPostureCheck } from '../packages/evidence/domain-posture-context.mts';
@@ -68,6 +69,7 @@ type DomainPostureCollectorDependencies = Readonly<{
   now: () => Date;
   setTimer: (callback: () => void, milliseconds: number) => DomainPostureTimerHandle;
   clearTimer: (handle: DomainPostureTimerHandle) => void;
+  collectDnsInheritanceChecks?: typeof collectDnsInheritanceChecks;
 }>;
 
 type DomainPostureOptions = {
@@ -75,6 +77,7 @@ type DomainPostureOptions = {
   retiredDkimSelectors?: unknown[];
   mailProtectionProfile?: unknown;
   signal?: AbortSignal;
+  includeInheritedDns?: true;
 };
 
 type DkimQuery = DnsQuery & { selector: string; retired?: boolean };
@@ -847,6 +850,7 @@ async function collectDomainPosture(
     dkimSelectors = [],
     retiredDkimSelectors = [],
     mailProtectionProfile = 'standard',
+    includeInheritedDns,
     signal,
   }: DomainPostureOptions,
   dependencies: DomainPostureCollectorDependencies,
@@ -907,10 +911,15 @@ async function collectDomainPosture(
     parsedMtaDns?.valid ? dependencies.fetchMtaStsPolicy(domain, signal) : Promise.resolve(null),
     expandSpfPolicy(domain, spf, resolveEnrichmentTxt),
     validateDmarcExternalReporting(domain, dmarc, resolveEnrichmentTxt),
+    includeInheritedDns === true
+      ? (dependencies.collectDnsInheritanceChecks
+        ? dependencies.collectDnsInheritanceChecks(domain, dmarc, nameservers, signal ? { signal } : {})
+        : Promise.reject(new TypeError('The explicit DNS review collector is unavailable.')))
+      : Promise.resolve([]),
   ] as const;
   // A rejected policy request must not release the operation's capacity while
   // other started enrichment collectors are still settling.
-  const [mtaStsPolicy, spfExpansion, dmarcAuthorizations] = await Promise.all(enrichment)
+  const [mtaStsPolicy, spfExpansion, dmarcAuthorizations, inheritanceChecks] = await Promise.all(enrichment)
     .finally(() => Promise.allSettled(enrichment));
   signal?.throwIfAborted();
   const dnssec = !rdap
@@ -967,6 +976,10 @@ async function collectDomainPosture(
   if (!(checkedAt instanceof Date) || !Number.isFinite(checkedAt.getTime())) {
     throw new TypeError('Domain-posture completion time must be valid.');
   }
+  for (const item of inheritanceChecks) {
+    report.checks.push(item);
+    report.summary[item.status] += 1;
+  }
   return {
     ...report,
     checkedAt: checkedAt.toISOString(),
@@ -1001,6 +1014,7 @@ async function checkDomainPosture(
       now: () => new Date(),
       setTimer: (callback, milliseconds) => setTimeout(callback, milliseconds),
       clearTimer: handle => clearTimeout(handle as ReturnType<typeof setTimeout>),
+      collectDnsInheritanceChecks,
     });
   } finally {
     options.signal?.removeEventListener('abort', cancel);
@@ -1020,4 +1034,5 @@ export {
 
 export type {
   DomainPostureCollectorDependencies,
+  DomainPostureOptions,
 };

@@ -134,7 +134,7 @@ const CAPABILITY_PRIVACY_DETAILS = Object.freeze({
   registrar_rdap: capabilityPrivacyDetail('Retrieve one eligible sponsoring-registrar RDAP publication as a separate source.', ['registrar_registration_publication', 'source_health']),
   network_context: capabilityPrivacyDetail('Add bounded public allocation context for one observed public endpoint address.', ['public_network_allocation_context', 'source_health']),
   reverse_dns: capabilityPrivacyDetail('Resolve bounded reverse-DNS names for one public address.', ['reverse_dns_publication', 'source_health']),
-  domain_posture: capabilityPrivacyDetail('Review bounded DNS and mail publication posture without changing configuration.', ['normalised_posture_evidence', 'source_health']),
+  domain_posture: capabilityPrivacyDetail('Review bounded DNS and mail publication posture without changing configuration; a separate opt-in adds inherited DMARC and sampled direct parent referrals.', ['normalised_posture_evidence', 'source_health']),
   dnssec_validation: capabilityPrivacyDetail('Validate an explicitly authorised DNSSEC chain against a selected local trust anchor.', ['dnssec_validation_evidence', 'source_health']),
   mail_transport_review: capabilityPrivacyDetail('Review selected explicitly authorised SMTP transport and STARTTLS behaviour.', ['mail_transport_evidence', 'source_health']),
   rendered_web_capture: capabilityPrivacyDetail('Capture one explicitly authorised rendered page within the local-tool budget.', ['bounded_rendered_capture', 'capture_manifest']),

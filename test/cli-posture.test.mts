@@ -39,6 +39,12 @@ function postureReport(overrides = {}) {
 }
 
 describe('posture CLI argument parsing', () => {
+  test('accepts an explicit inherited DNS option only on posture', () => {
+    assert.equal((parseCliArguments(['posture', 'example.test', '--include-inherited-dns']) as { includeInheritedDns?: true }).includeInheritedDns, true);
+    for (const args of [['lookup', 'example.test'], ['posture', 'example.test', '--include-inherited-dns']]) {
+      assert.throws(() => parseCliArguments([...args, '--include-inherited-dns']), CliUsageError);
+    }
+  });
   test('accepts terminal defaults and optional selectors', () => {
     assert.deepEqual(parseCliArguments(['posture', 'example.test']), {
       action: 'posture', domain: 'example.test', output: 'terminal', quiet: false, color: true, selectorText: null, retiredSelectorText: null, mailProfile: 'standard', ownedDomain: false,
@@ -131,6 +137,17 @@ describe('posture output', () => {
 });
 
 describe('posture runner', () => {
+  test('forwards only the requested additional DNS option and caller cancellation', async () => {
+    const controller = new AbortController();
+    let called = false;
+    const code = await runCli(['posture', 'example.test', '--include-inherited-dns', '--json'], {
+      stdout: capture().stream, stderr: capture().stream, signal: controller.signal,
+      checkDomainPosture: async (_domain, options) => {
+        called = true; assert.equal(options?.includeInheritedDns, true); assert.equal(options?.signal, controller.signal); return postureReport();
+      },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS); assert.equal(called, true);
+  });
   test('normalizes the domain and selectors before calling the shared audit', async () => {
     const stdout = capture();
     let received;

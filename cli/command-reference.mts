@@ -376,6 +376,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--mail-profile': enumeration(['standard', 'defensive-no-mail', 'parked']),
   '--sarif': flag(),
   '--owned-domain': flag(),
+  '--include-inherited-dns': flag(),
   '--trust-anchor': file(),
   '--owned-or-authorized': flag(),
   '--active-probe': flag(),
@@ -829,11 +830,11 @@ const COMMAND_SEEDS = Object.freeze({
     reference: {
       description: 'Review bounded DNS mail, delegation, and domain-control posture.',
       example: 'whoisleuth posture example.test --mail-profile standard --json',
-      boundary: 'Missing or failed DNS observations remain inconclusive and are not reported as absent controls.',
+      boundary: 'Missing or failed DNS observations remain inconclusive. --include-inherited-dns explicitly adds a bounded DMARC tree walk and direct parent-delegation sample; records retain their queried owner and source. No message is sent and receiver enforcement is not inferred.',
     },
-    collection: { mode: 'network', scope: 'Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests.' },
+    collection: { mode: 'network', scope: 'Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor DMARC questions and direct DNS/TCP to sampled parent servers.' },
     summary: 'Review DNS and mail posture',
-    options: ['--selectors', '--retired-selectors', '--mail-profile', '--json', '--sarif', '--owned-domain', '--quiet', '--no-color'],
+    options: ['--selectors', '--retired-selectors', '--mail-profile', '--include-inherited-dns', '--json', '--sarif', '--owned-domain', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('domain', 'text', 0, 1, [], 'argv_or_stdin')]),
     constraints: Object.freeze([
     constraint({ kind: 'mutually_exclusive', options: ['--json', '--sarif'] }),

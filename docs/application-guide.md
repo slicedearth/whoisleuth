@@ -302,7 +302,15 @@ not an empty set. Portable settings preserve these choices; an import changes
 only the selected fields. Missing, incomplete or stale observations cannot
 confirm an expected absence.
 
-Brand views can provide:
+In **Current settings**, **Include inherited DMARC and direct parent delegation**
+is off by default. Selecting it adds a bounded ancestor-policy review and a
+direct parent-server sample when you start **Review official domains**.
+Each result identifies its queried owner and source. Inherited policy distinguishes
+existing from nonexistent names without deciding which applies; a parent sample
+is not complete delegation or DNSSEC validation. Ordinary Lookup and monitoring
+do not enable this option.
+
+Other Brand views include:
 
 - a cross-domain posture matrix over saved baselines and retained observations;
 - domain-control passports and local desired-state review;

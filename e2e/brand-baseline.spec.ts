@@ -11,6 +11,7 @@ import { PUBLIC_BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/works
 import { extractHtmlSignals } from '../lib/html-signals.mts';
 import { LEGACY_WEBSITE_SNAPSHOTS_KEY } from '../frontend/src/lib/browser-local-data-contract.ts';
 import { brandPostureObservationContext, normalizeBrandProfile } from '../packages/workspace/brand-profile-model.mts';
+import type { DomainPostureHttpResponse } from '../frontend/src/lib/analysis/client-response-contracts';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
 const ACTIVE_KEY = 'whois-rdap-active-brand-profile-v1';
@@ -83,7 +84,7 @@ function availabilityFixture() {
   };
 }
 
-function postureFixture(domain: string, checkedAt = ISO) {
+function postureFixture(domain: string, checkedAt = ISO): DomainPostureHttpResponse {
   return {
     domain,
     checkedAt,
@@ -1037,6 +1038,37 @@ test('valid posture results disclose bounded SPF and external-dependency evidenc
   await expect(page.getByText('SPF expansion', { exact: true })).toBeVisible();
   await page.getByText('External dependency review', { exact: true }).click();
   await expect(page.getByText('ns1.example.net', { exact: true })).toBeVisible();
+});
+
+test('additional DNS review is explicit, visible and not retained as a background preference', async ({ page }) => {
+  const selections: Array<string | null> = [];
+  await page.route('**/api/domain-posture?*', async route => {
+    const query = new URL(route.request().url()).searchParams;
+    selections.push(query.get('includeInheritedDns'));
+    const report = postureFixture(query.get('q') || 'stored.example');
+    if (query.get('includeInheritedDns') === '1') {
+      report.checks.push({ id: 'dmarc_inheritance', label: 'Inherited DMARC policy', status: 'info', summary: 'Inherited policy published at _dmarc.example.', detail: 'Existing and nonexistent names remain separate.', records: ['Recursive DNS TXT _dmarc.example · policy reject'], remediation: '' });
+      report.summary.info += 1;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(report) });
+  });
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, { [PROFILES_KEY]: currentBrandProfileBrowserStore([profileFixture()]), [ACTIVE_KEY]: 'profile-1' }, { destination: '/brands' });
+  await openBrandWorkbench(page, 'posture');
+  const option = page.getByRole('checkbox', { name: 'Include inherited DMARC and direct parent delegation' });
+  await expect(option).not.toBeChecked();
+  const button = page.getByRole('button', { name: 'Review official domains' });
+  const status = page.getByRole('status', { name: 'Brand Profile action status' });
+  await button.click(); await expect(status).toHaveText('Reviewed 1/1 official domain.');
+  expect(selections).toEqual([null]);
+  await option.focus(); await page.keyboard.press('Space'); await expect(option).toBeChecked();
+  expect(selections).toEqual([null]);
+  await button.click(); await expect(status).toHaveText('Reviewed 1/1 official domain.');
+  expect(selections).toEqual([null, '1']);
+  const disclosure = page.locator('.checks details').filter({ has: page.getByText('Inherited DMARC policy', { exact: true }) });
+  await disclosure.locator('summary').click(); await expect(disclosure).toContainText('Recursive DNS TXT _dmarc.example');
+  await page.reload(); await openBrandWorkbench(page, 'posture'); await expect(option).not.toBeChecked();
+  expect(selections).toEqual([null, '1']);
 });
 
 test('retains two completed posture observations sequentially without discarding either audit result', async ({ page }) => {

@@ -321,6 +321,16 @@ describe('fixture-injected Express network routes', () => {
     assert.equal(lookupOptions.securityTxt, true);
   });
 
+  test('admits additional posture DNS only for the exact query opt-in', async () => {
+    serviceCalls.length = 0;
+    assert.equal((await request('/api/domain-posture?q=example.test')).status, 200);
+    assert.equal((serviceCalls.at(-1)?.[2] as Record<string, unknown>).includeInheritedDns, undefined);
+    assert.equal((await request('/api/domain-posture?q=example.test&includeInheritedDns=1')).status, 200);
+    assert.equal((serviceCalls.at(-1)?.[2] as Record<string, unknown>).includeInheritedDns, true);
+    for (const value of ['true', '0', '1&includeInheritedDns=1']) assert.equal((await request(`/api/domain-posture?q=example.test&includeInheritedDns=${value}`)).status, 400);
+    assert.equal(serviceCalls.length, 2);
+  });
+
   test('domain source refresh keeps registration and observation targets distinct in both depths', async () => {
     for (const fast of [false, true]) {
       serviceCalls.length = 0;
