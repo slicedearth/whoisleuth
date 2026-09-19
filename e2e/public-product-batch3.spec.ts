@@ -343,7 +343,7 @@ test('opens a directly linked CLI command without loading unrelated command deta
   expect(investigationRequests).toEqual([]);
 });
 
-test('command and return links preserve open-in-new-tab activation @timing-sensitive', async ({ page, context }) => {
+test('command and return links preserve open-in-new-tab activation @timing-sensitive', { tag: '@cross-browser-critical' }, async ({ page, context }) => {
   await page.goto('/cli#command-lookup');
   const command = page.locator('[data-command-detail="lookup"]');
   await expect(command).toBeVisible();

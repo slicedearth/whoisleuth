@@ -159,7 +159,7 @@ test('encrypted backup cannot create a plaintext rehearsal and leaving does not 
   expect(await page.evaluate(id => navigator.locks.request(`whoisleuth-workspace:whoisleuth-workspace-${id}-v1`, { mode: 'shared', ifAvailable: true }, lock => Boolean(lock)), row!.id)).toBe(true);
 });
 
-test('a committed restore followed by failed reconciliation offers verification, not a second restore', async ({ page }) => {
+test('a committed restore followed by failed reconciliation offers verification, not a second restore', { tag: '@cross-browser-critical' }, async ({ page }) => {
   await page.goto('/dashboard'); await review(page, await simpleBackup());
   await page.evaluate(() => {
     const put = IDBObjectStore.prototype.put, transaction = IDBDatabase.prototype.transaction;

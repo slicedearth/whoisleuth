@@ -143,6 +143,12 @@ npm run test:e2e:stress
 
 Diagnose a failure before retrying it.
 
+Hosted CI and the complete local built suite run a small required Firefox and
+WebKit packet for locking, encrypted restore, draft recovery and native link
+navigation. Run that same isolated packet against a verified build with
+`npm run test:e2e:critical`. Install its pinned engines with
+`npm run test:e2e:critical:install` when they are not already cached.
+
 The targeted cross-browser packet reuses complete functional specifications in
 Firefox and WebKit: authentication, workspace isolation and encryption, Case
 recovery and returns, offline evidence, source progress and public navigation.

@@ -212,7 +212,7 @@ for (const encryptedSource of [false, true]) {
   });
 }
 
-for (const relock of ['manual', 'idle'] as const) test(`workspace lifecycle keeps the active key usable after cancellation and completes a later ${relock} lock`, async ({ page }) => {
+for (const relock of ['manual', 'idle'] as const) test(`workspace lifecycle keeps the active key usable after cancellation and completes a later ${relock} lock`, { tag: '@cross-browser-critical' }, async ({ page }) => {
   await page.goto('/dashboard'); const row = await createEncrypted(page, 'Cancellable lock'); await unlock(page, row.name);
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
   await createCaseThroughForm(page, 'cancel-lock.example'); const form = await recoveryPinForm(page), url = page.url();
@@ -307,7 +307,7 @@ test('unfinished Case forms use the encrypted workspace and remain outside its p
   expect(JSON.stringify(await decryptWorkspaceArchive(JSON.parse(content), BACKUP_PASSWORD))).not.toContain('recovery-only sentence');
 });
 
-test('encrypted workspace stays locked across reloads and supports a separately encrypted backup round trip', async ({ page, context }) => {
+test('encrypted workspace stays locked across reloads and supports a separately encrypted backup round trip', { tag: '@cross-browser-critical' }, async ({ page, context }) => {
   const unexpected: string[] = [];
   page.on('request', request => { const path = new URL(request.url()).pathname; if (path.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(path)) unexpected.push(path); });
   await page.goto('/dashboard');

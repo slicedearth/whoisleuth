@@ -31,7 +31,7 @@ test.describe('network origin guard', () => {
         await page.evaluate(url => fetch(url).then(() => 'unexpected', () => 'denied'), target);
         expect((await failed).failure()?.errorText).toContain('ERR_BLOCKED_BY_CLIENT');
         const error = page.waitForEvent('pageerror');
-        await page.evaluate(value => { setTimeout(() => { throw new Error(value); }, 0); }, `page-${index}-sentinel`);
+        await page.evaluate(value => { queueMicrotask(() => { throw new Error(value); }); }, `page-${index}-sentinel`);
         await error;
       }
       await guard.dispose(); disposed = true;

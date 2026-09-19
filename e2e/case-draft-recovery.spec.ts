@@ -16,7 +16,7 @@ async function pinForm(page: Page) {
   return details.locator('form').first();
 }
 
-test('Case drafts recover after reload, stay out of backups and clear atomically on submission', async ({ page }, testInfo) => {
+test('Case drafts recover after reload, stay out of backups and clear atomically on submission', { tag: '@cross-browser-critical' }, async ({ page }, testInfo) => {
   await openCasesView(page); await createCase(page, 'draft-recovery.example');
   let form = await pinForm(page);
   await form.getByLabel('Label', { exact: true }).fill('Unsubmitted fixture evidence');

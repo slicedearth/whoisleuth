@@ -205,6 +205,10 @@ describe('continuous integration workflow', () => {
       (workflow) => { fixtureJob(workflow, 'browser').steps.push({ run: 'npm run build' }); },
       (workflow) => { fixtureJob(workflow, 'cli-runtime').steps = fixtureJob(workflow, 'cli-runtime').steps.filter(step => !step.uses?.startsWith('actions/download-artifact@')); },
       (workflow) => { fixtureJob(workflow, 'cli-runtime').needs = []; },
+      (workflow) => { delete workflow.jobs['critical-browser']; },
+      (workflow) => { fixtureJob(workflow, 'critical-browser').steps = fixtureJob(workflow, 'critical-browser').steps.filter(step => step.run !== 'npm run test:e2e:critical'); },
+      (workflow) => { fixtureJob(workflow, 'critical-browser').steps = fixtureJob(workflow, 'critical-browser').steps.filter(step => step.run !== 'npm run frontend:build:integrity'); },
+      (workflow) => { fixtureJob(workflow, 'critical-browser').steps.find(step => step.run === 'npm run test:e2e:critical')!['continue-on-error'] = true; },
       (workflow) => { fixtureJob(workflow, 'verify').needs = ['quality']; },
       (workflow) => { fixtureJob(workflow, 'verify').if = 'success()'; },
     ];
@@ -281,6 +285,8 @@ describe('continuous integration workflow', () => {
     }
     assert.match(localPlan, /^test:e2e:built \(performance, functional shards, browser-health aggregation and timing candidate\)$/mu);
     assert.match(localPlan, /^verification:artifacts cleanup=all$/mu);
+    assert.match(localPlan, /^test:e2e:critical:install$/mu);
+    assert.doesNotMatch(localPlan, /^test:e2e:install$/mu);
     assert.ok(localPlan.indexOf('changed-line secret scan') < localPlan.indexOf('release:check'));
     assert.ok(localPlan.indexOf('release:check') < localPlan.indexOf('locked install'));
     assert.ok(localPlan.indexOf('locked install') < localPlan.indexOf('toolchain:check'));
@@ -516,6 +522,39 @@ describe('continuous integration workflow', () => {
         });
       `);
       assert.throws(() => assertAppliedBrowserSafety({ fixtureFile: disconnectedFixture }), /applied automatic network fixture/u);
+    }
+  });
+
+  test('discovers critical storage and native navigation behaviours in both secondary engines', () => {
+    const root = path.join(__dirname, '..');
+    const child = spawnSync(process.execPath, [
+      path.join(root, 'node_modules/@playwright/test/cli.js'), 'test',
+      '--config=e2e/cross-browser.config.ts', '--grep=@cross-browser-critical', '--list', '--reporter=json',
+    ], {
+      cwd: root, encoding: 'utf8', timeout: 30_000, maxBuffer: 4 * 1024 * 1024,
+      env: { ...environmentWithoutV8Coverage(), WHOISLEUTH_E2E_USE_BUILD: '0', WHOISLEUTH_PLAYWRIGHT_SHARD: '' },
+    });
+    assert.equal(child.status, 0, child.stderr || child.error?.message);
+    type Suite = { suites?: Suite[]; specs?: { title: string; tests: { projectName: string; expectedStatus: string }[] }[] };
+    const report = JSON.parse(child.stdout) as { suites: Suite[]; errors: unknown[] };
+    assert.deepEqual(report.errors, []);
+    const specifications = (suites: Suite[]): NonNullable<Suite['specs']> => suites.flatMap(suite => [
+      ...(suite.specs ?? []), ...specifications(suite.suites ?? []),
+    ]);
+    const specs = specifications(report.suites);
+    for (const engine of ['firefox', 'webkit']) {
+      for (const behaviour of [
+        /drafts recover.*clear atomically/u,
+        /cancellation.*manual lock/u,
+        /cancellation.*idle lock/u,
+        /encrypted.*backup round trip/u,
+        /open-in-new-tab activation/u,
+        /committed restore.*not a second restore/u,
+      ]) {
+        assert.ok(specs.some(spec => behaviour.test(spec.title)
+          && spec.tests.some(test => test.projectName === engine && test.expectedStatus === 'passed')),
+        `${engine} must execute ${behaviour}`);
+      }
     }
   });
 

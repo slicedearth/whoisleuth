@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { caseRecord, openSeededTimelineCase, openCaseResponseWorkspace } from './case-test-fixtures';
 import { openCaseSection } from './console-navigation';
 import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, useTheme } from './helpers';
@@ -21,7 +22,7 @@ async function openReview(page: import('@playwright/test').Page) {
 test('saved recheck questions preserve drafts and bind later source-qualified answers to their original conditions', async ({ page }, testInfo) => {
   await openSeededTimelineCase(page, domain, [caseRecord({ domain, evidencePins: [{ ...pin, id: 'baseline-pin' },
     { ...pin, id: 'failed-pin', sourceState: 'failed', completeness: 'partial', observedAt: after },
-    { ...pin, id: 'current-pin', value: '404', observedAt: after }] })], 16);
+    { ...pin, id: 'current-pin', value: '404', observedAt: after }] })], CASE_SCHEMA_VERSION);
   let section = await openReview(page);
   await section.getByText('Recheck questions', { exact: true }).click();
   const plan = section.getByRole('form', { name: 'Save a recheck question' });
@@ -80,7 +81,7 @@ test('saved recheck questions preserve drafts and bind later source-qualified an
 
 test('a recheck answer cannot silently use a question resolved in another tab', async ({ page, context }) => {
   await openSeededTimelineCase(page, domain, [caseRecord({ domain, assertions: [{ id: 'planned-question', kind: 'next_step', statement: questionText,
-    state: 'open', createdAt: before, updatedAt: before, recheck: { targetHostname: target, baselinePinId: null, conditions } }] })], 16);
+    state: 'open', createdAt: before, updatedAt: before, recheck: { targetHostname: target, baselinePinId: null, conditions } }] })], CASE_SCHEMA_VERSION);
   const section = await openReview(page), form = section.getByRole('form', { name: 'Record a recheck', exact: true });
   await form.getByRole('combobox', { name: 'Saved question', exact: true }).selectOption('planned-question');
   await form.getByRole('combobox', { name: 'Observed effect', exact: true }).selectOption('still_observed');

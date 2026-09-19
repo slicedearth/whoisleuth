@@ -67,6 +67,13 @@ export const CI_BROWSER_HEALTH_SCRIPTS = Object.freeze([
   'verification:timing:update-candidate',
 ] as const);
 
+export const CI_CRITICAL_BROWSER_SCRIPTS = Object.freeze([
+  'frontend:build:integrity',
+  'test:e2e:critical:install',
+  'test:e2e:critical',
+  'verification:artifacts',
+] as const);
+
 export const CI_CLI_RUNTIME_NODE_MAJOR = 26;
 export const CI_CLI_RUNTIME_SCRIPTS = Object.freeze([
   'frontend:build:integrity',
@@ -89,6 +96,7 @@ export type HostedCiScriptPlan = Readonly<{
   browserBuild: readonly string[];
   browser: readonly string[];
   browserHealth: readonly string[];
+  criticalBrowser: readonly string[];
   cliRuntime: readonly string[];
 }>;
 
@@ -321,6 +329,7 @@ function scriptPlan(workflow: Workflow): HostedCiScriptPlan {
     browserBuild: npmScripts(workflowJob(workflow, 'browser-build')),
     browser: npmScripts(workflowJob(workflow, 'browser')),
     browserHealth: npmScripts(workflowJob(workflow, 'browser-health')),
+    criticalBrowser: npmScripts(workflowJob(workflow, 'critical-browser')),
     cliRuntime: npmScripts(workflowJob(workflow, 'cli-runtime')),
   });
 }
@@ -342,7 +351,7 @@ function assertFrontendBuildArtifactFlow(workflow: Workflow): void {
   if (buildVerification < 0 || buildVerification >= build.steps.indexOf(upload)) {
     throw new Error('The frontend build must be verified before publication.');
   }
-  for (const name of ['browser', 'cli-runtime']) {
+  for (const name of ['browser', 'cli-runtime', 'critical-browser']) {
     const consumer = workflowJob(workflow, name);
     const download = consumer.steps.find((step) => step.uses?.startsWith('actions/download-artifact@')
       && step.with?.name === CI_FRONTEND_BUILD_ARTIFACT_NAME);
@@ -354,7 +363,7 @@ function assertFrontendBuildArtifactFlow(workflow: Workflow): void {
     const execution = consumer.steps.flatMap((step, index) => stepScripts(step).map(script => ({ script, index })));
     const integrity = execution.findIndex(({ script }) => script === 'frontend:build:integrity');
     const users = execution.flatMap(({ script }, index) =>
-      ['test:e2e:shard', 'frontend:authenticated-loading-report', 'local:package:check'].includes(script) ? [index] : []);
+      ['test:e2e:shard', 'test:e2e:critical', 'frontend:authenticated-loading-report', 'local:package:check'].includes(script) ? [index] : []);
     if (integrity < 0 || execution[integrity]!.index <= consumer.steps.indexOf(download)
       || users.some(index => index <= integrity) || npmScripts(consumer).includes('build')) {
       throw new Error('Browser and local package checks must consume the downloaded, verified build without rebuilding it.');
@@ -377,6 +386,7 @@ export function expectedHostedCiScriptPlan(): HostedCiScriptPlan {
     browserBuild: CI_BROWSER_BUILD_SCRIPTS,
     browser: CI_HOSTED_ONLY_BROWSER_SCRIPTS,
     browserHealth: CI_BROWSER_HEALTH_SCRIPTS,
+    criticalBrowser: CI_CRITICAL_BROWSER_SCRIPTS,
     cliRuntime: CI_CLI_RUNTIME_SCRIPTS,
   });
 }
@@ -433,8 +443,9 @@ export function formatLocalCiPlan(): string {
     ...CI_QUALITY_SCRIPTS,
     ...CI_UNIT_SCRIPTS,
     ...CI_BROWSER_BUILD_SCRIPTS,
-    'test:e2e:install',
+    'test:e2e:critical:install',
     'test:e2e:built (performance, functional shards, browser-health aggregation and timing candidate)',
+    'critical cross-browser checks (same isolated built suite)',
     ...CI_CLI_RUNTIME_SCRIPTS.map(script => `${script} (Node ${CI_CLI_RUNTIME_NODE_MAJOR} compatibility runtime)`),
     'verification:artifacts cleanup=all',
   ].join('\n');
@@ -493,7 +504,7 @@ export function main(args = process.argv.slice(2)): number {
     runCiCommandGroup('quality');
     runCiCommandGroup('unit', (script, extra) => npmRun(script, extra, unitEnvironment));
     runCiCommandGroup('browser-build');
-    npmRun('test:e2e:install');
+    npmRun('test:e2e:critical:install');
     npmRun('test:e2e:built');
     runCliRuntimeCheck(cliRuntime);
   } catch (error) {

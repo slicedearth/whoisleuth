@@ -36,6 +36,8 @@
     "test:e2e:shard": "node tools/playwright-balanced-shard.mts",
     "test:e2e:journeys": "playwright test --grep @analyst-journey --workers=1 --retries=0",
     "test:e2e:cross-browser": "playwright test --config=e2e/cross-browser.config.ts --workers=1 --retries=0",
+    "test:e2e:critical": "node tools/playwright-balanced-suite.mts --use-build --critical-only",
+    "test:e2e:critical:install": "playwright install --with-deps chromium firefox webkit",
     "test:e2e:built": "node tools/playwright-balanced-suite.mts --use-build",
     "test:e2e:summary": "node tools/playwright-results-summary.mts",
     "test:e2e:aggregate": "node tools/playwright-shard-aggregate.mts",

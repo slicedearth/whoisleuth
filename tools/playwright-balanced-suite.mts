@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,7 +42,7 @@ const DEFAULT_BASE_PORT = 4180;
 const MAX_PORT_SEARCH = 100;
 const interruption = new AbortController();
 
-type SuiteOptions = Readonly<{ useBuild: boolean }>;
+type SuiteOptions = Readonly<{ useBuild: boolean; criticalOnly: boolean }>;
 
 type FunctionalRun = Readonly<{
   label: string;
@@ -59,10 +59,10 @@ type FunctionalRunDependencies = Readonly<{
 }>;
 
 function parseOptions(args: readonly string[]): SuiteOptions {
-  if (args.length > 1 || args.some((value) => value !== '--use-build')) {
-    throw new TypeError('Usage: node tools/playwright-balanced-suite.mts [--use-build]');
+  if (args.length > 2 || new Set(args).size !== args.length || args.some((value) => !['--use-build', '--critical-only'].includes(value))) {
+    throw new TypeError('Usage: node tools/playwright-balanced-suite.mts [--use-build] [--critical-only]');
   }
-  return Object.freeze({ useBuild: args.includes('--use-build') });
+  return Object.freeze({ useBuild: args.includes('--use-build'), criticalOnly: args.includes('--critical-only') });
 }
 
 function configuredBasePort(): number {
@@ -132,7 +132,7 @@ function runEnvironment(
     WHOISLEUTH_BUILD_REVISION: revision,
     WHOISLEUTH_E2E_PORT: String(port),
     WHOISLEUTH_PLAYWRIGHT_RUN_KIND: kind,
-    ...(shard ? { WHOISLEUTH_PLAYWRIGHT_SHARD: shard } : {}),
+    WHOISLEUTH_PLAYWRIGHT_SHARD: shard ?? '',
     ...(kind === 'performance' ? { WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1' } : {}),
   };
   return {
@@ -209,7 +209,25 @@ export async function runFunctionalRunsSerially(
   });
 }
 
-async function runSuite(workspace: HostedBrowserWorkspace): Promise<number> {
+async function criticalBrowserSummary(workspace: HostedBrowserWorkspace, port: number): Promise<PlaywrightResultSummary> {
+  const environment = runEnvironment(workspace.root, port, 'functional', workspace.revision);
+  const code = await runProcess(workspace.root, 'critical cross-browser checks', [
+    path.join(workspace.root, 'node_modules/@playwright/test/cli.js'),
+    'test', '--config=e2e/cross-browser.config.ts', '--grep=@cross-browser-critical', '--workers=1', '--retries=0',
+  ], environment);
+  if (code !== 0) throw new Error(`Critical cross-browser checks failed with exit ${code}.`);
+  const report = resultData(workspace.root, environment);
+  const summary = summarizePlaywrightResults(report, 'critical cross-browser');
+  const reportDirectory = path.join(REPOSITORY_ROOT, 'playwright-results');
+  mkdirSync(reportDirectory, { recursive: true });
+  writeFileSync(path.join(reportDirectory, 'critical-browser.json'), `${JSON.stringify(report)}\n`, { mode: 0o600 });
+  if (!summary.total || summary.failed || summary.flaky || summary.retried || summary.skipped || summary.truncated) {
+    throw new Error('Critical cross-browser evidence is empty, incomplete, skipped, retried or failed.');
+  }
+  return summary;
+}
+
+async function runSuite(workspace: HostedBrowserWorkspace, criticalOnly: boolean): Promise<number> {
   const executionRoot = workspace.root;
   const playwrightCli = path.join(executionRoot, 'node_modules', '@playwright', 'test', 'cli.js');
   const shardRunner = path.join(executionRoot, 'tools', 'playwright-balanced-shard.mts');
@@ -220,6 +238,11 @@ async function runSuite(workspace: HostedBrowserWorkspace): Promise<number> {
   const ports = await selectPortRange(plan.shardCount + 1);
   try {
     if (interruption.signal.aborted) return 130;
+    if (criticalOnly) {
+      const summary = await criticalBrowserSummary(workspace, ports[0]!);
+      process.stdout.write(`Accepted critical browser suite: ${summary.passed}/${summary.total} passed; 0 failed, flaky, retried or skipped.\n`);
+      return 0;
+    }
     const performanceEnvironment = runEnvironment(
       executionRoot,
       ports[plan.shardCount]!,
@@ -262,9 +285,11 @@ async function runSuite(workspace: HostedBrowserWorkspace): Promise<number> {
 
     const functionalResults = functionalResult.reports;
     process.stdout.write(verifyHostedBrowserHealth(functionalResults));
+    const criticalSummary = await criticalBrowserSummary(workspace, ports[0]!);
     const summaries = [
       resultSummary(performanceEnvironment, performanceResult),
       ...functionalRuns.map((run, index) => resultSummary(run.environment, functionalResults[index])),
+      criticalSummary,
     ];
     const totals = summaries.reduce((summary, item) => ({
       total: summary.total + item.total,
@@ -289,7 +314,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     const options = parseOptions(args);
     if (!options.useBuild) runBuild();
     const workspace = createHostedBrowserWorkspace(REPOSITORY_ROOT);
-    return await runHostedBrowserWorkspace(workspace, () => runSuite(workspace), () => interruption.signal.aborted);
+    return await runHostedBrowserWorkspace(workspace, () => runSuite(workspace, options.criticalOnly), () => interruption.signal.aborted);
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : 'Balanced Playwright suite failed.'}\n`);
     return interruption.signal.aborted ? 130 : 2;
