@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { runMailReportWorker } from '../frontend/src/lib/mail-report-worker.ts';
 import { runMailReportWorkerOperation, type MailReportWorkerRequest, type MailReportWorkerResponse } from '../frontend/src/lib/mail-report-worker-model.ts';
 import { buildMailReportReview } from '../packages/interchange/mail-report-workbench.mts';
-import { sha256ArtifactDigest } from '../packages/evidence/artifact-integrity.mts';
+import { sha256ArtifactDigest, sha256ArtifactDigestV2 } from '../packages/evidence/artifact-integrity.mts';
 
 const request: MailReportWorkerRequest = { kind: 'review', reports: [], officialDomains: [] };
 class ControlledWorker {
@@ -76,8 +76,8 @@ test('worker handler preserves parser errors and never interprets unsupported op
 });
 
 test('the populated current mail fixture has independent coverage, scope and integrity expectations', async () => {
-  const current = JSON.parse(readFileSync(new URL('./fixtures/extracted-domain-lifecycle/mail-report-review-v2.json', import.meta.url), 'utf8'));
-  assert.equal(current.version, 2);
+  const current = JSON.parse(readFileSync(new URL('./fixtures/extracted-domain-lifecycle/mail-report-review-v3.json', import.meta.url), 'utf8'));
+  assert.equal(current.version, 3);
   assert.deepEqual(Object.keys(current).sort(), ['generatedAt', 'integrity', 'limitations', 'profileScope', 'reports', 'schema', 'summary', 'version']);
   assert.equal(current.reports.length, 1);
   assert.equal(current.reports[0].records[0].count, 3);
@@ -85,10 +85,15 @@ test('the populated current mail fixture has independent coverage, scope and int
   assert.equal(current.profileScope.state, 'complete');
   assert.deepEqual(current.profileScope.outsideScopeDomains, []);
   const { integrity, ...unsigned } = current;
-  assert.equal(integrity.digestSha256, await sha256ArtifactDigest(unsigned));
+  assert.equal(integrity.canonicalization, 'sorted-json-v2');
+  assert.equal(integrity.digestSha256, await sha256ArtifactDigestV2(unsigned));
   assert.deepEqual(await buildMailReportReview(current.reports, ['mail.example'], current.generatedAt), current);
   const historic = readFileSync(new URL('./fixtures/extracted-domain-lifecycle/mail-report-review-v1.json', import.meta.url), 'utf8');
   assert.equal(JSON.parse(historic).version, 1);
+  const previous = JSON.parse(readFileSync(new URL('./fixtures/extracted-domain-lifecycle/mail-report-review-v2.json', import.meta.url), 'utf8'));
+  const { integrity: oldIntegrity, ...oldUnsigned } = previous;
+  assert.equal(oldIntegrity.canonicalization, undefined);
+  assert.equal(oldIntegrity.digestSha256, await sha256ArtifactDigest(oldUnsigned));
 });
 
 test('native mail worker bootstrap accepts exactly one operation', async () => {

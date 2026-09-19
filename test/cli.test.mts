@@ -475,7 +475,7 @@ describe('CLI argument parsing', () => {
     });
     assert.throws(
       () => parseCliArguments(['inspect-archive', '--expect-content-digest', 'sha256:nope']),
-      /64 lowercase hexadecimal/iu,
+      /64 lowercase hex/iu,
     );
     assert.deepEqual(parseCliArguments([
       'sign-artifact',

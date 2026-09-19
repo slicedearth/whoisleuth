@@ -175,6 +175,12 @@ reports are projections of validated evidence. Digests establish content
 identity or integrity under their named canonicalisation contract; they do not
 establish truth, authorship or signer trust.
 
+Mail and campaign review outputs declare `sorted-json-v2`; historical versions
+retain their original digest rules. Archive inspection exposes a versioned
+content identity alongside its legacy bare-hash field. New Case snapshots
+declare code-unit factor ordering; historical snapshot identifiers retain their
+original ordering, while evidence comparison treats factors as sets.
+
 The shared investigation manifest owns file identities, source declarations and
 ordered packaging events. Its ZIP container uses generated paths and the shared
 bounded ZIP reader. Browser preparation and inspection run in a cancellable

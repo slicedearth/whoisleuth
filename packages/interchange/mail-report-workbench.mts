@@ -1,4 +1,4 @@
-import { sha256ArtifactDigest } from '../evidence/artifact-integrity.mts';
+import { SORTED_JSON_V2, sha256ArtifactDigestV2 } from '../evidence/artifact-integrity.mts';
 import { boundedJsonLimitsForBytes, parseBoundedJson } from '../../lib/bounded-json.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { MAIL_REPORT_SCHEMA, MAIL_REPORT_VERSION } from '../contracts/analyst-interchange.mts';
@@ -100,7 +100,7 @@ export type MailReportReview = Readonly<{
     coverage: MailInputCoverage;
   }>;
   limitations: readonly string[];
-  integrity: Readonly<{ algorithm: 'SHA-256'; digestSha256: string }>;
+  integrity: Readonly<{ algorithm: 'SHA-256'; canonicalization: typeof SORTED_JSON_V2; digestSha256: string }>;
 }>;
 
 type ExpandedFile = Readonly<{ name: string; bytes: Uint8Array; container: MailContainer }>;
@@ -502,7 +502,7 @@ export async function buildMailReportReview(
       'No DNS, SMTP, mailbox, provider, or target request is made during this review.',
     ],
   } as const;
-  return Object.freeze({ ...unsigned, integrity: Object.freeze({ algorithm: 'SHA-256', digestSha256: await sha256ArtifactDigest(unsigned) }) });
+  return Object.freeze({ ...unsigned, integrity: Object.freeze({ algorithm: 'SHA-256', canonicalization: SORTED_JSON_V2, digestSha256: await sha256ArtifactDigestV2(unsigned) }) });
 }
 
 function assertMailReviewCapacity(reports: readonly ParsedMailReport[]): void {

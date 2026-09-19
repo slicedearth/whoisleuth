@@ -1,5 +1,6 @@
 import { parseCommandArguments, type ParsedCommandArguments } from './command-argument-grammar.mts';
 import { CliUsageError, hasUnsafeCliText } from './errors.mts';
+import { parseArchiveContentDigest } from './archive-content-digest.mts';
 import type { InvestigationPlanRecipe, RunnableInvestigationPlanRecipe } from './investigation-plan.mts';
 import type { WorkflowArtifactBinding } from '../packages/contracts/investigation-run.mts';
 import { parseCliFailPolicies, type CliFailPolicy, type CliFailPolicyCommand } from './fail-policy.mts';
@@ -116,9 +117,8 @@ function terminalOptions(parsed: ParsedCommandArguments): TerminalOptions {
 
 function parseInspectArchiveArguments(parsed: ParsedCommandArguments): InspectArchiveArguments {
   const expectedContentDigest = parsed.optionValue('--expect-content-digest');
-  if (expectedContentDigest !== null && !/^sha256:[a-f0-9]{64}$/u.test(expectedContentDigest)) {
-    throw new CliUsageError('--expect-content-digest requires sha256 followed by 64 lowercase hexadecimal characters.');
-  }
+  try { parseArchiveContentDigest(expectedContentDigest); }
+  catch { throw new CliUsageError('--expect-content-digest requires sha256:<64 lowercase hex> or sorted-json-v2:sha256:<64 lowercase hex>.'); }
   return {
     action: 'inspect-archive',
     source: parsed.positionalValue('source'),

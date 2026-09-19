@@ -21,7 +21,11 @@ export const MISP_INDICATOR_EXPORT_VERSION = 2;
 export const DNS_CHANGE_REHEARSAL_VERSION = 2;
 export const DNS_CHANGE_REHEARSAL_EXPORT_SCHEMA = 'whoisleuth.dns-change-rehearsal';
 export const MAIL_REPORT_SCHEMA = 'whoisleuth.mail-report-review';
-export const MAIL_REPORT_VERSION = 2;
+export const MAIL_REPORT_VERSION = 3;
+export const MAIL_REPORT_CANONICALIZATION_ROUTES = Object.freeze([
+  Object.freeze({ version: 2, canonicalization: 'sorted-json-v1' as const, explicit: false }),
+  Object.freeze({ version: MAIL_REPORT_VERSION, canonicalization: 'sorted-json-v2' as const, explicit: true }),
+]);
 export const REGISTRATION_DISCLOSURE_PLAN_SCHEMA = 'whoisleuth.registration-disclosure-plan';
 export const REGISTRATION_DISCLOSURE_PLAN_VERSION = 2;
 export const STATIC_PAGE_PATTERN_PACK_SCHEMA = 'whoisleuth.static-page-pattern-pack';
@@ -107,10 +111,10 @@ const DNS_REHEARSAL_COMPATIBILITY = defineSchemaCompatibility({
 });
 const MAIL_REPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.mail-report-review', kind: 'export', schema: MAIL_REPORT_SCHEMA,
-  currentVersion: MAIL_REPORT_VERSION, supportedVersions: [1, MAIL_REPORT_VERSION], acceptsUnversionedLegacy: false,
+  currentVersion: MAIL_REPORT_VERSION, supportedVersions: [1, 2, MAIL_REPORT_VERSION], acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'not_applicable', migration: 'read_only', writeSemantics: 'read_only', byteBudget: null,
   owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
-  note: 'Output-only aggregate mail review. Version 2 reports source, entry, record, policy and profile-scope admission separately from display pagination. Historical version 1 has no reader; source-byte and collection bounds are distinct from serialised output bytes.',
+  note: 'Output-only aggregate mail review: v3 declares sorted-json-v2 integrity; v2 retains its undeclared v1 digest. Admission coverage is separate from pagination. Historical v1 has no reader; input and output byte bounds differ.',
 });
 const REGISTRATION_DISCLOSURE_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.registration-disclosure-plan', kind: 'export', schema: REGISTRATION_DISCLOSURE_PLAN_SCHEMA,
@@ -200,7 +204,8 @@ export const ANALYST_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(
       hook: { module: 'packages/interchange/mail-report-workbench.mts', exportName: 'buildMailReportReview', role: 'builder', runtime: 'shared' },
       fixtures: [
         { id: 'mail-report-review-v1', path: `${F}mail-report-review-v1.json`, bytes: 152, sha256: '804ffda72784ee2f0b34985f47f78075238841b4fbcc484b971efcd17f2b0c17', version: 1 },
-        { id: 'mail-report-review-v2', path: `${F}mail-report-review-v2.json`, bytes: 2188, sha256: '42bb3b3a05605b0ffdda3f369a52e0490dcf1541405f2db9cee900ddf0477d97', version: MAIL_REPORT_VERSION },
+        { id: 'mail-report-review-v2', path: `${F}mail-report-review-v2.json`, bytes: 2188, sha256: '42bb3b3a05605b0ffdda3f369a52e0490dcf1541405f2db9cee900ddf0477d97', version: 2 },
+        { id: 'mail-report-review-v3', path: `${F}mail-report-review-v3.json`, bytes: 1627, sha256: '32d71697a08eae70cc070b981953cb18829efee139283f6163edecd126614048', version: MAIL_REPORT_VERSION },
       ] },
     { descriptor: REGISTRATION_DISCLOSURE_COMPATIBILITY, lifecycleSchema: REGISTRATION_DISCLOSURE_PLAN_SCHEMA,
       requiredKeys: ['schema', 'version', 'generatedAt'], optionalKeys: ['domain', 'requests', 'limitations'],

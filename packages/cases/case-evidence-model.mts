@@ -59,7 +59,11 @@ function boolOrNull(value: unknown): boolean | null {
 // are deduplicated and the result is sorted deterministically (largest
 // contribution first, then label) so input order alone can never change a
 // snapshot's fingerprint and two equal factor sets in different order collapse.
-function normalizeFactors(value: unknown): EvidenceFactor[] {
+function compareFactors(a: EvidenceFactor, b: EvidenceFactor): number {
+  return b.points - a.points || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0);
+}
+
+function normalizeFactors(value: unknown, legacyOrder = false): EvidenceFactor[] {
   if (!Array.isArray(value)) return [];
   const seen = new Set<string>();
   const out: EvidenceFactor[] = [];
@@ -76,7 +80,7 @@ function normalizeFactors(value: unknown): EvidenceFactor[] {
     seen.add(key);
     out.push({ label, points });
   }
-  out.sort((a, b) => b.points - a.points || a.label.localeCompare(b.label));
+  out.sort(legacyOrder ? (a, b) => b.points - a.points || a.label.localeCompare(b.label) : compareFactors);
   return out.slice(0, MAX_EVIDENCE_FACTORS);
 }
 
@@ -167,7 +171,7 @@ const MATERIAL_FIELD_ORDER: Array<keyof CaseEvidenceMaterial> = [
 // The canonical, comparison-safe value of a material field. Registrar casing,
 // nameserver order, and sub-day timestamps are collapsed so they can never
 // count as a "change"; a non-conclusive availability contributes nothing.
-function materialValue(field: keyof CaseEvidenceMaterial, snapshot: CaseEvidenceMaterial): unknown {
+function materialValue(field: keyof CaseEvidenceMaterial, snapshot: CaseEvidenceMaterial, legacyOrder = false): unknown {
   switch (field) {
     case 'availability':
       return typeof snapshot.availability === 'string' && CONCLUSIVE_AVAILABILITY.has(snapshot.availability)
@@ -186,9 +190,9 @@ function materialValue(field: keyof CaseEvidenceMaterial, snapshot: CaseEvidence
     case 'mutationTypes':
       return snapshot.mutationTypes;
     case 'riskFactors':
-      return snapshot.riskFactors.map((factor) => [factor.label, factor.points]);
+      return (legacyOrder ? snapshot.riskFactors : [...snapshot.riskFactors].sort(compareFactors)).map((factor) => [factor.label, factor.points]);
     case 'opportunityFactors':
-      return snapshot.opportunityFactors.map((factor) => [factor.label, factor.points]);
+      return (legacyOrder ? snapshot.opportunityFactors : [...snapshot.opportunityFactors].sort(compareFactors)).map((factor) => [factor.label, factor.points]);
     default:
       return snapshot[field] ?? null;
   }
@@ -217,10 +221,10 @@ function hasMaterialEvidence(snapshot: CaseEvidenceMaterial): boolean {
 }
 
 // Deterministic string form of the material identity, keys in fixed order.
-function canonicalMaterialString(snapshot: CaseEvidenceMaterial): string {
+function canonicalMaterialString(snapshot: CaseEvidenceMaterial, legacyOrder = false): string {
   const canonical: Record<string, unknown> = {};
   for (const field of MATERIAL_FIELD_ORDER) {
-    const value = materialValue(field, snapshot);
+    const value = materialValue(field, snapshot, legacyOrder);
     // Optional collection context does not alter historical fingerprints when
     // absent; recorded context separates otherwise-identical captures.
     if ((field === 'inputHostname' || field === 'observationHostname' || field === 'webObservationMode') && value === null) continue;
@@ -253,6 +257,12 @@ function buildSnapshot(
 ): { snapshot: CaseEvidenceSnapshot; material: string } | null {
   if (!raw || typeof raw !== 'object') return null;
   const record = objectRecord(raw);
+  if (record.factorOrder !== undefined && record.factorOrder !== 'code-unit-v1') return null;
+  const historicalSchema = options.sourceVersion !== undefined && Number(options.sourceVersion) <= PUBLISHED_V2_3_CASE_SCHEMA_VERSION;
+  if (historicalSchema && record.factorOrder !== undefined) return null;
+  // Fieldless retained snapshots keep their original identity algorithm. New
+  // captures declare code-unit ordering; the declaration survives every save.
+  const legacyOrder = historicalSchema || (record.factorOrder === undefined && typeof record.fingerprint === 'string');
   const scanDepth = normalizeScanDepth(record.scanDepth);
   const httpSummary = normalizeHttpSummary(record);
   const acceptsProfileContext = options.sourceVersion === undefined || Number(options.sourceVersion) >= 12;
@@ -276,8 +286,8 @@ function buildSnapshot(
     riskScore: clampScore(record.riskScore),
     opportunityModelVersion: normalizeOpportunityModelVersion(record.opportunityModelVersion),
     opportunityScore: clampScore(record.opportunityScore),
-    riskFactors: normalizeFactors(record.riskFactors),
-    opportunityFactors: normalizeFactors(record.opportunityFactors),
+    riskFactors: normalizeFactors(record.riskFactors, legacyOrder),
+    opportunityFactors: normalizeFactors(record.opportunityFactors, legacyOrder),
     registrar: evidenceString(record.registrar),
     createdDate: lifecycleTimestamp(record.createdDate, options.sourceVersion),
     expiryDate: lifecycleTimestamp(record.expiryDate, options.sourceVersion),
@@ -363,10 +373,11 @@ function buildSnapshot(
       : DEFAULT_EVIDENCE_SOURCE;
 
   const material = canonicalMaterialString(fields);
-  const fingerprint = hashString(material);
+  const fingerprint = hashString(legacyOrder ? canonicalMaterialString(fields, true) : material);
   const snapshot: CaseEvidenceSnapshot = {
     id: `ev-${fingerprint}`,
     fingerprint,
+    ...(!legacyOrder ? { factorOrder: 'code-unit-v1' as const } : {}),
     firstCapturedAt,
     capturedAt,
     source,
@@ -406,7 +417,10 @@ function mergeDuplicateSnapshots(
     ? incoming.capturedAt
     : kept.capturedAt;
   const source = chooseSource(kept, incoming);
-  return { ...kept, firstCapturedAt, capturedAt, source };
+  // Preserve an existing historical identifier when a new capture contains
+  // the same evidence under the newer ordering declaration.
+  const base = kept.factorOrder && !incoming.factorOrder ? incoming : kept;
+  return { ...base, firstCapturedAt, capturedAt, source };
 }
 
 function compareSnapshotChrono(a: CaseEvidenceSnapshot, b: CaseEvidenceSnapshot): number {
@@ -511,7 +525,7 @@ export function caseEvidenceTimeline(history: readonly CaseEvidenceSnapshot[] | 
       ? ['other']
       : comparable ? caseEvidenceIncomparableReasons(previous.snapshot, snapshot) : [];
     if (comparable && !changes.length && !incomparableReasons.length
-      && previous.snapshot.fingerprint !== snapshot.fingerprint) incomparableReasons.push('other');
+      && canonicalMaterialString(previous.snapshot) !== canonicalMaterialString(snapshot)) incomparableReasons.push('other');
     return {
       snapshot,
       isBaseline,
@@ -767,11 +781,9 @@ function compareField(
       return { before: b, after: a, tone: 'neutral' };
     }
     case 'factors': {
-      // Factors are already normalized (deduped + deterministically sorted), so
-      // a set comparison ignores input order and reports a genuine change in the
-      // score's composition even when the total is unchanged.
-      const b = Array.isArray(before) ? before : [];
-      const a = Array.isArray(after) ? after : [];
+      // Historical identity ordering is not a change in the factor set.
+      const b = normalizeFactors(before);
+      const a = normalizeFactors(after);
       if (setsEqual(b, a)) return null;
       return { before: b, after: a, tone: 'neutral' };
     }

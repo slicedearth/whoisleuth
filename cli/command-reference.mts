@@ -1107,7 +1107,7 @@ const COMMAND_SEEDS = Object.freeze({
     reference: {
       description: `Summarise or search one current version-${WORKSPACE_ARCHIVE_VERSION} workspace archive, with exact ${LEGACY_WORKSPACE_ARCHIVE_DESCRIPTION} support and redacted output by default.`,
       example: 'whoisleuth inspect-archive workspace.json --search example.test --json',
-      boundary: 'Exact matches require --reveal. Retired and future archive versions are rejected without changing data. The archive is read locally and is never uploaded.',
+      boundary: 'Exact values require --reveal. New content comparisons use the reported sorted-json-v2:sha256 identity with --expect-content-digest; bare sha256 hashes retain their legacy locale-sensitive meaning. Retired and future archives are rejected. The archive is read locally and is never uploaded.',
     },
     collection: { mode: 'offline', scope: `Reads one selected bounded workspace archive v${WORKSPACE_ARCHIVE_VERSION}, retains exact ${LEGACY_WORKSPACE_ARCHIVE_SCOPE} compatibility, and redacts output by default.` },
     summary: 'Inspect an archive locally',

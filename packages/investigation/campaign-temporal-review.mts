@@ -1,4 +1,4 @@
-import { sha256ArtifactDigest } from '../evidence/artifact-integrity.mts';
+import { SORTED_JSON_V2, sha256ArtifactDigestV2 } from '../evidence/artifact-integrity.mts';
 import type { CaseEvidencePin, CasePinCompleteness } from '../cases/case-response-model.mts';
 import type { CaseRecord } from '../cases/case-record-model.mts';
 
@@ -261,6 +261,6 @@ export async function buildCampaignTemporalExport(
   });
   return Object.freeze({
     ...unsigned,
-    integrity: Object.freeze({ algorithm: 'SHA-256' as const, digestSha256: await sha256ArtifactDigest(unsigned) }),
+    integrity: Object.freeze({ algorithm: 'SHA-256' as const, canonicalization: SORTED_JSON_V2, digestSha256: await sha256ArtifactDigestV2(unsigned) }),
   });
 }

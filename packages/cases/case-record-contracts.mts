@@ -102,6 +102,7 @@ export type EvidenceFactor = { label: string; points: number };
 export type CaseEvidenceSnapshot = {
   id: string;
   fingerprint: string;
+  factorOrder?: 'code-unit-v1';
   firstCapturedAt: string;
   capturedAt: string;
   source: string;
@@ -154,7 +155,7 @@ export type CaseEvidenceSnapshot = {
 
 export type CaseEvidenceMaterial = Omit<
   CaseEvidenceSnapshot,
-  'id' | 'fingerprint' | 'firstCapturedAt' | 'capturedAt' | 'source'
+  'id' | 'fingerprint' | 'factorOrder' | 'firstCapturedAt' | 'capturedAt' | 'source'
 >;
 
 export type CaseRecord = {

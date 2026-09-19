@@ -187,6 +187,7 @@ function pickKnownSnapshotFields(snapshot: CaseEvidenceSnapshot): ReportSnapshot
   return {
     id: snapshot.id,
     fingerprint: snapshot.fingerprint,
+    ...(snapshot.factorOrder ? { factorOrder: snapshot.factorOrder } : {}),
     firstCapturedAt: snapshot.firstCapturedAt,
     capturedAt: snapshot.capturedAt,
     source: snapshot.source,
