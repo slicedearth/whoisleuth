@@ -400,15 +400,17 @@ describe('fixture-injected Express network routes', () => {
   });
 
   test('retains RDAP no-registry state and sanitizes every service failure', async () => {
+    const beforeCalls = serviceCalls.length;
     const missing = await request('/api/rdap?q=missing.test');
     assert.equal(missing.status, 404);
     assert.match(String(recordValue(await missing.json()).error), /No RDAP registry found/u);
-    const refused = await request('/api/rdap?q=example.gt');
-    assert.equal(refused.status, 404);
-    const refusal = recordValue(await refused.json());
-    assert.equal(refusal.source, 'retained_registry_capability_policy');
-    assert.match(String(refusal.error), /collection was not attempted/u);
-    assert.doesNotMatch(String(refusal.error), /via IANA bootstrap/u);
+    const absentFromCatalogue = await request('/api/rdap?q=example.gt');
+    assert.equal(absentFromCatalogue.status, 404);
+    const unavailable = recordValue(await absentFromCatalogue.json());
+    assert.equal(unavailable.source, undefined);
+    assert.match(String(unavailable.error), /No RDAP registry found.*via IANA bootstrap/u);
+    assert.doesNotMatch(String(unavailable.error), /collection was not attempted/u);
+    assert.deepEqual(serviceCalls.slice(beforeCalls), [['rdap', 'missing.test'], ['rdap', 'example.gt']]);
 
     const routes = [
       '/api/lookup?q=throw.test',

@@ -140,17 +140,22 @@ describe('fixture-injected Netlify network handlers', () => {
     assert.deepEqual(calls, [['domain', 'example.test']]);
     assert.equal(body(response).fixtureRdap, true);
 
+    const missingCalls: Array<readonly [string, string]> = [];
     const missing = createRdapHandler({
-      fetchRdapRecord: (async () => null) as RdapHandlerDependencies['fetchRdapRecord'],
+      fetchRdapRecord: (async (type: string, value: string) => {
+        missingCalls.push([type, value]);
+        return null;
+      }) as RdapHandlerDependencies['fetchRdapRecord'],
     });
     const missingResponse = await missing(event({ q: 'example.test' }));
     assert.equal(missingResponse.statusCode, 404);
     assert.match(String(body(missingResponse).error), /No RDAP registry found/u);
-    const refused = await missing(event({ q: 'example.gt' }));
-    assert.equal(refused.statusCode, 404);
-    assert.equal(body(refused).source, 'retained_registry_capability_policy');
-    assert.match(String(body(refused).error), /collection was not attempted/u);
-    assert.doesNotMatch(String(body(refused).error), /via IANA bootstrap/u);
+    const absentFromCatalogue = await missing(event({ q: 'example.gt' }));
+    assert.equal(absentFromCatalogue.statusCode, 404);
+    assert.equal(body(absentFromCatalogue).source, undefined);
+    assert.match(String(body(absentFromCatalogue).error), /No RDAP registry found.*via IANA bootstrap/u);
+    assert.doesNotMatch(String(body(absentFromCatalogue).error), /collection was not attempted/u);
+    assert.deepEqual(missingCalls, [['domain', 'example.test'], ['domain', 'example.gt']]);
   });
 
   test('normalizes Certificate Transparency and nameserver-search inputs before fixture services', async () => {
