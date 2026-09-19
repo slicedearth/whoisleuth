@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, test } from 'node:test';
+import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
 
 import {
   DEFERRED_MODULE_DEADLINE_MS,
@@ -70,9 +71,8 @@ describe('bounded deferred module loading', () => {
       for (const [name, attributes] of cases) await writeFile(path.join(workspace, `${name}.svelte`), `<script lang="ts">
         import DeferredSurface from './DeferredSurface.svelte'; import Subject from './Subject.svelte';
         </script><DeferredSurface load={async () => ({ default: Subject })} ${attributes} loadingLabel="Loading" unavailableLabel="Unavailable" />`);
-      const environment = { ...process.env };
+      const environment = environmentWithoutV8Coverage();
       delete environment.NODE_TEST_CONTEXT;
-      delete environment.NODE_V8_COVERAGE;
       const checked = spawnSync(process.execPath, [path.join(root, 'node_modules/svelte-check/bin/svelte-check'),
         '--workspace', workspace, '--tsconfig', 'tsconfig.json', '--output', 'machine-verbose'], {
         cwd: workspace, env: environment, encoding: 'utf8', timeout: 60_000, maxBuffer: 4 * 1024 * 1024,

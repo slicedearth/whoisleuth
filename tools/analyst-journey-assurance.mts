@@ -184,10 +184,11 @@ export function assertAppliedBrowserSafety(options: Readonly<{
   fixtureFile?: string;
 }> = {}): void {
   const temporaryRoot = mkdtempSync(path.join(tmpdir(), 'whoisleuth-browser-contract-'));
-  const environment: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: '0', WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1' };
+  const environment: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: '0', WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1', NODE_V8_COVERAGE: undefined };
   // Configuration discovery does not need a build. Fixture probes supply an
   // in-memory browser and must never start a server or make network requests.
-  for (const name of ['CI', 'WHOISLEUTH_E2E_USE_BUILD', 'NODE_V8_COVERAGE', 'PLAYWRIGHT_JSON_OUTPUT_NAME', 'PLAYWRIGHT_JSON_OUTPUT_FILE', 'PLAYWRIGHT_JSON_OUTPUT_DIR']) {
+  // Omission alone would let Node restore the parent's coverage directory.
+  for (const name of ['CI', 'WHOISLEUTH_E2E_USE_BUILD', 'PLAYWRIGHT_JSON_OUTPUT_NAME', 'PLAYWRIGHT_JSON_OUTPUT_FILE', 'PLAYWRIGHT_JSON_OUTPUT_DIR']) {
     delete environment[name];
   }
   const run = (args: readonly string[]) => spawnSync(process.execPath, [

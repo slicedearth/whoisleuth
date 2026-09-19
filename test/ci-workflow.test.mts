@@ -146,10 +146,33 @@ function escapeRegExp(value: string): string {
 }
 
 describe('continuous integration workflow', () => {
-  test('keeps deliberately interrupted subprocesses outside the parent coverage collector', () => {
+  test('keeps deliberately interrupted subprocesses outside the parent coverage collector', (context) => {
     const source = { PATH: '/fixture/bin', NODE_V8_COVERAGE: '/fixture/coverage' };
-    assert.deepEqual(environmentWithoutV8Coverage(source), { PATH: '/fixture/bin' });
+    assert.deepEqual(environmentWithoutV8Coverage(source), { PATH: '/fixture/bin', NODE_V8_COVERAGE: undefined });
     assert.equal(source.NODE_V8_COVERAGE, '/fixture/coverage');
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'whoisleuth-coverage-inheritance-'));
+    context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const previous = process.env.NODE_V8_COVERAGE;
+    const probe = (environment: NodeJS.ProcessEnv) => {
+      const child = spawnSync(process.execPath, ['-p', 'JSON.stringify(process.env.NODE_V8_COVERAGE ?? null)'], {
+        env: environment, encoding: 'utf8', timeout: 5_000, maxBuffer: 64 * 1024,
+      });
+      assert.ifError(child.error);
+      assert.equal(child.status, 0, child.stderr);
+      return JSON.parse(child.stdout) as string | null;
+    };
+    try {
+      process.env.NODE_V8_COVERAGE = directory;
+      assert.equal(probe(environmentWithoutV8Coverage()), null);
+      assert.deepEqual(fs.readdirSync(directory), []);
+      const omitted = { ...process.env };
+      delete omitted.NODE_V8_COVERAGE;
+      assert.equal(probe(omitted), directory, 'omission re-enables the parent collector');
+      assert.ok(fs.readdirSync(directory).some(file => /^coverage-.*\.json$/u.test(file)));
+    } finally {
+      if (previous === undefined) delete process.env.NODE_V8_COVERAGE;
+      else process.env.NODE_V8_COVERAGE = previous;
+    }
   });
 
   test('runs required checks for pull requests and main without write permissions', () => {

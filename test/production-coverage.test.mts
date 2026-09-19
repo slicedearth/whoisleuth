@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { describe, test } from 'node:test';
+import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
 
 import {
   PRODUCTION_COVERAGE_EXCLUSIONS,
@@ -175,9 +176,8 @@ describe('production coverage policy', () => {
       ].join('\n'));
       // This is a separate test-runner invocation, not a worker in the parent
       // run. The inherited worker marker prevents a recursive test run.
-      const environment = { ...process.env };
+      const environment = environmentWithoutV8Coverage();
       delete environment.NODE_TEST_CONTEXT;
-      delete environment.NODE_V8_COVERAGE;
       await promisify(execFile)(process.execPath, productionCoverageArguments('test/probe.test.mts'), {
         cwd: root, env: environment, encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024,
       });
@@ -327,8 +327,7 @@ describe('production coverage policy', () => {
       const file = path.join(directory, 'fixture.lcov');
       await writeFile(file, sources.map(source => lcovRecord(source,
         source === underCovered ? [10, 1, 8, 1, 5, 1] : [10, 10, 8, 8, 5, 5])).join('\n'));
-      const environment = { ...process.env };
-      delete environment.NODE_V8_COVERAGE;
+      const environment = environmentWithoutV8Coverage();
       await assert.rejects(promisify(execFile)(process.execPath, ['tools/production-coverage.mts', file], {
         cwd: path.resolve(import.meta.dirname, '..'), env: environment,
         encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024,

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
 
 import { buildAnalystJourneyAssurance, parseAnalystJourneySource } from '../tools/analyst-journey-assurance.mts';
 import { selectBalancedBrowserShard } from '../tools/playwright-balanced-shard.mts';
@@ -253,8 +254,7 @@ describe('verification architecture contracts', () => {
     const retained = readVerificationTimingProfile();
     const plan = buildBalancedBrowserShardPlan(retained);
     const directory = mkdtempSync(path.join(tmpdir(), 'whoisleuth-browser-command-parity-'));
-    const cleanEnvironment = { ...process.env };
-    delete cleanEnvironment.NODE_V8_COVERAGE;
+    const cleanEnvironment = environmentWithoutV8Coverage();
     try {
       const reports = plan.shards.map((shard) => {
         const report = path.join(directory, `shard-${shard.shard}.json`);
@@ -662,7 +662,7 @@ describe('verification architecture contracts', () => {
       const command = execution.commands[0]!;
       const args = [...command.args.filter(arg => !arg.endsWith('.spec.ts')), `--config=${config}`];
       const run = () => spawnSync(command.executable, args, {
-        cwd: REPOSITORY_ROOT, env: { ...process.env, ...command.environment },
+        cwd: REPOSITORY_ROOT, env: { ...environmentWithoutV8Coverage(), ...command.environment },
         encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024,
       });
       writeFileSync(spec, "require('./missing-support.cjs');");
