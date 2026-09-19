@@ -1,6 +1,7 @@
 import { profileSignals, type ActiveBrandProfileSourceState, type BrandProfile } from '../brand-profiles.ts';
 import type { Candidate } from '../candidate-handoff-core.ts';
 import { canonicalRegistrableDomain } from '../../../../lib/registrable-domain.mts';
+import { registryDateIso } from '../../../../packages/evidence/registry-dates.mts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import { compactHttpObservation } from './http-summary.ts';
@@ -131,8 +132,10 @@ export function normalizeBulkScanResult(
     availability: body.availability.state,
     registrarName: entityDisplayName(availability.registrar) || '—',
     nameservers,
-    createdDate: boundedText(availability.createdDate, 64),
-    expiryDate: boundedText(availability.expiryDate, 64),
+    createdDate: registryDateIso(boundedText(availability.createdDateIso, 64))
+      ?? registryDateIso(boundedText(availability.createdDate, 64)),
+    expiryDate: registryDateIso(boundedText(availability.expiryDateIso, 64))
+      ?? registryDateIso(boundedText(availability.expiryDate, 64)),
     privacyProtected,
     hasMx,
     hasNullMx,

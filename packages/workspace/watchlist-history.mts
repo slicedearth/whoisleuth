@@ -7,6 +7,7 @@ import { explainRiskScore, normalizeRiskModelVersion } from '../../lib/risk-scor
 import { HTTP_SECURITY_HEADER_TOKENS, normalizeHttpSummary } from '../cases/http-summary.mts';
 import { normalizeDomain } from '../cases/case-model.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { registryDateIso } from '../evidence/registry-dates.mts';
 import {
   MAX_WATCHLIST_CHANGES_PER_EVENT,
   MAX_WATCHLIST_DOMAINS,
@@ -256,8 +257,7 @@ function boundedInteger(value: unknown, maximum: number, fallback = 0): number {
 
 function normalizeDateValue(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > MAX_TIMESTAMP_LENGTH || CONTROL_RE.test(value)) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString().slice(0, 10) : null;
+  return registryDateIso(value)?.slice(0, 10) ?? null;
 }
 
 function inferredScanDepth(record: Record<string, unknown>): WatchlistScanDepth {
