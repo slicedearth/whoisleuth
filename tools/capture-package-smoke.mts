@@ -6,7 +6,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { crc32, deflateSync } from 'node:zlib';
-import type { Browser, Route } from 'playwright';
+import type { Route } from 'playwright';
+import type { CaptureBrowser } from '../packages/web-capture/capture.mts';
+import { checkCaptureBrowserIsolation } from './capture-browser-check.mts';
 
 // Runtime imports come only from the installed archive. The source imports below
 // are erased type annotations, not a fallback to the development checkout.
@@ -35,7 +37,7 @@ function screenshot(): Buffer {
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', header), chunk('IDAT', deflateSync(pixels)), chunk('IEND', Buffer.alloc(0))]);
 }
 
-function fixtureBrowser(): Browser {
+function fixtureBrowser(): CaptureBrowser {
   let route: ((value: Route) => Promise<void>) | undefined;
   const page = {
     on() {},
@@ -55,9 +57,10 @@ function fixtureBrowser(): Browser {
   };
   return {
     version: () => '151.0.0.0',
+    blockedDirectConnections: () => 0,
     newContext: async () => ({ addInitScript: async () => {}, route: async (_pattern: string, handler: typeof route) => { route = handler; }, routeWebSocket: async () => {}, newPage: async () => page, close: async () => {} }),
     close: async () => {},
-  } as unknown as Browser;
+  } as unknown as CaptureBrowser;
 }
 
 try {
@@ -126,6 +129,8 @@ try {
   checks.push('corrupted artefact rejection');
   if (process.argv[3] === '--browser') {
     const launcher: typeof import('../packages/web-capture/browser.mts') = await import(pathToFileURL(path.join(root, 'packages/web-capture/browser.mjs')).href);
+    await checkCaptureBrowserIsolation(capture.captureRenderedPage, launcher.launchCaptureBrowser);
+    checks.push('browser-lifetime direct and teardown connection denial');
     let observedRequests = 0;
     const rendered = await capture.captureRenderedPage({ targetUrl: 'https://example.test/', outputDirectory: path.join(temporary, 'rendered'), timeoutMs: 20_000 }, {
       launchBrowser: launcher.launchCaptureBrowser,

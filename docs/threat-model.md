@@ -76,6 +76,8 @@ or publication of different bytes from those reviewed.
 | CLI process | Local planning, collection, review, verification and files | Arguments, terminal bytes, environment, files, network responses | Command and execution-plane contracts, bounded input/output, private atomic writes, terminal sanitisation, explicit network plans |
 | Portable evidence | Interoperability and review | JSON, archives, signatures, digests, timestamps and nested documents | Duplicate-key-aware bounded parsing, exact envelopes, version routing, canonicalisation, structural and semantic validation |
 | Optional worker | Bounded monitoring or processing | Schedule, compact target set, store state and upstream responses | Separate configuration, encryption where promised, least data, budget and retry bounds, no general evidence custody |
+| Optional rendered capture | Explicit local rendering and artefact creation | Page scripts, subresources, browser teardown traffic and output paths | Browser sandbox, pinned collector, browser-lifetime deny-only proxy, disabled alternate transports, bounded private writes, explicit partial evidence |
+| Optional local application | Loopback access to a selected filesystem workspace | Local requests, stored records, concurrent writes and lost acknowledgements | Authenticated loopback boundary, exact origin admission, bounded transactions and durable operation receipts |
 
 ## Principal threats and controls
 
@@ -90,6 +92,13 @@ not bypass these primitives for convenience.
 Residual risk includes changes in public address allocation, upstream DNS
 compromise, and protocol-specific behaviours that are outside the validated
 connection. Evidence remains point-in-time.
+
+The capture companion supplies every admitted response through the pinned Node
+collector. A deny-only loopback proxy refuses direct browser connections even
+after page routing is removed; speculative DNS and direct QUIC are disabled.
+The browser is closed before connection accounting and the manifest are final.
+This boundary does not contain a browser-engine compromise: untrusted rendering
+still belongs in a disposable, operating-system-restricted environment.
 
 ### Resource exhaustion
 

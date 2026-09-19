@@ -35,6 +35,8 @@ Express and Netlify adapters call the same request services and evidence rules.
 | `frontend/` | Routes, components, accessibility, browser state, IndexedDB and downloads. | Canonical cross-runtime contract ownership. |
 | `cli/` and `bin/` | Command grammar, handlers, terminal output, local files and explicit CLI network effects. | Hosted sessions or browser persistence. |
 | Express and Netlify adapters | Deployment-specific request and response integration. | Independent evidence or scoring rules. |
+| `packages/web-capture/` | Optional sandboxed browser capture, pinned resource collection, browser-lifetime deny proxy and local artefacts. | Hosted collection, browser workspaces or automatic Case imports. |
+| `packages/local-application/` | Optional loopback application startup and filesystem workspace package. | A separate evidence model or hosted deployment. |
 | `tools/` | Explicit maintainer checks, deterministic measurements and generated-reference renderers. | Runtime product behaviour. |
 
 Frontend compatibility paths re-export shared modules through

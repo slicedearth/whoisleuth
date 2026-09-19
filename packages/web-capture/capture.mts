@@ -72,7 +72,7 @@ type CaptureArguments = Readonly<{
 }>;
 
 type CaptureDependencies = Readonly<{
-  launchBrowser(timeoutMs: number): Promise<Browser>;
+  launchBrowser(timeoutMs: number): Promise<CaptureBrowser>;
   startArtifactWriter?: typeof startAnchoredArtifactWriter;
   resolveAddresses?: typeof resolvePublicAddresses;
   fetchResource?: CaptureFetchResource;
@@ -80,6 +80,10 @@ type CaptureDependencies = Readonly<{
   writeArtifact?: typeof privateWrite;
   now?: () => string;
   deadlineScheduler?: CaptureDeadlineScheduler;
+}>;
+
+export type CaptureBrowser = Browser & Readonly<{
+  blockedDirectConnections(): number;
 }>;
 
 type DomProjection = Readonly<{
@@ -776,7 +780,7 @@ export async function captureRenderedPage(
   const ownedArtifacts = new Map<string, OwnedArtifactIdentity>();
   const pendingArtifactWrites = new Set<Promise<void>>();
   let anchoredWriter: AnchoredArtifactWriter | null = null;
-  let browser: Browser | null = null;
+  let browser: CaptureBrowser | null = null;
   let context: BrowserContext | null = null;
   let page: Page | null = null;
   const deadline = createCaptureDeadline(argumentsValue.timeoutMs, async () => {
@@ -884,6 +888,12 @@ export async function captureRenderedPage(
     context = null;
     const sealedBoundary = await deadline.run(requestBoundary.seal());
     const requestStats = sealedBoundary.stats;
+    const browserVersion = browser.version();
+    // Seal the browser-lifetime barrier too: page/context teardown may create
+    // connections after their route handlers have gone away.
+    await deadline.run(browser.close());
+    const blockedDirectConnections = browser.blockedDirectConnections();
+    browser = null;
     const domDigest = {
       schema: WEB_CAPTURE_DOM_DIGEST_SCHEMA,
       version: WEB_CAPTURE_DOM_DIGEST_VERSION,
@@ -913,6 +923,8 @@ export async function captureRenderedPage(
       'Each admitted exact resource URL, including path and query, is disclosed to its operator. No dedicated path or query field is retained; the page title and screenshot can reproduce page-controlled content including them.',
       'Downloads, service workers, dedicated/shared workers, WebSockets, WebRTC, WebTransport, non-read methods, non-HTTP(S), credentials, non-default ports, private addresses, and traffic over declared bounds were blocked.',
       'Each request was resolved and connection-pinned by the shared safe-fetch transport before its bounded response was supplied to the disposable browser; cookies, authorisation headers, and request bodies were not forwarded.',
+      'Direct browser connections were refused by a deny-only loopback proxy through browser shutdown; speculative DNS and direct QUIC were disabled. This does not replace operating-system isolation of untrusted browser code.',
+      ...(blockedDirectConnections ? ['Additional direct browser connection attempts were refused; their destinations and content were not retained.'] : []),
       `Each response body was read up to ${MAX_CAPTURE_RESPONSE_BYTES} bytes and the collector processed at most ${MAX_CAPTURE_TRANSFER_BYTES} response-body bytes across the capture; lower-level transport buffering is outside this application-level bound.`,
       `Rendered DOM counts are capped at ${MAX_WEB_CAPTURE_DOM_ELEMENTS} and the body text-node sequence is hashed only through a valid UTF-8 boundary within ${MAX_WEB_CAPTURE_VISIBLE_TEXT_BYTES} bytes; reaching either bound leaves the capture partial.`,
       'The screenshot perceptual hash is an investigative similarity signal and does not establish copying, ownership, intent, safety, or maliciousness.',
@@ -924,10 +936,10 @@ export async function captureRenderedPage(
       captures: [{
         domain: canonicalUrlHost(target),
         capturedAt,
-        conditions: readCaptureConditions({ browser: 'chromium', browserVersion: browser.version(), viewport: VIEWPORT,
+        conditions: readCaptureConditions({ browser: 'chromium', browserVersion, viewport: VIEWPORT,
           deviceScaleFactor: 1, locale: 'en-US', timezone: 'UTC', colourScheme: 'light' }),
         ...(observerLabel ? { observerLabel } : {}), ...(vantageLabel ? { vantageLabel } : {}),
-        completeness: requestStats.blockedRequestCount || dom.structureTruncated || dom.textTruncated ? 'partial' : 'complete',
+        completeness: requestStats.blockedRequestCount || blockedDirectConnections || dom.structureTruncated || dom.textTruncated ? 'partial' : 'complete',
         limitations,
         page: { title: title || null, finalOrigin: finalUrl.origin.toLowerCase() },
         requestDomains: sealedBoundary.requestHosts,
@@ -946,8 +958,6 @@ export async function captureRenderedPage(
     if (manifestBytes.length > MAX_WEB_CAPTURE_MANIFEST_BYTES) {
       throw new Error(`Rendered capture manifest exceeds the ${MAX_WEB_CAPTURE_MANIFEST_BYTES}-byte limit.`);
     }
-    await deadline.run(browser.close());
-    browser = null;
     // The manifest is the final commit marker. A reserved directory without it
     // is never a completed capture, and the destination is never replaced.
     await writeArtifact('manifest.json', manifestBytes);

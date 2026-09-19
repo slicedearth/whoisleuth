@@ -8,7 +8,7 @@ import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import zlib from 'node:zlib';
 
-import type { Browser, Route } from '@playwright/test';
+import type { Route } from '@playwright/test';
 
 import {
   MAX_CAPTURE_HOSTS,
@@ -22,6 +22,7 @@ import {
   installDomProjectionIntrinsics,
   parseCaptureArguments,
   sanitizeCaptureText,
+  type CaptureBrowser,
 } from '../packages/web-capture/capture.mts';
 import { startAnchoredArtifactWriter } from '../packages/web-capture/anchored-artifact-writer.mts';
 import { launchCaptureBrowser } from '../packages/web-capture/browser.mts';
@@ -135,6 +136,7 @@ function fakeBrowser(options: {
   rejectCloseSubresourceAbort?: boolean;
   stallDomProjection?: boolean;
   networkApisDisabled?: boolean;
+  blockedDirectConnections?: number;
 } = {}) {
   let routeHandler: ((route: Route) => Promise<void>) | null = null;
   const page = {
@@ -200,18 +202,27 @@ function fakeBrowser(options: {
   return {
     newContext: async () => context,
     version: () => '151.0.0.0',
+    blockedDirectConnections: () => options.blockedDirectConnections ?? 0,
+    once: () => {},
     close: async () => {},
-  } as unknown as Browser;
+  } as unknown as CaptureBrowser;
 }
 
 describe('optional local rendered capture package', () => {
   test('keeps the browser sandbox and a bounded launch deadline without fallback', async () => {
     const instance = fakeBrowser();
     const result = await launchCaptureBrowser(5000, { launch: async options => {
-      assert.deepEqual(options, { headless: true, chromiumSandbox: true, timeout: 5000 });
+      assert.equal(options?.headless, true);
+      assert.equal(options.chromiumSandbox, true);
+      assert.ok(options.timeout! > 0 && options.timeout! <= 5000);
+      assert.match(options.proxy!.server, /^http:\/\/127\.0\.0\.1:\d+$/u);
+      assert.equal(options.proxy!.bypass, '<-loopback>');
+      assert.ok(options.args?.includes('--dns-prefetch-disable'));
+      assert.ok(options.args?.includes('--disable-quic'));
       return instance;
     } });
     assert.equal(result, instance);
+    await result.close();
     for (const timeout of [0, -1, Infinity, 30001]) assert.throws(() => launchCaptureBrowser(timeout), /bounded deadline/u);
     await assert.rejects(() => launchCaptureBrowser(1000, { launch: async () => { throw new Error('Sandbox unavailable'); } }), /Sandbox unavailable/u);
   });
@@ -933,7 +944,7 @@ describe('optional local rendered capture package', () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-late-browser-test-'));
     const destination = path.join(parent, 'capture');
     const deadline = controlledDeadlineScheduler();
-    let resolveLaunch!: (browser: Browser) => void;
+    let resolveLaunch!: (browser: CaptureBrowser) => void;
     let signalLaunch!: () => void;
     let signalClose!: () => void;
     const launchStarted = new Promise<void>((resolve) => { signalLaunch = resolve; });
@@ -944,7 +955,7 @@ describe('optional local rendered capture package', () => {
     const lateBrowser = {
       newContext: async () => { contextCount += 1; throw new Error('late browser must not create a context'); },
       close: async () => { closeCount += 1; signalClose(); },
-    } as unknown as Browser;
+    } as unknown as CaptureBrowser;
     try {
       const capture = captureRenderedPage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 1_000,
@@ -952,7 +963,7 @@ describe('optional local rendered capture package', () => {
         launchBrowser: async (timeoutMs) => {
           launchTimeout = timeoutMs;
           signalLaunch();
-          return new Promise<Browser>((resolve) => { resolveLaunch = resolve; });
+          return new Promise<CaptureBrowser>((resolve) => { resolveLaunch = resolve; });
         },
         writeArtifact: async () => { throw new Error('late browser must not write artefacts'); },
         deadlineScheduler: deadline.scheduler,
@@ -1214,6 +1225,28 @@ describe('optional local rendered capture package', () => {
     } finally {
       await rm(parent, { recursive: true, force: true });
     }
+  });
+
+  test('seals direct-connection accounting after browser shutdown and retains no destination', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-direct-test-'));
+    let closed = false;
+    const instance = {
+      ...fakeBrowser(),
+      close: async () => { closed = true; },
+      blockedDirectConnections: () => { assert.equal(closed, true); return 2; },
+    };
+    try {
+      const manifest = await captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: path.join(parent, 'capture'), timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => instance,
+        fetchResource: fakeFetchResource,
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+      });
+      assert.equal(manifest.captures[0]?.completeness, 'partial');
+      assert.ok(manifest.captures[0]?.limitations.some(value => value.startsWith('Additional direct browser')));
+      assert.equal(parseWebCaptureManifest(manifest).findings.length, 1);
+    } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   test('does not retain a browser-requested host that fails public-address validation', async () => {

@@ -113,6 +113,10 @@ collection fails. Only hosts that successfully pass public-address resolution
 are retained in the manifest.
 Every allowed request uses the shared connection-pinned
 transport before its bounded response is supplied to the disposable browser.
+Direct browser connections are refused by a deny-only loopback proxy through
+browser shutdown; speculative DNS and direct QUIC are disabled. Refused direct
+attempts leave the capture partial without retaining their destinations or
+content. The proxy never forwards traffic or replaces the pinned collector.
 Cookies, authorisation headers, and request bodies are not forwarded. Each
 response body is read up to 4 MiB, with concurrent reads reserving from one
 shared 24 MiB application-level response-body budget. Lower-level transport

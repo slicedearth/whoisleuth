@@ -527,6 +527,11 @@ the hosted application and main CLI. It executes remote page JavaScript in a
 disposable network-bounded browser. Each admitted resource operator receives the
 exact requested URL, including its path and query.
 
+Only the pinned collector may contact resource operators. A browser-lifetime
+deny-only proxy refuses direct connections, including teardown attempts, without
+retaining their destinations or content. Refused attempts leave the capture
+partial. Speculative DNS and direct QUIC are disabled.
+
 The local manifest does not include dedicated request-path or query fields, but
 the page-controlled title can reproduce them. A local fixed-size screenshot
 necessarily preserves visible rendered content and may include page text or a
