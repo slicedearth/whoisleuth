@@ -19,6 +19,13 @@ behaviour and write semantics. The generated
 [schema inventory](case-contracts.md) and
 [privacy catalogue](privacy-data-flow-catalogue.md) project those declarations.
 
+Profile, watchlist and template merges update an existing record only from a
+strictly newer valid timestamp. Bulk-session and template imports preserve
+existing records at capacity. Bulk-session retention previews are transient;
+the save transaction checks the complete reviewed collection again before any
+confirmed removal. A failed refresh after a successful write is reported as a
+refresh failure, not a request to repeat the write.
+
 The default and unencrypted named workspaces use the plaintext JSON codec.
 Anyone able to use the browser profile, a privileged extension or the device
 may be able to read them. Named workspaces can instead use the encrypted codec

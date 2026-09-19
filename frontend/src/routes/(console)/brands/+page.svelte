@@ -489,7 +489,7 @@
         result=await importProfileFile(file,pageController.signal);
       }catch(cause){if(!pageController.signal.aborted)message=profileWriteFailureMessage(cause,'Import failed.');return;}
       if(pageController.signal.aborted)return;
-      const skipped=result.skipped?`; skipped ${result.skipped} invalid or over-limit profile${result.skipped===1?'':'s'}`:'';
+      const skipped=result.skipped?`; skipped ${result.skipped} older, same-time, invalid or over-limit profile${result.skipped===1?'':'s'}; local profiles were retained`:'';
       const imported=`Imported ${result.added} new and ${result.updated} updated profiles${skipped}.`;
       try{await refreshProfiles();message=imported;}
       catch{const issue:Exclude<ProfileCommitIssue,null>=profileSourceState==='unavailable'?'reread':'active-preference';message=`${imported} ${committedIssueText(issue,'profile import')}`;}

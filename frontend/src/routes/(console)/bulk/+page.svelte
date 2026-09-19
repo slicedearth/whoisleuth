@@ -75,7 +75,7 @@
   import { unavailableLocalContextLabels } from '$lib/local-context-load.ts';
   import { preloadBestEffort } from '$lib/idle-preload';
   import { loadDeferredModule } from '$lib/deferred-module';
-  import type { BulkSession } from '$lib/bulk-sessions';
+  import type { BulkSession, BulkSessionSavePreview } from '$lib/bulk-sessions';
   import type { BulkReviewFilter, BulkReviewPreset, BulkReviewPresetView, BulkReviewState, BulkReviewStore } from '$lib/bulk-review';
   import { DEFAULT_BULK_RESULT_COLUMNS, type BulkResultColumn } from '../../../../../packages/workspace/bulk-columns.mts';
   import { BULK_LIFECYCLE_FILTERS, BULK_REVIEW_SCHEMA, BULK_REVIEW_SCHEMA_VERSION } from '$lib/analysis/bulk-review-model.ts';
@@ -137,6 +137,9 @@
   let retainedRelationshipIds=$state<Set<string>>(new Set());let relationshipRetentionStatus=$state('');
   let relationshipsSourceState=$state<BrowserLocalCollectionLoadState>('idle');
   let bulkSessions=$state<BulkSession[]>([]);let bulkSessionName=$state('');let bulkSessionStatus=$state('');let currentBulkSessionId=$state('');let scanStartedAt=$state('');
+  let bulkSessionSaving = $state(false);
+  let bulkSessionRetention = $state<BulkSessionSavePreview | null>(null);
+  let bulkSessionRefreshRequired = $state(false);
   let bulkSessionsSourceState=$state<BrowserLocalCollectionLoadState>('idle');
   let bulkReviewStore=$state<BulkReviewStore>({schema:BULK_REVIEW_SCHEMA,version:BULK_REVIEW_SCHEMA_VERSION,presets:[],rows:[]});let reviewStateFilter=$state<BulkReviewFilter>('');let bulkReviewStatus=$state('');
   let bulkReviewSourceState=$state<BrowserLocalCollectionLoadState>('idle');
@@ -579,7 +582,86 @@
     return normalizeBulkScanResult(body,{targetDomain:domain,mode:snapshot.mode,profile:snapshot.profile,profileSourceState:snapshot.sourceState,candidate});
   }
   function failedResult(domain:string,message:string,snapshot:BulkScanProfileSnapshot):ScanResult{const candidate=provenance(domain);const mutationTypes=candidate?.mutationTypes||[];const officialDomains=snapshot.sourceState==='ready'?(snapshot.profile?.officialDomains||[]):[];const idn=analyzeDomainIdn(domain,officialDomains);const profileValue=snapshot.sourceState==='ready'?false:null;return{domain:idn?.asciiDomain||domain,status:'error',availability:'error',confidence:'unknown',registrar:'—',activity:'—',risk:null,opportunity:null,mutationTypes,trusted:null,error:message,saved:{domain:idn?.asciiDomain||domain,scanDepth:snapshot.mode,availability:'error',registrarName:'—',nameservers:[],faviconHash:null,faviconPHash:null,faviconMatch:profileValue,faviconNearMatch:profileValue,reusesOfficialAssets:profileValue,idnReferenceMatch:snapshot.sourceState==='ready'?Boolean(idn?.referenceMatches.length):null,pageBaselineMatch:null,hasActiveBrandProfile:snapshot.sourceState==='ready'?Boolean(snapshot.profile):null,riskFactors:[],mutationTypes,profileContext:snapshot.provenance,error:message},nameservers:[],faviconHash:null,faviconPHash:null,faviconMatch:profileValue,faviconNearMatch:profileValue,reusesOfficialAssets:profileValue,hasPasswordField:false,hasExternalFormAction:null,phishingLanguageMatch:null,registrant:null,abuseEvidence:null,ct:candidate?.certificateTransparency||null,idn,dns:null,dnssec:null,comparisonEvidence:null,relationship:relationshipObservation({},officialDomains),sourceCoverage:[{source:'lookup',state:'error'}]};}
-  async function saveCurrentBulkSession(){await ensureBulkSessionsContext();if(bulkSessionsSourceState!=='ready'||!bulkSessionsApi){bulkSessionStatus='Saved Bulk sessions are unavailable. Reload before saving.';return;}const name=bulkSessionName.trim();const domains=parseDomains();if(!name||!domains.length||!results.length){bulkSessionStatus='Enter a session name and complete at least one result before saving.';return;}try{const settled=new Set(results.map((row)=>row.domain));const isComplete=domains.every((domain)=>settled.has(domain));const now=new Date().toISOString();const sessionResults=results.map(toBulkSessionResult);const result=await bulkSessionsApi.saveBulkSession({id:currentBulkSessionId||createBulkSessionId(),name,mode,state:isComplete?'complete':status.startsWith('Cancelled')?'cancelled':'partial',inputDigest:await bulkSessionInputDigest(domains,mode),domains,results:sessionResults,profileContext:summarizeBulkProfileContexts(sessionResults),startedAt:scanStartedAt||now,updatedAt:now,completedAt:isComplete?now:null});currentBulkSessionId=result.session.id;bulkSessions=await bulkSessionsApi.loadBulkSessions();bulkSessionStatus=`${result.added?'Saved':'Updated'} ${result.session.name}.${result.pruned?` Pruned ${result.pruned} older session${result.pruned===1?'':'s'} to stay within storage.`:''}`;}catch(cause){bulkSessionStatus=cause instanceof Error?cause.message:'Could not save the Bulk session.';}}
+  async function persistBulkSession(session: unknown, retention?: BulkSessionSavePreview) {
+    if (!bulkSessionsApi) return;
+    try {
+      const expected = bulkSessions.find((value) => value.id === currentBulkSessionId) ?? null;
+      const result = await bulkSessionsApi.saveBulkSession(session, { expected, ...(retention ? { retention } : {}) });
+      currentBulkSessionId = result.session.id;
+      bulkSessionRetention = null;
+      const saved = `${result.added ? 'Saved' : 'Updated'} ${result.session.name}.${result.pruned ? ` Removed ${result.pruned} reviewed session${result.pruned === 1 ? '' : 's'}.` : ''}`;
+      try {
+        bulkSessions = await bulkSessionsApi.loadBulkSessions();
+        bulkSessionStatus = saved;
+      } catch {
+        bulkSessionRefreshRequired = true;
+        bulkSessionStatus = `${saved} Refreshing the saved list failed. Reload it; do not repeat the save.`;
+      }
+    } catch (cause) {
+      if (cause instanceof bulkSessionsApi.BulkSessionCapacityError) {
+        bulkSessionRetention = cause.preview;
+        bulkSessionStatus = cause.message;
+      } else if (failedLocalMutationOutcome(cause) === 'unknown') {
+        bulkSessionRefreshRequired = true;
+        bulkSessionRetention = null;
+        bulkSessionStatus = 'Saving could not be confirmed. The session may already be stored. Reload the saved list and review it before trying again.';
+      } else bulkSessionStatus = cause instanceof Error ? cause.message : 'Could not save the Bulk session.';
+    }
+  }
+
+  async function saveCurrentBulkSession() {
+    if (bulkSessionSaving || bulkSessionRefreshRequired || running) return;
+    bulkSessionSaving = true;
+    try {
+      await ensureBulkSessionsContext();
+      if (bulkSessionsSourceState !== 'ready' || !bulkSessionsApi) {
+        bulkSessionStatus = 'Saved Bulk sessions are unavailable. Reload before saving.';
+        return;
+      }
+      const name = bulkSessionName.trim();
+      const domains = parseDomains();
+      if (!name || !domains.length || !results.length) {
+        bulkSessionStatus = 'Enter a session name and complete at least one result before saving.';
+        return;
+      }
+      const settled = new Set(results.map((row) => row.domain));
+      const isComplete = domains.every((domain) => settled.has(domain));
+      const now = new Date().toISOString();
+      const sessionResults = results.map(toBulkSessionResult);
+      await persistBulkSession({
+        id: currentBulkSessionId || createBulkSessionId(), name, mode,
+        state: isComplete ? 'complete' : status.startsWith('Cancelled') ? 'cancelled' : 'partial',
+        inputDigest: await bulkSessionInputDigest(domains, mode), domains, results: sessionResults,
+        profileContext: summarizeBulkProfileContexts(sessionResults),
+        startedAt: scanStartedAt || now, updatedAt: now, completedAt: isComplete ? now : null,
+      });
+    } catch (cause) {
+      bulkSessionStatus = cause instanceof Error ? cause.message : 'Could not prepare the Bulk session.';
+    } finally { bulkSessionSaving = false; }
+  }
+
+  async function confirmBulkSessionRetention() {
+    if (!bulkSessionRetention || bulkSessionSaving || running || bulkSessionRefreshRequired) return;
+    bulkSessionSaving = true;
+    try { await persistBulkSession(bulkSessionRetention.session, bulkSessionRetention); }
+    finally { bulkSessionSaving = false; }
+  }
+
+  function cancelBulkSessionRetention() {
+    bulkSessionRetention = null;
+    bulkSessionStatus = 'Save cancelled. Saved sessions were not changed; the current results remain available.';
+  }
+
+  async function refreshSavedBulkSessions() {
+    if (!bulkSessionsApi || bulkSessionSaving) return;
+    bulkSessionSaving = true;
+    try {
+      bulkSessions = await bulkSessionsApi.loadBulkSessions();
+      bulkSessionRefreshRequired = false;
+      bulkSessionStatus = 'Saved sessions reloaded. Review the list before saving again.';
+    } catch { bulkSessionStatus = 'Saved sessions could not be reloaded. The previous save outcome has not changed.'; }
+    finally { bulkSessionSaving = false; }
+  }
   function loadSavedBulkSession(session:BulkSession){if(running){bulkSessionStatus='Cancel or wait for the active scan before loading a saved session.';return;}if(profileSourceState==='loading'){bulkSessionStatus='Wait for saved Brand Profile context to finish loading before restoring a saved session.';return;}scanGeneration+=1;currentBulkSessionId=session.id;bulkSessionName=session.name;mode=session.mode;input=session.domains.join('\n');const current=currentProfileContext();let quarantined=0;results=session.results.map((row)=>{const restored=fromBulkSessionResult(row,current.sourceState==='ready'?(profile?.officialDomains||[]):[]);const reconciled=reconcileBulkResultProfileContext(restored,current);if(reconciled.saved.profileContext.sourceState!=='ready')quarantined+=1;return reconciled;});completed=results.length;total=session.domains.length;page=1;scanStartedAt=session.startedAt;status=`Loaded ${session.name}: ${results.length} of ${session.domains.length} rows settled. Contact records were not retained.${quarantined?` Withheld profile-derived trust, matches, and Risk for ${quarantined} row${quarantined===1?'':'s'} whose saved provenance does not match the current settled profile context.`:''}`;void ensurePrimaryResultContext();requestAnimationFrame(()=>document.querySelector('#results')?.scrollIntoView({behavior:'auto'}));}
   async function resumeSavedBulkSession(session:BulkSession){if(running){bulkSessionStatus='Cancel or wait for the active scan before resuming a saved session.';return;}if(profileSourceState==='loading'){bulkSessionStatus='Wait for saved Brand Profile context to finish loading before resuming a saved session.';return;}loadSavedBulkSession(session);const settled=new Set(session.results.map((row)=>row.domain));const pending=session.domains.filter((domain)=>!settled.has(domain));if(!pending.length){bulkSessionStatus='Every queued domain already has a settled result. Use Retry failed to repeat error rows.';return;}await run(pending,false);await saveCurrentBulkSession();}
   async function removeSavedBulkSession(session:BulkSession){if(running){bulkSessionStatus='Cancel or wait for the active scan before deleting a saved session.';return;}if(!confirm(`Delete the saved session “${session.name}”?`))return;await ensureBulkSessionsContext();if(!bulkSessionsApi)return;try{bulkSessions=await bulkSessionsApi.deleteBulkSession(session.id);if(currentBulkSessionId===session.id){currentBulkSessionId='';bulkSessionName='';}bulkSessionStatus=`Deleted ${session.name}.`;}catch(cause){bulkSessionStatus=cause instanceof Error?cause.message:'Could not delete the Bulk session.';}}
@@ -610,6 +692,8 @@
     await goto(`/lookup?q=${encodeURIComponent(row.domain)}&depth=deep#query`);
   }
   async function run(domains:string[],replace=true,preservePrior=false):Promise<string[]>{
+    if(bulkSessionSaving){status='Wait for the saved-session operation to finish before scanning.';return[];}
+    bulkSessionRetention=null;
     if(profileSourceState==='loading'){status='Wait for saved Brand Profile context to finish loading before scanning.';return[];}
     const scanProfile=settledProfileSnapshot();
     const limit=bulkQueryLimit(mode);
@@ -768,7 +852,7 @@
       {#if workspaceTool==='sessions'}
         <DeferredSurface
           load={()=>import('$lib/components/BulkSessions.svelte')}
-          props={{sessions:bulkSessions,currentSessionId:currentBulkSessionId,saveName:bulkSessionName,setSaveName:(value:string)=>bulkSessionName=value,saveCurrent:saveCurrentBulkSession,loadSession:loadSavedBulkSession,resumeSession:resumeSavedBulkSession,deleteSession:removeSavedBulkSession,exportSessions:downloadBulkSessions,status:bulkSessionStatus,canSave:!running&&results.length>0,profileContextLoading:profileSourceState==='loading',running,sourceState:bulkSessionsSourceState}}
+          props={{sessions:bulkSessions,currentSessionId:currentBulkSessionId,saveName:bulkSessionName,setSaveName:(value:string)=>{bulkSessionName=value;bulkSessionRetention=null;},saveCurrent:saveCurrentBulkSession,loadSession:loadSavedBulkSession,resumeSession:resumeSavedBulkSession,deleteSession:removeSavedBulkSession,exportSessions:downloadBulkSessions,status:bulkSessionStatus,canSave:!running&&!bulkSessionSaving&&!bulkSessionRetention&&!bulkSessionRefreshRequired&&results.length>0,profileContextLoading:profileSourceState==='loading',running:running||bulkSessionSaving,sourceState:bulkSessionsSourceState,retention:bulkSessionRetention,confirmRetention:confirmBulkSessionRetention,cancelRetention:cancelBulkSessionRetention,refreshRequired:bulkSessionRefreshRequired,refreshSessions:refreshSavedBulkSessions}}
           onready={restoreBulkSessionsTarget}
           loadingLabel="Loading saved Bulk sessions from this browser."
           unavailableLabel="Saved Bulk sessions could not be loaded."

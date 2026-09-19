@@ -5,12 +5,25 @@ import {
   enforceBulkSessionStoreBudget,
   mergeBulkSessions,
   normalizeBulkSession,
-  upsertBulkSession,
+  prepareBulkSessionSave,
+  bulkSessionSavePreviewIsCurrent,
+  type BulkSessionSavePreview,
   type BulkSession,
   type BulkSessionComparison,
 } from './analysis/bulk-session-model.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
 import { serialiseWorkspacePortableJsonLine } from '../../../packages/contracts/workspace-portability.mts';
+import { downloadLocalFile } from './download-local-file.ts';
+import { assertLocalRecordCurrent, LocalRecordConflictError } from './local-mutation-outcome.ts';
+
+export type { BulkSessionSavePreview } from './analysis/bulk-session-model.ts';
+
+export class BulkSessionCapacityError extends Error {
+  constructor(readonly preview: BulkSessionSavePreview) {
+    super('Review the saved sessions that would be removed before saving. Nothing was changed.');
+    this.name = 'BulkSessionCapacityError';
+  }
+}
 
 export type {
   BulkSession,
@@ -31,11 +44,20 @@ function boundedSessions(value: unknown): BulkSession[] {
 
 export async function saveBulkSession(
   input: unknown,
+  options: { expected?: BulkSession | null; retention?: BulkSessionSavePreview } = {},
 ): Promise<{ session: BulkSession; added: boolean; pruned: number }> {
   const session = normalizeBulkSession(input);
   if (!session) throw new Error('The Bulk session is incomplete or invalid.');
   return updateBrowserLocalData('bulk_sessions', (current) => {
-    const result = upsertBulkSession(current, session);
+    const existing = current.find((value) => value.id === session.id);
+    if (!options.expected && existing) throw new LocalRecordConflictError('Bulk session');
+    assertLocalRecordCurrent(existing, options.expected ?? null, 'Bulk session');
+    const result = prepareBulkSessionSave(current, session);
+    if (result.removed.length && (!options.retention
+      || !bulkSessionSavePreviewIsCurrent(current, options.retention)
+      || JSON.stringify(result.session) !== JSON.stringify(options.retention.session))) {
+      throw new BulkSessionCapacityError(result);
+    }
     return {
       document: boundedSessions(result.sessions),
       result: { session: result.session, added: result.added, pruned: result.pruned },
@@ -68,12 +90,7 @@ export async function importBulkSessions(value: unknown) {
 export async function exportBulkSessions(generatedAt = new Date().toISOString()) {
   const archive = buildBulkSessionExport(await loadBulkSessions(), generatedAt);
   const blob = new Blob([serialiseWorkspacePortableJsonLine(archive)], { type: 'application/json;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `whoisleuth-bulk-sessions-${generatedAt.slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadLocalFile(blob, `whoisleuth-bulk-sessions-${generatedAt.slice(0, 10)}.json`);
 }
 
 export function compareSavedBulkSessions(

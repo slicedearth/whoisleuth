@@ -141,10 +141,14 @@ export function mergeWatchlistStores(localRaw: unknown, importedRaw: unknown) {
       skipped++;
       continue;
     }
-    if (Object.prototype.hasOwnProperty.call(local, name)) updated++;
+    const normalized = normalizeWatchlistEntry(entry);
+    if (Object.prototype.hasOwnProperty.call(local, name)) {
+      if (normalized.updatedAt <= local[name]!.updatedAt) { skipped++; continue; }
+      updated++;
+    }
     else if (Object.keys(local).length >= MAX_WATCHLISTS) { skipped++; continue; }
     else added++;
-    defineEntry(local, name, normalizeWatchlistEntry(entry));
+    defineEntry(local, name, normalized);
   }
   return { watchlists: local, added, updated, skipped };
 }

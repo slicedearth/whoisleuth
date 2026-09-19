@@ -19,6 +19,8 @@ import {
   type BulkProfileContextProvenance,
   unavailableBulkProfileContext,
   upsertBulkSession,
+  prepareBulkSessionSave,
+  bulkSessionSavePreviewIsCurrent,
 } from '../frontend/src/lib/analysis/bulk-session-model.ts';
 import { normalizeCaaCritical } from '../frontend/src/lib/analysis/dns-record-normalization.ts';
 
@@ -523,6 +525,39 @@ describe('saved Bulk sessions', () => {
     assert.equal(normalized.sessions.length, MAX_BULK_SESSIONS);
     assert.equal(normalized.sessions[0]?.id, `session-${MAX_BULK_SESSIONS + 2}`);
     assert.doesNotThrow(() => enforceBulkSessionStoreBudget(normalized));
+  });
+
+  test('reports count-based eviction and never evicts local sessions during an import', () => {
+    const local = Array.from({ length: MAX_BULK_SESSIONS }, (_, index) => session(`local-${index}`, {
+      updatedAt: new Date(Date.parse(FIRST) + index * 1_000).toISOString(),
+    }));
+    const before = structuredClone(local);
+    const candidate = session('incoming', { updatedAt: LATER });
+    const saved = upsertBulkSession(local, candidate);
+    assert.equal(saved.pruned, 1);
+    assert.equal(saved.sessions.length, MAX_BULK_SESSIONS);
+    const imported = mergeBulkSessions(local, buildBulkSessionExport([candidate]));
+    assert.deepEqual(imported.sessions, normalizeBulkSessionStore(local).sessions);
+    assert.deepEqual({ added: imported.added, updated: imported.updated, skipped: imported.skipped, pruned: imported.pruned }, { added: 0, updated: 0, skipped: 1, pruned: 0 });
+    assert.deepEqual(local, before);
+  });
+
+  test('previews the exact retention consequences without changing saved work and invalidates stale approval', () => {
+    const local = normalizeBulkSessionStore(Array.from({ length: MAX_BULK_SESSIONS }, (_, index) => session(`local-${index}`, {
+      updatedAt: new Date(Date.parse(FIRST) + index * 1_000).toISOString(),
+    }))).sessions;
+    const before = structuredClone(local);
+    const preview = prepareBulkSessionSave(local, session('new', { updatedAt: LATER }));
+    assert.deepEqual(preview.removed.map((value) => value.id), ['local-0']);
+    assert.equal(preview.pruned, 1);
+    assert.ok(preview.removedBytes > 0);
+    assert.deepEqual(local, before);
+    assert.equal(bulkSessionSavePreviewIsCurrent(local, preview), true);
+    const changed = structuredClone(local);
+    changed.find((value) => value.id === 'local-0')!.name = 'Peer change with the same timestamp';
+    assert.equal(bulkSessionSavePreviewIsCurrent(changed, preview), false);
+    assert.equal(bulkSessionSavePreviewIsCurrent(local.slice(1), preview), false);
+    assert.equal(prepareBulkSessionSave([], session('new')).removed.length, 0);
   });
 
   test('compares compact observations without treating missing rows as domain removal', () => {

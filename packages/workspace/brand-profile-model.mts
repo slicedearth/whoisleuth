@@ -922,9 +922,14 @@ export function mergeBrandProfiles(
     const rawId = normalizeBrandProfileId(value.id);
     if (rawId && rawName) retainIdName(rawId, rawName);
     const existing = rawName ? byName.get(rawName.toLowerCase()) : null;
+    const incomingUpdatedAt = timestamp(value.updatedAt, null);
+    if (existing && (!incomingUpdatedAt || incomingUpdatedAt <= existing.updatedAt)) {
+      skipped++;
+      continue;
+    }
     const profile = normalizeBrandProfile(item, {
       existing,
-      touch: Boolean(existing),
+      touch: false,
       nowIso: options.nowIso,
       makeId: options.makeId,
     });

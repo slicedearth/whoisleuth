@@ -708,8 +708,32 @@ export function upsertBulkSession(
     sessions: bounded.store.sessions,
     session,
     added: index < 0,
-    pruned: bounded.pruned,
+    pruned: Math.max(0, next.length - bounded.store.sessions.length),
   };
+}
+
+/** Ephemeral retention preview, never part of the stored or exported format. */
+export function prepareBulkSessionSave(raw: unknown, sessionRaw: unknown) {
+  const current = normalizeBulkSessionStore(raw).sessions;
+  const result = upsertBulkSession(current, sessionRaw);
+  if (!result.sessions.some((session) => session.id === result.session.id)) {
+    throw new Error('This Bulk session cannot fit alongside the saved sessions. Export or remove saved sessions before trying again. Nothing was changed.');
+  }
+  const retained = new Set(result.sessions.map((session) => session.id));
+  const removed = current.filter((session) => !retained.has(session.id));
+  return {
+    ...result,
+    current,
+    removed,
+    removedBytes: removed.reduce((total, session) => total + byteLength(JSON.stringify(bulkSessionStorageValue(session))), 0),
+  };
+}
+
+export type BulkSessionSavePreview = ReturnType<typeof prepareBulkSessionSave>;
+
+/** Confirmation applies to the exact records displayed, not just their IDs. */
+export function bulkSessionSavePreviewIsCurrent(raw: unknown, preview: BulkSessionSavePreview): boolean {
+  return serializeBulkSessionStore(raw) === serializeNormalizedBulkSessions(preview.current);
 }
 
 export function deleteBulkSession(raw: unknown, idRaw: unknown): BulkSession[] {
@@ -886,8 +910,16 @@ export function mergeBulkSessions(
       skipped += 1;
       continue;
     }
+    // An import is additive: count and byte pressure must not silently remove
+    // a local session (or an earlier admitted import). The preview reports
+    // the skipped candidate and the analyst can export/remove data explicitly.
+    const merged = upsertBulkSession(sessions, session);
+    if (merged.pruned > 0 || !merged.sessions.some((item) => item.id === session.id)) {
+      skipped += 1;
+      continue;
+    }
     added += 1;
-    sessions = upsertBulkSession(sessions, session).sessions;
+    sessions = merged.sessions;
   }
   const bounded = enforceBulkSessionStoreBudget({
     schema: BULK_SESSION_SCHEMA,

@@ -89,7 +89,7 @@ test('imports add, replace, and skip malformed or over-limit records determinist
   const local = { Local: entry() };
   const result = mergeWatchlistStores(local, {
     schema: 'whoisleuth.watchlists', version: 2, watchlists: {
-      Local: entry({ results: [{ domain: 'updated.invalid' }] }),
+      Local: entry({ results: [{ domain: 'updated.invalid' }], updatedAt: '2026-09-01T00:00:00.000Z' }),
       Added: entry({ results: [{ domain: 'added.invalid' }] }),
       Invalid: { results: 'not an array' },
     },
@@ -99,6 +99,21 @@ test('imports add, replace, and skip malformed or over-limit records determinist
   const added = requiredValue(result.watchlists.Added);
   assert.equal(requiredValue(updated.results[0]).domain, 'updated.invalid');
   assert.equal(requiredValue(added.results[0]).domain, 'added.invalid');
+});
+
+test('imports preserve newer or equally dated local watchlist observations and history', () => {
+  const local = { Local: entry() };
+  const expected = normalizeWatchlistStore(local).watchlists;
+  const before = structuredClone(local);
+  for (const updatedAt of ['2025-01-01T00:00:00Z', NOW, 'invalid', undefined]) {
+    const result = mergeWatchlistStores(local, {
+      schema: WATCHLIST_SCHEMA, version: WATCHLIST_SCHEMA_VERSION,
+      watchlists: { Local: entry({ updatedAt, results: [{ domain: 'older.example' }] }) },
+    });
+    assert.deepEqual(result.watchlists, expected);
+    assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 0, updated: 0, skipped: 1 });
+    assert.deepEqual(local, before);
+  }
 });
 
 test('imports reject unrelated, malformed, and future schemas', () => {

@@ -11,6 +11,7 @@ import {
   normalizeInvestigationTemplate,
   normalizeInvestigationTemplateStore,
   serializeInvestigationTemplateStore,
+  saveInvestigationTemplate,
 } from '../frontend/src/lib/analysis/investigation-template-model.ts';
 
 const CREATED_AT = '2026-07-28T01:00:00.000Z';
@@ -109,7 +110,7 @@ test('exports and non-destructively merges only the strict versioned schema', ()
 
   const updated = mergeInvestigationTemplates(result.templates, {
     ...exported,
-    templates: [{ ...candidate(), label: 'Updated review' }],
+    templates: [{ ...candidate(), label: 'Updated review', updatedAt: '2026-07-29T00:00:00Z' }],
   });
   assert.equal(updated.updated, 1);
   assert.equal(updated.templates.find((item) => item.id === 'focused-review')?.label, 'Updated review');
@@ -123,4 +124,27 @@ test('exports and non-destructively merges only the strict versioned schema', ()
   const before = structuredClone(unsupported);
   assert.throws(() => mergeInvestigationTemplates([], unsupported), /schema 2/u);
   assert.deepEqual(unsupported, before);
+});
+
+test('full template collections refuse a new save or import without deleting existing work', () => {
+  const local = Array.from({ length: MAX_INVESTIGATION_TEMPLATES }, (_, index) => candidate(`template-${index}`));
+  const before = structuredClone(local);
+  assert.throws(() => saveInvestigationTemplate(local, candidate('new-template')), /storage is full.*no templates were changed/u);
+  const updated = saveInvestigationTemplate(local, { ...candidate('template-0'), label: 'Edited existing template' });
+  assert.equal(updated.length, MAX_INVESTIGATION_TEMPLATES);
+  assert.equal(updated.find((item) => item.id === 'template-0')?.label, 'Edited existing template');
+  const imported = mergeInvestigationTemplates(local, buildInvestigationTemplateExport([candidate('imported')]));
+  assert.deepEqual(imported.templates, normalizeInvestigationTemplateStore(local).templates);
+  assert.deepEqual({ added: imported.added, updated: imported.updated, skipped: imported.skipped, pruned: imported.pruned }, { added: 0, updated: 0, skipped: 1, pruned: 0 });
+  assert.deepEqual(local, before);
+});
+
+test('template imports leave timestamp ties and older guidance unchanged', () => {
+  const local = [candidate()];
+  for (const updatedAt of [CREATED_AT, UPDATED_AT]) {
+    const result = mergeInvestigationTemplates(local, buildInvestigationTemplateExport([{ ...candidate(), updatedAt, label: 'Different guidance' }]));
+    assert.equal(result.updated, 0);
+    assert.equal(result.skipped, 1);
+    assert.equal(result.templates[0]?.label, 'Focused review');
+  }
 });

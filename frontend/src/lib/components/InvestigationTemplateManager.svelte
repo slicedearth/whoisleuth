@@ -240,7 +240,8 @@
         label: 'Investigation-template import',
         maximumBytes: MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES,
       }));
-      await reconcile(result.templates, `Imported ${result.added} new and ${result.updated} matching template${result.added + result.updated === 1 ? '' : 's'}.`);
+      const skipped = result.skipped ? ` Skipped ${result.skipped} older, same-time, invalid or over-limit template${result.skipped === 1 ? '' : 's'}; local templates were retained.` : '';
+      await reconcile(result.templates, `Imported ${result.added} new and ${result.updated} newer template${result.added + result.updated === 1 ? '' : 's'}.${skipped}`);
     } catch (cause) {
       mutationFailure(cause, 'Investigation-template import failed.');
     } finally {

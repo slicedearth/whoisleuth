@@ -702,6 +702,11 @@ Exports are deliberate local actions. Review them before sharing:
 - screenshots from authorised local capture preserve visible rendered content.
 
 Local importers bound and validate an entire file before preview or merge.
+Profile, watchlist and template merges retain local records when the incoming
+timestamp is older, equal or missing. New Bulk-session and template imports
+that exceed capacity are skipped without evicting saved work. Saving a Bulk
+session at capacity lists the affected sessions and offers export, cancellation
+or explicit removal; a changed collection requires a fresh review.
 STIX, MISP and external-finding inputs remain analyst-supplied evidence; import
 does not refresh them or establish their truth. Unsupported future schemas fail
 before partial interpretation.

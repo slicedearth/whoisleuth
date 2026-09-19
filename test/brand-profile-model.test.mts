@@ -449,11 +449,26 @@ test('duplicate ids retain the most recently updated bounded record', () => {
 
 test('structured imports merge by case-insensitive profile name', () => {
   const local = profile({ id: 'local', name: 'Example Brand' });
-  const imported = profile({ id: 'imported', name: 'example brand', productNames: ['Updated'] });
+  const imported = profile({ id: 'imported', name: 'example brand', productNames: ['Updated'], updatedAt: '2026-07-15T08:00:00.000Z' });
   const result = mergeBrandProfiles([local], { schema: 'whoisleuth.brand-profiles', version: 6, profiles: [imported] }, { nowIso: NOW, makeId: () => 'new-id' });
   assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 0, updated: 1, skipped: 0 });
   assert.equal(requiredValue(result.profiles[0]).id, 'local');
   assert.deepEqual(requiredValue(result.profiles[0]).productNames, ['Updated']);
+  assert.equal(result.profiles[0]?.updatedAt, imported.updatedAt);
+});
+
+test('imports preserve newer local profiles and unresolved timestamp ties without touching their age', () => {
+  const local = profile({ officialDomains: ['current.example'] });
+  const before = structuredClone(local);
+  for (const updatedAt of ['2026-07-01T00:00:00Z', NOW, 'invalid', undefined]) {
+    const result = mergeBrandProfiles([local], {
+      schema: 'whoisleuth.brand-profiles', version: BRAND_PROFILE_SCHEMA_VERSION,
+      profiles: [profile({ officialDomains: ['older.example'], updatedAt })],
+    }, { nowIso: '2026-09-01T00:00:00Z' });
+    assert.deepEqual(result.profiles, [normalizeBrandProfile(local)]);
+    assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 0, updated: 0, skipped: 1 });
+    assert.deepEqual(local, before);
+  }
 });
 
 test('restoring a missing profile preserves its exported modification time', () => {
