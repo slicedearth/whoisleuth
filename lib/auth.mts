@@ -90,6 +90,8 @@ function sign(payload: string, secret: SigningSecret): string {
 function timingSafeStringsEqual(a: string, b: string): boolean {
   // Inputs admitted by the request boundary remain bounded; equal-width digests
   // avoid exposing the configured secret's byte length through an early return.
+  // These transient digests are neither stored nor returned as password
+  // verifiers. Password-derived session signing uses scrypt in getSigningSecret.
   const bufA = crypto.createHash('sha256').update(a).digest();
   const bufB = crypto.createHash('sha256').update(b).digest();
   return crypto.timingSafeEqual(bufA, bufB);

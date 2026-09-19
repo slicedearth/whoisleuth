@@ -114,6 +114,12 @@ const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 // location, changed fingerprint, duplicate occurrence, or removed result causes
 // review instead of suppressing an entire rule or file.
 const KNOWN_CODEQL_FINDINGS: readonly KnownCodeqlFinding[] = Object.freeze([
+  // These digests exist only for equal-width timing-safe comparison. They are
+  // never stored or returned as password verifiers. The independent session
+  // secret signs tokens; the password fallback still derives its key with
+  // scrypt. Exact-content and bounded multibyte password tests cover this path.
+  Object.freeze({ ruleId: 'js/insufficient-password-hash', file: 'lib/auth.mts', primaryLocationLineHash: '8bc8c9a9fd07538e:1', primaryLocationStartColumnFingerprint: '48', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/insufficient-password-hash', file: 'lib/auth.mts', primaryLocationLineHash: 'a059fee767235f7c:1', primaryLocationStartColumnFingerprint: '48', reason: 'false_positive' as const }),
   // Deep Lookup must finish one bounded handshake even when the peer chain is
   // invalid so it can retain the failure as evidence. Node still exposes the
   // CA-path result through TLSSocket.authorized/authorizationError; endpoint
@@ -143,13 +149,15 @@ const KNOWN_CODEQL_FINDINGS: readonly KnownCodeqlFinding[] = Object.freeze([
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '3580829fea761be5:1', primaryLocationStartColumnFingerprint: '59', reason: 'false_positive' as const }),
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'b269a7c62be7cb18:1', primaryLocationStartColumnFingerprint: '56', reason: 'false_positive' as const }),
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'e8481cbf82455fde:1', primaryLocationStartColumnFingerprint: '61', reason: 'false_positive' as const }),
-  // The local host uses separate first-party launch and API buckets before
-  // origin/session validation or body parsing. Real HTTP regressions exhaust
-  // each bucket and require 429 before parsing or accepting a transaction.
-  // CodeQL does not model this middleware factory; pin only these three sites.
+  // Launch admission precedes body parsing. Bounded session validation selects
+  // separate anonymous/session API buckets; authenticated requests also consume
+  // an aggregate bucket before downstream actions. Real HTTP regressions prove
+  // anonymous traffic cannot exhaust admitted capacity, rotating sessions cannot
+  // bypass the aggregate ceiling, and excess transactions fail before parsing.
+  // CodeQL does not model this conditional middleware; pin these three sites.
   Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'lib/local-application-host.mts', primaryLocationLineHash: '6bb59177a3517719:1', primaryLocationStartColumnFingerprint: '48', reason: 'false_positive' as const }),
-  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'lib/local-application-host.mts', primaryLocationLineHash: '71a68c64e71dbe16:1', primaryLocationStartColumnFingerprint: '38', reason: 'false_positive' as const }),
-  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'lib/local-application-host.mts', primaryLocationLineHash: '1a22ab95f51e0b68:1', primaryLocationStartColumnFingerprint: '30', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'lib/local-application-host.mts', primaryLocationLineHash: '1381eb73c7c49b4:1', primaryLocationStartColumnFingerprint: '24', reason: 'false_positive' as const }),
+  Object.freeze({ ruleId: 'js/missing-rate-limiting', file: 'lib/local-application-host.mts', primaryLocationLineHash: '64fef5da90a48cc3:1', primaryLocationStartColumnFingerprint: '16', reason: 'false_positive' as const }),
   // CT result domains is a string array. Array.prototype.includes performs
   // exact element membership rather than URL substring sanitization.
   Object.freeze({ ruleId: 'js/incomplete-url-substring-sanitization', file: 'test/ct-search.test.mts', primaryLocationLineHash: '396838f0aee3b68c:1', primaryLocationStartColumnFingerprint: '13', reason: 'false_positive' as const }),

@@ -13,12 +13,23 @@ function resolved(contact: string) {
 test('a contact cannot add recipients or headers to a manually opened message', () => {
   for (const address of ['abuse@example.test?subject=injected&body=text', 'abuse@example.test#part',
     'abuse@example.test,bcc@example.test', 'abuse@example.test&bcc=another@example.test',
+    'abuse@@example.test', 'abuse@example.test@another.test',
     'abuse@example.test\r\nBcc: another@example.test', 'a'.repeat(321)]) {
     assert.equal(emailRecipient(address), null, address);
     assert.equal(recipientMailto(address), null, address);
     assert.equal(outreachAction('example.test', { email: address }), null, address);
     assert.deepEqual(resolved(address), [], address);
   }
+});
+
+test('literal percent-encoded delimiters remain recipient text rather than URI syntax', () => {
+  const address = 'review%40case%3Fsubject%3Dtext@example.test';
+  const uri = recipientMailto(address);
+  assert.equal(uri, 'mailto:review%2540case%253Fsubject%253Dtext@example.test');
+  const parsed = new URL(uri!);
+  assert.equal(decodeURIComponent(parsed.pathname), address);
+  assert.equal(parsed.search, '');
+  assert.equal(parsed.hash, '');
 });
 
 test('plus-addressing and literal percent characters stay in the recipient, while only authored headers are emitted', () => {

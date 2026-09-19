@@ -11,6 +11,8 @@ export function emailRecipient(value: unknown): string | null {
 export function recipientMailto(value: unknown, headers?: Readonly<{ subject: string; body: string }>): string | null {
   const address = emailRecipient(value);
   if (!address) return null;
+  const separator = address.indexOf('@');
+  const recipient = `${encodeURIComponent(address.slice(0, separator))}@${encodeURIComponent(address.slice(separator + 1))}`;
   const query = headers ? `?subject=${encodeURIComponent(headers.subject)}&body=${encodeURIComponent(headers.body)}` : '';
-  return `mailto:${encodeURIComponent(address).replace('%40', '@')}${query}`;
+  return `mailto:${recipient}${query}`;
 }
