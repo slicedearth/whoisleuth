@@ -499,6 +499,10 @@ describe('continuous integration workflow', () => {
     assertSafeConfiguration(hosted);
     assert.equal(hosted.hosted, true);
     assert.equal(hosted.useExistingBuild, true);
+    assert.equal(hosted.testTimeoutMs, local.testTimeoutMs);
+    assert.equal(hosted.assertionTimeoutMs, local.assertionTimeoutMs);
+    assert.ok(Number.isSafeInteger(local.assertionTimeoutMs) && local.assertionTimeoutMs > 0);
+    assert.ok(local.testTimeoutMs > local.assertionTimeoutMs && local.testTimeoutMs <= 120_000);
 
     const performance = resolvePlaywrightExecutionContract({
       WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1',

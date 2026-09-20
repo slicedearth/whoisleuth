@@ -178,7 +178,7 @@
   }
 </script>
 
-<section id="website-profile-snapshots" class="snapshot-manager card" aria-labelledby="website-snapshot-title">
+<section id="website-profile-snapshots" class="snapshot-manager card" aria-labelledby="website-snapshot-title" aria-busy={operation === 'loading' || operation === 'busy'}>
   <header>
     <div><p class="eyebrow">Analyst-selected history</p><h3 id="website-snapshot-title">Website profile snapshots</h3></div>
     <div class="toolbar">
@@ -230,16 +230,18 @@
   {:else}
     <p>No website-profile snapshot is retained for this domain.</p>
   {/if}
-  {#if operation === 'ready' || operation === 'busy'}<section class="certificate-inventory" aria-labelledby="certificate-inventory-title">
+  {#if operation !== 'unavailable'}<section class="certificate-inventory" aria-labelledby="certificate-inventory-title">
     <header>
       <div>
         <p class="eyebrow">Deployment-observed history</p>
         <h4 id="certificate-inventory-title">Observed certificate inventory</h4>
       </div>
-      <span>{certificateSnapshots.length} observation{certificateSnapshots.length === 1 ? '' : 's'} · {certificateDomains} domain{certificateDomains === 1 ? '' : 's'}</span>
+      <span>{#if operation === 'loading'}Loading…{:else}{certificateSnapshots.length} observation{certificateSnapshots.length === 1 ? '' : 's'} · {certificateDomains} domain{certificateDomains === 1 ? '' : 's'}{/if}</span>
     </header>
     <p>Built from leaf certificates in analyst-saved Deep Lookups in this workspace. Records are point-in-time observations.</p>
-    {#if certificateInventory.length}
+    {#if operation === 'loading'}
+      <p>Reading saved certificate observations…</p>
+    {:else if certificateInventory.length}
       <ul>
         {#each certificateInventory as item}
           {@const certificate = item.certificate}

@@ -43,6 +43,94 @@ type BrowserInteractionReadinessResult = Readonly<{
   readyAtMs: number;
 }>;
 
+export type InteractionRuntimeProbe = Readonly<{
+  longTaskSupported: boolean;
+  longTaskCount: number;
+  longTaskTotalMs: number;
+  layoutShiftSupported: boolean;
+  layoutShiftCount: number;
+  layoutShiftScore: number;
+  residualLayoutShiftCount: number;
+  residualLayoutShiftScore: number;
+}>;
+
+/** Installs browser-local observers; phase boundaries come from the actual input and readiness marks. */
+export function resetInteractionRuntimeProbe(): void {
+  const scope = globalThis as typeof globalThis & {
+    __whoisleuthInteractionReadiness?: { startedAt: number | null; readyAt: number | null };
+    __whoisleuthDeferredRuntime?: InteractionRuntimeProbe & { observers: PerformanceObserver[] };
+  };
+  for (const observer of scope.__whoisleuthDeferredRuntime?.observers ?? []) observer.disconnect();
+  const probe = {
+    longTaskSupported: false,
+    longTaskCount: 0,
+    longTaskTotalMs: 0,
+    layoutShiftSupported: false,
+    layoutShiftCount: 0,
+    layoutShiftScore: 0,
+    residualLayoutShiftCount: 0,
+    residualLayoutShiftScore: 0,
+    observers: [] as PerformanceObserver[],
+  };
+  scope.__whoisleuthDeferredRuntime = probe;
+  if (typeof PerformanceObserver === 'undefined') return;
+  if (PerformanceObserver.supportedEntryTypes.includes('longtask')) {
+    probe.longTaskSupported = true;
+    const observer = new PerformanceObserver((list) => {
+      const startedAt = scope.__whoisleuthInteractionReadiness?.startedAt;
+      if (startedAt === undefined || startedAt === null) return;
+      for (const entry of list.getEntries()) {
+        const duration = entry.startTime + entry.duration - Math.max(startedAt, entry.startTime);
+        if (duration <= 0) continue;
+        probe.longTaskCount += 1;
+        probe.longTaskTotalMs += duration;
+      }
+    });
+    probe.observers.push(observer);
+    observer.observe({ type: 'longtask', buffered: false });
+  }
+  if (PerformanceObserver.supportedEntryTypes.includes('layout-shift')) {
+    probe.layoutShiftSupported = true;
+    const observer = new PerformanceObserver((list) => {
+      const marks = scope.__whoisleuthInteractionReadiness;
+      if (marks?.startedAt === undefined || marks.startedAt === null) return;
+      for (const entry of list.getEntries()) {
+        const shift = entry as PerformanceEntry & { hadRecentInput?: boolean; value?: number };
+        if (typeof shift.value !== 'number' || shift.startTime < marks.startedAt) continue;
+        if (!shift.hadRecentInput) {
+          probe.layoutShiftCount += 1;
+          probe.layoutShiftScore += shift.value;
+        }
+        // Use the browser mark, not the later arrival of a driver command.
+        // Recent-input suppression must not hide movement after usable paint.
+        if (marks.readyAt !== null && shift.startTime >= marks.readyAt) {
+          probe.residualLayoutShiftCount += 1;
+          probe.residualLayoutShiftScore += shift.value;
+        }
+      }
+    });
+    probe.observers.push(observer);
+    observer.observe({ type: 'layout-shift', buffered: false });
+  }
+}
+
+export async function readInteractionRuntimeProbe(page: Page): Promise<InteractionRuntimeProbe> {
+  return page.evaluate(() => {
+    const scope = globalThis as typeof globalThis & { __whoisleuthDeferredRuntime?: InteractionRuntimeProbe };
+    const probe = scope.__whoisleuthDeferredRuntime;
+    return {
+      longTaskSupported: probe?.longTaskSupported ?? false,
+      longTaskCount: probe?.longTaskCount ?? 0,
+      longTaskTotalMs: Math.round((probe?.longTaskTotalMs ?? 0) * 100) / 100,
+      layoutShiftSupported: probe?.layoutShiftSupported ?? false,
+      layoutShiftCount: probe?.layoutShiftCount ?? 0,
+      layoutShiftScore: Math.round((probe?.layoutShiftScore ?? 0) * 10_000) / 10_000,
+      residualLayoutShiftCount: probe?.residualLayoutShiftCount ?? 0,
+      residualLayoutShiftScore: Math.round((probe?.residualLayoutShiftScore ?? 0) * 10_000) / 10_000,
+    };
+  });
+}
+
 export async function beginBrowserInteractionReadiness(
   page: Page,
   definition: BrowserInteractionReadiness,
@@ -56,6 +144,7 @@ export async function beginBrowserInteractionReadiness(
       startedAt: number | null;
       readyAt: number | null;
       animationFrame: number | null;
+      readyFrameSeen: boolean;
       cleanup: () => void;
     };
     const scope = globalThis as typeof globalThis & { __whoisleuthInteractionReadiness?: ReadinessRuntime };
@@ -80,14 +169,22 @@ export async function beginBrowserInteractionReadiness(
       startedAt: null,
       readyAt: null,
       animationFrame: null,
+      readyFrameSeen: false,
       cleanup: () => undefined,
     };
     const poll = (): void => {
       runtime.animationFrame = null;
       if (runtime.startedAt === null || runtime.readyAt !== null) return;
       if (input.targets.every(targetReady)) {
-        runtime.readyAt = performance.now();
-        return;
+        // Confirm the target after its first usable frame has painted. The
+        // initial reveal is not residual movement after an already usable UI.
+        if (runtime.readyFrameSeen) {
+          runtime.readyAt = performance.now();
+          return;
+        }
+        runtime.readyFrameSeen = true;
+      } else {
+        runtime.readyFrameSeen = false;
       }
       runtime.animationFrame = requestAnimationFrame(poll);
     };

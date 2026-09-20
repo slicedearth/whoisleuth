@@ -14,6 +14,8 @@ import {
   isNavigationReadinessMarked,
   readBrowserInteractionReadiness,
   readNavigationReadinessMark,
+  readInteractionRuntimeProbe,
+  resetInteractionRuntimeProbe,
 } from './performance-sampling.ts';
 
 const CASES_KEY = 'whois-rdap-cases-v1';
@@ -92,6 +94,61 @@ async function waitForAnimationFrames(page: Page, count = 3): Promise<void> {
     requestAnimationFrame(next);
   }), count);
 }
+
+test('interaction observations exclude setup and retain movement before the driver reads readiness', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => {
+    const original = PerformanceObserver;
+    const callbacks = new Map<string, PerformanceObserverCallback>();
+    const scope = window as typeof window & {
+      emitInteractionEntries?: (type: string, entries: readonly object[]) => void;
+      restoreInteractionObserver?: () => void;
+    };
+    class ControlledObserver {
+      static supportedEntryTypes = ['longtask', 'layout-shift'];
+      constructor(private callback: PerformanceObserverCallback) {}
+      observe(options: PerformanceObserverInit) { callbacks.set(options.type!, this.callback); }
+      disconnect() {}
+    }
+    Object.defineProperty(window, 'PerformanceObserver', { configurable: true, value: ControlledObserver });
+    scope.emitInteractionEntries = (type, entries) => {
+      const callback = callbacks.get(type);
+      if (!callback) throw new Error(`No observer installed for ${type}.`);
+      callback({ getEntries: () => entries } as unknown as PerformanceObserverEntryList, {} as PerformanceObserver);
+    };
+    scope.restoreInteractionObserver = () => {
+      Object.defineProperty(window, 'PerformanceObserver', { configurable: true, value: original });
+    };
+  });
+  try {
+    await page.evaluate(resetInteractionRuntimeProbe);
+    await page.evaluate(() => {
+      const scope = window as typeof window & {
+        __whoisleuthInteractionReadiness?: { startedAt: number | null; readyAt: number | null };
+        emitInteractionEntries: (type: string, entries: readonly object[]) => void;
+      };
+      // Already-delivered setup and delayed delivery of pre-input records must
+      // both be excluded; the task containing input is clipped at the event.
+      scope.emitInteractionEntries('layout-shift', [{ startTime: 50, value: 0.2 }]);
+      scope.__whoisleuthInteractionReadiness = { startedAt: 100, readyAt: null };
+      scope.emitInteractionEntries('longtask', [{ startTime: 20, duration: 60 }, { startTime: 80, duration: 50 }]);
+      scope.emitInteractionEntries('layout-shift', [{ startTime: 50, value: 0.2 }, { startTime: 110, value: 0.004 }]);
+      scope.__whoisleuthInteractionReadiness.readyAt = 150;
+      scope.emitInteractionEntries('layout-shift', [
+        { startTime: 120, value: 0.002 },
+        { startTime: 160, value: 0.003, hadRecentInput: true },
+        { startTime: 200, value: 0.005, hadRecentInput: false },
+      ]);
+    });
+    expect(await readInteractionRuntimeProbe(page)).toEqual({
+      longTaskSupported: true, longTaskCount: 1, longTaskTotalMs: 30,
+      layoutShiftSupported: true, layoutShiftCount: 3, layoutShiftScore: 0.011,
+      residualLayoutShiftCount: 2, residualLayoutShiftScore: 0.008,
+    });
+  } finally {
+    await page.evaluate(() => (window as typeof window & { restoreInteractionObserver: () => void }).restoreInteractionObserver());
+  }
+});
 
 test('CLI navigation readiness waits for working client-side filtering', async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });

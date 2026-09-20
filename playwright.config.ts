@@ -35,6 +35,8 @@ export default defineConfig({
   failOnFlakyTests: execution.failOnFlakyTests,
   retries: execution.retries,
   workers: execution.workers,
+  timeout: execution.testTimeoutMs,
+  expect: { timeout: execution.assertionTimeoutMs },
   outputDir: artifacts.testResults,
   globalTeardown: execution.serverEgressTeardown,
   reporter: execution.hosted

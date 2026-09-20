@@ -4,6 +4,7 @@
   import { lookupObservationHostname } from '../../../../packages/evidence/lookup-target.mts';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import LookupFamilySummary from '$lib/components/LookupFamilySummary.svelte';
+  import WebsiteSnapshotManager from '$lib/components/WebsiteSnapshotManager.svelte';
   import type { BrandProfile } from '$lib/brand-profiles';
   import {
     boundedTechnologyText,
@@ -155,15 +156,10 @@
     {/if}
 
     {#if result?.type === 'domain'}
-      <DeferredSurface
-        load={() => import('$lib/components/WebsiteSnapshotManager.svelte')}
-        loadingLabel="Loading website snapshot controls…"
-        unavailableLabel="Website snapshot controls could not be loaded."
-        props={{
-          domain: observationHostname,
-          canSave: !loading && lookupEvidenceDepth === 'deep' && Boolean(caseDomain) && technologyProfile.source === 'derived' && securityPosture.source === 'derived',
-          buildSnapshot,
-        }}
+      <WebsiteSnapshotManager
+        domain={observationHostname}
+        canSave={!loading && lookupEvidenceDepth === 'deep' && Boolean(caseDomain) && technologyProfile.source === 'derived' && securityPosture.source === 'derived'}
+        {buildSnapshot}
       />
     {/if}
 

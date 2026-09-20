@@ -200,6 +200,11 @@ export function resolvePlaywrightExecutionContract(environment: Environment = pr
     failOnFlakyTests: true as const,
     retries: 0 as const,
     workers: 1 as const,
+    // Operational hang guards, not performance targets. A cold instrumented
+    // browser may need more than the framework's five-second assertion default.
+    // Successful assertions return immediately in every execution environment.
+    testTimeoutMs: 90_000,
+    assertionTimeoutMs: 15_000,
     trace: 'retain-on-failure' as const,
     screenshot: 'only-on-failure' as const,
     functionalProject: Object.freeze({

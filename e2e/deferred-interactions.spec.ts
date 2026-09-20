@@ -14,6 +14,8 @@ import {
   performanceSampleMedian,
   summarizePerformanceTimings,
   readBrowserInteractionReadiness,
+  readInteractionRuntimeProbe,
+  resetInteractionRuntimeProbe,
   resetPerformanceSampleState,
   type BrowserInteractionReadiness,
   type PerformanceMeasurementContext,
@@ -36,17 +38,6 @@ type InteractionId =
 type InteractionBudget = Readonly<{
   assetEncodedTransferBytes: number;
   layoutShiftScore: number;
-  residualLayoutShiftScore: number;
-}>;
-
-type RuntimeProbe = Readonly<{
-  longTaskSupported: boolean;
-  longTaskCount: number;
-  longTaskTotalMs: number;
-  layoutShiftSupported: boolean;
-  layoutShiftCount: number;
-  layoutShiftScore: number;
-  residualLayoutShiftCount: number;
   residualLayoutShiftScore: number;
 }>;
 
@@ -149,99 +140,6 @@ function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function resetRuntimeProbe(): void {
-  const scope = globalThis as typeof globalThis & {
-    __whoisleuthDeferredRuntime?: {
-      longTaskCount: number;
-      longTaskTotalMs: number;
-      longTaskSupported: boolean;
-      layoutShiftCount: number;
-      layoutShiftScore: number;
-      layoutShiftSupported: boolean;
-      residualLayoutShiftCount: number;
-      residualLayoutShiftScore: number;
-      residualLayoutShiftActive: boolean;
-      residualLayoutShiftStartedAt: number | null;
-      observers: PerformanceObserver[];
-    };
-  };
-  for (const observer of scope.__whoisleuthDeferredRuntime?.observers ?? []) observer.disconnect();
-  const probe = {
-    longTaskSupported: false,
-    longTaskCount: 0,
-    longTaskTotalMs: 0,
-    layoutShiftSupported: false,
-    layoutShiftCount: 0,
-    layoutShiftScore: 0,
-    residualLayoutShiftCount: 0,
-    residualLayoutShiftScore: 0,
-    residualLayoutShiftActive: false,
-    residualLayoutShiftStartedAt: null,
-    observers: [] as PerformanceObserver[],
-  };
-  scope.__whoisleuthDeferredRuntime = probe;
-  if (typeof PerformanceObserver === 'undefined') return;
-  if (PerformanceObserver.supportedEntryTypes.includes('longtask')) {
-    probe.longTaskSupported = true;
-    const observer = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) {
-        probe.longTaskCount += 1;
-        probe.longTaskTotalMs += entry.duration;
-      }
-    });
-    probe.observers.push(observer);
-    observer.observe({ type: 'longtask', buffered: false });
-  }
-  if (PerformanceObserver.supportedEntryTypes.includes('layout-shift')) {
-    probe.layoutShiftSupported = true;
-    const observer = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) {
-        const shift = entry as PerformanceEntry & { hadRecentInput?: boolean; value?: number };
-        if (typeof shift.value !== 'number') continue;
-        if (!shift.hadRecentInput) {
-          probe.layoutShiftCount += 1;
-          probe.layoutShiftScore += shift.value;
-        }
-        if (probe.residualLayoutShiftActive
-          && probe.residualLayoutShiftStartedAt !== null
-          && shift.startTime >= probe.residualLayoutShiftStartedAt) {
-          probe.residualLayoutShiftCount += 1;
-          probe.residualLayoutShiftScore += shift.value;
-        }
-      }
-    });
-    probe.observers.push(observer);
-    observer.observe({ type: 'layout-shift', buffered: false });
-  }
-}
-
-async function readRuntimeProbe(page: Page): Promise<RuntimeProbe> {
-  return page.evaluate(() => {
-    const scope = globalThis as typeof globalThis & {
-      __whoisleuthDeferredRuntime?: {
-        longTaskSupported: boolean;
-        longTaskCount: number;
-        longTaskTotalMs: number;
-        layoutShiftSupported: boolean;
-        layoutShiftCount: number;
-        layoutShiftScore: number;
-        residualLayoutShiftCount: number;
-        residualLayoutShiftScore: number;
-      };
-    };
-    return {
-      longTaskSupported: scope.__whoisleuthDeferredRuntime?.longTaskSupported ?? false,
-      longTaskCount: scope.__whoisleuthDeferredRuntime?.longTaskCount ?? 0,
-      longTaskTotalMs: Math.round((scope.__whoisleuthDeferredRuntime?.longTaskTotalMs ?? 0) * 100) / 100,
-      layoutShiftSupported: scope.__whoisleuthDeferredRuntime?.layoutShiftSupported ?? false,
-      layoutShiftCount: scope.__whoisleuthDeferredRuntime?.layoutShiftCount ?? 0,
-      layoutShiftScore: Math.round((scope.__whoisleuthDeferredRuntime?.layoutShiftScore ?? 0) * 10_000) / 10_000,
-      residualLayoutShiftCount: scope.__whoisleuthDeferredRuntime?.residualLayoutShiftCount ?? 0,
-      residualLayoutShiftScore: Math.round((scope.__whoisleuthDeferredRuntime?.residualLayoutShiftScore ?? 0) * 10_000) / 10_000,
-    };
-  });
-}
-
 function isInvestigationEndpoint(request: Request): boolean {
   const url = new URL(request.url());
   if (url.origin !== ALLOWED_ORIGIN || !url.pathname.startsWith('/api/')) return false;
@@ -253,8 +151,8 @@ function numberField(value: unknown): number | null {
 }
 
 async function beginInteractionProbe(page: Page) {
-  await page.addInitScript(resetRuntimeProbe);
-  await page.evaluate(resetRuntimeProbe);
+  await page.addInitScript(resetInteractionRuntimeProbe);
+  await page.evaluate(resetInteractionRuntimeProbe);
 
   const session = await page.context().newCDPSession(page);
   const pendingAssets = new Set<string>();
@@ -306,24 +204,6 @@ async function beginInteractionProbe(page: Page) {
   async function close() {
     if (!active) return null;
     await page.evaluate(async () => {
-      const scope = globalThis as typeof globalThis & {
-        __whoisleuthDeferredRuntime?: {
-          residualLayoutShiftCount: number;
-          residualLayoutShiftScore: number;
-          residualLayoutShiftActive: boolean;
-          residualLayoutShiftStartedAt: number | null;
-        };
-      };
-      const runtime = scope.__whoisleuthDeferredRuntime;
-      if (runtime) {
-        runtime.residualLayoutShiftCount = 0;
-        runtime.residualLayoutShiftScore = 0;
-        // PerformanceObserver delivery can lag behind the layout-shift entry.
-        // Classify stability by the entry timestamp so a delayed callback for
-        // the initiating action cannot be mistaken for post-readiness motion.
-        runtime.residualLayoutShiftStartedAt = globalThis.performance.now();
-        runtime.residualLayoutShiftActive = true;
-      }
       await new Promise<void>((resolve) => {
         let framesRemaining = 8;
         const observeNextFrame = () => {
@@ -333,12 +213,8 @@ async function beginInteractionProbe(page: Page) {
         };
         requestAnimationFrame(observeNextFrame);
       });
-      if (runtime) {
-        runtime.residualLayoutShiftActive = false;
-        runtime.residualLayoutShiftStartedAt = null;
-      }
     });
-    const runtime = await readRuntimeProbe(page);
+    const runtime = await readInteractionRuntimeProbe(page);
     active = false;
     page.off('request', onRequest);
     await session.detach();
@@ -382,9 +258,9 @@ async function measureDeferredInteractionSample(
   const budget = options.budget ?? INTERACTION_BUDGETS[options.interaction];
   const readyPresentation = options.readyPresentation ?? 'visible_usable';
   await options.page.waitForLoadState('networkidle');
+  await beginBrowserInteractionReadiness(options.page, options.browserReadiness);
   const probe = await beginInteractionProbe(options.page);
   try {
-    await beginBrowserInteractionReadiness(options.page, options.browserReadiness);
     const hostStartedAt = performance.now();
     await options.action();
     const hostActionMs = round(performance.now() - hostStartedAt);
@@ -428,7 +304,7 @@ async function measureDeferredInteractionSample(
       limitations: Object.freeze([
         'This is a local production-build interaction measurement, not production latency.',
         'The desktop Chromium process does not represent all visitor hardware or network conditions.',
-        'Usable time starts at the triggering browser event and ends on the first animation frame where the phase-specific declared readiness targets are satisfied.',
+        'Usable time starts at the triggering browser event and ends when the declared targets remain ready after their first usable animation frame has painted.',
         readyPresentation === 'attached_hidden'
           ? 'This phase is ready when its target is attached inside a deliberately closed disclosure; the target is prepared but not yet visible or usable.'
           : 'This phase is ready only when its target and declared control are visible and usable.',
@@ -436,7 +312,7 @@ async function measureDeferredInteractionSample(
         'Transfer includes same-origin JavaScript and CSS completed after the explicit action.',
         'The Chromium run must expose long-task and layout-shift observers; zero means none were observed.',
         'Layout shift excludes entries associated with recent input, matching the browser CLS definition.',
-        'Residual layout shift includes every entry during a short post-readiness stability window.',
+        'Residual layout shift includes every entry from browser-owned usable readiness through eight observation frames, including movement before host assertions complete.',
         'Transfer and layout ceilings are reviewed resource and presentation regression limits, not elapsed-time targets.',
         'Elapsed time and long-task duration are observations for the recorded execution context, not universal performance guarantees or CI timing thresholds.',
       ]),
@@ -790,12 +666,14 @@ test('measures navigation to a non-default Monitor view', async ({ page }, testI
     browserReadiness: {
       start: { event: 'click', selector: '#tab-relationships' },
       targets: [
-        { selector: '.case-relationship-workspace' },
-        { selector: '#tab-relationships[aria-selected="true"]', requireEnabled: true },
+        { selector: '#monitor-view-panel[aria-labelledby="tab-relationships"] .case-relationship-workspace' },
+        { selector: '.profile-clusters' },
+        { selector: '.retained-observations' },
+        { selector: '.cluster-workspace' },
       ],
     },
     ready: relationshipWorkspace,
-    readyControl: selectedTab,
+    readyControl: relationshipWorkspace.getByRole('combobox', { name: 'Relationship', exact: true }),
   });
   await expect(selectedTab).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('#monitor-view-panel')).toHaveAttribute('aria-labelledby', 'tab-relationships');

@@ -585,7 +585,11 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await holdBrowserLocalReads(page, 8_000, '.family-web button.family-summary');
   const snapshots = page.locator('.snapshot-manager');
   await expect(snapshots.getByRole('button', { name: 'Save current snapshot' })).toBeDisabled();
+  await expect(snapshots).toHaveAttribute('aria-busy', 'true');
+  await expect(snapshots.getByRole('region', { name: 'Observed certificate inventory' })).toContainText('Reading saved certificate observations…');
+  await expect(snapshots).not.toContainText('No observed certificate has been retained.');
   await expect(snapshots.getByRole('button', { name: 'Save current snapshot' })).toBeEnabled({ timeout: 12_000 });
+  await expect(snapshots).toHaveAttribute('aria-busy', 'false');
   const sslblReviewLead = page.getByRole('complementary', { name: 'The observed leaf certificate matched the local SSLBL snapshot' });
   await expect(sslblReviewLead).toBeVisible();
   await expect(sslblReviewLead).toContainText('does not change Risk scoring');
