@@ -7,9 +7,9 @@
 import { normalizeDomain } from '../cases/case-model.mts';
 import { normalizeCtProvenance } from './ct-results.mts';
 import type { CtProvenance } from './ct-results.mts';
-import { MAX_CANDIDATE_SOURCE_LENGTH } from '../../lib/candidate-provenance-bounds.mts';
+import { MAX_CANDIDATE_SOURCE_LENGTH } from '../analysis/candidate-provenance-bounds.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
-import { parseBoundedJson } from '../../lib/bounded-json.mts';
+import { parseBoundedJson } from '../analysis/bounded-json.mts';
 import {
   HANDOFF_VERSION,
   MAX_CANDIDATE_HANDOFF_SERIALIZED_BYTES,

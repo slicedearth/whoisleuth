@@ -9,7 +9,7 @@ import {
   MAX_ADVANCED_CONFUSABLE_VARIANTS,
   wholeLabelConfusableVariantsForAscii,
 } from './idn-confusables.mts';
-import { canonicalRegistrableDomain, normalizeDiscoverySuffix } from './registrable-domain.mts';
+import { canonicalRegistrableDomain, normalizeDiscoverySuffix } from '../packages/analysis/registrable-domain.mts';
 import { MAX_DOMAIN_NAME_LENGTH, MAX_DOMAIN_LABEL_LENGTH } from '../packages/contracts/domain-name.mts';
 
 export { MAX_ADVANCED_CONFUSABLE_VARIANTS };

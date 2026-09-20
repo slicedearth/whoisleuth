@@ -25,7 +25,7 @@ import {
 } from '../../lib/registrar-standing-contract.mts';
 import { compareRegistrySources } from '../../lib/registry-comparison.mts';
 import { buildRegistryInsights } from '../../lib/registry-insights.mts';
-import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../lib/project-metadata.mts';
+import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../packages/analysis/project-metadata.mts';
 import {
   validHttpDeliveryMetadata,
   validPagePublicationMetadata,

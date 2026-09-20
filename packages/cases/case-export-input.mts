@@ -1,4 +1,4 @@
-import { boundedJsonLimitsForBytes, parseBoundedJsonObject } from '../../lib/bounded-json.mts';
+import { boundedJsonLimitsForBytes, parseBoundedJsonObject } from '../analysis/bounded-json.mts';
 import { canonicalArtifactJsonV2 } from '../evidence/artifact-integrity.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { CASE_SCHEMA_VERSION, CLI_CASE_PACK_INPUT_CASE_VERSIONS, MAX_CASE_STORE_BYTES, MAX_EDITABLE_CASE_INPUT_BYTES, PUBLISHED_V2_3_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';

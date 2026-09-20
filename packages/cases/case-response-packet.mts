@@ -20,7 +20,7 @@ export type * from './case-response-packet-types.mts';
 
 import {
   assertBoundedJsonStructure,
-} from '../../lib/bounded-json.mts';
+} from '../analysis/bounded-json.mts';
 import {
   CASE_RESPONSE_PACKET_SCHEMA,
   CASE_RESPONSE_PACKET_VERSION,

@@ -8,7 +8,7 @@ import {
   providerPolicyReviewAgeDays,
 } from '../lib/provider-policy-admission.mts';
 import { THREATFOX_PROVIDER } from '../lib/threatfox-intelligence.mts';
-import type { ThreatIntelligenceProviderDefinition } from '../lib/threat-intelligence-types.mts';
+import type { ThreatIntelligenceProviderDefinition } from '../packages/analysis/threat-intelligence-types.mts';
 import { URLHAUS_PROVIDER } from '../lib/urlhaus-intelligence.mts';
 import { URLSCAN_PROVIDER } from '../lib/urlscan-intelligence.mts';
 

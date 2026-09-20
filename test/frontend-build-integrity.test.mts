@@ -29,7 +29,6 @@ import {
 import {
   createHostedBrowserWorkspace,
   HOSTED_BROWSER_DIAGNOSTIC_LIMITS,
-  retainFocusedBrowserDiagnostics,
   runHostedBrowserWorkspace,
 } from '../tools/hosted-browser-workspace.mts';
 import { playwrightRunArtifacts } from '../tools/playwright-run-artifacts.mts';
@@ -135,26 +134,27 @@ function writeDiagnosticFixture(root: string, environment: NodeJS.ProcessEnv) {
 }
 
 describe('hosted browser workspace diagnostics', () => {
-  test('copies focused failure and interruption diagnostics privately without changing the contributor checkout', (context) => {
+  test('keeps focused failure and interruption diagnostics private without changing the contributor checkout', (context) => {
     for (const outcome of ['failed', 'interrupted'] as const) {
-      const root = fixtureRepository(context);
+      const { repository, workspace } = diagnosticWorkspace(context);
+      const root = workspace.root;
       const { files, artifacts } = writeDiagnosticFixture(root, {});
-      const before = readFileSync(path.join(root, 'package.json'));
+      const before = readFileSync(path.join(repository, 'package.json'));
       symlinkSync(path.join(root, 'package.json'), path.join(root, artifacts.testResults, 'source-link'));
       const excessive = path.join(root, artifacts.testResults, 'excessive.bin');
       writeFileSync(excessive, '');
       truncateSync(excessive, HOSTED_BROWSER_DIAGNOSTIC_LIMITS.fileBytes + 1);
-      const retained = retainFocusedBrowserDiagnostics(root, REVISION, outcome);
+      const retained = workspace.retainDiagnostics(outcome);
       context.after(() => rmSync(retained.directory, { recursive: true, force: true }));
-      assert.notEqual(retained.directory, root);
+      assert.notEqual(retained.directory, repository);
       assert.equal(lstatSync(retained.directory).mode & 0o777, 0o700);
       for (const [relative, expected] of files) {
         assert.equal(readFileSync(path.join(root, relative), 'utf8'), expected);
         assert.equal(readFileSync(path.join(retained.directory, relative), 'utf8'), expected);
         assert.equal(lstatSync(path.join(retained.directory, relative)).mode & 0o777, 0o600);
       }
-      assert.deepEqual(readFileSync(path.join(root, 'package.json')), before);
-      assert.equal(existsSync(path.join(root, artifacts.authFile)), true);
+      assert.deepEqual(readFileSync(path.join(repository, 'package.json')), before);
+      assert.equal(existsSync(path.join(repository, 'node_modules')), true);
       for (const relative of ['package.json', 'node_modules', 'frontend', artifacts.authFile,
         `${artifacts.testResults}/source-link`, `${artifacts.testResults}/excessive.bin`]) {
         assert.equal(existsSync(path.join(retained.directory, relative)), false, relative);

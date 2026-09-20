@@ -13,7 +13,7 @@ import {
   readLocalApplicationManifest,
 } from '../packages/workspace/local-application-protocol.mts';
 import { localDataManifestMatches, type LocalDataCapture, type LocalDataManifest, type LocalDataStorageCommit, type LocalDataStoredBinary } from '../packages/workspace/local-data-storage.mts';
-import { boundedJsonLimitsForBytes, parseBoundedJson } from './bounded-json.mts';
+import { boundedJsonLimitsForBytes, parseBoundedJson } from '../packages/analysis/bounded-json.mts';
 import { LocalWorkspaceError } from './local-application-errors.mts';
 import { LOCAL_WORKSPACE_FILE, LOCAL_WORKSPACE_FORMAT_VERSION, LOCAL_WORKSPACE_APPLICATION_ID as APPLICATION_ID, LOCAL_WORKSPACE_MAX_DATABASE_BYTES as MAX_DATABASE_BYTES } from '../packages/contracts/local-application.mts';
 export { LocalWorkspaceError } from './local-application-errors.mts';

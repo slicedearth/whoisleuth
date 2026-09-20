@@ -15,10 +15,10 @@ import { CLI_PACKAGE_SUPPORT_FILES } from './cli-package.mts';
 import type { ICruiseResult, IOptions } from 'dependency-cruiser';
 
 export const VERIFICATION_OWNERSHIP_MAP_VERSION = 2;
-export const MAX_VERIFICATION_CHANGED_PATHS = 128;
 export const MAX_VERIFICATION_CHANGED_PATH_LENGTH = 320;
 export const MAX_VERIFICATION_RULES = 64;
 export const MAX_VERIFICATION_INVENTORY_FILES = 8_000;
+export const MAX_VERIFICATION_CHANGED_PATHS = MAX_VERIFICATION_INVENTORY_FILES;
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SAFE_CHANGED_PATH = /^(?:[a-zA-Z0-9._+()@-]+\/)*[a-zA-Z0-9._+()@-]+$/u;

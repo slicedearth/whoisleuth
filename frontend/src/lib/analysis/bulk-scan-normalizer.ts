@@ -1,6 +1,6 @@
 import { profileSignals, type ActiveBrandProfileSourceState, type BrandProfile } from '../brand-profiles.ts';
 import type { Candidate } from '../candidate-handoff-core.ts';
-import { canonicalRegistrableDomain } from '../../../../lib/registrable-domain.mts';
+import { canonicalRegistrableDomain } from '../../../../packages/analysis/registrable-domain.mts';
 import { registryDateIso } from '../../../../packages/evidence/registry-dates.mts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 import { analyzeDomainIdn } from './idn-confusables.ts';

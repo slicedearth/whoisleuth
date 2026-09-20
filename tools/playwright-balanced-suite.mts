@@ -161,7 +161,7 @@ function verifyHostedBrowserHealth(reports: readonly unknown[]): string {
       `--report=${aggregatePath}`,
       `--provenance-id=browser-local-parity-${process.pid}-${Date.now()}`,
       `--environment=${process.platform}-${process.arch}-node${process.versions.node.split('.')[0]}-serial-shards`,
-      '--sample-basis=complete-four-shard-functional-run',
+      '--sample-basis=complete-functional-shard-run',
     ]);
     if (result.aggregate.files.some((measured) => !candidate.files.some((item) =>
       item.file === measured.file && item.weightMs === measured.weightMs && item.sampleCount === measured.sampleCount))) {
@@ -269,7 +269,7 @@ async function runSuite(workspace: HostedBrowserWorkspace, criticalOnly: boolean
         args: Object.freeze([shardRunner, `--run=${identity}`]),
       });
     });
-    // Hosted CI assigns each shard its own runner. Launching all four on one
+    // Hosted CI assigns each shard its own runner. Launching every shard on one
     // local host creates contention that the hosted topology does not have and
     // can turn bounded deferred-module deadlines into false product failures.
     // Preserve the exact shard plan and reports, but give each local shard the

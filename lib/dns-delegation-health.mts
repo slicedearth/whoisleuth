@@ -8,7 +8,7 @@ import * as net from 'node:net';
 
 import { createObservation } from '../packages/evidence/observation.mts';
 import { normalizeResolverMxRecord } from '../packages/evidence/domain-control-runtime.mts';
-import { isValidAsciiHostname } from './hostname.mts';
+import { isValidAsciiHostname } from '../packages/contracts/domain-name.mts';
 import { isPrivateAddress } from './safe-fetch.mts';
 
 type UnknownRecord = Record<string, unknown>;

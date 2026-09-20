@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
-import { readdir } from 'node:fs/promises';
-import path from 'node:path';
-import { MAX_CLI_PACKAGE_PROCESSING_ITEMS, validatePackedCliFiles } from './cli-package.mts';
+import { MAX_PACKAGE_PROCESSING_ITEMS } from './package-resource-bounds.mts';
+import { emittedPackageFiles, validateCompiledPackageFiles } from './package-source.mts';
 import { boundedSafeRelativePath, requireJsonRecord as object } from './maintainer-tool-helpers.mts';
 import { buildThirdPartyNotices, productionDependencyInstallPaths } from './third-party-notices.mts';
 import { readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
@@ -20,7 +19,7 @@ export function optionalPackageInputs(value: unknown, policy: Readonly<{
   requiredSources: readonly string[]; acceptsSource: (source: string) => boolean; dependencies: readonly string[];
 }>) {
   const graph = object(value, 'Package graph');
-  if (!Array.isArray(graph.modules) || !graph.modules.length || graph.modules.length > MAX_CLI_PACKAGE_PROCESSING_ITEMS) throw new Error('Package graph exceeds its processing bound.');
+  if (!Array.isArray(graph.modules) || !graph.modules.length || graph.modules.length > MAX_PACKAGE_PROCESSING_ITEMS) throw new Error('Package graph exceeds its processing bound.');
   const sources = new Set<string>(), dependencies = new Set<string>();
   function dependency(source: string) {
     const parts = source.split('/'), name = parts[1]?.startsWith('@') ? parts.slice(1, 3).join('/') : parts[1]!;
@@ -53,7 +52,7 @@ export function assertInstalledPackageDependencies(installedValue: unknown, revi
     return JSON.stringify([location.split('node_modules/').at(-1), entry.version, entry.integrity]);
   }));
   const entries = Object.entries(installed);
-  if (entries.length > MAX_CLI_PACKAGE_PROCESSING_ITEMS) throw new Error('Installed package dependencies exceed their processing bound.');
+  if (entries.length > MAX_PACKAGE_PROCESSING_ITEMS) throw new Error('Installed package dependencies exceed their processing bound.');
   let count = 0;
   for (const [location, value] of entries) {
     if (!location || location === `node_modules/${packageName}`) continue;
@@ -86,32 +85,12 @@ export function optionalPackageLock(manifest: Record<string, unknown>, lockfile:
   return { name: manifest.name, version: manifest.version, lockfileVersion: 3, requires: true, packages };
 }
 
-export async function emittedPackageFiles(directory: string): Promise<string[]> {
-  const files: string[] = [];
-  let entries = 0;
-  async function visit(relative: string, depth: number) {
-    if (depth > 20) throw new Error('Package output nesting exceeds its bound.');
-    for (const item of await readdir(path.join(directory, relative), { withFileTypes: true })) {
-      if (++entries > MAX_CLI_PACKAGE_PROCESSING_ITEMS * 2) throw new Error('Package output inventory exceeds its processing bound.');
-      const name = boundedSafeRelativePath(path.posix.join(relative, item.name), 'Package output');
-      // npm owns these installation-only files; neither belongs in an archive.
-      if (name === 'package-lock.json' || name === 'node_modules/.package-lock.json' || name === 'node_modules/.bin') continue;
-      if (item.isDirectory()) await visit(name, depth + 1);
-      else if (item.isFile()) files.push(name);
-      else throw new Error('Package contains a non-regular output.');
-      if (files.length > MAX_CLI_PACKAGE_PROCESSING_ITEMS) throw new Error('Package exceeds its file-processing bound.');
-    }
-  }
-  await visit('', 0);
-  return files.sort();
-}
-
 /** Preserve vendor files as distributed, while application output stays compiled. */
 export function validateOptionalPackageFiles(pack: Record<string, unknown>, expected: readonly string[]): readonly string[] {
-  if (!Array.isArray(pack.files) || !pack.files.length || pack.files.length > MAX_CLI_PACKAGE_PROCESSING_ITEMS) throw new Error('Optional package inventory exceeds its processing bound.');
+  if (!Array.isArray(pack.files) || !pack.files.length || pack.files.length > MAX_PACKAGE_PROCESSING_ITEMS) throw new Error('Optional package inventory exceeds its processing bound.');
   const files = pack.files.map(value => boundedSafeRelativePath(object(value, 'Packed optional entry').path, 'Packed optional path'));
   if (new Set(files).size !== files.length || JSON.stringify([...files].sort()) !== JSON.stringify([...expected].sort())) throw new Error('The optional archive differs from its reviewed file inventory.');
-  validatePackedCliFiles({ ...pack, files: pack.files.filter(value => !String(object(value, 'Packed entry').path).startsWith('node_modules/')) }, expected.filter(file => !file.startsWith('node_modules/')));
+  validateCompiledPackageFiles({ ...pack, files: pack.files.filter(value => !String(object(value, 'Packed entry').path).startsWith('node_modules/')) }, expected.filter(file => !file.startsWith('node_modules/')));
   return files;
 }
 
@@ -136,7 +115,7 @@ export async function assertInstalledOptionalPackage(directory: string, expected
     .filter(location => expected.has(`${location}/package.json`)).map(location => [location, object(reviewed[location], 'Reviewed dependency')]));
   const seen = new Set<string>();
   const installed = Object.entries(object(object(installedValue, 'Installed lockfile').packages, 'Installed packages'));
-  if (installed.length > MAX_CLI_PACKAGE_PROCESSING_ITEMS) throw new Error('Installed optional dependency inventory exceeds its bound.');
+  if (installed.length > MAX_PACKAGE_PROCESSING_ITEMS) throw new Error('Installed optional dependency inventory exceeds its bound.');
   for (const [location, value] of installed) {
     if (!location || location === `node_modules/${packageName}`) continue;
     const relative = location.startsWith(prefix) ? location.slice(prefix.length) : '';

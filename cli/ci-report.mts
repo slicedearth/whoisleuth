@@ -1,5 +1,5 @@
 import type { UnknownRecord } from './saved-lookup.mts';
-import { WHOISLEUTH_REQUEST_POLICY_URL } from '../lib/project-metadata.mts';
+import { WHOISLEUTH_REQUEST_POLICY_URL } from '../packages/analysis/project-metadata.mts';
 import { CLI_DOMAIN_CONTROL_MONITOR_SCHEMA } from '../packages/contracts/domain-control-monitor.mts';
 
 function record(value: unknown): UnknownRecord {

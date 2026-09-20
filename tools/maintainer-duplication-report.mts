@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
-import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
+import { parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 import { compareCodeUnits } from './maintainer-tool-helpers.mts';
 
 type WritableLike = { write(value: string): unknown };

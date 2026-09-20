@@ -1,8 +1,8 @@
 import { Buffer } from 'node:buffer';
 import { getDomain } from 'tldts';
 
-import { scanBoundedJson } from '../lib/bounded-json.mts';
-import { isValidAsciiDomainName } from '../lib/hostname.mts';
+import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
+import { isValidAsciiDomainName } from '../packages/contracts/domain-name.mts';
 import { isRecord, recordOrEmpty } from '../lib/json-record.mts';
 import { classifyQuery } from '../lib/classify.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';

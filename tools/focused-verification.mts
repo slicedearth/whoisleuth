@@ -7,8 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import { PLAYWRIGHT_FUNCTIONAL_PROJECT } from './playwright-execution-contract.mts';
 import { runPlaywrightProcess } from './playwright-process.mts';
-import { retainFocusedBrowserDiagnostics } from './hosted-browser-workspace.mts';
-import { assertFrontendBuildIntegrity } from './frontend-build-integrity.mts';
+import { createHostedBrowserWorkspace, runHostedBrowserWorkspace } from './hosted-browser-workspace.mts';
 import { playwrightRunArtifacts } from './playwright-run-artifacts.mts';
 import {
   readPlaywrightResultData,
@@ -28,8 +27,6 @@ const PLAYWRIGHT_CLI = path.join(REPOSITORY_ROOT, 'node_modules', '@playwright',
 const DEFAULT_PLAYWRIGHT_PORT = 4180;
 const MAX_PORT_SEARCH = 100;
 const MAX_GIT_OUTPUT_BYTES = 2 * 1024 * 1024;
-
-class BrowserDiagnosticRetentionError extends Error {}
 
 type FocusedCommand = Readonly<{
   id: string;
@@ -256,15 +253,16 @@ async function selectPlaywrightPort(): Promise<number> {
 
 export async function runFocusedBrowserSpecs(specs: readonly string[]): Promise<void> {
   const port = await selectPlaywrightPort();
+  const workspace = createHostedBrowserWorkspace(REPOSITORY_ROOT);
   const environment = {
     ...process.env,
     CI: '1',
     WHOISLEUTH_E2E_USE_BUILD: '1',
     WHOISLEUTH_E2E_PORT: String(port),
     WHOISLEUTH_PLAYWRIGHT_RUN_LABEL: 'focused iteration',
+    WHOISLEUTH_BUILD_REVISION: workspace.revision,
   };
-  const revision = assertFrontendBuildIntegrity(REPOSITORY_ROOT, environment).runtime.revision;
-  process.stdout.write(`\n> focused-browser (${specs.length} spec file(s), port ${port})\n`);
+  process.stdout.write(`\n> focused-browser (${specs.length} spec file(s), frozen checkout, port ${port})\n`);
   const interruption = new AbortController();
   let requestedSignal: NodeJS.Signals | null = null;
   const stop = (signal: NodeJS.Signals) => {
@@ -276,51 +274,37 @@ export async function runFocusedBrowserSpecs(specs: readonly string[]): Promise<
   process.on('SIGINT', onInterrupt);
   process.on('SIGTERM', onTerminate);
 
-  let exitCode: number | null = null;
-  let failure: unknown;
   try {
-    exitCode = await runPlaywrightProcess([
-      PLAYWRIGHT_CLI,
-      'test',
-      ...specs,
-      `--project=${PLAYWRIGHT_FUNCTIONAL_PROJECT}`,
-      '--workers=1',
-      '--retries=0',
-    ], {
-      cwd: REPOSITORY_ROOT,
-      env: environment,
-      signal: interruption.signal,
-    });
-    if (requestedSignal) throw new Error(`Focused browser verification was interrupted by ${requestedSignal}.`);
+    await runHostedBrowserWorkspace(workspace, async () => {
+      const exitCode = await runPlaywrightProcess([
+        path.join(workspace.root, 'node_modules/@playwright/test/cli.js'),
+        'test',
+        ...specs,
+        `--project=${PLAYWRIGHT_FUNCTIONAL_PROJECT}`,
+        '--workers=1',
+        '--retries=0',
+      ], {
+        cwd: workspace.root,
+        env: environment,
+        signal: interruption.signal,
+      });
+      if (requestedSignal) throw new Error(`Focused browser verification was interrupted by ${requestedSignal}.`);
 
-    const resultPath = path.join(REPOSITORY_ROOT, playwrightRunArtifacts(environment).jsonResults);
-    if (!existsSync(resultPath)) throw new Error('Focused Playwright results were not written.');
-    const summary = summarizePlaywrightResults(readPlaywrightResultData(resultPath), 'focused iteration');
-    process.stdout.write(renderPlaywrightResultSummary(summary));
-    if (exitCode !== 0 || summary.failed || summary.flaky || summary.retried) {
-      throw new Error(
-        `Focused browser verification was not clean: ${summary.failed} failed, ${summary.flaky} flaky, ${summary.retried} retried.`,
-      );
-    }
-  } catch (error) {
-    failure = error;
+      const resultPath = path.join(workspace.root, playwrightRunArtifacts(environment).jsonResults);
+      if (!existsSync(resultPath)) throw new Error('Focused Playwright results were not written.');
+      const summary = summarizePlaywrightResults(readPlaywrightResultData(resultPath), 'focused iteration');
+      process.stdout.write(renderPlaywrightResultSummary(summary));
+      if (exitCode !== 0 || summary.failed || summary.flaky || summary.retried) {
+        throw new Error(
+          `Focused browser verification was not clean: ${summary.failed} failed, ${summary.flaky} flaky, ${summary.retried} retried.`,
+        );
+      }
+      if (!(await localPortIsFree(port))) throw new Error(`Focused Playwright left port ${port} occupied.`);
+      return 0;
+    }, () => requestedSignal !== null);
   } finally {
     process.removeListener('SIGINT', onInterrupt);
     process.removeListener('SIGTERM', onTerminate);
-  }
-  if (!(await localPortIsFree(port))) {
-    failure ??= new Error(`Focused Playwright left port ${port} occupied.`);
-  }
-  if (failure) {
-    try {
-      const retained = retainFocusedBrowserDiagnostics(REPOSITORY_ROOT, revision,
-        requestedSignal ? 'interrupted' : 'failed');
-      process.stderr.write(`Focused browser diagnostics retained at ${retained.directory}: ${retained.retainedFiles} files, `
-        + `${retained.retainedBytes} bytes, ${retained.omittedEntries} omitted files/subtrees. Remove after review.\n`);
-    } catch (cause) {
-      throw new BrowserDiagnosticRetentionError('Focused browser diagnostic retention failed; local artefacts were preserved for review.', { cause });
-    }
-    throw failure;
   }
 }
 
@@ -346,7 +330,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     failure = error;
   }
 
-  if (cleanupBrowserArtifacts && !(failure instanceof BrowserDiagnosticRetentionError)) {
+  if (cleanupBrowserArtifacts) {
     try {
       const cleanup = await inspectVerificationArtifacts('browser', false);
       process.stdout.write(`Focused verification cleanup removed ${cleanup.removed.length} generated path(s).\n`);

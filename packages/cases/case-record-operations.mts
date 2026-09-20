@@ -1,7 +1,7 @@
 // Pure, framework-neutral analyst-case records, evidence histories, bounded
 // record normalization, and analyst updates.
 
-import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
+import { canonicalRegistrableDomain } from '../analysis/registrable-domain.mts';
 import { parseCredentialFreeHttpUrl } from '../evidence/lookup-target.mts';
 import { selectExistingCase, type CaseOpenSelection } from './case-selection.mts';
 import {

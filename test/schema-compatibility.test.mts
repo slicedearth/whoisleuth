@@ -638,16 +638,16 @@ describe('schema compatibility inventory', () => {
     assert.throws(() => validateSchemaCompatibilityEntries(writeSemantics), /compatibility metadata/i);
 
     const undeclaredProfile = structuredClone(inventory.entries);
-    undeclaredProfile.push({
+    undeclaredProfile[undeclaredProfile.findIndex(entry => entry.id === 'cli.lookup-plan')] = {
       ...requiredValue(undeclaredProfile.find((entry) => entry.id === 'export.lookup-evidence')),
       id: 'export.lookup-evidence-shadow',
-    });
+    };
     assert.throws(() => validateSchemaCompatibilityEntries(undeclaredProfile), /undeclared profiles/iu);
 
     const inheritedProfile = structuredClone(inventory.entries);
     const inheritedSeed = requiredValue(inheritedProfile.find((entry) => entry.id === 'cli.lookup-plan'));
     inheritedSeed.schema = 'constructor';
-    inheritedProfile.push({ ...inheritedSeed, id: 'cli.lookup-plan-shadow' });
+    inheritedProfile[inheritedProfile.findIndex(entry => entry.id === 'cli.doctor')] = { ...inheritedSeed, id: 'cli.lookup-plan-shadow' };
     assert.throws(() => validateSchemaCompatibilityEntries(inheritedProfile), /undeclared profiles/iu);
 
     const incompleteProfile = structuredClone(inventory.entries)
@@ -741,7 +741,7 @@ describe('schema compatibility inventory', () => {
     });
     assert.throws(
       () => validateSchemaCompatibilityEntries(overLimit),
-      /must contain 1-224 entries/iu,
+      /Schema compatibility inventory must contain/iu,
     );
     assert.equal(overLimitGetterCalls, 0);
   });

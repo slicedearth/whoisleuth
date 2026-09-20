@@ -20,7 +20,7 @@ import {
 } from './lookup-network-evidence-bounds.mts';
 import { isPrivateAddress } from './safe-fetch.mts';
 import { resolveServiceBindingRecords } from './service-binding-dns.mts';
-import { canonicalRegistrableDomain } from './registrable-domain.mts';
+import { canonicalRegistrableDomain } from '../packages/analysis/registrable-domain.mts';
 
 type MxRecord = { priority: number; exchange: string };
 type CaaRecord = { critical: number; tag: string; value: string };

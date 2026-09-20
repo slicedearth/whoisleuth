@@ -6,4 +6,4 @@ export {
   parseBoundedJson,
   parseBoundedJsonObject,
   scanBoundedJson,
-} from '../lib/bounded-json.mts';
+} from '../packages/analysis/bounded-json.mts';

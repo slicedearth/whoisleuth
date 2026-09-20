@@ -10,7 +10,7 @@ import {
   THREAT_INTELLIGENCE_RESULT_STATES,
   THREAT_INTELLIGENCE_SCHEMA,
   type ThreatIntelligenceResultState,
-} from './threat-intelligence-types.mts';
+} from '../packages/analysis/threat-intelligence-types.mts';
 import type {
   LookupProgressSource,
   LookupProgressState,

@@ -26,7 +26,7 @@ import {
 } from './case-record-decisions.mts';
 import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../evidence/observation.mts';
 import { PUBLISHED_V2_3_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
-import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
+import { canonicalRegistrableDomain } from '../analysis/registrable-domain.mts';
 
 // Forward-version policy (two distinct guarantees):
 //   - A locally-stored envelope that declares a version greater than this is

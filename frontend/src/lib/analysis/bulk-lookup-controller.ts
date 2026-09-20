@@ -7,7 +7,7 @@ import {
   requestJsonCapped,
   STANDARD_JSON_RESPONSE_BYTES,
 } from '../bounded-json-response.ts';
-import { scanBoundedJson } from '../../../../lib/bounded-json.mts';
+import { scanBoundedJson } from '../../../../packages/analysis/bounded-json.mts';
 
 export type BulkLookupMode = 'deep' | 'fast';
 

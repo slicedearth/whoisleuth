@@ -18,7 +18,7 @@
   } from '$lib/public-guide';
   import { PUBLIC_RESOURCES } from '$lib/public-resources';
   import { publicResourceHubNavigation } from '$lib/workspaces';
-  import { WHOISLEUTH_SITE_ORIGIN } from '../../../../../lib/project-metadata.mts';
+  import { WHOISLEUTH_SITE_ORIGIN } from '../../../../../packages/analysis/project-metadata.mts';
 
   const structuredData = {
     '@context': 'https://schema.org',

@@ -9,7 +9,7 @@ import {
   LARGE_JSON_RESPONSE_BYTES,
   readJsonResponseCapped,
 } from './bounded-json-response.mts';
-import { scanBoundedJson } from './bounded-json.mts';
+import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
 import { prepareSelectedLookupUrl } from '../packages/evidence/lookup-target.mts';
 import { LOOKUP_PROGRESS_CONTENT_TYPE, readLookupProgressResponse, type LookupProgressUpdate } from './lookup-progress-http.mts';
 

@@ -32,15 +32,7 @@ describe('architecture boundaries', () => {
       join(ROOT, '.dependency-cruiser.json'),
       '--output-type',
       'json',
-      join(FIXTURE_ROOT, 'packages', 'contracts'),
-      join(FIXTURE_ROOT, 'packages', 'evidence'),
-      join(FIXTURE_ROOT, 'packages', 'cases'),
-      join(FIXTURE_ROOT, 'packages', 'workspace'),
-      join(FIXTURE_ROOT, 'packages', 'monitoring'),
-      join(FIXTURE_ROOT, 'packages', 'investigation'),
-      join(FIXTURE_ROOT, 'packages', 'interchange'),
-      join(FIXTURE_ROOT, 'packages', 'relationships'),
-      join(FIXTURE_ROOT, 'packages', 'comparison'),
+      join(FIXTURE_ROOT, 'packages'),
       join(FIXTURE_ROOT, 'cli'),
       join(FIXTURE_ROOT, 'lib'),
       join(FIXTURE_ROOT, 'tools'),
@@ -62,15 +54,16 @@ describe('architecture boundaries', () => {
     for (const name of [
       'shared-contracts-stay-independent-of-domain-and-adapters',
       'domain-packages-stay-independent-of-runtime-adapters',
-      'case-domain-stays-independent-of-runtime-adapters',
-      'case-domain-no-node-core',
-      'workspace-domain-stays-independent-of-runtime-adapters',
-      'workspace-domain-no-node-core',
-      'portable-domain-packages-stay-independent-of-runtime-adapters',
-      'portable-domain-packages-no-node-core',
+      'domain-packages-no-node-core',
       'non-frontend-production-stays-out-of-frontend',
       'observation-consumers-use-domain-owner',
     ]) assert.ok(violatedRules.has(name), `${name} must report an actual forbidden dependency`);
+    const newDomainViolations = report.summary.violations.filter(violation =>
+      violation.from.endsWith('packages/new-domain/forbidden-dependencies.mts'));
+    assert.ok(newDomainViolations.some(violation => violation.to === 'fs'
+      && violation.rule.name === 'domain-packages-no-node-core'));
+    assert.ok(newDomainViolations.some(violation => violation.to.endsWith('lib/runtime.mts')
+      && violation.rule.name === 'domain-packages-stay-independent-of-runtime-adapters'));
     const blockedTargets = new Set(report.summary.violations
       .filter((violation) => violation.rule.name === 'non-frontend-production-stays-out-of-frontend')
       .map((violation) => violation.to.replace('test/fixtures/architecture/frontend/src/lib/', '')));

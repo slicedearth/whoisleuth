@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 
-import { isValidAsciiDomainName } from '../lib/hostname.mts';
+import { isValidAsciiDomainName } from '../packages/contracts/domain-name.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import { CliUsageError } from './errors.mts';
 

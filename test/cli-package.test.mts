@@ -4,25 +4,21 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 
 import {
   CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS,
-  CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
   MAX_CLI_PACKAGE_PROCESSING_ITEMS,
-  MAX_CLI_PACKAGE_FILE_BYTES,
-  assertCliPackageSourceSnapshot,
   buildCliPackageManifest,
-  captureCliPackageSourceSnapshot,
-  compilePackageSources,
   formatCliPackageReport,
-  isCliPackageCompilerInputPath,
-  materializeCliPackageSourceSnapshot,
   parseArguments,
-  selectCliPackageSources,
-  selectMaterializedCliPackageSources,
-  validatePackedCliFiles,
+  selectPackageSources,
+  selectMaterializedPackageSources,
 } from '../tools/cli-package.mts';
+import { assertPackageSourceSnapshot, capturePackageSourceSnapshot, compilePackageSources, emittedPackageFiles, isPackageCompilerInputPath, materializePackageSourceSnapshot, validateCompiledPackageFiles } from '../tools/package-source.mts';
+import { MAX_PACKAGE_FILE_BYTES, PACKAGE_PROCESS_TIMEOUT_MS } from '../tools/package-resource-bounds.mts';
 import { validateCandidateReport } from '../tools/published-cli-check.mts';
+import { npmExecutableName } from '../tools/maintainer-tool-helpers.mts';
 
 const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -76,7 +72,7 @@ const lockfile = {
 
 describe('scoped CLI package contract', () => {
   test('bounds both long-running package assembly and installed command processes', () => {
-    assert.equal(CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS, 120_000);
+    assert.equal(PACKAGE_PROCESS_TIMEOUT_MS, 120_000);
     assert.equal(CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS, 15_000);
     assert.ok(Number.isSafeInteger(MAX_CLI_PACKAGE_PROCESSING_ITEMS));
     assert.ok(MAX_CLI_PACKAGE_PROCESSING_ITEMS * 2 * 512 <= 4 * 1024 * 1024,
@@ -85,26 +81,52 @@ describe('scoped CLI package contract', () => {
 
   test('allows source decomposition without a release-count baseline and still bounds processing', () => {
     const source = (index: number) => index === 0 ? 'bin/whoisleuth.mts' : `lib/extracted-${index}.mts`;
-    const admitted = selectCliPackageSources({
+    const admitted = selectPackageSources({
       modules: Array.from({ length: 600 }, (_, index) => ({ source: source(index) })),
     }, { requiredSources: ['bin/whoisleuth.mts'] });
     assert.equal(admitted.length, 600);
-    assert.throws(() => selectCliPackageSources({
+    assert.throws(() => selectPackageSources({
       modules: Array.from({ length: MAX_CLI_PACKAGE_PROCESSING_ITEMS + 1 }, (_, index) => ({ source: source(index) })),
     }, { requiredSources: ['bin/whoisleuth.mts'] }), /between 1 and/u);
   });
 
   test('rejects excessive, missing, traversing and source-bearing packed contents', () => {
-    assert.deepEqual(validatePackedCliFiles({
+    assert.deepEqual(validateCompiledPackageFiles({
       files: [{ path: 'bin/whoisleuth.mjs' }, { path: 'package.json' }],
     }, ['bin/whoisleuth.mjs']), ['bin/whoisleuth.mjs', 'package.json']);
-    assert.throws(() => validatePackedCliFiles({
+    assert.throws(() => validateCompiledPackageFiles({
       files: Array.from({ length: MAX_CLI_PACKAGE_PROCESSING_ITEMS + 1 }, (_, index) => ({ path: `lib/item-${index}.mjs` })),
     }), /expected between 1 and/u);
-    assert.throws(() => validatePackedCliFiles({ files: [{ path: 'package.json' }] }, ['bin/whoisleuth.mjs']), /is missing/u);
-    assert.throws(() => validatePackedCliFiles({ files: [{ path: '../outside.mjs' }] }), /safe repository-relative path/u);
-    assert.throws(() => validatePackedCliFiles({ files: [{ path: 'test/private.mjs' }] }), /excluded application or test path/u);
-    assert.throws(() => validatePackedCliFiles({ files: [{ path: 'lib/source.mts' }] }), /source or source-map/u);
+    assert.throws(() => validateCompiledPackageFiles({ files: [{ path: 'package.json' }] }, ['bin/whoisleuth.mjs']), /is missing/u);
+    assert.throws(() => validateCompiledPackageFiles({ files: [{ path: '../outside.mjs' }] }), /safe repository-relative path/u);
+    assert.throws(() => validateCompiledPackageFiles({ files: [{ path: 'test/private.mjs' }] }), /excluded application or test path/u);
+    assert.throws(() => validateCompiledPackageFiles({ files: [{ path: 'lib/source.mts' }] }), /source or source-map/u);
+    assert.throws(() => validateCompiledPackageFiles({ files: [{ path: 'package.json' }, { path: 'lib/extra.mjs' }] },
+      ['package.json'], { exact: true }), /complete compiled output/u);
+    assert.throws(() => validateCompiledPackageFiles({ files: [{ path: 'package.json' }, { path: 'package.json' }] }),
+      /complete compiled output/u);
+  });
+
+  test('packs a newly discovered domain without another directory registration', async () => {
+    const staging = await mkdtemp(path.join(tmpdir(), 'whoisleuth-package-domain-'));
+    try {
+      const manifest = buildCliPackageManifest(rootManifest, templateManifest, lockfile);
+      await mkdir(path.join(staging, 'bin'));
+      await mkdir(path.join(staging, 'packages/new-domain'), { recursive: true });
+      await writeFile(path.join(staging, 'package.json'), JSON.stringify(manifest));
+      await writeFile(path.join(staging, 'bin/whoisleuth.mjs'), 'import "../packages/new-domain/helper.mjs";\n');
+      await writeFile(path.join(staging, 'packages/new-domain/helper.mjs'), 'export const value = 1;\n');
+      const packed = spawnSync(npmExecutableName(), ['pack', '--dry-run', '--json', '--ignore-scripts', '--offline'], {
+        cwd: staging, encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024,
+      });
+      assert.equal(packed.status, 0, packed.stderr);
+      const result = JSON.parse(packed.stdout)[0];
+      const files = validateCompiledPackageFiles(result, await emittedPackageFiles(staging), { exact: true });
+      assert.ok(files.includes('packages/new-domain/helper.mjs'));
+      assert.throws(() => validateCompiledPackageFiles({ ...result,
+        files: result.files.filter((entry: { path: string }) => entry.path !== 'packages/new-domain/helper.mjs'),
+      }, files, { exact: true }), /complete compiled output/u);
+    } finally { await rm(staging, { recursive: true, force: true }); }
   });
 
   test('keeps per-file and aggregate source-byte ceilings independent of counts', async () => {
@@ -113,15 +135,15 @@ describe('scoped CLI package contract', () => {
       await mkdir(path.join(repository, 'lib'));
       await writeFile(path.join(repository, 'lib', 'small.mts'), '12345', 'utf8');
       await writeFile(path.join(repository, 'lib', 'large.mts'), '123456789', 'utf8');
-      await assert.rejects(captureCliPackageSourceSnapshot(repository, ['lib/large.mts'], {
+      await assert.rejects(capturePackageSourceSnapshot(repository, ['lib/large.mts'], {
         totalBytes: 0,
         maximumBytes: 32,
         maximumFileBytes: 8,
       }), /exceeds/u);
-      await assert.rejects(captureCliPackageSourceSnapshot(repository, ['lib/small.mts', 'lib/large.mts'], {
+      await assert.rejects(capturePackageSourceSnapshot(repository, ['lib/small.mts', 'lib/large.mts'], {
         totalBytes: 0,
         maximumBytes: 12,
-        maximumFileBytes: MAX_CLI_PACKAGE_FILE_BYTES,
+        maximumFileBytes: MAX_PACKAGE_FILE_BYTES,
       }), /aggregate byte limit/u);
     } finally {
       await rm(repository, { recursive: true, force: true });
@@ -129,16 +151,16 @@ describe('scoped CLI package contract', () => {
   });
 
   test('validates compiler context paths with bounded linear segment checks', () => {
-    assert.equal(isCliPackageCompilerInputPath('node_modules/typescript/lib/lib.es2022.d.ts'), true);
-    assert.equal(isCliPackageCompilerInputPath('node_modules/@types/node/index.d.ts'), true);
-    assert.equal(isCliPackageCompilerInputPath('node_modules/example/package.json'), true);
-    assert.equal(isCliPackageCompilerInputPath('node_modules/example/node_modules/@scope/types/index.d.mts'), true);
-    assert.equal(isCliPackageCompilerInputPath('node_modules/example/index.js'), false);
-    assert.equal(isCliPackageCompilerInputPath('node_modules/example/../outside.d.ts'), false);
-    assert.equal(isCliPackageCompilerInputPath(`node_modules/${'-.'.repeat(4_096)}invalid.d.ts`), false);
+    assert.equal(isPackageCompilerInputPath('node_modules/typescript/lib/lib.es2022.d.ts'), true);
+    assert.equal(isPackageCompilerInputPath('node_modules/@types/node/index.d.ts'), true);
+    assert.equal(isPackageCompilerInputPath('node_modules/example/package.json'), true);
+    assert.equal(isPackageCompilerInputPath('node_modules/example/node_modules/@scope/types/index.d.mts'), true);
+    assert.equal(isPackageCompilerInputPath('node_modules/example/index.js'), false);
+    assert.equal(isPackageCompilerInputPath('node_modules/example/../outside.d.ts'), false);
+    assert.equal(isPackageCompilerInputPath(`node_modules/${'-.'.repeat(4_096)}invalid.d.ts`), false);
   });
   test('selects only the bounded executable dependency closure', () => {
-    const selected = selectCliPackageSources({
+    const selected = selectPackageSources({
       modules: [
         { source: 'package.json', dependencies: [] },
         { source: 'bin/whoisleuth.mts', dependencies: [{ module: '../cli/runner.mts', couldNotResolve: false }] },
@@ -180,7 +202,7 @@ describe('scoped CLI package contract', () => {
       'frontend/src/lib/analysis/domain-control-manifest-core.ts',
       'frontend/src/lib/analysis/domain-control-records.ts',
     ];
-    const selected = selectCliPackageSources({
+    const selected = selectPackageSources({
       modules: [
         ...roots.map((source) => ({ source, dependencies: [] })),
         { source: 'packages/evidence/domain-control-runtime.mts', dependencies: [] },
@@ -198,7 +220,7 @@ describe('scoped CLI package contract', () => {
       'packages/evidence/domain-control-runtime.mts',
       'packages/evidence/domain-name.mts',
     ]);
-    assert.throws(() => selectCliPackageSources({
+    assert.throws(() => selectPackageSources({
       modules: roots.slice(0, -1).map((source) => ({ source, dependencies: [] })),
     }, {
       maximumModules: 4,
@@ -207,14 +229,14 @@ describe('scoped CLI package contract', () => {
   });
 
   test('rejects unresolved, traversing, and incomplete dependency graphs', () => {
-    assert.throws(() => selectCliPackageSources({ modules: [{ source: '../bin/whoisleuth.mts' }] }), /safe repository-relative path/u);
-    assert.throws(() => selectCliPackageSources({
+    assert.throws(() => selectPackageSources({ modules: [{ source: '../bin/whoisleuth.mts' }] }), /safe repository-relative path/u);
+    assert.throws(() => selectPackageSources({
       modules: [
         { source: 'bin/whoisleuth.mts', dependencies: [{ module: '../cli/missing.mts', couldNotResolve: true }] },
         { source: 'cli/runner.mts' },
       ],
     }), /could not be resolved/u);
-    assert.throws(() => selectCliPackageSources({ modules: [{ source: 'bin/whoisleuth.mts' }] }), /cli\/runner\.mts/u);
+    assert.throws(() => selectPackageSources({ modules: [{ source: 'bin/whoisleuth.mts' }] }), /cli\/runner\.mts/u);
   });
 
   test('rejects linked package inputs and source changes after snapshot admission', async () => {
@@ -225,18 +247,18 @@ describe('scoped CLI package contract', () => {
       await writeFile(path.join(repository, 'lib', 'needed.mts'), 'export const needed = 1;\n', 'utf8');
       await writeFile(path.join(repository, 'lib', 'stable.mts'), "import { needed } from './needed.mts';\nexport const value = needed;\n", 'utf8');
       await writeFile(path.join(repository, 'lib', 'unreferenced.mts'), 'export const unreviewed = 2;\n', 'utf8');
-      const snapshot = await captureCliPackageSourceSnapshot(repository, [
+      const snapshot = await capturePackageSourceSnapshot(repository, [
         'lib/needed.mts',
         'lib/stable.mts',
         'lib/unreferenced.mts',
       ]);
-      await assertCliPackageSourceSnapshot(repository, snapshot);
+      await assertPackageSourceSnapshot(repository, snapshot);
 
       const assemblyRoot = path.join(repository, 'assembly');
       const sourceRoot = path.join(assemblyRoot, 'source');
       const stagingRoot = path.join(assemblyRoot, 'staging');
       await mkdir(stagingRoot, { recursive: true });
-      await materializeCliPackageSourceSnapshot(sourceRoot, snapshot);
+      await materializePackageSourceSnapshot(sourceRoot, snapshot);
       await writeFile(path.join(repository, 'lib', 'stable.mts'), 'export const value = 2;\n', 'utf8');
       await compilePackageSources(
         REPOSITORY_ROOT,
@@ -253,19 +275,19 @@ describe('scoped CLI package contract', () => {
         /ENOENT/u,
       );
       await assert.rejects(
-        assertCliPackageSourceSnapshot(repository, snapshot),
-        /changed during CLI package assembly/iu,
+        assertPackageSourceSnapshot(repository, snapshot),
+        /changed during Package assembly/iu,
       );
 
       await writeFile(path.join(outside, 'outside.mts'), 'export const outside = true;\n', 'utf8');
       await symlink(path.join(outside, 'outside.mts'), path.join(repository, 'final-link.mts'));
       await assert.rejects(
-        captureCliPackageSourceSnapshot(repository, ['final-link.mts']),
+        capturePackageSourceSnapshot(repository, ['final-link.mts']),
         /symbolic link/iu,
       );
       await symlink(outside, path.join(repository, 'linked-directory'));
       await assert.rejects(
-        captureCliPackageSourceSnapshot(repository, ['linked-directory/outside.mts']),
+        capturePackageSourceSnapshot(repository, ['linked-directory/outside.mts']),
         /symbolic link/iu,
       );
     } finally {
@@ -275,11 +297,11 @@ describe('scoped CLI package contract', () => {
   });
 
   test('rejects a dependency-discovery hint that is absent from the materialized entrypoint closure', () => {
-    assert.deepEqual(selectMaterializedCliPackageSources(
+    assert.deepEqual(selectMaterializedPackageSources(
       ['bin/whoisleuth.mts', 'cli/runner.mts'],
       ['bin/whoisleuth.mts', 'cli/runner.mts', 'lib/needed.mts'],
     ), ['bin/whoisleuth.mts', 'cli/runner.mts', 'lib/needed.mts']);
-    assert.throws(() => selectMaterializedCliPackageSources(
+    assert.throws(() => selectMaterializedPackageSources(
       ['bin/whoisleuth.mts', 'cli/runner.mts', 'lib/unreferenced.mts'],
       ['bin/whoisleuth.mts', 'cli/runner.mts', 'lib/needed.mts'],
     ), /not reachable from the materialized entrypoint closure/iu);
@@ -303,14 +325,6 @@ describe('scoped CLI package contract', () => {
     assert.equal(Object.hasOwn(manifest.dependencies as object, 'express'), false);
     assert.equal(Object.hasOwn(manifest, 'publishConfig'), false);
     assert.ok((manifest.files as string[]).includes('frontend/src/lib/**/*.js'));
-    assert.ok((manifest.files as string[]).includes('packages/cases/**/*.mjs'));
-    assert.ok((manifest.files as string[]).includes('packages/comparison/**/*.mjs'));
-    assert.ok((manifest.files as string[]).includes('packages/contracts/**/*.mjs'));
-    assert.ok((manifest.files as string[]).includes('packages/evidence/**/*.mjs'));
-    assert.ok((manifest.files as string[]).includes('packages/interchange/**/*.mjs'));
-    assert.ok((manifest.files as string[]).includes('packages/investigation/**/*.mjs'));
-    assert.ok((manifest.files as string[]).includes('packages/monitoring/**/*.mjs'));
-    assert.ok((manifest.files as string[]).includes('packages/workspace/**/*.mjs'));
   });
 
   test('generates public metadata only for an explicit release candidate', () => {

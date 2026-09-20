@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
 
-import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
 
 import {
   normalizeEncryptedDnsAdapter,

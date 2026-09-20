@@ -1,6 +1,6 @@
 import type { ClassifiedQuery, classifyQuery } from '../lib/classify.mts';
 import type { LookupOptions } from '../lib/lookup.mts';
-import type { explainRiskScore } from '../lib/risk-scoring.mts';
+import type { explainRiskScore } from '../packages/analysis/risk-scoring.mts';
 import type { RegistryCompatibilityRow } from '../lib/registry-capabilities.mts';
 import type { resolvePublicAddresses, safeFetch } from '../lib/safe-fetch.mts';
 import type { whoisQuery } from '../lib/whois-transport.mts';

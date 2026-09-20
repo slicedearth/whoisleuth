@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import ts from 'typescript';
 import type { JSONReport } from '@playwright/test/reporter';
-import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
+import { parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 
 import {
   SYNTHETIC_ANALYST_JOURNEYS,

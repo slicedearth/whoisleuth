@@ -13,7 +13,7 @@ import {
   requireJsonRecord as record,
 } from './maintainer-tool-helpers.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
-import { parseBoundedJson, parseBoundedJsonObject } from '../lib/bounded-json.mts';
+import { parseBoundedJson, parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 
 type JsonRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };

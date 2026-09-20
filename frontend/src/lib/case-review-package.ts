@@ -2,7 +2,7 @@ import { MAX_EDITABLE_CASE_INPUT_BYTES } from '../../../packages/contracts/case-
 import { caseReviewDocument, caseReviewFileSelection, matchCaseReviewFiles, readCaseReviewDocument } from '../../../packages/cases/case-review-package.mts';
 import type { CaseRecord } from '../../../packages/cases/case-record-contracts.mts';
 import { canonicalArtifactJsonV2 } from '../../../packages/evidence/artifact-integrity.mts';
-import { boundedJsonLimitsForBytes, parseBoundedJson } from '../../../lib/bounded-json.mts';
+import { boundedJsonLimitsForBytes, parseBoundedJson } from '../../../packages/analysis/bounded-json.mts';
 import { readRetainedCaseFiles } from './case-attachments.ts';
 import { readBrowserLocalData } from './browser-local-data-service.ts';
 import type { BrowserInvestigationPackageReview, SelectedInvestigationFile } from './investigation-package-worker-model.ts';

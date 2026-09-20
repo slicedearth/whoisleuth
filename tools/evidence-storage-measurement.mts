@@ -18,7 +18,7 @@ import {
 } from '../packages/cases/case-model.mts';
 import { buildWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
 import { buildCliCasePack } from '../cli/case-pack.mts';
-import { assertBoundedJsonStructure, parseBoundedJson } from '../lib/bounded-json.mts';
+import { assertBoundedJsonStructure, parseBoundedJson } from '../packages/analysis/bounded-json.mts';
 import { LOOKUP_EVIDENCE_SCHEMA, LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
 import { BROWSER_LOCAL_COLLECTION_MANIFEST } from '../packages/contracts/browser-local-collection-manifest.mts';
 

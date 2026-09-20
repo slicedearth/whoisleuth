@@ -1,5 +1,4 @@
 export const CRITICAL_MUTATION_MANIFEST_VERSION = 1;
-export const MAX_CRITICAL_MUTANTS = 12;
 export const MAX_CRITICAL_MUTATION_TEXT_BYTES = 2_048;
 export const MAX_CRITICAL_MUTATION_TIMEOUT_MS = 30_000;
 export const MAX_CRITICAL_MUTATION_OUTPUT_BYTES = 64 * 1024;
@@ -64,7 +63,7 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
   Object.freeze({
     id: 'scoring-missing-coverage-stays-unknown',
     area: 'missing_evidence_scoring',
-    file: 'lib/scoring-evidence-quality.mts',
+    file: 'packages/analysis/scoring-evidence-quality.mts',
     search: "  if (!coverage.length || depth === 'unknown') state = 'unknown';",
     replacement: "  if (depth === 'unknown') state = 'unknown';",
     focusedTests: Object.freeze(['test/scoring.test.mts']),
@@ -73,7 +72,7 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
   Object.freeze({
     id: 'scoring-unreviewed-page-match-remains-neutral',
     area: 'unreviewed_evidence_scoring',
-    file: 'lib/risk-scoring.mts',
+    file: 'packages/analysis/risk-scoring.mts',
     search: '  includePageBaselineMatch: false,',
     replacement: '  includePageBaselineMatch: true,',
     focusedTests: Object.freeze(['test/scoring.test.mts']),

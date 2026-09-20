@@ -15,7 +15,7 @@ import {
   MAX_EVIDENCE_DOMAIN_INPUT_LENGTH,
   normalizeEvidenceDomain,
 } from '../cases/case-model.mts';
-import { MAX_CANDIDATE_SOURCE_LENGTH } from '../../lib/candidate-provenance-bounds.mts';
+import { MAX_CANDIDATE_SOURCE_LENGTH } from '../analysis/candidate-provenance-bounds.mts';
 import { normalizeCtTimestamp } from '../evidence/observation.mts';
 import {
   MAX_CT_RESPONSE_CERTIFICATE_GROUPS,
@@ -24,7 +24,7 @@ import {
   MAX_CT_RESPONSE_HOSTNAMES_PER_MATCH,
   MAX_CT_RESPONSE_RESULTS,
   MAX_CT_RESPONSE_TIMESTAMP_LENGTH,
-} from '../../lib/ct-response-bounds.mts';
+} from '../analysis/ct-response-bounds.mts';
 
 // The stable mutation/source token every CT-derived candidate carries so Bulk,
 // coverage, and the handoff can recognise its provenance.

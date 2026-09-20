@@ -41,7 +41,7 @@ import {
   RESPONSE_READINESS_STATES,
   type ResponseReadinessState,
 } from './case-response-packet-vocabulary.mts';
-import { isValidAsciiHostname } from '../../lib/hostname.mts';
+import { isValidAsciiHostname } from '../contracts/domain-name.mts';
 
 const CONTACT_KINDS = new Set<string>(RESPONSE_CONTACT_KINDS);
 const PRE_PLATFORM_CONTACT_KINDS = new Set<string>(RESPONSE_CONTACT_KINDS.filter((kind) => kind !== 'application_platform'));

@@ -16,6 +16,7 @@ import {
   formatReleaseVersionReport,
   inspectReleaseVersionIdentity,
   inspectReleaseVersionDerivedOutputs,
+  inspectPrecedingPublicReleaseVersion,
   selectPrecedingPublicReleaseVersion,
   main,
   normalizeSemanticVersion,
@@ -23,6 +24,10 @@ import {
 } from '../tools/release-version-check.mts';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
+import { buildCaseSupportedContractBaseline } from '../packages/contracts/case-supported-contract-baseline.mts';
+import { CASE_SUPPORTED_CONTRACT_BASELINE_PATH } from '../tools/case-supported-contract-baseline.mts';
+import { releasePreparationCommands } from '../tools/prepare-release.mts';
+import { npmExecutableName } from '../tools/maintainer-tool-helpers.mts';
 
 function capture() {
   let value = '';
@@ -45,6 +50,16 @@ function git(repositoryRoot: string, ...args: string[]): void {
 }
 
 describe('release semantic-version validation', () => {
+  test('prepares approved versions through existing writers without tags or dependency scripts', () => {
+    const commands = releasePreparationCommands('4.1.1', '4.1.0');
+    assert.deepEqual(commands[0], [npmExecutableName(), 'version', '4.1.1', '--no-git-tag-version', '--ignore-scripts']);
+    assert.deepEqual(commands.slice(1), [
+      [process.execPath, 'tools/public-product-catalogue.mts', '--write'],
+      [process.execPath, 'tools/release-version-check.mts'],
+    ]);
+    assert.deepEqual(releasePreparationCommands('4.1.1', '4.1.1'), commands.slice(1));
+    assert.throws(() => releasePreparationCommands('--force', '4.1.0'));
+  });
   test('accepts stable, prerelease, and build semantic versions', () => {
     for (const version of ['0.1.0', '1.5.0', '2.0.0-rc.1', '2.0.0-rc.1+build.42']) {
       assert.equal(normalizeSemanticVersion(version), version);
@@ -151,6 +166,8 @@ describe('release manifest lockstep', () => {
   });
 
   test('checks generated writer metadata without rewriting a published same-schema fixture', async () => {
+    const fixturePath = new URL('./fixtures/case-lifecycle/cli-case-pack-v2-case-v16-current.json', import.meta.url);
+    const frozenBytes = await readFile(fixturePath);
     const published = JSON.parse(await readFile(new URL('./fixtures/case-lifecycle/cli-case-pack-v2-case-v15.json', import.meta.url), 'utf8'));
     assert.equal(published.packet.reports[0].application.version, '2.3.0');
     assert.deepEqual(await inspectReleaseVersionDerivedOutputs(process.cwd(), WHOISLEUTH_APPLICATION_VERSION), {
@@ -160,6 +177,34 @@ describe('release manifest lockstep', () => {
       inspectReleaseVersionDerivedOutputs(process.cwd(), '0.0.0'),
       /application metadata must match release version/u,
     );
+    assert.deepEqual(await readFile(fixturePath), frozenBytes);
+  });
+
+  test('checks the actual preceding tag without a manually maintained application-release declaration', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-public-boundary-'));
+    try {
+      await mkdir(path.join(directory, 'docs'));
+      const filename = path.join(directory, CASE_SUPPORTED_CONTRACT_BASELINE_PATH);
+      const baseline = buildCaseSupportedContractBaseline();
+      await writeFile(filename, JSON.stringify(baseline));
+      git(directory, 'init', '--quiet');
+      git(directory, 'config', 'user.name', 'Release fixture');
+      git(directory, 'config', 'user.email', 'release@example.test');
+      git(directory, 'add', '.');
+      git(directory, 'commit', '--quiet', '-m', 'Retain published contracts');
+      git(directory, 'tag', 'v4.1.0');
+      assert.equal(inspectPrecedingPublicReleaseVersion(directory, '4.1.1'), '4.1.0');
+      const missingContract = { ...baseline.commitments.contracts[0]!, key: 'browser.cases@999', version: 999 };
+      await writeFile(filename, JSON.stringify({ ...baseline, commitments: {
+        ...baseline.commitments, contracts: [...baseline.commitments.contracts, missingContract],
+      } }));
+      git(directory, 'add', '.');
+      git(directory, 'commit', '--quiet', '-m', 'Add a published contract');
+      git(directory, 'tag', 'v4.1.1');
+      assert.throws(() => inspectPrecedingPublicReleaseVersion(directory, '4.1.2'), /browser\.cases@999 disappeared/u);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   test('checks repository manifests through the no-argument command', async () => {
@@ -176,12 +221,10 @@ describe('release manifest lockstep', () => {
         stderr: stderr.stream,
         inspectIdentity: () => ({ state: 'unreleased', checkedPaths: RELEASE_IDENTITY_PATHS.length }),
         inspectPublicBoundary: () => '2.1.0',
-        inspectDerivedOutputs: async () => ({ checkedFixtures: 1, checkedReports: 1 }),
       }), 0);
       assert.match(stdout.value(), /Version: 2\.1\.0/);
       assert.match(stdout.value(), /Release identity: untagged version/u);
       assert.match(stdout.value(), /Preceding public compatibility boundary: v2\.1\.0/u);
-      assert.match(stdout.value(), /Version-derived outputs: 1 current fixture\(s\) and 1 embedded report\(s\) match/u);
       assert.equal(stderr.value(), '');
     } finally {
       await rm(directory, { recursive: true, force: true });

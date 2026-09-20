@@ -12,7 +12,7 @@ import {
   MAX_STRUCTURED_DATA_SAME_AS_HOSTS,
   STRUCTURED_DATA_IDENTITY_VERSION,
 } from './lookup-child-profile-contract.mts';
-import { isUriShapedLabel } from './portable-generator.mts';
+import { isUriShapedLabel } from '../packages/analysis/portable-generator.mts';
 import {
   analyzeStaticHtml,
   type StaticHtmlAnalysis,

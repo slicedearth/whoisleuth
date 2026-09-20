@@ -36,8 +36,8 @@ import {
 import type { ResponsePolicyAnalysis } from './response-policy.mts';
 import { nonEmptyErrorMessage } from './error-detail.mts';
 import { registryServiceAdmissionFor } from './registry-capabilities.mts';
-import { canonicalRegistrableDomain } from './registrable-domain.mts';
-import { isValidAsciiHostname } from './hostname.mts';
+import { canonicalRegistrableDomain } from '../packages/analysis/registrable-domain.mts';
+import { isValidAsciiHostname } from '../packages/contracts/domain-name.mts';
 import { prepareSelectedLookupUrl } from '../packages/evidence/lookup-target.mts';
 import {
   HOMEPAGE_FETCH_TIMEOUT_MS,

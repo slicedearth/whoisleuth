@@ -8,7 +8,7 @@
     WHOISLEUTH_PROJECT_URL,
     WHOISLEUTH_SITE_ORIGIN,
     WHOISLEUTH_SOURCE_REPOSITORY_URL,
-  } from '../../../../../../lib/project-metadata.mts';
+  } from '../../../../../../packages/analysis/project-metadata.mts';
 
   let { data }: { data: { resource: PublicResource } } = $props();
   const resource = $derived(data.resource);

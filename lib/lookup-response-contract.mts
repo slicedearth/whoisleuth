@@ -16,19 +16,19 @@ import {
   THREAT_INTELLIGENCE_SCHEMA,
   THREAT_INTELLIGENCE_SEVERITIES,
   type ThreatIntelligenceResultState,
-} from './threat-intelligence-types.mts';
+} from '../packages/analysis/threat-intelligence-types.mts';
 import {
   MAX_HTTP_ATTEMPTS,
   MAX_HTTP_ERROR_LENGTH,
   MAX_HTTP_EVIDENCE_REDIRECTS,
-} from './http-evidence-bounds.mts';
+} from '../packages/analysis/http-evidence-bounds.mts';
 import {
   MAX_OBSERVATION_LIMITATIONS,
   MAX_OBSERVATION_LIMITATION_LENGTH,
   normalizeExplicitIsoTimestamp,
 } from '../packages/evidence/observation.mts';
-import { assertBoundedJsonStructure } from './bounded-json.mts';
-import { canonicalRegistrableDomain } from './registrable-domain.mts';
+import { assertBoundedJsonStructure } from '../packages/analysis/bounded-json.mts';
+import { canonicalRegistrableDomain } from '../packages/analysis/registrable-domain.mts';
 import { validLookupObservationScope } from '../packages/evidence/lookup-target.mts';
 import {
   MAX_LOOKUP_DNS_RECORDS_PER_TYPE,

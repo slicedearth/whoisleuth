@@ -8,7 +8,7 @@ import {
 } from '../packages/evidence/artifact-integrity.mts';
 import { buildCaseReport, buildCaseReportVerificationProjection } from '../packages/cases/case-report.mts';
 import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
-import { assertBoundedJsonStructure, scanBoundedJson } from '../lib/bounded-json.mts';
+import { assertBoundedJsonStructure, scanBoundedJson } from '../packages/analysis/bounded-json.mts';
 import {
   assertCaseBrandProfileIds,
   CASE_AUDIENCE_SENSITIVE_FIELD_NAMES,

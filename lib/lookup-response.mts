@@ -18,7 +18,7 @@ import {
   URLHAUS_PROVIDER,
   URLSCAN_PROVIDER,
 } from './lookup-threat-provider-inventory.mts';
-import { THREAT_INTELLIGENCE_ENVELOPE_VERSION } from './threat-intelligence-types.mts';
+import { THREAT_INTELLIGENCE_ENVELOPE_VERSION } from '../packages/analysis/threat-intelligence-types.mts';
 import { registryAccessDiagnosticFor } from './registry-capabilities.mts';
 import { buildRegistryInsights } from './registry-insights.mts';
 import { buildRegistrarStanding } from './registrar-standing.mts';

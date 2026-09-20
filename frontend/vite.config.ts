@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { build, defineConfig, type Plugin } from 'vite';
-import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
+import { normalizeBoundedSemanticVersion } from '../packages/analysis/semantic-version.mts';
 import { browserThirdPartyNoticesPlugin } from '../tools/third-party-notices.mts';
 import { frontendWorkerBuild } from '../tools/frontend-worker-build.mts';
 

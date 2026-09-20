@@ -10,7 +10,6 @@ import {
   CRITICAL_MUTATION_MANIFEST,
   CRITICAL_MUTATION_MANIFEST_VERSION,
   assertUniqueCriticalMutationPattern,
-  MAX_CRITICAL_MUTANTS,
   MAX_CRITICAL_MUTATION_OUTPUT_BYTES,
   MAX_CRITICAL_MUTATION_TEXT_BYTES,
   MAX_CRITICAL_MUTATION_TIMEOUT_MS,
@@ -33,10 +32,10 @@ type MutationOutcome = Readonly<{
 }>;
 
 function validateManifest(): void {
-  if (CRITICAL_MUTATION_MANIFEST.length < 5 || CRITICAL_MUTATION_MANIFEST.length > MAX_CRITICAL_MUTANTS
+  if (CRITICAL_MUTATION_MANIFEST.length < 5
     || new Set(CRITICAL_MUTATION_MANIFEST.map((item) => item.id)).size !== CRITICAL_MUTATION_MANIFEST.length
     || new Set(CRITICAL_MUTATION_MANIFEST.map((item) => item.area)).size !== CRITICAL_MUTATION_MANIFEST.length) {
-    throw new TypeError('Critical mutation manifest must cover each reviewed area exactly once within its bound.');
+    throw new TypeError('Critical mutation manifest must cover each reviewed area exactly once.');
   }
   for (const mutant of CRITICAL_MUTATION_MANIFEST) {
     if (!/^[a-z0-9][a-z0-9-]{2,79}$/u.test(mutant.id) || !SAFE_PATH.test(mutant.file)

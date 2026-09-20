@@ -10,11 +10,11 @@
 import { parse } from 'tldts';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { normalizeCtQuery } from './ct-query.mts';
+import { normalizeCtQuery } from '../packages/analysis/ct-query.mts';
 import { safeFetch, readTextCapped } from './safe-fetch.mts';
 import { whoisleuthRequestHeaders } from './outbound-identity.mts';
 import { createObservation } from '../packages/evidence/observation.mts';
-import { isValidAsciiHostname } from './hostname.mts';
+import { isValidAsciiHostname } from '../packages/contracts/domain-name.mts';
 import { normalizeCtTimestamp } from '../packages/evidence/observation.mts';
 import {
   MAX_CT_RESPONSE_CERTIFICATE_GROUPS,
@@ -23,7 +23,7 @@ import {
   MAX_CT_RESPONSE_HOSTNAMES_PER_MATCH,
   MAX_CT_RESPONSE_RESULTS,
   MAX_CT_RESPONSE_TIMESTAMP_LENGTH,
-} from './ct-response-bounds.mts';
+} from '../packages/analysis/ct-response-bounds.mts';
 
 type CtRow = Record<string, unknown>;
 type CtDependencies = {

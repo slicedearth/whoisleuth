@@ -7,7 +7,7 @@ import { MAX_DOMAIN_CONTROL_INPUT_RECORDS, PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSIO
 
 import {
   scanBoundedJson,
-} from '../lib/bounded-json.mts';
+} from '../packages/analysis/bounded-json.mts';
 import {
   CLI_DOMAIN_CONTROL_REVIEW_INPUT_KEYS,
   CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,

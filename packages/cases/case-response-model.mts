@@ -69,7 +69,7 @@ import {
   text,
   uniqueIds,
 } from './case-response-values.mts';
-import { isValidAsciiHostname } from '../../lib/hostname.mts';
+import { isValidAsciiHostname } from '../contracts/domain-name.mts';
 import { readCaseRecheckContext } from './case-recheck-model.mts';
 
 export * from './case-response-records.mts';

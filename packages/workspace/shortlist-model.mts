@@ -3,8 +3,8 @@
 // import merging, and exact serialized-byte accounting.
 
 import { compactWatchlistResults } from './watchlist-history.mts';
-import { normalizeOpportunityModelVersion } from '../../lib/opportunity-scoring.mts';
-import { normalizeRiskModelVersion } from '../../lib/risk-scoring.mts';
+import { normalizeOpportunityModelVersion } from '../analysis/opportunity-scoring.mts';
+import { normalizeRiskModelVersion } from '../analysis/risk-scoring.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {

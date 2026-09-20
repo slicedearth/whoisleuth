@@ -1,7 +1,7 @@
 <script lang="ts">
   import PageHeading from '$lib/components/PageHeading.svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
-  import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../../../../lib/project-metadata.mts';
+  import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../../../../packages/analysis/project-metadata.mts';
 </script>
 
 <PublicSeo

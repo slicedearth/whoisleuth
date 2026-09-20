@@ -2,7 +2,7 @@ import { registryAccessProfileLabel } from './registry-access.mts';
 import {
   buildPortableGeneratorMetadata,
   portableGeneratorAttribution,
-} from './portable-generator.mts';
+} from '../packages/analysis/portable-generator.mts';
 import {
   technologyEvidenceRoles,
   type TechnologyEvidenceRole,

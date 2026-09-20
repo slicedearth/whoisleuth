@@ -1,4 +1,4 @@
-import { isValidAsciiHostname } from '../../lib/hostname.mts';
+import { isValidAsciiHostname } from '../contracts/domain-name.mts';
 import { INCIDENT_CASE_SCHEMA_VERSION, MAX_RESPONSE_RATIONALE_LENGTH } from '../contracts/case-portability.mts';
 import { enumeration, exact, text } from '../evidence/artifact-structure.mts';
 import type { CaseAssertionRecord, CaseEvidencePin, CaseObservedEffectState } from './case-response-records.mts';

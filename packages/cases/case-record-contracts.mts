@@ -8,7 +8,7 @@ import type {
   CaseObservedEffectHistory,
   CaseSightingRecord,
 } from './case-response-model.mts';
-import { ANALYST_REVIEW_REASONS } from '../../lib/analyst-taxonomy.mts';
+import { ANALYST_REVIEW_REASONS } from '../analysis/analyst-taxonomy.mts';
 import {
   CASE_IMPORT_VERSIONS,
   CASE_SCHEMA_VERSION,

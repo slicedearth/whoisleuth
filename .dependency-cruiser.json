@@ -38,82 +38,26 @@
     {
       "name": "domain-packages-stay-independent-of-runtime-adapters",
       "severity": "error",
-      "comment": "Evidence and collector-interface packages may use shared contracts and pure package peers but must not depend on application runtimes, tools, or presentation adapters.",
+      "comment": "Runtime-neutral domain packages may use package peers but must not reach runtime services, presentation, tooling or deployment adapters. New domain directories inherit this boundary.",
       "from": {
-        "path": "^(?:test/fixtures/architecture/)?packages/(?:evidence|collectors)/"
+        "path": "^(?:test/fixtures/architecture/)?packages/(?!(?:contracts|web-capture|local-application)(?:/|$))"
       },
       "to": {
-        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|lib|netlify/functions|tools)(?:/|$)|server\\.mts$)",
+        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|lib|netlify/functions|tools)(?:/|$)|packages/(?:web-capture|local-application)(?:/|$)|server\\.mts$)",
         "reachable": true
       }
     },
     {
-      "name": "case-domain-stays-independent-of-runtime-adapters",
+      "name": "domain-packages-no-node-core",
       "severity": "error",
-      "comment": "The pure Case domain may reuse the exact bounded root-domain primitives retained for compatibility, but it must not reach runtime, tool, network, filesystem, environment, or presentation adapters.",
+      "comment": "Domain rules execute in both browser and Node runtimes and cannot depend on Node core modules.",
       "from": {
-        "path": "^(?:test/fixtures/architecture/)?packages/cases/"
+        "path": "^(?:test/fixtures/architecture/)?packages/(?!(?:contracts|web-capture|local-application)(?:/|$))"
       },
       "to": {
-        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|netlify/functions|tools)(?:/|$)|lib/(?!(?:analyst-taxonomy|bounded-json|external-intelligence-risk|hostname|http-evidence-bounds|opportunity-scoring|portable-generator|project-metadata|registrable-domain|risk-scoring|scoring-evidence-quality|semantic-version|threat-intelligence-types)\\.mts$)|server\\.mts$)",
-        "reachable": true
-      }
-    },
-    {
-      "name": "case-domain-no-node-core",
-      "severity": "error",
-      "comment": "The shared Case domain must remain equivalent in Node and browser runtimes and cannot import Node core modules.",
-      "from": {
-        "path": "^(?:test/fixtures/architecture/)?packages/cases/"
-      },
-      "to": {
-        "dependencyTypes": ["core"]
-      }
-    },
-    {
-      "name": "workspace-domain-stays-independent-of-runtime-adapters",
-      "severity": "error",
-      "comment": "Pure workspace collection behaviour may reuse shared package owners and the small allowlisted cross-runtime scoring and query primitives, but cannot reach runtime, tool, network, filesystem, environment, or presentation adapters.",
-      "from": {
-        "path": "^(?:test/fixtures/architecture/)?packages/workspace/"
-      },
-      "to": {
-        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|netlify/functions|tools)(?:/|$)|lib/(?!(?:analyst-taxonomy|bounded-json|ct-query|external-intelligence-risk|hostname|http-evidence-bounds|opportunity-scoring|perceptual-hash-comparison|portable-generator|project-metadata|registrable-domain|risk-scoring|scoring-evidence-quality|semantic-version|threat-intelligence-types)\\.mts$)|server\\.mts$)",
-        "reachable": true
-      }
-    },
-    {
-      "name": "workspace-domain-no-node-core",
-      "severity": "error",
-      "comment": "Shared workspace collection behaviour must remain equivalent in browser and Node runtimes and cannot import Node core modules.",
-      "from": {
-        "path": "^(?:test/fixtures/architecture/)?packages/workspace/"
-      },
-      "to": {
-        "dependencyTypes": ["core"]
-      }
-    },
-    {
-      "name": "portable-domain-packages-stay-independent-of-runtime-adapters",
-      "severity": "error",
-      "comment": "Monitoring, investigation, interchange, relationship, and comparison behaviour may reuse dependency-neutral package peers and the established pure cross-runtime primitives, but cannot reach runtime, tool, network, filesystem, environment, or presentation adapters.",
-      "from": {
-        "path": "^(?:test/fixtures/architecture/)?packages/(?:monitoring|investigation|interchange|relationships|comparison)/"
-      },
-      "to": {
-        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|netlify/functions|tools)(?:/|$)|lib/(?!(?:analyst-taxonomy|bounded-json|candidate-provenance-bounds|ct-query|ct-response-bounds|external-intelligence-risk|hostname|http-evidence-bounds|opportunity-scoring|perceptual-hash-comparison|portable-generator|project-metadata|registrable-domain|risk-calibration-summary|risk-scoring|scoring-evidence-quality|semantic-version|threat-intelligence-types)\\.mts$)|server\\.mts$)",
-        "reachable": true
-      }
-    },
-    {
-      "name": "portable-domain-packages-no-node-core",
-      "severity": "error",
-      "comment": "Shared monitoring, investigation, interchange, relationship, and comparison behaviour must remain equivalent in browser and Node runtimes and cannot import Node core modules.",
-      "from": {
-        "path": "^(?:test/fixtures/architecture/)?packages/(?:monitoring|investigation|interchange|relationships|comparison)/"
-      },
-      "to": {
-        "dependencyTypes": ["core"]
+        "dependencyTypes": [
+          "core"
+        ]
       }
     },
     {
@@ -146,7 +90,7 @@
       "comment": "Shared, CLI, and browser-library modules must have an application consumer so obsolete production files cannot survive behind tests alone.",
       "from": {
         "path": "^(?:cli|frontend/src/lib|lib)/",
-        "pathNot": "^(?:cli/runner-types\\.mts|frontend/src/lib/local-data-platform-probe\\.ts|lib/(?:netlify-function-types|threat-intelligence-types|whois-contracts)\\.mts)$",
+        "pathNot": "^(?:cli/runner-types\\.mts|frontend/src/lib/local-data-platform-probe\\.ts|lib/(?:analyst-taxonomy|bounded-json|candidate-provenance-bounds|ct-query|ct-response-bounds|external-intelligence-risk|http-evidence-bounds|opportunity-scoring|perceptual-hash-comparison|portable-generator|project-metadata|registrable-domain|risk-calibration-summary|risk-scoring|scoring-evidence-quality|semantic-version|threat-intelligence-types|netlify-function-types|whois-contracts)\\.mts)$",
         "orphan": true
       },
       "to": {}
@@ -175,7 +119,9 @@
         "path": "^frontend/src/"
       },
       "to": {
-        "dependencyTypes": ["core"]
+        "dependencyTypes": [
+          "core"
+        ]
       }
     },
     {
@@ -229,9 +175,23 @@
       "fileName": "tsconfig.dependency-cruiser.json"
     },
     "enhancedResolveOptions": {
-      "exportsFields": ["exports"],
-      "conditionNames": ["import", "require", "node", "default"],
-      "extensions": [".mts", ".ts", ".svelte", ".mjs", ".js", ".json"]
+      "exportsFields": [
+        "exports"
+      ],
+      "conditionNames": [
+        "import",
+        "require",
+        "node",
+        "default"
+      ],
+      "extensions": [
+        ".mts",
+        ".ts",
+        ".svelte",
+        ".mjs",
+        ".js",
+        ".json"
+      ]
     }
   }
 }

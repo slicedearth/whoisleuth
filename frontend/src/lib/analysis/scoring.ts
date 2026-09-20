@@ -7,14 +7,14 @@ export {
   formatScoreBreakdown,
   normalizeRiskModelVersion,
   riskTone,
-} from '../../../../lib/risk-scoring.mts';
+} from '../../../../packages/analysis/risk-scoring.mts';
 export type {
   RiskExplanation,
   RiskFactor,
   RiskInput,
   RiskScoreSensitivity,
   RiskSensitivityScenario,
-} from '../../../../lib/risk-scoring.mts';
+} from '../../../../packages/analysis/risk-scoring.mts';
 export {
   OPPORTUNITY_MODEL_VERSION,
   OPPORTUNITY_REVIEW_THRESHOLD,
@@ -22,14 +22,14 @@ export {
   explainOpportunityScore,
   normalizeOpportunityModelVersion,
   opportunityTone,
-} from '../../../../lib/opportunity-scoring.mts';
+} from '../../../../packages/analysis/opportunity-scoring.mts';
 export type {
   OpportunityDimension,
   OpportunityDimensionId,
   OpportunityExplanation,
   OpportunityFactor,
   OpportunityScoreInput,
-} from '../../../../lib/opportunity-scoring.mts';
+} from '../../../../packages/analysis/opportunity-scoring.mts';
 
 // Acquisition/sourcing signals (domain age, expiry proximity, WHOIS privacy,
 // site activity) and the opportunity score that combines them into one

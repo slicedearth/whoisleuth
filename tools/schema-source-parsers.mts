@@ -3,7 +3,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import { parse as parseSvelte, type AST } from 'svelte/compiler';
 
-import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
 import {
   LOCAL_SCHEMA_IDENTIFIER_SOURCE,
   isCanonicalLocalSchemaIdentifier,

@@ -25,22 +25,12 @@ export const SCHEMA_SOURCE_CLASSIFICATIONS = Object.freeze([
     identifier: 'whoisleuth.git',
     kind: 'non_schema',
     reason: 'repository_filename',
-    owner: 'packages/cli/package.template.json',
-    sourceUses: Object.freeze([
-      Object.freeze({ file: 'packages/cli/package.template.json', literalOccurrences: 1, dynamicConstructions: 0 }),
-    ]),
-    relatedEntryIds: Object.freeze([]),
     note: 'Repository filename suffix in package metadata.',
   }),
   Object.freeze({
     identifier: 'whoisleuth.invalid',
     kind: 'non_schema',
     reason: 'reserved_protocol_hostname',
-    owner: 'lib/smtp-transport-review.mts',
-    sourceUses: Object.freeze([
-      Object.freeze({ file: 'lib/smtp-transport-review.mts', literalOccurrences: 1, dynamicConstructions: 0 }),
-    ]),
-    relatedEntryIds: Object.freeze([]),
     note: 'Reserved EHLO hostname used by the bounded mail transport review.',
   }),
   Object.freeze({
@@ -58,11 +48,6 @@ export const SCHEMA_SOURCE_CLASSIFICATIONS = Object.freeze([
     identifier: 'whoisleuth.local',
     kind: 'non_schema',
     reason: 'reserved_local_uid_host',
-    owner: 'frontend/src/lib/analysis/case-lifecycle-calendar.ts',
-    sourceUses: Object.freeze([
-      Object.freeze({ file: 'frontend/src/lib/analysis/case-lifecycle-calendar.ts', literalOccurrences: 0, dynamicConstructions: 1 }),
-    ]),
-    relatedEntryIds: Object.freeze([]),
     note: 'Reserved local UID hostname embedded in generated calendar events.',
   }),
   Object.freeze({
@@ -80,24 +65,12 @@ export const SCHEMA_SOURCE_CLASSIFICATIONS = Object.freeze([
     identifier: 'whoisleuth.mjs',
     kind: 'non_schema',
     reason: 'packaged_executable_filename',
-    owner: 'packages/cli/package.template.json',
-    sourceUses: Object.freeze([
-      Object.freeze({ file: 'packages/cli/package.template.json', literalOccurrences: 1, dynamicConstructions: 0 }),
-      Object.freeze({ file: 'tools/cli-package.mts', literalOccurrences: 4, dynamicConstructions: 0 }),
-      Object.freeze({ file: 'tools/published-cli-check.mts', literalOccurrences: 1, dynamicConstructions: 0 }),
-    ]),
-    relatedEntryIds: Object.freeze([]),
     note: 'Installed CLI executable filename.',
   }),
   Object.freeze({
     identifier: 'whoisleuth.mts',
     kind: 'non_schema',
     reason: 'source_entry_filename',
-    owner: 'tools/cli-package.mts',
-    sourceUses: Object.freeze([
-      Object.freeze({ file: 'tools/cli-package.mts', literalOccurrences: 2, dynamicConstructions: 0 }),
-    ]),
-    relatedEntryIds: Object.freeze([]),
     note: 'Source entry filename used during bounded package assembly.',
   }),
   Object.freeze({

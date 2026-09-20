@@ -38,7 +38,6 @@ import {
   renderPublicSitemap,
 } from '../lib/prerendered-routes.mts';
 import { WHOISLEUTH_SITE_ORIGIN } from '../lib/project-metadata.mts';
-import { FRONTEND_ROUTE_GZIP_BUDGETS } from '../tools/frontend-loading-report.mts';
 import { writeAtomically } from '../tools/public-product-catalogue.mts';
 
 const GENERATED_DIRECTORY = new URL('../frontend/src/lib/generated/', import.meta.url);
@@ -162,7 +161,7 @@ describe('public product catalogue', () => {
     ]);
   });
 
-  test('registers every public reference route, canonical redirect, sitemap URL and loading budget', () => {
+  test('registers every public reference route, canonical redirect and sitemap URL', () => {
     const routes = ['/cli', '/methodology', '/coverage', '/examples'] as const;
     const redirects = new Map(CANONICAL_TRAILING_SLASH_REDIRECTS);
     const robots = readFileSync(new URL('../frontend/static/robots.txt', import.meta.url), 'utf8');
@@ -172,8 +171,6 @@ describe('public product catalogue', () => {
     for (const route of routes) {
       assert.ok(PRERENDERED_ROUTES.includes(route));
       assert.equal(redirects.get(`${route}/`), route);
-      assert.equal(typeof FRONTEND_ROUTE_GZIP_BUDGETS[route], 'number');
-      assert.ok(FRONTEND_ROUTE_GZIP_BUDGETS[route]! > 0);
       assert.ok(sitemap.includes(`<loc>${WHOISLEUTH_SITE_ORIGIN}${route}</loc>`));
     }
   });

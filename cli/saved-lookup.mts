@@ -4,7 +4,7 @@ import { classifyQuery, type ClassifiedQuery } from '../lib/classify.mts';
 import {
   isSafeJsonObjectKey,
   scanBoundedJson,
-} from '../lib/bounded-json.mts';
+} from '../packages/analysis/bounded-json.mts';
 import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
 import { CliUsageError } from './arguments.mts';
 import type { BoundedTextStream } from './bulk.mts';

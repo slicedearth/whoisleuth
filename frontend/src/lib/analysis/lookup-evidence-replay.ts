@@ -23,7 +23,7 @@ import {
   resolveRegistrarIanaId,
   validRegistrarStanding,
 } from '../../../../lib/registrar-standing-contract.mts';
-import { scanBoundedJson } from '../../../../lib/bounded-json.mts';
+import { scanBoundedJson } from '../../../../packages/analysis/bounded-json.mts';
 import {
   buildLookupAssetGraph,
   type LookupAssetGraph,

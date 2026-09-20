@@ -1,9 +1,20 @@
 #!/usr/bin/env node
 
+import {
+  packageProcessEnvironment, copyPackageFile, capturePackageSourceSnapshot,
+  assertPackageSourceSnapshot, materializePackageSourceSnapshot,
+  discoverPackageCompilerClosure, compilePackageSources, emittedPackageFiles, validateCompiledPackageFiles,
+  type PackageSourceSnapshot, type PackageSnapshotState,
+} from './package-source.mts';
+import {
+  MAX_PACKAGE_GRAPH_BYTES, MAX_PACKAGE_SOURCE_BYTES, MAX_PACKAGE_FILE_BYTES,
+  MAX_PACKAGE_COMPILER_CONTEXT_BYTES, MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES,
+  PACKAGE_PROCESS_TIMEOUT_MS,
+} from './package-resource-bounds.mts';
 import { execFile as execFileCallback } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
-import { chmod, copyFile, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -13,10 +24,11 @@ import {
   WHOISLEUTH_PROJECT_URL,
   WHOISLEUTH_SOURCE_ISSUES_URL,
   WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL,
-} from '../lib/project-metadata.mts';
-import { scanBoundedJson } from '../lib/bounded-json.mts';
+} from '../packages/analysis/project-metadata.mts';
+import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
 import { CLI_INVESTIGATION_RUN_SCHEMA, CLI_INVESTIGATION_RUN_VERSION, MAX_INVESTIGATION_RUN_BYTES } from '../packages/contracts/investigation-run.mts';
 import { CLI_CASE_PACK_WRITER_FIXTURE_ID } from '../packages/contracts/case-portability.mts';
+import { assertReleaseVersionDerivedCasePack } from './release-version-check.mts';
 import {
   readBoundedRegularFile,
   readBoundedRegularFileWithin,
@@ -91,35 +103,33 @@ type ParsedArguments = Readonly<{
   artifactDirectory?: string;
   expectedTag?: string;
 }>;
-type CliPackageSourceIdentity = Readonly<{ bytes: Buffer; digestSha256: string }>;
-export type CliPackageSourceSnapshot = ReadonlyMap<string, CliPackageSourceIdentity>;
-type CliPackageSnapshotState = {
-  totalBytes: number;
-  maximumBytes?: number;
-  maximumFileBytes?: number;
-};
-type CliPackageCompilerClosure = Readonly<{
-  sources: readonly string[];
-  contextFiles: readonly string[];
-}>;
 
 const execFile = promisify(execFileCallback);
-
-export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
-export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
-export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
-export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES = 32 * 1024 * 1024;
-export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES = 8 * 1024 * 1024;
-export const CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS = 120_000;
 export const CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS = 15_000;
 
-const LOCAL_SOURCE_PATTERN = /^(?:bin|cli|lib|frontend\/src\/lib|packages\/(?:cases|comparison|contracts|evidence|interchange|investigation|monitoring|workspace))\/[A-Za-z0-9._/-]+\.(?:mts|ts|json)$/u;
-const COMPILABLE_SOURCE_PATTERN = /\.(?:mts|ts)$/u;
+const LOCAL_SOURCE_PATTERN = /^(?:bin|cli|lib|frontend\/src\/lib|packages\/(?!(?:web-capture|local-application)\/)[A-Za-z0-9._-]+)\/[A-Za-z0-9._/-]+\.(?:mts|ts|json)$/u;
 const CLI_RUNTIME_ENTRY_MODULES = Object.freeze(['bin/whoisleuth.mts', 'cli/runner.mts']);
-// Released archives permitted these two browser-safe deep imports.
+// Released deep imports remain entry points independently of current consumers.
 const CLI_COMPATIBILITY_ENTRY_MODULES = Object.freeze([
   'frontend/src/lib/analysis/domain-control-manifest-core.ts',
   'frontend/src/lib/analysis/domain-control-records.ts',
+  'lib/analyst-taxonomy.mts',
+  'lib/bounded-json.mts',
+  'lib/candidate-provenance-bounds.mts',
+  'lib/ct-query.mts',
+  'lib/ct-response-bounds.mts',
+  'lib/external-intelligence-risk.mts',
+  'lib/http-evidence-bounds.mts',
+  'lib/opportunity-scoring.mts',
+  'lib/perceptual-hash-comparison.mts',
+  'lib/portable-generator.mts',
+  'lib/project-metadata.mts',
+  'lib/registrable-domain.mts',
+  'lib/risk-calibration-summary.mts',
+  'lib/risk-scoring.mts',
+  'lib/scoring-evidence-quality.mts',
+  'lib/semantic-version.mts',
+  'lib/threat-intelligence-types.mts',
 ]);
 const INSTALLED_COMPATIBILITY_FACADES = Object.freeze([
   Object.freeze({
@@ -174,18 +184,6 @@ const INSTALLED_INLINE_FAMILY_MODULES = Object.freeze([
   Object.freeze({ source: 'cli/workflow-command-runner.mjs', exportName: 'runWorkflowCommand', label: 'workflow-family-handler' }),
   Object.freeze({ source: 'cli/history-command-runner.mjs', exportName: 'runHistoryCommand', label: 'history-family-handler' }),
 ]);
-const TYPESCRIPT_COMPILER_SOURCE = 'node_modules/typescript/lib/_tsc.js';
-const NODE_MODULE_COMPILER_INPUT_SEGMENT_PATTERN = /^@?[A-Za-z0-9._-]+$/u;
-const NODE_MODULE_COMPILER_INPUT_SUFFIXES = Object.freeze([
-  '.d.cts',
-  '.d.mts',
-  '.d.ts',
-  '.cts',
-  '.mts',
-  '.ts',
-  '.json',
-]);
-const MAX_NODE_MODULE_COMPILER_INPUT_PATH_LENGTH = 4_096;
 export const CLI_RUNTIME_DEPENDENCIES = Object.freeze([
   '@peculiar/x509',
   'fflate',
@@ -210,36 +208,6 @@ const CLI_PACKAGE_COMPILER_CONTEXT_FILES = Object.freeze([
   'frontend/package.json',
 ]);
 
-export function isCliPackageCompilerInputPath(relativePath: string): boolean {
-  if (
-    relativePath.length === 0
-    || relativePath.length > MAX_NODE_MODULE_COMPILER_INPUT_PATH_LENGTH
-    || !relativePath.startsWith('node_modules/')
-  ) return false;
-  const segments = relativePath.split('/');
-  if (segments.length < 3 || segments[0] !== 'node_modules') return false;
-  for (const segment of segments.slice(1)) {
-    if (
-      segment.length === 0
-      || segment.length > 255
-      || segment === '.'
-      || segment === '..'
-      || !NODE_MODULE_COMPILER_INPUT_SEGMENT_PATTERN.test(segment)
-    ) return false;
-  }
-  const fileName = segments.at(-1) ?? '';
-  return NODE_MODULE_COMPILER_INPUT_SUFFIXES.some((suffix) => (
-    fileName.length > suffix.length && fileName.endsWith(suffix)
-  ));
-}
-
-function cliPackageProcessEnvironment(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
-  const environment = { ...process.env, ...overrides };
-  delete environment.NODE_OPTIONS;
-  delete environment.NODE_PATH;
-  return environment;
-}
-
 function boundedString(value: unknown, label: string, maxLength = 240): string {
   if (typeof value !== 'string' || value.length === 0 || value.length > maxLength || value.trim() !== value) {
     throw new TypeError(`${label} must be a non-empty bounded string.`);
@@ -261,7 +229,7 @@ function dependencies(value: unknown): readonly DependencyEntry[] {
   return value.map((entry, index) => record(entry, `Dependency ${index + 1}`));
 }
 
-export function selectCliPackageSources(
+export function selectPackageSources(
   graphValue: unknown,
   options: Readonly<{
     maximumModules?: number;
@@ -382,14 +350,7 @@ export function buildCliPackageManifest(
       'cli/**/*.mjs',
       'lib/**/*.mjs',
       'frontend/src/lib/**/*.js',
-      'packages/cases/**/*.mjs',
-      'packages/comparison/**/*.mjs',
-      'packages/contracts/**/*.mjs',
-      'packages/evidence/**/*.mjs',
-      'packages/interchange/**/*.mjs',
-      'packages/investigation/**/*.mjs',
-      'packages/monitoring/**/*.mjs',
-      'packages/workspace/**/*.mjs',
+      'packages/**/*.mjs',
       'docs/cli.md',
       'docs/cli-reference.md',
       'DISCLOSURE',
@@ -425,7 +386,7 @@ function parseBoundedJsonBytes(bytes: Buffer, label: string): unknown {
   }
 }
 
-async function readBoundedJson(filename: string, maxBytes = MAX_CLI_PACKAGE_GRAPH_BYTES): Promise<unknown> {
+async function readBoundedJson(filename: string, maxBytes = MAX_PACKAGE_GRAPH_BYTES): Promise<unknown> {
   const bytes = await readBoundedRegularFile(filename, {
     maximumBytes: maxBytes,
     minimumBytes: 1,
@@ -446,10 +407,10 @@ async function dependencyGraph(repositoryRoot: string, entrySources: readonly st
   ], {
     cwd: repositoryRoot,
     encoding: 'utf8',
-    timeout: CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
+    timeout: PACKAGE_PROCESS_TIMEOUT_MS,
     killSignal: 'SIGTERM',
-    maxBuffer: MAX_CLI_PACKAGE_GRAPH_BYTES,
-    env: cliPackageProcessEnvironment({ NODE_ENV: 'production' }),
+    maxBuffer: MAX_PACKAGE_GRAPH_BYTES,
+    env: packageProcessEnvironment({ NODE_ENV: 'production' }),
   });
   try {
     scanBoundedJson(stdout);
@@ -457,13 +418,6 @@ async function dependencyGraph(repositoryRoot: string, entrySources: readonly st
   } catch {
     throw new TypeError('CLI dependency graph is not valid JSON.');
   }
-}
-
-async function copyPackageFile(stagingRoot: string, destination: string, bytes: Buffer): Promise<void> {
-  const safeDestination = safeRelativePath(destination, 'Package destination');
-  const destinationPath = path.join(stagingRoot, safeDestination);
-  await mkdir(path.dirname(destinationPath), { recursive: true });
-  await writeFile(destinationPath, bytes, { flag: 'wx', mode: 0o644 });
 }
 
 async function assertInstalledCompatibilityFacade(
@@ -506,192 +460,13 @@ async function assertInstalledCompatibilityFacade(
   }
 }
 
-export async function captureCliPackageSourceSnapshot(
-  repositoryRoot: string,
-  sources: readonly string[],
-  state?: CliPackageSnapshotState,
-): Promise<CliPackageSourceSnapshot> {
-  const snapshot = new Map<string, CliPackageSourceIdentity>();
-  const maximumFileBytes = state?.maximumFileBytes ?? MAX_CLI_PACKAGE_FILE_BYTES;
-  const maximumBytes = state?.maximumBytes ?? MAX_CLI_PACKAGE_SOURCE_BYTES;
-  for (const source of sources) {
-    const safeSource = safeRelativePath(source, 'Package source');
-    const bytes = await readBoundedRegularFileWithin(repositoryRoot, safeSource, {
-      maximumBytes: maximumFileBytes,
-      minimumBytes: 1,
-      label: safeSource,
-    });
-    if (state) {
-      state.totalBytes += bytes.byteLength;
-      if (state.totalBytes > maximumBytes) {
-        throw new TypeError('CLI package sources exceed the aggregate byte limit.');
-      }
-    }
-    snapshot.set(safeSource, Object.freeze({
-      bytes,
-      digestSha256: createHash('sha256').update(bytes).digest('hex'),
-    }));
-  }
-  return snapshot;
-}
-
-export async function assertCliPackageSourceSnapshot(
-  repositoryRoot: string,
-  snapshot: CliPackageSourceSnapshot,
-  maximumFileBytes = MAX_CLI_PACKAGE_FILE_BYTES,
-): Promise<void> {
-  for (const [source, identity] of snapshot) {
-    let bytes: Buffer;
-    try {
-      bytes = await readBoundedRegularFileWithin(repositoryRoot, source, {
-        maximumBytes: maximumFileBytes,
-        minimumBytes: 1,
-        expectedBytes: identity.bytes.byteLength,
-        label: source,
-      });
-    } catch (cause) {
-      throw new TypeError(`${source} changed during CLI package assembly.`, { cause });
-    }
-    const digest = createHash('sha256').update(bytes).digest('hex');
-    if (digest !== identity.digestSha256) {
-      throw new TypeError(`${source} changed during CLI package assembly.`);
-    }
-  }
-}
-
-function snapshotBytes(snapshot: CliPackageSourceSnapshot, source: string): Buffer {
+function snapshotBytes(snapshot: PackageSourceSnapshot, source: string): Buffer {
   const identity = snapshot.get(source);
   if (!identity) throw new TypeError(`CLI package snapshot is missing ${source}.`);
   return identity.bytes;
 }
 
-export async function materializeCliPackageSourceSnapshot(
-  sourceRoot: string,
-  snapshot: CliPackageSourceSnapshot,
-): Promise<void> {
-  for (const [source, identity] of snapshot) {
-    await copyPackageFile(sourceRoot, source, identity.bytes);
-  }
-}
-
-function packageCompilerOptions(repositoryRoot: string, rootDirectory: string, outputDirectory: string) {
-  return {
-    target: 'ES2022',
-    module: 'NodeNext',
-    moduleResolution: 'NodeNext',
-    resolveJsonModule: true,
-    rootDir: rootDirectory,
-    outDir: outputDirectory,
-    allowImportingTsExtensions: true,
-    rewriteRelativeImportExtensions: true,
-    erasableSyntaxOnly: true,
-    verbatimModuleSyntax: true,
-    moduleDetection: 'force',
-    strict: true,
-    noUncheckedIndexedAccess: true,
-    exactOptionalPropertyTypes: true,
-    esModuleInterop: true,
-    skipLibCheck: true,
-    types: ['node'],
-    typeRoots: [path.join(repositoryRoot, 'node_modules', '@types')],
-    lib: ['ES2022', 'DOM', 'DOM.Iterable'],
-    declaration: false,
-    sourceMap: false,
-  };
-}
-
-function compilerPackageManifests(relativePath: string): readonly string[] {
-  const segments = relativePath.split('/');
-  const manifests = new Set<string>();
-  for (let index = 0; index < segments.length - 1; index += 1) {
-    if (segments[index] !== 'node_modules') continue;
-    const first = segments[index + 1];
-    if (!first) continue;
-    const packageEnd = first.startsWith('@') ? index + 3 : index + 2;
-    if (packageEnd > segments.length - 1) continue;
-    manifests.add(`${segments.slice(0, packageEnd).join('/')}/package.json`);
-  }
-  return Object.freeze([...manifests].sort());
-}
-
-export async function discoverPackageCompilerClosure(
-  inputRoot: string,
-  temporaryRoot: string,
-  entrySources: readonly string[],
-  options: Readonly<{ acceptsSource?: (source: string) => boolean }> = {},
-): Promise<CliPackageCompilerClosure> {
-  const canonicalInputRoot = await realpath(inputRoot);
-  const acceptsSource = options.acceptsSource ?? ((source: string) => LOCAL_SOURCE_PATTERN.test(source));
-  const configurationPath = path.join(temporaryRoot, 'tsconfig.cli-package-closure.json');
-  const configuration = {
-    compilerOptions: packageCompilerOptions(
-      canonicalInputRoot,
-      canonicalInputRoot,
-      path.join(temporaryRoot, 'closure-output'),
-    ),
-    files: entrySources
-      .filter((source) => COMPILABLE_SOURCE_PATTERN.test(source))
-      .map((source) => path.join(canonicalInputRoot, source)),
-  };
-  await writeFile(configurationPath, `${JSON.stringify(configuration, null, 2)}\n`, 'utf8');
-  const compiler = path.join(canonicalInputRoot, TYPESCRIPT_COMPILER_SOURCE);
-  let stdout = '';
-  try {
-    ({ stdout } = await execFile(process.execPath, [
-      compiler,
-      '--project',
-      configurationPath,
-      '--listFilesOnly',
-      '--pretty',
-      'false',
-    ], {
-      cwd: canonicalInputRoot,
-      encoding: 'utf8',
-      timeout: CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
-      killSignal: 'SIGTERM',
-      maxBuffer: MAX_CLI_PACKAGE_GRAPH_BYTES,
-      env: cliPackageProcessEnvironment({ NODE_ENV: 'production' }),
-    }));
-  } catch (error) {
-    const commandError = error && typeof error === 'object' ? error as { stderr?: unknown; stdout?: unknown } : {};
-    const output = [commandError.stderr, commandError.stdout]
-      .find((value): value is string => typeof value === 'string' && value.trim().length > 0)
-      ?.trim()
-      .slice(0, 4_000);
-    throw new TypeError(`CLI TypeScript source-closure discovery failed${output ? `: ${output}` : '.'}`);
-  }
-  const selected = new Set(entrySources);
-  const contextFiles = new Set<string>([
-    TYPESCRIPT_COMPILER_SOURCE,
-    'node_modules/typescript/package.json',
-  ]);
-  for (const line of stdout.split(/\r?\n/u)) {
-    if (!line.trim()) continue;
-    const relative = path.relative(canonicalInputRoot, path.resolve(canonicalInputRoot, line.trim())).split(path.sep).join('/');
-    if (!relative || relative === '..' || relative.startsWith('../') || path.isAbsolute(relative)) {
-      throw new TypeError(`CLI compiler source closure escaped its configured input root at ${path.basename(line.trim()).slice(0, 160)}.`);
-    }
-    if (acceptsSource(relative)) {
-      selected.add(relative);
-      continue;
-    }
-    if (CLI_PACKAGE_COMPILER_CONTEXT_FILES.includes(relative as never) || relative === 'package.json') continue;
-    if (!isCliPackageCompilerInputPath(relative)) {
-      throw new TypeError(`CLI compiler source closure contains unsupported input ${relative}.`);
-    }
-    contextFiles.add(relative);
-    for (const manifest of compilerPackageManifests(relative)) contextFiles.add(manifest);
-  }
-  if (selected.size > MAX_CLI_PACKAGE_PROCESSING_ITEMS) {
-    throw new TypeError(`CLI compiler source closure exceeds the ${MAX_CLI_PACKAGE_PROCESSING_ITEMS}-item processing limit.`);
-  }
-  return Object.freeze({
-    sources: Object.freeze([...selected].sort()),
-    contextFiles: Object.freeze([...contextFiles].sort()),
-  });
-}
-
-export function selectMaterializedCliPackageSources(
+export function selectMaterializedPackageSources(
   runtimeSources: readonly string[],
   materializedSources: readonly string[],
 ): readonly string[] {
@@ -704,85 +479,9 @@ export function selectMaterializedCliPackageSources(
   return Object.freeze([...selected].sort());
 }
 
-export async function compilePackageSources(
-  repositoryRoot: string,
-  temporaryRoot: string,
-  stagingRoot: string,
-  sourceRoot: string,
-  entrySources: readonly string[],
-  options: Readonly<{ compilerRoot?: string; dependencyRoot?: string }> = {},
-): Promise<void> {
-  const compilerRoot = options.compilerRoot ?? repositoryRoot;
-  const dependencyRoot = options.dependencyRoot ?? repositoryRoot;
-  if (dependencyRoot !== sourceRoot) {
-    const dependencyLink = path.join(sourceRoot, 'node_modules');
-    try {
-      await symlink(
-        path.join(dependencyRoot, 'node_modules'),
-        dependencyLink,
-        process.platform === 'win32' ? 'junction' : 'dir',
-      );
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-    }
-  }
-  const configurationPath = path.join(temporaryRoot, 'tsconfig.cli-package.json');
-  const configuration = {
-    compilerOptions: packageCompilerOptions(dependencyRoot, sourceRoot, stagingRoot),
-    files: entrySources
-      .filter((source) => COMPILABLE_SOURCE_PATTERN.test(source))
-      .map((source) => path.join(sourceRoot, source)),
-  };
-  await writeFile(configurationPath, `${JSON.stringify(configuration, null, 2)}\n`, 'utf8');
-  const compiler = path.join(compilerRoot, TYPESCRIPT_COMPILER_SOURCE);
-  try {
-    await execFile(process.execPath, [compiler, '--project', configurationPath], {
-      cwd: repositoryRoot,
-      encoding: 'utf8',
-      timeout: CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
-      killSignal: 'SIGTERM',
-      maxBuffer: 4 * 1024 * 1024,
-      env: cliPackageProcessEnvironment({ NODE_ENV: 'production' }),
-    });
-  } catch (error) {
-    const commandError = error && typeof error === 'object' ? error as { stderr?: unknown; stdout?: unknown } : {};
-    const output = [commandError.stderr, commandError.stdout]
-      .find((value): value is string => typeof value === 'string' && value.trim().length > 0)
-      ?.trim()
-      .slice(0, 4_000);
-    throw new TypeError(`CLI TypeScript compilation failed${output ? `: ${output}` : '.'}`);
-  }
-  if (entrySources.includes('bin/whoisleuth.mts')) {
-    await chmod(path.join(stagingRoot, 'bin', 'whoisleuth.mjs'), 0o755);
-  }
-}
-
 function parsePackResult(value: unknown): JsonRecord {
   if (!Array.isArray(value) || value.length !== 1) throw new TypeError('npm pack must return exactly one package result.');
   return record(value[0], 'npm pack result');
-}
-
-export function validatePackedCliFiles(
-  packResult: JsonRecord,
-  requiredEntries: readonly string[] = [],
-): readonly string[] {
-  if (!Array.isArray(packResult.files) || packResult.files.length === 0 || packResult.files.length > MAX_CLI_PACKAGE_PROCESSING_ITEMS) {
-    const observed = Array.isArray(packResult.files) ? packResult.files.length : 0;
-    throw new TypeError(`Packed CLI contains ${observed} entries; expected between 1 and ${MAX_CLI_PACKAGE_PROCESSING_ITEMS}.`);
-  }
-  const entries = Object.freeze(packResult.files.map((entry, index) => (
-    safeRelativePath(record(entry, `Packed entry ${index + 1}`).path, `Packed entry ${index + 1} path`)
-  )));
-  for (const required of requiredEntries) {
-    if (!entries.includes(required)) throw new TypeError(`Packed CLI is missing ${required}.`);
-  }
-  if (entries.some((entry) => /^(?:e2e|netlify|test|tools|frontend\/src\/routes)(?:\/|$)/u.test(entry))) {
-    throw new TypeError('Packed CLI contains an excluded application or test path.');
-  }
-  if (entries.some((entry) => /\.(?:[cm]?ts|svelte|map)$/u.test(entry))) {
-    throw new TypeError('Packed CLI contains source or source-map files instead of compiled runtime files.');
-  }
-  return entries;
 }
 
 async function runInstalledCheck(executable: string, args: readonly string[], label: string, expectedExitCode = 0, expectedDiagnostics?: RegExp): Promise<string> {
@@ -792,7 +491,7 @@ async function runInstalledCheck(executable: string, args: readonly string[], la
     output = await execFile(process.execPath, [executable, ...args], {
       encoding: 'utf8', timeout: CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS,
       killSignal: 'SIGTERM', maxBuffer: 2 * 1024 * 1024,
-      env: cliPackageProcessEnvironment({ FORCE_COLOR: '0', NO_COLOR: '1' }),
+      env: packageProcessEnvironment({ FORCE_COLOR: '0', NO_COLOR: '1' }),
     });
   } catch (cause) {
     const error = cause as { code?: unknown; stdout?: unknown; stderr?: unknown; killed?: unknown };
@@ -829,11 +528,11 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       dependencyGraph(repositoryRoot, CLI_RUNTIME_ENTRY_MODULES),
       dependencyGraph(repositoryRoot, CLI_PACKAGE_ENTRY_MODULES),
     ]);
-    const executableSources = selectCliPackageSources(runtimeGraph, {
+    const executableSources = selectPackageSources(runtimeGraph, {
       maximumModules: MAX_CLI_PACKAGE_PROCESSING_ITEMS,
       requiredSources: CLI_RUNTIME_ENTRY_MODULES,
     });
-    const runtimeSources = selectCliPackageSources(packageGraph, {
+    const runtimeSources = selectPackageSources(packageGraph, {
       maximumModules: MAX_CLI_PACKAGE_PROCESSING_ITEMS,
       requiredSources: CLI_PACKAGE_ENTRY_MODULES,
     });
@@ -846,23 +545,23 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     // captured before a second trusted closure pass runs from the private
     // materialized tree; an ephemeral extra root can therefore only cause a
     // rejection, never an emitted package module.
-    const liveClosure = await discoverPackageCompilerClosure(repositoryRoot, temporaryRoot, runtimeSources);
+    const liveClosure = await discoverPackageCompilerClosure(repositoryRoot, temporaryRoot, runtimeSources, { acceptsSource: source => LOCAL_SOURCE_PATTERN.test(source), contextFiles: CLI_PACKAGE_COMPILER_CONTEXT_FILES });
     const copyState = { totalBytes: 0 };
-    const compilerState: CliPackageSnapshotState = {
+    const compilerState: PackageSnapshotState = {
       totalBytes: 0,
-      maximumBytes: MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES,
-      maximumFileBytes: MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES,
+      maximumBytes: MAX_PACKAGE_COMPILER_CONTEXT_BYTES,
+      maximumFileBytes: MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES,
     };
     const [sourceSnapshot, supportSnapshot, manifestSnapshot, compilerSnapshot] = await Promise.all([
-      captureCliPackageSourceSnapshot(repositoryRoot, liveClosure.sources, copyState),
-      captureCliPackageSourceSnapshot(repositoryRoot, CLI_PACKAGE_SUPPORT_FILES.map(([source]) => source), copyState),
-      captureCliPackageSourceSnapshot(repositoryRoot, [
+      capturePackageSourceSnapshot(repositoryRoot, liveClosure.sources, copyState),
+      capturePackageSourceSnapshot(repositoryRoot, CLI_PACKAGE_SUPPORT_FILES.map(([source]) => source), copyState),
+      capturePackageSourceSnapshot(repositoryRoot, [
         'package.json',
         ...CLI_PACKAGE_COMPILER_CONTEXT_FILES,
         'packages/cli/package.template.json',
         'package-lock.json',
       ], copyState),
-      captureCliPackageSourceSnapshot(repositoryRoot, liveClosure.contextFiles, compilerState),
+      capturePackageSourceSnapshot(repositoryRoot, liveClosure.contextFiles, compilerState),
     ]);
     const rootManifest = parseBoundedJsonBytes(snapshotBytes(manifestSnapshot, 'package.json'), 'package.json');
     const templateManifest = parseBoundedJsonBytes(
@@ -872,13 +571,14 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     const lockfile = parseBoundedJsonBytes(snapshotBytes(manifestSnapshot, 'package-lock.json'), 'package-lock.json');
     const expectedCommands = CLI_COMMANDS;
     const manifest = buildCliPackageManifest(rootManifest, templateManifest, lockfile, { publicationEnabled });
-    await materializeCliPackageSourceSnapshot(sourceRoot, sourceSnapshot);
-    await materializeCliPackageSourceSnapshot(sourceRoot, manifestSnapshot);
-    await materializeCliPackageSourceSnapshot(sourceRoot, compilerSnapshot);
+    await materializePackageSourceSnapshot(sourceRoot, sourceSnapshot);
+    await materializePackageSourceSnapshot(sourceRoot, manifestSnapshot);
+    await materializePackageSourceSnapshot(sourceRoot, compilerSnapshot);
     const materializedClosure = await discoverPackageCompilerClosure(
       sourceRoot,
       temporaryRoot,
       CLI_PACKAGE_ENTRY_MODULES,
+      { acceptsSource: source => LOCAL_SOURCE_PATTERN.test(source), contextFiles: CLI_PACKAGE_COMPILER_CONTEXT_FILES },
     );
     for (const source of materializedClosure.sources) {
       if (!sourceSnapshot.has(source)) {
@@ -890,7 +590,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
         throw new TypeError(`Materialized CLI compiler closure requires uncaptured context ${contextFile}.`);
       }
     }
-    const sources = selectMaterializedCliPackageSources(runtimeSources, materializedClosure.sources);
+    const sources = selectMaterializedPackageSources(runtimeSources, materializedClosure.sources);
     await compilePackageSources(
       repositoryRoot,
       temporaryRoot,
@@ -899,12 +599,13 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       CLI_PACKAGE_ENTRY_MODULES,
       { compilerRoot: sourceRoot, dependencyRoot: sourceRoot },
     );
+    await chmod(path.join(stagingRoot, 'bin', 'whoisleuth.mjs'), 0o755);
     await Promise.all([
-      assertCliPackageSourceSnapshot(repositoryRoot, sourceSnapshot),
-      assertCliPackageSourceSnapshot(
+      assertPackageSourceSnapshot(repositoryRoot, sourceSnapshot),
+      assertPackageSourceSnapshot(
         repositoryRoot,
         compilerSnapshot,
-        MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES,
+        MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES,
       ),
     ]);
     for (const [source, destination] of CLI_PACKAGE_SUPPORT_FILES) {
@@ -917,28 +618,29 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     } as const;
     const cliNotices = await buildThirdPartyNotices(repositoryRoot, noticeOptions);
     await Promise.all([
-      assertCliPackageSourceSnapshot(repositoryRoot, sourceSnapshot),
-      assertCliPackageSourceSnapshot(repositoryRoot, supportSnapshot),
-      assertCliPackageSourceSnapshot(repositoryRoot, manifestSnapshot),
-      assertCliPackageSourceSnapshot(
+      assertPackageSourceSnapshot(repositoryRoot, sourceSnapshot),
+      assertPackageSourceSnapshot(repositoryRoot, supportSnapshot),
+      assertPackageSourceSnapshot(repositoryRoot, manifestSnapshot),
+      assertPackageSourceSnapshot(
         repositoryRoot,
         compilerSnapshot,
-        MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES,
+        MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES,
       ),
     ]);
     if (await buildThirdPartyNotices(repositoryRoot, noticeOptions) !== cliNotices) {
       throw new TypeError('CLI third-party notice inputs changed during package assembly.');
     }
     const cliNoticeBytes = Buffer.byteLength(cliNotices, 'utf8');
-    if (cliNoticeBytes > MAX_CLI_PACKAGE_FILE_BYTES || copyState.totalBytes + cliNoticeBytes > MAX_CLI_PACKAGE_SOURCE_BYTES) {
+    if (cliNoticeBytes > MAX_PACKAGE_FILE_BYTES || copyState.totalBytes + cliNoticeBytes > MAX_PACKAGE_SOURCE_BYTES) {
       throw new TypeError('Generated CLI third-party notices exceed the package source boundary.');
     }
     copyState.totalBytes += cliNoticeBytes;
     await writeFile(path.join(stagingRoot, 'third-party-notices.txt'), cliNotices, { encoding: 'utf8', mode: 0o644 });
     await writeFile(path.join(stagingRoot, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`, { encoding: 'utf8', mode: 0o644 });
 
+    const expectedEntries = await emittedPackageFiles(stagingRoot);
     const npmCache = path.join(temporaryRoot, 'npm-cache');
-    const commonEnvironment = cliPackageProcessEnvironment({
+    const commonEnvironment = packageProcessEnvironment({
       npm_config_audit: 'false',
       npm_config_cache: npmCache,
       npm_config_fund: 'false',
@@ -947,42 +649,25 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     const { stdout: packOutput } = await execFile('npm', ['pack', '--json', '--pack-destination', artifactsRoot], {
       cwd: stagingRoot,
       encoding: 'utf8',
-      timeout: CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
+      timeout: PACKAGE_PROCESS_TIMEOUT_MS,
       killSignal: 'SIGTERM',
       maxBuffer: 4 * 1024 * 1024,
       env: commonEnvironment,
     });
     const packResult = parsePackResult(JSON.parse(packOutput));
-    const requiredEntries = [
-      'bin/whoisleuth.mjs',
-      'cli/runner.mjs',
-      'frontend/src/lib/analysis/domain-control-manifest-core.js',
-      'frontend/src/lib/analysis/domain-control-records.js',
-      'packages/cases/case-model.mjs',
-      'packages/comparison/page-similarity.mjs',
-      'packages/evidence/domain-control-runtime.mjs',
-      'packages/evidence/domain-name.mjs',
-      'packages/interchange/external-findings-import.mjs',
-      'packages/investigation/investigation-capsule.mjs',
-      'packages/workspace/bulk-session-model.mjs',
-      'packages/workspace/workspace-archive.mjs',
-      'package.json',
-      'third-party-notices.txt',
-      ...CLI_PACKAGE_SUPPORT_FILES.map(([, destination]) => destination),
-    ];
-    const entries = validatePackedCliFiles(packResult, requiredEntries);
+    const entries = validateCompiledPackageFiles(packResult, expectedEntries, { exact: true });
     const packedBytes = positiveInteger(packResult.size, 'Packed CLI bytes', MAX_CLI_PACKAGE_PACKED_BYTES);
     const unpackedBytes = positiveInteger(packResult.unpackedSize, 'Unpacked CLI bytes', MAX_CLI_PACKAGE_UNPACKED_BYTES);
     const filename = safeRelativePath(packResult.filename, 'Packed CLI filename');
     const tarball = path.join(artifactsRoot, filename);
     await Promise.all([
-      assertCliPackageSourceSnapshot(repositoryRoot, sourceSnapshot),
-      assertCliPackageSourceSnapshot(repositoryRoot, supportSnapshot),
-      assertCliPackageSourceSnapshot(repositoryRoot, manifestSnapshot),
-      assertCliPackageSourceSnapshot(
+      assertPackageSourceSnapshot(repositoryRoot, sourceSnapshot),
+      assertPackageSourceSnapshot(repositoryRoot, supportSnapshot),
+      assertPackageSourceSnapshot(repositoryRoot, manifestSnapshot),
+      assertPackageSourceSnapshot(
         repositoryRoot,
         compilerSnapshot,
-        MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES,
+        MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES,
       ),
     ]);
     if (await buildThirdPartyNotices(repositoryRoot, noticeOptions) !== cliNotices) {
@@ -993,7 +678,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     await execFile('npm', ['install', '--package-lock=true', '--ignore-scripts', '--no-audit', '--no-fund', tarball], {
       cwd: installRoot,
       encoding: 'utf8',
-      timeout: CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
+      timeout: PACKAGE_PROCESS_TIMEOUT_MS,
       killSignal: 'SIGTERM',
       maxBuffer: 4 * 1024 * 1024,
       env: commonEnvironment,
@@ -1339,6 +1024,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     for (const audience of ['internal', 'trusted', 'public']) {
       const output = await runInstalledCheck(executable, ['case-pack', incidentInput, '--audience', audience, '--reviewed', '--json'], `incident pack ${audience}`);
       const pack = record(JSON.parse(output), 'Installed incident pack');
+      assertReleaseVersionDerivedCasePack(pack, packageVersion);
       if (!Array.isArray(pack.cases) || pack.cases.length !== 2
         || new Set(pack.cases.map(item => record(item, 'Installed incident').id)).size !== 2
         || new Set(pack.cases.map(item => record(item, 'Installed incident').domain)).size !== 1

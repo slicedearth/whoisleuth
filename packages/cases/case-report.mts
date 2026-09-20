@@ -12,12 +12,12 @@
 import { caseEvidenceTimeline, compareCaseEvidence, currentCaseEvidence } from './case-model.mts';
 import type { CaseEvidenceSnapshot, CaseRecord, EvidenceFactor } from './case-model.mts';
 import { httpSecurityHeaderLabel } from './http-summary.mts';
-import { analystInteroperabilityTags } from '../../lib/analyst-taxonomy.mts';
+import { analystInteroperabilityTags } from '../analysis/analyst-taxonomy.mts';
 import {
   buildPortableGeneratorMetadata,
   portableGeneratorAttribution,
   type PortableGeneratorMetadata,
-} from '../../lib/portable-generator.mts';
+} from '../analysis/portable-generator.mts';
 import { buildCaseResponseLifecycleSummary, CASE_EVIDENCE_RELATION_STANCES } from './case-response-model.mts';
 import { normalizeCaseBrandProfileIds } from './case-brand-profile-references.mts';
 import { CASE_RECHECK_CONDITIONS } from './case-recheck-model.mts';

@@ -3,7 +3,7 @@
 // against a last-known baseline so browser-local storage does not grow by one complete
 // result set on every check.
 
-import { explainRiskScore, normalizeRiskModelVersion } from '../../lib/risk-scoring.mts';
+import { explainRiskScore, normalizeRiskModelVersion } from '../analysis/risk-scoring.mts';
 import { HTTP_SECURITY_HEADER_TOKENS, normalizeHttpSummary } from '../cases/http-summary.mts';
 import { normalizeDomain } from '../cases/case-model.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';

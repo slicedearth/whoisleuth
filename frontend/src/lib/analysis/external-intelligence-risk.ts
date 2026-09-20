@@ -4,4 +4,4 @@ export {
   EXTERNAL_INTELLIGENCE_CALIBRATION_VERSION,
   EXTERNAL_INTELLIGENCE_RECENT_DAYS,
   calibrateExternalIntelligenceRisk,
-} from '../../../../lib/external-intelligence-risk.mts';
+} from '../../../../packages/analysis/external-intelligence-risk.mts';

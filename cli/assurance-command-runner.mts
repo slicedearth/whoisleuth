@@ -5,7 +5,7 @@ import { encryptInvestigationPackage } from '../packages/investigation/investiga
 import { writeInvestigationFolder, writePreparedEvidenceFolder } from './investigation-folder.mts';
 import { buildInvestigationBagIt, prepareInvestigationBagIt } from '../packages/investigation/investigation-bagit.mts';
 
-import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
 import {
   MAX_ASSURANCE_INPUT_BYTES,
   buildDomainAssurance,

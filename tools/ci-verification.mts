@@ -20,6 +20,7 @@ export const CI_FRONTEND_BUILD_ARTIFACT_NAME = 'frontend-build-${{ github.sha }}
 export const CI_QUALITY_SCRIPTS = Object.freeze([
   'workflow:check',
   'toolchain:check',
+  'dependencies:review',
   'verification:timing:check',
   'verification:ownership:check',
   'verification:journeys:check',
@@ -253,6 +254,13 @@ function runCliRuntimeCheck(executable: string): void {
   });
 }
 
+export function criticalBrowserInstallArguments(systemDependencies = process.env.WHOISLEUTH_BROWSER_SYSTEM_DEPS): readonly string[] {
+  if (systemDependencies !== undefined && systemDependencies !== '' && systemDependencies !== 'preinstalled') {
+    throw new TypeError('Browser system dependencies must use the default installer or the prepared container image.');
+  }
+  return Object.freeze(['install', ...(systemDependencies === 'preinstalled' ? [] : ['--with-deps']), 'chromium', 'firefox', 'webkit']);
+}
+
 function assertCliRuntime(actual = process.versions.node): void {
   const match = /^(\d+)\.\d+\.\d+$/u.exec(actual);
   if (match?.[1] !== String(CI_CLI_RUNTIME_NODE_MAJOR)) {
@@ -442,6 +450,7 @@ export function formatLocalCiPlan(): string {
     ...CI_PREFLIGHT_SCRIPTS,
     'locked install (install-time audit disabled; scheduled and release audits are separate)',
     ...CI_QUALITY_SCRIPTS,
+    'security:codeql (application and workflow analyses; no upload)',
     ...CI_UNIT_SCRIPTS,
     ...CI_BROWSER_BUILD_SCRIPTS,
     'test:e2e:critical:install',
@@ -503,9 +512,10 @@ export function main(args = process.argv.slice(2)): number {
     run(npmExecutableName(), ['ci', '--include=optional', '--ignore-scripts', '--audit=false']);
     assertHostedCiParity();
     runCiCommandGroup('quality');
+    npmRun('security:codeql');
     runCiCommandGroup('unit', (script, extra) => npmRun(script, extra, unitEnvironment));
     runCiCommandGroup('browser-build');
-    npmRun('test:e2e:critical:install');
+    run(process.execPath, [path.join(REPOSITORY_ROOT, 'node_modules/playwright/cli.js'), ...criticalBrowserInstallArguments()]);
     npmRun('test:e2e:built');
     runCliRuntimeCheck(cliRuntime);
   } catch (error) {
@@ -522,7 +532,7 @@ export function main(args = process.argv.slice(2)): number {
     process.stderr.write(`${failure instanceof Error ? failure.message : 'Local CI verification failed.'}\n`);
     return 2;
   }
-  process.stdout.write('\nLocal CI matched every maintained quality, unit and browser gate.\n');
+  process.stdout.write('\nLocal CI passed the maintained quality, security, unit, browser and package gates. Hosted service checks remain separate.\n');
   return 0;
 }
 

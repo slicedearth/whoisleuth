@@ -3,7 +3,7 @@ import { parse as parseDomain } from 'tldts';
 import { parseDmarcRecords } from './domain-posture-parsers.mts';
 import { buildDnssecQuery, DNS_TYPE_NS, normalizeResolverEndpoint, parseDnssecResponse } from './dnssec-chain-validation.mts';
 import { defaultTcpExchange, type DnsExchange } from './service-binding-dns.mts';
-import { isValidAsciiHostname } from './hostname.mts';
+import { isValidAsciiHostname } from '../packages/contracts/domain-name.mts';
 import type { DomainPostureCheck } from '../packages/evidence/domain-posture-context.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 

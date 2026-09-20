@@ -22,7 +22,7 @@ import {
   resetPerformanceSampleState,
   resolvePlaywrightExecutionContract,
 } from '../tools/playwright-execution-contract.mts';
-import { buildBalancedBrowserShardPlan, readVerificationTestInventory, readVerificationTimingProfile } from '../tools/verification-timing-profile.mts';
+import { buildBalancedBrowserShardPlan, readVerificationTestInventory, readVerificationTimingProfile, VERIFICATION_BROWSER_SHARD_COUNT } from '../tools/verification-timing-profile.mts';
 import {
   CI_BROWSER_HEALTH_SCRIPTS,
   CI_BROWSER_BUILD_SCRIPTS,
@@ -146,6 +146,16 @@ function escapeRegExp(value: string): string {
 }
 
 describe('continuous integration workflow', () => {
+  test('audits the full locked dependency set through the shared quality group', () => {
+    assert.ok(CI_QUALITY_SCRIPTS.includes('dependencies:review'));
+    const args = PACKAGE_MANIFEST.scripts?.['dependencies:review']?.split(/\s+/u) ?? [];
+    assert.deepEqual(args.slice(0, 2), ['npm', 'audit']);
+    for (const flag of ['--package-lock-only', '--include=dev', '--include=optional', '--audit-level=moderate', '--registry=https://registry.npmjs.org']) {
+      assert.ok(args.includes(flag), `The shared dependency gate requires ${flag}.`);
+    }
+    assert.equal(args.some(arg => arg.startsWith('--omit=')), false);
+  });
+
   test('keeps deliberately interrupted subprocesses outside the parent coverage collector', (context) => {
     const source = { PATH: '/fixture/bin', NODE_V8_COVERAGE: '/fixture/coverage' };
     assert.deepEqual(environmentWithoutV8Coverage(source), { PATH: '/fixture/bin', NODE_V8_COVERAGE: undefined });
@@ -282,7 +292,7 @@ describe('continuous integration workflow', () => {
   test('executes canonical local groups and stops at the first failed command', () => {
     const shardPlan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
     const assigned = shardPlan.shards.flatMap((shard) => shard.files);
-    assert.equal(shardPlan.shards.length, 4);
+    assert.equal(shardPlan.shards.length, VERIFICATION_BROWSER_SHARD_COUNT);
     assert.equal(new Set(assigned).size, assigned.length);
     assert.deepEqual(assigned.sort(), readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).sort());
     assert.equal(PACKAGE_MANIFEST.scripts?.['verification:ci'], 'node tools/ci-verification.mts');
@@ -303,6 +313,7 @@ describe('continuous integration workflow', () => {
     assert.deepEqual(stopped, CI_QUALITY_SCRIPTS.slice(0, 2));
     assert.deepEqual(ciCommandGroupScripts('browser-build'), CI_BROWSER_BUILD_SCRIPTS);
     const localPlan = formatLocalCiPlan();
+    assert.match(localPlan, /security:codeql \(application and workflow analyses; no upload\)/);
     for (const script of [...CI_PREFLIGHT_SCRIPTS, ...CI_QUALITY_SCRIPTS, ...CI_UNIT_SCRIPTS, ...CI_BROWSER_BUILD_SCRIPTS]) {
       assert.match(localPlan, new RegExp(`^${escapeRegExp(script)}$`, 'mu'));
     }

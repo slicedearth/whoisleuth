@@ -18,7 +18,7 @@ import { isIP } from 'node:net';
 import { domainToASCII } from 'node:url';
 import { parse } from 'tldts';
 
-import { canonicalRegistrableDomain } from './registrable-domain.mts';
+import { canonicalRegistrableDomain } from '../packages/analysis/registrable-domain.mts';
 
 type ClassifiedQueryBase = {
   inputHostname?: string;

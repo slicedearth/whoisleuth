@@ -2,8 +2,8 @@
 // record normalization, and analyst updates.
 
 import { normalizeHttpSummary } from './http-summary.mts';
-import { normalizeOpportunityModelVersion } from '../../lib/opportunity-scoring.mts';
-import { normalizeRiskModelVersion } from '../../lib/risk-scoring.mts';
+import { normalizeOpportunityModelVersion } from '../analysis/opportunity-scoring.mts';
+import { normalizeRiskModelVersion } from '../analysis/risk-scoring.mts';
 import { latestObservationCohort } from '../evidence/latest-observations.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { PUBLISHED_V2_3_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';

@@ -5,14 +5,15 @@ import type { SchemaLifecycleFamilyDefinition } from './schema-lifecycle.mts';
 
 export const CASE_CONTRACT_OWNER = 'packages/contracts/case-portability.mts';
 export const MAX_CASE_OBJECTIVE_LENGTH = 320;
-export const LATEST_PUBLIC_APPLICATION_VERSION = '2.3.0';
-// Published writer identities are independent of the next writer. Historical
-// readers below use fixed release epochs, never a moving "latest" identity.
-export const LATEST_PUBLIC_CASE_SCHEMA_VERSION = 15;
-export const LATEST_PUBLIC_CASE_REPORT_SCHEMA_VERSION = 11;
-export const LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION = 9;
-export const LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION = 3;
-export const LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION = 8;
+// These published export names identify a format checkpoint, not the newest
+// application patch. Release verification reads the preceding tag's durable
+// commitments directly. Historical readers use fixed schema epochs below.
+export const LATEST_PUBLIC_APPLICATION_VERSION = '2.4.0';
+export const LATEST_PUBLIC_CASE_SCHEMA_VERSION = 16;
+export const LATEST_PUBLIC_CASE_REPORT_SCHEMA_VERSION = 12;
+export const LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION = 10;
+export const LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION = 4;
+export const LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION = 9;
 
 export const CASE_PORTABILITY_IDENTITY_CONSTANTS = Object.freeze([
   'LATEST_PUBLIC_APPLICATION_VERSION',
@@ -30,6 +31,7 @@ export const CASE_PORTABILITY_IDENTITY_CONSTANTS = Object.freeze([
   'PUBLISHED_V2_3_CASE_REPORT_SCHEMA_VERSION',
   'PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION',
   'PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION',
+  'PUBLISHED_V2_3_WORKSPACE_ARCHIVE_VERSION',
   'CASE_BROWSER_STORE_LIFECYCLE_SCHEMA',
   'CASE_EXPORT_LIFECYCLE_SCHEMA',
   'CASE_SCHEMA_VERSION',
@@ -253,12 +255,13 @@ export const WORKSPACE_ARCHIVE_SCHEMA = 'whoisleuth.workspace-archive';
 export const PUBLIC_WORKSPACE_ARCHIVE_VERSION = 5;
 export const PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION = 6;
 export const PUBLISHED_V2_2_WORKSPACE_ARCHIVE_VERSION = 7;
+export const PUBLISHED_V2_3_WORKSPACE_ARCHIVE_VERSION = 8;
 export const WORKSPACE_ARCHIVE_VERSION = 9;
 export const SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS = Object.freeze([
   PUBLIC_WORKSPACE_ARCHIVE_VERSION,
   PUBLISHED_V2_WORKSPACE_ARCHIVE_VERSION,
   PUBLISHED_V2_2_WORKSPACE_ARCHIVE_VERSION,
-  LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION,
+  PUBLISHED_V2_3_WORKSPACE_ARCHIVE_VERSION,
   WORKSPACE_ARCHIVE_VERSION,
 ] as const);
 export function isSupportedWorkspaceArchiveVersion(value: unknown): value is number {
@@ -917,7 +920,7 @@ const CASE_LIFECYCLE_FIXTURES = Object.freeze([
     sha256: '747062e2dbbcf96724b19718d36bf0dc50b08e96d8adb670115d2315032b6c05',
     contentDigestSha256: null,
     schema: WORKSPACE_ARCHIVE_SCHEMA,
-    version: LATEST_PUBLIC_WORKSPACE_ARCHIVE_VERSION,
+    version: PUBLISHED_V2_3_WORKSPACE_ARCHIVE_VERSION,
     role: 'historical' as const,
     expectation: 'normalises_to_current_output' as const,
     expectedOutputFixtureId: `workspace-archive-v${WORKSPACE_ARCHIVE_VERSION}-empty-current`,

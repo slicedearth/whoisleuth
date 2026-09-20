@@ -1,5 +1,6 @@
 // Dependency-free report identity and resource bounds shared by assembly and
 // registry verification. Importing these values does not load package builders.
+import { MAX_PACKAGE_SOURCE_BYTES } from './package-resource-bounds.mts';
 export const CLI_PACKAGE_REPORT_SCHEMA = 'whoisleuth.cli-package-check';
 export const CLI_PACKAGE_REPORT_VERSION = 3;
 
@@ -7,9 +8,11 @@ export const CLI_PACKAGE_REPORT_VERSION = 3;
 // Each phase may visit at most 4,096 items; independent byte limits and process
 // deadlines also apply. For tar validation this bounds header/padding overhead
 // to 4 MiB (two 512-byte records per entry), in addition to unpacked file bytes.
-export const MAX_CLI_PACKAGE_PROCESSING_ITEMS = 4_096;
+export { MAX_PACKAGE_PROCESSING_ITEMS as MAX_CLI_PACKAGE_PROCESSING_ITEMS } from './package-resource-bounds.mts';
 export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
-export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
+// Compilation and copied support files share a finite output allowance of
+// twice the admitted source budget. It is not tied to an earlier release size.
+export const MAX_CLI_PACKAGE_UNPACKED_BYTES = MAX_PACKAGE_SOURCE_BYTES * 2;
 
 export type CliPackageReport = Readonly<{
   schema: typeof CLI_PACKAGE_REPORT_SCHEMA;

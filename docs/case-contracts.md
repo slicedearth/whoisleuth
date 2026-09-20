@@ -54,13 +54,16 @@ workspace or embedded Case version.
 
 ## Public compatibility boundary
 
-Release 2.3.0 is the immediately preceding public writer. It emitted
-Case schema 15, Case report schema 11, response-packet schema
-9, review-input digest material version 3, and workspace
-archive schema 8. Version 2.4.0 is the current writer in this
-checkout. It emits Case schema 16, report schema 12,
+The published format checkpoint is release 2.4.0. It emitted
+Case schema 16, Case report schema 12, response-packet schema
+10, review-input digest material version 4, and workspace
+archive schema 9. The current writer emits
+Case schema 16, report schema 12,
 response-packet schema 10, review-input version 4, and workspace
 archive schema 9.
+
+Application patches do not create new format epochs. Release verification also
+checks the actual preceding public tag's durable commitments against this checkout.
 
 Both the latest public formats and the current writers directly preserve the
 formats written by public release 1.47.4:

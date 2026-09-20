@@ -4,8 +4,8 @@ import {
   RISK_CALIBRATION_SUMMARY_MIN_STRATUM_SAMPLE,
   type RiskCalibrationSummaryReport,
   type RiskCalibrationThresholdSummary,
-} from '../../lib/risk-calibration-summary.mts';
-import { RISK_MODEL_VERSION } from '../../lib/risk-scoring.mts';
+} from '../analysis/risk-calibration-summary.mts';
+import { RISK_MODEL_VERSION } from '../analysis/risk-scoring.mts';
 
 export { RISK_CALIBRATION_SUMMARY_MAX_BYTES };
 

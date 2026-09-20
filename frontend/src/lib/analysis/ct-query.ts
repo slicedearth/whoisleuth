@@ -1,1 +1,1 @@
-export * from '../../../../lib/ct-query.mts';
+export * from '../../../../packages/analysis/ct-query.mts';

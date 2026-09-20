@@ -1,8 +1,9 @@
 # Contributing
 
 Start with [local setup](docs/getting-started.md). Use the committed lockfile
-and development runtime in `.nvmrc`. Keep changes focused and add a regression
-test that would fail without the change.
+and development runtime in `.nvmrc`. Keep changes focused. Add an independent
+regression test for a behavioural defect; inspect cosmetic changes in the
+rendered interface rather than freezing individual CSS values in tests.
 
 ## Find the owner
 
@@ -29,6 +30,9 @@ the metadata version and empty optional policies; variants still need explicit
 discriminators and fixture bindings. Public document versions are separate.
 
 Follow imports and nearby tests rather than adding another registration table.
+Cross-runtime analysis belongs in `packages/analysis/`; domain directories
+inherit dependency boundaries without a filename allowlist. Existing public
+facades stay compatible, but new internal imports use the implementation owner.
 An ordinary helper in an existing area needs no package-inventory baseline or
 ownership exception. New unit tests follow `test/<name>.test.mts` and are
 discovered automatically. Source counts are reported; resource bounds still

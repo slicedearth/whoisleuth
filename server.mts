@@ -25,7 +25,7 @@ import {
   PRERENDERED_HTML_FILE_OVERRIDES,
 } from './lib/prerendered-routes.mts';
 import { searchCertificateTransparency } from './lib/ct-search.mts';
-import { isCtQueryError, normalizeCtQuery } from './lib/ct-query.mts';
+import { isCtQueryError, normalizeCtQuery } from './packages/analysis/ct-query.mts';
 import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors, normalizeMailProtectionProfile } from './lib/domain-posture.mts';
 import { parseInheritedDnsSelection } from './lib/dns-inheritance-review.mts';
 import { capabilityReport } from './lib/capabilities.mts';

@@ -13,7 +13,7 @@ import {
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
+import { parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 import {
   boundedSafeRelativePath,
   compareCodeUnits,

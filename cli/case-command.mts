@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { boundedJsonLimitsForBytes, parseBoundedJsonObject } from '../lib/bounded-json.mts';
+import { boundedJsonLimitsForBytes, parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 import { canonicalArtifactJsonV2 } from '../packages/evidence/artifact-integrity.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import { MAX_CASE_CHECKPOINT_FACTS, MAX_CASE_OBJECTIVE_LENGTH, MAX_CASE_STORE_BYTES, MAX_EDITABLE_CASE_INPUT_BYTES, MAX_NOTE_LENGTH, MAX_RESPONSE_RATIONALE_LENGTH, MAX_RESPONSE_VALUE_LENGTH } from '../packages/contracts/case-portability.mts';

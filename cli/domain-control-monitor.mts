@@ -1,5 +1,5 @@
 import { classifyQuery } from '../lib/classify.mts';
-import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
 import {
   buildDomainControlFlightRecorder,
   validateDomainControlFlightRecorderDocument,

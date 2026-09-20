@@ -21,7 +21,7 @@ import {
 } from '../contracts/investigation-portability.mts';
 import { MAX_PROFILE_VALUES } from '../contracts/workspace-portability.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
-import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
+import { canonicalRegistrableDomain } from '../analysis/registrable-domain.mts';
 import { createGraphInputReader, graphInputIsIncomplete, type LookupAssetInputCoverage } from './lookup-asset-graph-inputs.mts';
 
 export { LOOKUP_ASSET_GRAPH_SCHEMA, LOOKUP_ASSET_GRAPH_VERSION };

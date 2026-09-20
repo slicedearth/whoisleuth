@@ -4,7 +4,7 @@ import {
   ACQUISITION_DECISION_PACKET_SCHEMA,
   ACQUISITION_DECISION_PACKET_VERSION,
 } from '../contracts/investigation-portability.mts';
-import { isValidAsciiDomainName } from '../../lib/hostname.mts';
+import { isValidAsciiDomainName } from '../contracts/domain-name.mts';
 
 export { ACQUISITION_DECISION_PACKET_SCHEMA, ACQUISITION_DECISION_PACKET_VERSION };
 

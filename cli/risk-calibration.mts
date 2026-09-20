@@ -1,16 +1,16 @@
 import { Buffer } from 'node:buffer';
 import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
-import { isValidAsciiDomainName } from '../lib/hostname.mts';
-import { scanBoundedJson } from '../lib/bounded-json.mts';
-import { canonicalRegistrableDomain } from '../lib/registrable-domain.mts';
-import { ANALYST_REVIEW_REASON_VALUES, analystInteroperabilityTags } from '../lib/analyst-taxonomy.mts';
+import { isValidAsciiDomainName } from '../packages/contracts/domain-name.mts';
+import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
+import { canonicalRegistrableDomain } from '../packages/analysis/registrable-domain.mts';
+import { ANALYST_REVIEW_REASON_VALUES, analystInteroperabilityTags } from '../packages/analysis/analyst-taxonomy.mts';
 import {
   buildRiskCalibrationSummaryReport,
   parseRiskCalibrationSummaryReport,
   RISK_CALIBRATION_SUMMARY_INTERPRETATION,
   RISK_CALIBRATION_SUMMARY_THRESHOLDS,
   type RiskCalibrationSummaryReport,
-} from '../lib/risk-calibration-summary.mts';
+} from '../packages/analysis/risk-calibration-summary.mts';
 import {
   MAX_RISK_CALIBRATION_ACTIVITY_LENGTH,
   MAX_RISK_CALIBRATION_AVAILABILITY_LENGTH,
@@ -51,13 +51,13 @@ import {
 
 import { CliUsageError } from './arguments.mts';
 import type { BoundedTextStream } from './bulk.mts';
-import { RISK_MUTATION_TYPES } from '../lib/risk-scoring.mts';
-import type { RiskExplanation, RiskInput } from '../lib/risk-scoring.mts';
+import { RISK_MUTATION_TYPES } from '../packages/analysis/risk-scoring.mts';
+import type { RiskExplanation, RiskInput } from '../packages/analysis/risk-scoring.mts';
 import {
   THREAT_INTELLIGENCE_CONTRACT_VERSION,
   THREAT_INTELLIGENCE_ENVELOPE_VERSION,
   THREAT_INTELLIGENCE_SCHEMA,
-} from '../lib/threat-intelligence-types.mts';
+} from '../packages/analysis/threat-intelligence-types.mts';
 
 export {
   MAX_RISK_CALIBRATION_INPUT_BYTES,

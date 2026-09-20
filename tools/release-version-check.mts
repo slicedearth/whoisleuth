@@ -8,14 +8,15 @@ import {
   MAX_SEMANTIC_VERSION_LENGTH,
   normalizeBoundedSemanticVersion,
   normalizeBoundedStableSemanticVersion,
-} from '../lib/semantic-version.mts';
+} from '../packages/analysis/semantic-version.mts';
 import {
   CASE_PORTABILITY_LIFECYCLE_FAMILY,
   CASE_SCHEMA_VERSION,
   CLI_CASE_PACK_SCHEMA,
   CLI_CASE_PACK_WRITER_FIXTURE_ID,
-  LATEST_PUBLIC_APPLICATION_VERSION,
 } from '../packages/contracts/case-portability.mts';
+import { buildCaseSupportedContractBaseline, type CaseSupportedContractBaseline } from '../packages/contracts/case-supported-contract-baseline.mts';
+import { assertCaseSupportedContractTransition, CASE_SUPPORTED_CONTRACT_BASELINE_PATH } from './case-supported-contract-baseline.mts';
 import { requireJsonRecord as record } from './maintainer-tool-helpers.mts';
 
 type JsonRecord = Record<string, unknown>;
@@ -25,7 +26,6 @@ type MainOptions = Readonly<{
   stdout?: WritableLike;
   stderr?: WritableLike;
   inspectIdentity?: typeof inspectReleaseVersionIdentity;
-  inspectDerivedOutputs?: typeof inspectReleaseVersionDerivedOutputs;
   inspectPublicBoundary?: typeof inspectPrecedingPublicReleaseVersion;
 }>;
 
@@ -227,11 +227,14 @@ export function inspectPrecedingPublicReleaseVersion(
   );
   const tags = output.split('\n').filter(Boolean);
   const actual = selectPrecedingPublicReleaseVersion(currentVersion, tags);
-  if (actual !== LATEST_PUBLIC_APPLICATION_VERSION) {
-    throw new TypeError(
-      `The declared preceding public release ${LATEST_PUBLIC_APPLICATION_VERSION} has drifted from reachable tag v${actual}. Update the canonical compatibility boundary.`,
-    );
-  }
+  const baseline = requireSuccessfulGit(
+    git(repositoryRoot, ['show', `refs/tags/v${actual}:${CASE_SUPPORTED_CONTRACT_BASELINE_PATH}`]),
+    `Release identity could not read durable commitments from preceding tag v${actual}.`,
+  );
+  assertCaseSupportedContractTransition(
+    JSON.parse(baseline) as CaseSupportedContractBaseline,
+    buildCaseSupportedContractBaseline(),
+  );
   return actual;
 }
 
@@ -266,7 +269,7 @@ export function assertReleaseVersionDerivedCasePack(
     const application = record(report.application, 'Current Case-pack report application');
     if (application.name !== 'WHOISleuth' || application.version !== releaseVersion) {
       throw new TypeError(
-        `Current Case-pack fixture application metadata must match release version ${releaseVersion}. Regenerate the fixture through its canonical writer.`,
+        `Generated Case-pack application metadata must match release version ${releaseVersion}. Check the canonical writer.`,
       );
     }
   }
@@ -277,12 +280,24 @@ export async function inspectReleaseVersionDerivedOutputs(
   repositoryRoot: string,
   releaseVersion: string,
 ): Promise<ReleaseVersionDerivedOutputIdentity> {
+  const { buildCliCasePack, verifyCliCasePack } = await import('../cli/case-pack.mts');
   const fixture = CASE_PORTABILITY_LIFECYCLE_FAMILY.fixtures.find(
     (fixture) => fixture.schema === CLI_CASE_PACK_SCHEMA && fixture.id === CLI_CASE_PACK_WRITER_FIXTURE_ID,
   );
   if (!fixture) throw new TypeError('Release version check found no fixture for the current Case writer.');
-  const value = await readBoundedJson(path.join(repositoryRoot, fixture.path));
-  const checkedReports = assertReleaseVersionDerivedCasePack(value, releaseVersion);
+  // A published fixture remains immutable across application patches. Check
+  // the current writer independently, rather than rewriting historical bytes
+  // and their integrity metadata merely to update an application version.
+  const value = record(await readBoundedJson(path.join(repositoryRoot, fixture.path)), 'Case-pack fixture');
+  verifyCliCasePack(value);
+  const packet = record(value.packet, 'Case-pack fixture packet');
+  if ((packet.audience !== 'internal' && packet.audience !== 'public') || typeof value.exportedAt !== 'string') {
+    throw new TypeError('Case-pack fixture has invalid writer inputs.');
+  }
+  const generated = buildCliCasePack(JSON.stringify(value), {
+    audience: packet.audience, reviewed: true,
+  }, value.exportedAt);
+  const checkedReports = assertReleaseVersionDerivedCasePack(generated, releaseVersion);
   return Object.freeze({ checkedFixtures: 1, checkedReports });
 }
 
@@ -322,13 +337,8 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
       repositoryRoot,
       manifestReport.releaseVersion,
     );
-    const derived = await (options.inspectDerivedOutputs || inspectReleaseVersionDerivedOutputs)(
-      repositoryRoot,
-      manifestReport.releaseVersion,
-    );
     stdout.write(`${formatReleaseVersionReport(buildReleaseVersionReport(packageManifest, lockfile, identity))}\n`);
     stdout.write(`Preceding public compatibility boundary: v${publicBoundary}\n`);
-    stdout.write(`Version-derived outputs: ${derived.checkedFixtures} current fixture(s) and ${derived.checkedReports} embedded report(s) match\n`);
     return 0;
   } catch (error) {
     stderr.write(`${error instanceof Error ? error.message : 'Release version check failed.'}\n`);

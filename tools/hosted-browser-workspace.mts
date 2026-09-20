@@ -57,25 +57,24 @@ export type HostedBrowserWorkspace = Readonly<{
   retainDiagnostics: (outcome: FailedBrowserOutcome) => HostedBrowserDiagnostics;
 }>;
 
-function retainDiagnostics(root: string, revision: string, outcome: FailedBrowserOutcome, destination = root): HostedBrowserDiagnostics {
-  // Reduce a disposable workspace in place, or copy a contributor run to a
-  // private destination. Authentication, source and dependencies are not roots.
+function retainDiagnostics(root: string, revision: string, outcome: FailedBrowserOutcome): HostedBrowserDiagnostics {
+  // Reduce a disposable workspace in place. Authentication, source and
+  // dependencies are not roots. The contributor checkout is never pruned.
   // Prefer JSON and traces over HTML when the retained-byte ceiling is reached.
   const artifacts = [{}, { WHOISLEUTH_PLAYWRIGHT_RUN_KIND: 'performance' }].map(playwrightRunArtifacts);
   const roots = [...new Set((['jsonResults', 'testResults', 'htmlReport'] as const).flatMap((key) => (
     artifacts.map((item) => item[key].split('/')[0]!)
   )))];
-  const copying = destination !== root;
   const keep = new Set(roots);
   const directory = opendirSync(root);
   try {
     for (let entry = directory.readSync(); entry; entry = directory.readSync()) {
-      if (!copying && !keep.has(entry.name)) rmSync(path.join(root, entry.name), { recursive: true, force: true });
+      if (!keep.has(entry.name)) rmSync(path.join(root, entry.name), { recursive: true, force: true });
     }
   } finally {
     directory.closeSync();
   }
-  chmodSync(destination, 0o700);
+  chmodSync(root, 0o700);
 
   let entries = 0;
   let retainedFiles = 0;
@@ -92,23 +91,17 @@ function retainDiagnostics(root: string, revision: string, outcome: FailedBrowse
       || (stat.isFile() && (stat.nlink !== 1 || stat.size > HOSTED_BROWSER_DIAGNOSTIC_LIMITS.fileBytes
         || retainedBytes + stat.size > HOSTED_BROWSER_DIAGNOSTIC_LIMITS.totalBytes));
     if (unsafe || excessive) {
-      if (!copying) rmSync(filename, { recursive: true, force: true });
+      rmSync(filename, { recursive: true, force: true });
       omittedEntries += 1;
       return;
     }
     if (stat.isFile()) {
-      const target = path.join(destination, relative);
-      if (copying) {
-        mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
-        copyFileSync(filename, target);
-      }
-      chmodSync(target, 0o600);
+      chmodSync(filename, 0o600);
       retainedFiles += 1;
       retainedBytes += stat.size;
       return;
     }
-    if (copying) mkdirSync(path.join(destination, relative), { recursive: true, mode: 0o700 });
-    chmodSync(path.join(destination, relative), 0o700);
+    chmodSync(filename, 0o700);
     const children = opendirSync(filename);
     try {
       for (let entry = children.readSync(); entry; entry = children.readSync()) {
@@ -122,7 +115,7 @@ function retainDiagnostics(root: string, revision: string, outcome: FailedBrowse
     // lstat also finds dangling symbolic links, which must not survive cleanup.
     if (lstatSync(path.join(root, relative), { throwIfNoEntry: false })) prune(relative, 1);
   }
-  writeFileSync(path.join(destination, 'diagnostics.json'), `${JSON.stringify({
+  writeFileSync(path.join(root, 'diagnostics.json'), `${JSON.stringify({
     revision,
     outcome,
     retainedFiles,
@@ -131,22 +124,7 @@ function retainDiagnostics(root: string, revision: string, outcome: FailedBrowse
     limits: HOSTED_BROWSER_DIAGNOSTIC_LIMITS,
     note: 'Omitted entries count files or whole subtrees. Interrupted runs may contain incomplete reports. Remove this private directory after review.',
   }, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
-  return Object.freeze({ directory: destination, retainedFiles, retainedBytes, omittedEntries });
-}
-
-/** Copy bounded diagnostics before cleaning a non-disposable contributor checkout. */
-export function retainFocusedBrowserDiagnostics(
-  repositoryRoot: string,
-  revision: string,
-  outcome: FailedBrowserOutcome,
-): HostedBrowserDiagnostics {
-  const destination = mkdtempSync(path.join(tmpdir(), 'whoisleuth-browser-diagnostics-'));
-  try {
-    return retainDiagnostics(repositoryRoot, revision, outcome, realpathSync(destination));
-  } catch (cause) {
-    rmSync(destination, { recursive: true, force: true });
-    throw new Error('Browser diagnostics could not be copied; original local artefacts must be preserved.', { cause });
-  }
+  return Object.freeze({ directory: root, retainedFiles, retainedBytes, omittedEntries });
 }
 
 export async function runHostedBrowserWorkspace(

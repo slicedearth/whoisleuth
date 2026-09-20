@@ -9,7 +9,7 @@ import {
   isSupportedWorkspaceArchiveVersion,
   readWorkspaceArchive,
 } from './workspace-archive.mts';
-import { boundedJsonLimitsForBytes, parseBoundedJson } from '../../lib/bounded-json.mts';
+import { boundedJsonLimitsForBytes, parseBoundedJson } from '../analysis/bounded-json.mts';
 import {
   ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA,
   ENCRYPTED_WORKSPACE_ARCHIVE_VERSION,

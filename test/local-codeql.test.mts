@@ -325,7 +325,7 @@ describe('bounded CodeQL process execution', () => {
 });
 
 describe('local CodeQL orchestration', () => {
-  async function runFixture(results: readonly SarifFixtureFinding[]) {
+  async function runFixture(results: readonly SarifFixtureFinding[], language: LocalCodeqlOptions['language'] = 'javascript-typescript') {
     const temporaryDirectory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-codeql-test-'));
     const calls: ProcessCall[] = [];
     let removed = false;
@@ -341,6 +341,7 @@ describe('local CodeQL orchestration', () => {
       return { exitCode: 0, stdout: '', stderr: '' };
     };
     const report = await runLocalCodeql({
+      language,
       repositoryRoot: process.cwd(),
       codeqlCommand: '/opt/codeql/codeql',
       runProcess,
@@ -389,6 +390,18 @@ describe('local CodeQL orchestration', () => {
     assert.match(output, /js\/example-rule at lib\/example\.mts:42/);
     assert.match(output, /Review this path/);
     assert.match(output, /Fingerprint: fixture-line-hash:1 \/ 4/);
+  });
+
+  test('analyses workflows with the standard Actions suite and rejects new findings', async () => {
+    const clean = await runFixture([], 'actions');
+    assert.equal(clean.report.status, 'pass');
+    assert.equal(clean.report.language, 'actions');
+    assert.ok(clean.calls[1]!.args.includes('--language=actions'));
+    assert.ok(clean.calls[2]!.args.includes('actions-code-scanning.qls'));
+    const dirty = await runFixture([finding({ ruleId: 'actions/example-rule' })], 'actions');
+    assert.equal(dirty.report.status, 'findings');
+    assert.equal(dirty.removed, true);
+    assert.match(formatLocalCodeqlReport(dirty.report), /actions\/example-rule/);
   });
 
   test('cleans temporary data after a CodeQL failure and bounds the diagnostic', async () => {

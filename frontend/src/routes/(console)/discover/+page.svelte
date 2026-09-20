@@ -27,7 +27,7 @@
     normalizeCustomDictionaryTerms,
     normalizeGenerationTlds,
   } from '$lib/analysis/typosquat-generator.ts';
-  import { publicSuffixForAsciiHostname } from '../../../../../lib/registrable-domain.mts';
+  import { publicSuffixForAsciiHostname } from '../../../../../packages/analysis/registrable-domain.mts';
   import { activeProfile, isDomainAllowlisted, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
   import { saveCandidateHandoff, type Candidate } from '$lib/candidate-handoff';
   import {

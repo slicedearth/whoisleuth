@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 import { assertCaptureInstalledDependencies, capturePackageInputs, capturePackageManifest } from '../tools/capture-package.mts';
 import { CI_QUALITY_SCRIPTS, CI_CLI_RUNTIME_SCRIPTS } from '../tools/ci-verification.mts';
-import { createVerificationOwnershipPlan } from '../tools/verification-ownership.mts';
+import { buildVerificationOwnershipPlan } from '../tools/verification-ownership.mts';
 
 const entry = 'packages/web-capture/bin/whoisleuth-capture.mts';
 const source = {
@@ -15,14 +15,14 @@ const graph = (sources: string[]) => ({ modules: sources.map(source => ({ source
 
 describe('independent capture package', () => {
   test('discovers helper modules without a maintained source inventory', () => {
-    const sources = [entry, ...Array.from({ length: 300 }, (_, index) => `lib/helper-${index}.mts`), ...Array.from({ length: 300 }, (_, index) => `packages/comparison/helper-${index}.mts`)];
+    const sources = [entry, 'packages/new-domain/helper.mts', ...Array.from({ length: 300 }, (_, index) => `lib/helper-${index}.mts`), ...Array.from({ length: 300 }, (_, index) => `packages/comparison/helper-${index}.mts`)];
     const inputs = capturePackageInputs(graph([...sources, 'node_modules/playwright/index.mjs', 'node_modules/undici/index.js']));
     assert.deepEqual(inputs.sources, sources.sort());
     assert.deepEqual(inputs.dependencies, ['playwright', 'undici']);
   });
 
   test('rejects unrelated, unresolved, traversing and excessive graph inputs', () => {
-    for (const source of ['frontend/src/lib/private.ts', 'cli/private.mts', 'packages/unreviewed-adapter/runtime.mts', 'lib/../outside.mts', 'node_modules/unreviewed/index.js']) {
+    for (const source of ['frontend/src/lib/private.ts', 'cli/private.mts', 'packages/local-application/runtime.mts', 'lib/../outside.mts', 'node_modules/unreviewed/index.js']) {
       assert.throws(() => capturePackageInputs(graph([entry, source])));
     }
     assert.throws(() => capturePackageInputs({ modules: [{ source: entry, dependencies: [{ couldNotResolve: true }] }] }), /could not be resolved/u);
@@ -59,13 +59,13 @@ describe('independent capture package', () => {
     assert.throws(() => assertCaptureInstalledDependencies({ packages: { ...installed.packages, 'node_modules/unrelated': reviewed.packages['node_modules/unrelated'] } }, reviewed, ['playwright']), /reviewed lockfile/u);
   });
 
-  test('checks the companion in both runtime lanes without changing application dependencies', async () => {
+  test('checks the companion in both runtime lanes without changing application dependencies', () => {
     assert.ok(CI_QUALITY_SCRIPTS.includes('capture:package:check'));
     assert.ok(CI_CLI_RUNTIME_SCRIPTS.includes('capture:package:check'));
     const root = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
     const frontend = JSON.parse(readFileSync(new URL('../frontend/package.json', import.meta.url), 'utf8'));
     for (const manifest of [root, frontend]) assert.equal(manifest.dependencies?.playwright, undefined);
-    const plan = await createVerificationOwnershipPlan(['packages/web-capture/capture.mts']);
+    const plan = buildVerificationOwnershipPlan(['packages/web-capture/capture.mts']);
     assert.ok(plan.mandatorySpecialisedChecks.includes('capture-package'));
   });
 });

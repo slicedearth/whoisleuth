@@ -4,7 +4,7 @@
 // verdict. Inputs pass through the strict baseline normalizer before use.
 
 import { normalizePageBaseline } from '../workspace/page-baseline.mts';
-import { hammingDistanceHex } from '../../lib/perceptual-hash-comparison.mts';
+import { hammingDistanceHex } from '../analysis/perceptual-hash-comparison.mts';
 import { PAGE_COMPARISON_VERSION } from '../contracts/offline-comparison.mts';
 
 export { PAGE_COMPARISON_VERSION };

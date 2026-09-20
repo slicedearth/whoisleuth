@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
-import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
-import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
+import { parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
+import { normalizeBoundedSemanticVersion } from '../packages/analysis/semantic-version.mts';
 import { requireJsonRecord as object } from './maintainer-tool-helpers.mts';
 import { MAX_NOTICE_LOCKFILE_BYTES, MAX_NOTICE_PACKAGES, packageNameFromInstallPath, productionDependencyInstallPaths, resolveInstalledDependency } from './third-party-notices.mts';
 

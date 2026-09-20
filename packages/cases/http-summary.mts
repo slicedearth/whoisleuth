@@ -4,7 +4,7 @@
 // smaller derived shape: no paths, queries, header values, attempt errors, or
 // redirect inventories.
 
-import { MAX_HTTP_EVIDENCE_REDIRECTS } from '../../lib/http-evidence-bounds.mts';
+import { MAX_HTTP_EVIDENCE_REDIRECTS } from '../analysis/http-evidence-bounds.mts';
 
 export const HTTP_SUMMARY_VERSION = 1;
 export const MAX_HTTP_SUMMARY_ORIGIN_LENGTH = 300;

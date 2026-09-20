@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { realpathSync } from 'node:fs';
 import type { Plugin } from 'vite';
-import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
+import { parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 import { boundedSafeRelativePath, compareCodeUnits } from './maintainer-tool-helpers.mts';
 
 const MAX_OUTPUTS = 4_096;

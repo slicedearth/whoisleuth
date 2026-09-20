@@ -4,7 +4,7 @@
 // can be exercised under node --test.
 
 import { normalizeDomain } from '../cases/case-model.mts';
-import { normalizeCtQuery } from '../../lib/ct-query.mts';
+import { normalizeCtQuery } from '../analysis/ct-query.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {

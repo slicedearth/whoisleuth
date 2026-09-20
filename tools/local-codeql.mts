@@ -56,11 +56,12 @@ type CodeqlFindings = Readonly<{
 type LocalCodeqlReport = Readonly<{
   status: 'pass' | 'findings' | 'baseline_drift';
   codeqlVersion: string;
-  language: 'javascript-typescript';
-  querySuite: typeof CODEQL_QUERY_SUITE;
+  language: typeof CODEQL_ANALYSES[number]['language'];
+  querySuite: typeof CODEQL_ANALYSES[number]['querySuite'];
   findings: CodeqlFindings;
 }>;
 type LocalCodeqlOptions = Readonly<{
+  language?: typeof CODEQL_ANALYSES[number]['language'];
   repositoryRoot?: string;
   codeqlCommand?: string;
   runProcess?: ProcessRunner;
@@ -88,6 +89,10 @@ type StaleCodeqlCleanupOptions = Readonly<{
 
 const CODEQL_QUERY_SUITE = 'javascript-code-scanning.qls';
 const CODEQL_LANGUAGE = 'javascript-typescript' as const;
+export const CODEQL_ANALYSES = Object.freeze([
+  Object.freeze({ language: CODEQL_LANGUAGE, querySuite: CODEQL_QUERY_SUITE }),
+  Object.freeze({ language: 'actions' as const, querySuite: 'actions-code-scanning.qls' as const }),
+]);
 const CODEQL_PROCESS_TIMEOUT_MS = 15 * 60 * 1000;
 const MAX_CODEQL_OUTPUT_BYTES = 4 * 1024 * 1024;
 const MAX_CODEQL_SARIF_BYTES = 16 * 1024 * 1024;
@@ -677,6 +682,8 @@ function processFailure(command: string, result: ProcessResult): Error {
 }
 
 async function runLocalCodeql(options: LocalCodeqlOptions = {}): Promise<LocalCodeqlReport> {
+  const analysis = CODEQL_ANALYSES.find(item => item.language === (options.language ?? CODEQL_LANGUAGE));
+  if (!analysis) throw new TypeError('Unsupported local CodeQL language.');
   const repositoryRoot = path.resolve(options.repositoryRoot ?? PROJECT_ROOT);
   const codeqlCommand = await findCodeqlCommand(options.codeqlCommand);
   const runProcess = options.runProcess ?? runProcessBounded;
@@ -705,16 +712,16 @@ async function runLocalCodeql(options: LocalCodeqlOptions = {}): Promise<LocalCo
 
     const createResult = await runProcess(codeqlCommand, [
       'database', 'create', databasePath,
-      `--language=${CODEQL_LANGUAGE}`,
+      `--language=${analysis.language}`,
       `--source-root=${repositoryRoot}`,
     ], processOptions);
     if (createResult.exitCode !== 0) throw processFailure('CodeQL database creation', createResult);
 
     const analyzeResult = await runProcess(codeqlCommand, [
       'database', 'analyze', databasePath,
-      CODEQL_QUERY_SUITE,
+      analysis.querySuite,
       '--format=sarif-latest',
-      '--sarif-category=javascript-typescript',
+      `--sarif-category=${analysis.language}`,
       `--output=${sarifPath}`,
       `--threads=${CODEQL_THREADS}`,
       `--ram=${codeqlRamMegabytes()}`,
@@ -728,7 +735,7 @@ async function runLocalCodeql(options: LocalCodeqlOptions = {}): Promise<LocalCo
     }
     const findings = classifyCodeqlFindings(
       parseCodeqlSarif(await readFile(sarifPath)),
-      options.knownFindings ?? KNOWN_CODEQL_FINDINGS,
+      options.knownFindings ?? (analysis.language === CODEQL_LANGUAGE ? KNOWN_CODEQL_FINDINGS : []),
     );
     const status = findings.new > 0
       ? 'findings'
@@ -738,8 +745,8 @@ async function runLocalCodeql(options: LocalCodeqlOptions = {}): Promise<LocalCo
     return Object.freeze({
       status,
       codeqlVersion: parseCodeqlVersion(versionResult.stdout),
-      language: CODEQL_LANGUAGE,
-      querySuite: CODEQL_QUERY_SUITE,
+      language: analysis.language,
+      querySuite: analysis.querySuite,
       findings,
     });
   } catch (error) {
@@ -763,6 +770,7 @@ function formatLocalCodeqlReport(report: LocalCodeqlReport): string {
   const lines = [
     'WHOISleuth local CodeQL check',
     `CodeQL: ${report.codeqlVersion}`,
+    `Language: ${report.language}`,
     `Suite: ${report.querySuite}`,
     `Result: ${report.status === 'pass' ? 'PASS' : report.status === 'findings' ? 'NEW FINDINGS' : 'BASELINE DRIFT'}`,
     `Findings: ${report.findings.total} total, ${report.findings.known} reviewed, ${report.findings.new} new`,
@@ -790,9 +798,13 @@ function parseArguments(args: readonly string[]): void {
 async function main(args = process.argv.slice(2)): Promise<number> {
   try {
     parseArguments(args);
-    const report = await runLocalCodeql();
-    process.stdout.write(formatLocalCodeqlReport(report));
-    return report.status === 'pass' ? 0 : 1;
+    let status = 0;
+    for (const analysis of CODEQL_ANALYSES) {
+      const report = await runLocalCodeql({ language: analysis.language });
+      process.stdout.write(formatLocalCodeqlReport(report));
+      if (report.status !== 'pass') status = 1;
+    }
+    return status;
   } catch (error) {
     process.stderr.write(`${boundedText(error instanceof Error ? error.message : error, 'Local CodeQL check failed.', 1200)}\n`);
     return 2;

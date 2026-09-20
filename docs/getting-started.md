@@ -96,6 +96,38 @@ Shared executable groups keep the required local and hosted checks aligned.
 Already-prepared lanes can use `npm run verification:ci -- --group=<name>`;
 group mode does not install dependencies or orchestrate other lanes.
 
+For the Linux environment used by required CI, Docker can run the same owner
+from a clean commit:
+
+```bash
+npm run verification:linux
+```
+
+This builds an Ubuntu 24.04 image with the locked browser release, the primary
+Node version and the compatibility runtime. Image digests are recorded for each
+run. Only committed source and local tag history enter the container: no host
+dependencies, credentials, development servers or Docker socket are mounted.
+The browser sandbox remains enabled. On an ARM host the x64 environment is
+emulated; its elapsed times are not representative of hosted runner performance.
+`-- --build-image` prepares the environment without requiring a clean checkout.
+Private logs and environment details remain outside the repository. Failed
+containers are stopped and retained for diagnosis; remove them when finished.
+
+Local and hosted quality checks audit all locked dependencies against the same
+registry, rejecting moderate-or-higher advisories. The stricter production and
+release audits remain separate. Advisory data can change between runs. Alert
+reconciliation, action execution and deployment acceptance still involve hosted
+services; Linux rehearsal does not certify those services or replace required
+checks on the merge candidate.
+
+For an approved version change, `npm run release:prepare -- <version>` updates
+the two application manifests and regenerates public examples through their
+existing owner. It creates no commit, tag or publication. `npm run release:check`
+checks their lockstep, immutable tag identity and the preceding public tag's
+durable commitments before dependencies are installed. Installed package tests
+then check fresh writer metadata. Published fixtures are not rewritten merely
+to change a patch number.
+
 Performance reports retain samples, execution context, readiness, long tasks
 and layout evidence. Elapsed time is observational, not a limit calibrated to
 one development machine. Compare repeated workloads under comparable
@@ -185,7 +217,7 @@ The less common commands below each have one narrow purpose:
 | `npm run verification:ownership:check` | Ensure every tracked verification surface has one owner. |
 | `npm run verification:timing:check` | Check the retained timing profile without accepting a new candidate. |
 | `npm run test:duration-health -- --report=/absolute/path` | Compare medians from exactly three complete unit profiles (repeat `--report` three times) without rewriting the retained timing baseline. |
-| `npm run frontend:loading-report` | Measure route closures against loading budgets. |
+| `npm run frontend:loading-report` | Measure every route and check public/workspace isolation. Use `-- --json` to save measurements and `-- --compare=report.json` to show changes against an earlier report. |
 | `npm run benchmark:workflow` | Exercise the offline synthetic workflow benchmark. |
 | `npm run technology:coverage-check` | Verify reviewed technology-signature coverage. |
 | `npm run unicode:confusables` | Audit the local confusable catalogue and labelled corpus. |

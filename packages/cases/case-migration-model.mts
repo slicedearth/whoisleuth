@@ -46,7 +46,7 @@ import {
 } from '../contracts/case-portability.mts';
 import { canonicalArtifactJsonV2 } from '../evidence/artifact-integrity.mts';
 import { readCaseAttachments, mergeCaseAttachments, type CaseAttachment } from './case-attachment-model.mts';
-import { assertBoundedJsonStructure } from '../../lib/bounded-json.mts';
+import { assertBoundedJsonStructure } from '../analysis/bounded-json.mts';
 import {
   inspectCaseBrandProfileIds,
   unionCaseBrandProfileIds,

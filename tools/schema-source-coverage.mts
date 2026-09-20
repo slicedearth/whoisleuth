@@ -107,6 +107,9 @@ function isConventionalMarkdown(relative: string): boolean {
 function isFrontendStylesheet(relative: string): boolean {
   return relative.startsWith('frontend/src/') && path.extname(relative).toLowerCase() === '.css';
 }
+function isBuildScript(relative: string): boolean {
+  return relative.startsWith('tools/') && /\.(?:Dockerfile|sh)$/u.test(relative);
+}
 const SCHEMA_SOURCE_NON_SOURCE_FILE_SET = new Set<string>(SCHEMA_SOURCE_NON_SOURCE_FILES);
 const CLASSIFICATION_KINDS = new Set(['exempt', 'member', 'non_schema']);
 const CLASSIFICATION_REASONS = new Set([
@@ -148,8 +151,10 @@ const SCHEMA_INLINE_EMITTER_ALLOWLIST = Object.freeze([
 
 type SchemaSourceClassificationRecord = Readonly<{
   identifier: string;
-  kind: keyof typeof CLASSIFICATION_REASONS_BY_KIND;
   reason: string;
+  note: string;
+}> & (Readonly<{ kind: 'non_schema' }> | Readonly<{
+  kind: 'exempt' | 'member';
   owner: string;
   sourceUses: readonly Readonly<{
     file: string;
@@ -157,8 +162,7 @@ type SchemaSourceClassificationRecord = Readonly<{
     dynamicConstructions: number;
   }>[];
   relatedEntryIds: readonly string[];
-  note: string;
-}>;
+}>);
 
 export type SchemaSourceDiscovery = Readonly<{
   repositoryRoot: string;
@@ -260,7 +264,7 @@ async function collectFiles(
       }
       if (!metadata.isFile()) throw new TypeError(`Schema source path ${relative} must be an ordinary file or directory.`);
       if (!SOURCE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
-        if (isConventionalMarkdown(relative) || isFrontendStylesheet(relative)) continue;
+        if (isConventionalMarkdown(relative) || isFrontendStylesheet(relative) || isBuildScript(relative)) continue;
         if (!SCHEMA_SOURCE_NON_SOURCE_FILE_SET.has(relative)) {
           throw new TypeError(`Schema source scope contains an unclassified source path: ${relative}`);
         }
@@ -335,7 +339,7 @@ async function validateSchemaSourceScope(repositoryRoot: string): Promise<void> 
     for (const relative of manifest) {
       if (pathInside(relative, coveredRoots)) {
         if (SOURCE_EXTENSIONS.has(path.extname(relative).toLowerCase())) continue;
-        if (isConventionalMarkdown(relative) || isFrontendStylesheet(relative)) continue;
+        if (isConventionalMarkdown(relative) || isFrontendStylesheet(relative) || isBuildScript(relative)) continue;
         if (SCHEMA_SOURCE_NON_SOURCE_FILE_SET.has(relative)) {
           observedNonSourceFiles.add(relative);
           continue;
@@ -509,7 +513,10 @@ function validateClassification(value: unknown): asserts value is SchemaSourceCl
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Schema source classification must be an object.');
   const item = value as Record<string, unknown>;
   const keys = Object.keys(item).sort();
-  if (keys.join(',') !== 'identifier,kind,note,owner,reason,relatedEntryIds,sourceUses') {
+  const expectedKeys = item.kind === 'non_schema'
+    ? 'identifier,kind,note,reason'
+    : 'identifier,kind,note,owner,reason,relatedEntryIds,sourceUses';
+  if (keys.join(',') !== expectedKeys) {
     throw new TypeError('Schema source classification has an invalid field set.');
   }
   if (typeof item.identifier !== 'string'
@@ -519,7 +526,20 @@ function validateClassification(value: unknown): asserts value is SchemaSourceCl
     || !CLASSIFICATION_KINDS.has(item.kind)
     || typeof item.reason !== 'string'
     || !CLASSIFICATION_REASONS.has(item.reason)
-    || typeof item.owner !== 'string'
+    || typeof item.note !== 'string'
+    || !item.note
+    || item.note.length > MAX_SCHEMA_CLASSIFICATION_NOTE_LENGTH
+    || /[\x00-\x1f\x7f]/u.test(item.note)) {
+    throw new TypeError('Schema source classification has invalid bounded metadata.');
+  }
+  const kind = item.kind as keyof typeof CLASSIFICATION_REASONS_BY_KIND;
+  if (!CLASSIFICATION_REASONS_BY_KIND[kind].has(item.reason as never)) {
+    throw new TypeError('Schema source classification has inconsistent kind metadata.');
+  }
+  // Filenames and hostnames do not acquire schema meaning when a helper moves
+  // or repeats them. Actual schema emitters are checked independently below.
+  if (kind === 'non_schema') return;
+  if (typeof item.owner !== 'string'
     || item.owner.length > MAX_SCHEMA_CLASSIFICATION_PATH_LENGTH
     || item.owner.startsWith('/')
     || item.owner.includes('..')
@@ -529,11 +549,7 @@ function validateClassification(value: unknown): asserts value is SchemaSourceCl
     || !Array.isArray(item.relatedEntryIds)
     || item.relatedEntryIds.length > MAX_SCHEMA_CLASSIFICATION_RELATED_ENTRIES
     || item.relatedEntryIds.some((id) => typeof id !== 'string' || !/^[a-z0-9][a-z0-9.-]{2,79}$/u.test(id))
-    || new Set(item.relatedEntryIds).size !== item.relatedEntryIds.length
-    || typeof item.note !== 'string'
-    || !item.note
-    || item.note.length > MAX_SCHEMA_CLASSIFICATION_NOTE_LENGTH
-    || /[\x00-\x1f\x7f]/u.test(item.note)) {
+    || new Set(item.relatedEntryIds).size !== item.relatedEntryIds.length) {
     throw new TypeError('Schema source classification has invalid bounded metadata.');
   }
   let previousFile = '';
@@ -560,10 +576,7 @@ function validateClassification(value: unknown): asserts value is SchemaSourceCl
     }
     previousFile = use.file;
   }
-  const kind = item.kind as keyof typeof CLASSIFICATION_REASONS_BY_KIND;
-  if (!CLASSIFICATION_REASONS_BY_KIND[kind].has(item.reason as never)
-    || (kind === 'member' && item.relatedEntryIds.length === 0)
-    || (kind === 'non_schema' && item.relatedEntryIds.length !== 0)) {
+  if (kind === 'member' && item.relatedEntryIds.length === 0) {
     throw new TypeError('Schema source classification has inconsistent kind metadata.');
   }
 }
@@ -826,6 +839,10 @@ export async function validateSchemaSourceCoverage(
       || lifecycleMetadataByIdentifier.has(raw.identifier)) {
       throw new Error(`Schema source classification is duplicated or overlaps the inventory: ${raw.identifier}`);
     }
+    if (raw.kind === 'non_schema') {
+      classificationByIdentifier.set(raw.identifier, raw);
+      continue;
+    }
     if (!await ordinaryFile(discovery.repositoryRoot, raw.owner)) {
       throw new Error(`Schema source classification owner ${raw.owner} is missing or is not an ordinary file.`);
     }
@@ -900,8 +917,7 @@ export async function validateSchemaSourceCoverage(
   for (const dynamic of discovery.dynamicConstructions) {
     const allowedDynamicNonSchema = dynamic.reason === 'dynamic'
       && dynamic.identifier
-      && classificationByIdentifier.get(dynamic.identifier)?.kind === 'non_schema'
-      && classificationByIdentifier.get(dynamic.identifier)?.owner === dynamic.file;
+      && classificationByIdentifier.get(dynamic.identifier)?.kind === 'non_schema';
     if (!allowedDynamicNonSchema) {
       throw new Error(`Schema-like identifier has an unsafe ${dynamic.reason.replaceAll('_', ' ')} at ${dynamic.file}:${dynamic.line}; use one exact-case canonical literal or imported constant.`);
     }

@@ -1,4 +1,4 @@
-import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../lib/project-metadata.mts';
+import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../packages/analysis/project-metadata.mts';
 import {
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
   SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,

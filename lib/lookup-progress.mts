@@ -2,7 +2,7 @@
 // presentation-only; only a validated final ordinary Lookup result may cross
 // the persistence boundary.
 
-import { scanBoundedJson, MAX_BOUNDED_JSON_DEPTH, MAX_BOUNDED_JSON_KEYS, MAX_BOUNDED_JSON_VALUES } from './bounded-json.mts';
+import { scanBoundedJson, MAX_BOUNDED_JSON_DEPTH, MAX_BOUNDED_JSON_KEYS, MAX_BOUNDED_JSON_VALUES } from '../packages/analysis/bounded-json.mts';
 
 export const LOOKUP_PROGRESS_SCHEMA = 'whoisleuth.lookup-progress';
 export const LOOKUP_PROGRESS_VERSION = 1;

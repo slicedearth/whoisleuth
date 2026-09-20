@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { WHOISLEUTH_SITE_ORIGIN } from '../../../../lib/project-metadata.mts';
+  import { WHOISLEUTH_SITE_ORIGIN } from '../../../../packages/analysis/project-metadata.mts';
 
   let {
     title,

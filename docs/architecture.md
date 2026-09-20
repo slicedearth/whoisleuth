@@ -30,7 +30,7 @@ Express and Netlify adapters call the same request services and evidence rules.
 | Layer | Owns | Does not own |
 | --- | --- | --- |
 | `packages/contracts/` | Schema identity, compatibility descriptors, limits, capability metadata and portable contracts. | DOM, filesystem, network or framework effects. |
-| Domain packages | Pure Case, workspace, investigation, evidence, relationship, comparison and monitoring rules. | Browser storage, terminal presentation or hosted adapters. |
+| Domain packages | Pure analysis, Case, workspace, investigation, evidence, relationship, comparison and monitoring rules. | Node core, browser storage, terminal presentation or runtime adapters. |
 | `lib/` | Shared bounded collection, safe transport, authentication and host-neutral runtime services. | Svelte state or CLI argument handling. |
 | `frontend/` | Routes, components, accessibility, browser state, IndexedDB and downloads. | Canonical cross-runtime contract ownership. |
 | `cli/` and `bin/` | Command grammar, handlers, terminal output, local files and explicit CLI network effects. | Hosted sessions or browser persistence. |
@@ -39,9 +39,17 @@ Express and Netlify adapters call the same request services and evidence rules.
 | `packages/local-application/` | Optional loopback application startup and filesystem workspace package. | A separate evidence model or hosted deployment. |
 | `tools/` | Explicit maintainer checks, deterministic measurements and generated-reference renderers. | Runtime product behaviour. |
 
-Frontend compatibility paths re-export shared modules through
-identity-preserving facades. Non-frontend production code cannot
-import Svelte routes, components or browser adapters.
+`packages/analysis/` owns shared scoring, bounded JSON, target classification
+and evidence vocabularies. Domain directories inherit the same runtime-isolation
+rule. Historical `lib/` and frontend imports remain identity-preserving
+compatibility facades; internal consumers import the domain owner directly.
+Non-frontend production code cannot import Svelte routes, components or browser
+adapters.
+
+Package builders share bounded source discovery, snapshots, compilation and
+emitted-file validation in `tools/package-source.mts`. Each builder owns its
+entry points, runtime dependencies, allowed support files and installed checks.
+The optional packages do not load the CLI builder to compile shared code.
 
 The Cases route uses the Case workspace component for its list, filters,
 selection, drafts and collection refresh. Monitor's legacy Cases URL redirects

@@ -6,9 +6,9 @@ import { hammingDistanceHex, decodeBoundedImagePixels, imagePixelsPerceptualHash
 import { compareImagePixels, type PixelImage } from '../comparison/image-change.mts';
 import { compareObservationContexts, readCaptureConditions, readObservationLabel, type CaptureConditions } from '../comparison/capture-context.mts';
 import { MAX_EVIDENCE_IMAGE_REGIONS, type ImageRegion } from '../evidence/image-regions.mts';
-import { isValidAsciiHostname } from '../../lib/hostname.mts';
+import { isValidAsciiHostname } from '../contracts/domain-name.mts';
 import { decodeBoundedUtf8, readBoundedRegularFile } from '../../lib/bounded-file.mts';
-import { parseBoundedJson } from '../../lib/bounded-json.mts';
+import { parseBoundedJson } from '../analysis/bounded-json.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
   MAX_WEB_CAPTURE_MANIFEST_BYTES,

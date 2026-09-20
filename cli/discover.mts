@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
 import { CliUsageError } from './arguments.mts';
-import { normalizeDiscoverySuffix } from '../lib/registrable-domain.mts';
+import { normalizeDiscoverySuffix } from '../packages/analysis/registrable-domain.mts';
 
 const DEFAULT_DISCOVERY_TLDS = Object.freeze(['com', 'net', 'org']);
 const MAX_DISCOVERY_TLD_TEXT_LENGTH = 1024;

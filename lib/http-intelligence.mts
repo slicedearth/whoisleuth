@@ -10,7 +10,7 @@ import {
   MAX_HTTP_ERROR_LENGTH,
   MAX_HTTP_EVIDENCE_REDIRECTS,
   MAX_HTTP_PROVENANCE_URL,
-} from './http-evidence-bounds.mts';
+} from '../packages/analysis/http-evidence-bounds.mts';
 import {
   HTTP_DELIVERY_LIMITATIONS,
   HTTP_DELIVERY_METADATA_VERSION,

@@ -8,19 +8,18 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { parseBoundedJson } from '../lib/bounded-json.mts';
+import { parseBoundedJson } from '../packages/analysis/bounded-json.mts';
 import { readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
-import { normalizeBoundedStableSemanticVersion } from '../lib/semantic-version.mts';
-import { WHOISLEUTH_PROJECT_URL, WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL } from '../lib/project-metadata.mts';
+import { normalizeBoundedStableSemanticVersion } from '../packages/analysis/semantic-version.mts';
+import { WHOISLEUTH_PROJECT_URL, WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL } from '../packages/analysis/project-metadata.mts';
 import { LOCAL_APPLICATION_WORKER_URL } from '../lib/local-application-worker-client.mts';
 import { assertFrontendBuildIntegrity } from './frontend-build-integrity.mts';
 import {
-  assertCliPackageSourceSnapshot, captureCliPackageSourceSnapshot, compilePackageSources,
-  discoverPackageCompilerClosure, materializeCliPackageSourceSnapshot,
-  MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES, MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES, MAX_CLI_PACKAGE_GRAPH_BYTES,
-  CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
-} from './cli-package.mts';
-import { optionalPackageInputs, assertInstalledPackageDependencies, emittedPackageFiles, optionalPackageLock, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles, buildOptionalPackageNotices } from './optional-package.mts';
+  assertPackageSourceSnapshot, capturePackageSourceSnapshot, compilePackageSources,
+  discoverPackageCompilerClosure, emittedPackageFiles, materializePackageSourceSnapshot,
+} from './package-source.mts';
+import { MAX_PACKAGE_COMPILER_CONTEXT_BYTES, MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES, MAX_PACKAGE_GRAPH_BYTES, PACKAGE_PROCESS_TIMEOUT_MS } from './package-resource-bounds.mts';
+import { optionalPackageInputs, assertInstalledPackageDependencies, optionalPackageLock, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles, buildOptionalPackageNotices } from './optional-package.mts';
 import { pathIsWithin, requireJsonRecord as object } from './maintainer-tool-helpers.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -36,7 +35,7 @@ const SUPPORT = [['packages/local-application/README.md', 'README.md'], ['LICENS
 export const MAX_LOCAL_PACKAGE_PACKED_BYTES = 128 * 1024 * 1024;
 export const MAX_LOCAL_PACKAGE_UNPACKED_BYTES = 320 * 1024 * 1024;
 const execFile = promisify(execFileCallback);
-const parse = (bytes: Buffer | string) => object(parseBoundedJson(bytes.toString(), { maximumBytes: MAX_CLI_PACKAGE_GRAPH_BYTES }), 'Package input');
+const parse = (bytes: Buffer | string) => object(parseBoundedJson(bytes.toString(), { maximumBytes: MAX_PACKAGE_GRAPH_BYTES }), 'Package input');
 
 export function localApplicationPackageInputs(graph: unknown, rootManifest: unknown) {
   return optionalPackageInputs(graph, { requiredSources: ENTRIES, acceptsSource: source => SOURCE.test(source),
@@ -62,19 +61,19 @@ export async function checkLocalApplicationPackage(repositoryRoot = ROOT, candid
     npm_config_registry: 'https://registry.npmjs.org', npm_config_cache: path.join(temporary, 'cache'), npm_config_userconfig: path.join(home, 'npmrc'),
     npm_config_globalconfig: path.join(home, 'global-npmrc'), npm_config_ignore_scripts: 'true', npm_config_audit: 'false', npm_config_fund: 'false' };
   for (const key of ['NODE_OPTIONS', 'NODE_PATH', 'NPM_TOKEN', 'NODE_AUTH_TOKEN', 'SITE_PASSWORD', 'SESSION_SECRET']) delete environment[key];
-  const run = (command: string, args: string[], cwd: string) => execFile(command, args, { cwd, env: environment, encoding: 'utf8', timeout: CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS, maxBuffer: MAX_CLI_PACKAGE_GRAPH_BYTES, killSignal: 'SIGTERM' });
+  const run = (command: string, args: string[], cwd: string) => execFile(command, args, { cwd, env: environment, encoding: 'utf8', timeout: PACKAGE_PROCESS_TIMEOUT_MS, maxBuffer: MAX_PACKAGE_GRAPH_BYTES, killSignal: 'SIGTERM' });
   try {
     await Promise.all([sourceRoot, staged, packed, installed, home].map(directory => mkdir(directory)));
     await Promise.all(['npmrc', 'global-npmrc'].map(name => writeFile(path.join(home, name), '')));
-    const metadata = await captureCliPackageSourceSnapshot(root, ['package.json', 'package-lock.json', PACKAGE_SOURCE, ...SUPPORT.map(([source]) => source)], { totalBytes: 0 });
+    const metadata = await capturePackageSourceSnapshot(root, ['package.json', 'package-lock.json', PACKAGE_SOURCE, ...SUPPORT.map(([source]) => source)], { totalBytes: 0 });
     const lockfile = parse(metadata.get('package-lock.json')!.bytes);
     const graph = parse((await run(process.execPath, [path.join(root, 'node_modules/dependency-cruiser/bin/dependency-cruise.mjs'), '--config', path.join(root, '.dependency-cruiser.json'), '--exclude', '^$', '--output-type', 'json', ...ENTRIES], root)).stdout);
     const inputs = localApplicationPackageInputs(graph, parse(metadata.get('package.json')!.bytes));
     const closure = await discoverPackageCompilerClosure(root, temporary, inputs.sources, { acceptsSource: source => SOURCE.test(source) });
-    const sources = await captureCliPackageSourceSnapshot(root, closure.sources, { totalBytes: 0 });
-    const compiler = await captureCliPackageSourceSnapshot(root, closure.contextFiles, { totalBytes: 0, maximumBytes: MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES, maximumFileBytes: MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES });
+    const sources = await capturePackageSourceSnapshot(root, closure.sources, { totalBytes: 0 });
+    const compiler = await capturePackageSourceSnapshot(root, closure.contextFiles, { totalBytes: 0, maximumBytes: MAX_PACKAGE_COMPILER_CONTEXT_BYTES, maximumFileBytes: MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES });
     for (const [file, content] of metadata) if (sources.has(file)) assert.deepEqual(sources.get(file)!.bytes, content.bytes, 'Source metadata changed.');
-    await materializeCliPackageSourceSnapshot(sourceRoot, new Map([...sources, ...metadata, ...compiler]));
+    await materializePackageSourceSnapshot(sourceRoot, new Map([...sources, ...metadata, ...compiler]));
     const frozen = await discoverPackageCompilerClosure(sourceRoot, temporary, ENTRIES, { acceptsSource: source => SOURCE.test(source) });
     for (const file of frozen.sources) if (!sources.has(file)) throw new Error('Materialised local source closure changed.');
     for (const file of frozen.contextFiles) if (!compiler.has(file)) throw new Error('Materialised local compiler context changed.');
@@ -108,8 +107,8 @@ export async function checkLocalApplicationPackage(repositoryRoot = ROOT, candid
       || !Number.isSafeInteger(pack.unpackedSize) || Number(pack.unpackedSize) > MAX_LOCAL_PACKAGE_UNPACKED_BYTES) throw new Error('Local application archive exceeds its processing bounds.');
     if (typeof pack.filename !== 'string' || !/^[A-Za-z0-9._-]+\.tgz$/u.test(pack.filename)) throw new Error('Invalid local archive filename.');
     const archive = await readBoundedRegularFileWithin(packed, pack.filename, { maximumBytes: MAX_LOCAL_PACKAGE_PACKED_BYTES, minimumBytes: 1, label: 'Local application archive' });
-    await assertCliPackageSourceSnapshot(root, sources); await assertCliPackageSourceSnapshot(root, metadata);
-    await assertCliPackageSourceSnapshot(root, compiler, MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES);
+    await assertPackageSourceSnapshot(root, sources); await assertPackageSourceSnapshot(root, metadata);
+    await assertPackageSourceSnapshot(root, compiler, MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES);
     assert.deepEqual(assertFrontendBuildIntegrity(root), build);
     assert.equal(await buildOptionalPackageNotices(root, inputs.dependencies, 'Local application server', lockfile), notices);
     await writeFile(path.join(installed, 'package.json'), '{"private":true}\n');

@@ -4,7 +4,7 @@ import {
   updateCase,
   type CaseRecord,
 } from '../cases/case-model.mts';
-import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
+import { canonicalRegistrableDomain } from '../analysis/registrable-domain.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { canonicalArtifactJsonV2 } from '../evidence/artifact-integrity.mts';
 import { sha256IdentityHex } from '../evidence/record-identity.mts';

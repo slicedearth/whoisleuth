@@ -1,5 +1,5 @@
 import { searchCertificateTransparency } from '../../lib/ct-search.mts';
-import { isCtQueryError, normalizeCtQuery } from '../../lib/ct-query.mts';
+import { isCtQueryError, normalizeCtQuery } from '../../packages/analysis/ct-query.mts';
 import { operationBudgetTargetFor } from '../../lib/operation-budget.mts';
 import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../lib/netlify-network-guard.mts';
 import { json, withNetlifyApiErrorBoundary } from '../../lib/http.mts';

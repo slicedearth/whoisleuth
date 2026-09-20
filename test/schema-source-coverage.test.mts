@@ -618,11 +618,8 @@ describe('schema source coverage', () => {
       identifier: 'whoisleuth.com',
       kind: 'non_schema',
       reason: 'public_site_hostname',
-      owner: 'lib/project-metadata.mts',
-      sourceUses: [{ file: 'lib/project-metadata.mts', literalOccurrences: 1, dynamicConstructions: 0 }],
-      relatedEntryIds: [],
       note: 'Synthetic public hostname classification.',
-    }]), /cannot mask a schema emitter|expected 0 literal/iu);
+    }]), /cannot mask a schema emitter/iu);
 
     await writeFile(path.join(root, 'cli', 'emitter.mts'), "export class Contract { schema = 'whoisleuth.com'; }\n", 'utf8');
     const classFieldMasked = await discoverSchemaSources(root);
@@ -630,11 +627,8 @@ describe('schema source coverage', () => {
       identifier: 'whoisleuth.com',
       kind: 'non_schema',
       reason: 'public_site_hostname',
-      owner: 'lib/project-metadata.mts',
-      sourceUses: [{ file: 'lib/project-metadata.mts', literalOccurrences: 1, dynamicConstructions: 0 }],
-      relatedEntryIds: [],
       note: 'Synthetic public hostname classification.',
-    }]), /cannot mask a schema emitter|expected 0 literal/iu);
+    }]), /cannot mask a schema emitter/iu);
 
     await rm(path.join(root, 'cli', 'emitter.mts'));
     await rm(path.join(root, 'lib', 'project-metadata.mts'));
@@ -777,11 +771,23 @@ describe('schema source coverage', () => {
     await assert.rejects(
       validateSchemaSourceCoverage(inventory.entries, discovery, [
         ...SCHEMA_SOURCE_CLASSIFICATIONS.map((item) => item.identifier === 'whoisleuth.relationship-evidence'
-          ? { ...item, kind: 'non_schema' }
+          ? { identifier: item.identifier, kind: 'non_schema', reason: item.reason, note: item.note }
           : item),
       ]),
       /inconsistent kind metadata/iu,
     );
+
+    const sourceFilename = discovery.occurrences.find(item => item.identifier === 'whoisleuth.mts');
+    assert.ok(sourceFilename);
+    await validateSchemaSourceCoverage(inventory.entries, {
+      ...discovery,
+      occurrences: [...discovery.occurrences, { ...sourceFilename, file: 'tools/extracted-helper.mts', line: 1 }],
+    });
+    await assert.rejects(validateSchemaSourceCoverage(inventory.entries, {
+      ...discovery,
+      emitters: [...discovery.emitters, { file: 'tools/extracted-helper.mts', line: 1,
+        role: 'writer', identifier: sourceFilename.identifier, symbol: null }],
+    }), /cannot mask a schema emitter/iu);
 
     const localGeoIpOccurrence = discovery.occurrences.find((item) => item.identifier === 'whoisleuth.local-geoip-evidence');
     assert.ok(localGeoIpOccurrence);

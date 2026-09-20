@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
 
-import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
 
 const LOOKALIKE_CALIBRATION_INPUT_SCHEMA = 'whoisleuth.lookalike-calibration-input';
 const LOOKALIKE_CALIBRATION_SCHEMA = 'whoisleuth.lookalike-calibration';

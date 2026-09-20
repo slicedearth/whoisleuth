@@ -1,4 +1,4 @@
-import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
+import { canonicalRegistrableDomain } from '../analysis/registrable-domain.mts';
 import {
   CASE_SCHEMA_VERSION,
   MAX_EVIDENCE_SNAPSHOTS_PER_CASE,

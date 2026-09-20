@@ -4,7 +4,7 @@ import { serializeCsvCell, serializeCsvRows } from '../../../../lib/csv.mts';
 import {
   hammingDistanceHex,
   isInformativePerceptualHash,
-} from '../../../../lib/perceptual-hash-comparison.mts';
+} from '../../../../packages/analysis/perceptual-hash-comparison.mts';
 import { recordOrNull } from '../../../../lib/json-record.mts';
 import { MAX_LOOKUP_INPUT_CHARACTERS } from '../../../../packages/evidence/lookup-target.mts';
 import { emailRecipient } from '../../../../packages/evidence/email-recipient.mts';

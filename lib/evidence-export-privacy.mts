@@ -1,8 +1,8 @@
 // Portable tree bounds, private-field exclusion and availability projection.
 // Source-specific publication assembly remains in evidence-export.mts.
-import { isSafeJsonObjectKey } from './bounded-json.mts';
+import { isSafeJsonObjectKey } from '../packages/analysis/bounded-json.mts';
 import { recordOrNull, type UnknownRecord } from './json-record.mts';
-import { isUriShapedLabel } from './portable-generator.mts';
+import { isUriShapedLabel } from '../packages/analysis/portable-generator.mts';
 import { validHttpDeliveryMetadata, validPagePublicationMetadata } from './homepage-metadata-contract.mts';
 import {
   LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES, LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES,

@@ -26,7 +26,7 @@ import * as zlib from 'node:zlib';
 import {
   hammingDistanceHex,
   isInformativePerceptualHash,
-} from './perceptual-hash-comparison.mts';
+} from '../packages/analysis/perceptual-hash-comparison.mts';
 
 type DecodedImage = {
   width: number;

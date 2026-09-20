@@ -1,5 +1,5 @@
 import { zipSync } from 'fflate';
-import { parseBoundedJson, boundedJsonLimitsForBytes } from '../../lib/bounded-json.mts';
+import { parseBoundedJson, boundedJsonLimitsForBytes } from '../analysis/bounded-json.mts';
 import { BROWSER_LOCAL_COLLECTION_MANIFEST, BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID } from '../contracts/browser-local-collection-manifest.mts';
 import { LOCAL_WORKSPACE_MAX_FILES } from '../contracts/local-application.mts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_BYTES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../contracts/selected-file-limits.mts';

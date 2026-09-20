@@ -8,12 +8,20 @@ import { assertFrontendBuildIntegrity } from './frontend-build-integrity.mts';
 import {
   buildBalancedBrowserShardPlan,
   readVerificationTimingProfile,
+  type VerificationBrowserShardPlan,
 } from './verification-timing-profile.mts';
 import { playwrightJsonReporterEnvironment } from './playwright-run-artifacts.mts';
 import { runPlaywrightProcess } from './playwright-process.mts';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PLAYWRIGHT_CLI = path.join(REPOSITORY_ROOT, 'node_modules', '@playwright', 'test', 'cli.js');
+
+export function browserVerificationMatrix(plan: VerificationBrowserShardPlan = buildBalancedBrowserShardPlan(readVerificationTimingProfile())) {
+  return { include: [
+    ...plan.shards.map(shard => ({ kind: 'functional' as const, shard: `${shard.shard}/${plan.shardCount}`, label: `${shard.shard}-of-${plan.shardCount}` })),
+    { kind: 'performance' as const, label: 'performance' },
+  ] };
+}
 
 export function selectBalancedBrowserShard(value: string) {
   const match = /^(\d+)\/(\d+)$/u.exec(value);
@@ -35,10 +43,14 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
   try {
+    if (args.length === 1 && args[0] === '--matrix') {
+      process.stdout.write(`${JSON.stringify(browserVerificationMatrix())}\n`);
+      return 0;
+    }
     const runOptions = args.filter((value) => value.startsWith('--run='));
     const list = args.includes('--list');
     if (runOptions.length !== 1 || args.length !== (list ? 2 : 1) || args.some((value) => value !== '--list' && !value.startsWith('--run='))) {
-      throw new TypeError('Usage: node tools/playwright-balanced-shard.mts --run=N/TOTAL [--list]');
+      throw new TypeError('Usage: node tools/playwright-balanced-shard.mts --matrix | --run=N/TOTAL [--list]');
     }
     assertFrontendBuildIntegrity(REPOSITORY_ROOT);
     const selection = selectBalancedBrowserShard(runOptions[0]!.slice('--run='.length));

@@ -11,7 +11,7 @@ import {
 import { CliUsageError } from './errors.mts';
 import { hasUnsafeCliText } from './errors.mts';
 import EXIT_CODES from './exit-codes.mts';
-import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
 import type { CliCommand } from './command-reference.mts';
 import {
   CLI_INVESTIGATION_RUN_SCHEMA,

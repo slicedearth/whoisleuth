@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
 import path from 'node:path';
+import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { readPlaywrightResultData, summarizePlaywrightResults } from './playwright-results-summary.mts';
+import { playwrightRunArtifacts } from './playwright-run-artifacts.mts';
 import {
   buildBalancedBrowserShardPlan,
   parsePlaywrightTimingData,
@@ -162,12 +164,27 @@ export function renderBrowserShardTimingSummary(summary: BrowserShardTimingSumma
   ].join('\n');
 }
 
-function reportPaths(args: readonly string[]): Readonly<{ paths: readonly string[]; summary: boolean }> {
+export function reportPaths(args: readonly string[]): Readonly<{ paths: readonly string[]; summary: boolean }> {
   const summary = args.includes('--summary');
-  const unexpected = args.filter((arg) => arg !== '--summary' && !arg.startsWith('--report='));
-  const paths = args.filter((arg) => arg.startsWith('--report=')).map((arg) => arg.slice('--report='.length));
-  if (unexpected.length || paths.length !== 4 || args.length !== paths.length + (summary ? 1 : 0)) {
-    throw new TypeError('Usage: node tools/playwright-shard-aggregate.mts [--summary] --report=/absolute/path repeated exactly four times');
+  const plan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
+  const directories = args.filter(arg => arg.startsWith('--reports-directory=')).map(arg => arg.slice('--reports-directory='.length));
+  let paths = args.filter((arg) => arg.startsWith('--report=')).map((arg) => arg.slice('--report='.length));
+  const unexpected = args.filter(arg => arg !== '--summary' && !arg.startsWith('--report=') && !arg.startsWith('--reports-directory='));
+  if (unexpected.length || new Set(args).size !== args.length || directories.length > 1 || directories.length && paths.length
+    || !directories.length && paths.length !== plan.shardCount) {
+    throw new TypeError(`Usage: node tools/playwright-shard-aggregate.mts [--summary] --reports-directory=/absolute/path | --report=/absolute/path repeated ${plan.shardCount} times`);
+  }
+  if (directories.length) {
+    const directory = directories[0]!;
+    if (!path.isAbsolute(directory)) throw new TypeError('Browser shard report directory must be absolute.');
+    const expected = plan.shards.map(shard => path.basename(playwrightRunArtifacts({
+      WHOISLEUTH_PLAYWRIGHT_RUN_KIND: 'functional', WHOISLEUTH_PLAYWRIGHT_SHARD: `${shard.shard}/${plan.shardCount}`,
+    }).jsonResults)).sort();
+    const entries = readdirSync(directory, { withFileTypes: true });
+    if (entries.some(entry => !entry.isFile()) || identity(entries.map(entry => entry.name)) !== identity(expected)) {
+      throw new TypeError('Browser report directory must contain exactly the current functional shard reports.');
+    }
+    paths = expected.map(filename => path.join(directory, filename));
   }
   for (const filename of paths) {
     if (!path.isAbsolute(filename)) throw new TypeError('Browser shard report paths must be absolute.');

@@ -10,7 +10,7 @@ import {
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
-import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
+import { parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 import {
   boundedSafeRelativePath,
   compareCodeUnits,
@@ -43,11 +43,11 @@ export type FrontendLoadingReportInput = Readonly<{
   manifest: Manifest;
   routeNodes: readonly RouteNode[];
   measureAsset: (file: string) => AssetMeasurement;
-  routeGzipBudgets?: Readonly<Record<string, number>>;
+  previousRoutes?: Readonly<Record<string, number>>;
 }>;
 
 export const FRONTEND_LOADING_REPORT_SCHEMA = 'whoisleuth.frontend-loading-report';
-export const FRONTEND_LOADING_REPORT_VERSION = 1;
+export const FRONTEND_LOADING_REPORT_VERSION = 2;
 export const BROWSER_LOCAL_CHUNK_NAME = 'browser-local-data-definitions';
 export const MAX_FRONTEND_MANIFEST_BYTES = 2 * 1024 * 1024;
 export const MAX_FRONTEND_ROUTE_SOURCE_BYTES = 512 * 1024;
@@ -60,7 +60,6 @@ export const MAX_FRONTEND_GRAPH_EDGES = 16_384;
 export const MAX_FRONTEND_ASSETS = 2048;
 export const MAX_FRONTEND_ASSET_BYTES = 16 * 1024 * 1024;
 export const MAX_FRONTEND_TOTAL_ASSET_BYTES = 64 * 1024 * 1024;
-const kibibytes = (value: number) => value * 1024;
 
 function boundedManifestKey(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.length < 1 || value.length > 1024 || hasMaintainerUnsafeCharacters(value)) {
@@ -117,57 +116,6 @@ function validateManifest(value: unknown): Manifest {
   }
   return Object.freeze(manifest);
 }
-
-// Initial calibration used three clean production builds on 2026-08-24;
-// subsequent route-specific measurements are dated below. Each ceiling
-// is the largest observed gzip total plus 15% regression headroom, rounded up
-// to the next 5 KiB. They are tripwires, not performance targets or network
-// guarantees.
-export const FRONTEND_ROUTE_BUDGET_BASIS = Object.freeze({
-  measuredBuilds: 3,
-  reviewedOn: '2026-08-24',
-  headroomPercent: 15,
-  roundingKibibytes: 5,
-});
-
-export const FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES: Readonly<Record<string, number>> = Object.freeze({
-  '/': 85.5,
-  '/brands': 377.30, // Three clean builds, 2026-09-09: maximum 386,347 gzip bytes.
-  '/bulk': 440.84, // Three production builds, 2026-09-13: maximum 451,412 gzip bytes, including shared workspace lock controls.
-  '/cases': 375.09, // Three clean builds, 2026-09-09: maximum 384,092 gzip bytes.
-  '/cli': 82.98,
-  '/contact': 71.52,
-  '/coverage': 74.74,
-  '/dashboard': 100.09,
-  '/demo': 225.34,
-  '/discover': 322.79,
-  '/examples': 73.81,
-  '/guide': 66.19,
-  '/login': 68.78,
-  '/lookup': 570.91, // Three clean builds, 2026-09-11: maximum 584,609 gzip bytes.
-  '/methodology': 72.42,
-  '/monitor': 525.27, // Three clean builds, 2026-09-13: retained review forms and evidence workflows.
-  '/privacy': 73.75,
-  '/registry-support': 131.24, // Three production builds, 2026-09-13: maximum 134,380 gzip bytes, including shared workspace lock controls.
-  '/request-policy': 69.13,
-  '/resources': 85.63,
-  '/resources/[slug]': 72.61,
-  '/terms': 68.94,
-});
-
-export function deriveFrontendRouteGzipBudgets(
-  observed: Readonly<Record<string, number>> = FRONTEND_ROUTE_GZIP_OBSERVED_MAX_KIBIBYTES,
-): Readonly<Record<string, number>> {
-  return Object.freeze(Object.fromEntries(Object.entries(observed).map(([route, maximum]) => {
-    if (!Number.isFinite(maximum) || maximum <= 0) throw new TypeError(`Observed route maximum for ${route} must be positive.`);
-    const withHeadroom = maximum * (1 + FRONTEND_ROUTE_BUDGET_BASIS.headroomPercent / 100);
-    const rounded = Math.ceil(withHeadroom / FRONTEND_ROUTE_BUDGET_BASIS.roundingKibibytes)
-      * FRONTEND_ROUTE_BUDGET_BASIS.roundingKibibytes;
-    return [route, kibibytes(rounded)];
-  })));
-}
-
-export const FRONTEND_ROUTE_GZIP_BUDGETS = deriveFrontendRouteGzipBudgets();
 
 function publicPath(routeKey: string): string {
   const value = routeKey.replace(/\/\([^/]+\)/gu, '');
@@ -350,7 +298,13 @@ export function buildFrontendLoadingReport(input: FrontendLoadingReportInput) {
     measurementCache.set(file, measured);
     return measured;
   };
-  const budgets = input.routeGzipBudgets ?? FRONTEND_ROUTE_GZIP_BUDGETS;
+  const previous = input.previousRoutes;
+  if (previous && (Object.keys(previous).length > MAX_FRONTEND_ROUTES
+    || Object.entries(previous).some(([route, bytes]) => !route.startsWith('/') || route.length > 1024
+      || hasMaintainerUnsafeCharacters(route) || !Number.isSafeInteger(bytes) || bytes < 0
+      || bytes > MAX_FRONTEND_TOTAL_ASSET_BYTES))) {
+    throw new TypeError('Previous route measurements are invalid.');
+  }
   const routes = input.routeNodes
     .map((route) => {
       if (!Number.isSafeInteger(route.pageNode)
@@ -361,18 +315,15 @@ export function buildFrontendLoadingReport(input: FrontendLoadingReportInput) {
       }
       const measured = routeAssets(manifest, route, measureAsset);
       const path = publicPath(route.routeKey);
-      const configuredBudget = budgets[path];
-      const budgetGzipBytes = Number.isSafeInteger(configuredBudget) && (configuredBudget ?? 0) > 0
-        ? configuredBudget as number
-        : null;
+      const previousGzipBytes = previous && Object.hasOwn(previous, path) ? previous[path]! : null;
       return Object.freeze({
         path,
         access: route.routeKey.includes('(public)') ? 'public' as const : 'protected' as const,
         assetCount: measured.assets.length,
         bytes: measured.bytes,
         gzipBytes: measured.gzipBytes,
-        budgetGzipBytes,
-        overBudget: budgetGzipBytes === null || measured.gzipBytes > budgetGzipBytes,
+        previousGzipBytes,
+        changeGzipBytes: previousGzipBytes === null ? null : measured.gzipBytes - previousGzipBytes,
         includesBrowserLocalWorkspace: measured.assets.some((asset) => asset.file === browserLocalFile),
       });
     })
@@ -387,29 +338,25 @@ export function buildFrontendLoadingReport(input: FrontendLoadingReportInput) {
     gzipBytes: browserLocalAssets.gzipBytes,
   });
   const publicRouteLeak = publicRoutes.some((route) => route.includesBrowserLocalWorkspace);
-  const missingBudgetPaths = routes.filter((route) => route.budgetGzipBytes === null).map((route) => route.path);
-  const overBudgetPaths = routes
-    .filter((route) => route.budgetGzipBytes !== null && route.overBudget)
-    .map((route) => route.path);
   return Object.freeze({
     schema: FRONTEND_LOADING_REPORT_SCHEMA,
     version: FRONTEND_LOADING_REPORT_VERSION,
     mode: 'post_build_static_manifest',
-    ready: !publicRouteLeak && missingBudgetPaths.length === 0 && overBudgetPaths.length === 0,
+    ready: !publicRouteLeak,
     browserLocalWorkspace,
     summary: Object.freeze({
       publicRoutes: publicRoutes.length,
       protectedRoutes: protectedRoutes.length,
       publicRouteLeak,
-      missingBudgetPaths: Object.freeze(missingBudgetPaths),
-      overBudgetPaths: Object.freeze(overBudgetPaths),
+      compared: previous !== undefined,
+      removedRoutes: Object.freeze(Object.keys(previous ?? {}).filter(route => !routePaths.includes(route)).sort(compareCodeUnits)),
       largestPublicRouteGzipBytes: Math.max(0, ...publicRoutes.map((route) => route.gzipBytes)),
       largestProtectedRouteGzipBytes: Math.max(0, ...protectedRoutes.map((route) => route.gzipBytes)),
     }),
     routes: Object.freeze(routes),
     limitations: Object.freeze([
       'Sizes are per-file gzip estimates from one production build, not measured network timings.',
-      'Per-route ceilings are reviewed regression tripwires with headroom, not performance targets.',
+      'Route sizes and changes are measurements for review, not correctness limits or device-independent performance targets.',
       'The report models initial static route dependencies and excludes later user-triggered dynamic imports.',
       'A large protected chunk alone does not justify splitting it; run npm run frontend:authenticated-loading-report before changing its boundaries.',
     ]),
@@ -421,16 +368,14 @@ export function formatFrontendLoadingReport(report: ReturnType<typeof buildFront
     'Frontend loading report',
     `Browser-local workspace: ${(report.browserLocalWorkspace.gzipBytes / 1024).toFixed(2)} KiB gzip`,
     `Public-route exposure: ${report.summary.publicRouteLeak ? 'FAILED' : 'none'}`,
-    `Route budgets: ${report.summary.missingBudgetPaths.length || report.summary.overBudgetPaths.length ? 'FAILED' : 'within reviewed ceilings'}`,
-    ...(report.summary.missingBudgetPaths.length ? [`Missing route budgets: ${report.summary.missingBudgetPaths.join(', ')}`] : []),
-    ...report.routes.filter(route => route.budgetGzipBytes !== null && route.overBudget).map(route =>
-      `Exceeded route budget: ${route.path} by ${route.gzipBytes - route.budgetGzipBytes!} bytes (${(route.gzipBytes / 1024).toFixed(2)} KiB measured; ${(route.budgetGzipBytes! / 1024).toFixed(0)} KiB ceiling)`),
+    `Comparison: ${report.summary.compared ? 'previous report; all changes shown' : 'not supplied; current measurements only'}`,
+    ...(report.summary.removedRoutes.length ? [`Removed routes: ${report.summary.removedRoutes.join(', ')}`] : []),
     '',
-    'Route                         Access      Gzip KiB  Budget KiB  Workspace',
+    'Route                         Access      Gzip KiB  Change KiB  Workspace',
   ];
   for (const route of report.routes) {
     lines.push(
-      `${route.path.padEnd(29)} ${route.access.padEnd(11)} ${(route.gzipBytes / 1024).toFixed(2).padStart(8)}  ${route.budgetGzipBytes === null ? 'missing'.padStart(10) : (route.budgetGzipBytes / 1024).toFixed(0).padStart(10)}  ${route.includesBrowserLocalWorkspace ? 'yes' : 'no'}`,
+      `${route.path.padEnd(29)} ${route.access.padEnd(11)} ${(route.gzipBytes / 1024).toFixed(2).padStart(8)}  ${(route.changeGzipBytes === null ? (report.summary.compared ? 'new' : '—') : `${route.changeGzipBytes > 0 ? '+' : ''}${(route.changeGzipBytes / 1024).toFixed(2)}`).padStart(10)}  ${route.includesBrowserLocalWorkspace ? 'yes' : 'no'}`,
     );
   }
   lines.push('', ...report.limitations);
@@ -453,11 +398,44 @@ export function measureFrontendAsset(clientRoot: string, file: string): AssetMea
   return measureClientAsset(clientRoot, resolvedRoot, file);
 }
 
+export function previousFrontendRouteMeasurements(value: unknown): Readonly<Record<string, number>> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Previous loading report must be an object.');
+  const report = value as Record<string, unknown>;
+  if (report.schema !== FRONTEND_LOADING_REPORT_SCHEMA || report.version !== FRONTEND_LOADING_REPORT_VERSION
+    || !Array.isArray(report.routes) || report.routes.length < 1 || report.routes.length > MAX_FRONTEND_ROUTES) {
+    throw new TypeError('Comparison requires a current loading report with a bounded route inventory.');
+  }
+  const measurements: Record<string, number> = {};
+  for (const value of report.routes) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Previous route measurement is invalid.');
+    const route = value as Record<string, unknown>;
+    const key = boundedManifestKey(route.path, 'Previous route path');
+    if (!key.startsWith('/') || Object.hasOwn(measurements, key) || !Number.isSafeInteger(route.gzipBytes)
+      || (route.gzipBytes as number) < 0 || (route.gzipBytes as number) > MAX_FRONTEND_TOTAL_ASSET_BYTES) {
+      throw new TypeError('Previous route measurement is invalid or duplicated.');
+    }
+    measurements[key] = route.gzipBytes as number;
+  }
+  return Object.freeze(measurements);
+}
+
 export function main(
   output: WritableLike = process.stdout,
   errors: WritableLike = process.stderr,
+  args: readonly string[] = process.argv.slice(2),
 ): number {
   try {
+    const compare = args.filter(arg => arg.startsWith('--compare='));
+    if (args.filter(arg => arg === '--json').length > 1 || compare.length > 1
+      || args.some(arg => arg !== '--json' && !arg.startsWith('--compare='))
+      || compare.some(arg => !arg.slice('--compare='.length))) {
+      throw new TypeError('Usage: frontend-loading-report.mts [--json] [--compare=<previous-report.json>]');
+    }
+    const previousRoutes = compare[0] ? previousFrontendRouteMeasurements(parseBoundedJsonObject(
+      readBoundedStableRegularFileSync(path.resolve(compare[0].slice('--compare='.length)),
+        MAX_FRONTEND_MANIFEST_BYTES, 'Previous loading report').toString('utf8'),
+      { label: 'Previous loading report', maximumBytes: MAX_FRONTEND_MANIFEST_BYTES },
+    )) : undefined;
     assertFrontendBuildIntegrity();
     const frontend = path.resolve('frontend');
     const clientRoot = path.join(frontend, '.svelte-kit/output/client');
@@ -483,6 +461,7 @@ export function main(
     const report = buildFrontendLoadingReport({
       manifest,
       routeNodes,
+      ...(previousRoutes ? { previousRoutes } : {}),
       measureAsset(file) {
         const cached = measurements.get(file);
         if (cached) return cached;
@@ -498,7 +477,7 @@ export function main(
         return measurement;
       },
     });
-    output.write(formatFrontendLoadingReport(report));
+    output.write(args.includes('--json') ? `${JSON.stringify(report, null, 2)}\n` : formatFrontendLoadingReport(report));
     return report.ready ? 0 : 1;
   } catch (error) {
     errors.write(`${error instanceof Error ? error.message : 'Frontend loading report failed.'}\n`);
