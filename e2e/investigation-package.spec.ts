@@ -185,7 +185,6 @@ test('idle search indexing cannot displace a pressed package disclosure', { tag:
     await summary.scrollIntoViewIfNeeded();
     const bounds = await summary.boundingBox();
     if (!bounds) throw new Error('The package disclosure is absent.');
-    const scroll = await page.evaluate(() => window.scrollY);
     const pressedPoint = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
     const rasterPixel = await page.evaluate(() => 1 / devicePixelRatio);
     await page.mouse.move(pressedPoint.x, pressedPoint.y);
@@ -195,13 +194,13 @@ test('idle search indexing cannot displace a pressed package disclosure', { tag:
     await expect(page.locator('.recent-work .result-list > li')).toHaveCount(2);
     const settledBounds = await summary.boundingBox();
     if (!settledBounds) throw new Error('The pressed package disclosure disappeared.');
-    // Fractional layout rounding is not a displaced pointer target. Keep the
-    // geometry within one raster pixel and independently verify hit testing.
+    // Scroll anchoring may change the document offset while keeping the target
+    // still. Measure viewport geometry within one raster pixel and hit-test the
+    // original press, then require its actual release to open the disclosure.
     for (const key of ['x', 'y', 'width', 'height'] as const) {
       expect(Math.abs(settledBounds[key] - bounds[key]), key).toBeLessThanOrEqual(rasterPixel);
     }
     expect(await summary.evaluate((element, point) => element.contains(document.elementFromPoint(point.x, point.y)), pressedPoint)).toBe(true);
-    expect(await page.evaluate(() => window.scrollY)).toBe(scroll);
     await page.mouse.up();
     await expect(panel.getByLabel('Package purpose', { exact: true })).toBeVisible();
     const recent = page.locator('.recent-work > summary');

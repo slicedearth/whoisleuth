@@ -1,7 +1,11 @@
 import { expect, test } from '@playwright/test';
 import { createServer } from 'node:net';
 import { BASE_URL } from './constants.ts';
-import { ALLOWED_ORIGIN, installNetworkGuard, installBrowserGuards, isAllowedRequestOrigin } from './fixtures';
+import { ALLOWED_ORIGIN, installNetworkGuard, installBrowserGuards, isAllowedRequestOrigin, test as guardedTest } from './fixtures';
+
+guardedTest('the default context receives the service-worker block before guard installation', async ({ serviceWorkers }) => {
+  expect(serviceWorkers).toBe('block');
+});
 
 // Exercises the predicate every spec's automatic network guard
 // (fixtures.ts's networkAndConsoleGuard) relies on, so a change that

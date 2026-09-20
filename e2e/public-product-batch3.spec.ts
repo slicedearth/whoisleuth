@@ -354,13 +354,32 @@ test('command and return links preserve open-in-new-tab activation @timing-sensi
     expect(href).toMatch(/^#(?:command-|commands)/u);
     const expectedHref = new URL(href!, page.url()).href;
     const expectedDetail = href!.startsWith('#command-') ? href!.slice('#command-'.length) : null;
+    // Observe the actual background-tab gesture after all application handlers.
+    // Cancel only its browser default at window level, after recording whether
+    // the application intercepted it. Destination loading is exercised below
+    // with the native foreground-tab gesture, not driver background-page timing.
+    await link.evaluate(element => {
+      element.removeAttribute('data-native-click');
+      window.addEventListener('click', event => {
+        element.setAttribute('data-native-click', JSON.stringify({
+          intercepted: event.defaultPrevented,
+          modified: event.ctrlKey || event.metaKey,
+          shift: event.shiftKey,
+        }));
+        event.preventDefault();
+      }, { once: true });
+    });
+    await link.click({ modifiers: ['ControlOrMeta'] });
+    await expect(link).toHaveAttribute('data-native-click', JSON.stringify({ intercepted: false, modified: true, shift: false }));
+    await expect(page).toHaveURL(/#command-lookup$/u);
+    await expect(command).toBeVisible();
     const [destination] = await Promise.all([
       context.waitForEvent('page'),
-      link.click({ modifiers: ['ControlOrMeta'] }),
+      link.click({ modifiers: ['ControlOrMeta', 'Shift'] }),
     ]);
     try {
-      // Activate the tab before checking its hydrated content; background
-      // load-event timing is not part of the link's navigation contract.
+      // The browser activates this tab as part of the native gesture, before
+      // the driver exposes it. Preserve this on all supported browser engines.
       await destination.bringToFront();
       // Read the actual document and usable destination together. The string
       // URL matcher also waits for engine navigation bookkeeping, which can

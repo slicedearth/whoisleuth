@@ -226,6 +226,9 @@ export async function installBrowserGuards(browser: Browser, options: GuardOptio
 // Automatic at browser scope: every context and page is guarded before a test
 // can use it, without requiring an extra helper at each new-page call site.
 export const test = base.extend<Options & Fixtures>({
+  // The default context is created before the automatic guard. Later contexts
+  // receive the same policy from installBrowserGuards before they are returned.
+  serviceWorkers: 'block',
   networkGuardOrigin: [ALLOWED_ORIGIN, { option: true }],
   allowExpectedBulkLookup400Noise: [false, { option: true }],
   allowExpectedLookup429Noise: [false, { option: true }],

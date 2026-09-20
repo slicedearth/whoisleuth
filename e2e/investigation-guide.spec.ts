@@ -60,6 +60,10 @@ async function allowAndOpen(page: import('@playwright/test').Page, tool: 'Discov
   await expect(review).toContainText('Controls');
   await expect(review).toContainText('Limits');
   await action.getByRole('button', { name: `Allow and open ${tool}` }).click();
+  // The action awaits client-side navigation after recording approval. Do not
+  // reopen the departing page's work plan before the destination resets it.
+  await expect(page).toHaveURL(url => url.pathname === `/${tool.toLowerCase()}`);
+  await expect(page.getByRole('heading', { name: tool, exact: true, level: 1 })).toBeVisible();
 }
 
 async function markReviewed(page: import('@playwright/test').Page, step: string) {
