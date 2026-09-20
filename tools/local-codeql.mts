@@ -8,6 +8,7 @@ import { homedir, tmpdir, totalmem } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sanitizedMaintainerText as boundedText } from './maintainer-tool-helpers.mts';
+import { forceStopOwnedTree, waitForOwnedTreeExit } from './owned-process.mts';
 
 type ProcessResult = Readonly<{
   exitCode: number;
@@ -93,7 +94,9 @@ export const CODEQL_ANALYSES = Object.freeze([
   Object.freeze({ language: CODEQL_LANGUAGE, querySuite: CODEQL_QUERY_SUITE }),
   Object.freeze({ language: 'actions' as const, querySuite: 'actions-code-scanning.qls' as const }),
 ]);
-const CODEQL_PROCESS_TIMEOUT_MS = 15 * 60 * 1000;
+// Operational cancellation bound, not a performance target. Complete analysis
+// also runs on memory-constrained and emulated developer environments.
+const CODEQL_PROCESS_TIMEOUT_MS = 60 * 60 * 1000;
 const MAX_CODEQL_OUTPUT_BYTES = 4 * 1024 * 1024;
 const MAX_CODEQL_SARIF_BYTES = 16 * 1024 * 1024;
 const MAX_CODEQL_FINDINGS = 1000;
@@ -434,6 +437,7 @@ async function runProcessBounded(
   args: readonly string[],
   options: ProcessOptions,
   spawnProcess: typeof spawn = spawn,
+  stopProcessTree = forceStopOwnedTree,
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
     const child = spawnProcess(command, [...args], {
@@ -450,20 +454,23 @@ async function runProcessBounded(
     let exceededOutput = false;
     let terminationReason: 'deadline' | 'output' | null = null;
     let processError: Error | null = null;
-    let forceTimer: NodeJS.Timeout | null = null;
+    let stoppedProcesses: readonly number[] = [];
+    let terminationRequested = false;
 
     const finish = (callback: () => void): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      if (forceTimer) clearTimeout(forceTimer);
       callback();
     };
     const terminate = (): void => {
-      child.kill('SIGTERM');
-      if (!forceTimer) {
-        forceTimer = setTimeout(() => child.kill('SIGKILL'), 2000);
-        forceTimer.unref();
+      if (terminationRequested) return;
+      terminationRequested = true;
+      try {
+        stoppedProcesses = stopProcessTree(child);
+      } catch (error) {
+        processError = error instanceof Error ? error : new Error('Could not terminate the owned analyser process tree.');
+        child.kill('SIGKILL');
       }
     };
     const timeout = setTimeout(() => {
@@ -490,25 +497,29 @@ async function runProcessBounded(
     child.once('error', (error) => {
       processError = error;
     });
-    child.once('close', (code) => finish(() => {
-      if (processError) {
-        reject(processError);
-        return;
-      }
-      if (exceededOutput) {
-        reject(new Error(`CodeQL process output exceeded ${options.maxOutputBytes} bytes.`));
-        return;
-      }
-      if (terminationReason === 'deadline') {
-        reject(new Error(`CodeQL exceeded its ${options.timeoutMs} ms process deadline.`));
-        return;
-      }
-      resolve({
-        exitCode: Number.isInteger(code) ? Number(code) : 2,
-        stdout: Buffer.concat(stdout).toString('utf8'),
-        stderr: Buffer.concat(stderr).toString('utf8'),
+    child.once('close', async (code) => {
+      try { await waitForOwnedTreeExit(stoppedProcesses); }
+      catch (error) { processError ??= error instanceof Error ? error : new Error('Could not observe analyser termination.'); }
+      finish(() => {
+        if (processError) {
+          reject(processError);
+          return;
+        }
+        if (exceededOutput) {
+          reject(new Error(`CodeQL process output exceeded ${options.maxOutputBytes} bytes.`));
+          return;
+        }
+        if (terminationReason === 'deadline') {
+          reject(new Error(`CodeQL exceeded its ${options.timeoutMs} ms process deadline.`));
+          return;
+        }
+        resolve({
+          exitCode: Number.isInteger(code) ? Number(code) : 2,
+          stdout: Buffer.concat(stdout).toString('utf8'),
+          stderr: Buffer.concat(stderr).toString('utf8'),
+        });
       });
-    }));
+    });
   });
 }
 

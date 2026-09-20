@@ -322,23 +322,52 @@ describe('bounded CodeQL process execution', () => {
       stderr: new PassThrough(),
       kill: context.mock.fn(() => true),
     });
+    const stopTree = context.mock.fn(() => [] as readonly number[]);
     let settled = false;
     const execution = runProcessBounded('example-analyser', [], {
       cwd: process.cwd(), timeoutMs: 100, maxOutputBytes: 1024,
-    }, (() => child) as unknown as typeof spawn);
+    }, (() => child) as unknown as typeof spawn, stopTree);
     void execution.then(() => { settled = true; }, () => { settled = true; });
     const rejection = assert.rejects(execution, /process deadline/iu);
     context.mock.timers.tick(100);
-    assert.deepEqual(child.kill.mock.calls.map(call => call.arguments), [['SIGTERM']]);
+    assert.deepEqual(stopTree.mock.calls.map(call => call.arguments), [[child]]);
     await Promise.resolve();
     assert.equal(settled, false, 'requesting termination does not mean the child has closed');
     child.emit('close', 0);
     await rejection;
     assert.equal(settled, true);
     context.mock.timers.tick(2000);
-    assert.equal(child.kill.mock.callCount(), 1, 'closing the child cancels forced termination');
+    assert.equal(stopTree.mock.callCount(), 1, 'termination is requested once');
     child.stdout.destroy();
     child.stderr.destroy();
+  });
+
+  test('terminates descendants that retain the wrapper output pipes', { timeout: 30_000 }, async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-analyser-tree-'));
+    const identities = path.join(directory, 'processes.json');
+    const naturalExit = path.join(directory, 'natural-exit.txt');
+    try {
+      await assert.rejects(runProcessBounded(process.execPath, ['-e', [
+        "const { spawn } = require('node:child_process');",
+        "const { writeFileSync } = require('node:fs');",
+        'const [identities, naturalExit] = process.argv.slice(1);',
+        'const child = spawn(process.execPath, ["-e",',
+        '"setTimeout(() => { require(\'node:fs\').writeFileSync(process.argv[1], \'natural\'); }, 10000);", naturalExit],',
+        '{ stdio: ["ignore", "inherit", "inherit"] });',
+        'child.once("spawn", () => {',
+        'writeFileSync(identities, JSON.stringify([process.pid, child.pid]));',
+        'process.stdout.write("x".repeat(2048));',
+        '});',
+      ].join(' '), identities, naturalExit], {
+        cwd: directory, timeoutMs: 20_000, maxOutputBytes: 1024,
+      }), /output exceeded/u);
+      const owned: number[] = JSON.parse(await readFile(identities, 'utf8'));
+      assert.equal(owned.length, 2);
+      for (const pid of owned) assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+      await assert.rejects(access(naturalExit), { code: 'ENOENT' });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });
 
