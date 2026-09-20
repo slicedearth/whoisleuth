@@ -4,7 +4,7 @@ import { TEST_SITE_PASSWORD } from './constants';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { currentActionFixture } from './case-response-fixtures';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
-import { currentBrowserLocalDocument, expandLookupFamilies, expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
+import { currentBrowserLocalDocument, expandLookupFamilies, expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, migrateLegacyBrowserData, openNativeLinkInNewTab, readBrowserLocalCollection, useTheme } from './helpers';
 
 const DOMAIN = 'selected-context.example';
 const CASE_ID = 'selected-context';
@@ -101,16 +101,22 @@ test('Case context rereads on focus, reports failed reads and recovers without a
   await expect(context.getByRole('link', { name: 'other-context.example', exact: true })).toHaveCount(0);
 });
 
-test('Case links retain modified-click behaviour and selection clears on reload and sign-out', async ({ page, context: browser }) => {
+test('Case links retain modified-click behaviour without changing the selected context', { tag: '@timing-sensitive' }, async ({ page }) => {
   await seed(page);
   await navigate(page, 'Bulk');
   const context = page.getByRole('region', { name: 'Selected Case', exact: true });
-  const opened = browser.waitForEvent('page');
-  await context.getByRole('link', { name: DOMAIN, exact: true }).click({ modifiers: ['ControlOrMeta'] });
-  const peer = await opened;
+  const peer = await openNativeLinkInNewTab(page, context.getByRole('link', { name: DOMAIN, exact: true }));
   try { await expect(peer).toHaveURL(`/cases?case=${CASE_ID}`); await expect(peer.locator(`#case-head-${CASE_ID}`)).toBeVisible(); }
-  finally { await peer.close(); }
+  finally { await peer.close(); await page.bringToFront(); }
   await expect(page).toHaveURL('/bulk');
+  await expect(context.getByRole('link', { name: DOMAIN, exact: true })).toBeVisible();
+});
+
+test('Case selection clears on reload and sign-out without removing saved evidence', async ({ page }) => {
+  await seed(page);
+  await navigate(page, 'Bulk');
+  const context = page.getByRole('region', { name: 'Selected Case', exact: true });
+  await expect(context.getByRole('link', { name: DOMAIN, exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Bulk', exact: true })).toBeVisible();
   await expect(context).toHaveCount(0);

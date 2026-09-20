@@ -441,10 +441,12 @@ test('console footer opens policy pages separately while the public footer stays
     context.waitForEvent('page'),
     consolePrivacy.click(),
   ]);
+  await publicPage.bringToFront();
   await publicPage.waitForLoadState('domcontentloaded');
   await expect(publicPage).toHaveURL(/\/privacy$/u);
   await expect(page).toHaveURL(/\/lookup$/u);
   await publicPage.close();
+  await page.bringToFront();
 
   await page.goto('/');
   const publicPrivacy = page.locator('footer.site-footer').getByRole('link', { name: 'Privacy', exact: true });

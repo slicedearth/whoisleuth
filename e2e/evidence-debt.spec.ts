@@ -8,6 +8,7 @@ import {
   failBrowserLocalCollectionReads,
   holdBrowserLocalReads,
   migrateLegacyBrowserData,
+  openNativeLinkInNewTab,
 } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 
@@ -233,7 +234,7 @@ test('keeps readable Bulk gaps visible while the Case source is unavailable', as
   await expectNoHorizontalOverflow(page);
 });
 
-test('a modified Case link opens its own tab without changing the inbox or writing evidence', async ({ page, context }) => {
+test('a modified Case link opens its own tab without changing the inbox or writing evidence', { tag: '@timing-sensitive' }, async ({ page }) => {
   await page.goto('/monitor');
   await seedEvidenceDebt(page);
   const region = page.getByRole('region', { name: 'Evidence gaps' });
@@ -243,16 +244,14 @@ test('a modified Case link opens its own tab without changing the inbox or writi
   const originalUrl = page.url();
   await link.scrollIntoViewIfNeeded();
   await expect(link).toBeInViewport({ ratio: 1 });
-  const opened = context.waitForEvent('page');
-  await link.click({ modifiers: ['ControlOrMeta'] });
-  const other = await opened;
+  const other = await openNativeLinkInNewTab(page, link);
   try {
     await expect(other).toHaveURL('/cases?case=case-conflicting&section=evidence');
     await expect(other.locator('#case-head-case-conflicting')).toBeVisible();
     await expect(page).toHaveURL(originalUrl);
     await expect(page.getByRole('tab', { name: /^Inbox/u })).toHaveAttribute('aria-selected', 'true');
     expect(await page.evaluate(() => (window as typeof window & { __evidenceDebtWrites?: number }).__evidenceDebtWrites || 0)).toBe(0);
-  } finally { await other.close(); }
+  } finally { await other.close(); await page.bringToFront(); }
 });
 
 test('announces loading without presenting a false zero', async ({ page }) => {

@@ -21,6 +21,36 @@ const THEME_STORAGE_KEY = 'whoisleuth:theme:v1';
 const initialThemePreferences = new WeakMap<Page, 'dark' | 'light' | 'system'>();
 const LOCAL_DATA_DATABASE_NAME = 'whoisleuth-browser-data-v1';
 
+/** Verify native modifier handling, then activate the destination for UI checks. */
+export async function openNativeLinkInNewTab(page: Page, link: Locator): Promise<Page> {
+  await page.bringToFront();
+  await expect(link).toBeVisible();
+  const originalUrl = page.url();
+  // Observe the background-tab gesture after application handlers, then cancel
+  // only its browser default. The foreground gesture activates the destination
+  // before the driver exposes it, so UI checks do not depend on an inactive tab.
+  await link.evaluate(element => {
+    element.removeAttribute('data-native-click');
+    window.addEventListener('click', event => {
+      element.setAttribute('data-native-click', JSON.stringify({
+        intercepted: event.defaultPrevented,
+        modified: event.ctrlKey || event.metaKey,
+        shift: event.shiftKey,
+      }));
+      event.preventDefault();
+    }, { once: true });
+  });
+  await link.click({ modifiers: ['ControlOrMeta'] });
+  await expect(link).toHaveAttribute('data-native-click', JSON.stringify({ intercepted: false, modified: true, shift: false }));
+  await expect(page).toHaveURL(originalUrl);
+  const [destination] = await Promise.all([
+    page.context().waitForEvent('page'),
+    link.click({ modifiers: ['ControlOrMeta', 'Shift'] }),
+  ]);
+  await destination.bringToFront();
+  return destination;
+}
+
 type LegacyStorageValue = string | number | boolean | null | Record<string, unknown> | unknown[];
 
 type BrowserLocalCollectionSnapshot<Collection extends BrowserLocalCollectionId> = {
