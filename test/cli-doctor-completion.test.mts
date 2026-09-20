@@ -16,6 +16,7 @@ import { runCli } from '../cli/runner.mts';
 import {
   SHELL_COMPLETION_PROCESS_OPTIONS,
   assertSuccessfulShellProcess,
+  shellCompletionBatchProcessOptions,
   prepareBashCompletionBatch,
   prepareFishCompletionBatch,
   preparePowerShellCompletionBatch,
@@ -33,6 +34,17 @@ function capture() {
 }
 
 describe('CLI shell completion', () => {
+  test('keeps the per-case process watchdog independent of fixture batch size', () => {
+    const single = shellCompletionBatchProcessOptions(1);
+    const multiple = shellCompletionBatchProcessOptions(17);
+    assert.deepEqual(single, SHELL_COMPLETION_PROCESS_OPTIONS);
+    assert.equal(multiple.timeout, single.timeout * 17);
+    assert.equal(multiple.killSignal, single.killSignal);
+    for (const count of [0, -1, 1.5, Infinity, NaN, Number.MAX_SAFE_INTEGER]) {
+      assert.throws(() => shellCompletionBatchProcessOptions(count), /positive bounded case count/u);
+    }
+  });
+
   test('reports an unavailable shell with its bounded process diagnostic', () => {
     const unavailable = spawnSync('whoisleuth-unavailable-shell-fixture', [], SHELL_COMPLETION_PROCESS_OPTIONS);
     assert.throws(

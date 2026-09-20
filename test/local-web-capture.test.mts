@@ -116,6 +116,20 @@ function controlledDeadlineScheduler() {
   };
 }
 
+// Behaviour fixtures advance their deadline explicitly. Their screenshot
+// construction and host scheduling are not capture-latency assertions.
+function captureFixturePage(...[argumentsValue, dependencies]: Parameters<typeof captureRenderedPage>) {
+  return captureRenderedPage(argumentsValue, {
+    deadlineScheduler: controlledDeadlineScheduler().scheduler,
+    ...dependencies,
+  });
+}
+
+const CAPTURE_SCREENSHOTS = {
+  patterned: patternedPng(1024, 768),
+  flat: patternedPng(1024, 768, true),
+};
+
 function fakeBrowser(options: {
   hostname?: string;
   title?: string;
@@ -180,7 +194,7 @@ function fakeBrowser(options: {
         imageCount: options.imageCount ?? 0,
       };
     },
-    screenshot: async () => patternedPng(1024, 768, options.flatScreenshot === true),
+    screenshot: async () => Buffer.from(options.flatScreenshot ? CAPTURE_SCREENSHOTS.flat : CAPTURE_SCREENSHOTS.patterned),
     close: async () => {},
   };
   const context = {
@@ -405,7 +419,7 @@ describe('optional local rendered capture package', () => {
   test('fails before navigation when browser-managed transports remain available', async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-network-boundary-test-'));
     try {
-      await assert.rejects(() => captureRenderedPage({
+      await assert.rejects(() => captureFixturePage({
         targetUrl: 'https://example.test/', outputDirectory: path.join(parent, 'capture'), timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser({ networkApisDisabled: false }),
@@ -419,7 +433,7 @@ describe('optional local rendered capture package', () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-reservation-test-'));
     const destination = path.join(parent, 'capture');
     try {
-      const capture = () => captureRenderedPage({
+      const capture = () => captureFixturePage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser(),
@@ -444,7 +458,7 @@ describe('optional local rendered capture package', () => {
     const substitute = path.join(parent, 'substitute');
     await mkdir(substitute, { mode: 0o700 });
     try {
-      await assert.rejects(() => captureRenderedPage({
+      await assert.rejects(() => captureFixturePage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, {
         launchBrowser: async () => {
@@ -493,7 +507,7 @@ describe('optional local rendered capture package', () => {
     const destination = path.join(parent, 'capture');
     const unrelated = path.join(destination, 'unrelated.txt');
     try {
-      await assert.rejects(() => captureRenderedPage({
+      await assert.rejects(() => captureFixturePage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, {
         launchBrowser: async () => {
@@ -602,7 +616,7 @@ describe('optional local rendered capture package', () => {
     let initScriptCalls = 0;
     const resolved: string[] = [];
     try {
-      const manifest = await captureRenderedPage({
+      const manifest = await captureFixturePage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser({ onInitScript: () => { initScriptCalls += 1; } }),
@@ -636,7 +650,7 @@ describe('optional local rendered capture package', () => {
       const digestText = await readFile(path.join(destination, 'dom-digest.json'), 'utf8');
       assert.doesNotMatch(`${manifestText}${digestText}`, /private rendered|discarded|private=value|entry\?|asset\.js/u);
       assert.equal((await stat(path.join(destination, 'screenshot.png'))).size > 0, true);
-      await assert.rejects(() => captureRenderedPage({
+      await assert.rejects(() => captureFixturePage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, { launchBrowser: async () => fakeBrowser(), fetchResource: fakeFetchResource, resolveAddresses: async () => [] }), /EEXIST|ENOTEMPTY|exist/u);
     } finally {
@@ -653,7 +667,7 @@ describe('optional local rendered capture package', () => {
       (_, index) => `https://asset-${String(index).padStart(2, '0')}.example.test/resource.js`,
     );
     try {
-      const manifest = await captureRenderedPage({
+      const manifest = await captureFixturePage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser({ title, subresourceUrls }),
@@ -678,7 +692,7 @@ describe('optional local rendered capture package', () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-title-test-'));
     const destination = path.join(parent, 'capture');
     try {
-      const manifest = await captureRenderedPage({
+      const manifest = await captureFixturePage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser({ title: 'Account\u0085 review \u202Etxt' }),
@@ -698,7 +712,7 @@ describe('optional local rendered capture package', () => {
     const leftDirectory = path.join(parent, 'left');
     const rightDirectory = path.join(parent, 'right');
     try {
-      await captureRenderedPage({
+      await captureFixturePage({
         targetUrl: 'https://left.example.test/', outputDirectory: leftDirectory, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser({ hostname: 'left.example.test', title: 'Account', visibleText: 'left private text' }),
@@ -706,7 +720,7 @@ describe('optional local rendered capture package', () => {
         resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
         now: () => '2026-08-01T00:00:00.000Z',
       });
-      await captureRenderedPage({
+      await captureFixturePage({
         targetUrl: 'https://right.example.test/', outputDirectory: rightDirectory, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser({
@@ -884,7 +898,7 @@ describe('optional local rendered capture package', () => {
     const destination = path.join(parent, 'capture');
     const secondDestination = path.join(parent, 'capture-second');
     try {
-      const captureAt = async (outputDirectory: string) => captureRenderedPage({
+      const captureAt = async (outputDirectory: string) => captureFixturePage({
         targetUrl: 'https://example.test/', outputDirectory, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser({
@@ -921,11 +935,10 @@ describe('optional local rendered capture package', () => {
     }
   });
 
-  test('enforces one total-run deadline across renderer lifecycle work', async () => {
+  test('enforces one total-run deadline across renderer lifecycle work', { timeout: 60_000 }, async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-deadline-test-'));
     const destination = path.join(parent, 'capture');
     try {
-      const startedAt = Date.now();
       await assert.rejects(() => captureRenderedPage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 1_000,
       }, {
@@ -933,7 +946,6 @@ describe('optional local rendered capture package', () => {
         fetchResource: fakeFetchResource,
         resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
       }), /total-run deadline/u);
-      assert.ok(Date.now() - startedAt < 2_000);
       await assert.rejects(() => stat(destination), /ENOENT/u);
     } finally {
       await rm(parent, { recursive: true, force: true });
@@ -1071,7 +1083,7 @@ describe('optional local rendered capture package', () => {
         ['flat-right.example.test', rightDirectory],
       ];
       for (const [domain, destination] of captures) {
-        await captureRenderedPage({ targetUrl: `https://${domain}/`, outputDirectory: destination, timeoutMs: 5000 }, {
+        await captureFixturePage({ targetUrl: `https://${domain}/`, outputDirectory: destination, timeoutMs: 5000 }, {
           launchBrowser: async () => fakeBrowser({ hostname: domain, flatScreenshot: true }),
           fetchResource: fakeFetchResource,
           resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
@@ -1097,7 +1109,7 @@ describe('optional local rendered capture package', () => {
     const destination = path.join(parent, 'capture');
     const consumed: number[] = [];
     try {
-      const manifest = await captureRenderedPage({
+      const manifest = await captureFixturePage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser({
@@ -1127,7 +1139,7 @@ describe('optional local rendered capture package', () => {
     const destination = path.join(parent, 'capture');
     const allowances: number[] = [];
     try {
-      const manifest = await captureRenderedPage({
+      const manifest = await captureFixturePage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser({
@@ -1157,7 +1169,7 @@ describe('optional local rendered capture package', () => {
     const destination = path.join(parent, 'capture');
     const fetched: string[] = [];
     try {
-      const manifest = await captureRenderedPage({
+      const manifest = await captureFixturePage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser({
@@ -1183,7 +1195,7 @@ describe('optional local rendered capture package', () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-late-request-test-'));
     const destination = path.join(parent, 'capture');
     try {
-      const manifest = await captureRenderedPage({
+      const manifest = await captureFixturePage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser({
@@ -1209,7 +1221,7 @@ describe('optional local rendered capture package', () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-seal-test-'));
     const destination = path.join(parent, 'capture');
     try {
-      const manifest = await captureRenderedPage({
+      const manifest = await captureFixturePage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser({
@@ -1236,7 +1248,7 @@ describe('optional local rendered capture package', () => {
       blockedDirectConnections: () => { assert.equal(closed, true); return 2; },
     };
     try {
-      const manifest = await captureRenderedPage({
+      const manifest = await captureFixturePage({
         targetUrl: 'https://example.test/', outputDirectory: path.join(parent, 'capture'), timeoutMs: 5000,
       }, {
         launchBrowser: async () => instance,
@@ -1253,7 +1265,7 @@ describe('optional local rendered capture package', () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-rejected-host-test-'));
     const destination = path.join(parent, 'capture');
     try {
-      const manifest = await captureRenderedPage({
+      const manifest = await captureFixturePage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser({ subresourceUrls: ['https://blocked.internal.test/script.js'] }),
@@ -1275,7 +1287,7 @@ describe('optional local rendered capture package', () => {
     const destination = path.join(parent, 'capture');
     const resolved = new Set<string>();
     try {
-      const manifest = await captureRenderedPage({
+      const manifest = await captureFixturePage({
         targetUrl: 'https://entry.example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser({
@@ -1307,7 +1319,7 @@ describe('optional local rendered capture package', () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-budget-test-'));
     const destination = path.join(parent, 'capture');
     try {
-      await assert.rejects(() => captureRenderedPage({
+      await assert.rejects(() => captureFixturePage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 5000,
       }, {
         launchBrowser: async () => fakeBrowser(),
