@@ -687,6 +687,12 @@ describe('verification architecture contracts', () => {
     assert.equal(execution.commands.some(command => ['browser-discovery', 'build'].includes(command.id)), false);
   });
 
+  test('workflow edits run the native workflow validator once without deferring syntax validation', () => {
+    const execution = buildFocusedVerificationExecution(buildVerificationOwnershipPlan(['.github/workflows/ci.yml']));
+    assert.equal(execution.commands.filter(command => command.id === 'workflow:check').length, 1);
+    assert.equal(execution.deferredSpecialisedChecks.includes('workflow-closure'), false);
+  });
+
   test('a current fixture discovers both unit and browser consumers without another ownership declaration', async () => {
     const plan = await createVerificationOwnershipPlan(['test/support/current-case.mts']);
     assert.ok(plan.focusedUnitChecks.includes('test/current-case.test.mts'));

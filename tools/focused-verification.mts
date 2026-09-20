@@ -68,11 +68,11 @@ const SPECIALISED_SCRIPTS: Readonly<Partial<Record<SpecialisedCheck, string>>> =
   'analyst-journey-assurance': 'verification:journeys:check',
   'critical-mutation': 'test:mutation',
   'critical-io-coverage': 'test:coverage',
+  'workflow-closure': 'workflow:check',
 });
 
 const SPECIALISED_COVERED_BY_FOCUSED_TESTS = new Set<SpecialisedCheck>([
   'documentation',
-  'workflow-closure',
 ]);
 
 const SPECIALISED_DELIVERY_ONLY = new Set<SpecialisedCheck>([

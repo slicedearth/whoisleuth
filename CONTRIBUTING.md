@@ -69,6 +69,15 @@ any omissions. Merge requires complete fresh hosted checks against the current
 merge candidate. Release verification is a separate boundary. Local success
 does not promise identical behaviour on every supported environment.
 
+For workflow changes, run `npm run workflow:check`. Local and hosted quality
+checks use the same pinned actionlint release and platform archive digests.
+The command downloads the official executable into a temporary directory,
+checks its digest, validates every workflow and removes the executable.
+Set `WHOISLEUTH_ACTIONLINT_ARCHIVE` to a previously downloaded matching archive
+for offline use. No global installation or additional language toolchain is
+required. Optional shellcheck and pyflakes discovery is disabled so installed
+host tools cannot silently change this check's scope.
+
 ## Review a small change
 
 Trace an interface event from its form through validation, the domain operation

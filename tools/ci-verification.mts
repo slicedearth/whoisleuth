@@ -18,6 +18,7 @@ const FULL_SHA = /^[a-f0-9]{40}$/u;
 export const CI_FRONTEND_BUILD_ARTIFACT_NAME = 'frontend-build-${{ github.sha }}-${{ github.run_attempt }}';
 
 export const CI_QUALITY_SCRIPTS = Object.freeze([
+  'workflow:check',
   'toolchain:check',
   'verification:timing:check',
   'verification:ownership:check',
