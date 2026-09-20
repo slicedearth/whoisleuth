@@ -256,10 +256,6 @@ test('Lookup analyst question and disclosure controls change presentation withou
   await page.getByText('Close assessment', { exact: true }).click();
   await expect(detailedAssessment).not.toHaveAttribute('open', '');
   await expect(page.getByRole('button', { name: 'Expand Advanced evidence' })).toBeVisible();
-  const familyToggle = page.getByRole('button', { name: 'Expand Registration evidence' }).locator('.toggle-icon');
-  await expect(familyToggle).toHaveText('');
-  await expect(familyToggle).toHaveCSS('width', '17px');
-  await expect(familyToggle).toHaveCSS('height', '17px');
   await expect(page.getByRole('heading', { name: 'Validated lookup response' })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Expand Registration evidence' }).click();

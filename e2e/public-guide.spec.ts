@@ -238,10 +238,10 @@ test('public resources offer task-specific source boundaries on desktop and mobi
   await page.setViewportSize({ width: 320, height: 700 });
   await page.reload();
   await expect(page.getByRole('table', { name: 'Evidence sources and limitations' })).toBeVisible();
-  const articleSections = page.locator('.reference-browser');
-  await expect(articleSections).toBeVisible();
-  await articleSections.locator(':scope > summary').click();
-  await expect(articleSections.locator('.mobile-page-sections').getByRole('link')).toHaveCount(5);
+  await page.getByRole('button', { name: 'On this page', exact: true }).click();
+  const articleSections = page.getByRole('dialog');
+  await expect(articleSections.getByRole('link')).toHaveCount(5);
+  await articleSections.getByRole('button', { name: 'Close', exact: true }).click();
   expect(await breadcrumb.evaluate((element) => getComputedStyle(element).marginLeft)).toBe('0px');
   await expectNoHorizontalOverflow(page);
 
@@ -374,16 +374,15 @@ test('homepage and guide remain usable on a narrow mobile viewport', async ({ pa
   await expectNoHorizontalOverflow(page);
 
   await page.goto('/resources');
-  const sectionBrowser = page.locator('.reference-browser');
-  await expect(sectionBrowser).toBeVisible();
-  await sectionBrowser.locator(':scope > summary').click();
-  const resourceSections = sectionBrowser.locator('.mobile-page-sections');
+  await page.getByRole('button', { name: 'On this page', exact: true }).click();
+  const resourceSections = page.getByRole('dialog');
   await expect(resourceSections).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Common WHOISleuth tasks' })).toBeVisible();
   await expect(resourceSections.getByRole('link', { name: 'Topics' })).toHaveAttribute('href', '#topics');
   await expect(resourceSections.getByRole('link', { name: 'Tools' })).toHaveAttribute('href', '#tools');
   await expect(resourceSections.getByRole('link', { name: 'Practice' })).toHaveAttribute('href', '#practice');
   await expect(resourceSections.getByRole('link', { name: 'Reference' })).toHaveAttribute('href', '#reference');
+  await resourceSections.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Common WHOISleuth tasks' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Domain investigation terms' })).toBeVisible();
   await expect(page.getByRole('article', { name: 'Start with the decision, then open the evidence you need' })).toBeVisible();
   await expectNoHorizontalOverflow(page);

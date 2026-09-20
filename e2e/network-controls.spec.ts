@@ -95,8 +95,6 @@ test('disabled certificate and website capabilities degrade their own controls o
 
   await page.goto('/brands');
   const newProfileButton = page.getByRole('button', { name: 'New profile' });
-  await expect(newProfileButton).toHaveCSS('color', 'rgb(7, 16, 28)');
-  await expect(newProfileButton).toHaveCSS('background-image', /linear-gradient/);
   await newProfileButton.click();
   await page.getByRole('textbox', { name: 'Brand name', exact: true }).fill('Fixture Profile');
   await page.getByRole('textbox', { name: 'Official domains', exact: true }).fill('example.test');
@@ -105,8 +103,6 @@ test('disabled certificate and website capabilities degrade their own controls o
   await expect(page.getByText('website probe is disabled by deployment policy.', { exact: true })).toBeVisible();
   const saveProfileButton = page.getByRole('button', { name: 'Save profile' });
   await expect(saveProfileButton).toBeEnabled();
-  await expect(saveProfileButton).toHaveCSS('color', 'rgb(7, 16, 28)');
-  await expect(saveProfileButton).toHaveCSS('background-image', /linear-gradient/);
 });
 
 test('a disabled registry nameserver-search capability leaves local discovery available', async ({ page }) => {

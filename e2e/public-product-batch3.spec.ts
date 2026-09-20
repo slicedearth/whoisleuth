@@ -48,7 +48,7 @@ test('offline Case file guidance is reachable from tasks and direct command link
   const command = page.locator('article[data-command-detail="case"]');
   await expect(command.getByRole('heading', { name: 'case', exact: true })).toBeVisible();
   await expect(command).toContainText('Mutations require --output');
-  await command.getByText('Operational boundary', { exact: true }).click();
+  await expect(command.getByRole('region', { name: 'Operational boundary' })).toBeVisible();
   await expect(command).toContainText('Not reproduced requires an existing saved question');
   await command.getByText('Limits and contracts', { exact: true }).click();
   await expect(command).toContainText('without pruning');
@@ -116,13 +116,11 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
   await expect(page.locator('.public-section-navigation')).toHaveCount(0);
   expect((await page.locator('.reference-document').boundingBox())?.width ?? 0).toBeGreaterThan(800);
   const startNotes = page.locator('.start-notes');
-  await expect(startNotes).toHaveCSS('align-items', 'start');
   const installedHelpNote = startNotes.locator(':scope > p');
   const helpNoteHeight = (await installedHelpNote.boundingBox())?.height ?? 0;
   await startNotes.locator('.update-instructions > summary').click();
   expect((await installedHelpNote.boundingBox())?.height ?? 0).toBeCloseTo(helpNoteHeight, 0);
   const behaviourDetails = page.locator('.additional-behaviour > details');
-  await expect(page.locator('.additional-behaviour')).toHaveCSS('align-items', 'start');
   const closedBehaviourHeight = (await behaviourDetails.nth(1).boundingBox())?.height ?? 0;
   await behaviourDetails.nth(0).locator(':scope > summary').click();
   expect((await behaviourDetails.nth(1).boundingBox())?.height ?? 0).toBeCloseTo(closedBehaviourHeight, 0);
@@ -130,8 +128,9 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
   await page.setViewportSize({ width: 1024, height: 768 });
   await expect(page.locator('.reference-tree')).toBeHidden();
   await expect(page.locator('.reference-browser')).toBeVisible();
-  await page.locator('.reference-browser > summary').click();
-  await expect(page.locator('.reference-browser > nav')).toHaveCSS('align-items', 'start');
+  await page.getByRole('button', { name: 'Browse documentation' }).click();
+  await expect(page.getByRole('dialog', { name: 'Documentation', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
   expect((await page.locator('.reference-document').boundingBox())?.width ?? 0).toBeGreaterThan(880);
   await expectNoHorizontalOverflow(page);
 
@@ -171,35 +170,32 @@ test('long reference labels remain distinct and the mobile navigator works by ke
     ]) {
       await page.setViewportSize(viewport);
       const browser = page.locator('.reference-browser');
-      const summary = browser.locator(':scope > summary');
-      await expect(summary).toHaveCount(1);
+      const trigger = browser.getByRole('button', { name: 'Browse documentation' });
       if (viewport.width > 1080) {
         await expect(browser).toBeHidden();
         await expect(page.locator('.reference-tree').getByRole('link', { name: 'Reporting and takedown guidance', exact: true })).toHaveAttribute('aria-current', 'page');
       } else {
-        await expect(summary).toBeVisible();
-        await expect(summary.locator('span')).toHaveText('Browse documentation');
-        await expect(summary.locator('strong')).toHaveText('Reporting and takedown guidance');
-        const geometry = await summary.evaluate((element) => {
-          const a = element.querySelector('span')!.getBoundingClientRect();
-          const current = element.querySelector('strong')!;
-          const b = current.getBoundingClientRect();
-          const showsCurrent = getComputedStyle(current).display !== 'none';
-          const bounds = element.getBoundingClientRect();
-          return {
-            separated: !showsCurrent || a.right < b.left || a.bottom < b.top,
-            contained: [a, ...(showsCurrent ? [b] : [])].every((box) => box.left >= bounds.left && box.right <= bounds.right && box.bottom <= bounds.bottom),
-          };
-        });
-        expect(geometry.separated).toBe(true);
-        expect(geometry.contained).toBe(true);
-        await summary.focus();
+        await expect(trigger).toBeVisible();
+        await trigger.focus();
         await page.keyboard.press('Enter');
-        await expect(browser).toHaveAttribute('open', '');
-        await expect(browser.getByRole('link', { name: 'Reporting and takedown guidance', exact: true })).toHaveAttribute('aria-current', 'page');
-        await expect(summary).toBeFocused();
-        await page.keyboard.press('Space');
-        await expect(browser).not.toHaveAttribute('open', '');
+        const dialog = page.getByRole('dialog', { name: 'Documentation', exact: true });
+        await expect(dialog).toBeVisible();
+        await expect(dialog.getByRole('link', { name: 'Reporting and takedown guidance', exact: true })).toHaveAttribute('aria-current', 'page');
+        await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+        await page.keyboard.press('Escape');
+        await expect(dialog).toBeHidden();
+        await expect(trigger).toBeFocused();
+        await page.getByRole('button', { name: 'On this page', exact: true }).click();
+        const contents = page.getByRole('dialog', { name: 'Reporting and takedown guidance', exact: true });
+        await expect(contents).toBeVisible();
+        const destination = contents.getByRole('link').first();
+        const href = await destination.getAttribute('href');
+        await destination.focus();
+        await page.keyboard.press('Enter');
+        await expect(contents).toBeHidden();
+        expect(href).toMatch(/^#[a-z]/u);
+        await expect(page.locator(href!)).toBeFocused();
+        await expect(page.locator(href!).getByRole('heading').first()).toBeInViewport({ ratio: 1 });
       }
       await expectNoHorizontalOverflow(page);
       await page.evaluate(() => scrollTo(0, 0));
@@ -248,16 +244,23 @@ test('filters and opens the canonical CLI catalogue entirely by keyboard', async
   await expect(catalogue.getByRole('status')).toHaveText(`Showing 1 of ${CLI_COMMANDS.length} commands.`);
 
   const command = catalogue.locator('article[data-command="workflow-plan"]');
-  const open = command.locator(':scope > .command-row > button');
+  const open = command.getByRole('button', { name: 'View workflow-plan command' });
+  await expect(open).toContainText('View command');
   await open.focus();
   await page.keyboard.press('Enter');
   const workspace = catalogue.locator('article[data-command-detail="workflow-plan"]');
   await expect(workspace).toBeFocused();
+  await expect(workspace.getByRole('link', { name: 'Direct link to workflow-plan command' })).toHaveAttribute('href', '#command-workflow-plan');
   await expect(workspace.locator('.command-detail')).toContainText('Network behaviour');
   await expect(workspace.locator('.command-detail')).toContainText('Schemas');
   await workspace.getByRole('link', { name: /Back to 1 filtered command/u }).click();
   await expect(catalogue.locator('article[data-command="workflow-plan"] .command-open')).toBeFocused();
   await expect(page).toHaveURL(/\?q=workflow-plan#commands$/u);
+  await open.click();
+  await workspace.getByRole('combobox', { name: 'Jump to command' }).selectOption('lookup');
+  await expect(catalogue.locator('article[data-command-detail="lookup"]')).toBeFocused();
+  await expect(page).toHaveURL(/\/cli#command-lookup$/u);
+  await expect(catalogue.getByRole('region', { name: 'Operational boundary' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   expect(investigationRequests).toEqual([]);
 });
@@ -290,7 +293,6 @@ test('signer trust guidance is reachable by direct command link at supported wid
       await expect(detail).toContainText('--trust-store-file');
       await expect(detail).toContainText('whoisleuth.evidence-signer-trust-report');
       await expect(detail).toBeFocused();
-      await detail.getByText('Operational boundary', { exact: true }).click();
       await expect(detail.locator('.boundary p')).toBeVisible();
       await expect(detail.locator('.boundary p')).toContainText('unknown, retired, revoked or future-reviewed entries exit 4');
       await expectNoHorizontalOverflow(page);
@@ -332,13 +334,8 @@ test('opens a directly linked CLI command without loading unrelated command deta
   await expect(command).toBeVisible();
   await expect(command.locator('.command-detail')).toContainText('Limits and contracts');
   await expect(catalogue.locator('.command-detail')).toHaveCount(1);
-  await expect.poll(async () => {
-    const commandBox = await command.boundingBox();
-    const filtersBox = await catalogue.locator('.filters').boundingBox();
-    return commandBox && filtersBox
-      ? commandBox.y >= filtersBox.y + filtersBox.height
-      : false;
-  }).toBe(true);
+  await expect(command).toBeFocused();
+  await expect(command.getByRole('heading', { name: 'workflow-plan', exact: true })).toBeInViewport({ ratio: 1 });
   await expectNoHorizontalOverflow(page);
   expect(investigationRequests).toEqual([]);
 });
@@ -347,7 +344,7 @@ test('command and return links preserve open-in-new-tab activation @timing-sensi
   await page.goto('/cli#command-lookup');
   const command = page.locator('[data-command-detail="lookup"]');
   await expect(command).toBeVisible();
-  for (const link of [command.locator('.related-commands a').first(), command.locator('.back-to-results')]) {
+  for (const link of [command.locator('.related-commands a').first(), command.locator('.back-to-results'), command.getByRole('link', { name: 'Direct link to lookup command' })]) {
     await page.bringToFront();
     await expect(link).toBeVisible();
     const href = await link.getAttribute('href');
@@ -397,7 +394,7 @@ test('distinguishes compact and metadata CSV in responsive command details', asy
     const presentations = command.locator('dt').filter({ hasText: /^Presentation options$/u }).locator('..');
     await expect(presentations.getByText('--csv', { exact: true })).toBeVisible();
     await expect(presentations.getByText('--csv-with-metadata', { exact: true })).toBeVisible();
-    await command.getByText('Operational boundary', { exact: true }).click();
+    await expect(command.getByRole('region', { name: 'Operational boundary' })).toBeVisible();
     const boundary = command.locator('.boundary p');
     await expect(boundary).toContainText('separate observation and report times');
     await expect(boundary).toContainText('--csv retains the compact columns');
@@ -441,8 +438,7 @@ test('keeps workflow partial-result and resume guidance readable across referenc
   await page.goto('/cli#command-workflow-run');
   const detail = page.locator('article[data-command-detail="workflow-run"]');
   await expect(detail).toBeVisible();
-  await expect(detail.locator('details.boundary')).toHaveJSProperty('open', true);
-  const boundary = detail.locator('details.boundary > p');
+  const boundary = detail.getByRole('region', { name: 'Operational boundary' });
   await expect(boundary).toBeVisible();
   await expect(boundary).toContainText(/Partial collections pause for review.*not recollected.*resume/u);
   await expect(boundary).toContainText('failed validation or export steps remain retryable');
@@ -478,7 +474,7 @@ test('reveals related CLI commands even when the current filters exclude them', 
   const targetId = (await related.getAttribute('href'))?.replace('#command-', '') ?? '';
   expect(targetId).not.toBe('');
   await related.click();
-  await expect(search).toHaveValue('');
+  await expect(page).toHaveURL(new RegExp(`/cli#command-${targetId}$`, 'u'));
   const target = catalogue.locator(`article[data-command-detail="${targetId}"]`);
   await expect(target).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`#command-${targetId}$`, 'u'));

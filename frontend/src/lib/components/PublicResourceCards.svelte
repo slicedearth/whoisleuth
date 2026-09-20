@@ -26,16 +26,16 @@
 </div>
 
 <style>
-  .resource-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-  article{display:grid;min-width:0;gap:9px;padding:20px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
-  h3{margin:0;font:700 1.05rem var(--mono);letter-spacing:-.025em}
+  .resource-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 28px}
+  article{display:grid;align-content:start;min-width:0;gap:9px;padding:22px 0;border-top:1px solid var(--border)}
+  h3{margin:0;font:700 1.05rem/1.4 var(--font-sans);letter-spacing:-.015em}
   h3 a{display:flex;gap:10px;justify-content:space-between;color:var(--text)}
   h3 a span:first-child{min-width:0}
   h3 a span:last-child{flex:0 0 auto;color:var(--accent)}
   h3 a:hover{color:var(--accent)}
   article>p:not(.eyebrow){margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.6}
-  .compact{grid-template-columns:repeat(4,minmax(0,1fr))}
-  .compact article{padding:16px}
+  .compact{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  .compact article{padding:16px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   .compact article>p:not(.eyebrow){display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3}
   @media(max-width:980px){.compact{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media(max-width:680px){.resource-grid,.compact{grid-template-columns:1fr}}

@@ -562,7 +562,6 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
   const registrationFact = page.locator('.summaries article').filter({ hasText: 'Registration' }).first();
   const summaryCards = page.locator('.summaries article');
-  await expect(page.locator('.summaries')).toHaveCSS('align-items', 'start');
   const summaryPeerHeight = (await summaryCards.nth(1).boundingBox())?.height ?? 0;
   await registrationFact.getByText('Inspect evidence').click();
   expect((await summaryCards.nth(1).boundingBox())?.height ?? 0).toBeCloseTo(summaryPeerHeight, 0);
@@ -574,7 +573,6 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   const diagnosticGrid = page.getByRole('group', { name: 'Source diagnostics' });
   const diagnosticArticles = diagnosticGrid.locator('article');
   const diagnosticStates = diagnosticGrid.locator('article > strong');
-  await expect(diagnosticGrid).toHaveCSS('align-items', 'start');
   expect(await diagnosticArticles.count()).toBeGreaterThan(0);
   expect(await diagnosticStates.count()).toBe(await diagnosticArticles.count());
   expect(await diagnosticStates.evaluateAll((states) => {

@@ -79,7 +79,7 @@
   }
 </script>
 
-<div class="public-shell">
+<div class="public-shell" class:documentation-shell={referenceSectionActive}>
   <a class="skip-link" href="#main-content">Skip to main content</a>
   <header class="public-header">
     <a class="public-brand" href="/" aria-label="WHOISleuth overview"><span class="mark"><BrandMark /></span><span class="brand-copy"><strong>WHOISleuth</strong><small>Domain intelligence</small></span></a>
@@ -116,6 +116,7 @@
 
 <style>
   .public-shell{width:min(1280px,100%);min-height:100vh;margin:auto;padding:0 clamp(20px,4vw,48px)}
+  .public-shell.documentation-shell{width:min(1440px,100%)}
   .public-header{display:flex;position:static;inset:auto;z-index:auto;height:auto;align-items:center;justify-content:space-between;gap:12px 24px;padding:18px 0;border-bottom:1px solid var(--border);background:transparent;container:public-header/inline-size;flex-wrap:wrap}
   .public-brand{display:flex;align-items:center;gap:10px;font-family:var(--mono)}
   .public-brand .mark{width:38px;height:38px}

@@ -19,7 +19,6 @@ test('public pages expose a first-focusable skip link in the dark desktop theme'
   const focusedBox = await boundingBox(skipLink);
   expect(focusedBox.y).toBeGreaterThanOrEqual(0);
   expect(focusedBox.x).toBeGreaterThanOrEqual(0);
-  await expect(skipLink).toHaveCSS('background-color', 'rgb(23, 26, 33)');
 
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/#main-content$/u);

@@ -12,7 +12,7 @@
   } = $props();
 </script>
 
-<div class="goal-paths" role="region" aria-label={ariaLabel}>
+<div class="goal-paths" class:guide={linkSteps} role="region" aria-label={ariaLabel}>
   {#each goals as goal, index}
     <article class:featured={index === 0} id={linkSteps ? goal.id : undefined}>
       <h3>{goal.title}</h3>
@@ -69,8 +69,15 @@
   li a:hover,li a:focus-visible{border-color:var(--accent);color:var(--accent)}
   .path-link{align-self:flex-start;margin-top:auto;padding-top:24px;color:var(--accent);font:700 var(--text-xs) var(--mono)}
   .path-link:hover,.path-link:focus-visible{color:var(--text)}
+  .guide{grid-template-columns:1fr;gap:0}
+  .guide article,.guide article.featured{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 28px;padding:22px 0;border:0;border-top:1px solid var(--border);border-radius:0;background:transparent}
+  .guide h3{font-family:var(--font-sans)}
+  .guide p{grid-column:1;margin:0}
+  .guide ol{grid-column:2;grid-row:1/3;align-self:start;margin:0}
   @media(max-width:680px){
     .goal-paths{grid-template-columns:1fr}
     article.featured{grid-column:auto}
+    .guide article,.guide article.featured{grid-template-columns:1fr}
+    .guide ol{grid-column:1;grid-row:auto;margin-top:6px}
   }
 </style>

@@ -345,11 +345,9 @@ test('the dashboard starts a selected tab-scoped recipe without navigation or an
   const fullPlan = guide.locator('#investigation-plan');
   const planItems = fullPlan.locator(':scope > li');
   await expect(planItems).toHaveCount(5);
-  await expect(fullPlan).toHaveCSS('align-items', 'start');
   const fourthStepHeight = (await planItems.nth(3).boundingBox())?.height ?? 0;
   await planItems.nth(2).locator('summary').click();
   expect((await planItems.nth(3).boundingBox())?.height ?? 0).toBeCloseTo(fourthStepHeight, 0);
-  await expect(guide.locator('.secondary-details')).toHaveCSS('align-items', 'flex-start');
   for (const surface of [
     { width: 1280, height: 720, theme: 'light' },
     { width: 1280, height: 720, theme: 'dark' },

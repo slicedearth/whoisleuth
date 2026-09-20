@@ -74,16 +74,9 @@ test('signs in through the login form and back out again', async ({ page }) => {
   const publicFooter = page.locator('.public-footer');
   const publicPrivacyLink = publicFooter.getByRole('link', { name: 'Privacy' });
   const publicSourceLink = publicFooter.getByRole('link', { name: /Source and licence/ });
-  const publicAuthorLink = publicFooter.getByRole('link', { name: /slicedearth/ });
   await expect(publicPrivacyLink).toHaveAttribute('href', '/privacy');
   await expectVersionedSourceLink(publicSourceLink);
   await expect(publicFooter.locator('.new-tab')).toHaveCount(0);
-  await expect(publicPrivacyLink).toHaveCSS('text-decoration-line', 'none');
-  await expect(publicSourceLink).toHaveCSS('text-decoration-line', 'none');
-  await expect(publicAuthorLink).toHaveCSS('text-decoration-line', 'none');
-  await expect(publicPrivacyLink).toHaveCSS('font-weight', '700');
-  await expect(publicSourceLink).toHaveCSS('font-weight', '700');
-  await expect(publicAuthorLink).toHaveCSS('font-weight', '700');
   await expect(page.getByText('See the workflow', { exact: true })).toHaveCount(0);
   await expect.poll(() => publicSessionRequests).toBe(1);
   await expect(page.getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/login');

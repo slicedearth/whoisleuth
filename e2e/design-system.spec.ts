@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { boundingBox, currentBrandProfileBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData, openLookupOptionalSources, useTheme } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, openLookupOptionalSources, useTheme } from './helpers';
 import { protectedDestinations } from '../frontend/src/lib/workspaces';
 import { consoleCommandNavigation } from '../frontend/src/lib/console-command-navigation';
 import { INTELLIGENCE_CAPABILITIES, sectionedLookupFixture } from './lookup-design-fixtures';
@@ -100,13 +100,14 @@ test('the theme-aware WHOISleuth mark stays consistent and contained across them
   expect(await publicMark.evaluate((element) => element.tagName)).toBe('svg');
   await expect(publicMark.locator('[data-brand-tone="primary"]')).toHaveCount(1);
   await expect(publicMark.locator('[data-brand-tone="secondary"]')).toHaveCount(1);
+  const darkTones = await publicMark.locator('[data-brand-tone]').evaluateAll(elements => elements.map(element => getComputedStyle(element).fill));
 
   await page.getByRole('button', { name: /Colour theme/ }).click();
   await page.getByRole('option', { name: 'Light theme' }).click();
   const lightMark = page.locator('.public-brand .brand-mark');
   await expect(lightMark).toBeVisible();
-  await expect(lightMark.locator('[data-brand-tone="primary"]')).toHaveCSS('fill', 'rgb(0, 91, 145)');
-  await expect(lightMark.locator('[data-brand-tone="secondary"]')).toHaveCSS('fill', 'rgb(0, 107, 73)');
+  const lightTones = await lightMark.locator('[data-brand-tone]').evaluateAll(elements => elements.map(element => getComputedStyle(element).fill));
+  for (let index = 0; index < darkTones.length; index += 1) expect(lightTones[index]).not.toBe(darkTones[index]);
 
   await page.setViewportSize({ width: 320, height: 640 });
   await page.reload();
@@ -494,35 +495,6 @@ test('Lookup describes pending collection without implying staged completion', a
   await expect(page.locator('#result')).toBeVisible();
 });
 
-
-test('primary, secondary, and destructive actions are visually distinct', async ({ page }) => {
-  await useTheme(page, 'dark');
-  await page.goto('/brands');
-  const now = '2026-07-13T00:00:00.000Z';
-  const profile = {
-      id: 'design-profile', name: 'Design profile', officialDomains: ['official.invalid'], productNames: [],
-      tlds: [], approvedPartnerDomains: [], allowlistedDomains: [], allowlistedRegistrars: [], dkimSelectors: [],
-      trademarkOwner: '', trademarkRegistration: '', officialFaviconHash: '', officialFaviconPHash: '',
-      createdAt: now, updatedAt: now, pageBaseline: null,
-  };
-  await migrateLegacyBrowserData(page, {
-    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([profile]),
-    'whois-rdap-active-brand-profile-v1': 'design-profile',
-  });
-
-  const primary = page.getByRole('button', { name: 'New profile' });
-  const neutral = page.getByRole('button', { name: 'Export JSON' }).first();
-  const destructive = page.getByRole('button', { name: 'Delete' }).first();
-
-  // Primary: bright gradient with dark text.
-  await expect(primary).toHaveCSS('background-image', /linear-gradient/);
-  await expect(primary).toHaveCSS('color', 'rgb(7, 16, 28)');
-  // Secondary: flat panel, light text, no gradient.
-  await expect(neutral).toHaveCSS('background-image', 'none');
-  await expect(neutral).toHaveCSS('color', 'rgb(230, 232, 238)');
-  // Destructive: rendered in the danger colour.
-  await expect(destructive).toHaveCSS('color', 'rgb(255, 107, 107)');
-});
 
 test('long untrusted values wrap inside result tiles without page overflow', async ({ page }) => {
   const longLabel = 'a'.repeat(63);

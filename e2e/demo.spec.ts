@@ -318,8 +318,8 @@ test('settles long-to-short stage transitions at one stable workspace anchor', a
   await page.getByRole('button', { name: 'Open synthetic Case' }).click();
   await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeFocused();
   await expect(page.locator('#demo-workspace')).toHaveAttribute('aria-busy', 'false');
-  await expect.poll(() => workspaceTop(page), { timeout: 2500 }).toBe(24);
-  await expect(page.locator('#demo-workspace')).toHaveCSS('min-height', '0px');
+  await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeInViewport({ ratio: 1 });
+  await expect.poll(() => workspaceNeedsScroll(page), { timeout: 2500 }).toBe(false);
   const settledTop = await workspaceTop(page);
   expect(await workspaceTop(page)).toBe(settledTop);
 
@@ -327,8 +327,8 @@ test('settles long-to-short stage transitions at one stable workspace anchor', a
   await page.getByRole('button', { name: 'Review Lookup evidence' }).click();
   await expect(page.getByRole('heading', { name: 'northstar-login.example' })).toBeFocused();
   await expect(page.locator('#demo-workspace')).toHaveAttribute('aria-busy', 'false');
-  await expect.poll(() => workspaceTop(page), { timeout: 2500 }).toBe(24);
-  await expect(page.locator('#demo-workspace')).toHaveCSS('min-height', '0px');
+  await expect(page.getByRole('heading', { name: 'northstar-login.example', exact: true })).toBeInViewport({ ratio: 1 });
+  await expect.poll(() => workspaceNeedsScroll(page), { timeout: 2500 }).toBe(false);
   const returnTop = await workspaceTop(page);
   expect(await workspaceTop(page)).toBe(returnTop);
 });
