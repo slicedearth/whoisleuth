@@ -41,6 +41,24 @@ export class LookupAnchorController {
   #smoothInFlight = false;
   #resizeObserver: ResizeObserver | null = null;
   #mutationObserver: MutationObserver | null = null;
+  #pendingReveal: (() => void) | null = null;
+
+  /** A completed request may reveal its result only while its interaction still owns the viewport. */
+  captureRevealIntent(): Readonly<{ current: () => boolean; dispose: () => void }> {
+    this.#pendingReveal?.();
+    const controller = new AbortController();
+    let current = true;
+    const cancel = () => {
+      current = false;
+      controller.abort();
+      if (this.#pendingReveal === cancel) this.#pendingReveal = null;
+    };
+    this.#pendingReveal = cancel;
+    for (const eventName of CANCEL_EVENTS) {
+      window.addEventListener(eventName, cancel, { capture: true, passive: true, signal: controller.signal });
+    }
+    return Object.freeze({ current: () => current, dispose: cancel });
+  }
 
   #cancel = (): void => {
     this.stop();
@@ -100,6 +118,7 @@ export class LookupAnchorController {
   }
 
   stop(): void {
+    this.#pendingReveal?.();
     this.#resizeObserver?.disconnect();
     this.#mutationObserver?.disconnect();
     this.#resizeObserver = null;

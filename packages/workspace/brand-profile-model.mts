@@ -4,6 +4,11 @@
 
 import { normalizeDomain } from '../cases/case-model.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { canonicalDomainControlRecords, normalizeDeclaredDomainControlRecordModes, normalizeDomainControlRecordModes } from '../evidence/domain-control-runtime.mts';
+import { DOMAIN_CONTROL_RECORD_LIST_FIELDS, type DomainControlRecordModes } from '../contracts/domain-control-manifest.mts';
+import { latestObservationCohort } from '../evidence/latest-observations.mts';
+import { MAX_IDENTITY_DIGEST_BYTES, sha256IdentityHex } from '../evidence/record-identity.mts';
+import { DOMAIN_POSTURE_COMPARISON_VERSION, MAX_POSTURE_CHECKS, MAX_POSTURE_CHECK_RECORDS, MAX_POSTURE_RECORD_LENGTH, normalizeDomainPostureSourceContext, normalizeDomainPostureProfileContext, type DomainPostureProfileContext, type DomainPostureSourceContext } from '../evidence/domain-posture-context.mts';
 import { normalizeOpaqueReferenceId } from '../cases/opaque-reference-id.mts';
 import { normalizePageBaseline } from './page-baseline.mts';
 import type { PageBaseline } from './page-baseline.mts';
@@ -115,11 +120,14 @@ export type DesiredPostureSuppression = {
 };
 export type DesiredPostureObservation = {
   observedAt: string;
+  context?: DomainPostureProfileContext;
   checks: Array<{
     id: string;
     status: 'danger' | 'info' | 'pass' | 'warning';
     records: string[];
+    sourceContext?: DomainPostureSourceContext;
   }>;
+  omittedChecks?: number;
 };
 export type DesiredPostureChangeWindow = {
   id: string;
@@ -134,6 +142,7 @@ export type DesiredPostureBaseline = {
   ds: string[];
   mx: string[];
   caa: string[];
+  recordModes?: Readonly<Partial<DomainControlRecordModes>>;
   tlsIssuer: string;
   tlsSanPatterns: string[];
   tlsSpkiSha256: string;
@@ -290,6 +299,33 @@ export function normalizeProfileTextValues(value: unknown): string[] {
   return normalizeList(value, (item) => boundedText(item));
 }
 
+export const MAX_ALLOWLIST_DRAFT_CHARACTERS = (MAX_PROFILE_DOMAIN_LENGTH + 2) * MAX_PROFILE_VALUE_INPUTS;
+
+/** Admit the complete submitted list or leave the draft unchanged. */
+export function addBrandAllowlistValues(
+  profile: Pick<BrandProfile, 'officialDomains' | 'approvedPartnerDomains'>,
+  kind: 'domains' | 'registrars',
+  current: readonly string[],
+  raw: string,
+): string[] {
+  if (raw.length > MAX_ALLOWLIST_DRAFT_CHARACTERS) throw new RangeError('The submitted allowlist text is too large.');
+  const inputs = raw.split(/[\n,]+/u).map((item) => item.trim()).filter(Boolean);
+  if (inputs.length > MAX_PROFILE_VALUE_INPUTS) throw new RangeError(`Review at most ${MAX_PROFILE_VALUE_INPUTS} entries at a time.`);
+  const next = new Map(current.map((value) => [value.toLowerCase(), value]));
+  const trusted = new Set([...profile.officialDomains, ...profile.approvedPartnerDomains]);
+  for (const [index, input] of inputs.entries()) {
+    const value = kind === 'domains' ? normalizeProfileDomains([input])[0] : normalizeProfileTextValues([input])[0];
+    if (!value || (kind === 'registrars' && input.replace(/\s+/gu, ' ').length > MAX_PROFILE_TEXT_LENGTH)) {
+      throw new TypeError(`Allowlist entry ${index + 1} is invalid or too long. No entries were added.`);
+    }
+    if (kind === 'domains' && trusted.has(value)) continue;
+    if (!next.has(value.toLowerCase())) next.set(value.toLowerCase(), value);
+  }
+  if (next.size > MAX_PROFILE_VALUES) throw new RangeError(`This list would contain ${next.size} entries; the current profile supports ${MAX_PROFILE_VALUES}. No entries were added.`);
+  if (next.size === current.length) throw new TypeError('No new entries remain after excluding existing and trusted values.');
+  return [...next.values()];
+}
+
 export function normalizeProfileTlds(value: unknown): string[] {
   return normalizeList(value, normalizeTld);
 }
@@ -334,6 +370,32 @@ export function normalizeProtectionAttestations(value: unknown): ProtectionAttes
   return output;
 }
 
+export type ProtectionAttestationReview = Omit<ProtectionAttestation, 'assertedAt'>;
+
+/** Only submitted, validated reviews acquire a new analyst-review clock. */
+export function reviewProtectionAttestations(
+  existing: readonly ProtectionAttestation[],
+  reviews: readonly ProtectionAttestationReview[],
+  nowIso: string,
+): ProtectionAttestation[] {
+  const assertedAt = timestamp(nowIso, null);
+  if (!assertedAt) throw new TypeError('The account-control review time is invalid.');
+  if (reviews.length > MAX_PROTECTION_ATTESTATIONS) throw new RangeError('Too many account-control reviews were submitted.');
+  const next = new Map(existing.map((item) => [item.control, { ...item }]));
+  const seen = new Set<string>();
+  for (const review of reviews) {
+    if (!PROTECTION_ATTESTATION_CONTROL_SET.has(review.control) || seen.has(review.control)
+      || !PROTECTION_ATTESTATION_STATES.has(review.state)) throw new TypeError('An account-control review is invalid or repeated.');
+    const expiresAt = review.expiresAt === null ? null : timestamp(review.expiresAt, null);
+    if (review.expiresAt !== null && !expiresAt) throw new TypeError('Enter a valid account-control expiry date.');
+    if (typeof review.note !== 'string' || CONTROL_RE.test(review.note)
+      || review.note.replace(/\s+/gu, ' ').trim().length > MAX_PROFILE_TEXT_LENGTH) throw new TypeError(`Account-control notes must contain at most ${MAX_PROFILE_TEXT_LENGTH} characters and no control characters.`);
+    seen.add(review.control);
+    next.set(review.control, { control: review.control, state: review.state, assertedAt, expiresAt, note: boundedText(review.note) });
+  }
+  return [...next.values()];
+}
+
 function normalizeDesiredPostureRecords(value: unknown, normalizer?: (value: unknown) => string): string[] {
   if (!Array.isArray(value)) return [];
   const output = new Set<string>();
@@ -349,8 +411,9 @@ function normalizeDesiredPostureRecords(value: unknown, normalizer?: (value: unk
 
 function normalizeDesiredPostureObservation(value: unknown): DesiredPostureObservation | null {
   const candidate = record(value);
-  const observedAt = timestamp(candidate.observedAt, null);
-  if (!observedAt || !Array.isArray(candidate.checks)) return null;
+  const observedAt = normalizeExplicitIsoTimestamp(candidate.observedAt) ?? '';
+  if (!Array.isArray(candidate.checks)) return null;
+  const context = normalizeDomainPostureProfileContext(candidate.context);
   const checks: DesiredPostureObservation['checks'] = [];
   const seen = new Set<string>();
   for (const item of candidate.checks.slice(0, 64)) {
@@ -363,29 +426,90 @@ function normalizeDesiredPostureObservation(value: unknown): DesiredPostureObser
       || !POSTURE_CHECK_STATUSES.has(check.status)
     ) continue;
     seen.add(id);
+    if (check.sourceContext !== undefined && !Array.isArray(check.records)) throw new TypeError('Source-qualified posture records must be an array.');
+    const inputRecords = Array.isArray(check.records) ? check.records : [];
+    const records: string[] = [];
+    for (const item of inputRecords.slice(0, MAX_POSTURE_CHECK_RECORDS)) {
+      if (typeof item === 'string' && item.length <= MAX_POSTURE_RECORD_LENGTH && !CONTROL_RE.test(item)) records.push(item);
+    }
+    const omitted = Math.max(0, inputRecords.length - records.length);
+    const source = normalizeDomainPostureSourceContext(check.sourceContext);
+    const sourceContext = source && omitted ? {
+      ...source,
+      state: source.state === 'unavailable' ? 'unavailable' as const : 'partial' as const,
+      omittedRecords: source.omittedRecords === null ? null : Math.min(Number.MAX_SAFE_INTEGER, source.omittedRecords + omitted),
+    } : source;
     checks.push({
       id,
       status: check.status as DesiredPostureObservation['checks'][number]['status'],
-      records: normalizeDesiredPostureRecords(check.records),
+      records,
+      ...(sourceContext ? { sourceContext } : {}),
     });
-    if (checks.length >= 32) break;
+    if (checks.length >= MAX_POSTURE_CHECKS) break;
   }
-  return checks.length ? { observedAt, checks } : null;
+  const omittedChecks = Math.max(0, candidate.checks.length - checks.length)
+    + (Number.isSafeInteger(candidate.omittedChecks) && Number(candidate.omittedChecks) > 0 ? Number(candidate.omittedChecks) : 0);
+  return checks.length ? { observedAt, ...(context ? { context } : {}), checks, ...(omittedChecks ? { omittedChecks: Math.min(Number.MAX_SAFE_INTEGER, omittedChecks) } : {}) } : null;
 }
 
-function normalizeDesiredPostureObservationHistory(
+export function normalizeDesiredPostureObservationHistory(
   value: unknown,
   previous: DesiredPostureObservation | null,
 ): DesiredPostureObservation[] {
   const candidates = Array.isArray(value) ? value : previous ? [previous] : [];
-  const byTime = new Map<string, DesiredPostureObservation>();
+  const byTime = new Map<string, DesiredPostureObservation[]>();
   for (const item of candidates.slice(0, MAX_DESIRED_POSTURE_OBSERVATIONS * 4)) {
     const normalized = normalizeDesiredPostureObservation(item);
-    if (normalized) byTime.set(normalized.observedAt, normalized);
+    if (!normalized) continue;
+    if (new TextEncoder().encode(JSON.stringify(normalized)).byteLength > MAX_IDENTITY_DIGEST_BYTES) {
+      throw new RangeError('Record identity exceeds its byte limit.');
+    }
+    const cohort = byTime.get(normalized.observedAt) ?? [];
+    cohort.push(normalized);
+    byTime.set(normalized.observedAt, cohort);
   }
-  return [...byTime.values()]
-    .sort((left, right) => Date.parse(left.observedAt) - Date.parse(right.observedAt))
+  return [...byTime.entries()]
+    .sort(([left], [right]) => !left ? 1 : !right ? -1 : Date.parse(left) - Date.parse(right))
+    .flatMap(([, cohort]) => {
+      // Different capture times already distinguish observations. Digest-based
+      // deduplication and ordering remain necessary only within a tied cohort.
+      if (cohort.length === 1) return cohort;
+      const byIdentity = new Map(cohort.map((observation) => [desiredPostureObservationIdentity(observation), observation]));
+      return [...byIdentity.entries()].sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+        .map(([, observation]) => observation);
+    })
     .slice(-MAX_DESIRED_POSTURE_OBSERVATIONS);
+}
+
+export function desiredPostureObservationIdentity(observation: DesiredPostureObservation): string {
+  return sha256IdentityHex(new TextEncoder().encode(JSON.stringify(observation)));
+}
+
+export function desiredPostureObservations(baseline: Pick<DesiredPostureBaseline, 'observationHistory' | 'previousObservation'>): readonly DesiredPostureObservation[] {
+  return baseline.observationHistory?.length ? baseline.observationHistory : baseline.previousObservation ? [baseline.previousObservation] : [];
+}
+
+export function currentDesiredPostureObservation(baseline: Pick<DesiredPostureBaseline, 'observationHistory' | 'previousObservation'>) {
+  const history = desiredPostureObservations(baseline);
+  const cohort = latestObservationCohort(history, (item) => item.observedAt);
+  return {
+    observation: !cohort.undated.length && cohort.latest.length === 1 ? cohort.latest[0]! : null,
+    candidates: [...cohort.latest, ...cohort.undated],
+    limitation: cohort.undated.length ? 'Retained observations include an unknown capture time; no unique latest review is selected.'
+      : cohort.latest.length > 1 ? 'Distinct observations share the latest capture time; no unique latest review is selected.' : null,
+  };
+}
+
+export function brandPostureCollectionFingerprint(profile: Pick<BrandProfile, 'id' | 'officialDomains' | 'mailProtectionProfile' | 'dkimSelectors' | 'retiredDkimSelectors'>): string {
+  return sha256IdentityHex(new TextEncoder().encode(JSON.stringify([
+    profile.id, [...profile.officialDomains].sort(), profile.mailProtectionProfile,
+    [...profile.dkimSelectors].sort(), [...profile.retiredDkimSelectors].sort(),
+  ])));
+}
+
+export function brandPostureObservationContext(profile: BrandProfile, domain: string): DomainPostureProfileContext {
+  if (!profile.officialDomains.includes(domain)) throw new TypeError('Posture observation target is not an official domain of this profile.');
+  return { version: DOMAIN_POSTURE_COMPARISON_VERSION, domain, profileId: profile.id, profileFingerprint: brandPostureCollectionFingerprint(profile) };
 }
 
 function deterministicChangeWindowId(seed: string): string {
@@ -446,6 +570,22 @@ function normalizeTlsSanPatterns(value: unknown): string[] {
   return [...output].sort();
 }
 
+function normalizeBaselineRecords(candidate: Record<string, unknown>) {
+  const records = {
+    nameservers: normalizeDesiredPostureRecords(candidate.nameservers, (entry) => normalizeDomain(entry)),
+    ds: normalizeDesiredPostureRecords(candidate.ds),
+    mx: normalizeDesiredPostureRecords(candidate.mx),
+    caa: normalizeDesiredPostureRecords(candidate.caa),
+  };
+  if (!Object.hasOwn(candidate, 'recordModes')) return records;
+  const recordModes = normalizeDeclaredDomainControlRecordModes(candidate.recordModes);
+  for (const field of DOMAIN_CONTROL_RECORD_LIST_FIELDS) {
+    if (Object.hasOwn(recordModes, field)) records[field] = canonicalDomainControlRecords(candidate[field], field);
+  }
+  normalizeDomainControlRecordModes(recordModes, records);
+  return { ...records, recordModes };
+}
+
 export function normalizeDesiredPostureBaselines(
   value: unknown,
   officialDomains: readonly string[],
@@ -483,10 +623,7 @@ export function normalizeDesiredPostureBaselines(
     output.push({
       version: 1,
       domain,
-      nameservers: normalizeDesiredPostureRecords(candidate.nameservers, (entry) => normalizeDomain(entry)),
-      ds: normalizeDesiredPostureRecords(candidate.ds),
-      mx: normalizeDesiredPostureRecords(candidate.mx),
-      caa: normalizeDesiredPostureRecords(candidate.caa),
+      ...normalizeBaselineRecords(candidate),
       tlsIssuer: boundedText(candidate.tlsIssuer, MAX_PROFILE_TEXT_LENGTH),
       tlsSanPatterns: normalizeTlsSanPatterns(candidate.tlsSanPatterns),
       tlsSpkiSha256: typeof candidate.tlsSpkiSha256 === 'string' && SHA256_RE.test(candidate.tlsSpkiSha256)
@@ -509,7 +646,7 @@ export function normalizeDesiredPostureBaselines(
       ),
       suppressions,
       note: boundedText(candidate.note, MAX_PROFILE_TEXT_LENGTH),
-      previousObservation: observationHistory.at(-1) ?? previousObservation,
+      previousObservation: currentDesiredPostureObservation({ observationHistory, previousObservation }).observation,
       observationHistory,
       updatedAt: timestamp(candidate.updatedAt, fallback),
     });
@@ -695,7 +832,7 @@ export function brandProfileStoreVersion(raw: unknown): number | null {
 
 /** Normalize an internal profile collection or current stored envelope. */
 export function normalizeBrandProfileStore(raw: unknown): BrandProfileStore {
-  assertWorkspaceInputGraph(raw, 'Brand Profile store');
+  assertWorkspaceInputGraph(raw, 'Brand Profile store', { maximumBytes: MAX_PROFILE_STORE_BYTES });
   assertWorkspaceDeclaredVersion(raw, 'Brand Profile store');
   const sourceVersion = brandProfileStoreVersion(raw);
   if (!Array.isArray(raw) && sourceVersion !== null
@@ -713,6 +850,11 @@ export function normalizeBrandProfileStore(raw: unknown): BrandProfileStore {
     if (byId.size >= MAX_PROFILES) break;
   }
   return { version: BRAND_PROFILE_SCHEMA_VERSION, profiles: [...byId.values()] };
+}
+
+/** New authored/imported records receive an identity only at the mutation boundary. */
+export function createBrandProfileId(): string {
+  return crypto.randomUUID ? crypto.randomUUID() : `bp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export function serializeBrandProfileStore(profiles: unknown): string {
@@ -736,8 +878,8 @@ export function mergeBrandProfiles(
   importedRaw: unknown,
   options: Pick<NormalizeBrandProfileOptions, 'nowIso' | 'makeId'> = {},
 ) {
-  assertWorkspaceInputGraph(localRaw, 'Local Brand Profile store');
-  assertWorkspaceInputGraph(importedRaw, 'Imported Brand Profile document');
+  const local = normalizeBrandProfileStore(localRaw).profiles;
+  assertWorkspaceInputGraph(importedRaw, 'Imported Brand Profile document', { maximumBytes: MAX_PROFILE_STORE_BYTES });
   assertWorkspacePortableVersion(importedRaw, BRAND_PROFILE_SCHEMA_VERSION, 'Imported Brand Profile document');
   const imported = record(importedRaw);
   if (imported.schema !== BRAND_PROFILE_SCHEMA) {
@@ -768,7 +910,6 @@ export function mergeBrandProfiles(
     const name = boundedText(value.name, MAX_PROFILE_NAME_LENGTH);
     if (id && name) retainIdName(id, name);
   }
-  const local = normalizeBrandProfileStore(localRaw).profiles;
   for (const profile of local) retainIdName(profile.id, profile.name);
   const byName = new Map(local.map((profile) => [profile.name.toLowerCase(), profile]));
   const input = profileList(importedRaw);
@@ -781,9 +922,14 @@ export function mergeBrandProfiles(
     const rawId = normalizeBrandProfileId(value.id);
     if (rawId && rawName) retainIdName(rawId, rawName);
     const existing = rawName ? byName.get(rawName.toLowerCase()) : null;
+    const incomingUpdatedAt = timestamp(value.updatedAt, null);
+    if (existing && (!incomingUpdatedAt || incomingUpdatedAt <= existing.updatedAt)) {
+      skipped++;
+      continue;
+    }
     const profile = normalizeBrandProfile(item, {
       existing,
-      touch: Boolean(existing),
+      touch: false,
       nowIso: options.nowIso,
       makeId: options.makeId,
     });

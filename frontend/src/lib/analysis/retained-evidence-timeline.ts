@@ -1,11 +1,19 @@
-import type { CaseRecord } from './case-model.ts';
+import { caseLookupTarget, type CaseRecord } from './case-model.ts';
+import { caseWorkspaceHref } from './case-response-stage.ts';
 import type { BulkSession } from './bulk-session-model.ts';
 import type { RelationshipObservation } from './relationship-observation-model.ts';
 import type { WatchlistCollection } from './watchlist-store.ts';
 import type { WebsiteProfileSnapshot } from './website-snapshot-model.ts';
+import { normalizeExplicitIsoTimestamp, readObservationTime } from '../../../../packages/evidence/observation.mts';
+import { MAX_CASES, MAX_CASE_ASSERTIONS, MAX_CASE_EVIDENCE_PINS, MAX_EVIDENCE_SNAPSHOTS_PER_CASE } from '../../../../packages/contracts/case-portability.mts';
+import { MAX_BULK_SESSIONS, MAX_BULK_SESSION_ROWS, MAX_RELATIONSHIP_OBSERVATIONS, MAX_RELATIONSHIP_OBSERVATION_DOMAINS, MAX_WATCHLISTS, MAX_WATCHLIST_HISTORY_EVENTS, MAX_WATCHLIST_CHANGES_PER_EVENT, MAX_WEBSITE_SNAPSHOTS } from '../../../../packages/contracts/workspace-portability.mts';
+import { MAX_ANALYST_REVIEW_STATE_RECORDS, MAX_ANALYST_REVIEW_HISTORY, MAX_ANALYST_REVIEW_ASSOCIATIONS, MAX_ANALYST_REVIEW_RATIONALE_LENGTH, type AnalystReviewStateStore } from '../../../../packages/contracts/analyst-review-state-contract.mts';
+import { analystReviewDecisionIdentity } from '../../../../packages/monitoring/analyst-review-state.mts';
 
-export const MAX_RETAINED_TIMELINE_ITEMS = 2_000;
-export const MAX_RETAINED_TIMELINE_ENTITIES = 20;
+export const MAX_RETAINED_TIMELINE_ITEMS = MAX_CASES * (MAX_EVIDENCE_SNAPSHOTS_PER_CASE + MAX_CASE_EVIDENCE_PINS + MAX_CASE_ASSERTIONS)
+  + MAX_BULK_SESSIONS + MAX_RELATIONSHIP_OBSERVATIONS + MAX_WATCHLISTS * MAX_WATCHLIST_HISTORY_EVENTS + MAX_WEBSITE_SNAPSHOTS
+  + MAX_ANALYST_REVIEW_STATE_RECORDS * (1 + MAX_ANALYST_REVIEW_HISTORY);
+export const MAX_RETAINED_TIMELINE_ENTITIES = Math.max(MAX_BULK_SESSION_ROWS, MAX_RELATIONSHIP_OBSERVATION_DOMAINS, MAX_WATCHLIST_CHANGES_PER_EVENT);
 export const MAX_RETAINED_TIMELINE_LIMITATIONS = 8;
 
 export const RETAINED_TIMELINE_KINDS = [
@@ -17,11 +25,12 @@ export const RETAINED_TIMELINE_KINDS = [
   'website_snapshot',
   'watchlist_check',
   'relationship',
+  'review_decision',
 ] as const;
 export type RetainedTimelineKind = typeof RETAINED_TIMELINE_KINDS[number];
 export type RetainedTimelineCompleteness = 'complete' | 'partial' | 'inconclusive' | 'unknown';
-export type RetainedTimelineEventType = 'evidence' | 'change';
-export type RetainedTimelineTimeFilter = 'all' | '7d' | '30d' | '90d';
+export type RetainedTimelineEventType = 'evidence' | 'change' | 'activity';
+export type RetainedTimelineTimeFilter = 'all' | '7d' | '30d' | '90d' | 'undated';
 export const RETAINED_TIMELINE_AREAS = [
   'lookup',
   'bulk',
@@ -29,17 +38,19 @@ export const RETAINED_TIMELINE_AREAS = [
   'case',
   'evidence_pin',
   'relationship',
+  'review',
 ] as const;
 export type RetainedTimelineArea = typeof RETAINED_TIMELINE_AREAS[number];
 export type RetainedTimelineFreshness = 'current' | 'stale' | 'unknown';
 
-export const RETAINED_TIMELINE_FRESHNESS_DAYS: Readonly<Record<RetainedTimelineArea, number>> = {
+export const RETAINED_TIMELINE_FRESHNESS_DAYS: Readonly<Record<RetainedTimelineArea, number | null>> = {
   lookup: 30,
   bulk: 7,
   watchlist: 7,
   case: 30,
   evidence_pin: 30,
   relationship: 30,
+  review: null,
 };
 
 export type RetainedTimelineItem = Readonly<{
@@ -51,16 +62,18 @@ export type RetainedTimelineItem = Readonly<{
   entities: readonly string[];
   caseId: string | null;
   caseLabel: string | null;
+  caseAssociations?: readonly Readonly<{ id: string; label: string; present: boolean }>[];
   owner: string;
   href: string;
   areas: readonly RetainedTimelineArea[];
   source: string;
   sourceState: string;
-  observedAt: string;
-  storedAt: string;
+  observedAt: string | null;
+  storedAt: string | null;
+  activityAt?: string | null;
   freshness: RetainedTimelineFreshness;
   ageDays: number | null;
-  freshnessThresholdDays: number;
+  freshnessThresholdDays: number | null;
   completeness: RetainedTimelineCompleteness;
   truncated: boolean;
   derived: boolean;
@@ -71,9 +84,9 @@ export type RetainedEvidenceTimeline = Readonly<{
   items: readonly RetainedTimelineItem[];
   truncated: boolean;
   counts: Readonly<Record<RetainedTimelineKind | 'all' | RetainedTimelineEventType, number>>;
-  entities: readonly string[];
+  omissions: readonly Readonly<{ source: string; count: number }>[];
+  evaluatedAt: string | null;
   cases: readonly Readonly<{ id: string; label: string }>[];
-  sources: readonly string[];
   freshnessCounts: Readonly<Record<RetainedTimelineFreshness, number>>;
   limitations: readonly string[];
 }>;
@@ -97,17 +110,14 @@ function text(value: unknown, maximum = 240): string {
 }
 
 function timestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 64) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
-function entities(values: readonly unknown[]): string[] {
+function entities(values: readonly unknown[], maximum: number): string[] {
   const output = new Set<string>();
-  for (const value of values.slice(0, MAX_RETAINED_TIMELINE_ENTITIES * 4)) {
+  for (const value of values.slice(0, maximum)) {
     const candidate = text(value, 253).toLowerCase();
     if (candidate) output.add(candidate);
-    if (output.size >= MAX_RETAINED_TIMELINE_ENTITIES) break;
   }
   return [...output].sort();
 }
@@ -125,16 +135,14 @@ function limitations(values: readonly unknown[], fallback: string): string[] {
 
 function freshnessMetadata(
   area: RetainedTimelineArea,
-  observedAt: string,
-  now: string,
+  observedAt: string | null,
+  now: string | null,
 ): Pick<RetainedTimelineItem, 'freshness' | 'ageDays' | 'freshnessThresholdDays'> {
   const threshold = RETAINED_TIMELINE_FRESHNESS_DAYS[area];
-  const observed = Date.parse(observedAt);
-  const current = Date.parse(now);
-  if (!Number.isFinite(observed) || !Number.isFinite(current)) {
+  const { ageDays } = readObservationTime(observedAt, now);
+  if (ageDays === null || threshold === null) {
     return { freshness: 'unknown', ageDays: null, freshnessThresholdDays: threshold };
   }
-  const ageDays = Math.max(0, Math.floor((current - observed) / 86_400_000));
   return {
     freshness: ageDays >= threshold ? 'stale' : 'current',
     ageDays,
@@ -142,14 +150,22 @@ function freshnessMetadata(
   };
 }
 
-function caseTimelineItems(records: readonly CaseRecord[], now: string): RetainedTimelineItem[] {
+function omitTimelineSource(omissions: Map<string, number>, source: string, count: number) {
+  if (count > 0) omissions.set(source, Math.min(Number.MAX_SAFE_INTEGER, (omissions.get(source) ?? 0) + count));
+}
+
+function timelineSource<T>(values: readonly T[], maximum: number, source: string, omissions: Map<string, number>, newestLast = false): T[] {
+  omitTimelineSource(omissions, source, values.length - maximum);
+  return newestLast ? values.slice(-maximum) : values.slice(0, maximum);
+}
+
+function caseTimelineItems(records: readonly CaseRecord[], now: string | null, omissions: Map<string, number>): RetainedTimelineItem[] {
   const items: RetainedTimelineItem[] = [];
-  for (const record of records.slice(0, 500)) {
-    const caseHref = `/monitor?view=cases&case=${encodeURIComponent(record.id)}`;
-    for (const snapshot of record.evidenceHistory.slice(-20)) {
+  for (const record of timelineSource(records, MAX_CASES, 'Cases outside the source bound', omissions)) {
+    const caseHref = caseWorkspaceHref(record.id, 'evidence');
+    for (const snapshot of timelineSource(record.evidenceHistory, MAX_EVIDENCE_SNAPSHOTS_PER_CASE, 'Case snapshots outside the source bound', omissions, true)) {
       const observedAt = timestamp(snapshot.capturedAt);
       const storedAt = timestamp(record.updatedAt);
-      if (!observedAt || !storedAt) continue;
       const depth = snapshot.scanDepth === 'deep' ? 'Deep' : snapshot.scanDepth === 'fast' ? 'Fast' : 'Unknown-depth';
       const areas: RetainedTimelineArea[] = ['case'];
       if (snapshot.source === 'lookup') areas.push('lookup');
@@ -179,10 +195,9 @@ function caseTimelineItems(records: readonly CaseRecord[], now: string): Retaine
         limitations: ['Compact case snapshots do not retain a complete source-coverage or truncation record. Open the owning case for the retained fields.'],
       });
     }
-    for (const pin of record.evidencePins.slice(-40)) {
+    for (const pin of timelineSource(record.evidencePins, MAX_CASE_EVIDENCE_PINS, 'Case evidence pins outside the source bound', omissions, true)) {
       const observedAt = timestamp(pin.observedAt);
       const storedAt = timestamp(pin.createdAt);
-      if (!observedAt || !storedAt) continue;
       const checkpoint = Boolean(pin.checkpointId);
       items.push({
         id: `${checkpoint ? 'checkpoint' : 'pin'}:${record.id}:${pin.id}`,
@@ -194,7 +209,7 @@ function caseTimelineItems(records: readonly CaseRecord[], now: string): Retaine
         caseId: record.id,
         caseLabel: record.domain,
         owner: `Case · ${record.domain}`,
-        href: `${caseHref}#case-response-${encodeURIComponent(record.id)}`,
+        href: caseHref,
         areas: ['case', 'evidence_pin'],
         source: text(pin.source, 80) || 'Evidence pin',
         sourceState: text(pin.sourceState, 60) || 'recorded',
@@ -207,12 +222,11 @@ function caseTimelineItems(records: readonly CaseRecord[], now: string): Retaine
         limitations: limitations(pin.limitations, 'An analyst-selected pin is a retained fact, not an independent verification or conclusion.'),
       });
     }
-    for (const assertion of record.assertions.slice(-40)) {
+    for (const assertion of timelineSource(record.assertions, MAX_CASE_ASSERTIONS, 'Case assertions outside the source bound', omissions, true)) {
       const provenance = assertion.provenance;
       if (!provenance) continue;
-      const observedAt = timestamp(provenance.observedAt ?? provenance.createdAt ?? assertion.createdAt);
+      const observedAt = timestamp(provenance.observedAt);
       const storedAt = timestamp(assertion.createdAt);
-      if (!observedAt || !storedAt) continue;
       items.push({
         id: `external-assertion:${record.id}:${assertion.id}`,
         kind: 'external_assertion',
@@ -223,7 +237,7 @@ function caseTimelineItems(records: readonly CaseRecord[], now: string): Retaine
         caseId: record.id,
         caseLabel: record.domain,
         owner: `Case · ${record.domain}`,
-        href: `${caseHref}#case-response-${encodeURIComponent(record.id)}`,
+        href: caseWorkspaceHref(record.id, 'assessment'),
         areas: ['case'],
         source: provenance.sourceName,
         sourceState: 'external assertion',
@@ -240,11 +254,10 @@ function caseTimelineItems(records: readonly CaseRecord[], now: string): Retaine
   return items;
 }
 
-function websiteTimelineItems(snapshots: readonly WebsiteProfileSnapshot[], now: string): RetainedTimelineItem[] {
-  return snapshots.slice(0, 60).flatMap((snapshot): RetainedTimelineItem[] => {
+function websiteTimelineItems(snapshots: readonly WebsiteProfileSnapshot[], now: string | null, omissions: Map<string, number>): RetainedTimelineItem[] {
+  return timelineSource(snapshots, MAX_WEBSITE_SNAPSHOTS, 'Website snapshots outside the source bound', omissions).flatMap((snapshot): RetainedTimelineItem[] => {
     const observedAt = timestamp(snapshot.observedAt);
     const storedAt = timestamp(snapshot.savedAt);
-    if (!observedAt || !storedAt) return [];
     const states = [...new Set(snapshot.sources.map((source) => text(source.state, 40)).filter(Boolean))];
     return [{
       id: `website:${snapshot.id}`,
@@ -271,18 +284,17 @@ function websiteTimelineItems(snapshots: readonly WebsiteProfileSnapshot[], now:
   });
 }
 
-function watchlistTimelineItems(watchlists: WatchlistCollection, now: string): RetainedTimelineItem[] {
+function watchlistTimelineItems(watchlists: WatchlistCollection, now: string | null, omissions: Map<string, number>): RetainedTimelineItem[] {
   const items: RetainedTimelineItem[] = [];
-  for (const [name, watchlist] of Object.entries(watchlists).slice(0, 100)) {
+  for (const [name, watchlist] of timelineSource(Object.entries(watchlists), MAX_WATCHLISTS, 'Watchlists outside the source bound', omissions)) {
     const storedAt = timestamp(watchlist.updatedAt);
-    if (!storedAt) continue;
-    for (const event of watchlist.history.slice(-12)) {
+    for (const [index, event] of timelineSource(watchlist.history, MAX_WATCHLIST_HISTORY_EVENTS, 'Watchlist checks outside the source bound', omissions, true).entries()) {
       const observedAt = timestamp(event.checkedAt);
-      if (!observedAt) continue;
-      const changedEntities = entities(event.changes.map((change) => change.domain));
+      const changes = timelineSource(event.changes, MAX_WATCHLIST_CHANGES_PER_EVENT, 'Watchlist changes outside the source bound', omissions);
+      const changedEntities = entities(changes.map((change) => change.domain), MAX_WATCHLIST_CHANGES_PER_EVENT);
       const complete = event.conclusiveCount === event.resultCount && event.omittedChanges === 0;
       items.push({
-        id: `watchlist:${name}:${observedAt}`,
+        id: `watchlist:${name}:${observedAt ?? 'undated'}:${index}`,
         kind: 'watchlist_check',
         eventType: event.changeCount > 0 ? 'change' : 'evidence',
         title: event.changeCount > 0
@@ -310,18 +322,17 @@ function watchlistTimelineItems(watchlists: WatchlistCollection, now: string): R
   return items;
 }
 
-function relationshipTimelineItems(records: readonly RelationshipObservation[], now: string): RetainedTimelineItem[] {
-  return records.slice(0, 300).flatMap((record): RetainedTimelineItem[] => {
+function relationshipTimelineItems(records: readonly RelationshipObservation[], now: string | null, omissions: Map<string, number>): RetainedTimelineItem[] {
+  return timelineSource(records, MAX_RELATIONSHIP_OBSERVATIONS, 'Relationships outside the source bound', omissions).flatMap((record): RetainedTimelineItem[] => {
     const observedAt = timestamp(record.observedAt);
     const storedAt = timestamp(record.retainedAt);
-    if (!observedAt || !storedAt) return [];
     return [{
       id: `relationship:${record.id}`,
       kind: 'relationship',
       eventType: 'evidence',
       title: `${text(record.label, 100) || 'Relationship'} retained`,
       detail: `${record.domains.length} domain${record.domains.length === 1 ? '' : 's'} shared the bounded observation by ${text(record.method, 120) || 'the recorded comparison method'}.`,
-      entities: entities(record.domains),
+      entities: entities(timelineSource(record.domains, MAX_RELATIONSHIP_OBSERVATION_DOMAINS, 'Relationship members outside the source bound', omissions), MAX_RELATIONSHIP_OBSERVATION_DOMAINS),
       caseId: null,
       caseLabel: null,
       owner: 'Retained relationship',
@@ -331,31 +342,35 @@ function relationshipTimelineItems(records: readonly RelationshipObservation[], 
       sourceState: record.complete ? 'complete' : 'partial',
       observedAt,
       storedAt,
-      ...freshnessMetadata('relationship', observedAt, now),
+      ...(observedAt ? freshnessMetadata('relationship', observedAt, now)
+        : { freshness: 'unknown' as const, ageDays: null, freshnessThresholdDays: RETAINED_TIMELINE_FRESHNESS_DAYS.relationship }),
       completeness: record.complete && !record.truncated ? 'complete' : 'partial',
       truncated: record.truncated,
       derived: true,
-      limitations: limitations(record.limitations, 'Shared infrastructure is an investigative lead, not proof of ownership, control, or intent.'),
+      limitations: limitations([...record.limitations,
+        ...(!observedAt ? ['Contributing-source observation time is unavailable; retention does not establish when the relationship was observed.'] : []),
+      ], 'Shared infrastructure is an investigative lead, not proof of ownership, control, or intent.'),
     }];
   });
 }
 
-function bulkTimelineItems(sessions: readonly BulkSession[], now: string): RetainedTimelineItem[] {
-  return sessions.slice(0, 10).flatMap((session): RetainedTimelineItem[] => {
-    const observedAt = timestamp(session.completedAt ?? session.updatedAt ?? session.startedAt);
+function bulkTimelineItems(sessions: readonly BulkSession[], now: string | null, omissions: Map<string, number>): RetainedTimelineItem[] {
+  return timelineSource(sessions, MAX_BULK_SESSIONS, 'Bulk sessions outside the source bound', omissions).flatMap((session): RetainedTimelineItem[] => {
+    const activityAt = timestamp(session.completedAt) ?? timestamp(session.startedAt);
+    const observedAt = null;
     const storedAt = timestamp(session.updatedAt);
-    if (!observedAt || !storedAt) return [];
-    const settled = session.results.length;
+    const results = timelineSource(session.results, MAX_BULK_SESSION_ROWS, 'Bulk results outside the source bound', omissions);
+    const settled = results.length;
     const complete = session.state === 'complete'
       && settled === session.domains.length
-      && session.results.every((result) => result.status === 'complete');
+      && results.every((result) => result.status === 'complete');
     return [{
       id: `bulk:${session.id}`,
       kind: 'bulk_session',
-      eventType: 'evidence',
+      eventType: 'activity',
       title: `${text(session.name, 100) || 'Bulk session'} retained`,
       detail: `${settled} of ${session.domains.length} queued domains have compact settled results in this ${session.mode} session.`,
-      entities: entities(session.domains),
+      entities: entities(timelineSource(session.domains, MAX_BULK_SESSION_ROWS, 'Bulk members outside the source bound', omissions), MAX_BULK_SESSION_ROWS),
       caseId: null,
       caseLabel: null,
       owner: `Bulk session · ${text(session.name, 100) || session.id}`,
@@ -365,21 +380,82 @@ function bulkTimelineItems(sessions: readonly BulkSession[], now: string): Retai
       sourceState: `${session.mode} · ${session.state}`,
       observedAt,
       storedAt,
+      activityAt,
       ...freshnessMetadata('bulk', observedAt, now),
       completeness: complete ? 'complete' : settled > 0 ? 'partial' : 'inconclusive',
-      truncated: session.domains.length > MAX_RETAINED_TIMELINE_ENTITIES,
+      truncated: session.domains.length > MAX_BULK_SESSION_ROWS,
       derived: false,
       limitations: [
         'Saved Bulk sessions retain compact normalised rows and source states, not raw WHOIS, RDAP, DNS, HTTP, TLS, page, or contact payloads.',
-        'Freshness measures the age of this retained session observation. It does not establish the current state of any queued domain.',
+        'Session activity records completion or start, not a source observation. Review each retained row for its own evidence time and state.',
       ],
     }];
   });
 }
 
+function reviewTimelineItems(
+  store: AnalystReviewStateStore | undefined,
+  cases: readonly CaseRecord[],
+  omissions: Map<string, number>,
+): RetainedTimelineItem[] {
+  const caseById = new Map(cases.slice(0, MAX_CASES).map((record) => [record.id, record]));
+  return timelineSource(store?.records ?? [], MAX_ANALYST_REVIEW_STATE_RECORDS, 'Review records outside the source bound', omissions).flatMap((record) => {
+    const caseAssociations = timelineSource(record.caseIds, MAX_ANALYST_REVIEW_ASSOCIATIONS, 'Review Case associations outside the source bound', omissions).map((id) => {
+      const associated = caseById.get(id);
+      return { id, label: associated ? caseLookupTarget(associated) : `${id} (unavailable)`, present: Boolean(associated) };
+    });
+    const history = timelineSource(record.history, MAX_ANALYST_REVIEW_HISTORY, 'Review history outside the source bound', omissions);
+    omitTimelineSource(omissions, 'Earlier analyst decisions no longer retained', record.historyOmitted);
+    const occurrences = new Map<string, number>();
+    return [record, ...history].map((decision, index): RetainedTimelineItem => {
+      const identity = analystReviewDecisionIdentity(record.subjectKey, decision);
+      const occurrence = occurrences.get(identity) ?? 0;
+      occurrences.set(identity, occurrence + 1);
+      return {
+        id: `review-${identity}:${occurrence}`,
+        kind: 'review_decision',
+        eventType: 'activity',
+        title: `${index === 0 ? 'Latest' : 'Earlier'} ${record.evidenceFamily.replaceAll('_', ' ')} review: ${decision.disposition}`,
+        detail: text(decision.rationale, MAX_ANALYST_REVIEW_RATIONALE_LENGTH),
+        entities: caseAssociations.filter((association) => association.present).map((association) => association.label),
+        caseId: caseAssociations.length === 1 ? caseAssociations[0]!.id : null,
+        caseLabel: caseAssociations.length === 1 ? caseAssociations[0]!.label : null,
+        caseAssociations,
+        owner: 'review history',
+        href: `/monitor?view=inbox&review=${encodeURIComponent(record.subjectKey)}#review-inbox-title`,
+        areas: ['review', ...(caseAssociations.length ? ['case'] as const : [])],
+        source: 'Analyst review decision',
+        sourceState: index === 0 ? 'latest retained decision' : 'historical decision',
+        observedAt: null,
+        storedAt: null,
+        activityAt: timestamp(decision.reviewedAt),
+        freshness: 'unknown',
+        ageDays: null,
+        freshnessThresholdDays: null,
+        completeness: 'unknown',
+        truncated: record.historyOmitted > 0 || record.history.length > MAX_ANALYST_REVIEW_HISTORY,
+        derived: false,
+        limitations: [
+          'This timestamp records the analyst decision, not when its source evidence was observed. Open the review for current applicability and earlier rationale.',
+          ...(index > 0 && caseAssociations.length ? ['Case links use the latest retained associations; historical associations were not stored.'] : []),
+          ...(caseAssociations.some((association) => !association.present) ? ['One or more associated Cases are unavailable in the loaded workspace. Their identifiers remain retained.'] : []),
+          ...(record.historyOmitted > 0 ? [`At least ${record.historyOmitted} earlier decisions are no longer retained.`] : []),
+        ],
+      };
+    });
+  });
+}
+
+function eventTime(item: RetainedTimelineItem): string | null {
+  return item.eventType === 'activity' ? item.activityAt ?? null : item.observedAt;
+}
+
 function itemSort(left: RetainedTimelineItem, right: RetainedTimelineItem): number {
-  return right.observedAt.localeCompare(left.observedAt)
-    || right.storedAt.localeCompare(left.storedAt)
+  const leftTime = eventTime(left);
+  const rightTime = eventTime(right);
+  return Number(leftTime === null) - Number(rightTime === null)
+    || (rightTime ?? '').localeCompare(leftTime ?? '')
+    || (right.storedAt ?? '').localeCompare(left.storedAt ?? '')
     || left.id.localeCompare(right.id);
 }
 
@@ -389,6 +465,7 @@ export function buildRetainedEvidenceTimeline(input: Readonly<{
   watchlists?: WatchlistCollection;
   relationships?: readonly RelationshipObservation[];
   websiteSnapshots?: readonly WebsiteProfileSnapshot[];
+  reviewState?: AnalystReviewStateStore;
   now?: unknown;
 }>): RetainedEvidenceTimeline {
   const cases = Array.isArray(input.cases) ? input.cases : [];
@@ -396,33 +473,28 @@ export function buildRetainedEvidenceTimeline(input: Readonly<{
   const watchlists = input.watchlists && typeof input.watchlists === 'object' ? input.watchlists : {};
   const relationships = Array.isArray(input.relationships) ? input.relationships : [];
   const websiteSnapshots = Array.isArray(input.websiteSnapshots) ? input.websiteSnapshots : [];
-  const now = timestamp(input.now) ?? new Date().toISOString();
+  const now = input.now === undefined ? new Date().toISOString() : timestamp(input.now);
+  const omissions = new Map<string, number>();
   const all = [
-    ...caseTimelineItems(cases, now),
-    ...bulkTimelineItems(bulkSessions, now),
-    ...websiteTimelineItems(websiteSnapshots, now),
-    ...watchlistTimelineItems(watchlists, now),
-    ...relationshipTimelineItems(relationships, now),
+    ...caseTimelineItems(cases, now, omissions),
+    ...bulkTimelineItems(bulkSessions, now, omissions),
+    ...websiteTimelineItems(websiteSnapshots, now, omissions),
+    ...watchlistTimelineItems(watchlists, now, omissions),
+    ...relationshipTimelineItems(relationships, now, omissions),
+    ...reviewTimelineItems(input.reviewState, cases, omissions),
   ].sort(itemSort);
-  const items = all.slice(0, MAX_RETAINED_TIMELINE_ITEMS);
-  const inputTruncated = cases.length > 500
-    || Object.keys(watchlists).length > 100
-    || bulkSessions.length > 10
-    || relationships.length > 300
-    || websiteSnapshots.length > 60;
+  const items = timelineSource(all, MAX_RETAINED_TIMELINE_ITEMS, 'Timeline entries outside the display bound', omissions);
   const counts = Object.fromEntries([
     ['all', items.length],
     ['evidence', items.filter((item) => item.eventType === 'evidence').length],
     ['change', items.filter((item) => item.eventType === 'change').length],
+    ['activity', items.filter((item) => item.eventType === 'activity').length],
     ...RETAINED_TIMELINE_KINDS.map((kind) => [kind, items.filter((item) => item.kind === kind).length]),
   ]) as Record<RetainedTimelineKind | 'all' | RetainedTimelineEventType, number>;
   const caseOptions = new Map<string, string>();
-  const entityOptions = new Set<string>();
-  const sourceOptions = new Set<string>();
   for (const item of items) {
     if (item.caseId && item.caseLabel) caseOptions.set(item.caseId, item.caseLabel);
-    item.entities.forEach((entity) => entityOptions.add(entity));
-    sourceOptions.add(item.source);
+    for (const association of item.caseAssociations ?? []) caseOptions.set(association.id, association.label);
   }
   const freshnessCounts = {
     current: items.filter((item) => item.freshness === 'current').length,
@@ -431,15 +503,17 @@ export function buildRetainedEvidenceTimeline(input: Readonly<{
   };
   return {
     items,
-    truncated: inputTruncated || all.length > items.length,
+    truncated: omissions.size > 0,
+    omissions: [...omissions].map(([source, count]) => ({ source, count })),
     counts,
-    entities: [...entityOptions].sort(),
+    evaluatedAt: now,
     cases: [...caseOptions].map(([id, label]) => ({ id, label })).sort((left, right) => left.label.localeCompare(right.label)),
-    sources: [...sourceOptions].sort(),
     freshnessCounts,
     limitations: [
       'This is a bounded projection of deliberately retained browser-local records. It does not run collection, duplicate raw payloads, or infer maliciousness.',
       'Observation time records when evidence was collected or asserted. Storage time records when this browser retained the owning record; the two are never silently merged.',
+      'Undated evidence remains available. Time filters use source observation dates for evidence and separately labelled event dates for session activity and analyst decisions.',
+      ...(now === null ? ['The review clock is unavailable; freshness and relative-date filters cannot be evaluated.'] : []),
       'Open the owning record for complete retained detail, exact values, source limitations, and analyst notes.',
       'Freshness is a bounded age check over retained observation time. It does not run a lookup or imply that current live evidence has changed.',
     ],
@@ -449,20 +523,25 @@ export function buildRetainedEvidenceTimeline(input: Readonly<{
 export function filterRetainedEvidenceTimeline(
   timeline: RetainedEvidenceTimeline,
   filters: RetainedTimelineFilters,
-  now: unknown = new Date().toISOString(),
+  now: unknown = timeline.evaluatedAt,
 ): RetainedTimelineItem[] {
   const normalizedEntity = text(filters.entity, 253).toLowerCase();
   const normalizedCase = text(filters.caseId, 128);
   const normalizedSource = text(filters.source, 120);
-  const parsedNow = timestamp(now) || new Date(0).toISOString();
+  const parsedNow = timestamp(now);
   const days = filters.time === '7d' ? 7 : filters.time === '30d' ? 30 : filters.time === '90d' ? 90 : null;
-  const cutoff = days === null ? Number.NEGATIVE_INFINITY : Date.parse(parsedNow) - days * 86_400_000;
-  return timeline.items.filter((item) =>
-    (!normalizedEntity || item.entities.includes(normalizedEntity))
-    && (!normalizedCase || item.caseId === normalizedCase)
-    && (!normalizedSource || item.source === normalizedSource)
+  const current = parsedNow ? Date.parse(parsedNow) : Number.NaN;
+  const cutoff = days === null ? Number.NEGATIVE_INFINITY : current - days * 86_400_000;
+  return timeline.items.filter((item) => {
+    const observedAt = eventTime(item);
+    const inTimeRange = filters.time === 'all' || (filters.time === 'undated' ? observedAt === null
+      : observedAt !== null && Date.parse(observedAt) >= cutoff && Date.parse(observedAt) <= current);
+    return (!normalizedEntity || item.entities.some((entity) => entity.includes(normalizedEntity)))
+    && (!normalizedCase || item.caseId === normalizedCase || item.caseAssociations?.some((association) => association.id === normalizedCase))
+    && (!normalizedSource || item.source.toLowerCase().includes(normalizedSource.toLowerCase()))
     && (!filters.area || item.areas.includes(filters.area))
     && (filters.freshness === 'all' || item.freshness === filters.freshness)
     && (filters.eventType === 'all' || item.eventType === filters.eventType)
-    && Date.parse(item.observedAt) >= cutoff);
+    && inTimeRange;
+  });
 }

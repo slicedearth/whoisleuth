@@ -127,7 +127,7 @@ export function renderPrivacyDataFlowCatalogueMarkdown(
     '',
     `- Capability input: \`${coverage.capabilityManifest.schema}\` version ${coverage.capabilityManifest.version}.`,
     `- CLI input: \`${coverage.cliCommandCatalogue.schema}\` version ${coverage.cliCommandCatalogue.version}.`,
-    `- Schema lifecycle input: ${coverage.schemaLifecycleRegistry.familyCount} registered families and metadata versions ${coverage.schemaLifecycleRegistry.metadataVersions.join(', ')}.`,
+    `- Schema lifecycle input: ${coverage.schemaLifecycleRegistry.familyCount} registered families and metadata version${coverage.schemaLifecycleRegistry.metadataVersions.length === 1 ? '' : 's'} ${coverage.schemaLifecycleRegistry.metadataVersions.join(', ')}.`,
     `- Outside-registry inventory: **${coverage.outsideLifecycleRegistry.classification.replaceAll('_', ' ')}**. ${coverage.outsideLifecycleRegistry.reason}`,
     '',
     '## Processing classes',

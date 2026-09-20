@@ -144,13 +144,10 @@ function withNetlifyFetchApiErrorBoundary<TArguments extends unknown[]>(
   };
 }
 
-// Modern Netlify Fetch handlers receive a streaming Request rather than the
-// already-buffered Lambda event used by the older entry points. Enforce the
-// same byte boundary before retaining the complete body, reject malformed
-// UTF-8 deterministically, and share the implementation across every modern
-// request boundary that accepts JSON.
+// Streaming request boundaries share byte admission, an absolute read deadline
+// and fatal UTF-8 decoding before retaining a complete JSON body.
 async function readRequestTextCapped(
-  request: Request,
+  request: Readonly<{ body: ReadableStream<Uint8Array> | null; headers: Headers; signal: AbortSignal }>,
   maxBytes = MAX_API_JSON_BODY_BYTES,
   timeoutMs = MAX_API_REQUEST_BODY_READ_MS,
 ): Promise<BoundedRequestText> {

@@ -98,7 +98,6 @@ async function openPacketWizardStep(
 
 function caseWorkspaceActionStatus(page: Page) {
   return page
-    .getByRole('region', { name: 'Case workspace controls' })
     .getByRole('status', { name: 'Case workspace action status' });
 }
 

@@ -1,3 +1,4 @@
+import { openConsoleView } from './console-navigation';
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, openBulkShortlist } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
@@ -73,7 +74,7 @@ function campaign(index: number, domains: string[] = []) {
   };
 }
 
-test('case pagination keeps deep-linked cases visible and expanded', async ({ page }) => {
+test('a deep-linked Case returns to its position in the paginated list', async ({ page }) => {
   const cases = Array.from({ length: 27 }, (_, index) => caseRecord(index + 1));
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, {
@@ -81,9 +82,10 @@ test('case pagination keeps deep-linked cases visible and expanded', async ({ pa
   });
   await page.goto('/monitor?case=case-26');
 
+  await expect(page.locator('.case-heading', { hasText: 'case-26.invalid' })).toBeVisible();
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   const pagination = page.getByRole('navigation', { name: 'Case pages' });
   await expect(pagination).toContainText('Page 2 of 2');
-  await expect(page.locator('.case-head', { hasText: 'case-26.invalid' })).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.case-head')).toHaveCount(2);
 });
 
@@ -145,7 +147,7 @@ test('campaign and member pagination preserve expansion and case controls', asyn
     'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [] },
     'whoisleuth-campaigns-v1': currentBrowserLocalDocument('campaigns', { campaigns }),
   });
-  await page.getByRole('tab', { name: /Campaigns/ }).click();
+  await openConsoleView(page, 'campaigns');
 
   const campaignPages = page.getByRole('navigation', { name: 'Campaign pages' });
   await campaignPages.getByRole('button', { name: 'Next' }).click();
@@ -170,7 +172,9 @@ test('case consistency pagination exposes every bounded finding', async ({ page 
     'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases },
   });
 
-  const quality = page.locator('.quality');
+  await page.getByText('Case reports and follow-up tools', { exact: true }).click();
+  const quality = page.getByRole('region', { name: 'Case consistency audit', exact: true });
+  await expect(quality).toBeVisible();
   const pagination = quality.getByRole('navigation', { name: 'Case consistency finding pages' });
   await expect(quality.getByRole('listitem')).toHaveCount(24);
   await expect(quality.getByRole('status').first()).toContainText('Showing 1–24 of 30');

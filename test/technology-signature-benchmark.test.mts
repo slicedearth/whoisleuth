@@ -52,8 +52,12 @@ describe('technology signature benchmark', () => {
     });
   });
 
-  test('passes the complete bounded fixture corpus with per-category metrics', () => {
-    const report = buildTechnologySignatureBenchmark({ now: () => new Date(GENERATED_AT) });
+  test('passes the complete bounded fixture corpus with per-category metrics', async () => {
+    const report = await buildTechnologySignatureBenchmark({ now: () => new Date(GENERATED_AT) });
+    const signatures = TECHNOLOGY_SIGNATURE_CATALOGUE.length;
+    const evidenceRules = TECHNOLOGY_SIGNATURE_CATALOGUE.reduce((total, signature) => total + signature.evidence.length, 0);
+    const negativeFixtures = TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => fixture.kind === 'negative').length;
+    const mixedFixtures = TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => fixture.kind === 'mixed').length;
     assert.equal(report.schema, TECHNOLOGY_SIGNATURE_BENCHMARK_SCHEMA);
     assert.equal(report.version, TECHNOLOGY_SIGNATURE_BENCHMARK_VERSION);
     assert.equal(report.generatedAt, GENERATED_AT);
@@ -66,15 +70,15 @@ describe('technology signature benchmark', () => {
     assert.equal(report.summary.ready, true);
     assert.equal(report.summary.reviewedFixtures, TECHNOLOGY_REVIEWED_FIXTURES.length);
     assert.equal(report.summary.failedReviewedFixtures, 0);
-    assert.equal(report.summary.reviewedSignatureCoverage, 42);
-    assert.equal(report.summary.reviewedRepeatCoverage, 42);
-    assert.equal(report.summary.reviewedIndependentRepeatCoverage, 42);
-    assert.equal(report.summary.reviewedEvidenceRuleCoverage, 63);
-    assert.equal(report.summary.reviewedNegativeFixtures, 2);
-    assert.equal(report.summary.passedReviewedNegativeFixtures, 2);
-    assert.equal(report.summary.reviewedMixedFixtures, 67);
-    assert.equal(report.summary.passedReviewedMixedFixtures, 67);
-    assert.equal(report.summary.reviewedDeliberateNonmatches, 231);
+    assert.equal(report.summary.reviewedSignatureCoverage, signatures);
+    assert.equal(report.summary.reviewedRepeatCoverage, signatures);
+    assert.equal(report.summary.reviewedIndependentRepeatCoverage, signatures);
+    assert.equal(report.summary.reviewedEvidenceRuleCoverage, evidenceRules);
+    assert.equal(report.summary.reviewedNegativeFixtures, negativeFixtures);
+    assert.equal(report.summary.passedReviewedNegativeFixtures, negativeFixtures);
+    assert.equal(report.summary.reviewedMixedFixtures, mixedFixtures);
+    assert.equal(report.summary.passedReviewedMixedFixtures, mixedFixtures);
+    assert.equal(report.summary.reviewedDeliberateNonmatches, TECHNOLOGY_REVIEWED_FIXTURES.reduce((total, fixture) => total + fixture.negativeFor.length, 0));
     assert.equal(report.summary.reviewedFalsePositiveMatches, 0);
     assert.equal(report.metrics.positiveCoverage, report.summary.signatures);
     assert.equal(report.metrics.negativeCoverage, report.summary.signatures);
@@ -99,20 +103,17 @@ describe('technology signature benchmark', () => {
       evidenceCovered: true,
       current: true,
     });
-    assert.equal(report.reviewedProgramme.sampledEvidenceRules, 63);
-    assert.equal(report.reviewedProgramme.totalEvidenceRules, 63);
+    assert.equal(report.reviewedProgramme.sampledEvidenceRules, evidenceRules);
+    assert.equal(report.reviewedProgramme.totalEvidenceRules, evidenceRules);
     const reviewedSvelteKit = report.reviewedProgramme.bySignature.sveltekit;
     assert.ok(reviewedSvelteKit);
     assert.equal(reviewedSvelteKit.observations, 2);
     assert.equal(reviewedSvelteKit.independentOrigins, 2);
     assert.equal(reviewedSvelteKit.independentlyRepeated, true);
     assert.equal(reviewedSvelteKit.sampledEvidenceRules, 2);
-    assert.equal(report.reviewedProgramme.licenseBases['factual-observation'], 1);
-    assert.equal(report.reviewedProgramme.licenseBases['public-domain'], 2);
-    assert.equal(report.reviewedProgramme.licenseBases['permissively-licensed-source'], 52);
-    assert.equal(report.reviewedProgramme.licenseBases['copyleft-licensed-source'], 18);
-    assert.equal(report.reviewedProgramme.licenseBases['official-demonstration-terms'], 4);
-    assert.equal(report.reviewedProgramme.licenseBases['minimized-with-permission'], 1);
+    for (const [basis, count] of Object.entries(report.reviewedProgramme.licenseBases)) {
+      assert.equal(count, TECHNOLOGY_REVIEWED_FIXTURES.filter((fixture) => fixture.licenseBasis === basis).length, basis);
+    }
     assert.equal(
       Object.values(report.reviewedProgramme.byCategory).reduce((sum, category) => sum + category.signatures, 0),
       report.summary.signatures,
@@ -131,8 +132,8 @@ describe('technology signature benchmark', () => {
     assert.ok(report.fixtures.every((fixture) => fixture.status === 'pass'));
   });
 
-  test('does not copy synthetic HTML, headers, origins, or generator strings into output', () => {
-    const report = buildTechnologySignatureBenchmark({ now: () => new Date(GENERATED_AT) });
+  test('does not copy synthetic HTML, headers, origins, or generator strings into output', async () => {
+    const report = await buildTechnologySignatureBenchmark({ now: () => new Date(GENERATED_AT) });
     const serialized = JSON.stringify(report);
     assert.doesNotMatch(serialized, /__NEXT_DATA__|data-mage-init|wixstatic|private-build|WordPress 7\.1/);
     assert.doesNotMatch(serialized, /"resourceOrigins"|"responseHeaders"|"httpServer"|"generator"|"html"|fixture-input/);
@@ -171,17 +172,17 @@ describe('technology signature benchmark', () => {
     ).some((error) => /exceeds the .*evidence bound/.test(error)));
   });
 
-  test('formats concise output and supports a bounded JSON CLI mode', () => {
-    const report = buildTechnologySignatureBenchmark({ now: () => new Date(GENERATED_AT) });
+  test('formats concise output and supports a bounded JSON CLI mode', async () => {
+    const report = await buildTechnologySignatureBenchmark({ now: () => new Date(GENERATED_AT) });
     const output = formatTechnologySignatureBenchmark(report);
     assert.match(output, /technology-signature benchmark/i);
     assert.match(output, /fixtures passed/);
-    assert.match(output, /42\/42 signatures sampled/);
-    assert.match(output, /Reviewed negative controls: 2\/2 passed/);
-    assert.match(output, /Reviewed mixed controls: 67\/67 passed/);
-    assert.match(output, /Reviewed false-positive controls: 0\/231/);
+    assert.ok(output.includes(`${report.summary.reviewedSignatureCoverage}/${report.summary.signatures} signatures sampled`));
+    assert.ok(output.includes(`Reviewed negative controls: ${report.summary.passedReviewedNegativeFixtures}/${report.summary.reviewedNegativeFixtures} passed`));
+    assert.ok(output.includes(`Reviewed mixed controls: ${report.summary.passedReviewedMixedFixtures}/${report.summary.reviewedMixedFixtures} passed`));
+    assert.ok(output.includes(`Reviewed false-positive controls: 0/${report.summary.reviewedDeliberateNonmatches}`));
     assert.match(output, /Reviewed corpus maturity: current/);
-    assert.match(output, /Repeat sampling: 42\/42 signatures; independent origins: 42\/42; evidence rules: 63\/63/);
+    assert.ok(output.includes(`Repeat sampling: ${report.summary.reviewedRepeatCoverage}/${report.summary.signatures} signatures; independent origins: ${report.summary.reviewedIndependentRepeatCoverage}/${report.summary.signatures}; evidence rules: ${report.reviewedProgramme.sampledEvidenceRules}/${report.reviewedProgramme.totalEvidenceRules}`));
     assert.match(output, /network requests: 0/);
     assert.deepEqual(parseArguments([]), { json: false, requireReviewed: false });
     assert.deepEqual(parseArguments(['--json']), { json: true, requireReviewed: false });
@@ -195,7 +196,7 @@ describe('technology signature benchmark', () => {
 
     const stdout = capture();
     const stderr = capture();
-    assert.equal(main(['--json'], {
+    assert.equal(await main(['--json'], {
       stdout: stdout.stream,
       stderr: stderr.stream,
       now: () => new Date(GENERATED_AT),
@@ -204,7 +205,7 @@ describe('technology signature benchmark', () => {
     assert.equal(stderr.value(), '');
 
     const coverageStdout = capture();
-    assert.equal(main(['--require-reviewed'], {
+    assert.equal(await main(['--require-reviewed'], {
       stdout: coverageStdout.stream,
       stderr: stderr.stream,
       now: () => new Date(GENERATED_AT),

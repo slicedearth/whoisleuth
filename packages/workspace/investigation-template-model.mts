@@ -124,6 +124,9 @@ export function saveInvestigationTemplate(localRaw: unknown, candidateRaw: unkno
   const candidate = normalizeInvestigationTemplate(candidateRaw);
   if (!candidate) throw new Error('The investigation template is incomplete or invalid.');
   const local = normalizeInvestigationTemplateStore(localRaw).templates;
+  if (!local.some((item) => item.id === candidate.id) && local.length >= MAX_INVESTIGATION_TEMPLATES) {
+    throw new Error(`Investigation-template storage is full (${MAX_INVESTIGATION_TEMPLATES} templates). Export and remove a template before saving another; no templates were changed.`);
+  }
   return normalizeInvestigationTemplateStore([
     candidate,
     ...local.filter((item) => item.id !== candidate.id),
@@ -173,9 +176,16 @@ export function mergeInvestigationTemplates(localRaw: unknown, incomingRaw: unkn
   const byId = new Map(local.map((item) => [item.id, item]));
   let added = 0;
   let updated = 0;
+  let skipped = 0;
   for (const item of incoming) {
-    if (byId.has(item.id)) updated += 1;
-    else added += 1;
+    const existing = byId.get(item.id);
+    if (existing) {
+      if (item.updatedAt <= existing.updatedAt) { skipped += 1; continue; }
+      updated += 1;
+    } else {
+      if (byId.size >= MAX_INVESTIGATION_TEMPLATES) { skipped += 1; continue; }
+      added += 1;
+    }
     byId.set(item.id, item);
   }
   const templates = normalizeInvestigationTemplateStore([...byId.values()]).templates;
@@ -183,7 +193,7 @@ export function mergeInvestigationTemplates(localRaw: unknown, incomingRaw: unkn
     templates,
     added,
     updated,
-    skipped: Math.max(0, incoming.length - added - updated),
-    pruned: Math.max(0, byId.size - templates.length),
+    skipped,
+    pruned: 0,
   };
 }

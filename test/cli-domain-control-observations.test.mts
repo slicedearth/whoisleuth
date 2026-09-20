@@ -3,6 +3,7 @@ import { describe, test } from 'node:test';
 
 import {
   CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
+  CLI_DOMAIN_CONTROL_REVIEW_VERSION,
   buildCliDomainControlReview,
   domainControlObservationFromSavedLookup,
   formatCliDomainControlReview,
@@ -21,18 +22,18 @@ const observedAt = '2026-08-05T01:02:03.000Z';
 function lookup(domain = 'example.test', generatedAt = observedAt) {
   return {
     schema: 'whoisleuth.cli.lookup', version: 1, generatedAt, mode: 'deep', type: 'domain', query: domain, registrableDomain: domain,
-    diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' } },
+    diagnostics: { rdap: { status: 'success', observedAt: generatedAt }, whois: { status: 'partial', observedAt: generatedAt } },
     rdap: { parsed: { registrar: { name: 'Example Registrar' }, statuses: ['clientTransferProhibited'], dnssec: 'signed', nameservers: ['ns1.example.test'] } },
     whois: { parsed: { nameservers: ['ns1.example.test'] } },
     availability: {
       dns: {
-        status: 'success',
+        status: 'success', observedAt: generatedAt,
         records: { ns: ['ns1.example.test'], mx: [{ priority: 10, exchange: 'mail.example.test' }], caa: [{ critical: 0, tag: 'issue', value: 'ca.example' }] },
-        delegation: { status: 'success', records: { ds: [{ keyTag: 12345, algorithm: 13, digestType: 2, digest: 'ABCDEF' }] } },
+        delegation: { status: 'success', observedAt: generatedAt, records: { ds: [{ keyTag: 12345, algorithm: 13, digestType: 2, digest: 'ABCDEF' }] } },
       },
-      tls: { status: 'success', certificate: { fingerprintSha256: 'a'.repeat(64), issuer: { commonNames: ['Example Issuer'] }, publicKey: { fingerprintSha256: 'b'.repeat(64) } } },
-      http: { status: 'success', finalOrigin: 'https://example.test' },
-      pageIdentity: { status: 'success', bodySha256: 'c'.repeat(64), title: 'Example account centre' },
+      tls: { status: 'success', observedAt: generatedAt, certificate: { fingerprintSha256: 'a'.repeat(64), issuer: { commonNames: ['Example Issuer'] }, publicKey: { fingerprintSha256: 'b'.repeat(64) } } },
+      http: { status: 'success', observedAt: generatedAt, finalOrigin: 'https://example.test' },
+      pageIdentity: { status: 'success', observedAt: generatedAt, bodySha256: 'c'.repeat(64), title: 'Example account centre' },
     },
   };
 }
@@ -50,6 +51,16 @@ function manifest() {
 }
 
 describe('CLI domain-control observations', () => {
+  test('retains null MX and case-sensitive CAA payloads in their canonical form', () => {
+    const value = lookup();
+    value.availability.dns.records.mx = [{ priority: 0, exchange: '' }];
+    value.availability.dns.records.caa = [{ critical: 0, tag: 'iodef', value: 'https://REPORTS.EXAMPLE/Case?Ticket=One' }];
+    const observation = domainControlObservationFromSavedLookup(parseSavedLookupDocument(JSON.stringify(value)));
+    assert.deepEqual(observation.fields.find((item) => item.id === 'mail_exchangers')?.values, ['0 .']);
+    assert.deepEqual(observation.fields.find((item) => item.id === 'caa_policy')?.values, ['0 iodef https://reports.example/Case?Ticket=One']);
+    assert.equal(observation.fields.find((item) => item.id === 'caa_policy')?.state, 'observed');
+  });
+
   test('maps separately attributed bounded lookup evidence without raw payloads', () => {
     const document = parseSavedLookupDocument(JSON.stringify(lookup()));
     const observation = domainControlObservationFromSavedLookup(document);
@@ -72,7 +83,7 @@ describe('CLI domain-control observations', () => {
     const observation = domainControlObservationFromSavedLookup(parseSavedLookupDocument(JSON.stringify(value)));
     const delegation = observation.fields.find((field) => field.id === 'delegation_ds');
     assert.deepEqual(delegation, {
-      id: 'delegation_ds', source: 'DNS delegation', state: 'unavailable', values: [],
+      id: 'delegation_ds', source: 'DNS delegation', state: 'unsupported', values: [], observedAt: null,
     });
   });
 
@@ -95,7 +106,7 @@ describe('CLI domain-control observations', () => {
     const latest = lookup('example.test', '2026-08-05T01:00:00.000Z');
     const report = buildCliDomainControlReview(JSON.stringify({
       schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
-      version: 1,
+      version: CLI_DOMAIN_CONTROL_REVIEW_VERSION,
       manifest: manifest(),
       lookups: [first, latest],
     }), observedAt);
@@ -111,10 +122,33 @@ describe('CLI domain-control observations', () => {
     assert.match(formatCliDomainControlReview(report), /Domain-control evidence review/u);
   });
 
+  test('keeps conflicting latest fields partial while comparing independent equal fields', () => {
+    const first = lookup();
+    const second = lookup();
+    second.rdap.parsed.nameservers = ['ns2.example.test'];
+    second.availability.tls.certificate.issuer.commonNames = ['Another issuer'];
+    const older = lookup('example.test', '2026-08-04T01:00:00.000Z');
+    const input = (lookups: ReturnType<typeof lookup>[]) => JSON.stringify({ schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, version: CLI_DOMAIN_CONTROL_REVIEW_VERSION, manifest: manifest(), lookups });
+    const forward = buildCliDomainControlReview(input([older, first, second]), observedAt);
+    const reverse = buildCliDomainControlReview(input([second, first, older]), observedAt);
+    assert.deepEqual(forward, reverse);
+    const comparisons = forward.review.domains[0]!.comparisons;
+    assert.equal(comparisons.find((item) => item.field === 'nameservers')?.state, 'partial');
+    assert.equal(comparisons.find((item) => item.field === 'tlsIssuer')?.state, 'partial');
+    assert.equal(comparisons.find((item) => item.field === 'mx')?.state, 'aligned');
+    assert.equal(forward.input.ignoredHistoricalLookups, 1);
+    const nameservers = forward.observations[0]!.fields.find((item) => item.id === 'registry_nameservers');
+    assert.deepEqual(nameservers?.values, ['ns1.example.test', 'ns2.example.test']);
+    assert.match(nameservers?.source ?? '', /conflicting observations/u);
+    const duplicate = buildCliDomainControlReview(input([first, first]), observedAt);
+    assert.equal(duplicate.review.state, 'aligned');
+    assert.equal(duplicate.input.ignoredHistoricalLookups, 0);
+  });
+
   test('rejects an unknown root field', () => {
     assert.throws(() => buildCliDomainControlReview(JSON.stringify({
       schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
-      version: 1,
+      version: CLI_DOMAIN_CONTROL_REVIEW_VERSION,
       manifest: manifest(),
       lookups: [lookup()],
       rawEvidence: 'not accepted',
@@ -124,7 +158,7 @@ describe('CLI domain-control observations', () => {
   test('rejects duplicate keys inside an embedded saved Lookup before parsing can collapse them', () => {
     const input = JSON.stringify({
       schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
-      version: 1,
+      version: CLI_DOMAIN_CONTROL_REVIEW_VERSION,
       manifest: manifest(),
       lookups: [lookup()],
     }).replace('"mode":"deep"', '"mode":"deep","mode":"fast"');
@@ -144,7 +178,7 @@ describe('CLI domain-control observations', () => {
     assert.throws(
       () => buildCliDomainControlReview(JSON.stringify({
         schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
-        version: 1,
+        version: CLI_DOMAIN_CONTROL_REVIEW_VERSION,
         manifest: manifest(),
         lookups: [source],
       }), observedAt),
@@ -160,7 +194,7 @@ describe('CLI domain-control observations', () => {
 
     assert.doesNotThrow(() => buildCliDomainControlReview(JSON.stringify({
       schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
-      version: 1,
+      version: CLI_DOMAIN_CONTROL_REVIEW_VERSION,
       manifest: manifest(),
       lookups: [source],
     }), observedAt));
@@ -175,7 +209,7 @@ describe('CLI domain-control observations', () => {
       now: () => observedAt,
       readArtifactInput: async () => JSON.stringify({
         schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
-        version: 1,
+        version: CLI_DOMAIN_CONTROL_REVIEW_VERSION,
         manifest: manifest(),
         lookups: [lookup()],
       }),

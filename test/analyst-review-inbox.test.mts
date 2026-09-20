@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   analystReviewQueue,
+  analystReviewQueueMembership,
+  compareAnalystReviewAdmission,
   buildAnalystReviewInbox,
   filterAnalystReviewItems,
   MAX_ANALYST_REVIEW_ITEMS,
@@ -14,6 +16,7 @@ import {
   type AnalystReviewItem,
 } from '../frontend/src/lib/analysis/analyst-review-state.ts';
 import type { CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
+import { createCase } from '../packages/cases/case-model.mts';
 import type { BulkSession } from '../frontend/src/lib/analysis/bulk-session-model.ts';
 import type { WatchlistCollection } from '../frontend/src/lib/analysis/watchlist-store.ts';
 
@@ -95,7 +98,7 @@ function bulkSession(): BulkSession {
   };
 }
 
-function watchlists(): WatchlistCollection {
+function watchlists(domain = 'changed.invalid'): WatchlistCollection {
   return {
     Priority: {
       updatedAt: '2026-07-27T10:00:00.000Z',
@@ -108,13 +111,61 @@ function watchlists(): WatchlistCollection {
         conclusiveCount: 1,
         changeCount: 1,
         omittedChanges: 0,
-        changes: [{ domain: 'changed.invalid', field: 'hasMx', before: false, after: true, kind: 'mail_activated', tone: 'warning' }],
+        changes: [{ domain, field: 'hasMx', before: false, after: true, kind: 'mail_activated', tone: 'warning' }],
       }],
     },
   };
 }
 
 describe('analyst review inbox', () => {
+  test('uses source times instead of recent Case edits and keeps unavailable dates unknown', () => {
+    const record = createCase({ domain: 'review-clock.example', evidencePin: {
+      label: 'Limited retained observation', value: 'Unavailable', field: 'tls.issuer', source: 'Fixture source',
+      observedAt: '2026-06-01T00:00:00Z', completeness: 'partial', limitations: ['Source incomplete.'],
+    } }, NOW);
+    const gap = buildAnalystReviewInbox({ cases: [record] }, NOW).items.find((entry) => entry.kind === 'evidence_gap')!;
+    assert.equal(gap.observedAt, '2026-06-01T00:00:00.000Z');
+    assert.equal(gap.age, 'stale');
+    const undated = { ...record, evidencePins: record.evidencePins.map((pin) => ({ ...pin, observedAt: '' })) };
+    const unknown = buildAnalystReviewInbox({ cases: [undated] }, NOW).items.find((entry) => entry.kind === 'evidence_gap')!;
+    assert.equal(unknown.observedAt, '');
+    assert.equal(unknown.age, 'unknown');
+    const session = bulkSession();
+    for (const updatedAt of ['', '2026-02-30T00:00:00Z', '2026-07-27T09:00:00']) {
+      const projected = buildAnalystReviewInbox({ bulkSessions: [{ ...session, updatedAt }] }, NOW).items[0]!;
+      assert.equal(projected.observedAt, '');
+      assert.equal(projected.age, 'unknown');
+    }
+  });
+
+  test('selects material-change cohorts by check time and invalidates same-count content changes', () => {
+    const source = watchlists();
+    const older = source.Priority!.history[0]!;
+    const recent = { ...older, checkedAt: '2026-07-28T07:00:00Z', changes: older.changes.map((change) => ({ ...change, domain: 'recent.example' })) };
+    const project = (history: WatchlistCollection[string]['history']) => buildAnalystReviewInbox({ watchlists: { Priority: { ...source.Priority!, history } } }, NOW).items[0]!;
+    const selected = project([recent, older]);
+    assert.equal(selected.observedAt, '2026-07-28T07:00:00.000Z');
+    assert.deepEqual(project([older, recent]), selected);
+    const conflict = { ...recent, checkedAt: '2026-07-28T17:00:00+10:00', changes: older.changes };
+    const ambiguous = project([recent, conflict]);
+    assert.equal(ambiguous.completeness, 'inconclusive');
+    assert.match(ambiguous.detail, /share the latest check time/u);
+    assert.deepEqual(project([conflict, recent]), ambiguous);
+    assert.equal(project([{ ...older, checkedAt: '' }, recent]).age, 'unknown');
+    const changed = project([{ ...recent, changes: older.changes }]);
+    assert.equal(changed.subjectKey, selected.subjectKey);
+    assert.notEqual(changed.materialFingerprint, selected.materialFingerprint);
+  });
+
+  test('orders unknown dates and then newest observations without a non-finite comparator', () => {
+    const first = buildAnalystReviewInbox({ cases: [caseRecord()] }, NOW).items[0]!;
+    const old = { ...first, dueAt: null, observedAt: '2026-06-01T00:00:00Z' };
+    const recent = { ...old, observedAt: NOW };
+    const undated = { ...old, observedAt: '', dueAt: 'not a date' };
+    assert.ok(compareAnalystReviewAdmission(undated, recent, NOW) < 0);
+    assert.ok(compareAnalystReviewAdmission(recent, old, NOW) < 0);
+    assert.equal(compareAnalystReviewAdmission(undated, { ...undated }, NOW), 0);
+  });
   test('combines retained work without changing source semantics', () => {
     const inbox = buildAnalystReviewInbox({
       cases: [caseRecord()],
@@ -155,19 +206,39 @@ describe('analyst review inbox', () => {
     }, NOW), 'waiting');
   });
 
+  test('queue membership and its explanation share the same decision and priority', () => {
+    const record = caseRecord();
+    const item = buildAnalystReviewInbox({ cases: [record] }, NOW).items[0]!;
+    const changedReason = 'Material evidence changed after the saved decision.';
+    const cases = [
+      { item, queue: 'needs_action', reason: /No analyst lifecycle decision/u },
+      { item: { ...item, dueAt: '2026-07-29T00:00:00.000Z' }, queue: 'waiting', reason: /follow-up time has not arrived/u },
+      { item: { ...item, lifecycle: { ...item.lifecycle, state: 'resolved' as const } }, queue: 'reviewed', reason: /outside the action queues/u },
+      { item: { ...item, lifecycle: { ...item.lifecycle, state: 'resolved' as const, invalidated: true, reason: changedReason } }, queue: 'changed', reason: /Material evidence changed/u },
+    ];
+    for (const entry of cases) {
+      const membership = analystReviewQueueMembership(entry.item, NOW);
+      assert.equal(membership.queue, entry.queue);
+      assert.equal(analystReviewQueue(entry.item, NOW), entry.queue);
+      assert.match(membership.reason, entry.reason);
+    }
+    assert.equal(analystReviewQueueMembership({ ...item, dueAt: '2026-07-29T00:00:00.000Z' }, 'unavailable').queue, 'needs_action');
+  });
+
   test('links a watchlist change directly to one matching Case but not an ambiguous set', () => {
     const matching = caseRecord();
-    matching.evidenceHistory = [{ inputHostname: 'changed.invalid' } as unknown as CaseRecord['evidenceHistory'][number]];
-    const linked = buildAnalystReviewInbox({ cases: [matching], watchlists: watchlists() }, NOW)
+    const target = 'login.review.invalid';
+    matching.evidenceHistory = createCase({ domain: matching.domain, evidence: { inputHostname: target, scanDepth: 'deep', availability: 'registered' } }, NOW).evidenceHistory;
+    const linked = buildAnalystReviewInbox({ cases: [matching], watchlists: watchlists(target) }, NOW)
       .items.find((item) => item.kind === 'watchlist_change');
     assert.equal(linked?.caseId, matching.id);
-    assert.match(linked?.href ?? '', /case-response-case-one$/u);
+    assert.equal(linked?.href, '/cases?case=case-one&section=evidence');
     assert.match(linked?.detail ?? '', /Related Case: review\.invalid/u);
 
     const second = caseRecord();
     second.id = 'case-two';
-    second.domain = 'changed.invalid';
-    const ambiguous = buildAnalystReviewInbox({ cases: [matching, second], watchlists: watchlists() }, NOW)
+    second.domain = target;
+    const ambiguous = buildAnalystReviewInbox({ cases: [matching, second], watchlists: watchlists(target) }, NOW)
       .items.find((item) => item.kind === 'watchlist_change');
     assert.equal(ambiguous?.caseId, null);
     assert.match(ambiguous?.href ?? '', /^\/monitor\?view=watchlists/u);
@@ -216,8 +287,8 @@ describe('analyst review inbox', () => {
     assert.equal(gap.age, 'current');
     assert.equal(gap.nextAction, 'refresh');
     assert.match(gap.rankingReason, /high priority/i);
-    assert.match(gap.href, /case-response-case-one$/);
-    assert.equal(gap.retryHref, '/lookup?q=review.invalid&depth=deep');
+    assert.equal(gap.href, '/cases?case=case-one&section=assessment');
+    assert.equal(gap.retryHref, '/lookup?q=review.invalid&depth=deep&case=case-one');
     assert.match(gap.dismissalTarget ?? '', /^evidence-gap-review:case-one:[a-f0-9]{64}$/u);
   });
 

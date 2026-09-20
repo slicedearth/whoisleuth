@@ -87,6 +87,12 @@ describe('fieldLabel', () => {
 });
 
 describe('formatSnapshotValue', () => {
+  test('presents selected-page scope without exposing an internal token', () => {
+    assert.equal(display.fieldLabel('webObservationMode'), 'Website target');
+    assert.equal(display.formatSnapshotValue('webObservationMode', 'selected_url'), 'Selected URL; path and query not retained');
+    assert.ok(display.snapshotFieldGroups(deepSnapshot({ webObservationMode: 'selected_url' }))
+      .some((group) => group.name === 'Observation context' && group.rows.some((row) => row.field === 'webObservationMode')));
+  });
   test('returns "Not observed" for null and undefined', () => {
     assert.equal(display.formatSnapshotValue('availability', null), 'Not observed');
     assert.equal(display.formatSnapshotValue('riskScore', undefined), 'Not observed');
@@ -329,6 +335,14 @@ describe('deriveTimeline', () => {
     assert.ok(riskChange);
     assert.equal(riskChange.before, 40);
     assert.equal(riskChange.after, 85);
+  });
+
+  test('does not render cross-hostname score or page improvements as temporal changes', () => {
+    const before = deepSnapshot({ id: 'first', fingerprint: 'first', inputHostname: 'login.example.test', riskScore: 80, hasPasswordField: true, registrar: 'Old registrar' });
+    const after = deepSnapshot({ id: 'second', fingerprint: 'second', inputHostname: 'www.example.test', riskScore: 10, hasPasswordField: false, registrar: 'New registrar', capturedAt: LATER });
+    const entry = requiredValue(display.deriveTimeline([before, after])[0]);
+    assert.deepEqual(entry.changes?.map((change) => change.field), ['registrar']);
+    assert.ok(entry.incomparableReasons.includes('observation-context'));
   });
 
   test('detects incomparable change when only deep-only evidence differs across depths', () => {

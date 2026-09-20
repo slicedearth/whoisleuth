@@ -43,6 +43,13 @@ async function replaceAuthenticatedPlaintext(
   envelope: EncryptedWorkspaceArchiveEnvelope,
   value: unknown,
 ): Promise<EncryptedWorkspaceArchiveEnvelope> {
+  return replaceAuthenticatedBytes(envelope, new TextEncoder().encode(JSON.stringify(value)));
+}
+
+async function replaceAuthenticatedBytes(
+  envelope: EncryptedWorkspaceArchiveEnvelope,
+  plaintext: Uint8Array<ArrayBuffer>,
+): Promise<EncryptedWorkspaceArchiveEnvelope> {
   const encoder = new TextEncoder();
   const material = await crypto.subtle.importKey(
     'raw',
@@ -70,7 +77,7 @@ async function replaceAuthenticatedPlaintext(
     iv: decodeBase64url(envelope.cipher.iv),
     additionalData: encoder.encode(JSON.stringify(metadata)),
     tagLength: 128,
-  }, key, encoder.encode(JSON.stringify(value)));
+  }, key, plaintext);
   return { ...envelope, ciphertext: encodeBase64url(ciphertext) };
 }
 
@@ -205,6 +212,28 @@ async function noActiveProfileRiskArchive() {
 }
 
 describe('encrypted portable workspace archives', () => {
+  test('distinguishes authenticated invalid contents from a failed passphrase', async (context) => {
+    const envelope = await encryptWorkspaceArchive(await workspaceArchive(), PASSPHRASE);
+    const encoder = new TextEncoder();
+    for (const [label, plaintext, expected] of [
+      ['duplicate keys', encoder.encode('{"a":1,"a":2}'), /duplicate.*key/iu],
+      ['unsafe keys', encoder.encode('{"__proto__":1}'), /unsafe.*key/iu],
+      ['nesting bound', encoder.encode('['.repeat(60) + '0' + ']'.repeat(60)), /nesting/iu],
+      ['invalid JSON', encoder.encode('{'), /JSON/iu],
+      ['invalid UTF-8', new Uint8Array([0xc3, 0x28]), /decrypted.*UTF-8/iu],
+    ] as const) {
+      await context.test(label, async () => {
+        const malformed = await replaceAuthenticatedBytes(envelope, plaintext);
+        await assert.rejects(decryptWorkspaceArchive(malformed, PASSPHRASE), (error: unknown) => {
+          assert.ok(error instanceof Error);
+          assert.match(error.message, expected);
+          assert.doesNotMatch(error.message, /passphrase/iu);
+          return true;
+        });
+      });
+    }
+  });
+
   test('round trips a checksummed workspace archive through authenticated encryption', async () => {
     const source = await workspaceArchive();
     const encrypted = await encryptWorkspaceArchive(source, PASSPHRASE);
@@ -262,10 +291,11 @@ describe('encrypted portable workspace archives', () => {
     assert.deepEqual(imported?.riskFactors, []);
   });
 
-  test('rejects every malformed v4 Bulk result set after authenticated workspace decryption', async () => {
-    const attacks: Array<{ label: string; mutate: (session: Record<string, unknown>) => void }> = [
+  test('preserves public Bulk context requirements and current compact defaults after authenticated decryption', async () => {
+    const attacks: Array<{ label: string; currentDefault?: boolean; mutate: (session: Record<string, unknown>) => void }> = [
       {
         label: 'missing row context',
+        currentDefault: true,
         mutate: (session) => Reflect.deleteProperty((session.results as Array<Record<string, unknown>>)[0]!, 'profileContext'),
       },
       {
@@ -301,11 +331,19 @@ describe('encrypted portable workspace archives', () => {
         mutate: (session) => { session.state = 'cancelled'; session.completedAt = null; },
       },
     ];
-    for (const attack of attacks) {
+    for (const version of [4, 5]) for (const attack of attacks) {
       const archive = await noActiveProfileRiskArchive();
+      archive.sections.bulkSessions.version = version;
       const session = archive.sections.bulkSessions.sessions[0] as unknown as Record<string, unknown>;
       assert.ok(session);
+      for (const row of session.results as Array<Record<string, unknown>>) {
+        row.profileContext = structuredClone(session.profileContext);
+        if (version === 4) row.relationship = { ...(row.relationship as Record<string, unknown>), version: 2 };
+      }
       attack.mutate(session);
+      const manifestEntry = archive.manifest.sections.find((entry) => entry.id === 'bulkSessions');
+      assert.ok(manifestEntry);
+      manifestEntry.version = version;
       await refreshWorkspaceSectionIntegrity(archive, 'bulkSessions');
       const decrypted = await decryptWorkspaceArchive(
         await encryptWorkspaceArchive(archive, PASSPHRASE),
@@ -315,10 +353,11 @@ describe('encrypted portable workspace archives', () => {
       const bulkSection = parsed.sections.find((section) => section.id === 'bulkSessions');
       const merged = mergeBulkSessions([], bulkSection?.data);
       assert.deepEqual(
-        { sessions: merged.sessions, added: merged.added, skipped: merged.skipped },
-        { sessions: [], added: 0, skipped: 1 },
-        attack.label,
+        { sessions: merged.sessions.length, added: merged.added, skipped: merged.skipped },
+        version === 5 && attack.currentDefault ? { sessions: 1, added: 1, skipped: 0 } : { sessions: 0, added: 0, skipped: 1 },
+        `${version}: ${attack.label}`,
       );
+      if (merged.sessions.length) assert.equal(merged.sessions[0]?.results[0]?.profileContext.sourceState, 'unavailable');
     }
 
     for (const state of ['partial', 'cancelled'] as const) {

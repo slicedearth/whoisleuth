@@ -21,6 +21,20 @@ function capture() {
 }
 
 describe('offline evidence review command', () => {
+  test('retains an unrecognised inherited-name mapping in the offline review report', () => {
+    const document = buildOfflineEvidenceReview(JSON.stringify({
+      schema: 'whoisleuth.rdap-search-input', version: 1,
+      help: { reverse_search_properties: [{ searchableResourceType: 'domains', relatedResourceType: 'entities', property: 'handle' }] },
+      request: { searchableResourceType: 'domains', relatedResourceType: 'entities', property: 'handle', value: 'EXAMPLE' },
+      response: { reverse_search_properties_mapping: [{ property: 'constructor', propertyPath: '$.entities[*].handle' }] },
+    }), ISO);
+    assert.equal(document.kind, 'rdap_search');
+    const result = document.result as { responseInspection: { state: string; mappings: Array<{ state: string }> } };
+    assert.equal(result.responseInspection.state, 'partial');
+    assert.equal(result.responseInspection.mappings.length, 1);
+    assert.equal(result.responseInspection.mappings[0]?.state, 'unrecognized');
+  });
+
   test('dispatches every supported versioned evidence family without a request', () => {
     const inputs = [
       {

@@ -2,6 +2,53 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { checkDnsDelegation, checkDomainAvailability, isPrivacyProtected } from '../lib/availability.mts';
 import { recordValue, requiredValue, stringValue } from './value-assertions.mts';
+import { promises as dns } from 'node:dns';
+import { deferred } from './deferred.mts';
+
+test('cancellation interrupts a private DNS resolver without becoming an absence', async (context) => {
+  const started = deferred<void>();
+  const controller = new AbortController();
+  let cancelled = 0;
+  context.mock.method(dns.Resolver.prototype, 'resolveNs', () => {
+    started.resolve();
+    return new Promise<string[]>(() => {});
+  });
+  context.mock.method(dns.Resolver.prototype, 'cancel', () => { cancelled += 1; });
+  const pending = checkDnsDelegation('example.test', { signal: controller.signal });
+  await started.promise;
+  controller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.equal(cancelled, 1);
+});
+
+test('an interrupted registry request cannot trigger a DNS fallback', async () => {
+  const controller = new AbortController();
+  let dnsCalls = 0;
+  const result = checkDomainAvailability('example.test', {
+    fast: true, signal: controller.signal,
+    rdapRecordPromise: new Promise(() => {}),
+    resolveNs: async () => { dnsCalls += 1; return ['ns.example']; },
+  });
+  controller.abort();
+  await assert.rejects(result, { name: 'AbortError' });
+  assert.equal(dnsCalls, 0);
+});
+
+test('cancelling concurrent delegation and WHOIS does not leak a rejection or start later probes', async () => {
+  const controller = new AbortController();
+  const started = deferred<void>();
+  let probes = 0;
+  const pending = checkDomainAvailability('example.test', {
+    signal: controller.signal, rdapRecord: null,
+    whoisChainPromise: new Promise(() => {}),
+    resolveNs: () => { started.resolve(); return new Promise(() => {}); },
+    fetchHomepage: async () => { probes += 1; throw new Error('Unexpected probe'); },
+  });
+  await started.promise;
+  controller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.equal(probes, 0);
+});
 
 async function availability(domain: string, options: unknown): Promise<Record<string, unknown>> {
   return recordValue(await checkDomainAvailability(
@@ -114,7 +161,7 @@ test('privacy is tri-state and requires an explicit marker or usable contact evi
   assert.equal(isPrivacyProtected({ handle: null, name: 'Fixture Registrant', org: null, email: null, phone: null }), false);
 });
 
-test('unknown availability names a registry capability refusal', async () => {
+test('missing current RDAP evidence remains unknown without claiming a retained capability refusal', async () => {
   const result = await availability('example.gt', {
     fast: true,
     rdapRecord: null,
@@ -127,8 +174,8 @@ test('unknown availability names a registry capability refusal', async () => {
   });
 
   assert.equal(result.state, 'unknown');
-  assert.match(stringValue(result.detail), /RDAP was not queried/u);
-  assert.match(stringValue(result.detail), /no IANA-published RDAP service/u);
+  assert.doesNotMatch(stringValue(result.detail), /RDAP was not queried|no IANA-published RDAP service/u);
+  assert.notEqual(result.state, 'available');
 });
 
 test('deep availability names a registry permission requirement', async () => {

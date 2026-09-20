@@ -1,6 +1,6 @@
 {
   "schema": "whoisleuth.evidence-storage-measurement",
-  "version": 1,
+  "version": 2,
   "generatedAt": "2026-08-22T00:00:00.000Z",
   "startingRevision": "d3349cf85cded65989ab5ec542967429414bc1b7",
   "fixtureIdentity": {
@@ -73,7 +73,7 @@
       "manifests"
     ],
     "browserCodec": "json-v1",
-    "browserCollectionCount": 13
+    "browserCollectionCount": 16
   },
   "scenarios": [
     {
@@ -86,19 +86,17 @@
       "responseActions": 8,
       "responseActionEvents": 8,
       "browserLocal": {
-        "serializedCaseBytes": 43622,
+        "serializedCaseBytes": 43710,
         "retainedEvidenceBytes": 35926,
         "evidenceHistoryBytes": 22006,
         "evidencePinBytes": 4824,
         "decisionHistoryBytes": 2048,
         "responseActionHistoryBytes": 7112,
-        "indexedDbRecordPayloadBytes": 43798,
-        "indexedDbRecordEnvelopeBytes": 49342,
+        "indexedDbRecordPayloadBytes": 43886,
+        "indexedDbRecordEnvelopeBytes": 49462,
         "indexedDbManifestBytes": 283,
-        "indexedDbSerializedContractBytes": 49625,
-        "currentQuotaRatio": 0.0104,
-        "projectedContentAddressedBytes": 78278,
-        "projectedQuotaRatio": 0.018663
+        "indexedDbSerializedContractBytes": 49745,
+        "currentQuotaRatio": 0.010421
       },
       "duplication": {
         "eligiblePayloads": 40,
@@ -110,30 +108,17 @@
         "canonicalOnlyGroupCount": 0,
         "grossExactDuplicateBytes": 0,
         "grossCanonicalDuplicateBytes": 0,
-        "currentEligibleBytes": 31582,
-        "artifactBytes": 38630,
-        "referenceBytes": 4888,
-        "manifestBytes": 200,
-        "indexBytes": 7264,
-        "orphanMetadataBytes": 4960,
-        "collisionMetadataBytes": 5176,
-        "repairPreviewMetadataBytes": 5120,
-        "operationalMetadataBytes": 15256,
-        "candidateBytesBeforeOperationalReserve": 50982,
-        "candidateBytesAfterAllOverhead": 66238,
-        "netSavingsBytes": -34656,
-        "deduplicableBytesAfterAllOverhead": 0,
-        "architectureDeltaBytes": 34656
+        "currentEligibleBytes": 31582
       },
       "portable": {
         "workspaceArchive": {
           "caseCount": 8,
-          "totalBytes": 49156,
+          "totalBytes": 49490,
           "retainedEvidenceBytes": 35927
         },
         "cliCasePack": {
           "caseCount": 8,
-          "totalBytes": 115244,
+          "totalBytes": 116388,
           "retainedEvidenceBytes": 86394,
           "caseLimitApplied": false
         }
@@ -149,19 +134,17 @@
       "responseActions": 24,
       "responseActionEvents": 24,
       "browserLocal": {
-        "serializedCaseBytes": 130906,
+        "serializedCaseBytes": 131170,
         "retainedEvidenceBytes": 107866,
         "evidenceHistoryBytes": 66008,
         "evidencePinBytes": 14500,
         "decisionHistoryBytes": 6172,
         "responseActionHistoryBytes": 21378,
-        "indexedDbRecordPayloadBytes": 131482,
-        "indexedDbRecordEnvelopeBytes": 148128,
+        "indexedDbRecordPayloadBytes": 131746,
+        "indexedDbRecordEnvelopeBytes": 148488,
         "indexedDbManifestBytes": 285,
-        "indexedDbSerializedContractBytes": 148413,
-        "currentQuotaRatio": 0.03121,
-        "projectedContentAddressedBytes": 158383,
-        "projectedQuotaRatio": 0.037761
+        "indexedDbSerializedContractBytes": 148773,
+        "currentQuotaRatio": 0.031273
       },
       "duplication": {
         "eligiblePayloads": 120,
@@ -355,30 +338,17 @@
         "canonicalOnlyGroupCount": 0,
         "grossExactDuplicateBytes": 49452,
         "grossCanonicalDuplicateBytes": 49452,
-        "currentEligibleBytes": 94820,
-        "artifactBytes": 60176,
-        "referenceBytes": 14664,
-        "manifestBytes": 201,
-        "indexBytes": 15240,
-        "orphanMetadataBytes": 10416,
-        "collisionMetadataBytes": 10848,
-        "repairPreviewMetadataBytes": 10752,
-        "operationalMetadataBytes": 32016,
-        "candidateBytesBeforeOperationalReserve": 90281,
-        "candidateBytesAfterAllOverhead": 122297,
-        "netSavingsBytes": -27477,
-        "deduplicableBytesAfterAllOverhead": 0,
-        "architectureDeltaBytes": 27477
+        "currentEligibleBytes": 94820
       },
       "portable": {
         "workspaceArchive": {
           "caseCount": 24,
-          "totalBytes": 136443,
+          "totalBytes": 136953,
           "retainedEvidenceBytes": 107867
         },
         "cliCasePack": {
           "caseCount": 24,
-          "totalBytes": 344207,
+          "totalBytes": 347639,
           "retainedEvidenceBytes": 259356,
           "caseLimitApplied": false
         }
@@ -394,19 +364,17 @@
       "responseActions": 500,
       "responseActionEvents": 500,
       "browserLocal": {
-        "serializedCaseBytes": 2037024,
+        "serializedCaseBytes": 2042524,
         "retainedEvidenceBytes": 1557500,
         "evidenceHistoryBytes": 687500,
         "evidencePinBytes": 301500,
         "decisionHistoryBytes": 128000,
         "responseActionHistoryBytes": 444500,
-        "indexedDbRecordPayloadBytes": 2049500,
-        "indexedDbRecordEnvelopeBytes": 2328890,
+        "indexedDbRecordPayloadBytes": 2055000,
+        "indexedDbRecordEnvelopeBytes": 2336390,
         "indexedDbManifestBytes": 287,
-        "indexedDbSerializedContractBytes": 2329177,
-        "currentQuotaRatio": 0.485664,
-        "projectedContentAddressedBytes": 1000778,
-        "projectedQuotaRatio": 0.238604
+        "indexedDbSerializedContractBytes": 2336677,
+        "currentQuotaRatio": 0.486976
       },
       "duplication": {
         "eligiblePayloads": 2000,
@@ -428,7 +396,7 @@
           },
           {
             "kind": "evidence_pin",
-            "payloadDigest": "sha256:783a36653bdbc63cca24760db57f8755f84bf0a3f83c40525e5102d295064e2f",
+            "payloadDigest": "sha256:85dab9c789aeb537b37830d49eb05a2b23fc5f6b8e2a4d76ec027e2b3636e1db",
             "occurrences": 500,
             "payloadBytes": 601,
             "grossDuplicateBytes": 299899
@@ -461,7 +429,7 @@
           },
           {
             "kind": "evidence_pin",
-            "payloadDigest": "sha256:c5770b4c2caf0f408758e871c38b30f4fc883ac98b548de2cc7a89fe2933907c",
+            "payloadDigest": "sha256:e6797abd7696e08c8911f75bdb5e90afe255095ef742d2c79c76ca779b24f869",
             "occurrences": 500,
             "exactForms": 1,
             "payloadBytes": 601,
@@ -480,130 +448,29 @@
         "canonicalOnlyGroupCount": 0,
         "grossExactDuplicateBytes": 1283927,
         "grossCanonicalDuplicateBytes": 1283927,
-        "currentEligibleBytes": 1286500,
-        "artifactBytes": 3278,
-        "referenceBytes": 244500,
-        "manifestBytes": 201,
-        "indexBytes": 734,
-        "orphanMetadataBytes": 504,
-        "collisionMetadataBytes": 517,
-        "repairPreviewMetadataBytes": 520,
-        "operationalMetadataBytes": 1541,
-        "candidateBytesBeforeOperationalReserve": 248713,
-        "candidateBytesAfterAllOverhead": 250254,
-        "netSavingsBytes": 1036246,
-        "deduplicableBytesAfterAllOverhead": 1036246,
-        "architectureDeltaBytes": -1036246
+        "currentEligibleBytes": 1286500
       },
       "portable": {
         "workspaceArchive": {
           "caseCount": 500,
-          "totalBytes": 2042564,
+          "totalBytes": 2048310,
           "retainedEvidenceBytes": 1557501
         },
         "cliCasePack": {
           "caseCount": 25,
-          "totalBytes": 280576,
+          "totalBytes": 284151,
           "retainedEvidenceBytes": 192225,
           "caseLimitApplied": true
         }
       }
     }
   ],
-  "decision": {
-    "outcome": "no_build",
-    "representativeScenario": "representative-duplication",
-    "representativeNetSavingsBytes": 0,
-    "representativeNetSavingsRatio": 0,
-    "threshold": {
-      "minimumRepresentativeNetSavingsBytes": 524288,
-      "minimumRepresentativeNetSavingsRatio": 0.2,
-      "minimumQuotaPressureRatio": 0.75
-    },
-    "rationale": "Representative repeated immutable evidence does not recover the digest, reference, manifest, index, collision, orphan, and repair overhead required by a second persistence layer.",
-    "reconsiderWhen": {
-      "evidence": "A refreshed representative corpus, not only a synthetic worst case, must meet both savings thresholds.",
-      "minimumNetSavingsBytes": 524288,
-      "minimumNetSavingsRatio": 0.2,
-      "quotaPressureRatio": 0.75
-    }
-  },
-  "historicalCompatibility": {
-    "starting": {
-      "revision": "d3349cf85cded65989ab5ec542967429414bc1b7",
-      "compatibilityDescriptors": 9,
-      "supportedVersionSlots": 54,
-      "lifecycleContracts": 53,
-      "legacyContracts": 32,
-      "retiredOutputContracts": 12,
-      "migrations": 29,
-      "readerEdges": 10,
-      "writerEdges": 9,
-      "readerVersionSlots": 61,
-      "lifecycleFixtures": 87,
-      "lifecycleFixtureBytes": 579486,
-      "legacyAndRetiredFixtures": 45,
-      "legacyAndRetiredFixtureBytes": 302908,
-      "lifecycleShapes": 19,
-      "lifecycleBoundProfiles": 7,
-      "lifecycleHooks": 18,
-      "lifecycleSerialisationProfiles": 7,
-      "lifecyclePrivacyProfiles": 3,
-      "lifecycleConsumerEdges": 16,
-      "versionSensitiveProductionLines": 365,
-      "versionSensitiveBranches": 79,
-      "generatedInventoryEntries": 9,
-      "generatedDocumentationEntries": 17,
-      "focusedVerification": {
-        "testFiles": 13,
-        "tests": 276,
-        "passed": 276,
-        "failed": 0,
-        "skipped": 0,
-        "durationMs": 35068.222209,
-        "elapsedSeconds": 35.24,
-        "reliability": "single_local_observation_not_drift_gated"
-      }
-    },
-    "postConsolidation": {
-      "compatibilityDescriptors": 9,
-      "supportedVersionSlots": 25,
-      "lifecycleContracts": 25,
-      "legacyContracts": 16,
-      "retiredOutputContracts": 0,
-      "migrations": 9,
-      "readerEdges": 11,
-      "writerEdges": 9,
-      "readerVersionSlots": 34,
-      "lifecycleFixtures": 28,
-      "lifecycleFixtureBytes": 158795,
-      "legacyAndRetiredFixtures": 16,
-      "legacyAndRetiredFixtureBytes": 80937,
-      "lifecycleShapes": 23,
-      "lifecycleBoundProfiles": 7,
-      "lifecycleHooks": 18,
-      "lifecycleSerialisationProfiles": 7,
-      "lifecyclePrivacyProfiles": 3,
-      "lifecycleConsumerEdges": 17,
-      "versionSensitiveProductionLines": 235,
-      "versionSensitiveBranches": 57,
-      "generatedInventoryEntries": 9,
-      "generatedDocumentationEntries": 13,
-      "sourceMeasurement": {
-        "sourceFiles": 15,
-        "versionSensitiveProductionLines": 235,
-        "versionSensitiveBranches": 57,
-        "method": "TypeScript if, conditional, and switch nodes containing explicit historical-version markers; lines are unique nonblank non-comment lines spanned by those nodes."
-      }
-    }
-  },
   "limitations": [
     "The corpus contains reserved synthetic journeys and frozen current-format fixtures; it does not inspect browser profiles or investigation data.",
     "IndexedDB contract bytes are deterministic JSON projections of stored records and manifests, not an estimate of browser-engine page, key, or B-tree overhead.",
-    "Quota ratios compare the current and proposed logical Case representations with the 4 MiB application Case ceiling; they are not browser-origin quota estimates.",
+    "Quota ratios compare serialised Case bytes with the application Case ceiling; they are not browser-origin quota estimates.",
     "Portable evidence bytes are measured by rebuilding the same current archive or Case-pack with only evidence history, pins, decisions, and response actions removed.",
-    "The high-duplication boundary is deliberately synthetic and cannot by itself justify a second persistence abstraction.",
-    "Digest identity would establish only byte identity under the declared canonicalisation, not source truth, authority, ownership, or safety.",
-    "The focused verification duration is one local observation and is retained for maintenance context, not as a deterministic drift threshold."
+    "All scenarios are synthetic; their duplication rates do not establish representative real-world usage.",
+    "Duplicate digests identify content under the stated exact or canonical comparison; they do not establish source truth, authorship, authority, ownership or safety."
   ]
 }

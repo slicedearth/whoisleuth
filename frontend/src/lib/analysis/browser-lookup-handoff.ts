@@ -16,6 +16,7 @@ export type BrowserLookupHandoff = Readonly<{
   visibility: BrowserHandoffVisibility;
   opensNewContext: boolean;
   discarded: readonly string[];
+  openingNotice: string;
   limitations: readonly string[];
 }>;
 
@@ -108,6 +109,9 @@ export function buildBrowserLookupHandoff(
   const disclosedValue = disclosureFormat === 'sanitized_url' ? sanitizedUrl : domain;
   const endpoint = destinationEndpoint(destinationKind, options.endpoint);
   const destination = destinationDetails(destinationKind, endpoint, disclosedValue);
+  const openingNotice = destinationKind === 'lookup'
+    ? 'Opening the handoff fills Lookup but does not start collection. Review the target and collection plan before submitting.'
+    : 'Opening the handoff discloses the displayed value to the exact displayed endpoint. WHOISleuth does not discover, validate, submit to, or monitor that service.';
   const discarded = [
     parsed?.username || parsed?.password ? 'credentials' : '',
     parsed?.port ? 'port' : '',
@@ -122,11 +126,10 @@ export function buildBrowserLookupHandoff(
     destinationKind,
     ...destination,
     discarded,
+    openingNotice,
     limitations: [
       'The handoff contains only the displayed normalised hostname or sanitised HTTP(S) origin. It never includes URL credentials, port, path, query, fragment, or browser-local identifiers.',
-      destinationKind === 'lookup'
-        ? 'Opening the handoff fills Lookup but does not start collection. Review the target and collection plan before submitting.'
-        : 'Opening the handoff discloses the displayed value to the exact displayed endpoint. WHOISleuth does not discover, validate, submit to, or monitor that service.',
+      openingNotice,
     ],
   };
 }

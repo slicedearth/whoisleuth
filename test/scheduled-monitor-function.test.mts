@@ -18,6 +18,8 @@ import {
 } from '../lib/scheduled-monitor-runtime.mts';
 import type { EnvironmentInput } from '../lib/scheduled-monitor-configuration.mts';
 import type { NetlifyBlobStore } from '../lib/scheduled-monitor-netlify-store.mts';
+import { MAX_CYCLE_MS } from '../lib/scheduled-monitor-cycle.mts';
+import { deferred } from './deferred.mts';
 
 const key = randomBytes(32).toString('base64');
 const namespace = 'whoisleuth:scheduled-monitor:function-test';
@@ -36,6 +38,39 @@ function readyEnv(overrides: EnvironmentInput = {}): EnvironmentInput {
     ...overrides,
   };
 }
+
+test('the invocation-bound Blob transport aborts active requests and refuses later retries', async (context) => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  const started = deferred<AbortSignal>();
+  let requests = 0;
+  let boundFetch: typeof globalThis.fetch | undefined;
+  context.mock.method(globalThis, 'fetch', async (_input: unknown, init: RequestInit) => {
+    requests += 1;
+    assert.ok(init.signal);
+    started.resolve(init.signal);
+    return new Promise<Response>((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+    });
+  });
+  const running = runScheduledMonitorInvocation({ deploy: { context: 'production' } }, {
+    env: readyEnv(),
+    blobStoreFactory: (_name, options) => {
+      boundFetch = options.fetch;
+      return {
+        getWithMetadata: async () => { await options.fetch('https://blob.example.test/state'); return null; },
+        set: async () => { throw new Error('A cancelled read must not write.'); },
+      };
+    },
+  });
+  const signal = await started.promise;
+  context.mock.timers.tick(MAX_CYCLE_MS);
+  assert.equal((await running).stopReason, 'deadline');
+  assert.equal(signal.aborted, true);
+  assert.ok(boundFetch);
+  const retry = boundFetch;
+  assert.throws(() => retry('https://blob.example.test/state'), { name: 'TimeoutError' });
+  assert.equal(requests, 1);
+});
 
 class FakeBlobStore implements NetlifyBlobStore {
   entry: BlobEntry | null = null;

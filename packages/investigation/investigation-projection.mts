@@ -6,6 +6,8 @@ import {
   CASE_SCHEMA_VERSION,
   MAX_CASES,
   normalizeCaseStore,
+  type CaseRecord,
+  type CaseEvidenceSnapshot,
 } from '../cases/case-model.mts';
 import {
   BRAND_PROFILE_SCHEMA_VERSION,
@@ -220,47 +222,9 @@ export interface StoreRead<T> {
   limitation: string;
 }
 
-export interface NormalizedCaseEvidenceSnapshot {
-  id: string;
-  capturedAt: string;
-  firstCapturedAt: string;
-  source: string;
-  scanDepth: string;
-  riskModelVersion: number | null;
-  httpSummaryVersion: number | null;
-  nameservers: string[];
-  httpEvidenceStatus: string | null;
-  httpFinalOrigin: string | null;
-}
-
-export interface NormalizedCaseRecord {
-  id: string;
-  domain: string;
-  status: string;
-  disposition: string;
-  source: string;
-  evidenceHistory: NormalizedCaseEvidenceSnapshot[];
-  evidencePins: NormalizedCaseEvidencePin[];
-  updatedAt: string;
-}
-
-export interface NormalizedCaseEvidencePin {
-  id: string;
-  field: string | null;
-  category: string | null;
-  value: string;
-  source: string;
-  sourceState: string | null;
-  sourceSchema: {
-    collection: string;
-    schema: string;
-    version: number;
-  } | null;
-  observedAt: string;
-  completeness: string;
-  truncated: boolean | null;
-  limitations: string[];
-}
+export type NormalizedCaseEvidenceSnapshot = CaseEvidenceSnapshot;
+export type NormalizedCaseRecord = CaseRecord;
+export type NormalizedCaseEvidencePin = CaseRecord['evidencePins'][number];
 
 export interface NormalizedBrandProfile {
   id: string;

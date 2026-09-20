@@ -153,6 +153,8 @@ describe('typed local investigation projection', () => {
   test('projects cases, domains, nameserver sets, and comparable final origins with provenance', () => {
     const evidence = snapshot({
       firstCapturedAt: EARLY,
+      inputHostname: 'login.a.invalid',
+      observationHostname: 'login.a.invalid',
       nameservers: ['NS2.SHARED.INVALID.', 'ns1.shared.invalid'],
       httpSummaryVersion: 1,
       httpEvidenceStatus: 'partial',
@@ -165,12 +167,16 @@ describe('typed local investigation projection', () => {
       cases: { version: CASE_SCHEMA_VERSION, cases: [caseRecord('case-a', 'A.INVALID', [evidence])] },
     }), { generatedAt: LATE });
 
-    assert.equal(entity(result, 'domain').properties.domain, 'a.invalid');
+    assert.equal(entity(result, 'domain', (item) => item.canonical === 'a.invalid').properties.domain, 'a.invalid');
     assert.deepEqual(entity(result, 'nameserver_set').properties.nameservers, ['ns1.shared.invalid', 'ns2.shared.invalid']);
     assert.equal(entity(result, 'http_origin').properties.origin, 'https://landing.invalid');
     assert.equal(relationship(result, 'case_documents_domain').classification, 'direct');
     assert.equal(relationship(result, 'domain_uses_nameserver_set').classification, 'normalized');
     assert.equal(relationship(result, 'domain_reached_http_origin').classification, 'normalized');
+    const originRelationship = relationship(result, 'domain_reached_http_origin');
+    assert.equal(result.entities.find((item) => item.id === originRelationship.from)?.canonical, 'login.a.invalid');
+    const nameserverRelationship = relationship(result, 'domain_uses_nameserver_set');
+    assert.equal(result.entities.find((item) => item.id === nameserverRelationship.from)?.canonical, 'a.invalid');
     assert.equal(relationship(result, 'domain_uses_nameserver_set').firstObservedAt, EARLY);
     assert.equal(relationship(result, 'domain_uses_nameserver_set').lastObservedAt, LATE);
 
@@ -185,6 +191,21 @@ describe('typed local investigation projection', () => {
     assert.match(requiredValue(observation.limitations[0]), /source-health/);
   });
 
+  test('retains the unambiguous origin of historical root-target evidence', () => {
+    const result = buildInvestigationProjection(currentInput({
+      cases: { version: CASE_SCHEMA_VERSION, cases: [caseRecord('case-root', 'root.invalid', [snapshot({
+        inputHostname: 'root.invalid',
+        httpSummaryVersion: 1,
+        httpEvidenceStatus: 'success',
+        httpFinalOrigin: 'https://landing.invalid',
+        httpResponseStatus: 200,
+      })])] },
+    }), { generatedAt: LATE });
+    const origin = relationship(result, 'domain_reached_http_origin');
+    assert.equal(result.entities.find((item) => item.id === origin.from)?.canonical, 'root.invalid');
+    assert.equal(entity(result, 'http_origin').canonical, 'https://landing.invalid');
+  });
+
   test('does not create deep-only origin edges from fast or depth-unknown evidence', () => {
     const http = {
       httpSummaryVersion: 1,
@@ -194,8 +215,10 @@ describe('typed local investigation projection', () => {
     };
     const result = buildInvestigationProjection(currentInput({
       cases: { version: CASE_SCHEMA_VERSION, cases: [
-        caseRecord('case-fast', 'fast.invalid', [snapshot({ ...http, scanDepth: 'fast' })]),
-        caseRecord('case-unknown', 'unknown.invalid', [snapshot({ ...http, scanDepth: 'unknown' })]),
+        caseRecord('case-fast', 'fast.invalid', [snapshot({ ...http, inputHostname: 'fast.invalid', scanDepth: 'fast' })]),
+        caseRecord('case-unknown', 'unknown.invalid', [snapshot({ ...http, inputHostname: 'unknown.invalid', scanDepth: 'unknown' })]),
+        caseRecord('case-unknown-host', 'unknown-host.invalid', [snapshot({ ...http, inputHostname: null, scanDepth: 'deep' })]),
+        caseRecord('case-submitted-only', 'submitted.invalid', [snapshot({ ...http, inputHostname: 'portal.submitted.invalid', scanDepth: 'deep' })]),
       ] },
     }), { generatedAt: LATE });
     assert.equal(findEntity(result, 'http_origin'), undefined);
@@ -276,7 +299,7 @@ describe('typed local investigation projection', () => {
       updatedAt: LATE,
     };
     const result = buildInvestigationProjection(currentInput({
-      cases: { version: CASE_SCHEMA_VERSION, cases: [caseRecord('case-a', 'candidate.invalid')] },
+      cases: { version: CASE_SCHEMA_VERSION, cases: [caseRecord('case-a', 'candidate.invalid'), caseRecord('case-b', 'candidate.invalid')] },
       campaigns: { version: CAMPAIGN_SCHEMA_VERSION, campaigns: [campaign] },
       brandProfiles: { version: BRAND_PROFILE_SCHEMA_VERSION, profiles: [profile] },
     }), { generatedAt: LATE });
@@ -289,6 +312,9 @@ describe('typed local investigation projection', () => {
     assert.equal(relationship(result, 'campaign_contains_domain').classification, 'direct');
     assert.equal(relationship(result, 'campaign_contains_case').classification, 'derived');
     assert.match(relationship(result, 'campaign_contains_case').method, /canonical-domain match/);
+    const memberCaseIds = result.relationships.filter(item => item.type === 'campaign_contains_case').map(item => item.to);
+    assert.equal(memberCaseIds.length, 2);
+    assert.equal(new Set(memberCaseIds).size, 2);
   });
 
   test('preserves official-site baseline completeness, truncation, and model versions', () => {
@@ -350,6 +376,7 @@ describe('typed local investigation projection', () => {
       value: '192.0.2.20',
       domains: ['first.invalid', 'second.invalid'],
       description: 'Bounded retained pivot.',
+      sourceEvidence: ['first.invalid', 'second.invalid'].map((domain) => ({ domain, source: 'dns', status: 'success', observedAt: EARLY, complete: true, truncated: false })),
     }, {
       observedAt: EARLY,
       retainedAt: LATE,
@@ -372,7 +399,7 @@ describe('typed local investigation projection', () => {
     assert.equal(entity(result, 'ip_address').properties.ipAddress, '192.0.2.20');
     assert.equal(entity(result, 'ip_address').properties.observationId, retained.id);
     assert.equal(retainedObservation.store, 'relationshipObservations');
-    assert.equal(retainedObservation.source, 'bulk_relationship_analysis');
+    assert.equal(retainedObservation.source, 'dns');
     assert.equal(retainedObservation.status, 'success');
     assert.deepEqual(retainedObservation.schemaVersions, {
       relationshipEvidence: RELATIONSHIP_EVIDENCE_VERSION,

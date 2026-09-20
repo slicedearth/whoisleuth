@@ -6,6 +6,8 @@ import {
   parseTagList,
   parseSpfRecords,
   parseDmarcRecords,
+  parseDmarcReportingAuthorization,
+  parseReportingDestination,
   parseMtaStsDnsRecords,
   parseMtaStsPolicy,
   parseTlsRptRecords,
@@ -80,6 +82,26 @@ describe('SPF', () => {
 });
 
 describe('DMARC', () => {
+  test('uses exact case-sensitive version values for policy and external authorisation', () => {
+    for (const record of ['v=DMARC10', 'v=dmarc1', 'v=DMARC1extra', 'p=none;v=DMARC1']) {
+      assert.equal(parseDmarcRecords([record]).valid, false, record);
+      assert.equal(parseDmarcReportingAuthorization(record), null, record);
+    }
+    for (const record of ['v=DMARC1', 'v = DMARC1;', 'V=DMARC1; extension=known', ['v=DM', 'ARC1;']]) {
+      assert.equal(parseDmarcReportingAuthorization(record)?.v, 'DMARC1');
+    }
+    for (const record of ['v=DMARC1;broken', 'v=DMARC1;;', 'v=DMARC1;v=DMARC1', 'v=DMARC1;extension=one\ntwo']) {
+      assert.equal(parseDmarcReportingAuthorization(record), null, record);
+    }
+  });
+
+  test('does not silently discard empty reporting destinations', () => {
+    for (const list of ['', ',mailto:reports@example.test', 'mailto:reports@example.test,']) {
+      const parsed = parseDmarcRecords(['v=DMARC1; p=reject; rua=' + list]);
+      assert.equal(parsed.valid, false);
+      assert.match(parsed.issues.join(' '), /empty destination/u);
+    }
+  });
   test('parses enforced domain, subdomain, non-existent-subdomain, and reporting policy', () => {
     const parsed = parseDmarcRecords(['v=DMARC1; p=reject; sp=quarantine; np=reject; rua=mailto:dmarc@example.com; ruf=mailto:forensic@example.com']);
     assert.equal(parsed.valid, true);
@@ -133,6 +155,42 @@ describe('MTA-STS', () => {
 });
 
 describe('TLS-RPT', () => {
+  test('rejects incomplete, unsupported or repaired destination spellings', () => {
+    for (const destination of [
+      'not-a-uri', 'https:reports.example.test', 'https:////reports.example.test',
+      'http://reports.example.test', 'https://user:secret@reports.example.test', 'https://@reports.example.test',
+      'https://reports.example.test/#', 'https://reports.example.test/%oops', 'https://reports.example.test/a b',
+      'mailto:reports', 'mailto:@example.test', 'mailto:a..b@example.test', 'mailto:a%0Ab@example.test',
+      'mailto:reports@example.test!10m', 'mailto:reports@example.test,', ',mailto:reports@example.test',
+      'mailto:reports@example.test?subject', 'mailto:reports@bad_domain.example.test',
+    ]) {
+      const parsed = parseTlsRptRecords(['v=TLSRPTv1; rua=' + destination]);
+      assert.equal(parsed.valid, false, destination);
+      assert.ok(parsed.issues.length, destination);
+    }
+  });
+
+  test('accepts complete encoded mailbox and HTTPS destinations without collecting them', () => {
+    for (const destination of [
+      'mailto:reports+tls@example.test', 'mailto:%22report%20box%22@example.test',
+      'MAILTO:reports@EXAMPLE.test?subject=TLS%20report', 'mailto:reports@[IPv6:2001:db8::1]',
+      'https://reports.example.test:8443/tls?format=json&key=a%21b%2Cc%3Bd',
+    ]) {
+      assert.ok(parseReportingDestination(destination), destination);
+      assert.equal(parseTlsRptRecords(['v=TLSRPTv1; rua=' + destination]).valid, true, destination);
+    }
+  });
+
+  test('requires exact TLS reporting tokens while accepting valid extensions and split TXT strings', () => {
+    const destination = 'mailto:reports@example.test';
+    for (const record of [
+      'v=TLSRPTv10; rua=' + destination, 'v=tlsrptv1; rua=' + destination,
+      'V=TLSRPTv1; rua=' + destination, 'v = TLSRPTv1; rua=' + destination,
+      'v=TLSRPTv1; RUA=' + destination, 'v=TLSRPTv1; rua = ' + destination,
+      'v=TLSRPTv1; rua=' + destination + ';;', 'v=TLSRPTv1; rua=' + destination + '; ext=two words',
+    ]) assert.equal(parseTlsRptRecords([record]).valid, false, record);
+    assert.equal(parseTlsRptRecords([['v=TLSRPTv1; rua=mailto:rep', 'orts@example.test; x-token=value;']]).valid, true);
+  });
   test('requires exactly one policy with at least one rua destination', () => {
     const parsed = parseTlsRptRecords(['v=TLSRPTv1; rua=mailto:tls@example.com,https://reports.example.com/tls']);
     assert.equal(parsed.valid, true);

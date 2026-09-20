@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
+  import { beforeNavigate, goto } from '$app/navigation';
   import { page } from '$app/state';
   import { onMount, setContext, tick } from 'svelte';
   import {
@@ -8,20 +8,25 @@
     isProtectedDestination,
     referenceNavigation,
   } from '$lib/workspaces';
-  import { consoleCommandNavigation } from '$lib/console-command-navigation';
+  import { preloadBestEffort, preloadOnIdle } from '$lib/idle-preload';
   import { CAPABILITY_CONTEXT, fetchCapabilities, type CapabilityReport } from '$lib/capabilities';
   import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '$lib/bounded-json-response';
   import BrandMark from '$lib/components/BrandMark.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import ConsoleLoading from '$lib/components/ConsoleLoading.svelte';
+  import BrowserWorkspaceIndicator from '$lib/components/BrowserWorkspaceIndicator.svelte';
   import IntelligenceIcon from '$lib/components/IntelligenceIcon.svelte';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import ThemeSelector from '$lib/components/ThemeSelector.svelte';
   import AnalystUndo from '$lib/components/AnalystUndo.svelte';
+  import { keepFocusBelow } from '$lib/visible-focus';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import { reloadDeferredModulePage } from '$lib/deferred-module';
   import { initializeBrowserLocalData, type BrowserLocalDataServiceState } from '$lib/browser-local-data-service';
-  import { clearConsoleWorkflowState } from '$lib/console-workflow-state';
+  import { clearConsoleWorkflowState, subscribeSelectedConsoleCase } from '$lib/console-workflow-state';
+  import { hasUnlockedBrowserWorkspace, lockBrowserWorkspace } from '$lib/browser-workspace-unlock';
+  import { isLocalApplication } from '$lib/local-application-context.ts';
+  let localApplication = $state(false);
   import {
     hasStoredInvestigationGuide,
     INVESTIGATION_GUIDE_EVENT,
@@ -36,6 +41,7 @@
   let capabilities = $state<CapabilityReport|null>(null);
   let capabilitiesChecked = $state(false);
   let localData = $state<BrowserLocalDataServiceState>({ state: 'idle' });
+  let storageErrorHeading = $state<HTMLHeadingElement>();
   let consoleHeader = $state<HTMLElement>();
   let navigationPanel = $state<HTMLElement>();
   let navigationToggle = $state<HTMLButtonElement>();
@@ -43,9 +49,24 @@
   let commandReturnFocus: HTMLElement | undefined;
   let investigationGuideRequested = $state(false);
   let revealInvestigationGuideOnMount = $state(false);
-  const wideWorkspace = $derived(['/lookup', '/bulk', '/monitor', '/brands'].includes(page.url.pathname));
+  let selectedCaseId = $state<string | null>(null);
+  const showCaseContext = $derived(Boolean(selectedCaseId)
+    && page.url.pathname !== '/cases'
+    && !(page.url.pathname === '/monitor' && (page.url.searchParams.get('view') === 'cases' || page.url.searchParams.has('case'))));
+  const wideWorkspace = $derived(['/lookup', '/bulk', '/cases', '/monitor', '/brands'].includes(page.url.pathname));
   setContext(CAPABILITY_CONTEXT, () => capabilities);
+  beforeNavigate(({ to, willUnload, cancel }) => {
+    // Leaving an unlocked console replaces the document, including cached
+    // results and module state. Returning requires a fresh explicit unlock.
+    if (hasUnlockedBrowserWorkspace() && to && !willUnload && !isProtectedDestination(to.url)) {
+      cancel();
+      window.location.assign(to.url.href);
+    }
+  });
   onMount(() => {
+    localApplication = isLocalApplication();
+    const cancelNavigationPreload = preloadOnIdle(() => preloadBestEffort(() => import('$lib/console-command-navigation')));
+    const unsubscribeCase = subscribeSelectedConsoleCase((id) => { selectedCaseId = id; });
     void checkSession();
     if (hasStoredInvestigationGuide()) investigationGuideRequested = true;
     const showInvestigationGuide = () => {
@@ -59,6 +80,9 @@
     };
     mobileNavigation.addEventListener('change', closeAtDesktopWidth);
     return () => {
+      lockBrowserWorkspace();
+      cancelNavigationPreload();
+      unsubscribeCase();
       mobileNavigation.removeEventListener('change', closeAtDesktopWidth);
       window.removeEventListener(INVESTIGATION_GUIDE_EVENT, showInvestigationGuide);
     };
@@ -86,6 +110,7 @@
       const authenticated=record.authenticated===true;
       if(!authenticated){
         clearConsoleWorkflowState();
+        if (localApplication) { window.location.replace('/login'); return; }
         try{await goto(signInTarget(),{replaceState:true});}
         finally{clearConsoleWorkflowState();}
         return;
@@ -104,6 +129,15 @@
     localData=await initializeBrowserLocalData();
   }
 
+  async function createSavedViewStorage(){
+    if (localData.state !== 'error' || localData.code !== 'LOCAL_DATA_MISSING') return;
+    if (!window.confirm('Create empty saved Case view storage in this workspace? This does not recover lost views. If views were previously saved here, restore a verified backup instead. Existing records and files will not be replaced.')) return;
+    localData={state:'initializing'};
+    localData=await initializeBrowserLocalData({createMissingCollections:['case_views']});
+    await tick();
+    (localData.state === 'ready' ? document.querySelector<HTMLElement>('#main-content') : storageErrorHeading)?.focus();
+  }
+
   async function logout(){
     if(signingOut)return;
     signingOut=true;
@@ -112,6 +146,7 @@
       const {response}=await requestJsonCapped('/api/logout',{method:'POST'},{maximumBytes:SMALL_JSON_RESPONSE_BYTES,timeoutMs:10_000});
       if(!response.ok)throw new Error('The protected session could not be ended.');
       clearConsoleWorkflowState();
+      if (localApplication) { window.location.replace('/login'); return; }
       try{await goto('/login',{replaceState:true});}
       finally{clearConsoleWorkflowState();}
     }
@@ -201,7 +236,7 @@
   }
   function runtimeLabel(){return capabilities?.runtime==='netlify'?'Netlify':capabilities?.runtime==='express'?'Express':'Hosted';}
   function capabilityStatus(){return capabilitiesChecked?(capabilities?`Backend · ${runtimeLabel()}`:'Backend unavailable'):'Checking backend…';}
-  function capabilityStatusDetail(){return capabilitiesChecked?(capabilities?`Hosted network capabilities reported by the ${runtimeLabel()} runtime.`:'The backend capability report is unavailable.'):'Checking the backend capability report.';}
+  function capabilityStatusDetail(){return capabilitiesChecked?(capabilities?`Network capabilities reported by the ${runtimeLabel()} runtime.`:'The backend capability report is unavailable.'):'Checking the backend capability report.';}
 </script>
 
 <svelte:head><meta name="robots" content="noindex, nofollow"></svelte:head>
@@ -212,7 +247,7 @@
   <ConsoleLoading
     stage="session"
     title="Opening WHOISleuth"
-    detail="Confirming the protected session before loading any browser-local investigation data."
+    detail="Confirming the protected session before loading saved investigation data."
   />
 {:else if session==='unavailable'}
   <div class="center"><section class="login card"><h1>Session service unavailable</h1><p class="muted">The protected console could not confirm your session.</p><button class="primary" onclick={checkSession}>Retry</button><p class="login-links"><a href="/">Return home</a></p></section></div>
@@ -220,17 +255,40 @@
   <ConsoleLoading
     stage="workspace"
     title="Preparing your workspace"
-    detail="Opening bounded browser-local collections and checking the capabilities available to this deployment."
+    detail="Opening saved collections and checking the available capabilities."
   />
 {:else if localData.state==='error'}
-  <div class="center"><section class="login card"><h1>Browser-local data unavailable</h1><p class="muted">{localData.detail}</p>{#if localData.code==='DEFERRED_MODULE_UNAVAILABLE'}<button class="primary" onclick={reloadDeferredModulePage}>Reload page</button>{:else}<button class="primary" onclick={retryLocalData}>Retry</button>{/if}<p class="login-links"><a href="/privacy">Review storage and privacy details</a></p></section></div>
+  <div class="workspace-error">
+    <section class="workspace-access card">
+      {#if localData.code === 'LOCAL_DATA_WORKSPACE_LOCKED'}
+        <DeferredSurface load={() => import('$lib/components/BrowserWorkspaceUnlock.svelte')} props={{onunlock:retryLocalData}} loadingLabel="Loading workspace unlock." unavailableLabel="Workspace unlock could not be loaded. Reload the page to retry." />
+      {:else}
+        <h1 tabindex="-1" bind:this={storageErrorHeading}>{localApplication ? 'Filesystem workspace unavailable' : 'Browser-local data unavailable'}</h1>
+        <p class="muted">{localData.detail}</p>
+        {#if localData.code === 'DEFERRED_MODULE_UNAVAILABLE'}
+          <button class="primary" onclick={reloadDeferredModulePage}>Reload page</button>
+        {:else}
+          <button class="primary" onclick={retryLocalData}>Retry</button>
+        {/if}
+        {#if localData.code === 'LOCAL_DATA_MISSING'}
+          <details class="storage-upgrade">
+            <summary>Workspace created before saved Case views?</summary>
+            <p>This adds only empty saved-view storage. All other collections must be readable, and no retained records or files may exist without their metadata. Previously saved views require backup recovery instead.</p>
+            <button class="btn" type="button" onclick={createSavedViewStorage}>Create saved-view storage</button>
+          </details>
+        {/if}
+      {/if}
+      <p class="login-links"><a href="/privacy">Review storage and privacy details</a></p>
+    </section>
+  </div>
+  <section class="workspace-recovery card"><DeferredSurface load={() => import('$lib/components/BrowserWorkspaceManager.svelte')} props={{}} loadingLabel="Reading workspace recovery options." unavailableLabel="Workspace recovery could not be loaded. Reload the page to retry." /></section>
 {:else}
   <div class="shell" class:open={navOpen}>
     <a class="skip-link" href="#main-content">Skip to main content</a>
     <header bind:this={consoleHeader} inert={commandOpen} aria-hidden={commandOpen?'true':undefined}>
       <a href="/dashboard" aria-label="WHOISleuth Dashboard"><span class="mark small"><BrandMark /></span><strong>WHOISleuth</strong></a>
       <div class="console-header-actions">
-        <button class="command-trigger" type="button" aria-label="Open console navigation" bind:this={commandTrigger} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">Ctrl/⌘ K</span><span class="command-icon" aria-hidden="true"><IntelligenceIcon name="command" size={18} /></span><strong>Navigate</strong></button>
+        <button class="command-trigger" type="button" aria-label="Open console navigation" bind:this={commandTrigger} onpointerenter={() => preloadBestEffort(() => import('$lib/console-command-navigation'))} onfocus={() => preloadBestEffort(() => import('$lib/console-command-navigation'))} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">Ctrl/⌘ K</span><span class="command-icon" aria-hidden="true"><IntelligenceIcon name="command" size={18} /></span><strong>Search</strong></button>
         <span class="sign-out-control">
           <button class="console-sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>
           {#if logoutError}<span class="sign-out-error" role="alert">{logoutError}</span>{/if}
@@ -246,29 +304,38 @@
         {#each consoleNavigationGroups as navigationGroup}
           <div class="console-nav-group" role="group" aria-labelledby={`console-group-${navigationGroup.label.toLowerCase().replaceAll(' ', '-').replace('&', 'and')}`}>
             <p class="eyebrow" id={`console-group-${navigationGroup.label.toLowerCase().replaceAll(' ', '-').replace('&', 'and')}`}>{navigationGroup.label}</p>
-            {#each navigationGroup.items as item}<a class:active={isNavigationItemActive(item,page.url)} aria-current={isNavigationItemActive(item,page.url)?'page':undefined} href={item.href} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}
+            {#each navigationGroup.items as item}<a class:active={isNavigationItemActive(item,page.url)} aria-current={isNavigationItemActive(item,page.url)?'page':undefined} href={item.href} title={item.detail} onclick={()=>navOpen=false}><IntelligenceIcon name={item.icon} size={18} /><strong>{item.label}</strong></a>{/each}
           </div>
         {/each}
       </nav>
-      <nav class="reference-nav" aria-label="Reference"><p class="eyebrow">Reference</p>{#each referenceNavigation as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} target={item.opensInNewTab?'_blank':undefined} rel={item.opensInNewTab?'noopener noreferrer':undefined} aria-label={item.opensInNewTab?`${item.label}. ${item.detail}. Opens in a new tab.`:undefined} onclick={()=>navOpen=false}><strong>{item.label}</strong><small>{item.detail}</small></a>{/each}</nav>
+      <nav class="reference-nav" aria-label="Reference"><p class="eyebrow">Reference</p>{#each referenceNavigation as item}<a class:active={page.url.pathname===item.href} aria-current={page.url.pathname===item.href?'page':undefined} href={item.href} title={item.detail} target={item.opensInNewTab?'_blank':undefined} rel={item.opensInNewTab?'noopener noreferrer':undefined} aria-label={item.opensInNewTab?`${item.label}. Opens in a new tab.`:undefined} onclick={()=>navOpen=false}><IntelligenceIcon name={item.icon} size={18} /><strong>{item.label}</strong></a>{/each}</nav>
       <div class="session"><ThemeSelector /><div class="session-row"><span role="note" title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span></div></div>
     </aside>
     {#if navOpen}<button class="scrim" tabindex="-1" aria-hidden="true" onclick={()=>void closeNavigation()}></button>{/if}
-    <main id="main-content" class:wide-workspace={wideWorkspace} tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>{#if investigationGuideRequested}<DeferredSurface load={() => import('$lib/components/InvestigationGuide.svelte')} props={{revealOnMount:revealInvestigationGuideOnMount}} loadingLabel="Loading the investigation guide." unavailableLabel="The investigation guide could not be loaded." placeholder="workspace" />{/if}{@render children()}<SiteFooter console /></main>
+    <main id="main-content" use:keepFocusBelow={() => consoleHeader} class:wide-workspace={wideWorkspace} tabindex="-1" inert={navOpen||commandOpen} aria-hidden={navOpen||commandOpen?'true':undefined}>
+      <BrowserWorkspaceIndicator />
+      {#if showCaseContext && selectedCaseId}<DeferredSurface load={() => import('$lib/components/SelectedCaseContext.svelte')} props={{caseId:selectedCaseId}} loadingLabel="Reading selected Case…" unavailableLabel="Selected Case context could not be loaded." />{/if}
+      {#if investigationGuideRequested}<DeferredSurface load={() => import('$lib/components/InvestigationGuide.svelte')} props={{revealOnMount:revealInvestigationGuideOnMount}} loadingLabel="Loading the investigation guide." unavailableLabel="The investigation guide could not be loaded." placeholder="workspace" />{/if}
+      {@render children()}
+      <SiteFooter console />
+    </main>
     <div inert={navOpen||commandOpen}><AnalystUndo /></div>
     {#if commandOpen}
-      <CommandPalette commands={consoleCommandNavigation} onclose={closeCommandPalette} />
+      <CommandPalette onclose={closeCommandPalette} />
     {/if}
   </div>
 {/if}
 
 <style>
+  .workspace-recovery{width:min(760px,calc(100% - 32px));margin:20px auto;padding:20px}
+  .workspace-error{display:flex;justify-content:center;margin:40px 16px 20px}.workspace-access{width:min(480px,100%);padding:clamp(20px,4vw,34px);min-width:0;overflow-wrap:anywhere}
+  .storage-upgrade{margin-top:16px}.storage-upgrade>summary{min-height:44px;cursor:pointer}.storage-upgrade button{min-height:44px;max-width:100%;padding:8px 13px;white-space:normal}
   .login-links{display:flex;justify-content:center;gap:8px;margin:18px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .login-links a{color:var(--accent)}
   .reference-nav{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
   .sign-out-control{position:relative;display:inline-flex}
   .sign-out-error{position:absolute;z-index:20;top:calc(100% + 8px);right:0;width:min(300px,calc(100vw - 32px));padding:9px 11px;border:1px solid var(--danger);border-radius:var(--radius-sm);background:var(--panel);box-shadow:0 8px 24px rgb(var(--shadow-rgb) / .28);color:var(--danger);font-size:var(--text-2xs);line-height:1.4}
-  .console-nav-group+.console-nav-group{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+  .console-nav-group+.console-nav-group{margin-top:14px;padding-top:0}
   .command-trigger{display:flex;min-height:34px;align-items:center;gap:7px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--muted);font:650 var(--text-2xs) var(--mono);white-space:nowrap}
   .command-trigger:hover,.command-trigger:focus-visible{border-color:var(--accent);color:var(--accent);background:rgb(var(--accent-rgb) / .07)}
   .command-trigger span{padding:2px 4px;border:1px solid var(--border);border-radius:4px;color:var(--text);font:inherit}

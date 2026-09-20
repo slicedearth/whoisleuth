@@ -4,10 +4,12 @@ import { getDomain } from 'tldts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
 import { isValidAsciiDomainName } from '../lib/hostname.mts';
 import { isRecord, recordOrEmpty } from '../lib/json-record.mts';
+import { classifyQuery } from '../lib/classify.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import { CliUsageError } from './errors.mts';
 
 export const CLI_MAIL_REVIEW_SCHEMA = 'whoisleuth.cli.mail-review';
-export const CLI_MAIL_REVIEW_VERSION = 3;
+export const CLI_MAIL_REVIEW_VERSION = 4;
 export const MAX_MAIL_REVIEW_INPUT_BYTES = 16 * 1024 * 1024;
 export const MAX_MAIL_REVIEW_ROWS = 500;
 
@@ -29,10 +31,9 @@ function boolean(value: unknown): boolean | null {
 }
 
 function timestamp(value: unknown, label: string): string {
-  if (typeof value !== 'string' || value.length > 64 || !Number.isFinite(Date.parse(value))) {
-    throw new CliUsageError(`${label} must be a valid bounded timestamp.`);
-  }
-  return new Date(value).toISOString();
+  const result = normalizeExplicitIsoTimestamp(value);
+  if (!result) throw new CliUsageError(`${label} must be a valid bounded timestamp with an explicit timezone.`);
+  return result;
 }
 
 function booleanOrNull(value: unknown, label: string): boolean | null {
@@ -107,8 +108,8 @@ function validateMxEvidence(
 function validateMailRow(value: unknown, index: number, expectedVersion: number | null): UnknownRecord {
   const item = record(value);
   const label = `Mail review row ${index + 1}`;
-  const version = Number(item.version);
-  if (item.schema !== 'whoisleuth.cli.bulk.item' || ![2, 3].includes(version)
+  const version = item.version;
+  if (item.schema !== 'whoisleuth.cli.bulk.item' || typeof version !== 'number' || ![2, 3].includes(version)
     || (expectedVersion !== null && version !== expectedVersion)) {
     throw new CliUsageError(`${label} must use the matching WHOISleuth Bulk item schema version 2 or 3.`);
   }
@@ -217,6 +218,7 @@ function normalizeMailRow(value: unknown) {
   const providers = providerDomains(hosts);
   return {
     domain,
+    provenance: mailRowProvenance(item),
     state,
     dnsStatus,
     hasMx,
@@ -235,6 +237,28 @@ function normalizeMailRow(value: unknown) {
   };
 }
 
+function mailRowProvenance(item: UnknownRecord) {
+  return Object.freeze({
+    sourceGeneratedAt: timestamp(item.generatedAt, 'Bulk row generation time'),
+    observedAt: item.version === 3 ? normalizeExplicitIsoTimestamp(item.observedAt) : null,
+    dnsObservedAt: item.ok === true ? normalizeExplicitIsoTimestamp(record(record(item.availability).dns).observedAt) : null,
+    collectionOrigin: item.version === 3
+      ? item.collectionOrigin as 'current_run' | 'resumed_checkpoint'
+      : 'unknown' as const,
+  });
+}
+
+function failedMailRow(item: UnknownRecord, index: number) {
+  let target: string | null = null;
+  try { target = classifyQuery(String(item.query)).value; } catch { /* Invalid targets remain identifiable by input position. */ }
+  return Object.freeze({
+    rowNumber: index + 1,
+    target,
+    state: 'collection_failed' as const,
+    provenance: mailRowProvenance(item),
+  });
+}
+
 function parseInput(textValue: unknown): UnknownRecord[] {
   if (typeof textValue !== 'string' || Buffer.byteLength(textValue, 'utf8') > MAX_MAIL_REVIEW_INPUT_BYTES) {
     throw new CliUsageError(`Mail review input is limited to ${MAX_MAIL_REVIEW_INPUT_BYTES} bytes.`);
@@ -247,11 +271,11 @@ function parseInput(textValue: unknown): UnknownRecord[] {
     scanBoundedJson(textInput);
     const parsed = JSON.parse(textInput);
     const document = record(parsed);
-    if (document.schema === 'whoisleuth.cli.bulk' && [2, 3].includes(Number(document.version)) && Array.isArray(document.results)) {
+    if (document.schema === 'whoisleuth.cli.bulk' && typeof document.version === 'number' && [2, 3].includes(document.version) && Array.isArray(document.results)) {
       values = document.results;
       containerVersion = Number(document.version);
       timestamp(document.generatedAt, 'Mail review Bulk generation time');
-    } else if (document.schema === 'whoisleuth.cli.bulk.item' && [2, 3].includes(Number(document.version))) {
+    } else if (document.schema === 'whoisleuth.cli.bulk.item' && typeof document.version === 'number' && [2, 3].includes(document.version)) {
       values = [document];
     } else {
       throw new CliUsageError('Mail review requires WHOISleuth Bulk JSON schema version 2 or 3.');
@@ -277,6 +301,13 @@ function buildCliMailReview(textValue: unknown, generatedAt = new Date().toISOSt
   const inputRows = parseInput(textValue);
   const rows = inputRows.map(normalizeMailRow).filter((row): row is NonNullable<ReturnType<typeof normalizeMailRow>> => Boolean(row));
   if (!rows.length) throw new CliUsageError('Mail review input contains no completed domain results.');
+  const failedRows = inputRows.flatMap((row, index) => row.ok === false ? [failedMailRow(row, index)] : []);
+  const inputCoverage = Object.freeze({
+    inputRows: inputRows.length,
+    reviewedRows: rows.length,
+    failedRows: failedRows.length,
+    unmeasuredObservationRows: [...rows, ...failedRows].filter((row) => row.provenance.observedAt === null).length,
+  });
   const counts: Record<MailState, number> = {
     authenticated_mail: 0,
     evidence_incomplete: 0,
@@ -313,10 +344,14 @@ function buildCliMailReview(textValue: unknown, generatedAt = new Date().toISOSt
     })
     .sort((left, right) => left.providerDomain.localeCompare(right.providerDomain));
   const providerRelationships = allProviderRelationships.slice(0, 100);
+  const rowsWithIncompleteDns = rows.filter((row) => row.dnsStatus !== 'success' || row.hasMx === null || row.hasNullMx === null).length;
   const providerCoverage = {
-    complete: rows.every((row) => !row.providerDomainsTruncated)
+    complete: failedRows.length === 0 && rowsWithIncompleteDns === 0
+      && rows.every((row) => !row.providerDomainsTruncated)
       && allProviderRelationships.length <= 100
       && allProviderRelationships.every((relationship) => !relationship.domainsTruncated),
+    failedRows: failedRows.length,
+    rowsWithIncompleteDns,
     rowsWithOmittedProviders: rows.filter((row) => row.providerDomainsTruncated).length,
     omittedProviderDomains: rows.reduce((sum, row) => sum + row.providerDomainsOmitted, 0),
     relationshipCount: allProviderRelationships.length,
@@ -327,16 +362,20 @@ function buildCliMailReview(textValue: unknown, generatedAt = new Date().toISOSt
   return {
     schema: CLI_MAIL_REVIEW_SCHEMA,
     version: CLI_MAIL_REVIEW_VERSION,
-    generatedAt,
+    generatedAt: timestamp(generatedAt, 'Mail review generation time'),
     counts,
     rows,
+    failedRows,
+    inputCoverage,
     providerRelationships,
     providerCoverage,
     limitations: [
       'This review is passive and uses DNS evidence already retained in a WHOISleuth Bulk result; it makes no network request.',
       'Null MX, no explicit MX, receiving mail, authentication gaps, and incomplete evidence remain separate states.',
       'SMTP delivery, mailbox existence, catch-all behaviour, banner collection, and message acceptance were not tested.',
-      ...(!providerCoverage.complete
+      ...(failedRows.length ? [`${failedRows.length} input target${failedRows.length === 1 ? '' : 's'} failed collection and cannot contribute mail evidence. Input positions and normalised targets are retained; consult the original input for failure diagnostics.`] : []),
+      ...(rowsWithIncompleteDns ? [`${rowsWithIncompleteDns} reviewed domain${rowsWithIncompleteDns === 1 ? ' has' : 's have'} incomplete DNS evidence; unobserved provider relationships remain unknown.`] : []),
+      ...(providerCoverage.rowsWithOmittedProviders || providerCoverage.omittedRelationships || providerCoverage.omittedRelationshipDomains
         ? ['Mail-provider relationship coverage reached a configured row, relationship, or domain bound; omitted relationships remain unknown.']
         : []),
     ],
@@ -346,18 +385,29 @@ function buildCliMailReview(textValue: unknown, generatedAt = new Date().toISOSt
 function formatCliMailReview(document: ReturnType<typeof buildCliMailReview>): string {
   const lines = [
     'Passive mail exposure review',
+    `Input targets    ${document.inputCoverage.inputRows}`,
     `Domains          ${document.rows.length}`,
+    `Failed targets   ${document.inputCoverage.failedRows}`,
     `Authenticated    ${document.counts.authenticated_mail}`,
     `Auth gaps        ${document.counts.mail_auth_gap}`,
     `Null MX          ${document.counts.null_mx}`,
     `No explicit MX   ${document.counts.no_explicit_mx}`,
-    `Incomplete       ${document.counts.evidence_incomplete + document.counts.mail_auth_incomplete}`,
+    `Incomplete       ${document.counts.evidence_incomplete + document.counts.mail_auth_incomplete + document.inputCoverage.failedRows}`,
     '',
   ];
   for (const row of document.rows) {
     lines.push(`${row.domain}  ${row.state.replaceAll('_', ' ')}`);
+    lines.push(`  Observed      ${row.provenance.observedAt ?? 'unknown'} · ${row.provenance.collectionOrigin.replaceAll('_', ' ')}`);
+    lines.push(`  DNS observed  ${row.provenance.dnsObservedAt ?? 'unknown'} · Source output ${row.provenance.sourceGeneratedAt}`);
     lines.push(`  MX providers  ${row.providerDomains.join(', ') || 'None observed'}${row.providerDomainsOmitted ? ` · +${row.providerDomainsOmitted} omitted` : ''}`);
     lines.push(`  SPF / DMARC   ${row.hasSpf === null ? 'unknown' : row.hasSpf ? 'observed' : 'not observed'} / ${row.hasDmarc === null ? 'unknown' : row.hasDmarc ? 'observed' : 'not observed'}`);
+  }
+  if (document.failedRows.length) {
+    lines.push('', 'Failed collection inputs');
+    for (const row of document.failedRows) {
+      lines.push(`Input ${row.rowNumber}  ${row.target ?? 'unrecognised target'} · collection failed`);
+      lines.push(`  Observed      ${row.provenance.observedAt ?? 'unknown'} · ${row.provenance.collectionOrigin.replaceAll('_', ' ')} · Source output ${row.provenance.sourceGeneratedAt}`);
+    }
   }
   if (document.providerRelationships.length) {
     lines.push('', 'Shared mail-provider relationships');
@@ -366,7 +416,7 @@ function formatCliMailReview(document: ReturnType<typeof buildCliMailReview>): s
     }
   }
   if (!document.providerCoverage.complete) {
-    lines.push('', `Provider coverage partial  ${document.providerCoverage.omittedProviderDomains} row providers · ${document.providerCoverage.omittedRelationships} relationships · ${document.providerCoverage.omittedRelationshipDomains} relationship domains omitted`);
+    lines.push('', `Provider coverage partial  ${document.providerCoverage.failedRows} failed targets · ${document.providerCoverage.rowsWithIncompleteDns} incomplete DNS rows · ${document.providerCoverage.omittedProviderDomains} row providers · ${document.providerCoverage.omittedRelationships} relationships · ${document.providerCoverage.omittedRelationshipDomains} relationship domains omitted`);
   }
   lines.push('', 'Limitations:');
   for (const limitation of document.limitations) lines.push(`  - ${limitation}`);

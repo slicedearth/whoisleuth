@@ -205,6 +205,22 @@ describe('case creation and updates', () => {
     assert.equal(concluded.record.updatedAt, LATER);
   });
 
+  test('conclusions reference retained pins without copying them and reject missing or duplicate identities', () => {
+    const opened = model.openOrCreateCase([], { domain: 'conclusion.example', evidencePin: {
+      label: 'Retained observation', value: 'Review this observation.', source: 'Supplied record', observedAt: ISO,
+    } }, ISO);
+    const pin = requiredValue(opened.record.evidencePins[0]);
+    const input = { disposition: 'suspicious', reviewReasonCode: 'other_reviewed', summary: 'A reviewed assessment',
+      rationale: 'The selected observation needs corroboration.', evidence: [{ pinId: pin.id, stance: 'supports' as const }] };
+    const concluded = model.recordCaseConclusion(opened.cases, opened.record.id, input, LATER);
+    assert.deepEqual(concluded.record.evidencePins, [pin]);
+    assert.deepEqual(concluded.record.decisions[0]?.evidencePinIds, [pin.id]);
+    for (const evidence of [[{ pinId: 'missing', stance: 'supports' as const }], [...input.evidence, ...input.evidence]]) {
+      assert.throws(() => model.recordCaseConclusion(opened.cases, opened.record.id, { ...input, evidence }, LATER), /retained|once/iu);
+    }
+    assert.deepEqual(opened.record.decisions, []);
+  });
+
   test('rejects conclusions without a reviewed reason, rationale-compatible decision, or evidence', () => {
     const opened = model.openOrCreateCase([], { domain: 'invalid-conclusion.example' }, ISO);
     const input = {
@@ -1082,6 +1098,18 @@ describe('compareCaseEvidence', () => {
     assert.equal(change.tone, 'danger');
   });
 
+  test('withholds hostname-specific improvements while preserving registration changes', () => {
+    const before = requiredValue(model.normalizeSnapshot(deepEvidence({ inputHostname: 'login.example.test', riskScore: 80, hasPasswordField: true, hasMx: true, registrar: 'Old registrar' }), { fallback: ISO, caseDomain: 'example.test' }));
+    const after = requiredValue(model.normalizeSnapshot(deepEvidence({ inputHostname: 'www.example.test', riskScore: 10, hasPasswordField: false, hasMx: false, registrar: 'New registrar' }), { fallback: LATER, caseDomain: 'example.test' }));
+    assert.equal(before.inputHostname, 'login.example.test');
+    assert.equal(after.inputHostname, 'www.example.test');
+    assert.deepEqual(model.compareCaseEvidence(before, after).map((change) => change.field), ['registrar']);
+    assert.ok(model.caseEvidenceIncomparableReasons(before, after).includes('observation-context'));
+    const sameHost = { ...after, inputHostname: before.inputHostname };
+    assert.deepEqual(new Set(model.compareCaseEvidence(before, sameHost).map((change) => change.field)), new Set(['riskScore', 'registrar', 'hasMx', 'hasPasswordField']));
+    assert.deepEqual(model.compareCaseEvidence(before, { ...after, inputHostname: null }).map((change) => change.field), ['registrar']);
+  });
+
   test('keeps unversioned or differently-versioned risk scores readable but incomparable', () => {
     const unversioned = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', riskScore: 90 }, { fallback: ISO });
     const current = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', riskModelVersion: 1, riskScore: 42 }, { fallback: LATER });
@@ -1289,6 +1317,24 @@ describe('serialized store byte budget', () => {
     const snapshotsBefore = cases.reduce((sum, c) => sum + c.evidenceHistory.length, 0);
     const result = model.enforceStoreBudget(cases);
     assert.ok(result.pruned > 0);
+    const current = structuredClone(result.cases);
+    const before = structuredClone(cases);
+    const preview = model.prepareCaseStoreSave(current, cases);
+    assert.deepEqual(cases, before, 'preview must not change the proposed or saved records');
+    assert.deepEqual(preview.cases, result.cases);
+    assert.equal(preview.removed.reduce((sum, item) => sum + item.snapshotIds.length, 0), result.pruned);
+    assert.equal(preview.removedBytes, Buffer.byteLength(model.serializeCaseStore(cases)) - Buffer.byteLength(model.serializeCaseStore(result.cases)));
+    for (const item of preview.removed) {
+      const proposed = requiredValue(cases.find(record => record.id === item.caseId));
+      const retained = requiredValue(result.cases.find(record => record.id === item.caseId));
+      assert.deepEqual(item.snapshotIds, proposed.evidenceHistory.filter(snapshot => !retained.evidenceHistory.some(kept => kept.id === snapshot.id)).map(snapshot => snapshot.id));
+      assert.equal(item.remainingSnapshots, retained.evidenceHistory.length);
+    }
+    assert.equal(model.caseStoreSavePreviewIsCurrent(current, preview), true);
+    const peer = structuredClone(current);
+    requiredValue(peer[0]).tags = ['peer-edit'];
+    assert.equal(peer[0]?.updatedAt, current[0]?.updatedAt);
+    assert.equal(model.caseStoreSavePreviewIsCurrent(peer, preview), false, 'same-clock changes must invalidate confirmation');
     assert.ok(new TextEncoder().encode(model.serializeCaseStore(result.cases)).length <= model.MAX_CASE_STORE_BYTES);
     // Analyst-authored notes are all still present.
     const keptNotes = result.cases.reduce((sum, c) => sum + c.notes.length, 0);

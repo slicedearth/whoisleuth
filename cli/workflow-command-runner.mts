@@ -1,7 +1,7 @@
 import type { CliArguments } from './arguments.mts';
 import { formatCliJunit } from './ci-report.mts';
 import { formatDomainControlMonitor, runDomainControlMonitor } from './domain-control-monitor.mts';
-import { boundedCliErrorMessage, CliUsageError } from './errors.mts';
+import { boundedCliErrorMessage, createCliDiagnosticOutput, CliUsageError } from './errors.mts';
 import EXIT_CODES from './exit-codes.mts';
 import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
 import { formatJsonDocument } from './formatters/json.mts';
@@ -14,16 +14,55 @@ import {
 import {
   MAX_INVESTIGATION_RUN_BYTES,
   formatInvestigationRun,
+  investigationRunExitCode,
   runInvestigationRecipe,
 } from './investigation-run.mts';
 import { MAX_OFFLINE_EVIDENCE_INPUT_BYTES } from './offline-evidence-review.mts';
+import { MAX_OFFLINE_ARTIFACT_BYTES } from './artifact-verify.mts';
+import { MAX_RETAINED_ARTIFACT_DIFF_BYTES } from './retained-artifact-diff.mts';
+import { MAX_SAVED_LOOKUP_INPUT_BYTES } from './saved-lookup.mts';
+import { MAX_COMPARE_INPUT_BYTES } from './compare.mts';
+import { MAX_SOURCE_RELIABILITY_INPUT_BYTES } from './source-reliability.mts';
+import { MAX_SHARING_REVIEW_BYTES } from './sharing-review.mts';
+import type { WorkflowStepInputs } from './investigation-artifacts.mts';
+import type { CliCommand } from './command-reference.mts';
 import { createBufferedOutput } from './output-file.mts';
 import type { CliCommandContext, CliDependencies } from './runner-types.mts';
+import { boundedInteractiveAnswer, canReadInteractiveLine, readBoundedInteractiveLine } from './terminal-input.mts';
 import { WORKFLOW_INLINE_COMMANDS } from './inline-command-families.mts';
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
 
 type WorkflowInlineCommand = typeof WORKFLOW_INLINE_COMMANDS[number];
 type WorkflowCommandArguments = Extract<CliArguments, { action: WorkflowInlineCommand }>;
+
+function boundWorkflowInputs(command: CliCommand, inputs: WorkflowStepInputs, dependencies: CliDependencies, context: CliCommandContext): Partial<CliDependencies> {
+  if (!inputs.size) return {};
+  const read = <Source extends string | null | undefined>(
+    source: Source,
+    fallback: ((source: Source) => string | Promise<string>) | undefined,
+    maximumBytes: number,
+    label: string,
+  ) => typeof source === 'string' && inputs.has(source)
+    ? inputs.get(source)!
+    : fallback ? fallback(source) : context.readInput(source, maximumBytes, label);
+  switch (command) {
+    case 'export': return { readExportInput: (source) => read(source, dependencies.readExportInput,
+      MAX_SAVED_LOOKUP_INPUT_BYTES, 'Evidence export input') };
+    case 'verify-artifact': return { readArtifactInput: (source) => read(source, dependencies.readArtifactInput,
+      MAX_OFFLINE_ARTIFACT_BYTES, 'Artefact input') };
+    case 'sharing-review': return { readArtifactInput: (source) => read(source, dependencies.readArtifactInput,
+      MAX_SHARING_REVIEW_BYTES, 'Sharing review input') };
+    case 'compare': return { readCompareInput: (source) => read(source, dependencies.readCompareInput,
+      MAX_COMPARE_INPUT_BYTES, 'Comparison input') };
+    case 'source-report': return { readSourceReliabilityInput: (source) => read(source, dependencies.readSourceReliabilityInput,
+      MAX_SOURCE_RELIABILITY_INPUT_BYTES, 'Source reliability input') };
+    case 'diff':
+    case 'timeline': return { readDiffInput: (source) => read(source, dependencies.readDiffInput,
+      command === 'diff' ? MAX_RETAINED_ARTIFACT_DIFF_BYTES : MAX_SAVED_LOOKUP_INPUT_BYTES,
+      command === 'diff' ? 'Retained diff input' : 'Lookup timeline input') };
+    default: throw new CliUsageError('This fixed-workflow command does not accept retained artefacts.');
+  }
+}
 
 async function runMonitorOnceCommand(
   args: Extract<WorkflowCommandArguments, { action: 'monitor-once' }>,
@@ -106,12 +145,18 @@ async function runWorkflowRecipeCommand(
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Investigation workflow');
+  const input = (dependencies.stdin ?? process.stdin) as Parameters<typeof canReadInteractiveLine>[0];
+  if (args.interactive && !canReadInteractiveLine(input, context.stderr, dependencies.environment)) {
+    throw new CliUsageError('--interactive requires terminal input and terminal stderr. Use --select for unattended workflows.');
+  }
   let resumeInput: string | null = null;
   if (args.resumeSource) {
     try {
-      resumeInput = dependencies.readDiffInput
-        ? await dependencies.readDiffInput(args.resumeSource)
-        : await context.readInput(args.resumeSource, MAX_INVESTIGATION_RUN_BYTES, 'Investigation resume state');
+      resumeInput = dependencies.workflowResumeInput !== undefined
+        ? dependencies.workflowResumeInput
+        : dependencies.readDiffInput
+          ? await dependencies.readDiffInput(args.resumeSource)
+          : await context.readInput(args.resumeSource, MAX_INVESTIGATION_RUN_BYTES, 'Investigation resume state');
     } catch (error) {
       if (error instanceof CliUsageError) throw error;
       throw new CliUsageError(`Could not read investigation resume state: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
@@ -120,17 +165,39 @@ async function runWorkflowRecipeCommand(
   const document = await runInvestigationRecipe(args.recipe, args.subject, {
     approveNetwork: args.approveNetwork,
     selections: args.selections,
+    artifactBindings: args.artifactBindings,
+    confirmedReviews: args.confirmedReviews,
+    ...(args.interactive ? { selectInputs: async (request: Readonly<{ stepId: string; label: string; inputs: readonly string[] }>) => {
+      context.writeStderr(`${request.label}\nEnter literal input paths or values. Leave blank to pause; no approval is implied.\n`);
+      const answers: string[] = [];
+      for (const placeholder of request.inputs) {
+        const prompt = `${request.stepId} ${placeholder}: `;
+        const answer = boundedInteractiveAnswer(await (dependencies.workflowQuestion
+          ? dependencies.workflowQuestion(prompt)
+          : readBoundedInteractiveLine(prompt, { input: input!, output: context.stderr,
+            ...(dependencies.signal ? { signal: dependencies.signal } : {}) })));
+        if (!answer) break;
+        answers.push(answer);
+      }
+      return answers;
+    } } : {}),
     resumeInput,
     generatedAt: context.now(),
     ...(dependencies.signal ? { signal: dependencies.signal } : {}),
-    execute: async (command, stepArguments) => {
+    execute: async (command, stepArguments, inputs) => {
       const stepStdout = createBufferedOutput();
-      const stepStderr = createBufferedOutput();
-      const exitCode = await context.executeCli([command, ...stepArguments], {
-        stdout: stepStdout.stream,
-        stderr: stepStderr.stream,
-      });
-      return { exitCode, stdout: stepStdout.value() };
+      const stepStderr = createCliDiagnosticOutput();
+      try {
+        const exitCode = await context.executeCli([command, ...stepArguments], {
+          stdout: stepStdout.stream,
+          stderr: stepStderr.stream,
+          ...boundWorkflowInputs(command, inputs, dependencies, context),
+        });
+        return { exitCode, stdout: stepStdout.value() };
+      } finally {
+        const diagnostic = stepStderr.value();
+        if (diagnostic) context.writeStderr(`${command}: ${diagnostic}\n`);
+      }
     },
   });
   if (!args.quiet) {
@@ -138,7 +205,7 @@ async function runWorkflowRecipeCommand(
       ? formatJsonDocument(document)
       : context.terminal(formatInvestigationRun(document), args.color));
   }
-  return document.state === 'step_failed' ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
+  return investigationRunExitCode(document);
 }
 
 const WORKFLOW_COMMAND_HANDLERS = Object.freeze({

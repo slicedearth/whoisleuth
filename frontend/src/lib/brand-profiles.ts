@@ -1,6 +1,9 @@
+import { downloadLocalFile } from './download-local-file.ts';
 import {
   buildBrandProfileExport,
+  createBrandProfileId,
   applyBrandProfileFieldPatch,
+  brandPostureCollectionFingerprint,
   mergeBrandProfiles,
   normalizeBrandProfile,
   serializeBrandProfileStore,
@@ -13,17 +16,15 @@ import {
   profileDomainKind,
   profileSignals,
 } from './analysis/brand-profile-signals.ts';
-import type {
-  DesiredPostureBaseline,
-  MailProtectionProfile,
-  OfficialChannel,
-  ProtectionAttestation,
-  RightsReference,
-} from './analysis/brand-profile-model.ts';
+import type { BrandProfile } from './analysis/brand-profile-model.ts';
+export type { BrandProfile } from './analysis/brand-profile-model.ts';
 import { normalizePageBaseline } from './analysis/page-baseline.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
 import { BrowserLocalDataError } from './browser-local-data.ts';
+import { loadBrowserLocalDataPreparation } from './browser-local-data-worker.ts';
+import { assertLocalRecordCurrent, LocalRecordConflictError } from './local-mutation-outcome.ts';
 import { LEGACY_PROFILES_KEY } from './browser-local-data-contract.ts';
+import { workspacePreferenceStorage } from './browser-workspace-context.ts';
 import { serialiseWorkspacePortableJson } from '../../../packages/contracts/workspace-portability.mts';
 export { MAX_PROFILE_IMPORT_BYTES } from '../../../packages/contracts/workspace-portability.mts';
 
@@ -56,37 +57,14 @@ export function isBrandProfileMutationCommittedError(cause: unknown): cause is B
 }
 
 export type PageBaseline = ReturnType<typeof normalizePageBaseline>;
-export interface BrandProfile {
-  id: string;
-  name: string;
-  officialDomains: string[];
-  officialChannels: OfficialChannel[];
-  productNames: string[];
-  tlds: string[];
-  approvedPartnerDomains: string[];
-  allowlistedDomains: string[];
-  allowlistedRegistrars: string[];
-  dkimSelectors: string[];
-  retiredDkimSelectors: string[];
-  mailProtectionProfile: MailProtectionProfile;
-  protectionAttestations: ProtectionAttestation[];
-  desiredPostureBaselines: DesiredPostureBaseline[];
-  trademarkOwner: string;
-  trademarkRegistration: string;
-  rightsReferences: RightsReference[];
-  officialFaviconHash: string;
-  officialFaviconPHash: string;
-  pageBaseline: PageBaseline;
-  createdAt: string;
-  updatedAt: string;
-}
-
-const id = () => crypto.randomUUID ? crypto.randomUUID() : `bp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+export type BrandProfileSaveResult =
+  | { committed: true; profile: BrandProfile }
+  | { committed: false; message: string };
 
 export function normalizeProfile(raw: unknown, existing?: BrandProfile, touch = false): BrandProfile {
-  const profile = normalizeBrandProfile(raw, { existing, touch, makeId: id });
+  const profile = normalizeBrandProfile(raw, { existing, touch, makeId: createBrandProfileId });
   if (!profile) throw new Error('Enter a brand name.');
-  return profile as BrandProfile;
+  return profile;
 }
 
 export async function loadProfiles(): Promise<BrandProfile[]> {
@@ -103,7 +81,7 @@ export async function writeProfiles(profiles: BrandProfile[]): Promise<void> {
 
 export function activeProfileId() {
   try {
-    return normalizeBrandProfileId(localStorage.getItem(ACTIVE_PROFILE_KEY)) || '';
+    return normalizeBrandProfileId(workspacePreferenceStorage().getItem(ACTIVE_PROFILE_KEY)) || '';
   } catch (cause) {
     throw new BrowserLocalDataError('LOCAL_DATA_READ_FAILED', 'Could not read the active-profile preference. Browser storage may be unavailable.', { cause });
   }
@@ -113,8 +91,8 @@ export function setActiveProfile(profileId: string) {
   try {
     const normalized = normalizeBrandProfileId(profileId);
     if (profileId && !normalized) throw new Error('Active profile identifier is invalid.');
-    if (normalized) localStorage.setItem(ACTIVE_PROFILE_KEY, normalized);
-    else localStorage.removeItem(ACTIVE_PROFILE_KEY);
+    if (normalized) workspacePreferenceStorage().setItem(ACTIVE_PROFILE_KEY, normalized);
+    else workspacePreferenceStorage().removeItem(ACTIVE_PROFILE_KEY);
   } catch (cause) {
     if (cause instanceof Error && cause.message === 'Active profile identifier is invalid.') throw cause;
     throw new BrowserLocalDataError('LOCAL_DATA_WRITE_FAILED', 'Could not set the active profile. Browser storage may be full or unavailable.', { cause });
@@ -130,16 +108,15 @@ export function isDomainAllowlisted(domain: string, profile: BrandProfile | null
   return profileDomainKind(domain, profile) !== null;
 }
 
-export async function upsertProfile(raw: unknown, editingId = '', expectedUpdatedAt: string | null = null): Promise<BrandProfile> {
+export async function upsertProfile(raw: Partial<BrandProfile>, editingId = '', expected: BrandProfile | null = null): Promise<BrandProfile> {
   const committed = await updateBrowserLocalData('brand_profiles', (current) => {
     const profiles = [...current] as BrandProfile[];
     const index = editingId ? profiles.findIndex((item) => item.id === editingId) : -1;
     const existing = index >= 0 ? profiles[index] : undefined;
-    if (editingId && !existing) throw new Error('That Brand Profile no longer exists. It was not recreated.');
-    if (existing && expectedUpdatedAt !== null && existing.updatedAt !== expectedUpdatedAt) {
-      throw new Error('That Brand Profile changed after this editor opened. Review the current values before saving again.');
-    }
-    const normalized = normalizeProfile(raw, existing, true);
+    if (editingId && !existing) throw new LocalRecordConflictError('Brand Profile');
+    assertLocalRecordCurrent(existing, expected, 'Brand Profile', Object.keys(raw) as (keyof BrandProfile)[]);
+    const normalized = normalizeProfile({ ...existing, ...raw }, existing, true);
+    if (!editingId && profiles.some((profile) => profile.id === normalized.id)) throw new LocalRecordConflictError('Brand Profile');
     if (!normalized.name) throw new Error('Enter a brand name.');
     if (index >= 0) profiles[index] = normalized;
     else {
@@ -158,16 +135,16 @@ export async function upsertProfile(raw: unknown, editingId = '', expectedUpdate
 export async function updateProfileFields(
   profileId: string,
   patch: BrandProfileFieldPatch,
-  expectedUpdatedAt: string | null = null,
+  expected: BrandProfile,
 ): Promise<BrandProfile> {
   const committed = await updateBrowserLocalData('brand_profiles', (current) => {
     const profiles = [...current] as BrandProfile[];
     const index = profiles.findIndex((item) => item.id === profileId);
     const existing = index >= 0 ? profiles[index] : undefined;
-    if (!existing) throw new Error('That Brand Profile no longer exists. It was not recreated.');
-    if (expectedUpdatedAt !== null && existing.updatedAt !== expectedUpdatedAt) {
-      throw new Error('That Brand Profile changed after this editor opened. Review the current values before saving again.');
-    }
+    if (!existing) throw new LocalRecordConflictError('Brand Profile');
+    assertLocalRecordCurrent(existing, expected, 'Brand Profile', Object.keys(patch) as (keyof BrandProfile)[]);
+    if (Object.hasOwn(patch, 'desiredPostureBaselines')
+      && brandPostureCollectionFingerprint(existing) !== brandPostureCollectionFingerprint(expected)) throw new LocalRecordConflictError('Brand Profile');
     const normalized = applyBrandProfileFieldPatch(existing, patch) as BrandProfile;
     profiles[index] = normalized;
     const document = boundedProfiles(profiles);
@@ -179,8 +156,9 @@ export async function updateProfileFields(
   return committed.profile;
 }
 
-export async function deleteProfile(profileId: string): Promise<void> {
+export async function deleteProfile(profileId: string, expected: BrandProfile): Promise<void> {
   const committed = await updateBrowserLocalData('brand_profiles', (current) => {
+    assertLocalRecordCurrent(current.find((profile) => profile.id === profileId), expected, 'Brand Profile');
     const document = boundedProfiles((current as BrandProfile[]).filter((profile) => profile.id !== profileId));
     return { document, result: document };
   });
@@ -193,22 +171,29 @@ export async function deleteProfile(profileId: string): Promise<void> {
 
 export async function importProfiles(value: unknown) {
   return updateBrowserLocalData('brand_profiles', (current) => {
-    const result = mergeBrandProfiles(current, value, { makeId: id });
+    const result = mergeBrandProfiles(current, value, { makeId: createBrandProfileId });
     return {
-      document: boundedProfiles(result.profiles as BrandProfile[]),
+      document: result.profiles,
       result: { added: result.added, updated: result.updated, skipped: result.skipped },
     };
   });
 }
 
+export async function importProfileFile(file: Blob, signal?: AbortSignal) {
+  const options = signal ? { signal } : {};
+  const { mergeBrowserBrandProfileFile } = await loadBrowserLocalDataPreparation(options);
+  return updateBrowserLocalData('brand_profiles', async (current) => {
+    const result = await mergeBrowserBrandProfileFile(current, file, options);
+    return {
+      document: result.profiles,
+      result: { added: result.added, updated: result.updated, skipped: result.skipped },
+    };
+  }, { preparation: 'background', ...options });
+}
+
 export async function exportProfiles() {
   const blob = new Blob([serialiseWorkspacePortableJson(buildBrandProfileExport(await loadProfiles()))], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `whoisleuth-brand-profiles-${new Date().toISOString().slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadLocalFile(blob, `whoisleuth-brand-profiles-${new Date().toISOString().slice(0, 10)}.json`);
 }
 
 export function parseList(raw: string, lower = false) {

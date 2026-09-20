@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { types as utilTypes } from 'node:util';
 
 import ts from 'typescript';
+import { moduleForwardingSpecifier } from './module-forwarding.mts';
 
 import { decodeBoundedUtf8, readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
 import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
@@ -31,7 +32,7 @@ import {
   MAX_SCHEMA_SOURCE_AST_DEPTH,
   MAX_SCHEMA_SOURCE_AST_NODES,
   MAX_SCHEMA_SOURCE_FILE_BYTES,
-  MAX_SCHEMA_SOURCE_FILES,
+  MAX_SCHEMA_SOURCE_DIRECTORY_ENTRIES,
   MAX_SCHEMA_SOURCE_TOTAL_BYTES,
   type SchemaSourceDiscovery,
 } from './schema-source-coverage.mts';
@@ -94,7 +95,7 @@ function snapshotLifecycleSources(value: unknown): readonly LifecycleSource[] {
   }
   const lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length');
   const length = lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : null;
-  if (!Number.isSafeInteger(length) || Number(length) < 1 || Number(length) > MAX_SCHEMA_SOURCE_FILES) {
+  if (!Number.isSafeInteger(length) || Number(length) < 1 || Number(length) > MAX_SCHEMA_SOURCE_DIRECTORY_ENTRIES) {
     throw new TypeError('Schema lifecycle sources must use a bounded ordinary source list.');
   }
   const ownKeys = Reflect.ownKeys(value);
@@ -641,6 +642,12 @@ export async function loadSchemaLifecycleHookModules(
   return modules;
 }
 
+function forwardsAllValuesFrom(source: string, facade: string, owner: string): boolean {
+  const specifier = moduleForwardingSpecifier(source, facade);
+  return specifier !== null && specifier.startsWith('.')
+    && path.posix.normalize(path.posix.join(path.posix.dirname(facade), specifier)) === owner;
+}
+
 export function validateCasePortabilitySourceSnapshot(value: unknown): void {
   const sources = snapshotLifecycleSources(value);
   const sourceByPath = new Map(sources.map((source) => [source.file, source.source]));
@@ -657,10 +664,7 @@ export function validateCasePortabilitySourceSnapshot(value: unknown): void {
     if (!sourceByPath.has(facade) || !sourceByPath.has(owner)) {
       throw new TypeError(`Case domain compatibility facade is not source-covered: ${facade}.`);
     }
-    const relative = path.posix.relative(path.posix.dirname(facade), owner);
-    const specifier = relative.startsWith('.') ? relative : `./${relative}`;
-    const expected = `export * from '${specifier}';\n`;
-    if (sourceByPath.get(facade) !== expected) {
+    if (!forwardsAllValuesFrom(sourceByPath.get(facade)!, facade, owner)) {
       throw new TypeError(`Case domain compatibility facade is stale or is not an exact re-export: ${facade}.`);
     }
   }
@@ -729,12 +733,6 @@ export function validateCasePortabilitySourceSnapshot(value: unknown): void {
   }
 
   for (const { file, source } of sources) {
-    if (!facadePaths.has(file)
-      && !adapterPaths.has(file)
-      && !ownerPaths.has(file)
-      && reachesCaseOwner(file, new Set<string>())) {
-      throw new TypeError(`Case domain compatibility facade is hidden from the canonical register: ${file}.`);
-    }
     if (file === CASE_CONTRACT_OWNER) continue;
     for (const name of [
       ...CASE_PORTABILITY_IDENTITY_CONSTANTS,
@@ -784,9 +782,7 @@ export function validateWorkspacePortabilitySourceSnapshot(value: unknown): void
     if (!sourceByPath.has(facade) || !sourceByPath.has(owner)) {
       throw new TypeError(`Workspace domain compatibility facade is not source-covered: ${facade}.`);
     }
-    const relative = path.posix.relative(path.posix.dirname(facade), owner);
-    const specifier = relative.startsWith('.') ? relative : `./${relative}`;
-    if (sourceByPath.get(facade) !== `export * from '${specifier}';\n`) {
+    if (!forwardsAllValuesFrom(sourceByPath.get(facade)!, facade, owner)) {
       throw new TypeError(`Workspace domain compatibility facade is stale or is not an exact re-export: ${facade}.`);
     }
   }

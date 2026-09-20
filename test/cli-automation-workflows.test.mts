@@ -11,7 +11,7 @@ import { createBulkCheckpointWriter, parseBulkCheckpoint } from '../cli/bulk-che
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliLookupDocument } from '../cli/formatters/json.mts';
 import { buildCliLookupDiff } from '../cli/lookup-diff.mts';
-import { buildCliLookupReconciliation } from '../cli/lookup-reconcile.mts';
+import { buildCliLookupReconciliation, formatCliLookupReconciliation } from '../cli/lookup-reconcile.mts';
 import { buildCliLookupTimeline } from '../cli/lookup-timeline.mts';
 import { MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../cli/investigation-manifest.mts';
 import { CLI_PROGRESS_EVENT_SCHEMA, CLI_PROGRESS_EVENT_VERSION, createCliProgressEvents } from '../cli/progress-events.mts';
@@ -21,6 +21,26 @@ import type { BulkLookupResult } from '../cli/bulk.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 
 const NOW = '2026-08-01T00:00:00.000Z';
+
+test('same-domain timeline and reconciliation cannot compare selected-page values as the homepage', () => {
+  const make = (at: string, selected: boolean, pageTitle: string) => JSON.stringify(buildCliLookupDocument('example.test', classifiedDomain('example.test'), {
+    ...lookupResult('example.test'), availability: {
+      ...lookupResult('example.test').availability, observationHostname: 'example.test',
+      ...(selected ? { webObservationMode: 'selected_url' } : {}),
+      pageTitle, http: { status: 'success', requestUrl: 'https://example.test/selected', finalUrl: 'https://example.test/selected' },
+    },
+  }, at, 'deep'));
+  const left = make(NOW, false, 'Earlier page');
+  const right = make('2026-08-02T00:00:00.000Z', true, 'Different page');
+  const diff = buildCliLookupDiff(left, right, NOW, { domainMode: 'same' });
+  const title = diff.comparison.rows.find((row) => row.id === 'page-title');
+  assert.ok(title);
+  assert.equal(title.state, 'not_recorded');
+  assert.match(title.limitations.join(' '), /selected URL/);
+  assert.equal(buildCliLookupTimeline([left, right]).summary.transitionsWithObservedChanges, 0);
+  const reconciliation = buildCliLookupReconciliation([left, right]);
+  assert.equal(reconciliation.fields.find((field) => field.id === 'page-title')?.state, 'non_comparable');
+});
 
 function capture() {
   let value = '';
@@ -357,7 +377,7 @@ describe('reproducible investigation manifest', () => {
     assert.equal(lookupCalled, false);
     const document = JSON.parse(stdout.value());
     assert.equal(document.schema, 'whoisleuth.investigation-manifest');
-    assert.doesNotMatch(stdout.value(), /private|lookup\.json|brief\.json/iu);
+    assert.doesNotMatch(stdout.value(), /\/private\/|lookup\.json|brief\.json/iu);
   });
 
   test('stops reading manifest sources when their cumulative bytes exceed the bound', async () => {
@@ -762,6 +782,12 @@ describe('direct reports and saved Lookup diff', () => {
     assert.equal(direct.independence.state, 'verified_distinct_labels');
     assert.ok(direct.summary.disagreement > 0);
     assert.equal(direct.privacy.filenamesRetained, 0);
+    const terminal = formatCliLookupReconciliation(direct);
+    assert.match(terminal, /Capture time span\s+60 seconds/u);
+    assert.match(terminal, /2026-06-01T00:00:00.000Z.*observer Office.*vantage Resolver A/u);
+    assert.match(terminal, /2026-06-01T00:01:00.000Z.*observer Mobile.*vantage Resolver B/u);
+    assert.match(terminal, /Declared labels\s+distinct; collection independence not verified/u);
+    assert.doesNotMatch(terminal, /Independence\s+verified/u);
 
     const stdout = capture();
     const inputs: Record<string, string> = { 'office.json': office, 'mobile.json': mobile };

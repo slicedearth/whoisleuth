@@ -31,14 +31,69 @@ describe('HTTP provenance URL normalization', () => {
     assert.equal(normalizeProvenanceUrl('file:///etc/passwd'), null);
   });
 
-  test('replaces an overlong path with a bounded origin URL', () => {
-    const result = requiredValue(normalizeProvenanceUrl(`https://example.com/${'a'.repeat(MAX_HTTP_PROVENANCE_URL)}`));
-    assert.equal(result.url, 'https://example.com/');
-    assert.equal(result.pathTruncated, true);
+  test('retains the complete maximum admitted path and rejects a larger input', () => {
+    const prefix = 'https://example.test/';
+    const url = prefix + 'a'.repeat(MAX_HTTP_PROVENANCE_URL - prefix.length);
+    assert.deepEqual(normalizeProvenanceUrl(url), { url, queryOmitted: false, pathTruncated: false });
+    assert.equal(normalizeProvenanceUrl(`${url}a`), null);
+    const expanded = requiredValue(normalizeProvenanceUrl(prefix + 'é'.repeat(1_000)));
+    assert.equal(expanded.url, prefix);
+    assert.equal(expanded.pathTruncated, true);
   });
 });
 
 describe('buildHttpObservation', () => {
+  test('parses all HTTP date grammars with exact spacing, calendar and weekday checks', () => {
+    const fixtures: readonly [string, boolean][] = [
+      ['Sun, 06 Nov 1994 08:49:37 GMT', true],
+      ['Sunday, 06-Nov-94 08:49:37 GMT', true],
+      ['Sun Nov  6 08:49:37 1994', true],
+      ['Sun Nov 06 08:49:37 1994', true],
+      ['Sun Nov 13 08:49:37 1994', true],
+      ['Sun Nov   6 08:49:37 1994', false],
+      ['Sun Nov  13 08:49:37 1994', false],
+      ['Sun Nov 6 08:49:37 1994', false],
+      ['Mon Nov  6 08:49:37 1994', false],
+      ['Sun Feb 30 08:49:37 1994', false],
+      ['Sun Nov  6 08:49:37 1994 UTC', false],
+      ['Sat, 31 Dec 2016 23:59:60 GMT', true],
+      ['Sat, 31 Dec 2016 23:59:61 GMT', false],
+      ['Sun, 06 Nov 1994 24:00:00 GMT', false],
+    ];
+    for (const [value, valid] of fixtures) {
+      const delivery = buildHttpObservation({
+        response: { status: 200, headers: { get: (name) => ['last-modified', 'expires'].includes(name) ? value : null } },
+      }, { observedAt: OBSERVED_AT }).response.deliveryMetadata;
+      assert.deepEqual(delivery.cachePolicy.lastModified, { present: true, valid }, value);
+      assert.deepEqual(delivery.cachePolicy.expires, { present: true, valid }, value);
+      assert.equal(delivery.complete, valid, value);
+      assert.equal(delivery.truncated, false, value);
+      assert.equal(validHttpDeliveryMetadata(delivery), true);
+    }
+  });
+
+  test('interprets two-digit HTTP years using the observation-relative fifty-year boundary', () => {
+    const fixtures: readonly [string, string, boolean][] = [
+      [OBSERVED_AT, 'Monday, 13-Jul-76 00:00:00 GMT', true],
+      [OBSERVED_AT, 'Tuesday, 13-Jul-76 00:00:00 GMT', false],
+      [OBSERVED_AT, 'Tuesday, 13-Jul-76 00:00:01 GMT', true],
+      [OBSERVED_AT, 'Monday, 13-Jul-76 00:00:01 GMT', false],
+      [OBSERVED_AT, 'Wednesday, 14-Jul-76 00:00:00 GMT', true],
+      [OBSERVED_AT, 'Tuesday, 14-Jul-76 00:00:00 GMT', false],
+      [OBSERVED_AT, 'Tuesday, 01-Jan-80 00:00:00 GMT', true],
+      ['2031-01-01T00:00:00.000Z', 'Monday, 01-Jan-80 00:00:00 GMT', true],
+      ['1994-11-06T00:00:00.000Z', 'Friday, 06-Nov-15 08:49:37 GMT', true],
+      ['2094-11-06T00:00:00.000Z', 'Wednesday, 06-Nov-15 08:49:37 GMT', true],
+    ];
+    for (const [observedAt, value, valid] of fixtures) {
+      const observation = buildHttpObservation({
+        response: { status: 200, headers: { get: (name) => name === 'expires' ? value : null } },
+      }, { observedAt });
+      assert.equal(observation.observedAt, observedAt);
+      assert.deepEqual(observation.response.deliveryMetadata.cachePolicy.expires, { present: true, valid }, value);
+    }
+  });
+
   test('normalizes redirects, response metadata, and selected security headers', () => {
     const response = new Response('<title>Example</title>', {
       status: 200,

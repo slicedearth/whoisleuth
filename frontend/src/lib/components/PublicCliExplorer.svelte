@@ -5,6 +5,7 @@
   import CopyableCommand from '$lib/components/CopyableCommand.svelte';
   import { PUBLIC_CLI_INDEX } from '$lib/generated/public-cli-index';
   import { preloadOnIdle } from '$lib/idle-preload';
+  import { handlesLocalLink } from '$lib/link-activation';
   import {
     DEFERRED_MODULE_RECOVERY_DETAIL,
     loadDeferredModule,
@@ -65,37 +66,50 @@
     void ensureCatalogue().catch(() => undefined);
   }
 
-  async function openCommand(id: string) {
+  function currentSelection(request: number): boolean {
+    return active && request === loadGeneration;
+  }
+
+  function clearCommandSelection(): number {
+    loadGeneration += 1;
+    expandedId = '';
+    loadingId = '';
+    return loadGeneration;
+  }
+
+  async function openCommand(id: string, request: number) {
     if (expandedId === id || loadError) return;
-    const request = ++loadGeneration;
     loadError = '';
     loadingId = id;
     try {
       await ensureCatalogue();
-      if (!active || request !== loadGeneration) return;
+      if (!currentSelection(request)) return;
       expandedId = id;
     } catch {
-      if (!active || request !== loadGeneration) return;
+      if (!currentSelection(request)) return;
       loadError = 'Command details are unavailable.';
     } finally {
-      if (active && request === loadGeneration) loadingId = '';
+      if (currentSelection(request)) loadingId = '';
     }
   }
 
   async function revealCommand(id: string): Promise<void> {
+    const request = ++loadGeneration;
     if (!filtered.some((command) => command.id === id)) {
       resetFilters();
       await tick();
     }
-    await openCommand(id);
-    if (expandedId !== id) return;
+    if (!currentSelection(request)) return;
+    await openCommand(id, request);
+    if (!currentSelection(request) || expandedId !== id) return;
     await tick();
     requestAnimationFrame(() => {
+      if (!currentSelection(request)) return;
       const target = document.getElementById(`command-${id}`);
       target?.focus({ preventScroll: true });
       target?.scrollIntoView({ block: 'start' });
       requestAnimationFrame(() => {
-        if (!target) return;
+        if (!currentSelection(request) || !target?.isConnected) return;
         const filterBottom = document.querySelector('.filters')?.getBoundingClientRect().bottom ?? 0;
         const targetTop = target.getBoundingClientRect().top;
         if (targetTop < filterBottom + 12) window.scrollBy(0, targetTop - filterBottom - 12);
@@ -104,18 +118,21 @@
   }
 
   function navigateToCommand(event: MouseEvent, id: string): void {
+    if (event.currentTarget instanceof HTMLAnchorElement && !handlesLocalLink(event)) return;
     event.preventDefault();
     pushState(`#command-${id}`, page.state);
     void revealCommand(id);
   }
 
   async function returnToResults(event: MouseEvent): Promise<void> {
+    if (!handlesLocalLink(event)) return;
     event.preventDefault();
     const returnId = expandedId;
     pushState('#commands', page.state);
-    expandedId = '';
+    const request = clearCommandSelection();
     await tick();
     requestAnimationFrame(() => {
+      if (!currentSelection(request)) return;
       const target = document.querySelector<HTMLButtonElement>(`article[data-command="${CSS.escape(returnId)}"] .command-open`);
       target?.focus();
       target?.scrollIntoView({ block: 'center' });
@@ -193,7 +210,7 @@
     function openHashCommand() {
       const id = location.hash.match(/^#command-(.+)$/u)?.[1] ?? '';
       if (PUBLIC_CLI_INDEX.commands.some((command) => command.id === id)) void revealCommand(id);
-      else expandedId = '';
+      else clearCommandSelection();
     }
 
     readFiltersFromLocation();
@@ -256,6 +273,7 @@
         <p class="command-purpose">{command.summary}</p>
       </header>
       <div class="command-detail" id={`command-detail-${command.id}`}>
+        <p class="command-description">{detail.description}</p>
         <div class="command-examples">
           <section><h4>Usage</h4><CopyableCommand command={detail.usage} label={`${command.id} usage`} compact /></section>
           <section><h4>Example</h4><CopyableCommand command={detail.example} label={`${command.id} example`} compact /></section>
@@ -263,7 +281,9 @@
         <dl class="command-facts">
           <div><dt>Network behaviour</dt><dd><strong>{labelToken(detail.networkEffect)} · {labelToken(detail.capability.networkMode)}</strong>{detail.collection.scope}</dd></div>
           <div><dt>Authorisation</dt><dd>{labelToken(detail.capability.authorisation)}{detail.explicitAuthorisationRequired ? ' · dedicated acknowledgement required' : ''}</dd></div>
-          <div><dt>Output</dt><dd><strong>{detail.outputFormats.join(', ')}</strong>{detail.primaryEvidenceArtefacts.length ? detail.primaryEvidenceArtefacts.join(', ') : 'No evidence artefact is declared.'}</dd></div>
+          <div><dt>Produced artefact</dt><dd>{detail.primaryEvidenceArtefacts.length ? detail.primaryEvidenceArtefacts.join(', ') : 'No evidence artefact is declared.'}</dd></div>
+          <div><dt>Presentation options</dt><dd>{#if detail.presentationOptions.length}<ul>{#each detail.presentationOptions as format}<li><code>{format.option}</code> · {format.format}</li>{/each}</ul>{:else}No alternate presentation flag; the command writes its native output.{/if}</dd></div>
+          <div><dt>Output destination</dt><dd>{#if detail.fileOutput}<code>--output &lt;file&gt;</code> writes a local file atomically. Replacing a file requires <code>--force</code>. The command instructions state when file output is required.{:else}No common <code>--output</code> option. See usage for command-specific files.{/if}</dd></div>
           <div><dt>Exit behaviour</dt><dd>{exitBehaviour(detail)}</dd></div>
         </dl>
         <div class="command-inputs">
@@ -292,7 +312,7 @@
             <div><dt>Input limits</dt><dd><ul>{#each detail.inputLimits as item}<li>{item}</li>{/each}</ul></dd></div>
             <div><dt>Output limits</dt><dd><ul>{#each detail.outputLimits as item}<li>{item}</li>{/each}</ul></dd></div>
             <div><dt>Policies</dt><dd>Plan: {detail.planSupport ? 'supported' : 'not declared'} · Failure policy: {detail.failurePolicySupport ? 'supported' : 'not declared'}</dd></div>
-            <div><dt>Evidence artefacts</dt><dd>{detail.primaryEvidenceArtefacts.length ? detail.primaryEvidenceArtefacts.join(', ') : 'None declared.'}</dd></div>
+            <div><dt>Evidence completeness</dt><dd>{#if detail.capability.documentStates.length}Document states: {detail.capability.documentStates.join(', ')}. {/if}Exit 0 reports command completion; source states and limitations describe the evidence.</dd></div>
             <div><dt>Schemas</dt><dd>{detail.supportedSchemaIdentifiers.length ? detail.supportedSchemaIdentifiers.join(', ') : 'None declared.'}</dd></div>
             <div><dt>Privacy limits</dt><dd>{detail.capability.privacyLimitations.join(' ')}</dd></div>
           </dl>
@@ -330,22 +350,23 @@
   {/if}
 
   {#if !expandedId}<section class="recipes" aria-labelledby="command-recipes-title">
-    <div><p class="eyebrow">Command recipes</p><h3 id="command-recipes-title">Multi-step tasks</h3><p>Runnable recipes have an installed execution contract. Planning templates explain a sequence but do not run it.</p></div>
+    <div><p class="eyebrow">Command recipes</p><h3 id="command-recipes-title">Multi-step tasks</h3><p>Inspect a fixed sequence offline, then select its inputs and deliberately approve network collection and human-review declarations.</p></div>
     <div class="recipe-groups">
       <section aria-labelledby="runnable-recipes-title"><header><h4 id="runnable-recipes-title">Runnable workflows</h4><span>{runnableWorkflows.length}</span></header><p>Inspect with <code>workflow-plan --explain &lt;recipe&gt;</code>, then run deliberately with <code>workflow-run</code>.</p><ul>{#each runnableWorkflows as recipe}<li><code>{recipe.id}</code><strong>{recipe.label}</strong><span>{recipe.objective}</span><small>Runnable · {labelToken(recipe.subjectRequirement)}</small></li>{/each}</ul></section>
-      <section aria-labelledby="planning-recipes-title"><header><h4 id="planning-recipes-title">Planning templates</h4><span>{planningWorkflows.length}</span></header><p>Use these to inspect a fixed sequence. Their steps remain manual and are not executed by <code>workflow-run</code>.</p><ul>{#each planningWorkflows as recipe}<li><code>{recipe.id}</code><strong>{recipe.label}</strong><span>{recipe.objective}</span><small>Plan only · {labelToken(recipe.subjectRequirement)}</small></li>{/each}</ul></section>
+      {#if planningWorkflows.length}<section aria-labelledby="planning-recipes-title"><header><h4 id="planning-recipes-title">Planning templates</h4><span>{planningWorkflows.length}</span></header><p>These sequences require manual execution.</p><ul>{#each planningWorkflows as recipe}<li><code>{recipe.id}</code><strong>{recipe.label}</strong><span>{recipe.objective}</span><small>Plan only · {labelToken(recipe.subjectRequirement)}</small></li>{/each}</ul></section>{/if}
     </div>
   </section>{/if}
 </section>
 
 <style>
+  .command-description{margin:0 0 20px;max-width:75ch;font-size:var(--text-sm);line-height:1.65;overflow-wrap:anywhere}
   .catalogue-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:24px}.catalogue-heading>div{max-width:720px}.catalogue-heading h2,.recipes h3{margin:.3rem 0 .55rem;font:700 clamp(1.45rem,3vw,2rem) var(--mono);letter-spacing:-.04em}.catalogue-heading p:not(.eyebrow),.recipes p{margin:0;color:var(--muted);line-height:1.6}.catalogue-heading>span{flex:0 0 auto;color:var(--interface-accent);font:700 var(--text-xs) var(--mono)}
-  .filters{display:grid;position:sticky;z-index:6;top:8px;grid-template-columns:minmax(200px,1fr) 145px 130px auto;gap:8px;align-items:end;margin-top:22px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:rgb(var(--panel-rgb) / .96);box-shadow:0 8px 22px rgb(var(--shadow-rgb) / .12);backdrop-filter:blur(8px)}.filters label{display:grid;gap:6px;min-width:0}.filters label>span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.filters input[type='search'],.filters select{width:100%;min-width:0;padding:9px 10px}.filters .check{display:flex;min-height:40px;align-items:center;gap:8px;padding:0 5px}.filters .check input{width:18px;height:18px;margin:0}.filters .check span{color:var(--text)}
+  .filters{display:grid;position:sticky;z-index:6;top:8px;grid-template-columns:minmax(200px,1fr) 145px 130px auto;gap:8px;align-items:end;margin-top:22px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.filters label{display:grid;gap:6px;min-width:0}.filters label>span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.filters input[type='search'],.filters select{width:100%;min-width:0;padding:9px 10px}.filters .check{display:flex;min-height:40px;align-items:center;gap:8px;padding:0 5px}.filters .check input{width:18px;height:18px;margin:0}.filters .check span{color:var(--text)}
   .filter-status{margin:10px 0;color:var(--muted);font-size:var(--text-2xs)}.load-error{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:12px;padding:10px;border-left:2px dotted var(--muted);background:var(--panel-raised);color:var(--muted);font-size:var(--text-xs)}.load-error p,.load-error small{margin:0;overflow-wrap:anywhere}.load-error p{color:var(--danger)}.load-error small{flex:1}.load-error button{flex:0 0 auto}
-  .command-list{display:grid;gap:5px}.command-list article{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);overflow:hidden}.command-row{display:grid;grid-template-columns:minmax(0,1fr) 40px}.command-list button{display:grid;width:100%;grid-template-columns:minmax(160px,.4fr) minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 13px;border:0;background:transparent;color:var(--text);text-align:left}.command-list button:hover,.command-list button:focus-visible{background:rgb(var(--accent-rgb) / .06)}.command-list button>span:first-child{display:grid;min-width:0;gap:3px}.command-list button code{color:var(--accent);font-weight:750}.command-list button small{color:var(--muted);font:650 .56rem var(--mono);text-transform:uppercase}.command-summary{min-width:0;color:var(--muted);font-size:var(--text-xs);line-height:1.45;overflow-wrap:anywhere}.command-anchor{display:grid;place-items:center;border-left:1px solid var(--border);color:var(--muted);font:700 var(--text-xs) var(--mono)}.command-anchor:hover,.command-anchor:focus-visible{color:var(--accent);background:rgb(var(--accent-rgb) / .06)}
+  .command-list{display:grid;gap:5px}.command-list article{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);overflow:hidden}.command-row{display:grid;grid-template-columns:minmax(0,1fr) 40px}.command-list button{display:grid;width:100%;grid-template-columns:minmax(160px,.4fr) minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 13px;border:0;background:transparent;color:var(--text);text-align:left}.command-list button:hover,.command-list button:focus-visible{background:rgb(var(--accent-rgb) / .06)}.command-list button>span:first-child{display:grid;min-width:0;gap:3px}.command-list button code{color:var(--accent);font-weight:750}.command-list button small{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}.command-summary{min-width:0;color:var(--muted);font-size:var(--text-xs);line-height:1.45;overflow-wrap:anywhere}.command-anchor{display:grid;place-items:center;border-left:1px solid var(--border);color:var(--muted);font:700 var(--text-xs) var(--mono)}.command-anchor:hover,.command-anchor:focus-visible{color:var(--accent);background:rgb(var(--accent-rgb) / .06)}
   .command-workspace{min-width:0;scroll-margin-top:104px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);overflow:hidden;outline:none}.command-workspace:focus-visible{box-shadow:0 0 0 2px var(--accent)}.command-detail-heading{padding:20px;border-bottom:1px solid var(--border);background:var(--panel-raised)}.back-to-results{display:inline-flex;margin-bottom:18px;color:var(--accent);font:700 var(--text-xs) var(--mono)}.command-detail-heading>p{margin:0;color:var(--muted);font:650 var(--text-2xs) var(--mono);letter-spacing:.05em;text-transform:uppercase}.command-detail-heading h3{margin:6px 0 7px;font:750 clamp(1.55rem,4vw,2.25rem) var(--mono);letter-spacing:-.04em}.command-detail-heading h3 code{color:var(--accent)}.command-detail-heading .command-purpose{max-width:75ch;color:var(--text);font:400 var(--text-sm)/1.6 var(--font-sans);letter-spacing:normal;text-transform:none}
-  .command-detail{padding:20px;background:color-mix(in srgb,var(--panel-raised) 72%,var(--panel))}.command-examples h4,.command-inputs h4,.related-commands>strong{color:var(--interface-accent);font:700 var(--text-2xs) var(--mono);letter-spacing:.04em;text-transform:uppercase}.command-examples{display:grid;gap:9px}.command-examples section{display:grid;gap:6px}.command-examples h4{margin:0}.command-facts,.contract-details dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:14px 0 0;padding:1px;background:var(--border)}.command-facts>div,.contract-details dl>div{min-width:0;padding:11px;background:var(--panel)}dt{color:var(--interface-accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}dd{margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5;overflow-wrap:anywhere}.command-facts dd>strong{display:block;margin-bottom:4px;color:var(--text);font:700 var(--text-xs) var(--mono)}dd ul{margin:6px 0 0;padding-left:18px}.command-inputs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:9px}.command-inputs>section{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.command-inputs h4{margin:0 0 8px}.command-inputs dl{display:grid;gap:7px;margin:0}.command-inputs dl>div{display:grid;grid-template-columns:minmax(90px,.35fr) minmax(0,.65fr);gap:8px}.command-inputs dt{text-transform:none}.command-inputs dd,.command-inputs p{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}.command-inputs>section>p:last-child{margin-top:9px}.option-list{display:flex;flex-wrap:wrap;gap:5px;margin:0;padding:0;list-style:none}.option-list li{padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:var(--panel-raised);font-size:var(--text-2xs)}.related-commands{display:grid;gap:8px;margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.related-commands>div{display:flex;flex-wrap:wrap;gap:6px}.related-commands a{display:grid;gap:2px;min-width:145px;flex:1 1 180px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.related-commands a:hover,.related-commands a:focus-visible{border-color:var(--accent);background:rgb(var(--accent-rgb) / .06)}.related-commands a code{color:var(--accent);font-size:var(--text-xs)}.related-commands a span{color:var(--muted);font-size:var(--text-2xs);line-height:1.4}.boundary,.contract-details{margin-top:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.boundary summary,.contract-details summary{padding:12px 13px;font:700 var(--text-xs) var(--mono)}.boundary p{margin:0;padding:0 13px 13px;color:var(--muted);font-size:var(--text-xs);line-height:1.6}.contract-details dl{margin:0;border-top:1px solid var(--border)}.command-pagination{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;border-top:1px solid var(--border);background:var(--border)}.command-pagination a{display:grid;gap:3px;padding:14px 20px;background:var(--panel)}.command-pagination a:hover,.command-pagination a:focus-visible{background:rgb(var(--accent-rgb) / .07)}.command-pagination a.next{text-align:right}.command-pagination span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.command-pagination strong{color:var(--accent);font:700 var(--text-xs) var(--mono);overflow-wrap:anywhere}.empty{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px;border:1px dashed var(--border);color:var(--muted)}.empty p{margin:0}.empty button{padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);font:700 var(--text-xs) var(--mono)}
-  .recipes{display:grid;grid-template-columns:minmax(210px,.45fr) minmax(0,1.55fr);gap:24px;margin-top:40px;padding-top:32px;border-top:1px solid var(--border)}.recipe-groups{display:grid;gap:10px}.recipe-groups>section{display:grid;gap:9px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.recipe-groups header{display:flex;align-items:baseline;justify-content:space-between;gap:10px}.recipe-groups h4{margin:0;font:700 var(--text-sm) var(--mono)}.recipe-groups header span{color:var(--interface-accent);font:700 var(--text-xs) var(--mono)}.recipe-groups>section>p{font-size:var(--text-xs)}.recipes ul{display:grid;gap:6px;margin:0;padding:0;list-style:none}.recipes li{display:grid;grid-template-columns:minmax(135px,.35fr) minmax(0,.65fr);gap:4px 11px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.recipes li code{color:var(--accent);font-size:var(--text-xs)}.recipes li strong{font:700 var(--text-xs) var(--mono)}.recipes li span,.recipes li small{grid-column:1/-1;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}.recipes li small{color:var(--interface-accent);text-transform:uppercase}
+  .command-detail{padding:20px;background:transparent}.command-examples h4,.command-inputs h4,.related-commands>strong{color:var(--interface-accent);font:700 var(--text-2xs) var(--mono);letter-spacing:.04em;text-transform:uppercase}.command-examples{display:grid;gap:9px}.command-examples section{display:grid;gap:6px}.command-examples h4{margin:0}.command-facts,.contract-details dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 24px;margin:20px 0 0;padding:0}.command-facts>div,.contract-details dl>div{min-width:0;padding:12px 0;border-top:1px solid var(--border)}dt{color:var(--interface-accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}dd{margin:6px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.55;overflow-wrap:anywhere}.command-facts dd>strong{display:block;margin-bottom:4px;color:var(--text);font:700 var(--text-xs) var(--mono)}dd ul{margin:6px 0 0;padding-left:18px}.command-inputs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:9px}.command-inputs>section{min-width:0;padding:16px 0;border-top:1px solid var(--border)}.command-inputs h4{margin:0 0 8px}.command-inputs dl{display:grid;gap:7px;margin:0}.command-inputs dl>div{display:grid;grid-template-columns:minmax(90px,.35fr) minmax(0,.65fr);gap:8px}.command-inputs dt{text-transform:none}.command-inputs dd,.command-inputs p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.command-inputs>section>p:last-child{margin-top:9px}.option-list{display:flex;flex-wrap:wrap;gap:5px;margin:0;padding:0;list-style:none}.option-list li{padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:transparent;font-size:var(--text-xs)}.related-commands{display:grid;gap:8px;margin-top:12px;padding:16px 0;border-top:1px solid var(--border)}.related-commands>div{display:flex;flex-wrap:wrap;gap:6px}.related-commands a{display:grid;gap:2px;min-width:145px;flex:1 1 180px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.related-commands a:hover,.related-commands a:focus-visible{border-color:var(--accent);background:rgb(var(--accent-rgb) / .06)}.related-commands a code{color:var(--accent);font-size:var(--text-xs)}.related-commands a span{color:var(--muted);font-size:var(--text-xs);line-height:1.5}.boundary,.contract-details{margin-top:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.boundary summary,.contract-details summary{padding:12px 13px;font:700 var(--text-xs) var(--mono)}.boundary p{margin:0;padding:0 13px 13px;color:var(--muted);font-size:var(--text-xs);line-height:1.6}.contract-details dl{margin:0;padding:0 13px 13px}.command-pagination{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;border-top:1px solid var(--border);background:var(--border)}.command-pagination a{display:grid;gap:3px;padding:14px 20px;background:var(--panel)}.command-pagination a:hover,.command-pagination a:focus-visible{background:rgb(var(--accent-rgb) / .07)}.command-pagination a.next{text-align:right}.command-pagination span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.command-pagination strong{color:var(--accent);font:700 var(--text-xs) var(--mono);overflow-wrap:anywhere}.empty{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px;border:1px dashed var(--border);color:var(--muted)}.empty p{margin:0}.empty button{padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);font:700 var(--text-xs) var(--mono)}
+  .recipes{display:grid;grid-template-columns:minmax(210px,.45fr) minmax(0,1.55fr);gap:24px;margin-top:40px;padding-top:32px;border-top:1px solid var(--border)}.recipe-groups{display:grid;gap:10px}.recipe-groups>section{display:grid;gap:9px;padding:16px 0;border-top:1px solid var(--border)}.recipe-groups header{display:flex;align-items:baseline;justify-content:space-between;gap:10px}.recipe-groups h4{margin:0;font:700 var(--text-sm) var(--mono)}.recipe-groups header span{color:var(--interface-accent);font:700 var(--text-xs) var(--mono)}.recipe-groups>section>p{font-size:var(--text-xs)}.recipes ul{display:grid;gap:6px;margin:0;padding:0;list-style:none}.recipes li{display:grid;grid-template-columns:minmax(135px,.35fr) minmax(0,.65fr);gap:4px 11px;padding:12px 0;border-top:1px solid var(--border)}.recipes li code{color:var(--accent);font-size:var(--text-xs)}.recipes li strong{font:700 var(--text-xs) var(--mono)}.recipes li span,.recipes li small{grid-column:1/-1;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.recipes li small{color:var(--interface-accent);text-transform:uppercase}
   @media(max-width:560px){.load-error{align-items:stretch;flex-direction:column}.load-error button{width:100%}}
   @media(max-width:800px){.filters{position:static;grid-template-columns:repeat(2,minmax(0,1fr));box-shadow:none;backdrop-filter:none}.recipes{grid-template-columns:1fr}.command-list button{grid-template-columns:minmax(130px,.42fr) minmax(0,1fr) auto}.command-facts,.contract-details dl,.command-inputs{grid-template-columns:1fr}}
   @media(max-width:520px){.catalogue-heading{align-items:flex-start;flex-direction:column}.filters{grid-template-columns:1fr}.command-row{grid-template-columns:minmax(0,1fr) 36px}.command-list button{grid-template-columns:minmax(0,1fr) auto}.command-summary{grid-column:1/-1;grid-row:2}.command-detail-heading,.command-detail{padding:15px}.command-pagination{grid-template-columns:1fr}.command-pagination>span{display:none}.command-pagination a.next{text-align:left}.recipes li{grid-template-columns:1fr}.recipes li strong,.recipes li span,.recipes li small{grid-column:1}}

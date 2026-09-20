@@ -1,5 +1,8 @@
 <script lang="ts">
+  import { recipientMailto } from '../../../../packages/evidence/email-recipient.mts';
   import { tick } from 'svelte';
+  import { reviewClock } from '$lib/review-clock.ts';
+  import { createDraftRevision } from '$lib/controllers/submitted-draft';
   import {
     CASE_TYPES,
     MAX_CASE_INCIDENT_TARGETS,
@@ -15,6 +18,7 @@
   } from '$lib/cases';
   import {
     resolvePlatformReportingRoutes,
+    platformReportingCatalogueHealth,
     type PlatformReportingResolution,
     type PlatformReportingRoute,
   } from '../../../../packages/cases/platform-reporting-routes.mts';
@@ -44,6 +48,8 @@
   let typesOpenRecordId = $state('');
   let targetUrl = $state('');
   let busy = $state(false);
+  const typeDraft = createDraftRevision(() => record.id);
+  const targetDraft = createDraftRevision(() => record.id);
   const completeCaseNumber = $derived(caseNumber(record.id));
   const incidentTargets = $derived(caseIncidentTargets(record));
   const allIncidentTargets = $derived(caseIncidentTargets(record, { includeResolved: true }));
@@ -55,10 +61,11 @@
     return `${labels.slice(0, 2).join(', ')} and ${labels.length - 2} more`;
   });
   const typeReadiness = $derived(buildCaseTypeEvidenceReadiness(record));
+  const catalogueHealth = $derived(platformReportingCatalogueHealth(new Date($reviewClock)));
   const routeGroups = $derived.by<RouteGroup[]>(() => {
     const groups = new Map<string, RouteGroup>();
     for (const target of incidentTargets) {
-      const resolution = resolvePlatformReportingRoutes(target.url, selectedTypes);
+      const resolution = resolvePlatformReportingRoutes(target.url, selectedTypes, new Date($reviewClock));
       let hostname = 'other host';
       try { hostname = new URL(target.url).hostname; } catch { /* already validated */ }
       const key = resolution.platform?.id ?? `unsupported:${hostname}`;
@@ -132,6 +139,7 @@
   }
 
   async function saveTypes() {
+    const unchanged = typeDraft.capture();
     let tags: string[];
     try {
       tags = caseTagsWithTypes(record.tags, selectedTypes);
@@ -139,12 +147,13 @@
       onmessage(cause instanceof Error ? cause.message : 'Could not prepare the selected Case types.');
       return;
     }
-    if (!await persist({ tags }, `Saved Case types for ${record.domain}.`)) return;
+    if (!await persist({ tags }, `Saved Case types for ${record.domain}.`) || !unchanged()) return;
     typesDirty = false;
     typesOpen = false;
   }
 
   async function addIncidentTarget() {
+    const unchanged = targetDraft.capture();
     if (incidentTargets.length >= MAX_CASE_INCIDENT_TARGETS) {
       onmessage(`A Case can retain at most ${MAX_CASE_INCIDENT_TARGETS} active incident links. Resolve one before adding another.`);
       return;
@@ -160,7 +169,7 @@
       onmessage('That exact incident URL is already active in this Case.');
       return;
     }
-    if (!await persist({ assertion }, `Added an exact incident target to ${record.domain}.`)) return;
+    if (!await persist({ assertion }, `Added an exact incident target to ${record.domain}.`) || !unchanged()) return;
     targetUrl = '';
   }
 
@@ -212,8 +221,8 @@
     }
   }
 
-  function routeHref(route: PlatformReportingRoute): string {
-    return route.channel === 'email' ? `mailto:${route.contact}` : route.contact;
+  function routeHref(route: PlatformReportingRoute): string | undefined {
+    return route.channel === 'email' ? recipientMailto(route.contact) ?? undefined : route.contact;
   }
 </script>
 
@@ -225,7 +234,7 @@
 
   <details class="case-types" bind:open={typesOpen}>
     <summary><span>Case types</span><small>{selectedTypeSummary}{typesDirty ? ' · unsaved' : ''}</small></summary>
-    <form onsubmit={(event) => { event.preventDefault(); void saveTypes(); }}>
+    <form oninput={typeDraft.changed} onchange={typeDraft.changed} onsubmit={(event) => { event.preventDefault(); void saveTypes(); }}>
       <fieldset disabled={busy}>
         <legend class="sr-only">Select Case types</legend>
         <p>Select every type supported by the current analyst assessment. Types organise the workflow; they do not prove a violation.</p>
@@ -256,7 +265,7 @@
 
   <section id={`incident-targets-${record.id}`} class="incident-targets" tabindex="-1" aria-labelledby={`incident-targets-title-${record.id}`}>
     <div class="section-heading"><div><h5 id={`incident-targets-title-${record.id}`}>Incident links</h5><p>Retain exact social, platform or web content links that belong in this Case.</p></div><span>{incidentTargets.length} active{resolvedTargetCount ? ` · ${resolvedTargetCount} resolved` : ''}</span></div>
-    <form class="target-form" onsubmit={(event) => { event.preventDefault(); void addIncidentTarget(); }}>
+    <form class="target-form" oninput={targetDraft.changed} onchange={targetDraft.changed} onsubmit={(event) => { event.preventDefault(); void addIncidentTarget(); }}>
       <label class="field">Exact HTTP(S) URL <small>Do not include credentials or private access tokens</small><input type="url" bind:value={targetUrl} maxlength="1979" placeholder="https://social.example/post/123" required></label>
       <button class="btn" type="submit" disabled={busy || !targetUrl.trim() || incidentTargets.length >= MAX_CASE_INCIDENT_TARGETS}>Add incident link</button>
     </form>
@@ -274,16 +283,22 @@
   {#if routeGroups.length}
     <section class="reporting-routes" aria-labelledby={`reporting-routes-title-${record.id}`}>
       <div class="section-heading"><div><h5 id={`reporting-routes-title-${record.id}`}>Official platform routes</h5><p>Matched from exact incident-link hostnames and the selected Case types.</p></div></div>
+      <p class="empty">Retained catalogue: {catalogueHealth.state === 'limited' ? 'review due soon' : catalogueHealth.state} · reviewed {catalogueHealth.reviewedAt.slice(0, 10)} · review after {catalogueHealth.reviewAfter.slice(0, 10)}. No live route check is performed.</p>
       <div class="route-groups">
-        {#each routeGroups as group (group.key)}
+        {#each routeGroups as group (JSON.stringify([record.id, group.key, group.targets]))}
           <article>
-            <header><strong>{group.label}</strong><span class:stale={group.resolution.state === 'stale'}>{group.resolution.state}</span></header>
+            <header><strong>{group.label}</strong><span class:found={group.resolution.state === 'found'} class:stale={group.resolution.state === 'stale'}>{group.resolution.state}</span></header>
             <ul class="matched-targets">{#each group.targets as target}<li>{target}</li>{/each}</ul>
             <p>{group.resolution.limitation}</p>
-            {#each group.resolution.routes as route}
+            {#each group.resolution.routes as route (route.id)}
               <section class="route">
                 <div><strong>{route.label}</strong><span>Reviewed {route.reviewedAt} · recheck before {route.reviewAfter}</span></div>
-                <p>Prepare: {route.preparation.join('; ')}.</p>
+                <fieldset class="route-checklist">
+                  <legend>Preparation checklist</legend>
+                  {#each route.preparation as item, index (`${index}:${item}`)}
+                    <label><input type="checkbox"><span>{item}</span></label>
+                  {/each}
+                </fieldset>
                 <p>{route.privacyNote}</p>
                 <div class="route-actions"><a class="btn" href={routeHref(route)} target={route.channel === 'url' ? '_blank' : undefined} rel={route.channel === 'url' ? 'noopener noreferrer' : undefined}>{route.channel === 'email' ? `Prepare email to ${route.contact}` : 'Open official route'}<span class="sr-only"> ({route.channel === 'email' ? 'opens the mail application' : 'opens in a new tab'})</span></a><a href={route.guidanceUrl} target="_blank" rel="noopener noreferrer">Official guidance<span class="sr-only"> (opens in a new tab)</span></a><button class="btn" type="button" disabled={busy || typesDirty || reportingActionExists(route)} title={typesDirty ? 'Save the selected Case types before creating a reporting action.' : undefined} onclick={() => void createReportingAction(route)}>{reportingActionExists(route) ? 'Action already active' : typesDirty ? 'Save Case types first' : 'Create drafting action'}</button></div>
               </section>
@@ -297,13 +312,14 @@
 
 <style>
   .workflow-details{display:grid;gap:13px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .route-checklist{display:grid;min-width:0;gap:7px;margin:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.route-checklist legend{padding:0 5px;font-weight:650}.route-checklist label{display:flex;align-items:start;gap:7px;cursor:pointer}.route-checklist input{width:auto;flex:none;margin-top:3px}.route-checklist span{min-width:0;overflow-wrap:anywhere}
   .workflow-details>header,.section-heading,.route-groups article>header,.route>div:first-child{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px}.workflow-details h4,.workflow-details h5{margin:2px 0 0;font:700 var(--text-sm) var(--mono)}
   .case-number{display:grid;grid-template-columns:auto auto;align-items:center;gap:3px 8px;max-width:100%}.case-number>span{grid-column:1/-1;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}.case-number code{max-width:min(100%,430px);padding:5px 7px;background:var(--panel-raised);font-size:var(--text-2xs);overflow-wrap:anywhere;white-space:normal}.case-number button{grid-column:2;grid-row:2}
   .case-types{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.case-types>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;cursor:pointer;font:700 var(--text-xs) var(--mono)}.case-types>summary small{color:var(--muted);font:600 var(--text-2xs) var(--mono);text-align:right}.case-types>form{display:grid;gap:8px;padding:0 10px 10px}.case-types fieldset{display:grid;gap:10px;min-width:0;margin:0;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.case-types fieldset>p,.section-heading p,.route p,.empty{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}.case-types>form>button{justify-self:start}
   .type-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.type-grid label{display:flex;min-width:0;align-items:flex-start;gap:7px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer}.type-grid label:has(input:checked){border-color:rgb(var(--accent-rgb) / .55);background:rgb(var(--accent-rgb) / .06)}.type-grid input{flex:none;width:16px;height:16px;margin-top:1px}.type-grid span,.type-grid strong,.type-grid small{display:block;min-width:0}.type-grid strong{font:700 var(--text-xs) var(--mono)}.type-grid small{margin-top:3px;color:var(--muted);font-size:.62rem;line-height:1.35}
   .type-readiness,.incident-targets,.reporting-routes{display:grid;gap:9px;padding-top:12px;border-top:1px solid var(--border)}.section-heading>span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.type-readiness ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0;padding:0;list-style:none}.type-readiness li{display:flex;min-width:0;gap:8px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.type-readiness li>span{display:grid;flex:none;width:20px;height:20px;place-items:center;border:1px solid var(--border);border-radius:50%;font:750 var(--text-2xs) var(--mono)}.type-readiness li[data-state="present"]>span{color:var(--success);border-color:color-mix(in srgb,var(--success) 45%,var(--border))}.type-readiness li[data-state="missing"]>span{color:var(--amber);border-color:rgb(var(--amber-rgb)/.45)}.type-readiness strong,.type-readiness small{display:block}.type-readiness strong{font:700 var(--text-xs) var(--mono)}.type-readiness small{margin-top:2px;color:var(--muted);font-size:var(--text-2xs);text-transform:capitalize}.type-readiness p{margin:4px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.type-readiness .limitation{margin:0}.target-form{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px}.target-form input{width:100%;margin-top:5px}.field small{color:var(--muted)}
   .target-list{display:grid;gap:5px;margin:0;padding:0;list-style:none}.target-list li{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:8px;padding:7px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.target-list a{min-width:0;color:var(--accent);font:600 var(--text-2xs) var(--mono);overflow-wrap:anywhere}.target-list button{flex:none}
-  .route-groups{display:grid;gap:8px}.route-groups>article{display:grid;gap:8px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.route-groups article>header strong{font:700 var(--text-xs) var(--mono)}.route-groups article>header span{padding:3px 6px;border:1px solid var(--border);border-radius:999px;color:var(--success);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}.route-groups article>header span.stale{color:var(--amber)}.matched-targets{display:grid;gap:3px;margin:0;padding-left:18px;color:var(--muted);font:var(--text-2xs) var(--mono);overflow-wrap:anywhere}.route{display:grid;gap:7px;padding:9px;border-left:3px solid var(--accent);background:var(--panel)}.route>div:first-child strong{font:700 var(--text-xs) var(--mono)}.route>div:first-child span{color:var(--muted);font-size:var(--text-2xs)}.route-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px}.route-actions>a:not(.btn){color:var(--accent);font:650 var(--text-2xs) var(--mono)}
+  .route-groups{display:grid;gap:8px}.route-groups>article{display:grid;gap:8px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.route-groups article>header strong{font:700 var(--text-xs) var(--mono)}.route-groups article>header span{padding:3px 6px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}.route-groups article>header span.found{color:var(--success)}.route-groups article>header span.stale{color:var(--amber)}.matched-targets{display:grid;gap:3px;margin:0;padding-left:18px;color:var(--muted);font:var(--text-2xs) var(--mono);overflow-wrap:anywhere}.route{display:grid;gap:7px;padding:9px;border-left:3px solid var(--accent);background:var(--panel)}.route>div:first-child strong{font:700 var(--text-xs) var(--mono)}.route>div:first-child span{color:var(--muted);font-size:var(--text-2xs)}.route-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px}.route-actions>a:not(.btn){color:var(--accent);font:650 var(--text-2xs) var(--mono)}
   @media(max-width:900px){.type-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media(max-width:620px){.workflow-details>header{display:grid}.case-number{width:100%;grid-template-columns:minmax(0,1fr) auto}.case-types>summary{align-items:flex-start;flex-direction:column}.case-types>summary small{text-align:left}.type-grid,.type-readiness ul{grid-template-columns:1fr}.target-form{grid-template-columns:1fr}.target-form button,.case-types>form>button{width:100%}.target-list li{align-items:stretch;flex-direction:column}.target-list button{align-self:flex-start}.route-actions>*{flex:1 1 150px;text-align:center}}
   @media(max-width:480px){.workflow-details{padding:0;border:0;background:transparent}.case-types>form{padding:0 8px 8px}.case-types fieldset{padding:0;border:0;background:transparent}.type-grid label{padding:10px}}

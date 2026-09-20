@@ -7,15 +7,25 @@ import {
   requireIsoTimestamp,
   requireRecord,
 } from '../lib/bounded-contract-normalizers.mts';
+import {
+  EXTERNAL_FINDINGS_SCHEMA,
+  EXTERNAL_FINDINGS_VERSION,
+  MAX_EXTERNAL_FINDINGS,
+  MAX_EXTERNAL_FINDING_DOMAINS,
+  MAX_EXTERNAL_FINDINGS_PER_DOMAIN,
+  MAX_EXTERNAL_FINDING_LIMITATIONS,
+  MAX_EXTERNAL_FINDING_LIMITATION_LENGTH,
+  retainExternalFindingLimitations,
+} from '../packages/interchange/external-findings-import.mts';
 
 export const CT_EVENT_BATCH_SCHEMA = 'whoisleuth.ct-event-batch';
 export const CT_EVENT_BATCH_VERSION = 1;
 export const MAX_CT_EVENT_INPUT_BYTES = 4 * 1024 * 1024;
 export const MAX_CT_EVENTS = 500;
 export const MAX_CT_EVENT_NAMES = 100;
-export const MAX_CT_EXTERNAL_FINDINGS = 100;
-export const MAX_CT_EXTERNAL_DOMAINS = 25;
-export const MAX_CT_EXTERNAL_FINDINGS_PER_DOMAIN = 20;
+export const MAX_CT_EXTERNAL_FINDINGS = MAX_EXTERNAL_FINDINGS;
+export const MAX_CT_EXTERNAL_DOMAINS = MAX_EXTERNAL_FINDING_DOMAINS;
+export const MAX_CT_EXTERNAL_FINDINGS_PER_DOMAIN = MAX_EXTERNAL_FINDINGS_PER_DOMAIN;
 
 const ROOT_KEYS = new Set(['schema', 'version', 'source', 'events']);
 const SOURCE_KEYS = new Set(['name', 'reference', 'collectedAt']);
@@ -57,8 +67,8 @@ function domain(value: unknown, label: string): string {
 
 function boundedLimitations(value: unknown, label: string): readonly string[] {
   if (value === undefined) return Object.freeze([]);
-  if (!Array.isArray(value) || value.length > 8) throw new TypeError(`${label} must contain no more than 8 entries.`);
-  return Object.freeze([...new Set(value.map((item, index) => requireBoundedString(item, `${label}[${index}]`, 240)))]);
+  if (!Array.isArray(value) || value.length > MAX_EXTERNAL_FINDING_LIMITATIONS) throw new TypeError(`${label} must contain no more than ${MAX_EXTERNAL_FINDING_LIMITATIONS} entries.`);
+  return Object.freeze([...new Set(value.map((item, index) => requireBoundedString(item, `${label}[${index}]`, MAX_EXTERNAL_FINDING_LIMITATION_LENGTH)))]);
 }
 
 export function buildCtEventFindings(inputRaw: unknown) {
@@ -160,19 +170,18 @@ export function buildCtEventFindings(inputRaw: unknown) {
       namesComplete: finding.structuredObservation.namesComplete
         && selectedNamesByEvent.get(finding.structuredObservation.eventId) === finding.structuredObservation.dnsNameCount,
     }),
-    limitations: Object.freeze([
-      ...finding.limitations,
+    limitations: retainExternalFindingLimitations(finding.limitations, [
       'The supplied event is an observation, not proof that the certificate was served by the named domain or that the domain operator requested it.',
       ...(finding.structuredObservation.namesComplete
         && selectedNamesByEvent.get(finding.structuredObservation.eventId) !== finding.structuredObservation.dnsNameCount
         ? ['The bounded import did not retain every DNS name from this certificate event.']
         : []),
-      ...(truncated ? [`The batch contained ${unique.length} unique domain observations; this import preserves the first ${MAX_CT_EXTERNAL_FINDINGS} in deterministic order.`] : []),
-    ].slice(0, 8)),
+      ...(truncated ? [`The batch contained ${unique.length} unique domain observations; this import preserves the first ${selected.length} in deterministic order.`] : []),
+    ]),
   }));
   return Object.freeze({
-    schema: 'whoisleuth.external-findings' as const,
-    schemaVersion: 4 as const,
+    schema: EXTERNAL_FINDINGS_SCHEMA,
+    schemaVersion: EXTERNAL_FINDINGS_VERSION,
     source,
     findings: Object.freeze(findings),
   });

@@ -46,6 +46,7 @@ const MAX_SMTP_RESPONSE_BYTES = 16 * 1024;
 const MAX_SMTP_REPLY_LINES = 64;
 const MAX_SMTP_LINE_BYTES = 1_000;
 const MAX_SMTP_CAPABILITIES = 32;
+const SMTP_CAPABILITY_OMISSION = 'The retained EHLO capability inventory is incomplete; additional names were omitted. STARTTLS detection used the full bounded reply.';
 const MAX_SMTP_CERTIFICATE_BYTES = 256 * 1024;
 const SMTP_ENDPOINT_TIMEOUT_MS = 8_000;
 const MAIL_TRANSPORT_TOTAL_TIMEOUT_MS = 30_000;
@@ -328,16 +329,26 @@ function normalizeSmtpReply(linesValue: unknown): SmtpReply {
   return Object.freeze({ code, lines: Object.freeze(lines), bytes, sha256 });
 }
 
-function smtpCapabilities(reply: SmtpReply | null): readonly string[] {
-  if (!reply || reply.code !== 250) return Object.freeze([]);
+function smtpCapabilityInventory(reply: SmtpReply | null) {
+  // The reply has already passed line and byte admission. The display cap must
+  // not decide which protocol extensions the endpoint advertised.
+  const seen = new Set<string>();
   const output: string[] = [];
-  for (const line of reply.lines.slice(1)) {
+  for (const line of reply?.code === 250 ? reply.lines.slice(1) : []) {
     const capability = line.slice(4).trim().split(/\s+/u)[0]?.toUpperCase() || '';
-    if (!/^[A-Z0-9][A-Z0-9-]{0,31}$/u.test(capability) || output.includes(capability)) continue;
-    if (output.length >= MAX_SMTP_CAPABILITIES) break;
-    output.push(capability);
+    if (!/^[A-Z0-9][A-Z0-9-]{0,31}$/u.test(capability) || seen.has(capability)) continue;
+    seen.add(capability);
+    if (output.length < MAX_SMTP_CAPABILITIES) output.push(capability);
   }
-  return Object.freeze(output.sort());
+  return Object.freeze({
+    capabilities: Object.freeze(output.sort()),
+    starttlsAdvertised: seen.has('STARTTLS'),
+    truncated: seen.size > output.length,
+  });
+}
+
+function smtpCapabilities(reply: SmtpReply | null): readonly string[] {
+  return smtpCapabilityInventory(reply).capabilities;
 }
 
 async function runSmtpConversation(hostname: string, connection: SmtpConversationConnection): Promise<SmtpConversationResult> {
@@ -350,8 +361,7 @@ async function runSmtpConversation(hostname: string, connection: SmtpConversatio
     connection.assertIdle();
     await connection.write(EHLO_COMMAND);
     const ehlo = await connection.readReply();
-    const capabilities = smtpCapabilities(ehlo);
-    const starttlsAdvertised = capabilities.includes('STARTTLS');
+    const { capabilities, starttlsAdvertised } = smtpCapabilityInventory(ehlo);
     if (!starttlsAdvertised) {
       const diagnostics = connection.diagnostics();
       return Object.freeze({ connectedAddress: connection.remoteAddress, greeting, ehlo, capabilities, starttlsAdvertised, starttlsReply: null, starttlsState: 'not_advertised', tls: null, ...diagnostics });
@@ -667,11 +677,12 @@ function addressAuthentication(selected: Readonly<{ address: string; family: 4 |
     : Object.freeze({ state: 'unavailable' as const, detail: 'No address candidate was retained for cryptographic authentication review.' });
 }
 
-function endpointLimitations(addressState: MailTransportEndpoint['address']['state']): readonly string[] {
+function endpointLimitations(addressState: MailTransportEndpoint['address']['state'], capabilitiesTruncated = false): readonly string[] {
   const addressLimitation = addressState === 'connected'
     ? 'The endpoint observation is one point-in-time connection to one revalidated and pinned public address. Other addresses or later observations may differ.'
     : 'The endpoint did not produce confirmed connection evidence. Its address field retains only the highest completed public selection or revalidation stage, if any.';
   return Object.freeze([
+    ...(capabilitiesTruncated ? [SMTP_CAPABILITY_OMISSION] : []),
     addressLimitation,
     'Public-address validation, fresh revalidation, and connection pinning do not cryptographically authenticate the selected A or AAAA RRset or any CNAME chain.',
     'Only the SMTP greeting, EHLO capability names, and optional STARTTLS negotiation were observed. No authentication, recipient, mailbox, catch-all, relay, or message command was attempted.',
@@ -785,10 +796,12 @@ async function collectEndpoint(options: Readonly<{
     const tlsaComplete = !['indeterminate', 'timed_out', 'unavailable'].includes(tlsa.state)
       && (tlsa.state !== 'validated' || !tlsa.dane || !['partial', 'unavailable', 'invalid'].includes(tlsa.dane.state));
     const certificateComplete = smtp.starttlsState !== 'negotiated' || certificate.observation.state === 'observed';
+    const capabilitiesTruncated = smtpCapabilityInventory(smtp.ehlo).truncated;
     const complete = smtpState === 'observed'
       && dnssec.report.completeness === 'complete'
       && tlsaComplete
-      && certificateComplete;
+      && certificateComplete
+      && !capabilitiesTruncated;
     return Object.freeze({
       host: options.host,
       observedAt: options.observedAt,
@@ -802,7 +815,7 @@ async function collectEndpoint(options: Readonly<{
       dnssec: dnssec.report,
       tlsa,
       failure: null,
-      limitations: endpointLimitations(addressState),
+      limitations: endpointLimitations(addressState, capabilitiesTruncated),
     });
   } catch (error) {
     const detail = boundedError(error);
@@ -824,7 +837,7 @@ async function collectEndpoint(options: Readonly<{
       dnssec: dnssec?.report ?? null,
       tlsa: unavailableTlsa('unavailable', 'TLSA and DANE comparison was unavailable because endpoint collection did not complete.'),
       failure: Object.freeze({ stage, detail }),
-      limitations: endpointLimitations(addressState),
+      limitations: endpointLimitations(addressState, smtpCapabilityInventory(connectedSmtp?.ehlo ?? null).truncated),
     });
   }
 }
@@ -949,6 +962,7 @@ async function collectMailTransportReview(inputValue: unknown, options: Readonly
       retries: 0,
     }),
     limitations: Object.freeze([
+      ...(endpoints.some((endpoint) => endpoint.limitations.includes(SMTP_CAPABILITY_OMISSION)) ? [SMTP_CAPABILITY_OMISSION] : []),
       'This command performs active network collection only for the selected MX hosts in this explicitly authorised run. It is not invoked by Lookup, Bulk, monitoring, or automatic recipes.',
       'DNSSEC, TLSA or DANE, PKIX, certificate identity, STARTTLS, SMTP transport, MTA-STS context, and TLS-RPT context retain separate states and provenance. One family never supplies or upgrades another family.',
       ACTIVE_DANE_TA_LIMITATION,

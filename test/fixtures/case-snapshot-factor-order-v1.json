@@ -1,0 +1,63 @@
+{
+  "id": "ev-1alcz4f",
+  "fingerprint": "1alcz4f",
+  "firstCapturedAt": "2026-01-01T00:00:00.000Z",
+  "capturedAt": "2026-01-01T00:00:00.000Z",
+  "source": "unknown",
+  "inputHostname": null,
+  "scanDepth": "deep",
+  "availability": "registered",
+  "confidence": null,
+  "riskModelVersion": 7,
+  "riskScore": 12,
+  "opportunityModelVersion": null,
+  "opportunityScore": null,
+  "riskFactors": [
+    {
+      "label": "a",
+      "points": 6
+    },
+    {
+      "label": "ä",
+      "points": 6
+    },
+    {
+      "label": "Z",
+      "points": 6
+    }
+  ],
+  "opportunityFactors": [],
+  "registrar": null,
+  "createdDate": null,
+  "expiryDate": null,
+  "nameservers": [],
+  "hasMx": null,
+  "hasSpf": null,
+  "hasDmarc": null,
+  "activityStatus": null,
+  "websiteProbeDetail": null,
+  "pageTitle": null,
+  "httpSummaryVersion": null,
+  "httpEvidenceStatus": null,
+  "httpFinalOrigin": null,
+  "httpResponseStatus": null,
+  "httpTransportSecurity": null,
+  "httpRedirectCount": null,
+  "httpCrossOriginRedirect": null,
+  "httpHttpsDowngrade": null,
+  "httpContentType": null,
+  "httpSecurityHeaders": null,
+  "faviconMatch": null,
+  "faviconNearMatch": null,
+  "reusesOfficialAssets": null,
+  "hasPasswordField": null,
+  "hasExternalFormAction": null,
+  "phishingLanguageMatch": null,
+  "privacyProtected": null,
+  "idnReferenceMatch": null,
+  "pageBaselineMatch": null,
+  "hasActiveBrandProfile": null,
+  "profileContextState": null,
+  "profileContextLimitation": null,
+  "mutationTypes": []
+}

@@ -6,6 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { parse, stringify } from 'yaml';
+import ts from 'typescript';
 
 import {
   isPlaywrightFunctionalSpec,
@@ -20,7 +22,7 @@ import {
   resetPerformanceSampleState,
   resolvePlaywrightExecutionContract,
 } from '../tools/playwright-execution-contract.mts';
-import { buildBalancedBrowserShardPlan, readVerificationTimingProfile } from '../tools/verification-timing-profile.mts';
+import { buildBalancedBrowserShardPlan, readVerificationTestInventory, readVerificationTimingProfile } from '../tools/verification-timing-profile.mts';
 import {
   CI_BROWSER_HEALTH_SCRIPTS,
   CI_BROWSER_BUILD_SCRIPTS,
@@ -86,6 +88,32 @@ const FRONTEND_PACKAGE_MANIFEST = JSON.parse(fs.readFileSync(
   'utf8',
 )) as { scripts?: Record<string, string> };
 
+type WorkflowFixture = {
+  on: Record<string, unknown>;
+  permissions: Record<string, string>;
+  jobs: Record<string, {
+    if?: string;
+    needs?: string[];
+    steps: Array<{
+      name?: string;
+      uses?: string;
+      run?: string;
+      if?: string | boolean;
+      env?: Record<string, string>;
+      with?: Record<string, unknown>;
+      'continue-on-error'?: boolean;
+    }>;
+  }>;
+};
+
+function workflowFixture(): WorkflowFixture {
+  return parse(WORKFLOW) as WorkflowFixture;
+}
+
+function fixtureJob(workflow: WorkflowFixture, name: string) {
+  return requiredValue(workflow.jobs[name]);
+}
+
 function toolchainManifests() {
   return {
     packageManifest: { devDependencies: { '@types/node': '^24.13.3', typescript: '^6.0.3' } },
@@ -118,172 +146,145 @@ function escapeRegExp(value: string): string {
 }
 
 describe('continuous integration workflow', () => {
-  test('keeps deliberately interrupted subprocesses outside the parent coverage collector', () => {
+  test('keeps deliberately interrupted subprocesses outside the parent coverage collector', (context) => {
     const source = { PATH: '/fixture/bin', NODE_V8_COVERAGE: '/fixture/coverage' };
-    assert.deepEqual(environmentWithoutV8Coverage(source), { PATH: '/fixture/bin' });
+    assert.deepEqual(environmentWithoutV8Coverage(source), { PATH: '/fixture/bin', NODE_V8_COVERAGE: undefined });
     assert.equal(source.NODE_V8_COVERAGE, '/fixture/coverage');
-  });
-
-  test('runs once for pull requests and again after changes reach main', () => {
-    assert.match(WORKFLOW, /^on:\s*\n\s{2}push:\s*\n\s{4}branches:\s*\n\s{6}- main\s*\n\s{2}pull_request:\s*$/mu);
-    assert.doesNotMatch(WORKFLOW, /^\s{6}- ['"]?\*['"]?\s*$/mu);
-  });
-
-  test('splits comprehensive checks into independent lanes behind the required verification job', () => {
-    assert.match(WORKFLOW, /^permissions:\s*\n\s{2}contents: read$/mu);
-    assert.doesNotMatch(WORKFLOW, /\b(?:contents|issues|pull-requests|actions): write\b/u);
-    assert.match(WORKFLOW, /^\s{2}quality:\s*$/mu);
-    assert.match(WORKFLOW, /^\s{2}unit:\s*$/mu);
-    assert.match(WORKFLOW, /^\s{2}browser-build:\s*$/mu);
-    assert.match(WORKFLOW, /^\s{2}browser:\s*$/mu);
-    assert.match(WORKFLOW, /^\s{2}browser-health:\s*$/mu);
-    assert.match(WORKFLOW, /^\s{2}cli-runtime:\s*$/mu);
-    assert.match(WORKFLOW, /^\s{2}verify:\s*$/mu);
-    assert.match(WORKFLOW, /^concurrency:\s*\n\s{2}group: ci-/mu);
-    assert.match(WORKFLOW, /^\s{2}cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$/mu);
-    assert.match(WORKFLOW, /^\s{4}if: \$\{\{ always\(\) \}\}\s*\n\s{4}needs:\s*\n\s{6}- quality\s*\n\s{6}- unit\s*\n\s{6}- browser-build\s*\n\s{6}- browser\s*\n\s{6}- browser-health\s*\n\s{6}- cli-runtime$/mu);
-    assert.equal(occurrences(WORKFLOW, /^\s{10}persist-credentials: false$/gmu), 6);
-    const qualityJob = requiredValue(/\n  quality:\n([\s\S]*?)\n  unit:/u.exec(WORKFLOW)?.[1]);
-    const unitJob = requiredValue(/\n  unit:\n([\s\S]*?)\n  browser-build:/u.exec(WORKFLOW)?.[1]);
-    const browserBuildJob = requiredValue(/\n  browser-build:\n([\s\S]*?)\n  browser:/u.exec(WORKFLOW)?.[1]);
-    const browserJob = requiredValue(/\n  browser:\n([\s\S]*?)\n  browser-health:/u.exec(WORKFLOW)?.[1]);
-    assert.match(qualityJob, /^\s{10}fetch-depth: 0$/mu);
-    assert.ok(
-      qualityJob.indexOf('npm run verification:ci -- --group=preflight')
-        < qualityJob.indexOf('npm ci --include=optional --ignore-scripts --audit=false'),
-      'release-derived drift must fail before the locked install starts',
-    );
-    assert.match(unitJob, /^\s{6}- name: Install tested shell\s*\n\s{8}run: \|\s*\n\s{10}sudo apt-get update\s*\n\s{10}sudo apt-get install --no-install-recommends --yes zsh$/mu);
-    assert.equal(occurrences(WORKFLOW, /^\s{10}fetch-depth: 0$/gmu), 1);
-    assert.equal(occurrences(WORKFLOW, /^\s+run: npm ci --include=optional --ignore-scripts --audit=false$/gmu), 5);
-    assert.equal(occurrences(WORKFLOW, /^\s+run: npm run dependencies:audit$/gmu), 0);
-    assert.match(WORKFLOW, /^\s{10}QUALITY_RESULT: \$\{\{ needs\.quality\.result \}\}$/mu);
-    assert.match(WORKFLOW, /^\s{10}UNIT_RESULT: \$\{\{ needs\.unit\.result \}\}$/mu);
-    assert.match(WORKFLOW, /^\s{10}BROWSER_BUILD_RESULT: \$\{\{ needs\.browser-build\.result \}\}$/mu);
-    assert.match(WORKFLOW, /^\s{10}BROWSER_RESULT: \$\{\{ needs\.browser\.result \}\}$/mu);
-    assert.match(WORKFLOW, /^\s{10}BROWSER_HEALTH_RESULT: \$\{\{ needs\.browser-health\.result \}\}$/mu);
-    assert.match(WORKFLOW, /^\s{10}CLI_RUNTIME_RESULT: \$\{\{ needs\.cli-runtime\.result \}\}$/mu);
-
-    const actions = pinnedActions(WORKFLOW);
-    assert.deepEqual(actions.map(({ action }) => action), [
-      'actions/checkout',
-      'actions/setup-node',
-      'actions/checkout',
-      'actions/setup-node',
-      'actions/upload-artifact',
-      'actions/checkout',
-      'actions/setup-node',
-      'actions/upload-artifact',
-      'actions/checkout',
-      'actions/setup-node',
-      'actions/download-artifact',
-      'actions/upload-artifact',
-      'actions/upload-artifact',
-      'actions/checkout',
-      'actions/setup-node',
-      'actions/download-artifact',
-      'actions/upload-artifact',
-      'actions/checkout',
-      'actions/setup-node',
-    ]);
-    for (const { revision } of actions) assert.match(requiredValue(revision), /^[a-f0-9]{40}$/u);
-    for (const command of [
-      'npm run verification:ci -- --group=preflight',
-      'npm run verification:ci -- --group=quality',
-      'npm run verification:ci -- --group=unit',
-      'npm run verification:ci -- --group=browser-build',
-      'npm run verification:ci -- --group=cli-runtime',
-      'npm run security:staged -- --range "$SECRET_SCAN_BASE_SHA..$SECRET_SCAN_HEAD_SHA"',
-      'npm run test:e2e:install',
-      'npm run test:e2e:shard -- --run=${{ matrix.shard }}',
-      'npm run frontend:authenticated-loading-report',
-      'npm run test:e2e:summary',
-      'npm run verification:artifacts -- --cleanup=unit',
-      'npm run verification:artifacts -- --cleanup=browser',
-    ]) {
-      assert.match(WORKFLOW, new RegExp(`^\\s+run: ${escapeRegExp(command)}$`, 'mu'));
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'whoisleuth-coverage-inheritance-'));
+    context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const previous = process.env.NODE_V8_COVERAGE;
+    const probe = (environment: NodeJS.ProcessEnv) => {
+      const child = spawnSync(process.execPath, ['-p', 'JSON.stringify(process.env.NODE_V8_COVERAGE ?? null)'], {
+        env: environment, encoding: 'utf8', timeout: 5_000, maxBuffer: 64 * 1024,
+      });
+      assert.ifError(child.error);
+      assert.equal(child.status, 0, child.stderr);
+      return JSON.parse(child.stdout) as string | null;
+    };
+    try {
+      process.env.NODE_V8_COVERAGE = directory;
+      assert.equal(probe(environmentWithoutV8Coverage()), null);
+      assert.deepEqual(fs.readdirSync(directory), []);
+      const omitted = { ...process.env };
+      delete omitted.NODE_V8_COVERAGE;
+      assert.equal(probe(omitted), directory, 'omission re-enables the parent collector');
+      assert.ok(fs.readdirSync(directory).some(file => /^coverage-.*\.json$/u.test(file)));
+    } finally {
+      if (previous === undefined) delete process.env.NODE_V8_COVERAGE;
+      else process.env.NODE_V8_COVERAGE = previous;
     }
-    assert.deepEqual(readHostedCiScriptPlan(WORKFLOW), expectedHostedCiScriptPlan());
+  });
+
+  test('runs required checks for pull requests and main without write permissions', () => {
+    const workflow = workflowFixture();
+    assert.deepEqual(workflow.on.push, { branches: ['main'] });
+    assert.ok(Object.hasOwn(workflow.on, 'pull_request'));
     assert.doesNotThrow(() => assertHostedCiParity(WORKFLOW));
-    const workflowWithoutBuildJob = WORKFLOW.replace(/\n  browser-build:\n[\s\S]*?\n  browser:/u, '\n  browser:');
-    assert.throws(() => assertHostedCiParity(workflowWithoutBuildJob), /missing the browser-build job/u);
-    const workflowWithAlteredArtifactName = WORKFLOW.replace(CI_FRONTEND_BUILD_ARTIFACT_NAME, 'frontend-build-altered');
-    assert.throws(() => assertHostedCiParity(workflowWithAlteredArtifactName), /artifact publication has drifted/u);
-    const workflowWithAlteredArtifactPath = WORKFLOW.replace('            frontend/build\n            frontend/build-identity.json', '            frontend/other');
-    assert.throws(() => assertHostedCiParity(workflowWithAlteredArtifactPath), /artifact publication has drifted/u);
-    const workflowWithoutBuildIntegrity = WORKFLOW.replace('--group=browser-build', '--group=unit');
-    assert.throws(() => assertHostedCiParity(workflowWithoutBuildIntegrity), /browserBuild scripts have drifted/u);
-    const workflowWithMatrixBuild = WORKFLOW.replace(
-      '      - name: Install Playwright Chromium',
-      '      - name: Rebuild unexpectedly\n        run: npm run build\n      - name: Install Playwright Chromium',
-    );
-    assert.throws(() => assertHostedCiParity(workflowWithMatrixBuild), /browser scripts have drifted/u);
-    const workflowWithUnownedGate = WORKFLOW.replace(
-      '      - name: Run maintained quality group',
-      '      - name: Unowned gate\n        run: npm run unowned:gate\n      - name: Run maintained quality group',
-    );
-    assert.throws(() => assertHostedCiParity(workflowWithUnownedGate), /quality scripts have drifted/u);
-    const workflowWithoutBrowserCandidate = WORKFLOW.replace('          npm run --silent verification:timing:update-candidate -- \\\n', '');
-    assert.throws(() => assertHostedCiParity(workflowWithoutBrowserCandidate), /browserHealth scripts have drifted/u);
-    const workflowWithoutCliRuntime = WORKFLOW.replace('--group=cli-runtime', '--group=quality');
-    assert.throws(() => assertHostedCiParity(workflowWithoutCliRuntime), /cliRuntime scripts have drifted/u);
-    assert.match(WORKFLOW, /^\s{10}SECRET_SCAN_BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}$/mu);
-    assert.match(WORKFLOW, /^\s{10}SECRET_SCAN_HEAD_SHA: \$\{\{ github\.sha \}\}$/mu);
-    assert.equal(
-      PACKAGE_MANIFEST.scripts?.['dependencies:audit'],
-      'node tools/production-dependency-audit.mts',
-    );
-    assert.equal(PACKAGE_MANIFEST.scripts?.['frontend:build:integrity'], 'node tools/frontend-build-integrity.mts --check');
-    assert.equal(FRONTEND_PACKAGE_MANIFEST.scripts?.prebuild, 'node ../tools/frontend-build-integrity.mts --clean');
-    assert.equal(FRONTEND_PACKAGE_MANIFEST.scripts?.postbuild, 'node ../tools/frontend-build-integrity.mts --record');
-    assert.match(PACKAGE_MANIFEST.scripts?.['test:coverage'] ?? '', /packages\/\*\*\/\*\.mts/u);
-    assert.match(PACKAGE_MANIFEST.scripts?.['test:coverage'] ?? '', /tools\/production-coverage\.mts/u);
-    assert.doesNotMatch(PACKAGE_MANIFEST.scripts?.['test:coverage'] ?? '', /test:critical-io-coverage/u);
-    for (const script of ['test', 'test:coverage', 'test:profile'] as const) {
-      assert.match(PACKAGE_MANIFEST.scripts?.[script] ?? '', /--test-concurrency=4(?:\s|$)/u, script);
+    const actual = readHostedCiScriptPlan(WORKFLOW);
+    for (const [lane, scripts] of Object.entries(expectedHostedCiScriptPlan())) {
+      assert.deepEqual([...actual[lane as keyof typeof actual]].sort(), [...scripts].sort());
     }
-    for (const shard of [1, 2, 3, 4]) {
-      assert.match(WORKFLOW, new RegExp(
-        `^\\s{10}- kind: functional\\s*\\n\\s{12}shard: ${shard}\\/4\\s*\\n\\s{12}label: ${shard}-of-4$`,
-        'mu',
-      ));
+  });
+
+  test('accepts renamed steps, YAML formatting, action updates and independent preparation order', () => {
+    const workflow = workflowFixture();
+    for (const job of Object.values(workflow.jobs)) {
+      for (const step of job.steps) {
+        step.name = 'A different descriptive name';
+        if (step.uses) step.uses = step.uses.replace(/@[a-f0-9]{40}$/u, `@${'a'.repeat(40)}`);
+      }
     }
-    assert.match(WORKFLOW, /^\s{10}- kind: performance\s*\n\s{12}label: performance$/mu);
-    assert.match(WORKFLOW, /^\s{6}WHOISLEUTH_PLAYWRIGHT_RUN_KIND: \$\{\{ matrix\.kind \}\}$/mu);
-    assert.match(WORKFLOW, /^\s{10}WHOISLEUTH_PLAYWRIGHT_SHARD: \$\{\{ matrix\.shard \}\}$/mu);
-    assert.match(WORKFLOW, /^\s{10}path: playwright-results\/$/mu);
-    assert.match(WORKFLOW, /^\s{10}pattern: playwright-results-\*-of-4$/mu);
-    assert.match(WORKFLOW, /^\s{10}merge-multiple: true$/mu);
-    assert.match(WORKFLOW, /npm run --silent test:e2e:aggregate -- "\$\{reports\[@\]\}" > "\$RUNNER_TEMP\/playwright-browser-aggregate\.json"/u);
-    assert.match(WORKFLOW, /npm run --silent test:e2e:aggregate -- --summary "\$\{reports\[@\]\}" \| tee/u);
-    assert.equal(PACKAGE_MANIFEST.scripts?.['test:e2e:aggregate'], 'node tools/playwright-shard-aggregate.mts');
-    assert.match(WORKFLOW, /npm run --silent verification:timing:update-candidate --/u);
-    assert.match(WORKFLOW, /^\s{10}node-version: 26$/mu);
-    assert.match(WORKFLOW, /^\s+run: npm run verification:ci -- --group=cli-runtime$/mu);
-    assert.match(WORKFLOW, /^\s{10}path: test-coverage\.lcov$/mu);
-    assert.match(WORKFLOW, /^\s{10}retention-days: 7$/mu);
-    assert.match(browserJob, /^\s{4}needs:\s*\n\s{6}- browser-build$/mu);
-    assert.equal(occurrences(browserBuildJob, /^\s+run: npm run verification:ci -- --group=browser-build$/gmu), 1);
-    for (const script of CI_BROWSER_BUILD_SCRIPTS) {
-      assert.doesNotMatch(browserBuildJob, new RegExp(`^\\s+run: npm run ${escapeRegExp(script)}$`, 'mu'));
+    const build = fixtureJob(workflow, 'browser-build');
+    const upload = requiredValue(build.steps.find((step) => step.with?.name === CI_FRONTEND_BUILD_ARTIFACT_NAME));
+    upload.with!['compression-level'] = 0;
+    upload.with!['retention-days'] = 2;
+    const browser = fixtureJob(workflow, 'browser');
+    const installIndex = browser.steps.findIndex((step) => step.run === 'npm run test:e2e:install');
+    const [install] = browser.steps.splice(installIndex, 1);
+    const downloadIndex = browser.steps.findIndex((step) => step.uses?.startsWith('actions/download-artifact@'));
+    browser.steps.splice(downloadIndex, 0, requiredValue(install));
+    assert.doesNotThrow(() => assertHostedCiParity(stringify(workflow, { indent: 4 })));
+  });
+
+  test('rejects missing checks, ignored errors, mutable actions and an unverified build', () => {
+    const candidates: Array<(workflow: WorkflowFixture) => void> = [
+      (workflow) => { delete workflow.jobs['browser-build']; },
+      (workflow) => { fixtureJob(workflow, 'quality').steps.pop(); },
+      (workflow) => { fixtureJob(workflow, 'quality').steps.at(-1)!.if = false; },
+      (workflow) => { fixtureJob(workflow, 'quality').steps.at(-1)!['continue-on-error'] = true; },
+      (workflow) => { fixtureJob(workflow, 'quality').steps.at(-1)!.run += ' || true'; },
+      (workflow) => { fixtureJob(workflow, 'quality').steps.at(-1)!.run = 'if false; then npm run verification:ci -- --group=quality; fi'; },
+      (workflow) => { fixtureJob(workflow, 'quality').if = 'false'; },
+      (workflow) => { workflow.permissions.contents = 'write'; },
+      (workflow) => { fixtureJob(workflow, 'unit').steps[0]!.uses = 'actions/checkout@main'; },
+      (workflow) => { fixtureJob(workflow, 'unit').steps[0]!.with!['persist-credentials'] = true; },
+      (workflow) => { fixtureJob(workflow, 'browser-build').steps.at(-1)!.with!.path = 'frontend/build'; },
+      (workflow) => { fixtureJob(workflow, 'browser-build').steps.at(-1)!.with!.name = 'different-build'; },
+      (workflow) => {
+        const browser = fixtureJob(workflow, 'browser');
+        const integrity = browser.steps.findIndex((step) => step.run === 'npm run frontend:build:integrity');
+        browser.steps.push(requiredValue(browser.steps.splice(integrity, 1)[0]));
+      },
+      (workflow) => { fixtureJob(workflow, 'browser').steps.push({ run: 'npm run build' }); },
+      (workflow) => { fixtureJob(workflow, 'cli-runtime').steps = fixtureJob(workflow, 'cli-runtime').steps.filter(step => !step.uses?.startsWith('actions/download-artifact@')); },
+      (workflow) => { fixtureJob(workflow, 'cli-runtime').needs = []; },
+      (workflow) => { delete workflow.jobs['critical-browser']; },
+      (workflow) => { fixtureJob(workflow, 'critical-browser').steps = fixtureJob(workflow, 'critical-browser').steps.filter(step => step.run !== 'npm run test:e2e:critical'); },
+      (workflow) => { fixtureJob(workflow, 'critical-browser').steps = fixtureJob(workflow, 'critical-browser').steps.filter(step => step.run !== 'npm run frontend:build:integrity'); },
+      (workflow) => { fixtureJob(workflow, 'critical-browser').steps.find(step => step.run === 'npm run test:e2e:critical')!['continue-on-error'] = true; },
+      (workflow) => { fixtureJob(workflow, 'verify').needs = ['quality']; },
+      (workflow) => { fixtureJob(workflow, 'verify').if = 'success()'; },
+    ];
+    for (const mutate of candidates) {
+      const workflow = workflowFixture();
+      mutate(workflow);
+      assert.throws(() => assertHostedCiParity(stringify(workflow)));
     }
-    assert.equal(occurrences(WORKFLOW, /^\s+run: npm run frontend:build:integrity$/gmu), 1);
-    assert.match(browserBuildJob, new RegExp(`^\\s{10}name: ${escapeRegExp(CI_FRONTEND_BUILD_ARTIFACT_NAME)}$`, 'mu'));
-    assert.match(browserBuildJob, /^\s{10}if-no-files-found: error$/mu);
-    assert.match(browserBuildJob, /^\s{10}retention-days: 1$/mu);
-    assert.match(browserBuildJob, /^\s{10}compression-level: 6$/mu);
-    assert.doesNotMatch(browserBuildJob, /\.svelte-kit/u);
-    assert.match(browserJob, new RegExp(`^\\s{10}name: ${escapeRegExp(CI_FRONTEND_BUILD_ARTIFACT_NAME)}$`, 'mu'));
-    assert.match(browserJob, /^\s{10}path: frontend$/mu);
-    assert.doesNotMatch(browserJob, /^\s{10}(?:pattern|merge-multiple):/mu);
-    assert.ok(browserJob.indexOf('Download verified frontend build') < browserJob.indexOf('Verify frontend build identity'));
-    assert.ok(browserJob.indexOf('Verify frontend build identity') < browserJob.indexOf('Install Playwright Chromium'));
-    assert.doesNotMatch(WORKFLOW, /continue-on-error|allow_failure|advisory/iu);
+    assert.throws(() => assertHostedCiParity('jobs: {}\njobs: {}'), /valid YAML/u);
+    assert.throws(() => assertHostedCiParity('x'.repeat(512 * 1024 + 1)), /bound/u);
+  });
+
+  test('executes the final gate against every result, including newly added lanes', () => {
+    const workflow = workflowFixture();
+    const verify = fixtureJob(workflow, 'verify');
+    const gate = requiredValue(verify.steps.find((step) => step.env?.NEEDS_RESULTS));
+    assert.equal(gate.env?.NEEDS_RESULTS, '${{ toJSON(needs) }}');
+    const successes = Object.fromEntries(requiredValue(verify.needs).map((name) => [name, { result: 'success' }]));
+    const execute = (results: unknown) => spawnSync('bash', ['-e', '-o', 'pipefail', '-c', requiredValue(gate.run)], {
+      env: { ...process.env, NEEDS_RESULTS: JSON.stringify(results) }, encoding: 'utf8', timeout: 5000,
+    }).status;
+    assert.equal(execute(successes), 0);
+    assert.notEqual(execute({}), 0);
+    for (const name of [...Object.keys(successes), 'future-verification']) {
+      for (const result of ['failure', 'cancelled', 'skipped', null]) {
+        assert.notEqual(execute({ ...successes, [name]: { result } }), 0, `${name}: ${result}`);
+      }
+    }
+  });
+
+  test('can inspect and run pre-install checks without loading the development parser', () => {
+    const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      import Module from 'node:module';
+      const load = Module._load;
+      Module._load = function (id, ...args) {
+        if (id === 'yaml') throw new Error('development dependencies are not installed');
+        return load.call(this, id, ...args);
+      };
+      const { main, runCiCommandGroup } = await import('./tools/ci-verification.mts');
+      if (main(['--list']) !== 0) process.exit(2);
+      const scripts = [];
+      runCiCommandGroup('preflight', (script) => scripts.push(script));
+      if (!scripts.includes('release:check')) process.exit(3);
+    `], { cwd: path.join(__dirname, '..'), encoding: 'utf8', timeout: 5000 });
+    assert.equal(child.status, 0, child.stderr);
+  });
+
+  test('executes canonical local groups and stops at the first failed command', () => {
     const shardPlan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
     const assigned = shardPlan.shards.flatMap((shard) => shard.files);
     assert.equal(shardPlan.shards.length, 4);
     assert.equal(new Set(assigned).size, assigned.length);
-    assert.deepEqual(assigned.sort(), readVerificationTimingProfile().files.filter((item) => isPlaywrightFunctionalSpec(item.file)).map((item) => item.file).sort());
+    assert.deepEqual(assigned.sort(), readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).sort());
     assert.equal(PACKAGE_MANIFEST.scripts?.['verification:ci'], 'node tools/ci-verification.mts');
     assert.deepEqual(CI_COMMAND_GROUPS, ['preflight', 'quality', 'unit', 'browser-build', 'cli-runtime']);
     assert.deepEqual(parseCiVerificationArguments([]), { mode: 'full' });
@@ -307,6 +308,8 @@ describe('continuous integration workflow', () => {
     }
     assert.match(localPlan, /^test:e2e:built \(performance, functional shards, browser-health aggregation and timing candidate\)$/mu);
     assert.match(localPlan, /^verification:artifacts cleanup=all$/mu);
+    assert.match(localPlan, /^test:e2e:critical:install$/mu);
+    assert.doesNotMatch(localPlan, /^test:e2e:install$/mu);
     assert.ok(localPlan.indexOf('changed-line secret scan') < localPlan.indexOf('release:check'));
     assert.ok(localPlan.indexOf('release:check') < localPlan.indexOf('locked install'));
     assert.ok(localPlan.indexOf('locked install') < localPlan.indexOf('toolchain:check'));
@@ -325,7 +328,8 @@ describe('continuous integration workflow', () => {
       'verification:timing:update-candidate',
     ]);
     assert.equal(CI_CLI_RUNTIME_NODE_MAJOR, 26);
-    assert.deepEqual(CI_CLI_RUNTIME_SCRIPTS, ['cli:package:check']);
+    assert.ok(CI_CLI_RUNTIME_SCRIPTS.includes('cli:package:check'));
+    assert.ok(CI_CLI_RUNTIME_SCRIPTS.includes('capture:package:check'));
     assert.match(localPlan, /^cli:package:check \(Node 26 compatibility runtime\)$/mu);
     assert.equal(
       selectNodeRuntimeExecutable(26, ['/fixture/node-24', '/fixture/node-26'], (candidate) => (
@@ -395,11 +399,12 @@ describe('continuous integration workflow', () => {
     fs.mkdirSync(executableDirectory);
     context.after(() => fs.rmSync(temporaryRoot, { recursive: true, force: true }));
 
-    assert.throws(() => resolveUnitTestExecutables(['zsh', 'pwsh'], {
+    assert.throws(() => resolveUnitTestExecutables(['zsh', 'fish', 'pwsh'], {
       environment: { PATH: path.join(temporaryRoot, 'missing') },
       cwd: temporaryRoot,
     }), (error) => error instanceof Error
       && error.message.includes('zsh: not found')
+      && error.message.includes('fish: not found')
       && error.message.includes('pwsh: not found'));
 
     const failing = path.join(executableDirectory, 'zsh');
@@ -420,7 +425,7 @@ describe('continuous integration workflow', () => {
       }),
     }), /zsh: failed to launch \(fixture launch failure\)/u);
 
-    for (const executable of ['bash', 'zsh', 'pwsh']) {
+    for (const executable of ['bash', 'zsh', 'fish', 'pwsh']) {
       fs.writeFileSync(path.join(executableDirectory, executable), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     }
     const sourceEnvironment = { PATH: executableDirectory, PRESERVED_VALUE: 'yes' };
@@ -431,6 +436,7 @@ describe('continuous integration workflow', () => {
     assert.deepEqual([...resolved], [
       ['bash', path.join(executableDirectory, 'bash')],
       ['zsh', path.join(executableDirectory, 'zsh')],
+      ['fish', path.join(executableDirectory, 'fish')],
       ['pwsh', path.join(executableDirectory, 'pwsh')],
     ]);
     const executionEnvironment = unitTestExecutableEnvironment(resolved, sourceEnvironment);
@@ -438,6 +444,7 @@ describe('continuous integration workflow', () => {
     assert.equal(executionEnvironment.PRESERVED_VALUE, 'yes');
     assert.equal(executionEnvironment.WHOISLEUTH_VERIFICATION_BASH, path.join(executableDirectory, 'bash'));
     assert.equal(executionEnvironment.WHOISLEUTH_VERIFICATION_ZSH, path.join(executableDirectory, 'zsh'));
+    assert.equal(executionEnvironment.WHOISLEUTH_VERIFICATION_FISH, path.join(executableDirectory, 'fish'));
     assert.equal(executionEnvironment.WHOISLEUTH_VERIFICATION_PWSH, path.join(executableDirectory, 'pwsh'));
   });
 
@@ -515,6 +522,18 @@ describe('continuous integration workflow', () => {
     `);
     assert.throws(() => assertAppliedBrowserSafety({ configurationFile: weakenedConfiguration }), /Applied Playwright configuration weakened/u);
 
+    for (const patch of [
+      "webServer: { ...configuration.webServer, command: 'node server.mts' }",
+      'globalTeardown: undefined',
+    ]) {
+      fs.writeFileSync(weakenedConfiguration, `
+        const imported = require(${JSON.stringify(configuration)});
+        const configuration = imported.default ?? imported;
+        module.exports = { ...configuration, testDir: ${JSON.stringify(E2E_DIRECTORY)}, ${patch} };
+      `);
+      assert.throws(() => assertAppliedBrowserSafety({ configurationFile: weakenedConfiguration }), /independent server egress guard/u);
+    }
+
     const fixtures = pathToFileURL(path.join(E2E_DIRECTORY, 'fixtures.ts')).href;
     for (const auto of [false, true]) {
       const disconnectedFixture = path.join(directory, `disconnected-${auto}.mts`);
@@ -529,9 +548,51 @@ describe('continuous integration workflow', () => {
     }
   });
 
+  test('discovers critical storage and native navigation behaviours in both secondary engines', () => {
+    const root = path.join(__dirname, '..');
+    const environment = environmentWithoutV8Coverage();
+    // Listing never starts a browser or server. Keep this pre-build inspection
+    // independent of the caller's execution mode and report-output settings.
+    // Real browser execution still requires the verified build in CI.
+    for (const name of ['CI', 'WHOISLEUTH_E2E_USE_BUILD', 'PLAYWRIGHT_JSON_OUTPUT_NAME', 'PLAYWRIGHT_JSON_OUTPUT_FILE', 'PLAYWRIGHT_JSON_OUTPUT_DIR']) {
+      delete environment[name];
+    }
+    const child = spawnSync(process.execPath, [
+      path.join(root, 'node_modules/@playwright/test/cli.js'), 'test',
+      '--config=e2e/cross-browser.config.ts', '--grep=@cross-browser-critical', '--list', '--reporter=json',
+    ], {
+      cwd: root, encoding: 'utf8', timeout: 30_000, maxBuffer: 4 * 1024 * 1024,
+      env: { ...environment, WHOISLEUTH_PLAYWRIGHT_SHARD: '' },
+    });
+    assert.equal(child.status, 0, child.stderr || child.error?.message);
+    type Suite = { suites?: Suite[]; specs?: { title: string; tests: { projectName: string; expectedStatus: string }[] }[] };
+    const report = JSON.parse(child.stdout) as { suites: Suite[]; errors: unknown[] };
+    assert.deepEqual(report.errors, []);
+    const specifications = (suites: Suite[]): NonNullable<Suite['specs']> => suites.flatMap(suite => [
+      ...(suite.specs ?? []), ...specifications(suite.suites ?? []),
+    ]);
+    const specs = specifications(report.suites);
+    for (const engine of ['firefox', 'webkit']) {
+      for (const behaviour of [
+        /drafts recover.*clear atomically/u,
+        /cancellation.*manual lock/u,
+        /cancellation.*idle lock/u,
+        /encrypted.*backup round trip/u,
+        /open-in-new-tab activation/u,
+        /committed restore.*not a second restore/u,
+      ]) {
+        assert.ok(specs.some(spec => behaviour.test(spec.title)
+          && spec.tests.some(test => test.projectName === engine && test.expectedStatus === 'passed')),
+        `${engine} must execute ${behaviour}`);
+      }
+    }
+  });
+
   test('keeps performance reporting in CI with isolated samples and functional readiness checks', async () => {
-    assert.match(WORKFLOW, /^\s+run: npm run frontend:authenticated-loading-report$/mu);
-    assert.match(WORKFLOW, /^\s+if: \$\{\{ matrix\.kind == 'performance' \}\}$/mu);
+    const performance = requiredValue(fixtureJob(workflowFixture(), 'browser').steps.find(
+      (step) => step.run === 'npm run frontend:authenticated-loading-report',
+    ));
+    assert.equal(performance.if, "${{ matrix.kind == 'performance' }}");
     assert.equal(
       PACKAGE_MANIFEST.scripts?.['test:e2e'],
       'node tools/playwright-balanced-suite.mts',
@@ -708,9 +769,25 @@ describe('continuous integration workflow', () => {
   });
 
   test('browser tests synchronize on observable state instead of fixed delays', () => {
+    function fixedDelays(source: string): string[] {
+      const found: string[] = [];
+      const visit = (node: ts.Node): void => {
+        if (ts.isCallExpression(node)) {
+          const expression = node.expression;
+          const name = ts.isIdentifier(expression) ? expression.text : ts.isPropertyAccessExpression(expression) ? expression.name.text : '';
+          const testDeadline = ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)
+            && ['test', 'testInfo'].includes(expression.expression.text) && name === 'setTimeout';
+          if (['setTimeout', 'waitForTimeout'].includes(name) && !testDeadline) found.push(name);
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(ts.createSourceFile('browser-test.ts', source, ts.ScriptTarget.Latest, true));
+      return found;
+    }
+    assert.deepEqual(fixedDelays('test.setTimeout(90_000); testInfo.setTimeout(90_000); // setTimeout(20)'), []);
+    assert.deepEqual(fixedDelays('await page.waitForTimeout(10); window.setTimeout(done, 10); setTimeout(done, 10);'), ['waitForTimeout', 'setTimeout', 'setTimeout']);
     for (const { entry, source } of E2E_SOURCES) {
-      assert.doesNotMatch(source, /\bwaitForTimeout\s*\(/u, `${entry} uses a fixed Playwright delay`);
-      assert.doesNotMatch(source, /\bsetTimeout\s*\(/u, `${entry} uses a fixed timer delay`);
+      assert.deepEqual(fixedDelays(source), [], `${entry} uses a fixed delay rather than observable state`);
       assert.doesNotMatch(
         source,
         /frontend\/\.svelte-kit\/output/u,
@@ -754,7 +831,7 @@ describe('continuous integration workflow', () => {
     assert.match(TEST_HEALTH_WORKFLOW, /^\s+npm run sources:health -- --github-annotations$/mu);
     assert.match(TEST_HEALTH_WORKFLOW, /## Offline retained source health/u);
     assert.match(TEST_HEALTH_WORKFLOW, />> "\$GITHUB_STEP_SUMMARY"/u);
-    assert.match(TEST_HEALTH_WORKFLOW, /^\s{6}- name: Install tested shell\s*\n\s{8}run: \|\s*\n\s{10}sudo apt-get update\s*\n\s{10}sudo apt-get install --no-install-recommends --yes zsh$/mu);
+    assert.match(TEST_HEALTH_WORKFLOW, /apt-get install[^\n]*\bzsh\b/u);
     assert.match(TEST_HEALTH_WORKFLOW, /for run in 1 2 3; do\s+npm run test:profile > "\$RUNNER_TEMP\/test-duration-report-\$run\.txt"\s+done/u);
     assert.match(TEST_HEALTH_WORKFLOW, /npm run test:duration-health --/u);
     for (const run of [1, 2, 3]) {

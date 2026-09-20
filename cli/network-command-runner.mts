@@ -73,6 +73,8 @@ async function runNetworkCommand(
       dkimSelectors,
       retiredDkimSelectors,
       mailProtectionProfile: args.mailProfile,
+      ...(args.includeInheritedDns ? { includeInheritedDns: true } : {}),
+      ...(dependencies.signal ? { signal: dependencies.signal } : {}),
     }));
     const document = buildCliPostureDocument(requestedDomain, report as UnknownRecord, context.now());
     if (!args.quiet) {

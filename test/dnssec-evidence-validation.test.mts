@@ -27,6 +27,24 @@ function fixture() {
 }
 
 describe('offline DNSSEC evidence validation', () => {
+  test('distinguishes omitted or malformed record containers from explicit empty evidence', () => {
+    for (const dsRecords of [undefined, null, {}, 'records', false]) {
+      for (const delegationSigned of [false, true]) {
+        const result = validateDnssecEvidence({ ownerName: 'example.test', delegationSigned, dsRecords });
+        assert.equal(result.state, 'partial');
+        assert.equal(result.dsRecordCount, 0);
+        assert.match(result.findings.join(' '), /collection/u);
+      }
+    }
+    for (const field of ['dnskeyRecords', 'rrSigRecords']) {
+      const result = validateDnssecEvidence({ ownerName: 'example.test', delegationSigned: false, dsRecords: [], [field]: {} });
+      assert.equal(result.state, 'partial');
+      assert.equal(result.rejectedCount, 1);
+    }
+    assert.equal(validateDnssecEvidence({ ownerName: 'example.test', delegationSigned: false, dsRecords: [], dnskeyRecords: [], rrSigRecords: [] }).state, 'unsigned');
+    assert.equal(validateDnssecEvidence({ ownerName: 'example.test', delegationSigned: true, dsRecords: [], dnskeyRecords: [] }).state, 'conflict');
+  });
+
   test('interprets accepted version-1 zone-less ISO evidence as UTC only', () => {
     const result = validateDnssecEvidence({
       ownerName: 'example.test',

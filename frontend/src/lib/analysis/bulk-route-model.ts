@@ -325,7 +325,7 @@ export function countBulkRouteFilters(
 export function toBulkRouteTriageRow(
   row: ScanResult,
   caseRecord: CaseRecord | null,
-  caseSourceState: 'ready' | 'unavailable' = 'ready',
+  caseSourceState: 'ready' | 'unavailable' | 'selection_required' = 'ready',
 ): BulkTriageRow {
   return {
     domain: row.domain,
@@ -338,7 +338,7 @@ export function toBulkRouteTriageRow(
     hasMx: row.saved.hasMx ?? null,
     hasSpf: row.saved.hasSpf ?? null,
     hasDmarc: row.saved.hasDmarc ?? null,
-    caseDisposition: caseSourceState === 'ready' ? caseRecord?.disposition || 'untracked' : 'unavailable',
+    caseDisposition: caseSourceState === 'ready' ? caseRecord?.disposition || 'untracked' : caseSourceState,
   };
 }
 

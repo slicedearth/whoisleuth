@@ -1,7 +1,8 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { compareSavedBulkSessions, type BulkSession } from '$lib/bulk-sessions';
+  import { compareSavedBulkSessions, type BulkSession, type BulkSessionSavePreview } from '$lib/bulk-sessions';
   import { classifyBulkSourceCoverage } from '$lib/analysis/bulk-source-coverage.ts';
+  import type { BrowserLocalCollectionLoadState } from '$lib/browser-local-data-service';
 
   let {
     sessions,
@@ -18,6 +19,11 @@
     profileContextLoading,
     running,
     sourceState = 'ready',
+    retention = null,
+    confirmRetention,
+    cancelRetention,
+    refreshRequired = false,
+    refreshSessions,
   }: {
     sessions: BulkSession[];
     currentSessionId: string;
@@ -32,12 +38,28 @@
     canSave: boolean;
     profileContextLoading: boolean;
     running: boolean;
-    sourceState?: 'loading' | 'ready' | 'unavailable';
+    sourceState?: BrowserLocalCollectionLoadState;
+    retention?: BulkSessionSavePreview | null;
+    confirmRetention: () => void | Promise<void>;
+    cancelRetention: () => void;
+    refreshRequired?: boolean;
+    refreshSessions: () => void | Promise<void>;
   } = $props();
 
   let baselineId = $state('');
   let currentId = $state('');
   let componentRoot = $state<HTMLElement>();
+  let retentionHeading = $state<HTMLHeadingElement>();
+  $effect(() => {
+    const preview = retention;
+    if (preview) void tick().then(() => { if (retention === preview) retentionHeading?.focus(); });
+  });
+
+  async function cancelAndFocus() {
+    cancelRetention();
+    await tick();
+    document.getElementById('bulk-session-save')?.focus();
+  }
   const baseline = $derived(sessions.find((session) => session.id === baselineId) || null);
   const current = $derived(sessions.find((session) => session.id === currentId) || null);
   const comparison = $derived(baseline && current ? compareSavedBulkSessions(baseline, current) : null);
@@ -90,15 +112,15 @@
 <section class="bulk-sessions card" aria-labelledby="bulk-sessions-title" bind:this={componentRoot}>
   <div class="section-heading">
     <div>
-      <p class="eyebrow">Browser-local workspace</p>
+      <p class="eyebrow">Saved workspace</p>
       <h2 id="bulk-sessions-title" tabindex="-1">Saved Bulk sessions</h2>
       <p>Save compact results and source states so an incomplete investigation can be resumed or compared later. Raw source payloads and contact records are excluded.</p>
     </div>
-    {#if sessions.length}<button type="button" class="btn" onclick={exportSessions} disabled={running}>Export sessions</button>{/if}
+    {#if sourceState === 'ready' && sessions.length}<button type="button" class="btn" onclick={exportSessions} disabled={running}>Export sessions</button>{/if}
   </div>
 
   {#if sourceState !== 'ready'}
-    <p class="source-state {sourceState}" role={sourceState === 'unavailable' ? 'alert' : 'status'}>Saved Bulk sessions {sourceState === 'loading' ? 'are still loading' : 'could not be read'}. Counts, empty states, exports, and mutations remain unavailable; reload to retry without overwriting unknown saved work.</p>
+    <p class="source-state {sourceState}" role={sourceState === 'unavailable' ? 'alert' : 'status'}>Saved Bulk sessions {sourceState === 'idle' ? 'have not been loaded' : sourceState === 'loading' ? 'are still loading' : 'could not be read'}.{#if sourceState === 'unavailable'} Reload to retry; saved work has not been changed.{/if}</p>
   {:else}
   <div class="save-row">
     <label>
@@ -108,14 +130,28 @@
         value={saveName}
         maxlength="100"
         placeholder="July priority review"
+        disabled={running}
         oninput={(event) => setSaveName(event.currentTarget.value)}
       />
     </label>
-    <button type="button" class="primary" disabled={profileContextLoading || !canSave || !saveName.trim()} onclick={saveCurrent}>
+    <button id="bulk-session-save" type="button" class="primary" disabled={profileContextLoading || !canSave || !saveName.trim()} onclick={saveCurrent}>
       {currentSessionId ? 'Update saved session' : 'Save current session'}
     </button>
   </div>
   {#if status}<p class="session-status" role="status">{status}</p>{/if}
+  {#if refreshRequired}<button type="button" class="btn" disabled={running} onclick={refreshSessions}>Reload saved sessions</button>{/if}
+  {#if retention}
+    <section class="retention-review" aria-labelledby="bulk-retention-title">
+      <h3 id="bulk-retention-title" tabindex="-1" bind:this={retentionHeading}>Review storage changes</h3>
+      <p>Saving “{retention.session.name}” would remove {retention.removed.length} saved session{retention.removed.length === 1 ? '' : 's'} ({retention.removedBytes.toLocaleString()} stored bytes). Export them first if you need to retain them.</p>
+      <ul>{#each retention.removed as session (session.id)}<li>{session.name} · {session.results.length} retained result{session.results.length === 1 ? '' : 's'}</li>{/each}</ul>
+      <div class="session-actions">
+        <button type="button" class="btn" disabled={running} onclick={exportSessions}>Export before saving</button>
+        <button type="button" class="btn" disabled={running} onclick={cancelAndFocus}>Cancel save</button>
+        <button type="button" class="btn danger" disabled={running} onclick={confirmRetention}>Remove listed sessions and save</button>
+      </div>
+    </section>
+  {/if}
 
   {#if sessions.length}
     <div class="session-list">
@@ -133,11 +169,11 @@
             </dl>
           </div>
           <div class="session-actions">
-            <button type="button" class="btn small" disabled={profileContextLoading || running} onclick={() => loadSession(session)}>Load</button>
+            <button type="button" class="btn small" disabled={profileContextLoading || running || Boolean(retention)} onclick={() => loadSession(session)}>Load</button>
             {#if unstartedCount(session) > 0}
-              <button type="button" class="btn small" disabled={profileContextLoading || running} onclick={() => resumeSession(session)}>Resume unstarted</button>
+              <button type="button" class="btn small" disabled={profileContextLoading || running || Boolean(retention)} onclick={() => resumeSession(session)}>Resume unstarted</button>
             {/if}
-            <button id={`bulk-session-delete-${session.id}`} type="button" class="btn small danger" disabled={running} onclick={() => void deleteAndFocus(session)}>Delete</button>
+            <button id={`bulk-session-delete-${session.id}`} type="button" class="btn small danger" disabled={running || Boolean(retention)} onclick={() => void deleteAndFocus(session)}>Delete</button>
           </div>
         </article>
       {/each}
@@ -181,7 +217,7 @@
       </details>
     {/if}
   {:else}
-    <p class="empty">No Bulk sessions have been saved in this browser.</p>
+    <p class="empty">No Bulk sessions have been saved in this workspace.</p>
   {/if}
   {/if}
 </section>
@@ -205,6 +241,8 @@
   dt{color:var(--muted);font-size:var(--text-xs)}
   dd{margin:0;font-weight:700;font-size:var(--text-xs)}
   .session-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+  .retention-review{margin-top:16px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-sm);overflow-wrap:anywhere}
+  .retention-review h3{margin:0}.retention-review .session-actions{justify-content:flex-start}
   .comparison{margin-top:18px;border-top:1px solid var(--border);padding-top:14px}
   .comparison summary{cursor:pointer;font-weight:700}
   .compare-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}

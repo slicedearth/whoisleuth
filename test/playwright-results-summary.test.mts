@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { mkdtempSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 import {
   renderPlaywrightResultSummary,
   summarizePlaywrightResults,
+  readPlaywrightResultData,
+  MAX_PLAYWRIGHT_RESULTS_BYTES,
 } from '../tools/playwright-results-summary.mts';
 import {
   aggregatePlaywrightShardTimings,
@@ -12,7 +17,7 @@ import {
 import { PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS } from '../tools/playwright-execution-contract.mts';
 import type { VerificationTimingProfile } from '../tools/verification-timing-profile.mts';
 
-function fixture() {
+function fixture(attachmentBody?: string) {
   return {
     stats: { duration: 1_500 },
     suites: [{
@@ -23,7 +28,7 @@ function fixture() {
         file: '/checkout/e2e/console.spec.ts',
         tests: [{
           status: 'expected',
-          results: [{ status: 'passed', duration: 220, retry: 0, attachments: [] }],
+          results: [{ status: 'passed', duration: 220, retry: 0, attachments: attachmentBody ? [{ name: 'geometry', body: attachmentBody }] : [] }],
         }, {
           status: 'flaky',
           results: [
@@ -43,6 +48,31 @@ function fixture() {
 }
 
 describe('Playwright result summary', () => {
+  test('admits attachment-rich raw reports without relaxing failure or byte admission', () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'browser-report-admission-'));
+    const filename = path.join(directory, 'report.json');
+    try {
+      const value = fixture('a'.repeat(12 * 1024 * 1024));
+      writeFileSync(filename, JSON.stringify(value));
+      const parsed = readPlaywrightResultData(filename);
+      assert.deepEqual(summarizePlaywrightResults(parsed), summarizePlaywrightResults(value));
+      assert.equal(summarizePlaywrightResults(parsed).failed, 1);
+      assert.equal(summarizePlaywrightResults(parsed).flaky, 1);
+      writeFileSync(filename, '{broken');
+      assert.throws(() => readPlaywrightResultData(filename), /valid JSON/u);
+      writeFileSync(filename, '');
+      assert.throws(() => readPlaywrightResultData(filename), /byte limits/u);
+      truncateSync(filename, MAX_PLAYWRIGHT_RESULTS_BYTES + 1);
+      assert.throws(() => readPlaywrightResultData(filename), /byte limits/u);
+      assert.throws(() => readPlaywrightResultData(directory), /regular file/u);
+      writeFileSync(filename, '{}');
+      const link = path.join(directory, 'linked.json');
+      symlinkSync(filename, link);
+      assert.throws(() => readPlaywrightResultData(link), /ELOOP|symbolic/i);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
   test('counts retries and failures while retaining only bounded diagnostic labels', () => {
     const summary = summarizePlaywrightResults(fixture(), '1-of-2');
     assert.deepEqual({
@@ -146,7 +176,8 @@ describe('Playwright result summary', () => {
       }],
     });
     const accepted = files.map((item, index) => report(item.file, 10 + index));
-    const result = aggregatePlaywrightShardTimings(accepted, profile);
+    const inventory = [...files.map((item) => item.file), ...PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS, 'e2e/auth.setup.ts'];
+    const result = aggregatePlaywrightShardTimings(accepted, profile, inventory);
     assert.equal(result.summary.passed, 8);
     assert.equal(result.summary.browserSpecifications, 4);
     assert.equal(result.summary.setupFiles, 1);
@@ -159,13 +190,15 @@ describe('Playwright result summary', () => {
     assert.match(renderBrowserShardTimingSummary(result.summary), /0 failed, flaky, skipped, or retried/u);
 
     assert.throws(
-      () => aggregatePlaywrightShardTimings([accepted[0]!, accepted[0]!, accepted[2]!, accepted[3]!], profile),
+      () => aggregatePlaywrightShardTimings([accepted[0]!, accepted[0]!, accepted[2]!, accepted[3]!], profile, inventory),
       /uniquely match/u,
     );
     const retried = structuredClone(accepted);
     const retryTest = retried[0]!.suites[0]!.specs[1]!.tests[0]!;
     retryTest.status = 'flaky';
     retryTest.results.push({ status: 'passed', duration: 1, retry: 1 });
-    assert.throws(() => aggregatePlaywrightShardTimings(retried, profile), /complete passing/u);
+    assert.throws(() => aggregatePlaywrightShardTimings(retried, profile, inventory), /complete passing/u);
+    assert.throws(() => aggregatePlaywrightShardTimings(accepted, profile, [...inventory, 'e2e/new.spec.ts']),
+      /uniquely match/u, 'an unmeasured new specification must not be omitted from execution');
   });
 });

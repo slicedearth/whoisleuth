@@ -14,7 +14,7 @@ async function handleWhois(
   event: Parameters<NetlifyFunctionHandler>[0],
   dependencies: WhoisHandlerDependencies = { buildWhoisChain, parseWhoisChain },
 ): ReturnType<NetlifyFunctionHandler> {
-  const guard = guardNetlifyNetworkRequest(event, 'whois');
+  const guard = guardNetlifyNetworkRequest(event, 'whois', ['GET']);
   if (guard.response) return guard.response;
 
   const q = ((event.queryStringParameters && event.queryStringParameters.q) || '').trim();

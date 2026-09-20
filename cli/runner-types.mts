@@ -1,11 +1,12 @@
 import type { ClassifiedQuery, classifyQuery } from '../lib/classify.mts';
-import type { LookupSourceSettlement } from '../lib/lookup.mts';
+import type { LookupOptions } from '../lib/lookup.mts';
 import type { explainRiskScore } from '../lib/risk-scoring.mts';
 import type { RegistryCompatibilityRow } from '../lib/registry-capabilities.mts';
 import type { resolvePublicAddresses, safeFetch } from '../lib/safe-fetch.mts';
 import type { whoisQuery } from '../lib/whois-transport.mts';
 import type { validateDnssecChain } from '../lib/dnssec-chain-validation.mts';
 import type { collectMailTransportReview } from '../lib/smtp-transport-review.mts';
+import type { DomainPostureOptions } from '../lib/domain-posture.mts';
 import type { BoundedTextStream } from './bulk.mts';
 import type { createBulkCheckpointWriter } from './bulk-checkpoint.mts';
 import type { CliProgressEvents } from './progress-events.mts';
@@ -20,13 +21,7 @@ type WritableLike = WritableTerminal;
 
 type LookupDependency = (
   classified: ClassifiedQuery,
-  options?: {
-    fast?: boolean;
-    compact?: boolean;
-    onSourceSettled?: (settlement: LookupSourceSettlement) => void;
-    signal?: AbortSignal;
-    dnsResolverServers?: readonly string[];
-  },
+  options?: LookupOptions,
 ) => unknown | Promise<unknown>;
 
 type DiscoveryGeneratorDependency = {
@@ -53,11 +48,15 @@ type CliDependencies = {
   readBulkInput?: (source?: string | null) => string | Promise<string>;
   readCompareInput?: (source?: string | null) => string | Promise<string>;
   readDiffInput?: (source: string) => string | Promise<string>;
+  workflowResumeInput?: string;
+  caseFileInput?: string;
+  workflowQuestion?: (prompt: string) => Promise<string>;
   readDiscoveryDictionary?: (source: string) => string | Promise<string>;
   readDiscoveryAllowlist?: (source: string) => string | Promise<string>;
   readExportInput?: (source?: string | null) => string | Promise<string>;
   readRiskCalibrationInput?: (source?: string | null) => string | Promise<string>;
   readArtifactInput?: (source?: string | null) => string | Promise<string>;
+  readBinaryArtifactInput?: (source: string) => Uint8Array | Promise<Uint8Array>;
   readPassphraseFile?: (source: string) => string | Promise<string>;
   readPrivateKeyFile?: (source: string) => string | Promise<string>;
   readPublicKeyFile?: (source: string) => string | Promise<string>;
@@ -78,7 +77,7 @@ type CliDependencies = {
   normalizeDkimSelectors?: (raw: unknown) => string[];
   checkDomainPosture?: (
     domain: string,
-    options?: { dkimSelectors?: unknown[]; retiredDkimSelectors?: unknown[]; mailProtectionProfile?: unknown },
+    options?: DomainPostureOptions,
   ) => unknown | Promise<unknown>;
   fetchHomepage?: (domain: string) => unknown | Promise<unknown>;
   normalizeTlsHostname?: (value: unknown) => string | null;
@@ -112,6 +111,7 @@ type CliCommandContext = Readonly<{
   terminal(value: string, color?: boolean): string;
   presentation(color: boolean): TerminalPresentation;
   writeStdout(value: string): void;
+  writeBinaryOutput?(value: Uint8Array): void;
   writeStderr(value: string): void;
   readSingleInput(): Promise<string>;
   readInput(source: string | null | undefined, maximumBytes: number, label: string): Promise<string>;

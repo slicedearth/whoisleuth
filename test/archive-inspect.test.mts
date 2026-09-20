@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { describe, test } from 'node:test';
 
 import {
@@ -6,6 +7,8 @@ import {
   inspectWorkspaceArchive,
 } from '../cli/archive-inspect.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
+import { parseArchiveContentDigest } from '../cli/archive-content-digest.mts';
+import { parseCliArguments } from '../cli/arguments.mts';
 import { formatJsonDocument } from '../cli/formatters/json.mts';
 import { runCli } from '../cli/runner.mts';
 import {
@@ -15,7 +18,7 @@ import {
 import {
   encryptWorkspaceArchive,
 } from '../frontend/src/lib/analysis/workspace-archive-crypto.ts';
-import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { sha256ArtifactDigestV2 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 
 const NOW = '2026-07-29T10:00:00.000Z';
 const DOMAIN = 'review-target.invalid';
@@ -57,13 +60,60 @@ async function archiveWithUnknownPayload(sectionId: string, payload: unknown) {
   value.manifest.sections[index] = {
     ...original,
     bytes: new TextEncoder().encode(JSON.stringify(section)).byteLength,
-    checksum: await sha256ArtifactDigest(section),
+    checksum: await sha256ArtifactDigestV2(section),
   };
   value.sections.settings = section;
   return value;
 }
 
 describe('offline workspace archive inspection', () => {
+  test('preserves independently recorded legacy hashes and selects only the declared form', async () => {
+    const fixture = JSON.parse(await readFile(new URL('./fixtures/archive-content-identity-legacy.json', import.meta.url), 'utf8'));
+    const legacy = 'sha256:75f4af237d430ac33d29f2431dc23ced06e8ce6281fdb30fd8ee8c00b54ccdc5';
+    assert.equal(fixture.legacyContentDigest, legacy);
+    const raw = JSON.stringify(fixture.archive);
+    const report = await inspectWorkspaceArchive(raw, { expectedContentDigest: legacy });
+    assert.equal(report.version, 3);
+    assert.equal(report.summary.contentDigestSha256, legacy);
+    assert.equal(report.summary.expectedContentDigestCanonicalization, 'sorted-json-v1');
+    assert.match(report.summary.contentDigest, /^sorted-json-v2:sha256:[a-f0-9]{64}$/u);
+    const current = await inspectWorkspaceArchive(raw, { expectedContentDigest: report.summary.contentDigest });
+    assert.equal(current.summary.expectedContentDigestCanonicalization, 'sorted-json-v2');
+    assert.match(formatArchiveInspection(current), /Content identity: sorted-json-v2:sha256:/u);
+    const args = parseCliArguments(['inspect-archive', '--expect-content-digest', report.summary.contentDigest]);
+    assert.equal(args.action, 'inspect-archive');
+    if (args.action === 'inspect-archive') assert.equal(args.expectedContentDigest, report.summary.contentDigest);
+  });
+
+  test('never falls back to a different canonical form when content has collation-sensitive keys', async () => {
+    const raw = JSON.stringify(await archiveWithUnknownPayload('ordering', { a: 1, A: 2, _: 3 }));
+    const report = await inspectWorkspaceArchive(raw);
+    const legacy = report.summary.contentDigestSha256;
+    const current = report.summary.contentDigest;
+    assert.notEqual(current, `sorted-json-v2:${legacy}`);
+    await assert.rejects(inspectWorkspaceArchive(raw, { expectedContentDigest: `sorted-json-v2:${legacy}` }), /did not match/u);
+    await assert.rejects(inspectWorkspaceArchive(raw, { expectedContentDigest: current.slice('sorted-json-v2:'.length) }), /did not match/u);
+    assert.equal((await inspectWorkspaceArchive(raw, { expectedContentDigest: current })).summary.contentDigest, current);
+  });
+
+  test('rejects unknown, mixed, malformed and oversized digest declarations before reading an archive', async () => {
+    const hash = `sha256:${'a'.repeat(64)}`;
+    for (const value of [null, undefined, '']) assert.equal(parseArchiveContentDigest(value), null);
+    assert.deepEqual(parseArchiveContentDigest(hash), { canonicalization: 'sorted-json-v1', digestSha256: hash });
+    assert.deepEqual(parseArchiveContentDigest(`sorted-json-v2:${hash}`), { canonicalization: 'sorted-json-v2', digestSha256: hash });
+    for (const value of [7, {}, 'x'.repeat(87), hash.toUpperCase(), `sorted-json-v1:${hash}`, `sorted-json-v3:${hash}`, `sorted-json-v2:sorted-json-v2:${hash}`, `${hash} `]) {
+      assert.throws(() => parseArchiveContentDigest(value), /Expected archive content digest/u);
+    }
+    await assert.rejects(inspectWorkspaceArchive('invalid JSON', { expectedContentDigest: `sorted-json-v3:${hash}` }), /Expected archive content digest/u);
+    let reads = 0;
+    const code = await runCli(['inspect-archive', 'workspace.json', '--expect-content-digest', `sorted-json-v3:${hash}`], {
+      stdout: { write() {} }, stderr: { write() {} },
+      readArtifactInput: async () => { reads += 1; throw new Error('must not read'); },
+    });
+    assert.equal(code, EXIT_CODES.USAGE);
+    assert.equal(reads, 0);
+  });
+
   test('summarizes validated sections without printing retained contents', async () => {
     const report = await inspectWorkspaceArchive(JSON.stringify(await archive()));
     assert.equal(report.archive.encrypted, false);
@@ -91,6 +141,20 @@ describe('offline workspace archive inspection', () => {
       }),
       /did not match/iu,
     );
+  });
+
+  test('reports saved view inventory without exposing names or searching retained filter text', async () => {
+    const value = await buildWorkspaceArchive({ caseViews: {
+      schema: 'whoisleuth.case-views', version: 1, views: [{
+        id: 'private-view', name: 'Confidential review queue', createdAt: NOW, updatedAt: NOW,
+        filters: { status: 'monitoring', disposition: 'suspicious', search: DOMAIN, sort: 'updated' },
+      }],
+    } }, { generatedAt: NOW });
+    const report = await inspectWorkspaceArchive(JSON.stringify(value), { search: DOMAIN, reveal: true });
+    assert.equal(report.sections.find(section => section.id === 'caseViews')?.recordCount, 1);
+    assert.equal(report.search.matchCount, 0);
+    assert.doesNotMatch(JSON.stringify(report), /Confidential review queue|review-target\.invalid/u);
+    assert.doesNotMatch(formatArchiveInspection(report), /Confidential review queue|review-target\.invalid/u);
   });
 
   test('searches only exact allowlisted fields and redacts matches by default', async () => {

@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { openCaseSection } from './console-navigation';
 import { boundingBox, expectNoHorizontalOverflow } from './helpers';
 import { readFileSync } from 'node:fs';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
@@ -15,6 +16,27 @@ import { caseRecord, openSeededTimelineCase, snapshot } from './case-test-fixtur
 
 
 test.describe('evidence timeline', () => {
+  test('equal-time conflicting snapshots stay reviewable without a chosen summary or temporal change', async ({ page }) => {
+    await openSeededTimelineCase(page, 'equal-time.invalid', [caseRecord({
+      id: 'case-equal-time', domain: 'equal-time.invalid', evidenceHistory: [
+        snapshot({ id: 'low', riskScore: 10 }), snapshot({ id: 'high', riskScore: 90 }),
+      ],
+    })], CASE_SCHEMA_VERSION);
+    await expect(page.getByText(/Distinct snapshots share the latest capture time/)).toBeVisible();
+    await expect(page.locator('dl.evidence')).toHaveCount(0);
+    await expect(page.locator('.timeline-entry')).toHaveCount(2);
+    await expect(page.locator('.timeline-changes')).toHaveCount(0);
+    await expect(page.locator('.timeline-baseline')).toHaveCount(0);
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      for (const button of await page.locator('.timeline-toggle').all()) {
+        if (await button.getAttribute('aria-expanded') !== 'true') { await button.focus(); await button.press('Enter'); }
+      }
+      await expect(page.locator('.timeline-detail')).toHaveCount(2);
+      await expectNoHorizontalOverflow(page);
+    }
+  });
+
   test('a case with no evidence shows the empty state', async ({ page }) => {
     await openSeededTimelineCase(page, 'no-evidence.invalid', [
       caseRecord({ id: 'empty-ev', domain: 'no-evidence.invalid', evidenceHistory: [] }),
@@ -297,7 +319,9 @@ test.describe('evidence timeline', () => {
     await page.locator('.timeline-controls button', { hasText: 'Collapse all' }).click();
     await expect(page.locator('.timeline-list')).toHaveCount(0);
 
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
     await page.locator('.case-head', { hasText: 'second.invalid' }).click();
+    await openCaseSection(page, 'Evidence');
     await expect(page.locator('.timeline-list')).toBeVisible();
     await expect(page.locator('.timeline-controls button', { hasText: 'Material changes only' })).toHaveAttribute('aria-pressed', 'false');
     await expect(page.locator('.timeline-controls button', { hasText: 'Collapse all' })).toHaveAttribute('aria-expanded', 'true');
@@ -391,7 +415,7 @@ test.describe('cross-case comparison', () => {
     await expect(region).toContainText('not ownership or maliciousness conclusions');
 
     await region.getByRole('button', { name: 'Open dns-related.invalid' }).click();
-    await expect(page.locator('.case-head', { hasText: 'dns-related.invalid' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('heading', { name: 'dns-related.invalid', exact: true })).toBeVisible();
   });
 
   test('does not render a relationship section when no other case matches', async ({ page }) => {
@@ -441,6 +465,7 @@ test.describe('case report export', () => {
       }),
     ]);
 
+    await openCaseSection(page, 'Response');
     const downloadPromise = page.waitForEvent('download');
     await page.locator('.export-controls').getByRole('button', { name: 'Export JSON' }).click();
     const download = await downloadPromise;
@@ -479,6 +504,7 @@ test.describe('case report export', () => {
       }),
     ]);
 
+    await openCaseSection(page, 'Response');
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export Markdown' }).click();
     const download = await downloadPromise;
@@ -504,6 +530,7 @@ test.describe('case report export', () => {
       }),
     ]);
 
+    await openCaseSection(page, 'Response');
     const downloadPromise = page.waitForEvent('download');
     await page.locator('.export-controls').getByRole('button', { name: 'Export JSON' }).click();
     const download = await downloadPromise;
@@ -527,6 +554,7 @@ test.describe('case report export', () => {
     ]);
 
     // Check the "Include analyst notes" checkbox.
+    await openCaseSection(page, 'Response');
     await page.getByRole('checkbox', { name: 'Include analyst notes' }).check();
 
     const downloadPromise = page.waitForEvent('download');
@@ -547,8 +575,11 @@ test.describe('case report export', () => {
       caseRecord({ id: 'second-export', domain: 'second-export.invalid' }),
     ]);
 
+    await openCaseSection(page, 'Response');
     await page.getByRole('checkbox', { name: 'Include analyst notes' }).check();
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
     await page.locator('.case-head', { hasText: 'second-export.invalid' }).click();
+    await openCaseSection(page, 'Response');
 
     await expect(page.getByRole('checkbox', { name: 'Include analyst notes' })).not.toBeChecked();
   });
@@ -563,6 +594,7 @@ test.describe('case report export', () => {
       }),
     ]);
 
+    await page.getByRole('link', { name: 'All Cases', exact: true }).click();
     const downloadPromise = page.waitForEvent('download');
     await page.locator('.case-toolbar .top-actions button', { hasText: 'Export JSON' }).click();
     const download = await downloadPromise;
@@ -588,6 +620,7 @@ test.describe('case report export', () => {
       }),
     ]);
 
+    await openCaseSection(page, 'Response');
     const controls = page.locator('.export-controls');
     const notesCheckbox = controls.getByRole('checkbox', { name: 'Include analyst notes' });
     const attributionCheckbox = controls.getByRole('checkbox', { name: 'Include generator footer' });

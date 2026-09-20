@@ -282,7 +282,7 @@ function inspectRdapReverseSearchResponse(
     mappings.push(Object.freeze({
       property,
       propertyPath,
-      state: REGISTERED_PROPERTY_PATHS[property]?.includes(propertyPath)
+      state: Object.hasOwn(REGISTERED_PROPERTY_PATHS, property) && REGISTERED_PROPERTY_PATHS[property]?.includes(propertyPath)
         ? 'registered'
         : 'unrecognized',
     }));

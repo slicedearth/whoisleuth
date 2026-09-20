@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { buildPostureReport, fetchMtaStsPolicy, matchesMtaPattern, normalizeAuditDomain, normalizeDkimSelectors } from '../lib/domain-posture.mts';
 import { requiredValue } from './value-assertions.mts';
+import { validateDmarcExternalReporting } from '../lib/domain-posture-analysis.mts';
 
 const RSA_2048_PUBLIC_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoUwDmvRvwyuGHZ0vZBD3z+Zyusi3f+ccPP7s6IGnw5talY8ZpxC8SAB29A4zsGU8azxzEkhiiPeNlal0nBrVu5mfVeCJ8vUMIxiVZf3sSEpPRO9JM0KtF9FjujN2lR2c6pAFIUurSHR5zHsopgZUqzDIfy54PQ2UUMDgzy9avfmCqbStL+t7EHDPaydIw9PrKihG8pdhtiVEX0gbkmVnBSl3BLt5zmN/I7p6MnAJddRXZBQIljpGU4bQh2JpISKaewTpjicPVhmlYM09ssUWUkmIfI55Tf26HwO5N6z9hmEUpWbyVMe0hXTydNUgxJK+460H0f0QQdVHc8sDsgPEcwIDAQAB';
 
@@ -13,6 +14,7 @@ function strongInput(): Parameters<typeof buildPostureReport>[1] {
   return {
     spf: query(['v=spf1 include:_spf.example.net -all']),
     dmarc: query(['v=DMARC1; p=reject; sp=reject; np=reject; rua=mailto:dmarc@example.com']),
+    dmarcAuthorizations: [{ destination: 'example.com', reportType: 'aggregate', recordName: null, state: 'self', error: null }],
     mx: query([{ priority: 10, exchange: 'mail.example.com' }]),
     dnssec: { value: 'Signed', error: null },
     caa: query([{ critical: 0, issue: 'letsencrypt.org' }]),
@@ -31,6 +33,17 @@ function strongInput(): Parameters<typeof buildPostureReport>[1] {
 function byId(report: ReturnType<typeof buildPostureReport>, id: string) {
   return requiredValue(report.checks.find((item) => item.id === id));
 }
+
+test('malformed reporting evidence cannot become a passing posture check', async () => {
+  const input = strongInput();
+  input.dmarc = query(['v=DMARC1; p=reject; rua=mailto:reports@external.example.net']);
+  input.dmarcAuthorizations = await validateDmarcExternalReporting('example.test', input.dmarc, async () => query(['v=DMARC10']));
+  input.tlsRpt = query(['v=TLSRPTv1; rua=not-a-uri']);
+  const report = buildPostureReport('example.test', input);
+  assert.equal(byId(report, 'dmarc').status, 'warning');
+  assert.match(byId(report, 'dmarc').summary, /authorisation is incomplete/u);
+  assert.equal(byId(report, 'tls_rpt').status, 'danger');
+});
 
 describe('selector and MTA-STS hostname normalization', () => {
   test('normalizes IDNs and rejects non-domain audit targets', () => {
@@ -56,6 +69,11 @@ describe('selector and MTA-STS hostname normalization', () => {
     assert.equal(matchesMtaPattern('mail.example.com.', 'mail.example.com'), true);
     assert.equal(matchesMtaPattern('mx1.mail.example.com', '*.mail.example.com'), true);
     assert.equal(matchesMtaPattern('mail.example.com', '*.mail.example.com'), false);
+    assert.equal(matchesMtaPattern('sub.mx1.mail.example.com', '*.mail.example.com'), false);
+    assert.equal(matchesMtaPattern('MAIL.EXAMPLE.TEST.', '*.EXAMPLE.TEST.'), true);
+    assert.equal(matchesMtaPattern('notexample.test', '*.example.test'), false);
+    assert.equal(matchesMtaPattern('.example.test', '*.example.test'), false);
+    assert.equal(matchesMtaPattern('-bad.example.test', '*.example.test'), false);
   });
 });
 
@@ -100,6 +118,17 @@ describe('MTA-STS policy transport', () => {
 });
 
 describe('buildPostureReport', () => {
+  test('does not treat a multi-label MX as covered by a wildcard policy', () => {
+    const input = strongInput();
+    input.mx = query([{ priority: 10, exchange: 'sub.mail.example.test' }]);
+    input.mtaStsPolicy = {
+      text: 'version: STSv1\nmode: enforce\nmx: *.example.test\nmax_age: 86400\n',
+      contentType: 'text/plain', error: null,
+    };
+    const result = byId(buildPostureReport('example.test', input), 'mta_sts');
+    assert.equal(result.status, 'danger');
+    assert.match(result.detail ?? '', /sub\.mail\.example\.test/u);
+  });
   test('reports a fully configured domain without warnings or dangers', () => {
     const report = buildPostureReport('example.com', strongInput());
     assert.equal(report.summary.danger, 0);
@@ -193,6 +222,8 @@ describe('buildPostureReport', () => {
       'v=spf1 ip4:192.0.2.0/24 -all',
       'v=spf1 ip6:2001:db8::/32 -all',
       'v=spf1 ?ip4:192.0.2.1 -all',
+      'v=spf1 -include:invalid..example -all',
+      'v=spf1 -exists:invalid..example -all',
     ]) {
       input.spf = query([policy]);
       assert.equal(byId(buildPostureReport('example.com', input), 'defensive_mail_profile').status, 'warning', policy);

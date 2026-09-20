@@ -1,7 +1,6 @@
 // Covers lib/perceptual-hash.mts. Fixtures are built in-code rather than
-// committed as binary blobs: the decoder ignores PNG CRCs, so a structurally
-// valid chunk stream with placeholder CRCs is enough, and BMP/ICO containers
-// are just packed byte layouts. The key properties under test are that the
+// committed as binary blobs. PNG chunks have valid CRCs; BMP/ICO containers
+// include their complete masks. The key properties under test are that the
 // same underlying image rendered at different resolutions hashes to a *near*
 // (small Hamming distance) value while a different image hashes *far*, plus
 // that malformed input fails closed to null.
@@ -10,6 +9,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
 import { faviconPerceptualHash, hammingDistanceHex } from '../lib/perceptual-hash.mts';
+import { faviconTransparencyFixtures } from './favicon-image-fixtures.mts';
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 type PixelFunction = (x: number, y: number) => [number, number, number, number];
@@ -17,7 +17,8 @@ type PixelFunction = (x: number, y: number) => [number, number, number, number];
 function pngChunk(type: string, data: Buffer) {
   const length = Buffer.alloc(4);
   length.writeUInt32BE(data.length, 0);
-  const crc = Buffer.alloc(4); // decoder ignores CRCs
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(zlib.crc32(Buffer.concat([Buffer.from(type, 'ascii'), data])));
   return Buffer.concat([length, Buffer.from(type, 'ascii'), data, crc]);
 }
 
@@ -95,7 +96,7 @@ function icoWrapDib(size: number) {
       pixels[p] = lum; pixels[p + 1] = lum; pixels[p + 2] = lum; // BGR
     }
   }
-  const dib = Buffer.concat([header, pixels]);
+  const dib = Buffer.concat([header, pixels, Buffer.alloc(Math.ceil(size / 32) * 4 * size)]);
 
   const icoHeader = Buffer.alloc(6);
   icoHeader.writeUInt16LE(0, 0);
@@ -110,9 +111,7 @@ function icoWrapDib(size: number) {
   return Buffer.concat([icoHeader, entry, dib]);
 }
 
-// An 8-bit palettized BMP DIB in an ICO - the format Wikipedia/StackOverflow
-// and many classic favicon.ico files actually ship (verified live), and the
-// case that motivated widening the decoder past 24/32-bit.
+// An 8-bit palettized BMP DIB in an ICO, including a complete opaque AND mask.
 function icoWrap8bitDib(size: number) {
   const colors = 4; // small grayscale palette to keep the fixture compact
   const rowSize = Math.floor((8 * size + 31) / 32) * 4;
@@ -135,7 +134,7 @@ function icoWrap8bitDib(size: number) {
       pixels[y * rowSize + x] = (x + y) % colors; // 2D pattern -> informative hash
     }
   }
-  const dib = Buffer.concat([header, palette, pixels]);
+  const dib = Buffer.concat([header, palette, pixels, Buffer.alloc(Math.ceil(size / 32) * 4 * size)]);
 
   const icoHeader = Buffer.alloc(6);
   icoHeader.writeUInt16LE(0, 0);
@@ -187,7 +186,7 @@ function icoWrap32bitDib(size: number, alpha: number) {
       pixels[p] = lum; pixels[p + 1] = lum; pixels[p + 2] = lum; pixels[p + 3] = alpha;
     }
   }
-  const dib = Buffer.concat([header, pixels]);
+  const dib = Buffer.concat([header, pixels, Buffer.alloc(Math.ceil(size / 32) * 4 * size)]);
 
   const icoHeader = Buffer.alloc(6);
   icoHeader.writeUInt16LE(0, 0);
@@ -203,6 +202,18 @@ function icoWrap32bitDib(size: number, alpha: number) {
 }
 
 describe('faviconPerceptualHash', () => {
+  test('equivalent alpha, colour-key and masked pixels have the same informative hash', () => {
+    for (const fixture of faviconTransparencyFixtures()) {
+      assert.equal(faviconPerceptualHash(fixture.bytes), '5432aa315432aa31', fixture.name);
+    }
+  });
+
+  test('rejects incomplete non-alpha masks rather than treating unknown transparency as opaque', () => {
+    const fixture = faviconTransparencyFixtures().find((item) => item.name === '24-bit masked ICO')!;
+    const truncated = Buffer.from(fixture.bytes.subarray(0, fixture.bytes.length - 1));
+    truncated.writeUInt32LE(truncated.length - 22, 14);
+    assert.equal(faviconPerceptualHash(truncated), null);
+  });
   test('produces a 16-char hex hash for a PNG', () => {
     const hash = faviconPerceptualHash(patternPng(32, 6, 5));
     assert.ok(hash);

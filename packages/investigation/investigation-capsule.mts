@@ -1,4 +1,5 @@
 import type { CaseRecord } from '../cases/case-model.mts';
+import { LOOKUP_EVIDENCE_SCHEMA } from '../contracts/lookup-evidence.mts';
 import {
   canonicalArtifactJsonV2,
   sha256ArtifactDigestV2,
@@ -20,6 +21,7 @@ import {
   INVESTIGATION_CAPSULE_VERSION,
   PUBLIC_INVESTIGATION_CAPSULE_VERSION,
   SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS,
+  investigationCapsuleContracts,
 } from '../contracts/investigation-portability.mts';
 
 export {
@@ -143,7 +145,26 @@ function analystProjection(record: CaseRecord | null | undefined): Investigation
   };
 }
 
+/** Links admitted projections; this does not authenticate their observations. */
+export function investigationCapsuleProjectionsMatch(
+  target: InvestigationCapsule['target'],
+  brief: Pick<LookupInvestigationBrief, 'target' | 'targetType' | 'relationships'>,
+  graph: Pick<LookupAssetGraph, 'targetId' | 'nodes' | 'edges' | 'truncated'>,
+): boolean {
+  const targets = graph.nodes.filter((node) => node.kind === 'target');
+  return target.value === brief.target && target.type === brief.targetType
+    && targets.length === 1 && targets[0]?.id === graph.targetId
+    && targets[0]?.label === target.value
+    && brief.relationships.nodes === graph.nodes.length
+    && brief.relationships.edges === graph.edges.length
+    && brief.relationships.truncated === graph.truncated;
+}
+
 export async function buildInvestigationCapsule(input: BuildInvestigationCapsuleInput): Promise<InvestigationCapsule> {
+  const target = { value: input.brief.target, type: input.brief.targetType };
+  if (!investigationCapsuleProjectionsMatch(target, input.brief, input.graph)) {
+    throw new TypeError('The investigation brief and graph must describe the same target and retained relationships.');
+  }
   const analystRecords = input.includeAnalystRecords ? analystProjection(input.caseRecord) : null;
   const [evidenceDigest, briefDigest, graphDigest, analystRecordsDigest] = await Promise.all([
     sha256ArtifactDigestV2(input.lookupEvidence),
@@ -159,7 +180,7 @@ export async function buildInvestigationCapsule(input: BuildInvestigationCapsule
     schemaVersion: INVESTIGATION_CAPSULE_VERSION,
     generatedAt: iso(input.generatedAt),
     application: { name: 'WHOISleuth', version: safeVersion(input.applicationVersion) },
-    target: { value: input.brief.target, type: input.brief.targetType },
+    target,
     sourceContracts: [
       { id: 'lookup-evidence', schema: evidenceSchema, version: evidenceVersion, digest: evidenceDigest, embedded: false },
       { id: 'investigation-brief', schema: LOOKUP_INVESTIGATION_BRIEF_SCHEMA, version: LOOKUP_INVESTIGATION_BRIEF_VERSION, digest: briefDigest, embedded: true },
@@ -200,13 +221,34 @@ export async function buildInvestigationCapsule(input: BuildInvestigationCapsule
   };
 }
 
-type PublicInvestigationCapsule = Omit<InvestigationCapsule, 'schemaVersion' | 'investigationBrief'> & Readonly<{
-  schemaVersion: typeof PUBLIC_INVESTIGATION_CAPSULE_VERSION;
+type PublicInvestigationCapsule = Omit<InvestigationCapsule, 'schemaVersion' | 'investigationBrief' | 'graphSnapshot'> & Readonly<{
+  schemaVersion: 2 | 3;
   investigationBrief: Readonly<Record<string, unknown>>;
+  graphSnapshot: Readonly<Record<string, unknown>>;
 }>;
 
 export type SupportedInvestigationCapsule = InvestigationCapsule
   | PublicInvestigationCapsule;
+
+/** Cross-file linkage after the caller has bounded and hashed the source file.
+ * This is neither a source-format validator nor an authenticity decision. */
+export function investigationCapsuleSourceIdentity(
+  target: unknown,
+  reference: unknown,
+  source: Readonly<{ schema: string | null; version: number | null; digest: string | null; query: unknown }>,
+): Readonly<{ schema: boolean; version: boolean; target: boolean; contentDigest: boolean; linked: boolean }> {
+  const object = (value: unknown): Record<string, unknown> | null => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  const expected = object(reference);
+  const capsuleTarget = object(target);
+  const sourceQuery = object(source.query);
+  const validReference = expected?.id === 'lookup-evidence' && expected.embedded === false;
+  const schema = validReference && expected.schema === LOOKUP_EVIDENCE_SCHEMA && expected.schema === source.schema;
+  const version = validReference && Number.isSafeInteger(expected.version) && expected.version === source.version;
+  const targetMatches = typeof capsuleTarget?.value === 'string' && capsuleTarget.value.length > 0
+    && capsuleTarget.value === sourceQuery?.submitted && capsuleTarget.type === sourceQuery.type;
+  const contentDigest = validReference && typeof source.digest === 'string' && /^sha256:[a-f0-9]{64}$/u.test(source.digest) && expected.digest === source.digest;
+  return Object.freeze({ schema, version, target: targetMatches, contentDigest, linked: schema && version && targetMatches && contentDigest });
+}
 
 export async function verifyInvestigationCapsule(capsule: SupportedInvestigationCapsule): Promise<Readonly<{
   valid: boolean;
@@ -215,10 +257,8 @@ export async function verifyInvestigationCapsule(capsule: SupportedInvestigation
   analystRecords: boolean | null;
   whole: boolean;
 }>> {
-  const current = capsule.schemaVersion === INVESTIGATION_CAPSULE_VERSION;
-  const publicVersion = capsule.schemaVersion === PUBLIC_INVESTIGATION_CAPSULE_VERSION;
   const integrityRecord = capsule.integrity as unknown as Record<string, unknown>;
-  if ((!current && !publicVersion)
+  if (!investigationCapsuleContracts(capsule.schemaVersion)
     || integrityRecord.canonicalization !== SORTED_JSON_V2
     || integrityRecord.scope !== 'capsule excluding integrity') {
     return { valid: false, brief: false, graph: false, analystRecords: null, whole: false };

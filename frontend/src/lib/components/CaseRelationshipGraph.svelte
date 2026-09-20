@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import IntelligenceIcon, { type IntelligenceIconName } from '$lib/components/IntelligenceIcon.svelte';
   import type { CaseRecord } from '$lib/cases';
   import {
@@ -91,9 +92,7 @@
     try{
       const output=buildRelationshipGraphExport(summary,{format:exportFormat,...query});
       const blob=new Blob([output.content],{type:output.mimeType});
-      const url=URL.createObjectURL(blob);
-      const anchor=document.createElement('a');
-      anchor.href=url;anchor.download=output.filename;anchor.click();URL.revokeObjectURL(url);
+      downloadLocalFile(blob, output.filename);
       exportMessage=`Downloaded ${output.nodeCount} nodes and ${output.edgeCount} edges${output.truncated?' from a bounded partial graph':''}.`;
     }catch(cause){exportMessage=cause instanceof Error?cause.message:'Could not export the relationship graph.';}
   }

@@ -194,7 +194,7 @@ describe('Decision Fact v1 canonical model', () => {
     ]);
   });
 
-  test('applies exact caps before reading or copying excess values', () => {
+  test('refuses over-bound facts before reading excess values instead of silently retaining a prefix', () => {
     let excessReads = 0;
     const contributors = Array.from(
       { length: MAX_DECISION_FACT_CONTRIBUTORS },
@@ -249,18 +249,21 @@ describe('Decision Fact v1 canonical model', () => {
     );
     limitations.push('Excess limitation.');
 
-    const retained = createDecisionFact(fact('fact:bounded', {
-      contributors,
-      references,
-      contradictions,
-      limitations,
-      nextActions,
+    for (const [field, values] of Object.entries({ contributors, references, contradictions, limitations, nextActions })) {
+      assert.throws(() => createDecisionFact(fact('fact:bounded', { [field]: values })), /admission bound; no partial fact/u, field);
+    }
+    assert.throws(() => createDecisionFact(fact('fact:source-limitations', {
+      contributors: [contributor('source:bounded', { limitations })],
+    })), /contributor limitations exceeds/u);
+    const retained = createDecisionFact(fact('fact:exact', {
+      contributors: contributors.slice(0, MAX_DECISION_FACT_CONTRIBUTORS),
+      references: references.slice(0, MAX_DECISION_FACT_REFERENCES),
+      contradictions: contradictions.slice(0, MAX_DECISION_FACT_CONTRADICTIONS),
+      limitations: limitations.slice(0, MAX_DECISION_FACT_LIMITATIONS),
+      nextActions: nextActions.slice(0, MAX_DECISION_FACT_NEXT_ACTIONS),
     }));
-    assert.equal(retained.contributors.length, MAX_DECISION_FACT_CONTRIBUTORS);
-    assert.equal(retained.references.length, MAX_DECISION_FACT_REFERENCES);
-    assert.equal(retained.contradictions.length, MAX_DECISION_FACT_CONTRADICTIONS);
     assert.equal(retained.limitations.length, MAX_DECISION_FACT_LIMITATIONS);
-    assert.equal(retained.nextActions.length, MAX_DECISION_FACT_NEXT_ACTIONS);
+    assert.equal(retained.contributorCount, MAX_DECISION_FACT_CONTRIBUTORS);
     assert.equal(excessReads, 0);
 
     const facts = Array.from({ length: MAX_DECISION_FACTS }, (_, index) => fact(`fact:${String(index).padStart(2, '0')}`));
@@ -273,7 +276,8 @@ describe('Decision Fact v1 canonical model', () => {
       },
     });
     facts.length = 1_000_000;
-    assert.equal(buildDecisionFacts(facts).length, MAX_DECISION_FACTS);
+    assert.throws(() => buildDecisionFacts(facts), /admission bound; no partial fact/u);
+    assert.equal(buildDecisionFacts(facts.slice(0, MAX_DECISION_FACTS)).length, MAX_DECISION_FACTS);
     assert.equal(excessReads, 0);
   });
 

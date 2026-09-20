@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import path from 'node:path';
 
 import {
   playwrightJsonReporterEnvironment,
   playwrightJsonResultsPath,
   playwrightRunArtifacts,
   playwrightRunIdentity,
+  resolvePlaywrightRunArtifacts,
 } from '../tools/playwright-run-artifacts.mts';
 
 describe('Playwright run artefact ownership', () => {
@@ -39,6 +41,24 @@ describe('Playwright run artefact ownership', () => {
       PLAYWRIGHT_JSON_OUTPUT_FILE: '/tmp/browser-workspace/playwright-results/shard-3-of-4.json',
     });
     assert.equal(playwrightRunIdentity({ WHOISLEUTH_PLAYWRIGHT_RUN_KIND: 'performance' }), 'performance');
+  });
+
+  test('anchors every configured artefact to its checkout rather than an importing configuration', () => {
+    const root = path.resolve('fixture checkout');
+    for (const environment of [{}, {
+      WHOISLEUTH_PLAYWRIGHT_RUN_KIND: 'functional',
+      WHOISLEUTH_PLAYWRIGHT_SHARD: '3/4',
+    }, { WHOISLEUTH_PLAYWRIGHT_RUN_KIND: 'performance' }]) {
+      const relative = playwrightRunArtifacts(environment);
+      const configured = resolvePlaywrightRunArtifacts(root, environment);
+      assert.equal(configured.identity, relative.identity);
+      for (const key of ['authFile', 'jsonResults', 'htmlReport', 'testResults'] as const) {
+        assert.equal(configured[key], path.join(root, relative[key]));
+        assert.equal(path.isAbsolute(configured[key]), true);
+        assert.equal(path.resolve(root, 'e2e', configured[key]), configured[key]);
+      }
+      assert.equal(configured.jsonResults, playwrightJsonResultsPath(root, environment));
+    }
   });
 
   test('rejects malformed, conflicting, and out-of-range identities', () => {

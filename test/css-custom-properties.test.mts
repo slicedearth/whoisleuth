@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
@@ -26,7 +26,7 @@ test('every CSS custom-property reference has a definition or explicit fallback'
     for (const match of source.matchAll(/var\(\s*(--[a-z][\w-]*)(\s*,)?/giu)) {
       const property = match[1];
       if (property) references.push({
-        file: file.slice(FRONTEND_SOURCE.length + 1),
+        file: relative(FRONTEND_SOURCE, file),
         property,
         hasFallback: Boolean(match[2]),
       });

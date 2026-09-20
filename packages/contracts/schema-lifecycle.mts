@@ -19,7 +19,7 @@ type SchemaLifecycleObjectShape = Readonly<{
   path: string;
   requiredKeys: readonly string[];
   optionalKeys: readonly string[];
-  alternativeRequiredKeys?: readonly SchemaLifecycleAlternativeRequiredKeys[];
+  alternativeRequiredKeys: readonly SchemaLifecycleAlternativeRequiredKeys[];
   unknownKeys: 'discard_bounded' | 'preserve_bounded' | 'reject';
 }>;
 
@@ -46,15 +46,6 @@ type SchemaLifecycleShape = Readonly<{
   fixedArrays: readonly SchemaLifecycleFixedArrayShape[];
   normalisation: 'input_to_current' | 'preserve_bounded_document' | 'preserve_document' | 'preserve_signed_document' | 'project_known_fields';
   target: SchemaLifecycleTarget | null;
-  discriminator?: SchemaLifecycleVariantDiscriminator | null;
-}>;
-
-type SchemaLifecycleObjectShapeV4 = Omit<SchemaLifecycleObjectShape, 'alternativeRequiredKeys'> & Readonly<{
-  alternativeRequiredKeys: readonly SchemaLifecycleAlternativeRequiredKeys[];
-}>;
-
-type SchemaLifecycleShapeV4 = Omit<SchemaLifecycleShape, 'objects' | 'discriminator'> & Readonly<{
-  objects: readonly SchemaLifecycleObjectShapeV4[];
   discriminator: SchemaLifecycleVariantDiscriminator | null;
 }>;
 
@@ -155,7 +146,7 @@ type SchemaLifecycleContractReference = Readonly<{
   schema: string;
   versions: readonly number[];
   mode: 'direct' | 'embedded';
-  discriminator?: SchemaLifecycleConsumerDiscriminator | null;
+  discriminator: SchemaLifecycleConsumerDiscriminator | null;
 }>;
 
 type SchemaLifecycleConsumerDiscriminator = Readonly<{
@@ -182,20 +173,7 @@ type SchemaLifecycleConsumerEdge = Readonly<{
 }>;
 
 type SchemaLifecycleEmittedTarget = SchemaLifecycleTarget & Readonly<{
-  discriminator?: SchemaLifecycleVariantDiscriminator | null;
-}>;
-
-type SchemaLifecycleContractReferenceV4 = Omit<SchemaLifecycleContractReference, 'discriminator'> & Readonly<{
-  discriminator: SchemaLifecycleConsumerDiscriminator | null;
-}>;
-
-type SchemaLifecycleEmittedTargetV4 = SchemaLifecycleTarget & Readonly<{
   discriminator: SchemaLifecycleVariantDiscriminator | null;
-}>;
-
-type SchemaLifecycleConsumerEdgeV4 = Omit<SchemaLifecycleConsumerEdge, 'acceptedContracts' | 'emittedContract'> & Readonly<{
-  acceptedContracts: readonly SchemaLifecycleContractReferenceV4[];
-  emittedContract: SchemaLifecycleEmittedTargetV4 | null;
 }>;
 
 type SchemaLifecycleConsumerRelationship = Readonly<{
@@ -237,10 +215,6 @@ type SchemaLifecycleFixture = Readonly<{
   shapeId?: string | null;
 }>;
 
-type SchemaLifecycleFixtureV4 = Omit<SchemaLifecycleFixture, 'shapeId'> & Readonly<{
-  shapeId: string;
-}>;
-
 type SchemaLifecycleFamily = Readonly<{
   id: string;
   owner: string;
@@ -250,7 +224,10 @@ type SchemaLifecycleFamily = Readonly<{
   fixtures: readonly SchemaLifecycleFixture[];
 }>;
 
-type SchemaLifecycleMetadataBase = Readonly<{
+export const SCHEMA_LIFECYCLE_METADATA_VERSION = 4 as const;
+
+type SchemaLifecycleMetadata = Readonly<{
+  metadataVersion: typeof SCHEMA_LIFECYCLE_METADATA_VERSION;
   enforcement: 'declarative_only';
   shapes: readonly SchemaLifecycleShape[];
   boundProfiles: readonly SchemaLifecycleBoundProfile[];
@@ -259,60 +236,39 @@ type SchemaLifecycleMetadataBase = Readonly<{
   privacyProfiles: readonly SchemaLifecyclePrivacyProfile[];
   expiryProfiles: readonly SchemaLifecycleExpiryPolicy[];
   consumerEdges: readonly SchemaLifecycleConsumerEdge[];
-}>;
-
-type SchemaLifecycleMetadataV1 = SchemaLifecycleMetadataBase & Readonly<{
-  metadataVersion: 1;
-}>;
-
-type SchemaLifecycleMetadataV2 = SchemaLifecycleMetadataBase & Readonly<{
-  metadataVersion: 2;
   consumerRelationships: readonly SchemaLifecycleConsumerRelationship[];
 }>;
 
-type SchemaLifecycleMetadataV3 = SchemaLifecycleMetadataBase & Readonly<{
-  metadataVersion: 3;
-  consumerRelationships: readonly SchemaLifecycleConsumerRelationship[];
+type SchemaLifecycleFamilyWithMetadata = SchemaLifecycleFamily & Readonly<{
+  metadata: SchemaLifecycleMetadata;
 }>;
 
-type SchemaLifecycleMetadataV4 = Omit<SchemaLifecycleMetadataBase, 'consumerEdges' | 'shapes'> & Readonly<{
-  metadataVersion: 4;
-  shapes: readonly SchemaLifecycleShapeV4[];
-  consumerEdges: readonly SchemaLifecycleConsumerEdgeV4[];
-  consumerRelationships: readonly SchemaLifecycleConsumerRelationship[];
+/** Authoring omits the internal metadata version; normalised values can be rechecked. */
+export type SchemaLifecycleFamilyDefinition = SchemaLifecycleFamily & Readonly<{
+  metadata: Omit<SchemaLifecycleMetadata, 'metadataVersion' | 'shapes' | 'consumerEdges'> & Readonly<{
+    metadataVersion?: typeof SCHEMA_LIFECYCLE_METADATA_VERSION;
+    shapes: readonly (Omit<SchemaLifecycleShape, 'objects' | 'discriminator'> & Readonly<{
+      discriminator?: SchemaLifecycleVariantDiscriminator | null;
+      objects: readonly (Omit<SchemaLifecycleObjectShape, 'alternativeRequiredKeys'> & Readonly<{
+        alternativeRequiredKeys?: readonly SchemaLifecycleAlternativeRequiredKeys[];
+      }>)[];
+    }>)[];
+    consumerEdges: readonly (Omit<SchemaLifecycleConsumerEdge, 'acceptedContracts' | 'emittedContract'> & Readonly<{
+      acceptedContracts: readonly (Omit<SchemaLifecycleContractReference, 'discriminator'> & Readonly<{
+        discriminator?: SchemaLifecycleConsumerDiscriminator | null;
+      }>)[];
+      emittedContract: (SchemaLifecycleTarget & Readonly<{
+        discriminator?: SchemaLifecycleVariantDiscriminator | null;
+      }>) | null;
+    }>)[];
+  }>;
 }>;
-
-type SchemaLifecycleMetadata = SchemaLifecycleMetadataV1 | SchemaLifecycleMetadataV2 | SchemaLifecycleMetadataV3 | SchemaLifecycleMetadataV4;
-
-type SchemaLifecycleFamilyWithMetadataV1 = SchemaLifecycleFamily & Readonly<{
-  metadata: SchemaLifecycleMetadataV1;
-}>;
-
-export type SchemaLifecycleFamilyWithMetadataV2 = SchemaLifecycleFamily & Readonly<{
-  metadata: SchemaLifecycleMetadataV2;
-}>;
-
-export type SchemaLifecycleFamilyWithMetadataV3 = SchemaLifecycleFamily & Readonly<{
-  metadata: SchemaLifecycleMetadataV3;
-}>;
-
-export type SchemaLifecycleFamilyWithMetadataV4 = Omit<SchemaLifecycleFamily, 'fixtures'> & Readonly<{
-  fixtures: readonly SchemaLifecycleFixtureV4[];
-  metadata: SchemaLifecycleMetadataV4;
-}>;
-
-type SchemaLifecycleFamilyWithMetadata =
-  | SchemaLifecycleFamilyWithMetadataV1
-  | SchemaLifecycleFamilyWithMetadataV2
-  | SchemaLifecycleFamilyWithMetadataV3
-  | SchemaLifecycleFamilyWithMetadataV4;
 
 type SchemaLifecycleRegistry = readonly (SchemaLifecycleFamily | SchemaLifecycleFamilyWithMetadata)[];
 
 const FAMILY_KEYS = new Set(['id', 'owner', 'privacy', 'compatibility', 'contracts', 'fixtures']);
 const EXTENDED_FAMILY_KEYS = new Set([...FAMILY_KEYS, 'metadata']);
-const METADATA_V1_KEYS = new Set([
-  'metadataVersion',
+const METADATA_KEYS = new Set([
   'enforcement',
   'shapes',
   'boundProfiles',
@@ -321,14 +277,7 @@ const METADATA_V1_KEYS = new Set([
   'privacyProfiles',
   'expiryProfiles',
   'consumerEdges',
-]);
-const METADATA_V2_KEYS = new Set([
-  ...METADATA_V1_KEYS,
   'consumerRelationships',
-]);
-const METADATA_V3_KEYS = METADATA_V2_KEYS;
-const METADATA_V4_KEYS = new Set([
-  ...METADATA_V2_KEYS,
 ]);
 const COMPATIBILITY_KEYS = new Set([
   'id',
@@ -362,7 +311,6 @@ const CONTRACT_KEYS = new Set([
   'fixtureIds',
 ]);
 const TARGET_KEYS = new Set(['schema', 'version']);
-const EMITTED_TARGET_V4_KEYS = new Set([...TARGET_KEYS, 'discriminator']);
 const FIXTURE_KEYS = new Set([
   'id',
   'path',
@@ -376,11 +324,8 @@ const FIXTURE_KEYS = new Set([
   'expectedOutputFixtureId',
   'scope',
 ]);
-const FIXTURE_V4_KEYS = new Set([...FIXTURE_KEYS, 'shapeId']);
 const SHAPE_KEYS = new Set(['id', 'schema', 'versions', 'objects', 'fixedArrays', 'normalisation', 'target']);
-const SHAPE_V4_KEYS = new Set([...SHAPE_KEYS, 'discriminator']);
 const OBJECT_SHAPE_KEYS = new Set(['path', 'requiredKeys', 'optionalKeys', 'unknownKeys']);
-const OBJECT_SHAPE_V4_KEYS = new Set([...OBJECT_SHAPE_KEYS, 'alternativeRequiredKeys']);
 const ALTERNATIVE_REQUIRED_KEYS = new Set(['keys', 'resolution']);
 const FIXED_ARRAY_SHAPE_KEYS = new Set(['path', 'values']);
 const BOUND_PROFILE_KEYS = new Set(['id', 'bounds']);
@@ -396,7 +341,6 @@ const PRIVACY_PROFILE_KEYS = new Set([
 ]);
 const EXPIRY_POLICY_KEYS = new Set(['id', 'field', 'anchor', 'handling', 'phase', 'maximumLifetimeDays']);
 const CONTRACT_REFERENCE_KEYS = new Set(['schema', 'versions', 'mode']);
-const CONTRACT_REFERENCE_V3_KEYS = new Set([...CONTRACT_REFERENCE_KEYS, 'discriminator']);
 const CONSUMER_DISCRIMINATOR_KEYS = new Set(['path', 'values']);
 const CONTRACT_VARIANT_DISCRIMINATOR_KEYS = new Set(['path', 'value']);
 const CONSUMER_KEYS = new Set([
@@ -478,6 +422,7 @@ function ordinaryRecord(
   keys: ReadonlySet<string> | readonly ReadonlySet<string>[],
   label: string,
   budget?: MetadataCopyBudget,
+  optionalKeys: readonly string[] = [],
 ): Readonly<Record<string, unknown>> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new TypeError(`${label} must be an ordinary object.`);
@@ -490,12 +435,14 @@ function ordinaryRecord(
     ? keys
     : [keys as ReadonlySet<string>];
   const ownKeys = Reflect.ownKeys(value);
-  const selectedKeys = keySets.find((candidate) => ownKeys.length === candidate.size
-    && ownKeys.every((key) => typeof key === 'string' && candidate.has(key)));
+  const selectedKeys = keySets.find((candidate) => ownKeys.length >= candidate.size
+    && ownKeys.length <= candidate.size + optionalKeys.length
+    && [...candidate].every((key) => ownKeys.includes(key))
+    && ownKeys.every((key) => typeof key === 'string' && (candidate.has(key) || optionalKeys.includes(key))));
   if (!selectedKeys) {
     throw new TypeError(`${label} must use its exact registered fields.`);
   }
-  consumeMetadataSlots(budget, selectedKeys.size + 1);
+  consumeMetadataSlots(budget, ownKeys.length + 1);
   consumeMetadataSerialisedBytes(
     budget,
     2 + Math.max(0, ownKeys.length - 1) + (ownKeys as string[])
@@ -698,23 +645,23 @@ function copyEmittedTarget(
   value: unknown,
   label: string,
   budget: MetadataCopyBudget,
-  metadataVersion: 1 | 2 | 3 | 4,
 ): SchemaLifecycleEmittedTarget | null {
   if (value === null) return null;
   const source = ordinaryRecord(
     value,
-    metadataVersion === 4 ? EMITTED_TARGET_V4_KEYS : TARGET_KEYS,
+    TARGET_KEYS,
     label,
     budget,
+    ['discriminator'],
   );
-  const discriminator = metadataVersion === 4 && Object.hasOwn(source, 'discriminator')
+  const discriminator = Object.hasOwn(source, 'discriminator')
     && source.discriminator !== null
     ? copyVariantDiscriminator(source.discriminator, `${label} discriminator`, budget)
     : null;
   return Object.freeze({
     schema: boundedSchema(source.schema, `${label} schema`),
     version: positiveInteger(source.version, `${label} version`),
-    ...(metadataVersion === 4 ? { discriminator } : {}),
+    discriminator,
   });
 }
 
@@ -884,7 +831,7 @@ function copyContract(value: unknown, index: number): SchemaLifecycleContract {
 
 function copyFixture(value: unknown, index: number): SchemaLifecycleFixture {
   const label = `Schema lifecycle fixture ${index + 1}`;
-  const source = ordinaryRecord(value, [FIXTURE_KEYS, FIXTURE_V4_KEYS], label);
+  const source = ordinaryRecord(value, FIXTURE_KEYS, label, undefined, ['shapeId']);
   const role = source.role;
   const expectation = source.expectation;
   if (role !== 'input' && role !== 'historical' && role !== 'current') {
@@ -937,21 +884,21 @@ function copyObjectShape(
   index: number,
   shapeLabel: string,
   budget: MetadataCopyBudget,
-  metadataVersion: 1 | 2 | 3 | 4,
 ): SchemaLifecycleObjectShape {
   const label = `${shapeLabel} object ${index + 1}`;
   const source = ordinaryRecord(
     value,
-    metadataVersion === 4 ? OBJECT_SHAPE_V4_KEYS : OBJECT_SHAPE_KEYS,
+    OBJECT_SHAPE_KEYS,
     label,
     budget,
+    ['alternativeRequiredKeys'],
   );
   const requiredKeys = copyFieldArray(source.requiredKeys, `${label} required keys`, true, budget);
   const optionalKeys = copyFieldArray(source.optionalKeys, `${label} optional keys`, true, budget);
   if (requiredKeys.some((key) => optionalKeys.includes(key))) {
     throw new TypeError(`${label} required and optional keys must not overlap.`);
   }
-  const alternativeRequiredKeys = metadataVersion === 4
+  const alternativeRequiredKeys = Object.hasOwn(source, 'alternativeRequiredKeys')
     ? copyAlternativeRequiredKeys(source.alternativeRequiredKeys, `${label} alternative required keys`, budget)
     : Object.freeze([]);
   if (alternativeRequiredKeys.flatMap((group) => group.keys)
@@ -960,16 +907,14 @@ function copyObjectShape(
   }
   const unknownKeys = oneOf(
     source.unknownKeys,
-    metadataVersion === 4
-      ? ['discard_bounded', 'preserve_bounded', 'reject'] as const
-      : ['preserve_bounded', 'reject'] as const,
+    ['discard_bounded', 'preserve_bounded', 'reject'] as const,
     `${label} unknown-key handling`,
   );
   return Object.freeze({
     path: boundedMetadataPath(source.path, `${label} path`),
     requiredKeys,
     optionalKeys,
-    ...(metadataVersion === 4 ? { alternativeRequiredKeys } : {}),
+    alternativeRequiredKeys,
     unknownKeys,
   });
 }
@@ -992,14 +937,14 @@ function copyShape(
   value: unknown,
   index: number,
   budget: MetadataCopyBudget,
-  metadataVersion: 1 | 2 | 3 | 4,
 ): SchemaLifecycleShape {
   const label = `Schema lifecycle shape ${index + 1}`;
   const source = ordinaryRecord(
     value,
-    metadataVersion === 4 ? SHAPE_V4_KEYS : SHAPE_KEYS,
+    SHAPE_KEYS,
     label,
     budget,
+    ['discriminator'],
   );
   const objects = Object.freeze(denseArray(
     source.objects,
@@ -1007,7 +952,7 @@ function copyShape(
     MAX_NESTED_METADATA_COLLECTION,
     1,
     budget,
-  ).map((item, objectIndex) => copyObjectShape(item, objectIndex, label, budget, metadataVersion)));
+  ).map((item, objectIndex) => copyObjectShape(item, objectIndex, label, budget)));
   const fixedArrays = Object.freeze(denseArray(
     source.fixedArrays,
     `${label} fixed arrays`,
@@ -1021,9 +966,7 @@ function copyShape(
   }
   const normalisation = oneOf(
     source.normalisation,
-    metadataVersion === 4
-      ? ['input_to_current', 'preserve_bounded_document', 'preserve_document', 'preserve_signed_document', 'project_known_fields'] as const
-      : ['input_to_current', 'preserve_bounded_document', 'preserve_document', 'preserve_signed_document'] as const,
+    ['input_to_current', 'preserve_bounded_document', 'preserve_document', 'preserve_signed_document', 'project_known_fields'] as const,
     `${label} normalisation`,
   );
   const target = copyTarget(source.target, `${label} target`, budget);
@@ -1038,13 +981,9 @@ function copyShape(
     fixedArrays,
     normalisation,
     target,
-    ...(metadataVersion === 4
-      ? {
-        discriminator: source.discriminator === null
-          ? null
-          : copyVariantDiscriminator(source.discriminator, `${label} discriminator`, budget),
-      }
-      : {}),
+    discriminator: !Object.hasOwn(source, 'discriminator') || source.discriminator === null
+      ? null
+      : copyVariantDiscriminator(source.discriminator, `${label} discriminator`, budget),
   });
 }
 
@@ -1267,36 +1206,23 @@ function copyContractReference(
   index: number,
   consumerLabel: string,
   budget: MetadataCopyBudget,
-  metadataVersion: 1 | 2 | 3 | 4,
 ): SchemaLifecycleContractReference {
   const label = `${consumerLabel} accepted contract ${index + 1}`;
   const source = ordinaryRecord(
     value,
-    metadataVersion === 4
-      ? CONTRACT_REFERENCE_V3_KEYS
-      : metadataVersion === 3
-      ? [CONTRACT_REFERENCE_KEYS, CONTRACT_REFERENCE_V3_KEYS]
-      : CONTRACT_REFERENCE_KEYS,
+    CONTRACT_REFERENCE_KEYS,
     label,
     budget,
+    ['discriminator'],
   );
-  let discriminator: SchemaLifecycleConsumerDiscriminator | null | undefined;
-  if (metadataVersion >= 3) {
-    if (!Object.hasOwn(source, 'discriminator') || source.discriminator === null) {
-      discriminator = null;
-    } else {
-      discriminator = copyConsumerDiscriminator(
-        source.discriminator,
-        `${label} discriminator`,
-        budget,
-      );
-    }
-  }
+  const discriminator = !Object.hasOwn(source, 'discriminator') || source.discriminator === null
+    ? null
+    : copyConsumerDiscriminator(source.discriminator, `${label} discriminator`, budget);
   return Object.freeze({
     schema: boundedSchema(source.schema, `${label} schema`),
     versions: copyVersionArray(source.versions, `${label} versions`, budget),
     mode: oneOf(source.mode, ['direct', 'embedded'] as const, `${label} mode`),
-    ...(metadataVersion >= 3 ? { discriminator: discriminator ?? null } : {}),
+    discriminator,
   });
 }
 
@@ -1304,7 +1230,6 @@ function copyConsumerEdge(
   value: unknown,
   index: number,
   budget: MetadataCopyBudget,
-  metadataVersion: 1 | 2 | 3 | 4,
 ): SchemaLifecycleConsumerEdge {
   const label = `Schema lifecycle consumer ${index + 1}`;
   const source = ordinaryRecord(value, CONSUMER_KEYS, label, budget);
@@ -1327,13 +1252,11 @@ function copyConsumerEdge(
       referenceIndex,
       label,
       budget,
-      metadataVersion,
     ))),
     emittedContract: copyEmittedTarget(
       source.emittedContract,
       `${label} emitted contract`,
       budget,
-      metadataVersion,
     ),
     shapeIds: copyIdArray(source.shapeIds, `${label} shapes`, false, budget),
     boundProfileIds: copyIdArray(source.boundProfileIds, `${label} bound profiles`, false, budget),
@@ -1574,12 +1497,6 @@ function utf8Length(value: string): number {
   return bytes;
 }
 
-function metadataConsumerRelationships(
-  metadata: SchemaLifecycleMetadata,
-): readonly SchemaLifecycleConsumerRelationship[] {
-  return metadata.metadataVersion === 1 ? [] : metadata.consumerRelationships;
-}
-
 function validateMetadataSerialisedBudget(metadata: SchemaLifecycleMetadata): void {
   const serialised = JSON.stringify(metadata);
   if (utf8Length(serialised) > MAX_METADATA_SERIALISED_BYTES) {
@@ -1591,13 +1508,6 @@ function validateMetadataRelations(
   family: SchemaLifecycleFamily,
   metadata: SchemaLifecycleMetadata,
 ): void {
-  if (metadata.metadataVersion < 3 && (
-    metadata.serialisationProfiles.some((profile) => profile.propertyOrder === 'source_insertion')
-    || metadata.privacyProfiles.some((profile) => profile.network === 'explicit_bounded_passive_fast_or_deep')
-    || metadata.consumerEdges.some((edge) => edge.requestMode === 'explicit_bounded_passive_fast_or_deep')
-  )) {
-    throw new TypeError('Schema lifecycle metadata version 3 is required for extensible serialisation and Fast-or-Deep request policy.');
-  }
   const contractPairs = new Map(family.contracts.map((contract) => [`${contract.schema}\u0000${contract.version}`, contract]));
   const shapesById = new Map(metadata.shapes.map((shape) => [shape.id, shape]));
   const boundProfilesById = new Map(metadata.boundProfiles.map((profile) => [profile.id, profile]));
@@ -1606,7 +1516,7 @@ function validateMetadataRelations(
   const privacyProfilesById = new Map(metadata.privacyProfiles.map((profile) => [profile.id, profile]));
   const expiryProfilesById = new Map(metadata.expiryProfiles.map((profile) => [profile.id, profile]));
   const consumerEdgesById = new Map(metadata.consumerEdges.map((edge) => [edge.id, edge]));
-  const consumerRelationships = metadataConsumerRelationships(metadata);
+  const consumerRelationships = metadata.consumerRelationships;
   const consumerRelationshipsById = new Map(
     consumerRelationships.map((relationship) => [relationship.id, relationship]),
   );
@@ -1657,12 +1567,6 @@ function validateMetadataRelations(
     }
     const preservesExtensions = shape.objects.some((object) => object.unknownKeys === 'preserve_bounded');
     const discardsExtensions = shape.objects.some((object) => object.unknownKeys === 'discard_bounded');
-    if (metadata.metadataVersion < 3 && preservesExtensions) {
-      throw new TypeError(`Schema lifecycle shape ${shape.id} requires metadata version 3 for bounded extensions.`);
-    }
-    if (metadata.metadataVersion !== 4 && discardsExtensions) {
-      throw new TypeError(`Schema lifecycle shape ${shape.id} requires metadata version 4 for bounded projection.`);
-    }
     if (preservesExtensions && discardsExtensions) {
       throw new TypeError(`Schema lifecycle shape ${shape.id} must use one bounded extension policy.`);
     }
@@ -1685,7 +1589,7 @@ function validateMetadataRelations(
         && contracts.some((contract) => contract?.canonicalisation !== null))) {
       throw new TypeError(`Schema lifecycle shape ${shape.id} has inconsistent document integrity metadata.`);
     }
-    const discriminator = metadata.metadataVersion === 4 ? shape.discriminator ?? null : null;
+    const discriminator = shape.discriminator ?? null;
     if (discriminator) {
       if (shape.versions.length !== 1) {
         throw new TypeError(`Schema lifecycle shape ${shape.id} must qualify exactly one contract version.`);
@@ -1726,22 +1630,27 @@ function validateMetadataRelations(
     throw new TypeError('Every schema lifecycle contract must have at least one shape.');
   }
   const fixtureShapeIds = new Set<string>();
-  if (metadata.metadataVersion === 4) {
-    for (const fixture of family.fixtures) {
-      const shape = fixture.shapeId ? shapesById.get(fixture.shapeId) : null;
-      if (!shape
-        || shape.schema !== fixture.schema
-        || !shape.versions.includes(fixture.version)) {
-        throw new TypeError(`Schema lifecycle fixture ${fixture.id} must name a matching contract shape.`);
-      }
-      fixtureShapeIds.add(shape.id);
+  for (const fixture of family.fixtures) {
+    const candidates = metadata.shapes.filter((shape) => shape.schema === fixture.schema && shape.versions.includes(fixture.version));
+    // A routine fixture has one possible shape. Variants still require an
+    // explicit fixture binding; never choose arbitrarily between them.
+    const shape = fixture.shapeId
+      ? shapesById.get(fixture.shapeId)
+      : fixture.shapeId === undefined && candidates.length === 1 && !candidates[0]?.discriminator
+        ? candidates[0]
+        : null;
+    if (!shape
+      || shape.schema !== fixture.schema
+      || !shape.versions.includes(fixture.version)) {
+      throw new TypeError(`Schema lifecycle fixture ${fixture.id} must name a matching contract shape.`);
     }
-    for (const shape of metadata.shapes) {
-      const contracts = shape.versions.map((version) => contractPairs.get(`${shape.schema}\u0000${version}`));
-      if ((shape.discriminator !== null || contracts.some((contract) => contract?.lifecycle === 'retired'))
-        && !fixtureShapeIds.has(shape.id)) {
-        throw new TypeError(`Schema lifecycle shape ${shape.id} must have an exact repository fixture.`);
-      }
+    fixtureShapeIds.add(shape.id);
+  }
+  for (const shape of metadata.shapes) {
+    const contracts = shape.versions.map((version) => contractPairs.get(`${shape.schema}\u0000${version}`));
+    if ((shape.discriminator !== null || contracts.some((contract) => contract?.lifecycle === 'retired'))
+      && !fixtureShapeIds.has(shape.id)) {
+      throw new TypeError(`Schema lifecycle shape ${shape.id} must have an exact repository fixture.`);
     }
   }
 
@@ -1824,7 +1733,6 @@ function validateMetadataRelations(
 
   const acceptedShapeIds = new Set<string>();
   const emittedShapeIds = new Set<string>();
-  const coveredContractPairs = new Set<string>();
   for (const edge of metadata.consumerEdges) {
     if (edge.acceptedContracts.length === 0 && edge.emittedContract === null) {
       throw new TypeError(`Schema lifecycle consumer ${edge.id} must accept or emit a contract.`);
@@ -1852,13 +1760,11 @@ function validateMetadataRelations(
           || !contract.readable
           || acceptedSelections.has(selectionKey)
           || selectedShapes.some((shape) => acceptedContractShapes.has(`${key}\u0000${shape.id}`))
-          || (metadata.metadataVersion === 4
-            && ((qualified && (!reference.discriminator
-              || selectedShapes.length !== reference.discriminator.values.length))
-              || (!qualified && reference.discriminator !== null && reference.discriminator !== undefined)))) {
+          || (qualified && (!reference.discriminator
+            || selectedShapes.length !== reference.discriminator.values.length))) {
           throw new TypeError(`Schema lifecycle consumer ${edge.id} references an unreadable or duplicate contract.`);
         }
-        if (metadata.metadataVersion < 4 && reference.discriminator) {
+        if (!qualified && reference.discriminator) {
           const parentPath = parentMetadataPath(reference.discriminator.path);
           const field = metadataPathField(reference.discriminator.path);
           if (contractShapes.some((shape) => {
@@ -1873,7 +1779,6 @@ function validateMetadataRelations(
         }
         acceptedSelections.add(selectionKey);
         relevantContractPairs.add(key);
-        coveredContractPairs.add(key);
         if (selectedShapes.some((shape) => shape.normalisation === 'project_known_fields')) {
           if (contract.byteBudget === null) projectedContractWithoutByteBudget = true;
           else projectedContractBudgets.add(contract.byteBudget);
@@ -1881,7 +1786,7 @@ function validateMetadataRelations(
         for (const shape of selectedShapes) {
           shapeIds.add(shape.id);
           acceptedContractShapes.add(`${key}\u0000${shape.id}`);
-          acceptedShapeIds.add(shape.id);
+          acceptedShapeIds.add(`${key}\u0000${shape.id}`);
         }
       }
     }
@@ -1898,17 +1803,15 @@ function validateMetadataRelations(
         : contractShapes;
       if (!emitted
         || !emitted.emitted
-        || (metadata.metadataVersion === 4
-          && ((qualified && selectedShapes.length !== 1)
-            || (!qualified && edge.emittedContract.discriminator !== null
-              && edge.emittedContract.discriminator !== undefined)))) {
+        || (qualified && selectedShapes.length !== 1)
+        || (!qualified && edge.emittedContract.discriminator !== null
+          && edge.emittedContract.discriminator !== undefined)) {
         throw new TypeError(`Schema lifecycle consumer ${edge.id} must emit a registered writable contract.`);
       }
       relevantContractPairs.add(key);
-      coveredContractPairs.add(key);
       for (const shape of selectedShapes) {
         shapeIds.add(shape.id);
-        emittedShapeIds.add(shape.id);
+        emittedShapeIds.add(`${key}\u0000${shape.id}`);
       }
     }
     if (shapeIds.size !== edge.shapeIds.length || edge.shapeIds.some((id) => !shapeIds.has(id))) {
@@ -2005,25 +1908,19 @@ function validateMetadataRelations(
   }
   for (const contract of family.contracts) {
     const key = `${contract.schema}\u0000${contract.version}`;
-    if (metadata.metadataVersion < 4) {
-      if ((contract.readable || contract.emitted) && !coveredContractPairs.has(key)) {
-        throw new TypeError('Every readable or emitted schema lifecycle contract must have a consumer edge.');
-      }
-      continue;
-    }
     const contractShapeIds = shapeIdsByContract.get(key) ?? new Set<string>();
     if ([...contractShapeIds].some((id) => {
       const shape = shapesById.get(id);
       return shape?.discriminator !== null
         && shape?.discriminator !== undefined
         && !(contractPairs.get(key)?.lifecycle === 'retired' && fixtureShapeIds.has(id))
-        && !acceptedShapeIds.has(id)
-        && !emittedShapeIds.has(id);
+        && !acceptedShapeIds.has(`${key}\u0000${id}`)
+        && !emittedShapeIds.has(`${key}\u0000${id}`);
     })) {
       throw new TypeError(`Schema lifecycle contract ${contract.schema} v${contract.version} has an uncovered shape variant.`);
     }
-    const hasReader = [...contractShapeIds].some((id) => acceptedShapeIds.has(id));
-    const hasWriter = [...contractShapeIds].some((id) => emittedShapeIds.has(id));
+    const hasReader = [...contractShapeIds].some((id) => acceptedShapeIds.has(`${key}\u0000${id}`));
+    const hasWriter = [...contractShapeIds].some((id) => emittedShapeIds.has(`${key}\u0000${id}`));
     if (contract.readable !== hasReader || contract.emitted !== hasWriter) {
       throw new TypeError(`Schema lifecycle contract ${contract.schema} v${contract.version} must exactly aggregate its readable and emitted shape variants.`);
     }
@@ -2038,14 +1935,10 @@ function validateMetadataRelations(
   validateMetadataSerialisedBudget(metadata);
 }
 
-export function defineSchemaLifecycleFamily(value: SchemaLifecycleFamilyWithMetadataV1): SchemaLifecycleFamilyWithMetadataV1;
-export function defineSchemaLifecycleFamily(value: SchemaLifecycleFamilyWithMetadataV2): SchemaLifecycleFamilyWithMetadataV2;
-export function defineSchemaLifecycleFamily(value: SchemaLifecycleFamilyWithMetadataV3): SchemaLifecycleFamilyWithMetadataV3;
-export function defineSchemaLifecycleFamily(value: SchemaLifecycleFamilyWithMetadataV4): SchemaLifecycleFamilyWithMetadataV4;
-export function defineSchemaLifecycleFamily(value: SchemaLifecycleFamilyWithMetadata): SchemaLifecycleFamilyWithMetadata;
+export function defineSchemaLifecycleFamily(value: SchemaLifecycleFamilyDefinition): SchemaLifecycleFamilyWithMetadata;
 export function defineSchemaLifecycleFamily(value: SchemaLifecycleFamily): SchemaLifecycleFamily;
 export function defineSchemaLifecycleFamily(
-  value: SchemaLifecycleFamily | SchemaLifecycleFamilyWithMetadata,
+  value: SchemaLifecycleFamily | SchemaLifecycleFamilyDefinition,
 ): SchemaLifecycleFamily | SchemaLifecycleFamilyWithMetadata {
   const metadataDescriptor = value && typeof value === 'object'
     ? Object.getOwnPropertyDescriptor(value, 'metadata')
@@ -2076,13 +1969,13 @@ export function defineSchemaLifecycleFamily(
   validateFamilyRelations(family);
   if (!metadataDescriptor) {
     if (contracts.some((contract) => contract.extensionPolicy === 'preserve_bounded')) {
-      throw new TypeError('Schema lifecycle metadata version 3 is required for bounded extensions.');
+      throw new TypeError('Schema lifecycle metadata is required for bounded extensions.');
     }
     if (contracts.some((contract) => contract.extensionPolicy === 'discard_bounded'
       || contract.lifecycle === 'retired')
       || fixtures.some((fixture) => Object.hasOwn(fixture, 'shapeId')
         || fixture.expectation === 'historical_output_exact')) {
-      throw new TypeError('Schema lifecycle metadata version 4 is required for retired or projected contracts.');
+      throw new TypeError('Schema lifecycle metadata is required for retired or projected contracts.');
     }
     return family;
   }
@@ -2094,25 +1987,15 @@ export function defineSchemaLifecycleFamily(
   };
   const metadataSource = ordinaryRecord(
     source.metadata,
-    [METADATA_V1_KEYS, METADATA_V2_KEYS, METADATA_V3_KEYS, METADATA_V4_KEYS],
+    METADATA_KEYS,
     'Schema lifecycle metadata',
     metadataBudget,
+    ['metadataVersion'],
   );
   const metadataVersion = metadataSource.metadataVersion;
-  const hasConsumerRelationships = Object.hasOwn(metadataSource, 'consumerRelationships');
-  if ((metadataVersion !== 1 && metadataVersion !== 2 && metadataVersion !== 3 && metadataVersion !== 4)
-    || metadataSource.enforcement !== 'declarative_only'
-    || (metadataVersion === 1 && hasConsumerRelationships)
-    || ((metadataVersion === 2 || metadataVersion === 3 || metadataVersion === 4) && !hasConsumerRelationships)) {
+  if ((Object.hasOwn(metadataSource, 'metadataVersion') && metadataVersion !== SCHEMA_LIFECYCLE_METADATA_VERSION)
+    || metadataSource.enforcement !== 'declarative_only') {
     throw new TypeError('Schema lifecycle metadata must use an exact registered declarative-only version.');
-  }
-  const usesVersion4Vocabulary = contracts.some((contract) => contract.extensionPolicy === 'discard_bounded'
-    || contract.lifecycle === 'retired')
-    || fixtures.some((fixture) => Object.hasOwn(fixture, 'shapeId')
-      || fixture.expectation === 'historical_output_exact');
-  if ((metadataVersion === 4) !== usesVersion4Vocabulary
-    || (metadataVersion === 4 && fixtures.some((fixture) => !Object.hasOwn(fixture, 'shapeId')))) {
-    throw new TypeError('Schema lifecycle metadata version 4 must exclusively and completely own its retired or projected vocabulary.');
   }
   const metadataCommon = {
     enforcement: 'declarative_only' as const,
@@ -2126,7 +2009,6 @@ export function defineSchemaLifecycleFamily(
       item,
       index,
       metadataBudget,
-      metadataVersion as 1 | 2 | 3 | 4,
     ))),
     boundProfiles: Object.freeze(denseArray(
       metadataSource.boundProfiles,
@@ -2173,31 +2055,20 @@ export function defineSchemaLifecycleFamily(
       item,
       index,
       metadataBudget,
-      metadataVersion as 1 | 2 | 3 | 4,
     ))),
   };
-  const consumerRelationships = metadataVersion === 1
-    ? Object.freeze([])
-    : Object.freeze(denseArray(
-      metadataSource.consumerRelationships,
-      'Schema lifecycle consumer relationships',
-      MAX_METADATA_COLLECTION,
-      0,
-      metadataBudget,
-    ).map((item, index) => copyConsumerRelationship(item, index, metadataBudget)));
-  const metadata: SchemaLifecycleMetadata = metadataVersion === 1
-    ? Object.freeze({ metadataVersion: 1 as const, ...metadataCommon })
-    : metadataVersion === 2
-      ? Object.freeze({ metadataVersion: 2 as const, ...metadataCommon, consumerRelationships })
-      : metadataVersion === 3
-        ? Object.freeze({ metadataVersion: 3 as const, ...metadataCommon, consumerRelationships })
-        : Object.freeze({
-          metadataVersion: 4 as const,
-          ...metadataCommon,
-          shapes: metadataCommon.shapes as readonly SchemaLifecycleShapeV4[],
-          consumerEdges: metadataCommon.consumerEdges as readonly SchemaLifecycleConsumerEdgeV4[],
-          consumerRelationships,
-        });
+  const consumerRelationships = Object.freeze(denseArray(
+    metadataSource.consumerRelationships,
+    'Schema lifecycle consumer relationships',
+    MAX_METADATA_COLLECTION,
+    0,
+    metadataBudget,
+  ).map((item, index) => copyConsumerRelationship(item, index, metadataBudget)));
+  const metadata: SchemaLifecycleMetadata = Object.freeze({
+    metadataVersion: SCHEMA_LIFECYCLE_METADATA_VERSION,
+    ...metadataCommon,
+    consumerRelationships,
+  });
   validateMetadataRelations(family, metadata);
   return Object.freeze({ ...family, metadata }) as SchemaLifecycleFamilyWithMetadata;
 }
@@ -2233,7 +2104,7 @@ function validateRegistryConsumerRelationships(
   for (const family of families) {
     if (!Object.hasOwn(family, 'metadata')) continue;
     const metadata = (family as SchemaLifecycleFamilyWithMetadata).metadata;
-    for (const relationship of metadataConsumerRelationships(metadata)) {
+    for (const relationship of metadata.consumerRelationships) {
       const source = consumers.get(relationship.sourceConsumerId);
       const target = consumers.get(relationship.targetConsumerId);
       if (!source || source.familyId !== family.id) {
@@ -2340,7 +2211,7 @@ export function defineSchemaLifecycleRegistry(value: SchemaLifecycleRegistry): S
         ...metadata.privacyProfiles.map((item) => item.id),
         ...metadata.expiryProfiles.map((item) => item.id),
         ...metadata.consumerEdges.map((item) => item.id),
-        ...metadataConsumerRelationships(metadata).map((item) => item.id),
+        ...metadata.consumerRelationships.map((item) => item.id),
       ];
       for (const id of familyMetadataIds) {
         if (metadataIds.has(id)) {
@@ -2358,13 +2229,10 @@ export function defineSchemaLifecycleRegistry(value: SchemaLifecycleRegistry): S
 export type {
   SchemaLifecycleContract,
   SchemaLifecycleContractReference,
-  SchemaLifecycleContractReferenceV4,
   SchemaLifecycleAlternativeRequiredKeys,
   SchemaLifecycleConsumerDiscriminator,
   SchemaLifecycleConsumerEdge,
-  SchemaLifecycleConsumerEdgeV4,
   SchemaLifecycleEmittedTarget,
-  SchemaLifecycleEmittedTargetV4,
   SchemaLifecycleConsumerRelationship,
   SchemaLifecycleBound,
   SchemaLifecycleBoundPhase,
@@ -2375,7 +2243,6 @@ export type {
   SchemaLifecycleFamilyWithMetadata,
   SchemaLifecycleRegistry,
   SchemaLifecycleFixture,
-  SchemaLifecycleFixtureV4,
   SchemaLifecycleFixtureExpectation,
   SchemaLifecycleFixtureRole,
   SchemaLifecyclePrivacy,
@@ -2384,20 +2251,14 @@ export type {
   SchemaLifecycleNotePolicy,
   SchemaLifecycleNetwork,
   SchemaLifecycleMetadata,
-  SchemaLifecycleMetadataV1,
-  SchemaLifecycleMetadataV2,
-  SchemaLifecycleMetadataV3,
-  SchemaLifecycleMetadataV4,
   SchemaLifecycleRetention,
   SchemaLifecycleRole,
   SchemaLifecycleRuntime,
   SchemaLifecycleHook,
   SchemaLifecycleHookRole,
   SchemaLifecycleObjectShape,
-  SchemaLifecycleObjectShapeV4,
   SchemaLifecycleFixedArrayShape,
   SchemaLifecycleShape,
-  SchemaLifecycleShapeV4,
   SchemaLifecycleVariantDiscriminator,
   SchemaLifecycleSerialisationProfile,
   SchemaLifecycleState,

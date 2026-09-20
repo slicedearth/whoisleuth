@@ -1,7 +1,10 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page, TestInfo } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { currentBrandProfileBrowserStore, lookupDomainIdentity, migrateLegacyBrowserData, runBulkScan, useTheme } from './helpers';
+import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, lookupDomainIdentity, migrateLegacyBrowserData, runBulkScan, useTheme } from './helpers';
+import { caseRecord, snapshot } from './case-test-fixtures';
+import { openCaseSection } from './console-navigation';
+import { PUBLIC_REFERENCE_DESTINATIONS } from '../frontend/src/lib/public-reference-navigation.ts';
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
 const REQUIRED_MANUAL_RULES = new Set([
@@ -9,28 +12,9 @@ const REQUIRED_MANUAL_RULES = new Set([
   'aria-valid-attr-value',
   'link-in-text-block',
 ]);
-const REVIEWED_INCOMPLETE_RULES_BY_STATE: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  'public-initial-dark-desktop': ['color-contrast'],
-  'public-resource-dark-desktop': ['color-contrast'],
-  'public-error-dark-desktop': ['color-contrast'],
-  'public-populated-expanded-light-mobile': ['color-contrast'],
-  'public-contact-unavailable-dark-mobile': ['color-contrast'],
-  'public-privacy-dark-mobile': ['color-contrast'],
-  'public-resources-dark-mobile': ['color-contrast'],
-  'public-terms-dark-mobile': ['color-contrast'],
-  'public-request-policy-dark-mobile': ['color-contrast'],
-  'console-initial-light-desktop': ['color-contrast'],
-  'console-brands-initial-light-desktop': ['color-contrast'],
-  'console-brand-assets-dark-mobile': ['color-contrast'],
-  'console-discover-initial-light-desktop': ['color-contrast'],
-  'console-monitor-initial-light-desktop': ['color-contrast'],
-  'console-drawer-dark-mobile': ['color-contrast', 'skip-link'],
-  'console-registry-support-expanded-dark-mobile': ['color-contrast'],
-  'console-lookup-populated-expanded-dark-desktop': ['color-contrast'],
-  'console-bulk-populated-light-mobile': ['color-contrast'],
-  'console-guided-investigation-request-review-light-desktop': ['color-contrast'],
-  'public-login-dark-mobile': ['color-contrast'],
-});
+// A gradient can prevent automated contrast measurement. Record the affected
+// nodes as unresolved, never as a WCAG pass or a required positive count.
+const AUTOMATION_LIMITATIONS = new Set(['color-contrast']);
 
 async function expectResolvedDocumentReferences(page: Page, state: string) {
   const integrity = await page.evaluate(() => {
@@ -62,22 +46,28 @@ async function expectNoAccessibilityViolations(page: Page, testInfo: TestInfo, s
     .options({ rules: { 'target-size': { enabled: true } } })
     .analyze();
   const durationMs = Date.now() - startedAt;
-  const reviewedIncompleteRules = REVIEWED_INCOMPLETE_RULES_BY_STATE[state];
-  expect(reviewedIncompleteRules, `${state} has no reviewed incomplete-rule contract`).toBeDefined();
-  expect(
-    results.incomplete.map((result) => result.id).sort(),
-    `${state} changed its reviewed incomplete accessibility rules`,
-  ).toEqual([...(reviewedIncompleteRules ?? [])].sort());
   await testInfo.attach(`axe-${state}.json`, {
     body: JSON.stringify({
       state,
       durationMs,
       passes: results.passes.length,
-      incomplete: results.incomplete.map((result) => result.id),
+      incomplete: results.incomplete.map((result) => ({
+        id: result.id, requiresManualReview: true,
+        nodes: result.nodes.map(node => ({ target: node.target, summary: node.failureSummary })),
+      })),
+      unresolved: results.incomplete.filter(result => REQUIRED_MANUAL_RULES.has(result.id)).map(result => ({
+        id: result.id, nodes: result.nodes.map(node => ({ target: node.target, summary: node.failureSummary })),
+      })),
+      violations: results.violations.map(result => ({
+        id: result.id, nodes: result.nodes.map(node => ({ target: node.target, summary: node.failureSummary })),
+      })),
       inapplicable: results.inapplicable.length,
     }),
     contentType: 'application/json',
   });
+  const unrecognised = results.incomplete.filter(result => !AUTOMATION_LIMITATIONS.has(result.id)
+    && !(state === 'console-drawer-dark-mobile' && result.id === 'skip-link'));
+  expect(unrecognised, `${state} introduced an unresolved accessibility rule`).toEqual([]);
   expect(results.violations, `${state} produced accessibility violations`).toEqual([]);
   const unresolvedRequiredRules = results.incomplete
     .filter((result) => REQUIRED_MANUAL_RULES.has(result.id))
@@ -95,6 +85,68 @@ async function expectNoAccessibilityViolations(page: Page, testInfo: TestInfo, s
 async function expectSequentialHeadingOrder(page: Page, state: string) {
   const results = await new AxeBuilder({ page }).withRules(['heading-order']).analyze();
   expect(results.violations, `${state} produced a heading-order violation`).toEqual([]);
+}
+
+for (const destination of PUBLIC_REFERENCE_DESTINATIONS) {
+  for (const theme of ['light', 'dark'] as const) {
+    test(`public reference accessibility ${destination.href} ${theme}`, async ({ page }, testInfo) => {
+      test.slow();
+      await useTheme(page, theme);
+      for (const viewport of [{ width: 1280, height: 720 }, { width: 320, height: 700 }]) {
+        await page.setViewportSize(viewport);
+        await page.goto(destination.href);
+        await expect(page).toHaveURL(destination.href);
+        await expect(page.locator('main h1')).toHaveCount(1);
+        await expect(page.locator('main h1')).toBeVisible();
+        await expect(page.locator('main')).not.toContainText('Internal Error');
+        const state = `reference-${destination.href.replaceAll('/', '-')}-${theme}-${viewport.width}`;
+        await expectNoAccessibilityViolations(page, testInfo, state);
+        await expectSequentialHeadingOrder(page, state);
+      }
+    });
+  }
+}
+
+for (const theme of ['dark', 'light'] as const) {
+  test(`reference navigation keeps unique landmarks and visible keyboard focus in ${theme} mode`, async ({ page }) => {
+    await useTheme(page, theme);
+    for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(viewport);
+      await page.goto('/resources');
+      await expect(page.getByRole('heading', { name: 'Evidence guides', exact: true }).last()).toBeVisible();
+      if (viewport.width < 1080) {
+        const navigator = page.getByText('Browse documentation', { exact: true });
+        await navigator.click();
+        await expect(page.locator('.reference-browser')).toHaveAttribute('open', '');
+      }
+      const navigation = page.getByRole('navigation', { name: 'Documentation', exact: true });
+      await expect(navigation).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Evidence guides', exact: true })).toHaveCount(1);
+      // This is a best-practice rule, not part of the WCAG-only scans above.
+      const landmarks = await new AxeBuilder({ page }).withRules(['landmark-unique']).analyze();
+      expect(landmarks.violations).toEqual([]);
+
+      const link = navigation.getByRole('link').first();
+      await expect(link).toBeVisible();
+      await link.focus();
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Shift+Tab');
+      await expect(link).toBeFocused();
+      const hasVisibleOutline = () => link.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return element.matches(':focus-visible')
+          && !['none', 'hidden'].includes(style.outlineStyle)
+          && Number.parseFloat(style.outlineWidth) > 0
+          && !['transparent', 'rgba(0, 0, 0, 0)'].includes(style.outlineColor);
+      });
+      expect(await hasVisibleOutline()).toBe(true);
+      // A negative control proves that the focus check cannot always pass.
+      const hiddenOutline = await page.addStyleTag({ content: '.reference-sidebar a { outline: none !important; }' });
+      expect(await hasVisibleOutline()).toBe(false);
+      await hiddenOutline.evaluate((element) => element.parentNode?.removeChild(element));
+      expect(await hasVisibleOutline()).toBe(true);
+    }
+  });
 }
 
 async function installLookupFixture(page: Page) {
@@ -205,7 +257,7 @@ test('scans representative public initial, error, populated, and expanded states
   await expect(mobileComparison).toHaveAttribute('open', '');
   await expectNoAccessibilityViolations(page, testInfo, 'public-populated-expanded-light-mobile');
   await expectSequentialHeadingOrder(page, 'public populated demo');
-  await page.getByRole('button', { name: 'Open synthetic case in Monitor' }).click();
+  await page.getByRole('button', { name: 'Open synthetic Case' }).click();
   await expect(page.getByRole('heading', { name: 'Document and revisit northstar-login.example' })).toBeVisible();
   await expectSequentialHeadingOrder(page, 'public monitor demo');
 });
@@ -244,7 +296,9 @@ test('scans authenticated desktop and expanded mobile drawer states', async ({ p
   for (const [route, state, heading] of [
     ['/brands', 'console-brands-initial-light-desktop', 'Brands'],
     ['/discover', 'console-discover-initial-light-desktop', 'Discover'],
-    ['/monitor', 'console-monitor-initial-light-desktop', 'Monitor'],
+    ['/monitor', 'console-inbox-initial-light-desktop', 'Review inbox'],
+    ['/monitor?view=watchlists', 'console-monitoring-initial-light-desktop', 'Monitoring'],
+    ['/cases', 'console-cases-initial-light-desktop', 'Cases'],
   ] as const) {
     await page.goto(route);
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
@@ -296,6 +350,39 @@ test('scans authenticated desktop and expanded mobile drawer states', async ({ p
   await page.getByText('Review BV profile', { exact: true }).click();
   await expectNoAccessibilityViolations(page, testInfo, 'console-registry-support-expanded-dark-mobile');
 });
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`scans every selected Case section in ${theme}`, async ({ page }, testInfo) => {
+    test.slow();
+    await page.setViewportSize(theme === 'light' ? { width: 1280, height: 800 } : { width: 320, height: 700 });
+    await migrateLegacyBrowserData(page, {
+      'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [caseRecord({
+        id: 'accessibility-case', domain: 'review.example', evidenceHistory: [snapshot()],
+      })] }),
+    }, { clearStorage: true, destination: '/cases?case=accessibility-case' });
+    await useTheme(page, theme);
+    await expect(page.getByRole('heading', { name: 'review.example', exact: true })).toBeVisible();
+    for (const section of ['Summary', 'Evidence', 'Assessment', 'Response', 'History'] as const) {
+      await openCaseSection(page, section);
+      const state = `console-case-${section.toLowerCase()}-${theme}`;
+      if (section === 'Evidence') {
+        const timeline = page.getByRole('region', { name: /^Evidence timeline/u });
+        const snapshotToggle = timeline.getByRole('button', { name: /^#1 Captured/u });
+        await snapshotToggle.click();
+        await expect(snapshotToggle).toHaveAttribute('aria-expanded', 'true');
+        await expectResolvedDocumentReferences(page, `${state}-expanded-snapshot`);
+        await snapshotToggle.click();
+        await expect(snapshotToggle).toHaveAttribute('aria-expanded', 'false');
+        await expectResolvedDocumentReferences(page, `${state}-collapsed-snapshot`);
+        await timeline.getByRole('button', { name: 'Collapse all', exact: true }).click();
+        await expectResolvedDocumentReferences(page, `${state}-collapsed-timeline`);
+        await timeline.getByRole('button', { name: 'Expand all', exact: true }).click();
+      }
+      await expectNoAccessibilityViolations(page, testInfo, state);
+      await expectSequentialHeadingOrder(page, state);
+    }
+  });
+}
 
 test('scans populated Lookup, Bulk, and guided-investigation states', async ({ page }, testInfo) => {
   test.slow();

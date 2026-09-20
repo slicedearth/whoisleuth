@@ -2,7 +2,7 @@ import {
   addCaseNote,
   dispositionLabel,
   editCase,
-  getCaseByDomain,
+  getCasesByDomain,
   isReviewedCaseDisposition,
   openCase,
   recordCaseConclusion,
@@ -11,6 +11,11 @@ import {
   type CaseConclusionInput,
   type CaseRecord,
 } from '../cases.ts';
+import type { CaseOpenSelection } from '../analysis/case-model.ts';
+import type { EvidenceChange } from '../cases.ts';
+import type { CaseRecheckAnswerContext } from '../../../../packages/cases/case-recheck-model.mts';
+import { CaseSelectionError } from '../../../../packages/cases/case-selection.mts';
+import { MAX_CASE_OBJECTIVE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
 import {
   abuseRecipientKindLabel,
   type ResolvedAbuseRecipient,
@@ -28,7 +33,7 @@ import {
 type CaseEvidenceInput = Record<string, unknown>;
 
 type LookupCaseApi = Readonly<{
-  getByDomain: typeof getCaseByDomain;
+  getForDomain: typeof getCasesByDomain;
   open: typeof openCase;
   addNote: typeof addCaseNote;
   edit: typeof editCase;
@@ -37,15 +42,23 @@ type LookupCaseApi = Readonly<{
   recordRecheck?: typeof recordCaseRecheckOutcome;
 }>;
 
+type LookupCaseReadResult = Readonly<{
+  record: CaseRecord | null;
+  records: CaseRecord[];
+  status: string;
+  sourceState: 'ready' | 'unavailable';
+}>;
+
 type LookupCaseActionResult = Readonly<{
   record: CaseRecord | null;
   status: string;
+  sourceState?: 'ready' | 'unavailable';
   clearNote?: boolean;
-  mutationOutcome?: Exclude<LocalMutationOutcome, 'stale'>;
+  mutationOutcome: Exclude<LocalMutationOutcome, 'stale'>;
 }>;
 
 const DEFAULT_CASE_API: LookupCaseApi = {
-  getByDomain: getCaseByDomain,
+  getForDomain: getCasesByDomain,
   open: openCase,
   addNote: addCaseNote,
   edit: editCase,
@@ -57,6 +70,12 @@ const DEFAULT_CASE_API: LookupCaseApi = {
 export type LookupConclusionEvidenceSelection = Readonly<{
   field: string;
   stance: 'supports' | 'contradicts' | 'unresolved';
+}>;
+
+export type LookupRecheckComparison = Readonly<{ available: boolean; changes: EvidenceChange[]; observedAt: string; detail: string }>;
+export type LookupRecheckOutcomeInput = Readonly<{
+  state: string; completeness: string; source: string; followUpAt: string | null;
+  limitations: readonly string[]; comparisonSummary: string; recheck?: CaseRecheckAnswerContext;
 }>;
 
 function pruneSuffix(pruned: number): string {
@@ -72,18 +91,23 @@ export class LookupCaseController {
     this.#api = api;
   }
 
-  async refresh(domain: string): Promise<LookupCaseActionResult> {
-    if (!domain) return { record: null, status: '' };
+  async refresh(domain: string, selectedId = ''): Promise<LookupCaseReadResult> {
+    if (!domain) return { record: null, records: [], status: '', sourceState: 'ready' };
     try {
+      const records = await this.#api.getForDomain(domain);
+      const record = selectedId ? records.find(item => item.id === selectedId) ?? null : records.length === 1 ? records[0]! : null;
       return {
-        record: await this.#api.getByDomain(domain),
-        status: '',
+        record, records,
+        status: record ? '' : selectedId ? 'The selected Case is unavailable for this domain. Choose another retained incident.' : records.length > 1 ? 'Select the intended incident before retaining evidence or decisions.' : '',
+        sourceState: 'ready',
       };
     } catch {
       return {
         record: null,
+        records: [],
+        sourceState: 'unavailable',
         status:
-          'Browser-local case context is unavailable. The collected lookup evidence remains available.',
+          'Saved Case context is unavailable. The collected lookup evidence remains available.',
       };
     }
   }
@@ -92,14 +116,18 @@ export class LookupCaseController {
     domain: string,
     evidence: CaseEvidenceInput,
     scanDepth: 'fast' | 'deep',
+    selection: CaseOpenSelection = {},
+    title = '',
   ): Promise<LookupCaseActionResult> {
-    if (!domain) return { record: null, status: '' };
+    if (!domain) return { record: null, status: '', mutationOutcome: 'rejected' };
+    if (selection.newIncident && (!title.trim() || title.trim().length > MAX_CASE_OBJECTIVE_LENGTH)) return { record: null, status: 'Enter a bounded incident title before creating a separate Case.', mutationOutcome: 'rejected' };
     try {
       const { record, created, pruned } = await this.#api.open({
         domain,
         source: 'lookup',
+        ...(selection.newIncident ? { title } : {}),
         evidence: { ...evidence, scanDepth },
-      });
+      }, selection);
       if (!created) {
         const refreshed = await this.#api.edit(record.id, {
           source: 'lookup',
@@ -108,17 +136,21 @@ export class LookupCaseController {
         return {
           record: refreshed.record,
           status: `Refreshed the retained Case evidence for ${refreshed.record.domain}.${pruneSuffix(refreshed.pruned)}`,
+          mutationOutcome: 'committed',
         };
       }
       return {
         record,
         status: `Opened a new case for ${record.domain}.${pruneSuffix(pruned)}`,
+        mutationOutcome: 'committed',
       };
     } catch (cause) {
       return {
         record: null,
         status:
           cause instanceof Error ? cause.message : 'Could not open the case.',
+        sourceState: cause instanceof CaseSelectionError ? 'ready' : 'unavailable',
+        mutationOutcome: failedLocalMutationOutcome(cause),
       };
     }
   }
@@ -126,8 +158,9 @@ export class LookupCaseController {
   async openReplay(
     domain: string,
     evidence: CaseEvidenceInput,
+    selection: CaseOpenSelection = {},
   ): Promise<LookupCaseActionResult> {
-    if (!domain) return { record: null, status: '' };
+    if (!domain) return { record: null, status: '', mutationOutcome: 'rejected' };
     const importedEvidence = {
       ...evidence,
       source: 'import',
@@ -138,22 +171,26 @@ export class LookupCaseController {
         domain,
         source: 'manual',
         evidence: importedEvidence,
-      });
+      }, selection);
       if (!created) {
         const refreshed = await this.#api.edit(record.id, { evidence: importedEvidence });
         return {
           record: refreshed.record,
           status: `Added the historical replay evidence to the Case for ${refreshed.record.domain}.${pruneSuffix(refreshed.pruned)}`,
+          mutationOutcome: 'committed',
         };
       }
       return {
         record,
-        status: `Created a browser-local Case for ${record.domain} from historical replay evidence.${pruneSuffix(pruned)}`,
+        status: `Created a Case for ${record.domain} from historical replay evidence.${pruneSuffix(pruned)}`,
+        mutationOutcome: 'committed',
       };
     } catch (cause) {
       return {
         record: null,
         status: cause instanceof Error ? cause.message : 'Could not save the replay evidence to a Case.',
+        sourceState: cause instanceof CaseSelectionError ? 'ready' : 'unavailable',
+        mutationOutcome: failedLocalMutationOutcome(cause),
       };
     }
   }
@@ -162,10 +199,10 @@ export class LookupCaseController {
     record: CaseRecord | null,
     note: string,
   ): Promise<LookupCaseActionResult> {
-    if (!record) return { record: null, status: '' };
+    if (!record) return { record: null, status: '', mutationOutcome: 'rejected' };
     const body = note.trim();
     if (!body) {
-      return { record, status: 'A note cannot be empty.' };
+      return { record, status: 'A note cannot be empty.', mutationOutcome: 'rejected' };
     }
     try {
       const updated = await this.#api.addNote(record.id, body);
@@ -173,12 +210,14 @@ export class LookupCaseController {
         record: updated.record,
         status: `Added a note to the case.${pruneSuffix(updated.pruned)}`,
         clearNote: true,
+        mutationOutcome: 'committed',
       };
     } catch (cause) {
       return {
         record,
         status:
           cause instanceof Error ? cause.message : 'Could not add the note.',
+        mutationOutcome: failedLocalMutationOutcome(cause),
       };
     }
   }
@@ -192,6 +231,7 @@ export class LookupCaseController {
       return {
         record: null,
         status: 'Create or open the analyst case before recording a classification.',
+        mutationOutcome: 'rejected',
       };
     }
     const reviewedDisposition = isReviewedCaseDisposition(disposition);
@@ -200,6 +240,7 @@ export class LookupCaseController {
       return {
         record,
         status: 'Select the reviewed reason before saving this disposition.',
+        mutationOutcome: 'rejected',
       };
     }
     try {
@@ -210,6 +251,7 @@ export class LookupCaseController {
       return {
         record: updated.record,
         status: `Saved the analyst disposition and review reason.${pruneSuffix(updated.pruned)}`,
+        mutationOutcome: 'committed',
       };
     } catch (cause) {
       return {
@@ -217,6 +259,7 @@ export class LookupCaseController {
         status: cause instanceof Error
           ? cause.message
           : 'Could not save the analyst classification.',
+        mutationOutcome: failedLocalMutationOutcome(cause),
       };
     }
   }
@@ -284,7 +327,7 @@ export class LookupCaseController {
     input: Readonly<{ objective: string; incidentUrl: string; retainExactUrl: boolean }>,
   ): Promise<LookupCaseActionResult> {
     if (!record) {
-      return { record: null, status: 'Create or open the analyst case before retaining Incident context.' };
+      return { record: null, status: 'Create or open the analyst case before retaining Incident context.', mutationOutcome: 'rejected' };
     }
     try {
       const save = this.#api.recordContext ?? recordCaseInvestigationContext;
@@ -292,40 +335,35 @@ export class LookupCaseController {
       return {
         record: updated.record,
         status: `${input.retainExactUrl ? 'Retained the exact Incident URL' : 'Retained only the Incident origin'} and investigation objective in this Case.${pruneSuffix(updated.pruned)}`,
+        mutationOutcome: 'committed',
       };
     } catch (cause) {
       return {
         record,
         status: cause instanceof Error ? cause.message : 'Could not retain the Incident context.',
+        mutationOutcome: failedLocalMutationOutcome(cause),
       };
     }
   }
 
   async recordRecheckOutcome(
     record: CaseRecord | null,
-    input: Readonly<{
-      state: string;
-      observedAt: string;
-      completeness: string;
-      comparisonSummary: string;
-      source: string;
-      followUpAt: string | null;
-      limitations: readonly string[];
-      collectionDepth: 'fast' | 'deep';
-    }>,
+    input: LookupRecheckOutcomeInput & Readonly<{ observedAt: string; collectionDepth: 'fast' | 'deep'; observationHostname?: string }>,
   ): Promise<LookupCaseActionResult> {
-    if (!record) return { record: null, status: 'Create or open the analyst case before recording a recheck outcome.' };
+    if (!record) return { record: null, status: 'Create or open the analyst case before recording a recheck outcome.', mutationOutcome: 'rejected' };
     try {
       const save = this.#api.recordRecheck ?? recordCaseRecheckOutcome;
       const updated = await save(record.id, input);
       return {
         record: updated.record,
         status: `Recorded the analyst-reviewed recheck outcome and linked comparison evidence.${pruneSuffix(updated.pruned)}`,
+        mutationOutcome: 'committed',
       };
     } catch (cause) {
       return {
         record,
         status: cause instanceof Error ? cause.message : 'Could not record the recheck outcome.',
+        mutationOutcome: failedLocalMutationOutcome(cause),
       };
     }
   }
@@ -339,6 +377,7 @@ export class LookupCaseController {
         record: null,
         status:
           'Create or open the analyst case before recording a response route.',
+        mutationOutcome: 'rejected',
       };
     }
     const alreadyRecorded = record.actions.some(
@@ -350,6 +389,7 @@ export class LookupCaseController {
       return {
         record,
         status: 'That response route is already recorded in this case.',
+        mutationOutcome: 'rejected',
       };
     }
     try {
@@ -359,6 +399,7 @@ export class LookupCaseController {
           recipient: route.contact,
           contactSource: route.source,
           routeObservedAt: route.observedAt,
+          routeReviewAfter: route.reviewAfter,
           contactLimitations: [...route.limitations],
           state: 'planned',
         },
@@ -366,6 +407,7 @@ export class LookupCaseController {
       return {
         record: updated.record,
         status: `Recorded the ${abuseRecipientKindLabel(route.kind).toLowerCase()} as a planned, human-reviewed action.${pruneSuffix(updated.pruned)}`,
+        mutationOutcome: 'committed',
       };
     } catch (cause) {
       return {
@@ -374,6 +416,7 @@ export class LookupCaseController {
           cause instanceof Error
             ? cause.message
             : 'Could not record the response route.',
+        mutationOutcome: failedLocalMutationOutcome(cause),
       };
     }
   }
@@ -392,6 +435,9 @@ export class LookupCaseController {
       };
     }
     const evidencePins = checkpointPinInputs(facts, selectedFields, { transitionExpectations });
+    if (evidencePins.length !== new Set(selectedFields).size) {
+      return { record, status: 'A selected fact or its source observation time is unavailable. Review the current selection before saving a checkpoint.', mutationOutcome: 'rejected' };
+    }
     if (!evidencePins.length) {
       return {
         record,

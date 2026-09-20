@@ -3,8 +3,57 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as generator from '../frontend/src/lib/analysis/typosquat-generator.ts';
 import { requiredValue } from './value-assertions.mts';
+import { normalizeDiscoverySuffix, publicSuffixForAsciiHostname } from '../lib/registrable-domain.mts';
 
 describe('provenance-aware typosquat generation', () => {
+  test('mutates only the registrable label and retains the full source and selected suffix', () => {
+    const options = { preset: 'custom', mutationTypes: ['character_omission', 'tld_embedding', 'tld_substitution'] };
+    const result = generator.generateTyposquatCandidateSet('example.co.uk', ['com.au'], options);
+    assert.equal(result.inputValid, true);
+    assert.deepEqual(result.candidates.find(item => item.domain === 'exampl.co.uk'), {
+      domain: 'exampl.co.uk', source: 'example.co.uk', tld: 'co.uk', mutationTypes: ['character_omission'],
+    });
+    assert.deepEqual(result.candidates.find(item => item.domain === 'example.com.au'), {
+      domain: 'example.com.au', source: 'example.co.uk', tld: 'com.au', mutationTypes: ['tld_substitution'],
+    });
+    assert.ok(result.candidates.some(item => item.domain === 'examplecouk.co.uk'));
+    assert.ok(result.candidates.some(item => item.domain === 'example-co-uk.co.uk'));
+    assert.ok(result.candidates.every(item => ['co.uk', 'com.au'].includes(item.tld)));
+    assert.ok(generator.estimateTyposquatCandidateCount('example.co.uk', ['com.au'], options).estimatedMaximum >= result.candidates.length);
+  });
+
+  test('suffix rules honour wildcard exceptions, reject subdomains and retain reserved single-label support', () => {
+    assert.equal(normalizeDiscoverySuffix(' .CO.UK '), 'co.uk');
+    assert.equal(normalizeDiscoverySuffix('foo.ck'), 'foo.ck');
+    assert.equal(normalizeDiscoverySuffix('www.ck'), null);
+    assert.equal(publicSuffixForAsciiHostname('example.co.uk'), 'co.uk');
+    assert.equal(publicSuffixForAsciiHostname('www.ck'), 'ck');
+    for (const suffix of ['co.invalid', 'example.com', 'co..uk', 'https://co.uk', 'co.uk/path', 'co.uk\n', 'x'.repeat(253)]) {
+      assert.equal(normalizeDiscoverySuffix(suffix), null, suffix);
+    }
+    for (const domain of ['portal.example.co.uk', 'co.uk', 'foo.ck', 'https://example.co.uk', 'example.co.uk/path', 'example..co.uk', 'example.co.uk.']) {
+      assert.equal(generator.generateTyposquatCandidateSet(domain, []).inputValid, false, domain);
+    }
+    assert.equal(generator.generateTyposquatCandidateSet('example.foo.ck', []).inputValid, true);
+    assert.equal(generator.generateTyposquatCandidateSet('www.ck', []).inputValid, true);
+    assert.equal(generator.generateTyposquatCandidateSet('example.invalid', []).inputValid, true);
+    assert.equal(generator.generateTyposquatCandidateSet('example.test', []).inputValid, true);
+  });
+
+  test('multi-part suffixes keep bounded deterministic output and do not mutate caller input', () => {
+    const suffixes = ['CO.UK', '.co.uk', 'com.au', `${'x'.repeat(63)}.ck`, 'co.invalid'];
+    const before = structuredClone(suffixes);
+    const result = generator.generateTyposquatCandidateSet('example', suffixes);
+    assert.ok(result.candidates.length > 0 && result.candidates.length <= generator.MAX_GENERATED_CANDIDATES);
+    assert.deepEqual([...new Set(result.candidates.map(item => item.tld))], ['co.uk', 'com.au', `${'x'.repeat(63)}.ck`]);
+    for (const candidate of result.candidates) {
+      assert.ok(candidate.domain.length <= 253);
+      for (const label of candidate.domain.split('.')) assert.match(label, /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u);
+    }
+    assert.deepEqual(suffixes, before);
+    assert.deepEqual(generator.generateTyposquatCandidateSet('example', suffixes), result);
+  });
+
   test('retains every mutation family that produces the same domain', () => {
     const candidates = generator.generateTyposquatCandidates('a.com', []);
     const qVariant = candidates.find((candidate) => candidate.domain === 'q.com');
@@ -181,7 +230,7 @@ describe('provenance-aware typosquat generation', () => {
   });
 
   test('returns a stable diagnostic contract for invalid inputs', () => {
-    for (const input of ['', 'a'.repeat(64), 'example.co.uk', 'bad\nlabel', null, {}, []]) {
+    for (const input of ['', 'a'.repeat(64), 'portal.example.co.uk', 'bad\nlabel', null, {}, []]) {
       const result = generator.generateTyposquatCandidateSet(input, ['com']);
       assert.equal(result.version, 1);
       assert.equal(result.inputValid, false);
@@ -618,7 +667,7 @@ describe('provenance-aware typosquat generation', () => {
   });
 
   test('estimate reports invalid and missing-TLD inputs without generating candidates', () => {
-    assert.deepEqual(generator.estimateTyposquatCandidateCount('example.co.uk', ['com']), {
+    assert.deepEqual(generator.estimateTyposquatCandidateCount('portal.example.co.uk', ['com']), {
       inputValid: false,
       preset: 'all',
       tldCount: 0,

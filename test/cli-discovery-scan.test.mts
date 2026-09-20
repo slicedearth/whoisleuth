@@ -153,6 +153,17 @@ describe('analyst-selected DNS resolvers', () => {
 });
 
 describe('discovery scan allowlists and relationships', () => {
+  test('retains an admitted multi-part suffix beyond a single-label byte limit', () => {
+    const suffix = `${'x'.repeat(63)}.ck`;
+    const domain = `example.${suffix}`;
+    const document = buildDiscoveryScanDocument(
+      [{ domain, source: `original.${suffix}`, tld: suffix, mutationTypes: ['character_omission'] }],
+      [success(0, domain)], metadata({ generatedCandidateCount: 1, selectedCandidateCount: 1 }), new Set(),
+    );
+    assert.equal(document.results[0]?.tld, suffix);
+    assert.equal(document.results[0]?.domain, domain);
+  });
+
   test('bounds and normalizes analyst allowlists without discarding evidence', async () => {
     const text = await readDiscoveryScanListBounded(Readable.from(['# reviewed\nONE.example\n']));
     const allowlist = parseDiscoveryScanAllowlist(text, (value) => classified(value.toLowerCase()));
@@ -189,6 +200,21 @@ describe('discovery scan allowlists and relationships', () => {
     const failed: BulkLookupResult = { index: 0, query: 'one.example', ok: false, error: '=HYPERLINK("https://example.invalid")' };
     const document = buildDiscoveryScanDocument(candidates().slice(0, 1), [failed], metadata({ generatedCandidateCount: 1, selectedCandidateCount: 1 }), new Set());
     assert.match(formatDiscoveryScanCsv(document), /"'=HYPERLINK\(""https:\/\/example\.invalid""\)"/u);
+  });
+
+  test('metadata CSV retains source versions, previous observation clocks and the original compact columns', () => {
+    const retained = { ...success(0, 'one.example'), observedAt: '2026-07-31T00:00:00.000Z', collectionOrigin: 'resumed_checkpoint' as const };
+    const document = buildDiscoveryScanDocument(candidates().slice(0, 1), [retained], metadata({ generatedCandidateCount: 1, selectedCandidateCount: 1 }), new Set());
+    const compact = formatDiscoveryScanCsv(document);
+    assert.equal(compact.split('\n')[0], 'domain,availability,confidence,review_lane,mutation_types,a,aaaa,ns,mx,relationship_ids,error');
+    const enriched = formatDiscoveryScanCsv(document, true);
+    assert.ok(enriched.split('\n')[1]!.startsWith(`${compact.split('\n')[1]},${document.schema},${document.version},`));
+    assert.match(enriched, /,2026-07-31T00:00:00\.000Z,2026-08-01T00:00:00\.000Z,resumed_checkpoint,deep,8,/u);
+    assert.match(enriched, /""whois"":""skipped""/u);
+    assert.equal(formatDiscoveryScanCsv(document), compact);
+    for (const option of ['--csv', '--json', '--plan', '--quiet']) {
+      assert.throws(() => parseCliArguments(['discover-scan', 'example.test', '--csv-with-metadata', option]), CliUsageError);
+    }
   });
 
   test('reversibly escapes terminal-unsafe collection errors in JSONL output', () => {
@@ -288,6 +314,61 @@ describe('discovery observation snapshots', () => {
     }
   });
 
+  test('resumed older observations cannot roll newer component baselines backwards', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-observed-order-'));
+    const snapshot = path.join(directory, 'observed.json');
+    const selected = candidates().slice(0, 1);
+    const configuration = { deep: true, resolverServers: [] };
+    const priorAt = '2026-08-02T00:00:00.000Z';
+    try {
+      await updateDiscoveryObservationSnapshot(snapshot, selected, [success(0, 'one.example')], configuration, priorAt);
+      const before = JSON.parse(await readFile(snapshot, 'utf8')).observations[0];
+      const resumed = { ...success(0, 'one.example', 'available'), observedAt: '2026-08-01T00:00:00.000Z', collectionOrigin: 'resumed_checkpoint' as const };
+      const report = await updateDiscoveryObservationSnapshot(snapshot, selected, [resumed], configuration, '2026-08-03T00:00:00.000Z');
+      const after = JSON.parse(await readFile(snapshot, 'utf8')).observations[0];
+      assert.deepEqual(report.changed, []);
+      assert.deepEqual(report.unavailableComponents, [{ domain: 'one.example', components: ['registration', 'dns'] }]);
+      assert.equal(after.registrationObservedAt, priorAt);
+      assert.equal(after.dnsObservedAt, priorAt);
+      assert.equal(after.observedAt, priorAt);
+      assert.equal(after.availabilityState, before.availabilityState);
+      assert.deepEqual(after.dns, before.dns);
+      assert.equal(after.latestAttemptState, 'partial');
+      assert.match(report.limitations.join(' '), /Older registration observations: 1/u);
+      const recovered = await updateDiscoveryObservationSnapshot(snapshot, selected, [success(0, 'one.example', 'available')], configuration, '2026-08-04T00:00:00.000Z');
+      assert.equal(recovered.changed.length, 1);
+      assert.deepEqual(recovered.unavailable, []);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  test('equal-time component conflicts preserve the baseline and identify unavailable comparisons', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-observed-tie-'));
+    const snapshot = path.join(directory, 'observed.json');
+    const selected = candidates().slice(0, 1);
+    const configuration = { deep: true, resolverServers: [] };
+    const at = '2026-08-02T00:00:00.000Z';
+    try {
+      await updateDiscoveryObservationSnapshot(snapshot, selected, [success(0, 'one.example')], configuration, at);
+      const duplicate = await updateDiscoveryObservationSnapshot(snapshot, selected, [success(0, 'one.example')], configuration, at);
+      assert.deepEqual(duplicate.unavailable, []);
+      assert.deepEqual(duplicate.changed, []);
+      const conflict = success(0, 'one.example', 'available');
+      assert.ok(conflict.ok);
+      const availability = (conflict.result as Record<string, unknown>).availability as Record<string, unknown>;
+      availability.dns = { status: 'success', records: { a: ['192.0.2.99'], aaaa: [], ns: [], mx: [] } };
+      const report = await updateDiscoveryObservationSnapshot(snapshot, selected, [conflict], configuration, at);
+      assert.deepEqual(report.changed, []);
+      assert.deepEqual(report.unavailableComponents, [{ domain: 'one.example', components: ['registration', 'dns'] }]);
+      assert.match(report.limitations.join(' '), /Conflicting equal-time registration observations: 1/u);
+      assert.match(report.limitations.join(' '), /Conflicting equal-time DNS observations: 1/u);
+      const stored = JSON.parse(await readFile(snapshot, 'utf8')).observations[0];
+      assert.equal(stored.availabilityState, 'registered');
+      assert.deepEqual(stored.dns.a, ['192.0.2.11']);
+      assert.equal(stored.latestRegistrationState, 'unavailable');
+      assert.equal(stored.latestAttemptState, 'partial');
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
   test('preserves complete DNS evidence when a later component is partial', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-observed-partial-'));
     const snapshot = path.join(directory, 'observed.json');
@@ -360,6 +441,33 @@ describe('discovery observation snapshots', () => {
 });
 
 describe('discover-scan runner', () => {
+  test('metadata CSV preserves a partial exit and emits events only on stderr', async () => {
+    const stdout = capture();
+    const stderr = capture();
+    let requests = 0;
+    const code = await runCli(['discover-scan', 'brand.example', '--scan-limit', '2', '--csv-with-metadata', '--events'], {
+      stdout: stdout.stream, stderr: stderr.stream, now: () => '2026-08-02T00:00:00.000Z',
+      loadTyposquatGenerator: async () => ({
+        MAX_GENERATION_TLDS: 20, MUTATION_FAMILY_IDS: ['character_omission'],
+        MUTATION_LABELS: { character_omission: 'Character omission' },
+        normalizeMutationFamilyIds: () => [], normalizeCustomDictionaryTerms: () => ({ values: [], rejectedCount: 0 }),
+        generateTyposquatCandidateSet: () => ({ inputValid: true, candidates: candidates(), version: 1 }),
+      }),
+      classifyQuery: classified,
+      runUnifiedLookup: async (item) => {
+        requests += 1;
+        if (item.value === 'two.example') throw new Error('=fixture failure');
+        return compactResult(item.value);
+      },
+    });
+    assert.equal(code, EXIT_CODES.PARTIAL_FAILURE);
+    assert.equal(requests, 2);
+    assert.match(stdout.value(), /^domain,availability,/u);
+    assert.match(stdout.value(), /,source_schema,source_version,observed_at,report_generated_at,/u);
+    assert.match(stdout.value(), /,'=fixture failure,whoisleuth\.cli\.discovery-scan,/u);
+    assert.doesNotMatch(stdout.value(), /\x1b|"event":/u);
+    assert.match(stderr.value(), /"event":"started"/u);
+  });
   test('rejects invalid or non-public resolver selections before planning or generation', async () => {
     let generationCalls = 0;
     for (const resolver of ['not-an-ip', '127.0.0.1', '192.0.2.1']) {

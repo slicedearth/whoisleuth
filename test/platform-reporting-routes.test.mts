@@ -34,6 +34,12 @@ describe('platform reporting routes', () => {
   });
 
   test('warns for the final review month and becomes stale at the exact deadline', () => {
+    const beforeReview = platformReportingCatalogueHealth(new Date('2026-09-03T23:59:59.999Z'));
+    assert.equal(beforeReview.state, 'unavailable');
+    assert.equal(beforeReview.ageDays, null);
+    const reviewed = platformReportingCatalogueHealth(new Date('2026-09-04T00:00:00Z'));
+    assert.equal(reviewed.state, 'current');
+    assert.equal(reviewed.ageDays, 0);
     const current = platformReportingCatalogueHealth(new Date('2027-02-01T00:00:00.000Z'));
     const limited = platformReportingCatalogueHealth(new Date('2027-02-02T00:00:00.000Z'));
     const stale = platformReportingCatalogueHealth(new Date('2027-03-04T00:00:00.000Z'));
@@ -43,6 +49,18 @@ describe('platform reporting routes', () => {
     assert.equal(stale.state, 'stale');
     assert.equal(stale.reviewDueInDays, 0);
     assert.throws(() => platformReportingCatalogueHealth(new Date('invalid')), /valid review time/iu);
+  });
+
+  test('withholds platform routes when the evaluation clock is unavailable or predates their review', () => {
+    for (const now of [new Date('invalid'), new Date('2026-09-03T23:59:59.999Z')]) {
+      const result = resolvePlatformReportingRoutes('https://t.me/example/7', [], now);
+      assert.equal(result.platform?.id, 'telegram');
+      assert.equal(result.state, 'unavailable');
+      assert.deepEqual(result.routes, []);
+      assert.doesNotMatch(result.limitation, /reached their recheck date/iu);
+    }
+    assert.equal(resolvePlatformReportingRoutes('https://t.me/example/7', [], new Date('2026-09-04T00:00:00Z')).state, 'found');
+    assert.equal(resolvePlatformReportingRoutes('https://t.me/example/7', [], new Date('2027-03-03T23:59:59.999Z')).state, 'found');
   });
 
   test('keeps every route on an official platform-controlled origin with reviewed dates and preparation guidance', () => {

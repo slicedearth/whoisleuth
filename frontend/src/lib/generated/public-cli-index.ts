@@ -1,6 +1,6 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
 export const PUBLIC_CLI_INDEX = {
-  "commandCount": 48,
+  "commandCount": 49,
   "groups": [
     "investigate",
     "respond",
@@ -265,6 +265,13 @@ export const PUBLIC_CLI_INDEX = {
       "mode": "offline"
     },
     {
+      "id": "case",
+      "summary": "Review and update ordinary local Case files",
+      "group": "respond",
+      "common": true,
+      "mode": "offline"
+    },
+    {
       "id": "case-pack",
       "summary": "Build a reviewed case package",
       "group": "respond",
@@ -383,42 +390,42 @@ export const PUBLIC_CLI_INDEX = {
       "label": "Campaign candidate review",
       "objective": "Prepare a bounded candidate set, collect a deliberately selected queue, and review retained evidence without asserting campaign attribution.",
       "subjectRequirement": "brand_or_domain",
-      "runnableByWorkflowRun": false
+      "runnableByWorkflowRun": true
     },
     {
       "id": "certificate-anomaly",
       "label": "Certificate anomaly review",
       "objective": "Review bounded certificate observations alongside current source-qualified domain evidence without treating issuance as proof of control or intent.",
       "subjectRequirement": "domain",
-      "runnableByWorkflowRun": false
+      "runnableByWorkflowRun": true
     },
     {
       "id": "registry-disagreement",
       "label": "Registry disagreement review",
       "objective": "Collect separately attributed registration evidence and review conflicting publications without selecting an arbitrary source as truth.",
       "subjectRequirement": "domain",
-      "runnableByWorkflowRun": false
+      "runnableByWorkflowRun": true
     },
     {
       "id": "evidence-handoff",
       "label": "Reviewed evidence handoff",
       "objective": "Verify, minimise, and package analyst-selected evidence for a deliberate handoff without transmitting or submitting it.",
       "subjectRequirement": "review_label",
-      "runnableByWorkflowRun": false
+      "runnableByWorkflowRun": true
     },
     {
       "id": "planned-domain-change",
       "label": "Planned domain change",
       "objective": "Review an analyst-authored desired state and prepare bounded change material without changing DNS, registry, mail, or hosted configuration.",
       "subjectRequirement": "domain",
-      "runnableByWorkflowRun": false
+      "runnableByWorkflowRun": true
     },
     {
       "id": "post-change-verification",
       "label": "Post-change verification",
       "objective": "Perform one explicit later observation and compare it with analyst-selected retained evidence after an authorised change.",
       "subjectRequirement": "domain",
-      "runnableByWorkflowRun": false
+      "runnableByWorkflowRun": true
     }
   ]
 } as const;

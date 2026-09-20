@@ -13,6 +13,9 @@ import type {
   LookupReviewActionBasis,
 } from './lookup-evidence-impact.ts';
 import {
+  MAX_LOOKUP_DECISION_DETAIL,
+  MAX_LOOKUP_DECISION_ENTRIES,
+  MAX_LOOKUP_DECISION_LABEL,
   MAX_LOOKUP_PRESENTED_ACTIONS,
   MAX_LOOKUP_SOURCE_ACTIONS,
   rankLookupNextActions,
@@ -20,6 +23,7 @@ import {
   type LookupNextAction,
 } from './lookup-decision-support.ts';
 import type { LookupTaskView } from './lookup-presentation.ts';
+import { LOOKUP_GUIDANCE_TASKS } from '../../../../packages/investigation/lookup-task-guidance.mts';
 
 export const LOOKUP_REVIEW_ACTION_MODEL_VERSION = 1 as const;
 
@@ -74,7 +78,7 @@ type ContextActionRule = Readonly<{
 const SAFE_ID = /^[a-z0-9](?:[a-z0-9._:-]{0,199})$/u;
 const SAFE_FRAGMENT = /^#[a-z0-9](?:[a-z0-9._:-]{0,159})$/u;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/u;
-const TASKS = new Set<LookupTaskView>(['general', 'acquisition', 'brand', 'incident', 'owned']);
+const TASKS = new Set<LookupTaskView>(LOOKUP_GUIDANCE_TASKS);
 const IMPORTANCE = new Set<DecisionFactImportance>(['high', 'medium', 'low']);
 const BASIS = new Set<LookupReviewActionBasis>([
   'decision_fact',
@@ -93,7 +97,7 @@ const FACT_BACKED_ACTION_IDS = new Set([
   'review-refresh-options',
   'inspect-limited-source',
 ]);
-const ALL_TASKS = Object.freeze(['general', 'acquisition', 'brand', 'incident', 'owned'] as const);
+const ALL_TASKS = LOOKUP_GUIDANCE_TASKS;
 const ACQUISITION_TASK = Object.freeze(['acquisition'] as const);
 const BRAND_TASK = Object.freeze(['brand'] as const);
 const OWNED_TASK = Object.freeze(['owned'] as const);
@@ -122,8 +126,8 @@ function validateSupport(support: LookupDecisionSupport): void {
   if (support.actions.length > MAX_LOOKUP_SOURCE_ACTIONS) {
     throw new RangeError(`Lookup decision support exceeds the ${MAX_LOOKUP_SOURCE_ACTIONS}-action bound.`);
   }
-  if (support.entries.length > 16) {
-    throw new RangeError('Lookup decision support exceeds the 16-entry bound.');
+  if (support.entries.length > MAX_LOOKUP_DECISION_ENTRIES) {
+    throw new RangeError(`Lookup decision support exceeds the ${MAX_LOOKUP_DECISION_ENTRIES}-entry bound.`);
   }
   const entryIds = new Set<string>();
   for (const entry of support.entries) {
@@ -131,8 +135,8 @@ function validateSupport(support: LookupDecisionSupport): void {
       || entryIds.has(entry.id)
       || (entry.state !== 'conflict' && entry.state !== 'uncertain')
       || !IMPORTANCE.has(entry.importance)
-      || !canonicalText(entry.title, 160)
-      || !canonicalText(entry.detail, 320)
+      || !canonicalText(entry.title, MAX_LOOKUP_DECISION_LABEL)
+      || !canonicalText(entry.detail, MAX_LOOKUP_DECISION_DETAIL)
       || !SAFE_FRAGMENT.test(entry.href)) {
       throw new TypeError(`Lookup decision support entry ${entry.id} is ambiguous or non-canonical.`);
     }
@@ -142,9 +146,9 @@ function validateSupport(support: LookupDecisionSupport): void {
   for (const action of support.actions) {
     if (!SAFE_ID.test(action.id)
       || actionIds.has(action.id)
-      || !canonicalText(action.label, 160)
-      || !canonicalText(action.reason, 320)
-      || !canonicalText(action.expectedOutcome, 320)
+      || !canonicalText(action.label, MAX_LOOKUP_DECISION_LABEL)
+      || !canonicalText(action.reason, MAX_LOOKUP_DECISION_DETAIL)
+      || !canonicalText(action.expectedOutcome, MAX_LOOKUP_DECISION_DETAIL)
       || !SAFE_FRAGMENT.test(action.href)
       || !IMPORTANCE.has(action.priority)) {
       throw new TypeError(`Lookup decision support action ${action.id} is ambiguous or non-canonical.`);

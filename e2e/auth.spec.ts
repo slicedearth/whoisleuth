@@ -10,6 +10,50 @@ import { expectVersionedSourceLink } from './helpers';
 // origin and console errors/warnings for every test in this file already.
 test.use({ storageState: { cookies: [], origins: [] } });
 
+test('sign-in retains a direct Case response link without creating the missing Case', async ({ page }) => {
+  const destination = '/cases?case=case-not-in-this-browser#case-response-case-not-in-this-browser';
+  await page.goto(destination);
+  await expect(page).toHaveURL(`/login?next=${encodeURIComponent(destination)}`);
+  await page.getByLabel('Password').fill(TEST_SITE_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(destination);
+  await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
+  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('That Case is not available in this workspace.');
+  await expect(page.locator('.case-head')).toHaveCount(0);
+});
+
+for (const authenticated of [false, true]) {
+  test(`preserves a protected investigation deep link ${authenticated ? 'with an existing session' : 'through sign-in'}`, async ({ page }) => {
+    const collectors: string[] = [];
+    page.on('request', (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.startsWith('/api/') && !['/api/login', '/api/session', '/api/capabilities'].includes(pathname)) {
+        collectors.push(pathname);
+      }
+    });
+    const target = '/lookup?q=continuation.invalid&task=brand&depth=deep#query';
+    const signIn = `/login?next=${encodeURIComponent(target)}`;
+    if (authenticated) {
+      await page.goto('/login');
+      await page.getByLabel('Password').fill(TEST_SITE_PASSWORD);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await expect(page).toHaveURL('/dashboard');
+      await page.goto(signIn);
+    } else {
+      await page.goto(target);
+      await expect(page).toHaveURL(signIn);
+      await page.getByLabel('Password').fill(TEST_SITE_PASSWORD);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+    }
+    await expect(page).toHaveURL(target);
+    await expect(page.locator('#query')).toHaveValue('continuation.invalid');
+    await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
+    await expect(page.getByLabel('Analyst question')).toHaveValue('brand');
+    await expect(page.getByRole('button', { name: 'Run lookup' })).toBeEnabled();
+    expect(collectors).toEqual([]);
+  });
+}
+
 test('signs in through the login form and back out again', async ({ page }) => {
   test.slow();
   // A local, all-levels console capture just for the password-leak check
@@ -179,7 +223,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
     expect(themeBox).not.toBeNull();
     expect(consoleBox).not.toBeNull();
     expect(menuBox).not.toBeNull();
-    await expect(themeButton.locator('.theme-trigger-label')).toHaveText('Theme');
+    await expect(themeButton.locator('.theme-trigger-label')).toHaveText(/\S/u);
     await expect(themeButton.locator('.theme-trigger-label')).toBeVisible();
     const menuTops = [themeBox!.y, consoleBox!.y, menuBox!.y];
     const menuBottoms = [themeBox!.y + themeBox!.height, consoleBox!.y + consoleBox!.height, menuBox!.y + menuBox!.height];

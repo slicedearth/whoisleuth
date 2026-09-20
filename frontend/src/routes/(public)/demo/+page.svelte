@@ -1,14 +1,17 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { onDestroy, onMount, tick } from 'svelte';
   import PublicConsoleCta from '$lib/components/PublicConsoleCta.svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
+  import DeferredSurface from '$lib/components/DeferredSurface.svelte';
+  import { preloadBestEffort } from '$lib/idle-preload';
   import {
     DEFERRED_MODULE_RECOVERY_DETAIL,
     loadDeferredModule,
     reloadDeferredModulePage,
   } from '$lib/deferred-module';
   import {
-    createSyntheticDemoState, MAX_SYNTHETIC_DEMO_NOTE_LENGTH,
+    createSyntheticDemoState, startSyntheticDemoScenario, type SyntheticDemoScenario, MAX_SYNTHETIC_DEMO_NOTE_LENGTH,
     normalizeSyntheticDemoState, parseSyntheticDemoState, SYNTHETIC_DEMO_CANDIDATES, SYNTHETIC_DEMO_PROFILE,
     SYNTHETIC_DEMO_STAGES, SYNTHETIC_DEMO_STORAGE_KEY,
     syntheticDemoCandidate, syntheticDemoLookupView, syntheticDemoRelationshipGroups, syntheticDemoStage,
@@ -26,6 +29,15 @@
   let demoState:ReturnType<typeof createSyntheticDemoState>=$state(createSyntheticDemoState());
   let view=$state<View>('dashboard');
   let message=$state('');
+  let practiceOpen=$state(false);
+  let practiceStarted=$state(false);
+  let practiceGeneration=$state(0);
+  function preloadCasePractice(){preloadBestEffort(()=>import('$lib/components/CasePractice.svelte'));}
+  onMount(()=>{
+    const reveal=()=>{if(window.location.hash==='#case-practice'){practiceOpen=true;practiceStarted=true;}};
+    reveal();window.addEventListener('hashchange',reveal);
+    return ()=>window.removeEventListener('hashchange',reveal);
+  });
   let candidateFilter=$state<CandidateFilter>('all');
   let relatedDomains=$state<string[]>([]);
   let demoVisualView=$state<DemoVisualView>('evidence');
@@ -113,7 +125,7 @@
   const relationshipGroups=$derived(syntheticDemoRelationshipGroups());
   const currentStageIndex=$derived(Math.max(0,SYNTHETIC_DEMO_STAGES.findIndex((stage)=>stage.id===view)));
   const stageDescriptions:Record<View,string>={
-    dashboard:'Choose an investigation task and begin with a synthetic Brand Profile.',
+    dashboard:'Choose an independent task. Each uses fixed, separately attributed evidence.',
     brands:'Define the official identity and trusted comparison boundary.',
     discover:'Generate a small, reviewable candidate set.',
     bulk:'Compare candidates consistently and choose one lead for deeper review.',
@@ -251,7 +263,12 @@
     demoWorkspace?.scrollIntoView({block:'start',behavior:reducedMotion?'auto':'smooth'});
     if(reducedMotion||!needsScroll)releaseWorkspaceHeight();
   }
-  function start(){save({started:true},'Guided synthetic investigation started.');void goToStage('brands');}
+  function start(scenario:SyntheticDemoScenario){
+    const next=startSyntheticDemoScenario(scenario);
+    save({...next},'Synthetic scenario started.');
+    discoverPreviewReady=false;candidateFilter='all';relatedDomains=[];demoVisualView='evidence';lookupFamily=null;
+    void goToStage(syntheticDemoStage(next));
+  }
   function loadProfile(){save({profileReady:true},'Synthetic profile loaded.');void goToStage('discover');}
   function generate(){discoverPreviewReady=true;message='Loaded three synthetic candidates.';}
   function handoffCandidates(){save({candidatesReady:true},'Handed three reviewed synthetic candidates to Bulk triage.');void goToStage('bulk');}
@@ -296,12 +313,7 @@
   function exportCase(){
     if(!buildSyntheticDemoExportView){message='The synthetic export workspace is unavailable.';return;}
     const payload=buildSyntheticDemoExportView(demoState,new Date().toISOString());
-    const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
-    const anchor=document.createElement('a');
-    anchor.href=url;
-    anchor.download='whoisleuth-synthetic-demo-case.json';
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadLocalFile(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}), 'whoisleuth-synthetic-demo-case.json');
     message='Synthetic case report created. It is clearly marked as demonstration data.';
   }
   onDestroy(()=>{
@@ -322,9 +334,14 @@
 <section class="demo-hero" class:started={demoState.started}>
   <p class="eyebrow">Public synthetic demo</p>
   <h1><span class="hero-full-title">Explore a synthetic domain investigation.</span><span class="hero-compact-title">Synthetic investigation</span></h1>
-  <p>Use Brands, Discover, Bulk, Lookup and Monitor with fictional reserved-domain data.</p>
+  <p>Inspect a suspicious domain, review a brand lookalike, or compare a reported change. No sign-in or live collection.</p>
   <div class="synthetic-flag">Synthetic demo · State resets with this tab</div>
 </section>
+
+<details id="case-practice" class="case-practice-entry card" bind:open={practiceOpen} ontoggle={event=>{if(event.currentTarget.isConnected&&event.currentTarget.open)practiceStarted=true;}}>
+  <summary onpointerenter={preloadCasePractice} onfocus={preloadCasePractice}>Practise with real Case forms</summary>
+  {#if practiceStarted}{#key practiceGeneration}<DeferredSurface load={()=>import('$lib/components/CasePractice.svelte')} props={{onreset:()=>{practiceGeneration+=1;}}} onready={()=>{if(practiceGeneration>0)document.getElementById('case-practice-title')?.focus();}} loadingLabel="Opening the isolated Case practice." unavailableLabel="Case practice could not be loaded." />{/key}{/if}
+</details>
 
 <nav class="demo-steps card" bind:this={demoSteps} aria-label="Synthetic tool substeps">
   {#each SYNTHETIC_DEMO_STAGES as item,index}
@@ -371,10 +388,12 @@
 {:else if view==='dashboard'}
   <section class="demo-panel card" aria-labelledby="dashboard-heading">
     <p class="eyebrow">Dashboard · Synthetic preview</p><h2 id="dashboard-heading" data-stage-heading tabindex="-1">Choose a focused investigation task</h2>
-    <p>The protected Dashboard summarises saved work and opens each tool. The counts below belong only to this demo.</p>
-    <div class="dashboard-summary"><article><span>Open cases</span><strong>0</strong></article><article><span>Watchlists</span><strong>0</strong></article><article><span>Brand profiles</span><strong>1 fixture</strong></article></div>
-    <div class="tool-preview"><span>Brands</span><span>Discover</span><span>Bulk</span><span>Lookup</span><span>Monitor</span></div>
-    <button class="primary" type="button" disabled={stageTransitioning} onpointerenter={()=>void ensureStage('brands')} onfocus={()=>void ensureStage('brands')} onclick={start}>Begin with Brands</button>
+    <p>Each scenario starts independently. Starting another replaces this tab’s demo progress, not saved Console work.</p>
+    <div class="scenario-grid independent-grid">
+      <article><h3>Suspicious domain</h3><p>Inspect a credential-lure fixture, separate observations from interpretation, and retain a Case for follow-up.</p><button class="primary" type="button" disabled={stageTransitioning} onpointerenter={()=>void ensureStage('lookup')} onfocus={()=>void ensureStage('lookup')} onclick={()=>start('suspicious-domain')}>Inspect suspicious domain</button></article>
+      <article><h3>Brand lookalike</h3><p>Start with an official Brand Profile, compare three candidates and investigate the strongest lead.</p><button class="btn" type="button" disabled={stageTransitioning} onpointerenter={()=>void ensureStage('brands')} onfocus={()=>void ensureStage('brands')} onclick={()=>start('brand-lookalike')}>Begin with Brands</button></article>
+      <article><h3>Reported change</h3><p>Open an existing synthetic Case, compare a later observation and export the evidence without treating change as proof of removal.</p><button class="btn" type="button" disabled={stageTransitioning} onpointerenter={()=>void ensureStage('monitor')} onfocus={()=>void ensureStage('monitor')} onclick={()=>start('reported-change')}>Compare a reported change</button></article>
+    </div>
   </section>
 {:else if view==='brands'}
   <section class="demo-panel card" aria-labelledby="brand-heading">
@@ -412,7 +431,7 @@
 
     <section class="demo-decision-brief card" aria-labelledby="demo-decision-title">
       <header><div><p class="eyebrow">Decision brief</p><h3 id="demo-decision-title">What needs analyst attention?</h3></div><span class="priority-cue">{selectedRiskBand}</span></header>
-      <div class="lookup-handoff"><div><p class="eyebrow">Case decision</p><strong>Retain the finding only when it warrants follow-up</strong><span>Create a tab-scoped synthetic case for comparison.</span></div><button class="primary" type="button" disabled={stageTransitioning} onpointerenter={()=>void ensureStage('monitor')} onfocus={()=>void ensureStage('monitor')} onclick={openCase}>Open synthetic case in Monitor</button></div>
+      <div class="lookup-handoff"><div><p class="eyebrow">Case decision</p><strong>Retain the finding only when it warrants follow-up</strong><span>Create a tab-scoped synthetic case for comparison.</span></div><button class="primary" type="button" disabled={stageTransitioning} onpointerenter={()=>void ensureStage('monitor')} onfocus={()=>void ensureStage('monitor')} onclick={openCase}>Open synthetic Case</button></div>
       <div class="decision-layout">
         <dl><div><dt>Registration</dt><dd>{selected.availability}</dd></div><div><dt>Candidate origin</dt><dd>{selected.mutation}</dd></div><div><dt>Evidence complete</dt><dd>{lookupCompleteEvidenceCount}</dd></div><div><dt>Evidence limited</dt><dd>{lookupLimitedEvidenceCount}</dd></div></dl>
         <div class="key-observations"><h4>Three review cues</h4><ol><li>Registry evidence reports the name as {selected.availability.toLowerCase()}.</li><li>The candidate was retained from {selected.provenance.source.toLowerCase()} evidence.</li><li>{#if selected.relationship}{selected.relationship.label} appears across {selected.relationship.relatedCandidates} candidates.{:else}No exact relationship lead appears in this fixture.{/if}</li></ol></div>
@@ -555,6 +574,12 @@
 <section class="demo-footer"><div><p>Ready for live investigation?</p><PublicConsoleCta /></div><p><a href="/">Return to the public overview</a></p></section>
 
 <style>
+  .case-practice-entry{padding:16px 22px;margin-bottom:24px;min-width:0}.case-practice-entry>summary{min-height:44px;align-content:center;font-weight:650}.case-practice-entry[open]>summary{margin-bottom:18px}
+  .scenario-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:22px;margin-top:24px}
+  .scenario-grid article{min-width:0;padding-top:16px;border-top:1px solid var(--border)}
+  .scenario-grid h3{margin:0;font-size:var(--text-md)}
+  .scenario-grid p{color:var(--muted);font-size:var(--text-sm);line-height:1.6}
+  .scenario-grid button{max-width:100%;min-height:44px;white-space:normal}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
   .demo-actions button,.candidate button,.case-actions button,.filter-bar button,.lookup-handoff button,.profile-handoff button{padding:9px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);font:700 var(--text-xs) var(--mono)}
   .demo-hero{max-width:900px}.demo-hero h1{margin:.25rem 0;font:700 clamp(1.9rem,4.4vw,3.1rem) var(--mono);letter-spacing:-.05em}.hero-compact-title{display:none}.demo-hero>p:not(.eyebrow){max-width:78ch;color:var(--muted);line-height:1.6}.synthetic-flag{display:inline-block;margin-top:9px;padding:7px 10px;border:1px solid var(--amber);border-radius:999px;color:var(--amber);font:700 var(--text-2xs) var(--mono)}
@@ -566,7 +591,7 @@
   .demo-panel{min-height:420px;padding:clamp(22px,4vw,38px)}.demo-panel:not(.card){padding-inline:0}.demo-panel>h2{margin:.25rem 0 8px;font:700 clamp(1.4rem,3vw,2rem) var(--mono)}.demo-panel>h2:focus{outline:none}.demo-panel>h2:focus-visible{outline:2px solid var(--focus);outline-offset:5px}.demo-panel>p:not(.eyebrow),.candidate p,.export-warning,.follow-up p{color:var(--muted);line-height:1.55}
   .deferred-demo-stage{display:flex;min-width:0;align-items:flex-start;flex-direction:column;justify-content:center}.deferred-demo-stage button{margin-top:10px}
   .demo-panel dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:24px 0}.demo-panel dl div{min-width:0;padding:14px;border:1px solid var(--border)}dt{color:var(--muted);font:600 var(--text-2xs) var(--mono);letter-spacing:.06em;text-transform:uppercase}dd{margin:6px 0 0;overflow-wrap:anywhere}code{color:var(--accent);font-family:var(--mono)}
-  .dashboard-summary,.configuration-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:24px 0}.dashboard-summary article,.configuration-grid article{padding:15px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.dashboard-summary span,.configuration-grid span{display:block;color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}.dashboard-summary strong,.configuration-grid strong{display:block;margin-top:7px;overflow-wrap:anywhere}.tool-preview,.preview-list{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0}.tool-preview span,.preview-list span{padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font-size:var(--text-xs)}
+  .configuration-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:24px 0}.configuration-grid article{padding:15px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.configuration-grid span{display:block;color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}.configuration-grid strong{display:block;margin-top:7px;overflow-wrap:anywhere}.preview-list{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0}.preview-list span{padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font-size:var(--text-xs)}
   .discover-review{margin-top:24px}.review-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.review-heading h3{margin:2px 0 0;font:700 var(--text-lg) var(--mono)}.review-heading>span{padding:6px 9px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:700 var(--text-2xs) var(--mono)}.discover-candidates{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:13px}.discover-candidates article{min-width:0;padding:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.discover-candidates code,.discover-candidates strong{display:block;overflow-wrap:anywhere}.discover-candidates strong{margin-top:7px;font-size:var(--text-xs)}.discover-candidates p{margin:7px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.handoff-row{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:13px;padding:13px 14px;border-left:2px solid var(--accent);background:rgb(var(--accent-rgb) / .04)}.handoff-row p{max-width:68ch;margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}.handoff-row button{flex:0 0 auto}
   .shared-profile,.shared-evidence,.shared-timeline{margin-top:18px}.shared-profile{margin-bottom:18px}.shared-evidence+.shared-evidence{margin-top:12px}.visual-summary{scroll-margin-top:92px}
   :global(.shared-evidence[id]){scroll-margin-top:92px}
@@ -580,12 +605,12 @@
   .retained-case{display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,.8fr);gap:18px;margin-top:18px;padding:var(--card-pad)}.retained-case h3,.change-review h3{margin:2px 0 0;font:700 var(--text-md) var(--mono)}.retained-case>div>p:not(.eyebrow){max-width:62ch;margin:7px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}.retained-case dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:0;padding:1px;background:var(--border)}.retained-case dl div{padding:10px;border:0;background:var(--panel-raised)}.change-review{margin-top:18px;padding:var(--card-pad)}.change-review>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.change-review>header>span{padding:6px 9px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:700 var(--text-2xs) var(--mono)}.change-list{display:grid;gap:9px;margin-top:14px}.change-list>article{padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.change-list>article>div{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.change-list time{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.change-list article>p{margin:9px 0 0;color:var(--muted);font-size:var(--text-xs)}.change-list dl{display:grid;gap:7px;margin:10px 0 0}.change-list dl div{padding:9px 10px;border:1px solid var(--border);background:var(--panel)}.change-list dd{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center;margin-top:5px;font-size:var(--text-xs)}.change-list dd b{color:var(--accent)}.change-list dd span{overflow-wrap:anywhere}
   .demo-footer{display:flex;justify-content:space-between;gap:20px;margin-top:45px;padding-top:18px;border-top:1px solid var(--border);color:var(--muted);font-size:var(--text-2xs)}.demo-footer>div{display:flex;align-items:center;gap:10px}.demo-footer p{margin:0}.demo-footer a{color:var(--accent)}
   @media(max-width:900px){.decision-layout,.console-depth-note,.retained-case{grid-template-columns:minmax(0,1fr)}}
-  @media(max-width:840px){.demo-steps{grid-template-columns:repeat(3,minmax(0,1fr))}.demo-steps button::after{display:none}.candidate-grid,.discover-candidates{grid-template-columns:1fr}.dashboard-summary,.configuration-grid{grid-template-columns:1fr}}
+  @media(max-width:840px){.demo-steps{grid-template-columns:repeat(3,minmax(0,1fr))}.demo-steps button::after{display:none}.candidate-grid,.discover-candidates{grid-template-columns:1fr}.configuration-grid{grid-template-columns:1fr}}
   @media(max-width:760px){
     .demo-hero h1{font-size:1.65rem;line-height:1.14}.demo-hero.started{display:flex;align-items:baseline;gap:9px}.demo-hero.started .eyebrow{flex:0 0 auto;margin:0}.demo-hero.started h1{margin:0;font-size:var(--text-md);letter-spacing:-.025em}.demo-hero.started .hero-full-title,.demo-hero.started>p:not(.eyebrow),.demo-hero.started .synthetic-flag{display:none}.demo-hero.started .hero-compact-title{display:inline}
     .demo-steps{display:flex;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:thin;margin:14px 0 6px}.demo-steps button{flex:0 0 154px;grid-template-columns:27px minmax(0,1fr);min-height:46px;scroll-snap-align:center}
     .demo-stage-summary{gap:7px;margin-bottom:7px;padding:6px 9px}.demo-stage-summary span{display:none}.demo-actions{min-height:0;align-items:center;flex-direction:row;gap:9px;margin-bottom:9px}.demo-actions button{flex:0 0 auto;padding:7px 9px}.demo-actions span{line-height:1.35}
-    .demo-panel{min-height:0;padding:16px}.demo-panel:not(.card){padding-inline:0}.demo-panel>h2{font-size:1.35rem}.demo-panel dl,.case-grid{grid-template-columns:1fr}.dashboard-summary,.configuration-grid{grid-template-columns:minmax(0,1fr);gap:1px;margin:16px 0;padding:1px;background:var(--border)}.dashboard-summary article,.configuration-grid article{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;padding:9px 11px;border:0;border-radius:0;background:var(--panel)}.dashboard-summary strong,.configuration-grid strong{margin-top:0;text-align:right}.tool-preview{display:none}
+    .demo-panel{min-height:0;padding:16px}.demo-panel:not(.card){padding-inline:0}.demo-panel>h2{font-size:1.35rem}.demo-panel dl,.case-grid{grid-template-columns:1fr}.configuration-grid{grid-template-columns:minmax(0,1fr);gap:1px;margin:16px 0;padding:1px;background:var(--border)}.configuration-grid article{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;padding:9px 11px;border:0;border-radius:0;background:var(--panel)}.configuration-grid strong{margin-top:0;text-align:right}
     .demo-footer,.demo-footer>div,.handoff-row{align-items:flex-start;flex-direction:column}.demo-decision-brief header,.coverage-note{align-items:flex-start;flex-direction:column}.coverage-note span{text-align:left}.demo-decision-brief{padding:14px}.demo-decision-brief dl,.retained-case dl{grid-template-columns:repeat(2,minmax(0,1fr))}.decision-layout{gap:10px}.lookup-handoff{align-items:stretch;flex-direction:column;gap:10px}.lookup-handoff button,.profile-handoff button{width:100%}.lookup-family-stack{gap:9px;margin-top:22px}.lookup-family>h3{margin-bottom:5px}.lookup-family :global(.family-summary){align-items:center;flex-direction:row;gap:8px;padding:10px 11px}.lookup-family :global(.metrics){display:none}.lookup-family :global(.section-toggle){font-size:.55rem}.change-list dd{grid-template-columns:minmax(0,1fr)}.change-list dd b{display:grid;width:100%;min-height:18px;place-items:center;overflow:hidden;font-size:0;line-height:1;transform:none}.change-list dd b::after{content:'↓';font:700 var(--text-xs) var(--mono)}
   }
   @media(max-width:460px){.demo-visual-switcher{grid-template-columns:minmax(0,1fr)}}

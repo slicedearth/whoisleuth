@@ -1,16 +1,21 @@
 <script lang="ts">
   import type { BrandProfile } from '$lib/brand-profiles';
   import type { DomainPostureHttpResponse } from '$lib/analysis/client-response-contracts';
-  import { buildDesiredPostureHistory, buildOwnedDomainPostureReview } from '$lib/analysis/owned-domain-posture-review.ts';
-  type AuditResult = { domain: string; report: DomainPostureHttpResponse | null; error: string };
+  import { buildOwnedDomainPostureReview, filterPostureComparisons, POSTURE_COMPARISON_FILTERS, type PostureComparisonFilter, type DomainPostureAuditResult } from '$lib/analysis/owned-domain-posture-review.ts';
+  import { reviewClock } from '$lib/review-clock.ts';
+  import { desiredPostureObservations } from '$lib/analysis/brand-profile-model.ts';
+  import { POSTURE_SOURCE_LABELS } from '../../../../packages/evidence/domain-posture-context.mts';
+  import PostureObservationHistory from './PostureObservationHistory.svelte';
   let { active, disabledReason, auditing, results, audit, retainObservation }: {
     active: BrandProfile;
     disabledReason: string;
     auditing: boolean;
-    results: AuditResult[];
-    audit: () => void | Promise<void>;
+    results: DomainPostureAuditResult[];
+    audit: (includeInheritedDns?: boolean) => void | Promise<void>;
     retainObservation: (report: DomainPostureHttpResponse) => void | Promise<void>;
   } = $props();
+  let comparisonFilter = $state<PostureComparisonFilter>('all');
+  let includeInheritedDns = $state(false);
 </script>
 
 <section class="audit card">
@@ -20,10 +25,12 @@
       <h2>Official-domain settings review</h2>
       <p>Review registration controls, delegation, SPF, DMARC, MTA-STS, TLS-RPT, BIMI, CAA, DNSSEC and supplied DKIM selectors.</p>
     </div>
-    <button class="primary" onclick={audit} disabled={auditing || !active.officialDomains.length || Boolean(disabledReason)}>
+    <button class="primary" onclick={() => audit(includeInheritedDns)} disabled={auditing || !active.officialDomains.length || Boolean(disabledReason)}>
       {auditing ? 'Reviewing…' : 'Review official domains'}
     </button>
   </header>
+  <label class="inheritance-option"><input type="checkbox" bind:checked={includeInheritedDns} disabled={auditing} /> Include inherited DMARC and direct parent delegation</label>
+  <p class="inheritance-detail">Adds up to seven ancestor DMARC queries and a direct sample of two parent DNS servers per domain, with bounded server discovery. Exact-name results remain separate.</p>
   {#if disabledReason}<p class="feature-disabled" role="note">{disabledReason}</p>{/if}
   {#if results.length}
     <div class="audit-results">
@@ -33,9 +40,11 @@
           {#if item.error}
             <p class="error">{item.error}</p>
           {:else if item.report}
-            {@const review = buildOwnedDomainPostureReview(active, item.report)}
-            {@const retainedHistory = buildDesiredPostureHistory(review.baseline?.observationHistory || (review.baseline?.previousObservation ? [review.baseline.previousObservation] : []))}
+            {@const review = buildOwnedDomainPostureReview(active, item.report, new Date($reviewClock).toISOString(), item.context)}
             <p class="counts">{item.report.summary.danger || 0} action · {item.report.summary.warning || 0} review · {item.report.summary.pass || 0} pass</p>
+            <ul class="limitation" aria-label={`Evidence limits for ${item.domain}`}>
+              {#each review.limitations as limitation (limitation.id)}<li>{limitation.text}</li>{/each}
+            </ul>
             <section class="desired-state" aria-label={`Expected settings for ${item.domain}`}>
               <header>
                 <div><strong>{review.profileLabel}</strong><span>Expected settings</span></div>
@@ -50,7 +59,6 @@
                   </article>
                 {/each}
               </div>
-              <p class="limitation">{review.limitations[0]}</p>
             </section>
             <section class="baseline-review" aria-label={`Expected and observed settings for ${item.domain}`}>
               <header>
@@ -61,8 +69,13 @@
                 {#if review.baseline}<button class="btn compact" onclick={() => retainObservation(item.report!)}>Retain this observation</button>{/if}
               </header>
               {#if review.baseline}
+                {@const visibleComparisons = filterPostureComparisons(review.baselineComparisons, comparisonFilter, review.baseline)}
+                <label class="comparison-filter">Show fields for {item.domain}
+                  <select bind:value={comparisonFilter}>{#each Object.entries(POSTURE_COMPARISON_FILTERS) as [value, label]}<option {value}>{label}</option>{/each}</select>
+                </label>
+                <p class="limitation" role="status">Showing {visibleComparisons.length} of {review.baselineComparisons.length} comparison fields.</p>
                 <div class="comparison-grid">
-                  {#each review.baselineComparisons as comparison}
+                  {#each visibleComparisons as comparison}
                     <article class={`comparison-${comparison.state}`}>
                       <div><strong>{comparison.label}</strong><span>{comparison.state.replaceAll('_', ' ')}</span></div>
                       <p>{comparison.explanation}</p>
@@ -77,17 +90,15 @@
                     <summary>Changes since retained observation <strong>{review.previousChanges.filter((entry) => entry.state === 'changed').length}</strong></summary>
                     <ul>
                       {#each review.previousChanges as change}
-                        <li><code>{change.checkId}</code> · {change.state}</li>
+                        <li><code>{change.checkId}</code> · {change.state}{#if change.limitation} — {change.limitation}{/if}</li>
                       {/each}
                     </ul>
                   </details>
                 {/if}
-                {#if review.baseline.observationHistory?.length}
-                  <details class="history">
-                    <summary>Domain control history <strong>{review.baseline.observationHistory.length} retained</strong></summary>
-                    {#if retainedHistory.length}
-                      <ol>{#each [...retainedHistory].reverse() as transition}<li><span>{transition.previousObservedAt} → {transition.observedAt}</span><strong>{transition.changedChecks.length ? `${transition.changedChecks.length} changed` : 'unchanged'}</strong>{#if transition.changedChecks.length}<small>{transition.changedChecks.join(' · ')}</small>{/if}</li>{/each}</ol>
-                    {:else}<p>Save another completed review to compare source-attributed settings over time.</p>{/if}
+                {#if desiredPostureObservations(review.baseline).length}
+                  <details>
+                    <summary>Domain control history <strong>{desiredPostureObservations(review.baseline).length} retained</strong></summary>
+                    <PostureObservationHistory baseline={review.baseline} />
                   </details>
                 {/if}
                 <p class="limitation">Saving an observation is explicit and local. Incomplete evidence remains unknown and does not replace expected settings.</p>
@@ -101,6 +112,7 @@
                   <summary><span>{check.label}</span><strong>{check.status}</strong></summary>
                   <p>{check.summary}</p>
                   {#if check.detail}<p>{check.detail}</p>{/if}
+                  {#if check.sourceContext}<p>{POSTURE_SOURCE_LABELS[check.sourceContext.source]} · observed {check.sourceContext.observedAt || 'at an unknown time'} · {check.sourceContext.state}{#if check.sourceContext.omittedRecords !== 0} · {check.sourceContext.omittedRecords === null ? 'omissions unknown' : `${check.sourceContext.omittedRecords} records omitted`}{/if}</p>{/if}
                   {#if check.remediation}<p><b>Next:</b> {check.remediation}</p>{/if}
                   {#if check.records.length}<pre>{check.records.join('\n')}</pre>{/if}
                 </details>
@@ -156,7 +168,6 @@
                     </article>
                   {/each}
                 </div>
-                <p class="limitation">{review.limitations[1]}</p>
               </details>
             {/if}
           {:else}
@@ -171,6 +182,7 @@
 <style>
   .audit{margin-top:16px;padding:var(--card-pad)}
   .audit h2{margin:0}
+  .inheritance-option{display:flex;align-items:start;gap:8px;min-height:32px;margin-top:12px;font-size:var(--text-sm);line-height:1.5}.inheritance-option input{flex:none;margin-top:5px}.inheritance-detail{color:var(--muted);font-size:var(--text-xs);line-height:1.5;max-width:75ch}
   .audit .section-head p:not(.eyebrow),.counts{color:var(--muted);font-size:var(--text-sm);line-height:1.5}
   .audit .section-head>button{align-self:start}
   .audit-results{display:grid;gap:12px;margin-top:18px}
@@ -179,12 +191,12 @@
   .checks{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}
   .checks details{min-width:0;padding:10px 12px;border:1px solid var(--border);border-left:3px solid var(--border);border-radius:var(--radius-sm)}
   .checks details.danger{border-left-color:var(--danger)}.checks details.warning{border-left-color:var(--amber)}.checks details.pass{border-left-color:var(--accent2)}
-  .checks summary{display:flex;justify-content:space-between;gap:10px;cursor:pointer;font-size:var(--text-xs)}
-  .checks summary strong{text-transform:capitalize}.checks details.danger summary strong{color:var(--danger)}.checks details.warning summary strong{color:var(--amber)}.checks details.pass summary strong{color:var(--accent2)}
-  .checks p{color:var(--muted);font-size:var(--text-xs);line-height:1.5}.checks pre{overflow:auto;font-size:var(--text-2xs)}
+  .checks summary{display:list-item;cursor:pointer;font-size:var(--text-xs);overflow-wrap:anywhere}
+  .checks summary strong{float:inline-end;margin-inline-start:10px;white-space:nowrap;text-transform:capitalize}.checks details.danger summary strong{color:var(--danger)}.checks details.warning summary strong{color:var(--amber)}.checks details.pass summary strong{color:var(--accent2)}
+  .checks p{color:var(--muted);font-size:var(--text-xs);line-height:1.5}.checks pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--text-2xs)}
   .analysis{margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-  .analysis>summary{display:flex;justify-content:space-between;gap:12px;cursor:pointer;font-size:var(--text-xs);font-weight:700}
-  .analysis>summary strong{color:var(--accent2);text-transform:capitalize}
+  .analysis>summary{display:list-item;cursor:pointer;font-size:var(--text-xs);font-weight:700;overflow-wrap:anywhere}
+  .analysis>summary strong{float:inline-end;margin-inline-start:12px;color:var(--accent2);text-transform:capitalize}
   .analysis p,.analysis li,.analysis table{font-size:var(--text-xs);line-height:1.5}
   .analysis p,.analysis li{color:var(--muted)}
   .analysis ul{padding-left:20px}
@@ -207,8 +219,8 @@
   .baseline-review>header>div{display:grid;gap:2px}.baseline-review>header span{color:var(--muted);font-size:var(--text-2xs)}
   .baseline-review>p,.baseline-review li{color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .baseline-review details{font-size:var(--text-xs)}.baseline-review ul{margin-bottom:0;padding-left:20px}
-  .history ol{display:grid;gap:6px;margin:8px 0 0;padding:0;list-style:none}.history li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.history span,.history small{color:var(--muted);overflow-wrap:anywhere}.history small{grid-column:1/-1}
   .comparison-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .comparison-filter{display:grid;gap:6px;font-size:var(--text-xs);margin-block:10px}.comparison-filter select{width:100%;min-width:0;max-width:420px}
   .comparison-grid article{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .comparison-grid article>div{display:flex;justify-content:space-between;gap:8px}.comparison-grid article>div span{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   .comparison-grid article.comparison-drift>div span{color:var(--danger)}.comparison-grid article.comparison-suppressed>div span{color:var(--amber)}.comparison-grid article.comparison-aligned>div span{color:var(--accent2)}

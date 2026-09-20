@@ -2,25 +2,17 @@ import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { domainToASCII } from 'node:url';
 
-import { scanBoundedJson } from '../lib/bounded-json.mts';
-
-import {
-  decryptWorkspaceArchive,
-  isEncryptedWorkspaceArchive,
-} from '../packages/workspace/workspace-archive-crypto.mts';
 import {
   WORKSPACE_ARCHIVE_SCHEMA,
   readWorkspaceArchive,
 } from '../packages/workspace/workspace-archive.mts';
-import { canonicalArtifactJson } from '../packages/evidence/artifact-integrity.mts';
-import {
-  MAX_OFFLINE_ARTIFACT_BYTES,
-  verifyOfflineArtifact,
-} from './artifact-verify.mts';
+import { canonicalArtifactJson, canonicalArtifactJsonV2 } from '../packages/evidence/artifact-integrity.mts';
+import { parseArchiveContentDigest } from './archive-content-digest.mts';
+import { verifyOfflineWorkspaceArchive } from './artifact-verify.mts';
 import { safeTerminalValue } from './formatters/terminal.mts';
 
 export const ARCHIVE_INSPECTION_SCHEMA = 'whoisleuth.workspace-archive-inspection';
-export const ARCHIVE_INSPECTION_VERSION = 2;
+export const ARCHIVE_INSPECTION_VERSION = 3;
 export const MAX_ARCHIVE_SEARCH_LENGTH = 253;
 export const MAX_ARCHIVE_SEARCH_MATCHES = 100;
 export const MAX_ARCHIVE_SEARCH_NODES = 100_000;
@@ -46,7 +38,10 @@ export type ArchiveInspectionReport = Readonly<{
     inputBytes: number;
     sectionCount: number;
     recordCount: number;
+    contentDigest: string;
+    /** Compatibility value for previously recorded bare-hash comparisons. */
     contentDigestSha256: string;
+    expectedContentDigestCanonicalization: 'sorted-json-v1' | 'sorted-json-v2' | null;
   }>;
   sections: readonly Readonly<{
     id: string;
@@ -78,30 +73,11 @@ const SEARCHABLE_FIELDS = new Set([
   'target',
 ]);
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
-const SHA256_DIGEST_RE = /^sha256:[a-f0-9]{64}$/u;
 
 function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as UnknownRecord
     : null;
-}
-
-function parseJson(raw: string): UnknownRecord {
-  if (typeof raw !== 'string') throw new TypeError('Archive input must be UTF-8 JSON text.');
-  const bytes = Buffer.byteLength(raw, 'utf8');
-  if (bytes === 0 || bytes > MAX_OFFLINE_ARTIFACT_BYTES) {
-    throw new TypeError(`Archive input must be between 1 byte and ${MAX_OFFLINE_ARTIFACT_BYTES} bytes.`);
-  }
-  let parsed: unknown;
-  try {
-    scanBoundedJson(raw);
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new TypeError('Archive input must be valid bounded JSON without duplicate keys.');
-  }
-  const value = record(parsed);
-  if (!value) throw new TypeError('Archive input must contain one JSON object.');
-  return value;
 }
 
 function normalizeSearch(value: unknown): string | null {
@@ -127,9 +103,9 @@ function valueDigest(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
 }
 
-function archiveContentDigest(
+function archiveContentDigests(
   sections: Awaited<ReturnType<typeof readWorkspaceArchive>>['sections'],
-): string {
+): Readonly<{ current: string; legacy: string }> {
   const identity = sections.map((section) => ({
     id: section.id,
     schema: section.schema,
@@ -143,15 +119,10 @@ function archiveContentDigest(
       return content;
     })(),
   }));
-  return `sha256:${createHash('sha256').update(canonicalArtifactJson(identity), 'utf8').digest('hex')}`;
-}
-
-function expectedContentDigest(value: unknown): string | null {
-  if (value === null || value === undefined || value === '') return null;
-  if (typeof value !== 'string' || !SHA256_DIGEST_RE.test(value)) {
-    throw new TypeError('Expected archive content digest must use the form sha256 followed by 64 lowercase hexadecimal characters.');
-  }
-  return value;
+  return Object.freeze({
+    current: `sha256:${createHash('sha256').update(canonicalArtifactJsonV2(identity), 'utf8').digest('hex')}`,
+    legacy: `sha256:${createHash('sha256').update(canonicalArtifactJson(identity), 'utf8').digest('hex')}`,
+  });
 }
 
 function searchSection(
@@ -216,21 +187,12 @@ export async function inspectWorkspaceArchive(
     expectedContentDigest?: string | null;
   }> = {},
 ): Promise<ArchiveInspectionReport> {
-  const parsed = parseJson(raw);
-  const encrypted = isEncryptedWorkspaceArchive(parsed);
-  if (encrypted && !options.passphrase) {
-    throw new TypeError('Encrypted archive inspection requires a separate passphrase file.');
-  }
-  await verifyOfflineArtifact(raw, options.passphrase === undefined
-    ? {}
-    : { passphrase: options.passphrase });
-  const archiveValue = encrypted
-    ? await decryptWorkspaceArchive(parsed, options.passphrase as string)
-    : parsed;
-  const archive = await readWorkspaceArchive(archiveValue);
-  const contentDigestSha256 = archiveContentDigest(archive.sections);
-  const expectedDigest = expectedContentDigest(options.expectedContentDigest);
-  if (expectedDigest && expectedDigest !== contentDigestSha256) {
+  const expectedDigest = parseArchiveContentDigest(options.expectedContentDigest);
+  const { archive, encrypted } = await verifyOfflineWorkspaceArchive(raw, options);
+  const digests = archiveContentDigests(archive.sections);
+  if (expectedDigest && expectedDigest.digestSha256 !== (
+    expectedDigest.canonicalization === 'sorted-json-v2' ? digests.current : digests.legacy
+  )) {
     throw new TypeError('Workspace archive content digest did not match the expected value.');
   }
   const search = normalizeSearch(options.search);
@@ -264,7 +226,9 @@ export async function inspectWorkspaceArchive(
       inputBytes: Buffer.byteLength(raw, 'utf8'),
       sectionCount: archive.sections.length,
       recordCount: archive.sections.reduce((sum, section) => sum + section.recordCount, 0),
-      contentDigestSha256,
+      contentDigest: `sorted-json-v2:${digests.current}`,
+      contentDigestSha256: digests.legacy,
+      expectedContentDigestCanonicalization: expectedDigest?.canonicalization ?? null,
     }),
     sections: Object.freeze(archive.sections.map((section) => Object.freeze({
       id: section.id,
@@ -286,6 +250,7 @@ export async function inspectWorkspaceArchive(
     limitations: Object.freeze([
       'Inspection validates the archive and reports bounded section metadata without printing retained evidence by default.',
       'The content digest covers ordered section identities and normalised content after excluding each section export timestamp. Equality detects matching retained archive content but does not authenticate its source or accuracy.',
+      'Use the versioned contentDigest identity for new comparisons. The compatibility contentDigestSha256 field and bare expected hashes retain the original locale-sensitive digest; they are not a cross-locale identity guarantee.',
       'Search checks exact values in a small allowlist of target fields and never searches analyst notes, contacts, or raw evidence.',
       ...(reveal
         ? ['Search values were revealed only because the operator supplied --reveal; handle the output as sensitive evidence.']
@@ -303,7 +268,9 @@ export function formatArchiveInspection(report: ArchiveInspectionReport): string
     `Archive: ${report.archive.encrypted ? 'encrypted' : 'plain'} · v${report.archive.version}`,
     `Sections: ${report.summary.sectionCount}`,
     `Records: ${report.summary.recordCount}`,
-    `Content digest: ${report.summary.contentDigestSha256}`,
+    `Content identity: ${report.summary.contentDigest}`,
+    ...(report.summary.expectedContentDigestCanonicalization === 'sorted-json-v1'
+      ? ['Expected digest matched using the legacy locale-sensitive form.'] : []),
   ];
   for (const section of report.sections) {
     lines.push(`${safeTerminalValue(section.label)}: ${section.recordCount} records · ${safeTerminalValue(section.status)} · ${section.bytes} bytes`);

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { buildLookupEvidenceReplayDiff } from '../frontend/src/lib/analysis/lookup-evidence-replay-diff.ts';
+import { buildLookupAssetGraph } from '../packages/investigation/lookup-asset-graph.mts';
 import type { LookupEvidenceReplay } from '../frontend/src/lib/analysis/lookup-evidence-replay.ts';
 import {
   deliveryMetadataDisplay,
@@ -24,7 +25,7 @@ function replay(overrides: Partial<LookupEvidenceReplay> = {}): LookupEvidenceRe
     contradictions: [], unknowns: [], recommendedSteps: [],
     pagePublicationMetadata: null,
     httpDeliveryMetadata: null,
-    graph: { version: 2, targetId: 'target:example.test', nodes: [], edges: [], sources: [], truncated: false, limitations: [] },
+    graph: buildLookupAssetGraph({ target: 'example.test' }),
     limitations: [],
     ...overrides,
   };

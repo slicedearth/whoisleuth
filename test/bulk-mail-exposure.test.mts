@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { relationshipObservation } from '../packages/comparison/relationship-evidence.mts';
 
 import {
   buildBulkMailExposureExport,
@@ -27,6 +28,7 @@ function result(
     trusted: null,
     error: '',
     scanDepth: 'deep',
+    observedAt: null,
     createdDate: null,
     expiryDate: null,
     nameservers: ['ns1.example.test'],
@@ -48,17 +50,7 @@ function result(
     riskFactors: [],
     dns: null,
     dnssec: null,
-    relationship: {
-      version: 2,
-      nameservers: [],
-      ipAddresses: [],
-      trackingIdentifiers: [],
-      officialAssetHosts: [],
-      faviconHash: null,
-      faviconPHash: null,
-      certificateFingerprint: null,
-      truncated: false,
-    },
+    relationship: relationshipObservation({}),
     sourceCoverage: [{ source: 'dns', state: 'complete' }],
     profileContext: {
       sourceState: 'ready',
@@ -210,6 +202,7 @@ describe('Bulk lookalike mail exposure', () => {
   test('exports a deterministic bounded review without raw records', async () => {
     const report = buildBulkMailExposureReport([{
       ...result('export.example'),
+      sourceCoverage: [{ source: 'dns', state: 'complete', observedAt: OBSERVED_AT }],
       rawWhois: 'excluded',
       registrant: { email: 'private@example.test' },
     }], {
@@ -222,6 +215,7 @@ describe('Bulk lookalike mail exposure', () => {
     assert.match(first.document.integrity.digestSha256, /^sha256:[a-f0-9]{64}$/u);
     assert.equal(first.content.includes('private@example.test'), false);
     assert.equal(first.content.includes('excluded'), false);
+    assert.deepEqual(report.rows[0]?.sourceCoverage, [{ source: 'dns', state: 'complete' }]);
     const verification = await verifyOfflineArtifact(first.content);
     assert.equal(verification.artifact.schema, 'whoisleuth.bulk-mail-exposure');
     assert.equal(verification.state, 'verified');

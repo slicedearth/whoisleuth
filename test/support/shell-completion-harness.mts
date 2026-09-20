@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { unitTestExecutablePath } from '../../tools/toolchain-compatibility.mts';
 
@@ -11,18 +14,31 @@ type CompletionResult = Readonly<{
 const START_MARKER = '__WHOISLEUTH_COMPLETION_START_';
 const END_MARKER = '__WHOISLEUTH_COMPLETION_END_';
 
+// A hang guard for complete fixture batches, not a completion-latency budget.
+export const SHELL_COMPLETION_PROCESS_OPTIONS = Object.freeze({
+  encoding: 'utf8' as const,
+  timeout: 60_000,
+  killSignal: 'SIGKILL' as const,
+});
+
 export function assertSuccessfulShellProcess(child: SpawnSyncReturns<string>, label: string): void {
   const detail = typeof child.stderr === 'string' ? child.stderr.trim().slice(0, 2_048) : '';
-  const outcome = child.error
-    ? `failed to start: ${child.error.message.slice(0, 512)}`
-    : child.signal
-      ? `terminated by ${child.signal}`
-      : `exited with status ${String(child.status)}`;
+  const outcome = (child.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT'
+    ? 'exceeded its process deadline'
+    : child.error
+      ? `failed to start: ${child.error.message.slice(0, 512)}`
+      : child.signal
+        ? `terminated by ${child.signal}`
+        : `exited with status ${String(child.status)}`;
   assert.equal(child.status, 0, `${label} ${outcome}${detail ? `: ${detail}` : ''}`);
 }
 
 function completionKey(words: readonly string[]): string {
   return JSON.stringify(words);
+}
+
+function shellLiteral(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 function parseMarkedResults(stdout: string, expected: readonly (readonly string[])[]): ReadonlyMap<string, readonly string[]> {
@@ -69,7 +85,7 @@ export function prepareBashCompletionBatch(
   repositoryRoot: string,
 ): (words: readonly string[]) => readonly string[] {
   const invocations = cases.map((words, index) => `
-COMP_WORDS=(${words.map((word) => JSON.stringify(word)).join(' ')})
+COMP_WORDS=(${words.map(shellLiteral).join(' ')})
 COMP_CWORD=${words.length - 1}
 printf '${START_MARKER}${index}__\\n'
 _whoisleuth_completion
@@ -78,8 +94,8 @@ printf '${END_MARKER}${index}__\\n'
 `).join('\n');
   const harness = `whoisleuth() { "$WHOISLEUTH_TEST_NODE" bin/whoisleuth.mts "$@"; }\n${script}\n${invocations}`;
   const child = spawnSync(unitTestExecutablePath('bash'), ['--noprofile', '--norc', '-c', harness], {
+    ...SHELL_COMPLETION_PROCESS_OPTIONS,
     cwd: repositoryRoot,
-    encoding: 'utf8',
     env: { ...process.env, WHOISLEUTH_TEST_NODE: process.execPath },
   });
   assertSuccessfulShellProcess(child, 'Bash completion batch');
@@ -93,7 +109,7 @@ export function prepareZshCompletionBatch(
   repositoryRoot: string,
 ): (words: readonly string[]) => readonly string[] {
   const invocations = cases.map((words, index) => `
-words=(${words.map((word) => JSON.stringify(word)).join(' ')})
+words=(${words.map(shellLiteral).join(' ')})
 CURRENT=${words.length}
 printf '${START_MARKER}${index}__\\n'
 _whoisleuth
@@ -115,13 +131,47 @@ compadd() {
 ${script}
 ${invocations}`;
   const child = spawnSync(unitTestExecutablePath('zsh'), ['-f', '-c', harness], {
+    ...SHELL_COMPLETION_PROCESS_OPTIONS,
     cwd: repositoryRoot,
-    encoding: 'utf8',
     env: { ...process.env, WHOISLEUTH_TEST_NODE: process.execPath },
   });
   assertSuccessfulShellProcess(child, 'Zsh completion batch');
   const results = parseMarkedResults(child.stdout, cases);
   return (words) => lookupResult(results, words);
+}
+
+export function prepareFishCompletionBatch(
+  script: string,
+  lines: readonly string[],
+  repositoryRoot: string,
+): (line: string) => readonly string[] {
+  const literal = (value: string) => `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+  const invocations = lines.map((line, index) => `
+printf '${START_MARKER}${index}__\\n'
+complete --do-complete ${literal(line)}
+printf '${END_MARKER}${index}__\\n'
+`).join('\n');
+  const harness = `
+function whoisleuth
+    command "$WHOISLEUTH_TEST_NODE" bin/whoisleuth.mts $argv
+end
+${script}
+${invocations}`;
+  const directory = mkdtempSync(join(tmpdir(), 'whoisleuth-fish-completion-'));
+  try {
+    const child = spawnSync(unitTestExecutablePath('fish'), ['--no-config', '--private', '-c', harness], {
+      ...SHELL_COMPLETION_PROCESS_OPTIONS,
+      cwd: repositoryRoot,
+      env: { ...process.env, WHOISLEUTH_TEST_NODE: process.execPath,
+        XDG_CONFIG_HOME: directory, XDG_DATA_HOME: directory, XDG_CACHE_HOME: directory },
+    });
+    assertSuccessfulShellProcess(child, 'Fish completion batch');
+    assert.equal(child.stderr.trim(), '', `Fish completion diagnostics: ${child.stderr.trim().slice(0, 2_048)}`);
+    const results = parseMarkedResults(child.stdout, lines.map((line) => [line]));
+    return (line) => lookupResult(results, [line]).map((candidate) => candidate.split('\t')[0]!);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 }
 
 function parsePowerShellResults(stdout: string, expected: readonly string[]): ReadonlyMap<string, readonly string[]> {
@@ -162,8 +212,8 @@ $results = foreach ($lineValue in $lines) {
 }
 $results | ConvertTo-Json -Compress -Depth 4 -AsArray`;
   const child = spawnSync(unitTestExecutablePath('pwsh'), ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', invocation], {
+    ...SHELL_COMPLETION_PROCESS_OPTIONS,
     cwd: repositoryRoot,
-    encoding: 'utf8',
     input: JSON.stringify(lines),
     env: { ...process.env, WHOISLEUTH_TEST_NODE: process.execPath },
   });

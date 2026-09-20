@@ -1,26 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import BrowserLookupHandoff from '$lib/components/BrowserLookupHandoff.svelte';
-  import InvestigationSearch from '$lib/components/InvestigationSearch.svelte';
+  import SavedWorkSearch from '$lib/components/SavedWorkSearch.svelte';
   import InvestigationTemplateManager from '$lib/components/InvestigationTemplateManager.svelte';
   import WorkspaceArchive from '$lib/components/WorkspaceArchive.svelte';
-  import { loadCampaigns } from '$lib/campaigns';
-  import { loadCases } from '$lib/cases';
-  import { loadProfiles } from '$lib/brand-profiles';
-  import { buildLocalInvestigationSearchIndex } from '$lib/investigation-search';
-  import { loadRelationshipObservations } from '$lib/relationship-observations';
+  import InvestigationPackage from '$lib/components/InvestigationPackage.svelte';
   import {
     investigationRecipes,
     startInvestigationGuide,
     type InvestigationRecipeId,
   } from '$lib/investigation-guide';
-  import {
-    markInvestigationSearchSourcesUnavailable,
-    unavailableInvestigationSearchIndex,
-    type InvestigationSearchIndex,
-  } from '$lib/analysis/investigation-search.ts';
-  import type { InvestigationStoreName } from '$lib/analysis/investigation-projection.ts';
-  import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data.ts';
   import { loadInvestigationTemplates, type InvestigationTemplate } from '$lib/investigation-templates';
   import { publicResources } from '$lib/workspaces';
   import {
@@ -34,7 +23,7 @@
   } = $props();
 
   const publicResource = publicResources[0];
-  let investigationIndex = $state<InvestigationSearchIndex | null>(null);
+  let refreshController: AbortController | null = null;
   let guideDomain = $state('');
   let guideRecipeId = $state<InvestigationRecipeId>('new_domain_triage');
   let guideTemplateId = $state('');
@@ -44,51 +33,27 @@
   let workspaceMessage = $state('');
   let supportDiagnostics = $state('');
   let supportStatus = $state('');
+  let workspaceArchive = $state<WorkspaceArchive>();
   const selectedRecipe = $derived(investigationRecipes.find((recipe) => recipe.id === guideRecipeId) || investigationRecipes[0]);
   const compatibleTemplates = $derived(templates.filter((template) => template.recipeId === guideRecipeId));
 
   async function refreshSecondaryWorkspaces() {
+    refreshController?.abort();
+    const controller = new AbortController();
+    refreshController = controller;
     templateLoadState = 'loading';
     workspaceMessage = '';
-    const results = await Promise.allSettled([
-      loadCases(),
-      loadCampaigns(),
-      loadProfiles(),
-      loadRelationshipObservations(),
-      loadInvestigationTemplates(),
-    ]);
-    const [caseResult, campaignResult, profileResult, relationshipResult, templateResult] = results;
-    if (templateResult?.status === 'fulfilled') {
-      templates = templateResult.value;
+    try {
+      const loaded = await loadInvestigationTemplates();
+      if (controller.signal.aborted) return;
+      templates = loaded;
       templateLoadState = 'ready';
-    } else {
+    } catch {
+      if (controller.signal.aborted) return;
       templateLoadState = 'unavailable';
       guideTemplateId = '';
+      workspaceMessage = 'Saved templates are unavailable. Standard guides and other workspace tools remain available.';
     }
-
-    const searchResults = [caseResult, campaignResult, profileResult, relationshipResult];
-    if (searchResults.some((result) => result?.status === 'fulfilled')) {
-      const unavailableStores: InvestigationStoreName[] = [];
-      if (caseResult?.status === 'rejected') unavailableStores.push('cases');
-      if (campaignResult?.status === 'rejected') unavailableStores.push('campaigns');
-      if (profileResult?.status === 'rejected') unavailableStores.push('brandProfiles');
-      if (relationshipResult?.status === 'rejected') unavailableStores.push('relationshipObservations');
-      investigationIndex = markInvestigationSearchSourcesUnavailable(buildLocalInvestigationSearchIndex({
-        cases: caseResult?.status === 'fulfilled' ? caseResult.value : undefined,
-        campaigns: campaignResult?.status === 'fulfilled' ? campaignResult.value : undefined,
-        brandProfiles: profileResult?.status === 'fulfilled' ? profileResult.value : undefined,
-        relationshipObservations: relationshipResult?.status === 'fulfilled' ? relationshipResult.value : undefined,
-      }), unavailableStores);
-    } else {
-      investigationIndex = unavailableInvestigationSearchIndex('Saved-work search is unavailable because one or more required browser-local collections could not be read.');
-    }
-    const expectedFailures = results
-      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-      .filter((result) => isExpectedBrowserLocalDataFailure(result.reason));
-    const unexpectedFailure = results.find((result): result is PromiseRejectedResult =>
-      result.status === 'rejected' && !isExpectedBrowserLocalDataFailure(result.reason));
-    if (expectedFailures.length > 0) workspaceMessage = 'Some browser-local workspaces are unavailable. Available saved work remains usable.';
-    if (unexpectedFailure) throw unexpectedFailure.reason;
   }
 
   async function handleArchiveImport(resultMessage: string) {
@@ -126,7 +91,10 @@
   }
 
   onMount(() => {
-    void refreshSecondaryWorkspaces();
+    void refreshSecondaryWorkspaces().catch(() => {
+      if (!refreshController?.signal.aborted) workspaceMessage = 'Some saved-work tools could not be refreshed. No saved records were changed.';
+    });
+    return () => { refreshController?.abort(); };
   });
 </script>
 
@@ -136,7 +104,7 @@
 
   {#if mode === 'all'}
     <BrowserLookupHandoff />
-    <InvestigationSearch index={investigationIndex} />
+    <SavedWorkSearch />
   {/if}
 
   {#if mode !== 'import'}<section class="guide-launcher card" aria-labelledby="guide-launcher-title">
@@ -172,7 +140,13 @@
   </section>{/if}
 
   {#if mode === 'all'}<InvestigationTemplateManager {templates} loadState={templateLoadState} onchange={(value) => { templates = value; if (!value.some((item) => item.id === guideTemplateId)) guideTemplateId = ''; }} />{/if}
-  {#if mode !== 'guide'}<WorkspaceArchive onimport={handleArchiveImport} importOnly={mode === 'import'} />{/if}
+  {#if mode !== 'guide'}
+    <InvestigationPackage onworkspace={async file => {
+      if (!workspaceArchive) throw new Error('Workspace review is unavailable.');
+      await workspaceArchive.reviewFile(file);
+    }} />
+    <WorkspaceArchive bind:this={workspaceArchive} onimport={handleArchiveImport} importOnly={mode === 'import'} />
+  {/if}
   {#if mode === 'all'}
     <details class="support-diagnostics card">
       <summary>Support diagnostics</summary>

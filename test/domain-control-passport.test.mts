@@ -17,7 +17,7 @@ import {
 } from '../frontend/src/lib/analysis/domain-control-manifest-core.ts';
 import type { BrandProfile, DesiredPostureBaseline } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import { buildDomainControlManifest, verifyDomainControlManifest } from '../lib/domain-control-manifest.mts';
-import { DOMAIN_CONTROL_MANIFEST_INPUT_VERSION } from '../packages/contracts/domain-control-manifest.mts';
+import { DOMAIN_CONTROL_MANIFEST_INPUT_VERSION, DOMAIN_CONTROL_MANIFEST_VERSION } from '../packages/contracts/domain-control-manifest.mts';
 
 const generatedAt = '2026-08-07T00:00:00.000Z';
 const expiresAt = '2026-09-07T00:00:00.000Z';
@@ -253,7 +253,7 @@ describe('browser domain-control passports', () => {
     );
     await assert.rejects(() => verifyDomainControlPassport({ ...passport, expiresAt: '2026-08-08T00:00:00.000Z' }, generatedAt), /integrity/iu);
     await assert.rejects(() => verifyDomainControlPassport(passport, expiresAt), /expired/iu);
-    await assert.rejects(() => verifyDomainControlPassport({ ...passport, version: 3 }, generatedAt), /unsupported|malformed/iu);
+    await assert.rejects(() => verifyDomainControlPassport({ ...passport, version: DOMAIN_CONTROL_MANIFEST_VERSION + 1 }, generatedAt), /unsupported|malformed/iu);
     await assert.rejects(() => verifyDomainControlPassport({
       ...passport,
       entries: [{ ...passport.entries[0]!, nameservers: ['ns2.example.test', 'ns1.example.test'] }],

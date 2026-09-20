@@ -31,6 +31,37 @@ function deferred<T>() {
 }
 
 describe('Lookup request controller', () => {
+  test('suppresses source updates after cancellation, input changes, supersession and disposal', async () => {
+    for (const action of ['cancel', 'invalidate', 'replace', 'dispose'] as const) {
+      const held = deferred<LookupRequestOutcome>();
+      let deliver: Parameters<LookupRequest>[1]['onProgress'];
+      const seen: unknown[] = [];
+      const controller = new LookupRequestController({ request: async (url, options) => {
+        if (url.includes('second')) return { ok: true, value: validResponse() };
+        deliver = options.onProgress; return held.promise;
+      } });
+      const running = controller.run('/api/lookup?q=example.test', () => {}, async () => {}, { onProgress: update => { seen.push(update); } });
+      await Promise.resolve();
+      assert.ok(deliver); deliver({ transport: 'buffered', snapshot: null });
+      assert.equal(seen.length, 1);
+      if (action === 'replace') await controller.run('/api/lookup?q=second.test', () => {});
+      else controller[action]();
+      deliver({ transport: 'buffered', snapshot: null });
+      assert.equal(seen.length, 1, action);
+      held.resolve({ ok: false, kind: 'cancelled', message: 'Cancelled' });
+      await running; controller.dispose();
+    }
+  });
+  test('a completed request cannot deliver a later source update', async () => {
+    let deliver: Parameters<LookupRequest>[1]['onProgress'];
+    let updates = 0;
+    const controller = new LookupRequestController({ request: async (_url, options) => {
+      deliver = options.onProgress; return { ok: true, value: validResponse() };
+    } });
+    await controller.run('/api/lookup?q=example.test', () => {}, async () => {}, { onProgress: () => { updates++; } });
+    assert.ok(deliver); deliver({ transport: 'buffered', snapshot: null });
+    assert.equal(updates, 0); controller.dispose();
+  });
   test('returns only the current typed request outcome', async () => {
     const first = deferred<LookupRequestOutcome>();
     const second = deferred<LookupRequestOutcome>();

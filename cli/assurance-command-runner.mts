@@ -1,4 +1,9 @@
 import { Buffer } from 'node:buffer';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import { buildInvestigationPackage } from '../packages/investigation/investigation-package.mts';
+import { encryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
+import { writeInvestigationFolder, writePreparedEvidenceFolder } from './investigation-folder.mts';
+import { buildInvestigationBagIt, prepareInvestigationBagIt } from '../packages/investigation/investigation-bagit.mts';
 
 import { scanBoundedJson } from '../lib/bounded-json.mts';
 import {
@@ -53,6 +58,8 @@ import {
   MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES,
   buildInvestigationManifest,
   formatInvestigationManifest,
+  investigationFileMediaType,
+  type InvestigationManifestArtifactInput,
 } from './investigation-manifest.mts';
 import {
   buildOpenAssetModelBridge,
@@ -76,10 +83,18 @@ async function runManifestCommand(
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Investigation manifest');
-  const artifacts: { content: string }[] = [];
+  const artifacts: InvestigationManifestArtifactInput[] = [];
   let totalBytes = 0;
   try {
     for (const source of args.sources) {
+      if (args.package || args.folder) {
+        const content = dependencies.readBinaryArtifactInput ? await dependencies.readBinaryArtifactInput(source)
+          : await readBoundedRegularFile(source, { maximumBytes: MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, minimumBytes: 1, label: 'Package artefact input', ...(dependencies.signal ? { signal: dependencies.signal } : {}) });
+        if (content.byteLength > MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES - totalBytes) throw new CliUsageError('Package artefacts exceed the combined byte limit.');
+        totalBytes += content.byteLength;
+        artifacts.push({ content, mediaType: investigationFileMediaType(source) });
+        continue;
+      }
       const content = dependencies.readDiffInput
         ? await dependencies.readDiffInput(source)
         : await context.readInput(source, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, 'Manifest artefact input');
@@ -95,18 +110,36 @@ async function runManifestCommand(
   }
   let document;
   try {
-    document = await buildInvestigationManifest({
+    if (args.package) {
+      const built = await (args.bagit ? buildInvestigationBagIt : buildInvestigationPackage)({ workflow: args.workflow, configurationDigestSha256: args.configurationDigestSha256, artifacts }, context.now(), context.packageVersion);
+      dependencies.signal?.throwIfAborted();
+      if (!context.writeBinaryOutput) throw new CliUsageError('Package output requires an explicit file destination.');
+      const output = args.passphraseSource
+        ? await encryptInvestigationPackage(built.bytes, await context.readPassphraseSource(args.passphraseSource))
+        : built.bytes;
+      dependencies.signal?.throwIfAborted();
+      context.writeBinaryOutput(output);
+      return EXIT_CODES.SUCCESS;
+    }
+    const input = {
       workflow: args.workflow,
       configurationDigestSha256: args.configurationDigestSha256,
       artifacts,
-    }, context.now(), context.packageVersion);
+    };
+    if (args.bagit && args.folder) {
+      const prepared = await prepareInvestigationBagIt(input, context.now(), context.packageVersion);
+      await writePreparedEvidenceFolder(args.folder, prepared.files, 'data', 'tagmanifest-sha512.txt', dependencies.signal);
+      document = prepared.manifest;
+    } else document = args.folder
+      ? await writeInvestigationFolder(args.folder, input, context.now(), context.packageVersion, dependencies.signal)
+      : await buildInvestigationManifest(input, context.now(), context.packageVersion);
   } catch (error) {
     throw new CliUsageError(boundedCliErrorMessage(error, 'Investigation manifest input is invalid'));
   }
   if (!args.quiet) {
     context.writeStdout(args.output === 'json'
       ? formatJsonDocument(document)
-      : context.terminal(formatInvestigationManifest(document), args.color));
+      : context.terminal(`${args.folder ? 'Created a new private evidence folder.\n' : ''}${formatInvestigationManifest(document)}`, args.color));
   }
   return EXIT_CODES.SUCCESS;
 }

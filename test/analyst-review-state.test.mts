@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { describe, test } from 'node:test';
+import { MAX_IDENTITY_DIGEST_BYTES, sha256IdentityHex } from '../packages/evidence/record-identity.mts';
 
 import {
   ANALYST_REVIEW_STATE_SCHEMA,
@@ -52,6 +53,45 @@ function item(overrides: Partial<AnalystReviewItem> = {}): AnalystReviewItem {
 }
 
 describe('canonical analyst Review Item lifecycle', () => {
+  test('ordinary form line breaks keep the existing canonical stored rationale without admitting unsafe controls', () => {
+    const save = (rationale: string) => setAnalystReviewDecision(emptyAnalystReviewStateStore(), item(), {
+      disposition: 'open', rationale, reviewedAt: NOW,
+    });
+    const saved = save('First observation.\r\n\tContrary observation.');
+    assert.equal(saved.records[0]!.rationale, 'First observation. Contrary observation.');
+    assert.deepEqual(normalizeAnalystReviewStateStore(saved), saved);
+    for (const control of ['\u0000', '\u001b', '\u007f']) assert.throws(() => save(`First${control}second`), /rationale is invalid/u);
+    assert.throws(() => save('x'.repeat(1001)), /rationale is invalid/u);
+    assert.throws(() => normalizeAnalystReviewStateStore({ ...saved, records: [{ ...saved.records[0], rationale: 'Noncanonical\nrecord' }] }), /rationale is invalid/u);
+  });
+  test('validates calendar dates independently and keeps an unavailable review clock open', () => {
+    for (const reviewedAt of ['2026-02-30T00:00:00Z', '2026-08-23T24:00:00Z', '2026-08-23T01:00:00', 'Sun, 23 Aug 2026 01:00:00 GMT']) {
+      assert.throws(() => setAnalystReviewDecision(emptyAnalystReviewStateStore(), item(), {
+        disposition: 'open', rationale: 'Calendar validation.', reviewedAt,
+      }), /explicit valid date, time and timezone/u);
+    }
+    const review = item();
+    const state = setAnalystReviewDecision(emptyAnalystReviewStateStore(), review, {
+      disposition: 'expected', rationale: 'Time-limited analyst review.', reviewedAt: NOW, expiresAt: '2026-08-24T00:00:00Z',
+    });
+    for (const now of ['', 'invalid', '2026-08-22T00:00:00Z']) {
+      const lifecycle = analystReviewLifecycle(review, state, now);
+      assert.equal(lifecycle.effectiveDisposition, 'open');
+      assert.equal(lifecycle.invalidated, true);
+      assert.match(lifecycle.reason, /clock/u);
+      assert.deepEqual(lifecycle.decision, state.records[0]);
+    }
+    assert.equal(analystReviewLifecycle(review, state, NOW).effectiveDisposition, 'expected');
+  });
+  test('shared bounded record digests match independent vectors and the platform implementation', () => {
+    assert.equal(sha256IdentityHex(new Uint8Array()), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+    assert.equal(sha256IdentityHex(new TextEncoder().encode('abc')), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+    for (const length of [55, 56, 63, 64, 65, 1_023, MAX_IDENTITY_DIGEST_BYTES]) {
+      const bytes = Uint8Array.from({ length }, (_, index) => (index * 71 + 29) % 256);
+      assert.equal(sha256IdentityHex(bytes), createHash('sha256').update(bytes).digest('hex'));
+    }
+    assert.throws(() => sha256IdentityHex(new Uint8Array(MAX_IDENTITY_DIGEST_BYTES + 1)), /byte limit/u);
+  });
   test('keeps stable subject identity separate from material evidence identity', () => {
     assert.equal(
       analystReviewSubjectKey('case', ['evidence-gap', 'case-one']),
@@ -125,7 +165,7 @@ describe('canonical analyst Review Item lifecycle', () => {
         rationale: 'This should remain open.',
         reviewedAt: NOW,
       }),
-      /Partial, inconclusive, or stale evidence cannot resolve/,
+      /evidence cannot resolve/,
     );
     assert.throws(
       () => setAnalystReviewDecision(emptyAnalystReviewStateStore(), item({ completeness: 'complete', age: 'stale' }), {
@@ -133,7 +173,7 @@ describe('canonical analyst Review Item lifecycle', () => {
         rationale: 'A stale observation must not close review.',
         reviewedAt: NOW,
       }),
-      /stale evidence cannot resolve/,
+      /stale or undated evidence cannot resolve/,
     );
 
     const expected = setAnalystReviewDecision(emptyAnalystReviewStateStore(), item(), {

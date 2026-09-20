@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalReads, lookupDomainIdentity, migrateLegacyBrowserData, openDashboardGuidedInvestigation, openDashboardSecondaryWorkspaces, selectBulkResultView } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalReads, holdBrowserLocalTransaction, lookupDomainIdentity, migrateLegacyBrowserData, openDashboardGuidedInvestigation, openDashboardSecondaryWorkspaces, selectBulkResultView, useTheme } from './helpers';
 import { BASE_URL } from './constants.ts';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import { INVESTIGATION_GUIDE_KEY as GUIDE_KEY } from '../frontend/src/lib/investigation-guide-storage';
@@ -11,6 +11,11 @@ type RecipeLabel =
   | 'Credential impersonation response'
   | 'Mail abuse response'
   | 'Domain-control change response';
+
+type LookupRevealProbe = {
+  resultReveals: number;
+  immediateHeading: { top: number; bottom: number; headerBottom: number; viewportHeight: number } | null;
+};
 
 async function startRecipe(
   page: import('@playwright/test').Page,
@@ -37,7 +42,15 @@ function currentAction(page: import('@playwright/test').Page) {
   return page.locator('.guide .current-action');
 }
 
+async function openWorkPlan(page: import('@playwright/test').Page) {
+  const plan = page.locator('details.work-plan');
+  await expect(plan).toHaveCount(1);
+  if (!await plan.evaluate((element: HTMLDetailsElement) => element.open)) await plan.locator(':scope > summary').click();
+  await expect(plan).toHaveJSProperty('open', true);
+}
+
 async function allowAndOpen(page: import('@playwright/test').Page, tool: 'Discover' | 'Bulk' | 'Lookup') {
+  await openWorkPlan(page);
   const action = currentAction(page);
   await action.getByRole('button', { name: 'Review requests' }).click();
   const review = action.getByRole('region', { name: /Review requests for/ });
@@ -47,6 +60,10 @@ async function allowAndOpen(page: import('@playwright/test').Page, tool: 'Discov
   await expect(review).toContainText('Controls');
   await expect(review).toContainText('Limits');
   await action.getByRole('button', { name: `Allow and open ${tool}` }).click();
+  // The action awaits client-side navigation after recording approval. Do not
+  // reopen the departing page's work plan before the destination resets it.
+  await expect(page).toHaveURL(url => url.pathname === `/${tool.toLowerCase()}`);
+  await expect(page.getByRole('heading', { name: tool, exact: true, level: 1 })).toBeVisible();
 }
 
 async function markReviewed(page: import('@playwright/test').Page, step: string) {
@@ -60,6 +77,7 @@ async function markReviewed(page: import('@playwright/test').Page, step: string)
 }
 
 async function useGuideReturn(page: import('@playwright/test').Page, step: string) {
+  await openWorkPlan(page);
   const action = currentAction(page);
   const control = page.getByRole('button', { name: `Return to guided investigation: ${step}` });
   const hasStableUsefulExposure = () => action.evaluate(async (element) => {
@@ -94,7 +112,7 @@ async function useGuideReturn(page: import('@playwright/test').Page, step: strin
   await expect.poll(hasStableUsefulExposure, { timeout: 15_000 }).toBe(true);
 }
 
-async function installLookupFixture(page: import('@playwright/test').Page) {
+async function installLookupFixture(page: import('@playwright/test').Page, beforeResponse?: () => Promise<void>) {
   await page.route('**/api/lookup?*', async (route) => {
     const url = new URL(route.request().url());
     const domain = url.searchParams.get('q') || 'portal.example.test';
@@ -116,6 +134,7 @@ async function installLookupFixture(page: import('@playwright/test').Page) {
       whois: { status: url.searchParams.get('fast') === '1' ? 'skipped' : 'complete' },
       availability: { status: 'complete' },
     };
+    await beforeResponse?.();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -127,6 +146,91 @@ async function installLookupFixture(page: import('@playwright/test').Page) {
         diagnostics,
       }),
     });
+  });
+}
+
+for (const width of [1280, 390]) for (const intent of ['unchanged', 'guide', 'wheel'] as const) {
+  test(`late Lookup reveal respects ${intent} viewport intent at ${width}px`, { tag: '@timing-sensitive' }, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: width === 1280 ? 720 : 844 });
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.addInitScript(() => {
+      const state: LookupRevealProbe = { resultReveals: 0, immediateHeading: null };
+      Object.defineProperty(window, '__lookupRevealProbe', { value: state });
+      const original = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = function (options?: boolean | ScrollIntoViewOptions) {
+        if (this.id === 'result') state.resultReveals += 1;
+        original.call(this, options);
+        if (this.id === 'result') {
+          const heading = this.querySelector('h2');
+          const header = document.querySelector('.shell > header');
+          if (!heading || !header) throw new Error('The completed Lookup must contain its result heading and console header.');
+          const rect = heading.getBoundingClientRect();
+          state.immediateHeading = { top: rect.top, bottom: rect.bottom, headerBottom: header.getBoundingClientRect().bottom, viewportHeight: window.innerHeight };
+        }
+      };
+    });
+    let release: (() => Promise<void>) | null = null;
+    await installLookupFixture(page, async () => { release = await holdBrowserLocalTransaction(page); });
+    await startRecipe(page, 'New-domain triage', 'portal.test');
+    await allowAndOpen(page, 'Lookup');
+    const run = page.getByRole('button', { name: 'Run lookup', exact: true });
+    await run.click();
+    const resultHeading = page.getByRole('heading', { name: 'portal.test', exact: true });
+    let retainedResultTop = 0;
+    try {
+      await expect(page.getByRole('heading', { name: 'registered', exact: true })).toBeVisible();
+      await expect.poll(() => release !== null).toBe(true);
+      await expect(page.getByRole('button', { name: 'Looking up…', exact: true })).toBeDisabled();
+      if (intent === 'guide') {
+        await openWorkPlan(page);
+        await expect(page.locator('details.work-plan > summary')).toBeFocused();
+      } else if (intent === 'wheel') {
+        const before = await page.evaluate(() => window.scrollY);
+        await page.mouse.move(width * 0.75, 300);
+        await page.mouse.wheel(0, 1000);
+        await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
+        retainedResultTop = await resultHeading.evaluate(async (element) => {
+          await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+          return element.getBoundingClientRect().top;
+        });
+      }
+    } finally {
+      const finish = release as (() => Promise<void>) | null;
+      if (finish) await finish();
+    }
+    await expect(run).toBeEnabled();
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())))));
+    const reveal = await page.evaluate(() => (window as unknown as { __lookupRevealProbe: LookupRevealProbe }).__lookupRevealProbe);
+    if (intent === 'unchanged') {
+      expect(reveal.resultReveals).toBe(1);
+      const immediate = reveal.immediateHeading;
+      if (!immediate) throw new Error('The completed Lookup did not record a result reveal.');
+      expect(immediate.top).toBeGreaterThanOrEqual(immediate.headerBottom);
+      expect(immediate.bottom).toBeLessThanOrEqual(immediate.viewportHeight);
+      await expect(resultHeading).toBeInViewport();
+      await expect.poll(() => resultHeading.evaluate((element) =>
+        element.getBoundingClientRect().top - (document.querySelector('.shell > header')?.getBoundingClientRect().bottom ?? 0),
+      )).toBeGreaterThanOrEqual(0);
+      for (const theme of ['light', 'dark'] as const) {
+        await useTheme(page, theme);
+        await page.screenshot({ path: testInfo.outputPath(`lookup-reveal-${width}-${theme}.png`) });
+      }
+      await openWorkPlan(page);
+      await expect(page.locator('details.work-plan > summary')).toBeFocused();
+      await expect(page.locator('details.work-plan > summary')).toBeInViewport();
+    } else {
+      expect(reveal.resultReveals).toBe(0);
+      if (intent === 'guide') {
+        await expect(page.locator('details.work-plan > summary')).toBeFocused();
+        await expect(page.locator('details.work-plan > summary')).toBeInViewport();
+      } else {
+        // Removing the loading note can change scrollY through native scroll anchoring.
+        // The content the analyst reached must retain its viewport position.
+        const resultTop = await resultHeading.evaluate(element => element.getBoundingClientRect().top);
+        expect(Math.abs(resultTop - retainedResultTop)).toBeLessThanOrEqual(1);
+      }
+    }
   });
 }
 
@@ -154,10 +258,10 @@ async function runBulkStep(
 }
 
 async function retainCases(page: import('@playwright/test').Page, label: string, domains: string[]) {
-  await currentAction(page).getByRole('link', { name: 'Open Monitor' }).click();
+  await currentAction(page).getByRole('link', { name: 'Open Cases' }).click();
   const firstDomain = domains[0];
   if (!firstDomain) throw new Error('Case retention requires at least one domain.');
-  await expect(page).toHaveURL(new RegExp(`/monitor\\?view=cases&investigation=1&domain=${firstDomain.replaceAll('.', '\\.')}`));
+  await expect(page).toHaveURL(new RegExp(`/cases\\?investigation=1&domain=${firstDomain.replaceAll('.', '\\.')}`));
   const queue = page.locator('#case-review-queue');
   await expect(queue).toBeFocused();
   await expect(queue.locator('li')).toHaveCount(domains.length);
@@ -169,18 +273,33 @@ async function retainCases(page: import('@playwright/test').Page, label: string,
       && element.compareDocumentPosition(toolbar) & Node.DOCUMENT_POSITION_FOLLOWING,
     );
   })).toBe(true);
-  for (const domain of domains) {
+  for (const [index, domain] of domains.entries()) {
     await expect(queue).toContainText(domain);
     await queue.getByRole('button', { name: `Open case for ${domain}` }).click();
-    const caseHeader = page.locator('.case-head', { hasText: domain });
+    const caseHeader = page.locator('.case-heading', { hasText: domain });
     await expect(caseHeader).toBeVisible();
     await expect(caseHeader).toBeFocused();
+    if (index < domains.length - 1) await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   }
   await markReviewed(page, label);
   const completedGuide = page.locator('.guide-complete');
   await expect(completedGuide).toContainText('All');
+  await expect(completedGuide).not.toContainText('No case retained');
+  const caseSelector = page.getByRole('combobox', { name: 'Case for this guide' });
+  if (domains.length > 1) {
+    await expect(completedGuide).toContainText('Selected Case has another target');
+    const chooseCase = completedGuide.getByRole('button', { name: 'Choose Case for handoff' });
+    await chooseCase.focus();
+    await chooseCase.press('Enter');
+    await expect(caseSelector).toBeFocused();
+    await caseSelector.selectOption({ label: firstDomain });
+    await expect(caseSelector).toBeFocused();
+  } else {
+    await expect(completedGuide.getByRole('button', { name: 'Choose Case for handoff' })).toHaveCount(0);
+    await expect(caseSelector.locator('option:checked')).toHaveText(firstDomain);
+  }
   await expect(completedGuide).toContainText('Case needs a reviewed disposition or decision');
-  await expect(completedGuide.getByRole('link', { name: 'Review case decision workspace' })).toHaveAttribute('href', /\/monitor\?view=cases&case=.+#case-response-/u);
+  await expect(completedGuide.getByRole('link', { name: 'Review case decision workspace' })).toHaveAttribute('href', /\/cases\?case=.+&section=response$/u);
 }
 
 test('the dashboard starts a selected tab-scoped recipe without navigation or analysis', async ({ page }) => {
@@ -202,10 +321,14 @@ test('the dashboard starts a selected tab-scoped recipe without navigation or an
   await expect(context.getByText('Not retained', { exact: true })).toBeVisible();
   await expect(context.getByText('No retained evidence', { exact: true })).toBeVisible();
   await expect(context.getByText('Confirm brand profile', { exact: true })).toBeVisible();
-  await guide.getByRole('button', { name: 'Dismiss details' }).click();
-  await expect(currentAction(page)).toHaveCount(0);
-  await expect(context).toBeVisible();
-  await guide.getByRole('button', { name: 'Show work plan' }).click();
+  const disclosure = guide.locator('details.work-plan > summary');
+  await disclosure.focus();
+  await disclosure.press('Enter');
+  await expect(currentAction(page)).toHaveCount(1);
+  await expect(currentAction(page)).toBeHidden();
+  await expect(context).toBeHidden();
+  await expect(disclosure).toContainText('0 of 5 steps reviewed');
+  await disclosure.press('Enter');
   await expect(currentAction(page)).toContainText('Step 1 of 5');
   await expect(currentAction(page)).toContainText('Confirm brand profile');
   await expect(currentAction(page).getByRole('heading', { name: 'What to do' })).toBeVisible();
@@ -238,7 +361,7 @@ test('the dashboard starts a selected tab-scoped recipe without navigation or an
     { width: 320, height: 700, theme: 'dark' },
   ] as const) {
     await page.setViewportSize({ width: surface.width, height: surface.height });
-    await page.evaluate((theme) => { document.documentElement.dataset.theme = theme; }, surface.theme);
+    await useTheme(page, surface.theme);
     const stepRows = await planItems.evaluateAll((items) => items.map((item) => Math.round(item.getBoundingClientRect().top)));
     expect(new Set(stepRows).size).toBe(surface.width <= 900 ? 5 : 3);
     await expectNoHorizontalOverflow(page);
@@ -283,15 +406,15 @@ test('a response playbook reaches focused local packet preflight without a reque
   await currentAction(page).getByRole('button', { name: 'Confirm skipped' }).click();
   await expect(currentAction(page)).toContainText('Prepare reviewed response');
 
-  await currentAction(page).getByRole('link', { name: /Open Monitor|Go to/ }).click();
-  await expect(page).toHaveURL(/\/monitor\?view=cases&investigation=1&response=1&domain=portal\.example\.test#case-review-queue/u);
+  await currentAction(page).getByRole('link', { name: /Open Cases|Go to/ }).click();
+  await expect(page).toHaveURL(/\/cases\?investigation=1&response=1&domain=portal\.example\.test#case-review-queue/u);
   const queue = page.locator('#case-review-queue');
   await queue.getByRole('button', { name: 'Open case for portal.example.test' }).click();
   const preflight = page.locator('details[id^="case-response-preflight-"]');
   await expect(preflight).toHaveAttribute('open', '');
   await expect(preflight.getByText('Prepare a reviewed abuse evidence packet', { exact: true })).toBeFocused();
   await expect(preflight).toContainText('This prepares local drafts only; nothing is sent.');
-  await expect(preflight).toContainText('Lookup Decision Facts are transient and are not copied into browser-local cases');
+  await expect(preflight).toContainText('Lookup Decision Facts are transient and are not copied into saved Cases');
   const allowedStartupReads = new Set(['/api/session', '/api/capabilities']);
   for (const request of observedRequests) {
     expect(request.origin).toBe(expectedOrigin);
@@ -316,7 +439,7 @@ test('active context can change its target only through an explicit guide restar
   const target = guide.getByRole('textbox', { name: 'Investigation target' });
   await target.fill('replacement.example.test');
   await guide.getByRole('button', { name: 'Review target change' }).click();
-  await expect(guide.getByRole('status')).toContainText('Changing the target restarts this guide');
+  await expect(guide.getByRole('status').filter({ hasText: 'Changing the target restarts this guide' })).toBeVisible();
   expect((await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null'), GUIDE_KEY)).domain).toBe('portal.example.test');
 
   await guide.getByRole('button', { name: 'Confirm and restart guide' }).click();
@@ -349,7 +472,7 @@ test('an analyst can save and run a bounded local guide template without removin
   await expect(mandatoryApproval).toBeChecked();
   await expect(mandatoryApproval).toBeDisabled();
   await page.getByRole('button', { name: 'Save template' }).click();
-  await expect(page.getByRole('status')).toContainText('Saved the Focused local review template.');
+  await expect(page.getByRole('status').filter({ hasText: 'Saved the Focused local review template.' })).toBeVisible();
 
   await page.getByRole('combobox', { name: 'Template' }).selectOption({ label: 'Focused local review' });
   await page.getByRole('textbox', { name: 'Domain', exact: true }).fill('portal.example.test');
@@ -417,6 +540,7 @@ test('returning to the same guided Bulk step keeps its peer set and completed re
   await expect(page.locator('.results-table tbody tr')).toHaveCount(2);
 
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/ }).click();
+  await openWorkPlan(page);
   await expect(currentAction(page)).toContainText('Compare focused peers');
   await currentAction(page).getByRole('link', { name: 'Open Bulk' }).click();
 
@@ -543,7 +667,7 @@ test('a browser-local context failure does not block or misstate a guided invest
   const guide = page.locator('.guide');
   await expect(guide).toBeFocused();
   await expect(currentAction(page)).toContainText('Collect domain evidence');
-  await expect(guide.getByRole('status')).toContainText('unreadable saved data is not treated as absent');
+  await expect(guide.getByRole('status').filter({ hasText: 'Some saved investigation context is unavailable' })).toContainText('unreadable saved data is not treated as absent');
   await expect(guide.getByText('Unavailable', { exact: true })).toHaveCount(3);
   await guide.getByText('Saved evidence unavailable', { exact: true }).click();
   await expect(guide).toContainText('do not interpret this state as an empty evidence history');
@@ -624,8 +748,9 @@ test('an unavailable active-profile preference does not hide a healthy retained 
   const guide = page.locator('.guide');
   await expect(guide.getByText('Unavailable', { exact: true })).toHaveCount(1);
   await expect(guide.locator('.context-tray').getByText('reviewing · unreviewed', { exact: true })).toBeVisible();
-  await expect(guide.getByRole('status')).toContainText('active-profile preference');
-  await expect(guide.getByRole('status')).not.toContainText('Cases');
+  const unavailableContext = guide.getByRole('status').filter({ hasText: 'Some saved investigation context is unavailable' });
+  await expect(unavailableContext).toContainText('active-profile preference');
+  await expect(unavailableContext).not.toContainText('Cases');
   await page.evaluate((key) => {
     const stored = JSON.parse(sessionStorage.getItem(key) || 'null');
     const now = new Date().toISOString();
@@ -646,6 +771,7 @@ test('an unavailable active-profile preference does not hide a healthy retained 
 test('partial progress, pause, resume, and restart remain explicit', async ({ page }) => {
   await startRecipe(page, 'Infrastructure pivot');
   await allowAndOpen(page, 'Lookup');
+  await openWorkPlan(page);
   await currentAction(page).getByRole('button', { name: 'Mark partial' }).click();
   await currentAction(page).getByRole('textbox', { name: 'What remains incomplete?' }).fill('The registry source was unavailable, so the evidence needs another review.');
   await currentAction(page).getByRole('button', { name: 'Confirm partial' }).click();
@@ -654,12 +780,86 @@ test('partial progress, pause, resume, and restart remain explicit', async ({ pa
   await page.getByRole('button', { name: 'Pause guide' }).click();
   await expect(page.locator('.guide')).toContainText('Paused');
   await page.reload();
+  await openWorkPlan(page);
   await page.getByRole('button', { name: 'Resume guide' }).click();
   await page.getByText('Guide options', { exact: true }).click();
   await page.getByRole('button', { name: 'Restart guide' }).click();
   await page.getByRole('button', { name: 'Confirm restart' }).click();
   await expect(page.locator('.guide')).toContainText('0 of 3 steps reviewed');
   await expect(currentAction(page)).toContainText('Collect starting evidence');
+});
+
+test('failed guide progress and clear operations retain the draft and visible context', async ({ page }) => {
+  await startRecipe(page, 'Infrastructure pivot');
+  await allowAndOpen(page, 'Lookup');
+  await openWorkPlan(page);
+  await currentAction(page).getByRole('button', { name: 'Mark partial', exact: true }).click();
+  const rationale = currentAction(page).getByRole('textbox', { name: 'What remains incomplete?', exact: true });
+  await rationale.fill('The selected source needs a later review.');
+  await page.evaluate((key) => {
+    const target = window as typeof window & { failGuideWrites?: boolean };
+    target.failGuideWrites = true;
+    const set = Storage.prototype.setItem;
+    const remove = Storage.prototype.removeItem;
+    Storage.prototype.setItem = function (name: string, value: string) {
+      if (this === sessionStorage && name === key && target.failGuideWrites) throw new DOMException('Unavailable', 'QuotaExceededError');
+      return set.call(this, name, value);
+    };
+    Storage.prototype.removeItem = function (name: string) {
+      if (this === sessionStorage && name === key && target.failGuideWrites) throw new DOMException('Unavailable', 'InvalidStateError');
+      return remove.call(this, name);
+    };
+  }, GUIDE_KEY);
+  await currentAction(page).getByRole('button', { name: 'Confirm partial', exact: true }).click();
+  await expect(page.locator('.guide').getByRole('alert')).toContainText('Could not retain');
+  await expect(rationale).toHaveValue('The selected source needs a later review.');
+  await expect(page.locator('.guide')).toContainText('0 of 3 steps reviewed');
+  await page.getByRole('button', { name: 'Clear context', exact: true }).click();
+  await expect(page.locator('.guide').getByRole('alert')).toContainText('Could not clear');
+  await expect(rationale).toHaveValue('The selected source needs a later review.');
+  await page.evaluate(() => { (window as typeof window & { failGuideWrites?: boolean }).failGuideWrites = false; });
+  await currentAction(page).getByRole('button', { name: 'Confirm partial', exact: true }).click();
+  await expect(page.locator('.guide')).toContainText('1 of 3 steps reviewed');
+  expect(await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null').stages[0].reviewNote, GUIDE_KEY)).toBe('The selected source needs a later review.');
+  await page.getByRole('button', { name: 'Clear context', exact: true }).click();
+  await expect(page.locator('.guide')).toHaveCount(0);
+  expect(await page.evaluate((key) => sessionStorage.getItem(key), GUIDE_KEY)).toBeNull();
+});
+
+test('step selection and disclosure preserve separate temporary outcome notes without recording progress', async ({ page }) => {
+  await startRecipe(page, 'Infrastructure pivot');
+  await allowAndOpen(page, 'Lookup');
+  await openWorkPlan(page);
+  await currentAction(page).getByRole('button', { name: 'Mark partial', exact: true }).click();
+  await currentAction(page).getByRole('textbox', { name: 'What remains incomplete?', exact: true }).fill('Unsubmitted evidence note.');
+  const stage = page.getByRole('combobox', { name: 'Review step', exact: true });
+  await stage.selectOption('bulk');
+  await currentAction(page).getByRole('button', { name: 'Skip this step', exact: true }).click();
+  await currentAction(page).getByRole('textbox', { name: 'Why is this step being skipped?', exact: true }).fill('Unsubmitted comparison note.');
+  await stage.selectOption('lookup');
+  const note = currentAction(page).getByRole('textbox', { name: 'What remains incomplete?', exact: true });
+  await expect(note).toHaveValue('Unsubmitted evidence note.');
+  const summary = page.locator('details.work-plan > summary');
+  await summary.click();
+  await expect(currentAction(page).locator('textarea')).toHaveCount(1);
+  await expect(note).toBeHidden();
+  await summary.press('Enter');
+  await expect(note).toHaveValue('Unsubmitted evidence note.');
+  const before = await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null'), GUIDE_KEY);
+  expect(before.stages.every((item: { outcome: string; reviewNote: string | null }) => item.outcome === 'pending' && item.reviewNote === null)).toBe(true);
+  expect(before.stages.find((item: { id: string }) => item.id === 'bulk').approvedAt).toBeNull();
+  await stage.selectOption('bulk');
+  await expect(currentAction(page).getByRole('textbox', { name: 'Why is this step being skipped?', exact: true })).toHaveValue('Unsubmitted comparison note.');
+  await currentAction(page).getByRole('button', { name: 'Confirm skipped', exact: true }).click();
+  await expect(currentAction(page)).toBeFocused();
+  const after = await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) || 'null'), GUIDE_KEY);
+  expect(after.stages.find((item: { id: string }) => item.id === 'bulk')).toMatchObject({ outcome: 'skipped', reviewNote: 'Unsubmitted comparison note.' });
+  expect(after.stages.find((item: { id: string }) => item.id === 'lookup')).toMatchObject({ outcome: 'pending', reviewNote: null });
+  await expect(note).toHaveValue('Unsubmitted evidence note.');
+  await page.reload();
+  await expect(page.locator('details.work-plan')).toHaveJSProperty('open', false);
+  await openWorkPlan(page);
+  await expect(currentAction(page).getByRole('textbox')).toHaveCount(0);
 });
 
 test('exports only a compact versioned progress summary after explicit confirmation', async ({ page }) => {
@@ -678,7 +878,7 @@ test('exports only a compact versioned progress summary after explicit confirmat
   expect(Object.keys(payload).sort()).toEqual(['createdAt', 'generatedAt', 'limitations', 'recipe', 'schema', 'stages', 'status', 'target', 'template', 'updatedAt', 'version']);
 });
 
-test('shows retained evidence without treating it as workflow completion', async ({ page }) => {
+test('shows retained Case context without treating a record update as evidence or workflow completion', async ({ page }) => {
   await page.goto('/dashboard');
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [{
@@ -688,10 +888,51 @@ test('shows retained evidence without treating it as workflow completion', async
   });
   await openDashboardSecondaryWorkspaces(page);
   await page.getByRole('textbox', { name: 'Domain', exact: true }).fill('portal.example.test');
-  await page.getByRole('button', { name: 'Start guide' }).click();
-  await page.getByText(/^Saved evidence/).click();
-  await expect(page.locator('.evidence-checkpoint')).toContainText('1 observation');
+  const checkpoint = page.locator('details.evidence-checkpoint');
+  const summary = checkpoint.locator(':scope > summary');
+  const explanation = checkpoint.locator(':scope > p');
+  const release = await holdBrowserLocalTransaction(page);
+  try {
+    await page.getByRole('button', { name: 'Start guide' }).click();
+    await expect(summary).toHaveText('Checking saved evidence');
+    await expect(explanation).toContainText('Saved evidence context is still loading');
+    await expect(explanation).toBeHidden();
+    await summary.click();
+    await expect(checkpoint).toHaveJSProperty('open', true);
+    await expect(explanation).toBeVisible();
+  } finally {
+    await release();
+  }
+  await expect(summary).toContainText('Saved evidence · 0 observations');
+  await expect(checkpoint).toHaveJSProperty('open', true);
+  await expect(page.locator('.context-tray')).toContainText('Retained context only; no evidence captures');
   await expect(page.locator('.guide')).toContainText('0 of 3 steps reviewed');
+});
+
+test('the guide does not arbitrarily choose between retained hostname and parent Cases', async ({ page }) => {
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: ['example.test', 'login.example.test'].map((domain, index) => ({
+      id: `guide-case-${index}`, domain, status: 'new', disposition: 'unreviewed', tags: [], notes: [], source: 'manual', evidenceHistory: [], createdAt: '2026-07-20T00:00:00.000Z', updatedAt: '2026-07-20T00:00:00.000Z',
+    })) },
+  }, { destination: '/dashboard' });
+  await startRecipe(page, 'New-domain triage', 'login.example.test');
+  await expect(page.locator('.context-tray')).toContainText('Choose a Case (2 match this target)');
+  await expect(page.locator('.guide').getByRole('link', { name: 'Review case decision workspace' })).toHaveCount(0);
+  const caseSelector = page.getByRole('combobox', { name: 'Case for this guide' });
+  await expect(caseSelector).toHaveValue('');
+  await expect(caseSelector.getByRole('option')).toHaveCount(3);
+  await caseSelector.focus();
+  await caseSelector.selectOption({ label: 'login.example.test' });
+  await expect(caseSelector).toHaveValue('guide-case-1');
+  await expect(caseSelector).toBeFocused();
+  await expect(page.locator('.context-tray')).toContainText('new · unreviewed');
+  await page.setViewportSize({ width: 320, height: 760 });
+  expect(await caseSelector.evaluate((element) => {
+    const control = element.getBoundingClientRect();
+    const context = element.closest('.context-tray')!.getBoundingClientRect();
+    return control.width >= context.width * 0.9 && control.height >= 44;
+  })).toBe(true);
+  await expectNoHorizontalOverflow(page);
 });
 
 test('future and oversized current guide records stay untouched', async ({ page }) => {

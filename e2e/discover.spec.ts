@@ -252,6 +252,18 @@ test('lookalike presets expose a live upper-bound estimate and clear stale resul
 });
 
 test('Unicode lookalikes show both domain forms and support evidence-aware filtering', async ({ page }) => {
+  const profile = {
+    id: 'visual-references', name: 'Reference set',
+    officialDomains: ['scope.invalid', 'xn--scpe-1nd.invalid', 'xn--scpe-65d.invalid', 'xn--cope-f9d.invalid'],
+    productNames: [], tlds: [], approvedPartnerDomains: [], allowlistedDomains: [],
+    allowlistedRegistrars: [], dkimSelectors: [], trademarkOwner: '', trademarkRegistration: '',
+    officialFaviconHash: '', officialFaviconPHash: '',
+    createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([profile]),
+    'whois-rdap-active-brand-profile-v1': profile.id,
+  });
   await page.getByRole('button', { name: /^Impersonation\b/u }).click();
   await page.getByRole('textbox', { name: 'Brand or domain' }).fill('scope.invalid');
   await page.getByRole('textbox', { name: 'TLDs' }).fill('invalid');
@@ -265,10 +277,22 @@ test('Unicode lookalikes show both domain forms and support evidence-aware filte
   await expect(candidate).toContainText('Scripts: Cyrillic, Latin');
   await expect(candidate).toContainText('Whole-label Unicode confusable');
   await expect(candidate).toContainText('Source or profile visual match');
-  await expect(candidate).toContainText('Visual match: scope.invalid');
-  const reviewSignals = candidate.locator('.candidate-badge.review');
+  const selectedBeforeReview = await candidate.getByRole('checkbox').isChecked();
+  const reviewSignals = candidate.locator('.review-cues > summary');
   await expect(reviewSignals).toHaveText(/[2-5] review cues/u);
-  await expect(reviewSignals).toHaveAttribute('title', /source or profile character match/u);
+  const cueList = candidate.locator('.review-cues ul');
+  await expect(cueList).toBeHidden();
+  await reviewSignals.focus();
+  await reviewSignals.press('Enter');
+  await expect(cueList).toBeVisible();
+  await expect(cueList).toContainText('source or profile character match');
+  await expect(candidate.getByRole('checkbox')).toBeChecked({ checked: selectedBeforeReview });
+  const references = candidate.locator('.reference-matches');
+  await references.locator('summary').click();
+  await expect(references.locator('summary')).toContainText('4 visual matches');
+  await expect(references.getByRole('listitem')).toHaveText(profile.officialDomains);
+  await expect(references.getByRole('listitem').last()).toBeVisible();
+  await expect(candidate.getByRole('checkbox')).toBeChecked({ checked: selectedBeforeReview });
   await expect(page.getByText('Visual matches and review cues are leads for further review, not findings.', { exact: true })).toBeVisible();
   const reviewCueScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="review-cues"]');
   const unicodeScope = page.getByRole('combobox', { name: 'Candidate scope' }).locator('option[value="unicode"]');
@@ -537,9 +561,9 @@ test('multi-word lookalikes retain separator and reordering provenance', async (
 });
 
 test('lookalike generation rejects ambiguous dotted input and invalid mutation labels', async ({ page }) => {
-  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('example.co.uk');
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('portal.example.co.uk');
   await page.getByRole('button', { name: 'Generate candidates' }).click();
-  await expect(page.getByRole('alert')).toContainText('domain with one suffix label');
+  await expect(page.getByRole('alert')).toContainText('registrable domain, without a subdomain or URL');
   await expect(page.locator('.candidate')).toHaveCount(0);
 
   await page.getByRole('textbox', { name: 'Brand or domain' }).fill('m.com');
@@ -566,6 +590,25 @@ test('domain seeds expand across selected TLDs with combined provenance', async 
   await expect(combined).toContainText('Selected TLD substitution');
   await page.getByRole('textbox', { name: 'Filter candidates' }).fill('acme.test');
   await expect(page.locator('.candidate strong', { hasText: /^acme\.test$/ })).toHaveCount(0);
+});
+
+test('multi-part suffix generation preserves selection and remains offline', async ({ page }) => {
+  const collection: string[] = [];
+  await page.route('**/api/lookup**', async route => { collection.push(route.request().url()); await route.abort(); });
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('example.co.uk');
+  await page.getByRole('textbox', { name: 'TLDs' }).fill('com.au');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+  await page.getByRole('textbox', { name: 'Filter candidates' }).fill('exampl.co.uk');
+  const originalSuffix = page.locator('.candidate').filter({ has: page.locator('strong', { hasText: /^exampl\.co\.uk$/u }) });
+  await expect(originalSuffix).toContainText('Character omission');
+  await page.getByRole('textbox', { name: 'Filter candidates' }).fill('example.com.au');
+  const selectedSuffix = page.locator('.candidate').filter({ has: page.locator('strong', { hasText: /^example\.com\.au$/u }) });
+  await expect(selectedSuffix).toContainText('Selected TLD substitution');
+  await selectedSuffix.getByRole('checkbox').check();
+  await expect(selectedSuffix.getByRole('checkbox')).toBeChecked();
+  await page.setViewportSize({ width: 320, height: 844 });
+  await expectNoHorizontalOverflow(page);
+  expect(collection).toEqual([]);
 });
 
 test('name-idea generation refuses labels that exceed DNS bounds', async ({ page }) => {
@@ -894,8 +937,13 @@ test('a capped search does not replace the previous complete baseline', async ({
   });
 
   await runCtSearch(page);
+  const complete = await readBrowserLocalCollection(page, 'ct_history', { minimumRecords: 1 });
+  const completeValue = complete.records[0]!.value as { domains: string[]; baselineAt: string };
+  expect(completeValue.domains).toEqual(['example.invalid']);
   await runCtSearch(page);
   await expect(page.locator('.status')).toContainText('Capped results did not replace that baseline');
+  const capped = await readBrowserLocalCollection(page, 'ct_history', { minimumRecords: 1 });
+  expect(capped.records[0]?.value).toMatchObject({ domains: completeValue.domains, baselineAt: completeValue.baselineAt });
   await expect(page.locator('.ct-history-state.unclassified_partial')).toHaveCount(2);
   await expect(page.locator('.ct-history-state.reappeared')).toHaveCount(0);
   const history = page.locator('details.ct-history');
@@ -918,8 +966,8 @@ test('a capped search does not replace the previous complete baseline', async ({
   await expect(summary).toBeVisible();
   await expect(summary.locator('dd')).toHaveText(['1', 'At least 2', 'At least 2', 'At least 1', '1']);
 
-  // The third complete response matches the original baseline. If the capped
-  // response had replaced it, the original domain would be mislabelled new.
+  // Continue after independently proving that the capped write preserved the
+  // exact complete baseline, rather than inferring it from set intersection.
   await runCtSearch(page);
   await expect(page.locator('.status')).toContainText('0 first observed · 0 reappeared · 1 continuing since the previous complete search');
   await expect(page.locator('.ct-history-state.continuing')).toHaveCount(1);

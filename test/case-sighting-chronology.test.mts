@@ -53,6 +53,7 @@ describe('case sighting chronology', () => {
       source: 'DNS lookup',
       firstObservedAt: EARLY,
       lastObservedAt: LATE,
+      undatedCount: 0,
       observationCount: 2,
       states: ['analyst_confirmed', 'observed_by_deployment'],
       completeness: 'partial',
@@ -75,5 +76,19 @@ describe('case sighting chronology', () => {
     const chronology = buildCaseSightingChronology(entries);
     assert.equal(chronology.length, MAX_CASE_SIGHTING_CHRONOLOGY_ENTRIES);
     assert.notEqual(chronology[0]?.source, chronology.at(-1)?.source);
+  });
+
+  test('keeps undated observations outside the known range without dropping their source sequence', () => {
+    const dated = sighting({ id: 'dated', observedAt: EARLY });
+    const undated = sighting({ id: 'undated', observedAt: null, createdAt: LATE });
+    const unknownSource = sighting({ id: 'other', source: 'Another source', observedAt: null });
+    for (const entries of [[dated, undated, unknownSource], [unknownSource, undated, dated]]) {
+      const rows = buildCaseSightingChronology(entries);
+      assert.equal(rows.length, 2);
+      assert.deepEqual(rows.map(({ firstObservedAt, lastObservedAt, observationCount, undatedCount }) => ({ firstObservedAt, lastObservedAt, observationCount, undatedCount })), [
+        { firstObservedAt: EARLY, lastObservedAt: EARLY, observationCount: 2, undatedCount: 1 },
+        { firstObservedAt: null, lastObservedAt: null, observationCount: 1, undatedCount: 1 },
+      ]);
+    }
   });
 });

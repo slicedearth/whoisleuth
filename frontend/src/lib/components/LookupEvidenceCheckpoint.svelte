@@ -17,6 +17,8 @@
     onsave,
     actionBusy = false,
     headingId = 'lookup-checkpoint-title',
+    title = 'Retain selected normalised facts',
+    allowTransition = true,
   }: {
     facts: readonly CheckpointFact[];
     pins: readonly CaseEvidencePin[];
@@ -26,6 +28,8 @@
     ) => Promise<LocalMutationOutcome>;
     actionBusy?: boolean;
     headingId?: string;
+    title?: string;
+    allowTransition?: boolean;
   } = $props();
 
   let selectedFields = $state<string[]>([]);
@@ -40,7 +44,7 @@
       : [];
   });
   const comparison = $derived(compareCheckpointPins(checkpointPins, facts));
-  const transitionComparison = $derived(compareAcquisitionTransitionPins(checkpointPins, facts));
+  const transitionComparison = $derived(allowTransition ? compareAcquisitionTransitionPins(checkpointPins, facts) : []);
 
   function toggle(field: string, checked: boolean) {
     selectedFields = checked
@@ -79,27 +83,29 @@
   <header>
     <div>
       <p class="eyebrow">Field checkpoint</p>
-      <h4 id={headingId}>Retain selected normalised facts</h4>
+      <h4 id={headingId}>{title}</h4>
       <p>Choose only the facts needed for later review. Raw registry payloads, contacts, scripts, and unselected fields are not stored by this action.</p>
     </div>
     <button class="btn" type="button" disabled={actionBusy || !selectedFields.length} onclick={() => void save()}>Save {selectedFields.length || ''} checkpoint fact{selectedFields.length === 1 ? '' : 's'}</button>
   </header>
 
   {#if selectable.length}
-    <label class="transition-toggle">
-      <input type="checkbox" checked={transitionMode} onchange={(event) => setTransitionMode(event.currentTarget.checked)}>
+    {#if allowTransition}<label class="transition-toggle">
+      <input type="checkbox" disabled={actionBusy} checked={transitionMode} onchange={(event) => setTransitionMode(event.currentTarget.checked)}>
       <span><strong>Plan an acquisition transition</strong><small>Declare whether each selected fact should be preserved, changed, or manually reviewed. A later Lookup verifies only what its sources can observe.</small></span>
-    </label>
+    </label>{/if}
     <div class="fact-grid independent-grid">
       {#each selectable as fact (fact.field)}
         <label>
-          <input type="checkbox" checked={selectedFields.includes(fact.field)} onchange={(event) => toggle(fact.field, event.currentTarget.checked)}>
+          <input type="checkbox" disabled={actionBusy || !fact.observedAt} checked={selectedFields.includes(fact.field)} onchange={(event) => toggle(fact.field, event.currentTarget.checked)}>
           <span>
             <strong>{fact.label}</strong>
             <small>{fact.value}</small>
             <small>{fact.source} · {fact.sourceState} · {fact.completeness}{fact.truncated ? ' · truncated' : ''}</small>
+            {#if fact.observedAt}<small>Observed <time datetime={fact.observedAt}>{fact.observedAt}</time></small>
+            {:else}<small>Observation time unavailable — a dated checkpoint cannot be saved.</small>{/if}
             {#if transitionMode && selectedFields.includes(fact.field)}
-              <select aria-label={`Transition expectation for ${fact.label}`} value={transitionExpectations[fact.field] ?? 'preserve'} onchange={(event) => setExpectation(fact.field, event.currentTarget.value as CaseTransitionExpectation)}>
+              <select disabled={actionBusy} aria-label={`Transition expectation for ${fact.label}`} value={transitionExpectations[fact.field] ?? 'preserve'} onchange={(event) => setExpectation(fact.field, event.currentTarget.value as CaseTransitionExpectation)}>
                 <option value="preserve">Preserve this value</option>
                 <option value="change">Expect this value to change</option>
                 <option value="review">Review manually after transition</option>
@@ -114,9 +120,9 @@
   {/if}
 
   {#if transitionComparison.length}
-    <section class="transition-review" aria-labelledby="transition-review-title">
+    <section class="transition-review" aria-labelledby={`${headingId}-transition-review`}>
       <header>
-        <div><p class="eyebrow">Post-acquisition verification</p><h5 id="transition-review-title">Reviewed transition plan</h5></div>
+        <div><p class="eyebrow">Post-acquisition verification</p><h5 id={`${headingId}-transition-review`}>Reviewed transition plan</h5></div>
         <span>{transitionComparison.length} planned fact{transitionComparison.length === 1 ? '' : 's'}</span>
       </header>
       <div class="comparison">
@@ -128,7 +134,7 @@
               <div><dt>Checkpoint</dt><dd>{item.before}</dd></div>
               <div><dt>Current</dt><dd>{item.after ?? 'Unavailable in this observation'}</dd></div>
             </dl>
-            <small>{item.source} · {item.observedAt}</small>
+            <small>{item.source} · {item.observedAt ?? 'Observation time unavailable'}</small>
           </article>
         {/each}
       </div>
@@ -138,7 +144,7 @@
 
   {#if comparison.length}
     <details>
-      <summary>Compare with latest saved checkpoint <span>{comparison.length} facts</span></summary>
+      <summary>Compare with latest saved checkpoint <span>{comparison.length} fact{comparison.length === 1 ? '' : 's'}</span></summary>
       <div class="comparison">
         {#each comparison as item (item.field)}
           <article data-state={item.state}>
@@ -147,7 +153,7 @@
               <div><dt>Checkpoint</dt><dd>{item.before}</dd></div>
               <div><dt>Current</dt><dd>{item.after ?? 'Not recorded in this observation'}</dd></div>
             </dl>
-            <small>{item.source} · {item.observedAt}</small>
+            <small>{item.source} · {item.observedAt ?? 'Observation time unavailable'}</small>
           </article>
         {/each}
       </div>

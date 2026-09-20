@@ -255,6 +255,7 @@ function lookalikeGenerationScenario(): ScenarioResult<Record<string, unknown>> 
 async function partialSourceScenario(): Promise<ScenarioResult<Record<string, unknown>>> {
   const partialCases = [
     caseRecord('partial-deep', 'partial.invalid', [snapshot({
+      inputHostname: 'partial.invalid',
       nameservers: ['ns.shared.invalid'],
       httpSummaryVersion: 1,
       httpEvidenceStatus: 'partial',
@@ -262,6 +263,7 @@ async function partialSourceScenario(): Promise<ScenarioResult<Record<string, un
       httpResponseStatus: 200,
     })]),
     caseRecord('fast-only', 'fast.invalid', [snapshot({
+      inputHostname: 'fast.invalid',
       scanDepth: 'fast',
       nameservers: ['ns.fast.invalid'],
       httpSummaryVersion: 1,
@@ -330,8 +332,8 @@ function relationshipProvenanceScenario(): ScenarioResult<Record<string, unknown
     httpResponseStatus: 200,
   };
   const projection = buildInvestigationProjection(projectionInput([
-    caseRecord('relation-a', 'relation-a.invalid', [snapshot(shared)]),
-    caseRecord('relation-b', 'relation-b.invalid', [snapshot(shared)]),
+    caseRecord('relation-a', 'relation-a.invalid', [snapshot({ ...shared, inputHostname: 'relation-a.invalid' })]),
+    caseRecord('relation-b', 'relation-b.invalid', [snapshot({ ...shared, inputHostname: 'relation-b.invalid' })]),
   ]), { generatedAt: OBSERVED_AT });
   const summary = buildInvestigationCaseRelationships(projection);
   const projectedGraph = projectCaseRelationshipGraph(summary);

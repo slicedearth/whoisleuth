@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { buildLocalRenderedCaptureHandoff } from '../frontend/src/lib/analysis/local-rendered-capture-handoff.ts';
 
 describe('local rendered-capture handoff', () => {
-  test('builds one explicit source-checkout command for the exact retained URL', () => {
+  test('builds one explicit installed-companion command for the exact retained URL', () => {
     const handoff = buildLocalRenderedCaptureHandoff(
       'https://login.review.example/session?flow=fixture#step',
       new Date('2026-09-04T05:06:07.000Z'),
@@ -13,7 +13,7 @@ describe('local rendered-capture handoff', () => {
     assert.equal(handoff.manifestPath, `${handoff.outputDirectory}/manifest.json`);
     assert.equal(
       handoff.command,
-      "npm run capture:local -- 'https://login.review.example/session?flow=fixture#step' --output-dir ~/whoisleuth-capture-login.review.example-20260904T050607Z --authorize-rendered-capture",
+      "./node_modules/.bin/whoisleuth-capture 'https://login.review.example/session?flow=fixture#step' --output-dir ~/whoisleuth-capture-login.review.example-20260904T050607Z --authorize-rendered-capture",
     );
   });
 

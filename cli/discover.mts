@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
 import { CliUsageError } from './arguments.mts';
+import { normalizeDiscoverySuffix } from '../lib/registrable-domain.mts';
 
 const DEFAULT_DISCOVERY_TLDS = Object.freeze(['com', 'net', 'org']);
 const MAX_DISCOVERY_TLD_TEXT_LENGTH = 1024;
@@ -47,8 +48,8 @@ function normalizeDiscoveryTlds(raw: unknown, maximum: unknown): string[] {
   const values: string[] = [];
   const seen = new Set<string>();
   for (const token of tokens) {
-    const value = token.toLowerCase().replace(/^\./, '');
-    if (!/^[a-z]{2,63}$/.test(value)) throw new CliUsageError(`Invalid TLD "${token}".`);
+    const value = normalizeDiscoverySuffix(token);
+    if (!value) throw new CliUsageError(`Invalid TLD or public suffix "${token}".`);
     if (seen.has(value)) continue;
     seen.add(value);
     values.push(value);

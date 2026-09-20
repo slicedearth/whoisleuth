@@ -91,6 +91,44 @@ describe('staged secret check', () => {
     })));
   });
 
+  test('distinguishes source references and type annotations from literal credentials', () => {
+    const name = genericKey;
+    const reference = 'readConfiguredCredential';
+    for (const extension of ['js', 'mjs', 'cjs', 'jsx', 'ts', 'mts', 'cts', 'tsx', 'svelte']) {
+      const file = `source.${extension}`;
+      for (const line of [
+        `function append(${name}: StaticHtmlToken): void {}`,
+        `const ${name} = ${reference};`,
+        `const ${name} = process.env.CONFIGURED_VALUE;`,
+        `const ${name} = \`\${process.env.CONFIGURED_VALUE}\`;`,
+      ]) {
+        assert.deepEqual(scanAddedDiff([`+++ b/${file}`, '@@ -0,0 +1 @@', `+${line}`].join('\n')), [], `${file}: ${line}`);
+      }
+      const secretValue = 'x'.repeat(24);
+      for (const value of [`"${secretValue}"`, `'${secretValue}'`, `\`${secretValue}\``, '1234567890123456']) {
+        assert.deepEqual(scanAddedDiff([`+++ b/${file}`, '@@ -0,0 +1 @@', `+const ${name} = ${value};`].join('\n')), [
+          { file, addedLine: 1, rule: 'assigned-secret' },
+        ]);
+      }
+    }
+  });
+
+  test('retains bare configuration, comments and quoted-key object detection', () => {
+    const credential = 'b'.repeat(24);
+    for (const file of ['.env', 'settings.yaml', 'settings.toml', 'settings.json']) {
+      for (const line of [`${genericKey}: ${credential}`, `"${genericKey}": "${credential}"`]) {
+        assert.deepEqual(scanAddedDiff([`+++ b/${file}`, '@@ -0,0 +1 @@', `+${line}`].join('\n')), [
+          { file, addedLine: 1, rule: 'assigned-secret' },
+        ]);
+      }
+    }
+    for (const line of [`// ${genericKey}=${credential}`, `const settings = { "${genericKey}": "${credential}" };`]) {
+      assert.deepEqual(scanAddedDiff(['+++ b/source.mts', '@@ -0,0 +1 @@', `+${line}`].join('\n')), [
+        { file: 'source.mts', addedLine: 1, rule: 'assigned-secret' },
+      ]);
+    }
+  });
+
   test('detects fine-grained GitHub tokens while retaining placeholder examples', () => {
     const credential = ['github_', 'pat_', 'A'.repeat(24)].join('');
     assert.deepEqual(scanAddedDiff([

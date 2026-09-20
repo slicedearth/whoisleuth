@@ -2,6 +2,8 @@ import { defineSchemaCompatibility } from './schema-compatibility.mts';
 import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 import {
   MAX_DOMAIN_CONTROL_MANIFEST_BYTES,
+  MAX_CURRENT_DOMAIN_CONTROL_RECORDS,
+  MAX_DOMAIN_CONTROL_DS_PRESENTATION_LENGTH,
 } from './domain-control-manifest.mts';
 import {
   MAX_DOMAIN_CONTROL_MONITOR_CONCURRENCY,
@@ -12,18 +14,23 @@ import {
 
 export const DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA = 'whoisleuth.domain-control-flight-recorder.input';
 export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA = 'whoisleuth.domain-control-flight-recorder';
-export const DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION = 1;
+export const PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION = 1;
+export const DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION = 2;
+export const SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS = [PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION, DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION] as const;
 
 export const MIN_FLIGHT_RECORDER_OBSERVATIONS = 1;
 export const MAX_FLIGHT_RECORDER_OBSERVATIONS = 200;
 export const MAX_FLIGHT_RECORDER_WINDOWS = 40;
 export const MAX_FLIGHT_RECORDER_FIELDS = 24;
-export const MAX_FLIGHT_RECORDER_VALUES = 32;
+export const PUBLIC_MAX_FLIGHT_RECORDER_VALUES = 32;
+export const MAX_FLIGHT_RECORDER_VALUES = MAX_CURRENT_DOMAIN_CONTROL_RECORDS;
 export const DOMAIN_CONTROL_FLIGHT_RECORDER_VALUE_INPUT_FACTOR = 2;
 export const MAX_FLIGHT_RECORDER_INPUT_VALUES = MAX_FLIGHT_RECORDER_VALUES
   * DOMAIN_CONTROL_FLIGHT_RECORDER_VALUE_INPUT_FACTOR;
+export const PUBLIC_MAX_FLIGHT_RECORDER_INPUT_VALUES = PUBLIC_MAX_FLIGHT_RECORDER_VALUES * DOMAIN_CONTROL_FLIGHT_RECORDER_VALUE_INPUT_FACTOR;
 export const MAX_FLIGHT_RECORDER_SOURCE_LENGTH = 120;
-export const MAX_FLIGHT_RECORDER_VALUE_LENGTH = 500;
+export const PUBLIC_MAX_FLIGHT_RECORDER_VALUE_LENGTH = 500;
+export const MAX_FLIGHT_RECORDER_VALUE_LENGTH = MAX_DOMAIN_CONTROL_DS_PRESENTATION_LENGTH;
 export const MAX_FLIGHT_RECORDER_WINDOW_ID_LENGTH = 64;
 export const MAX_FLIGHT_RECORDER_WINDOW_REASON_LENGTH = 400;
 export const MAX_FLIGHT_RECORDER_JSON_DEPTH = 8;
@@ -56,18 +63,20 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_KEYS = Object.freeze([
   'observations',
   'approvedWindows',
 ] as const);
-export const DOMAIN_CONTROL_FLIGHT_RECORDER_OBSERVATION_KEYS = Object.freeze([
+export const PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_OBSERVATION_KEYS = Object.freeze([
   'domain',
   'observedAt',
   'collectionDepth',
   'fields',
 ] as const);
-export const DOMAIN_CONTROL_FLIGHT_RECORDER_FIELD_KEYS = Object.freeze([
+export const DOMAIN_CONTROL_FLIGHT_RECORDER_OBSERVATION_KEYS = Object.freeze(['domain', 'capturedAt', 'collectionDepth', 'fields'] as const);
+export const PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_FIELD_KEYS = Object.freeze([
   'id',
   'source',
   'state',
   'values',
 ] as const);
+export const DOMAIN_CONTROL_FLIGHT_RECORDER_FIELD_KEYS = Object.freeze([...PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_FIELD_KEYS, 'observedAt'] as const);
 export const DOMAIN_CONTROL_FLIGHT_RECORDER_WINDOW_KEYS = Object.freeze([
   'id',
   'domain',
@@ -86,7 +95,7 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_ROOT_KEYS = Object.freeze([
   'summary',
   'limitations',
 ] as const);
-export const DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS = Object.freeze([
+export const PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS = Object.freeze([
   'id',
   'domain',
   'field',
@@ -99,11 +108,12 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS = Object.freeze([
   'approvedWindow',
   'explanation',
 ] as const);
+export const DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS = Object.freeze([...PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS, 'capturedAt'] as const);
 export const DOMAIN_CONTROL_FLIGHT_RECORDER_APPROVED_WINDOW_KEYS = Object.freeze([
   'id',
   'reason',
 ] as const);
-export const DOMAIN_CONTROL_FLIGHT_RECORDER_SUMMARY_KEYS = Object.freeze([
+export const PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_SUMMARY_KEYS = Object.freeze([
   'firstObservations',
   'observedChanges',
   'approvedChanges',
@@ -111,7 +121,8 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_SUMMARY_KEYS = Object.freeze([
   'collectionChanges',
   'recoveredSources',
 ] as const);
-export const DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS = Object.freeze([
+export const DOMAIN_CONTROL_FLIGHT_RECORDER_SUMMARY_KEYS = Object.freeze([...PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_SUMMARY_KEYS, 'incompleteFields'] as const);
+export const PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS = Object.freeze([
   'The flight recorder compares only supplied bounded observations and performs no collection or configuration change.',
   'Source fields remain separate. A collection failure, partial result, unsupported source, or missing field never becomes evidence that a prior value disappeared.',
   'Approved windows label expected timing but do not delete evidence or establish that a change was authorised, successful, safe, or complete.',
@@ -119,17 +130,22 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS = Object.freeze([
 ] as const);
 
 export type DomainControlFlightRecorderField = typeof DOMAIN_CONTROL_FLIGHT_RECORDER_FIELDS[number];
+export const DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS = Object.freeze([
+  ...PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS,
+  'Capture time and source observation time remain separate. Unknown, conflicting or non-increasing source times cannot establish an observed change.',
+] as const);
 export type DomainControlObservationState = 'observed' | 'partial' | 'unavailable' | 'unsupported';
 
 export type DomainControlFlightRecorderObservation = Readonly<{
   domain: string;
-  observedAt: string;
+  capturedAt: string;
   collectionDepth: 'deep' | 'fast' | 'unknown';
   fields: readonly Readonly<{
     id: DomainControlFlightRecorderField;
     source: string;
     state: DomainControlObservationState;
     values: readonly string[];
+    observedAt: string | null;
   }>[];
 }>;
 
@@ -138,10 +154,10 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_COMPATIBILITY = defineSchemaCo
   kind: 'cli_document',
   schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA,
   currentVersion: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION,
-  supportedVersions: [DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION],
+  supportedVersions: SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS,
   acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'reject',
-  migration: 'exact_current_only',
+  migration: 'read_only',
   writeSemantics: 'read_only',
   byteBudget: MAX_DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_BYTES,
   owner: 'packages/contracts/domain-control-flight-recorder.mts',
@@ -153,15 +169,19 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_COMPATIBILITY = defineSchemaCompatib
   kind: 'cli_document',
   schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA,
   currentVersion: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION,
-  supportedVersions: [DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION],
+  supportedVersions: SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS,
   acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'reject',
-  migration: 'exact_current_only',
+  migration: 'read_only',
   writeSemantics: 'read_only',
   byteBudget: MAX_DOMAIN_CONTROL_FLIGHT_RECORDER_OUTPUT_BYTES,
   owner: 'packages/contracts/domain-control-flight-recorder.mts',
   note: 'Offline first and last observed control history that preserves expected and unexpected changes.',
 });
+
+const FLIGHT_INPUT_SHAPE_IDS = SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS.map((version) => `domain-control-flight-recorder.input.v${version}`);
+const FLIGHT_DOCUMENT_SHAPE_IDS = SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS.map((version) => `domain-control-flight-recorder.document.v${version}`);
+const CURRENT_FLIGHT_DOCUMENT_SHAPE_ID = `domain-control-flight-recorder.document.v${DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION}`;
 
 export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE = defineSchemaLifecycleFamily({
   id: 'domain-control-flight-recorder',
@@ -171,7 +191,7 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE = defineSchemaLifec
     DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_COMPATIBILITY,
     DOMAIN_CONTROL_FLIGHT_RECORDER_COMPATIBILITY,
   ],
-  contracts: [
+  contracts: ([
     {
       compatibilityId: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_COMPATIBILITY.id,
       schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA,
@@ -204,8 +224,12 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE = defineSchemaLifec
       byteBudget: MAX_DOMAIN_CONTROL_FLIGHT_RECORDER_OUTPUT_BYTES,
       fixtureIds: ['domain-control-flight-recorder-v1'],
     },
-  ],
-  fixtures: [
+  ] as const).flatMap((contract) => SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS.map((version) => ({
+    ...contract, version, lifecycle: version === DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION ? 'current' as const : 'legacy' as const,
+    emitted: contract.emitted && version === DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION,
+    fixtureIds: contract.fixtureIds.map((id) => id.replace(/v\d+$/u, `v${version}`)),
+  }))),
+  fixtures: ([
     {
       id: 'domain-control-flight-recorder-input-v1',
       path: 'test/fixtures/domain-control-flight-recorder-input-v1.json',
@@ -213,7 +237,7 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE = defineSchemaLifec
       sha256: '1fc4127a5885409d2ba76d40c1835a496767c6fe6d87f0545d8367d5f394a628',
       contentDigestSha256: null,
       schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA,
-      version: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION,
+      version: PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION,
       role: 'input',
       expectation: 'normalises_to_current_output',
       expectedOutputFixtureId: 'domain-control-flight-recorder-v1',
@@ -226,25 +250,34 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE = defineSchemaLifec
       sha256: 'c35d43907bba7a7912f3151bc1a2ba37bb8f774c56a3bd5f690be262e842cf4c',
       contentDigestSha256: null,
       schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA,
-      version: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION,
+      version: PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION,
       role: 'current',
       expectation: 'accepted_exact',
       expectedOutputFixtureId: null,
       scope: 'repository',
     },
-  ],
+  ] as const).flatMap((fixture) => {
+    const version = DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION;
+    const id = fixture.id.replace(/v\d+$/u, `v${version}`);
+    const content = fixture.role === 'input'
+      ? { bytes: 2108, sha256: '6998ea864355dd0802b3b6f2c4905f8c84136ad0d4ac9cad1a0fd63dca523b60' }
+      : { bytes: 4649, sha256: '8f3168d101291166f34cede351bc176a934e7997920cd8c22ec00d642ec000df' };
+    return [
+      { ...fixture, role: fixture.role === 'input' ? 'input' as const : 'historical' as const, expectation: 'accepted_exact' as const, expectedOutputFixtureId: null },
+      { ...fixture, ...content, id, path: `test/fixtures/${id}.json`, version, expectedOutputFixtureId: fixture.expectedOutputFixtureId?.replace(/v\d+$/u, `v${version}`) ?? null },
+    ];
+  }),
   metadata: {
-    metadataVersion: 2,
     enforcement: 'declarative_only',
-    shapes: [
+    shapes: SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS.flatMap((version) => [
       {
-        id: 'domain-control-flight-recorder.input.v1',
+        id: `domain-control-flight-recorder.input.v${version}`,
         schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA,
-        versions: [DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION],
+        versions: [version],
         objects: [
           { path: '$', requiredKeys: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_KEYS, optionalKeys: [], unknownKeys: 'reject' },
-          { path: '$.observations[]', requiredKeys: DOMAIN_CONTROL_FLIGHT_RECORDER_OBSERVATION_KEYS, optionalKeys: [], unknownKeys: 'reject' },
-          { path: '$.observations[].fields[]', requiredKeys: DOMAIN_CONTROL_FLIGHT_RECORDER_FIELD_KEYS, optionalKeys: [], unknownKeys: 'reject' },
+          { path: '$.observations[]', requiredKeys: version === PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION ? PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_OBSERVATION_KEYS : DOMAIN_CONTROL_FLIGHT_RECORDER_OBSERVATION_KEYS, optionalKeys: [], unknownKeys: 'reject' },
+          { path: '$.observations[].fields[]', requiredKeys: version === PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION ? PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_FIELD_KEYS : DOMAIN_CONTROL_FLIGHT_RECORDER_FIELD_KEYS, optionalKeys: [], unknownKeys: 'reject' },
           { path: '$.approvedWindows[]', requiredKeys: DOMAIN_CONTROL_FLIGHT_RECORDER_WINDOW_KEYS, optionalKeys: [], unknownKeys: 'reject' },
         ],
         fixedArrays: [],
@@ -252,20 +285,20 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE = defineSchemaLifec
         target: { schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, version: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION },
       },
       {
-        id: 'domain-control-flight-recorder.document.v1',
+        id: `domain-control-flight-recorder.document.v${version}`,
         schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA,
-        versions: [DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION],
+        versions: [version],
         objects: [
           { path: '$', requiredKeys: DOMAIN_CONTROL_FLIGHT_RECORDER_ROOT_KEYS, optionalKeys: [], unknownKeys: 'reject' },
-          { path: '$.events[]', requiredKeys: DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS, optionalKeys: [], unknownKeys: 'reject' },
+          { path: '$.events[]', requiredKeys: version === PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION ? PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS : DOMAIN_CONTROL_FLIGHT_RECORDER_EVENT_KEYS, optionalKeys: [], unknownKeys: 'reject' },
           { path: '$.events[].approvedWindow', requiredKeys: DOMAIN_CONTROL_FLIGHT_RECORDER_APPROVED_WINDOW_KEYS, optionalKeys: [], unknownKeys: 'reject' },
-          { path: '$.summary', requiredKeys: DOMAIN_CONTROL_FLIGHT_RECORDER_SUMMARY_KEYS, optionalKeys: [], unknownKeys: 'reject' },
+          { path: '$.summary', requiredKeys: version === PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION ? PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_SUMMARY_KEYS : DOMAIN_CONTROL_FLIGHT_RECORDER_SUMMARY_KEYS, optionalKeys: [], unknownKeys: 'reject' },
         ],
-        fixedArrays: [{ path: '$.limitations', values: DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS }],
+        fixedArrays: [{ path: '$.limitations', values: version === PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION ? PUBLIC_DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS : DOMAIN_CONTROL_FLIGHT_RECORDER_LIMITATIONS }],
         normalisation: 'preserve_document',
         target: null,
       },
-    ],
+    ] as const),
     boundProfiles: [
       {
         id: 'domain-control-flight-recorder.input-wire.v1',
@@ -277,7 +310,7 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE = defineSchemaLifec
           { id: 'observation-fields', path: '$.observations[].fields', phase: 'pre_accumulation', unit: 'items', minimum: 0, maximum: MAX_FLIGHT_RECORDER_FIELDS, handling: 'reject' },
           { id: 'observation-unique-fields', path: '$.observations[].fields', phase: 'normalised', unit: 'items', minimum: 0, maximum: MAX_FLIGHT_RECORDER_UNIQUE_FIELDS, handling: 'reject' },
           { id: 'field-input-values', path: '$.observations[].fields[].values', phase: 'pre_accumulation', unit: 'items', minimum: 0, maximum: MAX_FLIGHT_RECORDER_INPUT_VALUES, handling: 'reject' },
-          { id: 'field-values', path: '$.observations[].fields[].values', phase: 'normalised', unit: 'items', minimum: 0, maximum: MAX_FLIGHT_RECORDER_VALUES, handling: 'truncate' },
+          { id: 'field-values', path: '$.observations[].fields[].values', phase: 'normalised', unit: 'items', minimum: 0, maximum: MAX_FLIGHT_RECORDER_VALUES, handling: 'reject' },
           { id: 'field-source', path: '$.observations[].fields[].source', phase: 'pre_accumulation', unit: 'characters', minimum: 1, maximum: MAX_FLIGHT_RECORDER_SOURCE_LENGTH, handling: 'reject' },
           { id: 'field-value-text', path: '$.observations[].fields[].values[]', phase: 'pre_accumulation', unit: 'characters', minimum: 1, maximum: MAX_FLIGHT_RECORDER_VALUE_LENGTH, handling: 'reject' },
           { id: 'approved-windows', path: '$.approvedWindows', phase: 'pre_accumulation', unit: 'items', minimum: 0, maximum: MAX_FLIGHT_RECORDER_WINDOWS, handling: 'reject' },
@@ -323,7 +356,7 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE = defineSchemaLifec
       {
         id: 'domain-control-flight-recorder.json.v1',
         schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA,
-        versions: [DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION],
+        versions: SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS,
         mediaType: 'application/json',
         encoding: 'utf-8',
         bom: false,
@@ -383,12 +416,21 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE = defineSchemaLifec
     ],
     consumerEdges: [
       {
+        id: 'domain-control-flight-recorder.node-validate', plane: 'node', operation: 'validate-document',
+        acceptedContracts: [{ schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS, mode: 'direct' }],
+        emittedContract: null, shapeIds: FLIGHT_DOCUMENT_SHAPE_IDS,
+        boundProfileIds: ['domain-control-flight-recorder.output-wire.v1'],
+        hookIds: ['domain-control-flight-recorder.node.validate-document'], serialisationProfileId: null,
+        privacyProfileId: 'domain-control-flight-recorder.sensitive.v1', expiryPolicyId: 'domain-control-flight-recorder.expiry-not-applicable.v1',
+        requestMode: 'none', retentionEffect: 'transient_report', bindingState: 'declared_unenforced', policyState: 'current',
+      },
+      {
         id: 'domain-control-flight-recorder.node-build',
         plane: 'node',
         operation: 'review',
-        acceptedContracts: [{ schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, versions: [DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION], mode: 'direct' }],
+        acceptedContracts: [{ schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS, mode: 'direct' }],
         emittedContract: { schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, version: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION },
-        shapeIds: ['domain-control-flight-recorder.input.v1', 'domain-control-flight-recorder.document.v1'],
+        shapeIds: [...FLIGHT_INPUT_SHAPE_IDS, CURRENT_FLIGHT_DOCUMENT_SHAPE_ID],
         boundProfileIds: ['domain-control-flight-recorder.input-wire.v1', 'domain-control-flight-recorder.output-wire.v1'],
         hookIds: ['domain-control-flight-recorder.node.build'],
         serialisationProfileId: null,
@@ -403,9 +445,9 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE = defineSchemaLifec
         id: 'domain-control-flight-recorder.cli-json-stdout',
         plane: 'cli',
         operation: 'review-json-stdout',
-        acceptedContracts: [{ schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, versions: [DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION], mode: 'direct' }],
+        acceptedContracts: [{ schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS, mode: 'direct' }],
         emittedContract: { schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, version: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION },
-        shapeIds: ['domain-control-flight-recorder.input.v1', 'domain-control-flight-recorder.document.v1'],
+        shapeIds: [...FLIGHT_INPUT_SHAPE_IDS, CURRENT_FLIGHT_DOCUMENT_SHAPE_ID],
         boundProfileIds: ['domain-control-flight-recorder.input-wire.v1', 'domain-control-flight-recorder.output-wire.v1', 'domain-control-flight-recorder.cli-command.v1'],
         hookIds: ['domain-control-flight-recorder.node.build', 'domain-control-flight-recorder.node.serialise-json'],
         serialisationProfileId: 'domain-control-flight-recorder.json.v1',
@@ -420,9 +462,9 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE = defineSchemaLifec
         id: 'domain-control-flight-recorder.cli-terminal-stdout',
         plane: 'cli',
         operation: 'review-terminal-stdout',
-        acceptedContracts: [{ schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, versions: [DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION], mode: 'direct' }],
+        acceptedContracts: [{ schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS, mode: 'direct' }],
         emittedContract: { schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, version: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION },
-        shapeIds: ['domain-control-flight-recorder.input.v1', 'domain-control-flight-recorder.document.v1'],
+        shapeIds: [...FLIGHT_INPUT_SHAPE_IDS, CURRENT_FLIGHT_DOCUMENT_SHAPE_ID],
         boundProfileIds: ['domain-control-flight-recorder.input-wire.v1', 'domain-control-flight-recorder.output-wire.v1', 'domain-control-flight-recorder.cli-command.v1'],
         hookIds: ['domain-control-flight-recorder.node.build', 'domain-control-flight-recorder.node.format-terminal'],
         serialisationProfileId: null,
@@ -437,9 +479,9 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE = defineSchemaLifec
         id: 'domain-control-flight-recorder.cli-json-file',
         plane: 'cli',
         operation: 'review-json-file',
-        acceptedContracts: [{ schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, versions: [DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION], mode: 'direct' }],
+        acceptedContracts: [{ schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS, mode: 'direct' }],
         emittedContract: { schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, version: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION },
-        shapeIds: ['domain-control-flight-recorder.input.v1', 'domain-control-flight-recorder.document.v1'],
+        shapeIds: [...FLIGHT_INPUT_SHAPE_IDS, CURRENT_FLIGHT_DOCUMENT_SHAPE_ID],
         boundProfileIds: ['domain-control-flight-recorder.input-wire.v1', 'domain-control-flight-recorder.output-wire.v1', 'domain-control-flight-recorder.cli-command.v1'],
         hookIds: ['domain-control-flight-recorder.node.build', 'domain-control-flight-recorder.node.serialise-json'],
         serialisationProfileId: 'domain-control-flight-recorder.json.v1',
@@ -454,9 +496,9 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE = defineSchemaLifec
         id: 'domain-control-flight-recorder.cli-terminal-file',
         plane: 'cli',
         operation: 'review-terminal-file',
-        acceptedContracts: [{ schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, versions: [DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION], mode: 'direct' }],
+        acceptedContracts: [{ schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_FLIGHT_RECORDER_VERSIONS, mode: 'direct' }],
         emittedContract: { schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, version: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION },
-        shapeIds: ['domain-control-flight-recorder.input.v1', 'domain-control-flight-recorder.document.v1'],
+        shapeIds: [...FLIGHT_INPUT_SHAPE_IDS, CURRENT_FLIGHT_DOCUMENT_SHAPE_ID],
         boundProfileIds: ['domain-control-flight-recorder.input-wire.v1', 'domain-control-flight-recorder.output-wire.v1', 'domain-control-flight-recorder.cli-command.v1'],
         hookIds: ['domain-control-flight-recorder.node.build', 'domain-control-flight-recorder.node.format-terminal'],
         serialisationProfileId: null,
@@ -473,7 +515,7 @@ export const DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE = defineSchemaLifec
         operation: 'embed-after-current-manifest-bounded-passive-monitor',
         acceptedContracts: [],
         emittedContract: { schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, version: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION },
-        shapeIds: ['domain-control-flight-recorder.document.v1'],
+        shapeIds: [CURRENT_FLIGHT_DOCUMENT_SHAPE_ID],
         boundProfileIds: ['domain-control-flight-recorder.output-wire.v1', 'domain-control-flight-recorder.monitor-action.v1'],
         hookIds: ['domain-control-flight-recorder.node.validate-document', 'domain-control-flight-recorder.cli.monitor'],
         serialisationProfileId: null,

@@ -2,6 +2,7 @@
 // files are generated locally and never submitted or applied automatically.
 
 import { caseDispositionSupportsDefensiveResponse, normalizeDomain } from '../cases/case-model.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import {
   DEFENSIVE_INDICATOR_EXPORT_VERSION,
   DEFENSIVE_INDICATOR_MANIFEST_SCHEMA,
@@ -65,6 +66,21 @@ function plainRecord(value: unknown): Record<string, unknown> | null {
 function riskScore(record: Record<string, unknown>): number | null {
   const value = record.risk ?? record.riskScore;
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/** Source metadata shared by interchange writers; export time is not evidence time. */
+export function defensiveIndicatorProvenance(value: unknown) {
+  const source = plainRecord(value) ?? {};
+  const saved = plainRecord(source.saved) ?? {};
+  const score = riskScore(source);
+  const version = source.riskModelVersion ?? saved.riskModelVersion;
+  const depth = source.scanDepth ?? saved.scanDepth;
+  return Object.freeze({
+    riskScore: score === null ? null : Math.max(0, Math.min(100, Math.round(score))),
+    riskModelVersion: typeof version === 'number' && Number.isSafeInteger(version) && version > 0 && version <= 1_000 ? version : null,
+    scanDepth: depth === 'fast' || depth === 'deep' ? depth : 'unknown',
+    observedAt: normalizeExplicitIsoTimestamp(source.observedAt) || normalizeExplicitIsoTimestamp(saved.observedAt),
+  });
 }
 
 function normalizedDomainSet(value: unknown): Set<string> {

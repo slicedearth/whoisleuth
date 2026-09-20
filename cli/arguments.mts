@@ -1,10 +1,14 @@
 import { parseCommandArguments, type ParsedCommandArguments } from './command-argument-grammar.mts';
 import { CliUsageError, hasUnsafeCliText } from './errors.mts';
+import { parseArchiveContentDigest } from './archive-content-digest.mts';
 import type { InvestigationPlanRecipe, RunnableInvestigationPlanRecipe } from './investigation-plan.mts';
+import type { WorkflowArtifactBinding } from '../packages/contracts/investigation-run.mts';
 import { parseCliFailPolicies, type CliFailPolicy, type CliFailPolicyCommand } from './fail-policy.mts';
 import { isDirectLookupTarget } from '../lib/classify.mts';
+import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../packages/investigation/investigation-manifest.mts';
 import {
   CLI_COMMANDS,
+  CLI_CASE_OPERATIONS,
   cliMetaActionForInvocation,
   isCliCommand,
   type CliCommand,
@@ -12,7 +16,7 @@ import {
   type CompletionShell,
 } from './command-reference.mts';
 
-const MAX_CLI_ARGUMENTS = 32;
+const MAX_CLI_ARGUMENTS = MAX_INVESTIGATION_MANIFEST_ARTIFACTS + 32;
 const MAX_CLI_ARGUMENT_LENGTH = 1024;
 
 type TerminalOptions = { quiet: boolean; color: boolean };
@@ -38,6 +42,7 @@ type VerifySignatureArguments = {
   action: 'verify-signature';
   source: string | null;
   publicKeySource: string | null;
+  trustStoreSource: string | null;
   output: 'terminal' | 'json';
 } & TerminalOptions;
 
@@ -47,17 +52,17 @@ type CliAction =
   | { action: 'completion'; shell: CompletionShell }
   | ({ action: 'commands'; output: 'terminal' | 'json'; common: boolean; group: CliHelpGroup | null; mode: 'offline' | 'network' | null } & TerminalOptions)
   | { action: 'manual' }
-  | ({ action: 'manifest'; sources: readonly string[]; workflow: string; configurationDigestSha256: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'manifest'; sources: readonly string[]; workflow: string; configurationDigestSha256: string | null; package?: true; bagit?: true; folder?: string; passphraseSource?: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'map-observations'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'oam-export'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'doctor'; network: boolean; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html' | 'junit'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean; includeAttribution: boolean; observerLabel: string | null; vantageLabel: string | null; browse?: true; saveLookup?: string; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
-  | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries' | 'junit'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; plan: boolean; filter: 'all' | 'registered' | 'inconclusive' | 'errors'; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
+  | ({ action: 'lookup'; query: string | null; output: 'terminal' | 'json' | 'markdown' | 'html' | 'junit'; deep: boolean; detail: LookupDetail; strictExit: boolean; events: boolean; plan: boolean; includeAttribution: boolean; observerLabel: string | null; vantageLabel: string | null; exactUrl?: true; browse?: true; saveLookup?: string; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
+  | ({ action: 'bulk'; source: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'csv_metadata' | 'domains' | 'queries' | 'junit'; deep: boolean; concurrency: number; checkpoint: string | null; resume: boolean; events: boolean; plan: boolean; filter: 'all' | 'registered' | 'inconclusive' | 'errors'; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'ct-search'; keyword: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'ct-intake'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'discover'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; snapshotSource: string | null } & TerminalOptions)
-  | ({ action: 'discover-scan'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; deep: boolean; scanLimit: number; chunkSize: number; concurrency: number; checkpoint: string | null; resume: boolean; resolverText: string | null; observationSnapshot: string | null; allowlistSource: string | null; filter: 'all' | 'registered' | 'inconclusive' | 'acquisition' | 'suppressed'; events: boolean; plan: boolean; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
-  | ({ action: 'posture'; domain: string | null; output: 'terminal' | 'json' | 'sarif'; selectorText: string | null; retiredSelectorText: string | null; mailProfile: 'defensive_no_mail' | 'parked' | 'standard'; ownedDomain: boolean } & TerminalOptions)
+  | ({ action: 'discover-scan'; seed: string | null; output: 'terminal' | 'json' | 'jsonl' | 'csv' | 'csv_metadata' | 'domains'; preset: 'common' | 'impersonation' | 'all' | 'custom'; keyboardLayout: 'qwerty' | 'azerty' | 'qwertz' | 'all'; tldText: string | null; dictionarySource: string | null; familyText: string | null; deep: boolean; scanLimit: number; chunkSize: number; concurrency: number; checkpoint: string | null; resume: boolean; resolverText: string | null; observationSnapshot: string | null; allowlistSource: string | null; filter: 'all' | 'registered' | 'inconclusive' | 'acquisition' | 'suppressed'; events: boolean; plan: boolean; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
+  | ({ action: 'posture'; domain: string | null; output: 'terminal' | 'json' | 'sarif'; selectorText: string | null; retiredSelectorText: string | null; mailProfile: 'defensive_no_mail' | 'parked' | 'standard'; ownedDomain: boolean; includeInheritedDns?: true } & TerminalOptions)
   | ({ action: 'http'; domain: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'tls'; hostname: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'dnssec-validate'; target: string; resolver: string; trustAnchorSource: string; ownedOrAuthorized: true; output: 'terminal' | 'json' } & TerminalOptions)
@@ -68,7 +73,7 @@ type CliAction =
   | { action: 'registry-scaffold'; profile: string; suffix: string; scenario: 'registered' | 'not_found' | 'inconclusive' }
   | ({ action: 'risk-calibrate'; source: string | null; output: 'terminal' | 'json' | 'summary_json' } & TerminalOptions)
   | ({ action: 'lookalike-calibrate'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'verify-artifact'; source: string | null; passphraseSource: string | null; manifestSource: string | null; manifestEntryId: string | null; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
+  | ({ action: 'verify-artifact'; source: string | null; passphraseSource: string | null; manifestSource: string | null; manifestEntryId: string | null; package?: true; bagit?: true; folder?: string; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
   | ({ action: 'interchange-report'; source: string | null; passphraseSource: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | InspectArchiveArguments
   | SignArtifactArguments
@@ -80,6 +85,7 @@ type CliAction =
   | ({ action: 'mail-headers'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'review-evidence'; source: string | null; mmdbSource: string | null; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
   | ({ action: 'brief'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'case'; operation: typeof CLI_CASE_OPERATIONS[number]; source: string | null; caseId: string | null; domain: string | null; title: string | null; newIncident: boolean; text: string | null; noteSource: string | null; inputSource: string | null; expectedFileDigest: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'case-pack'; source: string | null; output: 'terminal' | 'json'; audience: 'internal' | 'trusted' | 'public'; reviewed: true } & TerminalOptions)
   | ({ action: 'domain-control'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'monitor-once'; source: string | null; previousSource: string | null; output: 'terminal' | 'json' | 'junit'; limit: number; concurrency: number; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
@@ -89,7 +95,7 @@ type CliAction =
   | ({ action: 'workflow-plan'; recipe: InvestigationPlanRecipe; subject: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'workflow-plan'; discovery: 'list'; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'workflow-plan'; discovery: 'explain'; recipe: InvestigationPlanRecipe; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'workflow-run'; recipe: RunnableInvestigationPlanRecipe; subject: string; resumeSource: string | null; selections: readonly Readonly<{ stepId: string; value: string }>[]; approveNetwork: boolean; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'workflow-run'; recipe: RunnableInvestigationPlanRecipe; subject: string; resumeSource: string | null; selections: readonly Readonly<{ stepId: string; value: string }>[]; artifactBindings: readonly WorkflowArtifactBinding[]; confirmedReviews: readonly string[]; approveNetwork: boolean; interactive: boolean; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'diff'; leftSource: string; rightSource: string; leftSessionId: string | null; rightSessionId: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'reconcile'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'timeline'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
@@ -111,9 +117,8 @@ function terminalOptions(parsed: ParsedCommandArguments): TerminalOptions {
 
 function parseInspectArchiveArguments(parsed: ParsedCommandArguments): InspectArchiveArguments {
   const expectedContentDigest = parsed.optionValue('--expect-content-digest');
-  if (expectedContentDigest !== null && !/^sha256:[a-f0-9]{64}$/u.test(expectedContentDigest)) {
-    throw new CliUsageError('--expect-content-digest requires sha256 followed by 64 lowercase hexadecimal characters.');
-  }
+  try { parseArchiveContentDigest(expectedContentDigest); }
+  catch { throw new CliUsageError('--expect-content-digest requires sha256:<64 lowercase hex> or sorted-json-v2:sha256:<64 lowercase hex>.'); }
   return {
     action: 'inspect-archive',
     source: parsed.positionalValue('source'),
@@ -140,6 +145,7 @@ function parseVerifySignatureArguments(parsed: ParsedCommandArguments): VerifySi
     action: 'verify-signature',
     source: parsed.positionalValue('source'),
     publicKeySource: parsed.optionValue('--public-key-file'),
+    trustStoreSource: parsed.optionValue('--trust-store-file'),
     output: parsed.hasOption('--json') ? 'json' : 'terminal',
     ...terminalOptions(parsed),
   };
@@ -203,6 +209,7 @@ function parseLookupArguments(parsed: ParsedCommandArguments): Extract<CliAction
     vantageLabel: normalizedLabel(parsed, '--vantage', 80),
     ...terminalOptions(parsed),
     ...(parsed.hasOption('--browse') ? { browse: true as const } : {}),
+    ...(parsed.hasOption('--exact-url') ? { exactUrl: true as const } : {}),
     ...(parsed.optionValue('--save-lookup') ? { saveLookup: parsed.optionValue('--save-lookup')! } : {}),
     ...(selectedFailPolicies ? { failOn: selectedFailPolicies } : {}),
   };
@@ -210,7 +217,7 @@ function parseLookupArguments(parsed: ParsedCommandArguments): Extract<CliAction
 
 function parseManifestArguments(parsed: ParsedCommandArguments): Extract<CliAction, { action: 'manifest' }> {
   const sources = parsed.positionalValues('artefacts');
-  if (sources.some((source) => !source)) throw new CliUsageError('manifest requires from 1 to 16 JSON artefact files.');
+  if (sources.some((source) => !source)) throw new CliUsageError(`manifest requires from 1 to ${MAX_INVESTIGATION_MANIFEST_ARTIFACTS} artefact files.`);
   if (new Set(sources).size !== sources.length) throw new CliUsageError('manifest artefact files must be different.');
   const configurationDigestSha256 = parsed.optionValue('--configuration-digest');
   if (configurationDigestSha256 !== null && !/^sha256:[a-f0-9]{64}$/u.test(configurationDigestSha256)) {
@@ -221,6 +228,10 @@ function parseManifestArguments(parsed: ParsedCommandArguments): Extract<CliActi
     sources,
     workflow: parsed.optionValue('--workflow')!,
     configurationDigestSha256,
+    ...(parsed.optionValue('--passphrase-file') ? { passphraseSource: parsed.optionValue('--passphrase-file')! } : {}),
+    ...(parsed.hasOption('--package') ? { package: true as const } : {}),
+    ...(parsed.hasOption('--bagit') ? { bagit: true as const } : {}),
+    ...(parsed.optionValue('--folder') ? { folder: parsed.optionValue('--folder')! } : {}),
     output: jsonOutput(parsed),
     ...terminalOptions(parsed),
   };
@@ -231,8 +242,9 @@ function parseBulkArguments(parsed: ParsedCommandArguments): Extract<CliAction, 
   const selectedFailPolicies = failPolicies(parsed, 'bulk');
   const output = parseOutput(parsed, [
     ['--json', 'json'], ['--jsonl', 'jsonl'], ['--csv', 'csv'], ['--domains', 'domains'],
+    ['--csv-with-metadata', 'csv_metadata'],
     ['--queries', 'queries'], ['--junit', 'junit'],
-  ]) as 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains' | 'queries' | 'junit';
+  ]) as Extract<CliAction, { action: 'bulk' }>['output'];
   const filter = parsed.hasOption('--registered-only') ? 'registered'
     : parsed.hasOption('--inconclusive-only') ? 'inconclusive'
       : parsed.hasOption('--errors-only') ? 'errors' : 'all';
@@ -284,7 +296,7 @@ function parseDiscoverScanArguments(parsed: ParsedCommandArguments): Extract<Cli
   return {
     action: 'discover-scan',
     seed: parsed.positionalValue('subject'),
-    output: parseOutput(parsed, [['--json', 'json'], ['--jsonl', 'jsonl'], ['--csv', 'csv'], ['--domains', 'domains']]) as 'terminal' | 'json' | 'jsonl' | 'csv' | 'domains',
+    output: parseOutput(parsed, [['--json', 'json'], ['--jsonl', 'jsonl'], ['--csv', 'csv'], ['--csv-with-metadata', 'csv_metadata'], ['--domains', 'domains']]) as Extract<CliAction, { action: 'discover-scan' }>['output'],
     ...discoveryValues(parsed),
     deep,
     scanLimit: parsed.integerOption('--scan-limit') ?? Math.min(100, deep ? 50 : 500),
@@ -313,6 +325,7 @@ function parsePostureArguments(parsed: ParsedCommandArguments): Extract<CliActio
     retiredSelectorText: parsed.optionValue('--retired-selectors'),
     mailProfile: mailProfile === 'defensive-no-mail' ? 'defensive_no_mail' : mailProfile as 'parked' | 'standard',
     ownedDomain: parsed.hasOption('--owned-domain'),
+    ...(parsed.hasOption('--include-inherited-dns') ? { includeInheritedDns: true as const } : {}),
     ...terminalOptions(parsed),
   };
 }
@@ -352,12 +365,16 @@ function parseTwoFileComparisonArguments(
 }
 
 function parseVerifyArtifactArguments(parsed: ParsedCommandArguments): Extract<CliAction, { action: 'verify-artifact' }> {
+  if (parsed.hasOption('--folder') && parsed.positionalValue('source')) throw new CliUsageError('--folder selects its own input; do not also supply a file or stdin marker.');
   return {
     action: 'verify-artifact',
     source: parsed.positionalValue('source'),
     passphraseSource: parsed.optionValue('--passphrase-file'),
     manifestSource: parsed.optionValue('--manifest'),
     manifestEntryId: parsed.optionValue('--manifest-entry'),
+    ...(parsed.hasOption('--package') ? { package: true as const } : {}),
+    ...(parsed.hasOption('--bagit') ? { bagit: true as const } : {}),
+    ...(parsed.optionValue('--folder') ? { folder: parsed.optionValue('--folder')! } : {}),
     output: jsonOutput(parsed),
     strictExit: parsed.hasOption('--strict-exit'),
     ...terminalOptions(parsed),
@@ -417,6 +434,11 @@ function parseWorkflowPlanArguments(parsed: ParsedCommandArguments): Extract<Cli
 }
 
 function parseWorkflowRunArguments(parsed: ParsedCommandArguments): Extract<CliAction, { action: 'workflow-run' }> {
+  const artifactBindings = parsed.optionValues('--use-artifact').map((value) => {
+    const match = /^([a-z0-9]+(?:-[a-z0-9]+)*):([1-9][0-9]?)=([a-z0-9]+(?:-[a-z0-9]+)*)$/u.exec(value);
+    if (!match) throw new CliUsageError('--use-artifact requires <step-id>:<input-number>=<earlier-step-id>.');
+    return Object.freeze({ stepId: match[1]!, input: Number(match[2]), sourceStepId: match[3]! });
+  });
   const selections = parsed.optionValues('--select').map((value) => {
     const separator = value.indexOf('=');
     const stepId = separator === -1 ? '' : value.slice(0, separator);
@@ -435,7 +457,10 @@ function parseWorkflowRunArguments(parsed: ParsedCommandArguments): Extract<CliA
     subject: parsed.positionalValue('subject')!,
     resumeSource: parsed.optionValue('--resume'),
     selections: Object.freeze(selections),
+    artifactBindings: Object.freeze(artifactBindings),
+    confirmedReviews: Object.freeze(parsed.optionValues('--confirm-review')),
     approveNetwork: parsed.hasOption('--approve-network'),
+    interactive: parsed.hasOption('--interactive'),
     output: jsonOutput(parsed),
     ...terminalOptions(parsed),
   };
@@ -457,6 +482,35 @@ function uniqueSources(parsed: ParsedCommandArguments, command: 'reconcile' | 't
   const sources = parsed.positionalValues('sources');
   if (new Set(sources).size !== sources.length) throw new CliUsageError(`${command} input files must be different.`);
   return sources;
+}
+
+function parseCaseArguments(parsed: ParsedCommandArguments): Extract<CliAction, { action: 'case' }> {
+  const operation = parsed.positionalValue('operation') as typeof CLI_CASE_OPERATIONS[number];
+  const source = parsed.positionalValue('source');
+  const domain = parsed.optionValue('--domain');
+  const caseId = parsed.optionValue('--case-id');
+  const title = parsed.optionValue('--title');
+  const newIncident = parsed.hasOption('--new-incident');
+  const text = parsed.optionValue('--text');
+  const noteSource = parsed.optionValue('--note-file');
+  const inputSource = parsed.optionValue('--input');
+  const expectedFileDigest = parsed.optionValue('--expect-file-digest');
+  if (source === '-' || inputSource === '-' || noteSource === '-') throw new CliUsageError('Case operations require selected files, not stdin.');
+  if (operation !== 'open' && !source) throw new CliUsageError(`${operation} requires a Case file.`);
+  if (operation !== 'show' && !parsed.hasOption('--output')) throw new CliUsageError('Case mutations require --output; nothing was changed.');
+  if (operation === 'open' && !domain) throw new CliUsageError('case open requires --domain.');
+  if (operation !== 'open' && (title || newIncident)) throw new CliUsageError('--title and --new-incident belong to case open.');
+  if (newIncident && (!title || caseId)) throw new CliUsageError('--new-incident requires a distinguishing --title and cannot select an existing --case-id.');
+  if (operation === 'note' ? (text === null && !noteSource) : (text !== null || noteSource !== null)) {
+    throw new CliUsageError('Only case note accepts and requires --text or --note-file.');
+  }
+  if (['pin', 'assess', 'recheck'].includes(operation) ? !inputSource : inputSource !== null) {
+    throw new CliUsageError('Only case pin, assess and recheck accept and require --input.');
+  }
+  if (expectedFileDigest !== null && (!source || !/^sha256:[a-f0-9]{64}$/u.test(expectedFileDigest))) {
+    throw new CliUsageError('--expect-file-digest requires a source file and sha256:<64 lowercase hexadecimal characters>.');
+  }
+  return { action: 'case', operation, source, caseId, domain, title, newIncident, text, noteSource, inputSource, expectedFileDigest, output: jsonOutput(parsed), ...terminalOptions(parsed) };
 }
 
 const CLI_PARSERS = Object.freeze({
@@ -517,6 +571,7 @@ const CLI_PARSERS = Object.freeze({
     output: jsonOutput(parsed), strictExit: parsed.hasOption('--strict-exit'), ...terminalOptions(parsed),
   }),
   brief: (parsed) => singleInputAction('brief', parsed),
+  case: parseCaseArguments,
   'case-pack': (parsed) => ({
     action: 'case-pack', source: parsed.positionalValue('source'), output: jsonOutput(parsed),
     audience: parsed.optionValue('--audience') as 'internal' | 'trusted' | 'public', reviewed: true, ...terminalOptions(parsed),

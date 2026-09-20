@@ -1,15 +1,18 @@
 import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../lib/project-metadata.mts';
 import {
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
-  PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
   V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
-} from '../lib/evidence-export.mts';
+} from '../packages/contracts/lookup-evidence.mts';
 import {
   RISK_CALIBRATION_DATASET_SCHEMA,
   RISK_CALIBRATION_REPORT_SCHEMA,
 } from '../packages/contracts/risk-calibration.mts';
 import {
   CASE_SCHEMA_VERSION,
+  CLI_CASE_PACK_INPUT_CASE_VERSIONS,
+  MAX_CASE_STORE_BYTES,
+  MAX_EDITABLE_CASE_INPUT_BYTES,
   SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS,
   WORKSPACE_ARCHIVE_VERSION,
 } from '../packages/contracts/case-portability.mts';
@@ -20,12 +23,16 @@ import {
   type CliHelpGroup,
 } from '../packages/contracts/cli-command-semantics.mts';
 import { CLI_FAIL_POLICIES_BY_COMMAND, type CliFailPolicyCommand } from './fail-policy.mts';
+import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../packages/investigation/investigation-manifest.mts';
 
 const LEGACY_WORKSPACE_ARCHIVE_VERSIONS = SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS
   .filter((version) => version !== WORKSPACE_ARCHIVE_VERSION);
 const LEGACY_WORKSPACE_ARCHIVE_DESCRIPTION = LEGACY_WORKSPACE_ARCHIVE_VERSIONS
   .map((version) => `version-${version}`)
   .join(' and ');
+const PUBLISHED_V2_LOOKUP_EVIDENCE_VERSIONS = SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS
+  .filter((version) => version > V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION && version !== LOOKUP_EVIDENCE_SCHEMA_VERSION)
+  .join(', ');
 const LEGACY_WORKSPACE_ARCHIVE_SCOPE = LEGACY_WORKSPACE_ARCHIVE_VERSIONS
   .map((version) => `v${version}`)
   .join(' and ');
@@ -133,6 +140,8 @@ type CliCommandDefinition = Readonly<{
     inputLimits: readonly string[];
     outputLimits: readonly string[];
     outputFormats: readonly string[];
+    presentationOptions: readonly Readonly<{ option: string; format: string }>[];
+    fileOutput: boolean;
     primaryEvidenceArtefacts: readonly string[];
   }>;
 }>;
@@ -150,12 +159,8 @@ const INVESTIGATION_PLAN_RECIPES = Object.freeze([
   'post-change-verification',
 ] as const);
 
-const RUNNABLE_INVESTIGATION_PLAN_RECIPES = Object.freeze([
-  'domain-triage',
-  'lookalike-review',
-  'owned-domain-review',
-  'historical-comparison',
-] as const);
+const RUNNABLE_INVESTIGATION_PLAN_RECIPES = INVESTIGATION_PLAN_RECIPES;
+const CLI_CASE_OPERATIONS = ['show', 'open', 'note', 'pin', 'assess', 'recheck'] as const;
 
 const CLI_META_ACTIONS: readonly CliMetaAction[] = Object.freeze([
   Object.freeze({
@@ -199,6 +204,8 @@ redirected or unsupported terminals continue to print this help. No request
 starts until a Lookup plan is shown and the analyst confirms collection.
 Use --json or --jsonl where supported for machine-readable stdout.
 Use --output <file> for atomic private file output and --force to replace it.
+Use -- before positional filenames that begin with a hyphen; ./ also makes a
+filename unambiguous, for example: whoisleuth verify-artifact -- ./-evidence.json.
 Use --palette auto, light, or dark after the command to select a fixed terminal
 colour palette; --no-color, NO_COLOR, and redirected output still suppress ANSI.
 Use --config <file> and --profile <name> for explicit versioned safe defaults.
@@ -306,6 +313,8 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--palette': enumeration(['auto', 'light', 'dark']),
   '--network': flag(),
   '--json': flag(),
+  '--package': flag(),
+  '--folder': file(),
   '--quiet': flag('idempotent'),
   '--no-color': flag('idempotent'),
   '--common': flag(),
@@ -319,12 +328,14 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--no-attribution': flag(),
   '--fast': flag(),
   '--deep': flag(),
+  '--exact-url': flag(),
   '--observer': text(),
   '--vantage': text(),
   '--plan': flag(),
   '--summary': flag(),
   '--verbose': flag(),
   '--browse': flag(),
+  '--interactive': flag(),
   '--save-lookup': file(),
   '--strict-exit': flag(),
   '--fail-on': optionDefinition('policy_list', {
@@ -333,6 +344,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--events': flag(),
   '--jsonl': flag(),
   '--csv': flag(),
+  '--csv-with-metadata': flag(),
   '--domains': flag(),
   '--queries': flag(),
   '--registered-only': flag(),
@@ -364,6 +376,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--mail-profile': enumeration(['standard', 'defensive-no-mail', 'parked']),
   '--sarif': flag(),
   '--owned-domain': flag(),
+  '--include-inherited-dns': flag(),
   '--trust-anchor': file(),
   '--owned-or-authorized': flag(),
   '--active-probe': flag(),
@@ -372,13 +385,15 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--summary-json': flag(),
   '--passphrase-file': file(),
   '--manifest': file(),
-  '--manifest-entry': enumeration(Array.from({ length: 16 }, (_, index) => `artifact-${index + 1}`)),
+  '--bagit': flag(),
+  '--manifest-entry': enumeration(Array.from({ length: MAX_INVESTIGATION_MANIFEST_ARTIFACTS }, (_, index) => `artifact-${index + 1}`)),
   '--search': text(),
   '--require-match': flag(),
   '--reveal': flag(),
   '--expect-content-digest': text(true),
   '--private-key-file': file(),
   '--public-key-file': file(),
+  '--trust-store-file': file(),
   '--mmdb': file(),
   '--audience': enumeration(['internal', 'trusted', 'public']),
   '--reviewed': flag(),
@@ -393,10 +408,20 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--list': flag(),
   '--explain': enumeration(INVESTIGATION_PLAN_RECIPES),
   '--select': optionDefinition('text', { occurrence: 'repeatable', acceptsOptionLikeValue: true }),
+  '--use-artifact': optionDefinition('text', { occurrence: 'repeatable' }),
+  '--confirm-review': optionDefinition('text', { occurrence: 'repeatable' }),
   '--approve-network': flag(),
   '--left-session': text(true),
   '--right-session': text(true),
   '--compact': flag(),
+  '--case-id': text(),
+  '--domain': text(),
+  '--title': text(),
+  '--new-incident': flag(),
+  '--text': text(),
+  '--note-file': file(),
+  '--input': file(),
+  '--expect-file-digest': text(),
 } as const satisfies Readonly<Record<string, CliOptionDefinition>>);
 
 type CliOption = keyof typeof CLI_OPTION_DEFINITIONS;
@@ -424,10 +449,15 @@ const QUIET_OUTPUT_CONSTRAINT = constraint({
   kind: 'mutually_exclusive',
   options: ['--quiet', '--output'],
 });
-const MACHINE_OUTPUT_OPTIONS = Object.freeze([
-  '--json', '--jsonl', '--junit', '--csv', '--domains', '--queries', '--markdown',
-  '--html', '--sarif', '--summary-json',
-]);
+const PRESENTATION_OPTIONS = Object.freeze([
+  ['--json', 'JSON'], ['--jsonl', 'JSON Lines'], ['--junit', 'JUnit XML'],
+  ['--csv', 'CSV'],
+  ['--csv-with-metadata', 'CSV with evidence metadata'],
+  ['--domains', 'domain list'], ['--queries', 'query list'],
+  ['--markdown', 'Markdown'], ['--html', 'HTML'], ['--sarif', 'SARIF'],
+  ['--summary-json', 'summary JSON'],
+] as const);
+const MACHINE_OUTPUT_OPTIONS: readonly string[] = Object.freeze(PRESENTATION_OPTIONS.map(([option]) => option));
 
 function optionSpec(command: CliCommand, option: CliOption, scope: CliOptionScope): CliOptionSpec {
   const definition = CLI_OPTION_DEFINITIONS[option];
@@ -581,16 +611,22 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   manifest: commandSeed({
     reference: {
-      description: 'Record an ordered, path-free manifest for up to 16 local JSON artefacts.',
+      description: `Record an ordered, path-free manifest for up to ${MAX_INVESTIGATION_MANIFEST_ARTIFACTS} local files. Use --package --output evidence.zip for a ZIP, add --passphrase-file to encrypt the ordinary package, or use --folder ./evidence for a new unencrypted folder. Add --bagit to ZIP or folder output for BagIt 1.0 with SHA-512 checksums.`,
       example: 'whoisleuth manifest lookup.json comparison.json --workflow "domain review" --json',
-      boundary: 'The command records hashes and bounded schema metadata only. It omits source paths and artefact contents and performs no network collection.',
+      boundary: 'Ordinary output contains metadata only. ZIP and folder output include unchanged selected bytes and are private until reviewed for sharing. Folders must be new; existing destinations are never replaced and a failed write may leave explicit partial output. BagIt output is unencrypted; its checksums do not authenticate evidence. Filenames ending in .json are parsed as JSON; other files are opaque and never executed. Original paths are omitted. No network request is made.',
     },
-    collection: { mode: 'offline', scope: 'Reads 1 to 16 local JSON artefacts capped at 32 MiB in total and retains no source paths.' },
+    collection: { mode: 'offline', scope: `Reads 1 to ${MAX_INVESTIGATION_MANIFEST_ARTIFACTS} local files, at most ${MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES / 1024 / 1024} MiB each and ${MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES.toLocaleString('en-AU')} bytes combined; retains no source paths.` },
     summary: 'Build an evidence manifest offline',
-    options: ['--workflow', '--configuration-digest', '--json', '--quiet', '--no-color'],
-    positionals: Object.freeze([positional('artefacts', 'file', 1, 16)]),
+    options: ['--workflow', '--configuration-digest', '--package', '--bagit', '--passphrase-file', '--folder', '--json', '--quiet', '--no-color'],
+    positionals: Object.freeze([positional('artefacts', 'file', 1, MAX_INVESTIGATION_MANIFEST_ARTIFACTS)]),
     constraints: Object.freeze([
     constraint({ kind: 'required', options: ['--workflow'] }),
+    constraint({ kind: 'requires_any', option: '--bagit', requiredOptions: ['--package', '--folder'] }),
+    constraint({ kind: 'excludes_all', option: '--bagit', excludedOptions: ['--passphrase-file'] }),
+    constraint({ kind: 'requires_all', option: '--package', requiredOptions: ['--output'] }),
+    constraint({ kind: 'requires_all', option: '--passphrase-file', requiredOptions: ['--package'] }),
+    constraint({ kind: 'mutually_exclusive', options: ['--package', '--json'] }),
+    constraint({ kind: 'excludes_all', option: '--folder', excludedOptions: ['--package', '--output', '--force'] }),
   ]),
     handlerOwner: 'inline',
     networkEffect: 'offline',
@@ -645,17 +681,18 @@ const COMMAND_SEEDS = Object.freeze({
     reference: {
       description: 'Collect registration evidence for one domain, IP, or ASN.',
       example: 'whoisleuth lookup example.test --deep --browse',
-      boundary: 'Fast is the default. An ICANN-recognised public domain, reserved documentation domain, IP, or ASN may occupy command position as shorthand; it delegates to this same parser and URL-like input requires the explicit lookup command. Deep mode adds bounded WHOIS, DNS, HTTP, TLS, technology, posture, and network context where applicable. A full Deep homepage observation can derive fixed publication and delivery/cache summaries from the same response without retaining raw metadata values or making another request. --browse opens before collection, shows aggregate Fast progress or independently settled planned Deep sources, and then navigates allowlisted retained fields in the completed document. Press ? for help and / to search rendered panel text only. Closing during collection cancels without a partial document. --save-lookup writes the exact completed private JSON only after a normal browser close; it can contain normalised evidence omitted from panels and refuses an existing path.',
+      boundary: 'Fast is the default. An ICANN-recognised public domain, reserved documentation domain, IP, or ASN may occupy command position as shorthand; it delegates to this same parser and URL-like input requires the explicit lookup command. Deep mode adds bounded WHOIS, DNS, HTTP, TLS, technology, posture, and network context where applicable. --deep --exact-url explicitly sends the input URL path and query to the website, without its fragment; ordinary URL input sends only the hostname. --plan remains offline and omits the selected URL. Retained paths and page-derived text require review before sharing. A full Deep homepage observation can derive fixed publication and delivery/cache summaries from the same response without retaining raw metadata values or making another request. --browse opens before collection, shows aggregate Fast progress or independently settled planned Deep sources, and then navigates allowlisted retained fields in the completed document. Press ? for help and / to search rendered panel text only. Closing during collection cancels without a partial document. --save-lookup writes the exact completed private JSON only after a normal browser close; it can contain normalised evidence omitted from panels and refuses an existing path.',
     },
     collection: { mode: 'network', scope: 'Accepts one target. Fast is the default; deep collection must be selected explicitly.' },
     summary: 'Collect one domain, IP, or ASN',
-    options: ['--json', '--junit', '--markdown', '--html', '--no-attribution', '--fast', '--deep', '--observer', '--vantage', '--plan', '--summary', '--verbose', '--browse', '--save-lookup', '--strict-exit', '--fail-on', '--events', '--quiet', '--no-color'],
+    options: ['--json', '--junit', '--markdown', '--html', '--no-attribution', '--fast', '--deep', '--exact-url', '--observer', '--vantage', '--plan', '--summary', '--verbose', '--browse', '--save-lookup', '--strict-exit', '--fail-on', '--events', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('target', 'text', 0, 1, [], 'argv_or_stdin', ['--browse'])]),
     constraints: Object.freeze([
     constraint({ kind: 'mutually_exclusive', options: ['--json', '--junit', '--markdown', '--html'] }),
     constraint({ kind: 'mutually_exclusive', options: ['--fast', '--deep'] }),
     constraint({ kind: 'mutually_exclusive', options: ['--summary', '--verbose'] }),
     constraint({ kind: 'requires_all', option: '--save-lookup', requiredOptions: ['--browse'] }),
+    constraint({ kind: 'requires_all', option: '--exact-url', requiredOptions: ['--deep'] }),
     constraint({ kind: 'excludes_all', option: '--summary', excludedOptions: ['--json', '--junit', '--markdown', '--html'] }),
     constraint({ kind: 'excludes_all', option: '--verbose', excludedOptions: ['--json', '--junit', '--markdown', '--html'] }),
     constraint({ kind: 'excludes_all', option: '--browse', excludedOptions: ['--json', '--junit', '--markdown', '--html', '--summary', '--verbose', '--events', '--plan', '--quiet'] }),
@@ -675,18 +712,18 @@ const COMMAND_SEEDS = Object.freeze({
     reference: {
       description: 'Triage newline-delimited domains, IPs, or ASNs with bounded concurrency.',
       example: 'cat domains.txt | whoisleuth bulk --jsonl',
-      boundary: 'Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV.',
+      boundary: 'Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.',
     },
     collection: { mode: 'network', scope: 'Accepts at most 500 fast or 50 deep targets, with concurrency capped at 8 fast or 3 deep.' },
     summary: 'Run bounded multi-target collection',
-    options: ['--json', '--jsonl', '--junit', '--csv', '--domains', '--queries', '--registered-only', '--inconclusive-only', '--errors-only', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--plan', '--fail-on', '--quiet', '--no-color'],
+    options: ['--json', '--jsonl', '--junit', '--csv', '--csv-with-metadata', '--domains', '--queries', '--registered-only', '--inconclusive-only', '--errors-only', '--fast', '--deep', '--concurrency', '--checkpoint', '--resume', '--events', '--plan', '--fail-on', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: Object.freeze([
-    constraint({ kind: 'mutually_exclusive', options: ['--json', '--jsonl', '--junit', '--csv', '--domains', '--queries'] }),
+    constraint({ kind: 'mutually_exclusive', options: ['--json', '--jsonl', '--junit', '--csv', '--csv-with-metadata', '--domains', '--queries'] }),
     constraint({ kind: 'mutually_exclusive', options: ['--registered-only', '--inconclusive-only', '--errors-only'] }),
     constraint({ kind: 'mutually_exclusive', options: ['--fast', '--deep'] }),
     constraint({ kind: 'requires_all', option: '--resume', requiredOptions: ['--checkpoint'] }),
-    constraint({ kind: 'excludes_all', option: '--plan', excludedOptions: ['--jsonl', '--junit', '--csv', '--domains', '--queries', '--events', '--checkpoint', '--resume', '--quiet', '--fail-on'] }),
+    constraint({ kind: 'excludes_all', option: '--plan', excludedOptions: ['--jsonl', '--junit', '--csv', '--csv-with-metadata', '--domains', '--queries', '--events', '--checkpoint', '--resume', '--quiet', '--fail-on'] }),
   ]),
     handlerOwner: 'bulk',
     networkEffect: 'conditional_network',
@@ -739,7 +776,7 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   discover: commandSeed({
     reference: {
-      description: 'Generate bounded lookalike-domain candidates from local mutation rules.',
+      description: 'Generate bounded lookalike-domain candidates from a brand or registrable domain, including multi-part public suffixes.',
       example: 'whoisleuth discover example.test --preset common --jsonl',
       boundary: 'Generation and optional local snapshot comparison are offline. Candidates are leads only and are not resolved, registered, or classified as malicious.',
     },
@@ -765,20 +802,20 @@ const COMMAND_SEEDS = Object.freeze({
     reference: {
       description: 'Generate a bounded candidate set, collect a selected subset, and produce a supervised review queue.',
       example: 'whoisleuth discover-scan example.test --scan-limit 50 --checkpoint scan.json --json',
-      boundary: 'This command performs network collection. Fast compact lookup is the default; deep mode is capped at 50 candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution.',
+      boundary: 'This command performs network collection. Fast compact lookup is the default; deep mode is capped at 50 candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.',
     },
     collection: { mode: 'network', scope: 'Scans at most 500 fast or 50 deep candidates, with concurrency capped at 8 fast or 3 deep.' },
     summary: 'Collect a supervised candidate review queue',
-    options: ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--fast', '--deep', '--scan-limit', '--chunk-size', '--concurrency', '--resolver', '--allowlist', '--checkpoint', '--resume', '--observation-snapshot', '--registered-only', '--inconclusive-only', '--acquisition-only', '--suppressed-only', '--events', '--plan', '--fail-on', '--json', '--jsonl', '--csv', '--domains', '--quiet', '--no-color'],
+    options: ['--tlds', '--preset', '--families', '--keyboard', '--dictionary', '--fast', '--deep', '--scan-limit', '--chunk-size', '--concurrency', '--resolver', '--allowlist', '--checkpoint', '--resume', '--observation-snapshot', '--registered-only', '--inconclusive-only', '--acquisition-only', '--suppressed-only', '--events', '--plan', '--fail-on', '--json', '--jsonl', '--csv', '--csv-with-metadata', '--domains', '--quiet', '--no-color'],
     positionals: OPTIONAL_TEXT_POSITIONAL,
     constraints: Object.freeze([
-    constraint({ kind: 'mutually_exclusive', options: ['--json', '--jsonl', '--csv', '--domains'] }),
+    constraint({ kind: 'mutually_exclusive', options: ['--json', '--jsonl', '--csv', '--csv-with-metadata', '--domains'] }),
     constraint({ kind: 'mutually_exclusive', options: ['--preset', '--families'] }),
     constraint({ kind: 'mutually_exclusive', options: ['--fast', '--deep'] }),
     constraint({ kind: 'mutually_exclusive', options: ['--registered-only', '--inconclusive-only', '--acquisition-only', '--suppressed-only'] }),
     constraint({ kind: 'requires_all', option: '--resume', requiredOptions: ['--checkpoint'] }),
     constraint({ kind: 'value_excludes', option: '--preset', value: 'common', excludedOptions: ['--dictionary'] }),
-    constraint({ kind: 'excludes_all', option: '--plan', excludedOptions: ['--jsonl', '--csv', '--domains', '--events', '--checkpoint', '--resume', '--observation-snapshot', '--quiet', '--fail-on'] }),
+    constraint({ kind: 'excludes_all', option: '--plan', excludedOptions: ['--jsonl', '--csv', '--csv-with-metadata', '--domains', '--events', '--checkpoint', '--resume', '--observation-snapshot', '--quiet', '--fail-on'] }),
   ]),
     handlerOwner: 'discovery_scan',
     networkEffect: 'conditional_network',
@@ -793,11 +830,11 @@ const COMMAND_SEEDS = Object.freeze({
     reference: {
       description: 'Review bounded DNS mail, delegation, and domain-control posture.',
       example: 'whoisleuth posture example.test --mail-profile standard --json',
-      boundary: 'Missing or failed DNS observations remain inconclusive and are not reported as absent controls.',
+      boundary: 'Missing or failed DNS observations remain inconclusive. --include-inherited-dns explicitly adds a bounded DMARC tree walk and direct parent-delegation sample; records retain their queried owner and source. No message is sent and receiver enforcement is not inferred.',
     },
-    collection: { mode: 'network', scope: 'Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests.' },
+    collection: { mode: 'network', scope: 'Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor DMARC questions and direct DNS/TCP to sampled parent servers.' },
     summary: 'Review DNS and mail posture',
-    options: ['--selectors', '--retired-selectors', '--mail-profile', '--json', '--sarif', '--owned-domain', '--quiet', '--no-color'],
+    options: ['--selectors', '--retired-selectors', '--mail-profile', '--include-inherited-dns', '--json', '--sarif', '--owned-domain', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('domain', 'text', 0, 1, [], 'argv_or_stdin')]),
     constraints: Object.freeze([
     constraint({ kind: 'mutually_exclusive', options: ['--json', '--sarif'] }),
@@ -1022,17 +1059,21 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "verify-artifact": commandSeed({
     reference: {
-      description: 'Validate a supported archive, claim passport, packet, manifest, saved Lookup, or supported Lookup-evidence export without printing evidence contents.',
+      description: 'Validate a supported archive, ordinary Case export, claim passport, packet, manifest, saved Lookup or Lookup-evidence export without printing evidence contents. Use --package for an evidence ZIP or encrypted package, with --passphrase-file to unlock it; use --folder ./evidence for an unencrypted evidence folder. Add --bagit with --package or --folder to verify BagIt 1.0.',
       example: 'whoisleuth verify-artifact report.json --manifest manifest.json --manifest-entry artifact-2 --json --strict-exit',
-      boundary: 'Verification is offline and redacted. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 when only an envelope or legacy projection integrity was verified.',
+      boundary: 'Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Case exports are checked without repairing content; ordinary package review also counts original references with matching bytes. Ordinary folders allow only the declared layout; BagIt allows bounded nested payloads and checks SHA-256/SHA-512 manifests without interpreting payloads. Symbolic links are refused. BagIt fetch.txt is never fetched; missing files, mismatches and unsupported algorithms remain explicit. Package digests describe bytes, not filesystem metadata or authenticity. In scripts, use --strict-exit: incomplete verification returns 4. Default exit 0 means the report was produced, not that its checks passed.',
     },
-    collection: { mode: 'offline', scope: 'Reads one selected bounded artefact and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.' },
+    collection: { mode: 'offline', scope: 'Reads one selected bounded artefact, ZIP or explicit evidence folder and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.' },
     summary: 'Validate saved evidence offline',
-    options: ['--passphrase-file', '--manifest', '--manifest-entry', '--json', '--strict-exit', '--quiet', '--no-color'],
-    positionals: OPTIONAL_FILE_POSITIONAL,
+    options: ['--passphrase-file', '--manifest', '--manifest-entry', '--package', '--bagit', '--folder', '--json', '--strict-exit', '--quiet', '--no-color'],
+    positionals: Object.freeze([positional('source', 'file', 0, 1, [], 'argv_or_stdin', ['--package'])]),
     constraints: Object.freeze([
+    constraint({ kind: 'requires_any', option: '--bagit', requiredOptions: ['--package', '--folder'] }),
+    constraint({ kind: 'excludes_all', option: '--bagit', excludedOptions: ['--passphrase-file', '--manifest', '--manifest-entry'] }),
     constraint({ kind: 'requires_all', option: '--manifest', requiredOptions: ['--manifest-entry'] }),
     constraint({ kind: 'requires_all', option: '--manifest-entry', requiredOptions: ['--manifest'] }),
+    constraint({ kind: 'excludes_all', option: '--package', excludedOptions: ['--manifest', '--manifest-entry'] }),
+    constraint({ kind: 'excludes_all', option: '--folder', excludedOptions: ['--package', '--manifest', '--manifest-entry', '--passphrase-file'] }),
   ]),
     handlerOwner: 'inline',
     networkEffect: 'offline',
@@ -1067,7 +1108,7 @@ const COMMAND_SEEDS = Object.freeze({
     reference: {
       description: `Summarise or search one current version-${WORKSPACE_ARCHIVE_VERSION} workspace archive, with exact ${LEGACY_WORKSPACE_ARCHIVE_DESCRIPTION} support and redacted output by default.`,
       example: 'whoisleuth inspect-archive workspace.json --search example.test --json',
-      boundary: 'Exact matches require --reveal. Retired and future archive versions are rejected without changing data. The archive is read locally and is never uploaded.',
+      boundary: 'Exact values require --reveal. New content comparisons use the reported sorted-json-v2:sha256 identity with --expect-content-digest; bare sha256 hashes retain their legacy locale-sensitive meaning. Retired and future archives are rejected. The archive is read locally and is never uploaded.',
     },
     collection: { mode: 'offline', scope: `Reads one selected bounded workspace archive v${WORKSPACE_ARCHIVE_VERSION}, retains exact ${LEGACY_WORKSPACE_ARCHIVE_SCOPE} compatibility, and redacts output by default.` },
     summary: 'Inspect an archive locally',
@@ -1110,19 +1151,19 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "verify-signature": commandSeed({
     reference: {
-      description: 'Verify the cryptographic signature of one signed evidence package and report embedded-artefact assurance separately.',
-      example: 'whoisleuth verify-signature packet.signed.json --json',
-      boundary: 'A valid signature proves package consistency for the embedded key. It does not upgrade failed or unsupported embedded-artefact assurance or establish the holder\'s real-world identity or authority.',
+      description: 'Verify one signed package and report embedded-artefact assurance separately. --trust-store-file also checks an explicit local fingerprint policy and emits a signer-trust report; unknown, retired, revoked or future-reviewed entries exit 4.',
+      example: 'whoisleuth verify-signature packet.signed.json --trust-store-file trust.json --json',
+      boundary: 'A valid signature proves package consistency for the embedded key, not identity, authority or evidence accuracy. With --trust-store-file, unknown, retired, revoked or future-reviewed entries exit 4 even if --public-key-file matches. Replacement fingerprints need their own trusted entry; no signing date overrides current revocation.',
     },
-    collection: { mode: 'offline', scope: 'Reads one selected signed package and optional local public key.' },
+    collection: { mode: 'offline', scope: 'Reads one selected signed package, optional local public key and explicit fingerprint trust file. No automatic trust discovery or network requests.' },
     summary: 'Verify a signed evidence package',
-    options: ['--public-key-file', '--json', '--quiet', '--no-color'],
+    options: ['--public-key-file', '--trust-store-file', '--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
     handlerOwner: 'evidence',
     networkEffect: 'offline',
     common: false,
-    schemaIdentifiers: Object.freeze(['whoisleuth.evidence-signature-verification']),
+    schemaIdentifiers: Object.freeze(['whoisleuth.evidence-signature-verification', 'whoisleuth.evidence-signer-trust-store', 'whoisleuth.evidence-signer-trust-report']),
     primaryArtefacts: Object.freeze([]),
     planSupport: false,
     additionalOutputFormats: Object.freeze([]),
@@ -1276,13 +1317,29 @@ const COMMAND_SEEDS = Object.freeze({
     additionalOutputFormats: Object.freeze([]),
     bootstrapProfile: 'allowed',
   }),
+  case: commandSeed({
+    reference: {
+      description: 'Show or open a local Case, append a note or evidence pin, record an assessment, or retain an offline recheck. Use --input for pin, assessment and recheck JSON; --text or --note-file for a note. Mutations require --output and always write the complete current Case export.',
+      example: 'whoisleuth case open --domain example.test --output cases.json\n  whoisleuth case show cases.json\n  whoisleuth case note cases.json --text "Review the retained observation" --output cases.json --force',
+      boundary: 'No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:<digest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.',
+    },
+    collection: { mode: 'offline', scope: `Reads exact Case schemas ${CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(' or ')}. Input is bounded to ${MAX_EDITABLE_CASE_INPUT_BYTES / 1024 / 1024} MiB including formatting; the complete canonical Case store must fit ${MAX_CASE_STORE_BYTES / 1024 / 1024} MiB without pruning. Writes current schema ${CASE_SCHEMA_VERSION}.` },
+    summary: 'Review and update ordinary local Case files',
+    options: ['--case-id', '--domain', '--title', '--new-incident', '--text', '--note-file', '--input', '--expect-file-digest', '--json', '--no-color'],
+    positionals: Object.freeze([positional('operation', 'enum', 1, 1, CLI_CASE_OPERATIONS), positional('source', 'file', 0, 1)]),
+    constraints: Object.freeze([constraint({ kind: 'mutually_exclusive', options: ['--text', '--note-file'] })]),
+    handlerOwner: 'inline', networkEffect: 'offline', common: true,
+    schemaIdentifiers: Object.freeze(['whoisleuth.case-export']),
+    primaryArtefacts: Object.freeze(['Case export']), planSupport: false,
+    additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
+  }),
   "case-pack": commandSeed({
     reference: {
-      description: `Package browser-created Case-schema-${CASE_SCHEMA_VERSION} records as a reviewed, audience-specific Case-pack v2.`,
+      description: `Package browser-created Case records from schemas ${CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(' or ')} as a reviewed, audience-specific Case-pack v2 with current schema ${CASE_SCHEMA_VERSION}.`,
       example: 'whoisleuth case-pack cases.json --audience trusted --reviewed --json',
       boundary: 'The command is an offline handoff from the browser Case workflow: it creates a new package, never creates or mutates a durable Case, never mutates the source archive, and requires an explicit review acknowledgement.',
     },
-    collection: { mode: 'offline', scope: `Reads one bounded Case-schema-${CASE_SCHEMA_VERSION} browser export and writes a separate audience-specific Case-pack v2.` },
+    collection: { mode: 'offline', scope: `Reads one bounded Case export from schemas ${CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(' or ')} and writes a separate audience-specific Case-pack v2.` },
     summary: 'Build a reviewed case package',
     options: ['--audience', '--reviewed', '--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
@@ -1302,7 +1359,7 @@ const COMMAND_SEEDS = Object.freeze({
     reference: {
       description: 'Build an integrity-protected desired-state manifest or compare one with supplied observations.',
       example: 'whoisleuth domain-control domain-control-input.json --json',
-      boundary: 'The command is offline and changes no registrar, DNS, mail, or certificate configuration. Only complete supplied observations can produce drift.',
+      boundary: 'The command is offline and changes no registrar, DNS, mail, or certificate configuration. Only complete, recent source observations can establish drift or expected absence.',
     },
     collection: { mode: 'offline', scope: 'Reads one bounded desired-state or review document and performs no collection or configuration change.' },
     summary: 'Build or review a domain control manifest',
@@ -1386,7 +1443,7 @@ const COMMAND_SEEDS = Object.freeze({
       example: 'whoisleuth sharing-review packet.json --marking amber --recipient-scope organization --purpose "Reviewed incident handoff" --human-reviewed --personal-data-reviewed --redactions-confirmed --json',
       boundary: 'The command is offline and emits only bounded schema/version metadata, no content values, and no raw evidence. Its result is a review aid, not legal advice or recipient authorisation.',
     },
-    collection: { mode: 'offline', scope: 'Reads one artefact capped at 15 MiB, emits only bounded schema/version metadata and no content values, and performs no transmission.' },
+    collection: { mode: 'offline', scope: 'Reads one bounded artefact, emits only schema/version metadata and no content values, and performs no transmission.' },
     summary: 'Lint an artefact before deliberate sharing',
     options: ['--marking', '--recipient-scope', '--purpose', '--human-reviewed', '--personal-data-reviewed', '--redactions-confirmed', '--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
@@ -1430,12 +1487,12 @@ const COMMAND_SEEDS = Object.freeze({
   "workflow-run": commandSeed({
     reference: {
       description: 'Execute approved steps from a fixed investigation recipe and emit a resumable checkpoint.',
-      example: 'whoisleuth workflow-run domain-triage example.test --resume run.json --select export=saved-lookup.json --json --output run-next.json',
-      boundary: 'Only installed recipe commands can run. Network steps require explicit approval for each invocation. Repeat --select in placeholder order for one step; each bounded value replaces one exact placeholder and cannot start with a hyphen, become an option, or invoke a shell.',
+      example: 'whoisleuth workflow-run domain-triage example.test --approve-network --json --output run.json',
+      boundary: 'Only installed recipe commands can run. Network steps require explicit approval for each invocation. New runs connect compatible earlier outputs using the recipe defaults. Use --use-artifact <step-id>:<input-number>=<earlier-step-id> to override a connection; input numbers start at 1. Repeat --select for remaining placeholders in order, or supply every input for a step to replace its connections with files. Values stay literal and cannot start with a hyphen or invoke a shell. Optional --interactive prompts on terminal stderr for missing inputs; a blank answer pauses. It grants neither network approval nor human-review confirmation. A step declaring human review still requires --confirm-review <step-id> for that invocation. Checkpoints do not grant later approvals. Resumes preserve recorded connections. Content digests identify retained output, not authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.',
     },
     collection: { mode: 'network', scope: 'Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause.' },
     summary: 'Execute approved fixed-recipe steps',
-    options: ['--select', '--approve-network', '--resume', '--json', '--quiet', '--no-color'],
+    options: ['--select', '--use-artifact', '--confirm-review', '--approve-network', '--resume', '--interactive', '--json', '--quiet', '--no-color'],
     positionals: Object.freeze([
     positional('recipe', 'enum', 1, 1, RUNNABLE_INVESTIGATION_PLAN_RECIPES),
     positional('subject', 'text', 1, 1),
@@ -1454,7 +1511,7 @@ const COMMAND_SEEDS = Object.freeze({
     reference: {
       description: 'Compare an earlier and later artefact from the same retained Lookup, Bulk-session, or domain-portfolio family.',
       example: 'whoisleuth diff earlier.json later.json --json',
-      boundary: 'Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.',
+      boundary: 'Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; same-domain comparisons preserve observation times and collection uncertainty. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.',
     },
     collection: { mode: 'offline', scope: 'Reads two compatible retained artefacts capped at 8 MiB each and retains no source paths.' },
     summary: 'Compare two compatible retained artefacts',
@@ -1514,7 +1571,7 @@ const COMMAND_SEEDS = Object.freeze({
     reference: {
       description: 'Convert one saved lookup into a versioned evidence report.',
       example: 'whoisleuth export lookup.json --markdown',
-      boundary: `Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-${LOOKUP_EVIDENCE_SCHEMA_VERSION} exports preserve evidence-source attribution and limitations; published v2 schema ${PUBLISHED_V2_LOOKUP_EVIDENCE_SCHEMA_VERSION} and exact v1 schema ${V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION} remain readable, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.`,
+      boundary: `Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-${LOOKUP_EVIDENCE_SCHEMA_VERSION} exports preserve evidence-source attribution and limitations; published v2 schemas ${PUBLISHED_V2_LOOKUP_EVIDENCE_VERSIONS} and exact v1 schema ${V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION} remain readable, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.`,
     },
     collection: { mode: 'offline', scope: 'Reads one saved Lookup and writes one bounded report.' },
     summary: 'Convert a lookup to an evidence report',
@@ -1554,16 +1611,11 @@ function documentationMetadata(
   const explicitAuthorisationRequired = commandOptions.some((option) => (
     option === '--owned-or-authorized' || option === '--active-probe' || option === '--approve-network'
   ));
-  const outputOptionFormats = [
-    ['--json', 'JSON'], ['--jsonl', 'JSON Lines'], ['--junit', 'JUnit XML'],
-    ['--csv', 'CSV'], ['--domains', 'domain list'], ['--queries', 'query list'],
-    ['--markdown', 'Markdown'], ['--html', 'HTML'], ['--sarif', 'SARIF'],
-    ['--summary-json', 'summary JSON'],
-  ] as const;
+  const presentationOptions = Object.freeze(PRESENTATION_OPTIONS
+    .filter(([option]) => commandOptions.includes(option))
+    .map(([option, format]) => Object.freeze({ option, format })));
   const outputFormats = new Set<string>(['terminal']);
-  for (const [option, label] of outputOptionFormats) {
-    if (commandOptions.includes(option)) outputFormats.add(label);
-  }
+  for (const { format } of presentationOptions) outputFormats.add(format);
   for (const format of seed.additionalOutputFormats) outputFormats.add(format);
   const positionalLimits = positionals.map((item) => (
     `${item.name}: ${item.minimum}-${item.maximum} ${item.valueKind} value${item.maximum === 1 ? '' : 's'}`
@@ -1589,14 +1641,20 @@ function documentationMetadata(
         : []),
     ]),
     outputFormats: Object.freeze([...outputFormats]),
+    presentationOptions,
+    fileOutput: commonOptions.includes('--output'),
     primaryEvidenceArtefacts: seed.primaryArtefacts,
   });
+}
+
+function expandedOptionValues(specification: CliOptionSpec): boolean {
+  return specification.valueKind === 'enum' && specification.values.join('|').length > 60;
 }
 
 function optionUsage(specification: CliOptionSpec): string {
   if (specification.arity === 0) return specification.option;
   if (specification.valueKind === 'enum') {
-    return `${specification.option} <${specification.values.join('|')}>`;
+    return `${specification.option} <${expandedOptionValues(specification) ? specification.option.slice(2) : specification.values.join('|')}>`;
   }
   if (specification.valueKind === 'policy_list') return `${specification.option} <policy[,policy...]>`;
   if (specification.valueKind === 'integer') return `${specification.option} <integer>`;
@@ -1705,11 +1763,32 @@ function metaActionDefinition(id: CliMetaActionId): CliMetaAction {
   return CLI_META_ACTION_BY_ID[id];
 }
 
+function cliInvocationOptionIndices(argv: readonly string[]): ReadonlySet<number> {
+  const namedCommand = isCliCommand(argv[0]) ? argv[0] : null;
+  const options = new Map(commandDefinition(namedCommand ?? 'lookup').grammar.options
+    .map((option) => [option.option, option]));
+  const indices = new Set<number>();
+  for (let index = namedCommand ? 1 : 0; index < argv.length; index += 1) {
+    const argument = argv[index]!;
+    if (argument === '--') break;
+    if (!argument.startsWith('-')) continue;
+    indices.add(index);
+    const option = options.get(argument);
+    const value = argv[index + 1];
+    if (option?.arity === 1 && value !== undefined) {
+      if (value === '--' && !option.acceptsOptionLikeValue) break;
+      index += 1;
+    }
+  }
+  return indices;
+}
+
 function cliMetaActionForInvocation(argv: readonly string[]): CliMetaAction | null {
+  const optionIndices = cliInvocationOptionIndices(argv);
   for (const action of CLI_META_ACTIONS) {
     const matches = action.scope === 'root_only'
       ? action.aliases.includes(argv[0] ?? '')
-      : argv.some((argument) => action.aliases.includes(argument));
+      : argv.some((argument, index) => optionIndices.has(index) && action.aliases.includes(argument));
     if (matches) return action;
   }
   return null;
@@ -1777,13 +1856,8 @@ function commandOwnsOption(command: CliCommand, option: string): boolean {
 }
 
 function invocationHasFlag(command: CliCommand, args: readonly string[], flag: string): boolean {
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    if (argument === flag) return true;
-    const specification = argument ? commandOptionSpec(command, argument) : null;
-    if (specification?.arity === 1) index += 1;
-  }
-  return false;
+  const argv = [command, ...args];
+  return [...cliInvocationOptionIndices(argv)].some((index) => argv[index] === flag);
 }
 
 function cliInvocationNetworkEffect(
@@ -1806,11 +1880,14 @@ function cliInvocationNetworkEffect(
 function commandHelp(command: CliCommand): string {
   const detail = COMMAND_DETAILS[command];
   const collection = COMMAND_COLLECTION[command];
-  return `WHOISleuth ${command}\n${detail.description}\n\nUsage:\n  ${COMMAND_USAGE[command]}\n\nExample:\n  ${detail.example}\n\nCollection:\n  ${collection.mode === 'offline' ? 'Offline' : 'Network'}: ${collection.scope}\n\nBoundary:\n  ${detail.boundary}\n\nRun "whoisleuth --help" to see the grouped command list.\n`;
+  const values = commandDefinition(command).grammar.options.filter(expandedOptionValues)
+    .map(option => `\n${option.option} values:\n${option.values.map(value => `  ${value}`).join('\n')}\n`).join('');
+  return `WHOISleuth ${command}\n${detail.description}\n\nUsage:\n  ${COMMAND_USAGE[command]}\n\nExample:\n  ${detail.example}\n\nCollection:\n  ${collection.mode === 'offline' ? 'Offline' : 'Network'}: ${collection.scope}\n\nBoundary:\n  ${detail.boundary}\n${values}\nRun "whoisleuth --help" to see the grouped command list.\n`;
 }
 
 export {
   CLI_COMMAND_REGISTRY,
+  CLI_CASE_OPERATIONS,
   CLI_COMMANDS,
   CLI_META_ACTIONS,
   COMMAND_COLLECTION,
@@ -1824,6 +1901,7 @@ export {
   RUNNABLE_INVESTIGATION_PLAN_RECIPES,
   OPTIONS_BY_COMMAND,
   cliMetaActionForInvocation,
+  cliInvocationOptionIndices,
   cliInvocationNetworkEffect,
   commandOptionSpec,
   commandOwnsOption,

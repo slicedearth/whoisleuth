@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
+  import Pagination from './Pagination.svelte';
   import {
     DEFERRED_MODULE_RECOVERY_DETAIL,
     isDeferredModuleLoadError,
@@ -7,21 +8,60 @@
     reloadDeferredModulePage,
   } from '$lib/deferred-module';
   import {
-    projectInvestigationContextPreview,
+    MAX_INVESTIGATION_CONTEXT_PREVIEW_RESULTS,
     type InvestigationContextPreview,
   } from '$lib/analysis/investigation-context-preview.ts';
   import type {
-    InvestigationSearchIndex,
     InvestigationSearchResult,
   } from '$lib/analysis/investigation-search.ts';
+  import type { InvestigationSearchSession } from '$lib/investigation-search-session';
 
-  let { query } = $props<{ query: string }>();
+  let { query }: { query: string } = $props();
   let loadState = $state<'loading' | 'ready' | 'unavailable'>('loading');
-  let index = $state<InvestigationSearchIndex | null>(null);
+  let session = $state.raw<InvestigationSearchSession | null>(null);
+  let pageSelection = $state({ query: '', page: 1 });
+  let resultList = $state<HTMLOListElement>();
   let moduleUnavailable = $state(false);
-  const preview = $derived<InvestigationContextPreview | null>(index
-    ? projectInvestigationContextPreview(index, query)
-    : null);
+  let pending = $state(false);
+  let queryError = $state('');
+  let completed = $state.raw<{ session: InvestigationSearchSession; query: string; page: number; preview: InvestigationContextPreview } | null>(null);
+  let focusRequest: { query: string; page: number } | null = null;
+  const preview = $derived(completed?.session === session && completed?.query === query ? completed.preview : null);
+  const pageCount = $derived(Math.max(1, Math.ceil((preview?.totalMatches ?? 0) / MAX_INVESTIGATION_CONTEXT_PREVIEW_RESULTS)));
+  const currentPage = $derived(Math.min(completed?.page ?? 1, pageCount));
+
+  function setResultPage(value: number) {
+    if (pending) return;
+    pageSelection = { query, page: Math.max(1, Math.min(pageCount, value)) };
+    focusRequest = { query, page: pageSelection.page };
+  }
+
+  $effect(() => {
+    const currentSession = session;
+    const currentQuery = query;
+    const page = pageSelection.query === currentQuery ? pageSelection.page : 1;
+    if (!currentSession) return;
+    let active = true;
+    pending = true;
+    queryError = '';
+    void currentSession.preview(currentQuery, page).then(async (result: InvestigationContextPreview) => {
+      if (!active) return;
+      completed = { session: currentSession, query: currentQuery, page, preview: result };
+      pending = false;
+      if (focusRequest && focusRequest.query === currentQuery && focusRequest.page === page) {
+        focusRequest = null;
+        await tick();
+        if (!active) return;
+        resultList?.focus({ preventScroll: true });
+        resultList?.scrollIntoView({ block: 'start' });
+      }
+    }).catch((cause: unknown) => {
+      if (!active) return;
+      pending = false;
+      if (!(cause instanceof DOMException && cause.name === 'AbortError')) queryError = 'Saved context could not return results. Reload the page to retry.';
+    });
+    return () => { active = false; };
+  });
 
   const typeLabels: Record<InvestigationSearchResult['entityType'], string> = {
     domain: 'Domain',
@@ -65,9 +105,9 @@
           () => import('$lib/investigation-search'),
           { signal: controller.signal },
         );
-        const loaded = await module.loadLocalInvestigationSearchIndex();
-        if (!active) return;
-        index = loaded;
+        const loaded = await module.loadLocalInvestigationSearchSession(controller.signal);
+        if (!active) { loaded.dispose(); return; }
+        session = loaded;
         loadState = 'ready';
       } catch (cause) {
         if (!active) return;
@@ -78,6 +118,7 @@
     return () => {
       active = false;
       controller.abort();
+      session?.dispose();
     };
   });
 </script>
@@ -86,11 +127,17 @@
   <p class="state" role="status">Reading bounded saved context from this browser…</p>
 {:else if loadState === 'unavailable'}
   <div class="state unavailable" role="alert">
-    <p>{moduleUnavailable ? 'The saved-context module is unavailable.' : 'Saved context is unavailable because one or more browser-local collections could not be read.'}</p>
-    {#if moduleUnavailable}<small>{DEFERRED_MODULE_RECOVERY_DETAIL}</small><button class="btn" type="button" onclick={reloadDeferredModulePage}>Reload page</button>{/if}
+    <p>{moduleUnavailable ? 'The saved-context module is unavailable.' : 'Saved context could not be prepared. No saved records were changed. Reload the page to retry.'}</p>
+    {#if moduleUnavailable}<small>{DEFERRED_MODULE_RECOVERY_DETAIL}</small>{/if}
+    <button class="btn" type="button" onclick={reloadDeferredModulePage}>Reload page</button>
   </div>
+{:else if queryError}
+  <p class="state unavailable" role="alert">{queryError}</p>
+  <button class="btn" type="button" onclick={reloadDeferredModulePage}>Reload page</button>
+{:else if pending && !preview}
+  <p class="state" role="status">Searching saved context…</p>
 {:else if preview}
-  <p class="state state-{preview.state}" role="status" aria-live="polite">{preview.detail}</p>
+  <p class="state state-{preview.state}" role="status" aria-live="polite">{pending ? 'Searching saved context…' : preview.detail}</p>
   {#if preview.limitations.length}
     <details>
       <summary>Preview limitations</summary>
@@ -98,7 +145,7 @@
     </details>
   {/if}
   {#if preview.results.length}
-    <ol class="context-list" aria-label="Saved context matches">
+    <ol class="context-list paged-results" aria-label="Saved context matches" aria-busy={pending} tabindex="-1" bind:this={resultList}>
       {#each preview.results as result (result.entityId)}
         <li>
           <article>
@@ -114,6 +161,7 @@
         </li>
       {/each}
     </ol>
+    <Pagination {currentPage} {pageCount} setPage={setResultPage} ariaLabel="Saved context pages" />
   {/if}
 {/if}
 

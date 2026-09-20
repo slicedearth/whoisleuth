@@ -441,7 +441,9 @@ function buildLookupEvidenceReport(
       reportField('Complete publications', registryPublications.filter((item) => item.state === 'complete').length),
       reportField('Partial publications', registryPublications.filter((item) => item.state === 'partial').length),
       reportField('Unavailable publications', registryPublications.filter((item) => item.state === 'unavailable').length),
-      reportField('Published escalation routes', Array.isArray(registryInsights.abuseRouting) ? registryInsights.abuseRouting.length : 0),
+      reportField('Published escalation routes', Array.isArray(registryInsights.abuseRouting)
+        ? registryInsights.abuseRouting.length
+        : 'Excluded from this privacy-minimised report; publication count unavailable'),
       reportField('Interpretation limit', contactDisclosure.limitation),
     ] : [],
     comparison: {

@@ -50,6 +50,7 @@ describe('abuse recipient resolver', () => {
         securityTxtVersion: 1,
         state: 'present',
         finalUrl: 'https://target.example/.well-known/security.txt',
+        expiresAt: '2026-08-01T00:00:00.000Z',
         contacts: ['mailto:security@example.test', 'https://target.example/report#details'],
       },
       networkContext: {
@@ -72,13 +73,16 @@ describe('abuse recipient resolver', () => {
         }],
       },
       technologyProfile: {
+        version: 1, scanMode: 'deep', durationMs: null, complete: true, truncated: false, limitations: [], diagnostics: {}, browserLibraryProfile: null,
         profileVersion: 11,
         source: 'derived',
         status: 'success',
         observedAt: '2026-07-30T01:03:00.000Z',
         findings: [
-          { id: 'netlify', confidence: 'medium', roles: ['application_platform'] },
-          { id: 'cloudflare', confidence: 'medium', roles: ['observed_edge'] },
+          { id: 'netlify', name: 'Retained platform', category: 'delivery platform', confidence: 'medium', roles: ['application_platform'],
+            evidence: [{ source: 'passive response header', role: 'application_platform', description: 'Retained platform header' }] },
+          { id: 'cloudflare', name: 'Retained edge', category: 'delivery platform', confidence: 'medium', roles: ['observed_edge'],
+            evidence: [{ source: 'HTTP server header', role: 'observed_edge', description: 'Retained edge header' }] },
         ],
       },
       now: new Date('2026-09-04T00:00:00.000Z'),
@@ -98,6 +102,7 @@ describe('abuse recipient resolver', () => {
     assert.equal(result.recipients[1]?.contact, 'https://registry.example/report');
     assert.equal(result.recipients[1]?.observedAt, '2026-07-30T01:00:00.000Z');
     assert.equal(result.recipients[2]?.actionType, 'security_contact_report');
+    assert.equal(result.recipients[2]?.reviewAfter, '2026-08-01T00:00:00.000Z');
     assert.equal(result.recipients[3]?.kind, 'application_platform');
     assert.equal(result.recipients[3]?.actionType, 'network_hosting_report');
     assert.equal(result.recipients[4]?.kind, 'observed_edge');
@@ -173,11 +178,13 @@ describe('abuse recipient resolver', () => {
   test('withholds stale provider routes and keeps edge evidence separate from origin hosting', () => {
     const result = resolveAbuseRecipients({
       technologyProfile: {
+        version: 1, scanMode: 'deep', durationMs: null, complete: true, truncated: false, limitations: [], diagnostics: {}, browserLibraryProfile: null,
         profileVersion: 11,
         source: 'derived',
         status: 'success',
         observedAt: '2027-03-03T01:00:00.000Z',
-        findings: [{ id: 'cloudflare', confidence: 'medium', roles: ['observed_edge'] }],
+        findings: [{ id: 'cloudflare', name: 'Retained edge', category: 'delivery platform', confidence: 'medium', roles: ['observed_edge'],
+          evidence: [{ source: 'HTTP server header', role: 'observed_edge', description: 'Retained edge header' }] }],
       },
       now: new Date('2027-03-04T00:00:00.000Z'),
     });

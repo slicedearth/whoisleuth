@@ -72,6 +72,26 @@ export type LookupClaimReadiness = Readonly<{
   limitation: string;
 }>;
 
+const CLAIM_QUESTIONS: Readonly<Record<LookupClaimId, string>> = Object.freeze({
+  'registration-state': 'What does the registration authority establish?',
+  'current-web-observation': 'What was the website doing at the observed time?',
+  'brand-resemblance': 'Does the observed page resemble the reviewed Brand?',
+  'controlled-change': 'Which registration and DNS dependencies need review?',
+  'incident-response': 'What evidence and recipient route support a response?',
+  'network-context': 'What does the authoritative network record establish?',
+});
+
+/** A presentation of existing readiness, not a new verdict or collection plan. */
+export function lookupQuestionsNeedingEvidence(readiness: LookupClaimReadiness) {
+  return readiness.entries.filter((entry) => entry.state !== 'ready').map((entry) => ({
+    id: entry.id,
+    question: CLAIM_QUESTIONS[entry.id],
+    href: entry.href,
+    requirements: entry.requirements.filter((requirement) => requirement.state !== 'complete'),
+    limitations: entry.limitations,
+  }));
+}
+
 type JsonRecord = Record<string, unknown>;
 type RequirementDefinition = Readonly<{
   id: LookupClaimRequirementId;

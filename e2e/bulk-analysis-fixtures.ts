@@ -24,7 +24,8 @@ async function captureDownloads(
   }
 }
 
-// Only this spec legitimately produces Chrome's synthetic "responded with a
-// status of 400" console noise (one per deliberately-rejected domain in
+// Specifications using these rejected-domain inputs explicitly enable the
+// narrow local Lookup HTTP-400 diagnostic allowance. Other console errors and
+// all off-origin requests remain failures in the shared browser guard.
 
 export { captureDownloads, invalidDomains };

@@ -10,10 +10,8 @@ import {
   type InvestigationStoreName,
 } from './investigation-projection.mts';
 import { readBoundedInvestigationProjection } from './investigation-projection-reader.mts';
-import {
-  buildBoundedSearchIndex,
-  type BoundedSearchIndex,
-} from './bounded-local-search.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { MAX_CASE_OBJECTIVE_LENGTH } from '../contracts/case-portability.mts';
 import {
   INVESTIGATION_SEARCH_SCHEMA,
   INVESTIGATION_SEARCH_VERSION,
@@ -28,8 +26,9 @@ export const MAX_INVESTIGATION_SEARCH_QUERY_LENGTH = 200;
 export const MAX_INVESTIGATION_SEARCH_TOKENS = 8;
 export const MAX_INVESTIGATION_SEARCH_RESULTS = 50;
 export const MAX_INVESTIGATION_SEARCH_ENTITIES = 6000;
-export const MAX_INVESTIGATION_SEARCH_TERMS = 24000;
-export const MAX_INVESTIGATION_SEARCH_TERMS_PER_ENTITY = 24;
+export const MAX_INVESTIGATION_SEARCH_TERMS_PER_ENTITY = 32;
+export const MAX_INVESTIGATION_SEARCH_TERMS = MAX_INVESTIGATION_SEARCH_ENTITIES * MAX_INVESTIGATION_SEARCH_TERMS_PER_ENTITY;
+export const MAX_INVESTIGATION_SEARCH_TERM_BYTES = 8 * 1024 * 1024;
 export const MAX_INVESTIGATION_SEARCH_LIMITATIONS = 20;
 export const MAX_RECENT_INVESTIGATION_RESULTS = 6;
 
@@ -166,19 +165,6 @@ const TYPE_PRIORITY: Record<InvestigationEntityType, number> = {
   favicon_cluster: 10,
   official_asset_host: 11,
 };
-const transientCandidateIndexes = new WeakMap<InvestigationSearchIndex, BoundedSearchIndex>();
-
-function candidateIndex(index: InvestigationSearchIndex): BoundedSearchIndex {
-  const current = transientCandidateIndexes.get(index);
-  if (current) return current;
-  const built = buildBoundedSearchIndex(index.entries.map((entry) => ({
-    id: entry.entityId,
-    terms: entry.terms.map((term) => term.normalized),
-  })), MAX_INVESTIGATION_SEARCH_ENTITIES);
-  transientCandidateIndexes.set(index, built);
-  return built;
-}
-
 function record(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : null;
 }
@@ -189,9 +175,7 @@ function boundedText(value: unknown, maximum = 300): string {
 }
 
 function timestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 64 || CONTROL_RE.test(value)) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function positiveInteger(value: unknown): number | null {
@@ -259,7 +243,7 @@ function normalizeSourceSummary(value: unknown): InvestigationSearchSourceSummar
     state: sourceState(source?.state),
     version: positiveInteger(source?.version),
     records: typeof source?.records === 'number' && Number.isSafeInteger(source.records) && source.records >= 0
-      ? Math.min(source.records, MAX_INVESTIGATION_SEARCH_ENTITIES)
+      ? source.records
       : 0,
     truncated: source?.truncated === true,
   };
@@ -277,12 +261,29 @@ function normalizeSources(value: unknown): Record<InvestigationStoreName, Invest
   };
 }
 
+function exactIdentity(value: unknown): string {
+  const text = boundedText(value, 200);
+  return text === value ? text : '';
+}
+
+function duplicateIdentities(rows: readonly unknown[]): ReadonlySet<string> {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const row of rows) {
+    const id = exactIdentity(record(row)?.id);
+    if (!id) continue;
+    if (seen.has(id)) duplicates.add(id);
+    seen.add(id);
+  }
+  return duplicates;
+}
+
 function normalizeObservation(value: unknown): IndexedObservation | null {
   const observation = record(value);
-  const id = boundedText(observation?.id, 200);
+  const id = exactIdentity(observation?.id);
   const kind = observationKind(observation?.kind);
   const store = storeName(observation?.store);
-  const recordId = boundedText(observation?.recordId, 200);
+  const recordId = exactIdentity(observation?.recordId);
   const observedAt = timestamp(observation?.observedAt);
   if (!observation || !id || !kind || !store || !recordId || !observedAt) return null;
   return {
@@ -300,55 +301,57 @@ function normalizeObservation(value: unknown): IndexedObservation | null {
 
 function normalizeEntity(value: unknown): IndexedEntity | null {
   const entity = record(value);
-  const id = boundedText(entity?.id, 200);
+  const id = exactIdentity(entity?.id);
   const type = entityType(entity?.type);
   const canonical = boundedText(entity?.canonical, 300);
   if (!entity || !id || !type || !canonical) return null;
+  const rawReferences = Array.isArray(entity.observationIds) ? entity.observationIds : [];
+  const references = [...new Set(rawReferences.slice(0, 100).map(exactIdentity).filter(Boolean))];
   return {
     id,
     type,
     canonical,
     label: boundedText(entity.label, 300) || canonical,
     properties: record(entity.properties) || {},
-    observationIds: boundedStrings(entity.observationIds, 100, 200),
-    observationsTruncated: entity.observationsTruncated === true,
+    observationIds: references,
+    observationsTruncated: entity.observationsTruncated === true || rawReferences.length > 100
+      || rawReferences.slice(0, 100).some((value) => !exactIdentity(value)),
   };
 }
 
 function addTerm(
-  output: InvestigationSearchTerm[],
-  seen: Set<string>,
+  output: Map<string, InvestigationSearchTerm>,
   field: InvestigationSearchField,
   rawValue: unknown,
+  maximum = 300,
 ): void {
-  const value = boundedText(rawValue, 300);
+  const value = boundedText(rawValue, maximum);
   if (!value) return;
   const normalized = normalizeSearchText(value);
-  const key = `${field}\u0000${normalized}`;
-  if (!normalized || seen.has(key)) return;
-  seen.add(key);
-  if (output.length < MAX_INVESTIGATION_SEARCH_TERMS_PER_ENTITY) output.push({ field, value, normalized });
+  const previous = output.get(normalized);
+  if (!normalized || (previous && FIELD_PRIORITY[previous.field] <= FIELD_PRIORITY[field])) return;
+  output.set(normalized, { field, value, normalized });
 }
 
-function searchableTerms(entity: IndexedEntity): { terms: InvestigationSearchTerm[]; truncated: boolean } {
-  const terms: InvestigationSearchTerm[] = [];
-  const seen = new Set<string>();
-  addTerm(terms, seen, 'canonical', entity.canonical);
-  addTerm(terms, seen, 'label', entity.label);
-  addTerm(terms, seen, 'domain', entity.properties.domain);
-  addTerm(terms, seen, 'name', entity.properties.name);
-  addTerm(terms, seen, 'origin', entity.properties.origin);
-  addTerm(terms, seen, 'sha256', entity.properties.sha256);
-  addTerm(terms, seen, 'ip', entity.properties.ipAddress);
-  addTerm(terms, seen, 'identifier', entity.properties.identifier);
-  addTerm(terms, seen, 'value', entity.properties.value);
+function searchableTerms(entity: IndexedEntity): { terms: InvestigationSearchTerm[]; eligible: number; uninspected: number } {
+  const terms = new Map<string, InvestigationSearchTerm>();
+  addTerm(terms, 'canonical', entity.canonical);
+  addTerm(terms, 'label', entity.label);
+  addTerm(terms, 'domain', entity.properties.domain);
+  addTerm(terms, 'name', entity.properties.name, entity.type === 'case' ? MAX_CASE_OBJECTIVE_LENGTH : 300);
+  addTerm(terms, 'origin', entity.properties.origin);
+  addTerm(terms, 'sha256', entity.properties.sha256);
+  addTerm(terms, 'ip', entity.properties.ipAddress);
+  addTerm(terms, 'identifier', entity.properties.identifier);
+  addTerm(terms, 'value', entity.properties.value);
   const nameservers = Array.isArray(entity.properties.nameservers) ? entity.properties.nameservers : [];
   for (const nameserver of nameservers.slice(0, MAX_INVESTIGATION_SEARCH_TERMS_PER_ENTITY * 2)) {
-    addTerm(terms, seen, 'nameserver', nameserver);
+    addTerm(terms, 'nameserver', nameserver);
   }
   return {
-    terms,
-    truncated: seen.size > terms.length || nameservers.length > MAX_INVESTIGATION_SEARCH_TERMS_PER_ENTITY * 2,
+    terms: [...terms.values()].slice(0, MAX_INVESTIGATION_SEARCH_TERMS_PER_ENTITY),
+    eligible: terms.size,
+    uninspected: Math.max(0, nameservers.length - MAX_INVESTIGATION_SEARCH_TERMS_PER_ENTITY * 2),
   };
 }
 
@@ -443,7 +446,15 @@ export function markInvestigationSearchSourcesUnavailable(
     seen.add(store);
     sources[store] = { state: 'unavailable', version: null, records: 0, truncated: false };
   }
-  return { ...index, sources };
+  if (!seen.size) return index;
+  const marked = {
+    ...index, sources, truncated: true,
+    limitations: boundedStrings([
+      `${seen.size} saved collection${seen.size === 1 ? ' is' : 's are'} unavailable and could not be searched.`,
+      ...index.limitations,
+    ], MAX_INVESTIGATION_SEARCH_LIMITATIONS),
+  };
+  return marked;
 }
 
 /**
@@ -462,24 +473,65 @@ export function buildInvestigationSearchIndex(rawProjection: unknown): Investiga
 
   const sources = normalizeSources(projection.sources);
   const observations = new Map<string, IndexedObservation>();
-  let truncated = projection.truncated || projection.entities.length > MAX_INVESTIGATION_SEARCH_ENTITIES;
+  const ambiguousObservationIds = duplicateIdentities(projection.observations);
+  let invalidObservations = 0;
+  let duplicateObservations = 0;
   for (const rawObservation of projection.observations) {
+    if (ambiguousObservationIds.has(exactIdentity(record(rawObservation)?.id))) { duplicateObservations += 1; continue; }
     const observation = normalizeObservation(rawObservation);
-    if (observation && !observations.has(observation.id)) observations.set(observation.id, observation);
+    if (!observation) { invalidObservations += 1; continue; }
+    observations.set(observation.id, observation);
   }
 
+  const ambiguousEntityIds = duplicateIdentities(projection.entities);
+  const entities = new Map<string, IndexedEntity>();
+  let invalidEntities = 0;
+  let duplicateEntities = 0;
+  for (const rawEntity of projection.entities.slice(0, MAX_INVESTIGATION_SEARCH_ENTITIES)) {
+    if (ambiguousEntityIds.has(exactIdentity(record(rawEntity)?.id))) { duplicateEntities += 1; continue; }
+    const entity = normalizeEntity(rawEntity);
+    if (!entity) { invalidEntities += 1; continue; }
+    entities.set(entity.id, entity);
+  }
+  const encoder = new TextEncoder();
+  const candidates: Array<{
+    entity: IndexedEntity; observation: IndexedObservation;
+    searchable: ReturnType<typeof searchableTerms>; bytes: number[];
+  }> = [];
+  let missingObservations = 0;
+  let referenceLimited = 0;
+  for (const entity of entities.values()) {
+    const observation = selectObservation(entity, observations);
+    if (!observation) { missingObservations += 1; continue; }
+    const searchable = searchableTerms(entity);
+    if (entity.observationsTruncated) referenceLimited += 1;
+    candidates.push({ entity, observation, searchable, bytes: searchable.terms.map((term) => encoder.encode(term.normalized).byteLength) });
+  }
+
+  // Reserve canonical terms before spending the shared text budget on optional
+  // fields. The aggregate term bound follows from entity and per-entity bounds.
+  const admitted = new Set<string>();
+  let termBytes = 0;
+  for (const candidate of candidates) {
+    const bytes = candidate.bytes[0] ?? 0;
+    if (!bytes || termBytes + bytes > MAX_INVESTIGATION_SEARCH_TERM_BYTES) continue;
+    admitted.add(candidate.entity.id);
+    termBytes += bytes;
+  }
   const entries: InvestigationSearchEntry[] = [];
   let termCount = 0;
-  for (const rawEntity of projection.entities.slice(0, MAX_INVESTIGATION_SEARCH_ENTITIES)) {
-    const entity = normalizeEntity(rawEntity);
-    if (!entity) continue;
-    const observation = selectObservation(entity, observations);
-    if (!observation) continue;
-    const searchable = searchableTerms(entity);
-    const remaining = Math.max(0, MAX_INVESTIGATION_SEARCH_TERMS - termCount);
-    const terms = searchable.terms.slice(0, remaining);
-    if (!terms.length) { truncated = true; break; }
-    if (terms.length < searchable.terms.length) truncated = true;
+  let eligibleTerms = 0;
+  let uninspectedNameservers = 0;
+  for (const { entity, observation, searchable, bytes } of candidates) {
+    eligibleTerms += searchable.eligible;
+    uninspectedNameservers += searchable.uninspected;
+    if (!admitted.has(entity.id)) continue;
+    const terms = searchable.terms.filter((_, index) => {
+      if (index === 0) return true;
+      if (termBytes + bytes[index]! > MAX_INVESTIGATION_SEARCH_TERM_BYTES) return false;
+      termBytes += bytes[index]!;
+      return true;
+    });
     termCount += terms.length;
     const pivot = pivotFor(entity, observation);
     entries.push({
@@ -488,7 +540,7 @@ export function buildInvestigationSearchIndex(rawProjection: unknown): Investiga
       label: entity.label,
       canonical: entity.canonical,
       terms,
-      termsTruncated: searchable.truncated || terms.length < searchable.terms.length,
+      termsTruncated: searchable.uninspected > 0 || terms.length < searchable.eligible,
       sourceStore: observation.store,
       source: observation.source,
       classification: evidenceClassification(observation),
@@ -496,13 +548,14 @@ export function buildInvestigationSearchIndex(rawProjection: unknown): Investiga
       complete: observation.complete,
       truncated: observation.truncated,
       limitations: boundedStrings([
+        ...(entity.observationsTruncated ? ['Source references were capped or invalid; additional observations may be unavailable to search.'] : []),
+        ...(searchable.eligible > terms.length ? [`Search retained ${terms.length} of ${searchable.eligible} eligible terms for this item.`] : []),
+        ...(searchable.uninspected ? [`${searchable.uninspected} additional nameserver values were not inspected for search.`] : []),
         ...observation.limitations,
-        ...(entity.observationsTruncated ? ['Additional source observations were omitted by the projection reference cap.'] : []),
       ], MAX_INVESTIGATION_SEARCH_LIMITATIONS),
       href: pivot.href,
       action: pivot.action,
     });
-    if (termCount >= MAX_INVESTIGATION_SEARCH_TERMS) { truncated = true; break; }
   }
 
   entries.sort((left, right) => TYPE_PRIORITY[left.entityType] - TYPE_PRIORITY[right.entityType]
@@ -510,9 +563,21 @@ export function buildInvestigationSearchIndex(rawProjection: unknown): Investiga
     || left.canonical.localeCompare(right.canonical)
     || left.entityId.localeCompare(right.entityId));
   const projectionLimitations = boundedStrings(projection.limitations, MAX_INVESTIGATION_SEARCH_LIMITATIONS);
+  const incompleteSources = Object.values(sources).filter((source) => ['invalid', 'unavailable', 'unsupported'].includes(source.state) || source.truncated).length;
+  const omittedTerms = eligibleTerms - termCount;
+  const truncated = projection.truncated || projection.entities.length > MAX_INVESTIGATION_SEARCH_ENTITIES
+    || incompleteSources > 0 || invalidEntities > 0 || duplicateEntities > 0 || missingObservations > 0
+    || invalidObservations > 0 || duplicateObservations > 0 || referenceLimited > 0
+    || entries.length < candidates.length || omittedTerms > 0 || uninspectedNameservers > 0;
   const limitations = boundedStrings([
+    ...(truncated ? ['Search coverage is partial. Counts below describe the admitted local projection, not all possible evidence.'] : []),
+    `Search inspected ${Math.min(projection.entities.length, MAX_INVESTIGATION_SEARCH_ENTITIES)} admitted entities and indexed ${entries.length}. It retained ${termCount} of ${eligibleTerms} eligible distinct terms in ${termBytes} UTF-8 bytes.`,
+    ...(projection.inputCounts && projection.truncated ? [`Projection input contained ${projection.inputCounts.entities} entities, ${projection.inputCounts.observations} observations and ${projection.inputCounts.relationships} relationships; its reader admitted ${projection.entities.length}, ${projection.observations.length} and ${projection.relationships.length} respectively. Earlier source omissions may be additional.`] : []),
+    ...(invalidEntities || duplicateEntities || missingObservations ? [`Entity admission: ${invalidEntities} malformed rows, ${duplicateEntities} duplicate-identity rows and ${missingObservations} entities without an unambiguous usable source observation. Duplicate identities are not arbitrarily selected.`] : []),
+    ...(invalidObservations || duplicateObservations ? [`Source observation admission: ${invalidObservations} malformed or undated rows and ${duplicateObservations} duplicate-identity rows; ${observations.size} unambiguous observations retained.`] : []),
+    ...(omittedTerms || uninspectedNameservers || referenceLimited ? [`Search omissions: ${omittedTerms} eligible terms, ${uninspectedNameservers} uninspected nameserver values and ${referenceLimited} entities with capped or invalid source references. The source records remain available through their links.`] : []),
+    ...(incompleteSources ? [`${incompleteSources} source collections were incomplete, unavailable or unsupported for this index.`] : []),
     ...projectionLimitations,
-    ...(truncated ? ['The local search index reached a projection, entity, observation, term, or reference cap. Results may be partial.'] : []),
   ], MAX_INVESTIGATION_SEARCH_LIMITATIONS);
 
   const index: InvestigationSearchIndex = {
@@ -528,17 +593,16 @@ export function buildInvestigationSearchIndex(rawProjection: unknown): Investiga
     truncated,
     limitations,
   };
-  candidateIndex(index);
   return index;
 }
 
 function termRank(term: InvestigationSearchTerm, query: string): number | null {
   if (term.normalized === query) return FIELD_PRIORITY[term.field];
   if (term.normalized.startsWith(query)) return 100 + FIELD_PRIORITY[term.field];
+  if (!term.normalized.includes(query)) return null;
   const boundary = term.normalized.split(/[^a-z0-9]+/u).some((part) => part.startsWith(query));
   if (boundary) return 200 + FIELD_PRIORITY[term.field];
-  if (term.normalized.includes(query)) return 300 + FIELD_PRIORITY[term.field];
-  return null;
+  return 300 + FIELD_PRIORITY[term.field];
 }
 
 function matchEntry(
@@ -571,6 +635,7 @@ function matchEntry(
 export function searchInvestigationIndex(
   index: InvestigationSearchIndex,
   rawQuery: unknown,
+  options: Readonly<{ page?: number; pageSize?: number }> = {},
 ): InvestigationSearchResponse {
   if (index.state !== 'ready') {
     return {
@@ -610,9 +675,7 @@ export function searchInvestigationIndex(
   }
 
   const matches: InvestigationSearchResult[] = [];
-  const candidateIds = candidateIndex(index).candidateIds(query, tokens);
   for (const entry of index.entries) {
-    if (!candidateIds.has(entry.entityId)) continue;
     const match = matchEntry(entry, query, tokens);
     if (!match) continue;
     const { terms: _terms, termsTruncated: _termsTruncated, ...result } = entry;
@@ -628,7 +691,12 @@ export function searchInvestigationIndex(
     || left.label.localeCompare(right.label)
     || left.canonical.localeCompare(right.canonical)
     || left.entityId.localeCompare(right.entityId));
-  const results = matches.slice(0, MAX_INVESTIGATION_SEARCH_RESULTS);
+  const pageSize = Number.isSafeInteger(options.pageSize) && options.pageSize! > 0
+    ? Math.min(options.pageSize!, MAX_INVESTIGATION_SEARCH_RESULTS) : MAX_INVESTIGATION_SEARCH_RESULTS;
+  const pageCount = Math.max(1, Math.ceil(matches.length / pageSize));
+  const page = Number.isSafeInteger(options.page) && options.page! > 0 ? Math.min(options.page!, pageCount) : 1;
+  const start = (page - 1) * pageSize;
+  const results = matches.slice(start, start + pageSize);
   if (!results.length) {
     return {
       state: 'no_matches',
@@ -636,7 +704,8 @@ export function searchInvestigationIndex(
       results: [],
       totalMatches: 0,
       truncated: index.truncated,
-      detail: 'Nothing saved in this browser matched that search. This does not mean the domain or evidence is absent elsewhere.',
+      detail: index.truncated ? 'No match was found in the searchable subset. Local search coverage is partial.'
+        : 'No indexed saved work matched that search. This does not establish absence elsewhere.',
     };
   }
   return {
@@ -645,9 +714,9 @@ export function searchInvestigationIndex(
     results,
     totalMatches: matches.length,
     truncated: index.truncated || matches.length > results.length,
-    detail: matches.length > results.length
-      ? `Showing the first ${results.length} of ${matches.length} deterministic matches.`
-      : `${matches.length} deterministic local match${matches.length === 1 ? '' : 'es'}.`,
+    detail: `${matches.length > results.length
+      ? `Showing matches ${start + 1}–${start + results.length} of ${matches.length}.`
+      : `${matches.length} local match${matches.length === 1 ? '' : 'es'}.`}${index.truncated ? ' Search coverage is partial.' : ''}`,
   };
 }
 

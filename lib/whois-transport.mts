@@ -28,7 +28,7 @@ type QueryAddress = (
   address: string,
   server: string,
   query: string,
-  options: { port?: number; timeoutMs?: number; totalDeadlineMs?: number },
+  options: { port?: number; timeoutMs?: number; totalDeadlineMs?: number; signal?: AbortSignal },
 ) => Promise<string>;
 
 type WhoisQuery = (
@@ -39,6 +39,7 @@ type WhoisQuery = (
     timeoutMs?: number;
     totalDeadlineMs?: number;
     onAddressSelected?: (address: string) => void;
+    signal?: AbortSignal;
   },
 ) => Promise<string>;
 
@@ -60,46 +61,53 @@ function queryWhoisAddress(address: string, server: string, query: string, {
   timeoutMs = 10000,
   totalDeadlineMs = WHOIS_HOP_DEADLINE_MS,
   createConnection = net.createConnection,
+  signal,
 }: {
   port?: number;
   timeoutMs?: number;
   totalDeadlineMs?: number;
   createConnection?: CreateWhoisConnection;
+  signal?: AbortSignal;
 } = {}): Promise<string> {
   return new Promise<string>((resolve, reject) => {
+    signal?.throwIfAborted();
     const socket = createConnection({ host: address, port }, () => {
-      socket.write(query + '\r\n');
+      if (!signal?.aborted) socket.write(query + '\r\n');
     });
     const chunks: Buffer[] = [];
     let totalBytes = 0;
     let settled = false;
 
     const deadline = setTimeout(() => {
-      settled = true;
+      settle(reject, new Error(`WHOIS request to ${server} exceeded the total time limit`));
       socket.destroy();
-      reject(new Error(`WHOIS request to ${server} exceeded the total time limit`));
     }, totalDeadlineMs);
 
     function settle<T>(fn: (value: T) => void, value: T) {
       if (settled) return;
       settled = true;
       clearTimeout(deadline);
+      signal?.removeEventListener('abort', abort);
       fn(value);
     }
 
+    const abort = () => { settle(reject, signal!.reason); socket.destroy(); };
+
     socket.setTimeout(Math.min(timeoutMs, totalDeadlineMs));
     socket.on('data', (chunk: Buffer | string) => {
+      if (settled) return;
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       totalBytes += buffer.length;
       if (totalBytes > MAX_WHOIS_BYTES) {
-        socket.destroy();
         settle(reject, new Error(`WHOIS response from ${server} exceeded ${MAX_WHOIS_BYTES} bytes`));
+        socket.destroy();
         return;
       }
       chunks.push(buffer);
     });
 
     const settleResponse = () => {
+      if (settled) return;
       try {
         const responseText = new TextDecoder('utf-8', { fatal: true })
           .decode(Buffer.concat(chunks, totalBytes));
@@ -111,10 +119,12 @@ function queryWhoisAddress(address: string, server: string, query: string, {
     socket.on('end', settleResponse);
     socket.on('close', settleResponse);
     socket.on('timeout', () => {
-      socket.destroy();
       settle(reject, new Error(`WHOIS request to ${server} timed out`));
+      socket.destroy();
     });
     socket.on('error', (error) => settle(reject, error));
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) abort();
   });
 }
 
@@ -126,6 +136,7 @@ async function whoisQuery(server: string, query: string, {
   queryAddress = queryWhoisAddress,
   now = Date.now,
   onAddressSelected = (_address) => {},
+  signal,
 }: {
   port?: number;
   timeoutMs?: number;
@@ -134,7 +145,9 @@ async function whoisQuery(server: string, query: string, {
   queryAddress?: QueryAddress;
   now?: () => number;
   onAddressSelected?: (address: string) => void;
+  signal?: AbortSignal;
 } = {}): Promise<string> {
+  signal?.throwIfAborted();
   const startedAt = now();
   let resolutionTimer: NodeJS.Timeout | undefined;
   const records = await Promise.race([
@@ -146,11 +159,13 @@ async function whoisQuery(server: string, query: string, {
       );
     }),
   ]).finally(() => clearTimeout(resolutionTimer));
+  signal?.throwIfAborted();
 
   const candidates = records.slice(0, MAX_WHOIS_ADDRESSES);
   const failures: string[] = [];
   let attempts = 0;
   for (const { address } of candidates) {
+    signal?.throwIfAborted();
     const remainingMs = totalDeadlineMs - (now() - startedAt);
     if (remainingMs <= 0) break;
     attempts += 1;
@@ -159,7 +174,9 @@ async function whoisQuery(server: string, query: string, {
         port,
         timeoutMs: Math.min(timeoutMs, remainingMs),
         totalDeadlineMs: remainingMs,
+        ...(signal ? { signal } : {}),
       });
+      signal?.throwIfAborted();
       try {
         onAddressSelected(address);
       } catch {
@@ -167,6 +184,7 @@ async function whoisQuery(server: string, query: string, {
       }
       return response;
     } catch (error) {
+      signal?.throwIfAborted();
       failures.push(errorMessage(error, 'connection failed').slice(0, 200));
     }
   }

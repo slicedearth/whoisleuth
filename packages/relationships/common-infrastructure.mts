@@ -4,6 +4,8 @@
 // ownership, intent, safety, or maliciousness.
 
 import snapshotValue from './common-infrastructure-snapshot.json' with { type: 'json' };
+import { COMMON_INFRASTRUCTURE_SCHEMA, COMMON_INFRASTRUCTURE_VERSION, MAX_SNAPSHOT_ENTRIES } from '../contracts/common-infrastructure.mts';
+import { addressValue, type AddressValue } from '../contracts/ip-address.mts';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -31,8 +33,8 @@ type Source = Readonly<{
 }>;
 
 type Snapshot = Readonly<{
-  schema: 'whoisleuth.common-infrastructure';
-  version: 1;
+  schema: typeof COMMON_INFRASTRUCTURE_SCHEMA;
+  version: typeof COMMON_INFRASTRUCTURE_VERSION;
   generatedAt: string;
   source: Readonly<{
     project: string;
@@ -46,8 +48,16 @@ type Snapshot = Readonly<{
   limitations: readonly string[];
 }>;
 
-const IPV4_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/u;
-const IPV6_RE = /^[0-9a-f:.]+$/iu;
+type CompiledCidr = Readonly<{ cidr: string } & (
+  { family: 4; mask: number; network: number }
+  | { family: 6; mask: bigint; network: bigint }
+)>;
+type CompiledSource = readonly CompiledCidr[];
+
+// Only snapshots admitted and frozen here are cached. Mutable caller-supplied
+// snapshots are evaluated afresh, so changing their contents cannot reuse stale ranges.
+const compiledSnapshots = new WeakMap<Snapshot, readonly CompiledSource[]>();
+
 const SHA256_RE = /^[0-9a-f]{64}$/u;
 const COMMIT_RE = /^[0-9a-f]{40}$/u;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/u;
@@ -64,69 +74,25 @@ function record(value: unknown): JsonRecord | null {
     : null;
 }
 
-function canonicalIpv4(value: unknown): string | null {
-  if (typeof value !== 'string' || !IPV4_RE.test(value)) return null;
-  const octets = value.split('.').map(Number);
-  return octets.length === 4
-    && octets.every((octet) => Number.isInteger(octet) && octet >= 0 && octet <= 255)
-    ? octets.join('.')
-    : null;
-}
-
-function canonicalIpv6(value: unknown): string | null {
-  if (typeof value !== 'string' || !value.includes(':') || value.includes('%') || !IPV6_RE.test(value)) return null;
-  try {
-    const hostname = new URL(`https://[${value}]/`).hostname;
-    return hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1).toLowerCase() : null;
-  } catch {
-    return null;
-  }
-}
-
-function ipv4Long(value: string): number {
-  return value.split('.').reduce((total, octet) => (total << 8) + Number(octet), 0) >>> 0;
-}
-
-function expandedIpv6(value: string): string[] | null {
-  const embeddedIpv4 = value.includes('.');
-  if (embeddedIpv4) return null;
-  const pieces = value.split('::');
-  if (pieces.length > 2) return null;
-  const left = pieces[0] ? pieces[0].split(':') : [];
-  const right = pieces[1] ? pieces[1].split(':') : [];
-  if (left.some((part) => !/^[0-9a-f]{1,4}$/iu.test(part))
-    || right.some((part) => !/^[0-9a-f]{1,4}$/iu.test(part))) return null;
-  const missing = 8 - left.length - right.length;
-  if ((pieces.length === 1 && missing !== 0) || (pieces.length === 2 && missing < 1)) return null;
-  return [...left, ...Array.from({ length: Math.max(0, missing) }, () => '0'), ...right]
-    .map((part) => part.padStart(4, '0'));
-}
-
-function ipv6BigInt(value: string): bigint | null {
-  const parts = expandedIpv6(value);
-  if (!parts) return null;
-  return parts.reduce((total, part) => (total << 16n) + BigInt(`0x${part}`), 0n);
-}
-
-function inCidr(address: string, cidr: string): boolean {
-  const [rangeText, prefixText, ...rest] = cidr.split('/');
-  if (rest.length || !rangeText || !prefixText || !/^\d{1,3}$/u.test(prefixText)) return false;
+function compileCidr(value: unknown): CompiledCidr | null {
+  if (typeof value !== 'string' || value.length > 96) return null;
+  const [rangeText, prefixText, ...rest] = value.split('/');
+  if (rest.length || !rangeText || !prefixText || !/^\d{1,3}$/u.test(prefixText)) return null;
   const prefix = Number(prefixText);
-  const ipv4 = canonicalIpv4(address);
-  const range4 = canonicalIpv4(rangeText);
-  if (ipv4 && range4 && prefix <= 32) {
+  const range = addressValue(rangeText);
+  if (range?.family === 4 && prefix <= 32) {
     const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
-    return (ipv4Long(ipv4) & mask) === (ipv4Long(range4) & mask);
+    return { cidr: value, family: 4, mask, network: (range.value & mask) >>> 0 };
   }
-  const ipv6 = canonicalIpv6(address);
-  const range6 = canonicalIpv6(rangeText);
-  if (!ipv6 || !range6 || prefix > 128) return false;
-  const addressValue = ipv6BigInt(ipv6);
-  const rangeValue = ipv6BigInt(range6);
-  if (addressValue === null || rangeValue === null) return false;
+  if (range?.family !== 6 || prefix > 128) return null;
   const full = (1n << 128n) - 1n;
   const mask = prefix === 0 ? 0n : (full << BigInt(128 - prefix)) & full;
-  return (addressValue & mask) === (rangeValue & mask);
+  return { cidr: value, family: 6, mask, network: range.value & mask };
+}
+
+function inCompiledCidr(address: AddressValue, range: CompiledCidr): boolean {
+  if (address.family === 4 && range.family === 4) return ((address.value & range.mask) >>> 0) === range.network;
+  return address.family === 6 && range.family === 6 && (address.value & range.mask) === range.network;
 }
 
 function validDate(value: unknown): value is string {
@@ -135,22 +101,12 @@ function validDate(value: unknown): value is string {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
-function validCidr(value: unknown): value is string {
-  if (typeof value !== 'string' || value.length > 96) return false;
-  const [address, prefixText, ...rest] = value.split('/');
-  if (rest.length || !address || !prefixText || !/^\d{1,3}$/u.test(prefixText)) return false;
-  const prefix = Number(prefixText);
-  return canonicalIpv4(address) !== null
-    ? prefix <= 32
-    : canonicalIpv6(address) !== null && prefix <= 128;
-}
-
 export function parseCommonInfrastructureSnapshot(value: unknown): Snapshot {
   const source = record(value);
   const sourceMeta = record(source?.source);
   const sourceCommit = typeof sourceMeta?.commit === 'string' ? sourceMeta.commit : '';
-  if (source?.schema !== 'whoisleuth.common-infrastructure'
-    || source.version !== 1
+  if (source?.schema !== COMMON_INFRASTRUCTURE_SCHEMA
+    || source.version !== COMMON_INFRASTRUCTURE_VERSION
     || typeof source.generatedAt !== 'string'
     || !Array.isArray(source.sources)
     || source.sources.length < 1
@@ -166,6 +122,7 @@ export function parseCommonInfrastructureSnapshot(value: unknown): Snapshot {
     throw new TypeError('Common-infrastructure snapshot has an unsupported contract.');
   }
   const sources: Source[] = [];
+  const compiledSources: CompiledSource[] = [];
   const seenSourceIds = new Set<string>();
   let entryCount = 0;
   for (const rawSource of source.sources) {
@@ -183,20 +140,26 @@ export function parseCommonInfrastructureSnapshot(value: unknown): Snapshot {
       || !validDate(item.sourceDate)
       || !SHA256_RE.test(digest)
       || !Array.isArray(item.values)
-      || item.values.length > 20_000
-      || !item.values.every(validCidr)
+      || item.values.length > MAX_SNAPSHOT_ENTRIES - entryCount
       || new Set(item.values).size !== item.values.length) {
       throw new TypeError('Common-infrastructure source has an invalid contract.');
     }
     seenSourceIds.add(id);
-    sources.push({
+    const ranges = item.values.map((value) => {
+      const range = compileCidr(value);
+      if (!range) throw new TypeError('Common-infrastructure source has an invalid contract.');
+      return range;
+    });
+    const admitted: Source = Object.freeze({
       id,
       label: item.label,
       category: expectedCategory,
       sourceDate: item.sourceDate,
       sourceDigestSha256: digest,
-      values: item.values,
+      values: Object.freeze(ranges.map((range) => range.cidr)),
     });
+    sources.push(admitted);
+    compiledSources.push(ranges);
     entryCount += item.values.length;
   }
   const excludedSources: Array<{ id: string; reason: string }> = [];
@@ -212,44 +175,53 @@ export function parseCommonInfrastructureSnapshot(value: unknown): Snapshot {
       throw new TypeError('Common-infrastructure excluded source has an invalid contract.');
     }
     seenSourceIds.add(id);
-    excludedSources.push({ id, reason });
+    excludedSources.push(Object.freeze({ id, reason }));
   }
   if (seenSourceIds.size !== EXPECTED_SOURCES.size
     || !sources.some((item) => item.id === 'public-dns-core')
     || entryCount !== source.entryCount
-    || entryCount > 20_000) {
+    || entryCount > MAX_SNAPSHOT_ENTRIES) {
     throw new TypeError('Common-infrastructure snapshot entry count is inconsistent.');
   }
-  return {
-    schema: 'whoisleuth.common-infrastructure',
-    version: 1,
+  const snapshot: Snapshot = Object.freeze({
+    schema: COMMON_INFRASTRUCTURE_SCHEMA,
+    version: COMMON_INFRASTRUCTURE_VERSION,
     generatedAt: source.generatedAt,
-    source: {
+    source: Object.freeze({
       project: sourceMeta.project,
       repository: sourceMeta.repository,
       commit: sourceCommit,
       licence: sourceMeta.licence,
-    },
+    }),
     entryCount,
-    sources,
-    excludedSources,
-    limitations: Array.isArray(source.limitations)
+    sources: Object.freeze(sources),
+    excludedSources: Object.freeze(excludedSources),
+    limitations: Object.freeze(Array.isArray(source.limitations)
       ? source.limitations.filter((item): item is string => typeof item === 'string').slice(0, 8)
-      : [],
-  };
+      : []),
+  });
+  compiledSnapshots.set(snapshot, compiledSources);
+  return snapshot;
 }
 
-export const COMMON_INFRASTRUCTURE_SNAPSHOT = Object.freeze(parseCommonInfrastructureSnapshot(snapshotValue));
+export const COMMON_INFRASTRUCTURE_SNAPSHOT = parseCommonInfrastructureSnapshot(snapshotValue);
 
 export function classifyCommonInfrastructureAddress(
   value: unknown,
   snapshot: Snapshot = COMMON_INFRASTRUCTURE_SNAPSHOT,
 ): CommonInfrastructureMatch[] {
-  const address = canonicalIpv4(value) ?? canonicalIpv6(value);
+  const address = addressValue(value);
   if (!address) return [];
   const matches: CommonInfrastructureMatch[] = [];
-  for (const source of snapshot.sources) {
-    const cidr = source.values.find((entry) => inCidr(address, entry));
+  const prepared = compiledSnapshots.get(snapshot);
+  for (const [index, source] of snapshot.sources.entries()) {
+    const ranges = prepared?.[index];
+    const cidr = ranges
+      ? ranges.find((range) => inCompiledCidr(address, range))?.cidr
+      : source.values.find((entry) => {
+        const range = compileCidr(entry);
+        return range !== null && inCompiledCidr(address, range);
+      });
     if (!cidr) continue;
     matches.push(Object.freeze({
       sourceId: source.id,

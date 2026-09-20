@@ -46,13 +46,12 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
   Object.freeze({
     slug: 'open-source-domain-intelligence',
     shortTitle: 'Domain investigation evidence',
-    title: 'How WHOISleuth handles domain investigation evidence',
+    title: 'Domain investigation evidence',
     seoTitle: 'Open-source domain intelligence',
     description: 'See how WHOISleuth combines WHOIS, RDAP, DNS, certificates, website and network evidence while keeping every source and limitation visible.',
     eyebrow: 'Domain investigation',
     summary: Object.freeze([
-      'A useful domain investigation rarely comes from one database. Registration records describe the domain, DNS shows current publication, certificates show issued identities, and website observations describe one captured response.',
-      'WHOISleuth keeps those evidence classes separate. It uses authoritative registry evidence for registration decisions, then adds supporting context without converting a failed or missing source into a claim of absence or safety.',
+      'Review registration, DNS, certificates and website observations with their sources and collection times. Authoritative registration publications take precedence; positive authoritative DNS delegation can support registered status when those publications are inconclusive. Missing sources do not establish availability.',
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Start with the question', body: 'Decide whether you are checking existence, identity, infrastructure, acquisition signals, brand similarity, or a material change. The question determines whether a Fast or Deep collection is proportionate.' }),
@@ -83,13 +82,12 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
   Object.freeze({
     slug: 'rdap-vs-whois',
     shortTitle: 'RDAP versus WHOIS',
-    title: 'RDAP versus WHOIS: why registration sources disagree',
+    title: 'RDAP versus WHOIS',
     seoTitle: 'RDAP vs WHOIS: why sources disagree',
     description: 'Understand the different formats, authorities and failure modes of RDAP and WHOIS, and how to review conflicts without losing provenance.',
     eyebrow: 'Registration evidence',
     summary: Object.freeze([
-      'RDAP is structured JSON with bootstrap-based service discovery. WHOIS is text returned through registry or registrar-specific query rules. They can describe the same registration at different times and with different redaction policies.',
-      'A disagreement is not automatically an error. It is a review prompt. WHOISleuth preserves the source, authority, time, query path and normalised field used in each comparison.',
+      'Compare structured RDAP and text WHOIS records using their authority, collection time and redaction policy. WHOISleuth retains the source and query path for each normalised field, including disagreements.',
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Identify authority', body: 'Registry evidence controls domain-existence decisions. Registrar publication can enrich the record, while IANA accreditation and ICANN compliance notices remain separately dated provider context rather than evidence about the domain.' }),
@@ -120,13 +118,12 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
   Object.freeze({
     slug: 'lookalike-domain-checker',
     shortTitle: 'Lookalike domain review',
-    title: 'Find and review lookalike domains without treating similarity as abuse',
+    title: 'Review lookalike domains',
     seoTitle: 'Lookalike domain checker and review guide',
     description: 'Generate bounded typo, homoglyph and impersonation candidates, add certificate-log observations, and review the strongest leads with explainable evidence.',
     eyebrow: 'Brand protection',
     summary: Object.freeze([
-      'A useful lookalike review needs both coverage and restraint. Character substitutions, omissions, keyboard proximity, homoglyphs, word combinations and alternate domain endings can produce plausible candidates, but also many benign names.',
-      'WHOISleuth generates candidates locally, records the mutation family and scope, then lets analysts add registration and public certificate observations before deciding which domains deserve deeper review.',
+      'Generate candidates from a Brand Profile, then review registration, certificate and website evidence. Each candidate keeps its mutation family or discovery source. Similar spelling is a lead, not proof of abuse.',
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Define the protected identity', body: 'Create a browser-local Brand Profile with official domains, product terms, trusted partners and preferred domain endings.' }),
@@ -157,13 +154,12 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
   Object.freeze({
     slug: 'certificate-transparency-brand-protection',
     shortTitle: 'Certificate transparency',
-    title: 'Use Certificate Transparency as a brand-protection lead',
+    title: 'Certificate Transparency for brand review',
     seoTitle: 'Certificate Transparency for brand protection',
     description: 'Learn what public certificate logs can reveal about domain names, and why certificate observations need registration and website context.',
     eyebrow: 'Certificate evidence',
     summary: Object.freeze([
-      'Certificate Transparency logs can expose hostnames included in publicly logged certificates. This makes them useful for finding brand-related names and reviewing certificate reuse before a domain appears elsewhere.',
-      'Log presence is only an observation. It does not establish that a site is active, that the certificate is still deployed, or that a hostname is controlled by the party suggested by its name.',
+      'Find brand-related hostnames in public certificate logs and compare them with saved TLS observations. A log entry records a certificate or precertificate, not current deployment or control of a website.',
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Search reviewed terms', body: 'Use a bounded brand or domain query and retain the log source plus first and last observation context.' }),
@@ -193,13 +189,12 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
   Object.freeze({
     slug: 'domain-investigation-workflow',
     shortTitle: 'Domain investigation guide',
-    title: 'A practical domain investigation guide',
+    title: 'Investigate a domain',
     seoTitle: 'Domain investigation workflow guide',
     description: 'Move from one domain question to registration, DNS, certificate, website, relationship and case evidence without losing source health or scope.',
     eyebrow: 'Analyst guide',
     summary: Object.freeze([
-      'The fastest route through a domain investigation is not always the deepest scan. Start with the decision you need to make, collect only the evidence needed for that decision, and retain the facts that another reviewer must be able to reproduce.',
-      'WHOISleuth supports single-domain review, brand sweeps and infrastructure pivots. Network collection and report submission remain explicit actions.',
+      'Choose a question, collect the relevant sources, and save reviewed evidence in a Case. Use Fast for registration-first triage and Deep when the decision needs supporting website, certificate or network evidence.',
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Frame the decision', body: 'State whether you are checking registration, possible impersonation, infrastructure overlap, acquisition readiness, service change or an abuse-reporting lead.' }),
@@ -230,13 +225,12 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
   Object.freeze({
     slug: 'reporting-and-takedown-guidance',
     shortTitle: 'Reporting and takedown guidance',
-    title: 'Prepare and track an abuse or infringement report',
+    title: 'Prepare an abuse or infringement report',
     seoTitle: 'Abuse and takedown reporting guide',
     description: 'Prepare evidence, choose an official platform or infrastructure route, record delivery and recheck the reported content without assuming removal.',
     eyebrow: 'Response guidance',
     summary: Object.freeze([
-      'A useful complaint identifies the exact content, the observed conduct, the affected party, the reporter’s authority and the evidence available at a stated time. Different providers use different safety, impersonation, trademark and copyright processes.',
-      'WHOISleuth can retain exact incident links, suggest freshness-bounded official routes and prepare a local evidence packet. It does not submit a complaint, provide legal authority, or treat a provider acknowledgement as proof that content was removed.',
+      'Retain exact incident links, review the applicable official reporting route and prepare a local evidence packet. Submit the complaint yourself, record delivery and independently recheck the target. Provider acknowledgement does not establish removal.',
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Preserve the review basis', body: 'Retain exact public URLs, observation times, screenshots or capture digests, source limitations and an evidence-linked Case conclusion. Avoid collecting unrelated personal information.' }),
@@ -265,13 +259,12 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
   Object.freeze({
     slug: 'bulk-domain-comparison',
     shortTitle: 'Bulk domain comparison',
-    title: 'Compare multiple domains without flattening incomplete evidence',
+    title: 'Compare multiple domains',
     seoTitle: 'Bulk domain comparison guide',
     description: 'Use Bulk Fast or Bulk Deep collection, source-state filters and two-domain comparisons to prioritise a review queue.',
     eyebrow: 'Bulk triage',
     summary: Object.freeze([
-      'Bulk review is most useful when every row follows the same collection contract and incomplete sources stay visible. A failed domain request must not look like a low-risk result, and a missing field must not be treated as observed absence.',
-      'WHOISleuth applies explicit pacing and concurrency limits, retains row-level source states, and offers filters, saved views, review queues, relationships and a two-domain comparison over the compact evidence.',
+      'Collect a selected domain set at a consistent depth, filter the results and compare evidence side by side. Saved views and review queues retain context; row-level source states keep incomplete results distinct from observed absence.',
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Choose a focused set', body: 'Paste a bounded domain list or carry a reviewed shortlist from Discover. Remove unrelated names before collection.' }),
@@ -301,13 +294,12 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
   Object.freeze({
     slug: 'ip-asn-investigation',
     shortTitle: 'IP and ASN context',
-    title: 'Add IP and ASN context without claiming the origin host',
+    title: 'IP and ASN context',
     seoTitle: 'IP and ASN investigation guide',
     description: 'Interpret public IP registration, prefixes, routing identifiers and shared infrastructure as bounded investigation pivots.',
     eyebrow: 'Network context',
     summary: Object.freeze([
-      'A domain can resolve to a proxy, content-delivery edge, load balancer or shared hosting platform. The registered network and ASN help describe where the observed address sits, but usually do not identify the underlying customer or origin server.',
-      'WHOISleuth keeps domain DNS observations, IP RDAP registration and analyst-controlled routing pivots separately attributed. Known shared ranges are qualified locally rather than discarded.',
+      'Review the public endpoint, its network registration and routing context. DNS addresses, IP RDAP and shared-infrastructure matches remain separately attributed; a proxy or shared edge does not identify the origin server.',
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Start from an observed address', body: 'Deep Lookup selects one bounded public endpoint address from collected DNS or TLS evidence and performs one logical IP RDAP enrichment.' }),
@@ -338,13 +330,12 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
   Object.freeze({
     slug: 'local-first-osint',
     shortTitle: 'Local-first investigation',
-    title: 'Why local-first storage matters for domain investigations',
+    title: 'Local-first investigation storage',
     seoTitle: 'Local-first OSINT and browser storage',
     description: 'Understand what WHOISleuth keeps in the browser, what reaches public sources, and how deliberate exports preserve portability without hosted custody.',
     eyebrow: 'Privacy and storage',
     summary: Object.freeze([
-      'Domain investigations can contain sensitive notes, internal decisions, selected contacts and links between otherwise public observations. Sending every record to a hosted workspace is not always necessary for a solo or small trusted deployment.',
-      'WHOISleuth keeps core saved work in IndexedDB under the current browser origin. Network collection still reaches the relevant public sources, but browser-local cases and notes are not automatically synchronised or uploaded.',
+      'Cases, notes and saved observations stay in IndexedDB under the current browser origin. They are not automatically uploaded or synchronised across devices. Network collection still reaches the selected sources, and downloaded workspace archives provide backup and transfer.',
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Keep collection and retention separate', body: 'Opening a tool does not save its result. The analyst must choose a case, snapshot, watchlist, relationship or export action.' }),

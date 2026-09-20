@@ -4,7 +4,7 @@
 
 import { parse as parseDomain } from 'tldts';
 
-import { parseDmarcRecords, parseSpfRecords } from './domain-posture-parsers.mts';
+import { parseDmarcRecords, parseDmarcReportingAuthorization, parseReportingDestination, parseSpfRecords } from './domain-posture-parsers.mts';
 
 type DnsQuery = {
   records: unknown[];
@@ -238,11 +238,13 @@ async function expandSpfPolicy(
 }
 
 function reportDestinationDomain(value: unknown): string | null {
-  const raw = String(value || '').trim();
-  if (!/^mailto:/iu.test(raw)) return null;
-  const address = raw.slice(7).split('!')[0] || '';
-  const at = address.lastIndexOf('@');
-  return at > 0 ? strictHostname(address.slice(at + 1)) : null;
+  if (typeof value !== 'string') return null;
+  // The obsolete DMARC report-size suffix remains readable, but arbitrary
+  // text after an exclamation mark must not repair a malformed destination.
+  const uri = value.trim().replace(/![0-9]+[kmgt]?$/iu, '');
+  if (/[!,;]/u.test(uri)) return null;
+  const destination = parseReportingDestination(uri);
+  return destination?.scheme === 'mailto' ? strictHostname(destination.host) : null;
 }
 
 async function validateDmarcExternalReporting(
@@ -283,14 +285,21 @@ async function validateDmarcExternalReporting(
       continue;
     }
     const recordName = `${ownerDomain}._report._dmarc.${destinationDomain}`;
+    if (recordName.length > 253) {
+      results.push({ destination: destinationDomain, reportType: item.reportType, recordName: null, state: 'unavailable', error: 'The reporting authorisation query exceeds the DNS name limit.' });
+      continue;
+    }
     let query = cache.get(recordName);
     if (!query) {
       query = await resolveTxt(recordName);
       cache.set(recordName, query);
     }
-    const authorized = query.records.some((record) => (
-      String(Array.isArray(record) ? record.join('') : record || '').trim().toUpperCase().startsWith('V=DMARC1')
-    ));
+    const authorized = query.records.some((record) => {
+      const tags = parseDmarcReportingAuthorization(record);
+      if (!tags) return false;
+      // A recipient override cannot redirect authorisation to another host.
+      return tags.rua === undefined || tags.rua.split(',').every((destination) => reportDestinationDomain(destination) === destinationDomain);
+    });
     results.push({
       destination: destinationDomain,
       reportType: item.reportType,

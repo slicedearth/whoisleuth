@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
 
 import { buildAnalystJourneyAssurance, parseAnalystJourneySource } from '../tools/analyst-journey-assurance.mts';
 import { selectBalancedBrowserShard } from '../tools/playwright-balanced-shard.mts';
@@ -26,11 +27,15 @@ import {
   readVerificationTestInventory,
   readVerificationTimingProfile,
   VERIFICATION_TIMING_PROFILE_PATH,
+  verificationTestInventoryFingerprint,
 } from '../tools/verification-timing-profile.mts';
 import {
   assertDeclaredVerificationTest,
   buildVerificationOwnershipPlan,
+  browserSpecsForPrefixes,
   checkVerificationOwnershipMap,
+  createVerificationOwnershipPlan,
+  importedTestConsumers,
   FULL_BATCH_RELEASE_GATES,
 } from '../tools/verification-ownership.mts';
 
@@ -41,19 +46,20 @@ function rawProfile(): Record<string, unknown> {
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 describe('verification architecture contracts', () => {
-  test('retains complete measured timing identities and a deterministic exact browser plan', () => {
+  test('uses discovered tests for a deterministic exact browser plan and retains honest timing history', () => {
     const inventory = readVerificationTestInventory();
     const profile = readVerificationTimingProfile();
     const first = buildBalancedBrowserShardPlan(profile);
     const second = buildBalancedBrowserShardPlan(profile);
     assert.deepEqual(first, second);
-    assert.deepEqual(profile.files.map((item) => item.file).sort(), [...inventory].sort());
+    assert.equal(profile.inventoryFingerprint, verificationTestInventoryFingerprint(profile.files.map((item) => item.file)));
+    assert.equal(first.inventoryFingerprint, verificationTestInventoryFingerprint(inventory));
     assert.ok(inventory.every((file) => !file.startsWith('test/') || /^test\/[^/]+\.test\.mts$/u.test(file)));
     assert.equal(inventory.includes('tools/test-duration-reporter.mts'), false);
     assert.equal(inventory.some((file) => file.startsWith('test/support/')), false);
     assert.equal(first.setupFiles.length, 1);
     assert.equal(first.shards.length, 4);
-    const browserInventory = profile.files.filter((item) => item.lane === 'browser').map((item) => item.file).sort();
+    const browserInventory = inventory.filter((file) => file.endsWith('.spec.ts')).sort();
     const eligible = browserInventory.filter(isPlaywrightFunctionalSpec);
     const performanceAuthority = browserInventory.filter(isPlaywrightPerformanceAuthoritySpec);
     const assigned = first.shards.flatMap((item) => item.files).sort();
@@ -68,7 +74,9 @@ describe('verification architecture contracts', () => {
   });
 
   test('rejects missing, duplicate, unknown, malformed, and unmeasured timing identities', () => {
-    const inventory = readVerificationTestInventory();
+    const retained = rawProfile();
+    const inventory = (retained.files as Array<{ file: string }>).map((item) => item.file);
+    assert.doesNotThrow(() => parseVerificationTimingProfile(JSON.stringify(retained), inventory));
     const variants: Array<readonly [string, (value: Record<string, unknown>) => void]> = [
       ['missing', (value) => { (value.files as unknown[]).pop(); }],
       ['duplicate', (value) => { (value.files as unknown[]).push(structuredClone((value.files as unknown[])[0])); }],
@@ -95,11 +103,35 @@ describe('verification architecture contracts', () => {
     }
   });
 
+  test('discovers new and removed tests without rewriting historical timings or pretending estimates were measured', () => {
+    const files = ['a', 'b', 'c', 'd'].map((name, index) => ({
+      file: `e2e/${name}.spec.ts`, lane: 'browser', weightMs: (index + 1) * 100, sampleCount: 1, provenanceId: 'fixture-browser',
+    }));
+    const profile = parseVerificationTimingProfile(JSON.stringify({
+      profileVersion: 1,
+      inventoryFingerprint: verificationTestInventoryFingerprint(files.map((item) => item.file)),
+      provenance: [{ id: 'fixture-browser', lane: 'browser', environmentClass: 'fixture', sampleBasis: 'fixture', sampleCount: 1 }],
+      files,
+    }));
+    const before = JSON.stringify(profile);
+    const inventory = ['e2e/a.spec.ts', 'e2e/b.spec.ts', 'e2e/c.spec.ts', 'e2e/new.spec.ts', 'test/new.test.mts'];
+    const plan = buildBalancedBrowserShardPlan(profile, 4, inventory);
+    assert.deepEqual(plan, buildBalancedBrowserShardPlan(profile, 4, [...inventory].reverse()));
+    assert.deepEqual(plan.shards.flatMap((shard) => shard.files).sort(), inventory.filter(isPlaywrightFunctionalSpec));
+    assert.deepEqual(plan.unmeasuredFiles, ['e2e/new.spec.ts', 'test/new.test.mts']);
+    assert.equal(plan.totalPlannedWeightMs, 850, 'new browser file uses the historical lane median only for scheduling');
+    assert.equal(plan.inventoryFingerprint, verificationTestInventoryFingerprint(inventory));
+    assert.equal(JSON.stringify(profile), before);
+    assert.equal(profile.files.some((item) => item.file === 'e2e/new.spec.ts'), false);
+    const withoutBrowserHistory = { ...profile, files: [] };
+    assert.equal(buildBalancedBrowserShardPlan(withoutBrowserHistory, 4, inventory).totalPlannedWeightMs, 4);
+  });
+
   test('builds a complete median-of-three unit candidate and retires replaced provenance', () => {
     const retained = readVerificationTimingProfile();
     assert.ok(retained.provenance.length < MAX_TIMING_PROVENANCE);
-    const unitFiles = retained.files.filter((file) => file.lane === 'unit');
-    const replacedProvenance = new Set(unitFiles.map((file) => file.provenanceId));
+    const unitFiles = readVerificationTestInventory().filter((file) => file.startsWith('test/')).map((file) => ({ file }));
+    const replacedProvenance = new Set(retained.files.filter((file) => file.lane === 'unit').map((file) => file.provenanceId));
     assert.ok(unitFiles.length > 0 && replacedProvenance.size > 0);
     const directory = mkdtempSync(path.join(tmpdir(), 'whoisleuth-timing-update-'));
     const reports = [10.4, 12.6, 20.2].map((durationMs, index) => {
@@ -172,7 +204,7 @@ describe('verification architecture contracts', () => {
     const report = path.join(directory, 'aggregate.json');
     const aggregate = {
       reportVersion: 1,
-      inventoryFingerprint: retained.inventoryFingerprint,
+      inventoryFingerprint: plan.inventoryFingerprint,
       files: [
         ...functionalFiles.map((file, index) => ({ file, lane: 'browser', weightMs: index + 1, sampleCount: 1 })),
         ...plan.setupFiles.map((file) => ({ file, lane: 'browser_setup', weightMs: 5, sampleCount: plan.shardCount })),
@@ -193,6 +225,9 @@ describe('verification architecture contracts', () => {
       )));
       for (const retainedPerformance of performanceFiles) {
         assert.deepEqual(candidate.files.find((item) => item.file === retainedPerformance.file), retainedPerformance);
+      }
+      for (const file of plan.unmeasuredFiles.filter((file) => file.startsWith('test/'))) {
+        assert.equal(candidate.files.some((item) => item.file === file), false, 'browser evidence must not fabricate a unit timing');
       }
 
       writeFileSync(report, JSON.stringify({
@@ -219,8 +254,7 @@ describe('verification architecture contracts', () => {
     const retained = readVerificationTimingProfile();
     const plan = buildBalancedBrowserShardPlan(retained);
     const directory = mkdtempSync(path.join(tmpdir(), 'whoisleuth-browser-command-parity-'));
-    const cleanEnvironment = { ...process.env };
-    delete cleanEnvironment.NODE_V8_COVERAGE;
+    const cleanEnvironment = environmentWithoutV8Coverage();
     try {
       const reports = plan.shards.map((shard) => {
         const report = path.join(directory, `shard-${shard.shard}.json`);
@@ -249,7 +283,7 @@ describe('verification architecture contracts', () => {
       });
       assert.equal(aggregateRun.status, 0, aggregateRun.stderr || aggregateRun.stdout);
       const aggregate = JSON.parse(aggregateRun.stdout) as { inventoryFingerprint: string };
-      assert.equal(aggregate.inventoryFingerprint, retained.inventoryFingerprint);
+      assert.equal(aggregate.inventoryFingerprint, plan.inventoryFingerprint);
       const aggregatePath = path.join(directory, 'aggregate.json');
       writeFileSync(aggregatePath, aggregateRun.stdout);
 
@@ -267,8 +301,9 @@ describe('verification architecture contracts', () => {
         maxBuffer: 4 * 1024 * 1024,
       });
       assert.equal(candidateRun.status, 0, candidateRun.stderr || candidateRun.stdout);
-      const candidate = JSON.parse(candidateRun.stdout) as { inventoryFingerprint: string };
-      assert.equal(candidate.inventoryFingerprint, retained.inventoryFingerprint);
+      const candidate = parseVerificationTimingProfile(candidateRun.stdout);
+      const measuredBrowser = candidate.files.filter((item) => item.lane !== 'unit' && !isPlaywrightPerformanceAuthoritySpec(item.file));
+      assert.deepEqual(measuredBrowser.map((item) => item.file).sort(), [...plan.setupFiles, ...plan.shards.flatMap((shard) => shard.files)].sort());
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -301,7 +336,8 @@ describe('verification architecture contracts', () => {
     assert.ok(plan.focusedBrowserChecks.includes('e2e/dashboard.spec.ts'));
     assert.equal(plan.userFacingBrowserRequired, true);
     assert.match(JSON.stringify(plan), /Focused checks support iteration only/u);
-    assert.doesNotMatch(JSON.stringify(plan), /npm run|;|\$\(/u);
+    assert.ok(plan.focusedUnitChecks.every((file) => /^test\/[^/]+\.test\.mts$/u.test(file)));
+    assert.ok(plan.focusedBrowserChecks.every(isPlaywrightFunctionalSpec));
 
     const closure = checkVerificationOwnershipMap();
     assert.equal(closure.assignedFiles, closure.maintainedFiles);
@@ -310,6 +346,8 @@ describe('verification architecture contracts', () => {
     assert.ok(closure.privacyProfiles > 0 && closure.privacyConsumerFlows > 0);
     assert.ok(closure.browserRequiredSupportPaths > 0);
     assert.throws(() => buildVerificationOwnershipPlan(['../outside.mts']), /repository-relative|traverse/u);
+    assert.throws(() => buildVerificationOwnershipPlan(['lib/helper;touch.mts']), /repository-relative/u);
+    assert.throws(() => buildVerificationOwnershipPlan(['lib/$(id).mts']), /repository-relative/u);
     assert.throws(() => buildVerificationOwnershipPlan(['lib/safe-fetch.mts', 'lib/safe-fetch.mts']), /must not repeat/u);
     assert.throws(() => buildVerificationOwnershipPlan(['unowned-root.cfg']), /Unknown maintained ownership area/u);
     assert.throws(
@@ -332,7 +370,7 @@ describe('verification architecture contracts', () => {
         kind: 'isolated presentation',
         path: 'frontend/src/lib/components/LookupAtAGlance.svelte',
         owner: 'frontend user-facing routes and components',
-        unit: 'test/model-contract-properties.test.mts',
+        unit: 'test/lookup-request-controller.test.mts',
         browser: 'e2e/lookup-interaction-design.spec.ts',
         specialised: 'architecture',
         excluded: 'cli-package',
@@ -415,6 +453,126 @@ describe('verification architecture contracts', () => {
     );
   });
 
+  test('discovers new browser specifications by family without a maintained filename mirror', () => {
+    const inventory = ['e2e/lookup-new-review.spec.ts', 'e2e/lookup.spec.ts', 'e2e/lookupish.spec.ts', 'e2e/cases.spec.ts', 'e2e/auth.setup.ts'];
+    assert.deepEqual(browserSpecsForPrefixes(['lookup'], inventory), ['e2e/lookup-new-review.spec.ts', 'e2e/lookup.spec.ts']);
+    assert.deepEqual(browserSpecsForPrefixes(['lookup'], [...inventory].reverse()), browserSpecsForPrefixes(['lookup'], inventory));
+  });
+
+  test('covers canonical console destinations and focused Case forms without unrelated import journeys', () => {
+    const navigation = buildVerificationOwnershipPlan(['frontend/src/lib/workspaces.ts']);
+    assert.ok(navigation.focusedBrowserChecks.includes('e2e/console-workflow-navigation.spec.ts'));
+    assert.ok(navigation.focusedBrowserChecks.includes('e2e/console-workspace-layout.spec.ts'));
+    assert.ok(navigation.focusedBrowserChecks.includes('e2e/mobile-nav.spec.ts'));
+    const form = buildVerificationOwnershipPlan(['frontend/src/lib/components/CaseHistoryStage.svelte']);
+    assert.ok(form.focusedBrowserChecks.includes('e2e/case-workspace-navigation.spec.ts'));
+    assert.ok(form.focusedBrowserChecks.includes('e2e/submitted-drafts.spec.ts'));
+    assert.ok(form.focusedUnitChecks.includes('test/submitted-draft.test.mts'));
+    assert.equal(form.focusedBrowserChecks.includes('e2e/case-import-workflows.spec.ts'), false);
+    assert.equal(form.focusedBrowserChecks.includes('e2e/case-brand-association.spec.ts'), false);
+    assert.equal(form.mandatorySpecialisedChecks.includes('schema-inventory'), false);
+    assert.equal(form.mandatorySpecialisedChecks.includes('cli-package'), false);
+    assert.equal(form.mandatorySpecialisedChecks.includes('privacy-catalogue'), false);
+  });
+
+  test('does not mistake an unexplained interface for accessibility-only impact', () => {
+    const plan = buildVerificationOwnershipPlan(['frontend/src/lib/components/NewOrdinaryPanel.svelte']);
+    assert.deepEqual(plan.focusedBrowserChecks, readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).sort());
+    const family = buildVerificationOwnershipPlan(['frontend/src/lib/components/LookupNewReview.svelte']);
+    assert.ok(family.focusedBrowserChecks.includes('e2e/lookup-workspace-navigation.spec.ts'));
+    assert.equal(family.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
+  });
+
+  test('keeps document-only checks offline and avoids application compilation and browser work', async () => {
+    for (const file of ['README.md', 'docs/getting-started.md', 'packages/cases/README.md', 'docs/cli.md', 'SECURITY.md', 'TRADEMARKS.md', 'PRIVACY.md', 'docs/capability-manifest.md']) {
+      const plan = await createVerificationOwnershipPlan([file]);
+      const execution = buildFocusedVerificationExecution(plan);
+      assert.deepEqual(execution.browserSpecs, [], file);
+      assert.equal(execution.cleanupBrowserArtifacts, false, file);
+      assert.ok(!execution.commands.some((command) => /typecheck|build|^check$/u.test(command.id)), file);
+      if (['docs/cli.md', 'SECURITY.md', 'TRADEMARKS.md'].includes(file)) assert.ok(plan.focusedUnitChecks.includes('test/cli-package-boundary.test.mts'));
+      if (file === 'PRIVACY.md') assert.ok(plan.mandatorySpecialisedChecks.includes('privacy-catalogue'));
+      if (file === 'docs/capability-manifest.md') {
+        assert.ok(plan.mandatorySpecialisedChecks.includes('capability-catalogue'));
+        assert.ok(plan.focusedUnitChecks.includes('test/capability-manifest.test.mts'));
+      }
+    }
+  });
+
+  test('discovers transitive helper consumers and safely falls back when imports cannot explain coverage', () => {
+    const inventory = ['test/consumer.test.mts', 'test/unrelated.test.mts'];
+    const graph = { modules: [
+      { source: 'test/consumer.test.mts', dependencies: [{ resolved: 'packages/example/owner.mts', module: '../packages/example/owner.mts' }] },
+      { source: 'packages/example/owner.mts', dependencies: [{ resolved: 'packages/example/helper.mts', module: './helper.mts' }] },
+      { source: 'packages/example/helper.mts', dependencies: [{ resolved: 'packages/example/owner.mts', module: './owner.mts' }] },
+    ] } as Parameters<typeof importedTestConsumers>[1];
+    const selected = importedTestConsumers(['packages/example/helper.mts', 'test/consumer.test.mts', 'packages/example/deleted.mts'], graph, inventory);
+    assert.deepEqual(selected.get('packages/example/helper.mts'), ['test/consumer.test.mts']);
+    assert.deepEqual(selected.get('test/consumer.test.mts'), ['test/consumer.test.mts']);
+    assert.deepEqual(selected.get('packages/example/deleted.mts'), inventory);
+    graph.modules[0]!.dependencies[0]!.couldNotResolve = true;
+    assert.deepEqual(importedTestConsumers(['packages/example/helper.mts'], graph, inventory).get('packages/example/helper.mts'), inventory);
+    assert.equal(buildVerificationOwnershipPlan(['test/helpers/subprocess-environment.mts']).focusedUnitChecks.includes('test/helpers/subprocess-environment.mts'), false);
+  });
+
+  test('keeps erased type dependencies in compiler checks without treating them as runtime consumers', () => {
+    const inventory = ['test/runtime.test.mts', 'test/type-only.test.mts'];
+    const graph = { modules: [
+      { source: inventory[0], dependencies: [{ resolved: 'packages/example/owner.mts', module: '../packages/example/owner.mts', typeOnly: false, preCompilationOnly: false }] },
+      { source: inventory[1], dependencies: [
+        { resolved: 'packages/example/owner.mts', module: '../packages/example/owner.mts', typeOnly: true },
+        { resolved: './$types', module: './$types', couldNotResolve: true, preCompilationOnly: true },
+      ] },
+    ] } as Parameters<typeof importedTestConsumers>[1];
+    assert.deepEqual(importedTestConsumers(['packages/example/owner.mts'], graph, inventory).get('packages/example/owner.mts'), [inventory[0]]);
+    graph.modules[1]!.dependencies[1]!.preCompilationOnly = false;
+    assert.deepEqual(importedTestConsumers(['packages/example/owner.mts'], graph, inventory).get('packages/example/owner.mts'), inventory);
+    const execution = buildFocusedVerificationExecution(buildVerificationOwnershipPlan(['packages/cases/case-recheck-model.mts']));
+    assert.equal(execution.commands.filter(command => command.id === 'typecheck').length, 1);
+    assert.equal(execution.commands.some(command => command.id.startsWith('typecheck (')), false);
+  });
+
+  test('resolves ordinary components to existing route coverage without registering component names', async () => {
+    const component = 'frontend/src/lib/components/PublicGoalPaths.svelte';
+    const plan = await createVerificationOwnershipPlan([component]);
+    assert.ok(plan.focusedBrowserChecks.includes('e2e/public-guide.spec.ts'));
+    assert.ok(plan.focusedBrowserChecks.includes('e2e/accessibility.spec.ts'));
+    assert.equal(plan.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
+    assert.equal(plan.focusedBrowserChecks.includes('e2e/case-import-workflows.spec.ts'), false);
+    assert.ok(plan.focusedUnitChecks.includes('test/public-guide.test.mts'));
+    assert.equal(plan.focusedUnitChecks.includes('test/cli.test.mts'), false);
+    assert.ok(buildFocusedVerificationExecution(plan).commands.some(command => command.id === 'check'));
+
+    const ordinary = 'frontend/src/lib/components/NewOrdinaryPanel.svelte';
+    const discovered = buildVerificationOwnershipPlan([ordinary], new Map(), new Map(),
+      new Map([[ordinary, ['frontend/src/routes/(public)/resources/+page.svelte']]]));
+    assert.ok(discovered.focusedBrowserChecks.includes('e2e/public-guide.spec.ts'));
+    assert.equal(discovered.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
+    const unexplained = buildVerificationOwnershipPlan([ordinary], new Map(), new Map(),
+      new Map([[ordinary, ['frontend/src/routes/(console)/unclassified/+page.svelte']]]));
+    assert.deepEqual(unexplained.focusedBrowserChecks, readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).sort());
+    const stage = 'frontend/src/lib/components/CaseHistoryStage.svelte';
+    const known = buildVerificationOwnershipPlan([stage], new Map(), new Map(),
+      new Map([[stage, ['frontend/src/routes/(console)/cases/+page.svelte']]]));
+    assert.deepEqual(known.focusedBrowserChecks, buildVerificationOwnershipPlan([stage]).focusedBrowserChecks);
+  });
+
+  test('uses the existing resolver to find a real helper through its consumers', async () => {
+    const plan = await createVerificationOwnershipPlan(['packages/comparison/favicon-similarity.mts']);
+    assert.ok(plan.focusedUnitChecks.includes('test/utils.test.mts'));
+    assert.ok(plan.interpretation.some((line) => line.includes('current imports')));
+    assert.ok(plan.focusedUnitChecks.length < readVerificationTestInventory().filter((file) => file.startsWith('test/')).length);
+  });
+
+  test('follows imported release metadata into generated examples without another test registration', async () => {
+    const plan = await createVerificationOwnershipPlan(['package.json']);
+    assert.ok(plan.focusedUnitChecks.includes('test/public-product-catalogue.test.mts'));
+    assert.ok(plan.interpretation.some((line) => line.includes('current imports')));
+    assert.ok(plan.focusedUnitChecks.length < readVerificationTestInventory().filter((file) => file.startsWith('test/')).length);
+    assert.ok(plan.focusedBrowserChecks.includes('e2e/dashboard.spec.ts'));
+    assert.equal(plan.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
+  });
+
   test('selects one owner while aggregating every matching verification impact', () => {
     const plan = buildVerificationOwnershipPlan([
       'packages/contracts/privacy-data-flow-catalogue.mts',
@@ -428,7 +586,6 @@ describe('verification architecture contracts', () => {
     const sharedPrivacy = byPath.get('packages/contracts/privacy-data-flow-catalogue.mts')!;
     assert.equal(sharedPrivacy.ownershipArea, 'shared contracts and lifecycle metadata');
     assert.deepEqual(sharedPrivacy.impactAreas, [
-      'portable domain packages',
       'privacy contract and disclosure surfaces',
       'shared contracts and lifecycle metadata',
     ]);
@@ -469,7 +626,13 @@ describe('verification architecture contracts', () => {
     const execution = buildFocusedVerificationExecution(ownership);
     const ids = execution.commands.map((command) => command.id);
 
-    assert.equal(ids.filter((id) => id === 'typecheck').length, 1);
+    assert.equal(ids[0], 'browser-discovery');
+    assert.equal(execution.commands[0]!.args.includes('--list'), true);
+    assert.deepEqual(execution.commands[0]!.environment, { CI: '', WHOISLEUTH_E2E_USE_BUILD: '0' });
+    assert.ok(execution.commands.slice(1).every(command => command.environment === undefined));
+
+    assert.equal(ids.filter((id) => id === 'typecheck (e2e/tsconfig.json)').length, 1);
+    assert.equal(ids.includes('typecheck (tsconfig.json)'), false);
     assert.equal(ids.filter((id) => id === 'check').length, 1);
     assert.equal(ids.filter((id) => id === 'build').length, 1);
     assert.equal(ids.filter((id) => id === 'architecture:check').length, 1);
@@ -483,6 +646,60 @@ describe('verification architecture contracts', () => {
     assert.ok(!ids.includes('test:e2e:built'));
     assert.ok(!ids.includes('verification:ci'));
     assert.deepEqual(execution.deferredSpecialisedChecks, []);
+  });
+
+  test('browser discovery catches import failures without running setup, tests or a server', () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'whoisleuth-test-discovery-'));
+    try {
+      const config = path.join(directory, 'playwright.config.cjs');
+      const spec = path.join(directory, 'discovery.spec.cjs');
+      writeFileSync(config, `module.exports = {
+        testDir: ${JSON.stringify(directory)}, testMatch: '**/*.spec.cjs',
+        projects: [{ name: 'chromium' }],
+        webServer: { command: 'this-command-must-never-start', port: 4199 },
+      };`);
+      const execution = buildFocusedVerificationExecution(buildVerificationOwnershipPlan(['e2e/review-session.spec.ts']));
+      const command = execution.commands[0]!;
+      const args = [...command.args.filter(arg => !arg.endsWith('.spec.ts')), `--config=${config}`];
+      const run = () => spawnSync(command.executable, args, {
+        cwd: REPOSITORY_ROOT, env: { ...environmentWithoutV8Coverage(), ...command.environment },
+        encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024,
+      });
+      writeFileSync(spec, "require('./missing-support.cjs');");
+      const broken = run();
+      assert.ifError(broken.error);
+      assert.notEqual(broken.status, 0);
+      assert.match(broken.stdout + broken.stderr, /missing-support/u);
+      writeFileSync(spec, `const { test } = require(${JSON.stringify(path.join(REPOSITORY_ROOT, 'node_modules/@playwright/test'))});
+        test.beforeAll(() => { throw new Error('setup must not run'); });
+        test('discovered but not executed', () => { throw new Error('test must not run'); });`);
+      const valid = run();
+      assert.ifError(valid.error);
+      assert.equal(valid.status, 0, valid.stdout + valid.stderr);
+      assert.match(valid.stdout, /Total: 1 test in 1 file/u);
+      assert.doesNotMatch(valid.stdout + valid.stderr, /Error: (setup|test) must not run/u);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  test('documentation-only plans do not acquire browser discovery or build work', () => {
+    const execution = buildFocusedVerificationExecution(buildVerificationOwnershipPlan(['CONTRIBUTING.md']));
+    assert.equal(execution.browserSpecs.length, 0);
+    assert.equal(execution.commands.some(command => ['browser-discovery', 'build'].includes(command.id)), false);
+  });
+
+  test('workflow edits run the native workflow validator once without deferring syntax validation', () => {
+    const execution = buildFocusedVerificationExecution(buildVerificationOwnershipPlan(['.github/workflows/ci.yml']));
+    assert.equal(execution.commands.filter(command => command.id === 'workflow:check').length, 1);
+    assert.equal(execution.deferredSpecialisedChecks.includes('workflow-closure'), false);
+  });
+
+  test('a current fixture discovers both unit and browser consumers without another ownership declaration', async () => {
+    const plan = await createVerificationOwnershipPlan(['test/support/current-case.mts']);
+    assert.ok(plan.focusedUnitChecks.includes('test/current-case.test.mts'));
+    assert.ok(plan.focusedBrowserChecks.includes('e2e/review-session.spec.ts'));
+    assert.equal(plan.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
+    assert.equal(plan.userFacingBrowserRequired, true);
+    assert.equal(buildFocusedVerificationExecution(plan).commands[0]!.id, 'browser-discovery');
   });
 
   test('binds lowercase workflow facades and shared browser storage to their dedicated suites', () => {
@@ -500,11 +717,14 @@ describe('verification architecture contracts', () => {
     assert.ok(cases.impactAreas.includes('Case analyst workflow'));
     assert.ok(cases.focusedUnitChecks.includes('test/case-model.test.mts'));
     assert.ok(cases.focusedBrowserChecks.includes('e2e/cases.spec.ts'));
+    assert.ok(cases.focusedBrowserChecks.includes('e2e/case-brand-association.spec.ts'));
 
     const campaigns = byPath.get('frontend/src/lib/campaigns.ts')!;
     assert.ok(campaigns.impactAreas.includes('Brand and campaign analyst workflow'));
     assert.ok(campaigns.focusedUnitChecks.includes('test/campaign-model.test.mts'));
     assert.ok(campaigns.focusedBrowserChecks.includes('e2e/brand-asset-register.spec.ts'));
+    assert.ok(campaigns.focusedBrowserChecks.includes('e2e/case-brand-association.spec.ts'));
+    assert.ok(campaigns.focusedBrowserChecks.includes('e2e/parent-domain-campaign-scope.spec.ts'));
 
     for (const owner of ['frontend/src/lib/watchlists.ts', 'frontend/src/lib/scheduled-monitoring.ts']) {
       const assignment = byPath.get(owner)!;
@@ -588,7 +808,7 @@ describe('verification architecture contracts', () => {
     assert.throws(() => parseFocusedVerificationOptions(['--unknown']), /Usage/u);
   });
 
-  test('binds every version-one analyst journey to enabled semantic mobile tests and one shard', () => {
+  test('binds every declared analyst journey to enabled tests without claiming rendered outcomes', () => {
     const assurance = buildAnalystJourneyAssurance();
     assert.equal(assurance.journeyContractVersion, 1);
     assert.equal(assurance.mappedJourneys, assurance.declaredJourneys);
@@ -597,14 +817,15 @@ describe('verification architecture contracts', () => {
     assert.equal(assurance.browserTestsExecuted, 0);
     assert.equal(
       assurance.balancedShardSpecifications,
-      readVerificationTimingProfile().files.filter((item) => isPlaywrightFunctionalSpec(item.file)).length,
+      readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).length,
     );
     assert.equal(assurance.skippedJourneys, 0);
     assert.equal(assurance.retryAcceptance, false);
     assert.ok(assurance.jobs.Investigate.length > 0);
     assert.ok(assurance.jobs.Respond.length > 0);
     assert.ok(assurance.jobs.Assure.length > 0);
-    assert.ok(assurance.journeyMappings.every((item) => item.mobileOutcome && item.accessibilityOutcome && item.shards.length > 0));
+    assert.equal(assurance.assuranceVersion, 2);
+    assert.ok(assurance.journeyMappings.every((item) => item.mobileOutcome === null && item.accessibilityOutcome === null && item.shards.length > 0));
     assert.deepEqual(assurance.privacy, {
       sharedSameOriginGuard: true,
       reservedTargets: true,
@@ -624,5 +845,22 @@ describe('verification architecture contracts', () => {
     `);
     assert.equal(disabled.length, 1);
     assert.equal(disabled[0]?.disabled, true);
+    const helperBased = parseAnalystJourneySource('e2e/helper-journey.spec.ts', `
+      import { test } from './fixtures';
+      test('helper-driven journey', { tag: '@analyst-journey' }, async ({ page }) => {
+        // test.skip() in a comment does not disable a real test.
+        const explanation = 'testInfo.fixme() is only text';
+        await checkNarrowLayoutAndKeyboard(page);
+      });
+    `);
+    assert.equal(helperBased.length, 1);
+    assert.equal(helperBased[0]?.disabled, false);
+    for (const declaration of ['test.skip(true)', 'testInfo.fixme(true)']) {
+      const conditionallyDisabled = parseAnalystJourneySource('e2e/conditional-journey.spec.ts', `
+        import { test } from './fixtures';
+        test('conditional journey', { tag: '@analyst-journey' }, async ({ page }) => { ${declaration}; });
+      `);
+      assert.equal(conditionallyDisabled[0]?.disabled, true);
+    }
   });
 });

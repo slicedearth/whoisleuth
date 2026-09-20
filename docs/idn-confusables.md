@@ -2,8 +2,8 @@
 
 WHOISleuth uses one shared Unicode-confusable mapping for browser-side Lookup,
 Bulk analysis, local Discover generation, and the CLI. It performs no runtime
-request for Unicode data. The mapping is a small checked-in module so its
-source, limits, version, and review history remain visible.
+request for Unicode data. The checked-in module records its source, limits,
+version and provenance.
 
 ## Projection boundary
 
@@ -34,23 +34,16 @@ npm run unicode:confusables
 npm run unicode:confusables -- --json
 ```
 
-The calibration uses reserved synthetic labels. It compares the previous
-reviewed mapping with the proposed projection across mixed-script,
+The calibration uses reserved synthetic labels. It compares the compatibility
+mapping with the current projection across mixed-script,
 whole-label, same-script, and unrelated negative cases. It also measures
 single-substitution and same-script whole-label candidate growth across
 bounded neutral seed labels.
 
-The current projection is eligible for runtime use because:
-
-- labelled true positives improve from 2 of 8 to 8 of 8;
-- labelled false positives remain 0 of 5;
-- aggregate candidate growth is 36.02%, from 211 to 287 candidates and below
-  the 50% gate; and
-- the largest seed grows 61.9%, below the 75% per-seed gate.
-
-These figures describe this small fixture corpus, not real-world accuracy,
-maliciousness, or prevalence. Any update that introduces a new script or
-mapping class must extend the labelled corpus.
+The report contains the current match, false-positive and candidate-growth
+measurements. These describe the fixture corpus, not real-world accuracy,
+maliciousness or prevalence. Mapping updates require corresponding labelled
+coverage.
 
 ## Runtime generation boundary
 

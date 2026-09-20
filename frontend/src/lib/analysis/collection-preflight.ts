@@ -26,6 +26,7 @@ export interface CollectionPreflight {
 interface LookupPreflightInput {
   mode: 'fast' | 'deep';
   targetCount: number;
+  selectedUrl?: boolean;
   disabledSourceIds?: readonly string[];
   includeSecurityTxt?: boolean;
   includeExternalIntelligence?: boolean;
@@ -84,7 +85,9 @@ export function buildLookupCollectionPreflight(input: LookupPreflightInput): Col
         source('rdap', 'Registry RDAP', 'Collects structured registration evidence from the selected registry route.', disabledIds),
         source('whois', 'WHOIS', 'Uses bounded referral-aware WHOIS collection when the registry publishes a usable service.', disabledIds),
         source('dns_intelligence', 'DNS', 'Collects bounded registration, delegation, mail, and network records.', disabledIds),
-        source('website_probe', 'Website', 'Requests the exact public hostname with redirect revalidation and bounded response handling.', disabledIds),
+        source('website_probe', 'Website', input.selectedUrl
+          ? 'Sends the explicitly selected URL path and query to the website; fragments are not sent. Redirects and response handling remain bounded.'
+          : 'Requests the exact public hostname with redirect revalidation and bounded response handling.', disabledIds),
         source('tls_intelligence', 'TLS', 'Collects bounded certificate and negotiated-connection evidence for eligible public endpoints.', disabledIds),
         source('security_txt', 'security.txt', 'Requests the standardised disclosure-contact path only when explicitly selected.', disabledIds, input.includeSecurityTxt ? 'included' : 'optional'),
         source('external_intelligence', 'Selected third-party intelligence', 'Sends only the registrable domain to each explicitly selected search provider; no scan or report is submitted.', disabledIds,

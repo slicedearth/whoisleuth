@@ -33,6 +33,7 @@ ${commands}
 Human-readable output is the default. Versioned JSON and JSONL are available where documented. Diagnostics and optional progress events use standard error. Use --output and optional --force for atomic private file output. Use --palette auto, light, or dark for a fixed terminal palette. Lookup --browse provides an interactive terminal view.
 .SH EXIT STATUS
 0 indicates command completion, 2 invalid usage, 3 a collection or comparison failure, 4 an explicitly detected partial result, 70 an internal bootstrap failure, 130 analyst cancellation, and 143 service termination.
+For verify-artifact, use --strict-exit in scripts: incomplete verification then returns 4. Without it, producing a verification report can return 0 even when its checks fail. Read the report state and checks.
 .SH PRIVACY
 Network commands disclose the target to the sources named in focused help. Offline commands read local input only. Output files use private permissions and remain on the operator's machine.
 .SH LICENSE

@@ -1,5 +1,6 @@
 import {
   analystUndoExpired,
+  AnalystUndoConflictError,
   createAnalystUndoDescriptor,
   type AnalystUndoDescriptor,
   type AnalystUndoKind,
@@ -73,10 +74,12 @@ export async function runAnalystUndo(id: string, now = Date.now()): Promise<Anal
       state: 'undone',
       message: outcome?.trim() || `Undid ${action.action.toLowerCase()} for ${action.affectedRecord}.`,
     };
-  } catch {
+  } catch (cause) {
     return {
       state: 'failed',
-      message: `Could not undo ${action.action.toLowerCase()} for ${action.affectedRecord}.`,
+      message: cause instanceof AnalystUndoConflictError
+        ? cause.message
+        : `Could not confirm undo for ${action.affectedRecord}. Reload the saved record before making another change.`,
     };
   }
 }

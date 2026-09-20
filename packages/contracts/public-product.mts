@@ -5,7 +5,7 @@ const METHODOLOGY_TOPICS = Object.freeze([
   Object.freeze({
     id: 'authority',
     title: 'Authority-aware registration decisions',
-    summary: 'Only applicable authoritative registry evidence decides registration state. Registrar, WHOIS, DNS, HTTP, mail, page and analyst signals remain supporting context.',
+    summary: 'Authoritative registration publications take precedence. If they are inconclusive, positive authoritative DNS delegation can support registered status at medium confidence. Missing DNS never proves availability; HTTP, mail, page and analyst signals remain supporting context.',
     states: Object.freeze(['complete', 'partial', 'unavailable', 'unsupported', 'conflicting', 'stale']),
   }),
   Object.freeze({
@@ -86,6 +86,7 @@ const CLI_PUBLIC_GUIDANCE = Object.freeze({
     Object.freeze({ label: 'Review supplied evidence offline', command: 'whoisleuth review-evidence evidence.json --json' }),
     Object.freeze({ label: 'Compare retained observations', command: 'whoisleuth diff earlier.json later.json --json' }),
     Object.freeze({ label: 'Discover fixed workflow recipes', command: 'whoisleuth workflow-plan --list --json' }),
+    Object.freeze({ label: 'Create an offline Case file', command: 'whoisleuth case open --domain example.test --output cases.json' }),
     Object.freeze({ label: 'Explain one recipe', command: 'whoisleuth workflow-plan --explain evidence-handoff' }),
     Object.freeze({ label: 'Prepare a reviewed public handoff', command: 'whoisleuth case-pack cases.json --audience public --reviewed --json' }),
   ]),

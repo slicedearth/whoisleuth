@@ -17,9 +17,13 @@ import type {
   CaseTransitionExpectation,
 } from './case-response-model.ts';
 import type { LookupEvidenceReplay } from './lookup-evidence-replay.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+import { lookupObservationHostname } from '../../../../packages/evidence/lookup-target.mts';
 
 export const CASE_EVIDENCE_CHECKPOINT_VERSION = 1;
-export const MAX_CHECKPOINT_FACTS = 28;
+// This bounded selection accommodates separately attributed registration and
+// DNS fields; it is not a baseline count of the current projection.
+export const MAX_CHECKPOINT_FACTS = 32;
 export const MAX_CHECKPOINT_LIMITATIONS = 6;
 
 export type CheckpointComparisonState =
@@ -38,8 +42,10 @@ export type CheckpointFact = Readonly<{
   label: string;
   value: string | null;
   source: string;
+  observationHostname?: string;
+  webObservationMode?: 'selected_url';
   sourceState: string;
-  observedAt: string;
+  observedAt: string | null;
   collectionDepth: 'deep' | 'fast' | 'unknown';
   completeness: 'complete' | 'inconclusive' | 'partial' | 'unknown';
   truncated: boolean | null;
@@ -59,7 +65,7 @@ export type CheckpointComparison = Readonly<{
   after: string | null;
   state: CheckpointComparisonState;
   source: string;
-  observedAt: string;
+  observedAt: string | null;
   limitations: string[];
 }>;
 
@@ -91,14 +97,6 @@ const CONTROL_REPLACE_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Co
 function text(value: unknown, maximum = 300): string {
   if (typeof value !== 'string') return '';
   return value.replace(CONTROL_REPLACE_RE, ' ').replace(/\s+/gu, ' ').trim().slice(0, maximum);
-}
-
-function timestamp(value: unknown, fallback: string): string {
-  if (typeof value === 'string' && value.length <= 64) {
-    const parsed = Date.parse(value);
-    if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
-  }
-  return fallback;
 }
 
 function record(value: unknown): JsonObject {
@@ -175,6 +173,7 @@ function origin(value: unknown): string | null {
 }
 
 function entityName(value: unknown): string | null {
+  if (typeof value === 'string') return factValue(value);
   const entity = record(value);
   return factValue(entity.name ?? entity.org ?? entity.handle);
 }
@@ -188,25 +187,42 @@ export function buildLookupCheckpointFacts(
   response: LookupHttpResponse,
   options: Readonly<{
     collectionDepth?: 'deep' | 'fast' | 'unknown';
-    generatedAt?: string;
   }> = {},
 ): CheckpointFact[] {
   if (response.type !== 'domain') return [];
   const view = createLookupViewModel(response);
-  const generatedAt = timestamp(options.generatedAt, new Date().toISOString());
   const depth = options.collectionDepth ?? 'unknown';
   const rdapDiagnostic = record(view.diagnostics.rdap);
   const whoisDiagnostic = record(view.diagnostics.whois);
-  const registrationState = sourceState(rdapDiagnostic.status ?? whoisDiagnostic.status);
-  const registrationObservedAt = timestamp(view.rdap.fetchedAt ?? response.fetchedAt, generatedAt);
-  const registrationTruncated = view.rdapParsed.serverTruncated === true ? true : null;
+  const registrationSources = [
+    { source: 'Registry RDAP', publication: view.rdap, parsed: view.rdapParsed, diagnostic: rdapDiagnostic },
+    { source: 'WHOIS', publication: view.whois, parsed: view.whoisParsed, diagnostic: whoisDiagnostic },
+  ];
+  function registrationFact(field: string, label: string, value: (parsed: JsonObject) => unknown, notes: string[] = []): Omit<CheckpointFact, 'version' | 'sourceSchema'> {
+    const candidates = registrationSources.map((source) => ({ ...source, value: factValue(value(source.parsed)) }));
+    const selected = candidates.find((source) => source.value !== null)
+      ?? candidates.find(source => Object.keys(source.parsed).length > 0) ?? candidates[0]!;
+    const observedAt = normalizeExplicitIsoTimestamp(selected.publication.fetchedAt ?? selected.diagnostic.observedAt ?? selected.diagnostic.fetchedAt ?? selected.diagnostic.queriedAt);
+    const truncated = selected.parsed.serverTruncated === true || selected.parsed.truncated === true || selected.diagnostic.truncated === true;
+    const state = sourceState(selected.diagnostic.status);
+    return {
+      field, label, category: 'registration', value: selected.value, source: selected.source,
+      sourceState: state, observedAt, collectionDepth: depth,
+      completeness: !observedAt ? 'unknown' : truncated || selected.diagnostic.complete === false ? 'partial' : completeness(state),
+      truncated: truncated ? true : null,
+      limitations: sourceLimitations([
+        ...(!observedAt ? ['The source observation time is unavailable; this value cannot form a dated checkpoint.'] : []),
+        ...notes, ...sourceLimitations(selected.parsed.limitations), ...sourceLimitations(selected.diagnostic.limitations),
+      ]),
+    };
+  }
   const dns = record(view.availability.dns);
   const dnsRecords = record(dns.records);
   const dnsState = sourceState(dns.status);
-  const dnsObservedAt = timestamp(dns.observedAt, generatedAt);
+  const dnsObservedAt = normalizeExplicitIsoTimestamp(dns.observedAt);
   const tls = record(view.availability.tls);
   const tlsState = sourceState(tls.status);
-  const tlsObservedAt = timestamp(tls.observedAt, generatedAt);
+  const tlsObservedAt = normalizeExplicitIsoTimestamp(tls.observedAt);
   const tlsCertificate = record(tls.certificate);
   const tlsAltNames = record(tlsCertificate.subjectAltNames);
   const tlsPublicKey = record(tlsCertificate.publicKey);
@@ -215,24 +231,25 @@ export function buildLookupCheckpointFacts(
   const networkRegistration = record(network.network);
   const networkEndpoint = record(network.endpoint);
   const networkState = sourceState(network.status);
-  const networkObservedAt = timestamp(network.observedAt, generatedAt);
+  const networkObservedAt = normalizeExplicitIsoTimestamp(network.observedAt);
   const http = record(view.availability.http);
   const httpResponse = record(http.response);
   const httpState = sourceState(http.status);
-  const httpObservedAt = timestamp(http.observedAt, generatedAt);
+  const httpObservedAt = normalizeExplicitIsoTimestamp(http.observedAt);
   const availability = view.availability;
   const pageState = sourceState(availability.websiteProbeStatus ?? http.status);
   const securityTxt = record(view.securityTxt);
   const securityTxtState = sourceState(securityTxt.state);
-  const securityTxtObservedAt = timestamp(securityTxt.observedAt, generatedAt);
+  const securityTxtObservedAt = normalizeExplicitIsoTimestamp(securityTxt.observedAt);
 
   const specifications: Array<Omit<CheckpointFact, 'version' | 'sourceSchema'>> = [
-    { field: 'registration.registrar', category: 'registration', label: 'Registrar', value: entityName(view.rdapParsed.registrar) ?? entityName(view.whoisParsed.registrar), source: 'registry RDAP or WHOIS', sourceState: registrationState, observedAt: registrationObservedAt, collectionDepth: depth, completeness: completeness(registrationState), truncated: registrationTruncated, limitations: ['Registrar publication is point-in-time registration context and does not prove present control.'] },
-    { field: 'registration.statuses', category: 'registration', label: 'Registration statuses', value: factValue(view.rdapParsed.statuses ?? view.whoisParsed.statuses), source: 'registry RDAP or WHOIS', sourceState: registrationState, observedAt: registrationObservedAt, collectionDepth: depth, completeness: completeness(registrationState), truncated: registrationTruncated, limitations: sourceLimitations(view.rdapParsed.limitations) },
-    { field: 'registration.created', category: 'registration', label: 'Creation date', value: factValue(lifecycleValue(view.rdapParsed, 'createdDate') ?? lifecycleValue(view.whoisParsed, 'createdDate')), source: 'registry RDAP or WHOIS', sourceState: registrationState, observedAt: registrationObservedAt, collectionDepth: depth, completeness: completeness(registrationState), truncated: registrationTruncated, limitations: [] },
-    { field: 'registration.updated', category: 'registration', label: 'Updated date', value: factValue(lifecycleValue(view.rdapParsed, 'updatedDate') ?? lifecycleValue(view.whoisParsed, 'updatedDate')), source: 'registry RDAP or WHOIS', sourceState: registrationState, observedAt: registrationObservedAt, collectionDepth: depth, completeness: completeness(registrationState), truncated: registrationTruncated, limitations: [] },
-    { field: 'registration.expires', category: 'registration', label: 'Expiry date', value: factValue(lifecycleValue(view.rdapParsed, 'expiryDate') ?? lifecycleValue(view.whoisParsed, 'expiryDate')), source: 'registry RDAP or WHOIS', sourceState: registrationState, observedAt: registrationObservedAt, collectionDepth: depth, completeness: completeness(registrationState), truncated: registrationTruncated, limitations: [] },
-    { field: 'dns.nameservers', category: 'dns', label: 'Nameservers', value: factValue(availability.nameservers ?? view.rdapParsed.nameservers), source: 'DNS or registry publication', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true ? true : null, limitations: sourceLimitations(dns.limitations) },
+    registrationFact('registration.registrar', 'Registrar', (parsed) => entityName(parsed.registrar), ['Registrar publication is point-in-time registration context and does not prove present control.']),
+    registrationFact('registration.statuses', 'Registration statuses', (parsed) => parsed.statuses),
+    registrationFact('registration.created', 'Creation date', (parsed) => lifecycleValue(parsed, 'createdDate')),
+    registrationFact('registration.updated', 'Updated date', (parsed) => lifecycleValue(parsed, 'updatedDate')),
+    registrationFact('registration.expires', 'Expiry date', (parsed) => lifecycleValue(parsed, 'expiryDate')),
+    registrationFact('registration.nameservers', 'Published nameservers', (parsed) => parsed.nameservers),
+    { field: 'dns.nameservers', category: 'dns', label: 'Nameservers', value: factValue(dnsRecords.ns), source: 'DNS', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true ? true : null, limitations: sourceLimitations(dns.limitations) },
     { field: 'dns.addresses', category: 'dns', label: 'A and AAAA addresses', value: factValue([...normalizedStrings(dnsRecords.a), ...normalizedStrings(dnsRecords.aaaa)]), source: 'DNS', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true ? true : null, limitations: sourceLimitations(dns.limitations) },
     { field: 'dns.mx', category: 'dns', label: 'MX hosts', value: factValue(availability.mxHosts ?? dnsRecords.mx), source: 'DNS', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true ? true : null, limitations: sourceLimitations(dns.limitations) },
     { field: 'dns.caa', category: 'dns', label: 'CAA records', value: factValue(caaRecords(dnsRecords.caa)), source: 'DNS', sourceState: dnsState, observedAt: dnsObservedAt, collectionDepth: depth, completeness: completeness(dnsState), truncated: dns.truncated === true || (Array.isArray(dnsRecords.caa) && dnsRecords.caa.length > 20) ? true : null, limitations: sourceLimitations(dns.limitations) },
@@ -257,15 +274,35 @@ export function buildLookupCheckpointFacts(
     { field: 'disclosure.security_txt_contacts', category: 'disclosure', label: 'security.txt contacts', value: factValue(securityTxt.contacts), source: 'security.txt', sourceState: securityTxtState, observedAt: securityTxtObservedAt, collectionDepth: depth, completeness: completeness(securityTxtState), truncated: securityTxt.truncated === true ? true : null, limitations: ['Publication does not prove that a contact is monitored, appropriate, responsive, or responsible.', ...sourceLimitations(securityTxt.limitations)].slice(0, MAX_CHECKPOINT_LIMITATIONS) },
   ];
 
-  return specifications.map<CheckpointFact>((fact) => ({
-    version: 1,
-    ...fact,
-    sourceSchema: {
-      collection: 'lookup_result',
-      schema: LOOKUP_EVIDENCE_SCHEMA,
-      version: LOOKUP_EVIDENCE_SCHEMA_VERSION,
-    },
-  })).slice(0, MAX_CHECKPOINT_FACTS);
+  return specifications.map<CheckpointFact>((fact) => {
+    const observation = fact.category === 'dns' ? dns : fact.category === 'tls' ? tls
+      : ['http', 'page_identity'].includes(fact.category) ? http
+      : fact.category === 'network' ? network : fact.category === 'disclosure' ? securityTxt : null;
+    const incomplete = observation?.complete === false;
+    const truncated = fact.truncated === true || observation?.truncated === true
+      || fact.category === 'page_identity' && httpResponse.bodyTruncated === true;
+    const observationHostname = lookupObservationHostname({ domain: fact.category === 'registration'
+      ? response.registrableDomain
+      : fact.category === 'disclosure' ? response.inputHostname : lookupObservationHostname(availability) });
+    return {
+      version: 1,
+      ...fact,
+      ...(observationHostname ? { observationHostname } : {}),
+      ...(availability.webObservationMode === 'selected_url' && ['http', 'page_identity'].includes(fact.category)
+        ? { webObservationMode: 'selected_url' as const } : {}),
+      completeness: !fact.observedAt ? 'unknown' : incomplete || truncated ? 'partial' : fact.completeness,
+      truncated: truncated ? true : fact.truncated,
+      limitations: sourceLimitations([
+        ...(!fact.observedAt ? ['The source observation time is unavailable; this value cannot form a dated checkpoint.'] : []),
+        ...fact.limitations,
+      ]),
+      sourceSchema: {
+        collection: 'lookup_result',
+        schema: LOOKUP_EVIDENCE_SCHEMA,
+        version: LOOKUP_EVIDENCE_SCHEMA_VERSION,
+      },
+    };
+  }).slice(0, MAX_CHECKPOINT_FACTS);
 }
 
 const REPLAY_CHECKPOINT_FIELDS = Object.freeze({
@@ -313,7 +350,11 @@ export function buildLookupReplayCheckpointFacts(
       value,
       source: fact.source,
       sourceState: normalizedState,
+      ...((specification.category === 'registration' ? replay.caseDomain : replay.observationHostname)
+        ? { observationHostname: (specification.category === 'registration' ? replay.caseDomain : replay.observationHostname)! } : {}),
       observedAt: source.observedAt,
+      ...(replay.webObservationMode === 'selected_url' && ['http', 'page_identity'].includes(specification.category)
+        ? { webObservationMode: 'selected_url' as const } : {}),
       collectionDepth: 'unknown' as const,
       completeness: replayCompleteness(normalizedState, fact.sourceComplete),
       truncated: null,
@@ -348,7 +389,7 @@ export function checkpointPinInputs(
     ? options.checkpointId
     : checkpointId();
   return facts
-    .filter((fact) => selected.has(fact.field) && fact.value !== null)
+    .filter((fact): fact is CheckpointFact & { observedAt: string } => selected.has(fact.field) && fact.value !== null && normalizeExplicitIsoTimestamp(fact.observedAt) !== null)
     .slice(0, MAX_CHECKPOINT_FACTS)
     .map((fact) => ({
       checkpointId: id,
@@ -358,6 +399,8 @@ export function checkpointPinInputs(
       value: fact.value ?? '',
       source: fact.source,
       sourceState: fact.sourceState,
+      ...(fact.observationHostname ? { observationHostname: fact.observationHostname } : {}),
+      ...(fact.webObservationMode ? { webObservationMode: fact.webObservationMode } : {}),
       sourceSchema: fact.sourceSchema,
       observedAt: fact.observedAt,
       collectionDepth: fact.collectionDepth,
@@ -402,56 +445,89 @@ export function compareAcquisitionTransitionPins(
     });
 }
 
-export function compareCheckpointPins(
-  pins: readonly CaseEvidencePin[],
-  currentFacts: readonly CheckpointFact[],
-): CheckpointComparison[] {
-  const currentByField = new Map(currentFacts.map((fact) => [fact.field, fact]));
-  return pins
-    .filter((pin) => pin.checkpointId && pin.field)
-    .slice(-MAX_CHECKPOINT_FACTS)
-    .map((pin) => {
-      const current = currentByField.get(pin.field ?? '');
-      let state: CheckpointComparisonState = 'not_recorded';
-      let qualificationLimitation = '';
-      if (current) {
-        if (UNAVAILABLE_STATES.has(current.sourceState)) state = 'unavailable';
-        else if (CONFLICT_STATES.has(current.sourceState)) state = 'conflicting';
-        else if (current.value === null) state = 'missing';
-        else {
-          const sameSchema = Boolean(pin.sourceSchema
-            && pin.sourceSchema.collection === current.sourceSchema.collection
-            && pin.sourceSchema.schema === current.sourceSchema.schema
-            && pin.sourceSchema.version === current.sourceSchema.version);
-          const comparable = pin.completeness === 'complete'
-            && current.completeness === 'complete'
-            && pin.truncated !== true
-            && current.truncated !== true
-            && pin.source === current.source
-            && pin.category === current.category
-            && pin.collectionDepth === current.collectionDepth
-            && sameSchema;
-          if (!comparable) {
-            state = 'incomparable';
-            qualificationLimitation = 'Both checkpoint sides must retain the same source, scope, schema, collection depth, and complete untruncated evidence before equality or change is verified.';
-          } else {
-            state = current.value === pin.value ? 'equal' : 'changed';
-          }
-        }
+type ComparableCheckpoint = Pick<CaseEvidencePin, 'field' | 'category' | 'label' | 'value' | 'source' | 'observationHostname' | 'webObservationMode' | 'sourceSchema' | 'observedAt' | 'collectionDepth' | 'completeness' | 'truncated' | 'limitations'>;
+
+function compareCheckpointValue(pin: ComparableCheckpoint, current: CheckpointFact | undefined): CheckpointComparison {
+  let state: CheckpointComparisonState = 'not_recorded';
+  let qualificationLimitation = '';
+  if (current) {
+    if ((pin.observationHostname ?? null) !== (current.observationHostname ?? null)) {
+      state = 'incomparable';
+      qualificationLimitation = 'The observations concern different or unknown hostnames; absence or change cannot be inferred across them.';
+    }
+    else if (pin.webObservationMode === 'selected_url' || current.webObservationMode === 'selected_url') {
+      state = 'incomparable';
+      qualificationLimitation = 'A selected URL was observed, but compact checkpoints omit its path and query; they cannot establish the same website target.';
+    }
+    else if (UNAVAILABLE_STATES.has(current.sourceState)) state = 'unavailable';
+    else if (CONFLICT_STATES.has(current.sourceState)) state = 'conflicting';
+    else if (current.value === null) state = 'missing';
+    else {
+      const sameSchema = Boolean(pin.sourceSchema
+        && pin.sourceSchema.collection === current.sourceSchema.collection
+        && pin.sourceSchema.schema === current.sourceSchema.schema
+        && pin.sourceSchema.version === current.sourceSchema.version);
+      const comparable = pin.completeness === 'complete'
+        && current.completeness === 'complete'
+        && normalizeExplicitIsoTimestamp(current.observedAt) !== null
+        && pin.truncated !== true
+        && current.truncated !== true
+        && pin.source === current.source
+        && pin.category === current.category
+        && pin.collectionDepth === current.collectionDepth
+        && sameSchema;
+      if (!comparable) {
+        state = 'incomparable';
+        qualificationLimitation = 'Both checkpoint sides must retain the same source, scope, schema, collection depth, and complete untruncated evidence before equality or change is verified.';
+      } else {
+        state = current.value === pin.value ? 'equal' : 'changed';
       }
-      return {
-        field: pin.field ?? '',
-        category: pin.category ?? 'other',
-        label: pin.label,
-        before: pin.value,
-        after: current?.value ?? null,
-        state,
-        source: current?.source ?? pin.source,
-        observedAt: current?.observedAt ?? pin.observedAt,
-        limitations: [...new Set([
-          ...(current?.limitations ?? pin.limitations),
-          ...(qualificationLimitation ? [qualificationLimitation] : []),
-        ])].slice(0, MAX_CHECKPOINT_LIMITATIONS),
-      };
-    });
+    }
+  }
+  return {
+    field: pin.field ?? '',
+    category: pin.category ?? 'other',
+    label: pin.label,
+    before: pin.value,
+    after: current?.value ?? null,
+    state,
+    source: current?.source ?? pin.source,
+    observedAt: current ? current.observedAt : pin.observedAt,
+    limitations: [...new Set([
+      ...(current?.limitations ?? pin.limitations),
+      ...(qualificationLimitation ? [qualificationLimitation] : []),
+    ])].slice(0, MAX_CHECKPOINT_LIMITATIONS),
+  };
+
+}
+
+export function compareCheckpointPins(
+  pins: readonly CaseEvidencePin[], currentFacts: readonly CheckpointFact[],
+): CheckpointComparison[] {
+  const currentByField = new Map(currentFacts.map(fact => [fact.field, fact]));
+  return pins.filter(pin => pin.checkpointId && pin.field).slice(-MAX_CHECKPOINT_FACTS)
+    .map(pin => compareCheckpointValue(pin, currentByField.get(pin.field ?? '')));
+}
+
+export function compareCheckpointFacts(
+  before: readonly CheckpointFact[], after: readonly CheckpointFact[],
+): CheckpointComparison[] {
+  const beforeByField = new Map(before.map(fact => [fact.field, fact]));
+  const afterByField = new Map(after.map(fact => [fact.field, fact]));
+  return [...new Set([...beforeByField.keys(), ...afterByField.keys()])].slice(0, MAX_CHECKPOINT_FACTS).map(field => {
+    const previous = beforeByField.get(field), current = afterByField.get(field);
+    if (!previous || previous.value === null) return {
+      field, category: current?.category ?? previous?.category ?? 'other',
+      label: current?.label ?? previous?.label ?? field, before: 'Not recorded', after: current?.value ?? null,
+      state: 'not_recorded', source: current?.source ?? previous?.source ?? 'Unknown',
+      observedAt: current?.observedAt ?? null, limitations: current?.limitations ?? [],
+    };
+    const comparison = compareCheckpointValue({ ...previous, value: previous.value }, current);
+    if (comparison.state === 'changed' && (!previous.observedAt || !current?.observedAt
+      || Date.parse(current.observedAt) <= Date.parse(previous.observedAt))) return {
+      ...comparison, state: 'incomparable',
+      limitations: ['The later request did not provide a later source observation time.', ...comparison.limitations].slice(0, MAX_CHECKPOINT_LIMITATIONS),
+    };
+    return comparison;
+  });
 }

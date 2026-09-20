@@ -5,6 +5,7 @@ import { runUnifiedLookup } from '../lib/lookup.mts';
 import { createLookupHttpResponse, parseLookupHttpResponse } from '../lib/lookup-response-contract.mts';
 import type { ClassifiedQuery, IpQuery } from '../lib/classify.mts';
 import { recordValue, requiredValue } from './value-assertions.mts';
+import { deferred } from './deferred.mts';
 import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,
@@ -13,6 +14,7 @@ import {
 type LookupResult = Awaited<ReturnType<typeof runUnifiedLookup>>;
 type FullLookupResult = Extract<LookupResult, { rdap: unknown }>;
 type AvailabilityFixtureOptions = {
+  observationHostname?: string;
   featurePolicy?: unknown;
   includeCredentialSurfaceProfile?: boolean;
   includePublicationMetadata?: boolean;
@@ -77,6 +79,79 @@ const classifiedDomain: Extract<ClassifiedQuery, { type: 'domain' }> = {
 };
 
 describe('runUnifiedLookup', () => {
+  test('bounds availability failure detail while preserving the unknown result and failure diagnostic', async () => {
+    for (const failure of [new Error(`Collector\n\u0000failed ${'x'.repeat(500)}`), null, { message: '\n\t' }]) {
+      const result = await runFullLookup(classifiedDomain, {
+        fast: true,
+        fetchRdapRecord: async () => null,
+        checkDomainAvailability: async () => { throw failure; },
+      });
+      assert.equal(result.availability.state, 'unknown');
+      assert.equal(result.availability.confidence, 'low');
+      assert.equal(result.diagnostics.availability.status, 'error');
+      const detail = result.availability.detail;
+      assert.equal(typeof detail, 'string');
+      assert.ok(String(detail).length <= 240);
+      assert.doesNotMatch(String(detail), /[\u0000-\u001f\u007f]/u);
+      if (failure instanceof Error) assert.match(String(detail), /^Collector failed x/u);
+      else assert.equal(detail, 'Availability lookup failed');
+    }
+  });
+  test('cancellation during one collector cannot start another queued collector', async () => {
+    const controller = new AbortController(); let laterCalls = 0;
+    const running = runUnifiedLookup(classifiedDomain, {
+      signal: controller.signal, waitForStartedCollectors: true,
+      fetchRdapRecord: async () => { controller.abort(); return null; },
+      buildWhoisChain: async () => { laterCalls++; return []; },
+      checkDomainAvailability: async () => { laterCalls++; return { state: 'unknown', confidence: 'low', detail: 'Fixture source' }; },
+    });
+    await assert.rejects(running, { name: 'AbortError' });
+    assert.equal(laterCalls, 0);
+  });
+  test('an HTTP lease drains started collectors after cancellation without starting dependent enrichment', async () => {
+    const started = deferred<void>();
+    const drained = deferred<null>();
+    const controller = new AbortController();
+    let complete = false;
+    let dependentCalls = 0;
+    const running = runUnifiedLookup(classifiedDomain, {
+      signal: controller.signal, waitForStartedCollectors: true,
+      fetchRdapRecord: async () => { started.resolve(); return drained.promise; },
+      buildWhoisChain: async () => [],
+      checkDomainAvailability: async () => { await drained.promise; return { state: 'unknown', confidence: 'low', detail: 'Fixture source' }; },
+      collectObservedNetworkContext: async () => { dependentCalls++; throw new Error('Must not start'); },
+    }).finally(() => { complete = true; });
+    const rejected = assert.rejects(running, { name: 'AbortError' });
+    await started.promise; controller.abort();
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.equal(complete, false);
+    assert.equal(dependentCalls, 0);
+    drained.resolve(null);
+    await rejected;
+    assert.equal(dependentCalls, 0);
+  });
+  test('fast compact cancellation reaches registry collection and cannot return an incomplete observation', async () => {
+    const started = deferred<void>();
+    const controller = new AbortController();
+    let availabilitySignal: AbortSignal | undefined;
+    const running = runUnifiedLookup(classifiedDomain, {
+      fast: true, compact: true, signal: controller.signal,
+      fetchRdapRecord: async (_type, _value, options) => {
+        assert.equal(options?.signal, controller.signal);
+        started.resolve();
+        return new Promise(() => {});
+      },
+      checkDomainAvailability: async (_domain, options) => {
+        availabilitySignal = options?.signal;
+        await options?.rdapRecordPromise;
+        throw new Error('Cancelled registry work must not yield availability.');
+      },
+    });
+    await started.promise;
+    controller.abort();
+    await assert.rejects(running, { name: 'AbortError' });
+    assert.equal(availabilitySignal, controller.signal);
+  });
   test('passes an explicit bounded DNS resolver selection into domain evidence collection', async () => {
     let capturedResolveNs: unknown = null;
     let capturedDnsResolverKeys: string[] = [];
@@ -190,6 +265,7 @@ describe('runUnifiedLookup', () => {
       checkDomainAvailability: async (domain: string, options: AvailabilityFixtureOptions) => {
         availabilityCalls += 1;
         assert.equal(domain, 'example.com');
+        assert.equal(options.observationHostname, 'login.example.com');
         assert.equal(options.includeExtendedDnsContext, true);
         assert.equal(options.includeCredentialSurfaceProfile, true);
         assert.equal(options.includePublicationMetadata, true);
@@ -316,6 +392,18 @@ describe('runUnifiedLookup', () => {
     assert.equal(result.diagnostics.whois.errorCode, null);
   });
 
+  test('reports an initial WHOIS transport failure as an error, not missing support', async () => {
+    const chain = [{ server: 'whois.iana.org', error: 'Fixture transport failure' }];
+    const result = await runFullLookup(classifiedDomain, {
+      fetchRdapRecord: async () => null,
+      buildWhoisChain: async () => chain,
+      checkDomainAvailability: async () => ({ state: 'unknown', confidence: 'low' }),
+    });
+    assert.equal(result.diagnostics.whois.status, 'error');
+    assert.equal(requiredValue(result.whois.parsed).registrationStatus, 'inconclusive');
+    assert.deepEqual(result.whois.chain, chain);
+  });
+
   test('retains bounded RDAP attempt provenance when every endpoint fails', async () => {
     const attempts = [{
       endpoint: 'https://rdap.example/domain/example.com',
@@ -375,6 +463,7 @@ describe('runUnifiedLookup', () => {
       buildWhoisChain: async () => [{ server: 'whois.example', response: 'large raw WHOIS body' }],
       checkDomainAvailability: async (_domain: string, options: AvailabilityFixtureOptions) => {
         assert.equal(options.includeCredentialSurfaceProfile, false);
+        assert.equal(options.observationHostname, undefined);
         assert.equal(options.includePublicationMetadata, false);
         assert.equal(options.includeDeliveryMetadata, false);
         assert.equal(options.includeStructuredDataIdentity, false);

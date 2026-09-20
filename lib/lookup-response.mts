@@ -11,7 +11,6 @@ import {
   LOOKUP_ERROR_CODES,
   LOOKUP_LEGACY_DIAGNOSTICS_VERSION,
   boundedSourceDetail,
-  errorMessage,
 } from './lookup-diagnostics.mts';
 import { createThreatIntelligenceResult } from './threat-intelligence-contract.mts';
 import {
@@ -26,6 +25,7 @@ import { buildRegistrarStanding } from './registrar-standing.mts';
 import { resolveRegistrarIanaId } from './registrar-standing-contract.mts';
 import { securityTxtUnavailable } from './security-txt.mts';
 import { parseWhoisChain } from './whois.mts';
+import { whoisCollectionStatus } from './whois-authority.mts';
 import type { checkDomainAvailability } from './availability.mts';
 import type { ClassifiedQuery } from './classify.mts';
 import type { collectReverseDnsIntelligence } from './dns-intelligence.mts';
@@ -219,10 +219,8 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
       availability = {
         applicable: true,
         ...result,
-        // Every observation nested in the availability envelope is collected
-        // against this registrable target. Request context remains on the
-        // top-level response; exact-host sources such as security.txt retain
-        // their own requested/final URL attribution.
+        // Registration authority retains its registrable target. Deep source
+        // observations declare their independently collected hostname.
         domain: classified.value,
       };
     } else {
@@ -231,7 +229,7 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
         domain: classified.value,
         state: 'unknown',
         confidence: 'low',
-        detail: errorMessage(availabilityResult.reason, 'Availability lookup failed'),
+        detail: boundedSourceDetail(availabilityResult.reason, 'Availability lookup failed'),
       };
     }
   }
@@ -247,11 +245,9 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
     ? 'disabled'
     : skipWhois
     ? 'skipped'
-    : whoisResult.status === 'rejected' || !Array.isArray(whoisChain)
+    : whoisResult.status === 'rejected'
       ? 'error'
-      : whoisChain.length === 1
-        ? 'unsupported'
-      : whois.parsed && whois.parsed.chainStatus === 'complete' ? 'complete' : 'partial';
+      : whoisCollectionStatus(whoisChain);
   const availabilityStatus = classified.type !== 'domain'
     ? 'not_applicable'
     : !availabilityEnabled ? 'disabled'

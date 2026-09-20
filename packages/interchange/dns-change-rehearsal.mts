@@ -3,6 +3,7 @@ import {
   DNS_CHANGE_REHEARSAL_VERSION,
 } from '../contracts/analyst-interchange.mts';
 import { canonicalPublicIpAddress } from '../evidence/public-address-policy.mts';
+import { canonicalCaaRecord, canonicalDsRecord, canonicalMxRecord } from '../evidence/domain-control-runtime.mts';
 
 export {
   DNS_CHANGE_REHEARSAL_EXPORT_SCHEMA,
@@ -207,79 +208,34 @@ function boundedLine(value: unknown, maximum = 500): string {
   return value.replace(/\s+/gu, ' ').trim().slice(0, maximum);
 }
 
-function dsRecords(value: string | readonly unknown[] | undefined): string[] {
+function recordInput(
+  value: string | readonly unknown[] | undefined,
+  normalize: (value: unknown) => string,
+): IntendedValues<string> {
   const values: readonly unknown[] = typeof value === 'string'
-    ? value.split(/\r?\n/u)
+    ? value.split(/\r?\n/u).filter((line) => line.trim())
     : Array.isArray(value)
       ? value
       : [];
+  const candidates = values.slice(0, MAX_REHEARSAL_RECORDS * 3);
   const output = new Set<string>();
-  for (const item of values.slice(0, MAX_REHEARSAL_RECORDS * 3)) {
-    if (typeof item === 'string') {
-      const normalized = boundedLine(item);
-      if (/^\d{1,5}\s+\d{1,3}\s+\d{1,3}\s+[a-f0-9]{16,256}$/iu.test(normalized)) output.add(normalized.toLowerCase());
-    } else {
-      const candidate = record(item);
-      const keyTag = Number(candidate.keyTag);
-      const algorithm = Number(candidate.algorithm);
-      const digestType = Number(candidate.digestType);
-      const digest = boundedLine(candidate.digest, 256).toLowerCase();
-      if (
-        Number.isInteger(keyTag) && keyTag >= 0 && keyTag <= 65_535
-        && Number.isInteger(algorithm) && algorithm >= 0 && algorithm <= 255
-        && Number.isInteger(digestType) && digestType >= 0 && digestType <= 255
-        && /^[a-f0-9]{16,256}$/u.test(digest)
-      ) {
-        output.add(`${keyTag} ${algorithm} ${digestType} ${digest}`);
-      }
+  let invalid = value !== undefined && typeof value !== 'string' && !Array.isArray(value) ? 1 : 0;
+  for (const item of candidates) {
+    let normalised = '';
+    try {
+      normalised = normalize(item);
+    } catch (error) {
+      if (!(error instanceof TypeError)) throw error;
     }
-    if (output.size >= MAX_REHEARSAL_RECORDS) break;
+    if (normalised) output.add(normalised);
+    else invalid += 1;
   }
-  return [...output].sort();
-}
-
-function mxRecords(value: string | readonly unknown[] | undefined): string[] {
-  const values: readonly unknown[] = typeof value === 'string'
-    ? value.split(/\r?\n/u)
-    : Array.isArray(value)
-      ? value
-      : [];
-  const output = new Set<string>();
-  for (const item of values.slice(0, MAX_REHEARSAL_RECORDS * 3)) {
-    const candidate = record(item);
-    const raw = typeof item === 'string'
-      ? boundedLine(item)
-      : `${candidate.priority ?? ''} ${candidate.exchange ?? ''}`.trim();
-    const match = raw.match(/^(\d{1,5})\s+(.+)$/u);
-    const exchange = hostname(match?.[2] ?? '');
-    const priority = Number(match?.[1]);
-    if (exchange && Number.isInteger(priority) && priority >= 0 && priority <= 65_535) {
-      output.add(`${priority} ${exchange}`);
-    }
-    if (output.size >= MAX_REHEARSAL_RECORDS) break;
-  }
-  return [...output].sort((left, right) => Number(left.split(' ')[0]) - Number(right.split(' ')[0]) || left.localeCompare(right));
-}
-
-function caaRecords(value: string | readonly unknown[] | undefined): string[] {
-  const values: readonly unknown[] = typeof value === 'string'
-    ? value.split(/\r?\n/u)
-    : Array.isArray(value)
-      ? value
-      : [];
-  const output = new Set<string>();
-  for (const item of values.slice(0, MAX_REHEARSAL_RECORDS * 3)) {
-    const candidate = record(item);
-    const raw = typeof item === 'string'
-      ? boundedLine(item)
-      : `${candidate.critical ?? ''} ${candidate.tag ?? ''} ${candidate.value ?? ''}`.trim();
-    const match = raw.match(/^([01])\s+(issue|issuewild|iodef)\s+(.{1,300})$/iu);
-    if (match && !CONTROL.test(match[3] ?? '')) {
-      output.add(`${match[1]} ${match[2]?.toLowerCase()} ${match[3]?.trim()}`);
-    }
-    if (output.size >= MAX_REHEARSAL_RECORDS) break;
-  }
-  return [...output].sort();
+  const sorted = [...output].sort();
+  return {
+    values: sorted.slice(0, MAX_REHEARSAL_RECORDS),
+    invalid,
+    omitted: values.length - candidates.length + Math.max(0, sorted.length - MAX_REHEARSAL_RECORDS),
+  };
 }
 
 function addressRows(value: string | readonly unknown[] | undefined): Array<{ hostname: string; addresses: string[] }> {
@@ -343,7 +299,14 @@ function recordSetFinding(
   label: string,
   observed: readonly string[],
   proposed: readonly string[],
+  qualification?: Readonly<{ intended: IntendedValues<string>; current: IntendedValues<string> }>,
 ): DnsChangeFinding {
+  if (qualification?.intended.invalid || qualification?.intended.omitted) {
+    return finding(id, 'blocked', `${label} intent is incomplete`, `${qualification.intended.values.length} admitted, ${qualification.intended.invalid} invalid and ${qualification.intended.omitted} over-bound intended records. Resolve the complete input before comparing it with observed evidence.`);
+  }
+  if (qualification?.current.invalid || qualification?.current.omitted) {
+    return finding(id, 'unknown', `Current ${label.toLowerCase()} is incomplete`, `${qualification.current.values.length} admitted, ${qualification.current.invalid} invalid and ${qualification.current.omitted} over-bound observed records. The retained subset cannot establish equality or removal.`);
+  }
   if (!proposed.length) {
     return finding(id, 'unknown', `${label} is not represented`, `No intended ${label.toLowerCase()} set was entered. An empty field is not interpreted as a request to remove current records.`);
   }
@@ -364,12 +327,20 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
   const currentGlue = glueInputRows(input.currentGlue);
   const proposedGlueInput = intendedAddressRows(input.proposedGlue, MAX_REHEARSAL_GLUE);
   const glue = proposedGlueInput.values.map((row) => ({ nameserver: row.hostname, addresses: row.addresses }));
-  const currentDs = dsRecords(input.currentDs);
-  const proposedDs = dsRecords(input.proposedDs);
-  const currentMx = mxRecords(input.currentMx);
-  const proposedMx = mxRecords(input.proposedMx);
-  const currentCaa = caaRecords(input.currentCaa);
-  const proposedCaa = caaRecords(input.proposedCaa);
+  const currentDsInput = recordInput(input.currentDs, canonicalDsRecord);
+  const proposedDsInput = recordInput(input.proposedDs, canonicalDsRecord);
+  const currentMxInput = recordInput(input.currentMx, canonicalMxRecord);
+  const proposedMxInput = recordInput(input.proposedMx, canonicalMxRecord);
+  const currentCaaInput = recordInput(input.currentCaa, canonicalCaaRecord);
+  const proposedCaaInput = recordInput(input.proposedCaa, canonicalCaaRecord);
+  const currentDs = currentDsInput.values;
+  const proposedDs = proposedDsInput.values;
+  const currentMx = currentMxInput.values;
+  const proposedMx = proposedMxInput.values;
+  const currentCaa = currentCaaInput.values;
+  const proposedCaa = proposedCaaInput.values;
+  const currentComplete = input.currentEvidenceComplete && [currentDsInput, currentMxInput, currentCaaInput]
+    .every((item) => !item.invalid && !item.omitted);
   const currentCriticalAddresses = addressRows(input.currentCriticalAddresses);
   const proposedCriticalAddressInput = intendedAddressRows(input.proposedCriticalAddresses, MAX_REHEARSAL_RECORDS);
   const proposedCriticalAddresses = proposedCriticalAddressInput.values;
@@ -384,27 +355,29 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
   const findings: DnsChangeFinding[] = [];
   const invalidIntendedValues = proposedNameserverInput.invalid
     + proposedGlueInput.invalid
-    + proposedCriticalAddressInput.invalid;
+    + proposedCriticalAddressInput.invalid
+    + proposedDsInput.invalid + proposedMxInput.invalid + proposedCaaInput.invalid;
   const omittedIntendedValues = proposedNameserverInput.omitted
     + proposedGlueInput.omitted
-    + proposedCriticalAddressInput.omitted;
+    + proposedCriticalAddressInput.omitted
+    + proposedDsInput.omitted + proposedMxInput.omitted + proposedCaaInput.omitted;
 
   findings.push(invalidIntendedValues || omittedIntendedValues
     ? finding(
         'intended_input',
         'blocked',
         'Resolve invalid or omitted intended values',
-        `${invalidIntendedValues} invalid and ${omittedIntendedValues} over-bound intended value${invalidIntendedValues + omittedIntendedValues === 1 ? ' was' : 's were'} not admitted. Review the complete nameserver and public-address input before using this rehearsal.`,
+        `${invalidIntendedValues} invalid and ${omittedIntendedValues} over-bound intended value${invalidIntendedValues + omittedIntendedValues === 1 ? ' was' : 's were'} not admitted. Review all intended DNS and public-address inputs before using this rehearsal.`,
       )
-    : finding('intended_input', 'ready', 'Intended values fit the rehearsal contract', 'Every entered nameserver and public address was admitted to the bounded intended configuration.'));
+    : finding('intended_input', 'ready', 'Intended values fit the rehearsal contract', 'Every entered DNS record and public address was admitted to the bounded intended configuration.'));
 
-  findings.push(!input.currentEvidenceComplete
-    ? finding('current_evidence', 'unknown', 'Current evidence is incomplete', 'Refresh and review the registry, parent, and direct nameserver observations before using this rehearsal.')
+  findings.push(!currentComplete
+    ? finding('current_evidence', 'unknown', 'Current evidence is incomplete', 'Refresh and review the registry, recursive resolver, and direct nameserver observations before using this rehearsal.')
     : current.length && registry.length && sameSet(current, registry)
-      ? finding('current_evidence', 'ready', 'Current delegation agrees', 'The retained parent view and registry nameserver publication are equivalent.')
-      : finding('current_evidence', 'review', 'Resolve the current delegation first', 'The retained parent and registry nameserver sets are unavailable or differ.'));
+      ? finding('current_evidence', 'ready', 'Current nameserver observations agree', 'The retained recursive resolver observation and registry nameserver publication are equivalent; no direct parent-server observation is inferred.')
+      : finding('current_evidence', 'review', 'Resolve the current delegation first', 'The retained recursive and registry nameserver sets are unavailable or differ.'));
   findings.push(proposed.length
-    ? finding('proposed_nameservers', changingNameservers ? 'review' : 'ready', changingNameservers ? 'Nameserver change proposed' : 'Nameserver set is unchanged', changingNameservers ? `${proposed.length} proposed nameserver${proposed.length === 1 ? '' : 's'} will replace the retained parent view.` : 'No parent nameserver change is represented by this input.')
+    ? finding('proposed_nameservers', changingNameservers ? 'review' : 'ready', changingNameservers ? 'Nameserver change proposed' : 'Nameserver set is unchanged', changingNameservers ? `${proposed.length} proposed nameserver${proposed.length === 1 ? '' : 's'} differ from the retained recursive observation.` : 'No nameserver change is represented by this input.')
     : finding('proposed_nameservers', 'blocked', 'Enter the intended nameservers', 'A rehearsal cannot be evaluated until the complete intended nameserver set is entered.'));
   findings.push(!inBailiwick.length
     ? finding('glue', 'ready', 'No proposed in-bailiwick glue dependency', 'None of the proposed nameservers is inside the domain being changed.')
@@ -427,9 +400,9 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
   } else {
     findings.push(finding('dnssec', 'ready', 'No DNSSEC publication change declared', 'This rehearsal assumes the current DNSSEC relationship remains unchanged.'));
   }
-  findings.push(recordSetFinding('ds', 'DS publication', currentDs, proposedDs));
-  findings.push(recordSetFinding('mx', 'MX routing', currentMx, proposedMx));
-  findings.push(recordSetFinding('caa', 'CAA policy', currentCaa, proposedCaa));
+  findings.push(recordSetFinding('ds', 'DS publication', currentDs, proposedDs, { intended: proposedDsInput, current: currentDsInput }));
+  findings.push(recordSetFinding('mx', 'MX routing', currentMx, proposedMx, { intended: proposedMxInput, current: currentMxInput }));
+  findings.push(recordSetFinding('caa', 'CAA policy', currentCaa, proposedCaa, { intended: proposedCaaInput, current: currentCaaInput }));
   const observedAddressSet = currentCriticalAddresses.flatMap((row) => row.addresses.map((itemAddress) => `${row.hostname} ${itemAddress}`)).sort();
   const proposedAddressSet = proposedCriticalAddresses.flatMap((row) => row.addresses.map((itemAddress) => `${row.hostname} ${itemAddress}`)).sort();
   findings.push(recordSetFinding('critical_addresses', 'Critical address', observedAddressSet, proposedAddressSet));
@@ -509,7 +482,7 @@ export function buildDnsChangeRehearsal(input: DnsChangeRehearsalInput): DnsChan
       criticalAddresses: currentCriticalAddresses,
       registrarLock: currentRegistrarLock,
       tlsSpkiSha256: currentTlsSpkiSha256,
-      complete: input.currentEvidenceComplete,
+      complete: currentComplete,
     },
     proposed: {
       nameservers: proposed,

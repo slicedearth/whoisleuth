@@ -53,10 +53,10 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - name: Install tested shell
+      - name: Install tested shells
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends --yes zsh
+          sudo apt-get install --no-install-recommends --yes zsh fish
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts --audit=false
       - name: Run maintained unit group
@@ -147,6 +147,11 @@ jobs:
         run: npm run frontend:build:integrity
       - name: Install Playwright Chromium
         run: npm run test:e2e:install
+      - name: Permit the pinned browser to create its sandbox
+        if: ${{ matrix.kind == 'functional' }}
+        run: |
+          node tools/ci-browser-sandbox.mts > "$RUNNER_TEMP/whoisleuth-chromium.apparmor"
+          sudo apparmor_parser --replace "$RUNNER_TEMP/whoisleuth-chromium.apparmor"
       - name: Run Playwright functional shard
         if: ${{ matrix.kind == 'functional' }}
         run: npm run test:e2e:shard -- --run=${{ matrix.shard }}
@@ -202,24 +207,33 @@ jobs:
           pattern: playwright-results-*-of-4
           path: ${{ runner.temp }}/playwright-functional-results
           merge-multiple: true
-      - name: Verify exact browser inventory and observed balance
-        run: |
-          reports=(
-            --report="$RUNNER_TEMP/playwright-functional-results/shard-1-of-4.json"
-            --report="$RUNNER_TEMP/playwright-functional-results/shard-2-of-4.json"
-            --report="$RUNNER_TEMP/playwright-functional-results/shard-3-of-4.json"
-            --report="$RUNNER_TEMP/playwright-functional-results/shard-4-of-4.json"
-          )
-          npm run --silent test:e2e:aggregate -- "${reports[@]}" > "$RUNNER_TEMP/playwright-browser-aggregate.json"
-          npm run --silent test:e2e:aggregate -- --summary "${reports[@]}" | tee "$RUNNER_TEMP/playwright-browser-health.md"
-          cat "$RUNNER_TEMP/playwright-browser-health.md" >> "$GITHUB_STEP_SUMMARY"
-          npm run --silent verification:timing:update-candidate -- \
-            --lane=browser \
-            --report="$RUNNER_TEMP/playwright-browser-aggregate.json" \
-            --provenance-id="browser-ci-${{ github.run_id }}-${{ github.run_attempt }}" \
-            --environment=linux-x64-chromium-node24-ci \
-            --sample-basis=complete-four-shard-functional-run \
-            > "$RUNNER_TEMP/verification-timing-browser-candidate.json"
+      - name: Verify exact browser inventory
+        run: >-
+          npm run --silent test:e2e:aggregate --
+          --report="$RUNNER_TEMP/playwright-functional-results/shard-1-of-4.json"
+          --report="$RUNNER_TEMP/playwright-functional-results/shard-2-of-4.json"
+          --report="$RUNNER_TEMP/playwright-functional-results/shard-3-of-4.json"
+          --report="$RUNNER_TEMP/playwright-functional-results/shard-4-of-4.json"
+          > "$RUNNER_TEMP/playwright-browser-aggregate.json"
+      - name: Summarise observed balance
+        run: >-
+          npm run --silent test:e2e:aggregate -- --summary
+          --report="$RUNNER_TEMP/playwright-functional-results/shard-1-of-4.json"
+          --report="$RUNNER_TEMP/playwright-functional-results/shard-2-of-4.json"
+          --report="$RUNNER_TEMP/playwright-functional-results/shard-3-of-4.json"
+          --report="$RUNNER_TEMP/playwright-functional-results/shard-4-of-4.json"
+          > "$RUNNER_TEMP/playwright-browser-health.md"
+      - name: Record browser timing evidence
+        run: >-
+          npm run --silent verification:timing:update-candidate --
+          --lane=browser
+          --report="$RUNNER_TEMP/playwright-browser-aggregate.json"
+          --provenance-id="browser-ci-${{ github.run_id }}-${{ github.run_attempt }}"
+          --environment=linux-x64-chromium-node24-ci
+          --sample-basis=complete-four-shard-functional-run
+          > "$RUNNER_TEMP/verification-timing-browser-candidate.json"
+      - name: Present browser health summary
+        run: cat "$RUNNER_TEMP/playwright-browser-health.md" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload browser timing evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -231,7 +245,54 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  critical-browser:
+    needs: browser-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --include=optional --ignore-scripts --audit=false
+      - name: Download verified frontend build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: frontend-build-${{ github.sha }}-${{ github.run_attempt }}
+          path: frontend
+      - name: Verify frontend build identity
+        run: npm run frontend:build:integrity
+      - name: Install critical browser engines
+        run: npm run test:e2e:critical:install
+      - name: Check critical storage and navigation behaviour across engines
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: npm run test:e2e:critical
+      - name: Upload critical browser evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: critical-browser-results
+          path: |
+            playwright-results/critical-browser.json
+            ${{ runner.temp }}/whoisleuth-hosted-browser-*/diagnostics.json
+            ${{ runner.temp }}/whoisleuth-hosted-browser-*/playwright-results/
+            ${{ runner.temp }}/whoisleuth-hosted-browser-*/playwright-report/
+            ${{ runner.temp }}/whoisleuth-hosted-browser-*/test-results/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Clean generated browser artefacts
+        if: always()
+        run: npm run verification:artifacts -- --cleanup=browser
+
   cli-runtime:
+    needs: browser-build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -246,6 +307,11 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts --audit=false
+      - name: Download verified frontend build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: frontend-build-${{ github.sha }}-${{ github.run_attempt }}
+          path: frontend
       - name: Run maintained CLI compatibility group
         run: npm run verification:ci -- --group=cli-runtime
 
@@ -257,22 +323,13 @@ jobs:
       - browser-build
       - browser
       - browser-health
+      - critical-browser
       - cli-runtime
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Require every verification lane to pass
         env:
-          QUALITY_RESULT: ${{ needs.quality.result }}
-          UNIT_RESULT: ${{ needs.unit.result }}
-          BROWSER_BUILD_RESULT: ${{ needs.browser-build.result }}
-          BROWSER_RESULT: ${{ needs.browser.result }}
-          BROWSER_HEALTH_RESULT: ${{ needs.browser-health.result }}
-          CLI_RUNTIME_RESULT: ${{ needs.cli-runtime.result }}
+          NEEDS_RESULTS: ${{ toJSON(needs) }}
         run: |
-          test "$QUALITY_RESULT" = success
-          test "$UNIT_RESULT" = success
-          test "$BROWSER_BUILD_RESULT" = success
-          test "$BROWSER_RESULT" = success
-          test "$BROWSER_HEALTH_RESULT" = success
-          test "$CLI_RUNTIME_RESULT" = success
+          node -e 'const results = Object.values(JSON.parse(process.env.NEEDS_RESULTS)); process.exit(results.length > 0 && results.every(job => job.result === "success") ? 0 : 1)'

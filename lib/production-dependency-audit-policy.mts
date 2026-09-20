@@ -153,9 +153,11 @@ function metadataMatches(vulnerabilities: JsonObject, metadata: unknown): boolea
     Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 10_000_000
   ))) return false;
   const total = Number(dependencies.total);
+  // The advisory client excludes the root from total but counts it as prod.
+  // Other categories still cannot exceed the dependency inventory itself.
   return dependencyKeys
     .filter((key) => key !== 'total')
-    .every((key) => Number(dependencies[key]) <= total);
+    .every((key) => Number(dependencies[key]) <= total + (key === 'prod' ? 1 : 0));
 }
 
 export function assessProductionDependencyAudit(options: Readonly<{

@@ -50,6 +50,59 @@ function fixtureDependencies(responses: Response[], overrides: Partial<SafeFetch
 }
 
 describe('safe fetch redirect provenance', () => {
+  test('redirect methods discard body headers only when changing to GET', async () => {
+    for (const [status, method, expectedMethod, hasBody] of [
+      [301, 'POST', 'GET', false], [302, 'POST', 'GET', false], [303, 'PUT', 'GET', false],
+      [301, 'PUT', 'PUT', true], [307, 'POST', 'POST', true], [308, 'POST', 'POST', true],
+    ] as const) {
+      const headers = new Headers({ 'content-type': 'text/plain', 'content-length': '7', authorization: 'fixture-secret' });
+      const fixture = fixtureDependencies([new Response('', { status, headers: { location: '/next' } }), new Response('ok')]);
+      await safeFetchDetailed('https://example.test/', { method, body: 'payload', headers }, fixture.dependencies);
+      const next = requiredValue(fixture.requests[1]).options;
+      assert.equal(next.method, expectedMethod);
+      assert.equal(next.body, hasBody ? 'payload' : null);
+      assert.equal(new Headers(next.headers).has('content-type'), hasBody);
+      assert.equal(new Headers(next.headers).has('content-length'), hasBody);
+      assert.equal(new Headers(next.headers).get('authorization'), 'fixture-secret');
+      assert.equal(headers.get('content-type'), 'text/plain', 'caller headers stay unchanged');
+    }
+    const head = fixtureDependencies([new Response(null, { status: 303, headers: { location: '/next' } }), new Response(null)]);
+    await safeFetchDetailed('https://example.test/', { method: 'HEAD' }, head.dependencies);
+    assert.equal(head.requests[1]?.options.method, 'HEAD');
+  });
+
+  test('cross-origin redirects keep only public request headers and never replay writes', async () => {
+    for (const target of ['https://other.example.test/', 'http://example.test/']) {
+      const fixture = fixtureDependencies([new Response('', { status: 302, headers: { location: target } }), new Response('ok')]);
+      await safeFetchDetailed('https://example.test/', { headers: { accept: 'text/html', authorization: 'private', cookie: 'private', 'proxy-authorization': 'private', 'x-api-key': 'private', host: 'example.test' } }, fixture.dependencies);
+      assert.deepEqual([...new Headers(fixture.requests[1]?.options.headers)], [['accept', 'text/html']]);
+      assert.equal(fixture.requests[1]?.options.credentials, 'omit');
+      assert.equal(fixture.requests[1]?.options.referrer, '');
+      assert.equal(fixture.requests[1]?.options.referrerPolicy, 'no-referrer');
+      assert.equal(fixture.resolved.length, 2, 'every new destination is independently resolved');
+      const write = fixtureDependencies([new Response('', { status: 307, headers: { location: target } })]);
+      await assert.rejects(safeFetchDetailed('https://example.test/', { method: 'POST', body: 'private' }, write.dependencies), /across origins/u);
+      assert.equal(write.requests.length, 1); assert.equal(write.resolved.length, 1); assert.equal(write.closedDispatchers.length, 1);
+    }
+  });
+
+  test('redirect replay owns mutable bytes and rejects one-shot bodies before another request', async () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    const fixture = fixtureDependencies([new Response('', { status: 307, headers: { location: '/next' } }), new Response('ok')], {
+      resolvePublicAddresses: async () => { bytes.fill(9); return PUBLIC_ADDRESSES; },
+    });
+    await safeFetchDetailed('https://example.test/', { method: 'POST', body: bytes }, fixture.dependencies);
+    for (const request of fixture.requests) assert.deepEqual(request.options.body, new Uint8Array([1, 2, 3]));
+    for (const body of [new ReadableStream(), new FormData()]) {
+      const denied = fixtureDependencies([new Response('', { status: 308, headers: { location: '/next' } })]);
+      await assert.rejects(safeFetchDetailed('https://example.test/', { method: 'POST', body }, denied.dependencies), /streaming or multipart/u);
+      assert.equal(denied.requests.length, 1); assert.equal(denied.resolved.length, 1); assert.equal(denied.closedDispatchers.length, 1);
+    }
+    const cancelled = fixtureDependencies([]);
+    await assert.rejects(safeFetchDetailed('https://example.test/', { signal: AbortSignal.abort() }, cancelled.dependencies), /abort/iu);
+    assert.equal(cancelled.resolved.length, 0);
+  });
+
   test('uses the dispatcher-compatible undici fetch instead of the host global', async () => {
     const agent = new MockAgent();
     agent.disableNetConnect();

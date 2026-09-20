@@ -33,10 +33,11 @@ export const SYNTHETIC_DEMO_STAGES = [
   Object.freeze({ id: 'discover', label: '3. Discover' }),
   Object.freeze({ id: 'bulk', label: '4. Bulk' }),
   Object.freeze({ id: 'lookup', label: '5. Lookup' }),
-  Object.freeze({ id: 'monitor', label: '6. Monitor' }),
+  Object.freeze({ id: 'monitor', label: '6. Cases' }),
 ] as const;
 
 export type SyntheticDemoStageId = typeof SYNTHETIC_DEMO_STAGES[number]['id'];
+export type SyntheticDemoScenario = 'suspicious-domain' | 'brand-lookalike' | 'reported-change';
 export type SyntheticDemoCaseStatus = 'new' | 'reviewing' | 'monitoring';
 
 export interface SyntheticDemoState {
@@ -371,6 +372,16 @@ export function createSyntheticDemoState(): SyntheticDemoState {
   return { version: SYNTHETIC_DEMO_VERSION, started: false, profileReady: false, candidatesReady: false, selectedCandidateId: '', caseReady: false, caseStatus: 'new', note: '', followUpReady: false };
 }
 
+export function startSyntheticDemoScenario(scenario: SyntheticDemoScenario): SyntheticDemoState {
+  const state = createSyntheticDemoState();
+  if (scenario === 'brand-lookalike') return { ...state, started: true };
+  return {
+    ...state, started: true, profileReady: true, candidatesReady: true,
+    selectedCandidateId: 'credential-lure', caseReady: scenario === 'reported-change',
+    caseStatus: scenario === 'reported-change' ? 'reviewing' : 'new',
+  };
+}
+
 export function normalizeSyntheticDemoState(value: unknown): SyntheticDemoState {
   const fallback = createSyntheticDemoState();
   if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
@@ -616,7 +627,7 @@ export function syntheticDemoLookupView(id: string) {
         parentNameservers: dns.nameservers,
         registryNameservers: dns.nameservers,
         findings: [
-          { id: 'parent_registry_ns', label: 'Parent and registry nameservers', state: 'healthy', summary: 'Parent view and registry publication agree', detail: 'The fixed nameserver sets are equivalent.', remediation: '' },
+          { id: 'parent_registry_ns', label: 'Recursive and registry nameservers', state: 'healthy', summary: 'Recursive observation and registry publication agree', detail: 'The fixed nameserver sets are equivalent.', remediation: '' },
           { id: 'authority_reachability', label: 'Direct nameserver reachability', state: 'healthy', summary: 'Selected nameservers answered direct NS and SOA queries', detail: 'Synthetic fixture only; no DNS query occurred.', remediation: '' },
         ],
         authorities: dns.nameservers.slice(0, 2).map((nameserver) => ({

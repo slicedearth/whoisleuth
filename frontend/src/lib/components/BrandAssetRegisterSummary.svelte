@@ -35,7 +35,7 @@
     <p class="source-state">The active-profile preference does not resolve to a readable local Brand Profile. The unresolved reference is preserved and no replacement profile is inferred.</p>
   {:else}
     {#if projection.state === 'loading'}
-      <p class="source-state" role="status" aria-live="polite">Loading browser-local asset sources…</p>
+      <p class="source-state" role="status" aria-live="polite">Loading saved asset sources…</p>
     {/if}
     {#if projection.sources.cases.state === 'unavailable'}
       <p class="source-state" role="alert">Cases could not be read. The register remains partial and the associated-Case count is unavailable.</p>

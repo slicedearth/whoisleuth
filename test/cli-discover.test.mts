@@ -183,6 +183,8 @@ describe('discover TLD normalization', () => {
   test('normalizes, deduplicates, and preserves input order', () => {
     assert.deepEqual(normalizeDiscoveryTlds(' COM, .net; org com ', 20), ['com', 'net', 'org']);
     assert.deepEqual(DEFAULT_DISCOVERY_TLDS, ['com', 'net', 'org']);
+    assert.deepEqual(normalizeDiscoveryTlds('CO.UK, .com.au; co.uk test', 20), ['co.uk', 'com.au', 'test']);
+    assert.throws(() => normalizeDiscoveryTlds('example.co.uk', 20), /Invalid TLD or public suffix/u);
   });
 
   test('rejects malformed, empty, over-limit, and excessive input before generation', () => {
@@ -305,6 +307,20 @@ describe('discover output', () => {
 });
 
 describe('discover runner', () => {
+  test('the real generator retains multi-part suffixes without collection', async (context) => {
+    context.mock.method(globalThis, 'fetch', () => { throw new Error('Generation must not fetch'); });
+    const stdout = capture();
+    const stderr = capture();
+    const code = await runCli(['discover', 'example.co.uk', '--tlds', 'com.au', '--families', 'character_omission,tld_substitution', '--json'], {
+      stdout: stdout.stream, stderr: stderr.stream,
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS, stderr.value());
+    const document = JSON.parse(stdout.value());
+    assert.ok(document.candidates.some((item: { domain: string; tld: string }) => item.domain === 'exampl.co.uk' && item.tld === 'co.uk'));
+    assert.ok(document.candidates.some((item: { domain: string; tld: string }) => item.domain === 'example.com.au' && item.tld === 'com.au'));
+    assert.equal(stderr.value(), '');
+  });
+
   test('passes normalized controls to the shared generator and emits JSON', async () => {
     const stdout = capture();
     const stderr = capture();

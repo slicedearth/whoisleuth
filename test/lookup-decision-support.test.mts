@@ -156,6 +156,68 @@ test('decision support keeps conflicts separate from incomplete source compariso
   assert.match(support.actions.find((action) => action.id === 'review-priority-conflict')?.expectedOutcome ?? '', /authoritative|unresolved/u);
 });
 
+test('comparison summaries bound both publications without changing the source values', () => {
+  for (const length of [0, 151, 152, 153, 180, 320, 2_000]) {
+    const left = 'a'.repeat(length);
+    const right = 'b'.repeat(length);
+    const registryComparison = { fields: [{
+      label: 'Name servers', status: 'conflict', rdapDisplay: left, whoisDisplay: right,
+    }] };
+    const registrarPublicationComparison = { fields: [{
+      label: 'Name servers', status: 'conflict', registryDisplay: left, registrarDisplay: right,
+    }] };
+    const original = structuredClone({ registryComparison, registrarPublicationComparison });
+    const support = buildLookupDecisionSupport({
+      task: 'general', coverage, refreshPlan, registryComparison, registrarPublicationComparison,
+    });
+    assert.equal(support.entries.length, 2);
+    for (const entry of support.entries) {
+      assert.ok(entry.detail.length <= 320);
+      assert.equal(entry.detail.trim(), entry.detail);
+      assert.equal(entry.href, '#registry');
+      assert.equal(entry.state, 'conflict');
+      assert.equal(entry.detail, length > 152
+        ? `${'a'.repeat(151)}… compared with ${'b'.repeat(151)}….`
+        : `${left || 'not published'} compared with ${right || 'not published'}.`);
+    }
+    assert.deepEqual({ registryComparison, registrarPublicationComparison }, original);
+  }
+  const support = buildLookupDecisionSupport({
+    task: 'general', coverage, refreshPlan,
+    registryComparison: { fields: [{ label: 'Registrar', status: 'conflict',
+      rdapDisplay: `${'a'.repeat(152)} more`, whoisDisplay: 'Other registrar',
+    }] },
+  });
+  assert.match(support.entries[0]!.detail, /… compared with Other registrar\.$/u);
+  const unicode = buildLookupDecisionSupport({
+    task: 'general', coverage, refreshPlan,
+    registryComparison: { fields: [{ label: 'Registrar', status: 'conflict',
+      rdapDisplay: `${'a'.repeat(150)}😀 continued`, whoisDisplay: 'Other registrar',
+    }] },
+  });
+  assert.equal(unicode.entries[0]!.detail, `${'a'.repeat(150)}… compared with Other registrar.`);
+});
+
+test('composed hostname summaries satisfy the same detail boundary', () => {
+  const hostname = (label: string) => `${label}.${'x'.repeat(63)}.${'y'.repeat(63)}.${'z'.repeat(63)}.test`;
+  const support = buildLookupDecisionSupport({
+    task: 'incident', coverage, refreshPlan,
+    requestedHost: hostname('requested'), registrableDomain: 'requested.test',
+    finalUrl: `https://${hostname('final')}/`,
+    canonicalUrl: `https://${hostname('canonical')}/`,
+    openGraphUrl: `https://${hostname('metadata')}/`,
+  });
+  assert.equal(support.entries.length, 3);
+  assert.deepEqual(support.entries.map((entry) => entry.id).sort(), [
+    'http-cross-site-final-origin', 'page-canonical-origin', 'page-open-graph-origin',
+  ]);
+  for (const entry of support.entries) {
+    assert.equal(entry.state, 'conflict');
+    assert.ok(entry.detail.length <= 320);
+    assert.ok(entry.detail.endsWith('…'));
+  }
+});
+
 test('decision support does not turn an unsupported WHOIS service into incident uncertainty', () => {
   const support = buildLookupDecisionSupport({
     task: 'incident',
@@ -396,7 +458,8 @@ test('quality matrix joins coverage, timing, freshness, refresh, and downstream 
   assert.equal(matrix.entries.find((entry) => entry.id === 'whois')?.timingOutcome, 'rejected');
   assert.equal(matrix.entries.find((entry) => entry.id === 'whois')?.observedAt, '2026-07-31T00:00:00.000Z');
   assert.equal(matrix.entries.find((entry) => entry.id === 'whois')?.ageDays, 0);
-  assert.equal(matrix.entries.find((entry) => entry.id === 'rdap')?.observedAt, '2026-07-30T00:00:00.000Z');
+  assert.equal(matrix.entries.find((entry) => entry.id === 'rdap')?.observedAt, null);
+  assert.equal(matrix.entries.find((entry) => entry.id === 'rdap')?.ageDays, null);
   assert.equal(matrix.entries.find((entry) => entry.id === 'whois')?.refreshAvailable, true);
   assert.equal(matrix.entries.find((entry) => entry.id === 'rdap')?.endpointClass, 'Authoritative registry endpoint');
   assert.match(

@@ -12,6 +12,7 @@ import {
   CLI_COMMAND_CATALOGUE_VERSION,
 } from './cli-command-catalogue.mts';
 import { defineSchemaCompatibility } from './schema-compatibility.mts';
+import { PRIVACY_CATALOGUE_FIXTURE_METADATA } from './generated/privacy-catalogue-fixture.mts';
 import {
   defineSchemaLifecycleFamily,
   type SchemaLifecycleConsumerDiscriminator,
@@ -77,6 +78,8 @@ export const PRIVACY_PROCESSING_CLASSES = Object.freeze([
 export type PrivacyProcessingClassId = typeof PRIVACY_PROCESSING_CLASSES[number]['id'];
 
 export const PRIVACY_CATALOGUE_INVARIANTS = Object.freeze([
+  'Browser-profile retention describes the browser deployment. The optional standalone local application instead stores saved collections, recovery drafts and original files in an explicitly selected plaintext filesystem workspace; appearance and tab preferences remain browser-local.',
+  'Standalone workspace traffic stays between the browser and its authenticated loopback process. Starting it makes no collection request; explicit collection uses the existing request policy from this machine, and offline mode disables collection. Clearing browser data or signing out does not delete the filesystem workspace. Encrypted portable backups remain separate.',
   'The catalogue contains fixed contract metadata only; it contains no target, evidence value, personal data, raw contact, credential, cookie, authorisation value, runtime secret, complete query-bearing URL, unnecessary path or local filesystem detail.',
   'Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.',
   'Offline operations make no request and do not inherit a capability family\'s possible network disclosure.',
@@ -120,7 +123,7 @@ const CAPABILITY_PRIVACY_DETAILS = Object.freeze({
   availability: capabilityPrivacyDetail('Produce an authority-aware registration-availability decision.', ['authority_aware_availability', 'source_health']),
   domain_evidence: capabilityPrivacyDetail('Collect the source-qualified domain evidence eligible for the selected mode.', ['normalised_domain_evidence', 'source_health']),
   dns_intelligence: capabilityPrivacyDetail('Collect bounded public DNS publication evidence.', ['normalised_dns_evidence', 'source_health']),
-  website_probe: capabilityPrivacyDetail('Observe one bounded homepage and static response workflow.', ['bounded_http_and_page_evidence', 'source_health']),
+  website_probe: capabilityPrivacyDetail('Observe one bounded homepage or explicitly selected URL through the static response workflow.', ['bounded_http_and_page_evidence', 'source_health']),
   tls_intelligence: capabilityPrivacyDetail('Observe one bounded TLS connection and certificate presentation.', ['bounded_tls_evidence', 'source_health']),
   certificate_transparency: capabilityPrivacyDetail('Search retained public certificate observations for a bounded term.', ['certificate_observation_leads', 'source_health']),
   security_txt: capabilityPrivacyDetail('Collect one optional bounded security.txt publication.', ['normalised_security_contact_publication', 'source_health']),
@@ -131,16 +134,16 @@ const CAPABILITY_PRIVACY_DETAILS = Object.freeze({
   registrar_rdap: capabilityPrivacyDetail('Retrieve one eligible sponsoring-registrar RDAP publication as a separate source.', ['registrar_registration_publication', 'source_health']),
   network_context: capabilityPrivacyDetail('Add bounded public allocation context for one observed public endpoint address.', ['public_network_allocation_context', 'source_health']),
   reverse_dns: capabilityPrivacyDetail('Resolve bounded reverse-DNS names for one public address.', ['reverse_dns_publication', 'source_health']),
-  domain_posture: capabilityPrivacyDetail('Review bounded DNS and mail publication posture without changing configuration.', ['normalised_posture_evidence', 'source_health']),
+  domain_posture: capabilityPrivacyDetail('Review bounded DNS and mail publication posture without changing configuration; a separate opt-in adds inherited DMARC and sampled direct parent referrals.', ['normalised_posture_evidence', 'source_health']),
   dnssec_validation: capabilityPrivacyDetail('Validate an explicitly authorised DNSSEC chain against a selected local trust anchor.', ['dnssec_validation_evidence', 'source_health']),
   mail_transport_review: capabilityPrivacyDetail('Review selected explicitly authorised SMTP transport and STARTTLS behaviour.', ['mail_transport_evidence', 'source_health']),
   rendered_web_capture: capabilityPrivacyDetail('Capture one explicitly authorised rendered page within the local-tool budget.', ['bounded_rendered_capture', 'capture_manifest']),
   rendered_capture_comparison: capabilityPrivacyDetail('Compare selected rendered-capture artefacts without another request.', ['bounded_capture_comparison']),
   idn_confusables: capabilityPrivacyDetail('Derive bounded Unicode and confusable context from the current target.', ['confusable_analysis']),
-  analyst_cases: capabilityPrivacyDetail('Retain analyst-selected Case material and the separately bounded Review Item lifecycle overlay in the browser profile.', ['bounded_case_state', 'bounded_analyst_review_state']),
+  analyst_cases: capabilityPrivacyDetail('Retain analyst-selected Case material, recheck questions, original files and separate image derivatives using the workspace codec; saved Case filters and Review Item state remain separate bounded collections.', ['bounded_case_state', 'recheck_question_context', 'selected_original_files_and_provenance', 'selected_image_derivatives_and_regions', 'saved_case_filters', 'bounded_analyst_review_state']),
   watchlists: capabilityPrivacyDetail('Retain analyst-selected watchlist and monitoring-view state in the browser profile.', ['bounded_watchlist_state']),
   offline_review: capabilityPrivacyDetail('Review or derive from deliberately selected bounded local evidence without a request.', ['bounded_offline_review']),
-  portable_evidence: capabilityPrivacyDetail('Build, verify or review bounded portable evidence under operator control.', ['bounded_portable_evidence', 'integrity_or_compatibility_state']),
+  portable_evidence: capabilityPrivacyDetail('Build, verify or review bounded portable ZIP, optionally encrypted package or folder evidence under operator control; package passphrases and folder handles are not retained for background access.', ['bounded_portable_evidence', 'integrity_or_compatibility_state']),
   runtime_diagnostics: capabilityPrivacyDetail('Report local runtime readiness and only the explicitly selected fixed network diagnostics.', ['bounded_runtime_diagnostics']),
   workflow_execution: capabilityPrivacyDetail('Plan or run only installed fixed workflow steps with separate network approval.', ['bounded_workflow_state', 'explicit_step_outcomes']),
   scheduled_monitoring: capabilityPrivacyDetail('Run an operator-configured bounded monitoring cycle over encrypted compact state.', ['compact_monitoring_evidence', 'delivery_state', 'bounded_recovery_counts']),
@@ -369,7 +372,7 @@ function credentialUse(model: CapabilityDefinition['credentialModel']): string {
     required_public_trust_file: 'A selected local public trust file is read for validation and is not transmitted.',
     optional_secret_passphrase_file: 'A selected local passphrase file is read only for the requested local operation and is not emitted.',
     required_secret_private_key_file: 'A selected local private key is used locally and is not transmitted, retained or emitted.',
-    optional_public_key_file: 'A selected local public key can be used for verification and is not transmitted.',
+    optional_public_key_file: 'Selected local public keys and an optional fingerprint trust file are read only for verification, never transmitted or automatically retained. Trust output contains only the matching entry and a file digest.',
     worker_encryption_key: 'A configured worker key encrypts compact worker state and is never included in retained records or catalogue output.',
   };
   return descriptions[model];
@@ -409,6 +412,7 @@ function processingClassesForBoundary(boundary: Readonly<{
 function deliberatelyNotSent(boundary: Readonly<{
   networkMode: string;
   credentialModel: string;
+  disclosedData: readonly string[];
 }>, capabilityFamilyId: CapabilityId): readonly string[] {
   if (boundary.networkMode === 'none') {
     return Object.freeze([
@@ -424,7 +428,7 @@ function deliberatelyNotSent(boundary: Readonly<{
     'unselected_local_files',
     'cookies_and_session_data',
     'unrelated_evidence_values',
-    ...(capabilityFamilyId === 'rendered_web_capture' ? [] : ['complete_query_bearing_urls']),
+    ...(capabilityFamilyId === 'rendered_web_capture' || boundary.disclosedData.includes('selected_url_request') ? [] : ['complete_query_bearing_urls']),
     ...(boundary.credentialModel === 'deployment_optional' ? [] : ['credentials']),
   ]);
 }
@@ -1429,8 +1433,7 @@ export const PRIVACY_DATA_FLOW_CATALOGUE_LIFECYCLE_FAMILY = defineSchemaLifecycl
   fixtures: [{
     id: 'privacy-data-flow-catalogue-v1',
     path: 'docs/privacy-data-flow-catalogue.json',
-    bytes: 489_551,
-    sha256: '733da04dab11f34f3343619bc611755c0e0b4fafbabc1a5a5c0a4ec503b5e360',
+    ...PRIVACY_CATALOGUE_FIXTURE_METADATA,
     contentDigestSha256: null,
     schema: PRIVACY_DATA_FLOW_CATALOGUE_SCHEMA,
     version: PRIVACY_DATA_FLOW_CATALOGUE_VERSION,
@@ -1440,7 +1443,6 @@ export const PRIVACY_DATA_FLOW_CATALOGUE_LIFECYCLE_FAMILY = defineSchemaLifecycl
     scope: 'repository',
   }],
   metadata: {
-    metadataVersion: 2,
     enforcement: 'declarative_only',
     shapes: [{
       id: 'privacy-data-flow-catalogue.document.v1',
@@ -1517,7 +1519,11 @@ export const PRIVACY_DATA_FLOW_CATALOGUE_LIFECYCLE_FAMILY = defineSchemaLifecycl
       id: 'privacy-data-flow-catalogue.public-generation.v1',
       plane: 'shared',
       operation: 'generate-public-catalogue',
-      acceptedContracts: [],
+      acceptedContracts: [{
+        schema: PRIVACY_DATA_FLOW_CATALOGUE_SCHEMA,
+        versions: [PRIVACY_DATA_FLOW_CATALOGUE_VERSION],
+        mode: 'direct',
+      }],
       emittedContract: {
         schema: PRIVACY_DATA_FLOW_CATALOGUE_SCHEMA,
         version: PRIVACY_DATA_FLOW_CATALOGUE_VERSION,

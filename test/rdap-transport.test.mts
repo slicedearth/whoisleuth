@@ -1,10 +1,43 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { deferred } from './deferred.mts';
 
 import {
   fetchRdapDetailedWithTimeout,
   fetchRdapWithTimeout,
+  RdapBodyAdmissionError,
 } from '../lib/rdap-transport.mts';
+
+test('parent cancellation stops both a pending fetch and a pending response body', async () => {
+  for (const phase of ['fetch', 'body']) {
+    const controller = new AbortController();
+    const reached = deferred<void>();
+    let transportSignal: AbortSignal | undefined;
+    let cancelled = false;
+    const response = new Response(new ReadableStream({ cancel() { cancelled = true; } }));
+    const request = fetchRdapWithTimeout('https://rdap.example.test/domain/example.test', {
+      signal: controller.signal,
+    }, 7_000, {
+      fetch: async (_url, options) => {
+        transportSignal = options?.signal ?? undefined;
+        if (phase === 'fetch') {
+          reached.resolve();
+          return new Promise<Response>(() => {});
+        }
+        return response;
+      },
+      readText: () => {
+        reached.resolve();
+        return new Promise(() => {});
+      },
+    });
+    await reached.promise;
+    controller.abort(new DOMException('Cycle finished', 'TimeoutError'));
+    await assert.rejects(request, { name: 'TimeoutError' });
+    assert.equal(transportSignal?.aborted, true);
+    if (phase === 'body') assert.equal(cancelled, true);
+  }
+});
 
 test('returns bounded RDAP status and text through an injected safe transport', async () => {
   const result = await fetchRdapWithTimeout('https://rdap.example.test/domain/example.test', {
@@ -111,4 +144,26 @@ test('rejects malformed UTF-8 before RDAP JSON can be interpreted', async () => 
       durationMs: 1,
     }),
   }), /encoded data|encoding|decode|utf-8/iu);
+});
+
+test('body admission retains HTTP status and a bounded cause without exposing transport details', async () => {
+  for (const kind of ['too_large', 'invalid_encoding', 'unreadable'] as const) {
+    await assert.rejects(fetchRdapWithTimeout('https://rdap.example.test/domain/example.test', {}, 1_000, {
+      fetch: async () => kind === 'invalid_encoding'
+        ? new Response(new Uint8Array([0xff]), { status: 200 })
+        : new Response('{}', { status: 200 }),
+      ...(kind === 'invalid_encoding' ? {} : {
+        readText: async () => {
+          if (kind === 'unreadable') throw new Error('private transport detail');
+          return { text: '', truncated: true, bytesRead: 2_000_000 };
+        },
+      }),
+    }), (error: unknown) => {
+      assert.ok(error instanceof RdapBodyAdmissionError);
+      assert.equal(error.status, 200);
+      assert.equal(error.kind, kind);
+      assert.doesNotMatch(error.message, /private transport detail|example\.test/u);
+      return true;
+    });
+  }
 });

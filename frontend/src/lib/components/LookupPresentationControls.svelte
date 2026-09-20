@@ -13,14 +13,9 @@
 
 </script>
 
-<section class="presentation card" aria-labelledby="lookup-presentation-title">
-  <div>
-    <p class="eyebrow">Result layout</p>
-    <h3 id="lookup-presentation-title">Choose what to review</h3>
-    <p>The analyst question chosen above orders the evidence. Open individual evidence families or all of them.</p>
-  </div>
+<section class="presentation" aria-labelledby="lookup-presentation-title">
+  <h3 id="lookup-presentation-title">Evidence families</h3>
   <div class="section-visibility">
-    <span>Evidence families</span>
     <div role="group" aria-label="Evidence family visibility">
       <button type="button" aria-disabled={allSectionsExpanded} onclick={() => { if (!allSectionsExpanded) expandAll(); }}>Expand all</button>
       <button type="button" aria-disabled={!anySectionsExpanded} onclick={() => { if (anySectionsExpanded) collapseAll(); }}>Collapse all</button>
@@ -29,15 +24,12 @@
 </section>
 
 <style>
-  .presentation{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end;margin:12px 0;padding:14px}
-  .presentation h3{margin:3px 0 0;font:700 var(--text-sm) var(--mono)}
-  .presentation p:not(.eyebrow){margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
+  .presentation{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;margin:18px 0 0;padding-block:10px;border-block:1px solid var(--border)}
+  .presentation h3{margin:0;font:650 var(--text-sm) var(--font-sans)}
   .section-visibility{display:grid;gap:5px;color:var(--muted);font:600 var(--text-xs) var(--mono)}
   .section-visibility>div{display:flex;gap:6px}
   .section-visibility button{min-height:var(--control-h);padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--text);font:650 var(--text-2xs) var(--mono);white-space:nowrap}
   .section-visibility button:hover:not([aria-disabled='true']),.section-visibility button:focus-visible{border-color:var(--accent);color:var(--accent)}
   .section-visibility button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .section-visibility button[aria-disabled='true']{cursor:not-allowed;opacity:.45}
-  @media(max-width:980px){.presentation{grid-template-columns:1fr 1fr}.presentation>div:first-child{grid-column:1 / -1}}
-  @media(max-width:440px){.presentation{grid-template-columns:1fr}}
 </style>

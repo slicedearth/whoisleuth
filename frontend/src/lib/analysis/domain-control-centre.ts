@@ -1,11 +1,17 @@
 import type { BrandProfile, DesiredPostureBaseline } from './brand-profile-model.ts';
+import { brandPostureObservationContext, currentDesiredPostureObservation, desiredPostureObservations } from './brand-profile-model.ts';
+import { buildDesiredPostureComparisonsFromObservation } from './owned-domain-posture-review.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+import { domainControlRecordMode } from '../../../../packages/evidence/domain-control-runtime.mts';
+import { DOMAIN_CONTROL_RECORD_LIST_FIELDS } from '../../../../packages/contracts/domain-control-manifest.mts';
 
 export type DomainControlCentreRow = Readonly<{
   domain: string;
   baseline: DesiredPostureBaseline | null;
   baselineFields: number;
   latestObservationAt: string | null;
-  nameserverPreflight: 'aligned' | 'configured' | 'drift' | 'incomplete' | 'not_configured';
+  observationLimitation: string | null;
+  nameserverPreflight: 'aligned' | 'configured' | 'drift' | 'incomplete' | 'not_configured' | 'observed';
   activeWindow: DesiredPostureBaseline['approvedChangeWindows'][number] | null;
   nextWindow: DesiredPostureBaseline['approvedChangeWindows'][number] | null;
 }>;
@@ -28,29 +34,20 @@ export type DomainControlCentre = Readonly<{
   }>;
 }>;
 
-function sameValues(left: readonly string[], right: readonly string[]): boolean {
-  const normalise = (values: readonly string[]) => [...new Set(values.map((value) => value.trim().toLowerCase()).filter(Boolean))].sort();
-  const a = normalise(left);
-  const b = normalise(right);
-  return a.length === b.length && a.every((value, index) => value === b[index]);
-}
-
-function nameserverPreflight(baseline: DesiredPostureBaseline | null): DomainControlCentreRow['nameserverPreflight'] {
+function nameserverPreflight(profile: BrandProfile, baseline: DesiredPostureBaseline | null, now: string): DomainControlCentreRow['nameserverPreflight'] {
   if (!baseline) return 'not_configured';
-  if (!baseline.nameservers.length) return 'incomplete';
-  const latest = baseline.observationHistory?.at(-1) ?? baseline.previousObservation;
-  if (!latest) return 'configured';
-  const observed = latest.checks.find((check) => check.id === 'nameservers');
-  if (!observed || observed.status === 'info' || !observed.records.length) return 'incomplete';
-  return sameValues(baseline.nameservers, observed.records) ? 'aligned' : 'drift';
+  if (domainControlRecordMode(baseline, 'nameservers') === 'unconfigured') return 'not_configured';
+  if (!desiredPostureObservations(baseline).length) return 'configured';
+  const latest = currentDesiredPostureObservation(baseline);
+  const comparison = buildDesiredPostureComparisonsFromObservation(baseline, latest.observation, now, {
+    context: brandPostureObservationContext(profile, baseline.domain), limitation: latest.limitation,
+  }).find((item) => item.field === 'nameservers');
+  return comparison?.state === 'aligned' ? 'aligned' : comparison?.state === 'drift' ? 'drift' : comparison?.state === 'observed' ? 'observed' : 'incomplete';
 }
 
 function baselineFieldCount(baseline: DesiredPostureBaseline): number {
   return [
-    baseline.nameservers.length,
-    baseline.ds.length,
-    baseline.mx.length,
-    baseline.caa.length,
+    ...DOMAIN_CONTROL_RECORD_LIST_FIELDS.map((field) => domainControlRecordMode(baseline, field) !== 'unconfigured'),
     baseline.tlsIssuer,
     baseline.tlsSanPatterns.length,
     baseline.tlsSpkiSha256,
@@ -85,19 +82,20 @@ function concentrationGroups(profile: BrandProfile): DomainControlConcentration[
 }
 
 export function buildDomainControlCentre(profile: BrandProfile, nowValue = new Date().toISOString()): DomainControlCentre {
-  const now = Date.parse(nowValue);
+  const now = Date.parse(normalizeExplicitIsoTimestamp(nowValue) ?? '');
   const rows = profile.officialDomains.map((domain) => {
     const baseline = profile.desiredPostureBaselines.find((item) => item.domain === domain) ?? null;
-    const windows = baseline?.approvedChangeWindows ?? [];
+    const windows = [...(baseline?.approvedChangeWindows ?? [])].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
     const activeWindow = windows.find((window) => Date.parse(window.startsAt) <= now && now <= Date.parse(window.endsAt)) ?? null;
     const nextWindow = windows.find((window) => Date.parse(window.startsAt) > now) ?? null;
-    const latest = baseline?.observationHistory?.at(-1) ?? baseline?.previousObservation ?? null;
+    const latest = baseline ? currentDesiredPostureObservation(baseline) : null;
     return Object.freeze({
       domain,
       baseline,
       baselineFields: baseline ? baselineFieldCount(baseline) : 0,
-      latestObservationAt: latest?.observedAt ?? null,
-      nameserverPreflight: nameserverPreflight(baseline),
+      latestObservationAt: latest?.observation?.observedAt ?? null,
+      observationLimitation: latest?.limitation ?? null,
+      nameserverPreflight: nameserverPreflight(profile, baseline, nowValue),
       activeWindow,
       nextWindow,
     });
@@ -108,7 +106,7 @@ export function buildDomainControlCentre(profile: BrandProfile, nowValue = new D
     counts: Object.freeze({
       domains: rows.length,
       baselines: rows.filter((row) => row.baseline).length,
-      retainedObservations: rows.filter((row) => row.latestObservationAt).length,
+      retainedObservations: rows.filter((row) => row.baseline && desiredPostureObservations(row.baseline).length).length,
       plannedOrActiveChanges: rows.filter((row) => row.activeWindow || row.nextWindow || row.baseline?.lifecycle === 'change_planned').length,
       retiringOrRetired: rows.filter((row) => row.baseline?.lifecycle === 'retiring' || row.baseline?.lifecycle === 'retired').length,
     }),

@@ -1,0 +1,701 @@
+<script lang="ts">
+  import { page } from '$app/state';
+  import { beforeNavigate, goto } from '$app/navigation';
+  import { onMount, tick, untrack } from 'svelte';
+  import { parseBoundedJson } from '$lib/bounded-json';
+  import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
+  import { registerAnalystUndo } from '$lib/analyst-undo';
+  import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
+  import { hasUnprotectedCaseDrafts } from '$lib/controllers/case-draft.svelte.ts';
+  import { preloadBestEffort } from '$lib/idle-preload';
+  import { readCaseNavigationContext, selectConsoleCase } from '$lib/console-workflow-state';
+  import { monitorRouteKey, monitorRouteTarget } from '$lib/controllers/monitor-route-controller.ts';
+  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
+  import { casesForDomain, type CaseIncidentInput } from '$lib/analysis/case-model.ts';
+  import { filterCaseList } from '../../../../packages/cases/case-list-view.mts';
+  import type { CaseViewFilters } from '../../../../packages/contracts/case-views-contract.mts';
+  import { loadInvestigationGuide } from '$lib/investigation-guide';
+  import { loadProfiles, type BrandProfile } from '$lib/brand-profiles';
+  import type { ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
+  import {
+    addCaseBrandProfileAssociation, addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES,
+    caseFreeformTags, caseTagsWithTypes, caseTypeIds, deleteCase,
+    dispositionLabel, editCase, editCaseTags, restoreCaseTags, exportCases,
+    exportRiskCalibrationDataset, importCases, loadCases, MAX_CASE_IMPORT_BYTES,
+    openCase, createCaseIncident, previewRiskCalibrationDataset, removeCaseBrandProfileAssociation,
+    statusLabel, type CaseRecord, type RiskCalibrationExportPreview,
+    CaseAssociationCapacityError, exportCaseSnapshot, type CaseAssociationRetention,
+  } from '$lib/cases';
+  import LocalCollectionState from '$lib/components/LocalCollectionState.svelte';
+  import DeferredSurface from '$lib/components/DeferredSurface.svelte';
+  import CaseWorkspaceToolbar from '$lib/components/CaseWorkspaceToolbar.svelte';
+  import CaseIncidentForm from '$lib/components/CaseIncidentForm.svelte';
+  import CaseFilters from '$lib/components/CaseFilters.svelte';
+  import CaseSavedViews from '$lib/components/CaseSavedViews.svelte';
+  import CaseList from '$lib/components/CaseList.svelte';
+  import CaseStorageReview from '$lib/components/CaseStorageReview.svelte';
+  import PageHeading from '$lib/components/PageHeading.svelte';
+  let { initialCases = null, initialMessage = '', onchange }: {
+    initialCases?: CaseRecord[] | null;
+    initialMessage?: string;
+    onchange?: (records: CaseRecord[], state: ParentDomainCampaignSourceState) => void;
+  } = $props();
+  let cases = $state.raw<CaseRecord[]>(untrack(() => initialCases ?? []));
+  let casesSourceState = $state<'loading' | 'ready' | 'unavailable'>(untrack(() => initialCases ? 'ready' : 'loading'));
+  let caseMessage = $state(untrack(() => initialMessage || readCaseNavigationContext(page.url.searchParams.get('case'))?.message || ''));
+  const CASE_PAGE_SIZE = 25;
+  let pendingNoteCaseIds = $state<string[]>([]);
+  let casesRefreshing = $state(false);
+  let brandProfiles = $state<BrandProfile[]>([]);
+  let brandProfilesUnavailable = $state(true);
+  let casePage = $state(1);
+  let statusFilter = $state<CaseViewFilters['status']>('');
+  let dispositionFilter = $state<CaseViewFilters['disposition']>('');
+  let caseSearch = $state('');
+  let caseSort = $state<'updated' | 'domain' | 'status'>('updated');
+  let expandedId = $state('');
+  let listHref = '/cases';
+  const selectedCase = $derived(cases.find((record) => record.id === expandedId));
+  let associationRetention = $state.raw<CaseAssociationRetention | null>(null);
+  let retentionSaving = $state(false);
+  $effect(() => {
+    if (associationRetention && selectedCase?.id !== associationRetention.id && !retentionSaving) associationRetention = null;
+  });
+  let calibrationMode = $state(false);
+  let noteDraft = $state('');
+  let tagDraft = $state('');
+  let newDomain = $state('');
+  let openingCase = $state(false);
+  let incidentDraftDirty = $state(false);
+  let incidentOpeningIntent: (() => boolean) | null = null;
+  let calibrationCaseIds = $state<string[]>([]);
+  let calibrationReview = $state<RiskCalibrationExportPreview | null>(null);
+  let calibrationExportBusy = $state(false);
+  let guidedDomains = $state<string[]>([]);
+  let guidedDomainsTruncated = $state(false);
+  let mounted = false;
+  let navigationCancelled = false;
+  beforeNavigate(({ from, to, cancel, willUnload }) => {
+    navigationCancelled = false;
+    const sameCase = !willUnload && from?.url.pathname === to?.url.pathname
+      && from?.url.searchParams.get('case') && from.url.searchParams.get('case') === to?.url.searchParams.get('case');
+    if (!sameCase && (hasUnprotectedCaseDrafts() || incidentDraftDirty)
+      && (willUnload || !window.confirm('Some Case edits are not saved. Leave and lose those edits?'))) {
+      navigationCancelled = true;
+      cancel();
+    }
+  });
+  const existingCaseDomains = $derived(new Set(cases.map((record) => record.domain)));
+  const currentFilters = $derived({ status: statusFilter, disposition: dispositionFilter, search: caseSearch, sort: caseSort });
+  const filteredCases = $derived(filterCaseList(cases, currentFilters));
+  const casePageCount = $derived(Math.max(1, Math.ceil(filteredCases.length / CASE_PAGE_SIZE)));
+  const currentCasePage = $derived(Math.min(casePage, casePageCount));
+  const pagedCases = $derived(filteredCases.slice((currentCasePage - 1) * CASE_PAGE_SIZE, currentCasePage * CASE_PAGE_SIZE));
+  function date(value: string) {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+  }
+  function setCasePage(value: number) {
+    selectionRevision.changed();
+    casePage = Math.min(casePageCount, Math.max(1, Math.trunc(value)));
+  }
+  function changeCaseView(change: () => void) {
+    selectionRevision.changed();
+    change();
+    casePage = 1;
+  }
+  function showCasePage(record: CaseRecord) {
+    const index = filteredCases.findIndex(item => item.id === record.id);
+    if (index >= 0)
+      casePage = Math.floor(index / CASE_PAGE_SIZE) + 1;
+  }
+  function caseTagDraft(record: CaseRecord) {
+    return caseFreeformTags(record.tags).join(', ');
+  }
+  async function selectCase(record: CaseRecord) {
+    selectionRevision.changed();
+    await navigateCase(record.id);
+  }
+  async function returnToList(previousId = expandedId) {
+    selectionRevision.changed();
+    if (!await navigateCaseUrl(listHref)) return;
+    await tick();
+    const target = document.getElementById(`case-head-${previousId}`) ?? document.getElementById('new-case');
+    target?.scrollIntoView({ block: 'center' });
+    target?.focus({ preventScroll: true });
+  }
+  async function focusCase(record: CaseRecord) {
+    await tick();
+    if (!mounted || expandedId !== record.id || page.url.hash.startsWith('#case-response-') || page.url.searchParams.get('response') === '1') return;
+    const target = document.getElementById(`case-head-${record.id}`);
+    if (restoreSubmittedFocus(null, target, target?.closest('[data-case-workspace]'))) {
+      target?.scrollIntoView({ block: 'center' });
+    }
+  }
+  async function openGuidedCase(domain: string) {
+    if (showIncidentChoices(domain)) return;
+    const editorUnchanged = captureCaseOpeningIntent();
+    const responseRequested = page.url.searchParams.get('response') === '1';
+    let committed: Awaited<ReturnType<typeof openCase>>;
+    try {
+      committed = await openCase({ domain, source: 'monitor' });
+    }
+    catch (cause) {
+      caseMessage = cause instanceof Error ? cause.message : 'Could not open the guided case.';
+      return;
+    }
+    const { record, created } = committed;
+    await reconcileCommittedCaseSnapshot(committed, created ? `Opened a new case for ${record.domain}.` : `Opened the existing case for ${record.domain}.`);
+    if (!mounted || !editorUnchanged())
+      return;
+    selectConsoleCase(record.id);
+    clearCaseFilters();
+    casePage = 1;
+    showCasePage(record);
+    expandedId = record.id;
+    tagDraft = caseTagDraft(record);
+    noteDraft = '';
+    await navigateCase(record.id, responseRequested);
+  }
+  function prunedNote(pruned: number) {
+    return pruned ? ` (pruned ${pruned} old evidence snapshot${pruned === 1 ? '' : 's'} to stay within storage)` : '';
+  }
+  async function trackDomain() {
+    if (openingCase)
+      return;
+    const unchanged = newCaseDraft.capture();
+    const domain = newDomain.trim();
+    if (!domain) {
+      caseMessage = 'Enter a domain to track.';
+      return;
+    }
+    if (showIncidentChoices(domain)) return;
+    const editorUnchanged = captureCaseOpeningIntent();
+    openingCase = true;
+    try {
+      let committed: Awaited<ReturnType<typeof openCase>>;
+      try {
+        committed = await openCase({ domain, source: 'monitor' });
+      }
+      catch (cause) {
+        caseMessage = cause instanceof Error ? cause.message : 'Could not open the case.';
+        return;
+      }
+      const { record, created } = committed;
+      if (unchanged())
+        newDomain = '';
+      await reconcileCommittedCaseSnapshot(committed, created ? `Opened a new case for ${record.domain}.` : `${record.domain} already has a case.`);
+      if (!mounted || !editorUnchanged())
+        return;
+      selectConsoleCase(record.id);
+      clearCaseFilters();
+      casePage = 1;
+      showCasePage(record);
+      expandedId = record.id;
+      tagDraft = caseTagDraft(record);
+      noteDraft = '';
+      await navigateCase(record.id);
+      if (unchanged())
+        await focusCase(record);
+    }
+    finally {
+      openingCase = false;
+    }
+  }
+  function showIncidentChoices(domain: string): boolean {
+    const matches = casesForDomain(cases, domain);
+    if (matches.length < 2) return false;
+    clearCaseFilters();
+    caseSearch = matches[0]!.domain;
+    casePage = 1;
+    caseMessage = `${matches.length} Cases use ${matches[0]!.domain}. Choose the intended incident below, or create a separate Case.`;
+    return true;
+  }
+  async function createIncident(input: CaseIncidentInput): Promise<CaseRecord | null> {
+    incidentOpeningIntent = captureCaseOpeningIntent();
+    let committed: Awaited<ReturnType<typeof createCaseIncident>>;
+    try { committed = await createCaseIncident(input); }
+    catch (cause) { caseMessage = cause instanceof Error ? cause.message : 'Could not create the incident Case.'; return null; }
+    await reconcileCommittedCaseSnapshot(committed, 'Created a separate incident Case.');
+    return committed.record;
+  }
+  async function openCreatedIncident(record: CaseRecord) {
+    if (!mounted || !incidentOpeningIntent?.()) return;
+    clearCaseFilters();
+    await selectCase(record);
+  }
+  async function setStatus(record: CaseRecord, value: string) {
+    try {
+      const committed = await editCase(record.id, { status: value });
+      await reconcileCommittedCaseMutation(committed, `Set ${record.domain} to ${statusLabel(value)}.`);
+    }
+    catch (cause) {
+      caseMessage = cause instanceof Error ? cause.message : 'Could not update the case.';
+    }
+  }
+  async function setDisposition(record: CaseRecord, value: string) {
+    try {
+      const committed = await editCase(record.id, { disposition: value });
+      await reconcileCommittedCaseMutation(committed, `Marked ${record.domain} as ${dispositionLabel(value)}.`);
+    }
+    catch (cause) {
+      caseMessage = cause instanceof Error ? cause.message : 'Could not update the case.';
+    }
+  }
+  async function setReviewReason(record: CaseRecord, value: string) {
+    try {
+      const committed = await editCase(record.id, { reviewReasonCode: value });
+      await reconcileCommittedCaseMutation(committed, `Updated the review reason for ${record.domain}.`);
+    }
+    catch (cause) {
+      caseMessage = cause instanceof Error ? cause.message : 'Could not update the review reason.';
+    }
+  }
+  async function changeBrandProfileAssociation(record: CaseRecord, profileId: string, operation: 'add' | 'remove', retention?: CaseAssociationRetention) {
+    if (retentionSaving && !retention) return false;
+    let persisted: CaseRecord;
+    let committedCases: CaseRecord[] = [];
+    let pruned = 0;
+    try {
+      const result = operation === 'add'
+        ? await addCaseBrandProfileAssociation(record.id, profileId, retention)
+        : await removeCaseBrandProfileAssociation(record.id, profileId, retention);
+      persisted = result.record;
+      committedCases = result.cases;
+      pruned = result.pruned;
+    }
+    catch (cause) {
+      if (cause instanceof CaseAssociationCapacityError) associationRetention = cause.retention;
+      caseMessage = cause instanceof Error ? cause.message : `Could not ${operation} the Brand Profile association.`;
+      return false;
+    }
+    try {
+      await refreshCases();
+      if (expandedId === persisted.id) showCasePage(persisted);
+      caseMessage = `${operation === 'add' ? 'Added' : 'Removed'} an explicit Brand Profile association for ${persisted.domain}.${prunedNote(pruned)}`;
+    }
+    catch {
+      installCommittedCaseSnapshot(committedCases, 'partial');
+      if (expandedId === persisted.id) showCasePage(persisted);
+      caseMessage = `Brand Profile association saved for ${persisted.domain}, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.${prunedNote(pruned)}`;
+    }
+    associationRetention = null;
+    return true;
+  }
+  async function restoreAssociationFocus(id: string) {
+    await tick();
+    if (selectedCase?.id !== id) return;
+    const select = document.getElementById(`case-brand-profile-${id}`);
+    if (select instanceof HTMLSelectElement && !select.disabled) select.focus();
+    else document.getElementById(`case-brand-associations-region-${id}`)?.focus();
+  }
+  async function cancelAssociationRetention() {
+    if (!associationRetention || retentionSaving) return;
+    const id = associationRetention.id;
+    associationRetention = null;
+    caseMessage = 'Association change cancelled. Saved Cases were not changed.';
+    await restoreAssociationFocus(id);
+  }
+  async function confirmAssociationRetention() {
+    const retention = associationRetention;
+    if (!retention || retentionSaving || selectedCase?.id !== retention.id) return;
+    retentionSaving = true;
+    try {
+      if (await changeBrandProfileAssociation(selectedCase, retention.profileId, retention.operation, retention)) {
+        await restoreAssociationFocus(retention.id);
+      }
+    } finally { retentionSaving = false; }
+  }
+  function exportRetentionSnapshot() {
+    if (!associationRetention) return;
+    try { exportCaseSnapshot(associationRetention.preview.current); caseMessage = 'Exported the reviewed Case snapshot, including evidence awaiting your decision.'; }
+    catch { caseMessage = 'The Case export could not be downloaded. Saved Cases were not changed.'; }
+  }
+  function addBrandProfileAssociation(record: CaseRecord, profileId: string) {
+    return changeBrandProfileAssociation(record, profileId, 'add');
+  }
+  function removeBrandProfileAssociation(record: CaseRecord, profileId: string) {
+    return changeBrandProfileAssociation(record, profileId, 'remove');
+  }
+  async function saveTags(record: CaseRecord) {
+    const previous = [...record.tags];
+    const submittedDraft = tagDraft;
+    const unchanged = tagRevision.capture();
+    try {
+      const next = caseTagsWithTypes(submittedDraft.split(/[,\n]+/).map(value => value.trim()).filter(Boolean), caseTypeIds(record.tags));
+      if (previous.join('\\0') === next.join('\\0'))
+        return;
+      const committed = await editCaseTags(record.id, next);
+      if (unchanged())
+        tagDraft = caseTagDraft(committed.record);
+      await reconcileCommittedCaseSnapshot(committed, `Updated tags for ${record.domain}.`, expandedId === record.id ? committed.record : null);
+      registerAnalystUndo({
+        kind: 'case_tags', action: 'Case tags updated', affectedRecord: record.domain,
+        undo: async () => {
+          const unchangedUndo = tagRevision.capture();
+          const restored = await restoreCaseTags(committed.undo);
+          if (expandedId === restored.record.id && unchangedUndo())
+            tagDraft = caseTagDraft(restored.record);
+          await reconcileCommittedCaseSnapshot(restored, `Restored the previous tags for ${record.domain}.`, expandedId === restored.record.id ? restored.record : null);
+          return `Restored the previous tags for ${record.domain}.`;
+        },
+      });
+    }
+    catch (cause) {
+      caseMessage = cause instanceof Error ? cause.message : 'Could not update tags.';
+    }
+  }
+  async function addNote(record: CaseRecord) {
+    if (pendingNoteCaseIds.includes(record.id))
+      return;
+    const unchanged = noteRevision.capture();
+    const body = noteDraft.trim();
+    if (!body) {
+      caseMessage = 'A note cannot be empty.';
+      return;
+    }
+    pendingNoteCaseIds = [...pendingNoteCaseIds, record.id];
+    caseMessage = `Adding a note to ${record.domain}…`;
+    try {
+      let committed: Awaited<ReturnType<typeof addCaseNote>>;
+      try {
+        committed = await addCaseNote(record.id, body);
+      }
+      catch (cause) {
+        caseMessage = cause instanceof Error ? cause.message : 'Could not add the note.';
+        return;
+      }
+      if (unchanged())
+        noteDraft = '';
+      await reconcileCommittedCaseSnapshot(committed, `Added a note to ${record.domain}.`, expandedId === record.id ? committed.record : null);
+    }
+    finally {
+      pendingNoteCaseIds = pendingNoteCaseIds.filter((id) => id !== record.id);
+    }
+  }
+  async function downloadCases() {
+    try {
+      await exportCases();
+    }
+    catch (cause) {
+      caseMessage = cause instanceof Error ? cause.message : 'Could not export cases.';
+    }
+  }
+  function toggleCalibrationCase(record: CaseRecord, selected: boolean) {
+    calibrationReview = null;
+    calibrationCaseIds = selected ? [...new Set([...calibrationCaseIds, record.id])] : calibrationCaseIds.filter(id => id !== record.id);
+  }
+  async function reviewCalibrationDataset() {
+    try {
+      calibrationReview = await previewRiskCalibrationDataset(calibrationCaseIds);
+    }
+    catch (cause) {
+      caseMessage = cause instanceof Error ? cause.message : 'Could not review the Risk calibration dataset.';
+    }
+  }
+  async function downloadCalibrationDataset() {
+    calibrationExportBusy = true;
+    try {
+      const result = await exportRiskCalibrationDataset(calibrationCaseIds);
+      calibrationReview = null;
+      caseMessage = `Exported ${result.included} reviewed case${result.included === 1 ? '' : 's'} for offline Risk calibration${result.excluded ? `; excluded ${result.excluded} incompatible selection${result.excluded === 1 ? '' : 's'}` : ''}. No model setting was changed.`;
+    }
+    catch (cause) {
+      caseMessage = cause instanceof Error ? cause.message : 'Could not export the Risk calibration dataset.';
+    }
+    finally {
+      calibrationExportBusy = false;
+    }
+  }
+  async function removeCase(record: CaseRecord) {
+    if (!confirm(`Delete the case for ${record.domain}? Its notes are removed unless you exported them.`))
+      return;
+    const previousIndex = pagedCases.findIndex(item => item.id === record.id);
+    const previousPage = currentCasePage;
+    let committed: Awaited<ReturnType<typeof deleteCase>>;
+    try {
+      committed = await deleteCase(record.id);
+    }
+    catch (cause) {
+      caseMessage = cause instanceof Error ? cause.message : 'Could not delete the case.';
+      return;
+    }
+    const returnAfterDeletion = expandedId === record.id;
+    try {
+      await refreshCases();
+      caseMessage = `Deleted the case for ${record.domain}.`;
+    }
+    catch {
+      installCommittedCaseSnapshot(committed.cases, 'partial');
+      caseMessage = `Deleted the case for ${record.domain}. The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.`;
+    }
+    if (mounted && returnAfterDeletion && (!expandedId || expandedId === record.id)) {
+      const next = currentCasePage < previousPage ? pagedCases.at(-1) : pagedCases[Math.min(Math.max(0, previousIndex), pagedCases.length - 1)];
+      await returnToList(next?.id ?? '');
+    }
+  }
+  function clearCaseFilters() {
+    statusFilter = '';
+    dispositionFilter = '';
+    caseSearch = '';
+  }
+  async function importCaseFile(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file)
+      return;
+    try {
+      if (file.size > MAX_CASE_IMPORT_BYTES)
+        throw new Error(`Case imports are limited to ${MAX_CASE_IMPORT_BYTES} bytes.`);
+      const result = await importCases(parseBoundedJson(await file.text(), { label: 'Case import', maximumBytes: MAX_CASE_IMPORT_BYTES }));
+      const success = `Imported ${result.added} new and ${result.updated} merged cases${result.skipped ? `; skipped ${result.skipped} invalid or over-limit record${result.skipped === 1 ? '' : 's'}` : ''}${result.brandProfileReferencesOmitted ? `; omitted ${result.brandProfileReferencesOmitted} Brand Profile reference${result.brandProfileReferencesOmitted === 1 ? '' : 's'} beyond the retained bounds` : ''}${result.authoredHistoryOmitted ? `; omitted ${result.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${result.authoredHistoryOmitted === 1 ? '' : 's'}` : ''}.`;
+      await reconcileCommittedCaseSnapshot(result, success);
+    }
+    catch (cause) {
+      caseMessage = cause instanceof Error ? cause.message : 'Case import failed';
+    }
+    finally {
+      input.value = '';
+    }
+  }
+  function restoreGuidedQueueTarget() {
+    if (page.url.hash !== '#case-review-queue')
+      return;
+    const target = document.getElementById('case-review-queue');
+    target?.scrollIntoView({ block: 'center' });
+    target?.focus({ preventScroll: true });
+  }
+  const newCaseDraft = createDraftRevision(() => 'new-case');
+  const tagRevision = createDraftRevision(() => expandedId);
+  const noteRevision = createDraftRevision(() => expandedId);
+  const selectionRevision = createDraftRevision(() => expandedId);
+  function captureCaseOpeningIntent() {
+    selectionRevision.changed();
+    const selected = selectionRevision.capture();
+    const note = noteRevision.capture();
+    const tags = tagRevision.capture();
+    const domain = newCaseDraft.capture();
+    return () => selected() && note() && tags() && domain();
+  }
+  async function navigateCase(id: string, responseRequested = false) {
+    const destination = `${caseWorkspaceHref(id)}${responseRequested ? '&response=1' : ''}`;
+    return navigateCaseUrl(destination);
+  }
+  async function navigateCaseUrl(destination: string): Promise<boolean> {
+    try {
+      await goto(destination, { noScroll: true, keepFocus: true });
+      return monitorRouteKey(page.url) === monitorRouteKey(new URL(destination, page.url));
+    } catch {
+      if (!navigationCancelled) caseMessage = 'Could not open the requested Case view. Your current form remains available.';
+      return false;
+    }
+  }
+  async function refreshCases() {
+    const hadSnapshot = casesSourceState === 'ready';
+    casesRefreshing = true;
+    try {
+      installCommittedCaseSnapshot(await loadCases());
+    }
+    catch (cause) {
+      if (!hadSnapshot)
+        casesSourceState = 'unavailable';
+      const state = hadSnapshot ? 'partial'
+        : cause instanceof BrowserLocalDataError && cause.code === 'LOCAL_DATA_FUTURE_SCHEMA' ? 'future_schema' : 'unavailable';
+      onchange?.(cases, state);
+      throw cause;
+    }
+    finally {
+      casesRefreshing = false;
+    }
+  }
+  function installCommittedCaseSnapshot(records: CaseRecord[], state: ParentDomainCampaignSourceState = 'ready') {
+    cases = records;
+    casesSourceState = 'ready';
+    calibrationCaseIds = calibrationCaseIds.filter(id => records.some(record => record.id === id));
+    if (expandedId && !records.some(record => record.id === expandedId))
+      expandedId = '';
+    onchange?.(records, state);
+  }
+  async function reconcileCommittedCaseSnapshot(committed: {
+    cases: CaseRecord[];
+    pruned: number;
+  }, success: string, record: CaseRecord | null = null) {
+    try {
+      await refreshCases();
+      if (record && expandedId === record.id)
+        showCasePage(record);
+      caseMessage = `${success}${prunedNote(committed.pruned)}`;
+    }
+    catch {
+      installCommittedCaseSnapshot(committed.cases, 'partial');
+      if (record && expandedId === record.id)
+        showCasePage(record);
+      caseMessage = `${success} The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.${prunedNote(committed.pruned)}`;
+    }
+  }
+  async function reconcileCommittedCaseMutation(committed: Awaited<ReturnType<typeof editCase>>, success: string) {
+    await reconcileCommittedCaseSnapshot(committed, success, committed.record);
+  }
+  let appliedRouteKey = '';
+  async function applyCaseTarget(currentUrl: URL, routeKey: string) {
+    if (routeKey === appliedRouteKey || casesSourceState === 'loading')
+      return;
+    const target = monitorRouteTarget(currentUrl);
+    selectionRevision.changed();
+    appliedRouteKey = routeKey;
+    if (casesSourceState !== 'ready')
+      return;
+    if (target.kind === 'case') {
+      const record = cases.find(record => record.id === target.id);
+      if (!record) {
+        expandedId = '';
+        selectConsoleCase(null);
+        caseMessage = 'That Case is not available in this workspace. Choose a retained Case or import its workspace archive.';
+        return;
+      }
+      if (expandedId === record.id) return;
+      selectConsoleCase(record.id);
+      showCasePage(record);
+      if (expandedId !== record.id) {
+        expandedId = record.id;
+        tagDraft = caseTagDraft(record);
+        noteDraft = '';
+      }
+      await tick();
+      if (monitorRouteKey(page.url) !== routeKey)
+        return;
+      await focusCase(record);
+      return;
+    }
+    expandedId = '';
+    selectConsoleCase(null);
+    listHref = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
+    guidedDomains = [];
+    guidedDomainsTruncated = false;
+    if (target.kind === 'investigation') {
+      const guide = loadInvestigationGuide();
+      const carried = guide?.recipeId === 'brand_sweep' ? (guide.focusDomain ? [guide.focusDomain] : []) : guide?.reviewDomains ?? [];
+      guidedDomains = [...new Set([...carried, target.domain].filter(Boolean))];
+      guidedDomainsTruncated = Boolean(guide?.reviewDomainsTruncated);
+      await tick();
+      if (monitorRouteKey(page.url) === routeKey && target.restoreQueue)
+        restoreGuidedQueueTarget();
+    }
+    else if (target.kind === 'domain') {
+      newDomain = target.domain;
+      caseSearch = target.domain;
+    }
+  }
+  $effect(() => {
+    const currentUrl = new URL(page.url);
+    const routeKey = monitorRouteKey(currentUrl);
+    cases;
+    casesSourceState;
+    untrack(() => {
+      void applyCaseTarget(currentUrl, routeKey);
+    });
+  });
+  onMount(() => {
+    mounted = true;
+    const preloadController = new AbortController();
+    preloadBestEffort(() => import('$lib/components/CaseDetail.svelte'), preloadController.signal);
+    void refreshCases().catch(cause => {
+      caseMessage = cause instanceof Error ? cause.message : 'Could not read saved Cases.';
+    });
+    void loadProfiles().then(profiles => {
+      brandProfiles = profiles;
+      brandProfilesUnavailable = false;
+    }).catch(() => {
+      brandProfilesUnavailable = true;
+    });
+    return () => {
+      mounted = false;
+      preloadController.abort();
+    };
+  });
+</script>
+<section class="case-workspace" data-case-workspace aria-label="Cases" aria-busy={casesRefreshing}>
+  {#if !selectedCase}<PageHeading eyebrow="Respond" title="Cases" description="Review evidence, record decisions and prepare responses." />{/if}
+  {#if caseMessage}<p class="message" role="status" aria-label="Case workspace action status" aria-live="polite" aria-atomic="true">{caseMessage}</p>{/if}
+  {#if associationRetention}
+    <CaseStorageReview retention={associationRetention} busy={retentionSaving} confirm={confirmAssociationRetention}
+      cancel={cancelAssociationRetention} exportSnapshot={exportRetentionSnapshot} />
+  {/if}
+  {#if casesSourceState === 'ready'}
+    {#if casesRefreshing}
+      <p class="refresh-status" role="status" aria-live="polite">Refreshing Cases while the last readable snapshot remains available.</p>
+    {/if}
+    {#if selectedCase}
+      {#key selectedCase.id}
+        <DeferredSurface load={() => import('$lib/components/CaseDetail.svelte')}
+          loadingLabel="Opening Case…" unavailableLabel="The Case detail could not be loaded. Your saved Case has not changed."
+          onready={() => selectedCase && focusCase(selectedCase)}
+          props={{ record: selectedCase, allRecords: cases, tagDraft, setTagDraft: (value: string) => { tagRevision.changed(); tagDraft = value; },
+            noteDraft, setNoteDraft: (value: string) => { noteRevision.changed(); noteDraft = value; }, pendingNoteCaseIds,
+            selectCase, returnToList, setStatus, setDisposition, setReviewReason, addBrandProfileAssociation, removeBrandProfileAssociation,
+            saveTags, addNote, removeCase, refreshCases, installCommittedCaseSnapshot, setMessage: (value: string) => caseMessage = value,
+            formatDate: date, brandProfiles, brandProfilesUnavailable }} />
+      {/key}
+    {:else}
+    {#if guidedDomains.length}
+      <DeferredSurface load={() => import('$lib/components/GuidedCaseQueue.svelte')}
+        loadingLabel="Loading guided Case queue…" unavailableLabel="The guided Case queue could not be loaded."
+        onready={restoreGuidedQueueTarget}
+        props={{ domains: guidedDomains, existingDomains: existingCaseDomains, truncated: guidedDomainsTruncated, openDomain: openGuidedCase }} />
+    {/if}
+    <CaseWorkspaceToolbar
+      domain={newDomain} setDomain={(value) => { newCaseDraft.changed(); newDomain = value; }}
+      {trackDomain} {openingCase} caseCount={cases.length} calibrationSelectedCount={calibrationCaseIds.length}
+      {downloadCases} {reviewCalibrationDataset} {importCaseFile} message="" />
+    <CaseIncidentForm records={cases} initialDomain={newDomain} create={createIncident} created={openCreatedIncident} ondirty={(dirty) => incidentDraftDirty = dirty} />
+    {#if calibrationReview}
+      <DeferredSurface load={() => import('$lib/components/CalibrationExportReview.svelte')}
+        loadingLabel="Loading calibration export review…" unavailableLabel="Calibration export review could not be loaded."
+        props={{ preview: calibrationReview, busy: calibrationExportBusy, confirm: downloadCalibrationDataset,
+          cancel: () => { if (!calibrationExportBusy) calibrationReview = null; } }} />
+    {/if}
+
+      <CaseFilters
+        status={statusFilter} setStatus={(value) => changeCaseView(() => statusFilter = value)}
+        disposition={dispositionFilter} setDisposition={(value) => changeCaseView(() => dispositionFilter = value)}
+        search={caseSearch} setSearch={(value) => changeCaseView(() => caseSearch = value)}
+        sort={caseSort} setSort={(value) => changeCaseView(() => caseSort = value)}
+        statusOptions={CASE_STATUSES} dispositionOptions={CASE_DISPOSITIONS}
+        clear={() => changeCaseView(clearCaseFilters)} matchedCount={filteredCases.length} totalCount={cases.length} />
+    <CaseSavedViews filters={currentFilters} onapply={(view) => changeCaseView(() => {
+      statusFilter = view.status; dispositionFilter = view.disposition; caseSearch = view.search; caseSort = view.sort;
+    })} />
+    {#if cases.length}
+      <CaseList
+        records={pagedCases} {selectCase} {calibrationMode} {calibrationCaseIds} {toggleCalibrationCase} formatDate={date}
+        currentPage={currentCasePage} pageCount={casePageCount} setPage={setCasePage} />
+    {:else}
+      <section class="empty-state card">
+        <h2>No cases yet</h2>
+        <p>Retain evidence from Lookup or Bulk, or enter a domain above.</p>
+        <a href="/lookup">Open Lookup →</a>
+      </section>
+    {/if}
+    <details class="advanced-case-tools">
+      <summary>Advanced Case tools</summary>
+      <button class="btn" type="button" aria-pressed={calibrationMode} onclick={() => calibrationMode = !calibrationMode}>{calibrationMode ? 'Finish selecting calibration Cases' : 'Select Cases for calibration export'}</button>
+      <DeferredSurface load={() => import('$lib/components/RiskCalibrationDashboard.svelte')} props={{}}
+        loadingLabel="Loading risk-calibration reference…" unavailableLabel="Risk-calibration reference could not be loaded." />
+    </details>
+    <DeferredSurface load={() => import('$lib/components/ExternalFindingsImport.svelte')}
+      loadingLabel="Loading external-findings import…" unavailableLabel="External-findings import could not be loaded."
+      props={{ cases, oncomplete: refreshCases, oncommitted: installCommittedCaseSnapshot, onmessage: (value: string) => caseMessage = value }} />
+    {/if}
+  {:else}
+    <LocalCollectionState state={casesSourceState} title="Cases unavailable" detail="Saved cases could not be read, so the count, empty state, imports, and mutations remain unavailable. Reload to retry without overwriting unknown saved work." />
+  {/if}
+</section>
+
+<style>
+  .case-workspace { min-width: 0; --control-h: 44px; }
+  .refresh-status { margin: 10px 2px; color: var(--muted); font-size: var(--text-xs); }
+  .advanced-case-tools { margin: 16px 0; padding-block: 12px; border-block: 1px solid var(--border); }
+  .advanced-case-tools summary { cursor: pointer; font: 650 var(--text-sm) var(--mono); }
+  .advanced-case-tools > button { margin-top: 12px; }
+  .message { color: var(--accent); font-size: var(--text-sm); overflow-wrap: anywhere; }
+</style>

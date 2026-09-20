@@ -1,3 +1,4 @@
+import { downloadLocalFile } from './download-local-file.ts';
 import {
   buildShortlistExport,
   MAX_SHORTLIST_ENTRIES,
@@ -9,6 +10,7 @@ import {
 } from './analysis/shortlist-model.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
 import { LEGACY_SHORTLIST_KEY } from './browser-local-data-contract.ts';
+import { assertAnalystUndoCurrent } from './analysis/analyst-undo.ts';
 import { serialiseWorkspacePortableJson } from '../../../packages/contracts/workspace-portability.mts';
 export { MAX_SHORTLIST_IMPORT_BYTES } from '../../../packages/contracts/workspace-portability.mts';
 
@@ -42,15 +44,40 @@ export async function toggleShortlist(raw: unknown): Promise<boolean> {
 export async function setShortlistSelection(raw: unknown[], selected: boolean) {
   return updateBrowserLocalData('shortlist', (current) => {
     const result = applyShortlistSelection(current, raw, selected);
+    const records = boundedShortlist(result.entries);
+    const before = new Map(current.map((record) => [record.domain, record]));
+    const after = new Map(records.map((record) => [record.domain, record]));
+    const undo = [...new Set([...before.keys(), ...after.keys()])].flatMap((domain) => {
+      const previous = before.get(domain) ?? null;
+      const expected = after.get(domain) ?? null;
+      return JSON.stringify(previous) === JSON.stringify(expected) ? [] : [{ domain, previous: structuredClone(previous), expected: structuredClone(expected) }];
+    });
     return {
-      document: boundedShortlist(result.entries),
+      document: records,
       result: {
         added: result.added,
         updated: result.updated,
         removed: result.removed,
         skipped: result.skipped,
+        records,
+        undo,
       },
     };
+  });
+}
+
+export async function restoreShortlistSelection(undo: Awaited<ReturnType<typeof setShortlistSelection>>['undo']): Promise<ShortlistRecord[]> {
+  return updateBrowserLocalData('shortlist', (current) => {
+    const records = new Map(current.map((record) => [record.domain, record]));
+    // Validate the complete compensation before making any replacement.
+    for (const change of undo) assertAnalystUndoCurrent(records.get(change.domain) ?? null, change.expected);
+    for (const change of undo) {
+      if (change.previous) records.set(change.domain, change.previous);
+      else records.delete(change.domain);
+    }
+    if (records.size > MAX_SHORTLIST_ENTRIES) throw new Error('Undo would exceed the shortlist limit. Current saved work was preserved.');
+    const document = boundedShortlist([...records.values()]);
+    return { document, result: document };
   });
 }
 
@@ -69,10 +96,5 @@ export async function importShortlist(value: unknown) {
 }
 
 export async function exportShortlist() {
-  const url = URL.createObjectURL(new Blob([serialiseWorkspacePortableJson(buildShortlistExport(await loadShortlist()))], { type: 'application/json' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `whoisleuth-shortlist-${new Date().toISOString().slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadLocalFile(new Blob([serialiseWorkspacePortableJson(buildShortlistExport(await loadShortlist()))], { type: 'application/json' }), `whoisleuth-shortlist-${new Date().toISOString().slice(0, 10)}.json`);
 }

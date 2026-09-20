@@ -1,4 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
 
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow } from './helpers';
@@ -7,13 +9,70 @@ import {
   parseRiskCalibrationDataset,
   RISK_CALIBRATION_DATASET_SCHEMA,
   RISK_CALIBRATION_DATASET_VERSION,
+  type ExplainRiskScore,
 } from '../cli/risk-calibration.mts';
 import { buildRiskCalibrationSummaryReport } from '../lib/risk-calibration-summary.mts';
 import { explainRiskScore, explainRiskScoreV7, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
 
 const NOW = '2026-08-10T00:00:00.000Z';
 
-function reports() {
+test('external evaluation with missing authority stays unmeasured in the console', async ({ page }, testInfo) => {
+  const output = JSON.parse(execFileSync(process.execPath, [path.resolve(__dirname, '../tools/risk-evaluation.mts')], {
+    encoding: 'utf8', timeout: 30_000, maxBuffer: 512 * 1024,
+  }));
+  const evaluation = output.reports.find((report: { split: string }) => report.split === 'evaluation');
+  expect(evaluation).toBeTruthy();
+  await page.goto('/monitor?view=cases');
+  await page.locator('details.advanced-case-tools > summary').click();
+  const dashboard = page.locator('.calibration-dashboard');
+  await expect(dashboard.getByRole('heading', { name: 'Reviewed Risk calibration' })).toBeVisible();
+  const requests: string[] = [];
+  page.on('request', request => requests.push(request.url()));
+  await dashboard.locator('input[type="file"]').setInputFiles({
+    name: 'external-evaluation-summary.json', mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(evaluation.calibration)),
+  });
+  await expect(dashboard.locator('.summary-grid article').nth(0).locator('strong')).toHaveText('64');
+  await expect(dashboard.locator('.summary-grid article').nth(1).locator('strong')).toHaveText('0');
+  await expect(dashboard.locator('.summary-grid article').nth(3).locator('strong')).toHaveText('64');
+  await expect(dashboard.locator('.sample-state')).toHaveAttribute('data-state', 'insufficient');
+  await expect(dashboard.locator('.sample-state')).toContainText('No records are eligible for Risk scoring');
+  await expect(dashboard.locator('.sample-state')).not.toContainText('Insufficient class balance');
+  const replay = dashboard.locator('.threshold-replay');
+  const replayToggle = replay.locator(':scope > summary');
+  await expect(replay).not.toHaveAttribute('open', '');
+  await expect(replayToggle).toContainText('no scored records');
+  await replayToggle.focus(); await replayToggle.press('Enter');
+  await expect(replay).toHaveAttribute('open', '');
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(value => document.documentElement.dataset.theme = value, theme);
+      const metrics = width < 640 ? dashboard.locator('.threshold-cards') : dashboard.locator('table');
+      await expect(metrics).toBeVisible();
+      await expect(metrics.getByText('Unmeasured', { exact: true }).first()).toBeVisible();
+      const value = metrics.getByText('Unmeasured', { exact: true }).first();
+      expect(await value.evaluate(element => {
+        const text = [...element.childNodes].find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim() === 'Unmeasured');
+        if (!text) throw new Error('Expected the displayed metric value.');
+        const range = document.createRange(); range.selectNodeContents(text);
+        return range.getClientRects().length;
+      })).toBe(1);
+      await expectNoHorizontalOverflow(page);
+      const results = await new AxeBuilder({ page }).include('.calibration-dashboard').analyze();
+      expect(results.violations).toEqual([]);
+      await dashboard.screenshot({ path: testInfo.outputPath(`external-evaluation-${theme}-${width}.png`) });
+    }
+  }
+  expect(requests).toEqual([]);
+  await replayToggle.focus(); await replayToggle.press('Enter');
+  await expect(replayToggle).toBeFocused();
+  await expect(replay).not.toHaveAttribute('open', '');
+  await dashboard.getByRole('button', { name: 'Clear summary' }).click();
+  await expect(dashboard.locator('.summary-grid')).toHaveCount(0);
+});
+
+function reports(explain: ExplainRiskScore = explainRiskScore) {
   const dataset = parseRiskCalibrationDataset(JSON.stringify({
     schema: RISK_CALIBRATION_DATASET_SCHEMA,
     version: RISK_CALIBRATION_DATASET_VERSION,
@@ -27,7 +86,7 @@ function reports() {
         : { availability: 'registered', scanDepth: 'fast' },
     })),
   }));
-  const detailed = buildRiskCalibrationReport(dataset, explainRiskScore, {
+  const detailed = buildRiskCalibrationReport(dataset, explain, {
     generatedAt: NOW,
     modelVersion: RISK_MODEL_VERSION,
     reviewThreshold: RISK_REVIEW_THRESHOLD,
@@ -84,9 +143,10 @@ test('target-free calibration review stays tab-local, exact, accessible, and mob
   await expect(dashboard).not.toContainText('private-calibration-0');
   await expect(dashboard).not.toContainText('example.test');
 
-  const strata = dashboard.getByText(/Review 4 bounded strata/iu);
+  const strata = dashboard.locator('summary').filter({ hasText: /Review 4 bounded strata/iu });
   await strata.focus();
-  await page.keyboard.press('Enter');
+  await expect(strata).toBeFocused();
+  await strata.press('Enter');
   await expect(dashboard.locator('.strata-grid article')).toHaveCount(4);
   await expect(dashboard.getByText('Deep Scan')).toBeVisible();
   expect(requests).toEqual([]);
@@ -102,6 +162,22 @@ test('target-free calibration review stays tab-local, exact, accessible, and mob
 
   await dashboard.getByRole('button', { name: 'Clear summary' }).click();
   await expect(dashboard.getByText('20 / 20', { exact: true })).toHaveCount(0);
+  const high = reports((input) => {
+    const explained = explainRiskScore(input);
+    return explained ? { ...explained, score: 100 } : null;
+  }).summary;
+  const contradictory = {
+    ...summary,
+    strata: summary.strata.map((stratum) => stratum.dimension === 'scan_depth' && stratum.value === 'deep'
+      ? high.strata.find((candidate) => candidate.dimension === 'scan_depth' && candidate.value === 'deep')!
+      : stratum),
+  };
+  await input.setInputFiles({ name: 'contradictory-summary.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(contradictory)) });
+  await expect(dashboard.getByRole('alert')).toContainText('strata disagree with the current-threshold confusion counts');
+  await expect(dashboard.locator('tbody tr')).toHaveCount(0);
+  await input.setInputFiles({ name: 'consistent-summary.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(summary)) });
+  await expect(dashboard.getByText('20 / 20', { exact: true })).toBeVisible();
+  await dashboard.getByRole('button', { name: 'Clear summary' }).click();
   await input.setInputFiles({
     name: 'detailed-calibration.json',
     mimeType: 'application/json',

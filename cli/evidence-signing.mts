@@ -300,11 +300,12 @@ export async function verifyEvidencePackageSignature(
 
 export function formatEvidenceSignatureVerification(
   report: EvidenceSignatureVerification,
+  includeStandaloneTrust = true,
 ): string {
   const lines = [
     'WHOISleuth evidence signature verification',
     `State: ${report.state}`,
-    `Signer trust: ${report.signature.signerTrust}`,
+    ...(includeStandaloneTrust ? [`Signer trust: ${report.signature.signerTrust}`] : []),
     `Artifact: ${report.artifact.kind} · ${report.artifact.schema ?? 'unrecognised'} v${report.artifact.version ?? 'unrecognised'}`,
     `Artifact assurance: ${report.artifact.assurance.state}`,
     `Signed: ${report.signature.signedAt}`,

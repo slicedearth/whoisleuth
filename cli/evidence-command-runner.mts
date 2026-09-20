@@ -22,6 +22,7 @@ import EXIT_CODES from './exit-codes.mts';
 import { formatJsonDocument } from './formatters/json.mts';
 import { readCliTextInput } from './input.mts';
 import type { BoundedTextStream } from './bulk.mts';
+import { assessEvidenceSignerTrust, formatSignerTrustReport, MAX_SIGNER_TRUST_STORE_BYTES, type SignerTrustReport } from './signer-trust.mts';
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
 
 type WritableLike = { write(value: string): unknown };
@@ -60,12 +61,13 @@ async function readArtifact(
   source: string | null,
   label: string,
   dependencies: EvidenceCommandDependencies,
+  maximumBytes = MAX_OFFLINE_ARTIFACT_BYTES,
 ): Promise<string> {
   try {
     return dependencies.readArtifactInput
       ? await dependencies.readArtifactInput(source)
       : await readCliTextInput(source, dependencies.stdin, {
-        maximumBytes: MAX_OFFLINE_ARTIFACT_BYTES,
+        maximumBytes,
         label,
         ...(dependencies.signal ? { signal: dependencies.signal } : {}),
       });
@@ -191,14 +193,23 @@ async function runVerifySignatureCommand(
     )
     : null;
   const report = await verifyEvidencePackageSignature(input, publicKey);
+  let trustReport: SignerTrustReport | null = null;
+  if (args.trustStoreSource) {
+    const trustRaw = await readArtifact(args.trustStoreSource, 'Signer trust store', dependencies, MAX_SIGNER_TRUST_STORE_BYTES);
+    try {
+      trustReport = assessEvidenceSignerTrust(report, trustRaw, dependencies.now ? dependencies.now() : new Date().toISOString());
+    } catch (error) {
+      throw new CliUsageError(boundedCliErrorMessage(error, 'Invalid signer trust store.'));
+    }
+  }
   if (!args.quiet) {
     dependencies.stdout.write(
       args.output === 'json'
-        ? formatJsonDocument(report)
-        : formatEvidenceSignatureVerification(report),
+        ? formatJsonDocument(trustReport ?? report)
+        : trustReport ? formatSignerTrustReport(trustReport) : formatEvidenceSignatureVerification(report),
     );
   }
-  return EXIT_CODES.SUCCESS;
+  return trustReport && trustReport.state !== 'trusted' ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
 }
 
 const EVIDENCE_COMMAND_HANDLERS = Object.freeze({

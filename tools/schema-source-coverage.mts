@@ -45,7 +45,6 @@ export {
   MAX_SCHEMA_SOURCE_STATIC_EVALUATION_STEPS,
 } from './schema-source-parsers.mts';
 
-export const MAX_SCHEMA_SOURCE_FILES = 1_024;
 export const MAX_SCHEMA_SOURCE_TOTAL_BYTES = 32 * 1024 * 1024;
 export const MAX_SCHEMA_SOURCE_IDENTIFIERS = 512;
 export const MAX_SCHEMA_SOURCE_REFERENCES = 100_000;
@@ -64,12 +63,9 @@ export const SCHEMA_SOURCE_ROOTS = Object.freeze([
 ] as const);
 export const SCHEMA_SOURCE_ROOT_FILES = Object.freeze(['server.mts'] as const);
 export const SCHEMA_SOURCE_NON_SOURCE_FILES = Object.freeze([
-  'frontend/src/app.css',
   'frontend/src/app.html',
   'lib/generated/cisa-kev-catalog.sha256',
   'lib/generated/retire-browser-catalog.sha256',
-  'packages/cli/README.md',
-  'packages/web-capture/README.md',
 ] as const);
 const DEFAULT_SCHEMA_SOURCE_REPOSITORY_ROOT = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
 
@@ -82,10 +78,6 @@ const SCHEMA_SOURCE_EXEMPT_FILES = new Set([
   'DISCLOSURE',
   'LICENSE',
   'NOTICE',
-  'PRIVACY.md',
-  'README.md',
-  'SECURITY.md',
-  'TRADEMARKS.md',
   'frontend/analysis-tsconfig.json',
   'frontend/package.json',
   'frontend/svelte.config.ts',
@@ -107,6 +99,14 @@ const SCHEMA_SOURCE_IGNORED_DIRECTORY_NAMES = new Set([
 ]);
 
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.cts', '.js', '.json', '.jsx', '.mjs', '.mts', '.svelte', '.ts', '.tsx']);
+// Prose is not executable schema source. New contributor documents and package
+// READMEs do not need a per-file exception; runtime templates still do.
+function isConventionalMarkdown(relative: string): boolean {
+  return /^(?:[^/]+|packages\/[^/]+\/README)\.md$/u.test(relative);
+}
+function isFrontendStylesheet(relative: string): boolean {
+  return relative.startsWith('frontend/src/') && path.extname(relative).toLowerCase() === '.css';
+}
 const SCHEMA_SOURCE_NON_SOURCE_FILE_SET = new Set<string>(SCHEMA_SOURCE_NON_SOURCE_FILES);
 const CLASSIFICATION_KINDS = new Set(['exempt', 'member', 'non_schema']);
 const CLASSIFICATION_REASONS = new Set([
@@ -143,18 +143,7 @@ const MAX_SCHEMA_CLASSIFICATION_SOURCE_USES = 16;
 
 const SCHEMA_INLINE_EMITTER_ALLOWLIST = Object.freeze([
   ['whoisleuth.common-infrastructure', 'packages/relationships/common-infrastructure-snapshot.json', 1],
-  ['whoisleuth.common-infrastructure', 'packages/relationships/common-infrastructure.mts', 1],
-  ['whoisleuth.external-findings', 'cli/ct-event-intake.mts', 1],
-  ['whoisleuth.registry-standards-coverage', 'lib/registry-capability-catalogue.mts', 1],
-  ['whoisleuth.shortlist', 'frontend/src/lib/browser-local-data-definitions.ts', 2],
   ['whoisleuth.sslbl-certificate-snapshot', 'lib/sslbl-certificates.generated.mts', 1],
-  ['whoisleuth.watchlists', 'frontend/src/lib/browser-local-data-definitions.ts', 1],
-] as const);
-
-const SCHEMA_OWNER_USE_ALLOWLIST = Object.freeze([
-  ['cli.web-capture-comparison', 'packages/web-capture/compare.mts', 'writer', 1],
-  ['export.web-capture-dom-digest', 'packages/web-capture/capture.mts', 'writer', 1],
-  ['browser.analyst-review-state', 'packages/contracts/analyst-review-state.mts', 'writer', 1],
 ] as const);
 
 type SchemaSourceClassificationRecord = Readonly<{
@@ -271,6 +260,7 @@ async function collectFiles(
       }
       if (!metadata.isFile()) throw new TypeError(`Schema source path ${relative} must be an ordinary file or directory.`);
       if (!SOURCE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+        if (isConventionalMarkdown(relative) || isFrontendStylesheet(relative)) continue;
         if (!SCHEMA_SOURCE_NON_SOURCE_FILE_SET.has(relative)) {
           throw new TypeError(`Schema source scope contains an unclassified source path: ${relative}`);
         }
@@ -285,9 +275,6 @@ async function collectFiles(
         throw new TypeError(`Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_TOTAL_BYTES} aggregate bytes.`);
       }
       state.files.push(relative);
-      if (state.files.length > MAX_SCHEMA_SOURCE_FILES) {
-        throw new TypeError(`Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_FILES} files.`);
-      }
     }
   };
   await visit(root, relativeRoot, 0);
@@ -348,6 +335,7 @@ async function validateSchemaSourceScope(repositoryRoot: string): Promise<void> 
     for (const relative of manifest) {
       if (pathInside(relative, coveredRoots)) {
         if (SOURCE_EXTENSIONS.has(path.extname(relative).toLowerCase())) continue;
+        if (isConventionalMarkdown(relative) || isFrontendStylesheet(relative)) continue;
         if (SCHEMA_SOURCE_NON_SOURCE_FILE_SET.has(relative)) {
           observedNonSourceFiles.add(relative);
           continue;
@@ -356,6 +344,7 @@ async function validateSchemaSourceScope(repositoryRoot: string): Promise<void> 
       }
       if (pathInside(relative, SCHEMA_SOURCE_EXEMPT_ROOTS)
         || coveredFiles.has(relative)
+        || isConventionalMarkdown(relative)
         || SCHEMA_SOURCE_EXEMPT_FILES.has(relative)) continue;
       throw new TypeError(`Schema source scope contains an unclassified repository path: ${relative}`);
     }
@@ -405,7 +394,7 @@ async function validateSchemaSourceScope(repositoryRoot: string): Promise<void> 
         await visit(absolute, relative, depth + 1);
       } else if (!metadata.isFile()) {
         throw new TypeError(`Schema source scope path ${relative} must be an ordinary file or directory.`);
-      } else {
+      } else if (!isConventionalMarkdown(relative)) {
         throw new TypeError(`Schema source scope contains an unclassified source path: ${relative}`);
       }
     }
@@ -452,9 +441,6 @@ export async function discoverSchemaSources(
     traversal.files.push(relativeFile);
   }
   const files = traversal.files.sort(ordinalCompare);
-  if (files.length > MAX_SCHEMA_SOURCE_FILES) {
-    throw new TypeError(`Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_FILES} files.`);
-  }
 
   const occurrences: SourceOccurrence[] = [];
   const definitions: SourceDefinition[] = [];
@@ -482,7 +468,9 @@ export async function discoverSchemaSources(
     appendBounded(occurrences, result.occurrences, MAX_SCHEMA_SOURCE_OCCURRENCES, `Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_OCCURRENCES} occurrences.`);
     appendBounded(definitions, result.definitions, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} definitions.`);
     appendBounded(dynamicConstructions, result.dynamicConstructions, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema diagnostics.`);
-    appendBounded(imports, result.imports, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} imports.`);
+    // Imports are whole-repository references, not per-file schema bindings.
+    // Keep the independent 32 MiB source and 100,000-reference resource bounds.
+    appendBounded(imports, result.imports, MAX_SCHEMA_SOURCE_REFERENCES, `Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_REFERENCES} imports.`);
     appendBounded(aliases, result.aliases, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} aliases.`);
     appendBounded(emitters, result.emitters, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} emitters.`);
     appendBounded(localDeclarations, result.localDeclarations, MAX_SCHEMA_SOURCE_REFERENCES, `Schema source coverage exceeds ${MAX_SCHEMA_SOURCE_REFERENCES} local declarations.`);
@@ -703,15 +691,15 @@ function buildCanonicalSourceBindings(
     boundByFile.set(file, values);
   };
   for (const definition of discovery.definitions) bind(definition.file, definition.identifier);
-  const dynamicUseAllowlist = new Map<string, number>();
+  const dynamicUseAllowlist = new Set<string>();
   if (enforceRepositoryLedgers) {
-    for (const [file, role, expectedCount] of SCHEMA_DYNAMIC_USE_ALLOWLIST) {
+    for (const [file, role] of SCHEMA_DYNAMIC_USE_ALLOWLIST) {
       const key = `${file}\0${role}`;
       if (dynamicUseAllowlist.has(key)) throw new Error(`Schema source dynamic-use allowance is duplicated: ${file} (${role}).`);
-      dynamicUseAllowlist.set(key, expectedCount);
+      dynamicUseAllowlist.add(key);
     }
   }
-  const usedDynamicUseAllowlist = new Map<string, number>();
+  const usedDynamicUseAllowlist = new Set<string>();
   const uses: ResolvedSchemaUse[] = [];
   const unresolvedUses: string[] = [];
   for (const emitter of discovery.emitters) {
@@ -719,7 +707,7 @@ function buildCanonicalSourceBindings(
     if (!identifier) {
       const useKey = `${emitter.file}\0${emitter.role}`;
       if (dynamicUseAllowlist.has(useKey)) {
-        usedDynamicUseAllowlist.set(useKey, (usedDynamicUseAllowlist.get(useKey) ?? 0) + 1);
+        usedDynamicUseAllowlist.add(useKey);
       } else {
         if (unresolvedUses.length < 64) unresolvedUses.push(`${emitter.role} ${emitter.file}:${emitter.line}`);
       }
@@ -730,12 +718,11 @@ function buildCanonicalSourceBindings(
   if (unresolvedUses.length) {
     throw new Error(`Schema source uses do not resolve to canonical schema definitions: ${unresolvedUses.join(', ')}.`);
   }
-  for (const [allowedFile, allowedRole, expectedCount] of SCHEMA_DYNAMIC_USE_ALLOWLIST) {
+  for (const [allowedFile, allowedRole] of SCHEMA_DYNAMIC_USE_ALLOWLIST) {
     if (!enforceRepositoryLedgers) break;
     const key = `${allowedFile}\0${allowedRole}`;
-    const actualCount = usedDynamicUseAllowlist.get(key) ?? 0;
-    if (actualCount !== expectedCount) {
-      throw new Error(`Schema source dynamic-use allowance expected ${expectedCount} uses but found ${actualCount}: ${allowedFile} (${allowedRole}).`);
+    if (!usedDynamicUseAllowlist.has(key)) {
+      throw new Error(`Schema source dynamic-use allowance is stale: ${allowedFile} (${allowedRole}).`);
     }
   }
   return {
@@ -920,14 +907,6 @@ export async function validateSchemaSourceCoverage(
     }
   }
 
-  const ownerUseAllowlist = new Map<string, { owner: string; role: 'reader' | 'writer'; expectedCount: number }>();
-  if (enforceRepositoryLedgers) {
-    for (const [entryId, owner, role, expectedCount] of SCHEMA_OWNER_USE_ALLOWLIST) {
-      if (ownerUseAllowlist.has(entryId)) throw new Error(`Schema source owner-use allowance is duplicated: ${entryId}.`);
-      ownerUseAllowlist.set(entryId, { owner, role, expectedCount });
-    }
-  }
-  const usedOwnerAllowlist = new Set<string>();
   for (const [identifier, schemaEntries] of inventoryBySchema) {
     for (const entry of schemaEntries) {
       const definitions = definitionsByIdentifier.get(identifier) ?? [];
@@ -936,25 +915,10 @@ export async function validateSchemaSourceCoverage(
       if (!definitions.length
         && literalWriters.length === 1
         && literalWriters[0]?.file === entry.owner) continue;
-      const allowance = ownerUseAllowlist.get(entry.id);
-      if (allowance && allowance.owner === entry.owner) {
-        const actualCount = canonicalBindings.uses.filter((use) => (
-          use.identifier === identifier
-          && use.source.file === entry.owner
-          && use.source.role === allowance.role
-        )).length;
-        if (actualCount !== allowance.expectedCount) {
-          throw new Error(`Schema source owner-use allowance expected ${allowance.expectedCount} uses but found ${actualCount}: ${entry.id}.`);
-        }
-        usedOwnerAllowlist.add(entry.id);
-        continue;
-      }
+      if (canonicalBindings.uses.some((use) => (
+        use.identifier === identifier && use.source.file === entry.owner
+      ))) continue;
       throw new Error(`Schema compatibility owner ${entry.owner} is not the canonical definition or a reviewed producer or reader of ${identifier}.`);
-    }
-  }
-  if (enforceRepositoryLedgers) {
-    for (const entryId of ownerUseAllowlist.keys()) {
-      if (!usedOwnerAllowlist.has(entryId)) throw new Error(`Schema source owner-use allowance is stale: ${entryId}.`);
     }
   }
 

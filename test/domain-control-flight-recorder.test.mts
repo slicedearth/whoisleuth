@@ -7,13 +7,14 @@ import {
   buildDomainControlFlightRecorder,
   formatDomainControlFlightRecorder,
   serializeDomainControlFlightRecorder,
+  validateDomainControlFlightRecorderDocument,
 } from '../lib/domain-control-flight-recorder.mts';
 import {
   MAX_DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_BYTES,
   MAX_DOMAIN_CONTROL_FLIGHT_RECORDER_OUTPUT_BYTES,
-  MAX_FLIGHT_RECORDER_INPUT_VALUES,
+  PUBLIC_MAX_FLIGHT_RECORDER_INPUT_VALUES as MAX_FLIGHT_RECORDER_INPUT_VALUES,
   MAX_FLIGHT_RECORDER_OBSERVATIONS,
-  MAX_FLIGHT_RECORDER_VALUES,
+  PUBLIC_MAX_FLIGHT_RECORDER_VALUES as MAX_FLIGHT_RECORDER_VALUES,
 } from '../packages/contracts/domain-control-flight-recorder.mts';
 
 const firstAt = '2026-08-01T00:00:00.000Z';
@@ -62,11 +63,13 @@ describe('domain-control flight recorder', () => {
       unexpectedChanges: 0,
       collectionChanges: 1,
       recoveredSources: 1,
+      incompleteFields: 2,
     });
     const nameserverChange = report.events.find((event) => event.field === 'delegated_nameservers' && event.kind === 'observed_change');
-    assert.deepEqual(nameserverChange?.before, ['ns1.example.test.']);
+    assert.deepEqual(nameserverChange?.before, ['ns1.example.test']);
     assert.deepEqual(nameserverChange?.after, ['ns2.example.test']);
     assert.equal(nameserverChange?.approvedWindow?.id, 'dns-change-1');
+    assert.deepEqual(validateDomainControlFlightRecorderDocument(report), report);
     assert.match(formatDomainControlFlightRecorder(report), /Collection changes\s+1/u);
   });
 

@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
 
 import {
   buildCommonInfrastructureSnapshot,
+  DEFAULT_UPSTREAM_COMMIT,
   FRESHNESS_DAYS,
   MAX_SOURCE_BYTES,
   main,
@@ -26,6 +27,16 @@ function warningList(version: number, list: string[]) {
     matching_attributes: ['ip-src', 'ip-dst'],
     list,
   });
+}
+
+function snapshotWithRanges(values: string[]) {
+  return {
+    ...structuredClone(COMMON_INFRASTRUCTURE_SNAPSHOT),
+    entryCount: values.length,
+    sources: COMMON_INFRASTRUCTURE_SNAPSHOT.sources.map((source) => ({
+      ...source, values: source.id === 'public-dns-core' ? [...values] : [],
+    })),
+  };
 }
 
 describe('Common-infrastructure catalogue', () => {
@@ -81,6 +92,79 @@ describe('Common-infrastructure catalogue', () => {
     assert.deepEqual(classifyCommonInfrastructureAddress('not-an-address'), []);
     assert.deepEqual(classifyCommonInfrastructureAddress('192.0.2.1'), []);
     assert.deepEqual(classifyCommonInfrastructureAddress('2001:db8::1'), []);
+  });
+
+  test('matches independent family, exact-host and prefix-edge cases without crossing address families', () => {
+    for (const [cidr, positive, negative] of [
+      ['192.0.2.0/24', '192.0.2.255', '192.0.3.0'],
+      ['192.0.2.128/25', '192.0.2.128', '192.0.2.127'],
+      ['192.0.2.1/32', '192.0.2.1', '192.0.2.2'],
+      ['255.255.255.255/32', '255.255.255.255', '255.255.255.254'],
+      ['0.0.0.0/0', '255.255.255.255', '::1'],
+      ['2001:db8::/32', '2001:db8:ffff:ffff:ffff:ffff:ffff:ffff', '2001:db9::'],
+      ['2001:db8::1/128', '2001:0db8:0:0:0:0:0:1', '2001:db8::2'],
+      ['::/0', 'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff', '192.0.2.1'],
+      ['::ffff:192.0.2.1/128', '::ffff:c000:201', '192.0.2.1'],
+    ] as const) {
+      const snapshot = parseCommonInfrastructureSnapshot(snapshotWithRanges([cidr]));
+      const matches = classifyCommonInfrastructureAddress(positive, snapshot);
+      assert.deepEqual(matches.map((match) => match.cidr), [cidr]);
+      assert.equal(matches[0]?.sourceId, 'public-dns-core');
+      assert.deepEqual(classifyCommonInfrastructureAddress(negative, snapshot), []);
+    }
+  });
+
+  test('preserves source order and the first matching range instead of selecting the narrowest prefix', () => {
+    const raw = snapshotWithRanges(['192.0.2.0/24', '192.0.2.1/32']);
+    const other = raw.sources.find((source) => source.id !== 'public-dns-core');
+    assert.ok(other);
+    other.values = ['::/0', '192.0.2.1/32'];
+    raw.entryCount += other.values.length;
+    const snapshot = parseCommonInfrastructureSnapshot(raw);
+    const matches = classifyCommonInfrastructureAddress('192.0.2.1', snapshot);
+    assert.deepEqual(matches.map((match) => match.sourceId), raw.sources.filter((source) => source.values.length).map((source) => source.id));
+    assert.equal(matches.find((match) => match.sourceId === 'public-dns-core')?.cidr, '192.0.2.0/24');
+    assert.equal(matches.find((match) => match.sourceId === other.id)?.cidr, '192.0.2.1/32');
+  });
+
+  test('detaches admitted data from the caller and never caches a mutable direct-call snapshot', () => {
+    const raw = snapshotWithRanges(['192.0.2.1/32']);
+    const snapshot = parseCommonInfrastructureSnapshot(raw);
+    const source = raw.sources.find((item) => item.id === 'public-dns-core');
+    assert.ok(source);
+    assert.equal(classifyCommonInfrastructureAddress('192.0.2.1', raw).length, 1);
+    source.values[0] = '198.51.100.1/32';
+    source.label = 'Updated fixture label';
+    assert.equal(classifyCommonInfrastructureAddress('192.0.2.1', raw).length, 0);
+    assert.equal(classifyCommonInfrastructureAddress('198.51.100.1', raw)[0]?.sourceLabel, 'Updated fixture label');
+    const retained = classifyCommonInfrastructureAddress('192.0.2.1', snapshot);
+    assert.equal(retained.length, 1);
+    assert.notEqual(retained[0]?.sourceLabel, 'Updated fixture label');
+    assert.equal(classifyCommonInfrastructureAddress('198.51.100.1', snapshot).length, 0);
+    const retainedSource = snapshot.sources.find((item) => item.id === 'public-dns-core');
+    assert.ok(retainedSource);
+    assert.throws(() => Object.assign(retainedSource, { label: 'Cannot mutate an admitted snapshot' }), TypeError);
+    assert.throws(() => Object.assign(retainedSource.values, { 0: '198.51.100.1/32' }), TypeError);
+    assert.equal(Object.isFrozen(snapshot.source), true);
+    assert.equal(Object.isFrozen(snapshot.excludedSources), true);
+    assert.equal(Object.isFrozen(snapshot.limitations), true);
+  });
+
+  test('admits the existing maximum inventory without changing its boundary', () => {
+    const values = Array.from({ length: 20_000 }, (_, index) => `198.18.${Math.floor(index / 256)}.${index % 256}/32`);
+    const raw = snapshotWithRanges(values);
+    const snapshot = parseCommonInfrastructureSnapshot(raw);
+    assert.equal(snapshot.entryCount, 20_000);
+    assert.equal(classifyCommonInfrastructureAddress('198.18.78.31', snapshot)[0]?.cidr, '198.18.78.31/32');
+    assert.deepEqual(classifyCommonInfrastructureAddress('198.18.78.32', snapshot), []);
+    assert.throws(() => parseCommonInfrastructureSnapshot(snapshotWithRanges([...values, '198.18.78.32/32'])), /invalid contract|entry count/u);
+    const aggregate = snapshotWithRanges([]);
+    assert.ok(aggregate.sources[0] && aggregate.sources[1]);
+    aggregate.sources[0].values = values.slice(0, 19_999);
+    aggregate.sources[1].values = ['198.51.100.1/32', '198.51.100.2/32'];
+    Object.defineProperty(aggregate.sources[1].values, 0, { get() { throw new Error('Over-limit ranges must not be read'); } });
+    aggregate.entryCount = 20_000;
+    assert.throws(() => parseCommonInfrastructureSnapshot(aggregate), /invalid contract/u);
   });
 
   test('builds from fresh exact-CIDR sources and explicitly excludes fully validated stale sources', async () => {
@@ -187,6 +271,32 @@ describe('Common-infrastructure catalogue', () => {
         stderr: { write: () => true },
       }), 0);
 
+      let message = '';
+      let diagnostic = '';
+      assert.equal(await main(['--commit', 'c'.repeat(40), '--check-only'], {
+        repositoryRoot: directory,
+        ...buildOptions(),
+        now: () => new Date('2026-08-20T00:00:00.000Z'),
+        stdout: { write: value => { message += value; } },
+        stderr: { write: value => { diagnostic += value; } },
+      }), 1);
+      assert.match(message, /Validated retained content/u);
+      assert.match(diagnostic, /Freshness review required.*amazon-aws, cloudflare, google-gcp/u);
+      assert.doesNotMatch(diagnostic, /differs/u);
+      assert.deepEqual(JSON.parse(await readFile(outputPath, 'utf8')), snapshot, 'a freshness check cannot refresh or remove evidence');
+
+      let futureCalls = 0;
+      diagnostic = '';
+      assert.equal(await main(['--commit', 'c'.repeat(40), '--check-only'], {
+        repositoryRoot: directory,
+        now: () => new Date('2026-07-30T00:00:00.000Z'),
+        fetchImpl: async () => { futureCalls++; throw new Error('Future retained input must fail before fetching'); },
+        stdout: { write: () => true },
+        stderr: { write: value => { diagnostic += value; } },
+      }), 1);
+      assert.match(diagnostic, /generatedAt is in the future/u);
+      assert.equal(futureCalls, 0);
+
       const changed = structuredClone(snapshot);
       const firstSource = changed.sources[0];
       assert.ok(firstSource);
@@ -278,7 +388,7 @@ describe('Common-infrastructure catalogue', () => {
 
   test('parses explicit maintenance arguments without accepting moving refs', () => {
     assert.deepEqual(parseArguments([]), {
-      commit: '950282a018f0552d99f156412b650d31e7ff4688',
+      commit: DEFAULT_UPSTREAM_COMMIT,
       checkOnly: false,
     });
     assert.deepEqual(parseArguments(['--commit', 'c'.repeat(40), '--check-only']), {

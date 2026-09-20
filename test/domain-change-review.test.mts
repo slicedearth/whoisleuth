@@ -53,6 +53,34 @@ function input() {
 }
 
 describe('domain change review', () => {
+  test('preserves each contributing observation time separately from review generation', () => {
+    const value = input();
+    value.authoritySnapshots[0]!.observedAt = '2026-08-01T01:00:00.000Z';
+    value.authoritySnapshots[1]!.observedAt = '2026-08-02T02:00:00.000Z';
+    value.resolverSnapshots[0]!.observedAt = '2026-08-03T03:00:00.000Z';
+    value.certificate.observedAt = '2026-08-04T04:00:00.000Z';
+    const before = structuredClone(value);
+    const review = reviewDomainChange(value, NOW);
+    assert.equal(review.version, 2);
+    assert.equal(review.generatedAt, NOW);
+    assert.deepEqual(review.authoritativeRecordMatrix[0]?.observations.map((item) => item.observedAt), [
+      '2026-08-01T01:00:00.000Z', '2026-08-02T02:00:00.000Z',
+    ]);
+    assert.equal(review.resolverDivergenceMatrix[0]?.observations[0]?.observedAt, '2026-08-03T03:00:00.000Z');
+    assert.equal(review.certificate.observedAt, '2026-08-04T04:00:00.000Z');
+    assert.deepEqual(review.sourceObservations.authorities.map((item) => item.observedAt), [
+      '2026-08-01T01:00:00.000Z', '2026-08-02T02:00:00.000Z',
+    ]);
+    assert.deepEqual(value, before);
+    for (const snapshot of value.authoritySnapshots) { snapshot.state = 'unavailable'; snapshot.records = []; }
+    const empty = reviewDomainChange({ ...value, certificate: null }, NOW);
+    assert.deepEqual(empty.authoritativeRecordMatrix, []);
+    assert.equal(empty.sourceObservations.authorities.length, 2);
+    assert.equal(empty.sourceObservations.authorities[0]?.observedAt, '2026-08-01T01:00:00.000Z');
+    assert.equal(empty.sourceObservations.authorities[0]?.state, 'unavailable');
+    assert.equal(empty.certificate.observedAt, null);
+  });
+
   test('fails closed without two complete, comparable authority observations', () => {
     const empty = reviewDomainChange({
       schema: DOMAIN_CHANGE_INPUT_SCHEMA,

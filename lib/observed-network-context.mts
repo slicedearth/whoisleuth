@@ -35,6 +35,7 @@ const OBSERVED_NETWORK_CONTEXT_VERSION = 1;
 const MAX_NETWORK_CIDRS = 16;
 const MAX_NETWORK_ATTEMPTS = 3;
 const MAX_NETWORK_ABUSE_ROUTES = 6;
+const NETWORK_ABUSE_ROUTE_LIMITATION = 'The network abuse-route projection reached its local retention limit; additional published routes may exist.';
 const MAX_ENDPOINT_LENGTH = 2048;
 const MAX_DETAIL_LENGTH = 240;
 const MAX_NAME_LENGTH = 300;
@@ -160,15 +161,17 @@ function normalizedAbuseContact(value: unknown, channel: 'email' | 'phone'): str
   return PHONE_RE.test(contact) ? contact : null;
 }
 
-function networkAbuseEntities(parsed: UnknownRecord): UnknownRecord[] {
+function networkAbuseEntities(parsed: UnknownRecord) {
   const entitiesByRole = record(parsed.entitiesByRole);
   const roleEntities = Array.isArray(entitiesByRole.abuse) ? entitiesByRole.abuse : [];
   const fallback = parsed.abuse && typeof parsed.abuse === 'object' && !Array.isArray(parsed.abuse)
     ? [parsed.abuse]
     : [];
-  return [...roleEntities, ...fallback]
-    .filter((item): item is UnknownRecord => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
-    .slice(0, MAX_NETWORK_ABUSE_ROUTES);
+  return {
+    entities: [...roleEntities.slice(0, MAX_NETWORK_ABUSE_ROUTES + 1), ...fallback]
+      .filter((item): item is UnknownRecord => Boolean(item) && typeof item === 'object' && !Array.isArray(item)),
+    truncated: roleEntities.length > MAX_NETWORK_ABUSE_ROUTES + 1,
+  };
 }
 
 function projectNetworkAbuseRoutes(parsed: UnknownRecord, provenance: {
@@ -191,20 +194,27 @@ function projectNetworkAbuseRoutes(parsed: UnknownRecord, provenance: {
     truncated: boolean;
     limitations: string[];
   }>();
-  for (const entity of networkAbuseEntities(parsed)) {
+  const inventory = networkAbuseEntities(parsed);
+  let truncated = inventory.truncated;
+  for (const entity of inventory.entities) {
     const emails = Array.isArray(entity.emails) ? entity.emails : [];
     const phones = Array.isArray(entity.phones) ? entity.phones : [];
+    truncated ||= emails.length > MAX_NETWORK_ABUSE_ROUTES + 1 || phones.length > MAX_NETWORK_ABUSE_ROUTES + 1;
     const candidates: Array<{ channel: 'email' | 'phone'; value: unknown }> = [
       { channel: 'email', value: entity.email },
-      ...emails.slice(0, MAX_NETWORK_ABUSE_ROUTES).map((value) => ({ channel: 'email' as const, value })),
+      ...emails.slice(0, MAX_NETWORK_ABUSE_ROUTES + 1).map((value) => ({ channel: 'email' as const, value })),
       { channel: 'phone', value: entity.phone },
-      ...phones.slice(0, MAX_NETWORK_ABUSE_ROUTES).map((value) => ({ channel: 'phone' as const, value })),
+      ...phones.slice(0, MAX_NETWORK_ABUSE_ROUTES + 1).map((value) => ({ channel: 'phone' as const, value })),
     ];
     for (const candidate of candidates) {
       const contact = normalizedAbuseContact(candidate.value, candidate.channel);
       if (!contact) continue;
       const key = `${candidate.channel}:${contact.toLowerCase()}`;
       if (!routes.has(key)) {
+        if (routes.size >= MAX_NETWORK_ABUSE_ROUTES) {
+          truncated = true;
+          continue;
+        }
         routes.set(key, {
           kind: 'network_hosting',
           channel: candidate.channel,
@@ -226,10 +236,14 @@ function projectNetworkAbuseRoutes(parsed: UnknownRecord, provenance: {
           ],
         });
       }
-      if (routes.size >= MAX_NETWORK_ABUSE_ROUTES) return [...routes.values()];
     }
   }
-  return [...routes.values()];
+  return {
+    routes: [...routes.values()].map((route) => truncated
+      ? { ...route, complete: false, truncated: true, limitations: [...route.limitations, NETWORK_ABUSE_ROUTE_LIMITATION] }
+      : route),
+    truncated,
+  };
 }
 
 function networkSummary(parsedValue: unknown, family: 4 | 6) {
@@ -244,10 +258,12 @@ function networkSummary(parsedValue: unknown, family: 4 | 6) {
   const startAddress = publicAddress(parsed.startAddress, family);
   const endAddress = publicAddress(parsed.endAddress, family);
   const country = boundedString(parsed.country, 2);
-  const truncated = parsed.serverTruncated === true
-    || parsed.cidrsTruncated === true
-    || parsed.entitiesTruncated === true
-    || sourceCidrs.length > MAX_NETWORK_CIDRS;
+  const limitations = [
+    ...(parsed.serverTruncated === true ? ['The RDAP server declared that part of its response was truncated.'] : []),
+    ...(parsed.entitiesTruncated === true ? ['Some IP RDAP contact records or fields were omitted during bounded normalisation.'] : []),
+    ...(parsed.cidrsTruncated === true ? ['Some IP RDAP CIDR entries were invalid or exceeded the normalisation limit.'] : []),
+    ...(sourceCidrs.length > MAX_NETWORK_CIDRS ? ['The network CIDR summary reached its local retention limit.'] : []),
+  ];
   return {
     value: {
       handle: boundedString(parsed.handle, MAX_NAME_LENGTH),
@@ -260,8 +276,8 @@ function networkSummary(parsedValue: unknown, family: 4 | 6) {
       networkType: boundedString(parsed.networkType, 160),
       databaseUpdatedAt: isoTimestamp(lifecycle.databaseUpdatedDateIso || lifecycle.databaseUpdatedDate),
     },
-    truncated,
-    serverTruncated: parsed.serverTruncated === true,
+    truncated: limitations.length > 0,
+    limitations,
   };
 }
 
@@ -355,28 +371,33 @@ async function collectObservedNetworkContext(
     const parsed = record(rdapRecord.parsed);
     if (rdap.httpStatus !== 200 || !Object.keys(parsed).length) throw new Error('IP RDAP returned no usable normalised object');
     const summary = networkSummary(parsed, selection.family);
-    const partial = summary.truncated;
     const sourceObservedAt = rdap.fetchedAt || observedAt();
-    const abuseRouting = projectNetworkAbuseRoutes(parsed, {
+    const routeProjection = projectNetworkAbuseRoutes(parsed, {
       endpoint: rdap.endpoint,
       observedAt: sourceObservedAt,
       selection,
-      complete: !partial,
-      truncated: partial,
+      complete: !summary.truncated,
+      truncated: summary.truncated,
     });
+    const incompleteReasons = [
+      ...summary.limitations,
+      ...(routeProjection.truncated ? [NETWORK_ABUSE_ROUTE_LIMITATION] : []),
+    ];
+    const partial = incompleteReasons.length > 0;
     return baseContext(selection, {
       status: partial ? 'partial' : 'success',
       observedAt: sourceObservedAt,
       durationMs,
       complete: !partial,
       truncated: partial,
-      detail: 'The selected public endpoint address was mapped to its separately attributed IP RDAP registration.',
+      detail: partial
+        ? `Network registration was retained, but the source record is incomplete. ${incompleteReasons[0]}`
+        : 'The selected public endpoint address was mapped to its separately attributed IP RDAP registration.',
       limitations: [
+        ...incompleteReasons,
         'This identifies the registered network for one point-in-time endpoint address, not a definitive origin host or hosting provider.',
         'CDNs, reverse proxies, load balancers, shared hosting, and location-dependent DNS can present different networks.',
         'Network registration is an investigative lead and does not prove control, ownership, intent, or maliciousness.',
-        ...(summary.serverTruncated ? ['The RDAP server declared that part of its response was truncated.'] : []),
-        ...(sourceCidrsWereCapped(parsed) ? ['The network CIDR summary reached its local retention limit.'] : []),
       ],
       diagnostics: {
         requestCount: 1,
@@ -386,7 +407,7 @@ async function collectObservedNetworkContext(
       },
       rdap,
       network: summary.value,
-      abuseRouting,
+      abuseRouting: routeProjection.routes,
     });
   } catch (error) {
     const durationMs = Math.max(0, now() - started);
@@ -402,11 +423,6 @@ async function collectObservedNetworkContext(
       rdap: attempts.length ? { endpoint: null, transportSecurity: null, httpStatus: null, fetchedAt: null, attempts } : null,
     });
   }
-}
-
-function sourceCidrsWereCapped(parsed: UnknownRecord): boolean {
-  return parsed.cidrsTruncated === true
-    || (Array.isArray(parsed.cidrs) && parsed.cidrs.length > MAX_NETWORK_CIDRS);
 }
 
 export {

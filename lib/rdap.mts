@@ -25,7 +25,22 @@ import {
   type RdapFetch,
 } from './rdap-transport.mts';
 import type { RegistryRdapLinkSource } from './rdap-types.mts';
-import { registryServiceAdmissionFor } from './registry-capabilities.mts';
+import { REGISTRY_CAPABILITIES_VERSION, registryServiceAdmissionFor } from './registry-capabilities.mts';
+
+// A null record does not establish domain absence. Keep the HTTP explanation
+// aligned with the same admission decision used before bootstrap discovery.
+function rdapUnavailableResponse(type: string, value: string) {
+  const admission = type === 'domain' ? registryServiceAdmissionFor(value, 'rdap') : null;
+  if (admission?.allowed === false) {
+    return {
+      error: 'RDAP collection was not attempted because the retained registry capability policy does not admit this service.',
+      source: 'retained_registry_capability_policy',
+      capabilityVersion: REGISTRY_CAPABILITIES_VERSION,
+      limitation: admission.limitation,
+    };
+  }
+  return { error: `No RDAP registry found for "${value}" via IANA bootstrap` };
+}
 
 async function fetchRdapFromBases<const T extends string>(
   type: T,
@@ -47,13 +62,15 @@ async function fetchRdapRecord<const T extends string>(
   value: string,
   options: {
     fetchRecord?: typeof fetchRdapRecordWithParser;
+    signal?: AbortSignal;
   } = {},
 ) {
+  options.signal?.throwIfAborted();
   if (type === 'domain' && registryServiceAdmissionFor(value, 'rdap')?.allowed === false) {
     return null;
   }
   const fetchRecord = options.fetchRecord ?? fetchRdapRecordWithParser;
-  return fetchRecord(type, value, parseRdap);
+  return fetchRecord(type, value, parseRdap, options.signal ? { signal: options.signal } : {});
 }
 
 async function fetchRegistrarRdapRecord(
@@ -75,6 +92,7 @@ export {
   fetchBootstrap,
   clearRdapBootstrapCache,
   fetchRdapRecord,
+  rdapUnavailableResponse,
   fetchRdapFromBases,
   fetchRegistrarRdapRecord,
   selectRegistrarRdapLink,

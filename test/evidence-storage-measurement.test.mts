@@ -3,6 +3,8 @@ import { describe, test } from 'node:test';
 
 import {
   EVIDENCE_STORAGE_MEASUREMENT_FIXTURE_PATH,
+  EVIDENCE_STORAGE_MEASUREMENT_FIXTURE_VERSION,
+  EVIDENCE_STORAGE_MEASUREMENT_VERSION,
   EVIDENCE_STORAGE_STARTING_REVISION,
   buildEvidenceStorageMeasurementProfile,
   buildSyntheticEvidenceStorageCases,
@@ -12,13 +14,15 @@ import {
 } from '../tools/evidence-storage-measurement.mts';
 import { BROWSER_LOCAL_COLLECTION_MANIFEST } from '../packages/contracts/browser-local-collection-manifest.mts';
 
-describe('evidence-storage architecture measurement', () => {
+describe('evidence-storage measurement', () => {
   test('is deterministic and bound to the reviewed revision and fixture identities', async () => {
     const fixture = loadEvidenceStorageMeasurementFixture();
     const first = await buildEvidenceStorageMeasurementProfile(fixture);
     const second = await buildEvidenceStorageMeasurementProfile(fixture);
 
     assert.deepEqual(first, second);
+    assert.equal(first.version, EVIDENCE_STORAGE_MEASUREMENT_VERSION);
+    assert.equal(fixture.version, EVIDENCE_STORAGE_MEASUREMENT_FIXTURE_VERSION);
     assert.equal(first.startingRevision, EVIDENCE_STORAGE_STARTING_REVISION);
     assert.equal(first.fixtureIdentity.corpus, EVIDENCE_STORAGE_MEASUREMENT_FIXTURE_PATH);
     assert.match(first.fixtureIdentity.corpusSha256, /^sha256:[a-f0-9]{64}$/u);
@@ -28,7 +32,7 @@ describe('evidence-storage architecture measurement', () => {
     await checkEvidenceStorageMeasurementProfile();
   });
 
-  test('keeps the no-build decision on representative evidence while exposing the synthetic boundary', async () => {
+  test('reports exact and canonical duplication across the synthetic corpus', async () => {
     const profile = await buildEvidenceStorageMeasurementProfile();
     const low = profile.scenarios.find((scenario) => scenario.classification === 'representative_low');
     const representative = profile.scenarios.find((scenario) => scenario.classification === 'representative_mixed');
@@ -37,16 +41,15 @@ describe('evidence-storage architecture measurement', () => {
     assert.ok(representative);
     assert.ok(boundary);
 
-    assert.equal(profile.decision.outcome, 'no_build');
-    assert.equal(profile.decision.representativeScenario, representative.id);
     assert.equal(low.duplication.exactDuplicateGroupCount, 0);
-    assert.equal(low.duplication.deduplicableBytesAfterAllOverhead, 0);
+    assert.equal(low.duplication.grossExactDuplicateBytes, 0);
+    assert.equal(representative.duplication.exactDuplicateGroupCount, 12);
     assert.equal(representative.duplication.canonicalOnlyGroupCount, 0);
-    assert.equal(representative.duplication.deduplicableBytesAfterAllOverhead, 0);
-    assert.ok(representative.duplication.architectureDeltaBytes > 0);
-    assert.ok(boundary.duplication.deduplicableBytesAfterAllOverhead > 0);
-    assert.ok(boundary.browserLocal.currentQuotaRatio < profile.decision.threshold.minimumQuotaPressureRatio);
-    assert.match(profile.decision.reconsiderWhen.evidence, /representative corpus.*both savings thresholds/iu);
+    assert.ok(representative.duplication.grossExactDuplicateBytes > 0);
+    assert.equal(boundary.duplication.exactDuplicateGroupCount, 4);
+    assert.ok(boundary.duplication.grossExactDuplicateBytes > representative.duplication.grossExactDuplicateBytes);
+    assert.ok(boundary.browserLocal.currentQuotaRatio > 0);
+    assert.ok(boundary.browserLocal.currentQuotaRatio < 1);
   });
 
   test('measures storage families and preserves provenance, state, time, and privacy limits', async () => {

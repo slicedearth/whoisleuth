@@ -2,12 +2,15 @@
   import { tick } from 'svelte';
   import IntelligenceIcon, { type IntelligenceIconName } from '$lib/components/IntelligenceIcon.svelte';
   import BoundedRelationshipMap from '$lib/components/BoundedRelationshipMap.svelte';
+  import RelationshipSourceEvidence from '$lib/components/RelationshipSourceEvidence.svelte';
   import type {
     ForceGraphLinkInput,
     ForceGraphNodeInput,
   } from '$lib/analysis/visualization-models.ts';
   import {
     buildRelationshipAdmissionPreview,
+    snapshotRelationshipAdmission,
+    relationshipAdmissionMatchesCurrent,
     type RelationshipAdmissionAction,
     type RelationshipAdmissionGroup,
     type RelationshipAdmissionPreview,
@@ -17,7 +20,6 @@
 
   type PendingAdmission = RelationshipRetentionAdmission & Readonly<{
     action: RelationshipAdmissionAction;
-    relationshipIdentity: string;
   }>;
 
   let {
@@ -30,8 +32,6 @@
     retainedIds = new Set<string>(),
     retainStatus = '',
     retentionAvailable = true,
-    observedAt = '',
-    sourceIdentities = [],
     sourceContextId,
   }: {
     groups: RelationshipAdmissionGroup[];
@@ -43,8 +43,6 @@
     retainedIds?: ReadonlySet<string>;
     retainStatus?: string;
     retentionAvailable?: boolean;
-    observedAt?: string;
-    sourceIdentities?: string[];
     sourceContextId: string;
   } = $props();
 
@@ -54,57 +52,20 @@
   let returnFocusId = $state('');
   let admissionBusy = $state(false);
 
-  function relationshipIdentity(relationship: RelationshipAdmissionGroup): string {
-    return JSON.stringify([
-      relationship.type,
-      relationship.label,
-      relationship.method,
-      relationship.value,
-      relationship.normalizedValue,
-      relationship.domains,
-      relationship.description,
-    ]);
-  }
-
-  function sameTexts(left: readonly string[], right: readonly string[]): boolean {
-    return left.length === right.length && left.every((value, index) => value === right[index]);
-  }
-
   function admissionMatchesCurrent(admission: PendingAdmission): boolean {
-    return admission.sourceContextId === sourceContextId
-      && admission.observedAt === observedAt
-      && admission.complete === !truncated
-      && admission.truncated === truncated
-      && sameTexts(admission.sourceIdentities, sourceIdentities)
-      && sameTexts(admission.limitations, limitations)
-      && groups.some((relationship) => relationshipIdentity(relationship) === admission.relationshipIdentity);
+    return relationshipAdmissionMatchesCurrent(admission, groups, sourceContextId, limitations);
   }
 
   const admissionCurrent = $derived(pendingAdmission !== null && admissionMatchesCurrent(pendingAdmission));
 
   async function openAdmissionPreview(relationship: RelationshipAdmissionGroup, action: RelationshipAdmissionAction, index: number) {
-    const snapshot = Object.freeze({
-      ...relationship,
-      domains: Object.freeze([...relationship.domains]),
-    });
+    const snapshot = snapshotRelationshipAdmission(relationship, sourceContextId, limitations);
     pendingAdmission = Object.freeze({
       action,
-      relationship: snapshot,
-      relationshipIdentity: relationshipIdentity(snapshot),
-      sourceContextId,
-      observedAt,
-      sourceIdentities: Object.freeze([...sourceIdentities]),
-      complete: !truncated,
-      truncated,
-      limitations: Object.freeze([...limitations]),
+      ...snapshot,
     });
     returnFocusId = `relationship-${action}-${index}`;
-    preview = buildRelationshipAdmissionPreview(snapshot, {
-      action,
-      observedAt,
-      sourceIdentities,
-      truncated,
-    });
+    preview = buildRelationshipAdmissionPreview(snapshot.relationship, { action });
     await tick();
     previewElement?.focus();
   }
@@ -223,13 +184,14 @@
           <div><dt>Source identities</dt><dd>{preview.sourceIdentities.join(' · ')}</dd></div>
           <div><dt>Completeness</dt><dd>{preview.completeness}{preview.truncated ? ' · truncated' : ' · not truncated'}</dd></div>
           <div><dt>Estimated admission</dt><dd>{preview.estimatedNewNodes} newly visible or retained nodes · {preview.estimatedNewEdges} edges</dd></div>
-          <div><dt>Persistence</dt><dd>{preview.persistence === 'none' ? 'None; only the local scan queue changes.' : 'One bounded browser-local relationship observation.'}</dd></div>
+          <div><dt>Persistence</dt><dd>{preview.persistence === 'none' ? 'None; only the local scan queue changes.' : 'One bounded saved relationship observation.'}</dd></div>
           <div><dt>Network and disclosure</dt><dd>{preview.networkRequests} requests · no external service receives the target</dd></div>
         </dl>
+        <RelationshipSourceEvidence sources={preview.sourceEvidence} />
         <p class="shared-warning">{preview.sharedInfrastructureWarning}</p>
         <p><strong>Why this may help:</strong> {preview.usefulness}</p>
         <ul>{#each preview.limitations as limitation}<li>{limitation}</li>{/each}</ul>
-        {#if !admissionCurrent}<p class="admission-state" role="status">The current scan evidence changed after this preview opened. Close it and open a fresh preview before continuing.</p>{:else if preview.action === 'retain' && !retentionAvailable}<p class="admission-state" role="status">Relationship retention became unavailable. Reload its browser-local context before trying again.</p>{/if}
+        {#if !admissionCurrent}<p class="admission-state" role="status">The current scan evidence changed after this preview opened. Close it and open a fresh preview before continuing.</p>{:else if preview.action === 'retain' && !retentionAvailable}<p class="admission-state" role="status">Relationship retention became unavailable. Reload its saved context before trying again.</p>{/if}
         <div class="preview-actions"><button class="primary" type="button" disabled={!admissionCurrent || admissionBusy || (preview.action === 'retain' && !retentionAvailable)} onclick={() => void admitRelationship()}>{admissionBusy ? 'Retaining…' : preview.action === 'expand' ? 'Load reviewed domains' : 'Retain reviewed observation'}</button><button class="btn" type="button" disabled={admissionBusy} onclick={() => void closeAdmissionPreview()}>Cancel</button></div>
       </div>
     {/if}

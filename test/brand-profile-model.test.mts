@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applyBrandProfileFieldPatch,
+  addBrandAllowlistValues,
   assertBrandProfileStoreBudget,
   BRAND_PROFILE_SCHEMA_VERSION,
   brandProfileStoreVersion,
@@ -19,6 +20,7 @@ import {
   normalizeBrandProfileStore,
   normalizeDkimSelectors,
   normalizeProtectionAttestations,
+  reviewProtectionAttestations,
   normalizeProfileDomains,
   normalizeProfileTextValues,
   normalizeProfileTlds,
@@ -185,6 +187,49 @@ test('caps each general list and DKIM selectors at their effective limits', () =
   const selectors = Array.from({ length: MAX_PROFILE_VALUES }, (_, index) => `selector-${index}`);
   assert.equal(normalizeProfileTextValues(values).length, MAX_PROFILE_VALUES);
   assert.equal(normalizeDkimSelectors(selectors).length, MAX_DKIM_SELECTORS);
+});
+
+test('allowlist additions validate every input and reject the whole over-capacity draft', () => {
+  const owner = { officialDomains: ['official.example'], approvedPartnerDomains: ['partner.example'] };
+  assert.deepEqual(addBrandAllowlistValues(owner, 'domains', ['retained.example'], 'retained.example,NEW.example\nofficial.example\npartner.example'), ['retained.example', 'new.example']);
+  assert.deepEqual(addBrandAllowlistValues(owner, 'registrars', ['Reviewed Registrar'], 'reviewed registrar\n  Another   Registrar  '), ['Reviewed Registrar', 'Another Registrar']);
+  const retained = Array.from({ length: MAX_PROFILE_VALUES - 1 }, (_, index) => `retained-${index}.example`);
+  assert.equal(addBrandAllowlistValues(owner, 'domains', retained, 'last.example').length, MAX_PROFILE_VALUES);
+  assert.throws(() => addBrandAllowlistValues(owner, 'domains', retained, 'first.example\nlast.example'), /201 entries.*200.*No entries were added/u);
+  assert.equal(retained.length, MAX_PROFILE_VALUES - 1);
+  assert.throws(() => addBrandAllowlistValues(owner, 'domains', [], 'valid.example\nnot a domain'), /entry 2.*No entries were added/u);
+  assert.throws(() => addBrandAllowlistValues(owner, 'registrars', [], 'R'.repeat(MAX_PROFILE_TEXT_LENGTH + 1)), /entry 1.*too long/u);
+  assert.throws(() => addBrandAllowlistValues(owner, 'domains', [], 'official.example'), /No new entries/u);
+  assert.throws(() => addBrandAllowlistValues(owner, 'domains', [], Array(MAX_PROFILE_VALUE_INPUTS + 1).fill('repeated.example').join('\n')), /entries at a time/u);
+});
+
+test('account-control review stamps only submitted controls and keeps independent retained clocks', () => {
+  const before = normalizeProtectionAttestations([
+    { control: 'registrar_mfa', state: 'observed', assertedAt: NOW, expiresAt: '2026-08-01', note: 'Previous review' },
+    { control: 'registry_lock', state: 'needs_confirmation', assertedAt: '2026-07-01T00:00:00.000Z', note: 'Untouched' },
+  ]);
+  const unchanged = structuredClone(before);
+  const now = '2026-09-01T10:00:00.000Z';
+  const after = reviewProtectionAttestations(before, [
+    { control: 'registrar_mfa', state: 'observed', expiresAt: '2026-10-01T23:59:59.999Z', note: 'Reconfirmed' },
+  ], now);
+  assert.equal(after.length, 2);
+  assert.deepEqual(after[1], before[1]);
+  assert.equal(after[0]?.assertedAt, now);
+  assert.equal(after[0]?.expiresAt, '2026-10-01T23:59:59.999Z');
+  assert.deepEqual(before, unchanged);
+  assert.deepEqual(reviewProtectionAttestations(before, [], now), before);
+});
+
+test('invalid account-control reviews fail without refreshing or dropping retained statements', () => {
+  const before = normalizeProtectionAttestations([{ control: 'registrar_mfa', state: 'observed', assertedAt: NOW }]);
+  const valid = { control: 'registrar_mfa', state: 'observed', expiresAt: null, note: 'Reviewed' } as const;
+  assert.throws(() => reviewProtectionAttestations(before, [valid], 'not-a-time'), /review time/u);
+  assert.throws(() => reviewProtectionAttestations(before, [{ ...valid, expiresAt: '2026-02-30T23:59:59.999Z' }], NOW), /expiry date/u);
+  assert.throws(() => reviewProtectionAttestations(before, [{ ...valid, note: 'bad\ncontrol' }], NOW), /control characters/u);
+  assert.throws(() => reviewProtectionAttestations(before, [valid, valid], NOW), /repeated/u);
+  assert.throws(() => reviewProtectionAttestations(before, Array(7).fill(valid), NOW), /Too many/u);
+  assert.equal(before[0]?.assertedAt, NOW);
 });
 
 test('normalizes defensive mail profiles, retired selectors, and expiring analyst attestations', () => {
@@ -404,11 +449,26 @@ test('duplicate ids retain the most recently updated bounded record', () => {
 
 test('structured imports merge by case-insensitive profile name', () => {
   const local = profile({ id: 'local', name: 'Example Brand' });
-  const imported = profile({ id: 'imported', name: 'example brand', productNames: ['Updated'] });
+  const imported = profile({ id: 'imported', name: 'example brand', productNames: ['Updated'], updatedAt: '2026-07-15T08:00:00.000Z' });
   const result = mergeBrandProfiles([local], { schema: 'whoisleuth.brand-profiles', version: 6, profiles: [imported] }, { nowIso: NOW, makeId: () => 'new-id' });
   assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 0, updated: 1, skipped: 0 });
   assert.equal(requiredValue(result.profiles[0]).id, 'local');
   assert.deepEqual(requiredValue(result.profiles[0]).productNames, ['Updated']);
+  assert.equal(result.profiles[0]?.updatedAt, imported.updatedAt);
+});
+
+test('imports preserve newer local profiles and unresolved timestamp ties without touching their age', () => {
+  const local = profile({ officialDomains: ['current.example'] });
+  const before = structuredClone(local);
+  for (const updatedAt of ['2026-07-01T00:00:00Z', NOW, 'invalid', undefined]) {
+    const result = mergeBrandProfiles([local], {
+      schema: 'whoisleuth.brand-profiles', version: BRAND_PROFILE_SCHEMA_VERSION,
+      profiles: [profile({ officialDomains: ['older.example'], updatedAt })],
+    }, { nowIso: '2026-09-01T00:00:00Z' });
+    assert.deepEqual(result.profiles, [normalizeBrandProfile(local)]);
+    assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 0, updated: 0, skipped: 1 });
+    assert.deepEqual(local, before);
+  }
 });
 
 test('restoring a missing profile preserves its exported modification time', () => {
@@ -482,8 +542,8 @@ test('imports reject unrelated and future schemas', () => {
   assert.throws(() => mergeBrandProfiles([], {}), /not a WHOISleuth Brand Profile export/i);
   assert.throws(() => mergeBrandProfiles([], [profile()]), /not a WHOISleuth Brand Profile export/i);
   assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.cases', version: 2, profiles: [] }), /not a WHOISleuth Brand Profile export/);
-  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 1, profiles: [] }), /using schema 6, 7, or 8/);
-  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: BRAND_PROFILE_SCHEMA_VERSION + 1, profiles: [] }), /newer schema 9/);
+  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: 1, profiles: [] }), /Expected a WHOISleuth Brand Profile export using schema/);
+  assert.throws(() => mergeBrandProfiles([], { schema: 'whoisleuth.brand-profiles', version: BRAND_PROFILE_SCHEMA_VERSION + 1, profiles: [] }), /newer schema/);
 });
 
 test('serialized stores stay within a dedicated UTF-8 byte budget', () => {
@@ -496,8 +556,9 @@ test('oversized normalized stores fail before browser storage is touched', () =>
   const profiles = Array.from({ length: 100 }, (_, profileIndex) => profile({
     id: `profile-${profileIndex}`,
     name: `Profile ${profileIndex}`,
-    productNames: Array.from({ length: MAX_PROFILE_VALUES }, (_, valueIndex) => `${profileIndex}-${valueIndex}-${'x'.repeat(MAX_PROFILE_TEXT_LENGTH)}`),
+    productNames: Array.from({ length: MAX_PROFILE_VALUES }, (_, valueIndex) => `${profileIndex}-${valueIndex}-${'界'.repeat(MAX_PROFILE_TEXT_LENGTH)}`),
   }));
+  assert.ok(new TextEncoder().encode(JSON.stringify(normalizeBrandProfileStore(profiles))).byteLength > MAX_PROFILE_STORE_BYTES);
   assert.throws(() => assertBrandProfileStoreBudget(profiles), /Brand profile storage is full/);
 });
 

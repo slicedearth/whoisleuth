@@ -21,6 +21,7 @@ import { TAB_PORTABILITY_LIFECYCLE_FAMILY } from '../packages/contracts/tab-port
 import { WORKSPACE_PORTABILITY_LIFECYCLE_FAMILY } from '../packages/contracts/workspace-portability.mts';
 import {
   MAX_SCHEMA_LIFECYCLE_FAMILIES,
+  defineSchemaLifecycleFamily,
   defineSchemaLifecycleRegistry,
   type SchemaLifecycleFamily,
 } from '../packages/contracts/schema-lifecycle.mts';
@@ -30,6 +31,13 @@ function legacyCopy(): Record<string, unknown> {
   const family = structuredClone(DOMAIN_CONTROL_SCHEMA_LIFECYCLE) as Record<string, unknown>;
   delete family.metadata;
   return family;
+}
+
+function consumer(metadata: Record<string, unknown>, id: string): Record<string, unknown> {
+  const edge = (metadata.consumerEdges as Array<Record<string, unknown>>)
+    .find((candidate) => String(candidate.id).startsWith(`${id}.`));
+  assert.ok(edge, `Missing lifecycle consumer ${id}`);
+  return edge;
 }
 
 function uniqueCompatibility(family: Record<string, unknown>, suffix: string): void {
@@ -143,7 +151,7 @@ function heavyFamily(index: number): Record<string, unknown> {
     ));
   }
   const shapes = metadata.shapes as Array<Record<string, unknown>>;
-  const documentShape = shapes.find((shape) => String(shape.id).startsWith('domain-control.manifest.v1-v2'));
+  const documentShape = shapes.find((shape) => Array.isArray(shape.fixedArrays) && shape.fixedArrays.length > 0);
   const fixedArrays = documentShape?.fixedArrays as Array<Record<string, unknown>> | undefined;
   assert.ok(fixedArrays?.[0]);
   fixedArrays[0].values = Array.from({ length: 64 }, (_, itemIndex) => {
@@ -154,6 +162,18 @@ function heavyFamily(index: number): Record<string, unknown> {
 }
 
 describe('schema lifecycle registry', () => {
+  it('checks readers and writers per contract version when a shape spans versions', () => {
+    const family = structuredClone(INVESTIGATION_PORTABILITY_LIFECYCLE_FAMILY);
+    const shape = family.metadata.shapes.find((candidate) => candidate.schema === 'whoisleuth.bulk-review-manifest');
+    assert.deepEqual(shape?.versions, [2, 3]);
+    assert.doesNotThrow(() => defineSchemaLifecycleFamily(family));
+    assert.equal(family.contracts.find((contract) => contract.schema === shape?.schema && contract.version === 2)?.emitted, false);
+    const missingWriter = structuredClone(family) as any;
+    missingWriter.metadata.consumerEdges = missingWriter.metadata.consumerEdges
+      .filter((edge: { id: string }) => edge.id !== 'investigation.consumer.bulk-review-build');
+    assert.throws(() => defineSchemaLifecycleFamily(missingWriter), /exactly aggregate/iu);
+  });
+
   it('owns a detached recursively frozen canonical family list', () => {
     const source = SCHEMA_LIFECYCLE_REGISTRY.map((family) => structuredClone(family));
     const registry = defineSchemaLifecycleRegistry(source as unknown as readonly SchemaLifecycleFamily[]);
@@ -488,8 +508,8 @@ describe('schema lifecycle registry', () => {
     const hookRoleTarget = distinctFamily('relationship-hook-role-target', true);
     const hookRoleSourceMetadata = hookRoleSource.metadata as Record<string, unknown>;
     const hookRoleTargetMetadata = hookRoleTarget.metadata as Record<string, unknown>;
-    const hookRoleSourceConsumer = (hookRoleSourceMetadata.consumerEdges as Array<Record<string, unknown>>)[9]!;
-    const hookRoleTargetConsumer = (hookRoleTargetMetadata.consumerEdges as Array<Record<string, unknown>>)[9]!;
+    const hookRoleSourceConsumer = consumer(hookRoleSourceMetadata, 'domain-control.cli-interchange');
+    const hookRoleTargetConsumer = consumer(hookRoleTargetMetadata, 'domain-control.cli-interchange');
     hookRoleSourceMetadata.consumerRelationships = [{
       id: 'registry-test.incompatible-hook-role',
       sourceConsumerId: String(hookRoleSourceConsumer.id),
@@ -512,8 +532,8 @@ describe('schema lifecycle registry', () => {
     const hookRuntimeTarget = distinctFamily('relationship-hook-runtime-target', true);
     const hookRuntimeSourceMetadata = hookRuntimeSource.metadata as Record<string, unknown>;
     const hookRuntimeTargetMetadata = hookRuntimeTarget.metadata as Record<string, unknown>;
-    const hookRuntimeSourceConsumer = (hookRuntimeSourceMetadata.consumerEdges as Array<Record<string, unknown>>)[9]!;
-    const hookRuntimeTargetConsumer = (hookRuntimeTargetMetadata.consumerEdges as Array<Record<string, unknown>>)[9]!;
+    const hookRuntimeSourceConsumer = consumer(hookRuntimeSourceMetadata, 'domain-control.cli-interchange');
+    const hookRuntimeTargetConsumer = consumer(hookRuntimeTargetMetadata, 'domain-control.cli-interchange');
     hookRuntimeSourceMetadata.consumerRelationships = [{
       id: 'registry-test.incompatible-hook-runtime',
       sourceConsumerId: String(hookRuntimeSourceConsumer.id),
@@ -560,9 +580,18 @@ describe('schema lifecycle registry', () => {
   });
 
   it('enforces the aggregate serialised registry budget before inspecting the untouched tail', () => {
-    const families = Array.from({ length: 24 }, (_, index) => heavyFamily(index));
+    const families: Record<string, unknown>[] = [];
+    const maximumBytes = 4 * 1_048_576;
+    let bytes = 2;
+    while (bytes <= maximumBytes && families.length < MAX_SCHEMA_LIFECYCLE_FAMILIES - 1) {
+      const family = heavyFamily(families.length);
+      const normalised = defineSchemaLifecycleFamily(family as unknown as SchemaLifecycleFamily);
+      bytes += Number(families.length > 0) + Buffer.byteLength(JSON.stringify(normalised));
+      families.push(family);
+    }
+    assert.ok(bytes > maximumBytes, 'The synthetic families must cross the aggregate byte boundary.');
     assert.doesNotThrow(() => defineSchemaLifecycleRegistry(
-      families.slice(0, 23) as unknown as readonly SchemaLifecycleFamily[],
+      families.slice(0, -1) as unknown as readonly SchemaLifecycleFamily[],
     ));
 
     let tailTouches = 0;

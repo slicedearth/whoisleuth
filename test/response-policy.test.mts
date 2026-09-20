@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   MAX_RESPONSE_COOKIES,
+  MAX_RESPONSE_POLICY_DIRECTIVES,
   MAX_RESPONSE_POLICY_HEADER_BYTES,
   MAX_RESPONSE_POLICY_TOKENS,
   MIN_RECOMMENDED_HSTS_SECONDS,
@@ -12,6 +13,7 @@ import {
   qualifyResponsePolicyWithCspMeta,
 } from '../lib/response-policy.mts';
 import type { ResponsePolicyHeaderReader } from '../lib/response-policy.mts';
+import { CSP_POLICY_FIXTURES } from './csp-policy-fixtures.mts';
 
 function headers(
   values: Record<string, string> = {},
@@ -29,6 +31,14 @@ function signalIds(result: ReturnType<typeof analyzeResponsePolicyHeaders>): str
 }
 
 describe('privacy-minimized response-policy analysis', () => {
+  for (const fixture of CSP_POLICY_FIXTURES) {
+    test(`native policy contract: ${fixture.name}`, () => {
+      const result = analyzeResponsePolicyHeaders(headers({ 'content-security-policy': fixture.policy }));
+      assert.equal(result.components.contentSecurityPolicy, 'parsed');
+      assert.equal(signalIds(result).includes('csp_unsafe_inline'), fixture.blocks);
+      assert.equal(signalIds(result).includes('csp_unsafe_inline_attributes'), fixture.attributes);
+    });
+  }
   test('accepts bounded restrictive policies without retaining their values', () => {
     const secret = 'private-nonce-value';
     const result = analyzeResponsePolicyHeaders(headers({
@@ -60,6 +70,7 @@ describe('privacy-minimized response-policy analysis', () => {
       'csp_permissive_script_source',
       'csp_unsafe_eval',
       'csp_unsafe_inline',
+      'csp_unsafe_inline_attributes',
     ]);
     assert.doesNotMatch(JSON.stringify(result), /reports\.invalid|report-uri/);
   });
@@ -85,7 +96,7 @@ describe('privacy-minimized response-policy analysis', () => {
     assert.equal(signalIds(qualified).includes('csp_unsafe_inline'), false);
     assert.equal(signalIds(qualified).includes('csp_inline_constrained_by_meta'), true);
     assert.deepEqual(qualified.diagnostics, {
-      signalCount: 2,
+      signalCount: 3,
       cookieCount: 0,
       cookiesTruncated: false,
       cspMetaPoliciesObserved: 1,
@@ -102,6 +113,81 @@ describe('privacy-minimized response-policy analysis', () => {
     assert.ok(unqualified);
     assert.equal(signalIds(unqualified).includes('csp_unsafe_inline'), true);
     assert.equal(signalIds(unqualified).includes('csp_inline_constrained_by_meta'), false);
+  });
+
+  test('uses source-expression grammar rather than accepting every nonce-shaped token', () => {
+    for (const source of ["'nonce-!invalid'", "'nonce-a=b'", "'nonce-abc==='", "'sha256-'", "'sha512-x%20y'"]) {
+      const result = analyzeResponsePolicyHeaders(headers({ 'content-security-policy': `script-src 'unsafe-inline' ${source}` }));
+      assert.equal(signalIds(result).includes('csp_unsafe_inline'), true, source);
+      assert.equal(signalIds(result).includes('csp_unsafe_inline_attributes'), true, source);
+    }
+    for (const source of ["'nonce-a'", "'nonce-aB+/_-=='", "'sha256-abcd='", "'sha384-abcd'", "'strict-dynamic'"]) {
+      const result = analyzeResponsePolicyHeaders(headers({ 'content-security-policy': `script-src 'unsafe-inline' ${source}` }));
+      assert.equal(signalIds(result).includes('csp_unsafe_inline'), false, source);
+      assert.equal(signalIds(result).includes('csp_unsafe_inline_attributes'), false, source);
+    }
+  });
+
+  test('keeps element, attribute and evaluation directive fallbacks independent', () => {
+    const signals = (policy: string) => signalIds(analyzeResponsePolicyHeaders(headers({ 'content-security-policy': policy })));
+    const blocks = signals("default-src 'none'; script-src 'none'; script-src-elem 'unsafe-inline' 'unsafe-eval'");
+    assert.equal(blocks.includes('csp_unsafe_inline'), true);
+    assert.equal(blocks.includes('csp_unsafe_inline_attributes'), false);
+    assert.equal(blocks.includes('csp_unsafe_eval'), false);
+    const attributes = signals("script-src 'unsafe-inline' 'unsafe-eval'; script-src-elem 'none'");
+    assert.equal(attributes.includes('csp_unsafe_inline'), false);
+    assert.equal(attributes.includes('csp_unsafe_inline_attributes'), true);
+    assert.equal(attributes.includes('csp_unsafe_eval'), true);
+    const both = signals("default-src 'unsafe-inline'; script-src-attr 'none'");
+    assert.equal(both.includes('csp_unsafe_inline'), true);
+    assert.equal(both.includes('csp_unsafe_inline_attributes'), false);
+    const duplicate = signals("script-src-elem 'none'; script-src-elem 'unsafe-inline'");
+    assert.equal(duplicate.includes('csp_unsafe_inline'), false);
+  });
+
+  test('intersects repeated response policies and does not weaken a restrictive policy', () => {
+    for (const policy of [
+      "script-src 'unsafe-inline' 'unsafe-eval', default-src 'none'",
+      "script-src-elem 'none', script-src-elem 'unsafe-inline'",
+      "script-src 'unsafe-inline' 'unsafe-eval'; sandbox allow-forms",
+    ]) {
+      const result = analyzeResponsePolicyHeaders(headers({ 'content-security-policy': policy }));
+      assert.equal(result.status, 'success');
+      assert.equal(signalIds(result).includes('csp_unsafe_inline'), false);
+      assert.equal(signalIds(result).includes('csp_unsafe_eval'), false);
+    }
+    const repeated = analyzeResponsePolicyHeaders(headers({
+      'content-security-policy': "script-src 'unsafe-inline', script-src-elem 'unsafe-inline'; script-src-attr 'none'",
+    }));
+    assert.equal(signalIds(repeated).includes('csp_unsafe_inline'), true);
+    assert.equal(signalIds(repeated).includes('csp_unsafe_inline_attributes'), false);
+  });
+
+  test('does not interpret a truncated policy as permission or reset bounds for each policy', () => {
+    const tokenBoundary = `script-src ${Array.from({ length: MAX_RESPONSE_POLICY_TOKENS - 1 }, () => "'self'").join(' ')} 'unsafe-inline'`;
+    const atBoundary = analyzeResponsePolicyHeaders(headers({ 'content-security-policy': tokenBoundary }));
+    assert.equal(atBoundary.components.contentSecurityPolicy, 'parsed');
+    assert.equal(signalIds(atBoundary).includes('csp_unsafe_inline'), true);
+    const over = analyzeResponsePolicyHeaders(headers({ 'content-security-policy': `${tokenBoundary}, script-src 'none'` }));
+    assert.equal(over.components.contentSecurityPolicy, 'partial');
+    assert.deepEqual(over.signals, []);
+    const directives = analyzeResponsePolicyHeaders(headers({
+      'content-security-policy': Array.from({ length: MAX_RESPONSE_POLICY_DIRECTIVES + 1 }, () => 'default-src').join(','),
+    }));
+    assert.equal(directives.components.contentSecurityPolicy, 'partial');
+    assert.deepEqual(directives.signals, []);
+  });
+
+  test('meta qualification does not claim to evaluate attribute timing or enforce a meta sandbox', () => {
+    const header = analyzeResponsePolicyHeaders(headers({ 'content-security-policy': "script-src 'unsafe-inline'" }));
+    const qualified = qualifyResponsePolicyWithCspMeta(header, analyzeCspMetaPolicies([{
+      content: "script-src-elem 'none'", beforeScript: true,
+    }]));
+    assert.ok(qualified);
+    assert.equal(signalIds(qualified).includes('csp_unsafe_inline'), false);
+    assert.equal(signalIds(qualified).includes('csp_unsafe_inline_attributes'), true);
+    const sandbox = analyzeCspMetaPolicies([{ content: 'sandbox', beforeScript: true }]);
+    assert.equal(sandbox.inlineScriptConstrained, false);
   });
 
   test('distinguishes disabled, short, and sufficiently long HSTS durations', () => {

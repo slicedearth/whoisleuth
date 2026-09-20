@@ -14,7 +14,8 @@ import {
   THREAT_INTELLIGENCE_ENVELOPE_VERSION,
   THREAT_INTELLIGENCE_SCHEMA,
 } from '../lib/threat-intelligence-types.mts';
-import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
+import { buildFixtureRegistrarStanding as buildRegistrarStanding } from './registrar-standing-fixture.mts';
+import { LOOKUP_INVESTIGATION_BRIEF_VERSION } from '../packages/contracts/investigation-portability.mts';
 
 function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpResponse {
   return {
@@ -76,6 +77,25 @@ function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpRespon
 }
 
 describe('Lookup route analysis', () => {
+  test('keeps the network evidence family available without other web collectors', () => {
+    const base = response({ availability: {} });
+    const analyse = (result: LookupHttpResponse) => buildLookupRouteAnalysis({
+      result, lookupView: createLookupViewModel(result), profile: null,
+      task: 'general', completedLookupDepth: 'deep',
+    });
+    assert.equal(analyse(base).hasWebEvidence, false);
+    for (const status of ['success', 'partial', 'unsupported', 'not_found'] as const) {
+      const analysis = analyse({
+        ...base,
+        networkContext: { contextVersion: 1, source: 'ip_rdap', status },
+      });
+      assert.equal(analysis.hasWebEvidence, true);
+      const entry = analysis.evidenceCoverage.entries.find((item) => item.id === 'network-context');
+      assert.ok(entry);
+      assert.equal(entry.manualReviewSuggested, status === 'partial');
+    }
+  });
+
   test('builds the route evidence model from one normalized response view', () => {
     const result = response();
     const analysis = buildLookupRouteAnalysis({
@@ -119,7 +139,7 @@ describe('Lookup route analysis', () => {
         + analysis.lookupReviewActionModel.recommendedNextReviews.omittedCount,
     );
     assert.equal(analysis.lookupClaimReadiness.version, 2);
-    assert.equal(analysis.lookupInvestigationBrief.schemaVersion, 2);
+    assert.equal(analysis.lookupInvestigationBrief.schemaVersion, LOOKUP_INVESTIGATION_BRIEF_VERSION);
     assert.equal(
       analysis.lookupInvestigationBrief.decisionFacts.total,
       analysis.lookupDecisionFacts.length,
@@ -130,6 +150,39 @@ describe('Lookup route analysis', () => {
         + analysis.lookupInvestigationBrief.decisionFacts.omitted,
     );
     assert.equal(Object.hasOwn(analysis.lookupInvestigationBrief, 'verifiedFacts'), false);
+  });
+
+  test('retains complete registration values when long comparison summaries enter the review model', () => {
+    const nameservers = (prefix: string) => Array.from({ length: 8 }, (_, index) => (
+      `${prefix}-${index}.${'n'.repeat(50)}.example.test`
+    ));
+    const rdapNameservers = nameservers('rdap');
+    const whoisNameservers = nameservers('whois');
+    const result = response({
+      rdap: { parsed: { domain: 'EXAMPLE.TEST', nameservers: rdapNameservers } },
+      whois: { parsed: { domainName: 'EXAMPLE.TEST', nameservers: whoisNameservers, contactsByRole: {} }, chain: [] },
+    });
+    const before = structuredClone(result);
+    const analysis = buildLookupRouteAnalysis({
+      result, lookupView: createLookupViewModel(result), profile: null,
+      task: 'general', completedLookupDepth: 'fast',
+    });
+    const comparison = analysis.comparison.fields.find((field) => field.label === 'Name servers');
+    assert.ok(comparison);
+    assert.equal(comparison.status, 'conflict');
+    for (const name of rdapNameservers) assert.ok(comparison.rdapDisplay.includes(name));
+    for (const name of whoisNameservers) assert.ok(comparison.whoisDisplay.includes(name));
+    const entry = analysis.lookupDecisionSupport.entries.find((item) => item.id === 'registry-whois-name-servers');
+    assert.ok(entry);
+    assert.ok(entry.detail.length <= 320);
+    assert.match(entry.detail, /… compared with .*…\.$/u);
+    assert.equal(entry.href, '#registry');
+    assert.ok(analysis.lookupReviewActionModel.recommendedNextReviews.rankedItems.some((action) => (
+      action.contributingFactIds.includes('lookup-decision:registry-whois-name-servers')
+    )));
+    assert.ok(analysis.lookupDecisionFacts.some((fact) => fact.id === 'lookup-decision:registry-whois-name-servers'));
+    assert.equal(analysis.caseEvidence.availability, 'registered');
+    assert.deepEqual(result, before);
   });
 
   test('keeps registrar standing outside Risk and Opportunity scoring', () => {

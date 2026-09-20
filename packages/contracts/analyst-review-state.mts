@@ -1,5 +1,5 @@
 import { defineSchemaCompatibility } from './schema-compatibility.mts';
-import { buildExtractedLifecycleFamilyV2 } from './extracted-domain-lifecycle.mts';
+import { buildExtractedLifecycleFamily } from './extracted-domain-lifecycle.mts';
 import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 import {
   ANALYST_REVIEW_STATE_SCHEMA,
@@ -27,14 +27,15 @@ export const ANALYST_REVIEW_STATE_COMPATIBILITY = defineSchemaCompatibility({
   note: 'Bounded analyst-authored lifecycle overlay. Material evidence changes, expiry, and incomplete evidence reopen review without rewriting source evidence or losing earlier rationale.',
 });
 
-export const ANALYST_REVIEW_STATE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(buildExtractedLifecycleFamilyV2({
+export const ANALYST_REVIEW_STATE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(buildExtractedLifecycleFamily({
   id: 'analyst-review-state',
   owner: ANALYST_REVIEW_STATE_CONTRACT_OWNER,
   serializerModule: 'packages/monitoring/analyst-review-state.mts',
   serializerExportName: 'serialiseAnalystReviewStateJson',
   plane: 'browser',
-  projection: 'browser_export',
-  retention: 'operator_controlled_output',
+  projection: 'browser_import',
+  retention: 'browser_indexeddb',
+  notePolicy: 'allowed_bounded',
   includedCategories: ['subject-identity', 'material-fingerprint', 'analyst-disposition', 'rationale', 'review-times', 'case-and-campaign-references'],
   excludedCategories: ['raw-upstream-responses', 'expanded-contacts', 'complete-query-urls', 'credentials', 'cookies', 'certificate-transparency-history'],
   formats: [{

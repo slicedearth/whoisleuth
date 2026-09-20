@@ -17,6 +17,7 @@ import {
   WEB_CAPTURE_SUMMARY_VERSION,
 } from '../contracts/web-capture.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { readCaptureConditions, readObservationLabel, type ObservationContext } from '../comparison/capture-context.mts';
 export {
   WEB_CAPTURE_MANIFEST_SCHEMA,
   WEB_CAPTURE_MANIFEST_VERSION,
@@ -44,6 +45,7 @@ const CAPTURE_KEYS = new Set([
   'networkOrigins',
 ]);
 const MANIFEST_CAPTURE_KEYS = new Set([
+  'conditions', 'observerLabel', 'vantageLabel',
   'domain',
   'capturedAt',
   'completeness',
@@ -239,7 +241,21 @@ function partitionSummary(fragments: readonly string[]): string[] {
   return summaries;
 }
 
-export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocument {
+export type CaptureArtifactDeclaration = Readonly<{
+  capture: number;
+  observedAt: string | null;
+  kind: 'screenshot' | 'dom_digest';
+  fileName: string;
+  mimeType: string;
+  sha256: string;
+  bytes: number;
+}>;
+
+export function readWebCaptureManifest(value: unknown): Readonly<{
+  document: ExternalFindingsDocument;
+  artifacts: readonly CaptureArtifactDeclaration[];
+  captures: readonly (ObservationContext & Readonly<{ domain: string; completeness: string }>)[];
+}> {
   const root = record(value);
   if (
     !root
@@ -258,6 +274,8 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
     throw new Error(`Web capture manifests must contain between 1 and ${MAX_WEB_CAPTURE_SUMMARIES} captures.`);
   }
   const findings: Array<Record<string, unknown>> = [];
+  const artifacts: CaptureArtifactDeclaration[] = [];
+  const contexts: Array<ObservationContext & Readonly<{ domain: string; completeness: string }>> = [];
   const domainCounts = new Map<string, number>();
   const findingCounts = new Map<string, number>();
   for (const [index, raw] of root.captures.entries()) {
@@ -276,10 +294,13 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
       throw new Error(`Web capture manifests exceed the ${MAX_EXTERNAL_FINDING_DOMAINS}-domain limit.`);
     }
     const observedAt = timestamp(capture.capturedAt, `Web capture manifest ${index + 1} time`);
+    const conditions = readCaptureConditions(capture.conditions);
+    const observerLabel = readObservationLabel(capture.observerLabel), vantageLabel = readObservationLabel(capture.vantageLabel);
     const completeness = ['complete', 'inconclusive', 'partial', 'unknown'].includes(String(capture.completeness))
       ? capture.completeness
       : 'unknown';
     const limitations = stringList(capture.limitations, 8, 240, `Web capture manifest ${index + 1} limitations`);
+    contexts.push({ domain, observedAt, completeness: String(completeness), conditions, observerLabel, vantageLabel });
     const page = record(capture.page);
     if (page && !onlyKeys(page, PAGE_KEYS)) throw new Error(`Web capture manifest ${index + 1} page metadata contains unsupported fields.`);
     const pageTitle = text(page?.title, 300, `Web capture manifest ${index + 1} title`, true);
@@ -328,8 +349,11 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
         }
         artifactSummaries.push(`DOM digest ${fileName}: application/json, ${bytes} bytes, SHA-256 ${sha256}.`);
       }
+      artifacts.push({ capture: index + 1, observedAt, kind, fileName, mimeType: mimeType!, sha256, bytes });
     }
     const summaryFragments = [
+      ...(conditions ? [`Declared capture conditions: ${conditions.browser} ${conditions.browserVersion}; viewport ${conditions.viewport.width}x${conditions.viewport.height}; scale ${conditions.deviceScaleFactor}; locale ${conditions.locale}; timezone ${conditions.timezone}; ${conditions.colourScheme}.`] : []),
+      ...(observerLabel || vantageLabel ? [`Declared observer: ${observerLabel ?? 'unknown'}; vantage: ${vantageLabel ?? 'unknown'}. These labels do not verify collection independence.`] : []),
       pageTitle || finalOrigin
         ? `Sanitised page capture${pageTitle ? ` titled "${pageTitle}"` : ''}${finalOrigin ? ` ended at origin ${finalOrigin}` : ''}.`
         : '',
@@ -352,17 +376,44 @@ export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocumen
         observedAt,
         completeness,
         limitations: [
-          'Imported sanitised capture manifest metadata; WHOISleuth did not receive artefact bytes or independently verify their digests.',
+          'Imported capture metadata, not independently collected website evidence; artefact bytes and separate byte checks are not retained in these findings.',
           ...limitations,
         ].slice(0, 8),
         reference: sourceReference,
       });
     }
   }
-  return parseExternalFindingsDocument({
+  const document = parseExternalFindingsDocument({
     schema: EXTERNAL_FINDINGS_SCHEMA,
     schemaVersion: EXTERNAL_FINDINGS_VERSION,
     source: { name: sourceName, reference: sourceReference, collectedAt: sourceCollectedAt },
     findings,
+  });
+  return { document, artifacts, captures: contexts };
+}
+
+export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocument {
+  return readWebCaptureManifest(value).document;
+}
+
+export type CaptureArtifactMatch = Readonly<{
+  capture: number;
+  kind: CaptureArtifactDeclaration['kind'];
+  state: 'matched' | 'not_found';
+  matchingIds: readonly string[];
+}>;
+
+// Candidates must describe bytes already read and hashed by the caller. File
+// names and MIME declarations never establish identity; equal copies are all
+// reported rather than choosing an arbitrary file.
+export function matchCaptureArtifacts(
+  artifacts: readonly CaptureArtifactDeclaration[],
+  candidates: readonly Readonly<{ id: string; bytes: number; sha256: string }>[],
+): CaptureArtifactMatch[] {
+  return artifacts.map(artifact => {
+    const matchingIds = candidates.filter(candidate => candidate.bytes === artifact.bytes
+      && candidate.sha256.replace(/^sha256:/u, '') === artifact.sha256)
+      .map(candidate => candidate.id);
+    return { capture: artifact.capture, kind: artifact.kind, state: matchingIds.length ? 'matched' : 'not_found', matchingIds };
   });
 }

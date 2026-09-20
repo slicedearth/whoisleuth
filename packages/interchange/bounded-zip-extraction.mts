@@ -4,6 +4,7 @@ import {
   unzipSync,
   type UnzipFileInfo,
 } from 'fflate';
+import { updateCrc32 } from './crc32.mts';
 
 type BoundedZipSelection = Readonly<{
   key: string;
@@ -13,7 +14,7 @@ type BoundedZipSelection = Readonly<{
 }>;
 
 type BoundedZipExtractionOptions = Readonly<{
-  inspect: (entry: UnzipFileInfo) => BoundedZipSelection;
+  inspect: (entry: UnzipFileInfo, metadata: Readonly<{ kind: 'file' | 'directory' | 'special' | 'unspecified' }>) => BoundedZipSelection;
   keyForName: (name: string) => string;
   maximumEntries: number;
   maximumSelectedBytes: number;
@@ -35,6 +36,7 @@ const DATA_DESCRIPTOR_SIGNATURE = 0x08074b50;
 const MAX_ZIP_COMMENT_BYTES = 0xffff;
 
 type ZipDirectoryEntry = Readonly<{
+  kind: 'file' | 'directory' | 'special' | 'unspecified';
   crc32: number;
   compression: number;
   compressedSize: number;
@@ -42,26 +44,6 @@ type ZipDirectoryEntry = Readonly<{
   localHeaderOffset: number;
   localRegionEnd: number;
 }>;
-
-const CRC32_TABLE = (() => {
-  const table = new Uint32Array(256);
-  for (let index = 0; index < table.length; index += 1) {
-    let value = index;
-    for (let bit = 0; bit < 8; bit += 1) {
-      value = (value & 1) !== 0 ? 0xedb8_8320 ^ (value >>> 1) : value >>> 1;
-    }
-    table[index] = value >>> 0;
-  }
-  return table;
-})();
-
-function updateCrc32(state: number, bytes: Uint8Array): number {
-  let next = state >>> 0;
-  for (const byte of bytes) {
-    next = CRC32_TABLE[(next ^ byte) & 0xff]! ^ (next >>> 8);
-  }
-  return next >>> 0;
-}
 
 function concat(chunks: readonly Uint8Array[], total: number): Uint8Array {
   const output = new Uint8Array(total);
@@ -132,6 +114,11 @@ function inspectZipDirectory(
     const extraBytes = view.getUint16(offset + 30, true);
     const commentBytes = view.getUint16(offset + 32, true);
     const startingDisk = view.getUint16(offset + 34, true);
+    const host = view.getUint16(offset + 4, true) >>> 8;
+    const attributes = view.getUint32(offset + 38, true);
+    const unixType = host === 3 ? (attributes >>> 16) & 0xf000 : 0;
+    const kind = unixType === 0x8000 ? 'file' : unixType === 0x4000 ? 'directory'
+      : unixType !== 0 ? 'special' : (attributes & 0x10) !== 0 ? 'directory' : 'unspecified';
     const localHeaderOffset = view.getUint32(offset + 42, true);
     const nextOffset = offset + 46 + nameBytes + extraBytes + commentBytes;
     if ((flags & 1) !== 0
@@ -190,6 +177,7 @@ function inspectZipDirectory(
     }
 
     entries.push(Object.freeze({
+      kind,
       crc32,
       compression,
       compressedSize,
@@ -237,7 +225,7 @@ function extractBoundedZipEntries(
         || info.originalSize !== directoryEntry.originalSize) {
         throw new Error(options.metadataMismatchMessage);
       }
-      const selection = options.inspect(info);
+      const selection = options.inspect(info, { kind: directoryEntry.kind });
       if (!selection
         || typeof selection.key !== 'string'
         || !selection.key

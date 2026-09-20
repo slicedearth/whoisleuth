@@ -1,168 +1,39 @@
 <script lang="ts">
-  import { tick } from 'svelte';
-  import CaseRelationships from '$lib/components/CaseRelationships.svelte';
-  import EvidenceTimeline from '$lib/components/EvidenceTimeline.svelte';
-  import CaseReportExport from '$lib/components/CaseReportExport.svelte';
-  import DeferredCaseResponseWorkspace from '$lib/components/DeferredCaseResponseWorkspace.svelte';
-  import CaseBrandAssociations from '$lib/components/CaseBrandAssociations.svelte';
   import Pagination from '$lib/components/Pagination.svelte';
-  import type { BrandProfile } from '$lib/brand-profiles';
-  import {
-    CASE_DISPOSITIONS,
-    CASE_REVIEW_REASONS,
-    caseFreeformTags,
-    caseLookupTarget,
-    caseNumber,
-    caseStatusOptionsForDirectEdit,
-    caseTypeRecords,
-    dispositionLabel,
-    isReviewedCaseDisposition,
-    sourceLabel,
-    statusLabel,
-    type CaseRecord,
-  } from '$lib/cases';
+  import { caseFreeformTags, caseNumber, caseTypeRecords, dispositionLabel, isReviewedCaseDisposition, statusLabel, type CaseRecord } from '$lib/cases';
+  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
+  import { handlesLocalLink } from '$lib/link-activation';
 
-  let {
-    records,
-    allRecords,
-    expandedId,
-    tagDraft,
-    setTagDraft,
-    noteDraft,
-    setNoteDraft,
-    pendingNoteCaseIds,
-    calibrationCaseIds,
-    toggleCalibrationCase,
-    expand,
-    setStatus,
-    setDisposition,
-    setReviewReason,
-    addBrandProfileAssociation,
-    removeBrandProfileAssociation,
-    saveTags,
-    addNote,
-    removeCase,
-    refreshCases,
-    installCommittedCaseSnapshot,
-    setMessage,
-    formatDate,
-    currentPage,
-    pageCount,
-    setPage,
-    brandProfiles,
-    brandProfilesUnavailable,
-    responseCaseId = '',
-  }: {
+  let { records, selectCase, formatDate, currentPage, pageCount, setPage, calibrationMode = false, calibrationCaseIds, toggleCalibrationCase }: {
     records: CaseRecord[];
-    allRecords: CaseRecord[];
-    expandedId: string;
-    tagDraft: string;
-    setTagDraft: (value: string) => void;
-    noteDraft: string;
-    setNoteDraft: (value: string) => void;
-    pendingNoteCaseIds: string[];
-    calibrationCaseIds: string[];
-    toggleCalibrationCase: (record: CaseRecord, selected: boolean) => void;
-    expand: (record: CaseRecord) => void;
-    setStatus: (record: CaseRecord, value: string) => void;
-    setDisposition: (record: CaseRecord, value: string) => void;
-    setReviewReason: (record: CaseRecord, value: string) => void;
-    addBrandProfileAssociation: (record: CaseRecord, id: string) => boolean | Promise<boolean>;
-    removeBrandProfileAssociation: (record: CaseRecord, id: string) => boolean | Promise<boolean>;
-    saveTags: (record: CaseRecord) => void;
-    addNote: (record: CaseRecord) => void;
-    removeCase: (record: CaseRecord) => void | Promise<void>;
-    refreshCases: () => void | Promise<void>;
-    installCommittedCaseSnapshot: (cases: CaseRecord[]) => void;
-    setMessage: (value: string) => void;
+    selectCase: (record: CaseRecord) => void;
     formatDate: (value: string) => string;
     currentPage: number;
     pageCount: number;
     setPage: (value: number) => void;
-    brandProfiles: BrandProfile[];
-    brandProfilesUnavailable: boolean;
-    responseCaseId?: string;
+    calibrationMode?: boolean;
+    calibrationCaseIds: string[];
+    toggleCalibrationCase: (record: CaseRecord, selected: boolean) => void;
   } = $props();
-
-  function focusMovedAway(origin: Element | null): boolean {
-    const active = document.activeElement;
-    return active instanceof HTMLElement
-      && active !== origin
-      && active !== document.body
-      && active.isConnected;
-  }
-
-  async function removeAndFocus(record: CaseRecord) {
-    const origin = document.activeElement;
-    const owner = origin instanceof HTMLElement
-      ? origin.closest<HTMLElement>('#monitor-view-panel')
-      : null;
-    const previousIndex = records.findIndex((item) => item.id === record.id);
-    const previousPage = currentPage;
-    await removeCase(record);
-    await tick();
-    if (!owner?.isConnected || focusMovedAway(origin)) return;
-    if (origin instanceof HTMLElement && origin.isConnected) {
-      origin.focus();
-      return;
-    }
-    const next = currentPage < previousPage
-      ? records.at(-1)
-      : records[Math.min(Math.max(0, previousIndex), records.length - 1)];
-    const candidates = [
-      next ? document.getElementById(`case-head-${next.id}`) : null,
-      document.getElementById('new-case'),
-      document.getElementById('tab-cases'),
-    ];
-    const target = candidates.find((candidate) => candidate instanceof HTMLElement);
-    if (target instanceof HTMLElement) target.focus();
-  }
 </script>
 
-<section class="case-list">
+<section class="case-list" aria-label="Saved Cases">
   {#each records as record (record.id)}
-    <article class="case card" class:open={expandedId === record.id}>
-      <label class="calibration-select" class:unavailable={!isReviewedCaseDisposition(record.disposition) || !record.evidenceHistory.length}>
-        <input
-          type="checkbox"
-          checked={calibrationCaseIds.includes(record.id)}
-          disabled={!isReviewedCaseDisposition(record.disposition) || !record.evidenceHistory.length}
-          onchange={(event) => toggleCalibrationCase(record, event.currentTarget.checked)}
-        >
-        Include in offline Risk calibration export
-      </label>
-      <button id={`case-head-${record.id}`} class="case-head" aria-expanded={expandedId === record.id} aria-controls={`case-body-${record.id}`} onclick={() => expand(record)}>
-        <span class="case-domain"><strong>{record.domain}</strong><small><span title={`Complete Case number: ${caseNumber(record.id)}`}>Case …{caseNumber(record.id).slice(-8)}</span>{#if record.notes.length} · {record.notes.length} note{record.notes.length === 1 ? '' : 's'}{/if}</small></span>
-        <span class="badges"><span class={`badge status-${record.status}`}>{statusLabel(record.status)}</span><span class={`badge disposition-${record.disposition}`}>{dispositionLabel(record.disposition)}</span></span>
-        <span class="updated">{formatDate(record.updatedAt)}</span>
-      </button>
-      {#if caseTypeRecords(record.tags).length || caseFreeformTags(record.tags).length}<div class="tag-row">{#each caseTypeRecords(record.tags) as type}<span class="tag case-type">{type.label}</span>{/each}{#each caseFreeformTags(record.tags) as tag}<span class="tag">{tag}</span>{/each}</div>{/if}
-      {#if expandedId === record.id}
-        <div class="case-body" id={`case-body-${record.id}`}>
-          <div class="field-grid">
-            <label class="field">Status<select value={record.status} onchange={(event) => setStatus(record, event.currentTarget.value)}>{#each caseStatusOptionsForDirectEdit(record.status) as option}<option value={option.value}>{option.label}</option>{/each}</select><small>Use the independent-remediation section for a new deliberate closure.</small></label>
-            <label class="field">Disposition<select value={record.disposition} onchange={(event) => setDisposition(record, event.currentTarget.value)}>{#each CASE_DISPOSITIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
-            <label class="field">Review reason<select value={record.reviewReasonCode ?? ''} onchange={(event) => setReviewReason(record, event.currentTarget.value)}>{#each CASE_REVIEW_REASONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
-          </div>
-          <CaseBrandAssociations {record} profiles={brandProfiles} profilesUnavailable={brandProfilesUnavailable} addAssociation={addBrandProfileAssociation} removeAssociation={removeBrandProfileAssociation} />
-          <form class="tags-edit" onsubmit={(event) => { event.preventDefault(); saveTags(record); }}>
-            <label class="field" for={`tags-${record.id}`}>Additional tags <small>comma separated; Case types are managed below</small></label>
-            <div><input id={`tags-${record.id}`} value={tagDraft} oninput={(event) => setTagDraft(event.currentTarget.value)} placeholder="campaign-name, priority" autocomplete="off"><button class="btn" type="submit">Save tags</button></div>
-          </form>
-          <form class="note-edit" onsubmit={(event) => { event.preventDefault(); addNote(record); }}>
-            <label class="field" for={`note-${record.id}`}>Add note</label>
-            <textarea id={`note-${record.id}`} value={noteDraft} disabled={pendingNoteCaseIds.includes(record.id)} oninput={(event) => setNoteDraft(event.currentTarget.value)} rows="2" placeholder="Observed behaviour, evidence, decisions…"></textarea>
-            <button class="btn" type="submit" disabled={!noteDraft.trim() || pendingNoteCaseIds.includes(record.id)}>{pendingNoteCaseIds.includes(record.id) ? 'Adding…' : 'Add note'}</button>
-          </form>
-          {#if record.notes.length}<ol class="notes">{#each [...record.notes].reverse() as note}<li><time datetime={note.createdAt}>{formatDate(note.createdAt)}</time><p>{note.body}</p></li>{/each}</ol>{/if}
-          <CaseRelationships {record} records={allRecords} onselect={expand} />
-          {#key record.id}<EvidenceTimeline {record} />{/key}
-          {#key record.id}<DeferredCaseResponseWorkspace {record} onsaved={refreshCases} oncommitted={installCommittedCaseSnapshot} onmessage={setMessage} openInitially={responseCaseId===record.id} />{/key}
-          {#key record.id}<CaseReportExport {record} onmessage={setMessage} />{/key}
-          <div class="case-meta"><span>Source: {sourceLabel(record.source)}</span><span>Opened {formatDate(record.createdAt)}</span></div>
-          <div class="case-actions"><a class="btn" href={`/lookup?q=${encodeURIComponent(caseLookupTarget(record))}`}>Look up {caseLookupTarget(record) === record.domain ? 'domain' : 'latest hostname'}</a><button id={`case-delete-${record.id}`} class="btn danger" onclick={() => void removeAndFocus(record)}>Delete case</button></div>
-        </div>
+    <article class="case card">
+      {#if calibrationMode}
+        <label class="calibration-select">
+          <input type="checkbox" checked={calibrationCaseIds.includes(record.id)} disabled={!isReviewedCaseDisposition(record.disposition) || !record.evidenceHistory.length} onchange={(event) => toggleCalibrationCase(record, event.currentTarget.checked)}>
+          Include in offline Risk calibration export
+        </label>
       {/if}
+      <a id={`case-head-${record.id}`} class="case-head" href={caseWorkspaceHref(record.id)} onclick={(event) => {
+        if (handlesLocalLink(event)) { event.preventDefault(); selectCase(record); }
+      }}>
+        <span class="case-domain"><strong>{record.title || record.domain}</strong>{#if record.title}<small>{record.domain}</small>{/if}<small title={`Complete Case number: ${caseNumber(record.id)}`}>Case …{caseNumber(record.id).slice(-8)}{record.notes.length ? ` · ${record.notes.length} note${record.notes.length === 1 ? '' : 's'}` : ''}</small></span>
+        <span class="badges"><span class={`badge status-${record.status}`}>{statusLabel(record.status)}</span><span class={`badge disposition-${record.disposition}`}>{dispositionLabel(record.disposition)}</span></span>
+        <time class="updated" datetime={record.updatedAt}>{formatDate(record.updatedAt)}</time>
+      </a>
+      {#if caseTypeRecords(record.tags).length || caseFreeformTags(record.tags).length}<div class="tag-row">{#each caseTypeRecords(record.tags) as type}<span class="tag">{type.label}</span>{/each}{#each caseFreeformTags(record.tags) as tag}<span class="tag">{tag}</span>{/each}</div>{/if}
     </article>
   {/each}
   {#if !records.length}<p class="count">No cases match the current filters.</p>{/if}
@@ -170,47 +41,19 @@
 </section>
 
 <style>
-  .count{margin:12px 2px;color:var(--muted);font-size:var(--text-xs)}
-  .case-list{display:grid;gap:10px}
-  .case{padding:0;overflow:hidden}
-  .case.open{border-color:var(--accent)}
-  .calibration-select{display:flex;align-items:center;gap:8px;padding:9px 18px 0;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
-  .calibration-select input{width:16px;height:16px}
-  .calibration-select.unavailable{opacity:.6}
-  .case-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;width:100%;padding:15px 18px;border:0;background:none;text-align:left;cursor:pointer}
-  .case-head:hover .case-domain strong{color:var(--accent)}
-  .case-domain{display:flex;flex-direction:column;gap:3px;min-width:0}
-  .case-domain strong{overflow-wrap:anywhere;font:700 var(--text-md) var(--mono)}
-  .case-domain small,.updated{color:var(--muted);font-size:var(--text-2xs)}
-  .badges{display:flex;flex-wrap:wrap;gap:6px}
-  .badge.status-escalated{color:var(--danger);border-color:rgb(var(--danger-rgb) / .4)}
-  .badge.status-resolved{color:var(--accent2)}
-  .badge.disposition-confirmed_abuse{color:var(--danger);border-color:rgb(var(--danger-rgb) / .4)}
-  .badge.disposition-suspicious{color:var(--amber)}
-  .badge.disposition-false_positive,.badge.disposition-expected{color:var(--accent2)}
-  .tag-row{display:flex;flex-wrap:wrap;gap:6px;padding:0 18px 14px}
-  .tag{padding:3px 8px;border:1px solid var(--border);border-radius:6px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}
-  .tag.case-type{border-color:rgb(var(--interface-accent-rgb) / .42);color:var(--interface-accent)}
-  .case-body{display:grid;gap:14px;padding:16px 18px;border-top:1px solid var(--border);background:var(--panel)}
-  .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .tags-edit>div{display:flex;gap:8px;margin-top:6px}
-  .tags-edit input{flex:1;min-height:var(--control-h)}
-  .note-edit textarea{width:100%;margin-top:6px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-  .note-edit button{margin-top:8px}
-  .notes{display:grid;gap:8px;margin:0;padding:0;list-style:none}
-  .notes li{display:grid;gap:5px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-  .notes time{color:var(--muted);font:600 var(--text-2xs) var(--mono)}
-  .notes p{margin:0;font-size:var(--text-sm);line-height:1.55;overflow-wrap:anywhere;white-space:pre-wrap}
-  .case-meta{display:flex;flex-wrap:wrap;gap:14px;color:var(--muted);font-size:var(--text-2xs)}
-  .case-actions{display:flex;flex-wrap:wrap;gap:8px}
-  @media(max-width:800px){
-    .case-head{grid-template-columns:1fr;gap:7px}
-    .updated{order:3}
-    .field-grid{grid-template-columns:1fr}
-  }
-  @media(max-width:480px){
-    .calibration-select,.case-head{padding-left:12px;padding-right:12px}
-    .tag-row{padding-left:12px;padding-right:12px}
-    .case-body{padding:12px}
-  }
+  .case-list { display: grid; gap: 8px; }
+  .case { min-width: 0; padding: 0; }
+  .case-head { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 12px; align-items: center; padding: 16px; color: var(--text); text-decoration: none; border-radius: inherit; }
+  .case-head:hover { background: var(--panel-raised); }
+  .case-head:hover strong { color: var(--accent); }
+  .case-domain { display: grid; gap: 6px; min-width: 0; }
+  .case-domain strong { overflow-wrap: anywhere; font: 700 var(--text-md) var(--mono); }
+  .case-domain small, .updated, .count { color: var(--muted); font-size: var(--text-xs); }
+  .badges, .tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag-row { padding: 0 16px 12px; }
+  .tag { padding: 3px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+  .calibration-select { display: flex; align-items: center; gap: 8px; padding: 12px 16px 0; color: var(--muted); font-size: var(--text-xs); }
+  .calibration-select input { width: 18px; height: 18px; }
+  @media(max-width: 900px) { .case-head { grid-template-columns: minmax(0,1fr) auto; } .updated { grid-column: 1/-1; } }
+  @media(max-width: 540px) { .case-head { grid-template-columns: minmax(0,1fr); gap: 10px; } }
 </style>

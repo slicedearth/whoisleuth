@@ -1,3 +1,4 @@
+import { workspaceSessionStorage } from './browser-workspace-context.ts';
 import {
   handoffMatchesNavigationSource,
   parseSerializedHandoff,
@@ -39,7 +40,7 @@ export function saveCandidateHandoff(
   const prepared = serializeCandidateHandoff(source, candidates, generatedCandidates, undefined, token);
   if (!prepared) return { saved: false, reason: 'too_large' };
   try {
-    sessionStorage.setItem(HANDOFF_KEY, prepared.serialized);
+    workspaceSessionStorage().setItem(HANDOFF_KEY, prepared.serialized);
     return {
       saved: true,
       token,
@@ -52,8 +53,9 @@ export function saveCandidateHandoff(
 
 export function consumeCandidateHandoff(expectedToken: string, expectedSource: string): CandidateHandoff | null {
   try {
-    const serialized = sessionStorage.getItem(HANDOFF_KEY);
-    sessionStorage.removeItem(HANDOFF_KEY);
+    const storage = workspaceSessionStorage();
+    const serialized = storage.getItem(HANDOFF_KEY);
+    storage.removeItem(HANDOFF_KEY);
     const handoff = parseSerializedHandoff(serialized);
     return handoff?.token === expectedToken
       && handoffMatchesNavigationSource(handoff.source, expectedSource)

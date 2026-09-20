@@ -1,0 +1,20 @@
+{
+  "schema": "whoisleuth.domain-control-manifest-input",
+  "version": 2,
+  "expiresAt": "2026-09-03T00:00:00.000Z",
+  "entries": [
+    {
+      "domain": "example.test",
+      "nameservers": ["ns1.example.test"],
+      "ds": [],
+      "mx": [],
+      "caa": [],
+      "recordModes": {
+        "nameservers": "expect_records",
+        "ds": "unconfigured",
+        "mx": "expect_none",
+        "caa": "observe_only"
+      }
+    }
+  ]
+}

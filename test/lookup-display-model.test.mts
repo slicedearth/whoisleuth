@@ -74,20 +74,20 @@ test('projects fixed homepage metadata without retaining source values or invent
   assert.doesNotMatch(JSON.stringify({ publication, delivery }), /private value|W\/|Wed,|https:\/\//u);
 });
 
-test('qualifies incomplete homepage counts and malformed cache values without inventing absence', () => {
-  const localAttributeCap = extractHtmlSignals(
+test('qualifies incomplete homepage counts and malformed cache values without inventing absence', async () => {
+  const localAttributeCap = (await extractHtmlSignals(
     `<body><img alt="${'x'.repeat(2_049)}"></body>`,
     'example.com',
-  ).pageIdentity?.publicationMetadata;
+  )).pageIdentity?.publicationMetadata;
   const localDisplay = publicationMetadataDisplay(localAttributeCap);
   assert.match(localDisplay?.rows.find((row) => row.id === 'publication.images')?.value || '', /^1 images/u);
   assert.doesNotMatch(localDisplay?.rows.find((row) => row.id === 'publication.images')?.value || '', /At least/iu);
 
-  const documentCap = extractHtmlSignals(
+  const documentCap = (await extractHtmlSignals(
     '<body><h1>Example</h1><img></body>',
     'example.com',
     { sourceTruncated: true },
-  ).pageIdentity?.publicationMetadata;
+  )).pageIdentity?.publicationMetadata;
   const cappedDisplay = publicationMetadataDisplay(documentCap);
   assert.match(cappedDisplay?.rows.find((row) => row.id === 'publication.headings')?.value || '', /At least 1 total · H1 At least 1/u);
   assert.match(cappedDisplay?.rows.find((row) => row.id === 'publication.images')?.value || '', /At least 1 images · missing At least 1/u);

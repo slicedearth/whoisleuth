@@ -1,8 +1,9 @@
-import type { Server } from 'node:http';
+import { request as httpRequest, type Server } from 'node:http';
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import { recordValue, requiredValue, stringValue } from './value-assertions.mts';
+import { deferred } from './deferred.mts';
 import type { NetworkRouteServices } from '../server.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
@@ -10,6 +11,7 @@ process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-si
 
 const { app, apiErrorHandler, registerNetworkApiRoutes } = await import('../server.mts');
 const { buildSessionCookie, createSessionToken } = await import('../lib/auth.mts');
+const { defaultOperationBudget, operationClassFor } = await import('../lib/operation-budget.mts');
 
 let server: Server | null = null;
 let origin = '';
@@ -33,7 +35,7 @@ const fixtureServices = {
   fetchRdapRecord: async (_type: string, value: string) => {
     serviceFailure(value);
     serviceCalls.push(['rdap', value]);
-    return value === 'missing.test' ? null : { fixtureRdap: true };
+    return value === 'missing.test' || value === 'example.gt' ? null : { fixtureRdap: true };
   },
   searchRdapNameserver: async (nameserver: unknown, scope: unknown) => {
     serviceFailure(nameserver);
@@ -233,6 +235,65 @@ describe('fixture-injected Express network routes', () => {
     });
   }
 
+  test('disconnected individual routes cancel collectors, retain their lease until settlement and send no late response', async () => {
+    const routes = [
+      { route: 'rdap?q=example.test', feature: 'rdap', service: 'fetchRdapRecord', optionsIndex: 2 },
+      { route: 'rdap-nameserver-search?nameserver=ns.example.test&scope=test', feature: 'rdap_nameserver_search', service: 'searchRdapNameserver', optionsIndex: 2 },
+      { route: 'whois?q=example.test', feature: 'whois', service: 'buildWhoisChain', optionsIndex: 1 },
+      { route: 'availability?q=example.test', feature: 'availability', service: 'checkDomainAvailability', optionsIndex: 1 },
+      { route: 'ct-search?q=example', feature: 'certificate_transparency', service: 'searchCertificateTransparency', optionsIndex: 1 },
+      { route: 'domain-posture?q=example.test', feature: 'domain_posture', service: 'checkDomainPosture', optionsIndex: 1 },
+    ];
+    for (const { route, feature, service, optionsIndex } of routes) {
+      const started = deferred<AbortSignal>(), cancelled = deferred<void>();
+      const complete = deferred<never>();
+      const fixture = express();
+      let lateWrites = 0;
+      fixture.use((_request, response, next) => {
+        const json = response.json.bind(response);
+        response.json = body => { if (response.destroyed) lateWrites += 1; return json(body); };
+        next();
+      });
+      registerNetworkApiRoutes(fixture, { ...fixtureServices,
+        [service]: async (...args: unknown[]) => {
+          const signal = (args[optionsIndex] as { signal: AbortSignal }).signal;
+          assert.ok(signal instanceof AbortSignal, service);
+          signal.addEventListener('abort', () => cancelled.resolve(), { once: true });
+          started.resolve(signal);
+          return complete.promise;
+        },
+      });
+      const listener = await new Promise<Server>(resolve => {
+        const listener = fixture.listen(0, '127.0.0.1', () => resolve(listener));
+      });
+      const address = listener.address(); assert.ok(address && typeof address !== 'string');
+      const localOrigin = `http://127.0.0.1:${address.port}`;
+      const active = async () => (await defaultOperationBudget.status()).find(item => item.id === operationClassFor(feature))!.active;
+      const before = await active(); assert.equal(typeof before, 'number');
+      const request = httpRequest(`${localOrigin}/api/${route}`, { headers: {
+        Cookie: sessionCookie(), Origin: localOrigin, 'Sec-Fetch-Site': 'same-origin',
+      } }, () => assert.fail('disconnected request must not receive a result'));
+      request.on('error', () => {});
+      try {
+        request.end();
+        const signal = await started.promise;
+        assert.equal(await active(), before! + 1, service);
+        request.destroy();
+        await cancelled.promise;
+        assert.equal(signal.aborted, true);
+        assert.equal(await active(), before! + 1, `${service} must retain its capacity while its collector drains`);
+        complete.reject(new Error('fixture collector drained'));
+        // Yield to the completed promise chain, not an elapsed-time guess.
+        await new Promise<void>(resolve => setImmediate(resolve));
+        assert.equal(await active(), before, service);
+        assert.equal(lateWrites, 0, service);
+      } finally {
+        request.destroy(); complete.reject(new Error('fixture cleanup'));
+        await new Promise<void>((resolve, reject) => listener.close(error => error ? reject(error) : resolve()));
+      }
+    }
+  });
+
   test('covers every successful route projection without upstream traffic', async () => {
     serviceCalls.length = 0;
     const routes = [
@@ -260,6 +321,74 @@ describe('fixture-injected Express network routes', () => {
     assert.equal(lookupOptions.securityTxt, true);
   });
 
+  test('admits additional posture DNS only for the exact query opt-in', async () => {
+    serviceCalls.length = 0;
+    assert.equal((await request('/api/domain-posture?q=example.test')).status, 200);
+    assert.equal((serviceCalls.at(-1)?.[2] as Record<string, unknown>).includeInheritedDns, undefined);
+    assert.equal((await request('/api/domain-posture?q=example.test&includeInheritedDns=1')).status, 200);
+    assert.equal((serviceCalls.at(-1)?.[2] as Record<string, unknown>).includeInheritedDns, true);
+    for (const value of ['true', '0', '1&includeInheritedDns=1']) assert.equal((await request(`/api/domain-posture?q=example.test&includeInheritedDns=${value}`)).status, 400);
+    assert.equal(serviceCalls.length, 2);
+  });
+
+  test('domain source refresh keeps registration and observation targets distinct in both depths', async () => {
+    for (const fast of [false, true]) {
+      serviceCalls.length = 0;
+      const response = await request(`/api/availability?q=portal.example.test${fast ? '&fast=1' : ''}`);
+      assert.equal(response.status, 200);
+      assert.equal(serviceCalls.length, 1);
+      const call = serviceCalls[0]!;
+      assert.equal(call[0], 'availability');
+      assert.equal(call[1], 'example.test');
+      assert.equal((call[2] as Record<string, unknown>).observationHostname, fast ? undefined : 'portal.example.test');
+    }
+  });
+
+  test('POST Lookup admits selected URLs through the same authenticated network guards', async () => {
+    const url = 'https://portal.example.test/review?a=private-example#local-fragment';
+    const send = (suffix = '', origin = fixtureOrigin, payload = JSON.stringify({ url })) => fetch(`${fixtureOrigin}/api/lookup?q=portal.example.test${suffix}`, {
+      method: 'POST', headers: { Cookie: sessionCookie(), Origin: origin, 'Sec-Fetch-Site': 'same-origin', 'Content-Type': 'application/json' }, body: payload,
+    });
+    serviceCalls.length = 0;
+    const response = await send();
+    assert.equal(response.status, 200);
+    assert.doesNotMatch(await response.text(), /private-example|local-fragment/);
+    assert.equal((serviceCalls[0]?.[2] as Record<string, unknown>).selectedUrl, 'https://portal.example.test/review?a=private-example');
+    for (const response of [await send('&fast=1'), await send('&compact=1'), await send('', 'https://other.invalid'), await send('', fixtureOrigin, '{')]) {
+      assert.ok([400, 403].includes(response.status));
+    }
+    assert.equal(serviceCalls.length, 1);
+  });
+
+  test('selected URL bodies reject declared and streamed excess and invalid UTF-8 before collection', async () => {
+    const { MAX_LOOKUP_SELECTION_BODY_BYTES } = await import('../lib/lookup-selected-request.mts');
+    const send = (bytes: Buffer, declared: boolean) => new Promise<{ status: number; body: string }>((resolve, reject) => {
+      const request = httpRequest(`${fixtureOrigin}/api/lookup?q=portal.example.test`, { method: 'POST', headers: {
+        Cookie: sessionCookie(), Origin: fixtureOrigin, 'Sec-Fetch-Site': 'same-origin', 'Content-Type': 'application/json',
+        ...(declared ? { 'Content-Length': String(bytes.length) } : { 'Transfer-Encoding': 'chunked' }),
+      } }, (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('end', () => resolve({ status: response.statusCode!, body: Buffer.concat(chunks).toString('utf8') }));
+        response.on('error', reject);
+      });
+      request.on('error', reject);
+      request.setTimeout(5_000, () => request.destroy(new Error('Fixture request did not complete.')));
+      if (declared) request.end(bytes);
+      else request.write(bytes);
+    });
+    serviceCalls.length = 0;
+    for (const declared of [true, false]) {
+      const response = await send(Buffer.alloc(MAX_LOOKUP_SELECTION_BODY_BYTES + 1, 'x'), declared);
+      assert.equal(response.status, 413);
+      assert.deepEqual(JSON.parse(response.body), { error: 'Selected URL request is too large.' });
+    }
+    const invalid = await send(Buffer.from([0xc3, 0x28]), true);
+    assert.equal(invalid.status, 400);
+    assert.deepEqual(JSON.parse(invalid.body), { error: 'Invalid request encoding.' });
+    assert.equal(serviceCalls.length, 0);
+  });
+
   test('preserves missing-query and non-domain responses without calling services', async () => {
     for (const route of ['lookup', 'rdap', 'whois', 'availability', 'ct-search', 'domain-posture']) {
       const beforeCalls = serviceCalls.length;
@@ -281,9 +410,17 @@ describe('fixture-injected Express network routes', () => {
   });
 
   test('retains RDAP no-registry state and sanitizes every service failure', async () => {
+    const beforeCalls = serviceCalls.length;
     const missing = await request('/api/rdap?q=missing.test');
     assert.equal(missing.status, 404);
     assert.match(String(recordValue(await missing.json()).error), /No RDAP registry found/u);
+    const absentFromCatalogue = await request('/api/rdap?q=example.gt');
+    assert.equal(absentFromCatalogue.status, 404);
+    const unavailable = recordValue(await absentFromCatalogue.json());
+    assert.equal(unavailable.source, undefined);
+    assert.match(String(unavailable.error), /No RDAP registry found.*via IANA bootstrap/u);
+    assert.doesNotMatch(String(unavailable.error), /collection was not attempted/u);
+    assert.deepEqual(serviceCalls.slice(beforeCalls), [['rdap', 'missing.test'], ['rdap', 'example.gt']]);
 
     const routes = [
       '/api/lookup?q=throw.test',

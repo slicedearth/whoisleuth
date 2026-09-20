@@ -5,7 +5,7 @@ import {
 } from './investigation-search.ts';
 
 export const MAX_INVESTIGATION_CONTEXT_PREVIEW_RESULTS = 3;
-export const MAX_INVESTIGATION_CONTEXT_PREVIEW_LIMITATIONS = 4;
+export const MAX_INVESTIGATION_CONTEXT_PREVIEW_LIMITATIONS = 8;
 
 export type InvestigationContextPreviewState = 'idle' | 'ready' | 'partial' | 'unavailable' | 'no_matches';
 
@@ -33,14 +33,15 @@ function limitations(values: readonly string[]): string[] {
 }
 
 function omittedMatchDetail(count: number): string {
-  return `${count} additional local match${count === 1 ? ' was' : 'es were'} omitted from this three-item preview.`;
+  return `${count} other local match${count === 1 ? ' is' : 'es are'} available on the other result pages.`;
 }
 
 export function projectInvestigationContextPreview(
   index: InvestigationSearchIndex,
   query: unknown,
+  page = 1,
 ): InvestigationContextPreview {
-  const response = searchInvestigationIndex(index, query);
+  const response = searchInvestigationIndex(index, query, { page, pageSize: MAX_INVESTIGATION_CONTEXT_PREVIEW_RESULTS });
   if (response.state === 'idle') {
     return { state: 'idle', query: '', results: [], totalMatches: 0, omittedMatches: 0, detail: 'Enter a target before opening saved context.', limitations: [] };
   }
@@ -50,18 +51,16 @@ export function projectInvestigationContextPreview(
 
   const sourceLimitations = RETAINED_SOURCES
     .filter((source) => index.sources[source].state !== 'supported')
-    .map((source) => `${SOURCE_LABELS[source]} saved context is ${index.sources[source].state} and was not fully searched.`);
-  const results = response.results.slice(0, MAX_INVESTIGATION_CONTEXT_PREVIEW_RESULTS);
+    .map((source) => `${SOURCE_LABELS[source]} (${index.sources[source].state})`);
+  const results = response.results;
   const omittedMatches = Math.max(0, response.totalMatches - results.length);
   const partial = index.truncated
-    || response.truncated
-    || omittedMatches > 0
     || sourceLimitations.length > 0
     || results.some((result) => result.complete !== true || result.truncated === true);
   const previewLimitations = limitations([
-    ...(omittedMatches > 0 ? [omittedMatchDetail(omittedMatches)] : []),
-    ...sourceLimitations,
+    ...(sourceLimitations.length ? [`Saved collections not fully searched: ${sourceLimitations.join(', ')}.`] : []),
     ...index.limitations,
+    ...(omittedMatches > 0 ? [omittedMatchDetail(omittedMatches)] : []),
   ]);
 
   if (response.state === 'no_matches') {
@@ -85,8 +84,8 @@ export function projectInvestigationContextPreview(
     totalMatches: response.totalMatches,
     omittedMatches,
     detail: partial
-      ? `Showing ${results.length} bounded local match${results.length === 1 ? '' : 'es'} with partial coverage.${omittedMatches > 0 ? ` ${omittedMatchDetail(omittedMatches)}` : ''}`
-      : `Showing ${results.length} complete local match${results.length === 1 ? '' : 'es'}.`,
+      ? `${response.detail} The retained evidence or local coverage is partial.`
+      : response.detail,
     limitations: previewLimitations,
   };
 }

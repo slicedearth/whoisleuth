@@ -1,8 +1,11 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { caseWorkspaceHref as caseSectionHref } from '$lib/analysis/case-response-stage.ts';
   import { page } from '$app/state';
   import { onMount, tick } from 'svelte';
   import { loadLocalInvestigationProjection } from '$lib/investigation-search';
+  import { investigationGuideEvidenceContext, investigationGuideCaseContext } from '$lib/analysis/investigation-guide-context.ts';
+  import { readSelectedConsoleCase, selectConsoleCase, subscribeSelectedConsoleCase } from '$lib/console-workflow-state.ts';
   import { activeProfile } from '$lib/brand-profiles';
   import { loadCases, type CaseRecord } from '$lib/cases';
   import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data.ts';
@@ -11,7 +14,7 @@
   import { buildGuidedCollectionPreflight } from '$lib/analysis/collection-preflight.ts';
   import CollectionPreflight from '$lib/components/CollectionPreflight.svelte';
   import { normalizeInvestigationGuideDomain } from '$lib/analysis/investigation-guide.ts';
-  import { toolNavigation } from '$lib/workspaces';
+  import { casesNavigation, toolNavigation } from '$lib/workspaces';
   import {
     approveInvestigationGuideCollection,
     clearInvestigationGuide,
@@ -64,12 +67,14 @@
   let restartPending = $state(false);
   let exportPending = $state(false);
   let exportError = $state('');
-  let contextDismissed = $state(false);
+  let workPlanOpen = $state(false);
+  const outcomeDrafts = new Map<string, { outcome: 'partial' | 'skipped'; note: string }>();
   let editingTarget = $state(false);
   let targetChangePending = $state(false);
   let contextDomain = $state('');
   let contextError = $state('');
   let localContextError = $state('');
+  let persistenceError = $state('');
   let evidenceContextAvailable = $state(true);
   let profileContextAvailable = $state(true);
   let caseContextAvailable = $state(true);
@@ -77,17 +82,20 @@
   let profileContextPending = $state(true);
   let caseContextPending = $state(true);
   let localContextRefreshVersion = 0;
+  let focusRequest = 0;
   let guideSection = $state<HTMLElement | null>(null);
   let actionPanel = $state<HTMLElement | null>(null);
   let actionVisible = $state(true);
-  let actionObserver: IntersectionObserver | null = null;
-  let actionObservationVersion = 0;
   let handledLocation = '';
-  type StoredEvidenceContext = Readonly<{ observations: number; relationships: number; partial: boolean; truncated: boolean; latestObservedAt: string }>;
-  const emptyStoredEvidenceContext = (): StoredEvidenceContext => ({ observations: 0, relationships: 0, partial: false, truncated: false, latestObservedAt: '' });
+  type StoredEvidenceContext = ReturnType<typeof investigationGuideEvidenceContext>;
+  const emptyStoredEvidenceContext = (): StoredEvidenceContext => investigationGuideEvidenceContext(null, '', new Date().toISOString());
   let evidence = $state<StoredEvidenceContext>(emptyStoredEvidenceContext());
   let contextProfile = $state<BrandProfile | null>(null);
   let contextCase = $state<CaseRecord | null>(null);
+  let contextCaseChoices = $state<ReturnType<typeof investigationGuideCaseContext>['choices']>([]);
+  let contextCaseLabel = $state('Not retained');
+  let caseSelector = $state<HTMLSelectElement | null>(null);
+  const caseSelectionRequired = $derived(!contextCase && contextCaseChoices.length > 0);
   const localContextPending = $derived(evidenceContextPending || profileContextPending || caseContextPending);
   const recipe = $derived(guide ? investigationGuideRecipe(guide.recipeId) : null);
   const stages = $derived(guide ? investigationGuideStagesForGuide(guide) : []);
@@ -106,7 +114,7 @@
   const actionApproved = $derived(Boolean(actionStage && (!actionStage.requiresApproval || actionProgress?.approvedAt)));
   const candidateSelectionRequired = $derived(Boolean(guide?.recipeId === 'brand_sweep' && actionStage?.id === 'lookup' && !guide.focusDomain));
   const actionHref = $derived(actionStage && guide
-    ? actionIsCurrent
+    ? actionIsCurrent && !(actionStage.workspace === 'monitor' && page.url.searchParams.has('case'))
       ? targetHashes.get(actionStage.path) || actionStage.path
       : investigationGuideHref(actionStage.id, guide.domain, guide.recipeId, guide.focusDomain)
     : '/dashboard');
@@ -119,9 +127,8 @@
     !evidenceContextPending && !caseContextPending && evidenceContextAvailable && caseContextAvailable,
   );
   const caseWorkspaceHref = $derived(contextCase
-    ? `/monitor?view=cases&case=${encodeURIComponent(contextCase.id)}#case-response-${encodeURIComponent(contextCase.id)}`
+    ? caseSectionHref(contextCase.id, 'response')
     : null);
-  const evidenceFreshness = $derived(formatEvidenceFreshness(evidence.latestObservedAt, evidence.observations));
   const actionPreflight = $derived(actionStage ? buildGuidedCollectionPreflight({
     label: actionStage.label,
     requestImpact: actionStage.requestImpact,
@@ -130,21 +137,11 @@
     approved: actionApproved,
   }) : null);
 
-  function formatEvidenceFreshness(observedAt: string, observations: number): string {
-    if (!observations || !observedAt) return 'No retained evidence';
-    const parsed = new Date(observedAt);
-    if (!Number.isFinite(parsed.getTime())) return 'Retained time unavailable';
-    return `Latest ${new Intl.DateTimeFormat('en-AU', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    }).format(parsed)}`;
-  }
-
   async function refreshStoredContext() {
     const refreshVersion = ++localContextRefreshVersion;
     const requestedGuide = guide;
     const requestedIdentity = guideIdentity(requestedGuide);
+    const selectedCaseId = readSelectedConsoleCase();
     evidenceContextPending = true;
     profileContextPending = true;
     caseContextPending = true;
@@ -152,7 +149,7 @@
     const [evidenceResult, profileResult, caseResult] = await Promise.allSettled([
       refreshEvidence(requestedGuide),
       refreshProfileContext(requestedGuide),
-      refreshCaseContext(requestedGuide),
+      refreshCaseContext(requestedGuide, selectedCaseId),
     ]);
     if (refreshVersion !== localContextRefreshVersion || requestedIdentity !== guideIdentity(guide)) return;
     evidenceContextAvailable = evidenceResult.status === 'fulfilled';
@@ -160,7 +157,9 @@
     caseContextAvailable = caseResult.status === 'fulfilled';
     evidence = evidenceResult.status === 'fulfilled' ? evidenceResult.value : emptyStoredEvidenceContext();
     contextProfile = profileResult.status === 'fulfilled' ? profileResult.value : null;
-    contextCase = caseResult.status === 'fulfilled' ? caseResult.value : null;
+    contextCase = caseResult.status === 'fulfilled' ? caseResult.value.record : null;
+    contextCaseChoices = caseResult.status === 'fulfilled' ? caseResult.value.choices : [];
+    contextCaseLabel = caseResult.status === 'fulfilled' ? caseResult.value.label : 'Unavailable';
     evidenceContextPending = false;
     profileContextPending = false;
     caseContextPending = false;
@@ -174,8 +173,8 @@
         !caseContextAvailable ? 'Cases' : '',
       ].filter(Boolean).join(', ');
       localContextError = expectedFailure
-        ? `Some browser-local investigation context is unavailable (${unavailable}). Healthy sources remain available, and unreadable saved data is not treated as absent.`
-        : `Browser-local investigation context could not be refreshed (${unavailable}). Healthy sources remain available, and unreadable saved data is not treated as absent.`;
+        ? `Some saved investigation context is unavailable (${unavailable}). Healthy sources remain available, and unreadable saved data is not treated as absent.`
+        : `Saved investigation context could not be refreshed (${unavailable}). Healthy sources remain available, and unreadable saved data is not treated as absent.`;
     }
   }
 
@@ -184,7 +183,10 @@
   }
 
   async function revealGuide() {
+    const request = ++focusRequest;
+    workPlanOpen = true;
     await tick();
+    if (!mounted || request !== focusRequest) return;
     guideSection?.focus({ preventScroll: true });
     guideSection?.scrollIntoView({ block: 'start' });
   }
@@ -203,46 +205,50 @@
     });
   }
 
-  async function observeAction() {
-    const observationVersion = ++actionObservationVersion;
-    await tick();
-    if (observationVersion !== actionObservationVersion) return;
-    actionObserver?.disconnect();
-    actionObserver = null;
-    const panel = actionPanel;
+  $effect(() => {
+    const panel = workPlanOpen ? actionPanel : guideSection;
     if (!panel) {
       actionVisible = true;
       return;
     }
     actionVisible = actionExposureRatio(panel) >= usefulActionExposure;
     if (typeof IntersectionObserver === 'undefined') return;
-    actionObserver = new IntersectionObserver(([entry]) => {
-      if (observationVersion !== actionObservationVersion || actionPanel !== panel) return;
+    let active = true;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!active || !panel.isConnected) return;
       const ratio = entry?.isIntersecting ? entry.intersectionRatio : 0;
       actionVisible = ratio >= (actionVisible ? usefulActionExposure : returnControlHideExposure);
     }, { threshold: [0, usefulActionExposure, returnControlHideExposure] });
-    actionObserver.observe(panel);
-  }
+    observer.observe(panel);
+    return () => { active = false; observer.disconnect(); };
+  });
 
   async function revealAction() {
+    const request = ++focusRequest;
+    const startingFocus = document.activeElement;
+    workPlanOpen = true;
     actionVisible = true;
     await tick();
-    actionPanel?.focus({ preventScroll: true });
-    await afterLayout();
+    if (!mounted || request !== focusRequest
+      || (document.activeElement !== startingFocus && document.activeElement !== document.body)) return;
     const panel = actionPanel;
     if (!panel) return;
+    panel.focus({ preventScroll: true });
+    const stillOwnsFocus = () => mounted && request === focusRequest
+      && panel.isConnected && document.activeElement === panel;
+    await afterLayout();
+    if (!stillOwnsFocus()) return;
     for (const block of ['center', 'start', 'center'] as const) {
       panel.scrollIntoView({ behavior: 'auto', block });
       await afterLayout();
+      if (!stillOwnsFocus()) return;
       if (actionExposureRatio(panel) >= usefulActionExposure) break;
     }
-    panel.focus({ preventScroll: true });
-    await afterLayout();
-    await observeAction();
-    actionPanel?.focus({ preventScroll: true });
+    actionVisible = actionExposureRatio(panel) >= usefulActionExposure;
   }
 
   async function focusRouteTarget(hash: string) {
+    const request = ++focusRequest;
     let targetId = '';
     try {
       targetId = decodeURIComponent(hash.replace(/^#/, ''));
@@ -252,6 +258,7 @@
     if (!guideTargetIds.has(targetId)) return;
     await tick();
     await afterLayout();
+    if (!mounted || request !== focusRequest) return;
     const target = document.getElementById(targetId);
     if (!target) return;
     target.scrollIntoView({ block: 'center' });
@@ -269,8 +276,8 @@
       reviewingLocation = '';
       pendingOutcome = null;
       outcomeNote = '';
+      outcomeDrafts.clear();
       planOpen = false;
-      contextDismissed = false;
       editingTarget = false;
       targetChangePending = false;
       contextDomain = guide?.focusDomain || guide?.domain || '';
@@ -278,32 +285,13 @@
     }
     void refreshStoredContext();
     if (identityChanged) void revealGuide();
-    void observeAction();
   }
 
   async function refreshEvidence(requestedGuide: InvestigationGuide | null): Promise<StoredEvidenceContext> {
     if (!requestedGuide) return emptyStoredEvidenceContext();
     const projection = await loadLocalInvestigationProjection();
     const targetDomain = requestedGuide.focusDomain || requestedGuide.domain;
-    const domainEntity = projection.entities.find((entity) => entity.type === 'domain' && entity.canonical === targetDomain);
-    if (!domainEntity) {
-      return { ...emptyStoredEvidenceContext(), truncated: projection.truncated };
-    }
-    const observationIds = new Set(domainEntity.observationIds);
-    const observations = projection.observations.filter((observation) => observationIds.has(observation.id));
-    const relationships = projection.relationships.filter((relationship) => relationship.from === domainEntity.id || relationship.to === domainEntity.id);
-    return {
-      observations: observations.length,
-      relationships: relationships.length,
-      partial: observations.some((observation) => observation.status === 'partial' || observation.complete !== true),
-      truncated: projection.truncated || domainEntity.observationsTruncated
-        || observations.some((observation) => observation.truncated === true || observation.entityReferencesTruncated)
-        || relationships.some((relationship) => relationship.truncated === true || relationship.sourceObservationsTruncated),
-      latestObservedAt: observations.reduce(
-        (latest, observation) => observation.observedAt > latest ? observation.observedAt : latest,
-        '',
-      ),
-    };
+    return investigationGuideEvidenceContext(projection, targetDomain, new Date().toISOString());
   }
 
   async function refreshProfileContext(requestedGuide: InvestigationGuide | null): Promise<BrandProfile | null> {
@@ -311,23 +299,44 @@
     return activeProfile();
   }
 
-  async function refreshCaseContext(requestedGuide: InvestigationGuide | null): Promise<CaseRecord | null> {
-    if (!requestedGuide) return null;
+  async function refreshCaseContext(requestedGuide: InvestigationGuide | null, selectedId: string | null) {
+    if (!requestedGuide) return investigationGuideCaseContext([], '', null);
     const cases = await loadCases();
     const targetDomain = requestedGuide.focusDomain || requestedGuide.domain;
-    return cases.find((record) => record.domain === targetDomain) || null;
+    return investigationGuideCaseContext(cases, targetDomain, selectedId);
+  }
+
+  function revealCaseSelector() {
+    focusRequest += 1;
+    caseSelector?.focus({ preventScroll: true });
+    caseSelector?.scrollIntoView({ block: 'center' });
   }
 
   function endGuide() {
-    actionObservationVersion += 1;
-    actionObserver?.disconnect();
-    actionObserver = null;
-    clearInvestigationGuide();
+    try {
+      clearInvestigationGuide();
+    } catch (cause) {
+      persistenceError = cause instanceof Error ? cause.message : 'Could not clear the guided investigation.';
+      return;
+    }
+    persistenceError = '';
     guide = null;
   }
 
+  function applyGuideMutation(operation: () => InvestigationGuide | null): boolean {
+    try {
+      const next = operation();
+      guide = next;
+      persistenceError = '';
+      return true;
+    } catch (cause) {
+      persistenceError = cause instanceof Error ? cause.message : 'Could not save guided investigation progress.';
+      return false;
+    }
+  }
+
   function togglePause() {
-    guide = guide?.status === 'paused' ? resumeInvestigationGuide() : pauseInvestigationGuide();
+    applyGuideMutation(guide?.status === 'paused' ? resumeInvestigationGuide : pauseInvestigationGuide);
   }
 
   function beginTargetEdit() {
@@ -368,8 +377,9 @@
       reviewingLocation = '';
       pendingOutcome = null;
       outcomeNote = '';
+      outcomeDrafts.clear();
       planOpen = false;
-      contextDismissed = false;
+      workPlanOpen = true;
       editingTarget = false;
       targetChangePending = false;
       contextDomain = domain;
@@ -381,22 +391,22 @@
   }
 
   async function approveAndOpen(stage: InvestigationRecipeStage) {
-    guide = approveInvestigationGuideCollection(stage.id);
+    if (!applyGuideMutation(() => approveInvestigationGuideCollection(stage.id))) return;
     closeRequestReview();
     if (!guide) return;
     const approvedHref = investigationGuideApprovedHref(guide, stage.id);
     if (approvedHref === '/bulk?source=discover#domains') {
       if (page.url.pathname === stage.path && page.url.searchParams.get('source') === 'discover') {
-        guide = recordInvestigationGuideVisit(page.url.pathname);
+        applyGuideMutation(() => recordInvestigationGuideVisit(page.url.pathname));
         await focusRouteTarget('#domains');
       } else {
         await goto(approvedHref);
-        guide = recordInvestigationGuideVisit(stage.path) ?? guide;
+        applyGuideMutation(() => recordInvestigationGuideVisit(stage.path));
       }
       return;
     }
     await goto(approvedHref);
-    guide = recordInvestigationGuideVisit(stage.path) ?? guide;
+    applyGuideMutation(() => recordInvestigationGuideVisit(stage.path));
   }
 
   function openRequestReview(stageId: string) {
@@ -410,11 +420,13 @@
   }
 
   function setOutcome(stageId: string, outcome: 'pending' | 'complete' | 'partial' | 'skipped') {
-    guide = updateInvestigationGuideOutcome(stageId, outcome);
+    if (!applyGuideMutation(() => updateInvestigationGuideOutcome(stageId, outcome))) return;
+    outcomeDrafts.delete(stageId);
     pendingOutcome = null;
     outcomeNote = '';
     if (outcome !== 'pending') {
       selectedStageId = '';
+      restoreOutcomeDraft(nextStageId);
       planOpen = false;
       void revealAction();
     }
@@ -427,25 +439,42 @@
 
   function confirmOutcome(stageId: string) {
     if (!pendingOutcome || !outcomeNote.trim()) return;
-    guide = updateInvestigationGuideOutcome(stageId, pendingOutcome, outcomeNote);
+    const outcome = pendingOutcome;
+    if (!applyGuideMutation(() => updateInvestigationGuideOutcome(stageId, outcome, outcomeNote))) return;
+    outcomeDrafts.delete(stageId);
     pendingOutcome = null;
     outcomeNote = '';
     selectedStageId = '';
+    restoreOutcomeDraft(nextStageId);
     planOpen = false;
     void revealAction();
   }
 
   function cancelOutcomeReview() {
+    if (actionStage) outcomeDrafts.delete(actionStage.id);
     pendingOutcome = null;
     outcomeNote = '';
   }
 
+  function rememberOutcomeDraft() {
+    if (!actionStage) return;
+    if (pendingOutcome) outcomeDrafts.set(actionStage.id, { outcome: pendingOutcome, note: outcomeNote });
+    else outcomeDrafts.delete(actionStage.id);
+  }
+
+  function restoreOutcomeDraft(stageId: string | null) {
+    const draft = stageId ? outcomeDrafts.get(stageId) : undefined;
+    pendingOutcome = draft?.outcome ?? null;
+    outcomeNote = draft?.note ?? '';
+  }
+
   function reviewStage(stageId: string) {
+    if (!stages.some((stage) => stage.id === stageId)) return;
+    rememberOutcomeDraft();
     selectedStageId = stageId;
     reviewingStageId = '';
     reviewingLocation = '';
-    pendingOutcome = null;
-    outcomeNote = '';
+    restoreOutcomeDraft(stageId);
     planOpen = false;
     void revealAction();
   }
@@ -455,7 +484,10 @@
       restartPending = true;
       return;
     }
-    guide = restartStoredInvestigationGuide();
+    if (!applyGuideMutation(restartStoredInvestigationGuide)) return;
+    outcomeDrafts.clear();
+    pendingOutcome = null;
+    outcomeNote = '';
     selectedStageId = '';
     reviewingStageId = '';
     reviewingLocation = '';
@@ -487,6 +519,7 @@
   }
 
   function toolLabel(stage: InvestigationRecipeStage): string {
+    if (stage.workspace === 'monitor') return casesNavigation.label;
     return toolLabels.get(stage.path) ?? stage.workspace;
   }
 
@@ -501,18 +534,25 @@
     const pathname = page.url.pathname;
     const hash = page.url.hash;
     handledLocation = `${pathname}\u0000${hash}`;
-    guide = recordInvestigationGuideVisit(pathname) ?? guide;
+    applyGuideMutation(() => recordInvestigationGuideVisit(pathname));
     void (async () => {
       contextDomain = guide?.focusDomain || guide?.domain || '';
       if (revealOnMount) await revealGuide();
       if (hash) await focusRouteTarget(hash);
-      await observeAction();
-      void refreshStoredContext();
+      if (mounted) void refreshStoredContext();
     })();
     window.addEventListener(INVESTIGATION_GUIDE_EVENT, refreshFromEvent);
+    let selectedId = readSelectedConsoleCase();
+    const unsubscribeSelection = subscribeSelectedConsoleCase((id) => {
+      if (id === selectedId) return;
+      selectedId = id;
+      void refreshStoredContext();
+    });
     return () => {
-      actionObservationVersion += 1;
-      actionObserver?.disconnect();
+      mounted = false;
+      localContextRefreshVersion += 1;
+      focusRequest += 1;
+      unsubscribeSelection();
       window.removeEventListener(INVESTIGATION_GUIDE_EVENT, refreshFromEvent);
     };
   });
@@ -523,42 +563,57 @@
     const location = `${pathname}\u0000${hash}`;
     if (mounted && location !== handledLocation) {
       handledLocation = location;
+      rememberOutcomeDraft();
       selectedStageId = '';
+      restoreOutcomeDraft(nextStageId);
+      workPlanOpen = false;
       if (reviewingLocation !== location) {
         reviewingStageId = '';
         reviewingLocation = '';
       }
-      guide = recordInvestigationGuideVisit(pathname);
-      if (hash) void focusRouteTarget(hash).then(observeAction);
-      else void observeAction();
+      applyGuideMutation(() => recordInvestigationGuideVisit(pathname));
+      if (hash) void focusRouteTarget(hash);
     }
   });
 </script>
 
 {#if guide && recipe}
   <section class="guide card" aria-labelledby="investigation-guide-title" tabindex="-1" bind:this={guideSection}>
+    <details class="work-plan" bind:open={workPlanOpen}>
+      <summary>
+        <span class="guide-title" id="investigation-guide-title">{guide.template?.label || recipe.label}: {guide.domain}</span>
+        <span class="recipe-progress">{guide.status === 'paused' ? 'Paused · ' : ''}{reviewedCount} of {stages.length} steps reviewed · {actionStage?.label || 'Review completed plan'}</span>
+      </summary>
     <div class="guide-heading">
-      <div>
-        <p class="eyebrow">Guided investigation</p>
-        <strong class="guide-title" id="investigation-guide-title">{guide.template?.label || recipe.label}: {guide.domain}</strong>
-        <p class="recipe-progress">{guide.template ? `${recipe.label} template · ` : ''}{reviewedCount} of {stages.length} steps reviewed</p>
-      </div>
+      <label class="stage-selector" for="guide-review-stage">Review step
+        <select id="guide-review-stage" value={actionStage?.id || ''} onchange={(event) => reviewStage(event.currentTarget.value)}>
+          {#if !actionStage}<option value="" disabled>All steps reviewed</option>{/if}
+          {#each stages as stage, index}<option value={stage.id}>{index + 1}. {stage.label} · {stageState(stage.id)}</option>{/each}
+        </select>
+      </label>
       <div class="context-actions">
         <span class:paused={guide.status === 'paused'} class="recipe-status">{guide.status === 'paused' ? 'Paused' : 'Active'}</span>
-        <button class="btn compact" type="button" onclick={() => contextDismissed = !contextDismissed}>{contextDismissed ? 'Show work plan' : 'Dismiss details'}</button>
         <button class="btn compact danger" type="button" onclick={endGuide}>Clear context</button>
       </div>
     </div>
     <dl class="context-tray" aria-label="Active investigation context">
       <div><dt>Target</dt><dd>{guide.focusDomain || guide.domain}</dd></div>
       <div><dt>Brand Profile</dt><dd>{profileContextPending ? 'Loading…' : profileContextAvailable ? contextProfile?.name || 'None active' : 'Unavailable'}</dd></div>
-      <div><dt>Case</dt><dd>{caseContextPending ? 'Loading…' : caseContextAvailable ? contextCase ? `${contextCase.status} · ${contextCase.disposition}` : 'Not retained' : 'Unavailable'}</dd></div>
-      <div><dt>Evidence freshness</dt><dd>{evidenceContextPending ? 'Loading…' : evidenceContextAvailable ? evidenceFreshness : 'Unavailable'}</dd></div>
+      <div class:case-choice={contextCaseChoices.length > 0}><dt>Case</dt><dd>
+        {#if contextCaseChoices.length}
+          <select aria-label="Case for this guide" aria-busy={caseContextPending} bind:this={caseSelector} value={contextCase?.id || ''} onchange={(event) => selectConsoleCase(event.currentTarget.value)}>
+            <option value="" disabled>Choose Case</option>
+            {#each contextCaseChoices as choice (choice.id)}<option value={choice.id}>{choice.domain}</option>{/each}
+          </select>
+        {/if}
+        <span role="status">{caseContextPending ? 'Loading…' : contextCaseLabel}</span>
+      </dd></div>
+      <div><dt>Retained evidence time</dt><dd>{evidenceContextPending ? 'Loading…' : evidenceContextAvailable ? evidence.timeLabel : 'Unavailable'}</dd></div>
       <div><dt>Next action</dt><dd>{actionStage?.label || 'Review completed plan'}</dd></div>
     </dl>
     {#if localContextError}<p class="local-context-error" role="status">{localContextError}</p>{/if}
+    {#if persistenceError}<p class="local-context-error" role="alert">{persistenceError}</p>{/if}
 
-    {#if !contextDismissed}
     {#if actionStage && actionProgress}
       {#key actionStage.id}
         <article class="current-action" tabindex="-1" bind:this={actionPanel}>
@@ -585,26 +640,30 @@
                 <section class:ready={handoffReadiness.status === 'ready'} class="handoff-readiness" aria-label="Case handoff readiness">
                   <div>
                     <span>Case handoff</span>
-                    <strong>{handoffReadiness.label}</strong>
+                    <strong>{caseSelectionRequired ? contextCaseLabel : handoffReadiness.label}</strong>
                   </div>
-                  <ul>
-                    {#each handoffReadiness.checks as check}
-                      <li class:caution={check.state === 'caution'} class:block={check.state === 'block'}>
-                        <span aria-hidden="true">{check.state === 'pass' ? '✓' : check.state === 'caution' ? '!' : '×'}</span>
-                        <span><strong>{check.label}</strong><small>{check.detail}</small></span>
-                      </li>
-                    {/each}
-                  </ul>
-                  {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Open case decision workspace</a>{/if}
-                  <p>{handoffReadiness.limitations[0]}</p>
+                  {#if caseSelectionRequired}
+                    <button class="btn compact" type="button" onclick={revealCaseSelector}>Choose Case for handoff</button>
+                  {:else}
+                    <ul>
+                      {#each handoffReadiness.checks as check}
+                        <li class:caution={check.state === 'caution'} class:block={check.state === 'block'}>
+                          <span aria-hidden="true">{check.state === 'pass' ? '✓' : check.state === 'caution' ? '!' : '×'}</span>
+                          <span><strong>{check.label}</strong><small>{check.detail}</small></span>
+                        </li>
+                      {/each}
+                    </ul>
+                    {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Open case decision workspace</a>{/if}
+                    <p>{handoffReadiness.limitations[0]}</p>
+                  {/if}
                 </section>
               {:else}
                 <section class="handoff-readiness unavailable" aria-label="Case handoff readiness">
                   <div>
                     <span>Case handoff</span>
-                    <strong>{localContextPending ? 'Checking browser-local context' : 'Handoff context unavailable'}</strong>
+                    <strong>{localContextPending ? 'Checking saved context' : 'Handoff context unavailable'}</strong>
                   </div>
-                  <p>{localContextPending ? 'The readiness check will appear after browser-local case and evidence context settles.' : 'Browser-local case or evidence context could not be read. No handoff check is inferred from unavailable saved data.'}</p>
+                  <p>{localContextPending ? 'The readiness check will appear after saved case and evidence context settles.' : 'Saved case or evidence context could not be read. No handoff check is inferred from unavailable saved data.'}</p>
                 </section>
               {/if}
             {/if}
@@ -662,7 +721,7 @@
                     required
                     placeholder={pendingOutcome === 'partial' ? 'Record missing, unavailable, or deferred work.' : 'Record why this step does not apply or is deferred.'}
                   ></textarea>
-                  <small>{outcomeNote.length}/{MAX_INVESTIGATION_GUIDE_REVIEW_NOTE_LENGTH} characters · stored in this tab and included in the compact guide export</small>
+                  <small>{outcomeNote.length}/{MAX_INVESTIGATION_GUIDE_REVIEW_NOTE_LENGTH} characters · confirmed notes are saved in this tab and included in the guide export</small>
                   <div class="request-actions">
                     <button class="primary compact" type="submit">Confirm {pendingOutcome}</button>
                     <button class="btn compact" type="button" onclick={cancelOutcomeReview}>Cancel</button>
@@ -682,18 +741,22 @@
           <section class:ready={handoffReadiness.status === 'ready'} class="handoff-readiness complete-handoff" aria-label="Completed guide handoff readiness">
             <div>
               <span>Decision handoff</span>
-              <strong>{handoffReadiness.label}</strong>
+              <strong>{caseSelectionRequired ? contextCaseLabel : handoffReadiness.label}</strong>
             </div>
-            <p>{handoffReadiness.counts.evidencePins} evidence pin{handoffReadiness.counts.evidencePins === 1 ? '' : 's'} · {handoffReadiness.counts.decisions} decision{handoffReadiness.counts.decisions === 1 ? '' : 's'} · {handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions} unresolved unknown or contradiction record{handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions === 1 ? '' : 's'}</p>
-            {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Review case decision workspace</a>{/if}
+            {#if caseSelectionRequired}
+              <button class="btn compact" type="button" onclick={revealCaseSelector}>Choose Case for handoff</button>
+            {:else}
+              <p>{handoffReadiness.counts.evidencePins} evidence pin{handoffReadiness.counts.evidencePins === 1 ? '' : 's'} · {handoffReadiness.counts.decisions} decision{handoffReadiness.counts.decisions === 1 ? '' : 's'} · {handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions} unresolved unknown or contradiction record{handoffReadiness.counts.openUnknowns + handoffReadiness.counts.openContradictions === 1 ? '' : 's'}</p>
+              {#if caseWorkspaceHref}<a class="btn compact" href={caseWorkspaceHref}>Review case decision workspace</a>{/if}
+            {/if}
           </section>
         {:else}
           <section class="handoff-readiness complete-handoff unavailable" aria-label="Completed guide handoff readiness">
             <div>
               <span>Decision handoff</span>
-              <strong>{localContextPending ? 'Checking browser-local context' : 'Handoff context unavailable'}</strong>
+              <strong>{localContextPending ? 'Checking saved context' : 'Handoff context unavailable'}</strong>
             </div>
-            <p>{localContextPending ? 'The readiness summary will appear after browser-local case and evidence context settles.' : 'Browser-local case or evidence context could not be read. No completed handoff state is inferred from unavailable saved data.'}</p>
+            <p>{localContextPending ? 'The readiness summary will appear after saved case and evidence context settles.' : 'Saved case or evidence context could not be read. No completed handoff state is inferred from unavailable saved data.'}</p>
           </section>
         {/if}
       </article>
@@ -709,9 +772,11 @@
           <li data-stage-id={stage.id} class:current={isCurrent} class:partial={progress?.outcome === 'partial'} class:complete={progress?.outcome === 'complete'} class:skipped={progress?.outcome === 'skipped'}>
             <details open={actionStage?.id === stage.id}>
               <summary>
+                <span class="plan-stage-label">
                 <span aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
                 <span class="stage-heading"><strong>{stage.label}</strong><small>{stage.detail}</small></span>
                 <span class="stage-state">{isCurrent ? `Current · ${stageState(stage.id)}` : stageState(stage.id)}</span>
+                </span>
               </summary>
               <div class="stage-body">
                 <dl>
@@ -732,7 +797,7 @@
     <div class="secondary-details">
       <details class="evidence-checkpoint">
         <summary>{localContextPending ? 'Checking saved evidence' : evidenceContextAvailable ? `Saved evidence · ${evidence.observations} observation${evidence.observations === 1 ? '' : 's'} · ${evidence.relationships} relationship${evidence.relationships === 1 ? '' : 's'}` : 'Saved evidence unavailable'}</summary>
-        <p>{localContextPending ? 'Browser-local evidence context is still loading, so no retained-evidence conclusion is available yet.' : evidenceContextAvailable ? evidence.observations || evidence.relationships ? 'These retained records are a checkpoint, not proof that a step is complete.' : 'No saved observation in this browser currently links to this domain. This does not mean evidence is absent elsewhere.' : 'Browser-local evidence could not be read. Continue with the guide, but do not interpret this state as an empty evidence history.'}{!localContextPending && evidenceContextAvailable && evidence.partial ? ' Some retained evidence is partial.' : ''}{!localContextPending && evidenceContextAvailable && evidence.truncated ? ' A saved-data or source limit was reached.' : ''}</p>
+        <p>{localContextPending ? 'Saved evidence context is still loading, so no retained-evidence conclusion is available yet.' : evidenceContextAvailable ? evidence.observations || evidence.relationships ? 'These retained records are a checkpoint, not proof that a step is complete.' : 'No saved observation in this workspace currently links to this domain. This does not mean evidence is absent elsewhere.' : 'Saved evidence could not be read. Continue with the guide, but do not interpret this state as an empty evidence history.'}{!localContextPending && evidenceContextAvailable && evidence.partial ? ' Some retained evidence is partial.' : ''}{!localContextPending && evidenceContextAvailable && evidence.truncated ? ' A saved-data or source limit was reached.' : ''}</p>
       </details>
       <details class="guide-options">
         <summary>Guide options</summary>
@@ -761,7 +826,7 @@
       </details>
     </div>
     <p class="boundary">Progress stays in this tab. The guide never starts a scan, submits a target, changes Risk, or decides a case disposition.</p>
-    {/if}
+    </details>
   </section>
 {/if}
 
@@ -774,27 +839,32 @@
 {/if}
 
 <style>
-  .guide{margin:0 0 24px;padding:16px;scroll-margin-top:76px}
+  .guide{margin:0 0 20px;padding:0 16px;scroll-margin-top:76px}
+  .work-plan>summary{padding:14px 0;cursor:pointer;line-height:1.5}
+  .work-plan[open]{padding-bottom:16px}
+  .stage-selector{display:grid;gap:5px;flex:1;max-width:64ch;min-width:0;font-size:var(--text-xs);color:var(--muted)}
+  .stage-selector select{width:100%;min-width:0;font-size:var(--text-sm)}
   .guide:focus,.current-action:focus{outline:2px solid var(--accent);outline-offset:3px}
-  .guide-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+  .guide-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:8px}
   .context-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;align-items:center}
-  .guide-title{display:block;margin:3px 0 0;overflow-wrap:anywhere;font:700 var(--text-md) var(--mono)}
-  .recipe-progress{margin:5px 0 0;color:var(--muted);font-size:var(--text-2xs)}
+  .guide-title{overflow-wrap:anywhere;font:700 var(--text-sm) var(--mono)}
+  .recipe-progress{display:block;margin:4px 0 0 1.2em;color:var(--muted);font-size:var(--text-xs);overflow-wrap:anywhere}
   .recipe-status{flex:none;padding:5px 8px;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--border));border-radius:999px;color:var(--accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   .recipe-status.paused{border-color:var(--border);color:var(--muted)}
-  .context-tray{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;margin:12px 0 0;padding:1px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--border)}
-  .context-tray div{display:block;min-width:0;padding:8px 9px;background:var(--surface)}
+  .context-tray{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:14px 0 0;padding:12px 0;border-block:1px solid var(--border)}
+  .context-tray div{display:block;min-width:0}
   .context-tray dt,.context-tray dd{display:block}
   .context-tray dd{margin:3px 0 0;overflow-wrap:anywhere}
-  .local-context-error{margin:8px 0 0;color:var(--amber);font-size:var(--text-2xs);line-height:1.45}
-  .current-action{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(250px,.85fr);gap:18px;align-items:start;margin-top:13px;padding:16px;border:1px solid rgb(var(--accent-rgb) / .5);border-radius:var(--radius-md);background:rgb(var(--accent-rgb) / .07);scroll-margin-top:88px}
+  .context-tray select{display:block;width:100%;min-width:0;max-width:100%;margin-bottom:5px;font-size:var(--text-xs)}
+  .local-context-error{margin:8px 0 0;color:var(--amber);font-size:var(--text-sm);line-height:1.45}
+  .current-action{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(250px,.85fr);gap:24px;align-items:start;margin-top:16px;padding:0;scroll-margin-top:88px}
   .step-number{margin:0;color:var(--accent);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   .action-copy h2{margin:4px 0 5px;font:700 var(--text-md) var(--mono)}
-  .action-copy>p{max-width:760px;margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
+  .action-copy>p{max-width:72ch;margin:0;color:var(--muted);font-size:var(--text-sm);line-height:1.5}
   .action-copy>.step-number{color:var(--accent);font:700 var(--text-2xs) var(--mono)}
   .action-copy h3{margin:13px 0 6px;color:var(--text);font:700 var(--text-xs) var(--mono)}
-  .action-instructions{display:grid;gap:5px;margin:0;padding-left:20px;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
-  .completion-check{margin-top:13px;padding:10px 11px;border-left:3px solid var(--accent);background:rgb(var(--accent-rgb) / .06)}
+  .action-instructions{display:grid;gap:6px;max-width:72ch;margin:0;padding-left:20px;color:var(--muted);font-size:var(--text-sm);line-height:1.5}
+  .completion-check{margin-top:16px;padding-top:12px;border-top:1px solid var(--border)}
   .completion-check h3{margin:0 0 7px}
   .completion-check dl{margin:0;padding:0;border:0}
   .action-controls{display:grid;gap:9px;align-content:start}
@@ -805,15 +875,15 @@
   .mobile-action-label strong{margin-top:2px;font:700 var(--text-sm) var(--mono)}
   .request-review{display:grid;gap:7px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
   .request-review>strong{font:700 var(--text-xs) var(--mono)}
-  .candidate-note,.outcome-state{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
+  .candidate-note,.outcome-state{margin:0;color:var(--muted);font-size:var(--text-sm);line-height:1.45}
   .candidate-note strong{color:var(--text)}
   .request-actions,.outcome-actions{display:flex;flex-wrap:wrap;gap:6px}
   .outcome-actions{margin-top:2px;padding-top:9px;border-top:1px solid var(--border)}
   .outcome-actions>span{flex:1 0 100%;color:var(--muted);font:700 var(--text-2xs) var(--mono)}
   .outcome-review{display:grid;gap:7px;padding:10px;border:1px solid var(--amber);border-radius:var(--radius-sm);background:var(--surface)}
-  .outcome-review label{font:700 var(--text-2xs) var(--mono)}
+  .outcome-review label{font:700 var(--text-xs) var(--mono)}
   .outcome-review textarea{width:100%;min-height:74px;resize:vertical}
-  .outcome-review>small{color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
+  .outcome-review>small{color:var(--muted);font-size:var(--text-xs);line-height:1.4}
   .handoff-readiness{display:grid;gap:8px;padding:11px;border:1px solid var(--amber);border-radius:var(--radius-sm);background:var(--surface)}
   .handoff-readiness.ready{border-color:var(--success)}
   .handoff-readiness.unavailable{border-color:var(--border)}
@@ -826,27 +896,25 @@
   .handoff-readiness li.block{color:var(--danger)}
   .handoff-readiness li>span:first-child{font:700 var(--text-xs) var(--mono)}
   .handoff-readiness li strong,.handoff-readiness li small{display:block}
-  .handoff-readiness li strong{color:var(--text);font-size:var(--text-2xs)}
-  .handoff-readiness li small{margin-top:1px;color:var(--muted);font-size:var(--text-2xs);line-height:1.35}
-  .handoff-readiness>p{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
+  .handoff-readiness li strong{color:var(--text);font-size:var(--text-xs)}
+  .handoff-readiness li small{margin-top:1px;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
+  .handoff-readiness>p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
   .complete-handoff{margin-top:12px;max-width:780px}
-  .guide-complete{margin-top:13px;padding:16px;border:1px solid rgb(var(--accent2-rgb) / .5);border-radius:var(--radius-md);background:rgb(var(--accent2-rgb) / .07)}
+  .guide-complete{margin-top:16px;padding:0}
   .guide-complete h2{margin:4px 0 6px;font:700 var(--text-md) var(--mono)}
   .guide-complete>p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}
-  .compact{flex:none;padding:7px 10px;font-size:var(--text-2xs)}
+  .compact{flex:none;padding:8px 10px;font-size:var(--text-xs)}
   .plan-toggle{margin-top:10px}
   #investigation-plan{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 0;padding:0;list-style:none}
   #investigation-plan>li{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   summary{cursor:pointer}
-  #investigation-plan>li summary{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:6px 9px;align-items:start;padding:12px;list-style:none}
-  #investigation-plan>li summary::-webkit-details-marker{display:none}
-  #investigation-plan>li summary::after{content:'+';color:var(--muted);font:700 var(--text-sm) var(--mono);line-height:1}
-  #investigation-plan>li details[open] summary::after{content:'−'}
-  #investigation-plan>li summary>span:first-child{color:var(--muted);font:700 var(--text-2xs) var(--mono)}
+  #investigation-plan>li summary{padding:12px}
+  .plan-stage-label{display:inline-grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 9px;align-items:start;vertical-align:top;width:calc(100% - 1.2em)}
+  .plan-stage-label>span:first-child{color:var(--muted);font:700 var(--text-xs) var(--mono)}
   .stage-heading{min-width:0}
   #investigation-plan>li strong,#investigation-plan>li small{display:block}
   #investigation-plan>li strong{font:700 var(--text-xs) var(--mono)}
-  #investigation-plan>li small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}
+  #investigation-plan>li small{margin-top:3px;color:var(--muted);font-size:var(--text-xs);line-height:1.4}
   .stage-state{color:var(--muted);font:700 var(--text-2xs) var(--mono);text-align:right}
   #investigation-plan>li.current{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
   #investigation-plan>li.current .stage-state{color:var(--accent)}
@@ -855,11 +923,11 @@
   .stage-body{padding:0 12px 12px}
   dl{display:grid;gap:7px;margin:0 0 12px;padding-top:12px;border-top:1px solid var(--border)}
   dl div{display:grid;grid-template-columns:105px minmax(0,1fr);gap:8px}
-  dt{color:var(--muted);font:700 var(--text-2xs) var(--mono)}
-  dd{margin:0;font-size:var(--text-2xs);line-height:1.45}
+  dt{color:var(--muted);font:700 var(--text-xs) var(--mono)}
+  dd{min-width:0;margin:0;font-size:var(--text-xs);line-height:1.45;overflow-wrap:anywhere}
   .secondary-details{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px;margin-top:10px}
-  .secondary-details>details{flex:1 1 300px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
-  .secondary-details>details>summary{padding:9px 10px;font:700 var(--text-2xs) var(--mono)}
+  .secondary-details>details{flex:1 1 300px;min-width:0;border-top:1px solid var(--border)}
+  .secondary-details>details>summary{padding:12px 0;font:700 var(--text-xs) var(--mono)}
   .evidence-checkpoint p{margin:0;padding:0 10px 10px;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
   .guide-controls{display:flex;flex-wrap:wrap;gap:6px;padding:0 10px 10px}
   .guide-options .error{margin:0 10px 10px}
@@ -876,7 +944,8 @@
   .guide-return strong{margin:2px 0;font-size:var(--text-xs);overflow-wrap:anywhere}
   .guide-return small{color:var(--accent);font-weight:700}
   .guide-return:hover{border-color:var(--accent);background:var(--panel-raised)}
-  @media(max-width:900px){#investigation-plan{grid-template-columns:1fr}.current-action{grid-template-columns:1fr}.context-tray{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:900px){#investigation-plan{grid-template-columns:1fr}.current-action{grid-template-columns:1fr}.context-tray{grid-template-columns:repeat(2,minmax(0,1fr))}.context-tray .case-choice{grid-column:1/-1}}
   @media(max-width:560px){.guide-heading{flex-wrap:wrap}.context-actions{width:100%;justify-content:flex-start}.current-action>.action-copy{grid-row:2}.current-action>.action-controls{grid-row:1}.mobile-action-label{display:block}.action-controls>a,.action-controls>button{width:100%}.request-actions,.outcome-actions{display:grid}.secondary-details{display:grid}.guide-controls{display:grid;grid-template-columns:1fr 1fr}.guide-controls .btn{width:100%}.target-edit{grid-template-columns:1fr}dl div{grid-template-columns:1fr;gap:2px}.guide-return{right:10px;bottom:max(10px,env(safe-area-inset-bottom));max-width:calc(100vw - 20px)}}
-  @media(max-width:360px){.guide-controls{grid-template-columns:1fr}#investigation-plan>li summary{grid-template-columns:auto minmax(0,1fr) auto}.stage-state{grid-column:2;text-align:left}#investigation-plan>li summary::after{grid-column:3;grid-row:1}}
+  @media(max-width:560px){.compact,.stage-selector select,.context-tray select,.work-plan>summary,#investigation-plan>li summary,.secondary-details>details>summary{min-height:44px}.stage-selector{flex-basis:100%}}
+  @media(max-width:360px){.guide-controls{grid-template-columns:1fr}.plan-stage-label{grid-template-columns:auto minmax(0,1fr)}.stage-state{grid-column:2;text-align:left}}
 </style>

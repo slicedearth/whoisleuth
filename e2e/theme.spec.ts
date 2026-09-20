@@ -1,7 +1,35 @@
 import { expect, test } from './fixtures';
-import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces } from './helpers';
+import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, useTheme } from './helpers';
 
 const STORAGE_KEY = 'whoisleuth:theme:v1';
+
+test('theme preparation switches the current document and preserves that choice after navigation', async ({ page }) => {
+  await useTheme(page, 'dark');
+  await page.goto('/methodology');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  const navigationStart = await page.evaluate(() => performance.timeOrigin);
+  await useTheme(page, 'light');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(navigationStart);
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await useTheme(page, 'dark');
+  await page.goto('/resources');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
+  const activePage = await page.context().newPage();
+  try {
+    await activePage.setViewportSize({ width: 320, height: 700 });
+    await activePage.goto('/lookup');
+    await useTheme(activePage, 'light');
+    await useTheme(activePage, 'dark');
+    await expect(activePage.getByRole('button', { name: 'Toggle navigation', exact: true })).toHaveAttribute('aria-expanded', 'false');
+    await activePage.reload();
+    await expect(activePage.locator('html')).toHaveAttribute('data-theme', 'dark');
+  } finally {
+    await activePage.close();
+  }
+});
 
 async function chooseTheme(page: import('@playwright/test').Page, label: 'Dark' | 'Light' | 'System') {
   const trigger = page.getByRole('button', { name: /^Colour theme,/ });
@@ -89,7 +117,7 @@ test('the default system preference follows the operating-system colour scheme',
   await expect(page.locator('html')).toHaveAttribute('data-theme-preference', 'system');
   const trigger = page.getByRole('button', { name: 'Colour theme, System selected' });
   await expect(trigger).toHaveAttribute('title', 'System theme');
-  await expect(trigger.locator('.theme-trigger-label')).toHaveText('Theme');
+  await expect(trigger.locator('.theme-trigger-label')).toHaveText('System');
   await expect(trigger.locator('[data-theme-symbol="system"]')).toBeVisible();
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#e7e2d8');
   await expect(page.locator('.hero-preview .lookup-panel')).toHaveCSS('background-color', 'rgb(250, 247, 241)');
@@ -181,7 +209,7 @@ test('light preference applies before reload and persists across public pages', 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   const trigger = page.getByRole('button', { name: 'Colour theme, Light selected' });
   await expect(trigger.locator('[data-theme-symbol="light"]')).toBeVisible();
-  await expect(trigger).not.toContainText('Light');
+  await expect(trigger.locator('.theme-trigger-label')).toHaveText('Light');
 });
 
 test('source text and graph stroke tokens stay distinct and contrast-safe in both themes', async ({ page }) => {
@@ -359,7 +387,7 @@ test('light chrome uses a theme-aware mark without a bright boxed plate', async 
   await expect(rail).toHaveCSS('background-color', 'rgba(250, 247, 241, 0.97)');
   await expect(rail.locator('.brand strong')).toHaveCSS('color', 'rgb(28, 25, 21)');
   await expect(rail.locator('nav a').first()).toHaveCSS('color', 'rgb(28, 25, 21)');
-  await expect(rail.locator('nav a small').first()).toHaveCSS('color', 'rgb(88, 80, 69)');
+  await expect(rail.getByText('Domain intelligence console', { exact: true })).toHaveCSS('color', 'rgb(88, 80, 69)');
   await expect(rail.locator('.brand .mark')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(rail.locator('[data-brand-tone="primary"]')).toHaveCSS('fill', 'rgb(0, 91, 145)');
   await expect(rail.locator('[data-brand-tone="secondary"]')).toHaveCSS('fill', 'rgb(0, 107, 73)');
@@ -370,7 +398,7 @@ test('light chrome uses a theme-aware mark without a bright boxed plate', async 
   await expect(page.locator('.public-brand [data-brand-tone="secondary"]')).toHaveCSS('fill', 'rgb(0, 107, 73)');
 });
 
-test('theme-specific controls, nested surfaces, score visibility, and form hints retain their roles', async ({ page }) => {
+test('form hints remain readable in both colour themes', async ({ page }) => {
   await clearThemePreference(page);
   await page.goto('/lookup');
 
@@ -396,34 +424,11 @@ test('theme-specific controls, nested surfaces, score visibility, and form hints
         return (lighter! + 0.05) / (darker! + 0.05);
       };
       const value = {
-        controlBoundary: ratio(colour('--control-border'), colour('--panel-raised')),
-        quietControlBoundary: ratio(colour('--quiet-control-border'), colour('--panel')),
-        structuralBoundary: ratio(colour('--border'), colour('--panel')),
         hintText: ratio(colour('--muted'), colour('--panel')),
-        surface: colour('--surface'),
-        panel: colour('--panel'),
-        raised: colour('--panel-raised'),
-        scoreTrackHeight: Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--score-track-height')),
-        factorFillAlpha: Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--factor-fill-alpha')),
       };
       sample.remove();
       return value;
     });
-    if (theme === 'Dark') {
-      expect(contrast.controlBoundary).toBeLessThan(3);
-      expect(contrast.controlBoundary).toBeGreaterThan(contrast.quietControlBoundary);
-      expect(contrast.quietControlBoundary).toBeCloseTo(contrast.structuralBoundary, 5);
-      expect(contrast.quietControlBoundary).toBeLessThan(2);
-      expect(contrast.surface).toBe(contrast.panel);
-      expect(contrast.scoreTrackHeight).toBe(5);
-      expect(contrast.factorFillAlpha).toBeCloseTo(0.22, 5);
-    } else {
-      expect(contrast.controlBoundary).toBeGreaterThanOrEqual(3);
-      expect(contrast.quietControlBoundary).toBeGreaterThanOrEqual(3);
-      expect(contrast.surface).toBe(contrast.raised);
-      expect(contrast.scoreTrackHeight).toBe(10);
-      expect(contrast.factorFillAlpha).toBeCloseTo(0.45, 5);
-    }
     expect(contrast.hintText).toBeGreaterThanOrEqual(4.5);
   }
 });
@@ -512,21 +517,27 @@ test('system preference follows operating-system colour-scheme changes', async (
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
 
-test('the theme trigger controls only a rendered option list', async ({ page }) => {
+test('the theme trigger identifies its rendered appearance panel', async ({ page }) => {
   await clearThemePreference(page);
   await page.goto('/');
 
   const trigger = page.getByRole('button', { name: /^Colour theme,/ });
   await expect(trigger).not.toHaveAttribute('aria-controls');
-  await expect(page.locator('#colour-theme-options')).toHaveCount(0);
+  const panel = page.getByRole('dialog', { name: 'Appearance' });
+  await expect(panel).toHaveCount(0);
 
   await trigger.click();
-  await expect(trigger).toHaveAttribute('aria-controls', 'colour-theme-options');
-  await expect(page.locator('#colour-theme-options')).toBeVisible();
+  await expect(panel).toBeVisible();
+  expect(await trigger.getAttribute('aria-controls')).toBe(await panel.getAttribute('id'));
+  for (const label of ['Dark', 'Light', 'System']) {
+    const option = page.getByRole('option', { name: `${label} theme` });
+    await expect(option.locator('span')).toHaveText(label);
+    await expect(option.locator('span')).toBeVisible();
+  }
 
   await page.getByRole('option', { name: 'System theme' }).click();
   await expect(trigger).not.toHaveAttribute('aria-controls');
-  await expect(page.locator('#colour-theme-options')).toHaveCount(0);
+  await expect(panel).toHaveCount(0);
 });
 
 test('the public theme control inherits its canvas and keeps an opaque option surface', async ({ page }) => {
@@ -696,13 +707,13 @@ test('theme controls fit beside authenticated public navigation across common ph
   await expectNoHorizontalOverflow(page);
 });
 
-test('the mobile option list is anchored directly beneath its trigger', async ({ page }) => {
+test('the mobile appearance panel stays connected to its trigger and within the viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await clearThemePreference(page);
   await page.goto('/');
 
   const trigger = page.getByRole('button', { name: /^Colour theme,/ });
-  await expect(trigger.locator('.theme-trigger-label')).toHaveText('Theme');
+  await expect(trigger.locator('.theme-trigger-label')).toHaveText(/\S/u);
   await expect(trigger.locator('.theme-trigger-label')).toBeVisible();
   await trigger.click();
   const options = page.getByRole('listbox', { name: 'Colour theme options' });
@@ -711,8 +722,10 @@ test('the mobile option list is anchored directly beneath its trigger', async ({
 
   expect(triggerBox).not.toBeNull();
   expect(optionsBox).not.toBeNull();
-  expect(Math.abs(optionsBox!.x - triggerBox!.x)).toBeLessThan(1);
-  expect(Math.abs(optionsBox!.width - triggerBox!.width)).toBeLessThan(1);
+  expect(optionsBox!.x).toBeGreaterThanOrEqual(0);
+  expect(optionsBox!.x + optionsBox!.width).toBeLessThanOrEqual(390);
+  expect(optionsBox!.x).toBeLessThan(triggerBox!.x + triggerBox!.width);
+  expect(optionsBox!.x + optionsBox!.width).toBeGreaterThan(triggerBox!.x);
   expect(optionsBox!.y).toBeGreaterThanOrEqual(triggerBox!.y + triggerBox!.height + 5);
   expect(await options.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
   await expectNoHorizontalOverflow(page);

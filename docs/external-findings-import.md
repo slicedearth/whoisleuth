@@ -121,6 +121,10 @@ retained events against reviewed issuer and SAN expectations without another
 request. Partial or omitted name sets remain indeterminate, and certificate
 digests are never compared with expected public-key digests.
 
+`ct-intake` and `map-observations` reserve limitation entries for provenance
+and exact omission counts. If supplied qualifications no longer fit, the
+output states how many were omitted; review the original input for them.
+
 ## Sanitised capture artefact manifest
 
 `whoisleuth.web-capture-manifest` version 2 imports reviewed metadata for a
@@ -143,8 +147,9 @@ that the metadata was imported and unverified.
 ## Portable WARC and WACZ response evidence
 
 The Cases importer accepts a strict uncompressed `.warc` file as a separate
-local-only path. It parses at most 8 MiB, 100 records, and 1 MiB per record,
-then retains at most 25 supported HTML response findings. Request records,
+local-only path. It parses at most 8 MiB, 100 records, and 1 MiB per record
+(including HTTP headers and body), then retains at most 25 supported HTML
+response findings. Request records,
 cookie or authorisation material, downloads, compressed response bodies,
 non-HTML content, invalid or credentialed target URLs, excessive HTML, and
 mismatched supported record digests are excluded. The importer never executes
@@ -169,6 +174,8 @@ Selected ZIP entries, aggregate decompressed WARC bytes, gzip expansion, entry
 count, manifest size, and declared package bytes are bounded before the
 existing WARC privacy filter runs. Indexes, page lists, screenshots, custom
 files, and descriptive package fields are not imported.
+Each GZIP member's CRC32 and expanded size are checked before its evidence is
+accepted. These detect corruption, not the authenticity of the source.
 
 ## Bounds and merge behaviour
 

@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import {
   appendUnavailableCollectionStatus,
+  canonicalCaseUrl,
   buildMonitorNavigationUrl,
   createMonitorCollectionLoader,
   monitorRouteKey,
@@ -13,6 +14,10 @@ import {
 } from '../frontend/src/lib/controllers/monitor-route-controller.ts';
 
 describe('Monitor route controller', () => {
+  it('keeps legacy Case targets and fragments while choosing the dedicated Case destination', () => {
+    assert.equal(canonicalCaseUrl(new URL('https://example.test/monitor?view=cases&case=case-1&response=1#case-response-case-1')), '/cases?case=case-1&response=1#case-response-case-1');
+    assert.equal(canonicalCaseUrl(new URL('https://example.test/monitor?view=cases&investigation=1&domain=example.test#case-review-queue')), '/cases?investigation=1&domain=example.test#case-review-queue');
+  });
   it('normalizes views, workflow ownership and collection requirements', () => {
     assert.equal(monitorViewFromUrl(new URL('https://example.test/monitor')), 'inbox');
     assert.equal(
@@ -33,13 +38,17 @@ describe('Monitor route controller', () => {
     );
     assert.deepEqual(
       monitorViewCollections('timeline'),
-      ['cases', 'watchlists', 'bulk-sessions', 'relationships', 'website-snapshots'],
+      ['analyst-review-state', 'cases', 'watchlists', 'bulk-sessions', 'relationships', 'website-snapshots'],
     );
+    assert.deepEqual(monitorViewCollections('cases'), []);
+    for (const path of ['/monitor?domain=case.example', '/monitor?investigation=1&domain=case.example']) {
+      assert.equal(monitorViewFromUrl(new URL(path, 'https://example.test')), 'cases');
+    }
   });
 
   it('builds one canonical navigation URL and clears stale focus state', () => {
     const current = new URL(
-      'https://example.test/monitor?view=cases&case=case-1&investigation=1&domain=old.example#case-response-case-1',
+      'https://example.test/monitor?view=cases&case=case-1&review=previous&investigation=1&domain=old.example#case-response-case-1',
     );
     assert.equal(
       buildMonitorNavigationUrl(current, 'watchlists'),
@@ -63,6 +72,9 @@ describe('Monitor route controller', () => {
       id: 'case-1',
       responseHash: true,
     });
+    assert.deepEqual(monitorRouteTarget(new URL(
+      'https://example.test/cases?case=case-1#case-response-case-1',
+    )), { kind: 'case', id: 'case-1', responseHash: true });
     assert.deepEqual(
       monitorRouteTarget(new URL('https://example.test/monitor?watchlist=Daily')),
       { kind: 'watchlist', name: 'Daily' },
@@ -94,6 +106,8 @@ describe('Monitor route controller', () => {
     assert.equal(calls, 1);
 
     const firstStatus = appendUnavailableCollectionStatus('', 'cases');
+    assert.match(firstStatus, /^Some saved context could not be loaded \(cases\)/u);
+    assert.doesNotMatch(firstStatus, /browser|filesystem/iu);
     assert.equal(
       appendUnavailableCollectionStatus(firstStatus, 'cases'),
       firstStatus,

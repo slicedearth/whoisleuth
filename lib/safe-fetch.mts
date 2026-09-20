@@ -25,6 +25,8 @@ import * as crypto from 'node:crypto';
 import { Agent, fetch as undiciFetch } from 'undici';
 
 import { MAX_OUTBOUND_REDIRECTS } from './outbound-request-bounds.mts';
+import { MAX_OUTBOUND_HTTP_URL_CHARACTERS } from '../packages/contracts/http-url.mts';
+import { ipv6Groups } from '../packages/contracts/ip-address.mts';
 
 type PublicAddressRecord = { address: string; family: number };
 type SafeFetchDispatcher = { close?: () => Promise<unknown> | unknown };
@@ -52,7 +54,7 @@ type SafeFetchDetailedResult = {
 type CappedTextOptions = { includeSha256?: boolean; fatalUtf8?: boolean };
 
 const MAX_REDIRECTS = MAX_OUTBOUND_REDIRECTS;
-const MAX_SAFE_FETCH_URL_LENGTH = 4096;
+const MAX_SAFE_FETCH_URL_LENGTH = MAX_OUTBOUND_HTTP_URL_CHARACTERS;
 const MAX_SAFE_FETCH_ADDRESS_CANDIDATES = 64;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
@@ -92,48 +94,6 @@ function isPrivateIpv4(ip: string): boolean {
   return false;
 }
 
-// Expands a valid IPv6 address string to its full 8-group, zero-padded hex
-// form - e.g. "::1" -> all-zero groups ending in "0001". Needed because the
-// same address can be written multiple ways (a "::" shorthand for a run of
-// zero groups, an embedded IPv4 tail as either dotted-decimal or two hex
-// groups), and a hostile authoritative DNS server - the exact threat this
-// module exists to guard against - is free to choose whichever string form
-// it wants. Checking string prefixes on the as-written form (the previous
-// approach) only catches whichever form happened to be anticipated; e.g.
-// "::ffff:127.0.0.1" and "::ffff:7f00:1" are the same address, but only the
-// first was recognized as IPv4-mapped loopback.
-function expandIpv6Groups(ip: string): string[] {
-  const hasDoubleColon = ip.includes('::');
-  const [headStr, tailStr] = hasDoubleColon ? ip.split('::') : [ip, undefined];
-
-  // A dotted-decimal segment (the tail of "::ffff:127.0.0.1") is two
-  // 16-bit groups' worth of bits - convert it to hex groups first so the
-  // rest of this function only ever deals with plain hex.
-  const toHexGroups = (part: string | undefined): string[] => {
-    if (!part) return [];
-    return part.split(':').flatMap((group) => {
-      if (!group.includes('.')) return [group];
-      const bytes = group.split('.').map(Number);
-      const [first = -1, second = -1, third = -1, fourth = -1] = bytes;
-      if (
-        bytes.length !== 4
-        || [first, second, third, fourth].some((byte) => !Number.isInteger(byte))
-      ) return [];
-      return [
-        (((first << 8) | second) >>> 0).toString(16),
-        (((third << 8) | fourth) >>> 0).toString(16),
-      ];
-    });
-  };
-
-  const headGroups = toHexGroups(headStr);
-  const tailGroups = hasDoubleColon ? toHexGroups(tailStr) : [];
-  if (!hasDoubleColon) return headGroups.map((g) => g.padStart(4, '0').toLowerCase());
-  const missing = 8 - headGroups.length - tailGroups.length;
-  const middleGroups = new Array(Math.max(missing, 0)).fill('0');
-  return [...headGroups, ...middleGroups, ...tailGroups].map((g) => g.padStart(4, '0').toLowerCase());
-}
-
 function groupsToIpv4(hiGroup: string, loGroup: string): string | null {
   const hi = parseInt(hiGroup, 16);
   const lo = parseInt(loGroup, 16);
@@ -142,7 +102,7 @@ function groupsToIpv4(hiGroup: string, loGroup: string): string | null {
 }
 
 function isPrivateIpv6(ip: string): boolean {
-  const groups = expandIpv6Groups(ip.toLowerCase());
+  const groups = ipv6Groups(ip);
   if (groups.length !== 8) return true; // couldn't parse cleanly - fail closed
   const [
     g0 = '',
@@ -333,6 +293,42 @@ async function raceWithSignal<T>(promise: Promise<T>, signal: AbortSignal | null
   });
 }
 
+// Request bodies that can be replayed must be owned before the first await.
+// Streams and multipart encoders remain valid for one request, never a replay.
+function ownedRequestBody(body: BodyInit | null): BodyInit | null {
+  if (body instanceof URLSearchParams) return new URLSearchParams(body);
+  if (body instanceof ArrayBuffer) return body.slice(0);
+  if (ArrayBuffer.isView(body)) return Uint8Array.from(new Uint8Array(body.buffer, body.byteOffset, body.byteLength));
+  return body;
+}
+
+function redirectedRequest(options: RequestInit, status: number, source: URL, destination: URL): RequestInit {
+  const next = { ...options, headers: new Headers(options.headers) };
+  const method = (options.method ?? 'GET').toUpperCase();
+  if ((status === 301 || status === 302) && method === 'POST'
+    || status === 303 && method !== 'GET' && method !== 'HEAD') {
+    next.method = 'GET';
+    next.body = null;
+    for (const name of ['content-encoding', 'content-language', 'content-location', 'content-type', 'content-length', 'transfer-encoding']) next.headers.delete(name);
+  } else if (next.body != null && !(typeof next.body === 'string' || next.body instanceof Blob
+    || next.body instanceof URLSearchParams || next.body instanceof ArrayBuffer || ArrayBuffer.isView(next.body))) {
+    throw new Error('Refusing to replay a streaming or multipart request body after a redirect');
+  }
+  if (source.origin !== destination.origin) {
+    // This collector is not a general authenticated browser. Do not forward a
+    // caller's body or custom credentials to another authority or a downgrade.
+    if (next.body != null || !['GET', 'HEAD'].includes((next.method ?? 'GET').toUpperCase())) {
+      throw new Error('Refusing to forward a request body or mutation across origins');
+    }
+    const publicHeaders = new Set(['accept', 'accept-encoding', 'accept-language', 'user-agent', 'range']);
+    for (const name of [...next.headers.keys()]) if (!publicHeaders.has(name)) next.headers.delete(name);
+    next.credentials = 'omit';
+    next.referrer = '';
+    next.referrerPolicy = 'no-referrer';
+  }
+  return next;
+}
+
 // Detailed form of the shared safe request engine. It follows redirects
 // manually under the same DNS validation and connection-pinning policy as
 // safeFetch(), while retaining a bounded hop trace for consumers that need
@@ -361,11 +357,14 @@ async function safeFetchDetailed(
   const hops: SafeFetchHop[] = [];
   let currentUrl = requestedUrl;
   let redirectCount = 0;
+  let requestOptions: RequestInit = { ...options, headers: new Headers(options.headers),
+    ...(options.body !== undefined ? { body: ownedRequestBody(options.body) } : {}) };
 
   while (true) {
     const parsed = new URL(currentUrl);
     const hostname = resolutionHostname(parsed);
-    const signal = options.signal ?? null;
+    const signal = requestOptions.signal ?? null;
+    if (signal?.aborted) throw abortError(signal);
     const records = normalizePublicAddressCandidates(
       await raceWithSignal(resolveAddresses(hostname), signal),
       hostname,
@@ -376,7 +375,7 @@ async function safeFetchDetailed(
 
     // `dispatcher` is a supported undici extension used to pin the connection.
     // Keep the non-standard property local to this request boundary.
-    const fetchOptions: SafeFetchRequestOptions = { ...options, redirect: 'manual', dispatcher };
+    const fetchOptions: SafeFetchRequestOptions = { ...requestOptions, redirect: 'manual', dispatcher };
     let response: Response;
     try {
       response = await request(currentUrl, fetchOptions);
@@ -405,6 +404,7 @@ async function safeFetchDetailed(
     if (nextUrl && redirectCount < maxRedirects) {
       await response.body?.cancel().catch(() => {});
       await closeDispatcher(dispatcher);
+      requestOptions = redirectedRequest(requestOptions, response.status, parsed, new URL(nextUrl));
       redirectCount += 1;
       currentUrl = nextUrl;
       continue;
@@ -443,8 +443,8 @@ async function safeFetch(url: string, options: RequestInit = {}, redirectsLeft =
 // them can be made to hold an arbitrarily large body in memory. `truncated`
 // tells the caller whether the real body was actually cut short - callers
 // that need well-formed content (e.g. JSON) should treat that as a hard
-// failure rather than parsing a partial blob; callers that only need to
-// scan for a substring (e.g. plain-text/HTML matching) can safely ignore it.
+// failure rather than parsing a partial blob. Partial-evidence consumers may
+// use the prefix, but must preserve its incomplete scope.
 async function readTextCapped(res: Response, maxBytes: number, options: CappedTextOptions = {}) {
   const hasher = options.includeSha256 === true ? crypto.createHash('sha256') : null;
   const result = (text: string, truncated: boolean, bytesRead: number) => ({

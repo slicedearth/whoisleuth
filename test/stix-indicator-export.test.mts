@@ -54,7 +54,7 @@ test('builds a STIX 2.1 bundle with separately attributed observation and infere
   const indicator = objectByType(bundle, 'indicator');
   const relationship = objectByType(bundle, 'relationship');
   assert.equal(domain.value, 'candidate.example');
-  assert.equal(identity.x_whoisleuth_export_version, 1);
+  assert.equal(identity.x_whoisleuth_export_version, 2);
   assert.equal(identity.x_whoisleuth_generated_at, NOW);
   assert.equal(observation.created_by_ref, identity.id);
   assert.equal(observation.x_whoisleuth_evidence_kind, 'direct-observation');
@@ -85,14 +85,33 @@ test('uses the scan timestamp when present and discloses its basis', () => {
   assert.equal(observation.x_whoisleuth_observed_at_basis, 'scan');
 });
 
-test('falls back to export time and labels that weaker timestamp basis', () => {
-  const observation = objectByType(
-    bundleFrom(exported([result('candidate.example', { saved: { scanDepth: 'fast' } })]).content),
-    'observed-data',
-  );
-  assert.equal(observation.first_observed, NOW);
-  assert.equal(observation.x_whoisleuth_observed_at_basis, 'export');
-  assert.equal(observation.x_whoisleuth_scan_depth, 'fast');
+test('uses contextual notes rather than inventing observed-data times', () => {
+  for (const observedAt of [undefined, null, '', 'invalid', '2026-02-30T00:00:00Z', '2026-07-14T08:00:00']) {
+    const bundle = bundleFrom(exported([result('candidate.example', { saved: { scanDepth: 'fast', observedAt } })]).content);
+    const note = objectByType(bundle, 'note');
+    const domain = objectByType(bundle, 'domain-name');
+    const indicator = objectByType(bundle, 'indicator');
+    assert.equal(bundle.objects.some((object) => object.type === 'observed-data'), false);
+    assert.equal(bundle.objects.some((object) => object.type === 'relationship'), false);
+    assert.doesNotMatch(JSON.stringify(bundle), /first_observed|last_observed|number_observed/u);
+    assert.equal(note.created, NOW);
+    assert.equal(note.x_whoisleuth_observed_at_basis, 'unknown');
+    assert.equal(note.x_whoisleuth_scan_depth, 'fast');
+    assert.match(String(note.content), /not a sighting time/u);
+    assert.deepEqual(note.object_refs, [domain.id, indicator.id]);
+    assert.equal(indicator.valid_from, NOW);
+    assert.equal(indicator.x_whoisleuth_validity_basis, 'export');
+  }
+});
+
+test('keeps indicator creation validity distinct from the earlier source observation', () => {
+  const bundle = bundleFrom(exported([result('candidate.example')]).content);
+  const observation = objectByType(bundle, 'observed-data');
+  const indicator = objectByType(bundle, 'indicator');
+  assert.equal(indicator.valid_from, indicator.created);
+  assert.equal(indicator.valid_from, NOW);
+  assert.notEqual(indicator.valid_from, observation.first_observed);
+  assert.equal(indicator.x_whoisleuth_validity_basis, 'export');
 });
 
 test('uses canonical sorted domains and excludes ineligible or duplicate findings', () => {

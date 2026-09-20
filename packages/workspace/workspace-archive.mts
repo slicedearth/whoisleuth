@@ -82,6 +82,8 @@ import {
 } from '../contracts/case-portability.mts';
 import { ANALYST_REVIEW_STATE_COMPATIBILITY } from '../contracts/analyst-review-state.mts';
 import { WORKSPACE_PORTABILITY_ARCHIVE_SECTION_REFERENCES } from '../contracts/workspace-portability.mts';
+import { CASE_VIEWS_COMPATIBILITY } from '../contracts/case-views.mts';
+import { emptyCaseViewsStore, mergeCaseViews, normalizeCaseViewsStore } from './case-views.mts';
 
 export {
   isSupportedWorkspaceArchiveVersion,
@@ -155,6 +157,7 @@ export interface WorkspaceArchiveSectionMap {
   investigationTemplates: ReturnType<typeof buildInvestigationTemplateExport>;
   bulkReview: ReturnType<typeof buildBulkReviewExport>;
   analystReviewState: ReturnType<typeof buildAnalystReviewStateExport>;
+  caseViews: ReturnType<typeof normalizeCaseViewsStore>;
   settings: WorkspaceSettingsDocument;
 }
 
@@ -199,6 +202,7 @@ interface NormalizedWorkspaceInput {
   investigationTemplates: unknown[];
   bulkReview: unknown;
   analystReviewState: unknown;
+  caseViews: unknown;
   settings: UnknownRecord;
 }
 
@@ -221,7 +225,7 @@ interface WorkspaceSectionDefinition {
   version: number;
   supportedVersions?: readonly number[];
   count: (data: unknown) => number;
-  merge: ((local: NormalizedWorkspaceInput, data: unknown, now: string | null) => WorkspaceMergeResult) | null;
+  merge: ((local: NormalizedWorkspaceInput, data: unknown, now: string | null) => WorkspaceMergeResult & { document: unknown }) | null;
 }
 
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
@@ -326,6 +330,7 @@ function workspaceArchiveSections(
     investigationTemplates: buildInvestigationTemplateExport(input.investigationTemplates, now),
     bulkReview: buildBulkReviewExport(input.bulkReview),
     analystReviewState: buildAnalystReviewStateExport(input.analystReviewState),
+    caseViews: normalizeCaseViewsStore(input.caseViews),
     settings: settingsDocument(input),
   };
 }
@@ -373,7 +378,7 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     merge: (local, data) => {
       const result = mergeCases(local.cases, data);
       const bounded = enforceStoreBudget(result.cases);
-      return { ...result, cases: bounded.cases, pruned: bounded.pruned };
+      return { ...result, document: bounded.cases, pruned: bounded.pruned };
     },
   },
   {
@@ -381,7 +386,7 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     count: (data) => arrayCount(data, 'campaigns'),
     merge: (local, data) => {
       const result = mergeCampaigns(local.campaigns, data);
-      return { ...result, campaigns: assertCampaignStoreBudget(result.campaigns).campaigns };
+      return { ...result, document: assertCampaignStoreBudget(result.campaigns).campaigns };
     },
   },
   {
@@ -389,7 +394,8 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     count: (data) => arrayCount(data, 'profiles'),
     merge: (local, data, now) => {
       const result = mergeBrandProfiles(local.brandProfiles, data, { nowIso: now });
-      return { ...result, profiles: assertBrandProfileStoreBudget(result.profiles).profiles };
+      const profiles = assertBrandProfileStoreBudget(result.profiles).profiles;
+      return { ...result, profiles, document: profiles };
     },
   },
   {
@@ -397,7 +403,7 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     count: (data) => objectCount(data, 'watchlists'),
     merge: (local, data) => {
       const result = mergeWatchlistStores(local.watchlists, data);
-      return { ...result, watchlists: assertWatchlistStoreBudget(result.watchlists).watchlists };
+      return { ...result, document: assertWatchlistStoreBudget(result.watchlists).watchlists };
     },
   },
   {
@@ -405,7 +411,7 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     count: (data) => arrayCount(data, 'entries'),
     merge: (local, data) => {
       const result = mergeShortlistStores(local.shortlist, data);
-      return { ...result, entries: assertShortlistStoreBudget(result.entries).entries };
+      return { ...result, document: assertShortlistStoreBudget(result.entries).entries };
     },
   },
   {
@@ -413,14 +419,17 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     count: (data) => arrayCount(data, 'rules'),
     merge: (local, data) => {
       const result = mergeDetectionRules(local.detectionRules, data);
-      return { ...result, rules: assertDetectionRuleStoreBudget(result.rules).rules };
+      return { ...result, document: assertDetectionRuleStoreBudget(result.rules).rules };
     },
   },
   {
     ...sectionContract('relationshipObservations'),
     label: 'Retained relationship observations',
     count: (data) => arrayCount(data, 'observations'),
-    merge: (local, data) => mergeRelationshipObservations(local.relationshipObservations, data),
+    merge: (local, data) => {
+      const result = mergeRelationshipObservations(local.relationshipObservations, data);
+      return { ...result, document: result.observations };
+    },
   },
   {
     ...sectionContract('bulkSessions'),
@@ -428,27 +437,36 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     count: (data) => arrayCount(data, 'sessions'),
     merge: (local, data) => {
       const result = mergeBulkSessions(local.bulkSessions, data);
-      enforceBulkSessionStoreBudget(result.sessions);
-      return result;
+      const bounded = enforceBulkSessionStoreBudget(result.sessions);
+      return { ...result, document: bounded.store.sessions };
     },
   },
   {
     ...sectionContract('websiteSnapshots'),
     label: 'Website profile snapshots',
     count: (data) => arrayCount(data, 'snapshots'),
-    merge: (local, data) => mergeWebsiteSnapshots(local.websiteSnapshots, data),
+    merge: (local, data) => {
+      const result = mergeWebsiteSnapshots(local.websiteSnapshots, data);
+      return { ...result, document: result.snapshots };
+    },
   },
   {
     ...sectionContract('investigationTemplates'),
     label: 'Investigation templates',
     count: (data) => arrayCount(data, 'templates'),
-    merge: (local, data) => mergeInvestigationTemplates(local.investigationTemplates, data),
+    merge: (local, data) => {
+      const result = mergeInvestigationTemplates(local.investigationTemplates, data);
+      return { ...result, document: result.templates };
+    },
   },
   {
     ...sectionContract('bulkReview'),
     label: 'Bulk saved views and review queue',
     count: (data) => arrayCount(data, 'presets') + arrayCount(data, 'rows'),
-    merge: (local, data) => mergeBulkReviewStores(local.bulkReview, data),
+    merge: (local, data) => {
+      const result = mergeBulkReviewStores(local.bulkReview, data);
+      return { ...result, document: result.store };
+    },
   },
   {
     id: 'analystReviewState',
@@ -457,7 +475,19 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
     version: ANALYST_REVIEW_STATE_COMPATIBILITY.currentVersion,
     supportedVersions: ANALYST_REVIEW_STATE_COMPATIBILITY.supportedVersions,
     count: (data) => arrayCount(data, 'records'),
-    merge: (local, data) => mergeAnalystReviewStateStores(local.analystReviewState, data),
+    merge: (local, data) => {
+      const result = mergeAnalystReviewStateStores(local.analystReviewState, data);
+      return { ...result, document: result.store };
+    },
+  },
+  {
+    id: 'caseViews', label: 'Saved Case views', schema: compatibilitySchema(CASE_VIEWS_COMPATIBILITY),
+    version: CASE_VIEWS_COMPATIBILITY.currentVersion, supportedVersions: CASE_VIEWS_COMPATIBILITY.supportedVersions,
+    count: (data) => arrayCount(data, 'views'),
+    merge: (local, data) => {
+      const result = mergeCaseViews(local.caseViews, data);
+      return { ...result, document: result.store };
+    },
   },
   {
     id: 'settings', label: 'Workspace settings', schema: compatibilitySchema(WORKSPACE_SETTINGS_COMPATIBILITY),
@@ -471,6 +501,23 @@ const SECTION_DEFINITIONS: readonly WorkspaceSectionDefinition[] = [
 const DEFINITION_BY_ID = new Map<string, WorkspaceSectionDefinition>(
   SECTION_DEFINITIONS.map((definition) => [definition.id, definition]),
 );
+
+/** Apply previously verified data sections through the same owners as preview. */
+export function mergeReadyWorkspaceArchiveData(
+  localInput: unknown,
+  sections: readonly Pick<WorkspaceArchivePreviewSection, 'id' | 'data' | 'status'>[],
+  generatedAt: string | null,
+): readonly Readonly<WorkspaceMergeResult & { id: string; document: unknown }>[] {
+  if (sections.length > MAX_WORKSPACE_ARCHIVE_SECTIONS || new Set(sections.map(section => section.id)).size !== sections.length) {
+    throw new Error('Workspace data sections exceed their count or contain duplicate identities.');
+  }
+  const local = normalizedInput(localInput);
+  return sections.map(section => {
+    const definition = DEFINITION_BY_ID.get(section.id);
+    if (section.status !== 'ready' || !definition?.merge) throw new Error('Only verified, supported workspace data sections can be merged.');
+    return { ...definition.merge(local, section.data, generatedAt), id: section.id };
+  });
+}
 const SECTION_ORDER = new Map<string, number>(WORKSPACE_ARCHIVE_SECTION_IDS.map((id, index) => [id, index]));
 
 function canonicalSectionOrder(left: { id: string }, right: { id: string }): number {
@@ -494,6 +541,7 @@ function normalizedInput(input: unknown): NormalizedWorkspaceInput {
     investigationTemplates: Array.isArray(value.investigationTemplates) ? value.investigationTemplates : [],
     bulkReview: record(value.bulkReview) || {},
     analystReviewState: record(value.analystReviewState) || emptyAnalystReviewStateStore(),
+    caseViews: value.caseViews ?? emptyCaseViewsStore(),
     settings: record(value.settings) || {},
   };
 }
@@ -502,7 +550,7 @@ function ensureArchiveBudget(value: unknown): { serialized: string; bytes: numbe
   const serialized = serialize(value);
   const bytes = byteLength(serialized);
   if (bytes > MAX_WORKSPACE_ARCHIVE_BYTES) {
-    throw new Error('Workspace archives are limited to 10 MiB. Export smaller collections separately before trying again.');
+    throw new Error(`Workspace archives are limited to ${MAX_WORKSPACE_ARCHIVE_BYTES / 1024 / 1024} MiB. Export smaller collections separately before trying again.`);
   }
   return { serialized, bytes };
 }
@@ -520,7 +568,7 @@ export async function buildWorkspaceArchive(input: unknown, options: WorkspaceAr
     const data = sections[definition.id];
     const sectionBytes = byteLength(serialize(data));
     if (sectionBytes > MAX_WORKSPACE_ARCHIVE_SECTION_BYTES) {
-      throw new Error(`${definition.label} exceeds the 5 MiB workspace archive section limit.`);
+      throw new Error(`${definition.label} exceeds the ${MAX_WORKSPACE_ARCHIVE_SECTION_BYTES / 1024 / 1024} MiB workspace archive section limit.`);
     }
     const recordCount = definition.count(data);
     manifestSections.push({
@@ -570,8 +618,11 @@ function manifestEntry(raw: unknown): WorkspaceArchiveManifestEntry | null {
 
 /** Validate structure, section byte counts, and checksums without applying data. */
 export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchiveOptions = {}) {
-  assertWorkspaceInputGraph(raw, 'Workspace archive');
-  const value = record(raw);
+  assertWorkspaceInputGraph(raw, 'Workspace archive', { maximumBytes: MAX_WORKSPACE_ARCHIVE_BYTES });
+  // Snapshot before the first asynchronous digest: caller-owned data must not
+  // change between its checksum, contract checks and eventual import preview.
+  const { serialized, bytes } = ensureArchiveBudget(raw);
+  const value = record(JSON.parse(serialized));
   if (!value || value.schema !== WORKSPACE_ARCHIVE_SCHEMA) {
     throw new Error('This file is not a WHOISleuth workspace archive.');
   }
@@ -587,10 +638,9 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
   const sourceVersion = value.version;
   const expectedSectionIds: readonly string[] = sourceVersion === PUBLIC_WORKSPACE_ARCHIVE_VERSION
     ? PUBLIC_WORKSPACE_ARCHIVE_SECTION_IDS
-    : WORKSPACE_ARCHIVE_SECTION_IDS;
+    : sourceVersion < 9 ? WORKSPACE_ARCHIVE_SECTION_IDS.filter(id => id !== 'caseViews') : WORKSPACE_ARCHIVE_SECTION_IDS;
   const generatedAt = timestamp(value.generatedAt);
   if (!generatedAt) throw new Error('The workspace archive generation time is invalid.');
-  const { bytes } = ensureArchiveBudget(value);
   assertExactKeys(value, WORKSPACE_ARCHIVE_ROOT_KEYS, `version ${sourceVersion} envelope`);
   const manifest = record(value.manifest);
   const sectionValues = record(value.sections);
@@ -653,7 +703,7 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
     } else if (definition.count(data) !== entry.recordCount) {
       throw new Error(`${entry.id} does not match its manifest record count.`);
     }
-    sections.push({ ...entry, label: definition?.label || entry.id, status, reason, data: clone(data) });
+    sections.push({ ...entry, label: definition?.label || entry.id, status, reason, data });
     totalRecords += entry.recordCount;
   }
   if (Object.keys(sectionValues).some((id) => !seen.has(id))) {
@@ -678,6 +728,15 @@ export async function readWorkspaceArchive(raw: unknown, options: WorkspaceArchi
       status: 'ready',
       reason: `Workspace schema ${PUBLIC_WORKSPACE_ARCHIVE_VERSION} did not contain Review Item lifecycle state. Import supplies an empty section and invents no analyst decisions.`,
       data,
+    });
+  }
+  if (sourceVersion < 9) {
+    const data = emptyCaseViewsStore();
+    sections.push({
+      id: 'caseViews', label: 'Saved Case views', schema: compatibilitySchema(CASE_VIEWS_COMPATIBILITY),
+      version: CASE_VIEWS_COMPATIBILITY.currentVersion, recordCount: 0,
+      bytes: byteLength(serialize(data)), checksum: await checksum(data, options.cryptoProvider), status: 'ready',
+      reason: 'This archive predates saved Case views. Import supplies an empty section and does not remove existing views.', data,
     });
   }
   sections.sort(canonicalSectionOrder);
@@ -727,9 +786,27 @@ function settingsPreview(
   return { added: 0, updated, skipped, reason, settings: { activeProfileId, theme } };
 }
 
+/** Retain one verified snapshot; each read or preview returns an independent copy. */
+export async function prepareWorkspaceArchive(raw: unknown, options: WorkspaceArchiveOptions = {}) {
+  const archive = await readWorkspaceArchive(raw, options);
+  return Object.freeze({
+    read: () => clone(archive),
+    preview: (localInput: unknown, selection: Pick<WorkspaceArchiveOptions, 'selectedSectionIds'> = {}) =>
+      previewVerifiedWorkspaceArchive(clone(archive), localInput, selection),
+  });
+}
+
 /** Preview section-specific non-destructive merge outcomes without writing. */
 export async function previewWorkspaceArchive(raw: unknown, localInput: unknown, options: WorkspaceArchiveOptions = {}) {
-  const archive = await readWorkspaceArchive(raw, options);
+  // A one-shot preview owns the reader result directly; retained readers copy it.
+  return previewVerifiedWorkspaceArchive(await readWorkspaceArchive(raw, options), localInput, options);
+}
+
+function previewVerifiedWorkspaceArchive(
+  archive: Awaited<ReturnType<typeof readWorkspaceArchive>>,
+  localInput: unknown,
+  options: Pick<WorkspaceArchiveOptions, 'selectedSectionIds'>,
+) {
   const local = normalizedInput(localInput);
   const results: WorkspaceArchivePreviewSection[] = [];
   let mergedProfiles = local.brandProfiles;

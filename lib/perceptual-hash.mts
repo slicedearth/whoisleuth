@@ -8,7 +8,7 @@
 //
 // Pure JS, no external dependency and no native bindings, so it runs the same
 // on the serverless (Netlify) and self-hosted (Express) paths. That means
-// decoding the image ourselves: Node has no built-in image decoder, only
+// decoding the image ourselves: the runtime has no built-in image decoder, only
 // zlib (used here for PNG inflate). We support the favicon formats that
 // actually occur in practice - PNG, and PNG- or BMP-encoded ICO - and return
 // null for anything else (GIF/JPEG/SVG), which simply falls back to
@@ -38,8 +38,8 @@ type IcoEntry = { area: number; dataOffset: number; size: number };
 type DibPalette = { start: number; count: number };
 
 // Bound the decode work on attacker-controlled image bytes. Real favicons top
-// out around 256x256; anything claiming to be larger is refused rather than
-// decoded (it would also never be a legitimate favicon to compare against).
+// out around 256x256; larger inputs above this ceiling remain exact-only
+// evidence rather than causing unbounded pixel allocation.
 const MAX_DIM = 1024;
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -89,15 +89,17 @@ function decodePng(buf: Buffer): DecodedImage | null {
     const type = buf.toString('ascii', offset + 4, offset + 8);
     const dataStart = offset + 8;
     const dataEnd = dataStart + length;
-    if (dataEnd + 4 > buf.length) break; // truncated chunk
+    if (dataEnd + 4 > buf.length) return null;
     const data = buf.subarray(dataStart, dataEnd);
 
     if (type === 'IHDR') {
+      if (length !== 13 || width !== 0 || offset !== 8) return null;
       width = buf.readUInt32BE(dataStart);
       height = buf.readUInt32BE(dataStart + 4);
       bitDepth = byteAt(data, 8);
       colorType = byteAt(data, 9);
       interlace = byteAt(data, 12);
+      if (byteAt(data, 10) !== 0 || byteAt(data, 11) !== 0) return null;
     } else if (type === 'PLTE') {
       palette = data;
     } else if (type === 'tRNS') {
@@ -114,6 +116,11 @@ function decodePng(buf: Buffer): DecodedImage | null {
   if (!channels || bitDepth !== 8 || interlace !== 0) return null;
   if (width < 1 || height < 1 || width > MAX_DIM || height > MAX_DIM) return null;
   if (colorType === 3 && !palette) return null;
+  if (palette && (palette.length < 3 || palette.length > 768 || palette.length % 3 !== 0)) return null;
+  if (transparency && ((colorType === 0 && transparency.length !== 2)
+    || (colorType === 2 && transparency.length !== 6)
+    || (colorType === 3 && (!palette || transparency.length > palette.length / 3))
+    || colorType === 4 || colorType === 6)) return null;
   if (idatParts.length === 0) return null;
 
   // A valid non-interlaced 8-bit PNG decompresses to exactly one filter byte
@@ -168,11 +175,14 @@ function decodePng(buf: Buffer): DecodedImage | null {
     let alpha = 255;
     if (colorType === 0) {
       r = g = b = byteAt(recon, s);
+      if (transparency && r === transparency.readUInt16BE(0)) alpha = 0;
     } else if (colorType === 4) {
       r = g = b = byteAt(recon, s);
       alpha = byteAt(recon, s + 1);
     } else if (colorType === 2) {
       r = byteAt(recon, s); g = byteAt(recon, s + 1); b = byteAt(recon, s + 2);
+      if (transparency && r === transparency.readUInt16BE(0)
+        && g === transparency.readUInt16BE(2) && b === transparency.readUInt16BE(4)) alpha = 0;
     } else if (colorType === 6) {
       r = byteAt(recon, s);
       g = byteAt(recon, s + 1);
@@ -196,19 +206,20 @@ function decodePng(buf: Buffer): DecodedImage | null {
 // BITMAPINFOHEADER, an optional palette (for <=8-bit depths), then bottom-up
 // pixel rows. Supports the depths favicons actually ship: 1/4/8-bit
 // palettized and 24/32-bit truecolour. The stored height is doubled (it
-// includes the 1-bpp AND transparency mask); we use the real image height
-// and ignore the mask (opaque is fine for a brightness-based hash).
+// includes the 1-bpp AND transparency mask). Non-alpha and legacy all-zero
+// alpha images use that mask; meaningful 32-bit alpha remains authoritative.
 function decodeDib(buf: Buffer): DecodedImage | null {
   if (buf.length < 40) return null;
   const headerSize = buf.readUInt32LE(0);
-  if (headerSize < 40) return null;
+  if (headerSize < 40 || headerSize > buf.length) return null;
   const width = buf.readInt32LE(4);
   const rawHeight = buf.readInt32LE(8);
   const bitCount = buf.readUInt16LE(14);
   const compression = buf.readUInt32LE(16);
   if (compression !== 0) return null; // BI_RGB only
   if (![1, 4, 8, 24, 32].includes(bitCount)) return null;
-  const height = Math.floor(Math.abs(rawHeight) / 2) || Math.abs(rawHeight);
+  if (rawHeight <= 0 || rawHeight % 2 !== 0 || buf.readUInt16LE(12) !== 1) return null;
+  const height = rawHeight / 2;
   if (width < 1 || height < 1 || width > MAX_DIM || height > MAX_DIM) return null;
 
   // Palette (BGRA quads) for indexed depths, sitting between the header and
@@ -226,6 +237,10 @@ function decodeDib(buf: Buffer): DecodedImage | null {
 
   const rowSize = Math.floor((bitCount * width + 31) / 32) * 4; // padded to 4 bytes
   if (pixelStart + rowSize * height > buf.length) return null;
+  const maskStart = pixelStart + rowSize * height;
+  const maskRowSize = Math.ceil(width / 32) * 4;
+  const maskPresent = maskStart + maskRowSize * height <= buf.length;
+  if (bitCount !== 32 && !maskPresent) return null;
 
   const paletteColor = (index: number): [number, number, number] => {
     if (!palette || index >= palette.count) return [0, 0, 0];
@@ -264,10 +279,16 @@ function decodeDib(buf: Buffer): DecodedImage | null {
   }
   // Many legacy 32-bit BMP-in-ICO payloads leave the alpha plane all-zero and
   // rely on the separate 1-bit AND mask for transparency. Trusting those alpha
-  // bytes literally would composite the whole icon to white and hash to a
-  // meaningless all-zero value, so treat a fully-zero alpha plane as opaque.
-  if (bitCount === 32 && !sawNonzeroAlpha) {
-    for (let i = 3; i < pixels.length; i += 4) pixels[i] = 255;
+  // bytes literally would composite the whole icon to white. Restore opacity
+  // only where the legacy mask permits it. No mask plus meaningful 32-bit
+  // alpha is valid; an omitted legacy mask retains the opaque fallback.
+  if (bitCount !== 32 || !sawNonzeroAlpha) {
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const mask = maskPresent ? byteAt(buf, maskStart + (height - 1 - y) * maskRowSize + (x >> 3)) : 0;
+        pixels[(y * width + x) * 4 + 3] = mask & (0x80 >> (x & 7)) ? 0 : 255;
+      }
+    }
   }
   return { width, height, pixels };
 }
@@ -417,5 +438,6 @@ function inspectDecodedImage(buf: Buffer): DecodedImageInspection {
 // alias so the evidence contract does not imply that a screenshot is a favicon.
 const imagePerceptualHash = faviconPerceptualHash;
 
-export { faviconPerceptualHash, hammingDistanceHex, imagePerceptualHash, inspectDecodedImage };
-export type { DecodedImageInspection };
+// Pixel consumers share the same strict byte/dimension admission as hashing.
+export { faviconPerceptualHash, hammingDistanceHex, imagePerceptualHash, inspectDecodedImage, decodeImage as decodeBoundedImagePixels, dHash as imagePixelsPerceptualHash };
+export type { DecodedImageInspection, DecodedImage };

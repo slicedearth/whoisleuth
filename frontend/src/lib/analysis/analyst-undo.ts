@@ -10,6 +10,18 @@ export const ANALYST_UNDO_KINDS = Object.freeze([
 
 export type AnalystUndoKind = typeof ANALYST_UNDO_KINDS[number];
 
+export class AnalystUndoConflictError extends Error {
+  constructor() {
+    super('The saved value changed after this action. Undo was not applied; the newer changes were preserved.');
+    this.name = 'AnalystUndoConflictError';
+  }
+}
+
+/** Compare bounded, canonical values inside the existing storage transaction. */
+export function assertAnalystUndoCurrent<T>(current: T, expected: T): void {
+  if (JSON.stringify(current) !== JSON.stringify(expected)) throw new AnalystUndoConflictError();
+}
+
 export type AnalystUndoDescriptor = {
   id: string;
   kind: AnalystUndoKind;

@@ -29,13 +29,14 @@ import {
 import {
   createHostedBrowserWorkspace,
   HOSTED_BROWSER_DIAGNOSTIC_LIMITS,
+  retainFocusedBrowserDiagnostics,
   runHostedBrowserWorkspace,
 } from '../tools/hosted-browser-workspace.mts';
 import { playwrightRunArtifacts } from '../tools/playwright-run-artifacts.mts';
 
 const REVISION = '0123456789abcdef0123456789abcdef01234567';
 const ENVIRONMENT = Object.freeze({ WHOISLEUTH_BUILD_REVISION: REVISION });
-const SOURCE_DIRECTORIES = ['cli', 'frontend/src', 'frontend/static', 'lib', 'packages'];
+const SOURCE_DIRECTORIES = ['cli', 'frontend/src', 'frontend/static', 'lib', 'packages', 'tools'];
 const SOURCE_FILES = [
   '.nvmrc',
   'package.json',
@@ -134,6 +135,37 @@ function writeDiagnosticFixture(root: string, environment: NodeJS.ProcessEnv) {
 }
 
 describe('hosted browser workspace diagnostics', () => {
+  test('copies focused failure and interruption diagnostics privately without changing the contributor checkout', (context) => {
+    for (const outcome of ['failed', 'interrupted'] as const) {
+      const root = fixtureRepository(context);
+      const { files, artifacts } = writeDiagnosticFixture(root, {});
+      const before = readFileSync(path.join(root, 'package.json'));
+      symlinkSync(path.join(root, 'package.json'), path.join(root, artifacts.testResults, 'source-link'));
+      const excessive = path.join(root, artifacts.testResults, 'excessive.bin');
+      writeFileSync(excessive, '');
+      truncateSync(excessive, HOSTED_BROWSER_DIAGNOSTIC_LIMITS.fileBytes + 1);
+      const retained = retainFocusedBrowserDiagnostics(root, REVISION, outcome);
+      context.after(() => rmSync(retained.directory, { recursive: true, force: true }));
+      assert.notEqual(retained.directory, root);
+      assert.equal(lstatSync(retained.directory).mode & 0o777, 0o700);
+      for (const [relative, expected] of files) {
+        assert.equal(readFileSync(path.join(root, relative), 'utf8'), expected);
+        assert.equal(readFileSync(path.join(retained.directory, relative), 'utf8'), expected);
+        assert.equal(lstatSync(path.join(retained.directory, relative)).mode & 0o777, 0o600);
+      }
+      assert.deepEqual(readFileSync(path.join(root, 'package.json')), before);
+      assert.equal(existsSync(path.join(root, artifacts.authFile)), true);
+      for (const relative of ['package.json', 'node_modules', 'frontend', artifacts.authFile,
+        `${artifacts.testResults}/source-link`, `${artifacts.testResults}/excessive.bin`]) {
+        assert.equal(existsSync(path.join(retained.directory, relative)), false, relative);
+      }
+      const metadata = JSON.parse(readFileSync(path.join(retained.directory, 'diagnostics.json'), 'utf8'));
+      assert.equal(metadata.outcome, outcome);
+      assert.equal(metadata.retainedFiles, 4);
+      assert.equal(metadata.omittedEntries, 2);
+    }
+  });
+
   test('retains available failure and interruption evidence at its original paths after cleanup', async (context) => {
     for (const exit of [2, 130]) {
       const { repository, workspace } = diagnosticWorkspace(context);
@@ -262,6 +294,26 @@ describe('hosted browser workspace diagnostics', () => {
 });
 
 describe('frontend build integrity', () => {
+  test('worker outputs require a manifest identity and remain verified without builder intermediates', (context) => {
+    const root = fixtureRepository(context);
+    const workerSource = 'src/lib/workers/search.worker.ts';
+    const workerOutput = '_app/immutable/workers/search.A.js';
+    write(root, `frontend/${workerSource}`, 'self.postMessage("ready");\n');
+    write(root, `frontend/.svelte-kit/output/client/${workerOutput}`, 'self.postMessage("ready");\n');
+    write(root, `frontend/build/${workerOutput}`, 'self.postMessage("ready");\n');
+    assert.throws(() => recordFrontendBuildIntegrity(root, ENVIRONMENT), /immutable client assets do not exactly match/u);
+    const manifestFile = path.join(root, 'frontend/.svelte-kit/output/client/.vite/manifest.json');
+    const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
+    manifest[workerSource] = { file: workerOutput, assets: [] };
+    writeFileSync(manifestFile, JSON.stringify(manifest));
+    const recorded = recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    assert.equal(frontendProductionChunk(recorded, workerSource), `/${workerOutput}`);
+    rmSync(path.join(root, 'frontend/.svelte-kit'), { recursive: true });
+    assert.deepEqual(assertFrontendBuildIntegrity(root, ENVIRONMENT), recorded);
+    write(root, `frontend/build/${workerOutput}`, 'self.postMessage("changed");\n');
+    assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /build is stale or mixed/u);
+  });
+
   test('records deterministic served bytes and verifies them after an absolute-root move', (context) => {
     const root = fixtureRepository(context);
     const first = recordFrontendBuildIntegrity(root, ENVIRONMENT);
@@ -307,7 +359,10 @@ describe('frontend build integrity', () => {
 
   test('materialises local browser verification from only checkout files and declared artefacts', (context) => {
     const root = fixtureRepository(context);
+    write(root, 'test/removed.test.mts', 'export const removed = true;\n');
     initialiseFixtureCheckout(root);
+    rmSync(path.join(root, 'test/removed.test.mts'));
+    write(root, 'test/replacement.test.mts', 'export const replacement = true;\n');
     const retained = recordFrontendBuildIntegrity(root, ENVIRONMENT);
     const workspace = createHostedBrowserWorkspace(root, ENVIRONMENT);
     context.after(workspace.dispose);
@@ -315,6 +370,8 @@ describe('frontend build integrity', () => {
     assert.equal(workspace.root, realpathSync(workspace.root));
     assert.equal(existsSync(path.join(workspace.root, 'frontend/.svelte-kit')), false);
     assert.equal(existsSync(path.join(workspace.root, 'frontend/build/index.html')), true);
+    assert.equal(existsSync(path.join(workspace.root, 'test/removed.test.mts')), false);
+    assert.equal(readFileSync(path.join(workspace.root, 'test/replacement.test.mts'), 'utf8'), 'export const replacement = true;\n');
     const verified = assertFrontendBuildIntegrity(workspace.root, {
       WHOISLEUTH_BUILD_REVISION: retained.runtime.revision,
     });
@@ -353,7 +410,7 @@ describe('frontend build integrity', () => {
     }
   });
 
-  test('binds reuse to source bytes, runtime, and source revision', (context) => {
+  test('binds reuse to source bytes and source revision', (context) => {
     const root = fixtureRepository(context);
     recordFrontendBuildIntegrity(root, ENVIRONMENT);
     write(root, 'frontend/src/app.ts', 'export const app = false;\n');
@@ -364,6 +421,26 @@ describe('frontend build integrity', () => {
       () => assertFrontendBuildIntegrity(root, { WHOISLEUTH_BUILD_REVISION: 'abcdef0123456789abcdef0123456789abcdef01' }),
       /stale or mixed/u,
     );
+  });
+
+  test('preserves producer runtime provenance without requiring the same consumer environment', (context) => {
+    const root = fixtureRepository(context);
+    recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    const retained = markerObject(root);
+    const producer = { node: '24.18.0', platform: process.platform === 'linux' ? 'darwin' : 'linux', architecture: process.arch === 'x64' ? 'arm64' : 'x64', revision: REVISION };
+    write(root, FRONTEND_BUILD_INTEGRITY_MARKER, JSON.stringify({ ...retained, runtime: producer }));
+    assert.deepEqual(assertFrontendBuildIntegrity(root, ENVIRONMENT).runtime, producer);
+    write(root, 'frontend/build/_app/immutable/entry/app.A.js', 'changed bytes');
+    assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /stale or mixed/u);
+  });
+
+  test('discovers build-tool helpers without a separate source-file declaration', (context) => {
+    const root = fixtureRepository(context);
+    write(root, 'tools/ordinary-build-helper.mts', 'export const value = 1;\n');
+    const snapshot = recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    assert.ok(snapshot.source.files.some((file) => file.path === 'tools/ordinary-build-helper.mts'));
+    write(root, 'tools/ordinary-build-helper.mts', 'export const value = 2;\n');
+    assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /stale or mixed/u);
   });
 
   test('rejects malformed, future, oversized, and impossible markers', (context) => {

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { onDestroy } from 'svelte';
   import { PUBLIC_EXAMPLES_INDEX } from '$lib/generated/public-examples-index';
   import {
@@ -80,12 +81,7 @@
   }
 
   function downloadOutput(example: ExampleOutput) {
-    const url = URL.createObjectURL(new Blob([example.content], { type: example.mediaType }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = example.downloadName;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadLocalFile(new Blob([example.content], { type: example.mediaType }), example.downloadName);
     actionStatus = `${example.title} downloaded as a synthetic local example.`;
   }
 
@@ -107,7 +103,7 @@
         <h3>{example.title}</h3>
         <p>{example.summary}</p>
         <code>{example.command}</code>
-        <button type="button" disabled={Boolean(loadError)} aria-expanded={openedId === example.id} aria-controls={`example-output-${example.id}`} onpointerenter={preloadOutputs} onfocus={preloadOutputs} onclick={() => void toggleOutput(example.id)}>{loadingId === example.id ? 'Loading synthetic output…' : openedId === example.id ? 'Close synthetic output' : 'Open synthetic output'}</button>
+        <button type="button" disabled={Boolean(loadError)} aria-expanded={openedId === example.id} aria-controls={openedId === example.id && outputFor(example.id) ? `example-output-${example.id}` : undefined} onpointerenter={preloadOutputs} onfocus={preloadOutputs} onclick={() => void toggleOutput(example.id)}>{loadingId === example.id ? 'Loading synthetic output…' : openedId === example.id ? 'Close synthetic output' : 'Open synthetic output'}</button>
         {#if openedId === example.id && outputFor(example.id)}
           {@const output = outputFor(example.id)!}
           <div class="example-output" id={`example-output-${example.id}`}>

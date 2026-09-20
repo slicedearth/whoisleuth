@@ -25,6 +25,16 @@ describe('lookup page actions', () => {
     });
 
     assert.equal(url, '/api/lookup?q=target.example&fast=1');
+    const selection = {
+      mode: 'fast' as const,
+      includeExternalIntelligence: false, externalIntelligenceSupported: false,
+      includeMalwareHostIntelligence: false, malwareHostIntelligenceSupported: false,
+      includeMalwareIocIntelligence: false, malwareIocIntelligenceSupported: false,
+      includeSecurityTxt: false, securityTxtSupported: false, securityTxtEligible: false,
+    };
+    assert.equal(buildLookupRequestUrl('https://portal.example.test/private-path?private-query=value#fragment', selection),
+      '/api/lookup?q=portal.example.test&fast=1');
+    assert.throws(() => buildLookupRequestUrl('https://synthetic:private@portal.example.test/path', selection), /without credentials/u);
   });
 
   test('enables only selected, supported and eligible deep enrichments', () => {
@@ -90,8 +100,9 @@ describe('lookup page actions', () => {
 
   test('maps bounded source-map anchors to the evidence family that renders them', () => {
     assert.equal(lookupEvidenceFamilyForHref('#evidence-registry'), 'registry');
-    assert.equal(lookupEvidenceFamilyForHref('#evidence-network'), 'registry');
     for (const href of [
+      '#evidence-network',
+      '#evidence-network-context',
       '#evidence-dns',
       '#evidence-reverse-dns',
       '#evidence-http',

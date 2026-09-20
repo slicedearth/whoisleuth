@@ -4,6 +4,7 @@
   import PageHeading from '$lib/components/PageHeading.svelte';
   import PublicSeo from '$lib/components/PublicSeo.svelte';
   import { normalizeContactAddress } from '../../../../../lib/contact-address.mts';
+  import { recipientMailto } from '../../../../../packages/evidence/email-recipient.mts';
 
   type ContactCategory = 'privacy' | 'outbound' | 'security';
   type TurnstileApi = {
@@ -152,7 +153,7 @@
       '',
       boundedMessage,
     ].join('\n');
-    return `mailto:${route}?subject=${encodeURIComponent(boundedSubject)}&body=${encodeURIComponent(body)}`;
+    return recipientMailto(route, { subject: boundedSubject, body }) ?? '';
   }
 
   async function prepareEmail(event: SubmitEvent) {
@@ -301,5 +302,5 @@
   .contact-notes dt{font:750 var(--text-xs) var(--mono);color:var(--text)}
   .contact-notes dd,.contact-notes>p:not(.eyebrow){margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.6}
   .contact-notes a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
-  @media(max-width:780px){.contact-layout{grid-template-columns:1fr}.contact-notes{order:-1}.contact-notes dl{grid-template-columns:1fr}.contact-form,.contact-notes{padding:16px}.challenge-shell{max-width:100%}}
+  @media(max-width:780px){.contact-layout{grid-template-columns:1fr}.contact-notes dl{grid-template-columns:1fr}.contact-form,.contact-notes{padding:16px}.challenge-shell{max-width:100%}}
 </style>

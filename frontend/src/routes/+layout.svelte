@@ -1,7 +1,10 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { observeThemePreference } from '$lib/theme';
   import '../app.css';
 
   let { children } = $props();
+  onMount(() => observeThemePreference(() => {}));
 </script>
 
 {@render children()}

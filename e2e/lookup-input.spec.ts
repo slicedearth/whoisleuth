@@ -1,13 +1,14 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, holdBrowserLocalReads, lookupDomainIdentity, readBrowserLocalCollection } from './helpers';
+import { boundingBox, expandLookupFamilies, expectNoHorizontalOverflow, holdBrowserLocalReads, lookupDomainIdentity, openLookupOptionalSources, readBrowserLocalCollection } from './helpers';
 import { TEST_SITE_PASSWORD } from './constants.ts';
 import { readFile } from 'node:fs/promises';
-import { ACTIVE_PROFILE_KEY } from '../frontend/src/lib/brand-profiles';
 import { buildLookupEvidence } from '../frontend/src/lib/analysis/evidence-export';
 
-// Every value here is deliberately dotless (no TLD), so classifyQuery on the
-// server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
-// never trigger a live lookup, only client-side parsing/navigation.
+const ACTIVE_PROFILE_KEY = 'whois-rdap-active-brand-profile-v1';
+
+// Invalid-input cases use dotless values; collectable targets use local
+// response fixtures. The independent server guard rejects missing fixtures
+// before any collector transport can make a request.
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/lookup');
@@ -38,9 +39,41 @@ test('a single domain can be entered normally', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Run lookup' })).toBeVisible();
   await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
   await expect(page.getByRole('radio', { name: /Deep/u })).not.toBeChecked();
-  await expect(page.getByText('Separate multiple domains with commas, semicolons, tabs, or new lines.')).toBeVisible();
+  await expect(page.locator('.input-help')).toContainText(/Lists accept commas, semicolons, tabs or new lines/u);
   await expect(page.getByText('Press Ctrl+Enter or ⌘+Enter to run.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Run lookup' })).toHaveAttribute('aria-keyshortcuts', 'Control+Enter Meta+Enter');
+});
+
+test('ordinary URL lookup sends only its full hostname and rejects credentials before collection', async ({ page }) => {
+  const requests: string[] = [];
+  await page.route('**/api/lookup?*', async (route) => {
+    requests.push(route.request().url());
+    await route.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        query: 'portal.example.test', type: 'domain', registrableDomain: 'example.test',
+        availability: { applicable: true, state: 'registered', confidence: 'medium', domain: 'example.test', deepScanComplete: true },
+        rdap: { error: 'Fixture source unavailable' }, whois: { parsed: {}, chain: [] },
+        diagnostics: { version: 8, rdap: { status: 'error' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
+      }) });
+  });
+  const query = page.locator('#query');
+  const submit = page.getByRole('button', { name: 'Run lookup' });
+  for (const task of ['general', 'incident']) {
+    await page.locator('.task-guidance').getByLabel('Analyst question').selectOption(task);
+    await query.fill('https://synthetic:private@portal.example.test/private-path?private-query=present');
+    await submit.click();
+    await expect(page.getByRole('alert')).toContainText('without credentials');
+    await expect(submit).toBeEnabled();
+    expect(requests).toEqual([]);
+  }
+  await page.locator('.task-guidance').getByLabel('Analyst question').selectOption('general');
+  await query.fill('https://portal.example.test:8443/private-path?private-query=present#private-fragment');
+  await submit.click();
+  await expect(page.getByRole('heading', { name: 'registered', exact: true })).toBeVisible();
+  await expect(submit).toBeEnabled();
+  expect(requests).toHaveLength(1);
+  expect(new URL(requests[0]!).searchParams.get('q')).toBe('portal.example.test');
+  expect(requests[0]).not.toMatch(/private-path|private-query|private-fragment|synthetic|8443/u);
 });
 
 test('task guidance recommends evidence depth without submitting a lookup', async ({ page }) => {
@@ -52,6 +85,7 @@ test('task guidance recommends evidence depth without submitting a lookup', asyn
   const question = guidance.getByLabel('Analyst question');
   await expect(question).toHaveValue('general');
   await expect(guidance).toContainText('Fast recommended');
+  await guidance.locator('summary').click();
   await expect(guidance.getByRole('button', { name: 'Use Fast recommendation' })).toBeDisabled();
   await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
 
@@ -73,10 +107,38 @@ test('task guidance recommends evidence depth without submitting a lookup', asyn
   await expectNoHorizontalOverflow(page);
 });
 
+test('unanswered Lookup questions link to existing evidence without initiating collection', async ({ page }) => {
+  const requests: string[] = [];
+  await page.route('**/api/lookup?*', async route => {
+    requests.push(route.request().url());
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      query: 'questions.invalid', type: 'domain', registrableDomain: 'questions.invalid',
+      availability: { applicable: true, state: 'registered', confidence: 'high', domain: 'questions.invalid' },
+      rdap: { parsed: { domain: 'questions.invalid', registrar: { name: 'Fixture registrar' } } },
+      whois: { parsed: {}, chain: [] },
+      diagnostics: { version: 8, rdap: { status: 'success' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+    }) });
+  });
+  await page.getByLabel('Analyst question').selectOption('incident');
+  await page.locator('#query').fill('questions.invalid');
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  const questions = page.locator('.open-questions');
+  await expect(questions).toBeVisible();
+  await questions.locator('summary').click();
+  await expect(questions).toContainText('What was the website doing at the observed time?');
+  const route = questions.getByRole('link', { name: 'Reviewed case and recipient route', exact: true });
+  await expect(route).toHaveAttribute('href', '#case-response');
+  await route.click();
+  await expect(page.locator('#case-response-title')).toBeInViewport();
+  expect(requests).toHaveLength(1);
+  await expectNoHorizontalOverflow(page);
+});
+
 test('acquisition deep-link guidance preserves the route and permits deliberate override', async ({ page }) => {
   await page.goto('/lookup?task=acquisition&depth=fast#query');
   const guidance = page.locator('.task-guidance');
   await expect(guidance.getByLabel('Analyst question')).toHaveValue('acquisition');
+  await guidance.locator('summary').click();
   await expect(guidance).toContainText('Deep recommended');
   await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
   await guidance.getByRole('button', { name: 'Use Deep recommendation' }).click();
@@ -159,7 +221,7 @@ test('fast lookup mode is explicit and sends the fast contract parameter', async
 
   await page.locator('#query').fill('example.test');
   await expect(page.getByRole('radio', { name: /Fast/u })).toBeChecked();
-  await expect(page.getByText(/Fast is the fresh-session default.*lower-request registration evidence/u)).toBeVisible();
+  await expect(page.locator('.lookup-mode')).toContainText('Fast checks registration evidence');
 
   const requestPromise = page.waitForRequest((request) => {
     const url = new URL(request.url());
@@ -219,10 +281,10 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
   const pending = page.locator('.loading-note');
-  await expect(pending).toContainText('Deep lookup is waiting for one final response');
+  await expect(pending).toContainText('Collecting registry, WHOIS, domain, web, TLS');
   await expect(pending.locator('.loading-meta')).toContainText(/elapsed/u);
-  await expect(pending.locator('.collection-trace')).toContainText('Registry RDAP');
-  await expect(pending.locator('.collection-trace')).toContainText('Domain evidence');
+  await expect(pending).toContainText('Only the final validated response can be retained.');
+  await expect(page.getByRole('region', { name: 'Lookup source progress' })).toContainText('Waiting for source updates');
   await expect(page.getByRole('button', { name: 'Cancel lookup' })).toBeVisible();
   releaseLookup?.();
 
@@ -664,8 +726,8 @@ test('a delayed replay comparison cannot rebind to a replacement primary capture
       if (!hold) return original.call(this);
       hold = false;
       return new Promise<string>((resolve, reject) => {
-        Reflect.set(window, '__releaseReplayComparisonRead', () => {
-          void original.call(this).then(resolve, reject);
+        Reflect.set(window, '__releaseReplayComparisonRead', async () => {
+          await original.call(this).then(resolve, reject);
         });
       });
     };
@@ -676,6 +738,10 @@ test('a delayed replay comparison cannot rebind to a replacement primary capture
     buffer: Buffer.from(replayEvidence('primary-a.example.test', 'Registrar B')),
   });
   await expect(replay.getByText('Reading second evidence…', { exact: true })).toBeVisible();
+  await replay.locator('input[type="file"]').last().evaluate((control) => {
+    if (!(control instanceof HTMLInputElement) || !control.value) throw new Error('The held comparison input must retain its selection.');
+    Reflect.set(window, '__heldComparisonControl', control);
+  });
 
   await primaryInput.setInputFiles({
     name: 'primary-c.json',
@@ -683,11 +749,18 @@ test('a delayed replay comparison cannot rebind to a replacement primary capture
     buffer: Buffer.from(replayEvidence('primary-c.example.test', 'Registrar C')),
   });
   await expect(replay.getByRole('heading', { name: 'primary-c.example.test' })).toBeVisible();
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     const release = Reflect.get(window, '__releaseReplayComparisonRead');
     if (typeof release !== 'function') throw new Error('The replay comparison read gate was not installed.');
-    release();
+    await release();
   });
+  // The original control is cleared in the completed handler, even after its
+  // DOM node was replaced with the new primary capture's controls.
+  await expect.poll(() => page.evaluate(() => {
+    const control = Reflect.get(window, '__heldComparisonControl');
+    if (!(control instanceof HTMLInputElement)) throw new Error('The held comparison control was not captured.');
+    return control.value;
+  })).toBe('');
   await expect(replay.locator('.comparison-status')).toBeEmpty();
   await expect(replay.locator('.comparison-counts')).toHaveCount(0);
   await expect(replay).not.toContainText('Compared comparison-b.json locally');
@@ -732,6 +805,7 @@ test('keeps the current Lookup form and result during console navigation only', 
 
   await page.locator('#query').fill('portal.example.test');
   await page.getByRole('radio', { name: /Deep/u }).check();
+  await openLookupOptionalSources(page);
   await page.getByRole('checkbox', { name: /Retrieve security\.txt contacts/u }).check();
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
@@ -742,6 +816,7 @@ test('keeps the current Lookup form and result during console navigation only', 
 
   await expect(page.locator('#query')).toHaveValue('portal.example.test');
   await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();
+  await openLookupOptionalSources(page);
   await expect(page.getByRole('checkbox', { name: /Retrieve security\.txt contacts/u })).toBeChecked();
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
   expect(requestCount).toBe(1);
@@ -892,7 +967,12 @@ test('a malformed successful response is rejected at the Lookup boundary', async
   await expect(page.locator('#result')).toHaveCount(0);
 });
 
-test('security.txt collection is explicit, separately presented, and mobile safe', async ({ page }) => {
+for (const publication of [
+  { state: 'current', expiresAt: '2027-01-01T00:00:00.000Z' },
+  { state: 'expired', expiresAt: '2026-07-22T11:00:00.000Z' },
+] as const) {
+test(`security.txt ${publication.state} collection retains its route deadline and is mobile safe`, async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-07-22T12:00:00.000Z'));
   await page.route('**/api/lookup?*', async (route) => {
     await route.fulfill({
       status: 200,
@@ -912,7 +992,7 @@ test('security.txt collection is explicit, separately presented, and mobile safe
           finalUrl: 'https://portal.example.test/.well-known/security.txt', httpStatus: 200,
           redirectCount: 0, contacts: ['mailto:security@example.test'],
           policies: ['https://portal.example.test/security-policy'], encryption: [], canonical: [],
-          preferredLanguages: ['en'], expiresAt: '2027-01-01T00:00:00.000Z', signed: false, canonicalMatches: null,
+          preferredLanguages: ['en'], expiresAt: publication.expiresAt, signed: false, canonicalMatches: null,
         },
       }),
     });
@@ -920,6 +1000,7 @@ test('security.txt collection is explicit, separately presented, and mobile safe
 
   const option = page.getByRole('checkbox', { name: /Retrieve security\.txt contacts/u });
   await page.getByRole('radio', { name: /Deep/u }).check();
+  await openLookupOptionalSources(page);
   await expect(option).not.toBeChecked();
   await page.locator('#query').fill('192.0.2.1');
   await expect(option).toBeDisabled();
@@ -943,10 +1024,25 @@ test('security.txt collection is explicit, separately presented, and mobile safe
   await disclosure.locator('summary').click();
   await expect(disclosure.getByText('mailto:security@example.test', { exact: true })).toBeVisible();
   await expect(disclosure.getByText(/does not authorise testing/u)).toBeVisible();
+  if (publication.state === 'expired') {
+    await expect(disclosure.getByText('Recorded expiry has passed', { exact: true })).toBeVisible();
+    await expect(disclosure).not.toContainText('0 days to expiry');
+  }
+
+  await expandLookupFamilies(page);
+  await page.getByRole('button', { name: 'Create case', exact: true }).click();
+  const destination = page.locator('.response-actions article', { hasText: 'security@example.test' });
+  await expect(destination.locator('time')).toHaveAttribute('datetime', publication.expiresAt);
+  await destination.getByRole('button', { name: 'Record in case', exact: true }).click();
+  await expect.poll(async () => {
+    const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+    return stored.records.flatMap((item) => item.value.actions).map((action) => action.routeReviewAfter);
+  }).toEqual([publication.expiresAt]);
 
   await page.setViewportSize({ width: 320, height: 640 });
   await expectNoHorizontalOverflow(page);
 });
+}
 
 test('newlines, commas, and semicolons all parse as multiple domains and hand off to Bulk', async ({ page }) => {
   // Each delimiter gets its own line: the client-side parser picks one

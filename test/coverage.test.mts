@@ -4,6 +4,18 @@ import * as coverage from '../frontend/src/lib/analysis/coverage.ts';
 import { requiredValue } from './value-assertions.mts';
 
 describe('defensive-registration profile listing', () => {
+  test('recovers the full public suffix from handed-off names without a new retained field', () => {
+    const report = coverage.buildCoverageReport(
+      [{ domain: 'example.co.uk', availability: 'unknown', mutationTypes: ['character_omission'] }],
+      [{ domain: 'example.com.au', source: 'example', mutationTypes: ['keyword'] }],
+      new Set(['example.com.au']), {},
+    );
+    assert.deepEqual(report.tldGroups.map(group => group.key).sort(), ['co.uk', 'com.au']);
+    assert.equal(report.summary.total, 2);
+    assert.equal(report.summary.unknown, 2);
+    assert.equal(report.summary.profileListed, 1);
+  });
+
   test('counts unique domains while retaining overlapping mutation groups', () => {
     const results = [
       { domain: 'open.com', availability: 'available', candidateTld: 'com', mutationTypes: ['character_omission'] },

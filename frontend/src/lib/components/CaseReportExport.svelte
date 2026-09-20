@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import type { CaseRecord } from '$lib/cases';
   import { buildCaseReport, caseReportFilename } from '$lib/analysis/case-report.ts';
   import { buildCaseSightingStixExport } from '$lib/analysis/case-sighting-stix-export.ts';
@@ -27,12 +28,7 @@
       const blob = new Blob([content], {
         type: format === 'md' ? 'text/markdown' : 'application/json',
       });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = caseReportFilename(record.domain, format, generatedAt);
-      anchor.click();
-      URL.revokeObjectURL(url);
+      downloadLocalFile(blob, caseReportFilename(record.domain, format, generatedAt));
       onmessage?.(`Exported ${format === 'md' ? 'Markdown' : 'JSON'} report for ${record.domain}${includeNotes ? ' (with notes)' : ''}.`);
     } catch (cause) {
       onmessage?.(cause instanceof Error ? cause.message : 'Could not export case report.');
@@ -42,12 +38,7 @@
   function exportSightings() {
     try {
       const exported = buildCaseSightingStixExport(record);
-      const url = URL.createObjectURL(new Blob([exported.content], { type: exported.mimeType }));
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = exported.filename;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      downloadLocalFile(new Blob([exported.content], { type: exported.mimeType }), exported.filename);
       onmessage?.(`Exported ${exported.sightingCount} source-qualified sighting${exported.sightingCount === 1 ? '' : 's'} as a local STIX 2.1 bundle.`);
     } catch (cause) {
       onmessage?.(cause instanceof Error ? cause.message : 'Could not export source-qualified sightings.');

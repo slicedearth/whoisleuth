@@ -9,6 +9,8 @@ import {
   MAX_ADVANCED_CONFUSABLE_VARIANTS,
   wholeLabelConfusableVariantsForAscii,
 } from './idn-confusables.mts';
+import { canonicalRegistrableDomain, normalizeDiscoverySuffix } from './registrable-domain.mts';
+import { MAX_DOMAIN_NAME_LENGTH, MAX_DOMAIN_LABEL_LENGTH } from '../packages/contracts/domain-name.mts';
 
 export { MAX_ADVANCED_CONFUSABLE_VARIANTS };
 
@@ -156,17 +158,16 @@ const TLD_TYPOS: Readonly<Record<string, readonly string[]>> = {
 export const MAX_GENERATION_TLDS = 20;
 export const MAX_NAME_VARIANTS = 1_500;
 export const MAX_GENERATED_CANDIDATES = 2_000;
-export const MAX_GENERATION_INPUT_LENGTH = 253;
+export const MAX_GENERATION_INPUT_LENGTH = MAX_DOMAIN_NAME_LENGTH;
 export const MAX_CUSTOM_DICTIONARY_TERMS = 100;
 export const MAX_CUSTOM_DICTIONARY_TERM_LENGTH = 32;
 export const MAX_CUSTOM_DICTIONARY_TEXT_LENGTH = 4_096;
 
-const MAX_LABEL_LENGTH = 63;
+const MAX_LABEL_LENGTH = MAX_DOMAIN_LABEL_LENGTH;
 const MAX_TLD_INPUTS_INSPECTED = MAX_GENERATION_TLDS * 4;
 const MAX_CUSTOM_DICTIONARY_INPUTS_INSPECTED = MAX_CUSTOM_DICTIONARY_TERMS * 4;
 const CONTROL_CHARACTER_RE = /[\x00-\x1f\x7f]/;
 const DOMAIN_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
-const TLD_RE = /^[a-z]{2,63}$/;
 const CUSTOM_DICTIONARY_TERM_RE = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
 const FAMILY_NEW_VARIANT_LIMITS: Readonly<Record<string, number>> = Object.freeze({
   character_addition: 128,
@@ -298,10 +299,11 @@ function splitDomainParts(input: unknown): DomainParts | null {
   if (!trimmed) return null;
 
   if (trimmed.includes('.')) {
-    const match = trimmed.match(/^([a-z0-9-]+)\.([a-z]+)$/);
-    const name = match?.[1];
-    const tld = match?.[2];
-    if (!isValidDomainLabel(name) || typeof tld !== 'string' || !TLD_RE.test(tld)) return null;
+    const separator = trimmed.indexOf('.');
+    const name = trimmed.slice(0, separator);
+    const suffix = trimmed.slice(separator + 1);
+    const tld = normalizeDiscoverySuffix(suffix);
+    if (!isValidDomainLabel(name) || !tld || tld !== suffix || canonicalRegistrableDomain(trimmed) !== trimmed) return null;
     const tokens = name.split('-');
     return { name, tld, wordTokens: tokens.length >= 2 && tokens.length <= 4 && tokens.every(Boolean) ? tokens : [] };
   }
@@ -344,16 +346,15 @@ function distinctWordOrders(tokens: unknown): string[][] {
   return orders;
 }
 
-function normalizeTlds(values: unknown): { values: string[]; truncated: boolean } {
+export function normalizeGenerationTlds(values: unknown): { values: string[]; truncated: boolean } {
   if (!Array.isArray(values)) return { values: [], truncated: false };
   const normalized: string[] = [];
   const seen = new Set<string>();
   let truncated = values.length > MAX_TLD_INPUTS_INSPECTED;
 
   for (const raw of values.slice(0, MAX_TLD_INPUTS_INSPECTED)) {
-    if (typeof raw !== 'string' || raw.length > MAX_LABEL_LENGTH + 1 || CONTROL_CHARACTER_RE.test(raw)) continue;
-    const value = raw.trim().toLowerCase().replace(/^\./, '');
-    if (!TLD_RE.test(value) || seen.has(value)) continue;
+    const value = normalizeDiscoverySuffix(raw);
+    if (!value || seen.has(value)) continue;
     if (normalized.length >= MAX_GENERATION_TLDS) {
       truncated = true;
       continue;
@@ -464,7 +465,7 @@ function selectCandidateTlds(sourceTld: string | null, fallbackTlds: unknown, en
   if (sourceTld && !enabledFamilies.has('tld_substitution')) {
     return { values: [sourceTld], truncated: false };
   }
-  const normalizedFallbackTlds = normalizeTlds(fallbackTlds);
+  const normalizedFallbackTlds = normalizeGenerationTlds(fallbackTlds);
   const combinedTlds = sourceTld
     ? [sourceTld, ...normalizedFallbackTlds.values.filter((value) => value !== sourceTld)]
     : normalizedFallbackTlds.values;
@@ -724,8 +725,8 @@ export function generateTyposquatCandidateSet(rawInput: unknown, fallbackTlds: u
     for (const variant of pluralForms(name, parts.wordTokens)) addVariant(state, variant, 'pluralization');
   }
   if (enabledFamilies.has('tld_embedding') && tld) {
-    addVariant(state, `${name}${tld}`, 'tld_embedding');
-    addVariant(state, `${name}-${tld}`, 'tld_embedding');
+    addVariant(state, `${name}${tld.replaceAll('.', '')}`, 'tld_embedding');
+    addVariant(state, `${name}-${tld.replaceAll('.', '-')}`, 'tld_embedding');
   }
   if (enabledFamilies.has('www_prefix')) {
     addVariant(state, `ww${name}`, 'www_prefix');
@@ -864,6 +865,10 @@ export function generateTyposquatCandidateSet(rawInput: unknown, fallbackTlds: u
   const source = tld ? `${name}.${tld}` : name;
 
   function addCandidate(domain: string, candidateTld: string, mutationTypes: Iterable<string>) {
+    if (domain.length > MAX_DOMAIN_NAME_LENGTH) {
+      state.rejectedVariantCount += 1;
+      return;
+    }
     const existing = byDomain.get(domain);
     if (existing) {
       for (const mutationType of mutationTypes) {

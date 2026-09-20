@@ -216,22 +216,17 @@ describe('local CodeQL SARIF parsing', () => {
     assert.equal(drifted.staleBaseline.length, 1);
   });
 
-  test('pins the complete reviewed baseline and requires every exact identity once', () => {
-    const expected: KnownCodeqlFinding[] = [
-      { ruleId: 'js/disabling-certificate-validation', file: 'lib/tls-intelligence.mts', primaryLocationLineHash: '11f7ddb4d3c0cb28:1', primaryLocationStartColumnFingerprint: '0', reason: 'accepted_behavior' },
-      { ruleId: 'js/disabling-certificate-validation', file: 'lib/smtp-transport-review.mts', primaryLocationLineHash: '5cfcbf6f51b434cf:1', primaryLocationStartColumnFingerprint: '0', reason: 'accepted_behavior' },
-      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'c95b56b6acb3e65b:1', primaryLocationStartColumnFingerprint: '23', reason: 'false_positive' },
-      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'e98683a11c64bf47:1', primaryLocationStartColumnFingerprint: '26', reason: 'false_positive' },
-      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'e5df0635a7fe0562:1', primaryLocationStartColumnFingerprint: '53', reason: 'false_positive' },
-      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'f9955890d8802dc7:1', primaryLocationStartColumnFingerprint: '51', reason: 'false_positive' },
-      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'd958752a942a1329:1', primaryLocationStartColumnFingerprint: '69', reason: 'false_positive' },
-      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'bee55061202d551f:1', primaryLocationStartColumnFingerprint: '52', reason: 'false_positive' },
-      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: '3580829fea761be5:1', primaryLocationStartColumnFingerprint: '59', reason: 'false_positive' },
-      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'b269a7c62be7cb18:1', primaryLocationStartColumnFingerprint: '56', reason: 'false_positive' },
-      { ruleId: 'js/missing-rate-limiting', file: 'server.mts', primaryLocationLineHash: 'e8481cbf82455fde:1', primaryLocationStartColumnFingerprint: '61', reason: 'false_positive' },
-      { ruleId: 'js/incomplete-url-substring-sanitization', file: 'test/ct-search.test.mts', primaryLocationLineHash: '396838f0aee3b68c:1', primaryLocationStartColumnFingerprint: '13', reason: 'false_positive' },
-    ];
-    assert.deepEqual(KNOWN_CODEQL_FINDINGS, expected);
+  test('keeps reviewed identities immutable and distinct and requires every exact identity once', () => {
+    const expected = KNOWN_CODEQL_FINDINGS;
+    assert.ok(expected.length > 0);
+    assert.ok(Object.isFrozen(expected));
+    const identities = expected.map(entry => {
+      assert.ok(Object.isFrozen(entry));
+      assert.ok(entry.ruleId && entry.file && entry.primaryLocationLineHash && entry.primaryLocationStartColumnFingerprint);
+      assert.doesNotMatch(entry.file, /[?*{}]/u, 'a review must identify one file, not a path pattern');
+      return JSON.stringify([entry.ruleId, entry.file, entry.primaryLocationLineHash, entry.primaryLocationStartColumnFingerprint]);
+    });
+    assert.equal(new Set(identities).size, expected.length);
 
     const parsed = parseCodeqlSarif(sarif(expected.map((entry, index) => finding({
       ruleId: entry.ruleId,

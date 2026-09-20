@@ -185,6 +185,7 @@ async function runDiscoveryScanCommand(
     if (args.output === 'json') context.writeStdout(formatJsonDocument(document));
     else if (args.output === 'jsonl') context.writeStdout(formatDiscoveryScanJsonLines(document));
     else if (args.output === 'csv') context.writeStdout(formatDiscoveryScanCsv(document));
+    else if (args.output === 'csv_metadata') context.writeStdout(formatDiscoveryScanCsv(document, true));
     else if (args.output === 'domains') context.writeStdout(formatDiscoveryScanDomains(document));
     else context.writeStdout(context.terminal(formatTerminalDiscoveryScan(document), args.color));
   }

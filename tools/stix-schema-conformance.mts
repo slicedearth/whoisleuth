@@ -175,7 +175,12 @@ function conformanceBundles(): string[] {
   const generatedAt = '2026-08-01T00:00:00.000Z';
   const indicators = buildStixIndicatorExport([{
     domain: 'candidate.example', availability: 'registered', risk: 80, status: 'complete',
+    profileContext: { sourceState: 'ready' },
     saved: { scanDepth: 'deep', riskModelVersion: RISK_MODEL_VERSION, observedAt: generatedAt },
+  }, {
+    domain: 'unknown-time.example', availability: 'registered', risk: 80, status: 'complete',
+    profileContext: { sourceState: 'ready' },
+    saved: { scanDepth: 'fast', riskModelVersion: RISK_MODEL_VERSION, observedAt: null },
   }], { generatedAt, idFactory: idFactory() }).content;
   const caseRecord = createCase({
     domain: 'candidate.example',
@@ -184,6 +189,7 @@ function conformanceBundles(): string[] {
       observedAt: generatedAt, completeness: 'partial', limitations: ['Static fixture.'],
     },
   }, generatedAt);
+  caseRecord.sightings.push({ ...caseRecord.sightings[0]!, id: 'undated-fixture', observedAt: null });
   const sightings = buildCaseSightingStixExport(caseRecord, { generatedAt, idFactory: idFactory() }).content;
   return [indicators, sightings];
 }

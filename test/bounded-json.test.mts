@@ -7,6 +7,7 @@ import {
   MAX_BOUNDED_JSON_KEYS,
   MAX_BOUNDED_JSON_VALUES,
   assertBoundedJsonStructure,
+  boundedJsonLimitsForBytes,
   parseBoundedJson,
   parseBoundedJsonObject,
   scanBoundedJson,
@@ -43,6 +44,44 @@ function partitionedKeys(total: number, width = MAX_BOUNDED_JSON_CONTAINER_ITEMS
 }
 
 describe('bounded parsed JSON structure', () => {
+  test('accepts only the four JSON whitespace characters at every token boundary', () => {
+    for (const space of [' ', '\t', '\n', '\r', ' \t\n\r'.repeat(4_096)]) {
+      const raw = `${space}{${space}"rows"${space}:${space}[${space}1${space},${space}true${space}]${space}}${space}`;
+      assert.deepEqual(parseBoundedJson(raw, { maximumBytes: Buffer.byteLength(raw) }), { rows: [1, true] });
+    }
+    for (const space of ['\v', '\f', '\u00a0', '\u2003', '\ufeff', '\u2028', '\u2029']) {
+      for (const raw of [`${space}{}`, `{}${space}`, `{${space}"x":1}`, `{"x":${space}1}`, `[1,${space}2]`]) {
+        assert.throws(() => scanBoundedJson(raw));
+        assert.throws(() => JSON.parse(raw));
+      }
+    }
+  });
+
+  test('derives aggregate work from bytes without reducing valid minimal JSON or changing other bounds', () => {
+    for (const raw of ['0', '[]', '{}', '[0]', '[0,0]', '[[],[]]', '{"":0}', '{"":{"":0}}', '{"é":"\\u0000"}']) {
+      const maximumBytes = Buffer.byteLength(raw);
+      const limits = boundedJsonLimitsForBytes(maximumBytes);
+      assert.doesNotThrow(() => scanBoundedJson(raw, limits), raw);
+      assert.doesNotThrow(() => assertBoundedJsonStructure(JSON.parse(raw), 'Fixture', limits), raw);
+    }
+    for (const budget of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
+      assert.throws(() => boundedJsonLimitsForBytes(budget), /positive safe integer/);
+    }
+    const raw = JSON.stringify(partitionedKeys(MAX_BOUNDED_JSON_KEYS + 1));
+    assert.throws(() => scanBoundedJson(raw), /50000-key limit/);
+    assert.doesNotThrow(() => scanBoundedJson(raw, boundedJsonLimitsForBytes(Buffer.byteLength(raw))));
+    const limits = boundedJsonLimitsForBytes(4 * 1024 * 1024);
+    assert.throws(() => scanBoundedJson('{"x":0,"x":1}', limits), /duplicate object key/);
+    assert.throws(() => scanBoundedJson('{"__proto__":0}', limits), /unsafe object key/);
+    assert.throws(() => scanBoundedJson(JSON.stringify(nested(MAX_BOUNDED_JSON_DEPTH + 1)), limits), /nesting limit/);
+    assert.throws(() => scanBoundedJson(JSON.stringify(Array(10_001).fill(0)), limits), /container/);
+    for (const [raw, value] of [['"abcd"', 'abcd'], ['{"abc":"d"}', { abc: 'd' }]] as const) {
+      assert.throws(() => scanBoundedJson(raw, { maximumStringCodeUnits: 3 }), /aggregate text limit/);
+      assert.throws(() => assertBoundedJsonStructure(value, 'Fixture', { maximumStringCodeUnits: 3 }), /aggregate text limit/);
+      assert.doesNotThrow(() => scanBoundedJson(raw));
+    }
+  });
+
   test('accepts exact global depth, key, and value limits', () => {
     assert.doesNotThrow(() => assertBoundedJsonStructure(nested(MAX_BOUNDED_JSON_DEPTH)));
     assert.doesNotThrow(() => assertBoundedJsonStructure(

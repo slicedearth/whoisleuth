@@ -9,6 +9,8 @@ import {
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { runCli } from '../cli/runner.mts';
 import { MAX_SAVED_LOOKUP_INPUT_BYTES } from '../cli/saved-lookup.mts';
+import { buildCliBulkDocument, bulkJsonItem } from '../cli/formatters/json.mts';
+import type { BulkLookupResult } from '../cli/bulk.mts';
 
 function lookupDocument(overrides: Record<string, unknown> = {}) {
   return {
@@ -38,8 +40,8 @@ function lookupDocument(overrides: Record<string, unknown> = {}) {
         ],
       },
     },
-    dns: {
-      observation: {
+    availability: {
+      dns: {
         version: 1,
         status: 'partial',
         observedAt: '2026-07-15T00:00:00.000Z',
@@ -54,6 +56,9 @@ function lookupDocument(overrides: Record<string, unknown> = {}) {
     },
     threatIntelligence: {
       providers: [{
+        schema: 'whoisleuth.threat-intelligence-result',
+        version: 1,
+        provider: { id: 'urlscan_search', label: 'Reviewed search provider' },
         state: 'rate_limited',
         target: { value: 'private-target.example' },
         observation: {
@@ -104,16 +109,36 @@ describe('privacy-safe source reliability report', () => {
     assert.deepEqual(legacy, before);
   });
 
-  test('accepts saved Lookup versions 1 and 2 without widening the Bulk contract', () => {
+  test('accepts supported Lookup and Bulk health envelopes while rejecting future versions', () => {
     const report = buildSourceReliabilityReport(JSON.stringify([
       lookupDocument({ version: 1 }),
       lookupDocument({ version: 2 }),
     ]));
     assert.equal(report.documentsReviewed, 2);
     assert.throws(
-      () => buildSourceReliabilityReport(JSON.stringify({ schema: 'whoisleuth.cli.bulk', version: 2 })),
-      /version 1 Bulk or Bulk-item/iu,
+      () => buildSourceReliabilityReport(JSON.stringify({ schema: 'whoisleuth.cli.bulk', version: 999 })),
+      /supported CLI Lookup, Bulk or Bulk-item/iu,
     );
+    const result: BulkLookupResult = {
+      ok: true, index: 0, query: 'example.test',
+      classified: { type: 'domain', value: 'example.test', inputHostname: 'example.test', registrableDomain: 'example.test', isSubdomain: false },
+      result: lookupDocument(),
+    };
+    const metadata = { generatedAt: '2026-07-15T00:00:00.000Z', deep: true };
+    const bulk = buildCliBulkDocument([result], metadata);
+    const item = bulkJsonItem(result, metadata);
+    for (const version of [1, 2, bulk.version]) {
+      const retainedItem = { ...item, version };
+      const expected = buildSourceReliabilityReport(JSON.stringify(retainedItem), metadata.generatedAt);
+      const grouped = buildSourceReliabilityReport(JSON.stringify({ ...bulk, version, results: [retainedItem] }), metadata.generatedAt);
+      assert.deepEqual(grouped.sources, expected.sources);
+      assert.deepEqual(grouped.sources.find((source) => source.source === 'rdap')?.states, { success: 1 });
+      const withUnownedEnrichment = buildSourceReliabilityReport(JSON.stringify({
+        ...retainedItem, threatIntelligence: lookupDocument().threatIntelligence,
+        dnsSummary: { observation: { ...lookupDocument().availability.dns, source: 'rdap', status: 'error' } },
+      }), metadata.generatedAt);
+      assert.deepEqual(withUnownedEnrichment.sources, expected.sources);
+    }
   });
 
   test('applies the canonical saved-Lookup shape and byte boundary before source projection', () => {
@@ -253,7 +278,7 @@ describe('privacy-safe source reliability report', () => {
   test('rejects unknown schemas and unbounded document collections', () => {
     assert.throws(
       () => buildSourceReliabilityReport(JSON.stringify({ schema: 'unknown', version: 1 })),
-      /requires CLI Lookup version 1 or 2/iu,
+      /requires supported CLI Lookup/u,
     );
     assert.throws(
       () => buildSourceReliabilityReport(JSON.stringify(
@@ -316,43 +341,84 @@ describe('privacy-safe source reliability report', () => {
     );
   });
 
-  test('rejects traversal and source bounds instead of silently dropping evidence', () => {
+  test('does not interpret raw publications or extension fields as collector health', () => {
+    const baseline = lookupDocument();
+    const report = buildSourceReliabilityReport(JSON.stringify(baseline));
+    const fake = { ...baseline.availability.dns, source: 'rdap', status: 'error' };
     const observations = Array.from({ length: 65 }, (_, index) => ({
-      version: 1,
+      ...fake,
       source: `source_${index}`,
-      status: 'partial',
-      observedAt: '2026-07-15T00:00:00.000Z',
-      complete: false,
-      truncated: false,
-      limitations: [],
     }));
-    assert.throws(
-      () => buildSourceReliabilityReport(JSON.stringify(lookupDocument({ observations }))),
-      /64-source limit/u,
-    );
+    const contaminated = lookupDocument({
+      observations,
+      rdap: { parsed: { ...baseline.rdap.parsed, extension: fake }, raw: { diagnostics: baseline.diagnostics, observations } },
+      whois: { parsed: { ...baseline.whois.parsed, extension: fake } },
+      availability: { ...baseline.availability, dns: { ...baseline.availability.dns, records: { extension: fake } } },
+      threatIntelligence: { providers: baseline.threatIntelligence.providers.map((provider) => ({ ...provider, findings: [{ extension: fake, diagnostics: baseline.diagnostics }] })) },
+    });
+    const actual = buildSourceReliabilityReport(JSON.stringify(contaminated));
+    assert.deepEqual(actual.sources, report.sources);
+    assert.deepEqual(actual.totals, report.totals);
+    assert.equal(actual.sources.find((source) => source.source === 'rdap')?.rates.failure, 0);
+    assert.doesNotMatch(JSON.stringify(actual), /source_\d|private-target|secret provider/u);
+  });
 
+  test('retains independently attributed health at the documented collector boundaries', () => {
+    const observation = (source: string) => ({
+      ...lookupDocument().availability.dns, source,
+      status: 'success', complete: true, truncated: false, limitations: [],
+    });
+    const report = buildSourceReliabilityReport(JSON.stringify(lookupDocument({
+      diagnostics: { rdap: { status: 'skipped' }, whois: { status: 'skipped' } },
+      threatIntelligence: { providers: [] },
+      availability: {
+        dns: { ...observation('dns'), caaPolicy: observation('dns'), delegation: observation('dns_delegation') },
+        http: observation('http'), tls: observation('tls'), pageIdentity: observation('html'),
+        credentialSurfaceProfile: observation('html'), structuredDataIdentity: observation('html'),
+        technologyProfile: { ...observation('derived'), browserLibraryProfile: observation('derived') },
+        pageRoleProfile: observation('derived'), clientBehaviorProfile: observation('derived'),
+        securityPosture: observation('derived'),
+      },
+      reverseDns: observation('reverse_dns'), networkContext: observation('ip_rdap'),
+      securityTxt: observation('security_txt'),
+    })));
+    assert.deepEqual(Object.fromEntries(report.sources.map((source) => [source.source, source.samples.observations])), {
+      derived: 5, dns: 2, dns_delegation: 1, html: 3, http: 1,
+      ip_rdap: 1, rdap: 0, reverse_dns: 1, security_txt: 1, tls: 1, whois: 0,
+    });
+    assert.equal(report.totals.observationSamples, 16);
+    assert.equal(report.totals.timingSamples, 0);
+    assert.equal(report.totals.truncations, 0);
+  });
+
+  test('bounds input structure and owned health collections without traversing publications', () => {
     let nested: Record<string, unknown> = { leaf: true };
-    for (let depth = 0; depth < 13; depth += 1) nested = { next: nested };
-    assert.throws(
-      () => buildSourceReliabilityReport(JSON.stringify(lookupDocument({ nested }))),
-      /12-level traversal limit/u,
-    );
+    for (let depth = 0; depth < 50; depth += 1) nested = { next: nested };
+    assert.throws(() => buildSourceReliabilityReport(JSON.stringify(lookupDocument({ nested }))), /bounded JSON/u);
     assert.throws(
       () => buildSourceReliabilityReport(JSON.stringify(lookupDocument({
-        wide: Object.fromEntries(Array.from({ length: 201 }, (_, index) => [`field${index}`, {}])),
+        wide: Array.from({ length: 10_001 }, () => ({})),
       }))),
-      /more than 200 fields/u,
-    );
-    assert.throws(
-      () => buildSourceReliabilityReport(JSON.stringify(lookupDocument({
-        wide: Array.from({ length: 1_001 }, () => ({})),
-      }))),
-      /more than 1000 items/u,
+      /bounded JSON/u,
     );
     assert.throws(
       () => buildSourceReliabilityReport('{"schema":"whoisleuth.cli.lookup","schema":"whoisleuth.cli.lookup"}'),
       /duplicate keys/u,
     );
+    const baseline = lookupDocument();
+    const provider = baseline.threatIntelligence.providers[0]!;
+    assert.throws(() => buildSourceReliabilityReport(JSON.stringify(lookupDocument({
+      threatIntelligence: { providers: [provider, provider] },
+    }))), /duplicate provider health/u);
+    assert.throws(() => buildSourceReliabilityReport(JSON.stringify(lookupDocument({
+      threatIntelligence: { providers: Array.from({ length: 11 }, () => provider) },
+    }))), /provider health boundary/u);
+    const unknown = buildSourceReliabilityReport(JSON.stringify(lookupDocument({
+      threatIntelligence: { providers: [{ ...provider, provider: { id: 'private_source_label' } }] },
+      availability: { dns: { ...baseline.availability.dns, source: 'private_source_label' } },
+    })));
+    assert.equal(unknown.totals.observationSamples, 0);
+    assert.doesNotMatch(JSON.stringify(unknown), /private_source_label/u);
   });
 
   test('runs through the CLI without retaining target-bearing input fields', async () => {

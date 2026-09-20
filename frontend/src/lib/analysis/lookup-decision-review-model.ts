@@ -8,8 +8,12 @@ import {
   type DecisionFactFreshness,
   type DecisionFactImportance,
   type DecisionFactPresentationDescriptor,
-  type DecisionFactProvenance,
 } from '../../../../packages/evidence/decision-fact.mts';
+import {
+  decisionFactPresentation as presentation,
+  presentLookupContributor,
+  type LookupContributorPresentation,
+} from './lookup-fact-presentation.ts';
 import type {
   LookupDecisionEntry,
   LookupDecisionSupport,
@@ -22,16 +26,7 @@ export const MAX_LOOKUP_DECISION_REVIEW_ENTRIES = 16;
 export type LookupDecisionReviewGroupId = 'disagreements' | 'unresolved';
 export type LookupDecisionReviewDestination = `#${string}`;
 
-export type LookupDecisionReviewContributor = Readonly<{
-  id: string;
-  label: string;
-  evidenceState: DecisionFactEvidenceState;
-  evidencePresentation: DecisionFactPresentationDescriptor;
-  provenance: DecisionFactProvenance;
-  provenancePresentation: DecisionFactPresentationDescriptor;
-  observedAt: string | null;
-  limitations: readonly string[];
-}>;
+export type LookupDecisionReviewContributor = LookupContributorPresentation;
 
 export type LookupDecisionReviewAction = Readonly<{
   id: string;
@@ -122,18 +117,6 @@ const GROUP_SPECS: readonly GroupSpec[] = Object.freeze([
   }),
 ]);
 
-function presentation(
-  descriptor: DecisionFactPresentationDescriptor,
-): DecisionFactPresentationDescriptor {
-  return Object.freeze({
-    label: descriptor.label,
-    explanation: descriptor.explanation,
-    tone: descriptor.tone,
-    icon: descriptor.icon,
-    assistiveText: descriptor.assistiveText,
-  });
-}
-
 function guidanceProjection(guidance: LookupTaskGuidance): LookupTaskGuidance {
   if (!guidance || typeof guidance !== 'object'
     || !Array.isArray(guidance.questions)
@@ -183,25 +166,6 @@ function validateSupport(support: LookupDecisionSupport): void {
     || support.counts.uncertainties !== uncertainties) {
     throw new RangeError('Lookup decision support disagreement and uncertainty counts did not reconcile.');
   }
-}
-
-function contributorProjection(
-  contributor: DecisionFact['contributors'][number],
-): LookupDecisionReviewContributor {
-  return Object.freeze({
-    id: contributor.id,
-    label: contributor.label,
-    evidenceState: contributor.evidenceState,
-    evidencePresentation: presentation(
-      DECISION_FACT_PRESENTATION_DESCRIPTORS.evidenceState[contributor.evidenceState],
-    ),
-    provenance: contributor.provenance,
-    provenancePresentation: presentation(
-      DECISION_FACT_PRESENTATION_DESCRIPTORS.provenance[contributor.provenance],
-    ),
-    observedAt: contributor.observedAt,
-    limitations: Object.freeze([...contributor.limitations]),
-  });
 }
 
 function actionProjection(
@@ -264,7 +228,7 @@ function entryProjection(
     throw new TypeError(`Lookup decision fact ${fact.id} has contradictions inconsistent with its support state.`);
   }
 
-  const contributors = Object.freeze(fact.contributors.map(contributorProjection));
+  const contributors = Object.freeze(fact.contributors.map(presentLookupContributor));
   const attributedLimitations = new Set(
     contributors.flatMap((contributor) => contributor.limitations),
   );

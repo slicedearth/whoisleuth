@@ -50,7 +50,7 @@ const FAST_DOMAIN_EVIDENCE: PlannedSource = Object.freeze({
 const DEEP_DOMAIN_EVIDENCE: PlannedSource = Object.freeze({
   source: 'domain_evidence',
   purpose: 'Collect bounded DNS, HTTP, TLS, page-identity, technology, and security-posture evidence.',
-  disclosure: 'DNS resolvers and the target website infrastructure receive the hostname through bounded probes.',
+  disclosure: 'DNS, TLS and website probes use the submitted hostname. Registration-delegation queries use the registrable domain.',
   conditional: false,
 });
 const REGISTRAR_RDAP: PlannedSource = Object.freeze({
@@ -72,12 +72,16 @@ const REVERSE_DNS: PlannedSource = Object.freeze({
   conditional: false,
 });
 
-function plannedSources(classified: ClassifiedQuery, deep: boolean): readonly PlannedSource[] {
+function plannedSources(classified: ClassifiedQuery, deep: boolean, selectedUrl: boolean): readonly PlannedSource[] {
   if (!deep) {
     return Object.freeze(classified.type === 'domain' ? [RDAP, FAST_DOMAIN_EVIDENCE] : [RDAP]);
   }
   if (classified.type === 'domain') {
-    return Object.freeze([RDAP, WHOIS, DEEP_DOMAIN_EVIDENCE, REGISTRAR_RDAP, NETWORK_CONTEXT]);
+    const domainEvidence = selectedUrl ? Object.freeze({
+      ...DEEP_DOMAIN_EVIDENCE,
+      disclosure: 'The selected URL path and query are sent to the website and followed redirects. The fragment is not sent. DNS and TLS use its hostname; registration uses the registrable domain. Saved HTTP provenance omits queries, but page-derived text may contain sensitive information.',
+    }) : DEEP_DOMAIN_EVIDENCE;
+    return Object.freeze([RDAP, WHOIS, domainEvidence, REGISTRAR_RDAP, NETWORK_CONTEXT]);
   }
   if (classified.type === 'ipv4' || classified.type === 'ipv6') {
     return Object.freeze([RDAP, WHOIS, REVERSE_DNS]);
@@ -85,7 +89,7 @@ function plannedSources(classified: ClassifiedQuery, deep: boolean): readonly Pl
   return Object.freeze([RDAP, WHOIS]);
 }
 
-function buildCliLookupPlan(query: string, classified: ClassifiedQuery, deep: boolean): CliLookupPlan {
+function buildCliLookupPlan(query: string, classified: ClassifiedQuery, deep: boolean, selectedUrl = false): CliLookupPlan {
   return Object.freeze({
     schema: CLI_LOOKUP_PLAN_SCHEMA,
     version: CLI_LOOKUP_PLAN_VERSION,
@@ -100,7 +104,7 @@ function buildCliLookupPlan(query: string, classified: ClassifiedQuery, deep: bo
     planning: Object.freeze({
       networkRequestsMade: false,
       collectionRequiresNetwork: true,
-      sources: plannedSources(classified, deep),
+      sources: plannedSources(classified, deep, selectedUrl),
     }),
     limitations: Object.freeze([
       'This is a local preflight. It does not test source availability, feature configuration, cache state, redirects, referrals, or the exact number of requests a completed lookup may require.',
@@ -113,6 +117,8 @@ function formatCliLookupPlan(plan: CliLookupPlan): string {
   const lines = [
     'WHOISleuth lookup preflight',
     `Target: ${plan.target.normalized}`,
+    ...(plan.target.inputHostname && plan.target.inputHostname !== plan.target.normalized
+      ? [`Submitted hostname: ${plan.target.inputHostname}`] : []),
     `Type: ${plan.target.type}`,
     `Mode: ${plan.mode}`,
     'Network requests made: no',

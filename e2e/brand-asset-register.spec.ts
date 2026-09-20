@@ -187,7 +187,7 @@ test('renders the deterministic register as a desktop table and mobile cards in 
   const officialRow = register.getByRole('row', { name: /official\.example/u });
   await expect(officialRow).toContainText('Official');
   await expect(officialRow).toContainText('Observed lead');
-  await expect(register.getByRole('row', { name: /case\.example/u }).getByRole('link', { name: /Open Case asset-case/u })).toHaveAttribute('href', '/monitor?view=cases&case=asset-case');
+  await expect(register.getByRole('row', { name: /case\.example/u }).getByRole('link', { name: /Open Case asset-case/u })).toHaveAttribute('href', '/cases?case=asset-case');
   const relationshipLink = officialRow.getByRole('link', { name: /Open retained relationship/u });
   await expect(relationshipLink).toHaveAttribute('href', /\/monitor\?view=relationships&observation=relationship-/u);
   await expect(register).not.toContainText('ns1.shared.example');

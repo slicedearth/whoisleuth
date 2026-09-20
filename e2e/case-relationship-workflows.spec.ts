@@ -1,3 +1,4 @@
+import { openConsoleView } from './console-navigation';
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
 
@@ -120,7 +121,7 @@ test.describe('browser-local campaigns', () => {
     await migrateLegacyBrowserData(page, {
       'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: records },
     });
-    await page.getByRole('tab', { name: /Campaigns/ }).click();
+    await openConsoleView(page, 'campaigns');
   }
 
   test('creates a campaign, adds cases, persists details and opens a member', async ({ page }) => {
@@ -160,10 +161,10 @@ test.describe('browser-local campaigns', () => {
     await page.locator('.campaign-edit textarea').fill('Domains grouped for analyst follow-up.');
     await page.getByRole('button', { name: 'Save details' }).click();
     await page.locator('.add-case select').selectOption('member-one.invalid');
-    await page.getByRole('button', { name: 'Add case' }).click();
+    await page.getByRole('button', { name: 'Add domain', exact: true }).click();
     await expect(page.locator('.members')).toContainText('member-one.invalid');
     const reviewSummary = page.getByRole('region', { name: 'Campaign review cues' });
-    await expect(reviewSummary).toContainText('1/1 linked');
+    await expect(reviewSummary).toContainText('1 linked Case · 1 member domain');
     await expect(reviewSummary).toContainText('1 unreviewed');
     await expect(reviewSummary.locator('article', { hasText: 'Password field observed' })).toContainText('1');
     await expect(reviewSummary.locator('article', { hasText: 'Official identity relationship' })).toContainText('1');
@@ -188,17 +189,17 @@ test.describe('browser-local campaigns', () => {
     expect(mailColours.coverage).toBe(mailColours.marker);
     expect(mailColours.coverage).not.toBe('');
 
-    await page.getByRole('tab', { name: /Cases/ }).click();
-    await page.getByRole('tab', { name: /Campaigns/ }).click();
+    await openConsoleView(page, 'cases');
+    await openConsoleView(page, 'campaigns');
     await expect(page.locator('.campaign-head', { hasText: 'Credential cluster' })).toBeVisible();
 
     await page.reload();
-    await page.getByRole('tab', { name: /Campaigns/ }).click();
+    await openConsoleView(page, 'campaigns');
     await page.locator('.campaign-head', { hasText: 'Credential cluster' }).click();
     await expect(page.locator('.campaign-edit textarea')).toHaveValue('Domains grouped for analyst follow-up.');
     await page.getByRole('button', { name: 'Open case' }).click();
-    await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('.case-head', { hasText: 'member-one.invalid' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true })).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('.case-heading', { hasText: 'member-one.invalid' })).toBeVisible();
   });
 
   test('reviews exact Brand-scoped cohorts without a request, write, or assertion-derived link', async ({ page }) => {
@@ -297,9 +298,9 @@ test.describe('browser-local campaigns', () => {
     const openCase = cohort.getByRole('button', { name: /Open case cohort-alpha\.invalid/u });
     await openCase.focus();
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
-    const openedCase = page.locator('.case-head', { hasText: 'cohort-alpha.invalid' });
-    await expect(openedCase).toHaveAttribute('aria-expanded', 'true');
+    await expect(page).toHaveURL('/cases?case=cohort-alpha');
+    const openedCase = page.locator('.case-heading', { hasText: 'cohort-alpha.invalid' });
+    await expect(openedCase).toBeVisible();
     await expect(openedCase).toBeFocused();
   });
 
@@ -309,7 +310,7 @@ test.describe('browser-local campaigns', () => {
     await migrateLegacyBrowserData(page, cohortStorage('Unavailable profile fixture'), { destination: '/bulk' });
     await expect(page.locator('#console-navigation')).toBeVisible();
     await failBrowserLocalCollectionReads(page, 'brand_profiles');
-    const monitor = page.locator('#console-navigation').getByRole('link', { name: /^Monitor/u });
+    const monitor = page.locator('#console-navigation').getByRole('link', { name: /^Review inbox/u });
     await monitor.evaluate((link) => link.setAttribute('href', '/monitor?view=campaigns&campaign=cohort-campaign'));
     await monitor.click();
     const region = page.getByRole('region', { name: 'Brand campaign cohorts' });
@@ -330,7 +331,7 @@ test.describe('browser-local campaigns', () => {
     await migrateLegacyBrowserData(page, cohortStorage(), { destination: '/bulk' });
     await expect(page.locator('#console-navigation')).toBeVisible();
     await failBrowserLocalCollectionReads(page, 'relationship_observations');
-    const monitor = page.locator('#console-navigation').getByRole('link', { name: /^Monitor/u });
+    const monitor = page.locator('#console-navigation').getByRole('link', { name: /^Review inbox/u });
     await monitor.evaluate((link) => link.setAttribute('href', '/monitor?view=campaigns&campaign=cohort-campaign'));
     await monitor.click();
     const region = page.getByRole('region', { name: 'Brand campaign cohorts' });
@@ -356,12 +357,12 @@ test.describe('browser-local campaigns', () => {
       }] }),
     });
     await holdBrowserLocalReads(page, 3_000);
-    const monitorLink = page.getByRole('link', { name: /Monitor/ }).first();
+    const monitorLink = page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Review inbox', exact: true });
     await monitorLink.evaluate((link) => {
       link.setAttribute('href', '/monitor?view=campaigns&campaign=delayed-campaign');
     });
     await monitorLink.click();
-    await page.getByRole('tab', { name: /Campaigns/ }).click();
+    await openConsoleView(page, 'campaigns');
 
     const campaign = page.locator('.campaign-head', { hasText: 'Delayed campaign' });
     await expect(campaign).toBeVisible();
@@ -383,7 +384,7 @@ test.describe('browser-local campaigns', () => {
         domains: ['export-member.invalid'], createdAt: '2026-07-01T00:00:00.000Z', updatedAt: '2026-07-01T00:00:00.000Z',
       }] }),
     });
-    await page.getByRole('tab', { name: /Campaigns/ }).click();
+    await openConsoleView(page, 'campaigns');
 
     const downloadPromise = page.waitForEvent('download');
     await page.locator('.campaign-toolbar').getByRole('button', { name: 'Export JSON' }).click();
@@ -415,7 +416,7 @@ test.describe('browser-local campaigns', () => {
     await page.locator('.campaign-head', { hasText: 'Imported group' }).click();
     await expect(page.locator('.members')).toContainText('present.invalid');
     await expect(page.locator('.members')).toContainText('missing.invalid');
-    await expect(page.locator('.members')).toContainText('Case unavailable in this browser');
+    await expect(page.locator('.members')).toContainText('Case unavailable in this workspace');
   });
 
   test('campaign management remains usable without horizontal overflow on mobile', async ({ page }) => {
@@ -424,7 +425,7 @@ test.describe('browser-local campaigns', () => {
     await page.locator('#new-campaign').fill('A long investigation campaign name that must wrap safely on a narrow viewport');
     await page.getByRole('button', { name: 'Create campaign' }).click();
     await page.locator('.add-case select').selectOption('long-mobile-campaign-member.invalid');
-    await page.getByRole('button', { name: 'Add case' }).click();
+    await page.getByRole('button', { name: 'Add domain', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Retained source sequence' })).toContainText('No source-qualified pins or sightings');
     await expectNoHorizontalOverflow(page);
   });
@@ -443,8 +444,7 @@ test.describe('accessible cross-case relationship table', () => {
       minimumRecords: records.length,
       timeout: 10_000,
     });
-    await expect(page.getByRole('tab', { name: new RegExp(`Cases ${records.length}`) })).toBeVisible();
-    await page.getByRole('tab', { name: /Relationships/ }).click();
+    await openConsoleView(page, 'relationships');
   }
 
   test('filters semantic relationship rows and opens a member case', async ({ page }) => {
@@ -457,12 +457,12 @@ test.describe('accessible cross-case relationship table', () => {
     await openRelationshipTable(page, [
       caseRecord({ id: 'ns-a', domain: 'alpha-table.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-table.invalid'] })] }),
       caseRecord({ id: 'ns-b', domain: 'bravo-table.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-table.invalid'] })] }),
-      caseRecord({ id: 'http-a', domain: 'charlie-table.invalid', evidenceHistory: [snapshot(http)] }),
-      caseRecord({ id: 'http-b', domain: 'delta-table.invalid', evidenceHistory: [snapshot(http)] }),
+      caseRecord({ id: 'http-a', domain: 'charlie-table.invalid', evidenceHistory: [snapshot({ ...http, inputHostname: 'charlie-table.invalid' })] }),
+      caseRecord({ id: 'http-b', domain: 'delta-table.invalid', evidenceHistory: [snapshot({ ...http, inputHostname: 'delta-table.invalid' })] }),
     ]);
 
     await expect(page.getByRole('tab', { name: /Relationships 2/ })).toHaveAttribute('aria-selected', 'true');
-    const table = page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' });
+    const table = page.getByRole('table', { name: 'Cross-case relationships from retained investigation evidence' });
     await expect(table).toBeVisible();
     await expect(table.getByRole('columnheader')).toHaveCount(4);
     await expect(table.getByRole('row')).toHaveCount(3);
@@ -482,8 +482,8 @@ test.describe('accessible cross-case relationship table', () => {
     await expect(table).toContainText('Shared final website origin');
 
     await page.getByRole('button', { name: 'Open charlie-table.invalid' }).click();
-    await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('.case-head', { hasText: 'charlie-table.invalid' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true })).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('.case-heading', { hasText: 'charlie-table.invalid' })).toBeVisible();
   });
 
   test('keeps successful relationship context visible when campaigns cannot load', async ({ page }) => {
@@ -497,16 +497,16 @@ test.describe('accessible cross-case relationship table', () => {
         ],
       },
     });
-    await expect(page.getByRole('tab', { name: /Cases 2/ })).toBeVisible();
+    await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
     await failBrowserLocalCollectionReads(page, 'campaigns');
     const navigation = page.locator('#console-navigation');
     await navigation.getByRole('link', { name: /^Dashboard/u }).click();
-    await navigation.getByRole('link', { name: /^Monitor/u }).click();
-    await page.getByRole('tab', { name: /Relationships/ }).click();
+    await navigation.getByRole('link', { name: /^Review inbox/u }).click();
+    await openConsoleView(page, 'relationships');
 
     await expect(page.locator('.local-context-status')).toContainText('campaigns');
     await expect(page.locator('.local-context-status')).toContainText('Successfully loaded collections remain available');
-    const table = page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' });
+    const table = page.getByRole('table', { name: 'Cross-case relationships from retained investigation evidence' });
     await expect(table).toContainText('Shared nameserver set');
     await expect(table).toContainText('partial-a.invalid');
     await expect(table).toContainText('partial-b.invalid');
@@ -524,7 +524,7 @@ test.describe('accessible cross-case relationship table', () => {
     }).flat();
     await openRelationshipTable(page, records);
 
-    const table = page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' });
+    const table = page.getByRole('table', { name: 'Cross-case relationships from retained investigation evidence' });
     const pagination = page.getByRole('navigation', { name: 'Case relationship pages' });
     await expect(table.getByRole('row')).toHaveCount(51);
     await expect(pagination).toContainText('Page 1 of 2');
@@ -605,7 +605,7 @@ test.describe('accessible cross-case relationship table', () => {
     await expect(page.locator('.matching-count')).toHaveCount(1);
     await expect(page.locator('.matching-count')).toContainText('13 of 13 matching relationships');
 
-    const row = page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' }).getByRole('row', { name: /ns-12\.reservation\.invalid/u });
+    const row = page.getByRole('table', { name: 'Cross-case relationships from retained investigation evidence' }).getByRole('row', { name: /ns-12\.reservation\.invalid/u });
     await row.getByRole('button', { name: /Inspect relationship Shared nameserver set: ns-12\.reservation\.invalid/u }).click();
     await expect(graph.getByRole('button', { name: 'Shared nameserver set: ns-12.reservation.invalid', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(graph.locator('.relationship-node')).toHaveCount(12);
@@ -641,7 +641,7 @@ test.describe('accessible cross-case relationship table', () => {
         observations,
       }),
     });
-    await page.getByRole('tab', { name: /Relationships/ }).click();
+    await openConsoleView(page, 'relationships');
 
     const graphRegion = page.getByRole('region', { name: 'Relationship graph' });
     const graph = graphRegion.locator('.graph-scroll > svg');
@@ -671,8 +671,8 @@ test.describe('accessible cross-case relationship table', () => {
       httpResponseStatus: 200,
     };
     await openRelationshipTable(page, [
-      caseRecord({ id: 'graph-a', domain: 'alpha-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-graph.invalid'], ...http })] }),
-      caseRecord({ id: 'graph-b', domain: 'bravo-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-graph.invalid'], ...http })] }),
+      caseRecord({ id: 'graph-a', domain: 'alpha-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-graph.invalid'], ...http, inputHostname: 'alpha-graph.invalid' })] }),
+      caseRecord({ id: 'graph-b', domain: 'bravo-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-graph.invalid'], ...http, inputHostname: 'bravo-graph.invalid' })] }),
     ]);
 
     const graph = page.locator('.graph-scroll > svg');
@@ -713,8 +713,8 @@ test.describe('accessible cross-case relationship table', () => {
     await expect(graph.getByRole('button', { name: 'Shared nameserver set: ns.shared-graph.invalid' })).toHaveCount(0);
 
     await inspector.getByRole('button', { name: 'Open case', exact: true }).click();
-    await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('.case-head', { hasText: 'alpha-graph.invalid' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true })).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('.case-heading', { hasText: 'alpha-graph.invalid' })).toBeVisible();
   });
 
   test('focuses, pins, hides, resets, and compares bounded graph neighbours', async ({ page }) => {
@@ -725,8 +725,8 @@ test.describe('accessible cross-case relationship table', () => {
       httpResponseStatus: 200,
     };
     await openRelationshipTable(page, [
-      caseRecord({ id: 'view-a', domain: 'alpha-view.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-view.invalid'], ...http })] }),
-      caseRecord({ id: 'view-b', domain: 'bravo-view.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-view.invalid'], ...http })] }),
+      caseRecord({ id: 'view-a', domain: 'alpha-view.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-view.invalid'], ...http, inputHostname: 'alpha-view.invalid' })] }),
+      caseRecord({ id: 'view-b', domain: 'bravo-view.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-view.invalid'], ...http, inputHostname: 'bravo-view.invalid' })] }),
       caseRecord({ id: 'view-c', domain: 'charlie-view.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-view.invalid'] })] }),
     ]);
 
@@ -754,7 +754,7 @@ test.describe('accessible cross-case relationship table', () => {
     await graph.getByRole('button', { name: 'Shared final website origin: https://shared-view.invalid', exact: true }).click();
     await controls.getByRole('button', { name: 'Hide selected' }).click();
     await expect(graph.getByRole('button', { name: /Shared final website origin/ })).toHaveCount(0);
-    await expect(page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' })).toContainText('Shared final website origin');
+    await expect(page.getByRole('table', { name: 'Cross-case relationships from retained investigation evidence' })).toContainText('Shared final website origin');
     await controls.getByRole('button', { name: 'Reset view' }).click();
     await expect(graph.getByRole('button', { name: 'Shared final website origin: https://shared-view.invalid', exact: true })).toBeVisible();
 
@@ -782,8 +782,8 @@ test.describe('accessible cross-case relationship table', () => {
       httpResponseStatus: 200,
     };
     await openRelationshipTable(page, [
-      caseRecord({ id: 'export-graph-a', domain: 'alpha-export-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-export.invalid'], ...http })] }),
-      caseRecord({ id: 'export-graph-b', domain: 'bravo-export-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-export.invalid'], ...http })] }),
+      caseRecord({ id: 'export-graph-a', domain: 'alpha-export-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-export.invalid'], ...http, inputHostname: 'alpha-export-graph.invalid' })] }),
+      caseRecord({ id: 'export-graph-b', domain: 'bravo-export-graph.invalid', evidenceHistory: [snapshot({ nameservers: ['ns.shared-export.invalid'], ...http, inputHostname: 'bravo-export-graph.invalid' })] }),
     ]);
 
     const region = page.getByRole('region', { name: 'Relationship graph' });
@@ -862,7 +862,7 @@ test.describe('accessible cross-case relationship table', () => {
         createdAt: '2026-07-10T00:00:00.000Z', updatedAt: '2026-07-18T00:00:00.000Z',
       }] }),
     });
-    await page.getByRole('tab', { name: /Relationships/ }).click();
+    await openConsoleView(page, 'relationships');
 
     const workspaceControls = page.getByRole('group', { name: 'Relationship workspace filters' });
     await workspaceControls.getByLabel('Source').selectOption('import');
@@ -877,7 +877,7 @@ test.describe('accessible cross-case relationship table', () => {
     await expect(inspector).toContainText('Cases · Deep');
 
     await workspaceControls.getByLabel('Source').selectOption('monitor');
-    const table = page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' });
+    const table = page.getByRole('table', { name: 'Cross-case relationships from retained investigation evidence' });
     await expect(table).toContainText('Provenance review');
     await expect(table).toContainText('Import, Lookup, Monitor');
   });
@@ -925,7 +925,7 @@ test.describe('accessible cross-case relationship table', () => {
     await expect(workspace).toContainText('4');
     await workspace.getByRole('button', { name: 'Split cluster-a.invalid from this review cluster' }).click();
     await expect(workspace.locator('.cases')).not.toContainText('cluster-a.invalid');
-    await expect(page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' })).toContainText('cluster-a.invalid');
+    await expect(page.getByRole('table', { name: 'Cross-case relationships from retained investigation evidence' })).toContainText('cluster-a.invalid');
     await workspace.getByRole('button', { name: 'Reset' }).click();
     await expect(workspace.locator('article')).toHaveCount(2);
   });
@@ -948,7 +948,7 @@ test.describe('accessible cross-case relationship table', () => {
       caseRecord({ id: 'mobile-rel-a', domain: 'long-mobile-relationship-member-a.invalid', evidenceHistory: [snapshot({ nameservers: ['an-extremely-long-shared-nameserver-value.invalid'] })] }),
       caseRecord({ id: 'mobile-rel-b', domain: 'long-mobile-relationship-member-b.invalid', evidenceHistory: [snapshot({ nameservers: ['an-extremely-long-shared-nameserver-value.invalid'] })] }),
     ]);
-    await expect(page.getByRole('table', { name: 'Cross-case relationships from retained browser-local investigation evidence' })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Cross-case relationships from retained investigation evidence' })).toBeVisible();
     const graph = page.getByRole('region', { name: 'Relationship graph' });
     await graph.locator('.graph-scroll > svg').getByRole('button', { name: 'Case long-mobile-relationship-member-a.invalid', exact: true }).click();
     await graph.getByRole('button', { name: 'Add to comparison group' }).click();

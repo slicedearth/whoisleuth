@@ -34,7 +34,7 @@ export const PUBLIC_COVERAGE = {
   ],
   "summary": {
     "capabilityFamilies": 32,
-    "cliOperations": 48,
+    "cliOperations": 49,
     "registrySnapshot": {
       "schema": "whoisleuth\u002eregistry-standards-coverage",
       "version": 1,
@@ -87,6 +87,7 @@ export const PUBLIC_COVERAGE = {
       "limitations": [
         "Targets are disclosed only to the source families eligible for the selected mode.",
         "Fast, Compact, Deep and monitoring retain distinct request, evidence and storage boundaries.",
+        "Only explicit selected-URL collection in a single full Deep Lookup sends a path and query; fragments are excluded.",
         "A source failure or omission remains explicit and never establishes absence or safety."
       ]
     },
@@ -208,8 +209,8 @@ export const PUBLIC_COVERAGE = {
       ],
       "partialResultContract": "explicit_document",
       "limitations": [
-        "Only authoritative registration evidence can establish an availability decision.",
-        "DNS, page, mail and heuristic evidence cannot decide registration existence."
+        "Authoritative registration publications take precedence. When they are inconclusive, positive authoritative DNS delegation can support registered status at medium confidence.",
+        "Missing DNS never proves availability. Page, mail and heuristic evidence cannot decide registration existence."
       ]
     },
     {
@@ -241,7 +242,8 @@ export const PUBLIC_COVERAGE = {
       "partialResultContract": "explicit_per_source",
       "limitations": [
         "Each source retains its own state, observation time, completeness and limitations.",
-        "Fast and Compact never inherit the richer Deep request or storage contract."
+        "Fast and Compact never inherit the richer Deep request or storage contract.",
+        "A URL path and query are sent only after separate selection in a full Deep Lookup."
       ]
     },
     {
@@ -275,7 +277,7 @@ export const PUBLIC_COVERAGE = {
     },
     {
       "id": "website_probe",
-      "title": "Bounded homepage and static page evidence",
+      "title": "Bounded homepage or selected static page evidence",
       "job": "investigate",
       "implemented": true,
       "reviewBasis": "Versioned capability contract and deterministic repository verification",
@@ -299,6 +301,7 @@ export const PUBLIC_COVERAGE = {
       "partialResultContract": "explicit_per_source",
       "limitations": [
         "Static captured evidence is not a browser execution, vulnerability test or proof of page purpose.",
+        "Selected-URL collection sends the path and query only after explicit selection; retained paths and page-derived text still require privacy review.",
         "Complete query-bearing URLs, cookies, credentials, scripts and raw page content are not retained."
       ]
     },
@@ -609,7 +612,8 @@ export const PUBLIC_COVERAGE = {
       ],
       "partialResultContract": "explicit_per_source",
       "limitations": [
-        "Posture findings describe bounded public registry, DNS and MTA-STS publication evidence and never change configuration."
+        "Posture findings describe bounded public registry, DNS and MTA-STS publication evidence and never change configuration.",
+        "Inherited DMARC and direct parent delegation require a separate opt-in: at most seven ancestor TXT questions, one parent NS discovery and A/AAAA discovery for at most two parent servers, followed by one pinned public-address DNS/TCP question per server. No messages are sent; recursive policy and direct referral observations remain separate."
       ]
     },
     {
@@ -759,7 +763,7 @@ export const PUBLIC_COVERAGE = {
     },
     {
       "id": "analyst_cases",
-      "title": "Browser-local analyst cases and Review Item lifecycle",
+      "title": "Saved analyst Cases and Review Item lifecycle",
       "job": "respond",
       "implemented": true,
       "reviewBasis": "Versioned capability contract and deterministic repository verification",
@@ -782,7 +786,7 @@ export const PUBLIC_COVERAGE = {
       ],
       "partialResultContract": "explicit_document",
       "limitations": [
-        "Cases and the bounded analyst Review Item lifecycle overlay remain in the current browser profile unless deliberately exported.",
+        "Cases and Review Items remain in the selected workspace unless deliberately exported: the current browser profile for the browser deployment, or the selected filesystem folder in the standalone local application.",
         "Review decisions retain stable subject identity, the reviewed material fingerprint, rationale, timestamps, expiry and bounded associations; current titles, evidence summaries and source values remain derived.",
         "Analyst assertions, response actions and Review Item lifecycle decisions never rewrite their source evidence or start collection, reporting, monitoring or enforcement.",
         "Missing, partial, stale, truncated or unavailable evidence cannot resolve a Review Item; changed material evidence and expired decisions return it to review."
@@ -790,7 +794,7 @@ export const PUBLIC_COVERAGE = {
     },
     {
       "id": "watchlists",
-      "title": "Browser-local watchlists and monitoring views",
+      "title": "Saved watchlists and monitoring views",
       "job": "assure",
       "implemented": true,
       "reviewBasis": "Versioned capability contract and deterministic repository verification",
@@ -816,7 +820,7 @@ export const PUBLIC_COVERAGE = {
       ],
       "partialResultContract": "explicit_per_source",
       "limitations": [
-        "Browser-local monitoring state is not refreshed automatically unless a separately configured worker is used."
+        "Saved monitoring state is not refreshed automatically unless a separately configured worker is used."
       ]
     },
     {
@@ -876,7 +880,8 @@ export const PUBLIC_COVERAGE = {
       "limitations": [
         "Integrity, structure, signature and content assurance remain separate checks.",
         "Browser exports require an explicit browser action; CLI exports, verification and review require an explicit CLI command.",
-        "Sharing a generated artefact is a deliberate action outside the collection runtime."
+        "Sharing a generated artefact is a deliberate action outside the collection runtime.",
+        "Evidence packages retain selected JSON, screenshots and opaque file bytes unchanged, without redaction. Whole-package encryption is optional; ordinary ZIPs and folders remain unencrypted. Review uploads nothing and changes no saved records; workspace import requires a separate preview and confirmation."
       ]
     },
     {

@@ -47,6 +47,11 @@ import {
 } from './analyst-review-state-contract.mts';
 import { ANALYST_REVIEW_STATE_COMPATIBILITY } from './analyst-review-state.mts';
 import type { SchemaCompatibilityDescriptor } from './schema-compatibility.mts';
+import { CASE_DRAFT_COMPATIBILITY, MAX_CASE_DRAFT_RECORDS, MAX_CASE_DRAFT_STORE_BYTES } from './case-drafts.mts';
+import { CASE_VIEWS_COMPATIBILITY } from './case-views.mts';
+import { MAX_CASE_VIEWS, MAX_CASE_VIEWS_BYTES } from './case-views-contract.mts';
+import { REVIEW_SESSION_COMPATIBILITY } from './review-session.mts';
+import { MAX_REVIEW_SESSION_BYTES } from './review-session-contract.mts';
 
 export type BrowserLocalCollectionStaticDefinition = Readonly<{
   id: string;
@@ -80,6 +85,9 @@ function definition(value: Omit<BrowserLocalCollectionStaticDefinition, 'schemaV
 }
 
 export const BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID = Object.freeze({
+  review_session: definition({ id: 'review_session', label: 'Saved review position', compatibility: REVIEW_SESSION_COMPATIBILITY, maximumBytes: MAX_REVIEW_SESSION_BYTES, maximumRecords: 1 }),
+  case_drafts: definition({ id: 'case_drafts', label: 'Unfinished Case forms', compatibility: CASE_DRAFT_COMPATIBILITY, maximumBytes: MAX_CASE_DRAFT_STORE_BYTES, maximumRecords: MAX_CASE_DRAFT_RECORDS }),
+  case_views: definition({ id: 'case_views', label: 'Saved Case views', compatibility: CASE_VIEWS_COMPATIBILITY, maximumBytes: MAX_CASE_VIEWS_BYTES, maximumRecords: MAX_CASE_VIEWS }),
   cases: definition({ id: 'cases', label: 'Cases', compatibility: CASE_BROWSER_COMPATIBILITY, maximumBytes: MAX_CASE_STORE_BYTES, maximumRecords: MAX_CASES }),
   campaigns: definition({ id: 'campaigns', label: 'Campaigns', compatibility: CAMPAIGN_BROWSER_COMPATIBILITY, maximumBytes: MAX_CAMPAIGN_STORE_BYTES, maximumRecords: MAX_CAMPAIGNS }),
   brand_profiles: definition({ id: 'brand_profiles', label: 'Brand Profiles', compatibility: BRAND_PROFILE_BROWSER_COMPATIBILITY, maximumBytes: MAX_PROFILE_STORE_BYTES, maximumRecords: MAX_PROFILES }),
@@ -106,6 +114,9 @@ export const BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID = Object.freeze({
 } as const);
 
 export const BROWSER_LOCAL_COLLECTION_MANIFEST = Object.freeze([
+  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.review_session,
+  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.case_drafts,
+  BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.case_views,
   BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.cases,
   BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.campaigns,
   BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.brand_profiles,
@@ -120,3 +131,21 @@ export const BROWSER_LOCAL_COLLECTION_MANIFEST = Object.freeze([
   BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.bulk_review,
   BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.analyst_review_state,
 ]);
+
+// Archive membership is distinct from browser persistence. Recovery drafts and
+// saved review positions and transient certificate searches remain local and are not portable sections.
+export const WORKSPACE_ARCHIVE_COLLECTIONS = [
+  ['cases', 'cases'],
+  ['campaigns', 'campaigns'],
+  ['brandProfiles', 'brand_profiles'],
+  ['watchlists', 'watchlists'],
+  ['shortlist', 'shortlist'],
+  ['detectionRules', 'detection_rules'],
+  ['relationshipObservations', 'relationship_observations'],
+  ['bulkSessions', 'bulk_sessions'],
+  ['websiteSnapshots', 'website_snapshots'],
+  ['investigationTemplates', 'investigation_templates'],
+  ['bulkReview', 'bulk_review'],
+  ['analystReviewState', 'analyst_review_state'],
+  ['caseViews', 'case_views'],
+] as const satisfies readonly (readonly [string, keyof typeof BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID])[];

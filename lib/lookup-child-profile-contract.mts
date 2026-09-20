@@ -8,10 +8,11 @@ import {
   normalizeExplicitIsoTimestamp,
 } from '../packages/evidence/observation.mts';
 import {
-  PAGE_FINGERPRINT_VERSION,
+  PAGE_FINGERPRINT_PARSERS,
   PAGE_IDENTITY_VERSION,
 } from '../packages/contracts/workspace-portability.mts';
 import { validPagePublicationMetadata } from './homepage-metadata-contract.mts';
+import { PAGE_FINGERPRINT_TOKEN_LIMITS } from '../packages/contracts/page-fingerprints.mts';
 import {
   MAX_LOOKUP_TLS_ALT_NAMES,
   MAX_LOOKUP_TLS_CERTIFICATE_POLICIES,
@@ -33,9 +34,10 @@ import {
   type JsonValue,
 } from './lookup-contract-primitives.mts';
 import { TECHNOLOGY_EVIDENCE_ROLE_ORDER } from './technology-evidence-role.mts';
+import { MAX_HOMEPAGE_BYTES } from './outbound-request-bounds.mts';
 
-export const TECHNOLOGY_PROFILE_VERSION = 11;
-export const SUPPORTED_TECHNOLOGY_PROFILE_VERSIONS = Object.freeze([10, TECHNOLOGY_PROFILE_VERSION]);
+export const TECHNOLOGY_PROFILE_VERSION = 12;
+export const SUPPORTED_TECHNOLOGY_PROFILE_VERSIONS = Object.freeze([10, 11, TECHNOLOGY_PROFILE_VERSION]);
 export const MAX_TECHNOLOGY_FINDINGS = 24;
 export const MAX_EVIDENCE_PER_TECHNOLOGY = 4;
 export const MAX_TECHNOLOGY_EVIDENCE_DESCRIPTION_LENGTH = 180;
@@ -43,7 +45,7 @@ export const MAX_TECHNOLOGY_EVIDENCE_DESCRIPTION_LENGTH = 180;
 export const BROWSER_LIBRARY_PROFILE_VERSION = 2;
 export const MAX_LIBRARY_FINDINGS = 16;
 
-export const WEBSITE_SECURITY_POSTURE_VERSION = 2;
+export const WEBSITE_SECURITY_POSTURE_VERSION = 3;
 export const MAX_SECURITY_POSTURE_FINDINGS = 32;
 
 export const CREDENTIAL_SURFACE_PROFILE_VERSION = 1;
@@ -229,6 +231,7 @@ function validFingerprintIdentifier(value: unknown): boolean {
 }
 
 function validPageFingerprintProfile(value: JsonObject): boolean {
+  const tokenLimit = PAGE_FINGERPRINT_TOKEN_LIMITS[value.fingerprintVersion as keyof typeof PAGE_FINGERPRINT_TOKEN_LIMITS];
   const normalizedHtml = value.normalizedHtml;
   const visibleText = value.visibleText;
   const domStructure = value.domStructure;
@@ -241,7 +244,7 @@ function validPageFingerprintProfile(value: JsonObject): boolean {
     || normalizedHtml.algorithm !== 'sha256'
     || typeof normalizedHtml.value !== 'string'
     || !SHA256_RE.test(normalizedHtml.value)
-    || !validUint(normalizedHtml.tokenCount, 4_096)
+    || !validUint(normalizedHtml.tokenCount, tokenLimit)
     || typeof normalizedHtml.truncated !== 'boolean'
     || !(visibleText === null || isJsonObject(visibleText)
       && hasExactKeys(visibleText, ['algorithm', 'value', 'tokenCount', 'featureCount', 'truncated'])
@@ -257,16 +260,16 @@ function validPageFingerprintProfile(value: JsonObject): boolean {
     || domStructure.algorithm !== 'sha256'
     || typeof domStructure.value !== 'string'
     || !SHA256_RE.test(domStructure.value)
-    || !validUint(domStructure.nodeCount, 4_096)
-    || domStructure.parser !== 'static-tag-sequence-v1'
+    || !validUint(domStructure.nodeCount, tokenLimit)
+    || domStructure.parser !== PAGE_FINGERPRINT_PARSERS[value.fingerprintVersion as keyof typeof PAGE_FINGERPRINT_PARSERS]
     || typeof domStructure.truncated !== 'boolean'
     || !(domStructure.similarity === undefined || domStructure.similarity === null || isJsonObject(domStructure.similarity)
       && hasExactKeys(domStructure.similarity, ['algorithm', 'value', 'tokenCount', 'featureCount', 'truncated'])
       && domStructure.similarity.algorithm === 'simhash64-v1'
       && typeof domStructure.similarity.value === 'string'
       && SIMHASH64_RE.test(domStructure.similarity.value)
-      && validUint(domStructure.similarity.tokenCount, 4_096)
-      && validUint(domStructure.similarity.featureCount, 4_096)
+      && validUint(domStructure.similarity.tokenCount, tokenLimit)
+      && validUint(domStructure.similarity.featureCount, tokenLimit)
       && typeof domStructure.similarity.truncated === 'boolean')
     || !(formStructure === null || isJsonObject(formStructure)
       && hasExactKeys(formStructure, ['algorithm', 'value', 'formCount', 'controlCount', 'truncated'])
@@ -527,7 +530,7 @@ function browserLibraryProfileContractState(value: unknown): ChildContractState 
     || !isJsonObject(knownExploitedCatalog)
     || !hasOnlyKeys(knownExploitedCatalog, ['name', 'version', 'releasedAt'])
     || !['name', 'version', 'releasedAt'].every((field) => validBoundedString(knownExploitedCatalog[field], 160))
-    || normalizeExplicitIsoTimestamp(knownExploitedCatalog.releasedAt) !== knownExploitedCatalog.releasedAt
+    || normalizeExplicitIsoTimestamp(knownExploitedCatalog.releasedAt) === null
     || !Array.isArray(profile.findings)
     || profile.findings.length > MAX_LIBRARY_FINDINGS) return 'invalid';
   const methods = new Set(['script URL', 'script filename', 'inline signature', 'inline hash']);
@@ -552,6 +555,8 @@ function browserLibraryProfileContractState(value: unknown): ChildContractState 
       || !validUint(candidate.knownExploitedCount, 10_000)
       || !validExactStringArray(candidate.knownExploitedIdentifiers, 16, 80)
       || !validExactStringArray(candidate.weaknessClasses, 12, 80)) return 'invalid';
+    // Published profiles could retain legacy upstream identifier spellings.
+    // Keep that reader boundary; current catalogue writers validate syntax.
     if (findingIds.has(candidate.id as string)
       || !(candidate.advisoryIdentifiers as JsonValue[]).every((identifier) => typeof identifier === 'string'
         && /^(?:CVE-[0-9X-]+|GHSA-[A-Z0-9-]+)$/u.test(identifier))
@@ -559,7 +564,9 @@ function browserLibraryProfileContractState(value: unknown): ChildContractState 
         && /^CVE-[0-9X-]+$/u.test(identifier))
       || !(candidate.weaknessClasses as JsonValue[]).every((identifier) => typeof identifier === 'string'
         && /^CWE-[0-9]+$/u.test(identifier))
-      || Number(candidate.advisoryCount) < (candidate.advisoryIdentifiers as JsonValue[]).length
+      // One advisory can have several identifiers, including CVE and GHSA
+      // aliases. Their count is not the number of matching advisory records.
+      || (Number(candidate.advisoryCount) === 0 && (candidate.advisoryIdentifiers as JsonValue[]).length > 0)
       || Number(candidate.knownExploitedCount) < (candidate.knownExploitedIdentifiers as JsonValue[]).length) return 'invalid';
     findingIds.add(candidate.id as string);
   }
@@ -567,7 +574,7 @@ function browserLibraryProfileContractState(value: unknown): ChildContractState 
 }
 
 function pageFingerprintContractState(value: unknown): ChildContractState {
-  const versionState = childVersionState(value, 'fingerprintVersion', [PAGE_FINGERPRINT_VERSION]);
+  const versionState = childVersionState(value, 'fingerprintVersion', Object.keys(PAGE_FINGERPRINT_PARSERS).map(Number));
   if (versionState !== 'supported') return versionState;
   const profile = value as JsonObject;
   if (!hasExactKeys(profile, [
@@ -583,7 +590,9 @@ function pageFingerprintContractState(value: unknown): ChildContractState {
     || typeof profile.exact.value !== 'string'
     || !SHA256_RE.test(profile.exact.value)
     || !['complete-body', 'captured-prefix'].includes(String(profile.exact.scope))
-    || !validUint(profile.exact.bytes, 300_000)
+    // The published first-generation writer had a fixed 300,000-byte ceiling.
+    // Current native fingerprints share the collector's source-size policy.
+    || !validUint(profile.exact.bytes, profile.fingerprintVersion === 1 ? 300_000 : MAX_HOMEPAGE_BYTES)
     || !['captured-response-bytes', 'decoded-markup'].includes(String(profile.exact.source))
     || !validPageFingerprintProfile(profile)
     || profile.complete !== (profile.truncated !== true)) return 'invalid';
@@ -710,7 +719,7 @@ function tlsProfileContractState(value: unknown): ChildContractState {
 }
 
 function securityPostureContractState(value: unknown): ChildContractState {
-  const versionState = childVersionState(value, 'postureVersion', [WEBSITE_SECURITY_POSTURE_VERSION]);
+  const versionState = childVersionState(value, 'postureVersion', [2, WEBSITE_SECURITY_POSTURE_VERSION]);
   if (versionState !== 'supported') return versionState;
   const profile = value as JsonObject;
   if (!hasOnlyKeys(profile, [...OBSERVATION_FIELDS, 'postureVersion', 'summary', 'findings'])
@@ -919,6 +928,7 @@ function sanitizeLookupChildProfiles<T extends LookupChildProfileEnvelope>(value
 
 export {
   sanitizeLookupChildProfiles,
+  technologyProfileContractState,
   validSecurityPostureFinding,
   validTlsChainCertificate,
   validTlsFinding,

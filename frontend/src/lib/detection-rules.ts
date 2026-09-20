@@ -1,3 +1,4 @@
+import { downloadLocalFile } from './download-local-file.ts';
 // Browser-only custom-rule persistence. The pure model owns every validation,
 // evaluation, import/export, collection bound, and byte-budget decision.
 import {
@@ -12,6 +13,7 @@ import {
   updateDetectionRule as updateRule,
 } from './analysis/detection-rule-model.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
+import { assertLocalRecordCurrent } from './local-mutation-outcome.ts';
 import { LEGACY_DETECTION_RULES_KEY } from './browser-local-data-contract.ts';
 import type { CaseRecord } from './cases.ts';
 import type {
@@ -55,15 +57,17 @@ export async function createDetectionRule(input: Omit<DetectionRule, 'id'>): Pro
   });
 }
 
-export async function editDetectionRule(id: string, patch: Partial<Omit<DetectionRule, 'id'>>): Promise<DetectionRule[]> {
+export async function editDetectionRule(id: string, patch: Partial<Omit<DetectionRule, 'id'>>, expected: DetectionRule | null = null): Promise<DetectionRule[]> {
   return updateBrowserLocalData('detection_rules', (current) => {
+    assertLocalRecordCurrent(current.find((rule) => rule.id === id), expected, 'custom rule');
     const rules = boundedRules(updateRule(current, id, patch));
     return { document: rules, result: rules };
   });
 }
 
-export async function deleteDetectionRule(id: string): Promise<DetectionRule[]> {
+export async function deleteDetectionRule(id: string, expected: DetectionRule | null = null): Promise<DetectionRule[]> {
   return updateBrowserLocalData('detection_rules', (current) => {
+    assertLocalRecordCurrent(current.find((rule) => rule.id === id), expected, 'custom rule');
     const rules = boundedRules(current.filter((rule) => rule.id !== id));
     return { document: rules, result: rules };
   });
@@ -79,12 +83,7 @@ export async function importDetectionRules(raw: unknown): Promise<{ rules: Detec
 
 export async function exportDetectionRules(): Promise<void> {
   const blob = new Blob([serialiseWorkspacePortableJson(buildDetectionRuleExport(await loadDetectionRules()))], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `whoisleuth-custom-rules-${new Date().toISOString().slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadLocalFile(blob, `whoisleuth-custom-rules-${new Date().toISOString().slice(0, 10)}.json`);
 }
 
 export function evaluateCaseRules(record: CaseRecord, rules: DetectionRule[] = []): DetectionRuleEvaluation {

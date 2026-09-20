@@ -2,9 +2,10 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import ts from 'typescript';
-import { defineConfig, type Plugin } from 'vite';
+import { build, defineConfig, type Plugin } from 'vite';
 import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
+import { browserThirdPartyNoticesPlugin } from '../tools/third-party-notices.mts';
+import { frontendWorkerBuild } from '../tools/frontend-worker-build.mts';
 
 const THEME_INIT_PATH = fileURLToPath(new URL('./src/theme-init.ts', import.meta.url));
 const THEME_INIT_ASSET = 'theme-init.js';
@@ -41,23 +42,34 @@ function buildRevision(): string {
   }
 }
 
-async function compileThemeInitializer(): Promise<string> {
-  const source = await readFile(THEME_INIT_PATH, 'utf8');
-  const result = ts.transpileModule(source, {
-    fileName: THEME_INIT_PATH,
-    compilerOptions: {
-      module: ts.ModuleKind.ES2022,
-      removeComments: true,
-      sourceMap: false,
-      target: ts.ScriptTarget.ES2022,
+async function compileThemeInitializer(mode: string): Promise<string> {
+  // Bundle the same preference owners used by the client into the blocking
+  // initialiser. It must not wait for hydration or maintain a second parser.
+  const result = await build({
+    configFile: false,
+    envDir: false,
+    mode,
+    logLevel: 'silent',
+    build: {
+      write: false,
+      target: 'es2022',
+      lib: { entry: THEME_INIT_PATH, name: 'appearance', formats: ['iife'] },
     },
   });
-  return result.outputText;
+  if ('close' in result) throw new Error('Appearance initialisation cannot use watch mode.');
+  const outputs = Array.isArray(result) ? result : [result];
+  const chunks = outputs.flatMap(output => output.output).filter(output => output.type === 'chunk');
+  if (chunks.length !== 1 || chunks[0]!.imports.length || chunks[0]!.dynamicImports.length) {
+    throw new Error('Appearance initialisation must be one self-contained script.');
+  }
+  return chunks[0]!.code;
 }
 
 function themeInitializerPlugin(): Plugin {
+  let mode = 'production';
   return {
     name: 'whoisleuth-theme-initializer',
+    configResolved(config) { mode = config.mode; },
     configureServer(server) {
       server.middlewares.use(async (request, response, next) => {
         if (request.url?.split('?', 1)[0] !== `/${THEME_INIT_ASSET}`) {
@@ -66,7 +78,7 @@ function themeInitializerPlugin(): Plugin {
         }
 
         try {
-          const source = await compileThemeInitializer();
+          const source = await compileThemeInitializer(mode);
           response.statusCode = 200;
           response.setHeader('Content-Type', 'text/javascript; charset=utf-8');
           response.setHeader('Cache-Control', 'no-store');
@@ -81,21 +93,28 @@ function themeInitializerPlugin(): Plugin {
       this.emitFile({
         type: 'asset',
         fileName: THEME_INIT_ASSET,
-        source: await compileThemeInitializer(),
+        source: await compileThemeInitializer(mode),
       });
     },
   };
 }
 
-export default defineConfig(async () => ({
-  define: {
-    __WHOISLEUTH_VERSION__: JSON.stringify(await applicationVersion()),
-    __WHOISLEUTH_BUILD_REVISION__: JSON.stringify(buildRevision()),
-  },
-  plugins: [themeInitializerPlugin(), sveltekit()],
-  server: {
-    proxy: {
-      '/api': LOCAL_API_PROXY,
+export default defineConfig(async () => {
+  const workerBuild = frontendWorkerBuild(fileURLToPath(new URL('.', import.meta.url)));
+  return {
+    define: {
+      __WHOISLEUTH_VERSION__: JSON.stringify(await applicationVersion()),
+      __WHOISLEUTH_BUILD_REVISION__: JSON.stringify(buildRevision()),
     },
-  },
-}));
+    plugins: [
+      themeInitializerPlugin(),
+      workerBuild.client,
+      browserThirdPartyNoticesPlugin(fileURLToPath(new URL('..', import.meta.url)), workerBuild.renderedWorkerModules),
+      sveltekit(),
+    ],
+    worker: { plugins: workerBuild.workerPlugins },
+    server: {
+      proxy: { '/api': LOCAL_API_PROXY },
+    },
+  };
+});

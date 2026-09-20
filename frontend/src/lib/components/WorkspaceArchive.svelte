@@ -1,5 +1,14 @@
 <script lang="ts">
-  import { parseBoundedJson } from '$lib/bounded-json';
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import { onMount, tick } from 'svelte';
+  import BrowserWorkspaceIndicator from '$lib/components/BrowserWorkspaceIndicator.svelte';
+  import BrowserStorageHealth from './BrowserStorageHealth.svelte';
+  import WorkspaceRecovery from './WorkspaceRecovery.svelte';
+  import WorkspaceFileBackup from './WorkspaceFileBackup.svelte';
+  import { hasUnlockedBrowserWorkspace } from '$lib/browser-workspace-unlock.ts';
+  import { currentBrowserWorkspaceId, DEFAULT_BROWSER_WORKSPACE } from '$lib/browser-workspace-context.ts';
+  import { isLocalApplication } from '$lib/local-application-context.ts';
+  import { boundedJsonLimitsForBytes, parseBoundedJson } from '$lib/bounded-json';
   import {
     MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES,
     MAX_WORKSPACE_ARCHIVE_BYTES,
@@ -10,16 +19,18 @@
     decryptLocalWorkspaceArchive,
     inspectEncryptedWorkspaceArchive,
     isEncryptedWorkspaceArchive,
-    mergeLocalWorkspaceArchive,
-    previewLocalWorkspaceArchive,
+    prepareLocalWorkspaceArchive,
   } from '$lib/workspace-archive';
   import type { WorkspaceImportSummary } from '$lib/workspace-archive';
   import { restoreLegacyBrowserData } from '$lib/browser-local-data-service';
 
-  type WorkspacePreview = Awaited<ReturnType<typeof previewLocalWorkspaceArchive>>;
+  type ArchiveReview = Awaited<ReturnType<typeof prepareLocalWorkspaceArchive>>;
+  type WorkspacePreview = Awaited<ReturnType<ArchiveReview['preview']>>;
 
   let { onimport, importOnly = false }:{onimport?:(message:string)=>void|Promise<void>;importOnly?:boolean}=$props();
-  let archiveValue=$state<unknown>(null);
+  let archiveReview=$state.raw<ArchiveReview|null>(null);
+  let encryptedSource=$state(false);
+  let preparedBackup=$state.raw<Awaited<ReturnType<typeof createWorkspaceArchiveDownload>>['archive'] | null>(null);
   let preview=$state<WorkspacePreview|null>(null);
   let selectedIds=$state<string[]>([]);
   let message=$state('');
@@ -29,27 +40,28 @@
   let confirmPassphrase=$state('');
   let encryptedImportValue=$state<unknown>(null);
   let importPassphrase=$state('');
+  let importHeading=$state<HTMLHeadingElement>();
+  let importStatus=$state<HTMLParagraphElement>();
+  let defaultWorkspace=$state(true);
+  let localApplication=$state(false);
+  let preparedAt=$state<string|null>(null);
+  onMount(() => { localApplication=isLocalApplication(); defaultWorkspace=!localApplication && currentBrowserWorkspaceId()===DEFAULT_BROWSER_WORKSPACE; });
 
   function selected(id:string){return selectedIds.includes(id);}
   async function toggle(id:string,checked:boolean){
     const nextIds=checked?[...new Set([...selectedIds,id])]:selectedIds.filter((item)=>item!==id);
     selectedIds=nextIds;
-    if(!archiveValue)return;
+    if(!archiveReview)return;
     busy=true;
     try{
-      preview=await previewLocalWorkspaceArchive(archiveValue,nextIds);
+      preview=await archiveReview.preview(nextIds);
       selectedIds=preview.sections.filter((section)=>section.status==='ready'&&section.selected).map((section)=>section.id);
     }catch(cause){message=cause instanceof Error?cause.message:'Could not update the workspace selection preview.';}
     finally{busy=false;}
   }
 
   function downloadFile(output:{content:string;mimeType:string;filename:string}){
-    const url=URL.createObjectURL(new Blob([output.content],{type:output.mimeType}));
-    const anchor=document.createElement('a');
-    anchor.href=url;
-    anchor.download=output.filename;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadLocalFile(new Blob([output.content],{type:output.mimeType}), output.filename);
   }
 
   async function downloadUnencrypted(){
@@ -57,7 +69,9 @@
     try{
       const output=await createWorkspaceArchiveDownload();
       downloadFile(output);
-      message=`Downloaded an unencrypted workspace backup with ${output.archive.manifest.sectionCount} verified data sections.`;
+      preparedBackup=output.archive;
+      preparedAt=new Date().toISOString();
+      message=`Prepared an unencrypted workspace backup with ${output.archive.manifest.sectionCount} verified data sections. Check the downloaded file.`;
     }catch(cause){message=cause instanceof Error?cause.message:'Could not create the workspace archive.';}
     finally{busy=false;}
   }
@@ -68,8 +82,10 @@
       if(exportPassphrase!==confirmPassphrase)throw new Error('The backup passphrases do not match.');
       const output=await createEncryptedWorkspaceArchiveDownload(exportPassphrase);
       downloadFile(output);
+      preparedBackup=output.archive;
       showEncryptionForm=false;
-      message=`Downloaded an encrypted workspace backup with ${output.archive.manifest.sectionCount} verified data sections. Keep the passphrase separately because it cannot be recovered.`;
+      preparedAt=new Date().toISOString();
+      message=`Prepared an encrypted workspace backup with ${output.archive.manifest.sectionCount} verified data sections. Check the downloaded file and keep its passphrase separately.`;
     }catch(cause){message=cause instanceof Error?cause.message:'Could not encrypt the workspace archive.';}
     finally{
       exportPassphrase='';
@@ -79,30 +95,37 @@
   }
 
   async function previewArchive(value:unknown){
-    const result=await previewLocalWorkspaceArchive(value);
-    archiveValue=value;preview=result;
+    const review=await prepareLocalWorkspaceArchive(value);
+    const result=await review.preview();
+    archiveReview=review;preview=result;
     selectedIds=result.sections.filter((section)=>section.status==='ready').map((section)=>section.id);
     message=`Reviewed ${result.sections.length} backup sections. Check existing matches and skipped records before merging.`;
   }
 
-  async function chooseFile(event:Event){
-    const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];
-    archiveValue=null;preview=null;selectedIds=[];encryptedImportValue=null;importPassphrase='';message='';
-    if(!file)return;
+  export async function reviewFile(file:Blob):Promise<void>{
+    if(busy)throw new Error('Finish the current workspace operation before opening another file.');
+    archiveReview=null;preview=null;selectedIds=[];encryptedImportValue=null;importPassphrase='';message='';encryptedSource=false;
     busy=true;
     try{
-      if(file.size>MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES)throw new Error('Encrypted workspace archive imports are limited to 13.4 MiB.');
-      const value=parseBoundedJson(await file.text(),{label:'Workspace archive',maximumBytes:MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES});
+      if(file.size>MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES)throw new Error(`Encrypted workspace archive imports are limited to ${MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES} bytes.`);
+      const value=parseBoundedJson(await file.text(),{label:'Workspace archive',maximumBytes:MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES,limits:boundedJsonLimitsForBytes(MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES)});
       if(isEncryptedWorkspaceArchive(value)){
+        encryptedSource=true;
         const inspected=inspectEncryptedWorkspaceArchive(value);
         encryptedImportValue=value;
         message=`Encrypted backup selected (${inspected.ciphertextBytes.toLocaleString()} encrypted bytes). Enter its passphrase to review the contents locally.`;
       }else{
-        if(file.size>MAX_WORKSPACE_ARCHIVE_BYTES)throw new Error('Unencrypted workspace archive imports are limited to 10 MiB.');
+        if(file.size>MAX_WORKSPACE_ARCHIVE_BYTES)throw new Error(`Unencrypted workspace archive imports are limited to ${MAX_WORKSPACE_ARCHIVE_BYTES / 1024 / 1024} MiB.`);
         await previewArchive(value);
       }
-    }catch(cause){message=cause instanceof Error?cause.message:'Could not preview the workspace archive.';}
-    finally{busy=false;input.value='';}
+      await tick();importHeading?.focus();
+    }catch(cause){message=cause instanceof Error?cause.message:'Could not preview the workspace archive.';throw cause;}
+    finally{busy=false;}
+  }
+
+  async function chooseFile(event:Event){
+    const input=event.currentTarget as HTMLInputElement;const file=input.files?.[0];input.value='';
+    if(file)await reviewFile(file).catch(()=>{});
   }
 
   async function unlockImport(){
@@ -117,10 +140,10 @@
   }
 
   async function apply(){
-    if(!archiveValue)return;
+    if(!archiveReview)return;
     busy=true;message='';
     try{
-      const result=await mergeLocalWorkspaceArchive(archiveValue,selectedIds);
+      const result=await archiveReview.merge(selectedIds);
       const totals=result.results.reduce(
         (sum:Omit<WorkspaceImportSummary,'id'>,item)=>({
           added:sum.added+item.added,
@@ -133,15 +156,15 @@
         {added:0,updated:0,skipped:0,pruned:0,brandProfileReferencesOmitted:0,authoredHistoryOmitted:0},
       );
       const resultMessage=`Added backup data from ${result.results.length} sections: ${totals.added} new, ${totals.updated} existing matches, ${totals.skipped} skipped${totals.brandProfileReferencesOmitted?`, ${totals.brandProfileReferencesOmitted} Brand Profile reference${totals.brandProfileReferencesOmitted===1?'':'s'} omitted beyond the retained bounds`:''}${totals.authoredHistoryOmitted?`, ${totals.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${totals.authoredHistoryOmitted===1?'':'s'} omitted`:''}${totals.pruned?`, ${totals.pruned} older evidence snapshot${totals.pruned===1?'':'s'} pruned to fit`:''}.`;
-      archiveValue=null;preview=null;selectedIds=[];
+      archiveReview=null;preview=null;selectedIds=[];
       message=resultMessage;
       try {
         await onimport?.(resultMessage);
       } catch {
-        message=`${resultMessage} The Dashboard summary could not be refreshed; reload it to reread the committed browser-local state.`;
+        message=`${resultMessage} The Dashboard summary could not be refreshed; reload it to reread the saved workspace.`;
       }
     }catch(cause){message=cause instanceof Error?cause.message:'Workspace archive import failed.';}
-    finally{busy=false;}
+    finally{busy=false;await tick();importStatus?.focus();}
   }
 
   async function prepareRollbackCopy(){
@@ -158,14 +181,18 @@
   <header class="section-head">
     <div>
       <p class="eyebrow">{importOnly ? 'Bring existing work' : 'Manage saved data'}</p>
-      <h2 id="workspace-archive-title">{importOnly ? 'Import a workspace' : 'Back up or move saved work'}</h2>
-      <p>{importOnly ? 'Review a supported workspace backup before adding its selected records to this browser.' : 'Download supported work from this browser, or review a previous backup before adding it here.'}</p>
+      <h2 id="workspace-archive-title" bind:this={importHeading} tabindex="-1">{importOnly ? 'Import a workspace' : 'Back up or move saved work'}</h2>
+      <p>{importOnly ? 'Review a supported workspace backup before adding its selected records to this workspace.' : 'Download supported work from this workspace, or review a previous backup before adding it here.'}</p>
     </div>
     <div class="top-actions toolbar">
       {#if !importOnly}<button class="primary" type="button" onclick={()=>showEncryptionForm=!showEncryptionForm} aria-expanded={showEncryptionForm} aria-controls={showEncryptionForm?'workspace-encryption-form':undefined} disabled={busy}>Download encrypted backup</button>{/if}
       <label class="btn file-btn" class:disabled={busy}>Review backup file<input type="file" accept="application/json,.json" onchange={chooseFile} disabled={busy}></label>
     </div>
   </header>
+  <BrowserWorkspaceIndicator destination />
+  {#if !importOnly && !localApplication}<BrowserStorageHealth {preparedAt} />{/if}
+  {#if localApplication && preparedAt}<p>Backup prepared during this visit: {new Date(preparedAt).toLocaleString()}. Check the downloaded file; a prepared download is not a verified restore.</p>{/if}
+  {#if preparedBackup}{#key preparedBackup}<WorkspaceFileBackup archive={preparedBackup} />{/key}{/if}
 
   {#if showEncryptionForm}
     <form id="workspace-encryption-form" class="encryption-form" onsubmit={(event)=>{event.preventDefault();void downloadEncrypted();}}>
@@ -205,14 +232,17 @@
     </form>
   {/if}
 
-  <p class="privacy-note">Backups can include case notes and other analyst-owned records. Encrypted downloads protect the file while it is locked, but not this browser while the Console is open. Sessions, passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab state, and unrelated browser storage are excluded.</p>
+  <p class="privacy-note">Backups can include case notes and other analyst-owned records. Encrypted downloads protect the file while it is locked, but not this browser while the Console is open. Unfinished Case forms, sessions, passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab state, and unrelated browser storage are excluded.</p>
   {#if !importOnly}<details class="archive-details">
     <summary>How workspace backups work</summary>
     <p>Each backup uses a versioned manifest and a SHA-256 checksum for every data section. WHOISleuth checks its format, size, supported versions, and integrity before showing a merge preview. Existing work follows each data type's normal merge rules, and records missing from the backup are retained.</p>
     <p>Encrypted backups use browser-native PBKDF2-HMAC-SHA-256 and AES-256-GCM authenticated encryption. Encryption cannot protect an unlocked Console from software already able to read the page. A forgotten passphrase makes the backup unrecoverable.</p>
     <button class="btn unencrypted-download" type="button" onclick={downloadUnencrypted} disabled={busy}>Download unencrypted backup</button>
-    <p>WHOISleuth keeps the original local-storage documents after its one-time IndexedDB migration. If you intend to return to an older build after making changes here, update those legacy copies first. This does not replace a downloaded backup and can fail when the workspace no longer fits within local-storage limits.</p>
-    <button class="btn rollback-copy" type="button" onclick={prepareRollbackCopy} disabled={busy}>Update legacy rollback copy</button>
+    {#if defaultWorkspace}
+      <p>WHOISleuth keeps the original local-storage documents after its one-time IndexedDB migration. If you intend to return to an older build after making changes here, update those legacy copies first. This does not replace a downloaded backup and can fail when the workspace no longer fits within local-storage limits.</p>
+      <button class="btn rollback-copy" type="button" onclick={prepareRollbackCopy} disabled={busy}>Update legacy rollback copy</button>
+    {:else if localApplication}<p>This filesystem workspace has no browser-storage rollback copy. Download a portable backup for recovery.</p>
+    {:else}<p>Named workspaces have no historical local-storage copy. Download a portable backup for recovery; the default workspace is unchanged.</p>{/if}
   </details>{/if}
 
   {#if preview}
@@ -236,12 +266,15 @@
       </ul>
       <div class="preview-actions">
         <button class="primary" type="button" onclick={apply} disabled={busy||!selectedIds.length}>Add selected data</button>
-        <button class="btn" type="button" onclick={()=>{archiveValue=null;preview=null;selectedIds=[];message='Preview cancelled.';}} disabled={busy}>Cancel</button>
+        <button class="btn" type="button" onclick={()=>{archiveReview=null;preview=null;selectedIds=[];message='Preview cancelled.';}} disabled={busy}>Cancel</button>
       </div>
+      {#if localApplication}
+        <details class="archive-details"><summary>Rehearse filesystem recovery</summary><p>Start a separate local application with a new empty folder and <code>--init --offline</code>. Review and import this backup there, then restore its original files or evidence package. Compare the restored records and file verification results before relying on the backup. Keep the original folder unchanged.</p><a href="/cli#local-application">Local recovery instructions</a></details>
+      {:else if archiveReview}{#key archiveReview}<WorkspaceRecovery readArchive={archiveReview.read} requireEncryption={encryptedSource || hasUnlockedBrowserWorkspace()} onbusy={value => { busy = value; }} />{/key}{/if}
     </div>
   {/if}
 
-  {#if message}<p class="status" role="status" aria-live="polite">{message}</p>{/if}
+  {#if message}<p bind:this={importStatus} class="status" role="status" aria-live="polite" tabindex="-1">{message}</p>{/if}
 </section>
 
 <style>

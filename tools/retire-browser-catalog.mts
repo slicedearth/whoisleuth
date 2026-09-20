@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import { isCveIdentifier } from '../packages/contracts/vulnerability-identifiers.mts';
 
 import * as retire from 'retire';
 import {
@@ -12,19 +13,19 @@ import {
 } from './maintainer-tool-helpers.mts';
 
 const SOURCE_VERSION = '5.4.3';
-const SOURCE_REVISION = '56ea22d889656f4fbfe47b7df58d410a06ea59b7';
-const SOURCE_SHA256 = 'afc0e9596a7ace01e81eab25aa26b622817461610199b03a173097a69f7526cc';
+const SOURCE_REVISION = 'db79fa77c86e24d91c9ce1934ad9f2a640242774';
+const SOURCE_SHA256 = '574f68690a6f5031ac7602936196a3f4531407bc79fafec0f49278241fda857a';
 const SOURCE_URL = `https://github.com/RetireJS/retire.js/blob/${SOURCE_REVISION}/repository/jsrepository.json`;
 const OUTPUT_PATH = 'lib/generated/retire-browser-catalog.mts';
 const OUTPUT_DIGEST_PATH = 'lib/generated/retire-browser-catalog.sha256';
 const MAX_SOURCE_BYTES = 5 * 1024 * 1024;
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
+const MAX_COMPONENT_ADVISORIES = 256;
 const EXPRESSION_QUALIFICATION_MS = 1_500;
 const EXPRESSION_QUALIFICATION_INPUT_CHARS = 4_096;
 const EXTRACTOR_NAMES = Object.freeze(['uri', 'filename', 'filecontent', 'filecontentreplace', 'hashes']);
 const SEVERITIES = new Set(['none', 'low', 'medium', 'high', 'critical']);
 const VERSION_RE = /^[0-9][0-9.a-z_-]{0,63}$/i;
-const CVE_RE = /^CVE-[0-9X-]+$/;
 const GHSA_RE = /^GHSA-[A-Z0-9-]+$/i;
 const CWE_RE = /^CWE-[0-9]+$/;
 
@@ -64,7 +65,9 @@ function projectVulnerability(value: unknown): UnknownRecord | null {
   const excludes = stringArray(vulnerability.excludes, 32, VERSION_RE);
   const cwe = stringArray(vulnerability.cwe, 16, CWE_RE);
   const identifiers = record(vulnerability.identifiers);
-  const cve = stringArray(identifiers.CVE, 32, CVE_RE);
+  const suppliedCve = identifiers.CVE === undefined ? [] : Array.isArray(identifiers.CVE) ? identifiers.CVE : [identifiers.CVE];
+  const cve = suppliedCve.slice(0, 32).filter(isCveIdentifier);
+  const omittedCveIdentifiers = suppliedCve.length - cve.length;
   const githubId = typeof identifiers.githubID === 'string' && GHSA_RE.test(identifiers.githubID)
     ? identifiers.githubID.toUpperCase()
     : null;
@@ -72,6 +75,7 @@ function projectVulnerability(value: unknown): UnknownRecord | null {
   if (atOrAbove) projected.atOrAbove = atOrAbove;
   if (excludes.length) projected.excludes = excludes;
   if (cwe.length) projected.cwe = cwe;
+  if (omittedCveIdentifiers) projected.omittedCveIdentifiers = omittedCveIdentifiers;
   if (cve.length || githubId) {
     projected.identifiers = {
       ...(cve.length ? { CVE: cve } : {}),
@@ -93,6 +97,13 @@ function projectRepository(source: unknown): UnknownRecord {
     if (component === 'retire-example') continue;
     if (!/^[a-z0-9._-]{1,80}$/i.test(component)) continue;
     const value = record(rawValue);
+    const sourceVulnerabilities = Array.isArray(value.vulnerabilities) ? value.vulnerabilities : [];
+    if (sourceVulnerabilities.length > MAX_COMPONENT_ADVISORIES) {
+      throw new RangeError(
+        `Retire.js catalogue component ${component} has ${sourceVulnerabilities.length} advisories; `
+        + `maximum ${MAX_COMPONENT_ADVISORIES}. Refresh rejected without truncation.`,
+      );
+    }
     const sourceExtractors = record(value.extractors);
     const extractors: UnknownRecord = {};
 
@@ -123,8 +134,7 @@ function projectRepository(source: unknown): UnknownRecord {
     }
 
     if (!Object.keys(extractors).length) continue;
-    const vulnerabilities = (Array.isArray(value.vulnerabilities) ? value.vulnerabilities : [])
-      .slice(0, 128)
+    const vulnerabilities = sourceVulnerabilities
       .map(projectVulnerability)
       .filter((item): item is UnknownRecord => item !== null);
     projected[component] = { extractors, vulnerabilities };

@@ -23,19 +23,19 @@ function input(overrides: Record<string, unknown> = {}) {
 }
 
 describe('reviewed technology-fixture contribution tool', () => {
-  test('requires explicit timestamp zones and canonicalizes explicit offsets', () => {
-    assert.throws(
-      () => buildReviewedTechnologyFixture(input({ observedAt: '2026-07-28T10:00:00' })),
+  test('requires explicit timestamp zones and canonicalizes explicit offsets', async () => {
+    await assert.rejects(
+      async () => await buildReviewedTechnologyFixture(input({ observedAt: '2026-07-28T10:00:00' })),
       /explicit timezone/u,
     );
-    const fixture = buildReviewedTechnologyFixture(input({
+    const fixture = await buildReviewedTechnologyFixture(input({
       reviewedAt: '2026-07-29T10:00:00+11:00',
       observedAt: '2026-07-28T10:00:00+11:00',
     }));
     assert.equal(fixture.reviewedAt, '2026-07-28T23:00:00.000Z');
     assert.equal(fixture.observedAt, '2026-07-27T23:00:00.000Z');
-    assert.throws(
-      () => buildReviewedTechnologyFixture(input({
+    await assert.rejects(
+      async () => await buildReviewedTechnologyFixture(input({
         observedAt: '2026-07-30T10:00:00.000Z',
         reviewedAt: '2026-07-29T10:00:00.000Z',
       })),
@@ -43,8 +43,8 @@ describe('reviewed technology-fixture contribution tool', () => {
     );
   });
 
-  test('retains only minimised factual evidence and explicit privacy metadata', () => {
-    const fixture = buildReviewedTechnologyFixture(input());
+  test('retains only minimised factual evidence and explicit privacy metadata', async () => {
+    const fixture = await buildReviewedTechnologyFixture(input());
     assert.equal(fixture.schema, 'whoisleuth.technology-reviewed-fixture');
     assert.equal(fixture.kind, 'positive');
     assert.deepEqual(fixture.expectedIds, ['wordpress']);
@@ -61,8 +61,8 @@ describe('reviewed technology-fixture contribution tool', () => {
     });
   });
 
-  test('reconstructs known static markers instead of copying reviewed markup', () => {
-    const fixture = buildReviewedTechnologyFixture(input({
+  test('reconstructs known static markers instead of copying reviewed markup', async () => {
+    const fixture = await buildReviewedTechnologyFixture(input({
       id: 'reviewed-sveltekit-marker',
       expectedIds: ['sveltekit'],
       input: {
@@ -76,7 +76,7 @@ describe('reviewed technology-fixture contribution tool', () => {
     assert.doesNotMatch(JSON.stringify(fixture), /Private page wording/u);
   });
 
-  test('reconstructs passive platform headers without retaining upstream values', () => {
+  test('reconstructs passive platform headers without retaining upstream values', async () => {
     const cases = [
       ['php', 'x-powered-by', 'PHP/8.4.1', 'PHP'],
       ['aspnet', 'x-powered-by', 'ASP.NET/4.8', 'ASP.NET'],
@@ -84,7 +84,7 @@ describe('reviewed technology-fixture contribution tool', () => {
       ['fastly', 'x-served-by', 'cache-private-node-SYD', 'cache-fixture-FIX'],
     ] as const;
     for (const [technologyId, header, value, expected] of cases) {
-      const fixture = buildReviewedTechnologyFixture(input({
+      const fixture = await buildReviewedTechnologyFixture(input({
         id: `reviewed-${technologyId}-header`,
         expectedIds: [technologyId],
         input: { responseHeaders: { [header]: value } },
@@ -94,7 +94,7 @@ describe('reviewed technology-fixture contribution tool', () => {
     }
   });
 
-  test('accepts the reviewed source classes used by local and official examples', () => {
+  test('accepts the reviewed source classes used by local and official examples', async () => {
     for (const licenseBasis of [
       'minimized-with-permission',
       'public-domain',
@@ -102,13 +102,13 @@ describe('reviewed technology-fixture contribution tool', () => {
       'copyleft-licensed-source',
       'official-demonstration-terms',
     ]) {
-      const fixture = buildReviewedTechnologyFixture(input({ licenseBasis }));
+      const fixture = await buildReviewedTechnologyFixture(input({ licenseBasis }));
       assert.equal(fixture.licenseBasis, licenseBasis);
     }
   });
 
-  test('keeps the checked-in observation reproducible through the sanitising review tool', () => {
-    const fixture = buildReviewedTechnologyFixture(input({
+  test('keeps the checked-in observation reproducible through the sanitising review tool', async () => {
+    const fixture = await buildReviewedTechnologyFixture(input({
       id: 'owned-public-delivery-stack-20260805',
       reviewedAt: '2026-08-05T00:00:00.000Z',
       observedAt: '2026-08-05T00:00:00.000Z',
@@ -126,8 +126,8 @@ describe('reviewed technology-fixture contribution tool', () => {
     assert.deepEqual(fixture, TECHNOLOGY_REVIEWED_FIXTURES[0]);
   });
 
-  test('reproduces an official demonstration from facts without retaining its page or target', () => {
-    const fixture = buildReviewedTechnologyFixture(input({
+  test('reproduces an official demonstration from facts without retaining its page or target', async () => {
+    const fixture = await buildReviewedTechnologyFixture(input({
       id: 'official-typo3-demonstration-20260805',
       reviewedAt: '2026-08-05T03:54:00.000Z',
       observedAt: '2026-08-05T03:52:53.000Z',
@@ -145,8 +145,8 @@ describe('reviewed technology-fixture contribution tool', () => {
     assert.doesNotMatch(JSON.stringify(fixture), /https?:\/\//u);
   });
 
-  test('reproduces a locally permitted reference build from minimised response facts', () => {
-    const fixture = buildReviewedTechnologyFixture(input({
+  test('reproduces a locally permitted reference build from minimised response facts', async () => {
+    const fixture = await buildReviewedTechnologyFixture(input({
       id: 'official-craft-cms-reference-20260805',
       reviewedAt: '2026-08-05T04:25:00.000Z',
       observedAt: '2026-08-05T04:21:30.000Z',
@@ -164,8 +164,8 @@ describe('reviewed technology-fixture contribution tool', () => {
     assert.doesNotMatch(JSON.stringify(fixture), /https?:\/\//u);
   });
 
-  test('reproduces a licensed static export without retaining its page identifiers', () => {
-    const fixture = buildReviewedTechnologyFixture(input({
+  test('reproduces a licensed static export without retaining its page identifiers', async () => {
+    const fixture = await buildReviewedTechnologyFixture(input({
       id: 'licensed-webflow-export-20260805',
       reviewedAt: '2026-08-05T05:15:00.000Z',
       observedAt: '2026-08-05T05:10:00.000Z',
@@ -185,7 +185,7 @@ describe('reviewed technology-fixture contribution tool', () => {
     assert.doesNotMatch(JSON.stringify(fixture), /fixture-tenant/u);
   });
 
-  test('reproduces licensed repository evidence without retaining upstream values', () => {
+  test('reproduces licensed repository evidence without retaining upstream values', async () => {
     const cases = [
       {
         id: 'licensed-eleventy-output-20260805',
@@ -274,7 +274,7 @@ describe('reviewed technology-fixture contribution tool', () => {
     ];
 
     for (const candidate of cases) {
-      const fixture = buildReviewedTechnologyFixture(input(candidate));
+      const fixture = await buildReviewedTechnologyFixture(input(candidate));
       const checkedIn = TECHNOLOGY_REVIEWED_FIXTURES.find((item) => item.id === fixture.id);
 
       assert.deepEqual(fixture, checkedIn);
@@ -285,8 +285,8 @@ describe('reviewed technology-fixture contribution tool', () => {
     }
   });
 
-  test('creates catalogue-owned negative controls without retaining source page copy', () => {
-    const fixture = buildReviewedTechnologyFixture(input({
+  test('creates catalogue-owned negative controls without retaining source page copy', async () => {
+    const fixture = await buildReviewedTechnologyFixture(input({
       id: 'reviewed-eleventy-negative',
       expectedIds: [],
       negativeFor: ['eleventy'],
@@ -297,9 +297,9 @@ describe('reviewed technology-fixture contribution tool', () => {
     assert.equal(fixture.kind, 'negative');
     assert.deepEqual(fixture.expectedIds, []);
     assert.deepEqual(fixture.negativeFor, ['eleventy']);
-    assert.deepEqual(analyzeWebsiteTechnology(fixture.input).findings, []);
-    assert.throws(
-      () => buildReviewedTechnologyFixture(input({
+    assert.deepEqual((await analyzeWebsiteTechnology(fixture.input)).findings, []);
+    await assert.rejects(
+      async () => await buildReviewedTechnologyFixture(input({
         expectedIds: [],
         negativeFor: ['eleventy'],
         input: { html: '<main>Copied reference page wording</main>' },
@@ -308,8 +308,8 @@ describe('reviewed technology-fixture contribution tool', () => {
     );
   });
 
-  test('records expected findings and deliberate nonmatches from one reviewed artefact', () => {
-    const fixture = buildReviewedTechnologyFixture(input({
+  test('records expected findings and deliberate nonmatches from one reviewed artefact', async () => {
+    const fixture = await buildReviewedTechnologyFixture(input({
       id: 'reviewed-runtime-mixed-control',
       expectedIds: ['apache-http-server', 'php'],
       negativeFor: ['drupal', 'joomla', 'wordpress'],
@@ -321,40 +321,40 @@ describe('reviewed technology-fixture contribution tool', () => {
     assert.equal(fixture.kind, 'mixed');
     assert.deepEqual(fixture.expectedIds, ['apache-http-server', 'php']);
     assert.deepEqual(fixture.negativeFor, ['drupal', 'joomla', 'wordpress']);
-    assert.deepEqual(analyzeWebsiteTechnology(fixture.input).findings.map((finding) => finding.id), [
+    assert.deepEqual((await analyzeWebsiteTechnology(fixture.input)).findings.map((finding) => finding.id), [
       'php',
       'apache-http-server',
     ]);
-    assert.throws(
-      () => buildReviewedTechnologyFixture(input({ negativeFor: ['wordpress'] })),
+    await assert.rejects(
+      async () => await buildReviewedTechnologyFixture(input({ negativeFor: ['wordpress'] })),
       /both expect and forbid/iu,
     );
   });
 
-  test('rejects target-bearing material, unapproved origins, and mismatched expected results', () => {
-    assert.throws(
-      () => buildReviewedTechnologyFixture(input({
+  test('rejects target-bearing material, unapproved origins, and mismatched expected results', async () => {
+    await assert.rejects(
+      async () => await buildReviewedTechnologyFixture(input({
         input: { generator: 'WordPress https://private-target.invalid' },
       })),
       /target or contact/iu,
     );
-    assert.throws(
-      () => buildReviewedTechnologyFixture(input({
+    await assert.rejects(
+      async () => await buildReviewedTechnologyFixture(input({
         expectedIds: ['shopify'],
         input: { resourceOrigins: ['https://private-target.invalid'] },
       })),
       /approved shared vendor host/iu,
     );
-    assert.throws(
-      () => buildReviewedTechnologyFixture(input({ expectedIds: ['drupal'] })),
+    await assert.rejects(
+      async () => await buildReviewedTechnologyFixture(input({ expectedIds: ['drupal'] })),
       /observed.*instead/iu,
     );
-    assert.throws(
-      () => buildReviewedTechnologyFixture(input({ participantTarget: 'private-target.invalid' })),
+    await assert.rejects(
+      async () => await buildReviewedTechnologyFixture(input({ participantTarget: 'private-target.invalid' })),
       /unsupported fields/iu,
     );
-    assert.throws(
-      () => buildReviewedTechnologyFixture(input({
+    await assert.rejects(
+      async () => await buildReviewedTechnologyFixture(input({
         input: {
           generator: 'WordPress 7.1',
           comment: 'private review note',
@@ -362,15 +362,15 @@ describe('reviewed technology-fixture contribution tool', () => {
       })),
       /unsupported fields/iu,
     );
-    assert.throws(
-      () => buildReviewedTechnologyFixture(input({
+    await assert.rejects(
+      async () => await buildReviewedTechnologyFixture(input({
         expectedIds: ['php'],
         input: { responseHeaders: { 'x-origin-debug': 'PHP' } },
       })),
       /not approved/iu,
     );
-    assert.throws(
-      () => buildReviewedTechnologyFixture(input({
+    await assert.rejects(
+      async () => await buildReviewedTechnologyFixture(input({
         expectedIds: ['fastly'],
         input: { responseHeaders: { 'x-served-by': 'https://private-target.invalid/request' } },
       })),

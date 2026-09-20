@@ -3,9 +3,13 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
+import { build } from 'vite';
+import { frontendWorkerBuild } from '../tools/frontend-worker-build.mts';
+import { buildOptionalPackageNotices } from '../tools/optional-package.mts';
 
 import {
   buildThirdPartyNotices,
+  browserThirdPartyNoticesPlugin,
   MAX_NOTICE_DOCUMENT_BYTES,
   THIRD_PARTY_NOTICE_PATH,
   collectProductionPackages,
@@ -55,6 +59,125 @@ describe('third-party production dependency notices', () => {
       { name: 'alpha', version: '1.0.0', license: 'MIT', direct: true, installPath: 'node_modules/alpha' },
       { name: 'shared', version: '3.0.0', license: 'BSD-3-Clause', direct: false, installPath: 'node_modules/shared' },
     ]);
+  });
+
+  test('omits optional edges rather than packages required through another dependency', () => {
+    const base = fixtureLockfile();
+    const lockfile = { ...base, packages: { ...base.packages,
+      'node_modules/alpha': { ...base.packages['node_modules/alpha'],
+        optionalDependencies: { native: '1.0.0' },
+        peerDependencies: { 'optional-peer': '1.0.0' },
+        peerDependenciesMeta: { 'optional-peer': { optional: true } },
+      },
+      'node_modules/native': { version: '1.0.0', license: 'MIT', optional: true, dependencies: { 'native-child': '1.0.0' } },
+      'node_modules/native-child': { version: '1.0.0', license: 'MIT', optional: true },
+      'node_modules/optional-peer': { version: '1.0.0', license: 'MIT', optional: true },
+    } };
+    const scope = { directDependencyNames: ['alpha'], omitOptionalDependencies: true };
+    assert.deepEqual(collectProductionPackages(lockfile, scope).map(item => item.name), ['alpha', 'shared']);
+    assert.deepEqual(collectProductionPackages(lockfile, { directDependencyNames: ['alpha'] }).map(item => item.name),
+      ['alpha', 'native', 'native-child', 'optional-peer', 'shared']);
+    assert.throws(() => collectProductionPackages(lockfile, { omitOptionalDependencies: true }), /explicit packaged runtime scope/u);
+
+    const required = { ...lockfile, packages: { ...lockfile.packages,
+      'node_modules/beta': { ...base.packages['node_modules/beta'], dependencies: { native: '1.0.0' }, peerDependencies: { 'optional-peer': '1.0.0' } },
+    } };
+    assert.deepEqual(collectProductionPackages(required, { ...scope, directDependencyNames: ['alpha', 'beta'] }).map(item => item.name),
+      ['alpha', 'beta', 'native', 'native-child', 'optional-peer', 'shared']);
+    assert.deepEqual(collectProductionPackages(lockfile, { ...scope, directDependencyNames: ['native'] }).map(item => item.name), ['native', 'native-child']);
+  });
+
+  test('honours an optional declaration overriding a regular dependency of the same name', () => {
+    const base = fixtureLockfile();
+    const lockfile = { ...base, packages: { ...base.packages,
+      'node_modules/alpha': { ...base.packages['node_modules/alpha'], optionalDependencies: { shared: '3.0.0' } },
+    } };
+    assert.deepEqual(collectProductionPackages(lockfile, { directDependencyNames: ['alpha'], omitOptionalDependencies: true }).map(item => item.name), ['alpha']);
+  });
+
+  test('companion notices are identical with optional host packages absent or present and still require mandatory documents', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-optional-notices-'));
+    try {
+      const base = fixtureLockfile();
+      const lockfile = { ...base, packages: { ...base.packages,
+        'node_modules/alpha': { ...base.packages['node_modules/alpha'], optionalDependencies: { native: '1.0.0' } },
+        'node_modules/native': { version: '1.0.0', license: 'MIT', optional: true, os: ['darwin'] },
+      } };
+      await writeFixturePackage(directory, 'alpha', 'Alpha licence');
+      await writeFixturePackage(directory, 'shared', 'Shared licence');
+      const absent = await buildOptionalPackageNotices(directory, ['alpha'], 'Fixture companion', lockfile);
+      assert.match(absent, /Package count: 2/u);
+      assert.doesNotMatch(absent, /native@/u);
+      await assert.rejects(buildThirdPartyNotices(directory, { directDependencyNames: ['alpha'], lockfileValue: lockfile }), { code: 'ENOENT' });
+      await writeFixturePackage(directory, 'native', 'Optional native licence');
+      assert.equal(await buildOptionalPackageNotices(directory, ['alpha'], 'Fixture companion', lockfile), absent);
+      assert.match(await buildThirdPartyNotices(directory, { directDependencyNames: ['alpha'], lockfileValue: lockfile }), /native@1\.0\.0/u);
+      await rm(path.join(directory, 'node_modules/shared'), { recursive: true });
+      await assert.rejects(buildOptionalPackageNotices(directory, ['alpha'], 'Fixture companion', lockfile), { code: 'ENOENT' });
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  test('includes only the dev-declared dependencies identified in the delivered bundle', () => {
+    const lockfile = fixtureLockfile();
+    const bundledDependencies = [{ name: 'dev-only', version: '4.0.0' }];
+    assert.deepEqual(collectProductionPackages(lockfile, { bundledDependencies }).map((entry) => entry.name), ['alpha', 'beta', 'dev-only', 'shared']);
+    assert.throws(() => collectProductionPackages(lockfile, { bundledDependencies: [{ name: 'dev-only', version: '5.0.0' }] }), /absent from the locked inventory/u);
+    assert.throws(() => collectProductionPackages(lockfile, { bundledDependencies, directDependencyNames: ['alpha'] }), /must remain separate/u);
+    assert.throws(() => collectProductionPackages(lockfile, { bundledDependencies: [{ name: '../outside', version: '1.0.0' }] }), /safe relative path|invalid package/u);
+    assert.throws(() => collectProductionPackages({ ...lockfile, packages: { ...lockfile.packages, 'node_modules/dev-only': { version: '4.0.0', dev: true, license: 'UNLICENSED' } } }, { bundledDependencies }), /unreviewed licence/u);
+    assert.equal(collectProductionPackages(lockfile, { directDependencyNames: ['alpha'] }).some((entry) => entry.name === 'dev-only'), false);
+  });
+
+  test('includes development-classified libraries when a separate package delivers them at runtime', () => {
+    const lockfile = fixtureLockfile();
+    assert.deepEqual(collectProductionPackages(lockfile, { directDependencyNames: ['dev-only'] }).map(item => item.name), ['dev-only']);
+    assert.equal(collectProductionPackages(lockfile).some(item => item.name === 'dev-only'), false);
+  });
+
+  test('derives browser notices from a real build and replaces the copied production base', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-browser-notices-'));
+    try {
+      await mkdir(path.join(directory, 'public'), { recursive: true });
+      await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name: 'notice-fixture', version: '1.0.0', private: true, type: 'module' }));
+      const lockfile = fixtureLockfile();
+      await writeFile(path.join(directory, 'package-lock.json'), JSON.stringify({ ...lockfile, packages: { ...lockfile.packages,
+        'node_modules/unused-dev': { version: '1.0.0', dev: true, license: 'MIT' },
+        'node_modules/worker-only': { version: '1.0.0', dev: true, license: 'MIT' },
+      } }));
+      for (const name of ['alpha', 'beta', 'shared', 'dev-only']) await writeFixturePackage(directory, name, `${name} licence text`);
+      await writeFile(path.join(directory, 'node_modules/dev-only/package.json'), JSON.stringify({ name: 'dev-only', version: '4.0.0', license: 'MIT', type: 'module', exports: './index.js' }));
+      await writeFile(path.join(directory, 'node_modules/dev-only/index.js'), 'export const visible = "retained-browser-value";');
+      await writeFixturePackage(directory, 'worker-only', 'worker-only licence text');
+      await writeFile(path.join(directory, 'node_modules/worker-only/package.json'), JSON.stringify({ name: 'worker-only', version: '1.0.0', license: 'MIT', type: 'module', exports: './index.js' }));
+      await writeFile(path.join(directory, 'node_modules/worker-only/index.js'), 'export const message = "retained-worker-value";');
+      await mkdir(path.join(directory, 'src'));
+      await writeFile(path.join(directory, 'src/entry.js'), 'export { visible } from "dev-only"; export function start() { return new Worker(new URL("./index.worker.js", import.meta.url), { type: "module" }); }');
+      await writeFile(path.join(directory, 'src/index.worker.js'), 'import { message } from "worker-only"; self.postMessage(message);');
+      await writeFile(path.join(directory, 'public/third-party-notices.txt'), 'copied production base');
+      const workerBuild = frontendWorkerBuild(directory);
+      await build({
+        configFile: false, root: directory, logLevel: 'silent', plugins: [workerBuild.client, browserThirdPartyNoticesPlugin(directory, workerBuild.renderedWorkerModules)],
+        worker: { plugins: workerBuild.workerPlugins },
+        build: { outDir: 'dist', assetsDir: '_app/immutable/workers', manifest: true, minify: false,
+          lib: { entry: path.join(directory, 'src/entry.js'), formats: ['es'] } },
+      });
+      const notice = await readFile(path.join(directory, 'dist/third-party-notices.txt'), 'utf8');
+      assert.match(notice, /^dev-only@4\.0\.0\nRelationship: bundled browser dependency/mu);
+      assert.match(notice, /dev-only licence text/u);
+      assert.match(notice, /^worker-only@1\.0\.0\nRelationship: bundled browser dependency/mu);
+      assert.match(notice, /worker-only licence text/u);
+      const manifest = JSON.parse(await readFile(path.join(directory, 'dist/.vite/manifest.json'), 'utf8'));
+      assert.match(manifest['src/index.worker.js'].file, /^_app\/immutable\/workers\/index\.worker-[^/]+\.js$/u);
+      assert.match(await readFile(path.join(directory, 'dist', manifest['src/index.worker.js'].file), 'utf8'), /retained-worker-value/u);
+      assert.equal(Object.keys(manifest).filter((source) => source === 'src/index.worker.js').length, 1);
+      assert.match(notice, /run npm run build/u);
+      assert.doesNotMatch(notice, /run npm run licenses:update/u);
+      assert.match(notice, /^alpha@1\.0\.0$/mu);
+      assert.doesNotMatch(notice, /unused-dev|copied production base/u);
+      await assert.rejects(readFile(path.join(directory, 'dist/.vite/browser-licenses.json')), { code: 'ENOENT' });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   test('derives notice bytes from an admitted lockfile value and exposes later document drift', async () => {

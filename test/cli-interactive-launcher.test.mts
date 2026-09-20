@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { canReadInteractiveLine } from '../cli/terminal-input.mts';
 
 import {
   MAX_INTERACTIVE_ANSWER_BYTES,
@@ -39,6 +40,16 @@ function questionAnswers(values: readonly string[]) {
 }
 
 describe('interactive CLI launcher', () => {
+  test('bounded line prompts do not inherit full-screen browser dimensions', () => {
+    const { input, output } = launcherFixture();
+    output.columns = 20;
+    output.rows = 4;
+    assert.equal(canReadInteractiveLine(input, output, { TERM: 'dumb' }), true);
+    assert.equal(canLaunchInteractiveCli(input, output, { TERM: 'dumb' }), false);
+    assert.equal(canReadInteractiveLine(input, output, { CI: '1' }), false);
+    input.isTTY = false;
+    assert.equal(canReadInteractiveLine(input, output, {}), false);
+  });
   test('requires the complete evidence-browser terminal capability boundary', () => {
     const { input, output } = launcherFixture();
     assert.equal(canLaunchInteractiveCli(input, output, { TERM: 'xterm-256color' }), true);

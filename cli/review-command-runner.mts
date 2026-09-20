@@ -1,4 +1,11 @@
 import type { CliArguments } from './arguments.mts';
+import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../packages/contracts/investigation-package-limits.mts';
+import { verifyOfflineInvestigationFolder, verifyOfflineInvestigationPackage } from './investigation-package-review.mts';
+import { readInvestigationFolder } from './investigation-folder.mts';
+import { readBagItFolder } from './bagit-folder.mts';
+import { verifyOfflineBagIt } from './bagit-review.mts';
+import { MAX_BAGIT_ZIP_BYTES } from '../packages/interchange/bagit.mts';
 import {
   MAX_OFFLINE_ARTIFACT_BYTES,
   formatOfflineArtifactVerification,
@@ -20,6 +27,7 @@ import {
   formatOfflineEvidenceReview,
 } from './offline-evidence-review.mts';
 import { buildCliLookupBrief, formatCliLookupBrief } from './lookup-brief.mts';
+import { runCaseCommand } from './case-command.mts';
 import {
   MAX_MAIL_REVIEW_INPUT_BYTES,
   buildCliMailReview,
@@ -59,6 +67,35 @@ async function runVerifyArtifactCommand(
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Artefact verification');
+  if (args.folder) {
+    let files: Map<string, Uint8Array>;
+    try { files = await (args.bagit ? readBagItFolder : readInvestigationFolder)(args.folder, dependencies.signal); }
+    catch (cause) {
+      dependencies.signal?.throwIfAborted();
+      const reason = cause instanceof TypeError ? boundedCliErrorMessage(cause) : 'The selected folder is unavailable or could not be read.';
+      throw new CliUsageError(`Could not read evidence folder: ${reason}`);
+    }
+    const report = await (args.bagit ? verifyOfflineBagIt : verifyOfflineInvestigationFolder)(files);
+    dependencies.signal?.throwIfAborted();
+    if (!args.quiet) context.writeStdout(args.output === 'json' ? formatJsonDocument(report) : context.terminal(formatOfflineArtifactVerification(report), args.color));
+    return args.strictExit && !isCompleteOfflineArtifactVerification(report) ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
+  }
+  if (args.package) {
+    if (!args.source || args.source === '-') throw new CliUsageError('--package requires a selected ZIP file; binary stdin is not accepted.');
+    let bytes: Uint8Array;
+    try {
+      bytes = dependencies.readBinaryArtifactInput ? await dependencies.readBinaryArtifactInput(args.source)
+        : await readBoundedRegularFile(args.source, { maximumBytes: args.bagit ? MAX_BAGIT_ZIP_BYTES : MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES, minimumBytes: 22, label: 'Investigation package', ...(dependencies.signal ? { signal: dependencies.signal } : {}) });
+    } catch (error) {
+      if (error instanceof CliUsageError) throw error;
+      throw new CliUsageError(`Could not read package input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+    }
+    const passphrase = args.passphraseSource ? await context.readPassphraseSource(args.passphraseSource) : undefined;
+    const report = args.bagit ? await verifyOfflineBagIt(bytes) : await verifyOfflineInvestigationPackage(bytes, passphrase);
+    dependencies.signal?.throwIfAborted();
+    if (!args.quiet) context.writeStdout(args.output === 'json' ? formatJsonDocument(report) : context.terminal(formatOfflineArtifactVerification(report), args.color));
+    return args.strictExit && !isCompleteOfflineArtifactVerification(report) ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
+  }
   let input: string;
   try {
     input = dependencies.readArtifactInput
@@ -351,6 +388,7 @@ const REVIEW_COMMAND_HANDLERS = Object.freeze({
   'mail-headers': runMailHeadersCommand,
   'review-evidence': runOfflineEvidenceReviewCommand,
   'brief': runBriefOrCasePackCommand,
+  'case': runCaseCommand,
   'case-pack': runBriefOrCasePackCommand,
 } satisfies DiscriminatedCommandHandlerMap<
   ReviewCommandArguments,

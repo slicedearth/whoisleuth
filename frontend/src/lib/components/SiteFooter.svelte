@@ -37,6 +37,7 @@
   @media(max-width:720px){
     footer{padding:18px 0 22px}
     .footer-meta{width:100%;align-items:flex-start;flex-direction:column;gap:8px;text-align:left}
-    .footer-links{width:100%;justify-content:flex-start;flex-wrap:wrap;gap:8px 16px}
+    .footer-links{display:grid;width:100%;grid-template-columns:repeat(3,minmax(0,max-content));justify-content:start;gap:0 20px}
+    .footer-links a{min-width:0;min-height:44px;overflow-wrap:anywhere}
   }
 </style>

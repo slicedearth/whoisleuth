@@ -9,7 +9,7 @@ import {
   isSupportedWorkspaceArchiveVersion,
   readWorkspaceArchive,
 } from './workspace-archive.mts';
-import { parseBoundedJson } from '../../lib/bounded-json.mts';
+import { boundedJsonLimitsForBytes, parseBoundedJson } from '../../lib/bounded-json.mts';
 import {
   ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA,
   ENCRYPTED_WORKSPACE_ARCHIVE_VERSION,
@@ -20,6 +20,7 @@ import {
   WORKSPACE_ARCHIVE_PBKDF2_ITERATIONS,
 } from '../contracts/case-portability.mts';
 import { assertWorkspaceInputGraph } from './hostile-input.mts';
+import { AES_KEY_BITS, arrayBuffer, assertPassphrase, cryptoProvider, deriveArchiveKey } from '../evidence/passphrase-encryption.mts';
 
 export {
   ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA,
@@ -32,7 +33,6 @@ export {
 
 const SALT_BYTES = 16;
 const IV_BYTES = 12;
-const AES_KEY_BITS = 256;
 const AES_GCM_TAG_BITS = 128;
 const MAX_CIPHERTEXT_BASE64URL_CHARACTERS = Math.ceil(
   (MAX_WORKSPACE_ARCHIVE_BYTES + AES_GCM_TAG_BITS / 8) * 4 / 3,
@@ -77,27 +77,6 @@ function record(value: unknown): UnknownRecord | null {
 function hasExactKeys(value: UnknownRecord, expected: readonly string[]): boolean {
   const keys = Object.keys(value);
   return keys.length === expected.length && keys.every((key) => expected.includes(key));
-}
-
-function arrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  return bytes.slice().buffer as ArrayBuffer;
-}
-
-function assertPassphrase(passphrase: string): Uint8Array {
-  if (typeof passphrase !== 'string') {
-    throw new Error(`Use a backup passphrase with at least ${MIN_WORKSPACE_ARCHIVE_PASSPHRASE_CHARACTERS} characters.`);
-  }
-  if (passphrase.length > MAX_WORKSPACE_ARCHIVE_PASSPHRASE_BYTES) {
-    throw new Error('Backup passphrases are limited to 1024 UTF-8 bytes.');
-  }
-  if (Array.from(passphrase).length < MIN_WORKSPACE_ARCHIVE_PASSPHRASE_CHARACTERS) {
-    throw new Error(`Use a backup passphrase with at least ${MIN_WORKSPACE_ARCHIVE_PASSPHRASE_CHARACTERS} characters.`);
-  }
-  const bytes = encoder.encode(passphrase);
-  if (bytes.byteLength > MAX_WORKSPACE_ARCHIVE_PASSPHRASE_BYTES) {
-    throw new Error('Backup passphrases are limited to 1024 UTF-8 bytes.');
-  }
-  return bytes;
 }
 
 function base64url(bytes: Uint8Array): string {
@@ -175,7 +154,7 @@ function validateEnvelope(raw: unknown): {
   iv: Uint8Array;
   ciphertext: Uint8Array;
 } {
-  assertWorkspaceInputGraph(raw, 'Encrypted workspace archive');
+  assertWorkspaceInputGraph(raw, 'Encrypted workspace archive', { maximumBytes: MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES });
   const value = record(raw);
   if (!value || value.schema !== ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA) {
     throw new Error('This file is not an encrypted WHOISleuth workspace archive.');
@@ -272,41 +251,6 @@ function validateEnvelope(raw: unknown): {
   };
 }
 
-function cryptoProvider(provider: Crypto = globalThis.crypto): Crypto {
-  if (
-    !provider
-    || typeof provider.getRandomValues !== 'function'
-    || typeof provider.subtle?.importKey !== 'function'
-    || typeof provider.subtle?.deriveKey !== 'function'
-    || typeof provider.subtle?.encrypt !== 'function'
-    || typeof provider.subtle?.decrypt !== 'function'
-  ) {
-    throw new Error('Encrypted workspace archives are unavailable in this browser.');
-  }
-  return provider;
-}
-
-async function deriveArchiveKey(
-  provider: Crypto,
-  passphraseBytes: Uint8Array,
-  salt: Uint8Array,
-  usages: KeyUsage[],
-): Promise<CryptoKey> {
-  const material = await provider.subtle.importKey('raw', arrayBuffer(passphraseBytes), 'PBKDF2', false, ['deriveKey']);
-  return provider.subtle.deriveKey(
-    {
-      name: 'PBKDF2',
-      hash: 'SHA-256',
-      salt: arrayBuffer(salt),
-      iterations: WORKSPACE_ARCHIVE_PBKDF2_ITERATIONS,
-    },
-    material,
-    { name: 'AES-GCM', length: AES_KEY_BITS },
-    false,
-    usages,
-  );
-}
-
 export function isEncryptedWorkspaceArchive(raw: unknown): boolean {
   return record(raw)?.schema === ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA;
 }
@@ -326,15 +270,19 @@ export async function encryptWorkspaceArchive(
   passphrase: string,
   provider?: Crypto,
 ): Promise<EncryptedWorkspaceArchiveEnvelope> {
-  await readWorkspaceArchive(archive);
-  const archiveVersion = record(archive)?.version;
-  if (!isSupportedWorkspaceArchiveVersion(archiveVersion)) {
-    throw new Error('The workspace archive declares an unsupported content contract.');
-  }
+  assertWorkspaceInputGraph(archive, 'Workspace archive', { maximumBytes: MAX_WORKSPACE_ARCHIVE_BYTES });
   const plaintext = JSON.stringify(archive);
   const plaintextBytes = encoder.encode(plaintext);
   if (plaintextBytes.byteLength > MAX_WORKSPACE_ARCHIVE_BYTES) {
-    throw new Error('Workspace archives are limited to 10 MiB. Export smaller collections separately before trying again.');
+    throw new Error(`Workspace archives are limited to ${MAX_WORKSPACE_ARCHIVE_BYTES / 1024 / 1024} MiB. Export smaller collections separately before trying again.`);
+  }
+  // Validation and encryption consume the same snapshot, including when the
+  // caller changes the original object while checksum verification is pending.
+  const snapshot: unknown = JSON.parse(plaintext);
+  await readWorkspaceArchive(snapshot);
+  const archiveVersion = record(snapshot)?.version;
+  if (!isSupportedWorkspaceArchiveVersion(archiveVersion)) {
+    throw new Error('The workspace archive declares an unsupported content contract.');
   }
   const crypto = cryptoProvider(provider);
   const passphraseBytes = assertPassphrase(passphrase);
@@ -385,32 +333,52 @@ export async function decryptWorkspaceArchive(
   passphrase: string,
   provider?: Crypto,
 ): Promise<unknown> {
+  return (await decryptWorkspaceArchiveWithMetadata(raw, passphrase, provider)).archive;
+}
+
+/** Authenticate one envelope and return its inner JSON with verified byte metadata. */
+export async function decryptWorkspaceArchiveWithMetadata(
+  raw: unknown,
+  passphrase: string,
+  provider?: Crypto,
+): Promise<{ archive: unknown; ciphertextBytes: number }> {
   const { envelope, salt, iv, ciphertext } = validateEnvelope(raw);
   const crypto = cryptoProvider(provider);
   const passphraseBytes = assertPassphrase(passphrase);
   const { ciphertext: _ciphertext, ...metadata } = envelope;
   try {
-    const key = await deriveArchiveKey(crypto, passphraseBytes, salt, ['decrypt']);
-    const plaintext = await crypto.subtle.decrypt(
-      {
-        name: 'AES-GCM',
-        iv: arrayBuffer(iv),
-        additionalData: arrayBuffer(encoder.encode(canonicalMetadata(metadata))),
-        tagLength: AES_GCM_TAG_BITS,
-      },
-      key,
-      arrayBuffer(ciphertext),
-    );
+    let plaintext: ArrayBuffer;
+    try {
+      const key = await deriveArchiveKey(crypto, passphraseBytes, salt, ['decrypt']);
+      plaintext = await crypto.subtle.decrypt(
+        {
+          name: 'AES-GCM',
+          iv: arrayBuffer(iv),
+          additionalData: arrayBuffer(encoder.encode(canonicalMetadata(metadata))),
+          tagLength: AES_GCM_TAG_BITS,
+        },
+        key,
+        arrayBuffer(ciphertext),
+      );
+    } catch {
+      // Authentication failure cannot distinguish a wrong key from tampering.
+      throw new Error('The backup passphrase is incorrect or the encrypted file is corrupted.');
+    }
     if (plaintext.byteLength > MAX_WORKSPACE_ARCHIVE_BYTES) {
       throw new Error('The decrypted workspace archive exceeds its byte limit.');
     }
-    return parseBoundedJson(decoder.decode(plaintext), {
+    let json: string;
+    try {
+      json = decoder.decode(plaintext);
+    } catch {
+      throw new Error('The backup decrypted, but its contents are not valid UTF-8.');
+    }
+    const archive = parseBoundedJson(json, {
       label: 'Decrypted workspace archive',
       maximumBytes: MAX_WORKSPACE_ARCHIVE_BYTES,
+      limits: boundedJsonLimitsForBytes(MAX_WORKSPACE_ARCHIVE_BYTES),
     });
-  } catch (cause) {
-    if (cause instanceof Error && cause.message === 'The decrypted workspace archive exceeds its byte limit.') throw cause;
-    throw new Error('The backup passphrase is incorrect or the encrypted file is corrupted.');
+    return { archive, ciphertextBytes: ciphertext.byteLength };
   } finally {
     passphraseBytes.fill(0);
   }

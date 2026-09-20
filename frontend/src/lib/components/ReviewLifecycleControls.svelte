@@ -1,6 +1,14 @@
 <script lang="ts">
+  import { tick, untrack } from 'svelte';
+  import type { ReviewFormDraft } from '../../../../packages/contracts/review-session-contract.mts';
+  import { MAX_ANALYST_REVIEW_RATIONALE_LENGTH } from '../../../../packages/contracts/analyst-review-state-contract.mts';
+  import { createDraftRevision, restoreSubmittedFocus } from '../controllers/submitted-draft.ts';
+  import { failedLocalMutationOutcome } from '../local-mutation-outcome.ts';
+  import { isoFromUtcInput, utcDateTimeInputAttributes } from '../analysis/case-response-form-values.ts';
+  import EvidenceTimestamp from './EvidenceTimestamp.svelte';
   import {
     ANALYST_REVIEW_DISPOSITION_OPTIONS,
+    analystReviewCanResolve,
     type AnalystReviewDisposition,
     type AnalystReviewItem,
     type AnalystReviewLifecycle,
@@ -10,10 +18,16 @@
     item,
     lifecycle,
     onreview,
+    restoredDraft,
+    ondraft,
+    draftCapacityReached = false,
   }: {
     item: AnalystReviewItem;
     lifecycle: AnalystReviewLifecycle;
-    onreview: (item: AnalystReviewItem, input: {
+    restoredDraft?: ReviewFormDraft;
+    ondraft?: (draft: ReviewFormDraft | null) => void;
+    draftCapacityReached?: boolean;
+    onreview?: (item: AnalystReviewItem, input: {
       disposition: AnalystReviewDisposition;
       rationale: string;
       expiresAt: string | null;
@@ -21,21 +35,32 @@
     }) => void | Promise<void>;
   } = $props();
 
-  let disposition = $state<AnalystReviewDisposition | ''>('');
-  let rationale = $state('');
-  let expiresAt = $state('');
-  let reviewDueAt = $state('');
+  const initialDraft = untrack(() => restoredDraft?.id === item.id && restoredDraft.subjectKey === item.subjectKey ? restoredDraft : undefined);
+  let disposition = $state<AnalystReviewDisposition | ''>(initialDraft?.disposition ?? '');
+  let rationale = $state(initialDraft?.rationale ?? '');
+  let expiresAt = $state(initialDraft?.expiresAt ?? '');
+  let reviewDueAt = $state(initialDraft?.reviewDueAt ?? '');
   let busy = $state(false);
   let message = $state('');
+  let uncertain = $state(initialDraft?.uncertain ?? false);
+  let draftFingerprint = $state<string | null>(initialDraft?.materialFingerprint ?? null);
+  let form = $state<HTMLFormElement>();
+  let statusElement = $state<HTMLParagraphElement>();
+  const draft = createDraftRevision(() => item.id);
+  const changedEvidence = $derived(draftFingerprint !== null && draftFingerprint !== item.materialFingerprint);
   const needsExpiry = $derived(disposition === 'expected' || disposition === 'suppressed');
-
-  function iso(value: string): string | null {
-    if (!value) return null;
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
-  }
+  let reported = '';
+  $effect(() => {
+    const value: ReviewFormDraft | null = disposition || rationale || expiresAt || reviewDueAt || uncertain
+      ? { id: item.id, subjectKey: item.subjectKey, materialFingerprint: draftFingerprint ?? item.materialFingerprint,
+          disposition, rationale, expiresAt, reviewDueAt, uncertain: uncertain || busy }
+      : null;
+    const serialised = JSON.stringify(value);
+    if (serialised !== reported) { reported = serialised; untrack(() => ondraft?.(value)); }
+  });
 
   async function submit() {
+    if (!onreview || busy || uncertain || changedEvidence || draftCapacityReached) return;
     message = '';
     const selectedDisposition = disposition;
     if (!selectedDisposition) {
@@ -50,26 +75,37 @@
       message = 'Expected and suppressed decisions require an expiry.';
       return;
     }
+    if (expiresAt && !isoFromUtcInput(expiresAt) || reviewDueAt && !isoFromUtcInput(reviewDueAt)) {
+      message = 'Enter a valid UTC date and time before saving.';
+      return;
+    }
     busy = true;
-    const itemId = item.id;
+    const unchanged = draft.capture();
+    const origin = form?.contains(document.activeElement) ? document.activeElement as HTMLElement : null;
     const submittedRationale = rationale.trim();
+    let saved = false;
     try {
       await onreview(item, {
         disposition: selectedDisposition,
         rationale: submittedRationale,
-        expiresAt: iso(expiresAt),
-        reviewDueAt: iso(reviewDueAt),
+        expiresAt: isoFromUtcInput(expiresAt),
+        reviewDueAt: isoFromUtcInput(reviewDueAt),
       });
-      if (item.id !== itemId || rationale.trim() !== submittedRationale) return;
+      if (!unchanged()) return;
       rationale = '';
       disposition = '';
       expiresAt = '';
       reviewDueAt = '';
+      draftFingerprint = null;
       message = 'Review saved. Source evidence was not changed.';
+      saved = true;
     } catch (cause) {
+      uncertain = failedLocalMutationOutcome(cause) === 'unknown';
       message = cause instanceof Error ? cause.message : 'The Review Item could not be saved.';
     } finally {
       busy = false;
+      await tick();
+      restoreSubmittedFocus(origin, uncertain ? statusElement : saved ? form?.querySelector<HTMLSelectElement>('select') : origin, form);
     }
   }
 </script>
@@ -82,50 +118,68 @@
   <p class="lifecycle-reason">{lifecycle.reason}</p>
   {#if lifecycle.decision}
     <p class="last-decision">
-      Last decision: {lifecycle.decision.disposition} · {new Date(lifecycle.decision.reviewedAt).toLocaleString('en-AU')}
-      {#if lifecycle.decision.expiresAt} · expires {new Date(lifecycle.decision.expiresAt).toLocaleString('en-AU')}{/if}
+      Last decision: {lifecycle.decision.disposition} · <EvidenceTimestamp value={lifecycle.decision.reviewedAt} label={`review time for ${item.title}`} />
+      {#if lifecycle.decision.expiresAt} · expires <EvidenceTimestamp value={lifecycle.decision.expiresAt} label={`expiry for ${item.title}`} />{/if}
       {#if lifecycle.decision.history.length} · {lifecycle.decision.history.length} earlier decision{lifecycle.decision.history.length === 1 ? '' : 's'} retained{/if}
       {#if lifecycle.decision.historyOmitted} · at least {lifecycle.decision.historyOmitted} additional omitted{/if}
     </p>
     <p class="retained-rationale">{lifecycle.decision.rationale}</p>
+    {#if lifecycle.decision.history.length}
+      <details class="decision-history">
+        <summary>Earlier decisions ({lifecycle.decision.history.length})</summary>
+        <ol>
+          {#each lifecycle.decision.history as decision}
+            <li>
+              <p><strong>{decision.disposition}</strong> · <EvidenceTimestamp value={decision.reviewedAt} label={`earlier review time for ${item.title}`} /></p>
+              <p>{decision.rationale}</p>
+              {#if decision.expiresAt}<p>Expiry: <EvidenceTimestamp value={decision.expiresAt} label={`earlier expiry for ${item.title}`} /></p>{/if}
+              {#if decision.reviewDueAt}<p>Next review: <EvidenceTimestamp value={decision.reviewDueAt} label={`earlier follow-up time for ${item.title}`} /></p>{/if}
+            </li>
+          {/each}
+        </ol>
+      </details>
+    {/if}
   {/if}
-  <div class="decision-grid">
-    <label>Review outcome
-      <select bind:value={disposition} disabled={busy}>
+  {#if onreview}
+  {#if draftCapacityReached}<p class="message" role="status">The current queue already has its maximum number of unfinished review forms. Finish or discard a retained draft before starting another.</p>{/if}
+  {#if uncertain}<p class="message" role="status">This draft may already have been saved. Review the current decision before discarding it and starting another review.</p><button type="button" class="btn" disabled={busy} onclick={() => { disposition = ''; rationale = ''; expiresAt = ''; reviewDueAt = ''; uncertain = false; draftFingerprint = null; draft.changed(); }}>Discard uncertain draft</button>{/if}
+  {#if changedEvidence}<p class="message" role="status">The evidence changed while this draft was open. Review the current item before applying this rationale.</p><button type="button" class="btn" disabled={busy || uncertain} onclick={() => { draftFingerprint = item.materialFingerprint; draft.changed(); }}>Use draft with current evidence</button>{/if}
+  <form class="decision-grid responsive-grid" bind:this={form} aria-label={`Review decision for ${item.title}`} oninput={() => { draft.changed(); draftFingerprint ??= item.materialFingerprint; }} onsubmit={(event) => { event.preventDefault(); void submit(); }}>
+    <label class="field">Review outcome
+      <select bind:value={disposition} required disabled={busy || uncertain || draftCapacityReached}>
         <option value="">Choose an outcome</option>
         {#each ANALYST_REVIEW_DISPOSITION_OPTIONS as option}
-          <option value={option.value} disabled={option.value === 'resolved' && (item.completeness !== 'complete' || item.age === 'stale')}>{option.label}</option>
+          <option value={option.value} disabled={option.value === 'resolved' && !analystReviewCanResolve(item)}>{option.label}</option>
         {/each}
       </select>
     </label>
-    <label class="rationale">Rationale
-      <textarea bind:value={rationale} maxlength="1000" rows="2" disabled={busy} placeholder="Record why this review outcome applies"></textarea>
+    <label class="field">Rationale
+      <textarea bind:value={rationale} required maxlength={MAX_ANALYST_REVIEW_RATIONALE_LENGTH} rows="2" disabled={busy || uncertain || draftCapacityReached} placeholder="Record why this review outcome applies"></textarea>
     </label>
-    <label>Expiry {#if needsExpiry}<span aria-hidden="true">*</span><span class="sr-only">required</span>{/if}
-      <input type="datetime-local" bind:value={expiresAt} required={needsExpiry} disabled={busy} />
+    <label class="field">Expiry {#if needsExpiry}<span aria-hidden="true">*</span><span class="sr-only">required</span>{/if}
+      <input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={expiresAt} required={needsExpiry} disabled={busy || uncertain || draftCapacityReached} />
     </label>
-    <label>Next review
-      <input type="datetime-local" bind:value={reviewDueAt} disabled={busy} />
+    <label class="field">Next review
+      <input type="datetime-local" {...utcDateTimeInputAttributes} bind:value={reviewDueAt} disabled={busy || uncertain || draftCapacityReached} />
     </label>
-    <button type="button" disabled={busy || !disposition || !rationale.trim() || (needsExpiry && !expiresAt)} onclick={submit}>{busy ? 'Saving…' : 'Record decision'}</button>
-  </div>
-  <small>Times use this device’s timezone and are stored as UTC. Material evidence changes or expiry reopen the item; earlier rationale remains historical.</small>
-  {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
+    <button type="submit" class="btn" disabled={busy || uncertain || changedEvidence || draftCapacityReached || !disposition || !rationale.trim() || (needsExpiry && !expiresAt)}>{busy ? 'Saving…' : 'Record decision'}</button>
+  </form>
+  <small>Enter times in UTC. Saved review drafts keep that interpretation when resumed on a device in another timezone. Material evidence changes or expiry reopen the item; earlier rationale remains historical.</small>
+  {#if message}<p class="message" bind:this={statusElement} tabindex="-1" role="status" aria-live="polite">{message}</p>{/if}
+  {/if}
 </details>
 
 <style>
   .lifecycle-controls{min-width:0;margin-top:8px;padding-top:7px;border-top:1px solid var(--border);color:var(--muted);font-size:var(--text-xs)}
-  summary{cursor:pointer;color:var(--text);font:650 var(--text-xs) var(--mono);overflow-wrap:anywhere}
+  summary{min-height:24px;align-content:center;cursor:pointer;color:var(--text);font:650 var(--text-xs) var(--mono);overflow-wrap:anywhere}
   summary span{margin-left:6px;padding:1px 6px;border:1px solid var(--amber);border-radius:99px;color:var(--amber);font-size:var(--text-2xs)}
   .lifecycle-reason,.last-decision,.retained-rationale,.message{margin:7px 0 0;line-height:1.45;overflow-wrap:anywhere}
   .retained-rationale{padding:7px;border-left:2px solid var(--border);background:var(--panel)}
-  .decision-grid{display:grid;grid-template-columns:minmax(110px,.7fr) minmax(220px,2fr) minmax(160px,1fr) minmax(160px,1fr) auto;align-items:end;gap:7px;margin-top:10px}
-  label{display:grid;min-width:0;gap:4px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
-  select,textarea,input,button{min-width:0;min-height:36px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);font:600 var(--text-xs) var(--mono)}
-  select,input{padding:0 7px}textarea{width:100%;padding:7px;resize:vertical}button{padding:0 10px;cursor:pointer}button:disabled{cursor:not-allowed;opacity:.55}
-  select:focus-visible,textarea:focus-visible,input:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .decision-history{margin-top:8px}.decision-history ol{display:grid;gap:8px;padding-left:22px}.decision-history li{min-width:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.decision-history p{margin:0;overflow-wrap:anywhere}.decision-history p+p{margin-top:5px}
+  .decision-grid{--grid-min:13rem;--grid-gap:7px;align-items:end;margin-top:10px}
+  select,textarea,input,button{min-width:0}button:disabled{cursor:not-allowed;opacity:.55}
+  button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   small{display:block;margin-top:8px;line-height:1.4}.message{color:var(--accent)}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-  @media(max-width:1100px){.decision-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.rationale{grid-column:1/-1}}
-  @media(max-width:640px){.decision-grid{grid-template-columns:minmax(0,1fr)}.rationale{grid-column:auto}}
+  @media(max-width:640px){select,textarea,input,button,summary{min-height:44px}}
 </style>

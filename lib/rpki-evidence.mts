@@ -33,9 +33,10 @@ function record(value: unknown): Record<string, unknown> | null {
 }
 
 function normalizeAsn(value: unknown): number | null {
-  const text = typeof value === 'string' ? value.trim().replace(/^AS/iu, '') : value;
-  const number = Number(text);
-  return Number.isInteger(number) && number >= 0 && number <= 4_294_967_295 ? number : null;
+  const number = typeof value === 'number' ? value
+    : typeof value === 'string' && value.length <= 16 && /^(?:AS)?\d{1,10}$/iu.test(value.trim())
+      ? Number(value.trim().replace(/^AS/iu, '')) : NaN;
+  return Number.isSafeInteger(number) && number >= 0 && number <= 4_294_967_295 ? number : null;
 }
 
 function normalizeAuthorization(value: unknown): RouteOriginAuthorization | null {
@@ -45,7 +46,8 @@ function normalizeAuthorization(value: unknown): RouteOriginAuthorization | null
   const parsedPrefix = parseIpPrefix(prefix);
   const asn = normalizeAsn(source.asn ?? source.asID ?? source.origin);
   const maxLengthValue = source.maxLength ?? source.max_length ?? parsedPrefix?.length;
-  const maxLength = Number(maxLengthValue);
+  const maxLength = typeof maxLengthValue === 'number' ? maxLengthValue
+    : typeof maxLengthValue === 'string' && /^\d{1,3}$/u.test(maxLengthValue) ? Number(maxLengthValue) : NaN;
   const maximum = parsedPrefix?.family === 4 ? 32 : 128;
   if (!parsedPrefix || asn === null || !Number.isInteger(maxLength)
     || maxLength < parsedPrefix.length || maxLength > maximum) return null;
@@ -73,8 +75,9 @@ function reviewRpkiRoute(input: Readonly<{
   const baseLimitations = Object.freeze([
     'This offline review evaluates an explicitly supplied route prefix and origin ASN against an analyst-supplied VRP snapshot.',
     'It does not collect BGP announcements, establish route ownership, or prove that the snapshot was current or complete.',
+    'AS0 authorisations do not authorise an announcement. An AS0 route origin is invalid input; snapshot validation and signature verification remain external to this review.',
   ]);
-  if (!route || originAsn === null || !rows) {
+  if (!route || originAsn === null || originAsn === 0 || !rows) {
     return Object.freeze({
       schema: RPKI_EVIDENCE_SCHEMA,
       version: RPKI_EVIDENCE_VERSION,

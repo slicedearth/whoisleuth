@@ -5,7 +5,9 @@ import {
   assertLookupEvidencePortableTree,
   LOOKUP_EVIDENCE_SCHEMA,
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  HOSTNAME_SCOPED_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   PRIVACY_MINIMIZED_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  REGISTRAR_STANDING_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
   projectLookupEvidenceAvailability,
   projectLookupEvidenceAvailabilityPublic,
@@ -15,6 +17,7 @@ import {
   projectLookupEvidenceWhoisPublication,
   SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
 } from '../../lib/evidence-export.mts';
+import { validLookupObservationScope } from '../../packages/evidence/lookup-target.mts';
 import {
   registrarStandingObservedBy,
   resolveRegistrarIanaId,
@@ -616,13 +619,13 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
   validateLookupEvidenceSecurityTxt(sources.securityTxt);
   validateLookupEvidenceSslbl(sources.sslbl);
 
-  const analysis = exact(root.analysis, version >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+  const analysis = exact(root.analysis, version >= REGISTRAR_STANDING_LOOKUP_EVIDENCE_SCHEMA_VERSION
     ? ['availability', 'idn', 'registryInsights', 'registryComparison', 'registrarPublicationComparison', 'registrarStanding']
     : ['availability', 'idn', 'registryInsights', 'registryComparison', 'registrarPublicationComparison'], 'Lookup evidence analysis');
-  if (version >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+  if (version >= REGISTRAR_STANDING_LOOKUP_EVIDENCE_SCHEMA_VERSION
     && analysis.registrarStanding !== null
     && !validRegistrarStanding(analysis.registrarStanding)) fail('Lookup evidence registrar standing');
-  if (version >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+  if (version >= REGISTRAR_STANDING_LOOKUP_EVIDENCE_SCHEMA_VERSION
     && analysis.registrarStanding !== null
     && !registrarStandingObservedBy(analysis.registrarStanding, root.generatedAt)) {
     fail('Lookup evidence registrar standing observation time');
@@ -632,11 +635,16 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
     const availability = exactOptional(
       analysis.availability,
       currentAvailability ? ['registryContactsExcluded'] : [],
-      currentAvailability ? LOOKUP_AVAILABILITY_ANALYSIS_KEYS : PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS,
+      currentAvailability
+        ? [...LOOKUP_AVAILABILITY_ANALYSIS_KEYS, ...(version >= HOSTNAME_SCOPED_LOOKUP_EVIDENCE_SCHEMA_VERSION ? ['observationHostname', 'webObservationMode'] : [])]
+        : PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS,
       'Lookup evidence availability analysis',
     );
     if (currentAvailability && availability.registryContactsExcluded !== true) {
       fail('Lookup evidence availability contact exclusion');
+    }
+    if (!validLookupObservationScope(availability, query)) {
+      fail('Lookup evidence observation hostname binding');
     }
     validateLookupEvidenceHomepageMetadata(availability, version);
     if (!isDeepStrictEqual(
@@ -657,7 +665,7 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
     const whois = record(sources.whois, 'Lookup evidence WHOIS source');
     const rdapParsed = ['success', 'partial'].includes(rdapDiagnosticStatus) ? rdap.parsed : null;
     const whoisParsed = ['complete', 'partial'].includes(whoisDiagnosticStatus) ? whois.parsed : null;
-    if (version >= LOOKUP_EVIDENCE_SCHEMA_VERSION
+    if (version >= REGISTRAR_STANDING_LOOKUP_EVIDENCE_SCHEMA_VERSION
       && validRegistrarStanding(analysis.registrarStanding)
       && analysis.registrarStanding.ianaId !== resolveRegistrarIanaId(rdapParsed, whoisParsed)) {
       fail('Lookup evidence registrar standing source binding');

@@ -10,12 +10,13 @@
 import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { requiredValue } from './value-assertions.mts';
+import { eventFixtureForFetch } from './netlify-fetch-fixture.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 
 const { buildSessionCookie, createSessionToken } = await import('../lib/auth.mts');
 const [
-  { handler: lookupHandler },
+  { default: nativeLookupHandler },
   { handler: rdapHandler },
   { handler: whoisHandler },
   { handler: availabilityHandler },
@@ -31,6 +32,7 @@ const [
 ]);
 
 const INVALID_QUERY = 'private analyst note not a valid domain'; // embedded spaces fail before network work
+const lookupHandler = eventFixtureForFetch(nativeLookupHandler);
 
 let cookieHeader = '';
 before(() => {

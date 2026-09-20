@@ -6,9 +6,16 @@ import type { LookupSourceRefreshPlan } from './lookup-source-refresh.ts';
 import type { LookupFreshnessPolicy } from './lookup-source-refresh.ts';
 import type { LookupTaskView } from './lookup-presentation.ts';
 import type { LookupTiming, LookupTimingSource } from './lookup-response.ts';
-
-export type LookupDecisionState = 'conflict' | 'uncertain';
-export type LookupDecisionImportance = 'high' | 'medium' | 'low';
+import { readObservationTime } from '../../../../packages/evidence/observation.mts';
+import { lookupTaskGuidance } from '../../../../packages/investigation/lookup-task-guidance.mts';
+import type {
+  LookupDecisionEntry, LookupDecisionImportance, LookupDecisionSupport,
+  LookupEvidenceQualityEntry, LookupEvidenceQualityMatrix, LookupNextAction, LookupTaskGuidance,
+} from '../../../../packages/investigation/lookup-artefact-inputs.mts';
+export type {
+  LookupDecisionEntry, LookupDecisionImportance, LookupDecisionState, LookupDecisionSupport,
+  LookupEvidenceQualityEntry, LookupEvidenceQualityMatrix, LookupNextAction, LookupTaskGuidance,
+} from '../../../../packages/investigation/lookup-artefact-inputs.mts';
 export type LookupTaskEvidenceKind =
   | 'delegation'
   | 'dependency'
@@ -23,79 +30,12 @@ export type LookupTaskEvidenceKind =
   | 'redirect'
   | 'tls';
 
-export type LookupTaskGuidance = Readonly<{
-  task: LookupTaskView;
-  label: string;
-  summary: string;
-  questions: readonly string[];
-  prioritySections: readonly string[];
-}>;
-
-export type LookupDecisionEntry = Readonly<{
-  id: string;
-  state: LookupDecisionState;
-  importance: LookupDecisionImportance;
-  title: string;
-  detail: string;
-  sources: readonly string[];
-  href: `#${string}`;
-}>;
-
-export type LookupNextAction = Readonly<{
-  id: string;
-  label: string;
-  reason: string;
-  expectedOutcome: string;
-  href: `#${string}`;
-  priority: LookupDecisionImportance;
-}>;
-
-export type LookupDecisionSupport = Readonly<{
-  version: 1;
-  guidance: LookupTaskGuidance;
-  entries: readonly LookupDecisionEntry[];
-  actions: readonly LookupNextAction[];
-  counts: Readonly<{
-    conflicts: number;
-    uncertainties: number;
-  }>;
-}>;
-
-export type LookupEvidenceQualityEntry = Readonly<{
-  id: string;
-  label: string;
-  category: string;
-  endpointClass: string;
-  description: string;
-  state: EvidenceCoverageState;
-  statusLabel: string;
-  truncated: boolean;
-  observedAt: string | null;
-  ageDays: number | null;
-  durationMs: number | null;
-  timingOutcome: 'fulfilled' | 'rejected' | null;
-  refreshAvailable: boolean;
-  requestDisclosure: string | null;
-  limitations: readonly string[];
-  supports: readonly string[];
-}>;
-
-export type LookupEvidenceQualityMatrix = Readonly<{
-  version: 1;
-  observedAt: string | null;
-  totalMs: number | null;
-  entries: readonly LookupEvidenceQualityEntry[];
-  completeCount: number;
-  limitedCount: number;
-  stale: boolean;
-  ageDays: number | null;
-  freshnessPolicy: LookupFreshnessPolicy;
-}>;
-
 type JsonRecord = Record<string, unknown>;
 
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/gu;
-const MAX_TEXT = 320;
+export const MAX_LOOKUP_DECISION_DETAIL = 320;
+export const MAX_LOOKUP_DECISION_LABEL = 160;
+export const MAX_LOOKUP_DECISION_ENTRIES = 16;
 const MAX_ENTRIES = 24;
 export const MAX_LOOKUP_SOURCE_ACTIONS = 6;
 export const MAX_LOOKUP_PRESENTED_ACTIONS = 3;
@@ -116,9 +56,8 @@ const ACTION_PRIORITY: Readonly<Record<LookupNextAction['priority'], number>> = 
   low: 2,
 });
 
-const TASK_GUIDANCE: Readonly<Record<LookupTaskView, Omit<LookupTaskGuidance, 'task'>>> = Object.freeze({
+const TASK_GUIDANCE: Readonly<Record<LookupTaskView, Omit<LookupTaskGuidance, 'task' | 'label'>>> = Object.freeze({
   general: Object.freeze({
-    label: 'General investigation',
     summary: 'Establish what was observed, which sources agree, and what remains unknown before drawing a conclusion.',
     questions: Object.freeze([
       'Which source observations are complete enough to rely on?',
@@ -128,7 +67,6 @@ const TASK_GUIDANCE: Readonly<Record<LookupTaskView, Omit<LookupTaskGuidance, 't
     prioritySections: Object.freeze(['overview', 'web-evidence', 'registry', 'case-response']),
   }),
   acquisition: Object.freeze({
-    label: 'Acquisition review',
     summary: 'Prioritise registration lifecycle, authority, transfer dependencies, mail, DNS, and services that would need a controlled transition.',
     questions: Object.freeze([
       'Is the registration conclusion authoritative and internally consistent?',
@@ -138,7 +76,6 @@ const TASK_GUIDANCE: Readonly<Record<LookupTaskView, Omit<LookupTaskGuidance, 't
     prioritySections: Object.freeze(['overview', 'registry', 'web-evidence', 'case-response']),
   }),
   brand: Object.freeze({
-    label: 'Brand review',
     summary: 'Prioritise declared identity, page similarity, credential surfaces, external destinations, and infrastructure relationships.',
     questions: Object.freeze([
       'Does the page claim or resemble a reviewed identity?',
@@ -148,7 +85,6 @@ const TASK_GUIDANCE: Readonly<Record<LookupTaskView, Omit<LookupTaskGuidance, 't
     prioritySections: Object.freeze(['overview', 'web-evidence', 'external-intelligence', 'case-response']),
   }),
   incident: Object.freeze({
-    label: 'Incident response',
     summary: 'Prioritise current reachability, redirects, certificate state, credential surfaces, warning data, and evidence that can support a reviewed response.',
     questions: Object.freeze([
       'What behaviour was observed at the recorded time?',
@@ -158,7 +94,6 @@ const TASK_GUIDANCE: Readonly<Record<LookupTaskView, Omit<LookupTaskGuidance, 't
     prioritySections: Object.freeze(['overview', 'external-intelligence', 'web-evidence', 'case-response']),
   }),
   owned: Object.freeze({
-    label: 'Owned-domain posture',
     summary: 'Prioritise delegation, mail, certificate, security-policy, lifecycle, and change evidence for a domain under review.',
     questions: Object.freeze([
       'Do registry publication and directly observed delegation agree?',
@@ -253,37 +188,36 @@ function record(value: unknown): JsonRecord {
     : {};
 }
 
-function text(value: unknown, maximum = MAX_TEXT): string {
+function text(value: unknown, maximum = MAX_LOOKUP_DECISION_DETAIL): string {
   return String(value ?? '')
     .replace(CONTROL_CHARACTERS, ' ')
     .replace(/\s+/gu, ' ')
     .trim()
-    .slice(0, maximum);
+    .slice(0, maximum)
+    .trimEnd();
 }
 
 function idPart(value: unknown): string {
   return text(value, 80).toLowerCase().replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '');
 }
 
-function display(value: unknown): string {
-  const normalized = text(value, 180);
-  return normalized || 'not published';
+function summary(value: unknown, maximum: number): string {
+  const normalized = text(value, maximum + 2);
+  return normalized.length > maximum
+    ? `${normalized.slice(0, maximum - 1).replace(/[\uD800-\uDBFF]$/u, '').trimEnd()}…`
+    : normalized;
 }
 
-function isoDate(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
-}
-
-function ageDays(value: string | null, now: unknown): number | null {
-  const current = isoDate(now);
-  if (!value || !current) return null;
-  return Math.max(0, Math.floor((Date.parse(current) - Date.parse(value)) / 86_400_000));
+function comparisonDetail(left: unknown, right: unknown): string {
+  const separator = ' compared with ';
+  const suffix = '.';
+  const valueLimit = Math.floor((MAX_LOOKUP_DECISION_DETAIL - separator.length - suffix.length) / 2);
+  const display = (value: unknown) => summary(value, valueLimit) || 'not published';
+  return `${display(left)}${separator}${display(right)}${suffix}`;
 }
 
 function taskGuidance(task: LookupTaskView): LookupTaskGuidance {
-  return { task, ...TASK_GUIDANCE[task] };
+  return { task, label: lookupTaskGuidance(task).label, ...TASK_GUIDANCE[task] };
 }
 
 function comparisonEntries(
@@ -307,7 +241,7 @@ function comparisonEntries(
         state: 'conflict',
         importance: ['Domain', 'Registrar', 'Name servers', 'Statuses'].includes(label) ? 'high' : 'medium',
         title: `${label} differs between registration sources`,
-        detail: `${display(left)} compared with ${display(right)}.`,
+        detail: comparisonDetail(left, right),
         sources: kind === 'registry-whois'
           ? ['Registry RDAP', 'WHOIS']
           : ['Registry RDAP', 'Registrar RDAP'],
@@ -483,7 +417,13 @@ function prioritizeEntries(
     return importance[left.importance] - importance[right.importance]
       || leftBoost - rightBoost
       || left.title.localeCompare(right.title);
-  }).slice(0, 16);
+  }).slice(0, MAX_LOOKUP_DECISION_ENTRIES).map((entry) => ({
+    ...entry,
+    // These are inspection summaries, not retained source values. Apply the
+    // same contract to every producer, including composed hostname details.
+    title: summary(entry.title, MAX_LOOKUP_DECISION_LABEL),
+    detail: summary(entry.detail, MAX_LOOKUP_DECISION_DETAIL),
+  }));
 }
 
 function normalizedTaskEvidenceKinds(values: readonly unknown[] | undefined): Set<LookupTaskEvidenceKind> {
@@ -684,8 +624,8 @@ export function buildLookupEvidenceQualityMatrix(input: Readonly<{
   observedAtByEvidence?: Readonly<Record<string, unknown>>;
   now?: unknown;
 }>): LookupEvidenceQualityMatrix {
-  const observedAt = isoDate(input.observedAt);
-  const currentAgeDays = ageDays(observedAt, input.now ?? new Date().toISOString());
+  const now = input.now ?? new Date().toISOString();
+  const { observedAt, ageDays: currentAgeDays } = readObservationTime(input.observedAt, now);
   const timings = timingByEvidence(input.timing);
   const refreshByEvidence = new Map<string, LookupSourceRefreshPlan['items'][number]>();
   for (const item of input.refreshPlan.items) {
@@ -696,7 +636,7 @@ export function buildLookupEvidenceQualityMatrix(input: Readonly<{
   const entries = input.coverage.entries.slice(0, MAX_ENTRIES).map((entry) => {
     const timing = timings.get(entry.id);
     const refresh = refreshByEvidence.get(entry.id);
-    const entryObservedAt = isoDate(input.observedAtByEvidence?.[entry.id]) ?? observedAt;
+    const sourceTime = readObservationTime(input.observedAtByEvidence?.[entry.id], now);
     return {
       id: entry.id,
       label: entry.label,
@@ -707,8 +647,8 @@ export function buildLookupEvidenceQualityMatrix(input: Readonly<{
       state: entry.state,
       statusLabel: entry.statusLabel,
       truncated: entry.truncated,
-      observedAt: entryObservedAt,
-      ageDays: ageDays(entryObservedAt, input.now ?? new Date().toISOString()),
+      observedAt: sourceTime.observedAt,
+      ageDays: sourceTime.ageDays,
       durationMs: timing?.durationMs ?? null,
       timingOutcome: timing?.outcome ?? null,
       refreshAvailable: refresh !== undefined,

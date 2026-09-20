@@ -78,7 +78,7 @@ export function observeThemePreference(callback: (preference: ThemePreference) =
     callback(preference);
   };
   const handleStorage = (event: StorageEvent) => {
-    if (event.key !== THEME_STORAGE_KEY) return;
+    if (event.key !== THEME_STORAGE_KEY && event.key !== null) return;
     const preference = event.newValue === null
       ? 'system'
       : normalizeThemePreference(event.newValue);

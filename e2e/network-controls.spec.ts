@@ -98,6 +98,9 @@ test('disabled certificate and website capabilities degrade their own controls o
   await expect(newProfileButton).toHaveCSS('color', 'rgb(7, 16, 28)');
   await expect(newProfileButton).toHaveCSS('background-image', /linear-gradient/);
   await newProfileButton.click();
+  await page.getByRole('textbox', { name: 'Brand name', exact: true }).fill('Fixture Profile');
+  await page.getByRole('textbox', { name: 'Official domains', exact: true }).fill('example.test');
+  await page.getByText('Official-site identity', { exact: true }).click();
   await expect(page.getByRole('button', { name: 'Capture official-site baseline' })).toBeDisabled();
   await expect(page.getByText('website probe is disabled by deployment policy.', { exact: true })).toBeVisible();
   const saveProfileButton = page.getByRole('button', { name: 'Save profile' });

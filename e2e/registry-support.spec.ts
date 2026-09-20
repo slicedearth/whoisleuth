@@ -17,8 +17,10 @@ function sourceReportLookup(state: 'success' | 'error', durationMs: number) {
       timing: { version: 1, sources: [{ source: 'rdap', durationMs }] },
     },
     availability: {
-      version: 1, status: state, source: 'rdap', observedAt: SOURCE_REPORT_TIME,
-      complete: state === 'success', truncated: false, limitations: [], durationMs,
+      dns: {
+        version: 1, status: state, source: 'dns', observedAt: SOURCE_REPORT_TIME,
+        complete: state === 'success', truncated: false, limitations: [], durationMs,
+      },
     },
   };
 }

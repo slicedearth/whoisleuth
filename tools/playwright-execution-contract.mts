@@ -1,4 +1,5 @@
 import type { Page, TestInfo } from '@playwright/test';
+import path from 'node:path';
 
 export const PLAYWRIGHT_FUNCTIONAL_PROJECT = 'chromium';
 export const PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT = 'performance-measurement';
@@ -17,6 +18,36 @@ export const PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPEC_PATTERN = new RegExp(
 );
 export const PLAYWRIGHT_NETWORK_GUARD_ROUTE_PATTERN = '**/*';
 export const PLAYWRIGHT_AUTOMATIC_GUARD_OPTIONS = Object.freeze({ auto: true as const });
+
+/** Only the synthetic policy document deliberately exercises native CSP denials. */
+export function isPolicyFixtureDiagnostic(browser: string, type: string, text: string, messageUrl: string, pageUrl: string, origin: string): boolean {
+  const fixture = `${origin}/__policy-fixture`;
+  if (browser !== 'chromium' || type !== 'error' || pageUrl !== fixture || (messageUrl !== '' && messageUrl !== fixture)) return false;
+  return /^The source list for the Content Security Policy directive '[a-z-]+' contains an invalid source: '[^\n]+'. It will be ignored\.$/u.test(text)
+    || /^Executing inline (?:script|event handler) violates the following Content Security Policy directive '[^\n]+'. [^\n]+The action has been blocked\.$/u.test(text)
+    || /^Ignoring duplicate Content-Security-Policy directive '[a-z-]+'\.$/u.test(text);
+}
+
+/** Firefox can report layout reads made by the injected automation script. */
+export function isInjectedBrowserLayoutDiagnostic(browserName: string, type: string, text: string, url: string): boolean {
+  return browserName === 'firefox' && type === 'warning' && url === 'debugger eval code'
+    && /^\[JavaScript Warning: "Layout was forced before the page was fully loaded\. If stylesheets are not yet loaded this may cause a flash of unstyled content\." \{file: "debugger eval code" line: \d+\}\]$/u.test(text);
+}
+
+/** WebKit can report a handled same-origin fetch cancelled by navigation. */
+export function isCancelledSessionPageDiagnostic(browserName: string, message: string, origin: string, cancelledSession: boolean, navigated: boolean): boolean {
+  if (browserName !== 'webkit' || !cancelledSession || !navigated) return false;
+  const url = new URL(origin);
+  return url.origin === origin && url.protocol === 'http:' && url.hostname === '127.0.0.1'
+    && message === `/${url.host}/api/session due to access control checks.`;
+}
+
+/** Native preload timing is observational; failed loads and application warnings are not. */
+export function isNativePreloadTimingDiagnostic(browserName: string, type: string, text: string, messageUrl: string, origin: string, completedScripts: ReadonlySet<string>): boolean {
+  if (browserName !== 'webkit' || type !== 'warning' || messageUrl !== '') return false;
+  const match = /^The resource (http:\/\/127\.0\.0\.1:\d{1,5}\/_app\/immutable\/(?:chunks|nodes|entry)\/[A-Za-z0-9_.-]+\.js) was preloaded using link preload but not used within a few seconds from the window's load event\. Please make sure it wasn't preloaded for nothing\.$/u.exec(text);
+  return !!match && match[1]!.startsWith(origin + '/_app/immutable/') && completedScripts.has(match[1]!);
+}
 
 export function isPlaywrightPerformanceAuthoritySpec(file: string): boolean {
   const normalized = file.replaceAll('\\', '/');
@@ -154,12 +185,16 @@ export function performanceSampleMedian(values: readonly number[]): number {
 
 type Environment = Readonly<Record<string, string | undefined>>;
 
-export function resolvePlaywrightExecutionContract(environment: Environment = process.env) {
+export function resolvePlaywrightExecutionContract(environment: Environment = process.env, repositoryRoot = process.cwd()) {
   const hosted = Boolean(environment.CI);
   const useExistingBuild = hosted || environment.WHOISLEUTH_E2E_USE_BUILD === '1';
+  const guardedServer = 'node --import ./tools/browser-server-egress-guard.mts server.mts';
   return Object.freeze({
     hosted,
     useExistingBuild,
+    serverCommand: useExistingBuild ? guardedServer : `npm run build && ${guardedServer}`,
+    serverWorkingDirectory: path.resolve(repositoryRoot),
+    serverEgressTeardown: path.resolve(repositoryRoot, 'tools', 'browser-server-egress-teardown.cts'),
     includePerformanceAuthority: environment.WHOISLEUTH_E2E_PERFORMANCE_FIRST === '1',
     forbidOnly: true as const,
     failOnFlakyTests: true as const,

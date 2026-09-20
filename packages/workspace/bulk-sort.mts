@@ -1,12 +1,5 @@
-export type BulkSortKey =
-  | 'domain'
-  | 'availability'
-  | 'confidence'
-  | 'risk'
-  | 'opportunity'
-  | 'activity'
-  | 'registrar'
-  | 'mutation';
+export const BULK_SORT_KEYS = ['domain', 'availability', 'confidence', 'risk', 'opportunity', 'activity', 'registrar', 'mutation'] as const;
+export type BulkSortKey = typeof BULK_SORT_KEYS[number];
 
 export type BulkSortDirection = 1 | -1;
 

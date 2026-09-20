@@ -400,6 +400,21 @@ describe('structured RDAP metadata', () => {
     assert.deepEqual(parsed.events[1], { action: 'expiration', date: null, actor: null });
     assert.deepEqual(parsed.events[2], { action: 'last changed', date: '2025-01-01', actor: null });
     assert.equal(parsed.lifecycle.updatedDate, '2025-01-01');
+    assert.equal(parsed.eventsTruncated, true);
+  });
+
+  test('qualifies rejected event subfields independently of whole-event loss', () => {
+    const valid = { eventAction: 'registration', eventDate: '2020-01-01T00:00:00Z' };
+    assert.equal(parseFixture('domain', { ldhName: 'example.test', events: [valid] }).eventsTruncated, false);
+    for (const override of [
+      { eventAction: {} }, { eventAction: 'registration\nforged' },
+      { eventDate: {} }, { eventDate: 'x'.repeat(65) },
+      { eventActor: 'x'.repeat(161) }, { eventActor: null },
+    ]) {
+      const parsed = parseFixture('domain', { ldhName: 'example.test', events: [{ ...valid, ...override }] });
+      assert.equal(parsed.events.length, 1);
+      assert.equal(parsed.eventsTruncated, true);
+    }
   });
 
   test('retains multiple nested contacts per recognized role and preserves primary compatibility fields', () => {
@@ -538,6 +553,40 @@ describe('structured RDAP metadata', () => {
     assert.equal(requiredValue(complete.registrant).address, '1 Example St, Example City, EX, 3000, AU');
     assert.equal(requiredValue(complete.registrant).truncated, false);
     assert.equal(complete.entitiesTruncated, false);
+  });
+
+  test('distinguishes empty structured addresses from rejected address evidence', () => {
+    const cases: Array<{ value: unknown; truncated: boolean }> = [
+      { value: Array(7).fill(''), truncated: false },
+      { value: Array(7).fill('  '), truncated: false },
+      { value: ['', '', 'bad\naddress', '', '', '', ''], truncated: true },
+      { value: ['', '', 'x'.repeat(301), '', '', '', ''], truncated: true },
+      { value: ['', '', { unexpected: true }, '', '', '', ''], truncated: true },
+      { value: Array(33).fill(''), truncated: true },
+      { value: Array(7).fill('x'.repeat(200)), truncated: true },
+    ];
+    for (const { value, truncated } of cases) {
+      const source = {
+        entities: [{
+          handle: 'CONTACT-1', roles: ['registrant'],
+          vcardArray: ['vcard', [
+            ['fn', {}, 'text', 'Valid Name'],
+            ['adr', {}, 'text', value],
+          ]],
+        }],
+      };
+      const before = structuredClone(source);
+      for (const type of ['domain', 'ipv4', 'ipv6', 'asn'] as const) {
+        const parsed = parseFixture(type, source);
+        const entity = requiredValue(parsed.entitiesByRole.registrant?.[0]);
+        assert.equal(entity.name, 'Valid Name');
+        assert.equal(entity.truncated, truncated);
+        assert.equal(parsed.entitiesTruncated, truncated);
+        assert.equal(entity.address, null);
+        assert.deepEqual(entity.addresses, []);
+      }
+      assert.deepEqual(source, before);
+    }
   });
 
   test('caps recursive entity traversal by depth and tolerates cyclic fixture objects', () => {

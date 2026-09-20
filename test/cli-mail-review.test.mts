@@ -121,6 +121,69 @@ describe('passive mail exposure review', () => {
     const review = buildCliMailReview(document);
     assert.equal(review.rows[0]?.state, 'authenticated_mail');
     assert.equal(review.rows[0]?.domain, 'current.example');
+    assert.equal(review.rows[0]?.provenance.observedAt, null);
+    assert.equal(review.rows[0]?.provenance.sourceGeneratedAt, ISO);
+    assert.equal(review.inputCoverage.unmeasuredObservationRows, 1);
+  });
+
+  test('retains mixed failed inputs and original resumed observation times independently of report time', () => {
+    const observedAt = '2026-07-30T01:00:00.000Z';
+    const dnsObservedAt = '2026-07-30T00:59:00.000Z';
+    const generatedAt = '2026-08-02T01:02:03.000Z';
+    const success = bulkJsonItem({
+      index: 0, query: 'reviewed.example', ok: true, classified: classifyQuery('reviewed.example'),
+      observedAt, collectionOrigin: 'resumed_checkpoint',
+      result: {
+        availability: {
+          dns: { status: 'success', observedAt: dnsObservedAt, records: { a: [], aaaa: [], ns: [], mx: [{ priority: 10, exchange: 'mx.shared.example' }] } },
+          hasMx: true, hasNullMx: false, mxHosts: ['mx.shared.example'], hasSpf: true, hasDmarc: true,
+        }, diagnostics: {},
+      },
+    }, { generatedAt: ISO, deep: false });
+    const failure = bulkJsonItem({
+      index: 1, query: 'https://user:fixture@failed.example/private?token=fixture',
+      ok: false, error: 'Private upstream failure diagnostic', observedAt: null, collectionOrigin: 'current_run',
+    }, { generatedAt: ISO, deep: false });
+    const input = JSON.stringify({ schema: 'whoisleuth.cli.bulk', version: 3, generatedAt: ISO, results: [success, failure] });
+    const review = buildCliMailReview(input, generatedAt);
+    assert.equal(review.generatedAt, generatedAt);
+    assert.deepEqual(review.rows[0]?.provenance, {
+      sourceGeneratedAt: ISO, observedAt, dnsObservedAt, collectionOrigin: 'resumed_checkpoint',
+    });
+    assert.deepEqual(review.inputCoverage, { inputRows: 2, reviewedRows: 1, failedRows: 1, unmeasuredObservationRows: 1 });
+    assert.deepEqual(review.failedRows, [{
+      rowNumber: 2, target: 'failed.example', state: 'collection_failed',
+      provenance: { sourceGeneratedAt: ISO, observedAt: null, dnsObservedAt: null, collectionOrigin: 'current_run' },
+    }]);
+    assert.equal(review.counts.authenticated_mail, 1);
+    assert.equal(review.providerCoverage.complete, false);
+    assert.equal(review.providerCoverage.failedRows, 1);
+    assert.equal(review.providerCoverage.omittedRelationships, 0);
+    const terminal = formatCliMailReview(review);
+    assert.match(terminal, /Failed targets\s+1/u);
+    assert.match(terminal, /Incomplete\s+1/u);
+    assert.match(terminal, /Input 2\s+failed.example.*collection failed/u);
+    assert.match(terminal, /2026-07-30T01:00:00.000Z.*resumed checkpoint/u);
+    assert.doesNotMatch(JSON.stringify(review) + terminal, /fixture|\/private|Private upstream/u);
+    assert.doesNotMatch(review.limitations.join(' '), /reached a configured/u);
+    assert.throws(() => buildCliMailReview(JSON.stringify(failure)), /no completed domain results/u);
+    const jsonl = buildCliMailReview([success, failure].map((row) => JSON.stringify(row)).join('\n'), generatedAt);
+    assert.deepEqual(jsonl, review);
+  });
+
+  test('does not substitute legacy generation time or count incomplete DNS as full provider coverage', () => {
+    const row = bulkItem('partial.example', {
+      dnsStatus: 'partial', hasMx: true, hasNullMx: false, hasSpf: true, hasDmarc: true, mxHosts: ['mx.shared.example'],
+    });
+    const review = buildCliMailReview(bulkDocument([row]), ISO);
+    assert.equal(review.rows[0]?.provenance.observedAt, null);
+    assert.equal(review.rows[0]?.provenance.collectionOrigin, 'unknown');
+    assert.equal(review.providerCoverage.complete, false);
+    assert.equal(review.providerCoverage.rowsWithIncompleteDns, 1);
+    assert.equal(review.providerCoverage.failedRows, 0);
+    assert.match(review.limitations.join(' '), /incomplete DNS evidence/u);
+    assert.throws(() => buildCliMailReview(JSON.stringify({ ...row, version: '2' })), /schema version/u);
+    assert.throws(() => buildCliMailReview(bulkDocument([row]), '2026-08-01T01:02:03'), /explicit timezone/u);
   });
 
   test('rejects weak, contradictory, and duplicate-key Bulk rows', () => {
@@ -199,7 +262,7 @@ describe('passive mail exposure review', () => {
       },
     }]));
 
-    assert.equal(document.version, 3);
+    assert.equal(document.version, 4);
     assert.equal(Object.hasOwn(document, 'daneCounts'), false);
     assert.equal(Object.hasOwn(document.rows[0] ?? {}, 'dane'), false);
     assert.doesNotMatch(JSON.stringify(document), /TLSA|DANE/iu);

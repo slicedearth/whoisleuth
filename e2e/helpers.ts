@@ -18,7 +18,38 @@ import { summarizeBulkProfileContexts, unavailableBulkProfileContext } from '../
 // A few px of tolerance for subpixel layout rounding across engines.
 const OVERFLOW_TOLERANCE_PX = 1;
 const THEME_STORAGE_KEY = 'whoisleuth:theme:v1';
+const initialThemePreferences = new WeakMap<Page, 'dark' | 'light' | 'system'>();
 const LOCAL_DATA_DATABASE_NAME = 'whoisleuth-browser-data-v1';
+
+/** Verify native modifier handling, then activate the destination for UI checks. */
+export async function openNativeLinkInNewTab(page: Page, link: Locator): Promise<Page> {
+  await page.bringToFront();
+  await expect(link).toBeVisible();
+  const originalUrl = page.url();
+  // Observe the background-tab gesture after application handlers, then cancel
+  // only its browser default. The foreground gesture activates the destination
+  // before the driver exposes it, so UI checks do not depend on an inactive tab.
+  await link.evaluate(element => {
+    element.removeAttribute('data-native-click');
+    window.addEventListener('click', event => {
+      element.setAttribute('data-native-click', JSON.stringify({
+        intercepted: event.defaultPrevented,
+        modified: event.ctrlKey || event.metaKey,
+        shift: event.shiftKey,
+      }));
+      event.preventDefault();
+    }, { once: true });
+  });
+  await link.click({ modifiers: ['ControlOrMeta'] });
+  await expect(link).toHaveAttribute('data-native-click', JSON.stringify({ intercepted: false, modified: true, shift: false }));
+  await expect(page).toHaveURL(originalUrl);
+  const [destination] = await Promise.all([
+    page.context().waitForEvent('page'),
+    link.click({ modifiers: ['ControlOrMeta', 'Shift'] }),
+  ]);
+  await destination.bringToFront();
+  return destination;
+}
 
 type LegacyStorageValue = string | number | boolean | null | Record<string, unknown> | unknown[];
 
@@ -33,6 +64,7 @@ type RawBrowserLocalCollectionSnapshot = {
 };
 
 type BrowserLocalCollectionReadOptions = Readonly<{
+  databaseName?: string;
   minimumRecords?: number;
   minimumRevision?: number;
   timeout?: number;
@@ -123,14 +155,63 @@ export function currentBulkSessionBrowserStore(sessions: readonly Record<string,
 }
 
 export async function useTheme(page: Page, preference: 'dark' | 'light' | 'system') {
-  await page.addInitScript(({ key, value }) => {
-    localStorage.setItem(key, value);
-  }, { key: THEME_STORAGE_KEY, value: preference });
+  if (page.url() === 'about:blank') {
+    const initial = initialThemePreferences.get(page);
+    if (initial !== undefined && initial !== preference) {
+      throw new Error('Set one initial theme before navigation; switch the active page after it loads.');
+    }
+    if (initial === undefined) {
+      await page.addInitScript(({ key, value }) => {
+        const seedKey = `${key}:test-seeded`;
+        if (sessionStorage.getItem(seedKey)) return;
+        localStorage.setItem(key, value);
+        sessionStorage.setItem(seedKey, '1');
+      }, { key: THEME_STORAGE_KEY, value: preference });
+      initialThemePreferences.set(page, preference);
+    }
+    return;
+  }
+  const root = page.locator('html');
+  if (await root.getAttribute('data-theme-preference') !== preference) {
+    // The protected shell attaches after session initialisation. Absence is
+    // not evidence of a closed mobile menu. Public headers may contain both
+    // responsive controls, so wait for attachment before selecting visibility.
+    await expect(page.getByRole('button', { name: /^Colour theme,/u, includeHidden: true })).not.toHaveCount(0);
+    const trigger = page.getByRole('button', { name: /^Colour theme,/u });
+    const navigation = page.getByRole('button', { name: 'Toggle navigation', exact: true });
+    const openedNavigation = !await trigger.isVisible();
+    if (openedNavigation) {
+      await expect(navigation).toBeVisible();
+      await expect(navigation).toHaveAttribute('aria-expanded', 'false');
+      await navigation.click();
+    }
+    await trigger.click();
+    const label = preference === 'dark' ? 'Dark' : preference === 'light' ? 'Light' : 'System';
+    await page.getByRole('option', { name: `${label} theme`, exact: true }).click();
+    if (openedNavigation && await navigation.getAttribute('aria-expanded') === 'true') await navigation.click();
+  }
+  await expect(root).toHaveAttribute('data-theme-preference', preference);
+  if (preference !== 'system') await expect(root).toHaveAttribute('data-theme', preference);
+}
+
+export async function expectFocusedResultsVisible(page: Page, results: Locator, firstResult = results.getByRole('heading').first()) {
+  await expect(results).toBeFocused();
+  const header = page.getByRole('banner');
+  await expect(header).toBeVisible();
+  await expect.poll(async () => {
+    const [target, banner] = await Promise.all([results.boundingBox(), header.boundingBox()]);
+    if (!target || !banner) throw new Error('Focused result geometry is unavailable.');
+    return target.y - (banner.y + banner.height);
+  }).toBeGreaterThanOrEqual(0);
+  await expect(firstResult).toBeInViewport({ ratio: 1 });
 }
 
 export async function expectNoHorizontalOverflow(page: Page) {
-  const overflow = await page.evaluate(() => {
+  // Viewport updates can precede media-query layout. Wait for rendered fit
+  // within the normal assertion deadline; persistent overflow still fails.
+  await expect.poll(() => page.evaluate(tolerance => {
     const doc = document.documentElement;
+    if (doc.scrollWidth <= doc.clientWidth + tolerance) return null;
     const offenders = [...document.querySelectorAll<HTMLElement>('body *')]
       .map((element) => {
         const rect = element.getBoundingClientRect();
@@ -141,14 +222,17 @@ export async function expectNoHorizontalOverflow(page: Page) {
           width: Math.round(rect.width),
         };
       })
-      .filter((item) => item.right > doc.clientWidth + 1 || item.left < -1)
+      .filter((item) => item.right > doc.clientWidth + tolerance || item.left < -tolerance)
       .slice(0, 8);
     return { scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth, offenders };
-  });
-  expect(
-    overflow.scrollWidth,
-    `horizontal overflow: ${JSON.stringify(overflow.offenders)}`,
-  ).toBeLessThanOrEqual(overflow.clientWidth + OVERFLOW_TOLERANCE_PX);
+  }, OVERFLOW_TOLERANCE_PX), { message: 'horizontal overflow: rendered content must fit the viewport' }).toBeNull();
+}
+
+export async function openLookupOptionalSources(page: Page): Promise<void> {
+  const summary = page.locator('.optional-sources > summary');
+  await expect(summary).toBeVisible();
+  if (await summary.locator('..').getAttribute('open') === null) await summary.click();
+  await expect(summary.locator('..')).toHaveAttribute('open', '');
 }
 
 export async function expandLookupFamilies(page: Page): Promise<void> {
@@ -174,11 +258,12 @@ export async function openDashboardSecondaryWorkspaces(page: Page): Promise<void
 export async function openDashboardGuidedInvestigation(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Preparing your Dashboard' })).toHaveCount(0);
   const returningTrigger = page.getByRole('button', { name: 'Open saved-work tools' });
+  const firstUseTrigger = page.getByRole('button', { name: /^Start a guided investigation/u });
+  await expect(returningTrigger.or(firstUseTrigger).first()).toBeVisible();
   if (await returningTrigger.isVisible()) {
     await openDashboardSecondaryWorkspaces(page);
     return;
   }
-  const firstUseTrigger = page.getByRole('button', { name: /^Start a guided investigation/u });
   await expect(firstUseTrigger).toBeVisible();
   if (await firstUseTrigger.getAttribute('aria-expanded') !== 'true') await firstUseTrigger.click();
   await expect(firstUseTrigger).toHaveAttribute('aria-expanded', 'true');
@@ -193,10 +278,21 @@ export async function openBulkShortlist(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: /^Shortlist ·/u })).toBeVisible();
 }
 
+export async function openBrandProfileList(page: Page): Promise<void> {
+  const summary = page.locator('#brand-profiles-summary');
+  await expect(summary).toBeVisible();
+  const disclosure = summary.locator('..');
+  if (await disclosure.getAttribute('open') === null) await summary.click();
+  await expect(disclosure).toHaveAttribute('open', '');
+}
+
 export async function openBrandWorkbench(
   page: Page,
   workbench: 'attestations' | 'baselines' | 'certificates' | 'control' | 'mail' | 'passport' | 'portfolio' | 'posture',
 ): Promise<void> {
+  const tools = page.getByRole('tab', { name: 'Tools', exact: true });
+  await expect(tools).toBeVisible();
+  if (await tools.getAttribute('aria-selected') !== 'true') await tools.click();
   const selector = page.locator('#brand-workbench');
   await expect(selector).toBeEnabled();
   if (await selector.inputValue() !== workbench) await selector.selectOption(workbench);
@@ -299,6 +395,7 @@ export function requiredValue<Value>(
 async function tryReadBrowserLocalCollection<Collection extends BrowserLocalCollectionId>(
   page: Page,
   collection: Collection,
+  databaseName = LOCAL_DATA_DATABASE_NAME,
 ): Promise<BrowserLocalCollectionSnapshot<Collection> | null> {
   const snapshot = await page.evaluate(async ({
     databaseName,
@@ -347,7 +444,7 @@ async function tryReadBrowserLocalCollection<Collection extends BrowserLocalColl
     } finally {
       database.close();
     }
-  }, { databaseName: LOCAL_DATA_DATABASE_NAME, collectionId: collection });
+  }, { databaseName, collectionId: collection });
   if (!snapshot) return null;
   return {
     manifest: snapshot.manifest,
@@ -367,7 +464,7 @@ export async function readBrowserLocalCollection<Collection extends BrowserLocal
   let snapshot: BrowserLocalCollectionSnapshot<Collection> | null = null;
 
   await expect.poll(async () => {
-    snapshot = await tryReadBrowserLocalCollection(page, collection);
+    snapshot = await tryReadBrowserLocalCollection(page, collection, options.databaseName);
     return snapshot !== null
       && snapshot.records.length >= minimumRecords
       && Number(snapshot.manifest?.revision) >= minimumRevision;
@@ -516,6 +613,48 @@ export async function failNextBrowserLocalCollectionReadAfterWrite(
       return originalGet.call(this, query);
     };
   }, collection);
+}
+
+export async function holdBrowserLocalTransaction(page: Page): Promise<() => Promise<void>> {
+  await page.evaluate((databaseName) => new Promise<void>((resolve, reject) => {
+    const state = { released: false, finished: false };
+    const target = window as typeof window & { heldLocalTransaction?: typeof state };
+    if (target.heldLocalTransaction && !target.heldLocalTransaction.finished) {
+      reject(new Error('A browser-local transaction is already held.'));
+      return;
+    }
+    target.heldLocalTransaction = state;
+    const request = indexedDB.open(databaseName);
+    request.onupgradeneeded = () => request.transaction?.abort();
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const transaction = database.transaction('manifests', 'readwrite');
+      const store = transaction.objectStore('manifests');
+      const deadline = performance.now() + 20_000;
+      transaction.oncomplete = () => { state.finished = true; database.close(); };
+      transaction.onabort = () => { state.finished = true; database.close(); reject(transaction.error); };
+      const keepAlive = () => {
+        const read = store.get('__held_transaction_control__');
+        read.onerror = () => reject(read.error);
+        read.onsuccess = () => {
+          resolve();
+          if (!state.released && performance.now() < deadline) keepAlive();
+          else if (!state.released) transaction.abort();
+        };
+      };
+      keepAlive();
+    };
+  }), LOCAL_DATA_DATABASE_NAME);
+  return async () => {
+    await page.evaluate(() => {
+      const state = (window as typeof window & { heldLocalTransaction?: { released: boolean } }).heldLocalTransaction;
+      if (state) state.released = true;
+    });
+    await expect.poll(() => page.evaluate(() =>
+      (window as typeof window & { heldLocalTransaction?: { finished: boolean } }).heldLocalTransaction?.finished
+    )).toBe(true);
+  };
 }
 
 export async function holdBrowserLocalReads(page: Page, delayMs = 750, triggerSelector?: string) {

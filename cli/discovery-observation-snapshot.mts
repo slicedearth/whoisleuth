@@ -204,7 +204,24 @@ type CurrentAttempt = Readonly<{
   registrationObserved: boolean;
   dnsComplete: boolean;
   unavailableComponents: readonly ('dns' | 'registration')[];
+  withheld: readonly string[];
 }>;
+
+const DNS_MATERIAL_FIELDS = ['a', 'aaaa', 'ns', 'mx', 'hasNullMx', 'hasSpf', 'hasDmarc', 'status'] as const;
+
+function comparableValue(value: unknown): unknown {
+  return Array.isArray(value) ? [...new Set(value.map((item) => String(item).toLowerCase()))].sort() : value;
+}
+
+function dnsMaterial(dns: Observation['dns']): string {
+  return JSON.stringify(DNS_MATERIAL_FIELDS.map((field) => comparableValue(dns[field])));
+}
+
+function componentRecency(previousAt: string | null | undefined, previousMaterial: string, currentAt: string, currentMaterial: string): 'newer' | 'equal' | 'older' | 'conflicting' {
+  if (!previousAt || Date.parse(currentAt) > Date.parse(previousAt)) return 'newer';
+  if (Date.parse(currentAt) < Date.parse(previousAt)) return 'older';
+  return previousMaterial === currentMaterial ? 'equal' : 'conflicting';
+}
 
 function currentAttempt(
   domain: string,
@@ -223,33 +240,46 @@ function currentAttempt(
   const availability = item.ok ? record(record(item.result).availability) : {};
   const currentAvailabilityState = availabilityState(item) || 'unknown';
   const registrationObserved = item.ok && currentAvailabilityState !== 'unknown';
+  const currentConfidence = registrationObserved && typeof availability.confidence === 'string'
+    ? availability.confidence.replace(/[\u0000-\u001f\u007f]+/gu, ' ').trim().slice(0, 40) || 'unknown'
+    : 'unknown';
   const currentDns = bulkDnsSummary(item);
   const dnsComplete = deep && currentDns.status === 'success';
   const dnsRetainable = deep && currentDns.status === 'partial';
   const previousDnsRetainable = previous && ['partial', 'success'].includes(previous.dns.status);
-  const dns = dnsComplete || (dnsRetainable && !previousDnsRetainable)
-    ? currentDns
+  const registrationRecency = componentRecency(previous?.registrationObservedAt,
+    JSON.stringify([previous?.availabilityState, previous?.confidence]), attemptAt,
+    JSON.stringify([currentAvailabilityState, currentConfidence]));
+  const dnsRecency = componentRecency(previous?.dnsObservedAt, previous ? dnsMaterial(previous.dns) : '', attemptAt, dnsMaterial(currentDns));
+  const registrationAdmitted = registrationObserved && ['newer', 'equal'].includes(registrationRecency);
+  const dnsAdmitted = (dnsComplete || (dnsRetainable && !previousDnsRetainable)) && ['newer', 'equal'].includes(dnsRecency);
+  const dns = dnsAdmitted
+    ? dnsRecency === 'equal' && previous ? previous.dns : currentDns
     : previousDnsRetainable ? previous.dns : currentDns;
-  const registrationObservedAt = registrationObserved ? attemptAt : previous?.registrationObservedAt ?? null;
-  const dnsObservedAt = dnsComplete || (dnsRetainable && !previousDnsRetainable)
+  const registrationObservedAt = registrationAdmitted ? attemptAt : previous?.registrationObservedAt ?? null;
+  const dnsObservedAt = dnsAdmitted
     ? attemptAt
     : previous?.dnsObservedAt ?? null;
   const unavailableComponents: Array<'dns' | 'registration'> = [];
-  if (!registrationObserved) unavailableComponents.push('registration');
-  if (deep && !dnsComplete) unavailableComponents.push('dns');
+  if (!registrationAdmitted) unavailableComponents.push('registration');
+  if (deep && !(dnsComplete && dnsAdmitted)) unavailableComponents.push('dns');
   const attemptState: Observation['latestAttemptState'] = !item.ok
     ? 'error'
     : unavailableComponents.length ? 'partial' : 'success';
-  const confidence = registrationObserved && typeof availability.confidence === 'string'
-    ? availability.confidence.replace(/[\u0000-\u001f\u007f]+/gu, ' ').trim().slice(0, 40) || 'unknown'
+  const confidence = registrationAdmitted
+    ? currentConfidence
     : previous?.confidence ?? 'unknown';
-  const retainedAvailabilityState = registrationObserved
+  const retainedAvailabilityState = registrationAdmitted
     ? currentAvailabilityState
     : previous?.availabilityState ?? 'unknown';
   return {
-    registrationObserved,
-    dnsComplete,
+    registrationObserved: registrationAdmitted,
+    dnsComplete: dnsComplete && dnsAdmitted,
     unavailableComponents,
+    withheld: [
+      ...(registrationObserved && !registrationAdmitted ? [`${registrationRecency === 'older' ? 'Older' : 'Conflicting equal-time'} registration observations`] : []),
+      ...((dnsComplete || dnsRetainable) && ['older', 'conflicting'].includes(dnsRecency) ? [`${dnsRecency === 'older' ? 'Older' : 'Conflicting equal-time'} DNS observations`] : []),
+    ],
     observation: {
       domain,
       observedAt: latestObservedAt(registrationObservedAt, dnsObservedAt),
@@ -258,7 +288,7 @@ function currentAttempt(
       latestAttemptAt: attemptAt,
       collectionOrigin: item.collectionOrigin ?? 'current_run',
       latestAttemptState: attemptState,
-      latestRegistrationState: registrationObserved ? 'observed' : 'unavailable',
+      latestRegistrationState: registrationAdmitted ? 'observed' : 'unavailable',
       latestDnsState: deep ? currentDns.status : 'not_requested',
       availabilityState: retainedAvailabilityState,
       confidence,
@@ -273,17 +303,16 @@ function materialChanges(previous: Observation, current: Observation, attempt: P
 }) {
   const changes: Array<{ field: string; before: unknown; after: unknown }> = [];
   const compare = (field: string, before: unknown, after: unknown) => {
-    if (JSON.stringify(before) !== JSON.stringify(after)) changes.push({ field, before, after });
+    if (JSON.stringify(comparableValue(before)) !== JSON.stringify(comparableValue(after))) changes.push({ field, before, after });
   };
   if (attempt.registrationObserved) {
     compare('availabilityState', previous.availabilityState, current.availabilityState);
     compare('confidence', previous.confidence, current.confidence);
   }
   if (attempt.dnsComplete) {
-    for (const field of ['a', 'aaaa', 'ns', 'mx', 'hasNullMx', 'hasSpf', 'hasDmarc'] as const) {
+    for (const field of DNS_MATERIAL_FIELDS) {
       compare(`dns.${field}`, previous.dns[field], current.dns[field]);
     }
-    compare('dns.status', previous.dns.status, current.dns.status);
   }
   return changes;
 }
@@ -311,6 +340,7 @@ async function updateDiscoveryObservationSnapshot(
   const changed: Array<{ domain: string; changes: ReturnType<typeof materialChanges> }> = [];
   const unavailable: string[] = [];
   const unavailableComponents: Array<{ domain: string; components: readonly ('dns' | 'registration')[] }> = [];
+  const withheld = new Map<string, number>();
   for (let index = 0; index < domains.length; index++) {
     const domain = domains[index];
     const item = items[index];
@@ -318,6 +348,7 @@ async function updateDiscoveryObservationSnapshot(
     const previous = priorByDomain.get(domain);
     const attempt = currentAttempt(domain, item, previous, currentGeneratedAt, configuration.deep);
     const current = attempt.observation;
+    for (const reason of attempt.withheld) withheld.set(reason, (withheld.get(reason) ?? 0) + 1);
     if (attempt.unavailableComponents.length) {
       unavailable.push(domain);
       unavailableComponents.push({ domain, components: attempt.unavailableComponents });
@@ -355,7 +386,8 @@ async function updateDiscoveryObservationSnapshot(
       !changed.some((item) => item.domain === domain) && !unavailable.includes(domain)).length,
     limitations: [
       'Only bounded registration-state and DNS summaries are retained; raw registry records, contacts, page contents, and request details are excluded.',
-      'Registration and DNS retain separate observation times. A failed or partial component preserves its previous usable evidence and is reported as unavailable rather than as a removal or negative finding.',
+      'Registration and DNS retain separate observation times. Failed, incomplete, older or conflicting equal-time components preserve the prior usable baseline and are unavailable for a new comparison, not evidence of removal.',
+      ...[...withheld].map(([reason, count]) => `${reason}: ${count}. The retained component baseline was not replaced.`),
       'Material differences are observation changes for analyst review and do not establish ownership, control, intent, safety, or maliciousness.',
     ],
   };

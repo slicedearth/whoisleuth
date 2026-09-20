@@ -1,4 +1,7 @@
-import type { BrandProfile, DesiredPostureBaseline } from './brand-profile-model.ts';
+import { brandPostureObservationContext, currentDesiredPostureObservation, desiredPostureObservationIdentity, type BrandProfile } from './brand-profile-model.ts';
+import { caseWorkspaceHref } from './case-response-stage.ts';
+import { buildDesiredPostureComparisonsFromObservation } from './owned-domain-posture-review.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 import type { BulkSession } from './bulk-session-model.ts';
 import type { CaseRecord } from './case-model.ts';
 import type { DetectionRule } from './detection-rule-model.ts';
@@ -8,6 +11,7 @@ import type { WatchlistCollection } from './watchlist-store.ts';
 import { buildComparisonLedgerIndex } from './comparison-ledger.ts';
 import {
   analystReviewMaterialFingerprint,
+  analystReviewAgeAt,
   analystReviewSubjectKey,
   type AnalystReviewCompleteness,
   type AnalystReviewEvidenceFamily,
@@ -49,18 +53,11 @@ type ItemSeed = Readonly<{
 }>;
 
 function timestamp(value: unknown, fallback: string): string {
-  return typeof value === 'string' && Number.isFinite(Date.parse(value))
-    ? new Date(value).toISOString()
-    : fallback;
-}
-
-function age(observedAt: string, now: string): AnalystReviewItem['age'] {
-  const days = Math.max(0, Date.parse(now) - Date.parse(observedAt)) / 86_400_000;
-  return days > 30 ? 'stale' : days > 7 ? 'aging' : 'current';
+  return normalizeExplicitIsoTimestamp(value) ?? fallback;
 }
 
 function item(seed: ItemSeed, now: string): AnalystReviewItem {
-  const dueAt = seed.dueAt ? timestamp(seed.dueAt, now) : null;
+  const dueAt = normalizeExplicitIsoTimestamp(seed.dueAt);
   const priority = seed.priority ?? (dueAt && Date.parse(dueAt) <= Date.parse(now) ? 'high' : 'normal');
   const subjectKey = analystReviewSubjectKey(seed.family, seed.stable);
   return {
@@ -76,9 +73,9 @@ function item(seed: ItemSeed, now: string): AnalystReviewItem {
     source: seed.source,
     sourceIds: seed.sourceIds,
     caseDomain: seed.caseDomain ?? null,
-    observedAt: timestamp(seed.observedAt, now),
+    observedAt: timestamp(seed.observedAt, ''),
     dueAt,
-    age: age(timestamp(seed.observedAt, now), now),
+    age: analystReviewAgeAt(seed.observedAt, now),
     completeness: seed.completeness,
     nextAction: seed.nextAction ?? 'review',
     rankingReason: dueAt && Date.parse(dueAt) <= Date.parse(now)
@@ -90,10 +87,6 @@ function item(seed: ItemSeed, now: string): AnalystReviewItem {
     campaignIds: seed.campaignIds ?? [],
     dismissalTarget: null,
   };
-}
-
-function postureObservation(baseline: DesiredPostureBaseline) {
-  return baseline.observationHistory?.at(-1) ?? baseline.previousObservation;
 }
 
 function profileItems(profiles: readonly BrandProfile[], now: string): AnalystReviewItem[] {
@@ -137,21 +130,34 @@ function profileItems(profiles: readonly BrandProfile[], now: string): AnalystRe
           caseDomain: baseline.domain,
         }, now));
       }
-      const observation = postureObservation(baseline);
+      const selected = currentDesiredPostureObservation(baseline);
+      const observation = selected.observation;
+      const context = profile.officialDomains.includes(baseline.domain) ? brandPostureObservationContext(profile, baseline.domain) : undefined;
+      const comparisons = buildDesiredPostureComparisonsFromObservation(baseline, observation, now, { ...(context ? { context } : {}), limitation: selected.limitation });
+      if (selected.limitation) output.push(item({
+        stable: [profile.id, baseline.domain, 'posture-order'],
+        material: selected.candidates.map(desiredPostureObservationIdentity).sort(),
+        kind: 'desired_posture', family: 'desired_posture',
+        title: `Review retained settings context for ${baseline.domain}`,
+        detail: selected.limitation, source: `Retained Brand posture observations · ${profile.name}`,
+        sourceIds: ['brand_posture'], observedAt: '', completeness: 'inconclusive', nextAction: 'refresh', href, caseDomain: baseline.domain,
+      }, now));
       for (const check of observation?.checks ?? []) {
-        if (check.status !== 'danger' && check.status !== 'warning') continue;
+        const comparison = comparisons.find((value) => value.field === (check.id === 'registration_lock' ? 'registrarLock' : check.id));
+        const relevantComparison = comparison && !['not_configured', 'aligned', 'observed'].includes(comparison.state);
+        if (check.status !== 'danger' && check.status !== 'warning' && !relevantComparison) continue;
         output.push(item({
           stable: [profile.id, baseline.domain, 'desired-posture', check.id],
-          material: [check.id, check.status, check.records, observation?.observedAt],
+          material: [check.id, check.status, check.records, check.sourceContext, observation?.context, comparison?.desired, comparison?.state],
           kind: 'desired_posture',
           family: 'desired_posture',
           priority: check.status === 'danger' ? 'high' : 'normal',
           title: `Review ${check.id.replaceAll('_', ' ')} posture for ${baseline.domain}`,
-          detail: 'The latest retained posture observation differs from the analyst-authored baseline. It is a review lead, not proof of compromise, ownership, or unsafe operation.',
+          detail: relevantComparison ? comparison.explanation : 'The retained check is marked for review. Its status does not establish a difference from expected settings.',
           source: `Retained Brand posture observation · ${profile.name}`,
           sourceIds: ['brand_posture'],
-          observedAt: observation?.observedAt ?? baseline.updatedAt,
-          completeness: 'complete',
+          observedAt: check.sourceContext?.observedAt ?? '',
+          completeness: relevantComparison && ['drift', 'review', 'approved_window', 'suppressed'].includes(comparison.state) ? 'complete' : 'partial',
           href,
           caseDomain: baseline.domain,
         }, now));
@@ -180,7 +186,7 @@ function comparisonItems(input: Readonly<{
       detail: `Review the retained ${entry.mode.replaceAll('_', ' ')} without treating a difference as ownership, intent, or maliciousness.`,
       source: `${entry.earlier.source} → ${entry.later.source}`,
       sourceIds: ['comparison_ledger'],
-      observedAt: entry.later.observedAt ?? entry.later.publishedAt ?? entry.later.retainedAt ?? now,
+      observedAt: entry.later.observedAt ?? '',
       completeness: entry.completeness === 'complete' && !entry.truncated ? 'complete'
         : entry.completeness === 'partial' ? 'partial' : 'inconclusive',
       nextAction: entry.completeness === 'complete' && !entry.truncated ? 'review' : 'refresh',
@@ -200,13 +206,13 @@ function packetItems(cases: readonly CaseRecord[], now: string): AnalystReviewIt
       priority: action.state === 'authorised' ? 'high' : 'normal',
       title: `Complete reviewed handoff for ${record.domain}`,
       detail: `The retained ${action.type.replaceAll('_', ' ')} action is ${action.state.replaceAll('_', ' ')}. Packet draft fields and authorisation remain transient until deliberate export, so this Review Item does not claim that a packet exists or was submitted.`,
-      source: 'Browser-local Case response action',
+      source: 'Saved Case response action',
       sourceIds: ['case_action'],
       observedAt: action.updatedAt,
       dueAt: action.followUpAt ?? action.dueAt,
       completeness: record.evidencePins.length ? 'partial' : 'inconclusive',
       nextAction: 'resume',
-      href: `/monitor?view=cases&case=${encodeURIComponent(record.id)}&response=1#case-response-preflight-${encodeURIComponent(record.id)}`,
+      href: `${caseWorkspaceHref(record.id, 'response')}#case-response-preflight-${encodeURIComponent(record.id)}`,
       caseId: record.id,
       caseDomain: record.domain,
     }, now)));
@@ -223,8 +229,8 @@ function ruleItems(cases: readonly CaseRecord[], rules: readonly DetectionRule[]
         kind: 'detection_rule',
         family: 'rule',
         title: `Review custom-rule match for ${record.domain}`,
-        detail: `${match.name} matched retained Case evidence. This browser-local heuristic does not change the built-in Risk score and is not proof of maliciousness.`,
-        source: 'Browser-local custom detection rule',
+        detail: `${match.name} matched retained Case evidence. This local heuristic does not change the built-in Risk score and is not proof of maliciousness.`,
+        source: 'Saved custom detection rule',
         sourceIds: ['detection_rule'],
         observedAt: record.updatedAt,
         completeness: record.evidenceHistory.length || record.evidencePins.length ? 'partial' : 'inconclusive',
@@ -246,7 +252,7 @@ export function buildLocalAnalystReviewProjection(input: Readonly<{
   bulkSessions?: readonly BulkSession[];
   reviewState?: AnalystReviewStateStore;
 }>, nowRaw: unknown = new Date().toISOString()): LocalAnalystReviewProjection {
-  const now = timestamp(nowRaw, new Date(0).toISOString());
+  const now = timestamp(nowRaw, '');
   const cases = input.cases ?? [];
   const comparison = comparisonItems({
     cases,
@@ -289,9 +295,10 @@ export function buildLocalAnalystReviewProjection(input: Readonly<{
     admission: {
       omittedAtLeast,
       lowerBoundFamilies: [...lowerBoundFamilies],
+      currentSubjectKeys: [...new Set(all.map((item) => item.subjectKey))],
     },
     limitations: [
-      'These Review Items are projections over retained browser-local records. They make no request and do not rewrite their source records.',
+      'These Review Items are projections over saved records. They make no request and do not rewrite their source records.',
       'Custom-rule matches and desired-posture differences are analyst review leads, not proof of compromise, ownership, safety, or maliciousness.',
       'Response-packet draft inputs are transient; retained Case action readiness can prompt a handoff review but does not establish that a packet was exported or submitted.',
     ],

@@ -10,7 +10,7 @@ tasks.
 - Node.js 24 or later; use the exact `.nvmrc` runtime for repository work
 - npm with lockfile support
 - Chromium for browser end-to-end tests
-- Bash, zsh and PowerShell (`pwsh`) for the completion contract tests
+- Bash, zsh, Fish and PowerShell (`pwsh`) for the completion contract tests
 
 Use the committed lockfile. Do not replace it with an independently resolved
 dependency tree.
@@ -35,23 +35,27 @@ collection.
 Build and run the portable Express host with:
 
 ```bash
-npm run build
 npm start
 ```
+
+`npm start` builds the frontend before starting Express.
 
 The application reads deployment settings from the environment. Never commit
 passwords, session secrets, provider credentials or production configuration.
 
 ## Frontend development
 
-The SvelteKit frontend is under `frontend/`. Root scripts invoke the workspace
-commands, so ordinary development can remain at repository root:
+For the Console with a filesystem workspace, see the separate
+[local application](../packages/local-application/README.md). Build the frontend,
+then run `npm run local:app -- --workspace ../review-workspace --init --offline`.
+Choose a folder outside the checkout for real work. This mode uses a private
+launch link rather than the hosting password and does not use IndexedDB for
+saved collections. `npm run local:package:check` verifies an installed package
+against the current production build.
 
-```bash
-npm run dev
-npm run check
-npm run build
-```
+The SvelteKit frontend is under `frontend/`. Root scripts invoke the workspace
+commands. Run `npm run check` for Svelte validation or `npm run build` for a
+standalone production build from the repository root.
 
 The browser application imports runtime-neutral contracts from `packages/` and
 keeps Svelte state, DOM access, IndexedDB and downloads in frontend adapters.
@@ -59,80 +63,54 @@ Architecture checks enforce that direction.
 
 ## Verification
 
-Before pushing a clean commit, run the same maintained quality, unit and
-browser gates as hosted CI:
+Use [Contributing](../CONTRIBUTING.md) to locate an owner and choose checks for
+an ordinary change. During editing and before a feature-branch push:
+
+```bash
+npm run verification:focused -- --list
+npm run verification:focused
+```
+
+The plan explains selected owners and import dependents. Pass explicit
+repository-relative paths after `--` to narrow the declared scope. Documentation
+changes select offline document checks; documents included in the CLI also
+select package-document checks. Unknown import impact falls back to the full
+unit inventory. Browser selection remains deliberately conservative.
+
+Complete required hosted checks must pass against the current merge candidate
+before merge or deployment. A routine contribution does not require a second
+complete run on the contributor's machine. State which checks were run and
+which were not; a focused result is not release evidence.
+
+For verification-infrastructure changes, reproducing hosted failures, or full
+offline assurance, run the complete local boundary from a clean commit:
 
 ```bash
 npm run verification:ci
 ```
 
-While iterating, run the owned unit, static and browser checks for the current
-dirty diff. The focused command builds once and runs all selected browser specs
-in one process:
+It requires the exact `.nvmrc` runtime, tested shells and a Node 26 executable
+on `PATH` (or `WHOISLEUTH_CLI_RUNTIME_NODE`). It performs a locked install,
+quality checks, coverage, production-browser tests and CLI compatibility checks.
+Shared executable groups keep the required local and hosted checks aligned.
+Already-prepared lanes can use `npm run verification:ci -- --group=<name>`;
+group mode does not install dependencies or orchestrate other lanes.
 
-```bash
-npm run verification:focused
-```
+Performance reports retain samples, execution context, readiness, long tasks
+and layout evidence. Elapsed time is observational, not a limit calibrated to
+one development machine. Compare repeated workloads under comparable
+conditions. Functional readiness, network boundaries, byte limits and bounded
+timeouts remain enforced.
 
-Pass repository-relative paths after `--` to verify a smaller declared change,
-or add `--list` to inspect the plan without running it. This is an iteration
-boundary, not release evidence.
+Coverage includes loaded production TypeScript and independent critical I/O
+floors. Exclusions must identify their type, build, browser or process check.
+Tests use local fixtures; deliberate source-refresh and deployment checks have
+separate network modes. Do not run those for an unrelated edit.
 
-For mechanical changes, edit the domain owner first: CLI option grammar belongs
-to `cli/command-reference.mts`; Case status and disposition decisions belong to
-`case-record-decisions.mts`; Case persistence and audience treatment belongs to
-`case-record-projection.mts`. Generated help, completion and public reference
-outputs derive from those owners. Browser tests consume only the served build
-and private build-identity marker declared by the frontend build owner. The
-focused plan selects the affected derived consumers while immutable historical
-fixtures remain independent compatibility evidence.
-
-The local CI command requires the exact `.nvmrc` runtime, a Node 26 executable on
-`PATH` for the CLI compatibility lane, and a clean worktree. Set
-`WHOISLEUTH_CLI_RUNTIME_NODE` to an absolute executable path when that runtime
-is installed outside `PATH`. Before package, unit or build work begins, it
-probes the shells required by the unit lane and reports missing or unusable
-executables together; it does not install or skip them. The command performs the locked install and
-changed-line security scan before the maintained quality, coverage, build,
-production-browser and secondary CLI-runtime gates. Ordinary interactive
-browser work can use `npm run test:e2e`; the full CI command also runs the
-isolated performance measurements. Report exact failures, retries, flakes and
-skips rather than describing a retried run as clean.
-
-Performance measurements remain part of every complete local and hosted CI
-run. Reports retain three samples, medians, maxima, browser-side readiness,
-host-side duration, long tasks, and execution context. Elapsed times are
-observations, not release limits derived from a development machine. Review
-changes using repeated measurements of the same workload under comparable
-conditions; a different host's duration alone does not establish a regression
-or prove acceptable user experience. Any future blocking performance objective
-must state its user-facing requirement, representative workload and execution
-conditions instead of inheriting a prior machine's observed speed.
-
-Functional readiness, request boundaries, asset-transfer limits, layout checks
-and bounded test timeouts remain mandatory. Shared command and build contracts
-provide workflow consistency; they do not claim identical operating systems,
-hardware performance or coverage of every supported platform.
-
-Hosted jobs invoke the same executable `preflight`, `quality`, `unit`,
-`browser-build` and `cli-runtime` groups owned by `verification:ci`. Maintainers
-can run one already-prepared lane with `npm run verification:ci --
---group=<name>`; group mode preserves the lane's runtime and prerequisite checks
-but deliberately does not perform the full command's clean-commit guard,
-dependency installation, browser orchestration or final cleanup.
-
-The coverage gate measures all loaded production TypeScript, enforces the
-global line, branch and function floors, and retains stricter per-file floors
-for critical artefact I/O. Its inventory check also rejects any newly omitted
-source file. Type-only modules, compatibility re-exports, browser adapters,
-framework entries and executable entry points remain visible as a small,
-explicit list with an owning type, build, browser or process check; they are
-not silently counted as covered.
-
-Some checks deliberately read the repository, dependency graph, fixtures or
-generated contracts. They do not contact live investigation targets. Commands
-whose names describe drift, provider status or deployment self-checks can have
-separate explicit network modes; review their help before running them.
+[External evaluation examples](../fixtures/risk-evaluation/README.md) retain
+licensed, minimised source features separately from synthetic tests. Their
+development and evaluation groups are disjoint; the report distinguishes
+historical labels, missing inputs and unmeasured accuracy.
 
 ## Browser end-to-end tests
 
@@ -150,7 +128,10 @@ npx playwright test e2e/public-guide.spec.ts --workers=1 --retries=0
 ```
 
 The suite uses deterministic fixtures and must not contact live registries,
-domains, resolvers or providers. Confirm the served process belongs to the
+domains, resolvers or providers. Browser routing and a separately preloaded
+server transport guard enforce this. An unexpected collector request fails
+the run and names the operation; supply the missing deterministic fixture
+rather than disabling the guard. Confirm the served process belongs to the
 intended checkout. After testing, remove generated reports and build artefacts
 unless they are an intentional deliverable, and confirm port 4173 is free.
 
@@ -161,6 +142,28 @@ npm run test:e2e:stress
 ```
 
 Diagnose a failure before retrying it.
+
+Hosted CI and the complete local built suite run a small required Firefox and
+WebKit packet for locking, encrypted restore, draft recovery and native link
+navigation. Run that same isolated packet against a verified build with
+`npm run test:e2e:critical`. Install its pinned engines with
+`npm run test:e2e:critical:install` when they are not already cached.
+
+The targeted cross-browser packet reuses complete functional specifications in
+Firefox and WebKit: authentication, workspace isolation and encryption, Case
+recovery and returns, offline evidence, source progress and public navigation.
+It keeps the same production server, fixture guards and zero-retry policy:
+
+```bash
+npx playwright install firefox webkit
+npm run test:e2e:cross-browser
+```
+
+Use `-- --project=firefox` or `-- --project=webkit` to diagnose one engine.
+With an already verified production build, set `WHOISLEUTH_E2E_USE_BUILD=1`.
+These desktop engines with narrow viewports do not certify real mobile devices
+or every released browser version. The complete Chromium suite remains required
+at the full verification boundary.
 
 Failed or interrupted local suites print the location of their retained private
 diagnostics directory. It keeps bounded reports, traces and screenshots, without
@@ -201,10 +204,9 @@ refresh or network request, and does not fail an ordinary run merely because an
 optional retained source has aged. Use `npm run sources:health -- --strict` for
 the explicit maintenance gate; each entry names its narrower strict command.
 
-Candidate-acceptance, catalogue-update, staging-evidence, first-use-study and
-release-publication commands are deliberate maintainer actions rather than
-ordinary verification. Use the owning documentation or command help and do not
-run them as part of an unrelated change.
+Source refresh, catalogue updates and release publication are separate from
+ordinary verification. Use the corresponding guide or command help before
+running an operation that changes data or contacts an external service.
 
 ## Command-line interface
 
@@ -231,14 +233,5 @@ boundaries. Installed `whoisleuth <command> --help`, `whoisleuth commands` and
 
 ## Project layout
 
-| Path | Responsibility |
-| --- | --- |
-| `frontend/` | SvelteKit routes, components and browser adapters. |
-| `lib/` | Shared hosted/runtime collection and presentation-neutral services. |
-| `packages/` | Runtime-neutral contracts and domain modules. |
-| `cli/` and `bin/` | CLI grammar, handlers, terminal output and entry points. |
-| `netlify/functions/` | Netlify adapters over the shared hosted boundary. |
-| `test/` and `e2e/` | Deterministic unit, contract and browser verification. |
-| `tools/` | Explicit maintainer checks and generated-contract renderers. |
-
-See [architecture](architecture.md) for ownership and dependency boundaries.
+See [component ownership](architecture.md#component-ownership) for the directory
+map and [Contributing](../CONTRIBUTING.md#find-the-owner) for common editing paths.

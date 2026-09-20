@@ -263,13 +263,18 @@ test('outlier export is formula-safe and includes the local baseline', () => {
     row('one.example'),
     row('two.example'),
     row('three.example'),
-    row('=different.example', { registrar: 'Different Registrar' }),
+    row('=different.example', {
+      registrar: 'Different Registrar',
+      saved: { ...row('=different.example').saved, registrarName: 'Different Registrar' },
+    }),
   ]);
+  assert.ok(matrix.rows.some((item) => item.domain === '=different.example' && item.findings.length > 0));
   const output = buildBulkPeerOutlierExport(matrix, '2026-07-31T00:00:00.000Z');
   assert.match(output.filename, /2026-07-31/u);
   assert.match(output.content, /cohort_baseline/u);
   assert.match(output.content, /contrast_percent/u);
-  assert.doesNotMatch(output.content, /^=different/u);
+  assert.match(output.content, /(?:^|\n)'=different\.example,/u);
+  assert.doesNotMatch(output.content, /(?:^|\n)=different\.example,/u);
 });
 
 test('peer outlier rows filter by bounded domain, evidence, and dimension values', () => {

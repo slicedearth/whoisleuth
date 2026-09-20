@@ -45,6 +45,24 @@ function item(result: PageComparison, id: string): PageComparisonComponent {
 }
 
 describe('explainable page-baseline comparison', () => {
+  test('preserves public baselines without comparing different parser algorithms', () => {
+    const old = stored({ faviconHash: SHA_D });
+    const current = stored({
+      fingerprintVersion: 2,
+      domStructure: { ...old.domStructure, parser: 'html-tree-v2' },
+      faviconHash: SHA_D,
+    });
+    assert.equal(baseline.normalizePageBaseline(old)?.fingerprintVersion, 1);
+    assert.equal(baseline.normalizePageBaseline(current)?.fingerprintVersion, 2);
+    assert.equal(baseline.normalizePageBaseline({ ...current, domStructure: old.domStructure }), null);
+    const result = requiredValue(comparison.comparePageBaselines(old, current));
+    assert.equal(result.partial, true);
+    assert.equal(comparison.hasStrongPageIdentityReviewMatch(result), false);
+    assert.equal(item(result, 'favicon').status, 'same');
+    assert.equal(result.components.filter((component) => component.id !== 'favicon').every((component) => component.status === 'unavailable'), true);
+    assert.equal(result.components.some((component) => component.status === 'different'), false);
+  });
+
   test('reports independent identical components without an aggregate score', () => {
     const result = requiredValue(comparison.comparePageBaselines(stored(), stored({ domain: 'observed.example', lookupDomain: 'observed.example', observedAt: LATER })));
     assert.equal(result.comparisonVersion, 3);

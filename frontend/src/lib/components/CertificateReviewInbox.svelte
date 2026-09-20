@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import Pagination from './Pagination.svelte';
   import ReviewLifecycleControls from './ReviewLifecycleControls.svelte';
   import { buildCertificateReviewInbox, type CertificateEvidenceClass, type CertificateReviewFindingState } from '../analysis/certificate-review-inbox.ts';
@@ -12,7 +13,7 @@
     cases,
     reviewState,
     profileId = '',
-    now = new Date().toISOString(),
+    now,
     onreview,
     oncount,
   }: {
@@ -29,7 +30,14 @@
   let stateFilter = $state<CertificateReviewFindingState | ''>('');
   let selectedProfile = $state('');
   let page = $state(1);
-  const inbox = $derived(buildCertificateReviewInbox(profiles, cases, { now, reviewState, ...(selectedProfile ? { profileId: selectedProfile } : {}) }));
+  const review = $derived.by(() => {
+    const at = now ?? new Date().toISOString();
+    return {
+      at,
+      inbox: buildCertificateReviewInbox(profiles, cases, { now: at, reviewState, ...(selectedProfile ? { profileId: selectedProfile } : {}) }),
+    };
+  });
+  const inbox = $derived(review.inbox);
   const filtered = $derived(inbox.findings.filter((finding) =>
     (!evidenceFilter || finding.evidenceClass === evidenceFilter)
     && (!stateFilter || finding.state === stateFilter)
@@ -103,6 +111,9 @@
           </div>
           <h3>{finding.label}</h3>
           <p>{finding.detail}</p>
+          {#if finding.kind === 'ambiguous_observation'}
+            <a class="btn source-case" href={finding.item.caseId ? caseWorkspaceHref(finding.item.caseId, 'evidence') : '/cases'}>Review source {finding.item.caseId ? 'Case' : 'Cases'}</a>
+          {/if}
           <dl>
             <div><dt>Domain</dt><dd>{finding.domain}</dd></div>
             <div><dt>Observed</dt><dd>{formatDate(finding.observedAt)}</dd></div>
@@ -111,7 +122,7 @@
             <div><dt>SPKI SHA-256</dt><dd>{finding.spkiSha256 ?? 'Unavailable'}</dd></div>
             <div><dt>Sources</dt><dd>{finding.sources.join(', ') || 'Unavailable'}</dd></div>
           </dl>
-          <ReviewLifecycleControls item={finding.item} lifecycle={analystReviewLifecycle(finding.item, reviewState, now)} {onreview} />
+          <ReviewLifecycleControls item={finding.item} lifecycle={analystReviewLifecycle(finding.item, reviewState, review.at)} {onreview} />
           <details class="limitations"><summary>Evidence limits</summary><ul>{#each finding.limitations as limitation}<li>{limitation}</li>{/each}</ul></details>
         </li>
       {/each}
@@ -133,6 +144,7 @@
   .findings{display:grid;gap:9px;margin:14px 0 0;padding:0;list-style:none}.findings>li{min-width:0;padding:14px;border-left:3px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.findings>li.review{border-left-color:var(--amber)}
   .meta{display:flex;flex-wrap:wrap;gap:6px}.meta span{min-width:0;padding:2px 6px;border:1px solid var(--border);border-radius:99px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase;overflow-wrap:anywhere}
   h3{margin:8px 0 3px;font:700 var(--text-sm) var(--mono);overflow-wrap:anywhere}.findings p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.45;overflow-wrap:anywhere}
+  .source-case{margin-top:8px}
   dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:10px 0 0}dl div{min-width:0;padding:7px;border-radius:var(--radius-sm);background:var(--panel)}dt{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}dd{margin:3px 0 0;font-size:var(--text-xs);overflow-wrap:anywhere}
   details summary{cursor:pointer;color:var(--text);font-weight:650}.limitations{margin-top:9px}.limitations ul,.global-limits ul{padding-left:20px}.warning{color:var(--amber)}
   select:focus-visible,summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}

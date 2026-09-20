@@ -6,10 +6,21 @@ import {
 } from '../cases/case-model.mts';
 import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { canonicalArtifactJsonV2 } from '../evidence/artifact-integrity.mts';
+import { sha256IdentityHex } from '../evidence/record-identity.mts';
+import {
+  MAX_RESPONSE_LABEL_LENGTH,
+  MAX_RESPONSE_VALUE_LENGTH,
+  MAX_RESPONSE_LIMITATION_LENGTH,
+  normalizeCaseEvidencePins,
+  normalizeCaseSightings,
+} from '../cases/case-response-model.mts';
 import {
   EXTERNAL_FINDINGS_SCHEMA,
   EXTERNAL_FINDINGS_VERSION,
   MAX_EXTERNAL_FINDING_DOMAINS,
+  MAX_EXTERNAL_FINDING_LIMITATIONS,
+  MAX_EXTERNAL_FINDING_LIMITATION_LENGTH,
   MAX_EXTERNAL_FINDINGS,
   MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
   MAX_EXTERNAL_FINDINGS_PER_DOMAIN,
@@ -20,6 +31,8 @@ export {
   EXTERNAL_FINDINGS_SCHEMA,
   EXTERNAL_FINDINGS_VERSION,
   MAX_EXTERNAL_FINDING_DOMAINS,
+  MAX_EXTERNAL_FINDING_LIMITATIONS,
+  MAX_EXTERNAL_FINDING_LIMITATION_LENGTH,
   MAX_EXTERNAL_FINDINGS,
   MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
   MAX_EXTERNAL_FINDINGS_PER_DOMAIN,
@@ -165,12 +178,31 @@ function iso(value: unknown, label: string, optional = false): string | null {
 
 function limitations(value: unknown, index: number): string[] {
   if (value === undefined) return [];
-  if (!Array.isArray(value) || value.length > 8) {
-    throw new Error(`Finding ${index + 1} limitations must be an array with no more than 8 entries.`);
+  if (!Array.isArray(value) || value.length > MAX_EXTERNAL_FINDING_LIMITATIONS) {
+    throw new Error(`Finding ${index + 1} limitations must be an array with no more than ${MAX_EXTERNAL_FINDING_LIMITATIONS} entries.`);
   }
   const unique = new Set<string>();
-  for (const item of value) unique.add(requiredText(item, 240, `Finding ${index + 1} limitation`));
+  for (const item of value) unique.add(requiredText(item, MAX_EXTERNAL_FINDING_LIMITATION_LENGTH, `Finding ${index + 1} limitation`));
   return [...unique];
+}
+
+/** Keep provenance and omissions visible within the existing import bound. */
+export function retainExternalFindingLimitations(
+  supplied: readonly string[],
+  mandatory: readonly string[],
+): readonly string[] {
+  const required = limitations(mandatory, 0);
+  const optional = limitations(supplied, 0).filter((entry) => !required.includes(entry));
+  const available = MAX_EXTERNAL_FINDING_LIMITATIONS - required.length;
+  if (optional.length <= available) return Object.freeze([...required, ...optional]);
+  if (available < 1) throw new TypeError('Mandatory finding limitations leave no room to disclose omitted supplied limitations.');
+  const retained = optional.slice(0, available - 1);
+  const omitted = optional.length - retained.length;
+  return Object.freeze([
+    ...required,
+    ...retained,
+    `${omitted} supplied limitation${omitted === 1 ? ' was' : 's were'} omitted to retain mandatory provenance and omission notices; review the supplied input for the remaining qualifications.`,
+  ]);
 }
 
 function structuredObservation(value: unknown, index: number): ExternalFindingStructuredObservation | null {
@@ -355,25 +387,17 @@ function importedSourceLabel(finding: ExternalFinding, sourceName: string): stri
     : `Provider report: ${sourceName}`;
 }
 
-function existingPinKey(recordValue: CaseRecord, finding: ExternalFinding, sourceName: string): string {
-  const expectedLabel = `External ${finding.category} finding`;
-  const expectedValue = finding.structuredObservation?.value ?? pinValue(finding);
-  const expectedSource = importedSourceLabel(finding, sourceName);
-  const observation = finding.structuredObservation;
-  return recordValue.evidencePins.some((pin) => (
-    pin.label === expectedLabel
-    && pin.value === expectedValue
-    && pin.source === expectedSource
-    && pin.observedAt === finding.observedAt
-    && pin.completeness === finding.completeness
-    && (!observation || (
-      pin.field === observation.field
-      && pin.sourceSchema?.collection === 'external_observations'
-      && pin.sourceSchema.schema === observation.sourceSchema
-      && pin.sourceSchema.version === observation.sourceVersion
-      && (observation.eventId === null || pin.certificateObservation?.eventId === observation.eventId)
-    ))
-  )) ? findingKey(finding, sourceName) : '';
+function alreadyRetained(recordValue: CaseRecord, projection: ReturnType<typeof externalFindingCaseProjection>): boolean {
+  const { importContentSha256: expectedIdentity, ...expected } = projection.evidencePin;
+  return recordValue.evidencePins.some((pin) => {
+    const { id: _id, createdAt: _createdAt, importContentSha256, ...material } = pin;
+    if (importContentSha256 && importContentSha256 !== expectedIdentity) return false;
+    // Older pins have no content digest. Only a complete, exact retained
+    // projection can establish duplication; a shortened prefix cannot.
+    if (!importContentSha256 && (projection.shortenedFields.length || projection.omittedLimitations)) return false;
+    // An imported digest alone cannot substitute for matching retained fields.
+    return canonicalArtifactJsonV2(material) === canonicalArtifactJsonV2(expected);
+  });
 }
 
 function structuredPinFields(finding: ExternalFinding): Record<string, unknown> {
@@ -406,41 +430,44 @@ function structuredPinFields(finding: ExternalFinding): Record<string, unknown> 
   };
 }
 
-function mergeExternalFindingIntoCase(
-  current: readonly CaseRecord[],
-  caseId: string,
+/** Exact material retained by both the import preview and Case mutation. */
+export function externalFindingCaseProjection(
   finding: ExternalFinding,
   source: ExternalFindingsDocument['source'],
-  now: string,
-): Readonly<{ cases: CaseRecord[]; record: CaseRecord; added: boolean }> {
-  const target = current.find((candidate) => candidate.id === caseId) ?? null;
-  if (!target) throw new Error('The selected Case is unavailable for this finding.');
-  if (existingPinKey(target, finding, source.name)) {
-    return { cases: [...current], record: target, added: false };
-  }
-  const sourceLimitations = [
+) {
+  const identitySha256 = sha256IdentityHex(new TextEncoder().encode(canonicalArtifactJsonV2({
+    sourceName: source.name, sourceReference: source.reference, finding,
+  })));
+  const value = finding.structuredObservation?.value ?? pinValue(finding);
+  const sourceLabel = importedSourceLabel(finding, source.name);
+  const sourceReference = source.reference ? `Source reference: ${source.reference}` : null;
+  const shortenedFields = [
+    ...(value.length > MAX_RESPONSE_VALUE_LENGTH ? ['finding value'] : []),
+    ...(sourceLabel.length > MAX_RESPONSE_LABEL_LENGTH ? ['source label'] : []),
+    ...(sourceReference && sourceReference.length > MAX_RESPONSE_LIMITATION_LENGTH ? ['source reference'] : []),
+  ];
+  const mandatory = [
     finding.evidenceClass === 'deployment_observation'
       ? `Imported as an observation made by ${source.name}; this browser session did not collect or independently verify it.`
       : `Reported by ${source.name}; WHOISleuth did not collect or independently verify this provider finding.`,
-    ...(source.reference ? [`Source reference: ${source.reference}`] : []),
-    ...finding.limitations,
+    ...(sourceReference ? [sourceReference.length > MAX_RESPONSE_LIMITATION_LENGTH
+      ? `${sourceReference.slice(0, MAX_RESPONSE_LIMITATION_LENGTH - 13)}… [shortened]` : sourceReference] : []),
+    ...(shortenedFields.length ? [`Case storage shortened ${shortenedFields.join(', ')}. The content digest covers the complete accepted finding.`] : []),
   ];
-  const existingPinIds = new Set(target.evidencePins.map((pin) => pin.id));
-  let updated = updateCase([...current], target.id, {
-    evidencePin: {
+  const sourceLimitations = retainExternalFindingLimitations(finding.limitations, mandatory);
+  const omittedLimitations = finding.limitations.filter((item) => !sourceLimitations.includes(item)).length;
+  const pin = normalizeCaseEvidencePins([{
       ...structuredPinFields(finding),
+      importContentSha256: identitySha256,
       label: `External ${finding.category} finding`,
-      value: finding.structuredObservation?.value ?? pinValue(finding),
-      source: importedSourceLabel(finding, source.name),
+      value,
+      source: sourceLabel,
       observedAt: finding.observedAt,
       completeness: finding.completeness,
+      truncated: shortenedFields.length || omittedLimitations ? true : null,
       limitations: sourceLimitations,
-    },
-  }, now);
-  const addedPin = updated.record.evidencePins.find((pin) => !existingPinIds.has(pin.id)) ?? null;
-  if (!addedPin) throw new Error('The imported finding could not be retained as Case evidence.');
-  updated = updateCase(updated.cases, target.id, {
-    sighting: {
+  }], finding.observedAt)[0];
+  const observed = normalizeCaseSightings([{
       state: finding.evidenceClass === 'deployment_observation'
         ? 'observed_by_deployment'
         : 'reported_by_provider',
@@ -456,9 +483,31 @@ function mergeExternalFindingIntoCase(
       source: source.name,
       observedAt: finding.observedAt,
       completeness: finding.completeness,
-      evidencePinId: addedPin.id,
       limitations: sourceLimitations,
-    },
+  }], finding.observedAt)[0];
+  if (!pin || !observed) throw new TypeError('The finding has no valid retained Case projection.');
+  const { id: _pinId, createdAt: _pinCreatedAt, ...evidencePin } = pin;
+  const { id: _sightingId, createdAt: _sightingCreatedAt, evidencePinId: _pinReference, ...sighting } = observed;
+  return { evidencePin, sighting, identitySha256, shortenedFields, omittedLimitations };
+}
+
+function mergeExternalFindingIntoCase(
+  current: readonly CaseRecord[],
+  caseId: string,
+  finding: ExternalFinding,
+  source: ExternalFindingsDocument['source'],
+  now: string,
+): Readonly<{ cases: CaseRecord[]; record: CaseRecord; added: boolean }> {
+  const target = current.find((candidate) => candidate.id === caseId) ?? null;
+  if (!target) throw new Error('The selected Case is unavailable for this finding.');
+  const projection = externalFindingCaseProjection(finding, source);
+  if (alreadyRetained(target, projection)) return { cases: [...current], record: target, added: false };
+  const existingPinIds = new Set(target.evidencePins.map((pin) => pin.id));
+  let updated = updateCase([...current], target.id, { evidencePin: projection.evidencePin }, now);
+  const addedPin = updated.record.evidencePins.find((pin) => !existingPinIds.has(pin.id)) ?? null;
+  if (!addedPin) throw new Error('The imported finding could not be retained as Case evidence.');
+  updated = updateCase(updated.cases, target.id, {
+    sighting: { ...projection.sighting, evidencePinId: addedPin.id },
   }, now);
   return { cases: updated.cases, record: updated.record, added: true };
 }
@@ -475,7 +524,6 @@ export function mergeExternalFindingsIntoCases(
   let duplicatesSkipped = 0;
 
   for (const finding of document.findings) {
-    const existing = cases.find((candidate) => candidate.domain === finding.domain) ?? null;
     const opened = openOrCreateCase(cases, { domain: finding.domain, source: 'import' }, now);
     cases = opened.cases;
     const target = cases.find((candidate) => candidate.id === opened.record.id) ?? opened.record;
@@ -486,8 +534,8 @@ export function mergeExternalFindingsIntoCases(
       continue;
     }
     findingsAdded += 1;
-    if (existing) updatedDomains.add(finding.domain);
-    else createdDomains.add(finding.domain);
+    if (opened.created) createdDomains.add(finding.domain);
+    else updatedDomains.add(finding.domain);
   }
 
   return {
@@ -529,7 +577,7 @@ export function externalFindingsCaseTargets(
 
 /**
  * Merges already-validated external findings into one selected Case. A Case is
- * keyed to its registrable domain, while rendered captures may retain an exact
+ * identified by its immutable ID with a registrable-domain pivot, while rendered captures may retain an exact
  * hostname. Only same-domain findings are accepted, the exact hostname remains
  * explicit in the retained evidence, and this operation can never open another
  * Case as a side effect.

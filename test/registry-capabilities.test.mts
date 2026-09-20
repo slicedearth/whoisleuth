@@ -186,12 +186,11 @@ describe('registry capability metadata', () => {
     assert.equal(first.filter((row) => row.registryClass === 'infrastructure').length, 1);
   });
 
-  test('keeps the published compatibility table synchronized with the catalogue', () => {
+  test('links the compatibility guide to the current catalogue views', () => {
     const markdown = readFileSync(resolve(TEST_DIRECTORY, '..', 'docs', 'registry-compatibility.md'), 'utf8');
-    const documentedSuffixes = Array.from(markdown.matchAll(/^\| `\.([^`]+)`/gm), (match) => match[1]);
-    const catalogueSuffixes = registryCompatibilityMatrix().map((row) => row.suffixes[0]);
-
-    assert.deepEqual(documentedSuffixes, catalogueSuffixes);
+    assert.match(markdown, /\]\(https:\/\/www\.whoisleuth\.com\/registry-support\)/u);
+    assert.match(markdown, /^\s*whoisleuth registry-support(?:\s|$)/mu);
+    assert.match(markdown, /\]\(\.\.\/lib\/registry-capability-catalogue\.mts\)/u);
   });
 
   test('resolves a domain, a suffix, case, and one terminal root dot', () => {

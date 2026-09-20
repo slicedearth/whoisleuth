@@ -23,6 +23,7 @@ import { MAX_SECURITY_POSTURE_FINDINGS } from '../lib/website-security-posture.m
 import { analyzeWebsiteSecurityPosture } from '../lib/website-security-posture.mts';
 import { extractHtmlSignals } from '../lib/html-signals.mts';
 import { buildTlsObservation, skippedTlsObservation } from '../lib/tls-intelligence.mts';
+import { parseCertificateExtensionProfile } from '../lib/certificate-extension-profile.mts';
 import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,
@@ -60,7 +61,7 @@ import {
   parseLookupHttpResponse,
 } from '../lib/lookup-response-contract.mts';
 import { classifyQuery } from '../lib/classify.mts';
-import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
+import { buildFixtureRegistrarStanding as buildRegistrarStanding } from './registrar-standing-fixture.mts';
 
 const THREAT_TARGET = Object.freeze({
   type: 'domain',
@@ -165,8 +166,8 @@ function nestedValue(depth: number): unknown {
   return value;
 }
 
-function canonicalPageProfiles() {
-  const signals = extractHtmlSignals(
+async function canonicalPageProfiles() {
+  const signals = await extractHtmlSignals(
     '<html><head><title>Fixture</title></head><body><form><input type="password"></form><script id="__NEXT_DATA__"></script></body></html>',
     'example.test',
     {
@@ -188,8 +189,8 @@ function canonicalPageProfiles() {
   };
 }
 
-function legacyResourceOnlyTechnologyProfile() {
-  const current = canonicalPageProfiles().technologyProfile;
+async function legacyResourceOnlyTechnologyProfile() {
+  const current = (await canonicalPageProfiles()).technologyProfile;
   return {
     ...current,
     profileVersion: 10,
@@ -209,6 +210,13 @@ function legacyResourceOnlyTechnologyProfile() {
 
 function canonicalTlsProfile(overrides: Record<string, unknown> = {}) {
   return { ...skippedTlsObservation('Fixture TLS collection was skipped.'), ...overrides };
+}
+
+function populatedTlsProfile() {
+  return buildTlsObservation({
+    sniHost: 'example.test',
+    peerCertificate: { subject: { CN: 'example.test' }, issuer: { CN: 'Example CA' }, fingerprint256: 'a'.repeat(64) },
+  }, { observedAt: '2026-07-13T04:05:06.000Z' });
 }
 
 describe('Lookup HTTP response contract', () => {
@@ -279,10 +287,10 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(parsed.ok, true);
   });
 
-  test('accepts exact homepage metadata, projects it for display, and rejects malformed children', () => {
+  test('accepts exact homepage metadata, projects it for display, and rejects malformed children', async () => {
     const publicationMetadata = pagePublicationMetadataFixture();
     const deliveryMetadata = httpDeliveryMetadataFixture();
-    const profiles = canonicalPageProfiles();
+    const profiles = await canonicalPageProfiles();
     const raw = response({
       availability: {
         applicable: true,
@@ -419,6 +427,29 @@ describe('Lookup HTTP response contract', () => {
   });
 
   test('accepts exact producer network bounds and rejects over-bound or nested collection values', () => {
+    const base = populatedTlsProfile();
+    const certificate = requiredValue(base.certificate);
+    const extension = parseCertificateExtensionProfile(null);
+    const tls = {
+      ...base,
+      limitations: Array.from({ length: MAX_OBSERVATION_LIMITATIONS }, (_, index) => `TLS limitation ${index}`),
+      findings: Array.from({ length: MAX_LOOKUP_TLS_FINDINGS }, (_, index) => ({
+        id: `finding_${index}`, tone: 'neutral', label: `Finding ${index}`, detail: 'Bounded fixture detail.',
+      })),
+      chain: Array.from({ length: MAX_LOOKUP_TLS_CHAIN_CERTIFICATES }, (_, index) => ({
+        ...base.chain[0]!, fingerprintSha256: String(index).padStart(64, '0'),
+      })),
+      certificate: {
+        ...certificate,
+        subject: { ...certificate.subject, commonNames: Array.from({ length: MAX_LOOKUP_TLS_NAME_VALUES }, (_, index) => `name-${index}.example.test`) },
+        subjectAltNames: {
+          ...certificate.subjectAltNames!,
+          dnsNames: Array.from({ length: MAX_LOOKUP_TLS_ALT_NAMES }, (_, index) => `san-${index}.example.test`),
+          classes: { ...certificate.subjectAltNames!.classes, dns: MAX_LOOKUP_TLS_ALT_NAMES },
+        },
+        extensionProfile: { ...extension, parsed: true, certificatePolicies: { oids: Array.from({ length: MAX_LOOKUP_TLS_CERTIFICATE_POLICIES }, (_, index) => `1.2.3.${index}`), truncated: false } },
+      },
+    };
     const exact = response({
       reverseDns: { records: { ptr: Array.from({ length: MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS }, (_, index) => `ptr-${index}.example.test`) } },
       availability: {
@@ -432,24 +463,16 @@ describe('Lookup HTTP response contract', () => {
             https: [validHttpsRecord()],
           },
         },
-        tls: canonicalTlsProfile({
-          limitations: Array.from({ length: MAX_OBSERVATION_LIMITATIONS }, (_, index) => `TLS limitation ${index}`),
-          findings: Array.from({ length: MAX_LOOKUP_TLS_FINDINGS }, (_, index) => ({
-            id: `finding-${index}`,
-            tone: 'neutral',
-            label: `Finding ${index}`,
-            detail: 'Bounded fixture detail.',
-          })),
-          chain: Array.from({ length: MAX_LOOKUP_TLS_CHAIN_CERTIFICATES }, (_, index) => ({ fingerprintSha256: String(index).padStart(64, '0') })),
-          certificate: {
-            subject: { commonNames: Array.from({ length: MAX_LOOKUP_TLS_NAME_VALUES }, (_, index) => `name-${index}.example.test`) },
-            subjectAltNames: { dnsNames: Array.from({ length: MAX_LOOKUP_TLS_ALT_NAMES }, (_, index) => `san-${index}.example.test`), ipAddresses: [] },
-            extensionProfile: { certificatePolicies: { oids: Array.from({ length: MAX_LOOKUP_TLS_CERTIFICATE_POLICIES }, (_, index) => `1.2.3.${index}`) } },
-          },
-        }),
+        tls,
       },
     });
-    assert.equal(parseLookupHttpResponse(exact).ok, true);
+    const retained = parseLookupHttpResponse(exact);
+    assert.equal(retained.ok, true);
+    assert.deepEqual(retained.value.availability.tls, tls);
+    assert.equal(tls.chain.length, MAX_LOOKUP_TLS_CHAIN_CERTIFICATES);
+    assert.equal(tls.certificate.subject.commonNames.length, MAX_LOOKUP_TLS_NAME_VALUES);
+    assert.equal(tls.certificate.subjectAltNames.dnsNames.length, MAX_LOOKUP_TLS_ALT_NAMES);
+    assert.equal(tls.certificate.extensionProfile.certificatePolicies.oids.length, MAX_LOOKUP_TLS_CERTIFICATE_POLICIES);
 
     const invalidOuterEvidence = [
       response({ availability: { applicable: true, state: 'registered', dns: { records: { a: Array(MAX_LOOKUP_DNS_RECORDS_PER_TYPE + 1).fill('192.0.2.1') } } } }),
@@ -479,10 +502,10 @@ describe('Lookup HTTP response contract', () => {
     }
   });
 
-  test('enforces registration, page, observation, and live-container producer bounds', () => {
-    const profiles = canonicalPageProfiles();
+  test('enforces registration, page, observation, and live-container producer bounds', async () => {
+    const profiles = await canonicalPageProfiles();
     const postureFinding = (index: number) => ({
-      id: `posture-${index}`,
+      id: `posture_${index}`,
       category: 'transport',
       state: 'observed',
       tone: 'configured',
@@ -525,15 +548,22 @@ describe('Lookup HTTP response contract', () => {
           ...profiles.pageIdentity,
           embeddedOrigins: Array.from({ length: 20 }, (_, index) => `https://embed-${index}.example.test`),
           contactDomains: Array.from({ length: 20 }, (_, index) => `contact-${index}.example.test`),
-          forms: { externalActionOrigins: Array.from({ length: 10 }, (_, index) => `https://form-${index}.example.test`) },
-          resources: { externalOrigins: Array.from({ length: 30 }, (_, index) => `https://asset-${index}.example.test`) },
+          forms: { ...profiles.pageIdentity.forms, count: 10, externalActionOrigins: Array.from({ length: 10 }, (_, index) => `https://form-${index}.example.test`) },
+          resources: {
+            ...profiles.pageIdentity.resources, count: 30,
+            byType: { ...profiles.pageIdentity.resources.byType, script: 30 },
+            externalOrigins: Array.from({ length: 30 }, (_, index) => `https://asset-${index}.example.test`),
+          },
           downloads: {
+            ...profiles.pageIdentity.downloads,
+            count: 20, riskyCount: 20,
             riskyFileTypes: Array.from({ length: 20 }, (_, index) => `.type${index}`),
             externalOrigins: Array.from({ length: 20 }, (_, index) => `https://download-${index}.example.test`),
           },
         },
         securityPosture: {
           ...profiles.securityPosture,
+          diagnostics: { findings: MAX_SECURITY_POSTURE_FINDINGS, observed: MAX_SECURITY_POSTURE_FINDINGS, potentialExposure: 0, observedAbsence: 0, unavailable: 0 },
           summary: {
             observed: MAX_SECURITY_POSTURE_FINDINGS,
             potentialExposure: 0,
@@ -544,7 +574,10 @@ describe('Lookup HTTP response contract', () => {
         },
       },
     });
-    assert.equal(parseLookupHttpResponse(exact).ok, true);
+    const retained = parseLookupHttpResponse(exact);
+    assert.equal(retained.ok, true);
+    assert.deepEqual(retained.value.availability.pageIdentity, recordValue(exact.availability).pageIdentity);
+    assert.deepEqual(retained.value.availability.securityPosture, recordValue(exact.availability).securityPosture);
 
     const invalid = [
       response({ rdap: { error: [Array(500).fill('nested')] } }),
@@ -593,62 +626,67 @@ describe('Lookup HTTP response contract', () => {
     });
     assert.equal(parseLookupHttpResponse(withNullProfiles).ok, true);
 
+    const base = populatedTlsProfile();
+    const certificate = requiredValue(base.certificate);
+    const names = { ...certificate.subject, commonNames: ['C'.repeat(256)], organizations: ['O'.repeat(256)] };
+    const tls = { ...base, certificate: { ...certificate, subject: names } };
     const exactNames = response({
       availability: {
         applicable: true,
         state: 'registered',
-        tls: canonicalTlsProfile({
-          certificate: {
-            subject: { commonNames: ['C'.repeat(256)], organizations: ['O'.repeat(256)] },
-          },
-        }),
+        tls,
       },
     });
-    assert.equal(parseLookupHttpResponse(exactNames).ok, true);
+    const retained = parseLookupHttpResponse(exactNames);
+    assert.equal(retained.ok, true);
+    assert.deepEqual(retained.value.availability.tls, tls);
+    assert.equal(tls.certificate.subject.commonNames[0]!.length, 256);
+    assert.equal(tls.certificate.subject.organizations[0]!.length, 256);
     const malformed = parseLookupHttpResponse(response({
       availability: {
         applicable: true,
         state: 'registered',
-        tls: canonicalTlsProfile({ certificate: { subject: { commonNames: ['C'.repeat(257)] } } }),
+        tls: { ...tls, certificate: { ...tls.certificate, subject: { ...names, commonNames: ['C'.repeat(257)] } } },
       },
     }));
     assert.equal(malformed.ok, true);
     assert.equal(recordValue(malformed.value.availability.tls).compatibility, 'malformed');
   });
 
-  test('fails closed for malformed and future nested profiles while retaining independent evidence', () => {
-    const profiles = canonicalPageProfiles();
-    const futureTechnology = { ...profiles.technologyProfile, profileVersion: 999 };
-    const raw = response({
-      availability: {
-        applicable: true,
-        domain: 'example.test',
-        state: 'registered',
-        pageIdentity: profiles.pageIdentity,
-        technologyProfile: futureTechnology,
-        securityPosture: profiles.securityPosture,
-        tls: canonicalTlsProfile(),
-      },
-    });
-    const before = structuredClone(raw);
-    const first = parseLookupHttpResponse(raw);
-    const second = parseLookupHttpResponse(raw);
-    assert.equal(first.ok, true);
-    assert.deepEqual(first, second);
-    assert.deepEqual(raw, before);
-    assert.notEqual(first.value, raw);
-    assert.equal(first.value.availability.pageIdentity, profiles.pageIdentity);
-    assert.equal(first.value.availability.securityPosture, profiles.securityPosture);
-    assert.deepEqual(recordValue(first.value.availability.technologyProfile), {
-      status: 'unsupported',
-      source: 'derived',
-      complete: false,
-      truncated: false,
-      compatibility: 'unsupported_version',
-      limitations: ['Technology profile uses a newer unsupported version; its evidence was withheld.'],
-      findings: [],
-      browserLibraryProfile: null,
-    });
+  test('fails closed for malformed and future nested profiles while retaining independent evidence', async () => {
+    const profiles = await canonicalPageProfiles();
+    for (const profileVersion of [999, 1_000, 65_536, Number.MAX_SAFE_INTEGER]) {
+      const raw = response({
+        availability: {
+          applicable: true,
+          domain: 'example.test',
+          state: 'registered',
+          pageIdentity: profiles.pageIdentity,
+          technologyProfile: { ...profiles.technologyProfile, profileVersion },
+          securityPosture: profiles.securityPosture,
+          tls: canonicalTlsProfile(),
+        },
+      });
+      const before = structuredClone(raw);
+      const first = parseLookupHttpResponse(raw);
+      const second = parseLookupHttpResponse(JSON.parse(JSON.stringify(raw)));
+      assert.equal(first.ok, true);
+      assert.deepEqual(first, second);
+      assert.deepEqual(raw, before);
+      assert.notEqual(first.value, raw);
+      assert.equal(first.value.availability.pageIdentity, profiles.pageIdentity);
+      assert.equal(first.value.availability.securityPosture, profiles.securityPosture);
+      assert.deepEqual(recordValue(first.value.availability.technologyProfile), {
+        status: 'unsupported',
+        source: 'derived',
+        complete: false,
+        truncated: false,
+        compatibility: 'unsupported_version',
+        limitations: ['Technology profile uses a newer unsupported version; its evidence was withheld.'],
+        findings: [],
+        browserLibraryProfile: null,
+      });
+    }
 
     for (const technologyProfile of [
       { ...profiles.technologyProfile, status: 'unknown_status' },
@@ -717,8 +755,8 @@ describe('Lookup HTTP response contract', () => {
     assert.deepEqual(parseLookupHttpResponse(excessivelyNested), parseLookupHttpResponse(excessivelyNested));
   });
 
-  test('retains supported v10 resource-only technology evidence for compatibility projections', () => {
-    const technologyProfile = legacyResourceOnlyTechnologyProfile();
+  test('retains supported v10 resource-only technology evidence for compatibility projections', async () => {
+    const technologyProfile = await legacyResourceOnlyTechnologyProfile();
     const parsed = parseLookupHttpResponse(response({
       availability: {
         applicable: true,
@@ -735,8 +773,8 @@ describe('Lookup HTTP response contract', () => {
     assert.deepEqual(arrayValue(retained.findings), technologyProfile.findings);
   });
 
-  test('withholds unowned nested profile fields instead of retaining them as current evidence', () => {
-    const profiles = canonicalPageProfiles();
+  test('withholds unowned nested profile fields instead of retaining them as current evidence', async () => {
+    const profiles = await canonicalPageProfiles();
     const credential = structuredClone(profiles.credentialSurfaceProfile);
     recordValue(credential.inputs).unreviewed = { raw: 'x'.repeat(10_000) };
     const credentialResult = parseLookupHttpResponse(response({
@@ -792,8 +830,8 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(recordValue(retainedTechnology.browserLibraryProfile).compatibility, 'malformed');
   });
 
-  test('retains a version-one page fingerprint recorded before optional structure similarity', () => {
-    const profiles = canonicalPageProfiles();
+  test('retains a version-one page fingerprint recorded before optional structure similarity', async () => {
+    const profiles = await canonicalPageProfiles();
     const pageIdentity = structuredClone(profiles.pageIdentity);
     const fingerprints = recordValue(pageIdentity.fingerprints);
     delete recordValue(fingerprints.domStructure).similarity;
@@ -980,8 +1018,8 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(parseLookupHttpResponse(oversized).ok, false);
   });
 
-  test('projects separately attributed evidence without mutating the response', () => {
-    const profiles = canonicalPageProfiles();
+  test('projects separately attributed evidence without mutating the response', async () => {
+    const profiles = await canonicalPageProfiles();
     const raw = response({
       rdap: { parsed: { domain: 'EXAMPLE.TEST' }, registrarRdap: { parsed: { domain: 'EXAMPLE.TEST' } } },
       availability: {
@@ -1158,7 +1196,51 @@ describe('Lookup HTTP response contract', () => {
     assert.equal(recordValue(findings[1]).confidence, 'unknown');
     assert.equal(recordValue(findings[2]).referenceUrl, null);
     assert.equal(arrayValue(recordValue(provider.observation).limitations).length, MAX_THREAT_INTELLIGENCE_LIMITATIONS);
+    assert.equal(provider.state, 'partial');
+    assert.equal(recordValue(provider.observation).complete, false);
+    assert.equal(recordValue(provider.observation).truncated, true);
+    assert.match(String(arrayValue(recordValue(provider.observation).limitations)[0]), /7 invalid or over-limit provider findings were omitted/u);
     assert.equal(rawProvider.findings.length, MAX_THREAT_INTELLIGENCE_FINDINGS + 7);
+  });
+
+  test('qualifies discarded findings independently of source state and supplied limitation capacity', () => {
+    const finding = {
+      id: 'fixture', category: 'phishing',
+      firstObservedAt: '2026-07-01T00:00:00.000Z', lastObservedAt: '2026-07-02T00:00:00.000Z',
+    };
+    const fixtures = [
+      { findings: [], omitted: 0, truncated: false },
+      { findings: [finding], omitted: 0, truncated: false },
+      { findings: Array.from({ length: 100 }, (_, index) => ({ ...finding, id: `finding-${index}` })), omitted: 0, truncated: false },
+      { findings: [{ ...finding, firstObservedAt: finding.lastObservedAt, lastObservedAt: finding.firstObservedAt }], omitted: 1, truncated: false },
+      { findings: Array.from({ length: 101 }, (_, index) => ({ ...finding, id: `finding-${index}` })), omitted: 1, truncated: true },
+      { findings: Array.from({ length: 201 }, (_, index) => ({ ...finding, id: `finding-${index}` })), omitted: 101, truncated: true },
+    ];
+    for (const fixture of fixtures) {
+      for (const sourceState of ['success', 'not_found', 'error', 'rate_limited']) {
+        const rawProvider = {
+          schema: THREAT_INTELLIGENCE_SCHEMA, version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
+          provider: { id: 'urlscan_search' }, target: THREAT_TARGET, state: sourceState,
+          findings: fixture.findings,
+          observation: {
+            observedAt: '2026-07-03T00:00:00.000Z', complete: true, truncated: false,
+            limitations: Array.from({ length: MAX_THREAT_INTELLIGENCE_LIMITATIONS }, (_, index) => `Source limitation ${index}`),
+          },
+        };
+        const before = JSON.stringify(rawProvider);
+        const parsed = parseLookupHttpResponse(response({ threatIntelligence: { version: 1, providers: [rawProvider] } }));
+        assert.equal(parsed.ok, true);
+        const projected = requiredValue(createLookupViewModel(parsed.value).threatIntelligenceProviders[0]);
+        const observation = recordValue(projected.observation);
+        assert.equal(arrayValue(projected.findings).length, fixture.findings.length - fixture.omitted);
+        assert.equal(projected.state, fixture.omitted && ['success', 'not_found'].includes(sourceState) ? 'partial' : sourceState);
+        assert.equal(observation.complete, fixture.omitted === 0);
+        assert.equal(observation.truncated, fixture.truncated);
+        assert.equal(arrayValue(observation.limitations).length, MAX_THREAT_INTELLIGENCE_LIMITATIONS);
+        if (fixture.omitted) assert.match(String(arrayValue(observation.limitations)[0]), /^(\d+) invalid or over-limit provider findings? (was|were) omitted from this view\.$/u);
+        assert.equal(JSON.stringify(rawProvider), before);
+      }
+    }
   });
 
   test('does not host-normalize zone-less threat-intelligence wire timestamps', () => {

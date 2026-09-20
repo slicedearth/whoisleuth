@@ -1,6 +1,6 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
 export const PUBLIC_CLI_CATALOGUE = {
-  "commandCount": 48,
+  "commandCount": 49,
   "groups": [
     "investigate",
     "respond",
@@ -15,6 +15,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "completion",
       "summary": "Print shell completion",
+      "description": "Print a static shell-completion script for the installed CLI.",
       "group": "utilities",
       "common": false,
       "usage": "whoisleuth completion \u003cbash|zsh|fish|powershell>",
@@ -55,9 +56,8 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal"
-      ],
+      "presentationOptions": [],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -83,6 +83,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "doctor",
       "summary": "Check the local CLI runtime",
+      "description": "Check the supported runtime and local terminal capabilities.",
       "group": "utilities",
       "common": true,
       "usage": "whoisleuth doctor [--network] [--json] [--quiet] [--no-color]",
@@ -114,10 +115,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "runtime_diagnostics",
@@ -146,6 +150,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "commands",
       "summary": "List installed command contracts",
+      "description": "List the installed command contracts in terminal or versioned JSON form.",
       "group": "utilities",
       "common": true,
       "usage": "whoisleuth commands [--common] [--group \u003cinvestigate|respond|assure|utilities>] [--mode \u003coffline|network>] [--json] [--quiet] [--no-color]",
@@ -179,10 +184,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -208,6 +216,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "manual",
       "summary": "Print the generated manual page",
+      "description": "Print a generated roff manual page for local installation.",
       "group": "utilities",
       "common": false,
       "usage": "whoisleuth manual",
@@ -232,9 +241,8 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal"
-      ],
+      "presentationOptions": [],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -260,21 +268,22 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "manifest",
       "summary": "Build an evidence manifest offline",
+      "description": "Record an ordered, path-free manifest for up to 129 local files. Use --package --output evidence.zip for a ZIP, add --passphrase-file to encrypt the ordinary package, or use --folder ./evidence for a new unencrypted folder. Add --bagit to ZIP or folder output for BagIt 1.0 with SHA-512 checksums.",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth manifest \u003cartefacts...> --workflow \u003cvalue> [--configuration-digest \u003cvalue>] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth manifest \u003cartefacts...> [--package|--json] --workflow \u003cvalue> [--configuration-digest \u003cvalue>] [--bagit] [--passphrase-file \u003cfile>] [--folder \u003cfile>] [--quiet] [--no-color]",
       "example": "whoisleuth manifest lookup.json comparison.json --workflow \"domain review\" --json",
-      "boundary": "The command records hashes and bounded schema metadata only. It omits source paths and artefact contents and performs no network collection.",
+      "boundary": "Ordinary output contains metadata only. ZIP and folder output include unchanged selected bytes and are private until reviewed for sharing. Folders must be new; existing destinations are never replaced and a failed write may leave explicit partial output. BagIt output is unencrypted; its checksums do not authenticate evidence. Filenames ending in .json are parsed as JSON; other files are opaque and never executed. Original paths are omitted. No network request is made.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads 1 to 16 local JSON artefacts capped at 32 MiB in total and retains no source paths."
+        "scope": "Reads 1 to 129 local files, at most 64 MiB each and 71,303,424 bytes combined; retains no source paths."
       },
       "inputs": [
         {
           "name": "artefacts",
           "valueKind": "file",
           "minimum": 1,
-          "maximum": 16,
+          "maximum": 129,
           "values": [],
           "inputSource": "argv",
           "requiredWhenOptions": []
@@ -283,6 +292,10 @@ export const PUBLIC_CLI_CATALOGUE = {
       "importantOptions": [
         "--workflow",
         "--configuration-digest",
+        "--package",
+        "--bagit",
+        "--passphrase-file",
+        "--folder",
         "--json",
         "--quiet",
         "--no-color"
@@ -296,17 +309,20 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002einvestigation-manifest"
       ],
       "inputLimits": [
-        "Reads 1 to 16 local JSON artefacts capped at 32 MiB in total and retains no source paths.",
-        "artefacts: 1-16 file values"
+        "Reads 1 to 129 local files, at most 64 MiB each and 71,303,424 bytes combined; retains no source paths.",
+        "artefacts: 1-129 file values"
       ],
       "outputLimits": [
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -333,6 +349,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "map-observations",
       "summary": "Apply a declarative observation map offline",
+      "description": "Apply one bounded declarative field-mapping profile to local source observations.",
       "group": "respond",
       "common": false,
       "usage": "whoisleuth map-observations [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -374,10 +391,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -405,6 +425,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "oam-export",
       "summary": "Project external findings to Open Asset Model",
+      "description": "Project browser-compatible external findings into a bounded Open Asset Model bridge document.",
       "group": "respond",
       "common": false,
       "usage": "whoisleuth oam-export [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -446,10 +467,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -477,11 +501,12 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "lookup",
       "summary": "Collect one domain, IP, or ASN",
+      "description": "Collect registration evidence for one domain, IP, or ASN.",
       "group": "investigate",
       "common": true,
-      "usage": "whoisleuth lookup [\u003ctarget>] [--json|--junit|--markdown|--html] [--fast|--deep] [--summary|--verbose] [--no-attribution] [--observer \u003cvalue>] [--vantage \u003cvalue>] [--plan] [--browse] [--save-lookup \u003cfile>] [--strict-exit] [--fail-on \u003cpolicy[,policy...]>] [--events] [--quiet] [--no-color]",
+      "usage": "whoisleuth lookup [\u003ctarget>] [--json|--junit|--markdown|--html] [--fast|--deep] [--summary|--verbose] [--no-attribution] [--exact-url] [--observer \u003cvalue>] [--vantage \u003cvalue>] [--plan] [--browse] [--save-lookup \u003cfile>] [--strict-exit] [--fail-on \u003cpolicy[,policy...]>] [--events] [--quiet] [--no-color]",
       "example": "whoisleuth lookup example.test --deep --browse",
-      "boundary": "Fast is the default. An ICANN-recognised public domain, reserved documentation domain, IP, or ASN may occupy command position as shorthand; it delegates to this same parser and URL-like input requires the explicit lookup command. Deep mode adds bounded WHOIS, DNS, HTTP, TLS, technology, posture, and network context where applicable. A full Deep homepage observation can derive fixed publication and delivery/cache summaries from the same response without retaining raw metadata values or making another request. --browse opens before collection, shows aggregate Fast progress or independently settled planned Deep sources, and then navigates allowlisted retained fields in the completed document. Press ? for help and / to search rendered panel text only. Closing during collection cancels without a partial document. --save-lookup writes the exact completed private JSON only after a normal browser close; it can contain normalised evidence omitted from panels and refuses an existing path.",
+      "boundary": "Fast is the default. An ICANN-recognised public domain, reserved documentation domain, IP, or ASN may occupy command position as shorthand; it delegates to this same parser and URL-like input requires the explicit lookup command. Deep mode adds bounded WHOIS, DNS, HTTP, TLS, technology, posture, and network context where applicable. --deep --exact-url explicitly sends the input URL path and query to the website, without its fragment; ordinary URL input sends only the hostname. --plan remains offline and omits the selected URL. Retained paths and page-derived text require review before sharing. A full Deep homepage observation can derive fixed publication and delivery/cache summaries from the same response without retaining raw metadata values or making another request. --browse opens before collection, shows aggregate Fast progress or independently settled planned Deep sources, and then navigates allowlisted retained fields in the completed document. Press ? for help and / to search rendered panel text only. Closing during collection cancels without a partial document. --save-lookup writes the exact completed private JSON only after a normal browser close; it can contain normalised evidence omitted from panels and refuses an existing path.",
       "collection": {
         "mode": "network",
         "scope": "Accepts one target. Fast is the default; deep collection must be selected explicitly."
@@ -507,6 +532,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--no-attribution",
         "--fast",
         "--deep",
+        "--exact-url",
         "--observer",
         "--vantage",
         "--plan",
@@ -537,13 +563,25 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON",
-        "JUnit XML",
-        "Markdown",
-        "HTML"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        },
+        {
+          "option": "--junit",
+          "format": "JUnit XML"
+        },
+        {
+          "option": "--markdown",
+          "format": "Markdown"
+        },
+        {
+          "option": "--html",
+          "format": "HTML"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Source-qualified Lookup",
         "Lookup request plan"
@@ -582,11 +620,12 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "bulk",
       "summary": "Run bounded multi-target collection",
+      "description": "Triage newline-delimited domains, IPs, or ASNs with bounded concurrency.",
       "group": "investigate",
       "common": true,
-      "usage": "whoisleuth bulk [\u003csource>] [--json|--jsonl|--junit|--csv|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency \u003cinteger>] [--checkpoint \u003cfile>] [--resume] [--events] [--plan] [--fail-on \u003cpolicy[,policy...]>] [--quiet] [--no-color]",
+      "usage": "whoisleuth bulk [\u003csource>] [--json|--jsonl|--junit|--csv|--csv-with-metadata|--domains|--queries] [--registered-only|--inconclusive-only|--errors-only] [--fast|--deep] [--concurrency \u003cinteger>] [--checkpoint \u003cfile>] [--resume] [--events] [--plan] [--fail-on \u003cpolicy[,policy...]>] [--quiet] [--no-color]",
       "example": "cat domains.txt | whoisleuth bulk --jsonl",
-      "boundary": "Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV.",
+      "boundary": "Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.",
       "collection": {
         "mode": "network",
         "scope": "Accepts at most 500 fast or 50 deep targets, with concurrency capped at 8 fast or 3 deep."
@@ -607,6 +646,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--jsonl",
         "--junit",
         "--csv",
+        "--csv-with-metadata",
         "--domains",
         "--queries",
         "--registered-only",
@@ -641,15 +681,37 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON",
-        "JSON Lines",
-        "JUnit XML",
-        "CSV",
-        "domain list",
-        "query list"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        },
+        {
+          "option": "--jsonl",
+          "format": "JSON Lines"
+        },
+        {
+          "option": "--junit",
+          "format": "JUnit XML"
+        },
+        {
+          "option": "--csv",
+          "format": "CSV"
+        },
+        {
+          "option": "--csv-with-metadata",
+          "format": "CSV with evidence metadata"
+        },
+        {
+          "option": "--domains",
+          "format": "domain list"
+        },
+        {
+          "option": "--queries",
+          "format": "query list"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Bulk result",
         "Bulk checkpoint"
@@ -687,6 +749,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "ct-search",
       "summary": "Search certificate observations",
+      "description": "Search certificate-transparency observations for one bounded keyword.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth ct-search [\u003ckeyword>] [--json] [--quiet] [--no-color]",
@@ -728,10 +791,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "certificate_transparency",
@@ -758,6 +824,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "ct-intake",
       "summary": "Normalise certificate observations offline",
+      "description": "Normalise source-qualified local certificate events into browser-compatible findings.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth ct-intake [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -800,10 +867,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -831,6 +901,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "discover",
       "summary": "Generate lookalike candidates offline",
+      "description": "Generate bounded lookalike-domain candidates from a brand or registrable domain, including multi-part public suffixes.",
       "group": "investigate",
       "common": true,
       "usage": "whoisleuth discover [\u003csubject>] [--json|--jsonl|--domains] [--preset \u003ccommon|impersonation|all>|--families \u003cvalue>] [--tlds \u003cvalue>] [--keyboard \u003cqwerty|azerty|qwertz|all>] [--dictionary \u003cfile>] [--snapshot \u003cfile>] [--quiet] [--no-color]",
@@ -882,12 +953,21 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON",
-        "JSON Lines",
-        "domain list"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        },
+        {
+          "option": "--jsonl",
+          "format": "JSON Lines"
+        },
+        {
+          "option": "--domains",
+          "format": "domain list"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Candidate set",
         "Discovery snapshot"
@@ -918,11 +998,12 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "discover-scan",
       "summary": "Collect a supervised candidate review queue",
+      "description": "Generate a bounded candidate set, collect a selected subset, and produce a supervised review queue.",
       "group": "investigate",
       "common": true,
-      "usage": "whoisleuth discover-scan [\u003csubject>] [--json|--jsonl|--csv|--domains] [--preset \u003ccommon|impersonation|all>|--families \u003cvalue>] [--fast|--deep] [--registered-only|--inconclusive-only|--acquisition-only|--suppressed-only] [--tlds \u003cvalue>] [--keyboard \u003cqwerty|azerty|qwertz|all>] [--dictionary \u003cfile>] [--scan-limit \u003cinteger>] [--chunk-size \u003cinteger>] [--concurrency \u003cinteger>] [--resolver \u003cvalue>] [--allowlist \u003cfile>] [--checkpoint \u003cfile>] [--resume] [--observation-snapshot \u003cfile>] [--events] [--plan] [--fail-on \u003cpolicy[,policy...]>] [--quiet] [--no-color]",
+      "usage": "whoisleuth discover-scan [\u003csubject>] [--json|--jsonl|--csv|--csv-with-metadata|--domains] [--preset \u003ccommon|impersonation|all>|--families \u003cvalue>] [--fast|--deep] [--registered-only|--inconclusive-only|--acquisition-only|--suppressed-only] [--tlds \u003cvalue>] [--keyboard \u003cqwerty|azerty|qwertz|all>] [--dictionary \u003cfile>] [--scan-limit \u003cinteger>] [--chunk-size \u003cinteger>] [--concurrency \u003cinteger>] [--resolver \u003cvalue>] [--allowlist \u003cfile>] [--checkpoint \u003cfile>] [--resume] [--observation-snapshot \u003cfile>] [--events] [--plan] [--fail-on \u003cpolicy[,policy...]>] [--quiet] [--no-color]",
       "example": "whoisleuth discover-scan example.test --scan-limit 50 --checkpoint scan.json --json",
-      "boundary": "This command performs network collection. Fast compact lookup is the default; deep mode is capped at 50 candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution.",
+      "boundary": "This command performs network collection. Fast compact lookup is the default; deep mode is capped at 50 candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.",
       "collection": {
         "mode": "network",
         "scope": "Scans at most 500 fast or 50 deep candidates, with concurrency capped at 8 fast or 3 deep."
@@ -964,6 +1045,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--json",
         "--jsonl",
         "--csv",
+        "--csv-with-metadata",
         "--domains",
         "--quiet",
         "--no-color"
@@ -986,13 +1068,29 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON",
-        "JSON Lines",
-        "CSV",
-        "domain list"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        },
+        {
+          "option": "--jsonl",
+          "format": "JSON Lines"
+        },
+        {
+          "option": "--csv",
+          "format": "CSV"
+        },
+        {
+          "option": "--csv-with-metadata",
+          "format": "CSV with evidence metadata"
+        },
+        {
+          "option": "--domains",
+          "format": "domain list"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Reviewed candidate queue",
         "Observation snapshot"
@@ -1030,14 +1128,15 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "posture",
       "summary": "Review DNS and mail posture",
+      "description": "Review bounded DNS mail, delegation, and domain-control posture.",
       "group": "investigate",
       "common": false,
-      "usage": "whoisleuth posture [\u003cdomain>] [--json|--sarif] [--selectors \u003cvalue>] [--retired-selectors \u003cvalue>] [--mail-profile \u003cstandard|defensive-no-mail|parked>] [--owned-domain] [--quiet] [--no-color]",
+      "usage": "whoisleuth posture [\u003cdomain>] [--json|--sarif] [--selectors \u003cvalue>] [--retired-selectors \u003cvalue>] [--mail-profile \u003cstandard|defensive-no-mail|parked>] [--include-inherited-dns] [--owned-domain] [--quiet] [--no-color]",
       "example": "whoisleuth posture example.test --mail-profile standard --json",
-      "boundary": "Missing or failed DNS observations remain inconclusive and are not reported as absent controls.",
+      "boundary": "Missing or failed DNS observations remain inconclusive. --include-inherited-dns explicitly adds a bounded DMARC tree walk and direct parent-delegation sample; records retain their queried owner and source. No message is sent and receiver enforcement is not inferred.",
       "collection": {
         "mode": "network",
-        "scope": "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests."
+        "scope": "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor DMARC questions and direct DNS/TCP to sampled parent servers."
       },
       "inputs": [
         {
@@ -1054,6 +1153,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--selectors",
         "--retired-selectors",
         "--mail-profile",
+        "--include-inherited-dns",
         "--json",
         "--sarif",
         "--owned-domain",
@@ -1069,18 +1169,24 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecli.posture"
       ],
       "inputLimits": [
-        "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests.",
+        "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor DMARC questions and direct DNS/TCP to sampled parent servers.",
         "domain: 0-1 text value"
       ],
       "outputLimits": [
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON",
-        "SARIF"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        },
+        {
+          "option": "--sarif",
+          "format": "SARIF"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "domain_posture",
@@ -1112,6 +1218,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "http",
       "summary": "Inspect one homepage request",
+      "description": "Inspect one homepage request, redirects, and bounded response metadata.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth http [\u003cdomain>] [--json] [--quiet] [--no-color]",
@@ -1153,10 +1260,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "website_probe",
@@ -1186,6 +1296,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "tls",
       "summary": "Inspect one TLS connection",
+      "description": "Inspect one hostname certificate through a bounded TLS connection.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth tls [\u003chostname>] [--json] [--quiet] [--no-color]",
@@ -1227,10 +1338,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "tls_intelligence",
@@ -1260,6 +1374,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "dnssec-validate",
       "summary": "Validate an authorised DNSSEC chain",
+      "description": "Cryptographically validate one authorised DNSSEC chain from a supplied trust anchor through one selected public resolver.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth dnssec-validate \u003cdomain> --resolver \u003cvalue> --trust-anchor \u003cfile> --owned-or-authorized [--json] [--quiet] [--no-color]",
@@ -1305,10 +1420,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "dnssec_validation",
@@ -1337,6 +1455,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "mail-transport",
       "summary": "Review selected authorised SMTP transports",
+      "description": "Review selected authorised MX endpoints, DNSSEC-qualified TLSA evidence, SMTP capabilities, and optional STARTTLS certificates.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth mail-transport [\u003csource>] --resolver \u003cvalue> --trust-anchor \u003cfile> --owned-or-authorized --active-probe [--json] [--quiet] [--no-color]",
@@ -1383,10 +1502,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "mail_transport_review",
@@ -1418,6 +1540,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "registry-support",
       "summary": "Explain local registry coverage",
+      "description": "Explain the local registry capability profile for one domain or suffix.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth registry-support [\u003cdomain-or-suffix>] [--json] [--quiet] [--no-color]",
@@ -1460,10 +1583,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -1490,6 +1616,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "registry-doctor",
       "summary": "Diagnose saved registry collection",
+      "description": "Compare a saved Lookup registry result with the reviewed local capability profile.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth registry-doctor [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -1531,10 +1658,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -1562,6 +1692,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "registry-cohort",
       "summary": "Build target-free registry quality timelines",
+      "description": "Build privacy-safe suffix and capability-profile timelines from saved observations or retained cohort reports.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth registry-cohort [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -1603,10 +1734,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -1634,6 +1768,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "registry-scaffold",
       "summary": "Create a sanitised registry fixture scaffold",
+      "description": "Create a bounded synthetic WHOIS fixture scaffold for one existing capability profile.",
       "group": "utilities",
       "common": false,
       "usage": "whoisleuth registry-scaffold --profile \u003cvalue> --suffix \u003cvalue> --scenario \u003cregistered|not_found|inconclusive>",
@@ -1662,9 +1797,8 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal"
-      ],
+      "presentationOptions": [],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -1691,6 +1825,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "risk-calibrate",
       "summary": "Replay reviewed Risk labels offline",
+      "description": "Replay reviewed labels against the current explainable Risk model.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth risk-calibrate [\u003csource>] [--json|--summary-json] [--quiet] [--no-color]",
@@ -1734,11 +1869,17 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON",
-        "summary JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        },
+        {
+          "option": "--summary-json",
+          "format": "summary JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -1765,6 +1906,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "lookalike-calibrate",
       "summary": "Summarise reviewed lookalike yield offline",
+      "description": "Summarise reviewed candidate dispositions by mutation family without retaining domains.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth lookalike-calibrate [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -1807,10 +1949,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -1837,14 +1982,15 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "verify-artifact",
       "summary": "Validate saved evidence offline",
+      "description": "Validate a supported archive, ordinary Case export, claim passport, packet, manifest, saved Lookup or Lookup-evidence export without printing evidence contents. Use --package for an evidence ZIP or encrypted package, with --passphrase-file to unlock it; use --folder ./evidence for an unencrypted evidence folder. Add --bagit with --package or --folder to verify BagIt 1.0.",
       "group": "assure",
       "common": true,
-      "usage": "whoisleuth verify-artifact [\u003csource>] [--passphrase-file \u003cfile>] [--manifest \u003cfile>] [--manifest-entry \u003cartifact-1|artifact-2|artifact-3|artifact-4|artifact-5|artifact-6|artifact-7|artifact-8|artifact-9|artifact-10|artifact-11|artifact-12|artifact-13|artifact-14|artifact-15|artifact-16>] [--json] [--strict-exit] [--quiet] [--no-color]",
+      "usage": "whoisleuth verify-artifact [\u003csource>] [--passphrase-file \u003cfile>] [--manifest \u003cfile>] [--manifest-entry \u003cmanifest-entry>] [--package] [--bagit] [--folder \u003cfile>] [--json] [--strict-exit] [--quiet] [--no-color]",
       "example": "whoisleuth verify-artifact report.json --manifest manifest.json --manifest-entry artifact-2 --json --strict-exit",
-      "boundary": "Verification is offline and redacted. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 when only an envelope or legacy projection integrity was verified.",
+      "boundary": "Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Case exports are checked without repairing content; ordinary package review also counts original references with matching bytes. Ordinary folders allow only the declared layout; BagIt allows bounded nested payloads and checks SHA-256/SHA-512 manifests without interpreting payloads. Symbolic links are refused. BagIt fetch.txt is never fetched; missing files, mismatches and unsupported algorithms remain explicit. Package digests describe bytes, not filesystem metadata or authenticity. In scripts, use --strict-exit: incomplete verification returns 4. Default exit 0 means the report was produced, not that its checks passed.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one selected bounded artefact and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity."
+        "scope": "Reads one selected bounded artefact, ZIP or explicit evidence folder and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity."
       },
       "inputs": [
         {
@@ -1854,13 +2000,18 @@ export const PUBLIC_CLI_CATALOGUE = {
           "maximum": 1,
           "values": [],
           "inputSource": "argv_or_stdin",
-          "requiredWhenOptions": []
+          "requiredWhenOptions": [
+            "--package"
+          ]
         }
       ],
       "importantOptions": [
         "--passphrase-file",
         "--manifest",
         "--manifest-entry",
+        "--package",
+        "--bagit",
+        "--folder",
         "--json",
         "--strict-exit",
         "--quiet",
@@ -1875,17 +2026,20 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002eoffline-artifact-verification"
       ],
       "inputLimits": [
-        "Reads one selected bounded artefact and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.",
+        "Reads one selected bounded artefact, ZIP or explicit evidence folder and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Offline verification report"
       ],
@@ -1915,6 +2069,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "interchange-report",
       "summary": "Report portable artefact fidelity offline",
+      "description": "Report what one recognised portable artefact preserves, excludes, and supports across browser and CLI workflows.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth interchange-report [\u003csource>] [--passphrase-file \u003cfile>] [--json] [--quiet] [--no-color]",
@@ -1957,10 +2112,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -1990,14 +2148,15 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "inspect-archive",
       "summary": "Inspect an archive locally",
+      "description": "Summarise or search one current version-9 workspace archive, with exact version-5 and version-6 and version-7 and version-8 support and redacted output by default.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth inspect-archive [\u003csource>] [--passphrase-file \u003cfile>] [--search \u003cvalue>] [--require-match] [--reveal] [--expect-content-digest \u003cvalue>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth inspect-archive workspace.json --search example.test --json",
-      "boundary": "Exact matches require --reveal. Retired and future archive versions are rejected without changing data. The archive is read locally and is never uploaded.",
+      "boundary": "Exact values require --reveal. New content comparisons use the reported sorted-json-v2:sha256 identity with --expect-content-digest; bare sha256 hashes retain their legacy locale-sensitive meaning. Retired and future archives are rejected. The archive is read locally and is never uploaded.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one selected bounded workspace archive v8, retains exact v5 and v6 and v7 compatibility, and redacts output by default."
+        "scope": "Reads one selected bounded workspace archive v9, retains exact v5 and v6 and v7 and v8 compatibility, and redacts output by default."
       },
       "inputs": [
         {
@@ -2029,17 +2188,20 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002eworkspace-archive-inspection"
       ],
       "inputLimits": [
-        "Reads one selected bounded workspace archive v8, retains exact v5 and v6 and v7 compatibility, and redacts output by default.",
+        "Reads one selected bounded workspace archive v9, retains exact v5 and v6 and v7 and v8 compatibility, and redacts output by default.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -2068,6 +2230,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "sign-artifact",
       "summary": "Sign a reviewed artefact locally",
+      "description": "Sign one reviewed response packet or supported manifest with a local private key.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth sign-artifact [\u003csource>] --private-key-file \u003cfile>",
@@ -2107,9 +2270,8 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal"
-      ],
+      "presentationOptions": [],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -2136,14 +2298,15 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "verify-signature",
       "summary": "Verify a signed evidence package",
+      "description": "Verify one signed package and report embedded-artefact assurance separately. --trust-store-file also checks an explicit local fingerprint policy and emits a signer-trust report; unknown, retired, revoked or future-reviewed entries exit 4.",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth verify-signature [\u003csource>] [--public-key-file \u003cfile>] [--json] [--quiet] [--no-color]",
-      "example": "whoisleuth verify-signature packet.signed.json --json",
-      "boundary": "A valid signature proves package consistency for the embedded key. It does not upgrade failed or unsupported embedded-artefact assurance or establish the holder's real-world identity or authority.",
+      "usage": "whoisleuth verify-signature [\u003csource>] [--public-key-file \u003cfile>] [--trust-store-file \u003cfile>] [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth verify-signature packet.signed.json --trust-store-file trust.json --json",
+      "boundary": "A valid signature proves package consistency for the embedded key, not identity, authority or evidence accuracy. With --trust-store-file, unknown, retired, revoked or future-reviewed entries exit 4 even if --public-key-file matches. Replacement fingerprints need their own trusted entry; no signing date overrides current revocation.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one selected signed package and optional local public key."
+        "scope": "Reads one selected signed package, optional local public key and explicit fingerprint trust file. No automatic trust discovery or network requests."
       },
       "inputs": [
         {
@@ -2158,6 +2321,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       ],
       "importantOptions": [
         "--public-key-file",
+        "--trust-store-file",
         "--json",
         "--quiet",
         "--no-color"
@@ -2168,20 +2332,25 @@ export const PUBLIC_CLI_CATALOGUE = {
       "planSupport": false,
       "failurePolicySupport": false,
       "supportedSchemaIdentifiers": [
-        "whoisleuth\u002eevidence-signature-verification"
+        "whoisleuth\u002eevidence-signature-verification",
+        "whoisleuth\u002eevidence-signer-trust-store",
+        "whoisleuth\u002eevidence-signer-trust-report"
       ],
       "inputLimits": [
-        "Reads one selected signed package and optional local public key.",
+        "Reads one selected signed package, optional local public key and explicit fingerprint trust file. No automatic trust discovery or network requests.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -2210,6 +2379,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "source-report",
       "summary": "Build a target-free source report",
+      "description": "Create a target-free reliability summary from a saved lookup.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth source-report [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -2251,10 +2421,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -2282,6 +2455,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "compare",
       "summary": "Compare registry publications in one lookup",
+      "description": "Compare separately attributed registry publications in a saved lookup.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth compare [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -2323,10 +2497,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -2354,6 +2531,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "page-compare",
       "summary": "Compare saved static page evidence",
+      "description": "Compare static page identity, favicon, technology, and TLS evidence in two saved deep lookups.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth page-compare \u003csources...> [--json] [--quiet] [--no-color]",
@@ -2395,10 +2573,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -2426,6 +2607,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "mail-review",
       "summary": "Review saved passive mail evidence",
+      "description": "Review passive MX, null MX, SPF, DMARC, and shared mail-provider evidence from saved Bulk results.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth mail-review [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -2467,10 +2649,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -2498,6 +2683,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "mail-headers",
       "summary": "Review message headers offline",
+      "description": "Review identity, reported authentication, domain alignment, and Received routing from selected message headers.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth mail-headers [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -2539,10 +2725,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -2570,6 +2759,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "review-evidence",
       "summary": "Review supplied evidence offline",
+      "description": "Review one versioned DNS, domain-change, routing, GeoIP, RDAP, or trust-store document offline.",
       "group": "investigate",
       "common": true,
       "usage": "whoisleuth review-evidence [\u003csource>] [--mmdb \u003cfile>] [--json] [--strict-exit] [--quiet] [--no-color]",
@@ -2619,10 +2809,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -2651,6 +2844,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "brief",
       "summary": "Build a decision brief from a saved lookup",
+      "description": "Turn one saved Lookup into a compact decision brief with facts, unknowns, contradictions, and next actions.",
       "group": "investigate",
       "common": false,
       "usage": "whoisleuth brief [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -2692,10 +2886,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -2721,8 +2918,110 @@ export const PUBLIC_CLI_CATALOGUE = {
       }
     },
     {
+      "id": "case",
+      "summary": "Review and update ordinary local Case files",
+      "description": "Show or open a local Case, append a note or evidence pin, record an assessment, or retain an offline recheck. Use --input for pin, assessment and recheck JSON; --text or --note-file for a note. Mutations require --output and always write the complete current Case export.",
+      "group": "respond",
+      "common": true,
+      "usage": "whoisleuth case \u003cshow|open|note|pin|assess|recheck> [\u003csource>] [--text \u003cvalue>|--note-file \u003cfile>] [--case-id \u003cvalue>] [--domain \u003cvalue>] [--title \u003cvalue>] [--new-incident] [--input \u003cfile>] [--expect-file-digest \u003cvalue>] [--json] [--no-color]",
+      "example": "whoisleuth case open --domain example.test --output cases.json\n  whoisleuth case show cases.json\n  whoisleuth case note cases.json --text \"Review the retained observation\" --output cases.json --force",
+      "boundary": "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:\u003cdigest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
+      "collection": {
+        "mode": "offline",
+        "scope": "Reads exact Case schemas 15 or 16. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 16."
+      },
+      "inputs": [
+        {
+          "name": "operation",
+          "valueKind": "enum",
+          "minimum": 1,
+          "maximum": 1,
+          "values": [
+            "show",
+            "open",
+            "note",
+            "pin",
+            "assess",
+            "recheck"
+          ],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        },
+        {
+          "name": "source",
+          "valueKind": "file",
+          "minimum": 0,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--case-id",
+        "--domain",
+        "--title",
+        "--new-incident",
+        "--text",
+        "--note-file",
+        "--input",
+        "--expect-file-digest",
+        "--json",
+        "--no-color"
+      ],
+      "networkEffect": "offline",
+      "disclosureClass": "none",
+      "explicitAuthorisationRequired": false,
+      "planSupport": false,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002ecase-export"
+      ],
+      "inputLimits": [
+        "Reads exact Case schemas 15 or 16. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 16.",
+        "operation: 1-1 enum value",
+        "source: 0-1 file value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
+      ],
+      "fileOutput": true,
+      "primaryEvidenceArtefacts": [
+        "Case export"
+      ],
+      "capability": {
+        "familyId": "analyst_cases",
+        "networkMode": "none",
+        "dataSent": [
+          "none"
+        ],
+        "recipients": [
+          "none"
+        ],
+        "authorisation": "explicit_action",
+        "retention": "local_output_deliberate",
+        "export": "local_output",
+        "outcomes": [
+          "complete"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "The command reads only selected bounded local input and makes no network request.",
+          "Output remains under the operator's local retention and deletion control."
+        ]
+      }
+    },
+    {
       "id": "case-pack",
       "summary": "Build a reviewed case package",
+      "description": "Package browser-created Case records from schemas 15 or 16 as a reviewed, audience-specific Case-pack v2 with current schema 16.",
       "group": "respond",
       "common": true,
       "usage": "whoisleuth case-pack [\u003csource>] --audience \u003cinternal|trusted|public> --reviewed [--json] [--quiet] [--no-color]",
@@ -2730,7 +3029,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "The command is an offline handoff from the browser Case workflow: it creates a new package, never creates or mutates a durable Case, never mutates the source archive, and requires an explicit review acknowledgement.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one bounded Case-schema-15 browser export and writes a separate audience-specific Case-pack v2."
+        "scope": "Reads one bounded Case export from schemas 15 or 16 and writes a separate audience-specific Case-pack v2."
       },
       "inputs": [
         {
@@ -2760,17 +3059,20 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecase-report"
       ],
       "inputLimits": [
-        "Reads one bounded Case-schema-15 browser export and writes a separate audience-specific Case-pack v2.",
+        "Reads one bounded Case export from schemas 15 or 16 and writes a separate audience-specific Case-pack v2.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Reviewed Case-pack v2"
       ],
@@ -2799,11 +3101,12 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "domain-control",
       "summary": "Build or review a domain control manifest",
+      "description": "Build an integrity-protected desired-state manifest or compare one with supplied observations.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth domain-control [\u003csource>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth domain-control domain-control-input.json --json",
-      "boundary": "The command is offline and changes no registrar, DNS, mail, or certificate configuration. Only complete supplied observations can produce drift.",
+      "boundary": "The command is offline and changes no registrar, DNS, mail, or certificate configuration. Only complete, recent source observations can establish drift or expected absence.",
       "collection": {
         "mode": "offline",
         "scope": "Reads one bounded desired-state or review document and performs no collection or configuration change."
@@ -2841,10 +3144,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -2872,6 +3178,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "monitor-once",
       "summary": "Run one bounded domain control review",
+      "description": "Collect one bounded owned-domain review and compare it with an optional prior checkpoint.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth monitor-once [\u003csource>] [--json|--junit] [--previous \u003cfile>] [--limit \u003cinteger>] [--concurrency \u003cinteger>] [--fail-on \u003cpolicy[,policy...]>] [--quiet] [--no-color]",
@@ -2919,11 +3226,17 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON",
-        "JUnit XML"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        },
+        {
+          "option": "--junit",
+          "format": "JUnit XML"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "lookup",
@@ -2959,6 +3272,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "assurance",
       "summary": "Review domain change, recovery, or retirement plans",
+      "description": "Review a versioned domain change, recovery-dependency, or retirement plan.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth assurance [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -3001,10 +3315,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -3032,6 +3349,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "change-packet",
       "summary": "Build a reviewed change packet offline",
+      "description": "Assemble pre-change, post-change, and planning evidence into one integrity-protected packet.",
       "group": "respond",
       "common": false,
       "usage": "whoisleuth change-packet [\u003csource>] [--json] [--quiet] [--no-color]",
@@ -3074,10 +3392,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -3106,6 +3427,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "sharing-review",
       "summary": "Lint an artefact before deliberate sharing",
+      "description": "Lint one reviewed artefact against local integrity, marking, recipient, personal-data, and redaction controls.",
       "group": "respond",
       "common": false,
       "usage": "whoisleuth sharing-review [\u003csource>] --marking \u003cclear|green|amber|amber-strict|red> --recipient-scope \u003cpublic|community|organization|named-recipients> --purpose \u003cvalue> [--human-reviewed] [--personal-data-reviewed] [--redactions-confirmed] [--json] [--quiet] [--no-color]",
@@ -3113,7 +3435,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "The command is offline and emits only bounded schema/version metadata, no content values, and no raw evidence. Its result is a review aid, not legal advice or recipient authorisation.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one artefact capped at 15 MiB, emits only bounded schema/version metadata and no content values, and performs no transmission."
+        "scope": "Reads one bounded artefact, emits only schema/version metadata and no content values, and performs no transmission."
       },
       "inputs": [
         {
@@ -3146,17 +3468,20 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecli.sharing-review"
       ],
       "inputLimits": [
-        "Reads one artefact capped at 15 MiB, emits only bounded schema/version metadata and no content values, and performs no transmission.",
+        "Reads one bounded artefact, emits only schema/version metadata and no content values, and performs no transmission.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "portable_evidence",
@@ -3185,9 +3510,10 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "workflow-plan",
       "summary": "Plan a fixed investigation recipe",
+      "description": "Build a fixed domain-investigation plan from existing bounded CLI commands.",
       "group": "assure",
       "common": true,
-      "usage": "whoisleuth workflow-plan [\u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison|campaign-review|certificate-anomaly|registry-disagreement|evidence-handoff|planned-domain-change|post-change-verification>] [\u003csubject>] [--list|--explain \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison|campaign-review|certificate-anomaly|registry-disagreement|evidence-handoff|planned-domain-change|post-change-verification>] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth workflow-plan [\u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison|campaign-review|certificate-anomaly|registry-disagreement|evidence-handoff|planned-domain-change|post-change-verification>] [\u003csubject>] [--list|--explain \u003cexplain>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth workflow-plan domain-triage example.test --json",
       "boundary": "Planning is offline and plan-only. It does not execute commands, expand placeholders, read files, make requests, or submit evidence.",
       "collection": {
@@ -3250,10 +3576,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Plan-only workflow document"
       ],
@@ -3282,11 +3611,12 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "workflow-run",
       "summary": "Execute approved fixed-recipe steps",
+      "description": "Execute approved steps from a fixed investigation recipe and emit a resumable checkpoint.",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth workflow-run \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison> \u003csubject> [--select \u003cvalue>] [--approve-network] [--resume \u003cfile>] [--json] [--quiet] [--no-color]",
-      "example": "whoisleuth workflow-run domain-triage example.test --resume run.json --select export=saved-lookup.json --json --output run-next.json",
-      "boundary": "Only installed recipe commands can run. Network steps require explicit approval for each invocation. Repeat --select in placeholder order for one step; each bounded value replaces one exact placeholder and cannot start with a hyphen, become an option, or invoke a shell.",
+      "usage": "whoisleuth workflow-run \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison|campaign-review|certificate-anomaly|registry-disagreement|evidence-handoff|planned-domain-change|post-change-verification> \u003csubject> [--select \u003cvalue>] [--use-artifact \u003cvalue>] [--confirm-review \u003cvalue>] [--approve-network] [--resume \u003cfile>] [--interactive] [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth workflow-run domain-triage example.test --approve-network --json --output run.json",
+      "boundary": "Only installed recipe commands can run. Network steps require explicit approval for each invocation. New runs connect compatible earlier outputs using the recipe defaults. Use --use-artifact \u003cstep-id>:\u003cinput-number>=\u003cearlier-step-id> to override a connection; input numbers start at 1. Repeat --select for remaining placeholders in order, or supply every input for a step to replace its connections with files. Values stay literal and cannot start with a hyphen or invoke a shell. Optional --interactive prompts on terminal stderr for missing inputs; a blank answer pauses. It grants neither network approval nor human-review confirmation. A step declaring human review still requires --confirm-review \u003cstep-id> for that invocation. Checkpoints do not grant later approvals. Resumes preserve recorded connections. Content digests identify retained output, not authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.",
       "collection": {
         "mode": "network",
         "scope": "Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause."
@@ -3301,7 +3631,13 @@ export const PUBLIC_CLI_CATALOGUE = {
             "domain-triage",
             "lookalike-review",
             "owned-domain-review",
-            "historical-comparison"
+            "historical-comparison",
+            "campaign-review",
+            "certificate-anomaly",
+            "registry-disagreement",
+            "evidence-handoff",
+            "planned-domain-change",
+            "post-change-verification"
           ],
           "inputSource": "argv",
           "requiredWhenOptions": []
@@ -3318,8 +3654,11 @@ export const PUBLIC_CLI_CATALOGUE = {
       ],
       "importantOptions": [
         "--select",
+        "--use-artifact",
+        "--confirm-review",
         "--approve-network",
         "--resume",
+        "--interactive",
         "--json",
         "--quiet",
         "--no-color"
@@ -3341,10 +3680,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Resumable workflow state"
       ],
@@ -3359,12 +3701,14 @@ export const PUBLIC_CLI_CATALOGUE = {
           "public_ip_address",
           "homepage_request",
           "tls_handshake",
-          "mta_sts_policy_request"
+          "mta_sts_policy_request",
+          "certificate_search_term"
         ],
         "recipients": [
           "registry_service",
           "dns_resolver",
-          "target_public_service"
+          "target_public_service",
+          "certificate_transparency_service"
         ],
         "authorisation": "explicit_network_approval",
         "retention": "local_output_deliberate",
@@ -3376,8 +3720,10 @@ export const PUBLIC_CLI_CATALOGUE = {
         ],
         "documentStates": [
           "complete",
+          "partial",
           "awaiting_network_approval",
           "awaiting_analyst_selection",
+          "awaiting_review_confirmation",
           "step_failed"
         ],
         "privacyLimitations": [
@@ -3388,11 +3734,12 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "diff",
       "summary": "Compare two compatible retained artefacts",
+      "description": "Compare an earlier and later artefact from the same retained Lookup, Bulk-session, or domain-portfolio family.",
       "group": "assure",
       "common": true,
       "usage": "whoisleuth diff \u003csources...> [--left-session \u003cvalue>] [--right-session \u003cvalue>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth diff earlier.json later.json --json",
-      "boundary": "Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.",
+      "boundary": "Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; same-domain comparisons preserve observation times and collection uncertainty. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.",
       "collection": {
         "mode": "offline",
         "scope": "Reads two compatible retained artefacts capped at 8 MiB each and retains no source paths."
@@ -3431,10 +3778,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Retained-evidence comparison"
       ],
@@ -3464,6 +3814,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "reconcile",
       "summary": "Reconcile independently labelled observations",
+      "description": "Reconcile bounded values across independently labelled observations of one domain.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth reconcile \u003csources...> [--json] [--quiet] [--no-color]",
@@ -3505,10 +3856,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [],
       "capability": {
         "familyId": "offline_review",
@@ -3536,6 +3890,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "timeline",
       "summary": "Build same-domain history from saved lookups",
+      "description": "Build an ordered same-domain history from saved Lookup observations.",
       "group": "assure",
       "common": false,
       "usage": "whoisleuth timeline \u003csources...> [--json] [--quiet] [--no-color]",
@@ -3577,10 +3932,13 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Bounded retained-observation timeline"
       ],
@@ -3610,11 +3968,12 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "export",
       "summary": "Convert a lookup to an evidence report",
+      "description": "Convert one saved lookup into a versioned evidence report.",
       "group": "respond",
       "common": true,
       "usage": "whoisleuth export [\u003csource>] [--markdown|--html] [--compact] [--no-attribution]",
       "example": "whoisleuth export lookup.json --markdown",
-      "boundary": "Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-28 exports preserve evidence-source attribution and limitations; published v2 schema 27 and exact v1 schema 26 remain readable, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.",
+      "boundary": "Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-29 exports preserve evidence-source attribution and limitations; published v2 schemas 27, 28 and exact v1 schema 26 remain readable, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.",
       "collection": {
         "mode": "offline",
         "scope": "Reads one saved Lookup and writes one bounded report."
@@ -3652,12 +4011,17 @@ export const PUBLIC_CLI_CATALOGUE = {
         "Output is bounded by the command-owned formatter and document contract.",
         "Selected file output is atomic and replacement requires --force."
       ],
-      "outputFormats": [
-        "terminal",
-        "Markdown",
-        "HTML",
-        "JSON"
+      "presentationOptions": [
+        {
+          "option": "--markdown",
+          "format": "Markdown"
+        },
+        {
+          "option": "--html",
+          "format": "HTML"
+        }
       ],
+      "fileOutput": true,
       "primaryEvidenceArtefacts": [
         "Portable evidence report"
       ],
@@ -3725,7 +4089,7 @@ export const PUBLIC_CLI_CATALOGUE = {
             "mode": "offline",
             "approval": "analyst_selection",
             "produces": "whoisleuth\u002elookup-evidence",
-            "completion": "Select the reviewed lookup file; the plan never guesses a path."
+            "completion": "Reuse the collected Lookup by default, or select a different reviewed Lookup file."
           },
           {
             "id": "verify",
@@ -3743,7 +4107,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         ],
         "limitations": [
           "Collection remains analyst-triggered and source limitations remain explicit.",
-          "Disposition, reviewed response actions, monitoring, and closure continue in the browser-local Case workspace; this CLI recipe does not submit reports."
+          "Disposition, reviewed response actions, monitoring, and closure continue in the saved Case workspace; this CLI recipe does not submit reports."
         ]
       },
       {
@@ -3941,7 +4305,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "label": "Campaign candidate review",
         "objective": "Prepare a bounded candidate set, collect a deliberately selected queue, and review retained evidence without asserting campaign attribution.",
         "subjectRequirement": "brand_or_domain",
-        "runnableByWorkflowRun": false,
+        "runnableByWorkflowRun": true,
         "networkModes": [
           "offline",
           "network"
@@ -3985,16 +4349,16 @@ export const PUBLIC_CLI_CATALOGUE = {
           },
           {
             "id": "review",
-            "label": "Review selected retained evidence",
-            "command": "review-evidence",
+            "label": "Prepare a selected candidate brief",
+            "command": "brief",
             "exampleArguments": [
-              "\u003cselected-evidence.json>",
+              "\u003csaved-lookup.json>",
               "--json"
             ],
             "mode": "offline",
             "approval": "analyst_selection",
-            "produces": "whoisleuth\u002ecli.offline-evidence-review",
-            "completion": "Keep source observations separate and record any campaign grouping as analyst-authored."
+            "produces": "whoisleuth\u002ecli.lookup-brief",
+            "completion": "Select a saved candidate Lookup; keep any campaign grouping analyst-authored."
           }
         ],
         "limitations": [
@@ -4006,7 +4370,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "label": "Certificate anomaly review",
         "objective": "Review bounded certificate observations alongside current source-qualified domain evidence without treating issuance as proof of control or intent.",
         "subjectRequirement": "domain",
-        "runnableByWorkflowRun": false,
+        "runnableByWorkflowRun": true,
         "networkModes": [
           "network",
           "offline"
@@ -4039,8 +4403,8 @@ export const PUBLIC_CLI_CATALOGUE = {
             ],
             "mode": "offline",
             "approval": "analyst_selection",
-            "produces": "whoisleuth\u002ect-event-batch",
-            "completion": "Only selected saved observations enter the offline intake."
+            "produces": "whoisleuth\u002eexternal-findings",
+            "completion": "Select a certificate-event batch; a certificate-search report is not interchangeable with that input."
           },
           {
             "id": "corroborate",
@@ -4066,7 +4430,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "label": "Registry disagreement review",
         "objective": "Collect separately attributed registration evidence and review conflicting publications without selecting an arbitrary source as truth.",
         "subjectRequirement": "domain",
-        "runnableByWorkflowRun": false,
+        "runnableByWorkflowRun": true,
         "networkModes": [
           "network",
           "offline"
@@ -4126,7 +4490,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "label": "Reviewed evidence handoff",
         "objective": "Verify, minimise, and package analyst-selected evidence for a deliberate handoff without transmitting or submitting it.",
         "subjectRequirement": "review_label",
-        "runnableByWorkflowRun": false,
+        "runnableByWorkflowRun": true,
         "networkModes": [
           "offline"
         ],
@@ -4140,7 +4504,8 @@ export const PUBLIC_CLI_CATALOGUE = {
             "command": "verify-artifact",
             "exampleArguments": [
               "\u003cevidence.json>",
-              "--json"
+              "--json",
+              "--strict-exit"
             ],
             "mode": "offline",
             "approval": "analyst_selection",
@@ -4195,7 +4560,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "label": "Planned domain change",
         "objective": "Review an analyst-authored desired state and prepare bounded change material without changing DNS, registry, mail, or hosted configuration.",
         "subjectRequirement": "domain",
-        "runnableByWorkflowRun": false,
+        "runnableByWorkflowRun": true,
         "networkModes": [
           "offline"
         ],
@@ -4252,7 +4617,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "label": "Post-change verification",
         "objective": "Perform one explicit later observation and compare it with analyst-selected retained evidence after an authorised change.",
         "subjectRequirement": "domain",
-        "runnableByWorkflowRun": false,
+        "runnableByWorkflowRun": true,
         "networkModes": [
           "network",
           "offline"
@@ -4274,7 +4639,7 @@ export const PUBLIC_CLI_CATALOGUE = {
             ],
             "mode": "network",
             "approval": "network_disclosure",
-            "produces": "whoisleuth\u002edomain-control-review",
+            "produces": "whoisleuth\u002ecli.domain-control-monitor",
             "completion": "One later observation may remain partial, unavailable, stale, or conflicting."
           },
           {

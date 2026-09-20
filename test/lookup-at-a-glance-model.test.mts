@@ -95,6 +95,36 @@ const refreshPlan: LookupSourceRefreshPlan = {
   limitations: [],
 };
 
+test('review details retain the complete attributed chain without borrowing another source time', () => {
+  const fact = createDecisionFact(factInput('lookup-decision:registration-status', {
+    question: 'Do the registration sources agree?',
+    conclusion: 'The registry and registrar report different statuses.',
+    consistency: 'contradictory',
+    references: ['inspection-destination:#registry', 'comparison:registration'],
+    contradictions: ['Registry is active; registrar reports a hold.'],
+    contributors: [
+      contributor('registry', { label: 'Registry RDAP', references: ['rdap:registration'], observedAt: '2026-08-20T00:00:00.000Z' }),
+      contributor('registrar', { label: 'Registrar WHOIS', provenance: 'provider_reported', references: ['whois:registrar'], observedAt: null, limitations: ['Observation time was not retained.'] }),
+    ],
+  }));
+  const model = buildLookupAtAGlanceModel([fact]);
+  assert.equal(model.items.length, 1);
+  const item = model.items[0]!;
+  assert.equal(item.label, 'Do the registration sources agree?');
+  assert.equal(item.detail, 'The registry and registrar report different statuses.');
+  assert.equal(item.destination, '#registry');
+  assert.deepEqual(item.contradictions, ['Registry is active; registrar reports a hold.']);
+  assert.deepEqual(item.references, ['comparison:registration', 'inspection-destination:#registry']);
+  assert.deepEqual(item.contributors.map((source) => ({
+    label: source.label, observedAt: source.observedAt, references: source.references, limitations: source.limitations,
+  })), [
+    { label: 'Registrar WHOIS', observedAt: null, references: ['whois:registrar'], limitations: ['Observation time was not retained.'] },
+    { label: 'Registry RDAP', observedAt: '2026-08-20T00:00:00.000Z', references: ['rdap:registration'], limitations: [] },
+  ]);
+  assert.equal(group(model.groups, 'disagreements').displayedItems[0], item);
+  assertRecursivelyFrozen(model);
+});
+
 describe('Lookup At-a-glance Decision Fact projection', () => {
   test('uses exact canonical membership while preserving prior counts, destinations, and source attribution', () => {
     const coverage = buildEvidenceCoverageLedger([

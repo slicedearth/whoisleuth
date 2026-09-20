@@ -141,9 +141,25 @@ function safeTarget(value: unknown): URL | null {
 }
 
 function cleanTitle(html: string): string | null {
-  const match = /<title(?:\s[^>]*)?>([\s\S]{1,4096}?)<\/title\s*>/iu.exec(html);
-  if (!match?.[1]) return null;
-  const title = match[1]
+  // Both cursors advance through the bounded body. An unfinished opening tag
+  // consumes the remaining input once, without repeated suffix scans.
+  const openings = /<title(?=\s|>)/giu;
+  const closings = /<\/title\s*>/giu;
+  let closing = closings.exec(html);
+  let content: string | null = null;
+  for (let opening = openings.exec(html); opening; opening = openings.exec(html)) {
+    const start = html.indexOf('>', openings.lastIndex);
+    if (start < 0) break;
+    openings.lastIndex = start + 1;
+    while (closing && closing.index < start + 1) closing = closings.exec(html);
+    if (!closing) break;
+    const length = closing.index - start - 1;
+    if (length < 1 || length > 4_096) continue;
+    content = html.slice(start + 1, closing.index);
+    break;
+  }
+  if (content === null) return null;
+  const title = content
     .replace(/<[^>]{0,512}>/gu, ' ')
     .replace(/&(?:amp|#38);/giu, '&')
     .replace(/&(?:lt|#60);/giu, '<')
@@ -213,7 +229,9 @@ export async function parseWarcEvidenceArchive(
   if (!fileName.toLowerCase().endsWith('.warc')) {
     throw new Error('Portable archive import currently accepts uncompressed .warc files only.');
   }
-  const bytes = new Uint8Array(input);
+  // Own the admitted bytes before the first asynchronous digest. Caller aliases
+  // must not change what is parsed after its provenance hash has been recorded.
+  const bytes = new Uint8Array(new Uint8Array(input));
   const archiveDigestSha256 = hex(await sha(bytes, 'SHA-256'));
   const records = parseWarcRecords(bytes);
   const exclusions: string[] = [];
@@ -267,10 +285,6 @@ export async function parseWarcEvidenceArchive(
     const mediaType = (http.headers.get('content-type') ?? '').split(';', 1)[0]?.trim().toLowerCase();
     if (!['text/html', 'application/xhtml+xml'].includes(mediaType ?? '')) {
       addExclusion(exclusions, 'A non-HTML response body was excluded.');
-      continue;
-    }
-    if (http.body.byteLength > 512 * 1024) {
-      addExclusion(exclusions, 'An HTML response body exceeded the 512 KiB review bound and was excluded.');
       continue;
     }
     let html: string;

@@ -1,6 +1,7 @@
 import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { RELATIONSHIP_EVIDENCE_VERSION } from '../packages/contracts/offline-comparison.mts';
 
 import {
   MAX_RELATIONSHIP_OBSERVATIONS,
@@ -13,6 +14,7 @@ import {
   normalizeRelationshipObservation,
   normalizeRelationshipObservationStore,
   relationshipObservationId,
+  relationshipObservationStoreVersion,
   serializeRelationshipObservationStore,
   upsertRelationshipObservation,
 } from '../frontend/src/lib/analysis/relationship-observation-model.ts';
@@ -29,6 +31,7 @@ function input(overrides = {}) {
     value: 'ns1.shared.invalid · ns2.shared.invalid',
     domains: ['SECOND.INVALID', 'first.invalid', 'first.invalid'],
     description: 'Bounded relationship fixture.',
+    sourceEvidence: ['first.invalid', 'second.invalid'].map((domain) => ({ domain, source: 'dns', status: 'success', observedAt: EARLY, complete: true, truncated: false })),
     ...overrides,
   };
 }
@@ -40,12 +43,26 @@ function observation(overrides = {}, options = {}) {
     complete: true,
     truncated: false,
     limitations: ['Shared infrastructure is not proof of common control.'],
-    sourceVersion: 2,
+    sourceVersion: RELATIONSHIP_EVIDENCE_VERSION,
     ...options,
   });
 }
 
 describe('retained relationship observation model', () => {
+  test('rejects declared future and invalid portable versions before reading their records', () => {
+    const local = [observation()];
+    const before = structuredClone(local);
+    for (const version of [RELATIONSHIP_OBSERVATION_SCHEMA_VERSION + 1, 1001, 999999, Number.MAX_SAFE_INTEGER]) {
+      assert.equal(relationshipObservationStoreVersion({ version }), version);
+      assert.throws(() => mergeRelationshipObservations(local, { version, observations: [] }), /newer schema/iu);
+    }
+    for (const version of [null, undefined, '1', 0, -1, true]) {
+      assert.throws(() => mergeRelationshipObservations(local, { version, observations: [] }), /version must be a positive safe integer/iu);
+    }
+    assert.equal(mergeRelationshipObservations(local, { observations: [] }).observations.length, 1);
+    assert.deepEqual(local, before);
+  });
+
   test('creates a deterministic bounded derived observation without mutating input', () => {
     const raw = input();
     const before = structuredClone(raw);
@@ -58,7 +75,7 @@ describe('retained relationship observation model', () => {
     assert.deepEqual(first.domains, ['first.invalid', 'second.invalid']);
     assert.equal(first.classification, 'derived');
     assert.equal(first.source, 'bulk_relationship_analysis');
-    assert.equal(first.sourceVersion, 2);
+    assert.equal(first.sourceVersion, RELATIONSHIP_EVIDENCE_VERSION);
     assert.equal(first.observedAt, EARLY);
     assert.equal(first.retainedAt, LATE);
     assert.equal(first.complete, true);
@@ -94,7 +111,9 @@ describe('retained relationship observation model', () => {
       normalizedValue: '999.0.0.1',
       value: '999.0.0.1',
     })), /supported bounded value/i);
-    assert.throws(() => createRelationshipObservation(input(), { observedAt: null, retainedAt: LATE }), /observation time/i);
+    const undated = createRelationshipObservation(input({ sourceEvidence: [] }), { observedAt: null, retainedAt: LATE });
+    assert.equal(undated.observedAt, null);
+    assert.equal(undated.complete, false);
   });
 
   test('refreshes an existing identity, deletes explicitly, and keeps the store bounded', () => {

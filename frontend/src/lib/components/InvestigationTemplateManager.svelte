@@ -1,11 +1,15 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { parseBoundedJson } from '$lib/bounded-json';
+  import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
+  import { failedLocalMutationOutcome, LocalRecordConflictError } from '$lib/local-mutation-outcome';
   import { INVESTIGATION_RECIPES, type InvestigationRecipeId } from '$lib/analysis/investigation-guide.ts';
   import {
     deleteInvestigationTemplate,
     exportCacaoInvestigationTemplate,
     exportInvestigationTemplates,
     importInvestigationTemplates,
+    loadInvestigationTemplates,
     MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES,
     saveInvestigationTemplate,
     type InvestigationTemplate,
@@ -26,16 +30,23 @@
   let { templates, loadState, onchange }: {
     templates: InvestigationTemplate[];
     loadState: 'loading' | 'ready' | 'unavailable';
-    onchange: (templates: InvestigationTemplate[]) => void;
+    onchange: (templates: InvestigationTemplate[]) => void | Promise<void>;
   } = $props();
   let editing = $state(false);
   let editingId = $state('');
+  let draftId = $state('');
+  let editingBase = $state.raw<InvestigationTemplate | null>(null);
   let recipeId = $state<InvestigationRecipeId>('new_domain_triage');
   let label = $state('');
   let summary = $state('');
   let stages = $state<StageDraft[]>([]);
   let message = $state('');
+  let saving = $state(false);
+  let refreshRequired = $state(false);
+  let componentRoot = $state<HTMLElement>();
+  const draft = createDraftRevision(() => draftId);
   const recipe = $derived(INVESTIGATION_RECIPES.find((candidate) => candidate.id === recipeId) || INVESTIGATION_RECIPES[0]);
+  const orphanedDraft = $derived(loadState === 'ready' && editingBase !== null && !templates.some((template) => template.id === editingBase?.id));
 
   function stageDrafts(selectedRecipeId: InvestigationRecipeId): StageDraft[] {
     const selected = INVESTIGATION_RECIPES.find((candidate) => candidate.id === selectedRecipeId) || INVESTIGATION_RECIPES[0];
@@ -53,8 +64,11 @@
   }
 
   function beginNew() {
+    draft.changed();
     editing = true;
     editingId = '';
+    draftId = crypto.randomUUID();
+    editingBase = null;
     recipeId = 'new_domain_triage';
     label = '';
     summary = '';
@@ -63,8 +77,11 @@
   }
 
   function beginEdit(template: InvestigationTemplate) {
+    draft.changed();
     editing = true;
     editingId = template.id;
+    draftId = template.id;
+    editingBase = $state.snapshot(template);
     recipeId = template.recipeId;
     label = template.label;
     summary = template.summary;
@@ -90,12 +107,48 @@
     stages = stageDrafts(recipeId);
   }
 
-  async function save(event: SubmitEvent) {
-    event.preventDefault();
+  async function reconcile(next: InvestigationTemplate[], success: string) {
+    try {
+      await onchange(next);
+      refreshRequired = false;
+      message = success;
+    } catch {
+      refreshRequired = true;
+      message = `${success} The view could not be refreshed. Retry the refresh; do not repeat the write.`;
+    }
+  }
+
+  function mutationFailure(cause: unknown, fallback: string) {
+    if (cause instanceof LocalRecordConflictError || failedLocalMutationOutcome(cause) === 'unknown') refreshRequired = true;
+    message = cause instanceof Error ? cause.message : fallback;
+  }
+
+  async function retryRefresh() {
+    if (saving) return;
+    const origin = document.activeElement;
+    saving = true;
+    try { await reconcile(await loadInvestigationTemplates(), 'Refreshed saved templates. Unsaved edits are unchanged.'); }
+    catch (cause) { message = cause instanceof Error ? cause.message : 'Could not refresh saved templates.'; }
+    finally {
+      saving = false;
+      await tick();
+      restoreSubmittedFocus(origin, refreshRequired ? document.getElementById('refresh-investigation-templates') : editing ? document.getElementById('investigation-template-name') : document.getElementById('new-investigation-template'), componentRoot);
+    }
+  }
+
+  async function save(event?: SubmitEvent) {
+    event?.preventDefault();
+    if (saving || refreshRequired) return;
+    saving = true;
+    const unchanged = draft.capture();
+    const submittedLabel = label.trim();
+    const submittedId = draftId;
+    const submittedBase = editingBase;
+    const origin = document.activeElement;
     message = '';
     try {
       const next = await saveInvestigationTemplate({
-        id: editingId || undefined,
+        id: submittedId,
         recipeId,
         label,
         summary,
@@ -109,24 +162,50 @@
           instructions: stage.instructions.split('\n').map((item) => item.trim()).filter(Boolean),
           requiresApproval: stage.requiresApproval,
         })),
-      });
-      onchange(next);
-      editing = false;
-      message = `Saved the ${label.trim()} template.`;
+      }, undefined, submittedBase);
+      const saved = next.find((template) => template.id === submittedId);
+      await reconcile(next, `Saved the ${submittedLabel} template.`);
+      if (saved && draftId === submittedId && editingBase === submittedBase) {
+        editingId = saved.id;
+        editingBase = saved;
+      }
+      if (unchanged() && !refreshRequired) editing = false;
     } catch (cause) {
-      message = cause instanceof Error ? cause.message : 'Could not save the investigation template.';
+      mutationFailure(cause, 'Could not save the investigation template.');
+    } finally {
+      saving = false;
+      await tick();
+      restoreSubmittedFocus(origin, refreshRequired ? document.getElementById('refresh-investigation-templates') : editing ? origin as HTMLElement | null : document.getElementById(`edit-investigation-template-${submittedId}`), componentRoot);
     }
   }
 
+  async function saveAsNew() {
+    const form = document.getElementById('investigation-template-editor');
+    if (!orphanedDraft || saving || refreshRequired || !(form instanceof HTMLFormElement) || !form.reportValidity()) return;
+    draft.changed();
+    draftId = crypto.randomUUID();
+    editingId = '';
+    editingBase = null;
+    await save();
+  }
+
   async function remove(template: InvestigationTemplate) {
+    if (saving || refreshRequired) return;
     if (!confirm(`Delete the ${template.label} investigation template?`)) return;
+    const origin = document.activeElement;
+    const submitted = $state.snapshot(template);
+    const unchanged = draft.capture();
+    saving = true;
     try {
-      const next = await deleteInvestigationTemplate(template.id);
-      onchange(next);
-      if (editingId === template.id) editing = false;
-      message = `Deleted the ${template.label} template.`;
+      const next = await deleteInvestigationTemplate(template.id, submitted);
+      await reconcile(next, `Deleted the ${template.label} template.`);
+      if (editingId === template.id && unchanged()) editing = false;
     } catch (cause) {
-      message = cause instanceof Error ? cause.message : 'Could not delete the investigation template.';
+      mutationFailure(cause, 'Could not delete the investigation template.');
+    } finally {
+      saving = false;
+      await tick();
+      restoreSubmittedFocus(origin, refreshRequired ? document.getElementById('refresh-investigation-templates') : origin?.isConnected ? origin as HTMLElement : componentRoot?.querySelector<HTMLButtonElement>('.template-list button') ?? document.getElementById('new-investigation-template'), componentRoot);
     }
   }
 
@@ -151,7 +230,8 @@
   async function importFile(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
-    if (!file) return;
+    if (!file || saving || refreshRequired) return;
+    saving = true;
     try {
       if (file.size > MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES) {
         throw new Error('Investigation-template imports are limited to 384 KiB.');
@@ -160,17 +240,18 @@
         label: 'Investigation-template import',
         maximumBytes: MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES,
       }));
-      onchange(result.templates);
-      message = `Imported ${result.added} new and ${result.updated} matching template${result.added + result.updated === 1 ? '' : 's'}.`;
+      const skipped = result.skipped ? ` Skipped ${result.skipped} older, same-time, invalid or over-limit template${result.skipped === 1 ? '' : 's'}; local templates were retained.` : '';
+      await reconcile(result.templates, `Imported ${result.added} new and ${result.updated} newer template${result.added + result.updated === 1 ? '' : 's'}.${skipped}`);
     } catch (cause) {
-      message = cause instanceof Error ? cause.message : 'Investigation-template import failed.';
+      mutationFailure(cause, 'Investigation-template import failed.');
     } finally {
       input.value = '';
+      saving = false;
     }
   }
 </script>
 
-<section class="template-manager card" aria-labelledby="template-manager-title" aria-busy={loadState === 'loading'}>
+<section class="template-manager card" bind:this={componentRoot} aria-labelledby="template-manager-title" aria-busy={loadState === 'loading' || saving}>
   <header>
     <div>
       <p class="eyebrow">Saved templates</p>
@@ -178,14 +259,15 @@
       <p>Adapt an existing bounded guide. Templates can change guidance, omit steps, or add approval gates, but cannot run code, start requests, submit evidence, or remove a required gate. A restricted CACAO export contains manual steps only.</p>
     </div>
     <div class="toolbar">
-      <button class="btn" type="button" onclick={beginNew} disabled={loadState !== 'ready'}>New template</button>
+      <button id="new-investigation-template" class="btn" type="button" onclick={beginNew} disabled={loadState !== 'ready'}>New template</button>
       <button class="btn" type="button" onclick={download} disabled={loadState !== 'ready' || !templates.length}>Export</button>
-      <label class="btn file-btn" class:disabled={loadState !== 'ready'} aria-disabled={loadState !== 'ready'}>Import<input type="file" accept="application/json,.json" onchange={importFile} disabled={loadState !== 'ready'}></label>
+      <label class="btn file-btn" class:disabled={loadState !== 'ready' || saving || refreshRequired} aria-disabled={loadState !== 'ready' || saving || refreshRequired}>Import<input type="file" accept="application/json,.json" onchange={importFile} disabled={loadState !== 'ready' || saving || refreshRequired}></label>
     </div>
   </header>
+  {#if refreshRequired}<button id="refresh-investigation-templates" class="btn" type="button" onclick={retryRefresh} disabled={saving}>Refresh saved templates</button>{/if}
 
   {#if loadState === 'unavailable'}
-    <p class="empty warn" role="status">Saved investigation templates are unavailable. The standard guides remain available; reload the Dashboard to retry browser-local storage.</p>
+    <p class="empty warn" role="status">Saved investigation templates are unavailable. The standard guides remain available; reload the Dashboard to retry workspace storage.</p>
   {:else if loadState === 'loading'}
     <p class="empty" role="status">Loading saved investigation templates.</p>
   {:else if templates.length}
@@ -194,9 +276,9 @@
         <li>
           <div><strong>{template.label}</strong><span>{INVESTIGATION_RECIPES.find((item) => item.id === template.recipeId)?.label} · {template.stages.length} step{template.stages.length === 1 ? '' : 's'}</span></div>
           <div class="row-actions">
-            <button class="btn small" type="button" onclick={() => beginEdit(template)}>Edit</button>
+            <button id={`edit-investigation-template-${template.id}`} class="btn small" type="button" onclick={() => beginEdit(template)}>Edit</button>
             <button class="btn small" type="button" onclick={() => downloadPlaybook(template)}>CACAO</button>
-            <button class="btn small danger" type="button" onclick={() => remove(template)}>Delete</button>
+            <button class="btn small danger" type="button" onclick={() => remove(template)} disabled={saving || refreshRequired}>Delete</button>
           </div>
         </li>
       {/each}
@@ -206,14 +288,14 @@
   {/if}
 
   {#if editing}
-    <form onsubmit={save}>
+    <form id="investigation-template-editor" oninput={draft.changed} onchange={draft.changed} onsubmit={save}>
       <div class="form-heading">
         <div><p class="eyebrow">{editingId ? 'Edit template' : 'New template'}</p><h3>{editingId ? label || 'Template' : 'Create from a standard guide'}</h3></div>
-        <button class="btn small" type="button" onclick={() => { editing = false; }}>Cancel</button>
+        <button class="btn small" type="button" onclick={() => { draft.changed(); editing = false; }}>Cancel</button>
       </div>
       <div class="template-fields">
         <label>Base guide<select value={recipeId} onchange={changeRecipe} disabled={Boolean(editingId)}>{#each INVESTIGATION_RECIPES as item}<option value={item.id}>{item.label}</option>{/each}</select></label>
-        <label>Template name<input bind:value={label} maxlength="80" required placeholder="Focused supplier review"></label>
+        <label>Template name<input id="investigation-template-name" bind:value={label} maxlength="80" required placeholder="Focused supplier review"></label>
         <label class="wide">Summary<textarea bind:value={summary} maxlength="400" rows="2" placeholder={recipe?.summary}></textarea></label>
       </div>
       <div class="stage-editor">
@@ -232,7 +314,12 @@
           </details>
         {/each}
       </div>
-      <button class="primary" type="submit">Save template</button>
+      {#if orphanedDraft}
+        <p>The saved template was deleted. Your draft is still available and can be saved with a new identity.</p>
+        <button class="primary" type="button" onclick={saveAsNew} disabled={saving || refreshRequired}>Save as new template</button>
+      {:else}
+        <button class="primary" type="submit" disabled={saving || refreshRequired}>Save template</button>
+      {/if}
     </form>
   {/if}
   <p class="message" role="status">{message}</p>
@@ -241,7 +328,8 @@
 <style>
   .template-manager{margin-top:28px;padding:21px}
   header,.form-heading,.template-list li,.row-actions{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-  header>div:first-child{max-width:720px}
+  .form-heading>div{min-width:0}.form-heading>button,.toolbar>*,.row-actions>*{flex-shrink:0}.row-actions{flex-wrap:wrap}
+  header{flex-wrap:wrap}header>div:first-child{flex:1 1 24rem;min-width:0;max-width:720px}header>.toolbar{flex:none;max-width:100%}
   h2,h3,.eyebrow{margin:0}
   header p:not(.eyebrow),.empty{margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.55}
   .template-list{display:grid;gap:7px;margin:18px 0 0;padding:0;list-style:none}
@@ -265,5 +353,5 @@
   .file-btn.disabled{cursor:not-allowed;opacity:.48}
   .file-btn.disabled input[type='file']{cursor:not-allowed}
   .message:empty{display:none}
-  @media(max-width:700px){header,.template-list li{align-items:stretch;flex-direction:column}.toolbar,.row-actions{width:100%}.toolbar>*,.row-actions>*{flex:1}.template-fields{grid-template-columns:1fr}.template-fields .wide{grid-column:auto}}
+  @media(max-width:700px){header,.template-list li{align-items:stretch;flex-direction:column}header>div:first-child{flex-basis:auto}.toolbar,.row-actions{width:100%}.toolbar>*,.row-actions>*{flex:1 0 auto}.template-fields{grid-template-columns:1fr}.template-fields .wide{grid-column:auto}}
 </style>

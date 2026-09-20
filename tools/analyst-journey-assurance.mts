@@ -19,9 +19,9 @@ import {
   buildBalancedBrowserShardPlan,
   readVerificationTimingProfile,
 } from './verification-timing-profile.mts';
-import { PLAYWRIGHT_FUNCTIONAL_PROJECT, PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT } from './playwright-execution-contract.mts';
+import { PLAYWRIGHT_FUNCTIONAL_PROJECT, PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT, resolvePlaywrightExecutionContract } from './playwright-execution-contract.mts';
 
-export const ANALYST_JOURNEY_ASSURANCE_VERSION = 1;
+export const ANALYST_JOURNEY_ASSURANCE_VERSION = 2;
 export const MAX_ANALYST_JOURNEY_SPEC_BYTES = 2 * 1024 * 1024;
 export const MAX_ANALYST_JOURNEY_TOTAL_BYTES = 16 * 1024 * 1024;
 export const MAX_ANALYST_JOURNEY_TESTS = 256;
@@ -46,7 +46,6 @@ type JourneyTest = Readonly<{
   file: string;
   title: string;
   tags: readonly string[];
-  body: string;
   strings: readonly string[];
   sharedFixture: boolean;
   disabled: boolean;
@@ -86,7 +85,16 @@ function callbackStrings(node: ts.Node): readonly string[] {
 }
 
 function disabledByDeclarationOrScope(node: ts.CallExpression, callback: ts.Node): boolean {
-  if (/\b(?:test|testInfo)\.(?:skip|fixme)\s*\(/u.test(callback.getText())) return true;
+  let disabled = false;
+  const inspect = (child: ts.Node): void => {
+    if (ts.isCallExpression(child) && ts.isPropertyAccessExpression(child.expression)
+      && ts.isIdentifier(child.expression.expression)
+      && ['test', 'testInfo'].includes(child.expression.expression.text)
+      && ['skip', 'fixme'].includes(child.expression.name.text)) disabled = true;
+    ts.forEachChild(child, inspect);
+  };
+  inspect(callback);
+  if (disabled) return true;
   let current: ts.Node | undefined = node.parent;
   while (current) {
     if (ts.isCallExpression(current) && ts.isPropertyAccessExpression(current.expression)
@@ -135,7 +143,6 @@ export function parseAnalystJourneySource(file: string, source: string): readonl
             file,
             title,
             tags,
-            body: callback.getText(parsed),
             strings: callbackStrings(callback),
             sharedFixture,
             disabled: memberCall || disabledByDeclarationOrScope(node, callback),
@@ -177,10 +184,11 @@ export function assertAppliedBrowserSafety(options: Readonly<{
   fixtureFile?: string;
 }> = {}): void {
   const temporaryRoot = mkdtempSync(path.join(tmpdir(), 'whoisleuth-browser-contract-'));
-  const environment: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: '0', WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1' };
-  // Configuration discovery does not need a build. Fixture probes override
-  // page/context and must never launch a browser, start a server or make network requests.
-  for (const name of ['CI', 'WHOISLEUTH_E2E_USE_BUILD', 'NODE_V8_COVERAGE', 'PLAYWRIGHT_JSON_OUTPUT_NAME', 'PLAYWRIGHT_JSON_OUTPUT_FILE', 'PLAYWRIGHT_JSON_OUTPUT_DIR']) {
+  const environment: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: '0', WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1', NODE_V8_COVERAGE: undefined };
+  // Configuration discovery does not need a build. Fixture probes supply an
+  // in-memory browser and must never start a server or make network requests.
+  // Omission alone would let Node restore the parent's coverage directory.
+  for (const name of ['CI', 'WHOISLEUTH_E2E_USE_BUILD', 'PLAYWRIGHT_JSON_OUTPUT_NAME', 'PLAYWRIGHT_JSON_OUTPUT_FILE', 'PLAYWRIGHT_JSON_OUTPUT_DIR']) {
     delete environment[name];
   }
   const run = (args: readonly string[]) => spawnSync(process.execPath, [
@@ -205,6 +213,9 @@ export function assertAppliedBrowserSafety(options: Readonly<{
         const declaration = loaded.default ?? loaded;
         process.stdout.write(JSON.stringify({
           forbidOnly: config.forbidOnly, failOnFlakyTests: config.failOnFlakyTests, workers: config.workers,
+          serverCommand: declaration.webServer?.command,
+          serverWorkingDirectory: declaration.webServer?.cwd,
+          serverEgressTeardown: declaration.globalTeardown,
           projects: config.projects.map(project => ({
             name: project.name, retries: project.retries,
             fullyParallel: declaration.projects?.find(entry => entry.name === project.name)?.fullyParallel ?? declaration.fullyParallel ?? false,
@@ -233,6 +244,12 @@ export function assertAppliedBrowserSafety(options: Readonly<{
       || !functional.testIgnore.length || JSON.stringify(functional.testIgnore) !== JSON.stringify(performance.testMatch)) {
       throw new TypeError('Applied Playwright configuration weakened the maintained execution contract.');
     }
+    const execution = resolvePlaywrightExecutionContract(environment, REPOSITORY_ROOT);
+    if (configuration.serverCommand !== execution.serverCommand
+      || configuration.serverWorkingDirectory !== execution.serverWorkingDirectory
+      || configuration.serverEgressTeardown !== execution.serverEgressTeardown) {
+      throw new TypeError('Applied Playwright configuration disconnected the independent server egress guard.');
+    }
 
     const fixtureUrl = pathToFileURL(options.fixtureFile ?? path.join(REPOSITORY_ROOT, 'e2e', 'fixtures.ts')).href;
     const constantsUrl = pathToFileURL(path.join(REPOSITORY_ROOT, 'e2e', 'constants.ts')).href;
@@ -241,12 +258,24 @@ export function assertAppliedBrowserSafety(options: Readonly<{
       import { test as original, expect } from ${JSON.stringify(fixtureUrl)};
       import { ALLOWED_ORIGIN } from ${JSON.stringify(constantsUrl)};
       const test = original.extend({
-        browser: async () => { throw new Error('A fixture-contract probe must not launch a browser.'); },
-        context: async ({}, use) => {
-          await use({ handler: null, pattern: null,
-            async route(pattern, handler) { this.pattern = pattern; this.handler = handler; },
-            async unrouteAll() {}
+        browser: async ({}, use) => {
+          const contexts = [];
+          await use({
+            contexts: () => contexts,
+            async newContext() {
+              const context = Object.assign(new EventEmitter(), { handler: null, pattern: null,
+                pages: () => [],
+                async route(pattern, handler) { this.pattern = pattern; this.handler = handler; },
+                async unrouteAll() {},
+                async close() { this.emit('close'); contexts.splice(contexts.indexOf(this), 1); }
+              });
+              contexts.push(context); return context;
+            }
           });
+        },
+        context: async ({browser}, use) => {
+          const context = await browser.newContext();
+          try { await use(context); } finally { await context.close(); }
         },
         page: async ({}, use) => { await use(new EventEmitter()); }
       });
@@ -278,6 +307,7 @@ export function assertAppliedBrowserSafety(options: Readonly<{
     const probeConfig = path.join(temporaryRoot, 'probe.config.cjs');
     writeFileSync(probeConfig, `module.exports = {
       testDir: __dirname, testMatch: 'guard.spec.mts', workers: 1, retries: 0,
+      globalTeardown: ${JSON.stringify(execution.serverEgressTeardown)},
       outputDir: ${JSON.stringify(path.join(temporaryRoot, 'results'))}, reporter: 'json'
     };`, { mode: 0o600 });
     const results = parse(run(['--config', probeConfig]), 1) as unknown as JSONReport;
@@ -324,17 +354,16 @@ export function buildAnalystJourneyAssurance() {
     const tag = `@journey-${journey.id}`;
     const mapped = tests.filter((item) => item.tags.includes(tag));
     if (!mapped.length) throw new TypeError(`Declared analyst journey ${journey.id} has no real Playwright test.`);
-    const bodies = mapped.map((item) => item.body).join('\n');
-    if (!/setViewportSize\s*\(/u.test(bodies)) throw new TypeError(`Declared analyst journey ${journey.id} has no explicit mobile browser outcome.`);
-    if (!/(?:getByRole|getByLabel|toBeFocused|aria-)/u.test(bodies)) throw new TypeError(`Declared analyst journey ${journey.id} has no explicit accessibility browser outcome.`);
     const shardAssignments = [...new Set(mapped.map((item) => assignedShard(item.file, plan)))].sort();
     return Object.freeze({
       id: journey.id,
       tests: mapped.length,
       specifications: Object.freeze([...new Set(mapped.map((item) => item.file))].sort()),
       shards: Object.freeze(shardAssignments),
-      mobileOutcome: true,
-      accessibilityOutcome: true,
+      // Source membership cannot establish rendered outcomes. The required
+      // browser run supplies those results, independent of helper spelling.
+      mobileOutcome: null,
+      accessibilityOutcome: null,
     });
   });
   const declaredTags = new Set(SYNTHETIC_ANALYST_JOURNEYS.map((journey) => `@journey-${journey.id}`));

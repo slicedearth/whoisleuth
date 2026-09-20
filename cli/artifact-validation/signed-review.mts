@@ -16,7 +16,11 @@ import {
 import {
   BULK_REVIEW_MANIFEST_SCHEMA,
   BULK_REVIEW_MANIFEST_VERSION,
-} from '../../packages/investigation/bulk-review-export.mts';
+  SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS,
+} from '../../packages/contracts/investigation-portability.mts';
+import { MAX_BULK_SESSION_ROWS, MAX_BULK_SESSION_SOURCES } from '../../packages/contracts/workspace-portability.mts';
+import { BULK_SORT_KEYS } from '../../packages/workspace/bulk-sort.mts';
+import { normalizeExplicitIsoTimestamp } from '../../packages/evidence/observation.mts';
 import {
   LOOKUP_CLAIM_PASSPORT_SCHEMA,
   LOOKUP_CLAIM_PASSPORT_TARGET_TYPES,
@@ -32,20 +36,18 @@ import {
 import { normalizeDomainControlManifestDocument } from '../../packages/evidence/domain-control-runtime.mts';
 import {
   DOMAIN_CHANGE_PACKET_SCHEMA,
-  DOMAIN_CHANGE_PACKET_VERSION,
+  DOMAIN_CHANGE_PACKET_REVIEW_VERSIONS,
 } from '../../lib/domain-change-packet.mts';
+import { DOMAIN_CHANGE_REVIEW_SCHEMA } from '../../lib/domain-change-review.mts';
 import { DOMAIN_CONTROL_MANIFEST_SCHEMA } from '../../packages/contracts/domain-control-manifest.mts';
 import {
   INVESTIGATION_MANIFEST_SCHEMA,
-  INVESTIGATION_MANIFEST_VERSION,
-  MAX_INVESTIGATION_MANIFEST_ARTIFACTS,
-  MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES,
+  validateInvestigationManifest,
 } from '../investigation-manifest.mts';
 import {
   array,
   boolean,
   domain,
-  digest,
   enumeration,
   exact,
   fail,
@@ -236,10 +238,15 @@ function validateDomainComparison(value: UnknownRecord): void {
   validateIntegrity(root.integrity, 'Domain comparison integrity', root.version, BULK_DOMAIN_COMPARISON_EXPORT_VERSION);
 }
 
-function validateSourceCoverage(value: unknown, label: string): void {
-  const source = exact(value, ['source', 'state'], label);
+function validateNullableObservationTime(value: unknown, label: string): void {
+  if (value !== null && normalizeExplicitIsoTimestamp(value) !== value) fail(label);
+}
+
+function validateSourceCoverage(value: unknown, label: string, observedTime = false): void {
+  const source = exact(value, ['source', 'state', ...(observedTime ? ['observedAt'] : [])], label);
   if (typeof source.source !== 'string' || !/^[a-z][a-z0-9_-]{0,39}$/u.test(source.source)) fail(label);
   enumeration(source.state, SOURCE_STATES.filter((state) => state !== 'not_recorded'), label);
+  if (observedTime) validateNullableObservationTime(source.observedAt, `${label} observedAt`);
 }
 
 function validateProfileContext(value: unknown, label: string): void {
@@ -305,81 +312,81 @@ function validateBulkView(value: unknown, label: string): void {
   text(view.caseDispositionFilter, label, 60, true);
   enumeration(view.reviewStateFilter, ['', 'unreviewed', 'reviewing', 'reviewed', 'deferred'], label);
   text(view.groupBy, label, 60, true);
-  enumeration(view.sortKey, ['domain', 'availability', 'risk', 'opportunity', 'activity', 'registrar', 'mutation'], label);
+  enumeration(view.sortKey, BULK_SORT_KEYS, label);
   if (view.sortDirection !== 1 && view.sortDirection !== -1) fail(label);
 }
 
 function validateBulkReviewManifest(value: UnknownRecord): void {
   const root = exact(value, ['schema', 'version', 'generatedAt', 'observedAt', 'lookupProfile', 'selection', 'view', 'rows', 'limitations', 'integrity'], 'Bulk review manifest');
+  const version = SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS.find((candidate) => candidate === root.version);
+  if (version === undefined) fail('Bulk review manifest version');
+  const sourceTimes = version === BULK_REVIEW_MANIFEST_VERSION;
+  const maximumRows = sourceTimes ? MAX_BULK_SESSION_ROWS : 2_000;
+  const maximumSources = sourceTimes ? MAX_BULK_SESSION_SOURCES : 12;
   iso(root.generatedAt, 'Bulk review manifest generatedAt');
-  iso(root.observedAt, 'Bulk review manifest observedAt');
+  if (sourceTimes) validateNullableObservationTime(root.observedAt, 'Bulk review manifest observedAt');
+  else iso(root.observedAt, 'Bulk review manifest observedAt');
   enumeration(root.lookupProfile, ['deep', 'fast'], 'Bulk review manifest lookup profile');
   const selection = exact(root.selection, ['count', 'domains'], 'Bulk review manifest selection');
-  const domains = strings(selection.domains, 'Bulk review manifest selected domains', 2_000, 253);
+  const domains = strings(selection.domains, 'Bulk review manifest selected domains', maximumRows, 253);
   domains.forEach((item) => domain(item, 'Bulk review manifest selected domain'));
-  if (integer(selection.count, 'Bulk review manifest selection count', 0, 2_000) !== domains.length) fail('Bulk review manifest selection');
+  if (integer(selection.count, 'Bulk review manifest selection count', 0, maximumRows) !== domains.length) fail('Bulk review manifest selection');
   validateBulkView(root.view, 'Bulk review manifest view');
-  const rows = array(root.rows, 'Bulk review manifest rows', 2_000);
+  const rows = array(root.rows, 'Bulk review manifest rows', maximumRows);
   for (const [index, candidate] of rows.entries()) {
-    const row = exact(candidate, ['domain', 'reviewState', 'resultState', 'scanDepth', 'sourceCoverage', 'profileContext'], `Bulk review manifest row ${index + 1}`);
+    const row = exact(candidate, ['domain', 'reviewState', 'resultState', 'scanDepth', ...(sourceTimes ? ['observedAt'] : []), 'sourceCoverage', 'profileContext'], `Bulk review manifest row ${index + 1}`);
     domain(row.domain, 'Bulk review manifest row domain');
     enumeration(row.reviewState, ['unreviewed', 'reviewing', 'reviewed', 'deferred'], 'Bulk review manifest review state');
     enumeration(row.resultState, ['complete', 'error'], 'Bulk review manifest result state');
     enumeration(row.scanDepth, ['deep', 'fast'], 'Bulk review manifest scan depth');
-    array(row.sourceCoverage, 'Bulk review manifest source coverage', 12).forEach((item, sourceIndex) => validateSourceCoverage(item, `Bulk review manifest source ${sourceIndex + 1}`));
+    if (sourceTimes) validateNullableObservationTime(row.observedAt, 'Bulk review manifest row observedAt');
+    array(row.sourceCoverage, 'Bulk review manifest source coverage', maximumSources).forEach((item, sourceIndex) => validateSourceCoverage(item, `Bulk review manifest source ${sourceIndex + 1}`, sourceTimes));
     validateProfileContext(row.profileContext, 'Bulk review manifest profile context');
     if (domains[index] !== row.domain) fail('Bulk review manifest selection');
   }
   if (rows.length !== domains.length) fail('Bulk review manifest selection');
   strings(root.limitations, 'Bulk review manifest limitations', 8, 600);
-  validateIntegrity(root.integrity, 'Bulk review manifest integrity', root.version, BULK_REVIEW_MANIFEST_VERSION);
+  validateIntegrity(root.integrity, 'Bulk review manifest integrity', root.version, version);
 }
 
-function validateInvestigationManifest(value: UnknownRecord): void {
-  const root = exact(value, ['schema', 'version', 'generatedAt', 'application', 'workflow', 'configuration', 'artifacts', 'steps', 'summary', 'limitations', 'integrity'], 'Investigation manifest');
-  iso(root.generatedAt, 'Investigation manifest generatedAt');
-  const application = exact(root.application, ['name', 'version'], 'Investigation manifest application');
-  if (application.name !== 'WHOISleuth CLI' || typeof application.version !== 'string'
-    || !/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(application.version)) fail('Investigation manifest application');
-  text(root.workflow, 'Investigation manifest workflow', 160);
-  const configuration = exact(root.configuration, ['digestSha256'], 'Investigation manifest configuration');
-  if (configuration.digestSha256 !== null) digest(configuration.digestSha256, 'Investigation manifest configuration');
-  const artifacts = array(root.artifacts, 'Investigation manifest artifacts', MAX_INVESTIGATION_MANIFEST_ARTIFACTS, 1);
-  const steps = array(root.steps, 'Investigation manifest steps', MAX_INVESTIGATION_MANIFEST_ARTIFACTS, 1);
-  let totalBytes = 0;
-  for (const [index, candidate] of artifacts.entries()) {
-    const item = exact(candidate, ['sequence', 'id', 'schema', 'version', 'byteLength', 'contentDigestSha256', 'canonicalDigestSha256'], `Investigation manifest artifact ${index + 1}`);
-    if (integer(item.sequence, 'Investigation manifest artifact sequence', 1, artifacts.length) !== index + 1
-      || item.id !== `artifact-${index + 1}`) fail('Investigation manifest artifact order');
-    if (item.schema !== null) text(item.schema, 'Investigation manifest artifact schema', 160);
-    if (item.version !== null) integer(item.version, 'Investigation manifest artifact version', 1, 1_000);
-    totalBytes += integer(item.byteLength, 'Investigation manifest artifact bytes', 1, 15 * 1024 * 1024);
-    digest(item.contentDigestSha256, 'Investigation manifest content digest');
-    digest(item.canonicalDigestSha256, 'Investigation manifest canonical digest');
-    const step = exact(steps[index], ['sequence', 'artifactId', 'contentDigestSha256'], `Investigation manifest step ${index + 1}`);
-    if (step.sequence !== item.sequence || step.artifactId !== item.id || step.contentDigestSha256 !== item.contentDigestSha256) fail('Investigation manifest step linkage');
-  }
-  const summary = exact(root.summary, ['artifactCount', 'totalBytes'], 'Investigation manifest summary');
-  if (integer(summary.artifactCount, 'Investigation manifest artifact count', 1, MAX_INVESTIGATION_MANIFEST_ARTIFACTS) !== artifacts.length
-    || integer(summary.totalBytes, 'Investigation manifest total bytes', 1, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES) !== totalBytes) fail('Investigation manifest summary');
-  strings(root.limitations, 'Investigation manifest limitations', 8, 600);
-  validateIntegrity(root.integrity, 'Investigation manifest integrity', root.version, INVESTIGATION_MANIFEST_VERSION);
+function validateSourceObservations(value: unknown, label: string): UnknownRecord[] {
+  const names = new Set<string>();
+  return array(value, label, 16).map((candidate) => {
+    const source = exact(candidate, ['label', 'source', 'state', 'observedAt'], label);
+    const name = text(source.label, `${label} label`, 120).toLowerCase();
+    if (names.has(name)) fail(`${label} duplicate label`);
+    names.add(name);
+    text(source.source, `${label} source`, 240);
+    enumeration(source.state, ['observed', 'partial', 'unavailable'], `${label} state`);
+    iso(source.observedAt, `${label} observedAt`);
+    return source;
+  });
 }
 
-function validateReviewMatrix(value: unknown, label: string): void {
+function validateReviewMatrix(value: unknown, label: string, sources?: readonly UnknownRecord[]): void {
   for (const [rowIndex, candidate] of array(value, label, 500).entries()) {
     const row = exact(candidate, ['owner', 'type', 'state', 'observations'], `${label} row ${rowIndex + 1}`);
     text(row.owner, `${label} owner`, 253);
     enumeration(row.type, DNS_TYPES, `${label} type`);
     const observations = array(row.observations, `${label} observations`, 16);
+    if (sources && observations.length !== sources.length) fail(`${label} source coverage`);
     let complete = 0;
     const signatures = new Set<string>();
+    const names = new Set<string>();
     for (const observationCandidate of observations) {
-      const observation = exact(observationCandidate, ['label', 'source', 'state', 'values', 'ttlRange'], `${label} observation`);
+      const observation = exact(observationCandidate, ['label', 'source', 'state', 'values', 'ttlRange', ...(sources ? ['observedAt'] : [])], `${label} observation`);
       text(observation.label, `${label} observation label`, 120);
       text(observation.source, `${label} observation source`, 240);
       const state = enumeration(observation.state, ['observed', 'partial', 'unavailable'], `${label} observation state`);
       const values = strings(observation.values, `${label} observation values`, 500, 16_384);
+      if (sources) {
+        const name = String(observation.label).toLowerCase();
+        if (names.has(name)) fail(`${label} duplicate observation`);
+        names.add(name);
+        const source = sources.find((item) => item.label === observation.label);
+        if (!source || ['label', 'source', 'state', 'observedAt'].some((key) => observation[key] !== source[key])) fail(`${label} source provenance`);
+        iso(observation.observedAt, `${label} observation time`);
+      }
       if (state === 'observed') { complete += 1; signatures.add(JSON.stringify(values)); }
       if (observation.ttlRange !== null) {
         const range = exact(observation.ttlRange, ['minimum', 'maximum'], `${label} TTL range`);
@@ -393,14 +400,16 @@ function validateReviewMatrix(value: unknown, label: string): void {
   }
 }
 
-function validateDomainChangeReview(value: unknown, label: string): UnknownRecord {
-  const review = exact(value, ['schema', 'version', 'generatedAt', 'domain', 'state', 'authoritativeRecordMatrix', 'resolverDivergenceMatrix', 'dnssecAutomation', 'acmeDependencies', 'certificate', 'services', 'hsts', 'gate', 'limitations'], label);
-  if (review.schema !== 'whoisleuth.domain-change.review' || review.version !== 1) fail(label);
+function validateDomainChangeReview(value: unknown, label: string, version: number): UnknownRecord {
+  const retainedTimes = version >= 2;
+  const review = exact(value, ['schema', 'version', 'generatedAt', 'domain', 'state', 'authoritativeRecordMatrix', 'resolverDivergenceMatrix', 'dnssecAutomation', 'acmeDependencies', 'certificate', 'services', 'hsts', 'gate', 'limitations', ...(retainedTimes ? ['sourceObservations'] : [])], label);
+  if (review.schema !== DOMAIN_CHANGE_REVIEW_SCHEMA || review.version !== version) fail(label);
   iso(review.generatedAt, `${label} generatedAt`);
   domain(review.domain, `${label} domain`);
   enumeration(review.state, ['ready', 'review'], `${label} state`);
-  validateReviewMatrix(review.authoritativeRecordMatrix, `${label} authority matrix`);
-  validateReviewMatrix(review.resolverDivergenceMatrix, `${label} resolver matrix`);
+  const sources = retainedTimes ? exact(review.sourceObservations, ['authorities', 'resolvers'], `${label} source observations`) : null;
+  validateReviewMatrix(review.authoritativeRecordMatrix, `${label} authority matrix`, sources ? validateSourceObservations(sources.authorities, `${label} authority sources`) : undefined);
+  validateReviewMatrix(review.resolverDivergenceMatrix, `${label} resolver matrix`, sources ? validateSourceObservations(sources.resolvers, `${label} resolver sources`) : undefined);
   const automation = exact(review.dnssecAutomation, ['state', 'cdsObserved', 'cdnskeyObserved', 'csyncObserved', 'conflictingTypes', 'detail'], `${label} DNSSEC automation`);
   enumeration(automation.state, ['not_observed', 'conflict', 'partial', 'review_ready'], `${label} DNSSEC automation`);
   boolean(automation.cdsObserved, `${label} CDS observed`);
@@ -416,8 +425,12 @@ function validateDomainChangeReview(value: unknown, label: string): UnknownRecor
     optionalText(dependency.provider, `${label} ACME provider`, 120);
     enumeration(dependency.state, ['confirmed', 'partial', 'unknown'], `${label} ACME state`);
   }
-  const certificate = exact(review.certificate, ['state', 'continuity', 'findings'], `${label} certificate`);
+  const certificate = exact(review.certificate, ['state', 'continuity', 'findings', ...(retainedTimes ? ['observedAt'] : [])], `${label} certificate`);
   enumeration(certificate.state, ['not_supplied', 'observed', 'partial', 'unavailable'], `${label} certificate state`);
+  if (retainedTimes) {
+    iso(certificate.observedAt, `${label} certificate observedAt`, true);
+    if ((certificate.state === 'not_supplied') !== (certificate.observedAt === null)) fail(`${label} certificate observation time`);
+  }
   enumeration(certificate.continuity, ['unknown', 'retained', 'changes'], `${label} certificate continuity`);
   strings(certificate.findings, `${label} certificate findings`, 8, 600);
   for (const candidate of array(review.services, `${label} services`, 1_000)) {
@@ -535,6 +548,9 @@ function expectedDomainChangeSummary(
 
 function validateDomainChangePacket(value: UnknownRecord): void {
   const root = exact(value, ['schema', 'version', 'generatedAt', 'domain', 'reference', 'state', 'gate', 'summary', 'evidence', 'limitations', 'integrity'], 'Domain change packet');
+  const version = integer(root.version, 'Domain change packet version', 1, 1_000);
+  const reviewVersion = DOMAIN_CHANGE_PACKET_REVIEW_VERSIONS[version];
+  if (reviewVersion === undefined) fail('Domain change packet version');
   iso(root.generatedAt, 'Domain change packet generatedAt');
   domain(root.domain, 'Domain change packet domain');
   text(root.reference, 'Domain change packet reference', 200);
@@ -556,8 +572,8 @@ function validateDomainChangePacket(value: UnknownRecord): void {
   enumeration(summary.postChangeState, ['ready', 'review'], 'Domain change packet post-change state');
   enumeration(summary.assuranceState, ['incomplete', 'needs_review', 'ready'], 'Domain change packet assurance state');
   const evidence = exact(root.evidence, ['preChange', 'postChange', 'assurance'], 'Domain change packet evidence');
-  const pre = validateDomainChangeReview(evidence.preChange, 'Domain change packet pre-change review');
-  const post = validateDomainChangeReview(evidence.postChange, 'Domain change packet post-change review');
+  const pre = validateDomainChangeReview(evidence.preChange, 'Domain change packet pre-change review', reviewVersion);
+  const post = validateDomainChangeReview(evidence.postChange, 'Domain change packet post-change review', reviewVersion);
   const assurance = validatePlannedAssurance(evidence.assurance, 'Domain change packet assurance');
   const assuranceResult = assurance.result as UnknownRecord;
   if (pre.generatedAt !== root.generatedAt || post.generatedAt !== root.generatedAt || assurance.generatedAt !== root.generatedAt
@@ -584,7 +600,7 @@ function validateDomainChangePacket(value: UnknownRecord): void {
       || !sameValues(item.afterValues as unknown[], expected.afterValues);
   })) fail('Domain change packet summary');
   strings(root.limitations, 'Domain change packet limitations', 8, 600);
-  validateIntegrity(root.integrity, 'Domain change packet integrity', root.version, DOMAIN_CHANGE_PACKET_VERSION);
+  validateIntegrity(root.integrity, 'Domain change packet integrity', root.version, version);
 }
 
 export function validateSignedDigestArtifactStructure(schema: string, value: UnknownRecord): void {

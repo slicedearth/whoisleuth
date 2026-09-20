@@ -33,6 +33,7 @@ import {
   MAX_TAGS_PER_CASE,
 } from '../contracts/case-portability.mts';
 import type { CaseInvestigationBranch } from './case-investigation-branch-model.mts';
+import type { CaseAttachment } from './case-attachment-model.mts';
 import {
   CASE_DISPOSITIONS,
   CASE_STATUSES,
@@ -101,10 +102,13 @@ export type EvidenceFactor = { label: string; points: number };
 export type CaseEvidenceSnapshot = {
   id: string;
   fingerprint: string;
+  factorOrder?: 'code-unit-v1';
   firstCapturedAt: string;
   capturedAt: string;
   source: string;
   inputHostname: string | null;
+  observationHostname?: string | null;
+  webObservationMode?: 'selected_url';
   scanDepth: string;
   availability: string | null;
   confidence: string | null;
@@ -151,12 +155,13 @@ export type CaseEvidenceSnapshot = {
 
 export type CaseEvidenceMaterial = Omit<
   CaseEvidenceSnapshot,
-  'id' | 'fingerprint' | 'firstCapturedAt' | 'capturedAt' | 'source'
+  'id' | 'fingerprint' | 'factorOrder' | 'firstCapturedAt' | 'capturedAt' | 'source'
 >;
 
 export type CaseRecord = {
   id: string;
   domain: string;
+  title?: string;
   status: CaseStatus;
   disposition: CaseDisposition;
   reviewReasonCode?: string | null;
@@ -174,6 +179,7 @@ export type CaseRecord = {
   observedEffects: CaseObservedEffectHistory;
   closures: CaseClosureHistory;
   branches?: CaseInvestigationBranch[];
+  attachments?: CaseAttachment[];
   createdAt: string;
   updatedAt: string;
 };
@@ -181,6 +187,7 @@ export type CaseRecord = {
 export type CaseStore = { version: typeof CASE_SCHEMA_VERSION; cases: CaseRecord[] };
 export type CaseInput = {
   domain: unknown;
+  title?: unknown;
   status?: unknown;
   disposition?: unknown;
   reviewReasonCode?: unknown;
@@ -203,7 +210,7 @@ export type CaseInput = {
   branchUpdate?: unknown;
   note?: unknown;
 };
-export type CasePatch = Omit<Partial<CaseInput>, 'domain'>;
+export type CasePatch = Omit<Partial<CaseInput>, 'domain'> & { expectedTitle?: string };
 export type SnapshotOptions = {
   source?: string;
   fallback?: string | null;
@@ -213,6 +220,7 @@ export type SnapshotOptions = {
 export type EvidenceChange = { field: string; label: string; before: unknown; after: unknown; tone: string };
 export type CompareFieldSpec = {
   field: keyof CaseEvidenceSnapshot;
+  scope: 'registration' | 'hostname' | 'web';
   label: string;
   type: string;
   depthGate?: 'both-deep' | 'comparable';

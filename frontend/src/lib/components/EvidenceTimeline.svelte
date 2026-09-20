@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { CaseRecord } from '$lib/cases';
+  import { evidenceTime } from '$lib/analysis/evidence-time.ts';
+  import { currentCaseEvidence } from '$lib/analysis/case-record-model.ts';
   import {
     currentEvidenceSummary,
     deriveTimeline,
@@ -17,6 +19,7 @@
   let expandedSnapshots = $state(new Set<string>());
 
   const summary = $derived(currentEvidenceSummary(record.evidenceHistory));
+  const selection = $derived(currentCaseEvidence(record));
   const timeline = $derived(deriveTimeline(record.evidenceHistory));
   const visibleTimeline = $derived(changedOnly ? filterChangedOnly(timeline) : timeline);
   const filteredIncomparable = $derived(changedOnly && timeline.some(entry => entry.hasIncomparableChange && !visibleTimeline.includes(entry)));
@@ -41,9 +44,7 @@
   }
 
   function date(value: string | null) {
-    if (!value) return 'Not observed';
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+    return evidenceTime(value)?.readable ?? (value ? 'Time unavailable' : 'Not observed');
   }
 
   function toggleSnapshot(id: string) {
@@ -54,6 +55,7 @@
   }
 </script>
 
+{#if selection.limitation}<p class="timeline-incomparable-note">{selection.limitation} Review the retained snapshots below.</p>{/if}
 {#if summary}
   <dl class="evidence">
     <dt>Availability</dt><dd>{summary.availability ?? '—'}</dd>
@@ -70,7 +72,7 @@
     <h3 id={`timeline-heading-${record.id}`}>Evidence timeline <small>{timeline.length} snapshot{timeline.length===1?'':'s'}</small></h3>
     {#if timeline.length}
       <div class="timeline-controls">
-        <button aria-expanded={timelineExpanded} aria-controls={`timeline-list-${record.id}`} onclick={()=>timelineExpanded=!timelineExpanded}>{timelineExpanded?'Collapse all':'Expand all'}</button>
+        <button aria-expanded={timelineExpanded} aria-controls={timelineExpanded ? `timeline-list-${record.id}` : undefined} onclick={()=>timelineExpanded=!timelineExpanded}>{timelineExpanded?'Collapse all':'Expand all'}</button>
         <button aria-pressed={changedOnly} onclick={()=>changedOnly=!changedOnly}>Material changes only</button>
       </div>
     {/if}
@@ -86,7 +88,7 @@
         {@const isExpanded=expandedSnapshots.has(entry.snapshot.id)}
         <li class="timeline-entry">
           <div class="timeline-entry-head">
-            <button id={snapId} class="timeline-toggle" aria-expanded={isExpanded} aria-controls={bodyId} onclick={()=>toggleSnapshot(entry.snapshot.id)}>
+            <button id={snapId} class="timeline-toggle" aria-expanded={isExpanded} aria-controls={isExpanded ? bodyId : undefined} onclick={()=>toggleSnapshot(entry.snapshot.id)}>
               <span class="timeline-index">#{entry.displayIndex}</span>
               <time datetime={entry.snapshot.capturedAt}>{entry.hasRepeatedObservation?'Last observed ':'Captured '}{date(entry.snapshot.capturedAt)}</time>
             </button>
@@ -114,7 +116,7 @@
               {/each}
             </ul>
           {/if}
-          {#if entry.hasIncomparableChange}<p class="timeline-incomparable-note">{incomparableNote(entry.incomparableReasons)}</p>{/if}
+          {#if entry.hasIncomparableChange}<p class="timeline-incomparable-note">{entry.orderingLimitation ?? incomparableNote(entry.incomparableReasons)}</p>{/if}
 
           {#if isExpanded}
             <div class="timeline-detail" id={bodyId} role="region" aria-labelledby={snapId}>

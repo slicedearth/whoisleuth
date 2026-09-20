@@ -1,15 +1,14 @@
 #!/usr/bin/env node
 
-import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { summarizePlaywrightResults } from './playwright-results-summary.mts';
+import { readPlaywrightResultData, summarizePlaywrightResults } from './playwright-results-summary.mts';
 import {
-  MAX_TIMING_REPORT_BYTES,
   buildBalancedBrowserShardPlan,
   parsePlaywrightTimingData,
   readVerificationTimingProfile,
+  readVerificationTestInventory,
   type VerificationTimingProfile,
 } from './verification-timing-profile.mts';
 
@@ -57,8 +56,9 @@ function identity(files: readonly string[]): string {
 export function aggregatePlaywrightShardTimings(
   reports: readonly unknown[],
   profile: VerificationTimingProfile = readVerificationTimingProfile(),
+  inventory: readonly string[] = readVerificationTestInventory(),
 ): Readonly<{ aggregate: BrowserShardTimingAggregate; summary: BrowserShardTimingSummary }> {
-  const plan = buildBalancedBrowserShardPlan(profile);
+  const plan = buildBalancedBrowserShardPlan(profile, undefined, inventory);
   if (reports.length !== plan.shardCount) {
     throw new TypeError(`Browser timing aggregation requires exactly ${plan.shardCount} functional shard reports.`);
   }
@@ -128,7 +128,7 @@ export function aggregatePlaywrightShardTimings(
   return Object.freeze({
     aggregate: Object.freeze({
       reportVersion: 1,
-      inventoryFingerprint: profile.inventoryFingerprint,
+      inventoryFingerprint: plan.inventoryFingerprint,
       files: Object.freeze(files),
     }),
     summary: Object.freeze({
@@ -171,8 +171,6 @@ function reportPaths(args: readonly string[]): Readonly<{ paths: readonly string
   }
   for (const filename of paths) {
     if (!path.isAbsolute(filename)) throw new TypeError('Browser shard report paths must be absolute.');
-    const size = statSync(filename).size;
-    if (size < 1 || size > MAX_TIMING_REPORT_BYTES) throw new TypeError('Browser shard report has an invalid byte count.');
   }
   return Object.freeze({ paths: Object.freeze(paths), summary });
 }
@@ -180,11 +178,7 @@ function reportPaths(args: readonly string[]): Readonly<{ paths: readonly string
 export function main(args = process.argv.slice(2)): number {
   try {
     const options = reportPaths(args);
-    const reports = options.paths.map((filename) => {
-      let parsed: unknown;
-      try { parsed = JSON.parse(readFileSync(filename, 'utf8')) as unknown; } catch { throw new TypeError('Browser shard report must be valid JSON.'); }
-      return parsed;
-    });
+    const reports = options.paths.map(readPlaywrightResultData);
     const result = aggregatePlaywrightShardTimings(reports);
     process.stdout.write(options.summary
       ? renderBrowserShardTimingSummary(result.summary)

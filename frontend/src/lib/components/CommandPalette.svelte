@@ -3,21 +3,39 @@
   import { page } from '$app/state';
   import { onMount, tick } from 'svelte';
   import IntelligenceIcon from '$lib/components/IntelligenceIcon.svelte';
+  import DeferredSurface from './DeferredSurface.svelte';
   import { isNavigationItemActive, type NavigationItem } from '$lib/workspaces';
+  import { loadDeferredModule, reloadDeferredModulePage } from '$lib/deferred-module';
 
   type ConsoleCommand = NavigationItem & {
     group: string;
   };
 
   let {
-    commands,
     onclose,
   }: {
-    commands: readonly ConsoleCommand[];
     onclose: (restoreFocus?: boolean) => void | Promise<void>;
   } = $props();
 
+  let commands = $state<readonly ConsoleCommand[]>([]);
+  let destinationsState = $state<'loading' | 'ready' | 'unavailable'>('loading');
   let query = $state('');
+  let mode = $state<'pages' | 'saved'>('pages');
+
+  async function selectMode(next: 'pages' | 'saved') {
+    mode = next;
+    await tick();
+    if (next === 'pages') searchInput?.focus();
+  }
+
+  async function openSaved(href: string) {
+    const target = new URL(href, window.location.origin);
+    if (target.origin !== window.location.origin) return;
+    await onclose(false);
+    await goto(`${target.pathname}${target.search}${target.hash}`);
+    await tick();
+    document.getElementById('main-content')?.focus({ preventScroll: true });
+  }
   let selectedIndex = $state(0);
   let searchInput = $state<HTMLInputElement>();
   let dialog = $state<HTMLElement>();
@@ -33,13 +51,20 @@
     }));
   const selectedCommand = $derived(filteredCommands[selectedIndex]);
   const activeOptionId = $derived(selectedCommand ? `command-option-${selectedIndex}` : undefined);
-  const selectedAnnouncement = $derived(selectedCommand
+  const selectedAnnouncement = $derived(destinationsState !== 'ready' ? '' : selectedCommand
     ? `${selectedCommand.label}, ${selectedCommand.group}${isNavigationItemActive(selectedCommand, page.url) ? ', current page' : ''}${selectedCommand.opensInNewTab ? ', opens in a new tab' : ''}.`
     : 'No matching destination.');
 
   onMount(() => {
-    selectedIndex = Math.max(0, commands.findIndex((command) => isNavigationItemActive(command, page.url)));
+    const controller = new AbortController();
+    void loadDeferredModule(() => import('$lib/console-command-navigation'), { signal: controller.signal }).then(({ consoleCommandNavigation }) => {
+      if (controller.signal.aborted) return;
+      commands = consoleCommandNavigation;
+      destinationsState = 'ready';
+      selectedIndex = query ? 0 : Math.max(0, commands.findIndex((command) => isNavigationItemActive(command, page.url)));
+    }).catch(() => { if (!controller.signal.aborted) destinationsState = 'unavailable'; });
     void tick().then(() => searchInput?.focus());
+    return () => controller.abort();
   });
 
   function close() {
@@ -76,7 +101,7 @@
 
   function focusables() {
     if (!dialog) return [];
-    return [...dialog.querySelectorAll<HTMLElement>('input,a[href],button:not([disabled]):not([tabindex="-1"])')]
+    return [...dialog.querySelectorAll<HTMLElement>('input,select,textarea,summary,a[href],button:not([disabled]):not([tabindex="-1"])')]
       .filter((element) => element.getClientRects().length > 0);
   }
 
@@ -172,6 +197,10 @@
       </div>
       <button type="button" class="palette-close" aria-label="Close command palette" onclick={close}>Esc</button>
     </header>
+    <div class="search-modes" role="group" aria-label="Search scope"><button type="button" aria-pressed={mode === 'pages'} onclick={() => void selectMode('pages')}>Pages and tools</button><button type="button" aria-pressed={mode === 'saved'} onclick={() => void selectMode('saved')}>Saved work</button></div>
+    {#if mode === 'saved'}
+      <div class="saved-search"><DeferredSurface load={() => import('./SavedWorkSearch.svelte')} props={{compact:true,onopen:openSaved}} loadingLabel="Opening saved-work search…" unavailableLabel="Saved-work search could not be opened." /></div>
+    {:else}
     <label for="command-search">Search pages and tools</label>
     <div class="command-search">
       <span aria-hidden="true">❯</span>
@@ -181,8 +210,8 @@
         bind:value={query}
         role="combobox"
         aria-autocomplete="list"
-        aria-controls="command-results"
-        aria-expanded="true"
+        aria-controls={destinationsState === 'ready' && filteredCommands.length ? 'command-results' : undefined}
+        aria-expanded={destinationsState === 'ready' && filteredCommands.length > 0}
         aria-activedescendant={activeOptionId}
         oninput={resetSelection}
         autocomplete="off"
@@ -192,7 +221,12 @@
     </div>
     <span class="sr-only" role="status" aria-live="polite">{selectedAnnouncement}</span>
     {#if openError}<p class="open-error" role="alert">{openError}</p>{/if}
-    {#if filteredCommands.length}
+    {#if destinationsState === 'loading'}
+      <p class="no-results" role="status">Loading destinations…</p>
+    {:else if destinationsState === 'unavailable'}
+      <p class="open-error" role="alert">Destinations could not be loaded. The sidebar remains available. Reloading this page clears unsaved form edits.</p>
+      <button class="btn" type="button" onclick={reloadDeferredModulePage}>Reload destinations</button>
+    {:else if filteredCommands.length}
       <ul id="command-results" role="listbox" aria-label="Console destinations" bind:this={resultsList}>
         {#each filteredCommands as command,index (command.href)}
           <li role="presentation" class:selected={index === selectedIndex}>
@@ -223,10 +257,12 @@
       <p class="no-results">No page or tool matches that search.</p>
     {/if}
     <footer><span><kbd>↑</kbd><kbd>↓</kbd> select</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></footer>
+    {/if}
   </div>
 </div>
 
 <style>
+  .search-modes{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border)}.search-modes button{min-height:40px;padding:6px 12px;border:1px solid transparent;background:transparent;color:var(--muted);font:inherit}.search-modes button[aria-pressed='true']{border-color:var(--border);background:var(--panel-raised);color:var(--text)}.saved-search{min-height:0;overflow:auto;overscroll-behavior:contain}
   .palette-layer{position:fixed;inset:0;z-index:100;display:grid;place-items:start center;padding:clamp(72px,12vh,130px) 14px 24px}
   .palette-backdrop{position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:0;background:rgb(var(--shadow-rgb) / .76);backdrop-filter:blur(4px)}
   .command-palette{position:relative;display:flex;flex-direction:column;width:min(650px,100%);max-height:min(620px,calc(100dvh - 100px));padding:0;overflow:hidden;border-color:var(--border-strong);box-shadow:0 32px 100px rgb(var(--shadow-rgb) / .5)}

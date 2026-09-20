@@ -32,6 +32,7 @@ import {
 import { buildUnifiedLookupResponse } from './lookup-response.mts';
 import { createLookupTimingTracker } from './lookup-diagnostics.mts';
 import type { LookupTimingSource } from './lookup-diagnostics.mts';
+import { prepareSelectedLookupUrl } from '../packages/evidence/lookup-target.mts';
 
 type LookupOptions = {
   fetchRdapRecord?: typeof fetchRdapRecord;
@@ -49,6 +50,7 @@ type LookupOptions = {
   sslblNow?: string | number | Date;
   fast?: boolean;
   compact?: boolean;
+  selectedUrl?: string;
   externalIntelligence?: boolean;
   malwareHostIntelligence?: boolean;
   malwareIocIntelligence?: boolean;
@@ -57,6 +59,8 @@ type LookupOptions = {
   now?: () => number;
   onSourceSettled?: (settlement: LookupSourceSettlement) => void;
   signal?: AbortSignal;
+  /** HTTP operation leases outlive cancelled delivery while started collectors drain. */
+  waitForStartedCollectors?: boolean;
   dnsResolverServers?: readonly string[];
 };
 async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOptions = {}) {
@@ -82,8 +86,13 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const securityTxtRequested = options.securityTxt === true;
   const featurePolicy = options.featurePolicy || networkFeaturePolicy();
   const timing = createLookupTimingTracker(!fast && !compact, options.now || Date.now);
+  const startedCollectors: Promise<unknown>[] = [];
   const measure = <T,>(source: LookupTimingSource, operation: () => Promise<T> | T) => (
-    timing.measure(source, () => abortable(operation, options.signal))
+    timing.measure(source, () => abortable(() => {
+      const running = Promise.resolve(operation());
+      if (options.waitForStartedCollectors) startedCollectors.push(running.catch(() => {}));
+      return running;
+    }, options.signal))
   );
   const rdapEnabled = featureDecision('rdap', featurePolicy).enabled;
   const whoisEnabled = featureDecision('whois', featurePolicy).enabled;
@@ -91,13 +100,18 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const websiteProbeEnabled = featureDecision('website_probe', featurePolicy).enabled;
   const dnsIntelligenceEnabled = featureDecision('dns_intelligence', featurePolicy).enabled;
   const skipWhois = fast || !whoisEnabled;
+  const selectedUrl = options.selectedUrl === undefined ? undefined
+    : prepareSelectedLookupUrl(options.selectedUrl, classified.inputHostname ?? classified.value);
+  if (selectedUrl && (classified.type !== 'domain' || fast || compact || !availabilityEnabled || !websiteProbeEnabled)) {
+    throw new TypeError('Selected URL collection requires an enabled full Deep domain lookup.');
+  }
 
   const rdapPromise = rdapEnabled
-    ? measure('rdap', () => fetchRdap(classified.type, classified.value))
+    ? measure('rdap', () => fetchRdap(classified.type, classified.value, options.signal ? { signal: options.signal } : {}))
     : Promise.resolve(null);
   const whoisPromise = skipWhois
     ? Promise.resolve(null)
-    : measure('whois', () => fetchWhois(classified.value));
+    : measure('whois', () => fetchWhois(classified.value, options.signal ? { signal: options.signal } : {}));
   // Registrar RDAP is a separately attributed deep-lookup enrichment. It may
   // overlap the WHOIS chain, but it never joins the promises used to decide
   // availability and can add up to its own bounded timeout to a deep lookup.
@@ -117,7 +131,10 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
         includeStructuredDataIdentity: !fast && !compact,
         includeTechnologyProfile: !fast,
         includeSecurityPosture: !compact,
+        ...(!fast && !compact ? { observationHostname: classified.inputHostname } : {}),
+        ...(selectedUrl ? { selectedUrl } : {}),
         featurePolicy,
+        ...(options.signal ? { signal: options.signal } : {}),
         rdapRecordPromise: rdapPromise,
         whoisChainPromise: whoisPromise,
         ...(selectedDnsResolvers ? {
@@ -244,7 +261,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     }
   }
 
-  return buildUnifiedLookupResponse({
+  try { return await buildUnifiedLookupResponse({
     availabilityEnabled,
     availabilityPromise,
     classified,
@@ -267,7 +284,9 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     urlscanIntelligencePromise,
     whoisEnabled,
     whoisPromise,
-  });
+  }); } finally {
+    if (options.waitForStartedCollectors) await Promise.all(startedCollectors);
+  }
 }
 
 export { runUnifiedLookup };

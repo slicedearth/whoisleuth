@@ -7,12 +7,13 @@ import {
   retainedPostureObservationId,
 } from '../frontend/src/lib/analysis/domain-posture-matrix.ts';
 import { requiredValue } from './value-assertions.mts';
+import { postureObservation, postureSource } from './posture-observation-fixture.mts';
 
 const NOW = '2026-08-10T00:00:00.000Z';
 const OBSERVED = '2026-08-09T00:30:00.000Z';
 
 function profile() {
-  return requiredValue(normalizeBrandProfile({
+  const value = requiredValue(normalizeBrandProfile({
     id: 'portfolio-profile',
     name: 'Portfolio fixture',
     officialDomains: ['no-baseline.example', 'unavailable.example', 'review.example', 'aligned.example'],
@@ -36,10 +37,10 @@ function profile() {
         observationHistory: [{
           observedAt: OBSERVED,
           checks: [
-            { id: 'nameservers', status: 'pass', records: ['ns2.example'] },
-            { id: 'mx', status: 'pass', records: ['20 mail2.example'] },
-            { id: 'caa', status: 'warning', records: ['0 issue "ca.example"'] },
-            { id: 'registration_lock', status: 'warning', records: [] },
+            { id: 'nameservers', status: 'pass', records: ['ns2.example'], sourceContext: postureSource('dns_ns', OBSERVED) },
+            { id: 'mx', status: 'pass', records: ['20 mail2.example'], sourceContext: postureSource('dns_mx', OBSERVED) },
+            { id: 'caa', status: 'warning', records: ['0 issue "ca.example"'], sourceContext: postureSource('dns_caa', OBSERVED) },
+            { id: 'registration_lock', status: 'warning', records: ['ok'], sourceContext: postureSource('registry_rdap', OBSERVED) },
           ],
         }],
         updatedAt: '2026-08-09T01:00:00.000Z',
@@ -51,7 +52,7 @@ function profile() {
         observationHistory: [{
           observedAt: OBSERVED,
           checks: [
-            { id: 'nameservers', status: 'pass', records: ['ns1.example'] },
+            { id: 'nameservers', status: 'pass', records: ['ns1.example'], sourceContext: postureSource('dns_ns', OBSERVED) },
             { id: 'mx', status: 'info', records: [] },
           ],
         }],
@@ -66,6 +67,10 @@ function profile() {
     createdAt: NOW,
     updatedAt: NOW,
   }, { nowIso: NOW }));
+  for (const baseline of value.desiredPostureBaselines) {
+    if (baseline.observationHistory) baseline.observationHistory = baseline.observationHistory.map((observation) => postureObservation(value, baseline.domain, observation));
+  }
+  return value;
 }
 
 describe('cross-domain posture matrix', () => {

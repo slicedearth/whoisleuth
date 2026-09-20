@@ -3,7 +3,11 @@
 // those intermediate representations exist only long enough to derive a digest.
 
 import { createHash } from 'node:crypto';
-import { analyzeStaticHtml } from './static-html-analysis.mts';
+import { analyzeStaticHtml, type StaticHtmlAnalysis } from './static-html-analysis.mts';
+import {
+  PAGE_FINGERPRINT_VERSION, PAGE_FINGERPRINT_PARSERS, PAGE_FINGERPRINT_TOKEN_LIMITS,
+} from '../packages/contracts/page-fingerprints.mts';
+import { MAX_HOMEPAGE_BYTES } from './outbound-request-bounds.mts';
 
 type ExactBodyHash = {
   algorithm: 'sha256';
@@ -22,14 +26,14 @@ type PageFingerprintOptions = {
   resources?: FingerprintResourceInput | null;
   trackingIdentifiers?: unknown[];
   identifiersTruncated?: boolean;
+  htmlAnalysis?: StaticHtmlAnalysis;
 };
 
 type FormShape = { method: string; action: string; controls: Record<string, number> };
 
-const PAGE_FINGERPRINT_VERSION = 1;
-const MAX_FINGERPRINT_SOURCE_BYTES = 300000;
+const MAX_FINGERPRINT_SOURCE_BYTES = MAX_HOMEPAGE_BYTES;
 const MAX_FINGERPRINT_TAG_LENGTH = 4096;
-const MAX_FINGERPRINT_TOKENS = 4096;
+const MAX_FINGERPRINT_TOKENS = PAGE_FINGERPRINT_TOKEN_LIMITS[PAGE_FINGERPRINT_VERSION];
 const MAX_FINGERPRINT_ATTRIBUTES = 64;
 const MAX_VISIBLE_TEXT_TOKENS = 8192;
 const MAX_FORM_FINGERPRINTS = 50;
@@ -38,11 +42,6 @@ const MAX_RESOURCE_HOSTS = 30;
 const MAX_IDENTIFIER_VALUES = 30;
 const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu;
 const HAS_CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u;
-const COMMENT_RE = /<!--[\s\S]*?(?:-->|$)/g;
-const RAW_BODY_RE = /<(script|style|noscript|textarea|template)\b([^>]*)>[\s\S]*?(?:<\/\1\s*>|$)/gi;
-const MARKUP_TOKEN_RE = /<\/?[A-Za-z][A-Za-z0-9:-]*\b[^>]*>|[^<]+/g;
-const TAG_NAME_RE = /^<\s*(\/?)\s*([A-Za-z][A-Za-z0-9:-]*)/;
-const ATTRIBUTE_RE = /([^\s"'<>\/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
 const WORD_RE = /[\p{L}\p{N}]+/gu;
 const URL_ATTRIBUTE_NAMES = new Set(['action', 'cite', 'data', 'formaction', 'href', 'poster', 'src']);
 const OMITTED_ATTRIBUTE_NAMES = new Set(['integrity', 'nonce', 'srcdoc', 'style', 'value']);
@@ -53,16 +52,11 @@ function sha256(value: string | Buffer): string {
 }
 
 function boundedSource(html: unknown) {
-  const original = Buffer.from(typeof html === 'string' ? html : String(html || ''), 'utf8');
-  const truncated = original.length > MAX_FINGERPRINT_SOURCE_BYTES;
-  const bytes = truncated ? original.subarray(0, MAX_FINGERPRINT_SOURCE_BYTES) : original;
+  const supplied = typeof html === 'string' ? html : '';
+  const prefix = Buffer.from(supplied.slice(0, MAX_FINGERPRINT_SOURCE_BYTES), 'utf8');
+  const truncated = supplied.length > MAX_FINGERPRINT_SOURCE_BYTES || prefix.length > MAX_FINGERPRINT_SOURCE_BYTES;
+  const bytes = prefix.subarray(0, MAX_FINGERPRINT_SOURCE_BYTES);
   return { bytes, text: bytes.toString('utf8'), truncated };
-}
-
-function staticMarkup(html: string): string {
-  return html
-    .replace(COMMENT_RE, ' ')
-    .replace(RAW_BODY_RE, '<$1$2></$1>');
 }
 
 function normalizedExactBodyHash(value: unknown): ExactBodyHash | null {
@@ -80,35 +74,6 @@ function normalizedExactBodyHash(value: unknown): ExactBodyHash | null {
   };
 }
 
-function parseAttributes(tag: string): { values: Map<string, string>; truncated: boolean } {
-  const start = tag.search(/\s/);
-  if (start === -1) return { values: new Map<string, string>(), truncated: false };
-  const values = new Map<string, string>();
-  let truncated = false;
-  let match;
-  ATTRIBUTE_RE.lastIndex = 0;
-  while ((match = ATTRIBUTE_RE.exec(tag.slice(start)))) {
-    const name = match[1]?.toLowerCase();
-    if (!name) continue;
-    if (values.has(name)) continue;
-    if (values.size >= MAX_FINGERPRINT_ATTRIBUTES) {
-      truncated = true;
-      break;
-    }
-    values.set(name, match[2] ?? match[3] ?? match[4] ?? '');
-  }
-  return { values, truncated };
-}
-
-function decodeStableEntities(text: string): string {
-  const named: Record<string, string> = { amp: '&', apos: "'", gt: '>', lt: '<', nbsp: ' ', quot: '"' };
-  return text.replace(/&(?:#(\d{1,7})|#x([a-f0-9]{1,6})|([a-z]{2,8}));/gi, (whole, decimal, hex, name) => {
-    if (name) return named[name.toLowerCase()] ?? whole.toLowerCase();
-    const point = Number.parseInt(decimal || hex, decimal ? 10 : 16);
-    if (!Number.isInteger(point) || point <= 0 || point > 0x10ffff || (point >= 0xd800 && point <= 0xdfff)) return ' ';
-    return String.fromCodePoint(point);
-  });
-}
 
 function looksRandom(value: unknown): boolean {
   if (typeof value !== 'string') return false;
@@ -128,7 +93,7 @@ function reduceDynamicValues(value: string): string {
 }
 
 function normalizeText(value: unknown, maxLength = 512): string {
-  const normalized = reduceDynamicValues(decodeStableEntities(String(value || '')))
+  const normalized = reduceDynamicValues(String(value || ''))
     .normalize('NFKC')
     .replace(CONTROL_RE, ' ')
     .replace(/\s+/g, ' ')
@@ -167,46 +132,32 @@ function normalizeAttribute(name: string, value: string, baseUrl: string): strin
   return normalized ? `${name}=${normalized}` : name;
 }
 
-function normalizedMarkupAndStructure(html: string, baseUrl: string) {
-  const markup = staticMarkup(html);
+function normalizedMarkupAndStructure(analysis: StaticHtmlAnalysis, baseUrl: string) {
   const normalizedTokens: string[] = [];
-  const structureTokens: string[] = [];
+  const structureTokens = analysis.structureTokens;
   const visibleSegments: string[] = [];
-  let normalizedTruncated = false;
-  let structureTruncated = false;
+  let normalizedTruncated = analysis.structureLimitReached;
+  const structureTruncated = analysis.structureLimitReached;
   let attributesTruncated = false;
-  let oversizedTag = false;
-  let match;
-  MARKUP_TOKEN_RE.lastIndex = 0;
-  while ((match = MARKUP_TOKEN_RE.exec(markup))) {
-    const token = match[0];
-    if (token.startsWith('<')) {
-      if (token.length > MAX_FINGERPRINT_TAG_LENGTH) {
-        oversizedTag = true;
-        continue;
-      }
-      const nameMatch = token.match(TAG_NAME_RE);
-      const name = nameMatch?.[2]?.toLowerCase();
-      if (!nameMatch || !name) continue;
-      const closing = Boolean(nameMatch[1]);
-      const selfClosing = !closing && (VOID_TAGS.has(name) || /\/\s*>$/.test(token));
-      const structure = closing ? `/${name}` : selfClosing ? `${name}/` : name;
-      if (structureTokens.length < MAX_FINGERPRINT_TOKENS) structureTokens.push(structure);
-      else structureTruncated = true;
-
+  const oversizedTag = analysis.elements.some((element) => element.attributesTruncated);
+  for (const token of analysis.tokens) {
+    if (token.kind !== 'text') {
       if (normalizedTokens.length >= MAX_FINGERPRINT_TOKENS) {
         normalizedTruncated = true;
         continue;
       }
-      if (closing) {
-        normalizedTokens.push(`</${name}>`);
+      if (token.kind === 'end') {
+        normalizedTokens.push(`</${token.name}>`);
         continue;
       }
-      const parsed = parseAttributes(token);
-      if (parsed.truncated) attributesTruncated = true;
-      const attributes = [...parsed.values.entries()]
+      const element = token.element;
+      const name = element.name;
+      const selfClosing = element.html && VOID_TAGS.has(name);
+      if (element.attributesTruncated || element.attributes.length > MAX_FINGERPRINT_ATTRIBUTES) attributesTruncated = true;
+      const values = new Map(element.attributes.slice(0, MAX_FINGERPRINT_ATTRIBUTES).map(({ name, value }) => [name, value]));
+      const attributes = [...values.entries()]
         .map(([attributeName, value]) => {
-          const metaKey = name === 'meta' ? String(parsed.values.get('name') || parsed.values.get('property') || '') : '';
+          const metaKey = name === 'meta' ? String(values.get('name') || values.get('property') || '') : '';
           if (attributeName === 'content' && /(?:csrf|nonce|session|token)/i.test(metaKey)) return null;
           return normalizeAttribute(attributeName, value, baseUrl);
         })
@@ -216,7 +167,7 @@ function normalizedMarkupAndStructure(html: string, baseUrl: string) {
       continue;
     }
 
-    const text = normalizeText(token, MAX_FINGERPRINT_SOURCE_BYTES);
+    const text = normalizeText(token.value, MAX_FINGERPRINT_SOURCE_BYTES);
     if (!text) continue;
     visibleSegments.push(text);
     if (normalizedTokens.length < MAX_FINGERPRINT_TOKENS) normalizedTokens.push(`#text:${text.slice(0, 512)}`);
@@ -278,73 +229,64 @@ function formActionClass(value: unknown, baseUrl: string): string {
   return 'external';
 }
 
-function formStructureFingerprint(markup: string, baseUrl: string) {
-  const forms: FormShape[] = [];
-  let current: FormShape | null = null;
+function formStructureFingerprint(analysis: StaticHtmlAnalysis, baseUrl: string) {
+  const formByElement = new Map<number, FormShape>();
+  const firstElementById = new Map<string, number>();
   let formLimitReached = false;
   let controlLimitReached = false;
   let controls = 0;
-  let match;
-  MARKUP_TOKEN_RE.lastIndex = 0;
-  while ((match = MARKUP_TOKEN_RE.exec(markup))) {
-    const token = match[0];
-    if (!token.startsWith('<') || token.length > MAX_FINGERPRINT_TAG_LENGTH) continue;
-    const nameMatch = token.match(TAG_NAME_RE);
-    const name = nameMatch?.[2]?.toLowerCase();
-    if (!nameMatch || !name) continue;
-    const closing = Boolean(nameMatch[1]);
-    if (name === 'form') {
-      if (closing) {
-        if (current) forms.push(current);
-        current = null;
-        continue;
-      }
-      if (current) forms.push(current);
-      if (forms.length >= MAX_FORM_FINGERPRINTS) {
+  for (const [index, element] of analysis.elements.entries()) {
+    const attributes = new Map(element.attributes.map(({ name, value }) => [name, value]));
+    const id = attributes.get('id');
+    if (id && !firstElementById.has(id)) firstElementById.set(id, index);
+    if (element.html && element.name === 'form') {
+      if (formByElement.size >= MAX_FORM_FINGERPRINTS) {
         formLimitReached = true;
-        current = null;
         continue;
       }
-      const attributes = parseAttributes(token).values;
       const rawMethod = normalizeText(attributes.get('method') || 'get', 20);
-      current = {
+      formByElement.set(index, {
         method: /^[a-z]{1,20}$/.test(rawMethod) ? rawMethod : 'other',
         action: formActionClass(attributes.get('action'), baseUrl),
         controls: {},
-      };
-      continue;
+      });
     }
-    if (!current || closing || !['button', 'input', 'select', 'textarea'].includes(name)) continue;
+  }
+  for (const element of analysis.elements) {
+    const name = element.name;
+    if (!element.html || !['button', 'input', 'select', 'textarea'].includes(name)) continue;
+    const attributes = new Map(element.attributes.map(({ name, value }) => [name, value]));
+    let owner = attributes.has('form') ? firstElementById.get(attributes.get('form')!) ?? null : element.parent;
+    if (!attributes.has('form')) {
+      while (owner !== null && !formByElement.has(owner)) owner = analysis.elements[owner]?.parent ?? null;
+    }
+    const current = owner === null ? undefined : formByElement.get(owner);
+    if (!current) continue;
     if (controls >= MAX_FORM_CONTROLS) {
       controlLimitReached = true;
       continue;
     }
     controls += 1;
-    const attributes = parseAttributes(token).values;
     const rawType = name === 'input' || name === 'button'
       ? normalizeText(attributes.get('type') || (name === 'input' ? 'text' : 'submit'), 30)
       : name;
     const type = /^[a-z0-9-]{1,30}$/.test(rawType) ? `${name}:${rawType}` : `${name}:other`;
     current.controls[type] = (current.controls[type] || 0) + 1;
   }
-  if (current) forms.push(current);
-  if (forms.length > MAX_FORM_FINGERPRINTS) {
-    forms.length = MAX_FORM_FINGERPRINTS;
-    formLimitReached = true;
-  }
+  const forms = [...formByElement.values()];
   for (const form of forms) form.controls = Object.fromEntries(Object.entries(form.controls).sort(([left], [right]) => left.localeCompare(right)));
   return forms.length ? {
     algorithm: 'sha256',
     value: sha256(JSON.stringify(forms)),
     formCount: forms.length,
     controlCount: controls,
-    truncated: formLimitReached || controlLimitReached,
+    truncated: formLimitReached || controlLimitReached || analysis.tagLimitReached || analysis.inputLimitReached,
   } : null;
 }
 
 function normalizedResourceHosts(resources: FingerprintResourceInput | null | undefined) {
   const input = Array.isArray(resources?.externalOrigins) ? resources.externalOrigins : [];
-  const hosts = new Set();
+  const hosts = new Set<string>();
   let truncated = resources?.truncated === true || input.length > MAX_RESOURCE_HOSTS;
   for (const value of input) {
     if (hosts.size >= MAX_RESOURCE_HOSTS) {
@@ -414,21 +356,25 @@ function createPageFingerprints(html: unknown, options: PageFingerprintOptions =
     source: 'decoded-markup',
   };
   if (options.sourceTruncated === true && exact.scope === 'complete-body') exact = { ...exact, scope: 'captured-prefix' };
-  const normalized = normalizedMarkupAndStructure(source.text, baseUrl);
-  const parsedStructure = analyzeStaticHtml(source.text, { baseUrl });
+  const parsedStructure = !source.truncated && options.htmlAnalysis
+    ? options.htmlAnalysis : analyzeStaticHtml(source.text, { baseUrl, includeVisibleText: true });
+  const documentIncomplete = options.sourceTruncated === true || source.truncated
+    || parsedStructure.inputLimitReached || parsedStructure.tagLimitReached;
+  const treeIncomplete = documentIncomplete || parsedStructure.structureLimitReached;
+  const resolutionBase = parsedStructure.effectiveBaseUrl ?? baseUrl;
+  const normalized = normalizedMarkupAndStructure(parsedStructure, resolutionBase);
   const text = visibleTextFingerprint(normalized.visibleText);
   const structureSimilarity = simHash64(parsedStructure.structureTokens);
-  const forms = formStructureFingerprint(staticMarkup(source.text), baseUrl);
+  const forms = formStructureFingerprint(parsedStructure, resolutionBase);
   const resourceHosts = normalizedResourceHosts(options.resources);
   const identifiers = normalizedIdentifiers(options.trackingIdentifiers, options.identifiersTruncated === true);
-  const truncated = options.sourceTruncated === true || source.truncated || normalized.normalizedTruncated
-    || normalized.structureTruncated || parsedStructure.inputLimitReached || parsedStructure.tagLimitReached
-    || parsedStructure.structureLimitReached || text?.truncated === true || forms?.truncated === true
+  const truncated = treeIncomplete || normalized.normalizedTruncated
+    || normalized.structureTruncated || text?.truncated === true || forms?.truncated === true
     || resourceHosts.truncated || identifiers.truncated;
   const limitations = [
     'Fingerprints summarise capped static HTML and are comparison aids, not cryptographic proof of page authorship or intent.',
     'Visible-text SimHash is a fuzzy similarity fingerprint and must not be treated as a cryptographic digest.',
-    'DOM-structure SimHash is derived from a standards-compliant static token stream and is a review aid, not proof that two pages share an author or template.',
+    'DOM-structure and form fingerprints describe parsed ancestry and explicit form references, not every browser form-owner repair, executed behaviour or proof of a shared author.',
   ];
   if (source.truncated) limitations.push(`Fingerprint input was capped at ${MAX_FINGERPRINT_SOURCE_BYTES} UTF-8 bytes.`);
   if (normalized.normalizedTruncated || normalized.structureTruncated) limitations.push(`Fingerprint tokenization reached the ${MAX_FINGERPRINT_TOKENS}-token or ${MAX_FINGERPRINT_TAG_LENGTH}-character tag boundary.`);
@@ -443,24 +389,24 @@ function createPageFingerprints(html: unknown, options: PageFingerprintOptions =
       algorithm: 'sha256',
       value: sha256(normalized.normalizedTokens.join('\n')),
       tokenCount: normalized.normalizedTokens.length,
-      truncated: normalized.normalizedTruncated,
+      truncated: treeIncomplete || normalized.normalizedTruncated,
     },
-    visibleText: text,
+    visibleText: text ? { ...text, truncated: treeIncomplete || text.truncated } : null,
     domStructure: {
       algorithm: 'sha256',
       value: sha256(normalized.structureTokens.join('\n')),
       nodeCount: normalized.structureTokens.length,
-      parser: 'static-tag-sequence-v1',
-      truncated: normalized.structureTruncated,
+      parser: PAGE_FINGERPRINT_PARSERS[PAGE_FINGERPRINT_VERSION],
+      truncated: treeIncomplete || normalized.structureTruncated,
       similarity: structureSimilarity ? {
         algorithm: 'simhash64-v1',
         value: structureSimilarity.value,
         tokenCount: parsedStructure.structureTokens.length,
         featureCount: structureSimilarity.featureCount,
-        truncated: parsedStructure.inputLimitReached || parsedStructure.tagLimitReached || parsedStructure.structureLimitReached,
+        truncated: treeIncomplete,
       } : null,
     },
-    formStructure: forms,
+    formStructure: forms ? { ...forms, truncated: documentIncomplete || forms.truncated } : null,
     resourceHosts,
     identifiers,
     complete: !truncated,

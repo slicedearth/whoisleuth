@@ -9,6 +9,7 @@ const PRERENDERED_ROUTE_DEFINITIONS = Object.freeze([
   { path: '/', indexed: true },
   { path: '/brands', indexed: false },
   { path: '/bulk', indexed: false },
+  { path: '/cases', indexed: false },
   { path: '/cli', indexed: true },
   { path: '/contact', indexed: false },
   { path: '/coverage', indexed: true },

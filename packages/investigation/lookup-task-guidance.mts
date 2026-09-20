@@ -60,6 +60,11 @@ const GUIDANCE: Readonly<Record<LookupGuidanceTask, LookupTaskGuidance>> = Objec
   }),
 });
 
+export const LOOKUP_TASK_VIEWS = Object.freeze(LOOKUP_GUIDANCE_TASKS.map((task) => Object.freeze({
+  id: task,
+  label: GUIDANCE[task].label,
+})));
+
 export function lookupTaskGuidance(task: unknown): LookupTaskGuidance {
   return typeof task === 'string' && LOOKUP_GUIDANCE_TASKS.includes(task as LookupGuidanceTask)
     ? GUIDANCE[task as LookupGuidanceTask]

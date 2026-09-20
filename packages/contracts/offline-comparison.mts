@@ -14,7 +14,7 @@ export const CLI_COMPARISON_LEDGER_VERSION = 1;
 export const MAX_RETAINED_ARTIFACT_DIFF_BYTES = 8 * 1024 * 1024;
 
 export const RELATIONSHIP_EVIDENCE_SCHEMA = 'whoisleuth.relationship-evidence';
-export const RELATIONSHIP_EVIDENCE_VERSION = 2;
+export const RELATIONSHIP_EVIDENCE_VERSION = 3;
 export const TLS_RELATIONSHIP_PROFILE_VERSION = 2;
 export const SUPPORTED_TLS_RELATIONSHIP_PROFILE_VERSIONS = Object.freeze([TLS_RELATIONSHIP_PROFILE_VERSION] as const);
 
@@ -128,7 +128,6 @@ export const OFFLINE_COMPARISON_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily({
   contracts: OFFLINE_COMPARISON_CONTRACTS,
   fixtures: OFFLINE_COMPARISON_FIXTURES,
   metadata: {
-    metadataVersion: 4,
     enforcement: 'declarative_only',
     shapes: [
       offlineOutputShape('offline-comparison.page-output.current', CLI_PAGE_COMPARE_SCHEMA, [4], ['schema', 'version', 'generatedAt', 'left', 'right', 'page', 'technology', 'tls', 'limitations']),

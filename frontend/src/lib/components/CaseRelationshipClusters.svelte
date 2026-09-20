@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import {
     applyCaseRelationshipClusterAdjustments,
     buildCaseRelationshipClusterExport,
@@ -92,12 +93,7 @@
 
   function exportReview() {
     const content = `${JSON.stringify(buildCaseRelationshipClusterExport(summary, adjustments), null, 2)}\n`;
-    const url = URL.createObjectURL(new Blob([content], { type: 'application/json;charset=utf-8' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `whoisleuth-reviewed-clusters-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadLocalFile(new Blob([content], { type: 'application/json;charset=utf-8' }), `whoisleuth-reviewed-clusters-${new Date().toISOString().slice(0, 10)}.json`);
   }
 
   function confidenceLabel(value: string): string {

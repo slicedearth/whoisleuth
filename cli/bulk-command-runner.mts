@@ -121,6 +121,7 @@ async function runBulkCommand(
     else if (args.output === 'junit') context.writeStdout(formatCliJunit(selectedDocument));
     else if (args.output === 'jsonl') context.writeStdout(formatJsonLines(selectedItems, metadata));
     else if (args.output === 'csv') context.writeStdout(formatBulkCsv(selectedItems));
+    else if (args.output === 'csv_metadata') context.writeStdout(formatBulkCsv(selectedItems, selectedDocument));
     else if (args.output === 'domains') context.writeStdout(formatBulkDomainList(selectedItems));
     else if (args.output === 'queries') context.writeStdout(formatBulkQueryList(selectedItems));
     else context.writeStdout(context.terminal(formatTerminalBulk(selectedItems, metadata), args.color));

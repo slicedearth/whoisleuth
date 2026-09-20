@@ -33,6 +33,16 @@ function lookup(domain: string, whoisStatus = 'skipped'): string {
 }
 
 describe('registry doctor', () => {
+  test('treats a new RDAP service as catalogue drift rather than an access-policy bypass', () => {
+    const report = buildRegistryDoctorReport(lookup('new-service.gt'), NOW);
+    const rdap = report.sources.find(source => source.source === 'rdap');
+    assert.equal(rdap?.expected, 'unsupported');
+    assert.equal(rdap?.observed, 'success');
+    assert.equal(rdap?.alignment, 'unexpected_observation');
+    assert.match(report.recommendations.join(' '), /profile needs refreshing.*bootstrap discovery.*newly published service/u);
+    assert.doesNotMatch(report.recommendations.join(' '), /despite the declared unsupported access profile/u);
+    assert.match(report.limitations.join(' '), /makes no registry, registrar, RDAP, or WHOIS request/u);
+  });
   test('recognizes an expected RDAP-only registry constraint', () => {
     const report = buildRegistryDoctorReport(lookup('registry-only.dev'), NOW);
     assert.equal(report.sources.find((source) => source.source === 'rdap')?.alignment, 'observed');

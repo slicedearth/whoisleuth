@@ -1,0 +1,530 @@
+{
+  "schema": "whoisleuth.cli.domain-control-monitor",
+  "version": 2,
+  "generatedAt": "2026-08-20T00:00:00.000Z",
+  "manifest": {
+    "digestSha256": "sha256:6d2015c111fe05e44babfd42f9adefbfb3bee3caf9fad33c60b9ca640b0f0c8a",
+    "expiresAt": "2026-09-03T00:00:00.000Z"
+  },
+  "collection": {
+    "requested": 1,
+    "succeeded": 1,
+    "failed": 0,
+    "failures": []
+  },
+  "observations": [
+    {
+      "domain": "example.test",
+      "capturedAt": "2026-08-20T00:00:00.000Z",
+      "collectionDepth": "deep",
+      "fields": [
+        {
+          "id": "registrar",
+          "source": "Registry RDAP",
+          "state": "observed",
+          "values": [
+            "Example Registrar"
+          ],
+          "observedAt": "2026-08-20T00:00:00.000Z"
+        },
+        {
+          "id": "registrar_lock",
+          "source": "Registry RDAP",
+          "state": "observed",
+          "values": [
+            "required"
+          ],
+          "observedAt": "2026-08-20T00:00:00.000Z"
+        },
+        {
+          "id": "registry_dnssec",
+          "source": "Registry RDAP",
+          "state": "observed",
+          "values": [
+            "signed"
+          ],
+          "observedAt": "2026-08-20T00:00:00.000Z"
+        },
+        {
+          "id": "registry_nameservers",
+          "source": "Registry RDAP",
+          "state": "observed",
+          "values": [
+            "ns1.example.test",
+            "ns2.example.test"
+          ],
+          "observedAt": "2026-08-20T00:00:00.000Z"
+        },
+        {
+          "id": "whois_nameservers",
+          "source": "WHOIS",
+          "state": "unsupported",
+          "values": [],
+          "observedAt": "2026-08-20T00:00:00.000Z"
+        },
+        {
+          "id": "delegated_nameservers",
+          "source": "DNS NS",
+          "state": "observed",
+          "values": [
+            "ns1.example.test",
+            "ns2.example.test"
+          ],
+          "observedAt": "2026-08-20T00:00:00.000Z"
+        },
+        {
+          "id": "delegation_ds",
+          "source": "DNS delegation",
+          "state": "observed",
+          "values": [
+            "12345 13 2 abcdef"
+          ],
+          "observedAt": "2026-08-20T00:00:00.000Z"
+        },
+        {
+          "id": "mail_exchangers",
+          "source": "DNS MX",
+          "state": "observed",
+          "values": [
+            "10 mail.example.test"
+          ],
+          "observedAt": "2026-08-20T00:00:00.000Z"
+        },
+        {
+          "id": "caa_policy",
+          "source": "DNS CAA",
+          "state": "observed",
+          "values": [
+            "0 issue ca.example"
+          ],
+          "observedAt": "2026-08-20T00:00:00.000Z"
+        },
+        {
+          "id": "tls_certificate",
+          "source": "TLS",
+          "state": "observed",
+          "values": [
+            "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          ],
+          "observedAt": "2026-08-20T00:00:00.000Z"
+        },
+        {
+          "id": "tls_public_key",
+          "source": "TLS",
+          "state": "observed",
+          "values": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ],
+          "observedAt": "2026-08-20T00:00:00.000Z"
+        },
+        {
+          "id": "http_origin",
+          "source": "HTTP",
+          "state": "observed",
+          "values": [
+            "https://example.test/"
+          ],
+          "observedAt": "2026-08-20T00:00:00.000Z"
+        },
+        {
+          "id": "page_identity",
+          "source": "Static page identity",
+          "state": "observed",
+          "values": [
+            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd | Example account centre"
+          ],
+          "observedAt": "2026-08-20T00:00:00.000Z"
+        }
+      ]
+    }
+  ],
+  "review": {
+    "schema": "whoisleuth.domain-control-review",
+    "version": 2,
+    "generatedAt": "2026-08-20T00:00:00.000Z",
+    "state": "drift",
+    "manifest": {
+      "generatedAt": "2026-08-03T00:00:00.000Z",
+      "expiresAt": "2026-09-03T00:00:00.000Z",
+      "digestSha256": "sha256:6d2015c111fe05e44babfd42f9adefbfb3bee3caf9fad33c60b9ca640b0f0c8a",
+      "expired": false
+    },
+    "counts": {
+      "aligned": 6,
+      "drift": 1,
+      "partial": 0,
+      "unavailable": 0,
+      "unsupported": 0,
+      "not_configured": 0,
+      "due": 1,
+      "observed": 0
+    },
+    "domains": [
+      {
+        "domain": "example.test",
+        "state": "drift",
+        "comparisons": [
+          {
+            "field": "nameservers",
+            "state": "aligned",
+            "desired": [
+              "ns1.example.test",
+              "ns2.example.test"
+            ],
+            "observed": [
+              "ns1.example.test",
+              "ns2.example.test"
+            ],
+            "source": "Registry RDAP",
+            "observedAt": "2026-08-20T00:00:00.000Z",
+            "explanation": "The complete supplied observation matches the desired value.",
+            "expectation": "expect_records"
+          },
+          {
+            "field": "ds",
+            "state": "aligned",
+            "desired": [
+              "12345 13 2 abcdef"
+            ],
+            "observed": [
+              "12345 13 2 abcdef"
+            ],
+            "source": "DNS delegation",
+            "observedAt": "2026-08-20T00:00:00.000Z",
+            "explanation": "The complete supplied observation matches the desired value.",
+            "expectation": "expect_records"
+          },
+          {
+            "field": "mx",
+            "state": "drift",
+            "desired": [
+              "0 .",
+              "10 mail.example.test"
+            ],
+            "observed": [
+              "10 mail.example.test"
+            ],
+            "source": "DNS MX",
+            "observedAt": "2026-08-20T00:00:00.000Z",
+            "explanation": "The complete supplied observation differs from the desired value.",
+            "expectation": "expect_records"
+          },
+          {
+            "field": "caa",
+            "state": "aligned",
+            "desired": [
+              "0 issue ca.example"
+            ],
+            "observed": [
+              "0 issue ca.example"
+            ],
+            "source": "DNS CAA",
+            "observedAt": "2026-08-20T00:00:00.000Z",
+            "explanation": "The complete supplied observation matches the desired value.",
+            "expectation": "expect_records"
+          },
+          {
+            "field": "tlsIssuer",
+            "state": "aligned",
+            "desired": [
+              "example issuer"
+            ],
+            "observed": [
+              "example issuer"
+            ],
+            "source": "TLS",
+            "observedAt": "2026-08-20T00:00:00.000Z",
+            "explanation": "The complete supplied observation matches the desired value.",
+            "expectation": "expect_records"
+          },
+          {
+            "field": "tlsSpkiSha256",
+            "state": "aligned",
+            "desired": [
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ],
+            "observed": [
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ],
+            "source": "TLS",
+            "observedAt": "2026-08-20T00:00:00.000Z",
+            "explanation": "The complete supplied observation matches the desired value.",
+            "expectation": "expect_records"
+          },
+          {
+            "field": "registrarLock",
+            "state": "aligned",
+            "desired": [
+              "required"
+            ],
+            "observed": [
+              "required"
+            ],
+            "source": "Registry RDAP",
+            "observedAt": "2026-08-20T00:00:00.000Z",
+            "explanation": "The complete supplied observation matches the desired value.",
+            "expectation": "expect_records"
+          },
+          {
+            "field": "renewalReviewAt",
+            "state": "due",
+            "desired": [
+              "2026-08-20T00:00:00.000Z"
+            ],
+            "observed": [],
+            "source": null,
+            "observedAt": null,
+            "explanation": "The configured renewal review date is due.",
+            "expectation": "expect_records"
+          }
+        ]
+      }
+    ],
+    "ignoredObservationCount": 0,
+    "limitations": [
+      "This local review compares analyst-authored desired state with separately supplied observations and performs no collection or configuration change.",
+      "Only complete observations with valid source times within the current review-age window can establish alignment, drift or expected absence. Observation-only fields do not establish alignment.",
+      "A valid manifest digest or signature establishes file integrity, not the correctness of the desired state or supplied observations."
+    ]
+  },
+  "flightRecorder": {
+    "schema": "whoisleuth.domain-control-flight-recorder",
+    "version": 2,
+    "generatedAt": "2026-08-20T00:00:00.000Z",
+    "domains": [
+      "example.test"
+    ],
+    "observationCount": 1,
+    "events": [
+      {
+        "id": "example.test:registrar:2026-08-20T00:00:00.000Z:1",
+        "domain": "example.test",
+        "field": "registrar",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "Example Registrar"
+        ],
+        "source": "Registry RDAP",
+        "approvedWindow": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:registrar_lock:2026-08-20T00:00:00.000Z:2",
+        "domain": "example.test",
+        "field": "registrar_lock",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "required"
+        ],
+        "source": "Registry RDAP",
+        "approvedWindow": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:registry_dnssec:2026-08-20T00:00:00.000Z:3",
+        "domain": "example.test",
+        "field": "registry_dnssec",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "signed"
+        ],
+        "source": "Registry RDAP",
+        "approvedWindow": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:registry_nameservers:2026-08-20T00:00:00.000Z:4",
+        "domain": "example.test",
+        "field": "registry_nameservers",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "ns1.example.test",
+          "ns2.example.test"
+        ],
+        "source": "Registry RDAP",
+        "approvedWindow": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:whois_nameservers:2026-08-20T00:00:00.000Z:5",
+        "domain": "example.test",
+        "field": "whois_nameservers",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "incomplete_observation",
+        "state": "partial",
+        "before": [],
+        "after": [],
+        "source": "WHOIS",
+        "approvedWindow": null,
+        "explanation": "The source is unsupported. Retained values are incomplete; this is not evidence that a prior value disappeared or changed."
+      },
+      {
+        "id": "example.test:delegated_nameservers:2026-08-20T00:00:00.000Z:6",
+        "domain": "example.test",
+        "field": "delegated_nameservers",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "ns1.example.test",
+          "ns2.example.test"
+        ],
+        "source": "DNS NS",
+        "approvedWindow": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:delegation_ds:2026-08-20T00:00:00.000Z:7",
+        "domain": "example.test",
+        "field": "delegation_ds",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "12345 13 2 abcdef"
+        ],
+        "source": "DNS delegation",
+        "approvedWindow": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:mail_exchangers:2026-08-20T00:00:00.000Z:8",
+        "domain": "example.test",
+        "field": "mail_exchangers",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "10 mail.example.test"
+        ],
+        "source": "DNS MX",
+        "approvedWindow": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:caa_policy:2026-08-20T00:00:00.000Z:9",
+        "domain": "example.test",
+        "field": "caa_policy",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "0 issue ca.example"
+        ],
+        "source": "DNS CAA",
+        "approvedWindow": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:tls_certificate:2026-08-20T00:00:00.000Z:10",
+        "domain": "example.test",
+        "field": "tls_certificate",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        ],
+        "source": "TLS",
+        "approvedWindow": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:tls_public_key:2026-08-20T00:00:00.000Z:11",
+        "domain": "example.test",
+        "field": "tls_public_key",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "source": "TLS",
+        "approvedWindow": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:http_origin:2026-08-20T00:00:00.000Z:12",
+        "domain": "example.test",
+        "field": "http_origin",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "https://example.test/"
+        ],
+        "source": "HTTP",
+        "approvedWindow": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      },
+      {
+        "id": "example.test:page_identity:2026-08-20T00:00:00.000Z:13",
+        "domain": "example.test",
+        "field": "page_identity",
+        "observedAt": "2026-08-20T00:00:00.000Z",
+        "capturedAt": "2026-08-20T00:00:00.000Z",
+        "kind": "first_observation",
+        "state": "observed",
+        "before": [],
+        "after": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd | Example account centre"
+        ],
+        "source": "Static page identity",
+        "approvedWindow": null,
+        "explanation": "The first complete source-timed value for this field was retained."
+      }
+    ],
+    "summary": {
+      "firstObservations": 12,
+      "observedChanges": 0,
+      "approvedChanges": 0,
+      "unexpectedChanges": 0,
+      "collectionChanges": 0,
+      "recoveredSources": 0,
+      "incompleteFields": 1
+    },
+    "limitations": [
+      "The flight recorder compares only supplied bounded observations and performs no collection or configuration change.",
+      "Source fields remain separate. A collection failure, partial result, unsupported source, or missing field never becomes evidence that a prior value disappeared.",
+      "Approved windows label expected timing but do not delete evidence or establish that a change was authorised, successful, safe, or complete.",
+      "Observed changes can reflect publication lag or different collection conditions and require analyst review.",
+      "Capture time and source observation time remain separate. Unknown, conflicting or non-increasing source times cannot establish an observed change."
+    ]
+  },
+  "limitations": [
+    "This is one bounded run, not a daemon. Scheduling and secure checkpoint retention remain operator-controlled.",
+    "The output retains compact normalised observations and errors, not raw RDAP, WHOIS, DNS, HTTP, TLS or page payloads.",
+    "A failed source or lookup remains incomplete and does not establish that a previously observed value disappeared."
+  ]
+}

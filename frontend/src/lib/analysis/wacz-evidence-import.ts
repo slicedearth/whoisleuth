@@ -282,7 +282,9 @@ export async function parseWaczEvidenceArchive(
     throw new Error('Portable WACZ import accepts .wacz files only.');
   }
 
-  const archiveBytes = new Uint8Array(input);
+  // Hashing and extraction must consume the same owned snapshot, even when the
+  // caller changes or transfers its input while cryptography is pending.
+  const archiveBytes = new Uint8Array(new Uint8Array(input));
   const archiveDigestSha256 = await sha256Hex(archiveBytes);
   const { files, zipEntries } = unpackSelectedEntries(archiveBytes);
   const manifest = files['datapackage.json'];

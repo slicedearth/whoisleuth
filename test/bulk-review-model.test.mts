@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { readFile } from 'node:fs/promises';
+import { normalizeBulkResultColumns } from '../packages/workspace/bulk-columns.mts';
 
 import {
   BULK_AGE_FILTERS,
@@ -34,10 +36,29 @@ function view() {
     groupBy: 'registrar',
     sortKey: 'risk',
     sortDirection: -1,
+    columns: ['registration', 'risk', 'website', 'registrar', 'mutation', 'review', 'case'],
   };
 }
 
 describe('Bulk review model', () => {
+  test('migrates public preferences without changing their filters or dropping column choices on round trip', async () => {
+    const historical = JSON.parse(await readFile(new URL('./fixtures/workspace-lifecycle/portable-review-v1.json', import.meta.url), 'utf8'));
+    historical.presets = [{ kind: 'preset', id: 'old', name: 'Earlier view', view: { ...view(), columns: undefined }, createdAt: EARLIER, updatedAt: EARLIER }];
+    const migrated = mergeBulkReviewStores(null, historical).store;
+    assert.equal(migrated.version, 2);
+    assert.deepEqual(migrated.presets[0]?.view, view());
+    const chosen = upsertBulkReviewPreset(migrated, { id: 'chosen', name: 'Evidence', view: { ...view(), columns: ['website', 'risk', 'risk', 'unsupported'] } }, LATER);
+    assert.deepEqual(chosen.presets[0]?.view.columns, ['risk', 'website']);
+    const exported = buildBulkReviewExport(chosen);
+    assert.deepEqual(mergeBulkReviewStores(null, exported).store, exported);
+    assert.deepEqual(normalizeBulkResultColumns([]), []);
+    assert.deepEqual(normalizeBulkResultColumns(null), view().columns);
+    assert.throws(() => normalizeBulkReviewStore({ ...exported, version: 3 }), /newer schema/);
+    const privateInput = { ...view(), columns: ['risk'], targets: ['sensitive.example'], notes: 'private-review-note' };
+    const saved = upsertBulkReviewPreset(null, { name: 'Minimal', view: privateInput }, EARLIER);
+    assert.ok(!JSON.stringify(saved).includes('sensitive.example'));
+    assert.ok(!JSON.stringify(saved).includes('private-review-note'));
+  });
   test('normalizes saved views and domain review state without retaining scan results', () => {
     let store = upsertBulkReviewPreset(null, { id: 'priority-view', name: ' Priority review ', view: view() }, EARLIER);
     store = setBulkReviewRowState(store, 'EXAMPLE.INVALID.', 'reviewing', LATER);

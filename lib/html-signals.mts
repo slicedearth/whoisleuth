@@ -14,7 +14,7 @@ import { createPageFingerprints } from './page-fingerprints.mts';
 import { detectPageLanguageSignal } from './page-language-signals.mts';
 import { analyzePageRole } from './page-role-profile.mts';
 import { analyzeCspMetaPolicies } from './response-policy.mts';
-import { analyzeStaticHtml, type StaticPublicationMetadata } from './static-html-analysis.mts';
+import { analyzeStaticHtml, type StaticHtmlAnalysis, type StaticPublicationMetadata } from './static-html-analysis.mts';
 import { analyzeStructuredDataIdentity } from './structured-data-identity.mts';
 import { analyzeWebsiteTechnology } from './website-technology.mts';
 import {
@@ -24,11 +24,12 @@ import {
 
 type NormalizedIdentityUrl = { url: string; queryOmitted: boolean; pathTruncated: boolean };
 type HtmlSignalOptions = {
+  signal?: AbortSignal;
   baseUrl?: string;
   effectiveBaseUrl?: string;
   documentOrigin?: string;
   baseHrefState?: 'absent' | 'valid' | 'invalid';
-  tagMarkup?: string;
+  htmlAnalysis?: StaticHtmlAnalysis;
   sourceTruncated?: boolean;
   exactBodyHash?: unknown;
   httpServer?: unknown;
@@ -73,13 +74,8 @@ const HAS_CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignora
 // scoped to resource tags, not every <a href> - an outbound link to the
 // real site is normal on all sorts of pages; a resource pulled live from it
 // during page load is not.
-const ASSET_TAG_RE = /<(?:img|script|link)\b[^>]*?\b(?:src|href)\s*=\s*["']([^"']+)["'][^>]*>/gi;
-const ABSOLUTE_URL_HOST_RE = /^(?:https?:)?\/\/([^/]+)/i;
-const IDENTITY_TAG_RE = /<(html|link|meta|form)\b[^>]{0,4096}>/gi;
-const OVERSIZED_IDENTITY_TAG_RE = /<(?:html|link|meta|form)\b[^>]{4097}/i;
-const RELATIONSHIP_TAG_RE = /<(a|img|script|link|iframe|frame|source|video|audio|object|embed)\b[^>]{0,4096}>/gi;
-const OVERSIZED_RELATIONSHIP_TAG_RE = /<(?:a|img|script|link|iframe|frame|source|video|audio|object|embed)\b[^>]{4097}/i;
-const ATTRIBUTE_RE = /([^\s"'<>\/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+const IDENTITY_TAGS = new Set(['html', 'link', 'meta', 'form']);
+const RELATIONSHIP_TAGS = new Set(['a', 'img', 'script', 'link', 'iframe', 'frame', 'source', 'video', 'audio', 'object', 'embed']);
 const LANGUAGE_TAG_RE = /^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$/i;
 const HOSTNAME_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
 const RESOURCE_LINK_RELS = new Set(['stylesheet', 'icon', 'preload', 'prefetch', 'modulepreload', 'manifest']);
@@ -87,9 +83,6 @@ const RISKY_DOWNLOAD_EXTENSIONS = new Set([
   '7z', 'apk', 'bat', 'cmd', 'dmg', 'docm', 'exe', 'img', 'iso', 'jar', 'js',
   'msi', 'pkg', 'ps1', 'rar', 'scr', 'vbs', 'xlsm', 'zip',
 ]);
-const HTML_COMMENT_RE = /<!--[\s\S]*?(?:-->|$)/g;
-const RAW_TEXT_BLOCK_RE = /<(script|style|textarea|template)\b([^>]*)>[\s\S]*?<\/\1\s*>/gi;
-const NON_EXECUTING_RAW_TEXT_BLOCK_RE = /<(style|textarea|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
 
 function stripWwwPrefix(host: string): string {
   return host.toLowerCase().replace(/^www\./, '');
@@ -102,52 +95,22 @@ function boundedHtmlText(value: unknown, maxLength: number, ellipsis = false): s
     .trim();
   if (!text) return null;
   if (text.length <= maxLength) return text;
-  return ellipsis ? `${text.slice(0, maxLength)}…` : text.slice(0, maxLength);
+  return ellipsis ? `${text.slice(0, Math.max(0, maxLength - 1))}…` : text.slice(0, maxLength);
 }
 
-function extractExternalAssetHosts(html: string, ownDomain: string): string[] {
+function extractExternalAssetHosts(analysis: StaticHtmlAnalysis, ownDomain: string, documentUrl: string): string[] {
   const ownHost = stripWwwPrefix(ownDomain);
   const hosts = new Set<string>();
-  let match;
-  ASSET_TAG_RE.lastIndex = 0;
-  while ((match = ASSET_TAG_RE.exec(html))) {
-    const resourceUrl = match[1];
-    if (!resourceUrl) continue;
-    const hostMatch = resourceUrl.match(ABSOLUTE_URL_HOST_RE);
-    if (!hostMatch) continue;
-    const matchedHost = hostMatch[1];
-    if (!matchedHost || HAS_CONTROL_CHARACTER_RE.test(matchedHost)) continue;
-    const host = stripWwwPrefix(matchedHost);
+  for (const element of analysis.elements) {
+    if (!element.html || !['img', 'script', 'link'].includes(element.name)) continue;
+    const attribute = element.attributes.find((attribute) => attribute.name === (element.name === 'link' ? 'href' : 'src'));
+    const resource = normalizeIdentityUrl(attribute?.value, analysis.effectiveBaseUrl ?? documentUrl);
+    if (!resource) continue;
+    const host = stripWwwPrefix(new URL(resource.url).hostname);
     if (host && host !== ownHost) hosts.add(host);
     if (hosts.size >= MAX_EXTERNAL_ASSET_HOSTS) break;
   }
   return [...hosts];
-}
-
-function parseAttributes(tag: string): Map<string, string> {
-  const start = tag.search(/\s/);
-  if (start === -1) return new Map<string, string>();
-  const attributes = new Map<string, string>();
-  ATTRIBUTE_RE.lastIndex = 0;
-  let match;
-  while ((match = ATTRIBUTE_RE.exec(tag.slice(start)))) {
-    const name = (match[1] ?? '').toLowerCase();
-    if (!name) continue;
-    if (!attributes.has(name)) attributes.set(name, match[2] ?? match[3] ?? match[4] ?? '');
-  }
-  return attributes;
-}
-
-function markupForTagParsing(html: string): string {
-  return html
-    .replace(HTML_COMMENT_RE, ' ')
-    .replace(RAW_TEXT_BLOCK_RE, '<$1$2>');
-}
-
-function markupForTrackingIdentifiers(html: string): string {
-  return html
-    .replace(HTML_COMMENT_RE, ' ')
-    .replace(NON_EXECUTING_RAW_TEXT_BLOCK_RE, ' ');
 }
 
 function normalizeLanguage(value: unknown): string | null {
@@ -311,10 +274,9 @@ function trackingIdentifiers(html: string): { values: TrackingIdentifier[]; trun
   };
 }
 
-function extractPageRelationships(html: string, domain: string, options: HtmlSignalOptions = {}) {
+function extractPageRelationships(analysis: StaticHtmlAnalysis, domain: string, options: HtmlSignalOptions = {}) {
   const documentUrl = resolvedBaseUrl(domain, options.baseUrl);
   const baseUrl = resolvedBaseUrl(domain, options.effectiveBaseUrl ?? documentUrl);
-  const markup = typeof options.tagMarkup === 'string' ? options.tagMarkup : markupForTagParsing(html);
   const baseOrigin = options.documentOrigin ?? new URL(documentUrl).origin;
   const resourceKeys = new Set<string>();
   const resourceOrigins = new Set<string>();
@@ -328,24 +290,24 @@ function extractPageRelationships(html: string, domain: string, options: HtmlSig
   let riskyDownloadCount = 0;
   let tagsExamined = 0;
   let discardedUrls = 0;
-  let tagLimitReached = OVERSIZED_RELATIONSHIP_TAG_RE.test(markup);
+  let tagLimitReached = analysis.inputLimitReached || analysis.tagLimitReached;
   let resourceOriginLimitReached = false;
   let embeddedOriginLimitReached = false;
   let contactDomainLimitReached = false;
   let downloadOriginLimitReached = false;
   let downloadFileTypeLimitReached = false;
   let perTagLimitReached = false;
-  let match;
-  RELATIONSHIP_TAG_RE.lastIndex = 0;
-  while ((match = RELATIONSHIP_TAG_RE.exec(markup))) {
+  let resourceCountLimitReached = false;
+  for (const element of analysis.elements) {
+    if (!element.html || !RELATIONSHIP_TAGS.has(element.name)) continue;
     if (tagsExamined >= MAX_RESOURCE_TAGS) {
       tagLimitReached = true;
       break;
     }
     tagsExamined += 1;
-    const tagName = (match[1] ?? '').toLowerCase();
-    if (!tagName) continue;
-    const attributes = parseAttributes(match[0]);
+    const tagName = element.name;
+    const attributes = new Map(element.attributes.map(({ name, value }) => [name, value]));
+    if (element.attributesTruncated) tagLimitReached = true;
 
     if (tagName === 'a') {
       const href = attributes.get('href');
@@ -387,6 +349,7 @@ function extractPageRelationships(html: string, domain: string, options: HtmlSig
       }
       const key = `${reference.type}:${normalized.url}`;
       if (!resourceKeys.has(key)) {
+        if (resourceKeys.size >= MAX_RESOURCE_TAGS) { resourceCountLimitReached = true; continue; }
         resourceKeys.add(key);
         byType[reference.type] += 1;
       }
@@ -397,10 +360,14 @@ function extractPageRelationships(html: string, domain: string, options: HtmlSig
     }
   }
 
-  const tracking = trackingIdentifiers(markupForTrackingIdentifiers(html));
+  const tracking = trackingIdentifiers([
+    ...analysis.elements.filter((element) => element.html).flatMap((element) => element.attributes.map((attribute) => attribute.value)),
+    ...analysis.scripts.map((script) => script.inlineContent),
+  ].join('\n'));
+  if (analysis.scriptLimitReached || analysis.inlineLimitReached) tracking.truncated = true;
   const truncated = tagLimitReached || resourceOriginLimitReached || embeddedOriginLimitReached
     || contactDomainLimitReached || downloadOriginLimitReached || downloadFileTypeLimitReached
-    || perTagLimitReached || tracking.truncated;
+    || perTagLimitReached || resourceCountLimitReached || tracking.truncated;
   const limitations: string[] = [];
   if (tagLimitReached) limitations.push(`Resource parsing reached the ${MAX_RESOURCE_TAGS}-tag or ${MAX_IDENTITY_TAG_LENGTH}-character tag limit.`);
   if (resourceOriginLimitReached) limitations.push(`Only the first ${MAX_RESOURCE_ORIGINS} external resource origins were retained.`);
@@ -409,13 +376,14 @@ function extractPageRelationships(html: string, domain: string, options: HtmlSig
   if (downloadOriginLimitReached) limitations.push(`Only the first ${MAX_DOWNLOAD_ORIGINS} external download origins were retained.`);
   if (downloadFileTypeLimitReached) limitations.push(`Only the first ${MAX_DOWNLOAD_FILE_TYPES} risky download file types were retained.`);
   if (perTagLimitReached) limitations.push(`Some srcset URL candidates could not be safely enumerated within the ${MAX_URLS_PER_TAG}-candidate per-tag boundary.`);
+  if (resourceCountLimitReached) limitations.push(`Only the first ${MAX_RESOURCE_TAGS} distinct resource references were examined.`);
   if (tracking.truncated) limitations.push(`Only the first ${MAX_TRACKING_IDENTIFIERS} tracking identifiers were retained.`);
   return {
     resources: {
       count: resourceKeys.size,
       byType,
       externalOrigins: [...resourceOrigins].sort(),
-      truncated: tagLimitReached || resourceOriginLimitReached || perTagLimitReached,
+      truncated: tagLimitReached || resourceOriginLimitReached || perTagLimitReached || resourceCountLimitReached,
     },
     embeddedOrigins: [...embeddedOrigins].sort(),
     contactDomains: [...contactDomains].sort(),
@@ -446,12 +414,9 @@ function metaRefreshTarget(content: unknown): string | null {
 
 function extractPageIdentity(html: string, domain: string, options: HtmlSignalOptions = {}) {
   const documentUrl = resolvedBaseUrl(domain, options.baseUrl);
-  const baseAnalysis = options.effectiveBaseUrl === undefined
-    ? analyzeStaticHtml(html, { baseUrl: documentUrl })
-    : null;
-  const baseUrl = resolvedBaseUrl(domain, options.effectiveBaseUrl ?? baseAnalysis?.effectiveBaseUrl ?? documentUrl);
-  const baseHrefState = options.baseHrefState ?? baseAnalysis?.baseHrefState ?? 'absent';
-  const tagMarkup = markupForTagParsing(html);
+  const analysis = options.htmlAnalysis ?? analyzeStaticHtml(html, { baseUrl: documentUrl, includeVisibleText: true });
+  const baseUrl = resolvedBaseUrl(domain, options.effectiveBaseUrl ?? analysis.effectiveBaseUrl ?? documentUrl);
+  const baseHrefState = options.baseHrefState ?? analysis.baseHrefState;
   const parsedDocument = new URL(documentUrl);
   const baseOrigin = options.documentOrigin ?? parsedDocument.origin;
   const baseUsesHttps = parsedDocument.protocol === 'https:';
@@ -470,18 +435,17 @@ function extractPageIdentity(html: string, domain: string, options: HtmlSignalOp
   let discardedUrls = 0;
   let formLimitReached = false;
   let originLimitReached = false;
-  let tagLimitReached = OVERSIZED_IDENTITY_TAG_RE.test(tagMarkup);
-  let match;
-  IDENTITY_TAG_RE.lastIndex = 0;
-  while ((match = IDENTITY_TAG_RE.exec(tagMarkup))) {
+  let tagLimitReached = analysis.inputLimitReached || analysis.tagLimitReached;
+  for (const element of analysis.elements) {
+    if (!element.html || !IDENTITY_TAGS.has(element.name)) continue;
     if (tagsExamined >= MAX_IDENTITY_TAGS) {
       tagLimitReached = true;
       break;
     }
     tagsExamined += 1;
-    const tagName = (match[1] ?? '').toLowerCase();
-    if (!tagName) continue;
-    const attributes = parseAttributes(match[0]);
+    const tagName = element.name;
+    const attributes = new Map(element.attributes.map(({ name, value }) => [name, value]));
+    if (element.attributesTruncated) tagLimitReached = true;
 
     if (tagName === 'html' && documentLanguage === null) {
       documentLanguage = normalizeLanguage(attributes.get('lang'));
@@ -544,12 +508,10 @@ function extractPageIdentity(html: string, domain: string, options: HtmlSignalOp
   const queryOmitted = [canonical, metaRefresh, openGraphUrl].some((item) => item?.queryOmitted);
   const pathTruncated = [canonical, metaRefresh, openGraphUrl].some((item) => item?.pathTruncated);
   const sourceTruncated = options.sourceTruncated === true;
-  const relationships = extractPageRelationships(html, domain, { baseUrl: documentUrl, effectiveBaseUrl: baseUrl, documentOrigin: baseOrigin, tagMarkup });
+  const relationships = extractPageRelationships(analysis, domain, { baseUrl: documentUrl, effectiveBaseUrl: baseUrl, documentOrigin: baseOrigin });
   const fingerprints = createPageFingerprints(html, {
-    // Retained fingerprint algorithms pre-date document-base handling. Keep
-    // their response-URL normalization stable until a versioned fingerprint
-    // migration is intentionally introduced.
     baseUrl: documentUrl,
+    htmlAnalysis: analysis,
     exactBodyHash: options.exactBodyHash,
     sourceTruncated,
     resources: relationships.resources,
@@ -696,9 +658,31 @@ function buildPagePublicationMetadata(
   };
 }
 
-function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOptions = {}) {
+function domainSaleLandingPage(analysis: StaticHtmlAnalysis, domain: string): boolean {
+  if (analysis.inputLimitReached || analysis.tagLimitReached || analysis.visibleTextLimitReached) return false;
+  const title = analysis.title?.trim().toLowerCase() ?? '';
+  const content = analysis.visibleText.trim().toLowerCase();
+  const saleSuffix = /^\s+(?:(?:is|may be)\s+)?(?:for sale|available for purchase|available for lease)(?:[.!?:\s]|$)/u;
+  const explicitSale = (value: string): boolean => {
+    const genericSubject = /^(?:(?:this|the) domain(?: name)?|domain(?: name)?)/u.exec(value)?.[0];
+    return (genericSubject !== undefined && saleSuffix.test(value.slice(genericSubject.length)))
+      || (value.startsWith(domain) && saleSuffix.test(value.slice(domain.length)));
+  };
+  const explicitPurchase = /^(?:buy|purchase|own|bid on|inquire about) (?:this|the) domain(?: name)?(?:[.!?:\s]|$)/u;
+  // A short, directly worded landing page is sufficient. Long articles need
+  // corroborating page-title and transaction-control evidence; a generic
+  // commerce CTA or quoted example cannot classify the domain for sale.
+  if (content.length <= 240 && (explicitSale(content) || explicitPurchase.test(content))) return true;
+  if (!explicitSale(title) && !explicitPurchase.test(title)) return false;
+  if (!/(?:this domain(?: name)? (?:is )?for sale|buy this domain|purchase this domain|domain name for sale)/u.test(content)) return false;
+  return analysis.elements.some((element) => element.html
+    && ['form', 'button', 'a'].includes(element.name));
+}
+
+async function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOptions = {}) {
+  options.signal?.throwIfAborted();
   const documentUrl = resolvedBaseUrl(domain, options.baseUrl);
-  const htmlAnalysis = analyzeStaticHtml(html, { baseUrl: documentUrl, includeVisibleText: true });
+  const htmlAnalysis = options.htmlAnalysis ?? analyzeStaticHtml(html, { baseUrl: documentUrl, includeVisibleText: true });
   const effectiveBaseUrl = htmlAnalysis.effectiveBaseUrl ?? documentUrl;
   const documentOrigin = new URL(documentUrl).origin;
   const pageIdentity = options.includePageIdentity === false ? null : extractPageIdentity(html, domain, {
@@ -707,6 +691,7 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
     effectiveBaseUrl,
     documentOrigin,
     baseHrefState: htmlAnalysis.baseHrefState,
+    htmlAnalysis,
   });
   const includeCredentialSurfaceProfile = pageIdentity && options.includeCredentialSurfaceProfile === true;
   const includeStructuredDataIdentity = pageIdentity && options.includeStructuredDataIdentity !== false;
@@ -724,14 +709,17 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
       }
     : pageIdentity;
   const pageLanguageSignal = detectPageLanguageSignal(html, pageIdentity?.documentLanguage, htmlAnalysis);
+  const domainSaleSignal = options.sourceTruncated !== true && domainSaleLandingPage(htmlAnalysis, domain)
+    ? 'explicit domain-sale landing-page content' : null;
   return {
+    domainSaleSignal,
     pageTitle: htmlAnalysis.title,
     hasPasswordField: htmlAnalysis.forms.categories.password > 0,
     phishingLanguageMatch: pageLanguageSignal?.label ?? null,
     hasExternalFormAction: pageIdentity
       ? pageIdentity.forms.externalActionOrigins.length > 0
       : null,
-    externalAssetHosts: extractExternalAssetHosts(html, domain),
+    externalAssetHosts: extractExternalAssetHosts(htmlAnalysis, domain, documentUrl),
     cspMetaPolicy: analyzeCspMetaPolicies(htmlAnalysis.cspMetaPolicies, htmlAnalysis.cspMetaLimitReached),
     pageIdentity: pageIdentityOutput,
     credentialSurfaceProfile: includeCredentialSurfaceProfile && htmlAnalysis ? analyzeCredentialSurfaceProfile({
@@ -745,9 +733,10 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
       observedAt: options.observedAt,
       sourceTruncated: options.sourceTruncated,
     }) : null,
-    technologyProfile: includeTechnologyProfile && htmlAnalysis ? analyzeWebsiteTechnology({
+    technologyProfile: includeTechnologyProfile && htmlAnalysis ? await analyzeWebsiteTechnology({
       htmlAnalysis,
       generator: pageIdentity.generator,
+      ...(options.signal ? { signal: options.signal } : {}),
       httpServer: options.httpServer,
       responseHeaders: options.responseHeaders,
       resourceOrigins: pageIdentity.resources.externalOrigins,
@@ -759,7 +748,7 @@ function extractHtmlSignals(html: string, domain: string, options: HtmlSignalOpt
     pageRoleProfile: includeDerivedPageProfiles && htmlAnalysis ? analyzePageRole({
       htmlAnalysis,
       pageTitle: htmlAnalysis.title,
-      activityStatus: options.activityStatus,
+      activityStatus: domainSaleSignal ? 'parked' : options.activityStatus,
       observedAt: options.observedAt,
       sourceTruncated: options.sourceTruncated,
     }) : null,

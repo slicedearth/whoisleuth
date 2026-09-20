@@ -1,12 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
 import { BASE_URL, PORT, TEST_SESSION_SECRET, TEST_SITE_PASSWORD } from './e2e/constants.ts';
 import { resolvePlaywrightExecutionContract } from './tools/playwright-execution-contract.mts';
-import { playwrightRunArtifacts } from './tools/playwright-run-artifacts.mts';
+import { resolvePlaywrightRunArtifacts } from './tools/playwright-run-artifacts.mts';
 import { assertFrontendBuildIntegrity } from './tools/frontend-build-integrity.mts';
 
-const execution = resolvePlaywrightExecutionContract();
+// Playwright's CommonJS configuration loader owns this file's directory;
+// resolve server inputs from it, including when a wrapper imports the config.
+const execution = resolvePlaywrightExecutionContract(process.env, __dirname);
 if (execution.useExistingBuild) assertFrontendBuildIntegrity();
-const artifacts = playwrightRunArtifacts();
+const artifacts = resolvePlaywrightRunArtifacts(__dirname);
 const chromiumProject = {
   name: execution.functionalProject.name,
   use: { ...devices['Desktop Chrome'], storageState: artifacts.authFile },
@@ -34,6 +36,7 @@ export default defineConfig({
   retries: execution.retries,
   workers: execution.workers,
   outputDir: artifacts.testResults,
+  globalTeardown: execution.serverEgressTeardown,
   reporter: execution.hosted
     ? [
         ['list'],
@@ -56,7 +59,8 @@ export default defineConfig({
   // node directly. Local standalone runs still build automatically; the full
   // verification pyramid can reuse its explicit build instead of rebuilding.
   webServer: {
-    command: execution.useExistingBuild ? 'node server.mts' : 'npm start',
+    command: execution.serverCommand,
+    cwd: execution.serverWorkingDirectory,
     url: BASE_URL,
     // A port collision should fail the run loudly, not silently test
     // whatever unrelated (or stale) server already happens to be listening.

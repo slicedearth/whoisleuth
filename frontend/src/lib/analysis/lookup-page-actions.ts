@@ -3,6 +3,9 @@ import {
   type LookupSectionLink,
   type LookupTaskView,
 } from './lookup-presentation.ts';
+import { prepareLookupCollectionTarget } from '../../../../packages/evidence/lookup-target.mts';
+
+export { prepareLookupCollectionTarget };
 
 type LookupMode = 'fast' | 'deep';
 export type LookupEvidenceFamilyId =
@@ -16,10 +19,10 @@ export type LookupEvidenceFamilyId =
 
 const REGISTRY_EVIDENCE_TARGETS = new Set([
   '#evidence-registry',
-  '#evidence-network',
 ]);
 const WEB_EVIDENCE_TARGETS = new Set([
   '#web-evidence',
+  '#evidence-network',
   '#evidence-dns',
   '#evidence-reverse-dns',
   '#evidence-http',
@@ -57,7 +60,7 @@ export function buildLookupRequestUrl(
   target: string,
   selection: LookupRequestSelection,
 ): string {
-  const params = new URLSearchParams({ q: target });
+  const params = new URLSearchParams({ q: prepareLookupCollectionTarget(target) });
   if (selection.mode === 'fast') params.set('fast', '1');
   if (
     selection.mode === 'deep' &&

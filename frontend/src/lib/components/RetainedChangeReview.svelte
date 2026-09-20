@@ -120,7 +120,7 @@
 
 <section id="retained-change-review" class="change-review card" aria-labelledby="retained-change-title">
   <header class="section-head">
-    <div><p class="eyebrow">Derived browser-local review</p><h2 id="retained-change-title">Retained change review</h2></div>
+    <div><p class="eyebrow">Derived review</p><h2 id="retained-change-title">Retained change review</h2></div>
     <span class="bounded-count">{index.counts.retained} eligible retained comparison{index.counts.retained === 1 ? '' : 's'}</span>
   </header>
   <p>

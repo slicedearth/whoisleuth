@@ -13,7 +13,7 @@ import {
 } from '../frontend/src/lib/analysis/workspace-archive.ts';
 import { createRelationshipObservation } from '../frontend/src/lib/analysis/relationship-observation-model.ts';
 import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
-import { createCase, mergeCases, normalizeCaseStore, updateCase, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
+import { CASE_SCHEMA_VERSION, createCase, mergeCases, normalizeCaseStore, updateCase, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
 import { mergeBrandProfiles } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import {
   BULK_PROFILE_CONTEXT_IMPORTED_LIMITATION,
@@ -360,7 +360,7 @@ describe('portable workspace archive', () => {
     assert.equal(left.schema, WORKSPACE_ARCHIVE_SCHEMA);
     assert.equal(left.version, WORKSPACE_ARCHIVE_VERSION);
     assert.deepEqual(left.manifest.sections.map((section) => section.id), [...WORKSPACE_ARCHIVE_SECTION_IDS]);
-    assert.equal(left.manifest.sectionCount, 13);
+    assert.equal(left.manifest.sectionCount, WORKSPACE_ARCHIVE_SECTION_IDS.length);
     assert.equal(left.manifest.totalRecords, 13);
     assert.ok(left.manifest.sections.every((section) => /^sha256:[a-f0-9]{64}$/.test(section.checksum)));
     const settings = recordValue(left.sections.settings);
@@ -387,7 +387,7 @@ describe('portable workspace archive', () => {
 
   test('accepts an exact version 5 archive and migrates it to an empty Review Item section', async () => {
     const archive = structuredClone(await buildWorkspaceArchive(input(), { generatedAt: NOW }));
-    removeSections(archive, ['analystReviewState']);
+    removeSections(archive, ['analystReviewState', 'caseViews']);
     Reflect.set(archive, 'version', 5);
 
     const parsed = await readWorkspaceArchive(archive);
@@ -422,6 +422,7 @@ describe('portable workspace archive', () => {
       updatedAt: NOW,
     }];
     await retargetSectionVersion(archive, 'brandProfiles', 6);
+    removeSections(archive, ['caseViews']);
     Reflect.set(archive, 'version', 6);
 
     const parsed = await readWorkspaceArchive(archive);
@@ -439,17 +440,32 @@ describe('portable workspace archive', () => {
   test('preserves and existing-first unions current Case Brand Profile references', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
     const local = emptyInput();
-    local.cases = [{ ...caseRecord('archive-one.invalid', 'local-case'), brandProfileIds: ['local-profile'] }];
+    local.cases = [{ ...caseRecord('archive-one.invalid', 'case-one'), brandProfileIds: ['local-profile'] }];
     const preview = await previewWorkspaceArchive(archive, local);
     const cases = preview.sections.find((section) => section.id === 'cases');
     assert.ok(cases);
     assert.equal(cases.status, 'ready');
     assert.equal(cases.brandProfileReferencesOmitted, 0);
     const merged = mergeCases(normalizeCaseStore(local.cases).cases, archive.sections.cases);
+    assert.equal(merged.cases.length, 1);
+    assert.equal(merged.cases[0]?.id, 'case-one');
     assert.deepEqual(merged.cases[0]?.brandProfileIds, ['local-profile', 'profile-one']);
   });
 
-  test('keeps archive v8 while round-tripping embedded Case v15 lifecycle histories', async () => {
+  test('does not union Brand Profile references across separate same-domain incidents', async () => {
+    const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
+    const local = normalizeCaseStore([
+      { ...caseRecord('archive-one.invalid', 'local-case'), brandProfileIds: ['local-profile'] },
+    ]).cases;
+    const before = structuredClone(local);
+    const merged = mergeCases(local, archive.sections.cases);
+    assert.equal(merged.cases.length, 2);
+    assert.deepEqual(merged.cases.find(record => record.id === 'local-case'), before[0]);
+    assert.deepEqual(merged.cases.find(record => record.id === 'case-one')?.brandProfileIds, ['profile-one']);
+    assert.deepEqual(local, before);
+  });
+
+  test('keeps the archive envelope while round-tripping current embedded Case lifecycle histories', async () => {
     let record = createCase({
       domain: 'response-archive.invalid',
       source: 'lookup',
@@ -487,7 +503,7 @@ describe('portable workspace archive', () => {
     source.cases = [record];
     const archive = await buildWorkspaceArchive(source, { generatedAt: '2026-07-19T02:04:00.000Z' });
     assert.equal(archive.version, WORKSPACE_ARCHIVE_VERSION);
-    assert.equal(archive.sections.cases.version, 15);
+    assert.equal(archive.sections.cases.version, CASE_SCHEMA_VERSION);
     const parsed = await readWorkspaceArchive(archive);
     const cases = parsed.sections.find((section) => section.id === 'cases');
     assert.equal(cases?.status, 'ready');
@@ -534,10 +550,11 @@ describe('portable workspace archive', () => {
     assert.deepEqual(imported?.riskFactors, []);
   });
 
-  test('rejects every malformed v4 Bulk result set through an ordinary workspace preview', async () => {
-    const attacks: Array<{ label: string; mutate: (session: Record<string, unknown>) => void }> = [
+  test('preserves public Bulk row-context requirements and current compact defaults through workspace preview', async () => {
+    const attacks: Array<{ label: string; currentDefault?: boolean; mutate: (session: Record<string, unknown>) => void }> = [
       {
         label: 'missing row context',
+        currentDefault: true,
         mutate: (session) => Reflect.deleteProperty(requiredValue(session.results as Array<Record<string, unknown>>)[0]!, 'profileContext'),
       },
       {
@@ -573,22 +590,26 @@ describe('portable workspace archive', () => {
         mutate: (session) => { session.state = 'cancelled'; session.completedAt = null; },
       },
     ];
-    for (const attack of attacks) {
+    for (const version of [4, 5]) for (const attack of attacks) {
       const source = input();
       source.bulkSessions = [bulkSessionWithoutActiveProfileRisk()];
       const archive = structuredClone(await buildWorkspaceArchive(source, { generatedAt: NOW }));
       const section = recordValue(archive.sections.bulkSessions);
       const storedSession = requiredValue((section.sessions as Array<Record<string, unknown>>)[0]);
+      for (const row of storedSession.results as Array<Record<string, unknown>>) {
+        row.profileContext = structuredClone(storedSession.profileContext);
+        if (version === 4) row.relationship = { ...recordValue(row.relationship), version: 2 };
+      }
       attack.mutate(storedSession);
-      await refreshSectionIntegrity(archive, 'bulkSessions');
+      await retargetSectionVersion(archive, 'bulkSessions', version);
 
       const preview = await previewWorkspaceArchive(archive, emptyInput(), { selectedSectionIds: ['bulkSessions'] });
       const bulk = preview.sections.find((item) => item.id === 'bulkSessions');
       assert.equal(bulk?.status, 'ready', attack.label);
       assert.deepEqual(
         { added: bulk?.added, updated: bulk?.updated, skipped: bulk?.skipped },
-        { added: 0, updated: 0, skipped: 1 },
-        attack.label,
+        { added: version === 5 && attack.currentDefault ? 1 : 0, updated: 0, skipped: version === 5 && attack.currentDefault ? 0 : 1 },
+        `${version}: ${attack.label}`,
       );
     }
 
@@ -768,7 +789,7 @@ describe('portable workspace archive', () => {
 
   test('closes versioned workspace envelopes, manifests, and manifest entries before integrity claims', async () => {
     const attacks: Array<{ label: string; mutate: (archive: Awaited<ReturnType<typeof buildWorkspaceArchive>>) => void }> = [
-      { label: 'version 8 envelope', mutate: (archive) => { Reflect.set(archive, 'rawWhoisPayload', { credential: 'private material' }); } },
+      { label: `version ${WORKSPACE_ARCHIVE_VERSION} envelope`, mutate: (archive) => { Reflect.set(archive, 'rawWhoisPayload', { credential: 'private material' }); } },
       { label: 'manifest', mutate: (archive) => { Reflect.set(archive.manifest, 'uncheckedPolicy', 'private material'); } },
       { label: 'manifest section entry', mutate: (archive) => { Reflect.set(archive.manifest.sections[0]!, 'credential', 'private material'); } },
     ];
@@ -817,16 +838,16 @@ describe('portable workspace archive', () => {
     assert.equal(preview.unsupportedCount, 1);
   });
 
-  test('isolates a checksummed future Case v16 section as unsupported', async () => {
+  test('isolates a checksummed future Case section as unsupported', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
-    await retargetSectionVersion(archive, 'cases', 16);
+    await retargetSectionVersion(archive, 'cases', 999);
     const parsed = await readWorkspaceArchive(archive);
     assert.equal(parsed.sections.find((section) => section.id === 'cases')?.status, 'unsupported');
     const preview = await previewWorkspaceArchive(archive, emptyInput());
     const cases = preview.sections.find((section) => section.id === 'cases');
     assert.equal(cases?.status, 'unsupported');
     assert.equal(cases?.selected, false);
-    assert.match(cases?.reason ?? '', /newer schema 16/iu);
+    assert.match(cases?.reason ?? '', /newer schema 999/iu);
   });
 
   test('isolates a checksummed unsupported Case v11 section with explicit non-destructive guidance', async () => {
@@ -866,7 +887,7 @@ describe('portable workspace archive', () => {
     await assert.rejects(readWorkspaceArchive(schemaMismatch), /section contract does not match/iu);
   });
 
-  test('rejects a checksummed unknown section from an exact version 8 archive', async () => {
+  test('rejects a checksummed unknown section from a current archive', async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
     const index = archive.manifest.sections.findIndex((section) => section.id === 'settings');
     archive.manifest.sections[index] = {
@@ -902,7 +923,7 @@ describe('portable workspace archive', () => {
     };
     await assert.rejects(
       readWorkspaceArchive(archive),
-      /aggregate text exceeds the string ceiling|limited to 10 MiB/,
+      /aggregate text exceeds the string ceiling|limited to \d+ MiB/,
     );
   });
 
@@ -923,10 +944,13 @@ describe('portable workspace archive', () => {
     await assert.rejects(readWorkspaceArchive(archive), /cannot be serialised/);
   });
 
-  test('previews additive records and existing identities without mutating either side', async () => {
+  for (const [localId, expectedCases] of [
+    ['case-one', { added: 0, updated: 1, skipped: 0 }],
+    ['different-local-id', { added: 1, updated: 0, skipped: 0 }],
+  ] as const) test(`previews Case identity ${localId} without mutating either side`, async () => {
     const archive = await buildWorkspaceArchive(input(), { generatedAt: NOW });
     const local = emptyInput();
-    local.cases = [caseRecord('archive-one.invalid', 'different-local-id')];
+    local.cases = [caseRecord('archive-one.invalid', localId)];
     local.settings.theme = 'dark';
     const beforeArchive = structuredClone(archive);
     const beforeLocal = structuredClone(local);
@@ -938,7 +962,7 @@ describe('portable workspace archive', () => {
     assert.ok(cases);
     assert.ok(campaigns);
     assert.ok(settings);
-    assert.deepEqual({ added: cases.added, updated: cases.updated, skipped: cases.skipped }, { added: 0, updated: 1, skipped: 0 });
+    assert.deepEqual({ added: cases.added, updated: cases.updated, skipped: cases.skipped }, expectedCases);
     assert.deepEqual({ added: campaigns.added, updated: campaigns.updated }, { added: 1, updated: 0 });
     assert.equal(settings.updated, 1);
     assert.equal(settings.skipped, 0);

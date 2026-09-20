@@ -88,13 +88,13 @@
 <section class="queue card">
   {#if lookupDisabledReason}<p class="feature-disabled" role="note">{lookupDisabledReason}</p>{/if}
   {#if !lookupDisabledReason && scanLimitations.length}<p class="feature-disabled" role="note">Some {mode} scan sources are disabled by deployment policy: {scanLimitations.join(', ')}. {mode === 'deep' ? 'Saved evidence will not claim a complete deep scan.' : 'Results will identify unevaluated evidence.'}</p>{/if}
-  {#if profileContextState === 'loading'}<p class="profile-context" role="status" aria-live="polite">Loading browser-local Brand Profile context. Scanning and retries remain unavailable until this read settles.</p>
+  {#if profileContextState === 'loading'}<p class="profile-context" role="status" aria-live="polite">Loading saved Brand Profile context. Scanning and retries remain unavailable until this read settles.</p>
   {:else if profileContextState === 'unavailable'}<p class="profile-context limitation" role="alert">Brand Profile context is unavailable. A scan may continue with trust, allowlist, profile matches, and profile-dependent conclusions retained as inconclusive.</p>
   {:else if profileName}<p class="profile-context">Active profile: <strong>{profileName}</strong>. Official, partner, and allowlisted domains remain visible but are excluded from high-risk triage and Monitor saves.</p>
-  {:else}<p class="profile-context">No active Brand Profile is selected. Profile-derived comparisons are settled against that explicit empty context.</p>{/if}
+  {:else}<p class="profile-context">No active Brand Profile.</p>{/if}
   {#if handoffSource}<p class="handoff">Loaded {handoffCount} candidate{handoffCount === 1 ? '' : 's'} from {handoffSource}.{#if handoffContextTruncated} Generated coverage context was capped to fit browser tab storage; selected candidates were retained in full.{/if}</p>{/if}
   <div class="queue-label"><label class="queue-title" for="domains">Domains</label><label class="btn small file-btn">Import CSV or text<input type="file" accept=".csv,.txt,text/csv,text/plain" onchange={importDomainFile} disabled={running}></label></div>
-  <textarea id="domains" value={input} maxlength={MAX_DOMAIN_INPUT_CHARACTERS} oninput={(event) => setInput(event.currentTarget.value)} disabled={running} placeholder="example.com&#10;example.net"></textarea>
+  <textarea id="domains" value={input} maxlength={MAX_DOMAIN_INPUT_CHARACTERS} rows="3" oninput={(event) => setInput(event.currentTarget.value)} disabled={running} placeholder="example.com&#10;example.net"></textarea>
   <p class="input-help">Paste newline, comma, semicolon, or tab-separated entries. CSV files may include a named domain column. Collection is de-duplicated by registrable domain, and one {mode === 'deep' ? 'Deep' : 'Fast'} job is limited to {queryLimit} unique targets.{#if duplicateCount} {duplicateCount} duplicate{duplicateCount === 1 ? '' : 's'} removed.{/if}{#if equivalentCount} {equivalentCount} equivalent hostname entr{equivalentCount === 1 ? 'y was' : 'ies were'} combined by registrable target.{/if}</p>
   {#if entryCount > queryLimit}<p class="input-limit" role="alert">Remove {entryCount - queryLimit} domain{entryCount - queryLimit === 1 ? '' : 's'} before starting this {mode === 'deep' ? 'Deep' : 'Fast'} job.</p>{/if}
   {#if inputTooLarge}<p class="input-limit" role="alert">The pasted domain list exceeds the 2 MiB or bounded row and cell limit. Reduce it before scanning.</p>{/if}
@@ -121,18 +121,19 @@
 
 <style>
   .queue{padding:var(--card-pad)}
-  .profile-context{margin-top:0;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);color:var(--muted);font-size:var(--text-xs)}
+  .profile-context{margin:0 0 12px;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .profile-context strong{color:var(--text)}
-  .profile-context.limitation{border-color:rgb(var(--amber-rgb) / .35);color:var(--amber)}
+  .profile-context.limitation{color:var(--amber)}
   .handoff{margin-top:0;color:var(--accent);font-size:var(--text-sm)}
   .queue-label{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}
   .queue-title{font:700 var(--text-sm) var(--mono)}
   .input-help{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .input-limit{margin:8px 0 0;color:var(--danger);font-size:var(--text-xs)}
-  textarea{width:100%;min-height:150px;padding:12px;background:rgb(var(--bg-rgb) / .78);font-family:var(--mono);font-size:var(--text-sm)}
-  .queue-actions{display:flex;gap:9px;align-items:end;margin-top:12px}
-  .queue-actions .field:first-child{margin-right:auto}
-  .queue-actions select{min-width:220px;min-height:42px}
+  textarea{width:100%;min-height:104px;padding:12px;background:rgb(var(--bg-rgb) / .78);font-family:var(--mono);font-size:var(--text-sm)}
+  .queue-actions{display:flex;flex-wrap:wrap;gap:9px;align-items:end;margin-top:12px}
+  .queue-actions .field{flex:1 1 210px;min-width:0}
+  .queue-actions select{width:100%;min-width:0;min-height:44px}
+  .queue-actions button{min-height:44px}
   .progress{height:6px;margin-top:16px;overflow:hidden;border-radius:99px;background:var(--border)}
   .progress span{display:block;height:100%;background:var(--accent);transition:width .15s}
   .status{margin-bottom:0}

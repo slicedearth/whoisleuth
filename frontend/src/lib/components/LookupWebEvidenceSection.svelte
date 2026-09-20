@@ -1,4 +1,7 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
+  import type { CheckpointFact } from '$lib/analysis/case-evidence-checkpoint.ts';
+  import { lookupObservationHostname } from '../../../../packages/evidence/lookup-target.mts';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import LookupFamilySummary from '$lib/components/LookupFamilySummary.svelte';
   import type { BrandProfile } from '$lib/brand-profiles';
@@ -42,6 +45,7 @@
     onready,
     setServiceDependencyScope,
     setServiceDependencyFalsePositives,
+    sourceCheckpoint,
   }: {
     result: LookupHttpResponse | null;
     view: LookupView;
@@ -62,10 +66,15 @@
     onready: () => void | Promise<void>;
     setServiceDependencyScope: (value: string) => void;
     setServiceDependencyFalsePositives: (value: string) => void;
+    sourceCheckpoint?: Snippet<[CheckpointFact['category'], string]>;
   } = $props();
 
   const availability = $derived(view.availability);
+  const observationHostname = $derived(lookupObservationHostname(availability) ?? caseDomain);
   const reverseDns = $derived(view.reverseDns);
+  const observedNetworkContext = $derived(view.observedNetworkContext);
+  const observedNetworkEndpoint = $derived(view.observedNetworkEndpoint);
+  const observedNetworkRdap = $derived(view.observedNetworkRdap);
   const dnsEvidence = $derived(view.dnsEvidence);
   const httpEvidence = $derived(view.httpEvidence);
   const tlsEvidence = $derived(view.tlsEvidence);
@@ -92,17 +101,20 @@
   const pageDisplay = $derived(analysis.pageDisplay);
   const brandMimicryReview = $derived(analysis.brandMimicryReview);
   const certificatePolicyReview = $derived(analysis.certificatePolicyReview);
-  const evidenceQualityMatrix = $derived(analysis.evidenceQualityMatrix);
+  const webSources = $derived(analysis.evidenceCoverage.entries.filter((entry) => entry.category === 'network' || entry.category === 'web'));
+  const limitedSources = $derived(webSources.filter((entry) => entry.manualReviewSuggested));
 </script>
 
 <section class="result-section family-web" id="web-evidence" aria-labelledby="web-evidence-title">
   <h3 id="web-evidence-title">{result?.type === 'domain' ? 'Web and DNS evidence' : 'DNS evidence'}</h3>
   <LookupFamilySummary
     label={result?.type === 'domain' ? 'Web and DNS evidence' : 'DNS evidence'}
-    description="Review point-in-time DNS, HTTP, TLS, page identity, technology, and passive posture evidence without merging their source states."
+    description={limitedSources.length
+      ? `Limited ${limitedSources.length === 1 ? 'source' : 'sources'}: ${limitedSources.map((entry) => `${entry.label} (${entry.statusLabel.toLowerCase()})`).join(', ')}.`
+      : 'Review point-in-time network registration, DNS, HTTP, TLS, page identity, technology and passive posture evidence.'}
     metrics={[
-      `${evidenceQualityMatrix.entries.filter((entry) => ['network', 'web'].includes(entry.category.toLowerCase())).length} source records`,
-      `${evidenceQualityMatrix.entries.filter((entry) => ['network', 'web'].includes(entry.category.toLowerCase()) && entry.state !== 'complete').length} limited`,
+      `${webSources.length} source records`,
+      `${limitedSources.length} limited`,
     ]}
     {expanded}
     {onpreload}
@@ -110,6 +122,27 @@
     {onhide}
   />
   {#if expanded}
+    {#if observedNetworkContext.contextVersion === 1}
+      <div class="evidence-component" id="evidence-network"><DeferredSurface
+        load={() => import('$lib/components/LookupNetworkContext.svelte')}
+        loadingLabel="Loading observed network context…"
+        unavailableLabel="Observed network context could not be loaded."
+        {onready}
+        props={{
+          status: statusLabel(boundedTechnologyText(observedNetworkContext.status || 'unsupported', 40)),
+          detail: boundedTechnologyText(observedNetworkContext.detail || 'Observed network context was unavailable.', 300),
+          address: boundedTechnologyText(observedNetworkEndpoint.address, 64),
+          addressSource: pageDisplay.observedNetworkSourceLabel,
+          rdapEndpoint: boundedTechnologyText(observedNetworkRdap.endpoint, 2048),
+          httpStatus: observedNetworkRdap.httpStatus ? String(observedNetworkRdap.httpStatus) : '',
+          fetchedAt: dateTimeAttribute(observedNetworkRdap.fetchedAt) || '',
+          rows: pageDisplay.observedNetworkRows,
+          limitations: pageDisplay.observedNetworkLimitations,
+        }}
+      /></div>
+      {@render sourceCheckpoint?.('network', 'Network')}
+    {/if}
+
     {#if sslbl.sslblVersion === 1 && sslbl.verdict === 'listed'}
       <aside class="sslbl-review-lead" aria-labelledby="sslbl-review-lead-title">
         <div>
@@ -127,7 +160,7 @@
         loadingLabel="Loading website snapshot controls…"
         unavailableLabel="Website snapshot controls could not be loaded."
         props={{
-          domain: caseDomain,
+          domain: observationHostname,
           canSave: !loading && lookupEvidenceDepth === 'deep' && Boolean(caseDomain) && technologyProfile.source === 'derived' && securityPosture.source === 'derived',
           buildSnapshot,
         }}
@@ -150,14 +183,15 @@
         loadingLabel="Loading DNS evidence…"
         unavailableLabel="DNS evidence could not be loaded."
         {onready}
-        props={{headingId: 'dns-title', status: show(dnsEvidence.status), complete: dnsEvidence.complete !== false, rows: networkDisplay.dnsRows, failureDetail: networkDisplay.dnsQueryFailures, truncated: Boolean(dnsEvidence.truncated), delegation: networkDisplay.dnsDelegation, rehearsalEvidence: dnsRehearsalEvidence, domain: caseDomain, allowRehearsal: result?.type === 'domain', note: 'Point-in-time resolver evidence. Service-binding targets and address hints are displayed but not followed. Verify shared infrastructure independently.'}}
+        props={{headingId: 'dns-title', status: show(dnsEvidence.status), complete: dnsEvidence.complete !== false, rows: networkDisplay.dnsRows, failureDetail: networkDisplay.dnsQueryFailures, truncated: Boolean(dnsEvidence.truncated), delegation: networkDisplay.dnsDelegation, rehearsalEvidence: dnsRehearsalEvidence, domain: caseDomain, allowRehearsal: result?.type === 'domain', note: `Point-in-time resolver evidence for ${observationHostname}. Registration-delegation checks retain their separately named domain. Service-binding targets and address hints are displayed but not followed. Verify shared infrastructure independently.`}}
       /></div>
+      {@render sourceCheckpoint?.('dns', 'DNS')}
       {#if serviceDependencyReview}
         <div class="evidence-component"><DeferredSurface
           load={() => import('$lib/components/LookupServiceDependencyReview.svelte')}
           loadingLabel="Loading service-dependency review…"
           unavailableLabel="Service-dependency review could not be loaded."
-          props={{review: serviceDependencyReview, target: caseDomain, technologies: pageDisplay.technologyFindings, libraries: pageDisplay.browserLibraries, authorizedScope: serviceDependencyScope, falsePositiveTargets: serviceDependencyFalsePositives, setAuthorizedScope: setServiceDependencyScope, setFalsePositiveTargets: setServiceDependencyFalsePositives}}
+          props={{review: serviceDependencyReview, target: observationHostname, technologies: pageDisplay.technologyFindings, libraries: pageDisplay.browserLibraries, authorizedScope: serviceDependencyScope, falsePositiveTargets: serviceDependencyFalsePositives, setAuthorizedScope: setServiceDependencyScope, setFalsePositiveTargets: setServiceDependencyFalsePositives}}
         /></div>
       {/if}
     {/if}
@@ -170,6 +204,7 @@
         {onready}
         props={{status: statusLabel(show(httpEvidence.status)), complete: httpEvidence.complete !== false, rows: networkDisplay.httpRows, crossOriginRedirect: Boolean(httpEvidence.crossOriginRedirect), httpsDowngrade: Boolean(httpEvidence.httpsDowngrade), redirects: networkDisplay.httpRedirects, attempts: networkDisplay.httpAttempts, metadata: networkDisplay.httpMetadata, deliveryMetadata: networkDisplay.httpDeliveryMetadata, limitations: stringList(httpEvidence.limitations, MAX_OBSERVATION_LIMITATIONS, MAX_OBSERVATION_LIMITATION_LENGTH)}}
       /></div>
+      {@render sourceCheckpoint?.('http', 'HTTP')}
     {/if}
 
     {#if tlsEvidence.source === 'tls'}
@@ -180,6 +215,7 @@
         {onready}
         props={{status: statusLabel(show(tlsEvidence.status)), complete: tlsEvidence.complete !== false, rows: networkDisplay.tlsRows, findings: networkDisplay.tlsFindings, leafCertificate: networkDisplay.leafCertificate, alternativeNames: networkDisplay.alternativeNames, alternativeNamesTruncated: Boolean(tlsAltNames.truncated), chain: networkDisplay.tlsChain, chainTruncated: Boolean(tlsEvidence.chainTruncated), validationDetails: networkDisplay.tlsValidation, limitations: stringList(tlsEvidence.limitations, MAX_OBSERVATION_LIMITATIONS, MAX_OBSERVATION_LIMITATION_LENGTH), validFrom: typeof tlsCertificate.validFrom === 'string' ? tlsCertificate.validFrom : null, validTo: typeof tlsCertificate.validTo === 'string' ? tlsCertificate.validTo : null, observedAt: lookupObservedAt}}
       /></div>
+      {@render sourceCheckpoint?.('tls', 'TLS')}
       <div class="evidence-component"><DeferredSurface
         load={() => import('$lib/components/LookupCertificatePolicyReview.svelte')}
         loadingLabel="Loading certificate-policy review…"
@@ -206,6 +242,7 @@
         {onready}
         props={{state: boundedTechnologyText(securityTxt.state || 'unavailable', 40), detail: boundedTechnologyText(securityTxt.detail || 'Disclosure contact collection was unavailable.', 300), endpoint: boundedTechnologyText(securityTxt.finalUrl, 2048), httpStatus: securityTxt.httpStatus ? String(securityTxt.httpStatus) : '', observedAt: dateTimeAttribute(securityTxt.observedAt) || '', expiresAt: dateTimeAttribute(securityTxt.expiresAt) || '', contacts: stringList(securityTxt.contacts).slice(0, 10), policies: stringList(securityTxt.policies).slice(0, 10), encryption: stringList(securityTxt.encryption).slice(0, 10), languages: stringList(securityTxt.preferredLanguages).slice(0, 10), limitations: stringList(securityTxt.limitations).slice(0, 10)}}
       /></div>
+      {@render sourceCheckpoint?.('disclosure', 'Disclosure contact')}
     {/if}
 
     {#if pageIdentity.source === 'html'}
@@ -216,6 +253,7 @@
         {onready}
         props={{status: statusLabel(show(pageIdentity.status)), complete: Boolean(pageIdentity.complete), facts: pageDisplay.pageIdentityFacts, externalFormOrigins: stringList(pageForms.externalActionOrigins, 10, 2048), resourceCount: Number(pageResources.count) || 0, resourceSummary: pageDisplay.resourceSummary, embeddedOrigins: stringList(pageIdentity.embeddedOrigins, 20, 2048), contactDomains: stringList(pageIdentity.contactDomains, 20, 253), downloadCount: Number(pageDownloads.count) || 0, downloadSummary: pageDisplay.downloadSummary, trackingIdentifiers: pageDisplay.trackingIdentifiers, fingerprints: pageDisplay.fingerprints, publicationMetadata: pageDisplay.pagePublicationMetadata, limitations: stringList(pageIdentity.limitations, MAX_OBSERVATION_LIMITATIONS, MAX_OBSERVATION_LIMITATION_LENGTH)}}
       /></div>
+      {@render sourceCheckpoint?.('page_identity', 'Page identity')}
     {/if}
 
     {#if credentialSurfaceProfile.source === 'html'}
@@ -235,7 +273,7 @@
         loadingLabel="Loading passive posture evidence…"
         unavailableLabel="Passive posture evidence could not be loaded."
         {onready}
-        props={{status: statusLabel(show(securityPosture.status)), complete: Boolean(securityPosture.complete), summary: pageDisplay.securityPostureSummary, findings: pageDisplay.securityPostureFindings, limitations: pageDisplay.securityPostureLimitations}}
+        props={{status: statusLabel(show(securityPosture.status)), complete: Boolean(securityPosture.complete), findings: pageDisplay.securityPostureFindings, limitations: pageDisplay.securityPostureLimitations}}
       /></div>
     {/if}
 
@@ -255,7 +293,7 @@
         loadingLabel="Loading technology-profile evidence…"
         unavailableLabel="Technology-profile evidence could not be loaded."
         {onready}
-        props={{status: statusLabel(show(technologyProfile.status)), complete: Boolean(technologyProfile.complete), findings: pageDisplay.technologyFindings, authoritativeNameservers: Array.isArray(availability.nameservers) ? availability.nameservers.filter((value): value is string => typeof value === 'string').slice(0, 50) : [], limitations: pageDisplay.technologyLimitations, libraryAvailable: browserLibraryProfile.profileVersion === 1 || browserLibraryProfile.profileVersion === 2, libraryStatus: statusLabel(show(browserLibraryProfile.status)), libraryComplete: Boolean(browserLibraryProfile.complete), libraryCatalog: boundedTechnologyText((browserLibraryProfile.catalog as JsonRecord)?.version, 80), libraries: pageDisplay.browserLibraries, libraryLimitations: pageDisplay.browserLibraryLimitations}}
+        props={{status: statusLabel(show(technologyProfile.status)), complete: Boolean(technologyProfile.complete), observedAt: technologyProfile.observedAt, findings: pageDisplay.technologyFindings, authoritativeNameservers: Array.isArray(availability.nameservers) ? availability.nameservers.filter((value): value is string => typeof value === 'string').slice(0, 50) : [], limitations: pageDisplay.technologyLimitations, libraryAvailable: browserLibraryProfile.profileVersion === 1 || browserLibraryProfile.profileVersion === 2, libraryStatus: statusLabel(show(browserLibraryProfile.status)), libraryComplete: Boolean(browserLibraryProfile.complete), libraryObservedAt: browserLibraryProfile.observedAt, libraryCatalog: boundedTechnologyText((browserLibraryProfile.catalog as JsonRecord)?.version, 80), libraries: pageDisplay.browserLibraries, libraryLimitations: pageDisplay.browserLibraryLimitations}}
       /></div>
     {/if}
 

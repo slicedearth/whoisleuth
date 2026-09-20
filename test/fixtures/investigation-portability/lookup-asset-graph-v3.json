@@ -1,0 +1,369 @@
+{
+  "version": 3,
+  "targetId": "target-example-test-cb8lbx",
+  "nodes": [
+    {
+      "id": "target-example-test-cb8lbx",
+      "label": "example.test",
+      "kind": "target",
+      "detail": "Lookup target"
+    },
+    {
+      "id": "address-192-0-2-1-1n6ifs",
+      "label": "192.0.2.1",
+      "kind": "address",
+      "detail": ""
+    },
+    {
+      "id": "certificate-certificate-aaaaaaaaaaaa-1uug9r8",
+      "label": "Certificate aaaaaaaaaaaa",
+      "kind": "certificate",
+      "detail": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "id": "hostname-example-test-cb8lbx",
+      "label": "example.test",
+      "kind": "hostname",
+      "detail": "Certificate DNS subject alternative name"
+    },
+    {
+      "id": "hostname-mail-example-test-ukvzkk",
+      "label": "mail.example.test",
+      "kind": "hostname",
+      "detail": "Certificate DNS subject alternative name"
+    }
+  ],
+  "edges": [
+    {
+      "id": "resolves-to-olsid0",
+      "sourceId": "source-v9wwsa",
+      "kind": "resolves-to",
+      "label": "resolves to",
+      "sourceLabel": "DNS",
+      "observedAt": "2026-09-01T00:00:00.000Z",
+      "completeness": "complete",
+      "limitations": [],
+      "lenses": [
+        "all"
+      ],
+      "href": "#evidence-dns",
+      "source": "target-example-test-cb8lbx",
+      "target": "address-192-0-2-1-1n6ifs"
+    },
+    {
+      "id": "presents-certificate-mpcwq5",
+      "sourceId": "source-8ls06",
+      "kind": "presents-certificate",
+      "label": "presented certificate",
+      "sourceLabel": "TLS",
+      "observedAt": null,
+      "completeness": "complete",
+      "limitations": [],
+      "lenses": [
+        "all",
+        "certificate"
+      ],
+      "href": "#evidence-tls",
+      "source": "target-example-test-cb8lbx",
+      "target": "certificate-certificate-aaaaaaaaaaaa-1uug9r8"
+    },
+    {
+      "id": "authorizes-name-1oi6m0c",
+      "sourceId": "source-l6gmq5",
+      "source": "certificate-certificate-aaaaaaaaaaaa-1uug9r8",
+      "target": "hostname-example-test-cb8lbx",
+      "kind": "authorizes-name",
+      "label": "contains SAN",
+      "sourceLabel": "TLS certificate",
+      "observedAt": null,
+      "completeness": "complete",
+      "limitations": [],
+      "lenses": [
+        "certificate",
+        "identity"
+      ],
+      "href": "#evidence-tls",
+      "boundary": "same_registrable_domain"
+    },
+    {
+      "id": "authorizes-name-16e15at",
+      "sourceId": "source-l6gmq5",
+      "source": "certificate-certificate-aaaaaaaaaaaa-1uug9r8",
+      "target": "hostname-mail-example-test-ukvzkk",
+      "kind": "authorizes-name",
+      "label": "contains SAN",
+      "sourceLabel": "TLS certificate",
+      "observedAt": null,
+      "completeness": "complete",
+      "limitations": [],
+      "lenses": [
+        "certificate",
+        "identity"
+      ],
+      "href": "#evidence-tls",
+      "boundary": "same_registrable_domain"
+    }
+  ],
+  "sources": [
+    {
+      "id": "source-v9wwsa",
+      "label": "DNS",
+      "href": "#evidence-dns",
+      "observedAt": "2026-09-01T00:00:00.000Z",
+      "completeness": "complete",
+      "limitations": []
+    },
+    {
+      "id": "source-8ls06",
+      "label": "TLS",
+      "href": "#evidence-tls",
+      "observedAt": null,
+      "completeness": "complete",
+      "limitations": []
+    },
+    {
+      "id": "source-l6gmq5",
+      "label": "TLS certificate",
+      "href": "#evidence-tls",
+      "observedAt": null,
+      "completeness": "complete",
+      "limitations": []
+    }
+  ],
+  "coverage": {
+    "inputs": [
+      {
+        "id": "profile.official",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "profile.partner",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "profile.allowlisted",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "dns.limitations",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "dns.a",
+        "supplied": 3,
+        "inspected": 3,
+        "admitted": 1,
+        "invalid": 1,
+        "duplicates": 1,
+        "omitted": 0
+      },
+      {
+        "id": "dns.aaaa",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "dns.cname",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "dns.ns",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "dns.mx",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "dns.https",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "delegation.limitations",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "delegation.registry.nameservers",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "delegation.parent.nameservers",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "delegation.authorities",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "network.cidrs",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "page.formOrigins",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "page.resourceOrigins",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "page.trackingIdentifiers",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "structured.limitations",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "structured.entities",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "tls.limitations",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "tls.dnsNames",
+        "supplied": 2,
+        "inspected": 2,
+        "admitted": 2,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "tls.issuer.organizations",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "tls.issuer.commonNames",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      },
+      {
+        "id": "certificatePolicy.findings",
+        "supplied": 0,
+        "inspected": 0,
+        "admitted": 0,
+        "invalid": 0,
+        "duplicates": 0,
+        "omitted": 0
+      }
+    ]
+  },
+  "truncated": true,
+  "limitations": [
+    "The graph contains only settled evidence from this Lookup and does not start additional requests.",
+    "Shared infrastructure, certificates, resources, or identifiers do not establish ownership, control, intent, or maliciousness.",
+    "An observed address can represent a CDN, proxy, load balancer, or shared service rather than an origin host.",
+    "Missing and incomplete sources remain explicit and are not represented as absent relationships."
+  ]
+}

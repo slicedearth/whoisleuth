@@ -3,13 +3,19 @@ import type {
   EvidenceCoverageLedger,
 } from './evidence-coverage-ledger.ts';
 import type { LookupTaskView } from './lookup-presentation.ts';
+import type { LookupHttpResponse } from './lookup-response.ts';
+import type { CheckpointFact } from './case-evidence-checkpoint.ts';
+import type { CaseRecord } from '../cases.ts';
+import type { LocalMutationOutcome } from '../local-mutation-outcome.ts';
+import { sourceRefreshTarget, readSourceRefreshObservation } from './lookup-source-observation.ts';
+import { scanBoundedJson } from '../../../../lib/bounded-json.mts';
+import { readObservationTime } from '../../../../packages/evidence/observation.mts';
 import {
   BoundedJsonResponseError,
   requestJsonCapped,
 } from '../bounded-json-response.ts';
 
 export const LOOKUP_SOURCE_REFRESH_VERSION = 1 as const;
-export const LOOKUP_SOURCE_STALE_AFTER_DAYS = 7;
 export const LOOKUP_FRESHNESS_POLICY_VERSION = 1 as const;
 export const LOOKUP_SOURCE_REFRESH_TIMEOUT_MS = 40_000;
 export const MAX_LOOKUP_SOURCE_REFRESH_KEYS = 512;
@@ -61,15 +67,21 @@ export type LookupSourceRefreshResult = Readonly<{
   detail: string;
   observedAt: string | null;
   attemptedAt: string;
-  reason: LookupSourceRefreshPlanItem['reason'];
-  evidenceIds: readonly string[];
-  supersedesObservedAt: string | null;
+  facts: readonly CheckpointFact[];
 }>;
 
 export type LookupSourceRefreshLedger = Readonly<{
   version: typeof LOOKUP_SOURCE_REFRESH_VERSION;
   entries: readonly LookupSourceRefreshResult[];
-  truncated: boolean;
+}>;
+
+export type SourceRefreshCaseTarget = Readonly<{
+  record: CaseRecord | null;
+  ready: boolean;
+  busy: boolean;
+  status: string;
+  oncreate: () => Promise<void>;
+  onsave: (facts: readonly CheckpointFact[], fields: string[]) => Promise<LocalMutationOutcome>;
 }>;
 
 type RefreshRequestOutcome =
@@ -125,20 +137,13 @@ export function buildLookupFreshnessPolicy(
   };
 }
 
-function observedAgeDays(observedAt: unknown, now: unknown): number | null {
-  if (typeof observedAt !== 'string' || typeof now !== 'string') return null;
-  const observedMs = Date.parse(observedAt);
-  const nowMs = Date.parse(now);
-  if (!Number.isFinite(observedMs) || !Number.isFinite(nowMs)) return null;
-  return Math.max(0, Math.floor((nowMs - observedMs) / 86_400_000));
-}
-
 function limited(entries: readonly EvidenceCoverageEntry[], ids: ReadonlySet<string>): boolean {
   return entries.some((entry) => ids.has(entry.id) && entry.manualReviewSuggested);
 }
 
 function availableIds(entries: readonly EvidenceCoverageEntry[], ids: ReadonlySet<string>): string[] {
-  return entries.filter((entry) => ids.has(entry.id)).map((entry) => entry.id).slice(0, 12);
+  return entries.filter((entry) => ids.has(entry.id) && entry.state !== 'skipped' && entry.state !== 'unsupported')
+    .map((entry) => entry.id).slice(0, 12);
 }
 
 export function buildLookupSourceRefreshPlan(
@@ -151,10 +156,12 @@ export function buildLookupSourceRefreshPlan(
     observedAtByEvidence?: Readonly<Record<string, unknown>>;
   }> = {},
 ): LookupSourceRefreshPlan {
-  const ageDays = observedAgeDays(observedAt, now);
+  const { ageDays } = readObservationTime(observedAt, now);
   const freshnessPolicy = buildLookupFreshnessPolicy(options.task ?? 'general', options.freshnessPolicy);
   const entries = ledger.entries.slice(0, 24);
   const plans: LookupSourceRefreshPlanItem[] = [];
+  let stale = false;
+  let unknownSourceTimes = false;
   const groups: Array<{
     id: LookupSourceRefreshId;
     label: string;
@@ -191,19 +198,25 @@ export function buildLookupSourceRefreshPlan(
   for (const group of groups) {
     const evidenceIds = availableIds(entries, group.ids);
     if (!evidenceIds.length) continue;
-    const isLimited = limited(entries, group.ids);
     const thresholds = evidenceIds.map((id) => WEB_EVIDENCE_IDS.has(id)
       ? freshnessPolicy.thresholdsDays.web
       : NETWORK_EVIDENCE_IDS.has(id)
         ? freshnessPolicy.thresholdsDays.network
         : freshnessPolicy.thresholdsDays[group.threshold]);
     const staleAfterDays = Math.min(...thresholds);
-    const evidenceAges = evidenceIds
-      .map((id) => observedAgeDays(options.observedAtByEvidence?.[id] ?? observedAt, now))
-      .filter((value): value is number => value !== null);
-    const groupAgeDays = evidenceAges.length ? Math.max(...evidenceAges) : ageDays;
-    const groupStale = groupAgeDays !== null && groupAgeDays >= staleAfterDays;
+    // Availability is a derived decision; refresh age belongs to its collected inputs.
+    const sourceTimes = evidenceIds.flatMap((id, index) => id === 'availability' ? [] : [{
+      ...readObservationTime(options.observedAtByEvidence?.[id], now),
+      threshold: thresholds[index]!,
+    }]);
+    const unknownTime = sourceTimes.some((time) => time.ageDays === null);
+    const groupAgeDays = unknownTime || !sourceTimes.length ? null : Math.max(...sourceTimes.map((time) => time.ageDays!));
+    const groupStale = sourceTimes.some((time) => time.ageDays !== null && time.ageDays >= time.threshold);
+    const isLimited = limited(entries, group.ids) || unknownTime;
+    stale ||= groupStale;
+    unknownSourceTimes ||= unknownTime;
     if (!isLimited && !groupStale) continue;
+    const observationTimes = new Set(sourceTimes.map((time) => time.observedAt));
     plans.push({
       id: group.id,
       label: group.label,
@@ -211,14 +224,11 @@ export function buildLookupSourceRefreshPlan(
       evidenceIds,
       reason: isLimited ? 'limited' : 'stale',
       requestDisclosure: group.disclosure,
-      supersedesObservedAt: typeof observedAt === 'string' && Number.isFinite(Date.parse(observedAt))
-        ? new Date(observedAt).toISOString()
-        : null,
+      supersedesObservedAt: !unknownTime && observationTimes.size === 1 ? sourceTimes[0]!.observedAt : null,
       ageDays: groupAgeDays,
       staleAfterDays,
     });
   }
-  const stale = plans.some((item) => item.reason === 'stale');
   return {
     version: LOOKUP_SOURCE_REFRESH_VERSION,
     stale,
@@ -226,85 +236,18 @@ export function buildLookupSourceRefreshPlan(
     freshnessPolicy,
     items: plans,
     limitations: [
+      ...(unknownSourceTimes ? ['Some source observation times are missing, invalid or in the future; their age is unknown.'] : []),
       'A source refresh is displayed separately and never merged into the original unified Lookup envelope.',
-      'Run a complete Lookup before saving, comparing, or exporting replacement evidence collected at one review time.',
-      'A retry can remain partial or unavailable and never proves that missing evidence is absent.',
+      'Compare normalised facts here or retain selected dated facts in a Case. A full Lookup export still represents the original result.',
       'Freshness thresholds organise review only. They do not make an older observation false or a newer observation complete.',
     ],
   };
 }
 
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-}
-
-function text(value: unknown, maximum = 180): string {
-  return String(value ?? '')
-    .replace(/[\u0000-\u001f\u007f]+/gu, ' ')
-    .replace(/\s+/gu, ' ')
-    .trim()
-    .slice(0, maximum);
-}
-
-function summarizeSource(
-  plan: LookupSourceRefreshPlanItem,
-  body: Record<string, unknown>,
-  observedAt: string,
-  depth: 'deep' | 'fast',
-  supersedesObservedAt: string | null,
-): LookupSourceRefreshResult {
-  const base = {
-    version: LOOKUP_SOURCE_REFRESH_VERSION,
-    id: plan.id,
-    observedAt,
-    attemptedAt: observedAt,
-    reason: plan.reason,
-    evidenceIds: plan.evidenceIds.slice(0, 12),
-    supersedesObservedAt,
-  };
-  if (plan.id === 'rdap') {
-    const upstreamStatus = Number(body.upstreamStatus);
-    const parsed = record(body.parsed);
-    const complete = upstreamStatus === 200 && Object.keys(parsed).length > 0;
-    return {
-      ...base,
-      state: complete ? 'complete' : 'limited',
-      detail: complete
-        ? `Registry RDAP returned a validated ${upstreamStatus} response.`
-        : `Registry RDAP returned ${Number.isFinite(upstreamStatus) ? `HTTP ${upstreamStatus}` : 'no complete structured record'}.`,
-    };
-  }
-  if (plan.id === 'whois') {
-    const chain = Array.isArray(body.chain) ? body.chain : [];
-    const chainStatus = text(record(body.parsed).chainStatus, 40);
-    const complete = chain.length > 0 && chainStatus === 'complete';
-    return {
-      ...base,
-      state: complete ? 'complete' : 'limited',
-      detail: complete
-        ? `WHOIS returned a complete ${chain.length}-hop referral chain.`
-        : `WHOIS returned ${chain.length} hop${chain.length === 1 ? '' : 's'} with ${chainStatus || 'unknown'} chain status.`,
-    };
-  }
-  const state = text(body.state, 40) || 'unknown';
-  const complete = body.deepScanComplete === true
-    || (depth === 'fast' && state !== 'unknown');
-  const sourceStates = ['dns', 'http', 'tls']
-    .map((key) => text(record(body[key]).status, 40))
-    .filter(Boolean);
-  return {
-    ...base,
-    state: complete ? 'complete' : 'limited',
-    detail: `Domain evidence returned ${state}${sourceStates.length ? `; DNS, HTTP, and TLS states: ${sourceStates.join(', ')}` : ''}.`,
-  };
-}
 
 function unavailableRefreshResult(
   plan: LookupSourceRefreshPlanItem,
   attemptedAt: string,
-  supersedesObservedAt: string | null,
   detail: string,
 ): LookupSourceRefreshResult {
   return {
@@ -314,76 +257,68 @@ function unavailableRefreshResult(
     detail,
     observedAt: null,
     attemptedAt,
-    reason: plan.reason,
-    evidenceIds: plan.evidenceIds.slice(0, 12),
-    supersedesObservedAt,
+    facts: [],
   };
 }
 
 export async function requestLookupSourceRefresh(
   plan: LookupSourceRefreshPlanItem,
-  query: string,
+  original: LookupHttpResponse,
   depth: 'deep' | 'fast',
   options: Readonly<{
     fetchImpl?: FetchImplementation;
     timeoutMs?: number;
     now?: () => string;
-    supersedesObservedAt?: string | null;
+    signal?: AbortSignal;
   }> = {},
 ): Promise<RefreshRequestOutcome> {
-  const normalizedQuery = text(query, 4096);
-  if (!normalizedQuery) return { ok: false, message: 'A valid Lookup target is required.' };
+  let normalizedQuery: string;
+  try { normalizedQuery = sourceRefreshTarget(plan.id, original); }
+  catch (cause) { return { ok: false, message: cause instanceof Error ? cause.message : 'A valid Lookup target is required.' }; }
   const timeoutMs = Number.isFinite(options.timeoutMs)
     ? Math.max(1, Math.min(LOOKUP_SOURCE_REFRESH_TIMEOUT_MS, Math.round(Number(options.timeoutMs))))
     : LOOKUP_SOURCE_REFRESH_TIMEOUT_MS;
   const attemptedAt = options.now?.() ?? new Date().toISOString();
-  const supersedesObservedAt = options.supersedesObservedAt === undefined
-    ? plan.supersedesObservedAt
-    : options.supersedesObservedAt;
   try {
     const url = `${plan.endpoint}?q=${encodeURIComponent(normalizedQuery)}${plan.id === 'availability' && depth === 'fast' ? '&fast=true' : ''}`;
     const { response, body: rawBody } = await requestJsonCapped(url, {
       credentials: 'same-origin',
+      ...(options.signal ? { signal: options.signal } : {}),
     }, {
       ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
       maximumBytes: MAX_LOOKUP_SOURCE_REFRESH_BYTES,
       timeoutMs,
+      validateRawJson: raw => scanBoundedJson(raw),
     });
-    const body = record(rawBody);
     if (!response.ok) {
       return {
         ok: true,
         value: unavailableRefreshResult(
           plan,
           attemptedAt,
-          supersedesObservedAt,
-          text(body.error, 240) || `The source returned HTTP ${response.status}; no new observation was recorded.`,
+          `The source returned HTTP ${response.status}; no new observation was recorded.`,
         ),
       };
     }
-    if (Object.keys(body).length > MAX_LOOKUP_SOURCE_REFRESH_KEYS) {
+    if (rawBody && typeof rawBody === 'object' && Object.keys(rawBody).length > MAX_LOOKUP_SOURCE_REFRESH_KEYS) {
       return { ok: false, message: 'Source refresh returned an oversized record.' };
     }
     return {
       ok: true,
-      value: summarizeSource(
-        plan,
-        body,
-        attemptedAt,
-        depth,
-        supersedesObservedAt,
-      ),
+      value: { version: LOOKUP_SOURCE_REFRESH_VERSION, id: plan.id, attemptedAt,
+        ...readSourceRefreshObservation(plan.id, rawBody, original, depth, options.now?.() ?? new Date().toISOString()),
+      },
     };
   } catch (cause) {
+    if (options.signal?.aborted) return { ok: false, message: 'Source refresh cancelled. No new observation was retained.' };
     if (cause instanceof BoundedJsonResponseError && cause.code === 'response_too_large') {
-      return { ok: true, value: unavailableRefreshResult(plan, attemptedAt, supersedesObservedAt, 'The source response exceeded the local limit; no new observation was recorded.') };
+      return { ok: true, value: unavailableRefreshResult(plan, attemptedAt, 'The source response exceeded the local limit; no new observation was recorded.') };
     }
     return {
       ok: true,
       value: unavailableRefreshResult(
         plan,
         attemptedAt,
-        supersedesObservedAt,
         cause instanceof BoundedJsonResponseError && cause.code === 'timeout'
           ? 'The source refresh timed out; no new observation was recorded.'
           : 'The source refresh could not be completed; no new observation was recorded.',
@@ -396,22 +331,9 @@ export function mergeLookupSourceRefreshLedger(
   current: LookupSourceRefreshLedger | null,
   result: LookupSourceRefreshResult,
 ): LookupSourceRefreshLedger {
-  const candidates = [
-    ...(current?.version === LOOKUP_SOURCE_REFRESH_VERSION ? current.entries : []),
-    result,
-  ];
-  const byObservation = new Map<string, LookupSourceRefreshResult>();
-  for (const entry of candidates.slice(-MAX_LOOKUP_SOURCE_REFRESH_HISTORY * 4)) {
-    byObservation.set(`${entry.id}:${entry.attemptedAt}`, entry);
+  const entries = current?.version === LOOKUP_SOURCE_REFRESH_VERSION ? current.entries : [];
+  if (entries.length >= MAX_LOOKUP_SOURCE_REFRESH_HISTORY) {
+    throw new RangeError('Remove a reviewed refresh entry before collecting another. Existing observations were kept.');
   }
-  const ordered = [...byObservation.values()]
-    .sort((left, right) => Date.parse(left.attemptedAt) - Date.parse(right.attemptedAt));
-  const truncated = Boolean(current?.truncated)
-    || ordered.length > MAX_LOOKUP_SOURCE_REFRESH_HISTORY
-    || candidates.length > MAX_LOOKUP_SOURCE_REFRESH_HISTORY;
-  return {
-    version: LOOKUP_SOURCE_REFRESH_VERSION,
-    entries: ordered.slice(-MAX_LOOKUP_SOURCE_REFRESH_HISTORY),
-    truncated,
-  };
+  return { version: LOOKUP_SOURCE_REFRESH_VERSION, entries: [...entries, result] };
 }

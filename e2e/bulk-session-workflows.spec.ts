@@ -1,6 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { currentBulkSessionBrowserStore, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, readBrowserLocalCollection, runBulkScan, selectBulkResultView } from './helpers';
+import { BULK_SESSION_SCHEMA, BULK_SESSION_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
+import { MAX_BULK_SESSIONS } from '../packages/workspace/bulk-session-model.mts';
+import { richBulkSessionStore } from '../test/bulk-session-fixture.mts';
+import { currentBulkSessionBrowserStore, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
 
 // Saved Bulk sessions, provenance, resumption and cancellation coverage.
 
@@ -8,6 +11,71 @@ test.use({ allowExpectedBulkLookup400Noise: true });
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/bulk');
+});
+
+test('reviews capacity before saving and invalidates consent when another tab changes the affected records', async ({ page, context }) => {
+  const base = richBulkSessionStore(1).sessions[0]!;
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-bulk-sessions-v1': currentBulkSessionBrowserStore(Array.from({ length: MAX_BULK_SESSIONS }, (_, index) => ({
+      ...base, id: `retained-${index}`, name: `Retained session ${index}`,
+      updatedAt: new Date(Date.parse(base.updatedAt) + index * 1_000).toISOString(),
+    }))),
+  });
+  await page.route('**/api/lookup?*', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({
+      availability: { applicable: true, domain: 'new.example', state: 'registered', confidence: 'high' },
+      diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+    }),
+  }));
+  await runBulkScan(page, ['new.example']);
+  await openBulkWorkspaceTools(page);
+  const before = await readBrowserLocalCollection(page, 'bulk_sessions', { minimumRecords: MAX_BULK_SESSIONS });
+  await page.getByLabel('Session name').fill('New retained review');
+  await page.getByRole('button', { name: 'Save current session', exact: true }).click();
+  const preview = page.getByRole('region', { name: 'Review storage changes', exact: true });
+  await expect(preview.getByRole('heading')).toBeFocused();
+  await expect(preview.getByRole('list')).toContainText('Retained session 0');
+  expect(await readBrowserLocalCollection(page, 'bulk_sessions')).toEqual(before);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    await page.setViewportSize({ width: 320, height: 700 });
+    await expectNoHorizontalOverflow(page);
+    await expect(preview.getByRole('button', { name: 'Cancel save' })).toBeVisible();
+  }
+  const downloadEvent = page.waitForEvent('download');
+  await preview.getByRole('button', { name: 'Export before saving' }).click();
+  const downloaded = await downloadEvent;
+  const archive = JSON.parse(await readFile((await downloaded.path())!, 'utf8'));
+  expect(archive.sessions).toHaveLength(MAX_BULK_SESSIONS);
+  await preview.getByRole('button', { name: 'Cancel save' }).click();
+  await expect(preview).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Save current session', exact: true })).toBeFocused();
+  expect(await readBrowserLocalCollection(page, 'bulk_sessions')).toEqual(before);
+  await page.getByRole('button', { name: 'Save current session', exact: true }).click();
+  await expect(preview.getByRole('list')).toContainText('Retained session 0');
+
+  const peer = await context.newPage();
+  try {
+    await peer.goto('/bulk');
+    await openBulkWorkspaceTools(peer);
+    await peer.getByRole('article').filter({ has: peer.getByRole('heading', { name: 'Retained session 0', exact: true }) }).getByRole('button', { name: 'Load', exact: true }).click();
+    await peer.getByLabel('Session name').fill('Peer revision');
+    await peer.getByRole('button', { name: 'Update saved session', exact: true }).click();
+    await expect(peer.getByRole('status').filter({ hasText: 'Updated Peer revision.' })).toBeVisible();
+    const changed = await readBrowserLocalCollection(peer, 'bulk_sessions', { minimumRevision: before.manifest.revision + 1 });
+    await page.bringToFront();
+    await preview.getByRole('button', { name: 'Remove listed sessions and save' }).click();
+    await expect(preview.getByRole('list')).toContainText('Retained session 1');
+    await expect(preview.getByRole('list')).not.toContainText('Retained session 0');
+    expect(await readBrowserLocalCollection(page, 'bulk_sessions')).toEqual(changed);
+    await preview.getByRole('button', { name: 'Remove listed sessions and save' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Saved New retained review. Removed 1 reviewed session.' })).toBeVisible();
+    const after = await readBrowserLocalCollection(page, 'bulk_sessions', { minimumRevision: changed.manifest.revision + 1 });
+    expect(after.records).toHaveLength(MAX_BULK_SESSIONS);
+    expect(after.records.some((record) => record.value.name === 'Peer revision')).toBe(true);
+    expect(after.records.some((record) => record.value.id === 'retained-1')).toBe(false);
+    expect(after.records.some((record) => record.value.name === 'New retained review')).toBe(true);
+  } finally { await peer.close(); }
 });
 
 test('saves compact Bulk sessions, restores them after reload, and compares later observations', async ({ page }) => {
@@ -288,7 +356,7 @@ test('an unavailable Profile context stays inconclusive in Bulk rows, sessions, 
   await page.getByRole('button', { name: 'Save current session' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Saved Unavailable profile review.' })).toBeVisible();
   const stored = await readBrowserLocalCollection(page, 'bulk_sessions', { minimumRecords: 1 });
-  expect(stored.manifest.schemaVersion).toBe(4);
+  expect(stored.manifest.schemaVersion).toBe(BULK_SESSION_SCHEMA_VERSION);
   expect(stored.records[0]?.value.profileContext).toMatchObject({ sourceState: 'unavailable' });
   expect(stored.records[0]?.value.results[0]).toMatchObject({
     risk: null,
@@ -308,7 +376,7 @@ test('an unavailable Profile context stays inconclusive in Bulk rows, sessions, 
   const exportPath = await (await exportPromise).path();
   expect(exportPath).not.toBeNull();
   const exported = JSON.parse(await readFile(exportPath!, 'utf8'));
-  expect(exported).toMatchObject({ schema: 'whoisleuth.bulk-sessions', version: 4 });
+  expect(exported).toMatchObject({ schema: BULK_SESSION_SCHEMA, version: BULK_SESSION_SCHEMA_VERSION });
   expect(exported.sessions[0].profileContext.sourceState).toBe('unavailable');
   expect(exported.sessions[0].results[0].risk).toBeNull();
   expect(exported.sessions[0].results[0].idnReferenceMatch).toBeNull();

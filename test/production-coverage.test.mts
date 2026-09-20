@@ -1,14 +1,24 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
 import { describe, test } from 'node:test';
+import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
 
 import {
   PRODUCTION_COVERAGE_EXCLUSIONS,
   PRODUCTION_COVERAGE_POLICY,
+  discoverStructuralCoverageExclusions,
   parseProductionCoverage,
+  productionCoverageArguments,
+  readProductionCoverageInventory,
   validateProductionCoverage,
   validateProductionCoverageInventory,
   type CoveragePolicy,
 } from '../tools/production-coverage.mts';
+import { MAX_FORWARDING_SOURCE_BYTES, moduleForwardingSpecifier, moduleIsTypeOnly } from '../tools/module-forwarding.mts';
 
 function lcovRecord(source: string, values = [10, 9, 8, 6, 5, 5]): string {
   const [linesFound, linesHit, branchesFound, branchesHit, functionsFound, functionsHit] = values;
@@ -33,6 +43,155 @@ const FOCUSED_COVERAGE_POLICY: CoveragePolicy = Object.freeze({
 });
 
 describe('production coverage policy', () => {
+  test('recognises erased declarations without excusing runtime statements or imports', () => {
+    for (const source of [
+      'export type Value = Readonly<{ id: string }>;',
+      '/* Contract */ ; export interface Value { id: string };',
+      "import type { Value } from './owner.mts'; export type Result = Value | null;",
+      "export type { Value } from './owner.mts';", "export type * from './owner.mts';",
+    ]) assert.equal(moduleIsTypeOnly(source), true, source);
+    for (const source of [
+      '', ';', 'export type Value =', 'export const value = 1;',
+      "import './effect.mts'; export type Value = string;",
+      "import { type Value } from './effect.mts'; export type Result = Value;",
+      "export { type Value } from './effect.mts';", "export * from './owner.mts';",
+      'export type Value = string; globalThis.effect = true;',
+      'export enum State { Ready }', 'export class Value {}',
+      'namespace State { export const ready = true; }',
+      'declare const value: string;', ' '.repeat(MAX_FORWARDING_SOURCE_BYTES + 1),
+    ]) assert.equal(moduleIsTypeOnly(source, 'named-types.mts'), false, source.slice(0, 120));
+  });
+
+  test('discovers type-only files but requires coverage immediately when runtime code is added', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'whoisleuth-type-coverage-'));
+    try {
+      await mkdir(path.join(root, 'lib'));
+      await mkdir(path.join(root, 'frontend/src/lib'), { recursive: true });
+      const source = 'export interface Result { value: string }';
+      await writeFile(path.join(root, 'lib/owner.mts'), 'export const value = 1;');
+      await writeFile(path.join(root, 'lib/new-contract.mts'), source);
+      await writeFile(path.join(root, 'frontend/src/lib/new-contract.ts'), source);
+      const sources = ['lib/owner.mts', 'lib/new-contract.mts', 'frontend/src/lib/new-contract.ts'];
+      const report = parseProductionCoverage(lcovRecord('lib/owner.mts'));
+      const exclusions = await discoverStructuralCoverageExclusions(report, sources, root, []);
+      assert.deepEqual(exclusions, [
+        { source: 'lib/new-contract.mts', category: 'type_only', owner: 'tsconfig.json' },
+        { source: 'frontend/src/lib/new-contract.ts', category: 'type_only', owner: 'frontend/tsconfig.json' },
+      ]);
+      assert.equal(validateProductionCoverageInventory(report, sources, exclusions, () => true).excludedFiles, 2);
+      assert.throws(() => validateProductionCoverageInventory(report, sources, exclusions, () => false), /owner is missing/u);
+      const instrumented = parseProductionCoverage(`${lcovRecord('lib/owner.mts')}\n${lcovRecord('lib/new-contract.mts')}`);
+      assert.deepEqual(await discoverStructuralCoverageExclusions(instrumented, sources, root, []), [exclusions[1]]);
+      await writeFile(path.join(root, 'lib/new-contract.mts'), `${source}\nexport const initial = { value: 'runtime' };`);
+      const changed = await discoverStructuralCoverageExclusions(report, sources, root, []);
+      assert.deepEqual(changed, [exclusions[1]]);
+      assert.throws(() => validateProductionCoverageInventory(report, sources, changed, () => true), /unreviewed source omissions: lib\/new-contract.mts/u);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  test('recognises only an exact value-forwarding module without constraining formatting', () => {
+    for (const source of ["export * from './owner.mts';", '// A comment.\n; export * from "./owner.mts";\n;']) {
+      assert.equal(moduleForwardingSpecifier(source), './owner.mts');
+    }
+    for (const source of [
+      '', 'export * from', "export type * from './owner.mts';", "export * as nested from './owner.mts';",
+      "export { value } from './owner.mts';", "export {} from './owner.mts';",
+      "export * from './owner.mts' with { type: 'json' };",
+      "import './effect.mts'; export * from './owner.mts';",
+      "export * from './owner.mts'; globalThis.effect = true;",
+      "export * from './owner.mts'; export * from './another.mts';",
+      ' '.repeat(MAX_FORWARDING_SOURCE_BYTES + 1),
+    ]) assert.equal(moduleForwardingSpecifier(source), null);
+  });
+
+  test('discovers an ordinary forwarding chain without a new exclusion declaration', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'whoisleuth-forwarding-coverage-'));
+    try {
+      await mkdir(path.join(root, 'lib'));
+      await writeFile(path.join(root, 'lib/owner.mts'), 'export const value = 1;');
+      await writeFile(path.join(root, 'lib/forward.mts'), '// A formatting change.\nexport * from "./owner.mts";');
+      await writeFile(path.join(root, 'lib/new-helper.mts'), "export * from './forward.mts';");
+      const sources = ['lib/owner.mts', 'lib/forward.mts', 'lib/new-helper.mts'];
+      const report = parseProductionCoverage(lcovRecord('lib/owner.mts'));
+      const exclusions = await discoverStructuralCoverageExclusions(report, sources, root, []);
+      assert.deepEqual(exclusions, [
+        { source: 'lib/forward.mts', category: 'compatibility_re_export', owner: 'lib/owner.mts' },
+        { source: 'lib/new-helper.mts', category: 'compatibility_re_export', owner: 'lib/owner.mts' },
+      ]);
+      assert.equal(validateProductionCoverageInventory(report, sources, exclusions, () => true).excludedFiles, 2);
+      const instrumented = parseProductionCoverage(`${lcovRecord('lib/owner.mts')}\n${lcovRecord('lib/forward.mts')}`);
+      assert.deepEqual(await discoverStructuralCoverageExclusions(instrumented, sources, root, []), [
+        { source: 'lib/new-helper.mts', category: 'compatibility_re_export', owner: 'lib/forward.mts' },
+      ]);
+      await writeFile(path.join(root, 'lib/new-helper.mts'), "export * from './forward.mts'; export const extra = 2;");
+      const changed = await discoverStructuralCoverageExclusions(report, sources, root, []);
+      assert.equal(changed.length, 1);
+      assert.throws(() => validateProductionCoverageInventory(report, sources, changed, () => true), /unreviewed source omissions: lib\/new-helper.mts/u);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  test('cannot excuse an unmeasured implementation, unknown owner, cycle or unsafe source path', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'whoisleuth-forwarding-refusal-'));
+    try {
+      await mkdir(path.join(root, 'lib'));
+      const contents = {
+        'measured.mts': 'export const value = 1;',
+        'untested.mts': 'export const value = 2;',
+        'forward.mts': "export * from './untested.mts';",
+        'unknown.mts': "export * from './missing.mts';",
+        'cycle-a.mts': "export * from './cycle-b.mts';",
+        'cycle-b.mts': "export * from './cycle-a.mts';",
+      };
+      for (const [filename, source] of Object.entries(contents)) await writeFile(path.join(root, 'lib', filename), source);
+      const inventory = Object.keys(contents).map((filename) => `lib/${filename}`);
+      const report = parseProductionCoverage(lcovRecord('lib/measured.mts'));
+      assert.deepEqual(await discoverStructuralCoverageExclusions(report, inventory, root, []), []);
+      assert.throws(() => validateProductionCoverageInventory(report, inventory, [], () => true), /unreviewed source omissions/u);
+      await symlink(path.join(root, 'lib/measured.mts'), path.join(root, 'lib/link.mts'));
+      await assert.rejects(discoverStructuralCoverageExclusions(report, [...inventory, 'lib/link.mts'], root, []), /symbolic link/u);
+      await assert.rejects(discoverStructuralCoverageExclusions(report, ['../escape.mts'], root, []), /safe relative/u);
+      await writeFile(path.join(root, 'lib/oversized.mts'), ' '.repeat(MAX_FORWARDING_SOURCE_BYTES + 1));
+      await assert.rejects(discoverStructuralCoverageExclusions(report, ['lib/oversized.mts'], root, []), /byte maximum/u);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  test('native instrumentation discovers ordinary modules and excludes generated code in any package', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'whoisleuth-coverage-boundary-'));
+    try {
+      const modules = [
+        'lib/ordinary.mts', 'packages/example/ordinary.mts',
+        'packages/example/generated/catalogue.mts', 'packages/example/catalogue.generated.mts',
+        'frontend/src/lib/generated/catalogue.ts', 'lib/catalogue.generated.ts',
+      ];
+      for (const filename of modules) {
+        await mkdir(path.dirname(path.join(root, filename)), { recursive: true });
+        await writeFile(path.join(root, filename), 'export const ready = true;\n');
+      }
+      await mkdir(path.join(root, 'test'));
+      await writeFile(path.join(root, 'test/probe.test.mts'), [
+        "import assert from 'node:assert/strict';",
+        "import { test } from 'node:test';",
+        ...modules.map((filename, index) => `import { ready as value${index} } from '../${filename}';`),
+        `test('fixture modules execute', () => assert.ok([${modules.map((_, index) => `value${index}`).join(',')}].every(Boolean)));`,
+      ].join('\n'));
+      // This is a separate test-runner invocation, not a worker in the parent
+      // run. The inherited worker marker prevents a recursive test run.
+      const environment = environmentWithoutV8Coverage();
+      delete environment.NODE_TEST_CONTEXT;
+      await promisify(execFile)(process.execPath, productionCoverageArguments('test/probe.test.mts'), {
+        cwd: root, env: environment, encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024,
+      });
+      const report = parseProductionCoverage(await readFile(path.join(root, 'test-coverage.lcov'), 'utf8'));
+      assert.deepEqual(report.records.map((record) => record.source).sort(), [
+        'lib/ordinary.mts', 'packages/example/ordinary.mts',
+      ]);
+      assert.equal(report.global.lines.percentage, 100);
+      for (const filename of modules.slice(2)) {
+        assert.throws(() => parseProductionCoverage(lcovRecord(filename)), /Generated source/u);
+      }
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   test('retains explicit browser owners and coverage floors for critical production paths', () => {
     assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['cli/discriminated-command-handlers.mts'], {
       lines: 100, branches: 100, functions: 100,
@@ -115,6 +274,80 @@ describe('production coverage policy', () => {
     assert.throws(() => validateProductionCoverage(report, FOCUSED_COVERAGE_POLICY), /critical\.mts branch coverage is 62\.50%; required 75\.00%/u);
   });
 
+  test('reports every measured threshold and missing area from one valid report', () => {
+    const report = parseProductionCoverage(lcovRecord('lib/critical.mts', [10, 1, 8, 1, 5, 1]));
+    assert.throws(() => validateProductionCoverage(report, FOCUSED_COVERAGE_POLICY), error => {
+      assert.ok(error instanceof Error);
+      for (const expected of [
+        'missing maintained runtime areas: CLI',
+        'Global line coverage is 10.00%; required 80.00%',
+        'Global branch coverage is 12.50%; required 70.00%',
+        'Global function coverage is 20.00%; required 90.00%',
+        'lib/critical.mts line coverage is 10.00%; required 90.00%',
+        'lib/critical.mts branch coverage is 12.50%; required 75.00%',
+        'lib/critical.mts function coverage is 20.00%; required 100.00%',
+      ]) assert.ok(error.message.includes(expected), expected);
+      return true;
+    });
+  });
+
+  test('reports missing, unknown and unowned inventory entries together', () => {
+    const report = parseProductionCoverage([
+      lcovRecord('lib/measured.mts'), lcovRecord('lib/unknown.mts'),
+    ].join('\n'));
+    assert.throws(() => validateProductionCoverageInventory(report,
+      ['lib/measured.mts', 'lib/untested.mts'],
+      [
+        { source: 'lib/measured.mts', category: 'browser_adapter', owner: 'e2e/missing.spec.ts' },
+        { source: 'lib/removed.mts', category: 'browser_adapter', owner: 'e2e/missing.spec.ts' },
+      ], () => false), error => {
+      assert.ok(error instanceof Error);
+      for (const expected of [
+        'exclusion is stale or unknown: lib/removed.mts',
+        'exclusion owner is missing for lib/measured.mts',
+        'exclusion owner is missing for lib/removed.mts',
+        'measured unknown source files: lib/unknown.mts',
+        'unreviewed source omissions: lib/untested.mts',
+      ]) assert.ok(error.message.includes(expected), expected);
+      return true;
+    });
+  });
+
+  test('the executable reports threshold and inventory failures before rejecting the same report', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-coverage-diagnostics-'));
+    try {
+      const omitted = 'cli/discriminated-command-handlers.mts';
+      const underCovered = 'cli/workflow-command-runner.mts';
+      const nowMeasured = 'frontend/src/lib/browser-workspace-provider.ts';
+      const excluded = new Set(PRODUCTION_COVERAGE_EXCLUSIONS.map(item => item.source));
+      const sources = readProductionCoverageInventory().filter(source =>
+        source !== omitted && (!excluded.has(source) || source === nowMeasured));
+      assert.ok(sources.includes(underCovered));
+      assert.ok(sources.includes(nowMeasured));
+      const file = path.join(directory, 'fixture.lcov');
+      await writeFile(file, sources.map(source => lcovRecord(source,
+        source === underCovered ? [10, 1, 8, 1, 5, 1] : [10, 10, 8, 8, 5, 5])).join('\n'));
+      const environment = environmentWithoutV8Coverage();
+      await assert.rejects(promisify(execFile)(process.execPath, ['tools/production-coverage.mts', file], {
+        cwd: path.resolve(import.meta.dirname, '..'), env: environment,
+        encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024,
+      }), error => {
+        const result = error as Error & { code: number; stdout: string; stderr: string };
+        assert.equal(result.code, 2);
+        assert.equal(result.stdout, '');
+        for (const expected of [
+          `missing critical source ${omitted}`,
+          `${underCovered} line coverage is 10.00%; required 95.00%`,
+          `${underCovered} branch coverage is 12.50%; required 65.00%`,
+          `${underCovered} function coverage is 20.00%; required 100.00%`,
+          `unreviewed source omissions: ${omitted}`,
+        ]) assert.ok(result.stderr.includes(expected), expected);
+        assert.ok(!result.stderr.includes(nowMeasured), 'Measured browser-owned code is not an inventory failure.');
+        return true;
+      });
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
   test('closes the complete source inventory with explicit, owned non-unit exclusions', () => {
     const report = parseProductionCoverage([
       lcovRecord('lib/critical.mts'),
@@ -145,13 +378,39 @@ describe('production coverage policy', () => {
       () => validateProductionCoverageInventory(report, inventory, [], () => true),
       /unreviewed source omissions/u,
     );
-    assert.throws(
-      () => validateProductionCoverageInventory(report, inventory, [{ ...exclusion, source: 'cli/runner.mts' }], () => true),
-      /exclusions are now measured/u,
-    );
+    const measuredAdapter = parseProductionCoverage([
+      lcovRecord('lib/critical.mts'),
+      lcovRecord('cli/runner.mts'),
+      lcovRecord(exclusion.source),
+    ].join('\n'));
+    const measuredInventory = validateProductionCoverageInventory(measuredAdapter, inventory, [exclusion], () => true);
+    assert.equal(measuredInventory.sourceFiles, 3);
+    assert.equal(measuredInventory.measuredFiles, 3);
+    assert.equal(measuredInventory.excludedFiles, 0);
+    assert.equal(measuredInventory.exclusionsByCategory.browser_adapter, 0);
     assert.throws(
       () => validateProductionCoverageInventory(report, inventory, [exclusion], () => false),
       /exclusion owner is missing/u,
     );
+  });
+
+  test('a browser owner cannot excuse measured lines or bypass critical coverage thresholds', () => {
+    const report = parseProductionCoverage([
+      lcovRecord('lib/critical.mts', [10, 1, 8, 1, 5, 1]),
+      lcovRecord('cli/runner.mts', [10, 10, 8, 8, 5, 5]),
+    ].join('\n'));
+    const inventory = validateProductionCoverageInventory(report,
+      ['lib/critical.mts', 'cli/runner.mts'],
+      [{ source: 'lib/critical.mts', category: 'browser_adapter', owner: 'e2e/critical.spec.ts' }],
+      () => true);
+    assert.equal(inventory.excludedFiles, 0);
+    assert.equal(report.global.lines.hit, 11);
+    assert.equal(report.global.lines.found, 20);
+    assert.throws(() => validateProductionCoverage(report, FOCUSED_COVERAGE_POLICY), error => {
+      assert.ok(error instanceof Error);
+      assert.ok(error.message.includes('Global line coverage is 55.00%; required 80.00%'));
+      assert.ok(error.message.includes('lib/critical.mts line coverage is 10.00%; required 90.00%'));
+      return true;
+    });
   });
 });

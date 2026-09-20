@@ -115,6 +115,7 @@ const REGISTERED_DIAGNOSTIC_KEYS = [
   'discarded_relationships',
   'dmarc',
   'documentsParsed',
+  'eligibleAuthorityCount',
   'entities',
   'error',
   'externalScriptsSkipped',
@@ -143,11 +144,13 @@ const REGISTERED_DIAGNOSTIC_KEYS = [
   'objectsExamined',
   'observed',
   'observedAbsence',
+  'omittedAuthorityCount',
   'partialAuthorityCount',
   'passiveHeadersEvaluated',
   'potentialExposure',
   'ptr',
   'queriedAddressCount',
+  'queriedAuthorityCount',
   'redirectCount',
   'referencesExamined',
   'rejectedRows',
@@ -282,6 +285,22 @@ function canonicalTimestamp(value: unknown, expression: RegExp, assignUtcWhenMis
 
 function normalizeExplicitIsoTimestamp(value: unknown): string | null {
   return canonicalTimestamp(value, ISO_DATE_TIME_RE, false);
+}
+
+/** Retain a source's timestamp; missing, invalid or future times have no usable age. */
+function readObservationTime(value: unknown, now: unknown): Readonly<{
+  observedAt: string | null;
+  ageDays: number | null;
+}> {
+  const observedAt = normalizeExplicitIsoTimestamp(value);
+  const reviewedAt = normalizeExplicitIsoTimestamp(now);
+  const elapsed = observedAt && reviewedAt
+    ? Date.parse(reviewedAt) - Date.parse(observedAt)
+    : Number.NaN;
+  return {
+    observedAt,
+    ageDays: Number.isFinite(elapsed) && elapsed >= 0 ? Math.floor(elapsed / 86_400_000) : null,
+  };
 }
 
 // Frozen legacy schemas accepted zone-less ISO date-times. Preserve that
@@ -447,6 +466,7 @@ export {
   normalizeExplicitIsoTimestamp,
   normalizeLegacyIsoTimestamp,
   readObservationEnvelope,
+  readObservationTime,
 };
 
 export type {

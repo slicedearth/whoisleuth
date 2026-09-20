@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { openConsoleView } from './console-navigation';
 import {
   currentBrowserLocalDocument,
   currentBulkSessionBrowserStore,
@@ -108,6 +109,7 @@ test('case deletion restores focus after failure, then advances and falls back',
   }, { clearStorage: true });
 
   await page.locator('#case-head-focus-case-first').click();
+  await page.getByText('Case options', { exact: true }).click();
   const firstDelete = page.locator('#case-delete-focus-case-first');
   await expect(firstDelete).toBeVisible();
   await firstDelete.focus();
@@ -128,6 +130,7 @@ test('case deletion restores focus after failure, then advances and falls back',
   await expect(secondHead).toBeFocused();
 
   await secondHead.click();
+  await page.getByText('Case options', { exact: true }).click();
   page.once('dialog', (dialog) => dialog.accept());
   await page.locator('#case-delete-focus-case-second').click();
   const newCase = page.locator('#new-case');
@@ -151,6 +154,7 @@ test('case deletion on a sole trailing page focuses the nearest previous case', 
 
   await page.getByRole('navigation', { name: 'Case pages' }).getByRole('button', { name: 'Next' }).click();
   await page.locator('#case-head-page-case-26').click();
+  await page.getByText('Case options', { exact: true }).click();
   page.once('dialog', (dialog) => dialog.accept());
   await page.locator('#case-delete-page-case-26').click();
   await expect(page.locator('#case-head-page-case-25')).toBeVisible();
@@ -166,11 +170,12 @@ test('delayed case deletion does not steal focus after leaving the Cases view', 
     },
   }, { clearStorage: true });
   await page.locator('#case-head-delayed-case-focus').click();
+  await page.getByText('Case options', { exact: true }).click();
   const beforeDeletion = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   page.once('dialog', (dialog) => dialog.accept());
   await holdBrowserLocalReads(page, 1_200, '#case-delete-delayed-case-focus');
   const timelineTab = page.getByRole('tab', { name: /Timeline/u });
-  await timelineTab.click();
+  await openConsoleView(page, 'timeline');
   await expect(timelineTab).toBeFocused();
   const committed = await readBrowserLocalCollection(page, 'cases', {
     minimumRevision: beforeDeletion.manifest.revision + 1,

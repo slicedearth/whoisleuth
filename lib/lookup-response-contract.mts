@@ -29,6 +29,7 @@ import {
 } from '../packages/evidence/observation.mts';
 import { assertBoundedJsonStructure } from './bounded-json.mts';
 import { canonicalRegistrableDomain } from './registrable-domain.mts';
+import { validLookupObservationScope } from '../packages/evidence/lookup-target.mts';
 import {
   MAX_LOOKUP_DNS_RECORDS_PER_TYPE,
   MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS,
@@ -370,13 +371,23 @@ function normalizeThreatProvider(value: unknown, expectedDomain: string): JsonOb
         .filter((limitation): limitation is string => limitation !== null)
         .slice(0, MAX_THREAT_INTELLIGENCE_LIMITATIONS)
     : [];
-  const findings = Array.isArray(input.findings)
-    ? input.findings
-        .slice(0, MAX_THREAT_INTELLIGENCE_FINDINGS * 2)
-        .map((finding) => normalizeThreatFinding(finding, providerId))
-        .filter((finding): finding is JsonObject => finding !== null)
-        .slice(0, MAX_THREAT_INTELLIGENCE_FINDINGS)
-    : [];
+  const inputFindings = Array.isArray(input.findings) ? input.findings : [];
+  const normalizedFindings = inputFindings
+    .slice(0, MAX_THREAT_INTELLIGENCE_FINDINGS * 2)
+    .map((finding) => normalizeThreatFinding(finding, providerId))
+    .filter((finding): finding is JsonObject => finding !== null);
+  const findings = normalizedFindings.slice(0, MAX_THREAT_INTELLIGENCE_FINDINGS);
+  const omitted = inputFindings.length - findings.length;
+  const projectionIncomplete = omitted > 0 || !Array.isArray(input.findings);
+  const projectionTruncated = inputFindings.length > MAX_THREAT_INTELLIGENCE_FINDINGS * 2
+    || normalizedFindings.length > MAX_THREAT_INTELLIGENCE_FINDINGS;
+  if (projectionIncomplete) {
+    // Local qualification precedes supplied notices so a full limitation
+    // list cannot conceal evidence discarded at this trust boundary.
+    limitations.unshift(omitted > 0
+      ? `${omitted} invalid or over-limit provider finding${omitted === 1 ? ' was' : 's were'} omitted from this view.`
+      : 'Provider findings were not a supported array and were withheld from this view.');
+  }
   return {
     schema: THREAT_INTELLIGENCE_SCHEMA,
     version: THREAT_INTELLIGENCE_CONTRACT_VERSION,
@@ -389,14 +400,14 @@ function normalizeThreatProvider(value: unknown, expectedDomain: string): JsonOb
       value: expectedDomain,
       exposure: 'registrable_domain',
     },
-    state,
+    state: projectionIncomplete && ['success', 'not_found'].includes(state) ? 'partial' : state,
     detail: boundedThreatText(input.detail),
     findings,
     observation: {
       observedAt: threatTimestamp(observationInput.observedAt),
-      limitations,
-      complete: typeof observationInput.complete === 'boolean' ? observationInput.complete : null,
-      truncated: typeof observationInput.truncated === 'boolean' ? observationInput.truncated : null,
+      limitations: limitations.slice(0, MAX_THREAT_INTELLIGENCE_LIMITATIONS),
+      complete: projectionIncomplete ? false : typeof observationInput.complete === 'boolean' ? observationInput.complete : null,
+      truncated: projectionTruncated ? true : typeof observationInput.truncated === 'boolean' ? observationInput.truncated : null,
     },
   };
 }
@@ -854,6 +865,9 @@ function validLookupDomainIdentity(value: JsonObject): boolean {
   if (availability.domain !== undefined && availability.domain !== null
     && (canonicalRegistrableDomain(availability.domain) !== queryDomain
       || normalizedDomain(availability.domain) !== queryDomain)) return false;
+  if (!validLookupObservationScope(availability, {
+    inputHostname: normalizedDomain(value.inputHostname ?? value.query), registrableDomain: queryDomain,
+  })) return false;
 
   if (value.inputHostname !== undefined
     && canonicalRegistrableDomain(value.inputHostname) !== queryDomain) return false;
@@ -1056,6 +1070,8 @@ function parseCompactLookupHttpResponse(
     || !expectedHostname
     || !expectedRegistrableDomain
     || Object.keys(availability).length > MAX_COMPACT_LOOKUP_AVAILABILITY_KEYS
+    || availability.observationHostname !== undefined
+    || availability.webObservationMode !== undefined
     || availability.applicable !== true
     || normalizedDomain(availability.domain) !== expectedRegistrableDomain
     || typeof availability.state !== 'string'

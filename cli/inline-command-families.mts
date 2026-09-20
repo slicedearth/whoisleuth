@@ -23,6 +23,7 @@ const REVIEW_INLINE_COMMANDS = Object.freeze([
   'mail-headers',
   'review-evidence',
   'brief',
+  'case',
   'case-pack',
 ] as const satisfies readonly CliCommand[]);
 

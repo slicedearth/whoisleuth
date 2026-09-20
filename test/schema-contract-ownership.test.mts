@@ -120,7 +120,7 @@ describe('canonical schema contract ownership', () => {
     assert.equal(DOMAIN_CONTROL_MANIFEST_SCHEMA, LIB_DOMAIN_CONTROL_SCHEMA);
     assert.equal(DOMAIN_CONTROL_MANIFEST_VERSION, FRONTEND_DOMAIN_CONTROL_VERSION);
     assert.equal(DOMAIN_CONTROL_MANIFEST_VERSION, LIB_DOMAIN_CONTROL_VERSION);
-    assert.equal(DOMAIN_CONTROL_MANIFEST_INPUT_VERSION, 1);
+    assert.equal(DOMAIN_CONTROL_MANIFEST_INPUT_VERSION, DOMAIN_CONTROL_MANIFEST_INPUT_COMPATIBILITY.currentVersion);
     assert.equal(MAX_DOMAIN_CONTROL_MANIFEST_BYTES, MAX_DOMAIN_CONTROL_PASSPORT_BYTES);
     assert.equal(DOMAIN_CONTROL_MANIFEST_INPUT_COMPATIBILITY.byteBudget, MAX_DOMAIN_CONTROL_MANIFEST_BYTES);
     assert.equal(DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.byteBudget, MAX_DOMAIN_CONTROL_MANIFEST_BYTES);
@@ -129,11 +129,11 @@ describe('canonical schema contract ownership', () => {
     assert.ok(Object.isFrozen(DOMAIN_CONTROL_MANIFEST_COMPATIBILITY));
     assert.ok(Object.isFrozen(DOMAIN_CONTROL_SCHEMA_LIFECYCLE));
     assert.deepEqual(
-      DOMAIN_CONTROL_SCHEMA_LIFECYCLE.contracts.map((contract) => contract.compatibilityId),
-      [
+      new Set(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.contracts.map((contract) => contract.compatibilityId)),
+      new Set([
         DOMAIN_CONTROL_MANIFEST_INPUT_COMPATIBILITY.id,
         DOMAIN_CONTROL_MANIFEST_COMPATIBILITY.id,
-      ],
+      ]),
     );
   });
 

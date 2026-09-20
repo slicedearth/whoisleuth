@@ -17,6 +17,7 @@ import {
   buildCaseClosureLinkContext,
   buildCaseInvestigationTrail,
   buildCaseResponseLifecycleSummary,
+  isLegalCaseActionTransition,
   MAX_CASE_ACTION_BYTES,
   MAX_CASE_ACTION_EVENTS_PER_ACTION,
   MAX_CASE_ACTION_HISTORY_BYTES_PER_CASE,
@@ -58,6 +59,45 @@ test('the response workflow retains one ordered canonical stage vocabulary', () 
 });
 
 describe('case response record normalization', () => {
+  test('retains undated pins and sightings without substituting creation or import time', () => {
+    for (const observedAt of [undefined, null, '', '2026-02-30T10:00:00Z', '2026-07-28T01:00:00', 'not-a-time']) {
+      const pin = requiredValue(appendCaseEvidencePin([], { label: 'Retained fact', value: 'Observed content', observedAt }, LATER)[0]);
+      const sighting = requiredValue(appendCaseSighting([], { state: 'reported_by_provider', source: 'Fixture report', observedAt }, LATER)[0]);
+      assert.equal(pin.observedAt, null);
+      assert.equal(sighting.observedAt, null);
+      assert.equal(pin.createdAt, LATER);
+      assert.equal(sighting.createdAt, LATER);
+      assert.equal(requiredValue(normalizeCaseEvidencePins([pin], LATEST)[0]).observedAt, null);
+      assert.equal(requiredValue(normalizeCaseSightings([sighting], LATEST)[0]).observedAt, null);
+    }
+    const pin = requiredValue(appendCaseEvidencePin([], { label: 'Dated fact', value: 'Observed content', observedAt: NOW }, LATER)[0]);
+    assert.equal(pin.observedAt, NOW);
+    assert.equal(pin.createdAt, LATER);
+    const sights = normalizeCaseSightings([
+      { id: 'dated', state: 'analyst_confirmed', source: 'Fixture review', observedAt: NOW, createdAt: LATER },
+      { id: 'undated', state: 'analyst_confirmed', source: 'Fixture review', observedAt: null, createdAt: NEXT },
+    ], LATEST);
+    assert.deepEqual(sights.map((item) => item.id), ['dated', 'undated']);
+    const trail = buildCaseInvestigationTrail({ sightings: sights });
+    assert.equal(trail[0]?.createdAt, NEXT);
+    assert.match(trail[0]?.detail ?? '', /observed time unavailable/);
+    assert.equal(trail[1]?.createdAt, LATER);
+    assert.match(trail[1]?.detail ?? '', new RegExp(NOW.replaceAll('.', '\\.')));
+  });
+
+  test('import content identity is optional, bounded and not inferred for historical pins', () => {
+    const input = { label: 'Imported fact', value: 'Retained observation', importContentSha256: 'a'.repeat(64) };
+    const current = requiredValue(normalizeCaseEvidencePins([input], NOW, { sourceVersion: 15 })[0]);
+    assert.equal(current.importContentSha256, 'a'.repeat(64));
+    assert.equal(requiredValue(appendCaseEvidencePin([], input, NOW)[0]).importContentSha256, 'a'.repeat(64));
+    for (const sourceVersion of [12, 13, 14]) {
+      assert.equal(Object.hasOwn(requiredValue(normalizeCaseEvidencePins([input], NOW, { sourceVersion })[0]), 'importContentSha256'), false);
+    }
+    for (const value of [undefined, null, '', 'a'.repeat(63), 'a'.repeat(65), 'g'.repeat(64), 'A'.repeat(64)]) {
+      assert.equal(Object.hasOwn(requiredValue(normalizeCaseEvidencePins([{ ...input, importContentSha256: value }], NOW)[0]), 'importContentSha256'), false);
+    }
+  });
+
   test('pins keep bounded provenance and explicit completeness', () => {
     const pins = appendCaseEvidencePin([], {
       label: 'Observed form',
@@ -141,6 +181,8 @@ describe('case response record normalization', () => {
   });
 
   test('actions retain explicit legal transitions and derive mutable projections from history', () => {
+    assert.equal(isLegalCaseActionTransition('drafting', 'ready_for_review', 'analyst'), true);
+    assert.equal(isLegalCaseActionTransition('acknowledged', 'submitted', 'analyst'), false);
     let actions = appendCaseAction([], {
       type: 'registrar_report',
       recipient: 'abuse@example.test',
@@ -297,6 +339,23 @@ describe('case response record normalization', () => {
     assert.match(changed.history.at(-1)?.limitations.join(' ') ?? '', /prior readiness.*no longer applies/iu);
   });
 
+  test('editing a route deadline invalidates review but operational follow-up does not', () => {
+    let actions = appendCaseAction([], { recipient: 'Published review desk', routeObservedAt: NOW, routeReviewAfter: LATEST }, NOW);
+    const id = requiredValue(actions[0]).id;
+    actions = appendCaseActionTransition(actions, id, { nextState: 'ready_for_review' }, LATER);
+    actions = appendCaseActionTransition(actions, id, { nextState: 'reviewed' }, NEXT);
+    const operational = updateCaseAction(actions, { id, followUpAt: LATEST }, LATEST);
+    assert.equal(operational[0]?.state, 'reviewed');
+    const changed = updateCaseAction(operational, { id, routeReviewAfter: NEXT }, LATEST);
+    assert.equal(changed[0]?.routeReviewAfter, NEXT);
+    assert.equal(changed[0]?.state, 'drafting');
+    assert.equal(changed[0]?.history.at(-1)?.provenance, 'material_action_change');
+    assert.deepEqual(changed[0]?.history.slice(0, -1), actions[0]?.history);
+    const submitted = appendCaseActionTransition(actions, id, { nextState: 'authorised' }, LATEST);
+    const sent = appendCaseActionTransition(submitted, id, { nextState: 'submitted' }, '2026-07-31T01:01:00.000Z');
+    assert.throws(() => updateCaseAction(sent, { id, routeReviewAfter: NEXT }, '2026-07-31T01:02:00.000Z'), /cannot be rewritten/u);
+  });
+
   test('migrates a v12 action as one deterministic legacy snapshot without inventing a sequence', () => {
     const fixture = JSON.parse(readFileSync(new URL('./fixtures/case-v12-response-lifecycle.json', import.meta.url), 'utf8'));
     const raw = fixture.cases[0].actions;
@@ -387,6 +446,47 @@ describe('case response record normalization', () => {
     assert.equal(requiredValue(oversized[0]).history.length <= MAX_CASE_ACTION_EVENTS_PER_ACTION, true);
     assert.equal(requiredValue(oversized[0]).historyOmitted > 0, true);
     assert.match(requiredValue(oversized[0]).historyLimitations.join(' '), /omitted/iu);
+  });
+
+  test('equal-clock transitions follow their state prerequisites without rewriting source time', () => {
+    const seed = requiredValue(appendCaseAction([], { recipient: 'Same-clock review owner' }, NOW)[0]);
+    const root = requiredValue(seed.history[0]);
+    const states = [null, 'drafting', 'ready_for_review', 'reviewed', 'authorised'] as const;
+    const history = states.slice(1).map((nextState, index) => ({
+      ...root, id: `event-${9 - index}`, previousState: states[index]!, nextState,
+    }));
+    const historyLimitations = [
+      '2 retained concurrent transitions are not applied to the current-state projection.',
+      'The original provider receipt could not be independently verified.',
+    ];
+    const forward = requiredValue(normalizeCaseActions([{ ...seed, history, historyLimitations }], NOW, { sourceVersion: 15 })[0]);
+    const reversed = requiredValue(normalizeCaseActions([{ ...seed, history: [...history].reverse(), historyLimitations }], NOW, { sourceVersion: 15 })[0]);
+    assert.deepEqual(forward, reversed);
+    assert.equal(forward.state, 'authorised');
+    assert.deepEqual(forward.history.map((event) => [event.id, event.applied, event.occurredAt]), [
+      ['event-9', true, NOW], ['event-8', true, NOW], ['event-7', true, NOW], ['event-6', true, NOW],
+    ]);
+    assert.deepEqual(forward.historyLimitations, ['The original provider receipt could not be independently verified.']);
+    const sent = requiredValue(appendCaseActionTransition([forward], forward.id, {
+      nextState: 'submitted', occurredAt: NOW, reference: 'LOCAL-RECEIPT',
+    }, NOW)[0]);
+    assert.equal(sent.state, 'submitted');
+    assert.equal(sent.reference, 'LOCAL-RECEIPT');
+    assert.ok(sent.history.every((event) => event.applied && event.occurredAt === NOW));
+    assert.deepEqual(normalizeCaseActions([sent], LATEST, { sourceVersion: 15 }), [sent]);
+  });
+
+  test('state prerequisites do not reorder an event across a different source time', () => {
+    const seed = requiredValue(appendCaseAction([], { recipient: 'Source-clock review owner' }, NOW)[0]);
+    const root = requiredValue(seed.history[0]);
+    const result = requiredValue(normalizeCaseActions([{ ...seed, history: [
+      root,
+      { ...root, id: 'later-ready', previousState: 'drafting', nextState: 'ready_for_review', occurredAt: NEXT },
+      { ...root, id: 'earlier-review', previousState: 'ready_for_review', nextState: 'reviewed', occurredAt: LATER },
+    ] }], LATEST, { sourceVersion: 15 })[0]);
+    assert.equal(result.state, 'ready_for_review');
+    assert.equal(result.history.find((event) => event.id === 'earlier-review')?.applied, false);
+    assert.equal(result.history.find((event) => event.id === 'earlier-review')?.occurredAt, LATER);
   });
 
   test('normalises malformed and conflicting lifecycle histories idempotently with explicit omissions', () => {
@@ -642,6 +742,21 @@ describe('case response record normalization', () => {
     assert.equal(ambiguous.latestProviderOutcome, null);
     assert.equal(ambiguous.observedChangeState, 'ambiguous');
     assert.equal(ambiguous.latestObservedChangeAt, null);
+  });
+
+  test('does not select an independent effect by identifier when latest reviews disagree', () => {
+    const effects = normalizeCaseObservedEffectHistory({ reviews: [
+      { id: 'first', state: 'still_observed', observedAt: NEXT, sourceClass: 'analyst', source: 'First independent check', completeness: 'complete', createdAt: NEXT },
+      { id: 'second', state: 'not_reproduced', observedAt: NEXT, sourceClass: 'analyst', source: 'Second independent check', completeness: 'complete', createdAt: NEXT },
+    ] }, NEXT);
+    assert.equal(effects.reviews.length, 2);
+    for (const reviews of [effects.reviews, [...effects.reviews].reverse(), effects.reviews.map((review, index) => ({ ...review, id: index ? 'a' : 'z' }))]) {
+      const summary = buildCaseResponseLifecycleSummary({ observedEffects: { ...effects, reviews } });
+      assert.equal(summary.latestObservedEffect, null);
+    }
+    const later = { ...effects.reviews[0]!, id: 'later', observedAt: LATEST };
+    assert.equal(buildCaseResponseLifecycleSummary({ observedEffects: { ...effects, reviews: [...effects.reviews, later] } }).latestObservedEffect?.reviewId, 'later');
+    assert.equal(effects.reviews.length, 2);
   });
 
   test('keeps analyst assertions distinct from evidence and derives an explicit trail', () => {

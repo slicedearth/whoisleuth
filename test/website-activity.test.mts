@@ -1,5 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { MAX_HOMEPAGE_BYTES } from '../lib/outbound-request-bounds.mts';
 
 import {
   checkDomainAvailability,
@@ -9,6 +11,7 @@ import {
 } from '../lib/availability.mts';
 import { networkFeaturePolicy } from '../lib/feature-policy.mts';
 import { analyzeResponsePolicyHeaders } from '../lib/response-policy.mts';
+import { WEBSITE_SECURITY_POSTURE_VERSION } from '../lib/website-security-posture.mts';
 import { arrayValue, recordValue, requiredValue } from './value-assertions.mts';
 import { httpDeliveryMetadataFixture } from './homepage-metadata-fixtures.mts';
 
@@ -33,6 +36,27 @@ function registeredLookupOptions(homepageFetcher: () => ReturnType<typeof fetchH
 }
 
 describe('website activity classification', () => {
+  test('requires contextual domain-sale evidence, not generic commerce or inert copy', async () => {
+    for (const [html, expected] of [
+      ['<main><h1>Used equipment</h1><button>Make an offer</button></main>', 'registered'],
+      ['<!-- This domain is for sale --><main>Ordinary content</main>', 'registered'],
+      ['<script>"This domain is for sale"</script><main>Ordinary content</main>', 'registered'],
+      ['<article><h1>About domain sales</h1><p>An example of a landing page says this domain is for sale.</p></article>', 'registered'],
+      ['<main>This domain is for sale. Make an offer.</main>', 'for_sale'],
+      ['<title>Example.test is for sale</title><main>This domain is for sale.<form><input type=email><button>Make an offer</button></form></main>', 'for_sale'],
+    ]) {
+      let requests = 0;
+      const result = recordValue(await checkDomainAvailability('example.test', registeredLookupOptions(async () => {
+        requests += 1;
+        return fetchHomepage('example.test', { fetcher: async () => new Response(html, { headers: { 'content-type': 'text/html' } }) });
+      })));
+      assert.equal(result.state, expected, html);
+      assert.equal(result.activityStatus, expected === 'for_sale' ? 'parked' : 'active');
+      assert.equal('domainSaleSignal' in result, false);
+      assert.equal(requests, 1);
+    }
+  });
+
   test('any HTTP response proves that a web service is active', async () => {
     for (const status of [401, 403, 404, 503]) {
       const result = await fetchHomepage('example.com', {
@@ -147,24 +171,72 @@ describe('website activity classification', () => {
 
   test('a capped homepage prefix is usable but explicitly partial', async () => {
     const result = await fetchHomepage('example.com', {
-      fetcher: async () => new Response(Buffer.alloc(300100, 0x61), { status: 200 }),
+      fetcher: async () => new Response(Buffer.alloc(MAX_HOMEPAGE_BYTES + 100, 0x61), { status: 200 }),
     });
 
     assert.equal(result.status, 'fetched');
     assert.equal(result.http.status, 'partial');
     const response = recordValue(result.http.response);
     const bodyHash = recordValue(response.bodyHash);
-    assert.equal(response.capturedBodyBytes, 300000);
+    assert.equal(response.capturedBodyBytes, MAX_HOMEPAGE_BYTES);
     assert.equal(response.bodyTruncated, true);
     assert.equal(bodyHash.algorithm, 'sha256');
-    assert.equal(bodyHash.value, '12e1b9b179b29a4f7e5889b185d7ac71bff0ad1f49a7b391d0911b737a0f5381');
+    assert.equal(bodyHash.value, createHash('sha256').update(Buffer.alloc(MAX_HOMEPAGE_BYTES, 0x61)).digest('hex'));
     assert.equal(bodyHash.scope, 'captured-prefix');
-    assert.equal(bodyHash.bytes, 300000);
+    assert.equal(bodyHash.bytes, MAX_HOMEPAGE_BYTES);
+  });
+
+  test('captures a large page and an exact-limit body completely without another request', async () => {
+    for (const size of [600 * 1024, MAX_HOMEPAGE_BYTES]) {
+      const suffix = '<main>Final captured evidence</main>';
+      const html = '<!--' + 'x'.repeat(size - 7 - suffix.length) + '-->' + suffix;
+      let requests = 0;
+      const result = await fetchHomepage('example.test', {
+        fetcher: async () => { requests += 1; return new Response(html); },
+      });
+      assert.equal(requests, 1);
+      assert.equal(result.text, html);
+      const response = recordValue(result.http.response);
+      assert.equal(response.capturedBodyBytes, size);
+      assert.equal(response.bodyTruncated, false);
+      assert.equal(recordValue(response.bodyHash).scope, 'complete-body');
+      assert.equal(recordValue(response.bodyHash).value, createHash('sha256').update(html).digest('hex'));
+    }
   });
 
   test('a fetched favicon resolves an otherwise inconclusive homepage probe', () => {
     assert.equal(deriveWebsiteActivity('inconclusive', true), 'active');
     assert.equal(deriveWebsiteActivity('inconclusive', false), 'unreachable');
+  });
+
+  test('passes only icon evidence across the favicon wait after completing page analysis', async () => {
+    let enter!: () => void;
+    let resume!: () => void;
+    const entered = new Promise<void>((resolve) => { enter = resolve; });
+    const resumed = new Promise<void>((resolve) => { resume = resolve; });
+    let iconRequest: { html?: string; htmlAnalysis?: object } | undefined;
+    const observation = checkDomainAvailability('example.test', {
+      ...registeredLookupOptions(async () => fetchHomepage('example.test', {
+        fetcher: async () => new Response('<link rel=icon href="/brand.ico"><form><input type=password></form>'),
+      })),
+      fetchFaviconHash: async (_domain, options) => {
+        iconRequest = options;
+        enter();
+        await resumed;
+        return null;
+      },
+    });
+    await entered;
+    try {
+      assert.equal(iconRequest?.html, undefined);
+      assert.deepEqual(Object.keys(iconRequest?.htmlAnalysis ?? {}).sort(), ['effectiveBaseUrl', 'iconLinks']);
+      assert.equal(recordValue(iconRequest?.htmlAnalysis).iconLinks !== undefined, true);
+    } finally {
+      resume();
+    }
+    const result = recordValue(await observation);
+    assert.equal(result.hasPasswordField, true);
+    assert.equal(result.activityStatus, 'active');
   });
 
   test('parking evidence remains stronger than generic HTTP activity', () => {
@@ -287,7 +359,7 @@ describe('website activity classification', () => {
     assert.equal(clientBehaviorProfile.source, 'derived');
     assert.equal(clientBehaviorProfile.status, 'partial');
     assert.doesNotMatch(JSON.stringify({ pageRoleProfile, clientBehaviorProfile }), /token=|key=|secret|submit/);
-    assert.equal(securityPosture.postureVersion, 2);
+    assert.equal(securityPosture.postureVersion, WEBSITE_SECURITY_POSTURE_VERSION);
     assert.equal(securityPosture.source, 'derived');
     assert.equal(securityPosture.status, 'partial');
     assert.equal(securityFindings.some((item) => item.id === 'external_form_destinations'), true);

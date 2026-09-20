@@ -1,14 +1,12 @@
 <script lang="ts">
+  import { recipientMailto } from '../../../../packages/evidence/email-recipient.mts';
   import {
     CASE_DISPOSITIONS,
     isReviewedCaseDisposition,
-    CASE_OBSERVED_EFFECT_STATES,
-    CASE_PIN_COMPLETENESS,
     CASE_REVIEW_REASONS,
     caseInvestigationContext,
     parseIncidentUrlContext,
     type CaseRecord,
-    type EvidenceChange,
   } from '$lib/cases';
   import type {
     AbuseRecipientResolution,
@@ -16,8 +14,13 @@
   } from '$lib/analysis/abuse-recipient-resolver.ts';
   import { abuseRecipientKindLabel } from '$lib/analysis/abuse-recipient-resolver.ts';
   import type { CheckpointFact } from '$lib/analysis/case-evidence-checkpoint.ts';
-  import type { LookupConclusionEvidenceSelection } from '$lib/controllers/lookup-case-controller.ts';
+  import type { LookupConclusionEvidenceSelection, LookupRecheckComparison, LookupRecheckOutcomeInput } from '$lib/controllers/lookup-case-controller.ts';
   import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
+  import { handlesLocalLink } from '$lib/link-activation';
+  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
+  import CasePicker from './CasePicker.svelte';
+  import LookupRecheckReview from './LookupRecheckReview.svelte';
+  import { MAX_CASE_OBJECTIVE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
 
   type DraftAction = { email: string; body: string; mailto: string };
 
@@ -29,8 +32,14 @@
     incidentUrl,
     recheckComparison,
     record,
+    cases = [],
+    selectCase,
+    createIncident,
+    oncaseopen,
     note,
     caseStatus,
+    caseSourceState,
+    retryCaseRead,
     caseDisposition,
     caseReviewReason,
     checkpointFacts,
@@ -64,15 +73,16 @@
     lookupDepth: 'fast' | 'deep';
     task: 'general' | 'acquisition' | 'brand' | 'incident' | 'owned';
     incidentUrl: string;
-    recheckComparison: Readonly<{
-      available: boolean;
-      changes: EvidenceChange[];
-      observedAt: string;
-      detail: string;
-    }> | null;
+    recheckComparison: LookupRecheckComparison | null;
     record: CaseRecord | null;
+    cases?: CaseRecord[];
+    selectCase: (id: string) => void;
+    createIncident: (title: string) => Promise<LocalMutationOutcome>;
+    oncaseopen: () => void;
     note: string;
     caseStatus: string;
+    caseSourceState: 'loading' | 'ready' | 'unavailable';
+    retryCaseRead: () => void | Promise<void>;
     caseDisposition: string;
     caseReviewReason: string;
     checkpointFacts: readonly CheckpointFact[];
@@ -93,15 +103,8 @@
       rationale: string,
       selections: readonly LookupConclusionEvidenceSelection[],
     ) => Promise<LocalMutationOutcome>;
-    recordInvestigationContext: (objective: string, retainExactUrl: boolean) => Promise<boolean>;
-    recordRecheckOutcome: (input: Readonly<{
-      state: string;
-      completeness: string;
-      source: string;
-      followUpAt: string | null;
-      limitations: readonly string[];
-      comparisonSummary: string;
-    }>) => Promise<boolean>;
+    recordInvestigationContext: (objective: string, retainExactUrl: boolean) => Promise<LocalMutationOutcome>;
+    recordRecheckOutcome: (input: LookupRecheckOutcomeInput) => Promise<LocalMutationOutcome>;
     saveToWatchlist: () => void;
     recheckCase: () => void;
     recordRecipient: (route: ResolvedAbuseRecipient) => void | Promise<void>;
@@ -117,16 +120,12 @@
   let contextObjective = $state('');
   let retainExactIncidentUrl = $state(false);
   let appliedContextKey = $state('');
-  let recheckState = $state('still_observed');
-  let recheckCompleteness = $state('complete');
-  let recheckSource = $state('Analyst-reviewed Lookup recheck');
-  let recheckFollowUpAt = $state('');
-  let recheckLimitations = $state('');
-  let appliedRecheckKey = $state('');
+  let incidentTitle = $state('');
+  let recheckDraftEdited = $state(false);
   const retainedContext = $derived(caseInvestigationContext(record));
   const currentIncidentUrl = $derived(incidentUrl || retainedContext?.incidentUrl || '');
   const incidentUrlDetails = $derived(parseIncidentUrlContext(currentIncidentUrl));
-  const selectableConclusionFacts = $derived(checkpointFacts.filter((fact) => fact.value !== null));
+  const selectableConclusionFacts = $derived(checkpointFacts.filter((fact) => fact.value !== null && fact.observedAt !== null));
   const conclusionIncomplete = $derived(
     !isReviewedCaseDisposition(caseDisposition)
       || !caseReviewReason
@@ -142,15 +141,32 @@
     appliedContextKey = key;
   });
 
-  $effect(() => {
-    const key = recheckComparison?.observedAt ?? '';
-    if (!key || appliedRecheckKey === key) return;
-    recheckState = recheckComparison?.changes.length ? 'changed' : 'still_observed';
-    recheckCompleteness = 'complete';
-    recheckFollowUpAt = '';
-    recheckLimitations = '';
-    appliedRecheckKey = key;
-  });
+  function confirmCaseChange(): boolean {
+    const edited = Boolean(note || conclusionRationale || conclusionEvidence.length || recheckDraftEdited
+      || contextObjective !== (retainedContext?.objective ?? '') || retainExactIncidentUrl !== (retainedContext?.urlRetention === 'exact')
+      || (record && (caseDisposition !== record.disposition || caseReviewReason !== (record.reviewReasonCode ?? ''))));
+    return !edited || window.confirm('Change incident and discard unsaved Lookup Case form edits? Saved Case evidence and decisions will not change.');
+  }
+  function resetCaseForms() {
+    setNote(''); conclusionRationale = ''; conclusionEvidence = [];
+    contextObjective = ''; retainExactIncidentUrl = false; appliedContextKey = '';
+    recheckDraftEdited = false;
+  }
+  function changeIncident(id: string): boolean {
+    if (id === record?.id) return true;
+    if (actionBusy || !confirmCaseChange()) return false;
+    resetCaseForms(); selectCase(id); return true;
+  }
+  async function newIncident() {
+    if (actionBusy || !incidentTitle.trim() || !confirmCaseChange()) return;
+    if (clearsLocalMutationDraft(await createIncident(incidentTitle))) { incidentTitle = ''; resetCaseForms(); }
+  }
+
+  function startRecheck() {
+    if (recheckDraftEdited && !window.confirm('Recheck and discard the unsaved outcome draft? Saved answers will not change.')) return;
+    recheckDraftEdited = false;
+    recheckCase();
+  }
 
   function conclusionStance(field: string): LookupConclusionEvidenceSelection['stance'] {
     return conclusionEvidence.find((item) => item.field === field)?.stance ?? 'supports';
@@ -175,7 +191,7 @@
   }
 
   function routeHref(route: ResolvedAbuseRecipient): string | null {
-    if (route.channel === 'email') return `mailto:${route.contact}`;
+    if (route.channel === 'email') return recipientMailto(route.contact);
     if (route.channel === 'phone') return `tel:${route.contact.replace(/[^+\d]/gu, '')}`;
     try {
       const parsed = new URL(route.contact);
@@ -187,61 +203,34 @@
     }
   }
 
-  function caseWorkspaceHref(recordId: string, focusResponse = false): string {
-    const encodedId = encodeURIComponent(recordId);
-    const base = `/monitor?view=cases&case=${encodedId}`;
-    return focusResponse ? `${base}#case-response-${encodedId}` : base;
-  }
-
-  function displayComparisonValue(value: unknown): string {
-    if (Array.isArray(value)) return value.map(String).join(', ') || 'none';
-    if (value === null || value === undefined || value === '') return 'unavailable';
-    return String(value);
-  }
-
-  function localIso(value: string): string | null {
-    if (!value) return null;
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
-  }
-
-  function comparisonSummary(): string {
-    if (!recheckComparison?.changes.length) {
-      return 'No comparable material field change was found between the retained Case observations.';
-    }
-    return recheckComparison.changes
-      .map((change) => `${change.label}: ${displayComparisonValue(change.before)} to ${displayComparisonValue(change.after)}`)
-      .join('; ')
-      .slice(0, 1000);
-  }
-
-  async function submitRecheckOutcome() {
-    if (!recheckComparison?.available) return;
-    await recordRecheckOutcome({
-      state: recheckState,
-      completeness: recheckCompleteness,
-      source: recheckSource.trim(),
-      followUpAt: localIso(recheckFollowUpAt),
-      limitations: recheckLimitations.split(/\r?\n/u).map((item) => item.trim()).filter(Boolean),
-      comparisonSummary: comparisonSummary(),
-    });
-  }
 </script>
 
 {#if domain}
   <section class="case-card evidence-card card">
     <div class="case-intro section-head"><div><p class="eyebrow">Investigation</p><h4>Analyst case</h4></div>{#if record}<div class="case-badges"><span class={`badge status-${record.status}`}>{statusLabel(record.status)}</span><span class={`badge disposition-${record.disposition}`}>{dispositionLabel(record.disposition)}</span></div>{/if}</div>
-    {#if record}
+    {#if caseSourceState === 'ready'}
+      {#if cases.length > 1 || (cases.length && !record)}<CasePicker id="lookup-incident-case" records={cases} selectedId={record?.id ?? ''} disabled={actionBusy} select={changeIncident} />{/if}
+      {#if record?.title}<p class="case-hint">{record.title}</p>{/if}
+      <details class="case-tool"><summary>Create a separate incident</summary><form onsubmit={(event) => { event.preventDefault(); void newIncident(); }}>
+        <label class="field" for="lookup-incident-title">Incident title<input id="lookup-incident-title" bind:value={incidentTitle} required maxlength={MAX_CASE_OBJECTIVE_LENGTH} disabled={actionBusy} autocomplete="off"></label>
+        <button class="btn" type="submit" disabled={actionBusy || !incidentTitle.trim()}>Create incident with this evidence</button>
+      </form></details>
+    {/if}
+    {#if caseSourceState === 'loading'}
+      <p class="case-hint" role="status">Loading saved Case context…</p>
+    {:else if caseSourceState === 'unavailable'}
+      <div class="case-body"><p class="case-hint" role="alert">Saved Case context could not be read. Existing work may still be retained in this workspace.</p><button class="btn" type="button" onclick={() => void retryCaseRead()}>Retry Case read</button></div>
+    {:else if record}
       <div class="case-body">
         <form class="note-edit" onsubmit={(event) => { event.preventDefault(); addNote(); }}>
           <label class="field" for="case-note">Add note</label>
           <textarea id="case-note" value={note} oninput={(event) => setNote(event.currentTarget.value)} rows="2" placeholder="Observed behaviour, evidence, decisions…" disabled={actionBusy}></textarea>
-          <div class="case-actions"><button class="btn" type="submit" disabled={actionBusy || !note.trim()}>Add note</button><button class="btn" type="button" onclick={createCase} disabled={actionBusy} aria-label={`Refresh retained Case evidence for ${domain}`}>Refresh case evidence</button><a href={caseWorkspaceHref(record.id)}>Open in Monitor →</a></div>
+          <div class="case-actions"><button class="btn" type="submit" disabled={actionBusy || !note.trim()}>Add note</button><button class="btn" type="button" onclick={createCase} disabled={actionBusy} aria-label={`Refresh retained Case evidence for ${domain}`}>Refresh case evidence</button><a href={caseWorkspaceHref(record.id)} onclick={(event) => { if (handlesLocalLink(event)) oncaseopen(); }}>Open Case</a></div>
         </form>
-        <div class="case-tools">
+        <div class="case-tools independent-grid">
           {#if task === 'incident' && incidentUrlDetails}
             <form class="case-tool incident-context-tool" onsubmit={(event) => { event.preventDefault(); void recordInvestigationContext(contextObjective, retainExactIncidentUrl); }}>
-              <div><strong>Incident context</strong><p>Lookup sent only <code>{incidentUrlDetails.hostname}</code>. Decide what this browser-local Case should retain before the URL can enter an export.</p></div>
+              <div><strong>Incident context</strong><p>Lookup sent only <code>{incidentUrlDetails.hostname}</code>. Decide what this saved Case should retain before the URL can enter an export.</p></div>
               <p class="incident-url"><span>Current URL</span><code>{incidentUrlDetails.exactUrl}</code></p>
               {#if incidentUrlDetails.hasQuery || incidentUrlDetails.hasFragment}
                 <p class="privacy-warning">This URL contains {incidentUrlDetails.hasQuery ? 'a query' : ''}{incidentUrlDetails.hasQuery && incidentUrlDetails.hasFragment ? ' and ' : ''}{incidentUrlDetails.hasFragment ? 'a fragment' : ''}. Review it for tokens, personal data or unnecessary identifiers before retaining the exact value.</p>
@@ -288,52 +277,38 @@
           </form>
 
           <section class="case-tool monitoring-tool" aria-labelledby="lookup-case-monitoring-title">
-            <div><strong id="lookup-case-monitoring-title">Monitoring and recheck</strong><p>Keep a browser-local baseline, or deliberately recollect the displayed observation target with the current Lookup settings.</p></div>
+            <div><strong id="lookup-case-monitoring-title">Monitoring and recheck</strong><p>Keep a saved baseline, or deliberately recollect the displayed observation target with the current Lookup settings.</p></div>
             {#if watchlistSourceState === 'loading'}
-              <p class="field-note" role="status">Checking browser-local watchlists…</p>
+              <p class="field-note" role="status">Checking saved watchlists…</p>
             {:else if watchlistSourceState === 'unavailable'}
-              <p class="field-note warn-text">Browser-local watchlists could not be read. Existing membership is unknown and no empty state is inferred.</p>
+              <p class="field-note warn-text">Saved watchlists could not be read. Existing membership is unknown and no empty state is inferred.</p>
             {:else if linkedWatchlistNames.length}
               <p class="linked-watchlists">Linked watchlist{linkedWatchlistNames.length === 1 ? '' : 's'}: {#each linkedWatchlistNames as name, index}<a href={`/monitor?view=watchlists&watchlist=${encodeURIComponent(name)}`}>{name}</a>{index < linkedWatchlistNames.length - 1 ? ', ' : ''}{/each}</p>
             {:else}
-              <p class="field-note">This observation target is not in a readable browser-local watchlist.</p>
+              <p class="field-note">This observation target is not in a readable saved watchlist.</p>
             {/if}
             {#if record.status === 'monitoring' && watchlistSourceState === 'ready' && !linkedWatchlistNames.length}
-              <p class="monitoring-warning" role="note">This Case is marked Monitoring, but no readable watchlist currently contains {lookupTarget}. Add a local baseline or change the Case status in Monitor.</p>
+              <p class="monitoring-warning" role="note">This Case is marked Monitoring, but no readable watchlist currently contains {lookupTarget}. Add a local baseline or change its status in Cases.</p>
             {/if}
             <form class="watchlist-form" onsubmit={(event) => { event.preventDefault(); saveToWatchlist(); }}>
-              <label class="field" for="lookup-case-watchlist-name">Browser-local watchlist name<input id="lookup-case-watchlist-name" value={watchlistName} oninput={(event) => setWatchlistName(event.currentTarget.value)} maxlength="100" autocomplete="off" disabled={watchlistBusy}></label>
+              <label class="field" for="lookup-case-watchlist-name">Saved watchlist name<input id="lookup-case-watchlist-name" value={watchlistName} oninput={(event) => setWatchlistName(event.currentTarget.value)} maxlength="100" autocomplete="off" disabled={watchlistBusy}></label>
               <button class="btn small" type="submit" disabled={watchlistBusy || !watchlistName.trim()}>Save current observation</button>
             </form>
-            <div class="recheck-row"><button class="btn small" type="button" onclick={recheckCase} disabled={actionBusy || watchlistBusy}>Recheck and refresh Case</button><span>Runs a new {lookupDepth === 'deep' ? 'Deep' : 'Fast'} Lookup for {lookupTarget}; any selected optional sources keep their current settings. The watchlist is unchanged until you save the new observation.</span></div>
-            {#if recheckComparison}
-              <section class="recheck-comparison" aria-labelledby="lookup-recheck-comparison-title">
-                <div><strong id="lookup-recheck-comparison-title">Recheck comparison</strong><span>{recheckComparison.observedAt || 'time unavailable'}</span></div>
-                <p>{recheckComparison.detail}</p>
-                {#if recheckComparison.changes.length}
-                  <ul>{#each recheckComparison.changes as change}<li data-tone={change.tone}><strong>{change.label}</strong><span>{displayComparisonValue(change.before)} → {displayComparisonValue(change.after)}</span></li>{/each}</ul>
-                {/if}
-                {#if recheckComparison.available}
-                  <form onsubmit={(event) => { event.preventDefault(); void submitRecheckOutcome(); }}>
-                    <div class="classification-fields">
-                      <label class="field">Observed outcome<select bind:value={recheckState}>{#each CASE_OBSERVED_EFFECT_STATES.filter((value) => value !== 'not_checked') as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
-                      <label class="field">Completeness<select bind:value={recheckCompleteness}>{#each CASE_PIN_COMPLETENESS as value}<option {value}>{value}</option>{/each}</select></label>
-                      <label class="field">Review source<input bind:value={recheckSource} maxlength="80" required></label>
-                      <label class="field">Follow up at<input type="datetime-local" bind:value={recheckFollowUpAt}></label>
-                    </div>
-                    <label class="field">Limitations <small>one per line</small><textarea bind:value={recheckLimitations} maxlength="2000" rows="2"></textarea></label>
-                    <button class="btn small" type="submit" disabled={actionBusy || !recheckSource.trim()}>Record reviewed recheck outcome</button>
-                  </form>
-                {/if}
-              </section>
-            {/if}
+            <div class="recheck-row"><button class="btn small" type="button" onclick={startRecheck} disabled={actionBusy || watchlistBusy}>Recheck and refresh Case</button><span>Runs a new {lookupDepth === 'deep' ? 'Deep' : 'Fast'} Lookup for {lookupTarget}; any selected optional sources keep their current settings. The watchlist is unchanged until you save the new observation.</span></div>
             {#if watchlistStatus}<p class="case-status" role="status" aria-live="polite">{watchlistStatus}</p>{/if}
           </section>
+          {#if recheckComparison}
+            <div class="recheck-workspace">
+              {#key `${record.id}:${recheckComparison.observedAt}`}
+                <LookupRecheckReview {record} comparison={recheckComparison} busy={actionBusy} save={recordRecheckOutcome} changed={edited => recheckDraftEdited = edited} />
+              {/key}
+            </div>
+          {/if}
         </div>
-        <p class="case-hint">{record.notes.length} note{record.notes.length === 1 ? '' : 's'} · full status, tags, decisions, response actions, evidence comparison and closure remain in Monitor. Cases and local watchlists stay in this browser.</p>
+        <p class="case-hint">{record.notes.length} note{record.notes.length === 1 ? '' : 's'} · Open Cases for the full evidence, assessment, response and history.</p>
       </div>
     {:else}
-      <div class="case-body"><p class="case-hint">No case for {domain} yet.</p><button class="primary" onclick={createCase} disabled={actionBusy}>Create case</button></div>
+      <div class="case-body">{#if cases.length}<p class="case-hint">Choose an incident Case above to retain this evidence.</p>{:else}<p class="case-hint">No case for {domain} yet.</p><button class="primary" onclick={createCase} disabled={actionBusy}>Create case</button>{/if}</div>
     {/if}
     {#if caseStatus}<p class="case-status" role="status" aria-live="polite">{caseStatus}</p>{/if}
   </section>
@@ -351,12 +326,13 @@
           <span>{route.contact}</span>
           <p><b>{route.channel}</b> · source: {route.source}</p>
           {#if route.limitations.length}<ul>{#each route.limitations.slice(0, 3) as limitation}<li>{limitation}</li>{/each}</ul>{/if}
-          {#if route.officialSourceUrl}<p class="route-source"><a href={route.officialSourceUrl} target="_blank" rel="noreferrer">Review the official route source ↗</a>{route.catalogueReviewAfter ? ` · recheck before ${route.catalogueReviewAfter}` : ''}</p>{/if}
+          {#if route.officialSourceUrl}<p class="route-source"><a href={route.officialSourceUrl} target="_blank" rel="noreferrer">Review the official route source ↗</a></p>{/if}
+          {#if route.reviewAfter}<p class="route-source">Source review due <time datetime={route.reviewAfter}>{route.reviewAfter}</time></p>{/if}
           <div>
             <button class="btn small" type="button" onclick={() => void recordRecipient(route)} disabled={!record || actionBusy}>Record in case</button>
             <button class="btn small" type="button" onclick={() => copyDraft(route.contact, `${abuseRecipientKindLabel(route.kind).toLowerCase()} destination`)}>Copy destination</button>
             {#if routeHref(route)}<a class="btn small" href={routeHref(route) ?? undefined} target={route.channel === 'url' ? '_blank' : undefined} rel={route.channel === 'url' ? 'noreferrer' : undefined}>Open {route.channel === 'email' ? 'email' : route.channel === 'phone' ? 'phone' : 'reporting route'}</a>{/if}
-            {#if record}<a class="btn small" href={caseWorkspaceHref(record.id, true)}>Review response packet</a>{/if}
+            {#if record}<a class="btn small" href={`${caseWorkspaceHref(record.id, 'response')}#case-response-${encodeURIComponent(record.id)}`} onclick={(event) => { if (handlesLocalLink(event)) oncaseopen(); }}>Review response packet</a>{/if}
           </div>
         </article>
       {/each}
@@ -389,6 +365,7 @@
   .case-hint,.case-status{margin:10px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .case-status,.draft-status{color:var(--accent)}
   .case-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+  .recheck-workspace{grid-column:1/-1}
   .case-tool{display:grid;align-content:start;gap:10px;min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   .case-tool>div>strong{font:700 var(--text-xs) var(--mono)}
   .case-tool>div>p,.field-note,.linked-watchlists,.recheck-row span{margin:4px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
@@ -410,7 +387,6 @@
   .warn-text{color:var(--amber)}
   .recheck-row{display:flex;align-items:start;gap:8px}
   .recheck-row .btn{flex:0 0 auto}
-  .recheck-comparison{display:grid;gap:8px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.recheck-comparison>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px}.recheck-comparison>div>strong{font:700 var(--text-xs) var(--mono)}.recheck-comparison>div>span,.recheck-comparison>p{color:var(--muted);font-size:var(--text-2xs)}.recheck-comparison>p{margin:0;line-height:1.45}.recheck-comparison ul{display:grid;gap:5px;margin:0;padding:0;list-style:none}.recheck-comparison li{display:grid;grid-template-columns:minmax(100px,.35fr) minmax(0,1fr);gap:8px;padding:6px 8px;border-left:3px solid var(--border);background:var(--panel)}.recheck-comparison li[data-tone='danger']{border-color:var(--danger)}.recheck-comparison li[data-tone='warning']{border-color:var(--amber)}.recheck-comparison li strong,.recheck-comparison li span{font-size:var(--text-2xs);overflow-wrap:anywhere}.recheck-comparison form{display:grid;gap:8px;padding-top:8px;border-top:1px solid var(--border)}.recheck-comparison textarea{width:100%;margin-top:5px}
   .response-actions{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;margin-top:12px}
   .response-actions article{padding:13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   .response-actions strong,.response-actions span{display:block}

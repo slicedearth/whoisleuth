@@ -64,14 +64,18 @@ function addFinding(
 
 function analyzePageRole(input: PageRoleProfileInput = {}) {
   const htmlAnalysis = input.htmlAnalysis ?? analyzeStaticHtml(input.html);
-  const markup = htmlAnalysis.markup;
+  const elements = htmlAnalysis.elements.filter((element) => element.html && element.name !== 'template');
+  // Reuse native element evidence instead of allocating and scanning a second,
+  // independently capped reconstruction of the same document.
+  const marker = (pattern: RegExp) => elements.some((element) => pattern.test(element.name)
+    || element.attributes.some(({ name, value }) => pattern.test(name) || pattern.test(value.toLowerCase())));
   const title = boundedLowercase(input.pageTitle, MAX_ROLE_TITLE_CHARS);
   const activityStatus = boundedLowercase(input.activityStatus, 40);
   const forms = htmlAnalysis.forms;
   const findings: PageRoleFinding[] = [];
 
   const challengeEvidence: string[] = [];
-  if (/(?:captcha|recaptcha|hcaptcha|turnstile|cf-chl|challenge-form|verify-human)/u.test(markup)) {
+  if (marker(/(?:captcha|recaptcha|hcaptcha|turnstile|cf-chl|challenge-form|verify-human)/u)) {
     challengeEvidence.push('Static challenge or human-verification marker observed');
   }
   if (/(?:just a moment|checking your browser|verify you are human|access denied)/u.test(title)) {
@@ -84,7 +88,7 @@ function analyzePageRole(input: PageRoleProfileInput = {}) {
   if (forms.categories.username > 0 || forms.categories.email > 0) {
     authenticationEvidence.push('Username or email-purpose input observed');
   }
-  if (/(?:login|log-in|signin|sign-in|authentication|current-password|new-password)/u.test(markup)) {
+  if (marker(/(?:login|log-in|signin|sign-in|authentication|current-password|new-password)/u)) {
     authenticationEvidence.push('Static authentication marker observed');
   }
   addFinding(
@@ -97,13 +101,13 @@ function analyzePageRole(input: PageRoleProfileInput = {}) {
 
   const commerceEvidence: string[] = [];
   if (forms.categories.payment > 0) commerceEvidence.push('Payment-purpose input observed');
-  if (/(?:checkout|shopping-cart|add-to-cart|product-price|woocommerce|shopify-payment)/u.test(markup)) {
+  if (marker(/(?:checkout|shopping-cart|add-to-cart|product-price|woocommerce|shopify-payment)/u)) {
     commerceEvidence.push('Static commerce or checkout marker observed');
   }
   addFinding(findings, 'commerce', 'Commerce', forms.categories.payment > 0 ? 'high' : 'medium', commerceEvidence);
 
   const supportEvidence: string[] = [];
-  if (/(?:contact|support|helpdesk|customer-service)/u.test(markup)) {
+  if (marker(/(?:contact|support|helpdesk|customer-service)/u)) {
     supportEvidence.push('Static support or contact marker observed');
   }
   if (forms.formsObserved > 0 && forms.categories.password === 0 && forms.categories.payment === 0) {
@@ -113,14 +117,14 @@ function analyzePageRole(input: PageRoleProfileInput = {}) {
 
   const parkedEvidence: string[] = [];
   if (activityStatus === 'parked') parkedEvidence.push('Existing activity analysis classified the page as parked');
-  if (/(?:domain-for-sale|buy-this-domain|parking-page|sedoparking)/u.test(markup)) {
+  if (marker(/(?:domain-for-sale|buy-this-domain|parking-page|sedoparking)/u)) {
     parkedEvidence.push('Static domain-sale or parking marker observed');
   }
   addFinding(findings, 'parked_sale', 'Parked or for sale', activityStatus === 'parked' ? 'high' : 'medium', parkedEvidence);
 
   const contentEvidence: string[] = [];
-  if (/<(?:article|main)(?:\s|>)/u.test(markup)) contentEvidence.push('Semantic article or main-content element observed');
-  if (/<(?:h1|h2)(?:\s|>)/u.test(markup)) contentEvidence.push('Static heading structure observed');
+  if (elements.some(({ name }) => name === 'article' || name === 'main')) contentEvidence.push('Semantic article or main-content element observed');
+  if (elements.some(({ name }) => name === 'h1' || name === 'h2')) contentEvidence.push('Static heading structure observed');
   addFinding(findings, 'content', 'Content or publication', contentEvidence.length > 1 ? 'medium' : 'low', contentEvidence);
 
   if (!findings.length) {

@@ -5,8 +5,12 @@
 // output budgets before producing separately attributed normalized evidence.
 
 import { createObservation } from '../packages/evidence/observation.mts';
+import { latestObservationCohort } from '../packages/evidence/latest-observations.mts';
 import type { ObservationStatus } from '../packages/evidence/observation.mts';
 import {
+  CURATED_CONNECTOR_RELATIONSHIP_TYPES,
+  CURATED_CONNECTOR_RELATIONSHIP_CLASSIFICATIONS,
+  CURATED_CONNECTOR_RELATIONSHIP_ENDPOINTS as CONNECTOR_RELATIONSHIP_ENDPOINTS,
   THREAT_INTELLIGENCE_CONTRACT_VERSION,
   THREAT_INTELLIGENCE_CATEGORIES,
   THREAT_INTELLIGENCE_CONFIDENCES,
@@ -82,56 +86,8 @@ const TERMINAL_STATES_WITHOUT_FINDINGS = new Set<ThreatIntelligenceResultState>(
 const CATEGORIES = new Set<ThreatIntelligenceCategory>(THREAT_INTELLIGENCE_CATEGORIES);
 const SEVERITIES = new Set<ThreatIntelligenceSeverity>(THREAT_INTELLIGENCE_SEVERITIES);
 const CONFIDENCES = new Set<ThreatIntelligenceConfidence>(THREAT_INTELLIGENCE_CONFIDENCES);
-const CONNECTOR_RELATIONSHIP_TYPES = new Set<CuratedConnectorRelationshipType>([
-  'domain_resolves_to_ip',
-  'domain_uses_nameserver',
-  'domain_uses_mail_server',
-  'domain_presented_certificate',
-  'certificate_names_domain',
-  'ip_hosts_domain',
-  'domain_related_to_domain',
-]);
-const CONNECTOR_RELATIONSHIP_CLASSIFICATIONS = new Set<CuratedConnectorRelationshipClassification>([
-  'direct',
-  'normalized',
-  'derived',
-]);
-const CONNECTOR_RELATIONSHIP_ENDPOINTS: Readonly<Record<
-  CuratedConnectorRelationshipType,
-  Readonly<{
-    from: ReadonlySet<CuratedConnectorEntityType>;
-    to: ReadonlySet<CuratedConnectorEntityType>;
-  }>
->> = Object.freeze({
-  domain_resolves_to_ip: {
-    from: new Set<CuratedConnectorEntityType>(['domain', 'hostname']),
-    to: new Set<CuratedConnectorEntityType>(['ipv4', 'ipv6']),
-  },
-  domain_uses_nameserver: {
-    from: new Set<CuratedConnectorEntityType>(['domain']),
-    to: new Set<CuratedConnectorEntityType>(['hostname']),
-  },
-  domain_uses_mail_server: {
-    from: new Set<CuratedConnectorEntityType>(['domain']),
-    to: new Set<CuratedConnectorEntityType>(['hostname']),
-  },
-  domain_presented_certificate: {
-    from: new Set<CuratedConnectorEntityType>(['domain', 'hostname']),
-    to: new Set<CuratedConnectorEntityType>(['certificate']),
-  },
-  certificate_names_domain: {
-    from: new Set<CuratedConnectorEntityType>(['certificate']),
-    to: new Set<CuratedConnectorEntityType>(['domain', 'hostname']),
-  },
-  ip_hosts_domain: {
-    from: new Set<CuratedConnectorEntityType>(['ipv4', 'ipv6']),
-    to: new Set<CuratedConnectorEntityType>(['domain', 'hostname']),
-  },
-  domain_related_to_domain: {
-    from: new Set<CuratedConnectorEntityType>(['domain', 'hostname']),
-    to: new Set<CuratedConnectorEntityType>(['domain', 'hostname']),
-  },
-});
+const CONNECTOR_RELATIONSHIP_TYPES = new Set(CURATED_CONNECTOR_RELATIONSHIP_TYPES);
+const CONNECTOR_RELATIONSHIP_CLASSIFICATIONS = new Set(CURATED_CONNECTOR_RELATIONSHIP_CLASSIFICATIONS);
 
 // createObservation() retains at most 40 source characters, so provider IDs use
 // the same ceiling and can never be truncated at the provenance boundary.
@@ -333,7 +289,7 @@ function normalizeConnectorRelationship(
   const lastObservedAt = value.lastObservedAt == null ? null : isoTimestamp(value.lastObservedAt);
   const endpoints = type ? CONNECTOR_RELATIONSHIP_ENDPOINTS[type] : null;
   if (!type || !fromEntity || !toEntity || fromEntity.id === toEntity.id
-    || !endpoints?.from.has(fromEntity.type) || !endpoints.to.has(toEntity.type)
+    || !endpoints?.from.includes(fromEntity.type) || !endpoints.to.includes(toEntity.type)
     || !classification || !method
     || (value.firstObservedAt != null && !firstObservedAt)
     || (value.lastObservedAt != null && !lastObservedAt)
@@ -474,12 +430,23 @@ function createThreatIntelligenceResult(
   }
   normalizedFindings.sort(compareFindings);
   const findings: ThreatIntelligenceFinding[] = [];
-  const seen = new Set<string>();
+  const byIdentity = new Map<string, ThreatIntelligenceFinding[]>();
   for (const finding of normalizedFindings) {
     const key = findingKey(finding);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    findings.push(finding);
+    const group = byIdentity.get(key) ?? [];
+    group.push(finding);
+    byIdentity.set(key, group);
+  }
+  let conflictingIdentities = 0;
+  for (const group of byIdentity.values()) {
+    const cohort = latestObservationCohort(group, (finding) => finding.lastObservedAt);
+    const candidates = [...cohort.latest, ...cohort.undated];
+    if (new Set(candidates.map((finding) => JSON.stringify(finding))).size > 1) {
+      conflictingIdentities += 1;
+      discarded += candidates.length;
+      continue;
+    }
+    if (candidates[0]) findings.push(candidates[0]);
   }
   if (findings.length > MAX_FINDINGS) {
     discarded += findings.length - MAX_FINDINGS;
@@ -489,11 +456,12 @@ function createThreatIntelligenceResult(
   let state = requestedState;
   const sourceTruncated = resultInput.truncated === true;
   if (TERMINAL_STATES_WITHOUT_FINDINGS.has(state) && findings.length) state = 'partial';
-  if (state === 'success' && findings.length === 0) state = 'error';
+  if (state === 'success' && findings.length === 0) state = conflictingIdentities > 0 ? 'partial' : 'error';
   if ((discarded > 0 || sourceTruncated) && !['error', 'unavailable', 'rate_limited'].includes(state)) state = 'partial';
   const limitations = normalizeLimitations(resultInput.limitations);
   if (state === 'not_found') limitations.unshift(NO_MATCH_LIMITATION);
-  if (discarded > 0) limitations.unshift(`${discarded} invalid or over-limit provider finding${discarded === 1 ? ' was' : 's were'} omitted.`);
+  if (discarded > 0) limitations.unshift(`${discarded} invalid, conflicting or over-limit provider finding${discarded === 1 ? ' was' : 's were'} omitted.`);
+  if (conflictingIdentities > 0) limitations.unshift(`${conflictingIdentities} provider identit${conflictingIdentities === 1 ? 'y has' : 'ies have'} conflicting records at the latest or unknown observation time. No stronger record was selected from those conflicts.`);
   limitations.unshift(BASE_LIMITATION);
   const boundedLimitations = [...new Set(limitations)].slice(0, MAX_LIMITATIONS);
   const complete = ['success', 'not_found'].includes(state) && discarded === 0 && !sourceTruncated;

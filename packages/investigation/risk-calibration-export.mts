@@ -20,7 +20,7 @@ import {
   type RiskCalibrationRecord,
 } from '../contracts/risk-calibration.mts';
 import {
-  latestCaseEvidence,
+  currentCaseEvidence,
   type CaseDisposition,
   type CaseEvidenceSnapshot,
   type CaseRecord,
@@ -231,7 +231,11 @@ export function buildRiskCalibrationDatasetExport(
       exclusions.push(Object.freeze({ caseId, domain: record.domain, reason: 'unreviewed' }));
       continue;
     }
-    const snapshot = latestCaseEvidence(record);
+    const selection = currentCaseEvidence(record);
+    if (selection.limitation) {
+      throw new Error(`Cannot export calibration evidence for Case ${record.id}: ${selection.limitation} Deselect this Case or review and retain a distinct later observation before exporting.`);
+    }
+    const snapshot = selection.snapshot;
     if (!snapshot) {
       exclusions.push(Object.freeze({ caseId, domain: record.domain, reason: 'missing_evidence' }));
       continue;

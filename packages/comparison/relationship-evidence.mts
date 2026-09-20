@@ -7,6 +7,11 @@
 import { normalizeDomain } from '../cases/case-model.mts';
 import { groupBySimilarFavicon } from './favicon-similarity.mts';
 import {
+  qualifyRelationshipSources, relationshipSourceEvidence, normalizeRelationshipSourceProjection,
+  unknownRelationshipSource, MAX_RELATIONSHIP_SOURCES_PER_DOMAIN,
+  type RelationshipContribution, type RelationshipSourceProjection, type RelationshipType,
+} from './relationship-provenance.mts';
+import {
   RELATIONSHIP_EVIDENCE_SCHEMA,
   RELATIONSHIP_EVIDENCE_VERSION,
   SUPPORTED_TLS_RELATIONSHIP_PROFILE_VERSIONS,
@@ -29,6 +34,13 @@ export const MAX_OFFICIAL_ASSET_HOSTS_PER_ROW = 30;
 export const MAX_OFFICIAL_DOMAINS = 200;
 export const MAX_FAVICON_ROWS = 250;
 
+const ARRAY_RELATIONSHIP_FIELDS: Readonly<Partial<Record<RelationshipType, Readonly<{ field: string; maximum: number }>>>> = {
+  nameserver_set: { field: 'nameservers', maximum: MAX_NAMESERVERS_PER_ROW },
+  ip_address: { field: 'ipAddresses', maximum: MAX_IPS_PER_ROW },
+  tracking_identifier: { field: 'trackingIdentifiers', maximum: MAX_TRACKING_IDS_PER_ROW },
+  official_asset: { field: 'officialAssetHosts', maximum: MAX_OFFICIAL_ASSET_HOSTS_PER_ROW },
+};
+
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 const FAVICON_SHA_RE = /^[a-f0-9]{64}$/i;
 const FAVICON_PHASH_RE = /^[a-f0-9]{16}$/i;
@@ -43,6 +55,7 @@ export interface RelationshipObservation {
   faviconHash: string | null;
   faviconPHash: string | null;
   certificateFingerprint: string | null;
+  sourceEvidence: RelationshipSourceProjection;
   truncated: boolean;
 }
 
@@ -54,6 +67,10 @@ export interface ScanRelationshipGroup {
   normalizedValue: string;
   domains: string[];
   description: string;
+  sourceEvidence: RelationshipContribution[];
+  observedAt: string | null;
+  complete: boolean;
+  truncated: boolean;
 }
 
 export interface ScanRelationshipSummary {
@@ -148,7 +165,7 @@ function tlsCertificateFingerprint(availability: Record<string, unknown>): strin
   const certificate = record(tls?.certificate);
   const fingerprint = certificate?.fingerprintSha256;
   const status = tls?.status;
-  if (tls?.source !== 'tls' || !SUPPORTED_TLS_RELATIONSHIP_PROFILE_VERSIONS.some((version) => version === Number(tls?.profileVersion))
+  if (tls?.source !== 'tls' || !SUPPORTED_TLS_RELATIONSHIP_PROFILE_VERSIONS.some((version) => version === tls?.profileVersion)
     || typeof status !== 'string' || !['success', 'partial'].includes(status) || typeof fingerprint !== 'string'
     || fingerprint.length !== 64 || !CERTIFICATE_SHA_RE.test(fingerprint)) return null;
   return fingerprint.toLowerCase();
@@ -198,6 +215,30 @@ export function relationshipObservation(
     ? availability.faviconHash.toLowerCase() : null;
   const faviconPHash = typeof availability.faviconPHash === 'string' && FAVICON_PHASH_RE.test(availability.faviconPHash)
     ? availability.faviconPHash.toLowerCase() : null;
+  const certificateFingerprint = tlsCertificateFingerprint(availability);
+  const dnsSource = relationshipSourceEvidence('dns', availability.dns);
+  const httpSource = relationshipSourceEvidence('http', availability.http);
+  const projectedSource = (source: typeof dnsSource, truncated: boolean) => truncated
+    ? { ...source, complete: false, truncated: true } : source;
+  const sourceEvidence: RelationshipSourceProjection = {};
+  if (nameservers.values.length) sourceEvidence.nameserver_set = [
+    // The compact availability nameserver list can be registration data or a
+    // DNS fallback. Its source is not distinguishable from this projection.
+    ...(Array.isArray(availability.nameservers) && availability.nameservers.length
+      ? [availability.source === 'dns' ? projectedSource(dnsSource, nameservers.truncated)
+        : unknownRelationshipSource('registration_or_dns')] : []),
+    ...(Array.isArray(records.ns) && records.ns.length ? [projectedSource(dnsSource, nameservers.truncated)] : []),
+  ];
+  if (ipAddresses.values.length) sourceEvidence.ip_address = [projectedSource(dnsSource, ipAddresses.truncated)];
+  if (certificateFingerprint) sourceEvidence.certificate = [relationshipSourceEvidence('tls', availability.tls)];
+  if (trackingIdentifiers.values.length) sourceEvidence.tracking_identifier = [
+    projectedSource(httpSource, trackingIdentifiers.truncated),
+    relationshipSourceEvidence('page_identity', availability.pageIdentity),
+  ];
+  if (officialAssetHosts.length) sourceEvidence.official_asset = [projectedSource(httpSource, assets.truncated
+    || officialDomainSource.length > MAX_OFFICIAL_DOMAINS)];
+  // A homepage timestamp does not date the independently fetched favicon.
+  if (faviconHash || faviconPHash) sourceEvidence.favicon = [unknownRelationshipSource('favicon')];
   return {
     version: RELATIONSHIP_EVIDENCE_VERSION,
     nameservers: nameservers.values,
@@ -206,7 +247,8 @@ export function relationshipObservation(
     officialAssetHosts,
     faviconHash,
     faviconPHash,
-    certificateFingerprint: tlsCertificateFingerprint(availability),
+    certificateFingerprint,
+    sourceEvidence,
     truncated: nameservers.truncated || ipAddresses.truncated || trackingIdentifiers.truncated || assets.truncated
       || officialDomainSource.length > MAX_OFFICIAL_DOMAINS,
   };
@@ -227,7 +269,21 @@ function group(
   description: string,
   normalizedValue = value,
 ): ScanRelationshipGroup {
-  return { type, label, method, value, normalizedValue, domains, description };
+  return { type, label, method, value, normalizedValue, domains, description, ...qualifyRelationshipSources([], domains) };
+}
+
+function contributesToGroup(observation: Record<string, unknown>, item: ScanRelationshipGroup, domain: string): boolean {
+  if (item.type === 'certificate') return typeof observation.certificateFingerprint === 'string'
+    && observation.certificateFingerprint.toLowerCase() === item.normalizedValue;
+  if (item.type === 'nameserver_set') return Array.isArray(observation.nameservers)
+    && [...new Set(observation.nameservers.slice(0, MAX_NAMESERVERS_PER_ROW).map(hostname).filter(Boolean))].sort().join(' · ') === item.normalizedValue;
+  const field = ARRAY_RELATIONSHIP_FIELDS[item.type as RelationshipType];
+  if (field) return Array.isArray(observation[field.field]) && (observation[field.field] as unknown[]).slice(0, field.maximum).some((value) =>
+    (item.type === 'ip_address' ? ipAddress(value) : item.type === 'official_asset' ? hostname(value) : value) === item.normalizedValue);
+  return item.type === 'favicon' && item.normalizedValue.split('|').includes(`${domain}=${[
+    typeof observation.faviconHash === 'string' && FAVICON_SHA_RE.test(observation.faviconHash) ? `sha256:${observation.faviconHash.toLowerCase()}` : '',
+    typeof observation.faviconPHash === 'string' && FAVICON_PHASH_RE.test(observation.faviconPHash) ? `dhash:${observation.faviconPHash.toLowerCase()}` : '',
+  ].filter(Boolean).join(',')}`);
 }
 
 /**
@@ -240,7 +296,7 @@ export function buildScanRelationships(rawRows: RelationshipRow[]): ScanRelation
   for (const raw of input.slice(0, MAX_RELATIONSHIP_ROWS)) {
     const domain = normalizeDomain(raw?.domain);
     const observation = record(raw?.relationship);
-    if (!domain || raw?.trusted || !observation || observation.version !== RELATIONSHIP_EVIDENCE_VERSION) continue;
+    if (!domain || raw?.trusted || !observation || ![2, RELATIONSHIP_EVIDENCE_VERSION].some((version) => version === observation.version)) continue;
     rows.push({ domain, observation });
     if (observation.truncated === true) truncated = true;
   }
@@ -318,10 +374,29 @@ export function buildScanRelationships(rawRows: RelationshipRow[]): ScanRelation
   );
   output.sort((left, right) => (Number(order.get(left.type)) - Number(order.get(right.type))) || left.value.localeCompare(right.value) || left.domains.join('|').localeCompare(right.domains.join('|')));
   if (output.length > MAX_RELATIONSHIP_GROUPS) truncated = true;
+  const rowsByDomain = new Map<string, NormalizedRelationshipRow[]>();
+  for (const row of rows) {
+    const members = rowsByDomain.get(row.domain) ?? [];
+    members.push(row);
+    rowsByDomain.set(row.domain, members);
+  }
   const groups = output.slice(0, MAX_RELATIONSHIP_GROUPS).map((item) => {
-    if (item.domains.length <= MAX_RELATIONSHIP_DOMAINS) return item;
-    truncated = true;
-    return { ...item, domains: item.domains.slice(0, MAX_RELATIONSHIP_DOMAINS) };
+    const domains = item.domains.slice(0, MAX_RELATIONSHIP_DOMAINS);
+    let groupTruncated = item.domains.length > domains.length || input.length > MAX_RELATIONSHIP_ROWS;
+    if (groupTruncated) truncated = true;
+    const contributors: RelationshipContribution[] = [];
+    for (const domain of domains) for (const { observation } of rowsByDomain.get(domain) ?? []) {
+      if (!contributesToGroup(observation, item, domain)) continue;
+      const field = ARRAY_RELATIONSHIP_FIELDS[item.type as RelationshipType];
+      if (field && Array.isArray(observation[field.field]) && (observation[field.field] as unknown[]).length > field.maximum) groupTruncated = true;
+      const projection = observation.version === RELATIONSHIP_EVIDENCE_VERSION
+        ? normalizeRelationshipSourceProjection(observation.sourceEvidence) : {};
+      for (const source of projection[item.type as RelationshipType] ?? [unknownRelationshipSource()]) {
+        if (contributors.length >= MAX_RELATIONSHIP_DOMAINS * MAX_RELATIONSHIP_SOURCES_PER_DOMAIN) groupTruncated = true;
+        else contributors.push({ domain, ...source });
+      }
+    }
+    return { ...item, domains, ...qualifyRelationshipSources(contributors, domains, { truncated: groupTruncated, type: item.type as RelationshipType }) };
   });
   return {
     version: RELATIONSHIP_EVIDENCE_VERSION,

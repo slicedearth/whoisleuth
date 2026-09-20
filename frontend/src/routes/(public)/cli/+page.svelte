@@ -12,6 +12,8 @@
     { href: '#tasks', label: 'Common tasks' },
     { href: '#commands', label: 'Command reference' },
     { href: '#browser-handoff', label: 'Browser and CLI handoffs' },
+    { href: '#capture-companion', label: 'Capture companion' },
+    { href: '#local-application', label: 'Local application' },
     { href: '#behaviour', label: 'CLI behaviour' },
     { href: '#more', label: 'More documentation' },
   ] as const;
@@ -25,7 +27,7 @@
     {
       id: 'respond',
       label: 'Respond',
-      description: 'Prepare reviewed local material for a deliberate handoff.',
+      description: 'Maintain local Case files and prepare reviewed handoffs.',
     },
     {
       id: 'assure',
@@ -57,22 +59,21 @@
   currentHref="/cli"
   eyebrow="Command line"
   title="WHOISleuth CLI"
-  summary={['Install the command, start with a common task, or browse the current command reference.']}
+  summary={['Collect domain evidence and review saved investigations from your terminal.']}
   sections={pageSections}
 >
   {#snippet actions()}
-    <a class="primary" href="#start">Get started</a>
     <a class="btn" href="#commands">Browse all commands</a>
   {/snippet}
 
 <section class="cli-section" id="start" aria-labelledby="start-title">
-  <div class="section-intro"><p class="eyebrow">Get started</p><h2 id="start-title">Run the CLI locally</h2><p>WHOISleuth requires Node.js 24 or later. You can run it once or install the command globally.</p></div>
+  <div class="section-intro"><h2 id="start-title">Run the CLI locally</h2><p>Node.js 24 or later.</p></div>
   <ol class="start-steps">
     <li>
-      <span>1</span><div><h3>Run help without installing</h3><p>Load the package for this command only.</p><CopyableCommand command={PUBLIC_CLI_GUIDANCE.runOnce[0]} label="run-once help command" /></div>
+      <span>1</span><div><h3>Run help without installing</h3><CopyableCommand command={PUBLIC_CLI_GUIDANCE.runOnce[0]} label="run-once help command" /></div>
     </li>
     <li>
-      <span>2</span><div><h3>Install and check the CLI</h3><p>Install globally, then check the local runtime and configuration.</p><CopyableCommand command={PUBLIC_CLI_GUIDANCE.install[0]} label="installation command" /><CopyableCommand command={PUBLIC_CLI_GUIDANCE.install[1]} label="runtime check command" compact /></div>
+      <span>2</span><div><h3>Install and check the CLI</h3><CopyableCommand command={PUBLIC_CLI_GUIDANCE.install[0]} label="installation command" /><CopyableCommand command={PUBLIC_CLI_GUIDANCE.install[1]} label="runtime check command" compact /></div>
     </li>
     <li>
       <span>3</span><div><h3>Inspect a request before running it</h3><p>Show planned sources and limits without starting collection.</p><CopyableCommand command={PUBLIC_CLI_GUIDANCE.runOnce[1]} label="lookup plan command" /></div>
@@ -91,6 +92,7 @@
       <section aria-labelledby={`task-group-${group.id}`}>
         <header><h3 id={`task-group-${group.id}`}>{group.label}</h3><p>{group.description}</p></header>
         <ul>{#each group.tasks as task}<li><strong>{task.label}</strong><CopyableCommand command={task.command} label={`${task.label} command`} compact /></li>{/each}</ul>
+        {#if group.id === 'respond'}<p><a href={`${WHOISLEUTH_SOURCE_REPOSITORY_URL}/blob/main/docs/cli.md#local-case-files`}>Case file inputs and examples</a></p>{/if}
       </section>
     {/each}
   </div>
@@ -112,6 +114,20 @@
     {/each}
   </div>
   <p class="handoff-boundary">These checks do not upload, submit or publish an artefact. Browser import remains a separate reviewed action.</p>
+</section>
+
+<section class="cli-section" id="capture-companion" aria-labelledby="capture-companion-title">
+  <div class="section-intro"><h2 id="capture-companion-title">Optional rendered capture</h2><p>A separate local companion captures an explicitly authorised page or compares two captures offline. It is not included in the main CLI or hosted application.</p></div>
+  <p>Install it from a verified local archive, then install its browser explicitly. Cases can prepare a command for a retained Incident URL and import reviewed manifest metadata. Screenshots remain local files.</p>
+  <a class="btn" href={`${WHOISLEUTH_SOURCE_REPOSITORY_URL}/blob/main/packages/web-capture/README.md`}>Capture installation, output and limits</a>
+</section>
+
+<section class="cli-section" id="local-application" aria-labelledby="local-application-title">
+  <div class="section-intro"><h2 id="local-application-title">Console with a filesystem workspace</h2><p>The separate local application serves the Console on your machine and saves records, drafts and original files in a folder you choose. It requires Node.js 24.19 or newer and a verified local package archive.</p></div>
+  <CopyableCommand command="whoisleuth-local --workspace ./review-workspace --init --offline" label="new offline local workspace command" />
+  <p>Open the private launch link printed in the terminal. Omit <code>--init</code> when reopening the folder. The workspace is plaintext at rest; use operating-system protection and encrypted portable backups. Browser preferences remain browser-local.</p>
+  <p>It listens only on loopback. Starting it makes no collection request; omitting <code>--offline</code> enables the existing explicit collection actions from your machine.</p>
+  <a class="btn" href={`${WHOISLEUTH_SOURCE_REPOSITORY_URL}/blob/main/packages/local-application/README.md`}>Local installation, backup and recovery</a>
 </section>
 
 <section class="cli-section" id="behaviour" aria-labelledby="behaviour-title">
@@ -151,14 +167,15 @@
 </PublicReferenceDocument>
 
 <style>
-  .cli-section{padding:58px 0;border-top:1px solid var(--border);scroll-margin-top:74px}.section-intro{max-width:790px;margin-bottom:24px}.section-intro h2{margin:.3rem 0 .65rem;font:700 clamp(1.5rem,3vw,2.25rem) var(--mono);letter-spacing:-.04em}.section-intro>p:not(.eyebrow){margin:0;color:var(--muted);line-height:1.65}
-  .start-steps{display:grid;gap:0;margin:0;padding:0;list-style:none}.start-steps>li{display:grid;grid-template-columns:34px minmax(0,1fr);gap:14px;padding:22px 0;border-top:1px solid var(--border)}.start-steps>li:last-child{border-bottom:1px solid var(--border)}.start-steps>li>span{display:grid;width:27px;height:27px;place-items:center;border:1px solid var(--border);border-radius:50%;color:var(--interface-accent);font:750 var(--text-xs) var(--mono)}.start-steps h3{margin:2px 0 6px;font:700 var(--text-md) var(--mono)}.start-steps p{margin:0 0 13px;color:var(--muted);font-size:var(--text-sm);line-height:1.55}.start-steps :global(.copyable-command)+:global(.copyable-command){margin-top:7px}.update-instructions{margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.update-instructions summary{padding:14px 16px;font:700 var(--text-xs) var(--mono)}.update-instructions>div{display:grid;gap:7px;padding:0 14px 14px}
+  .cli-section{padding:36px 0;border-top:1px solid var(--border);scroll-margin-top:74px}.cli-section:first-child{padding-top:22px}.section-intro{max-width:790px;margin-bottom:24px}.section-intro h2{margin:.3rem 0 .65rem;font:700 clamp(1.5rem,3vw,2.25rem) var(--mono);letter-spacing:-.04em}.section-intro>p:not(.eyebrow){margin:0;color:var(--muted);line-height:1.65}
+  .start-steps{display:grid;gap:0;margin:0;padding:0;list-style:none}.start-steps>li{display:grid;grid-template-columns:34px minmax(0,1fr);gap:14px;padding:18px 0;border-top:1px solid var(--border)}.start-steps>li:last-child{border-bottom:1px solid var(--border)}.start-steps>li>span{display:grid;width:27px;height:27px;place-items:center;border:1px solid var(--border);border-radius:50%;color:var(--interface-accent);font:750 var(--text-xs) var(--mono)}.start-steps h3{margin:2px 0 12px;font:700 var(--text-md) var(--mono)}.start-steps p{margin:0 0 13px;color:var(--muted);font-size:var(--text-sm);line-height:1.55}.start-steps :global(.copyable-command)+:global(.copyable-command){margin-top:7px}.update-instructions{margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.update-instructions summary{padding:14px 16px;font:700 var(--text-xs) var(--mono)}.update-instructions>div{display:grid;gap:7px;padding:0 14px 14px}
   .start-notes{grid-template-columns:minmax(0,1fr) minmax(260px,.6fr);gap:10px;margin-top:14px}.start-notes>p{margin:0;padding:14px 16px;border-left:3px solid var(--interface-accent);background:var(--panel);color:var(--muted);font-size:var(--text-xs);line-height:1.55}.start-notes>p code{color:var(--accent)}.update-instructions{margin:0}
-  .task-groups{display:grid;gap:10px}.task-groups>section{display:grid;grid-template-columns:minmax(160px,.35fr) minmax(0,.65fr);gap:22px;padding:20px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}.task-groups header h3{margin:0;color:var(--accent);font:750 var(--text-md) var(--mono)}.task-groups header p{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}.task-groups ul{display:grid;gap:12px;margin:0;padding:0;list-style:none}.task-groups li{display:grid;gap:7px}.task-groups li strong{font:700 var(--text-xs) var(--mono)}
-  .handoff-recipes{--grid-min:260px;--grid-gap:9px}.handoff-recipes article{display:flex;min-width:0;flex-direction:column;padding:16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.handoff-recipes header{display:grid;grid-template-columns:26px minmax(0,1fr);gap:9px;align-items:start}.handoff-recipes header>span{display:grid;width:24px;height:24px;place-items:center;border:1px solid var(--border);border-radius:50%;color:var(--interface-accent);font:700 var(--text-xs) var(--mono)}.handoff-recipes h3{margin:2px 0 0;font:700 var(--text-sm) var(--mono);line-height:1.35}.recipe-commands{display:grid;gap:6px;margin-top:14px}.handoff-recipes p{margin:13px 0 0;color:var(--muted);font-size:var(--type-supporting-size);line-height:1.55}.handoff-boundary{margin:13px 0 0;padding:12px 14px;border-left:3px solid var(--interface-accent);background:var(--panel);color:var(--muted);font-size:var(--type-supporting-size);line-height:1.5}
+  .task-groups{display:grid;gap:10px}.task-groups>section{display:grid;grid-template-columns:minmax(160px,.35fr) minmax(0,.65fr);gap:22px;padding:20px 0;border-top:1px solid var(--border)}.task-groups header h3{margin:0;color:var(--accent);font:750 var(--text-md) var(--mono)}.task-groups header p{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}.task-groups ul{display:grid;gap:12px;margin:0;padding:0;list-style:none}.task-groups li{display:grid;gap:7px}.task-groups li strong{font:700 var(--text-xs) var(--mono)}
+  .handoff-recipes{--grid-min:260px;--grid-gap:9px}.handoff-recipes article{display:flex;min-width:0;flex-direction:column;padding:16px;border:1px solid var(--border);border-radius:var(--radius-sm)}.handoff-recipes header{display:grid;grid-template-columns:26px minmax(0,1fr);gap:9px;align-items:start}.handoff-recipes header>span{display:grid;width:24px;height:24px;place-items:center;border:1px solid var(--border);border-radius:50%;color:var(--interface-accent);font:700 var(--text-xs) var(--mono)}.handoff-recipes h3{margin:2px 0 0;font:700 var(--text-sm) var(--mono);line-height:1.35}.recipe-commands{display:grid;gap:6px;margin-top:14px}.handoff-recipes p{margin:13px 0 0;color:var(--muted);font-size:var(--type-supporting-size);line-height:1.55}.handoff-boundary{margin:13px 0 0;padding:12px 14px;border-left:3px solid var(--interface-accent);background:var(--panel);color:var(--muted);font-size:var(--type-supporting-size);line-height:1.5}
   .boundary-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;padding:1px;background:var(--border)}.boundary-list p{margin:0;padding:15px;background:var(--panel);color:var(--muted);font-size:var(--text-xs);line-height:1.55}.exit-codes{margin-top:34px}.exit-codes h3{margin:0 0 12px;font:700 var(--text-md) var(--mono)}.exit-codes table{width:100%;border:1px solid var(--border);border-spacing:0;border-radius:var(--radius-sm);overflow:hidden}.exit-codes tr:first-child>*{border-top:0}.exit-codes th,.exit-codes td{padding:11px 13px;border-top:1px solid var(--border);text-align:left}.exit-codes th{width:64px;color:var(--interface-accent);background:var(--panel-raised);font:750 var(--text-sm) var(--mono)}.exit-codes td{color:var(--muted);font-size:var(--text-xs);line-height:1.5}.exit-codes>p{margin:11px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.additional-behaviour{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:28px}.additional-behaviour details{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.additional-behaviour summary{padding:14px;font:700 var(--text-xs) var(--mono)}.additional-behaviour ul{margin:0;padding:0 18px 16px 34px}.additional-behaviour li{color:var(--muted);font-size:var(--text-xs);line-height:1.55}.additional-behaviour li+li{margin-top:7px}
   .more-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.more-links a{display:grid;gap:6px;padding:16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.more-links a:hover,.more-links a:focus-visible{border-color:var(--accent);background:rgb(var(--accent-rgb) / .06)}.more-links strong{color:var(--accent);font:700 var(--text-sm) var(--mono)}.more-links span{color:var(--muted);font-size:var(--text-xs);line-height:1.45}.package-verification{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-top:20px;padding:20px;border-left:3px solid var(--interface-accent);background:var(--panel)}.package-verification h3{margin:0;font:700 var(--text-sm) var(--mono)}.package-verification p{max-width:65ch;margin:7px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.package-verification nav{display:flex;flex:0 0 auto;align-items:flex-end;flex-direction:column;gap:6px}.package-verification a{color:var(--accent);font:700 var(--text-xs) var(--mono)}
+  .package-verification nav a{display:inline-flex;align-items:center;min-height:32px;padding:4px 2px}
   @media(max-width:900px){.task-groups>section{grid-template-columns:1fr}.boundary-list{grid-template-columns:1fr}.start-notes{grid-template-columns:1fr}}
-  @media(max-width:720px){.cli-section{padding:45px 0;scroll-margin-top:20px}.additional-behaviour,.more-links{grid-template-columns:1fr}.package-verification{align-items:flex-start;flex-direction:column;gap:12px}}
-  @media(max-width:440px){.start-steps>li{grid-template-columns:28px minmax(0,1fr);gap:10px}.task-groups>section{padding:15px}.exit-codes th{width:48px}.exit-codes th,.exit-codes td{padding:10px}}
+  @media(max-width:720px){.cli-section{padding:30px 0;scroll-margin-top:20px}.additional-behaviour,.more-links{grid-template-columns:1fr}.package-verification{align-items:flex-start;flex-direction:column;gap:12px}}
+  @media(max-width:440px){.start-steps>li{grid-template-columns:28px minmax(0,1fr);gap:10px}.task-groups>section{padding:15px 0}.exit-codes th{width:48px}.exit-codes th,.exit-codes td{padding:10px}}
 </style>

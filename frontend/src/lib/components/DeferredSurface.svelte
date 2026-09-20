@@ -1,4 +1,4 @@
-<script lang="ts">
+<script lang="ts" generics="Properties extends object">
   import { onDestroy, onMount, tick, type Component } from 'svelte';
   import {
     DEFERRED_MODULE_RECOVERY_DETAIL,
@@ -6,28 +6,29 @@
     reloadDeferredModulePage,
   } from '$lib/deferred-module';
 
-  type DeferredModule = Readonly<{ default: Component<any> }>;
+  type DeferredModule = Readonly<{ default: Component<Properties> }>;
 
   let {
     load,
-    props = {},
+    props,
     loadingLabel,
     unavailableLabel,
     onready,
     placeholder = 'none',
   }: {
     load: () => Promise<DeferredModule>;
-    props?: Record<string, unknown>;
+    props: NoInfer<Properties>;
     loadingLabel: string;
     unavailableLabel: string;
     onready?: () => void | Promise<void>;
     placeholder?: 'none' | 'panel' | 'workspace';
   } = $props();
 
-  let View = $state<Component<any> | null>(null);
+  let View = $state<Component<Properties> | null>(null);
   let loadState = $state<'loading' | 'ready' | 'unavailable'>('loading');
   let showLoadingState = $state(false);
-  let resolvedProps = $state.raw<Record<string, unknown>>({});
+  let readyActionFailed = $state(false);
+  let resolvedProps = $state.raw<Properties>();
   let generation = 0;
   let active = true;
   let firstLoadingFrame = 0;
@@ -63,6 +64,7 @@
     const controller = new AbortController();
     loadController = controller;
     loadState = 'loading';
+    readyActionFailed = false;
     scheduleLoadingState(request);
     try {
       const module = await loadDeferredModule(load, { signal: controller.signal });
@@ -70,8 +72,6 @@
       cancelLoadingState();
       View = module.default;
       loadState = 'ready';
-      await tick();
-      if (active && request === generation) await onready?.();
     } catch {
       if (!active || request !== generation) return;
       cancelLoadingState();
@@ -79,6 +79,16 @@
       loadState = 'unavailable';
     } finally {
       if (loadController === controller) loadController = null;
+    }
+    if (loadState !== 'ready') return;
+    await tick();
+    if (!active || request !== generation) return;
+    try {
+      await onready?.();
+    } catch {
+      // A post-load action can fail after the view is usable. Do not discard
+      // its state or repeat an action whose effects may already have occurred.
+      if (active && request === generation) readyActionFailed = true;
     }
   }
 
@@ -114,7 +124,10 @@
       <small>{DEFERRED_MODULE_RECOVERY_DETAIL}</small>
       <button class="btn" type="button" data-deferred-recovery="reload" onclick={reloadDeferredModulePage}>Reload page</button>
     </div>
-  {:else if View}
+  {:else if View && resolvedProps}
+    {#if readyActionFailed}
+      <p class="deferred-state" role="status">This section loaded, but its opening action could not finish. Its controls remain available.</p>
+    {/if}
     <View {...resolvedProps} />
   {/if}
 </div>

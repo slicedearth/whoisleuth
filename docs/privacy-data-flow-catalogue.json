@@ -6,7 +6,7 @@
       "schema": "whoisleuth.capability-manifest",
       "version": 1,
       "capabilityCount": 32,
-      "cliOperationCount": 48,
+      "cliOperationCount": 49,
       "cliVariantCount": 16
     },
     "cliCommandCatalogue": {
@@ -14,13 +14,11 @@
       "version": 1
     },
     "schemaLifecycleRegistry": {
-      "familyCount": 18,
-      "compatibilityCount": 85,
-      "privacyProfileCount": 45,
-      "consumerFlowCount": 141,
+      "familyCount": 21,
+      "compatibilityCount": 88,
+      "privacyProfileCount": 48,
+      "consumerFlowCount": 147,
       "metadataVersions": [
-        2,
-        3,
         4
       ]
     },
@@ -67,6 +65,8 @@
     }
   ],
   "invariants": [
+    "Browser-profile retention describes the browser deployment. The optional standalone local application instead stores saved collections, recovery drafts and original files in an explicitly selected plaintext filesystem workspace; appearance and tab preferences remain browser-local.",
+    "Standalone workspace traffic stays between the browser and its authenticated loopback process. Starting it makes no collection request; explicit collection uses the existing request policy from this machine, and offline mode disables collection. Clearing browser data or signing out does not delete the filesystem workspace. Encrypted portable backups remain separate.",
     "The catalogue contains fixed contract metadata only; it contains no target, evidence value, personal data, raw contact, credential, cookie, authorisation value, runtime secret, complete query-bearing URL, unnecessary path or local filesystem detail.",
     "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
     "Offline operations make no request and do not inherit a capability family's possible network disclosure.",
@@ -77,8 +77,8 @@
   "capabilityFlows": [
     {
       "id": "analyst_cases",
-      "title": "Browser-local analyst cases and Review Item lifecycle",
-      "requestPurpose": "Retain analyst-selected Case material and the separately bounded Review Item lifecycle overlay in the browser profile.",
+      "title": "Saved analyst Cases and Review Item lifecycle",
+      "requestPurpose": "Retain analyst-selected Case material, recheck questions, original files and separate image derivatives using the workspace codec; saved Case filters and Review Item state remain separate bounded collections.",
       "job": "respond",
       "executionPlanes": [
         "browser_local"
@@ -101,6 +101,10 @@
       ],
       "returnedDataCategories": [
         "bounded_case_state",
+        "recheck_question_context",
+        "selected_original_files_and_provenance",
+        "selected_image_derivatives_and_regions",
+        "saved_case_filters",
         "bounded_analyst_review_state"
       ],
       "processingClasses": [
@@ -144,8 +148,8 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Cases and the bounded analyst Review Item lifecycle overlay remain in the current browser profile unless deliberately exported.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Cases and Review Items remain in the selected workspace unless deliberately exported: the current browser profile for the browser deployment, or the selected filesystem folder in the standalone local application.",
         "Review decisions retain stable subject identity, the reviewed material fingerprint, rationale, timestamps, expiry and bounded associations; current titles, evidence summaries and source values remain derived.",
         "Analyst assertions, response actions and Review Item lifecycle decisions never rewrite their source evidence or start collection, reporting, monitoring or enforcement.",
         "Missing, partial, stale, truncated or unavailable evidence cannot resolve a Review Item; changed material evidence and expired decisions return it to review."
@@ -224,9 +228,9 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Only authoritative registration evidence can establish an availability decision.",
-        "DNS, page, mail and heuristic evidence cannot decide registration existence."
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Authoritative registration publications take precedence. When they are inconclusive, positive authoritative DNS delegation can support registered status at medium confidence.",
+        "Missing DNS never proves availability. Page, mail and heuristic evidence cannot decide registration existence."
       ]
     },
     {
@@ -299,7 +303,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Search results are lower-bound public log observations and do not prove current deployment or control."
       ]
     },
@@ -367,7 +371,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Budget records contain operation classes and bounded counters, not targets or evidence contents.",
         "Unavailable distributed controls make configured network-heavy operations fail closed."
       ]
@@ -443,7 +447,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_input",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Resolver answers are point-in-time publications and do not prove provider ownership or control."
       ]
     },
@@ -517,7 +521,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The selected resolver receives the bounded DNS questions for this explicitly authorised run.",
         "DNSSEC assurance remains separate from routing, DANE, PKIX and ownership claims."
       ]
@@ -537,6 +541,7 @@
         "normalised_target",
         "dns_question",
         "homepage_request",
+        "selected_url_request",
         "tls_handshake"
       ],
       "dataDeliberatelyNotSent": [
@@ -544,7 +549,6 @@
         "unselected_local_files",
         "cookies_and_session_data",
         "unrelated_evidence_values",
-        "complete_query_bearing_urls",
         "credentials"
       ],
       "recipientClasses": [
@@ -596,15 +600,16 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Each source retains its own state, observation time, completeness and limitations.",
-        "Fast and Compact never inherit the richer Deep request or storage contract."
+        "Fast and Compact never inherit the richer Deep request or storage contract.",
+        "A URL path and query are sent only after separate selection in a full Deep Lookup."
       ]
     },
     {
       "id": "domain_posture",
       "title": "Owned-domain posture review",
-      "requestPurpose": "Review bounded DNS and mail publication posture without changing configuration.",
+      "requestPurpose": "Review bounded DNS and mail publication posture without changing configuration; a separate opt-in adds inherited DMARC and sampled direct parent referrals.",
       "job": "assure",
       "executionPlanes": [
         "hosted_bounded_passive"
@@ -676,8 +681,9 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Posture findings describe bounded public registry, DNS and MTA-STS publication evidence and never change configuration."
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Posture findings describe bounded public registry, DNS and MTA-STS publication evidence and never change configuration.",
+        "Inherited DMARC and direct parent delegation require a separate opt-in: at most seven ancestor TXT questions, one parent NS discovery and A/AAAA discovery for at most two parent servers, followed by one pinned public-address DNS/TCP question per server. No messages are sent; recursive policy and direct referral observations remain separate."
       ]
     },
     {
@@ -748,7 +754,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_input",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Optional providers remain off unless configured and selected for one Deep Lookup.",
         "A provider report or miss remains attributed and is not proof of maliciousness, safety or absence."
       ]
@@ -820,7 +826,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_input",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Local string similarity and script analysis do not establish impersonation, intent or maliciousness."
       ]
     },
@@ -842,6 +848,7 @@
         "dns_question",
         "public_ip_address",
         "homepage_request",
+        "selected_url_request",
         "tls_handshake"
       ],
       "dataDeliberatelyNotSent": [
@@ -849,7 +856,6 @@
         "unselected_local_files",
         "cookies_and_session_data",
         "unrelated_evidence_values",
-        "complete_query_bearing_urls",
         "credentials"
       ],
       "recipientClasses": [
@@ -903,9 +909,10 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Targets are disclosed only to the source families eligible for the selected mode.",
         "Fast, Compact, Deep and monitoring retain distinct request, evidence and storage boundaries.",
+        "Only explicit selected-URL collection in a single full Deep Lookup sends a path and query; fragments are excluded.",
         "A source failure or omission remains explicit and never establishes absence or safety."
       ]
     },
@@ -982,7 +989,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The action never sends mail, authenticates, tests relay, enumerates recipients or retries automatically.",
         "DNSSEC, TLSA, DANE, PKIX, STARTTLS and SMTP states remain independently attributed."
       ]
@@ -1058,7 +1065,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "One observed public endpoint does not establish an origin host, hosting control or ownership."
       ]
     },
@@ -1129,7 +1136,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Offline commands read only selected bounded local inputs and make no network request.",
         "Generated output remains under the operator's local retention and deletion control."
       ]
@@ -1137,7 +1144,7 @@
     {
       "id": "portable_evidence",
       "title": "Portable evidence, verification and reviewed hand-off",
-      "requestPurpose": "Build, verify or review bounded portable evidence under operator control.",
+      "requestPurpose": "Build, verify or review bounded portable ZIP, optionally encrypted package or folder evidence under operator control; package passphrases and folder handles are not retained for background access.",
       "job": "assure",
       "executionPlanes": [
         "browser_local",
@@ -1203,10 +1210,11 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Integrity, structure, signature and content assurance remain separate checks.",
         "Browser exports require an explicit browser action; CLI exports, verification and review require an explicit CLI command.",
-        "Sharing a generated artefact is a deliberate action outside the collection runtime."
+        "Sharing a generated artefact is a deliberate action outside the collection runtime.",
+        "Evidence packages retain selected JSON, screenshots and opaque file bytes unchanged, without redaction. Whole-package encryption is optional; ordinary ZIPs and folders remain unencrypted. Review uploads nothing and changes no saved records; workspace import requires a separate preview and confirmation."
       ]
     },
     {
@@ -1280,7 +1288,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Published registration and allocation data remains attributed to its RDAP service.",
         "Missing or redacted fields do not establish absence, ownership or operational control."
       ]
@@ -1355,7 +1363,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The query is limited to one selected registry and is not a global reverse-nameserver inventory."
       ]
     },
@@ -1430,7 +1438,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "At most one eligible registry-advertised HTTPS service is followed and it never overwrites registry evidence."
       ]
     },
@@ -1500,7 +1508,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The comparator reads only two selected bounded local capture sets and makes no network request.",
         "It reports independent verified components and never emits a combined similarity, intent or maliciousness score."
       ]
@@ -1574,7 +1582,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Each admitted resource request discloses its exact URL, including path and query, its GET or HEAD method, and ordinary allowlisted request headers to that public resource endpoint; DNS questions are disclosed to the configured resolver.",
         "Structured outputs exclude request paths, queries, headers and bodies, but the control-sanitised page title and screenshot retain page-controlled content that may reproduce a path or query.",
         "Rendered capture executes page JavaScript and remains separate from hosted Lookup and the distributable CLI."
@@ -1651,7 +1659,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "PTR names are publisher-controlled context and do not prove ownership or service identity."
       ]
     },
@@ -1727,7 +1735,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Network diagnostics run only with the explicit network option and use fixed diagnostic targets."
       ]
     },
@@ -1806,7 +1814,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The worker retains only the documented compact encrypted projection and is not general evidence custody.",
         "Disabling collection does not delete retained ciphertext; deletion remains deliberate."
       ]
@@ -1884,7 +1892,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Publication is a source-attributed contact route, not proof that it is monitored or appropriate."
       ]
     },
@@ -1956,7 +1964,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_input",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "One exact retained-indicator search is performed without submitting an indicator or sample."
       ]
     },
@@ -2033,7 +2041,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "PKIX, hostname, validity and connection states remain independent and point-in-time.",
         "A successful handshake is not a safety, ownership or intent verdict."
       ]
@@ -2106,7 +2114,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_input",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "One exact host search is performed without submitting a URL, file or report."
       ]
     },
@@ -2178,13 +2186,13 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_input",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Archived scan history is searched without submitting a new scan."
       ]
     },
     {
       "id": "watchlists",
-      "title": "Browser-local watchlists and monitoring views",
+      "title": "Saved watchlists and monitoring views",
       "requestPurpose": "Retain analyst-selected watchlist and monitoring-view state in the browser profile.",
       "job": "assure",
       "executionPlanes": [
@@ -2250,14 +2258,14 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Browser-local monitoring state is not refreshed automatically unless a separately configured worker is used."
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Saved monitoring state is not refreshed automatically unless a separately configured worker is used."
       ]
     },
     {
       "id": "website_probe",
-      "title": "Bounded homepage and static page evidence",
-      "requestPurpose": "Observe one bounded homepage and static response workflow.",
+      "title": "Bounded homepage or selected static page evidence",
+      "requestPurpose": "Observe one bounded homepage or explicitly selected URL through the static response workflow.",
       "job": "investigate",
       "executionPlanes": [
         "hosted_bounded_passive"
@@ -2268,14 +2276,14 @@
       "dataSent": [
         "normalised_target",
         "dns_question",
-        "homepage_request"
+        "homepage_request",
+        "selected_url_request"
       ],
       "dataDeliberatelyNotSent": [
         "browser_local_records",
         "unselected_local_files",
         "cookies_and_session_data",
         "unrelated_evidence_values",
-        "complete_query_bearing_urls",
         "credentials"
       ],
       "recipientClasses": [
@@ -2327,8 +2335,9 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Static captured evidence is not a browser execution, vulnerability test or proof of page purpose.",
+        "Selected-URL collection sends the path and query only after explicit selection; retained paths and page-derived text still require privacy review.",
         "Complete query-bearing URLs, cookies, credentials, scripts and raw page content are not retained."
       ]
     },
@@ -2403,7 +2412,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Registry and referral publications remain separately attributed and can disagree.",
         "Raw WHOIS payloads and expanded contact data are excluded from compact retention."
       ]
@@ -2484,13 +2493,15 @@
       },
       "documentStates": [
         "complete",
+        "partial",
         "awaiting_network_approval",
         "awaiting_analyst_selection",
+        "awaiting_review_confirmation",
         "step_failed"
       ],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Only installed fixed-recipe steps can run, and each network invocation requires explicit approval.",
         "Analyst-selection placeholders pause without interpretation or collection."
       ]
@@ -2563,7 +2574,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The command is offline and treats every provider label, readiness state, and evidence reference as analyst-authored input. It changes no configuration.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -2635,7 +2646,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The command is offline, excludes raw upstream payloads, and does not create an analyst assertion or claim that the saved observation is current.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -2719,8 +2730,8 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.",
         "Only the source families eligible for the selected command and mode receive the bounded target representation.",
         "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
       ],
@@ -2799,7 +2810,7 @@
           "documentStates": [],
           "scoringEffect": "bounded_risk_and_acquisition_input",
           "nonInferences": [
-            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -2874,7 +2885,7 @@
           "documentStates": [],
           "scoringEffect": "bounded_risk_and_acquisition_input",
           "nonInferences": [
-            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -2942,7 +2953,7 @@
           "documentStates": [],
           "scoringEffect": "none",
           "nonInferences": [
-            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -3010,7 +3021,7 @@
           "documentStates": [],
           "scoringEffect": "none",
           "nonInferences": [
-            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -3018,11 +3029,82 @@
       ]
     },
     {
+      "id": "command.cli.case",
+      "command": "case",
+      "capabilityFamilyId": "analyst_cases",
+      "title": "Review and update ordinary local Case files",
+      "requestPurpose": "Reads exact Case schemas 15 or 16. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 16.",
+      "collectionMode": "offline",
+      "executionPlanes": [
+        "local_cli_offline"
+      ],
+      "trigger": "explicit_cli_command",
+      "networkMode": "none",
+      "authorisation": "explicit_action",
+      "dataSent": [
+        "none"
+      ],
+      "dataDeliberatelyNotSent": [
+        "no_network_request",
+        "no_third_party_disclosure",
+        "credentials",
+        "cookies_and_session_data",
+        "local_paths"
+      ],
+      "recipientClasses": [
+        "none"
+      ],
+      "returnedDataCategories": [
+        "bounded_local_derivation"
+      ],
+      "processingClasses": [
+        "transient_processing",
+        "deliberate_local_file_export",
+        "offline_processing_no_request"
+      ],
+      "requestBudget": "none",
+      "responseBudget": "bounded_local_input",
+      "concurrency": "none",
+      "retention": {
+        "mode": "local_output_deliberate",
+        "storageClass": "operator_controlled_local_output",
+        "durationControl": "no_automatic_retention_beyond_process_unless_operator_saves_output"
+      },
+      "exports": {
+        "mode": "local_output",
+        "classes": [
+          "operator_selected_local_output"
+        ]
+      },
+      "credentialModel": "none",
+      "credentialUse": "No operation credential is required.",
+      "cancellation": "bounded_atomic",
+      "partialResults": "all_or_nothing",
+      "outcomes": [
+        "complete"
+      ],
+      "normalisedOutcomes": {
+        "unavailable": "not_declared_for_boundary",
+        "blocked": "not_declared_for_boundary",
+        "partial": "not_declared_for_boundary",
+        "unsupported": "not_declared_for_boundary"
+      },
+      "documentStates": [],
+      "scoringEffect": "none",
+      "nonInferences": [
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:<digest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
+        "The command reads only selected bounded local input and makes no network request.",
+        "Output remains under the operator's local retention and deletion control."
+      ],
+      "variants": []
+    },
+    {
       "id": "command.cli.case-pack",
       "command": "case-pack",
       "capabilityFamilyId": "portable_evidence",
       "title": "Build a reviewed case package",
-      "requestPurpose": "Reads one bounded Case-schema-15 browser export and writes a separate audience-specific Case-pack v2.",
+      "requestPurpose": "Reads one bounded Case export from schemas 15 or 16 and writes a separate audience-specific Case-pack v2.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -3082,7 +3164,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The command is an offline handoff from the browser Case workflow: it creates a new package, never creates or mutates a durable Case, never mutates the source archive, and requires an explicit review acknowledgement.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -3156,7 +3238,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Assembly is offline. Readiness reflects only the supplied bounded evidence and does not authorise or perform a domain change.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -3227,7 +3309,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Catalogue generation is offline. It reports declared command modes and limits without executing collection or inspecting local evidence.",
         "The command emits fixed installed metadata and makes no network request or local evidence read."
       ],
@@ -3298,7 +3380,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Comparison is offline. Differences are review context and do not by themselves prove which publication is current.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -3369,7 +3451,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Generation is offline and writes only the script to stdout. The command never modifies shell configuration.",
         "The command emits fixed installed metadata and makes no network request or local evidence read."
       ],
@@ -3440,7 +3522,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The command is offline, caps output at 100 findings, and treats every event as a review lead rather than proof of serving or control.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -3514,7 +3596,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Certificate observations do not prove website activity, registration ownership, or malicious intent.",
         "The bounded search term is sent to the fixed Certificate Transparency search service."
       ],
@@ -3585,8 +3667,8 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; same-domain comparisons preserve observation times and collection uncertainty. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -3657,7 +3739,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Generation and optional local snapshot comparison are offline. Candidates are leads only and are not resolved, registered, or classified as malicious.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -3741,8 +3823,8 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "This command performs network collection. Fast compact lookup is the default; deep mode is capped at 50 candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "This command performs network collection. Fast compact lookup is the default; deep mode is capped at 50 candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.",
         "Only the source families eligible for the selected command and mode receive the bounded target representation.",
         "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
       ],
@@ -3821,7 +3903,7 @@
           "documentStates": [],
           "scoringEffect": "bounded_risk_and_acquisition_input",
           "nonInferences": [
-            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -3896,7 +3978,7 @@
           "documentStates": [],
           "scoringEffect": "bounded_risk_and_acquisition_input",
           "nonInferences": [
-            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -3964,7 +4046,7 @@
           "documentStates": [],
           "scoringEffect": "none",
           "nonInferences": [
-            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -4032,7 +4114,7 @@
           "documentStates": [],
           "scoringEffect": "none",
           "nonInferences": [
-            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -4107,7 +4189,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "This isolated action is never invoked by Lookup, Bulk, monitoring, or recipes. It caps DNS queries, aliases, delegations, bytes, and duration; transport and validation failures remain separate, and secure is not a general safety verdict.",
         "The selected resolver receives the bounded questions only after the owned-or-authorised acknowledgement.",
         "The local trust anchor is read from the selected file and is never transmitted."
@@ -4184,7 +4266,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The default check is offline. Public DNS and port 43 checks run only when --network is explicitly supplied.",
         "Network diagnostics are opt-in and use only fixed public diagnostic destinations."
       ],
@@ -4252,7 +4334,7 @@
           "documentStates": [],
           "scoringEffect": "none",
           "nonInferences": [
-            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
             "Network diagnostics are opt-in and use only fixed public diagnostic destinations."
           ]
         },
@@ -4323,7 +4405,7 @@
           "documentStates": [],
           "scoringEffect": "none",
           "nonInferences": [
-            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
             "Network diagnostics are opt-in and use only fixed public diagnostic destinations."
           ]
         }
@@ -4395,8 +4477,8 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "The command is offline and changes no registrar, DNS, mail, or certificate configuration. Only complete supplied observations can produce drift.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "The command is offline and changes no registrar, DNS, mail, or certificate configuration. Only complete, recent source observations can establish drift or expected absence.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -4467,8 +4549,8 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-28 exports preserve evidence-source attribution and limitations; published v2 schema 27 and exact v1 schema 26 remain readable, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-29 exports preserve evidence-source attribution and limitations; published v2 schemas 27, 28 and exact v1 schema 26 remain readable, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -4544,7 +4626,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Requests use the shared public-address and redirect guards. Fixed content-coding and cache-policy metadata describes only the selected response, excludes raw header values, and does not prove caching, transfer savings, performance, privacy, or safety. This is not a rendered browser or vulnerability scan.",
         "The target public service receives one bounded SSRF-guarded homepage workflow."
       ],
@@ -4555,7 +4637,7 @@
       "command": "inspect-archive",
       "capabilityFamilyId": "portable_evidence",
       "title": "Inspect an archive locally",
-      "requestPurpose": "Reads one selected bounded workspace archive v8, retains exact v5 and v6 and v7 compatibility, and redacts output by default.",
+      "requestPurpose": "Reads one selected bounded workspace archive v9, retains exact v5 and v6 and v7 and v8 compatibility, and redacts output by default.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -4617,8 +4699,8 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Exact matches require --reveal. Retired and future archive versions are rejected without changing data. The archive is read locally and is never uploaded.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Exact values require --reveal. New content comparisons use the reported sorted-json-v2:sha256 identity with --expect-content-digest; bare sha256 hashes retain their legacy locale-sensitive meaning. Retired and future archives are rejected. The archive is read locally and is never uploaded.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -4692,7 +4774,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The report is offline and metadata-only. It does not echo targets, contacts, notes, passphrases, evidence values, or an unrecognised schema string.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -4763,7 +4845,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Calibration is offline and diagnostic. It omits candidate identifiers, domains, notes, and evidence and never tunes generation or filtering automatically.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -4848,8 +4930,8 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Fast is the default. An ICANN-recognised public domain, reserved documentation domain, IP, or ASN may occupy command position as shorthand; it delegates to this same parser and URL-like input requires the explicit lookup command. Deep mode adds bounded WHOIS, DNS, HTTP, TLS, technology, posture, and network context where applicable. A full Deep homepage observation can derive fixed publication and delivery/cache summaries from the same response without retaining raw metadata values or making another request. --browse opens before collection, shows aggregate Fast progress or independently settled planned Deep sources, and then navigates allowlisted retained fields in the completed document. Press ? for help and / to search rendered panel text only. Closing during collection cancels without a partial document. --save-lookup writes the exact completed private JSON only after a normal browser close; it can contain normalised evidence omitted from panels and refuses an existing path.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Fast is the default. An ICANN-recognised public domain, reserved documentation domain, IP, or ASN may occupy command position as shorthand; it delegates to this same parser and URL-like input requires the explicit lookup command. Deep mode adds bounded WHOIS, DNS, HTTP, TLS, technology, posture, and network context where applicable. --deep --exact-url explicitly sends the input URL path and query to the website, without its fragment; ordinary URL input sends only the hostname. --plan remains offline and omits the selected URL. Retained paths and page-derived text require review before sharing. A full Deep homepage observation can derive fixed publication and delivery/cache summaries from the same response without retaining raw metadata values or making another request. --browse opens before collection, shows aggregate Fast progress or independently settled planned Deep sources, and then navigates allowlisted retained fields in the completed document. Press ? for help and / to search rendered panel text only. Closing during collection cancels without a partial document. --save-lookup writes the exact completed private JSON only after a normal browser close; it can contain normalised evidence omitted from panels and refuses an existing path.",
         "Only the source families eligible for the selected command and mode receive the bounded target representation.",
         "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
       ],
@@ -4873,14 +4955,14 @@
             "dns_question",
             "homepage_request",
             "tls_handshake",
-            "public_ip_address"
+            "public_ip_address",
+            "selected_url_request"
           ],
           "dataDeliberatelyNotSent": [
             "browser_local_records",
             "unselected_local_files",
             "cookies_and_session_data",
             "unrelated_evidence_values",
-            "complete_query_bearing_urls",
             "credentials"
           ],
           "recipientClasses": [
@@ -4929,7 +5011,7 @@
           "documentStates": [],
           "scoringEffect": "bounded_risk_and_acquisition_input",
           "nonInferences": [
-            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -5004,7 +5086,7 @@
           "documentStates": [],
           "scoringEffect": "bounded_risk_and_acquisition_input",
           "nonInferences": [
-            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -5072,7 +5154,7 @@
           "documentStates": [],
           "scoringEffect": "none",
           "nonInferences": [
-            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -5140,7 +5222,7 @@
           "documentStates": [],
           "scoringEffect": "none",
           "nonInferences": [
-            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -5212,7 +5294,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Review is offline. It makes no DNS, SMTP, HTTP, registry, or provider request, and does not retain address local parts, display names, subjects, message bodies, attachments, or raw header values. Reported authentication is not independently validated.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -5284,7 +5366,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Review is offline and sends no SMTP traffic. Missing or partial DNS evidence remains inconclusive.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -5362,7 +5444,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "This isolated action probes at most three selected MX hosts sequentially, reports selection, public revalidation, connection, and address authentication separately, sends only EHLO and optional STARTTLS, never retries, and performs no authentication, relay, recipient, mailbox, catch-all, or message test. If a DANE-TA TLSA usage 2 association is published, active collection retains only the leaf certificate and leaves that comparison partial without certificate-path construction and trust-anchor path validation. SMTP relay PKIX-TA usage 0 and PKIX-EE usage 1 records remain unsupported and cannot complete SMTP DANE assurance; a separate usage 3 match remains eligible.",
         "The command requires both owned-or-authorised and active-probe acknowledgements.",
         "It never sends mail, authenticates, tests relay, enumerates recipients or retries automatically."
@@ -5374,7 +5456,7 @@
       "command": "manifest",
       "capabilityFamilyId": "portable_evidence",
       "title": "Build an evidence manifest offline",
-      "requestPurpose": "Reads 1 to 16 local JSON artefacts capped at 32 MiB in total and retains no source paths.",
+      "requestPurpose": "Reads 1 to 129 local files, at most 64 MiB each and 71,303,424 bytes combined; retains no source paths.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -5418,8 +5500,8 @@
           "bounded_user_initiated_export"
         ]
       },
-      "credentialModel": "none",
-      "credentialUse": "No operation credential is required.",
+      "credentialModel": "optional_secret_passphrase_file",
+      "credentialUse": "A selected local passphrase file is read only for the requested local operation and is not emitted.",
       "cancellation": "bounded_atomic",
       "partialResults": "all_or_nothing",
       "outcomes": [
@@ -5434,8 +5516,8 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "The command records hashes and bounded schema metadata only. It omits source paths and artefact contents and performs no network collection.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Ordinary output contains metadata only. ZIP and folder output include unchanged selected bytes and are private until reviewed for sharing. Folders must be new; existing destinations are never replaced and a failed write may leave explicit partial output. BagIt output is unencrypted; its checksums do not authenticate evidence. Filenames ending in .json are parsed as JSON; other files are opaque and never executed. Original paths are omitted. No network request is made.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -5505,7 +5587,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Generation is offline and derives from the same command catalogue as focused help.",
         "The command emits fixed installed metadata and makes no network request or local evidence read."
       ],
@@ -5576,7 +5658,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Profiles select allowlisted dotted fields only. They execute no scripts, make no requests, and emit the browser-compatible external-findings contract.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -5659,7 +5741,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "This is an operator-scheduled one-shot collection, not a daemon. It caps targets and concurrency, retains normalised observations, and never changes domain configuration.",
         "The one-shot monitor reads selected local control state and performs only the bounded scheduled review collection.",
         "Its checkpoint and review evidence do not calculate Risk or Opportunity scores."
@@ -5732,7 +5814,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The projection is offline, preserves source completeness without inventing confidence, and covers only bounded FQDN, IP address, certificate, and related edge vocabulary.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -5804,7 +5886,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Comparison is offline and component-based. It executes no page code and produces no aggregate similarity or maliciousness score.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -5816,7 +5898,7 @@
       "command": "posture",
       "capabilityFamilyId": "domain_posture",
       "title": "Review DNS and mail posture",
-      "requestPurpose": "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests.",
+      "requestPurpose": "Accepts one domain and performs bounded RDAP, DNS, and conditional MTA-STS HTTPS requests. --include-inherited-dns separately adds ancestor DMARC questions and direct DNS/TCP to sampled parent servers.",
       "collectionMode": "network",
       "executionPlanes": [
         "local_cli_network"
@@ -5883,8 +5965,8 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Missing or failed DNS observations remain inconclusive and are not reported as absent controls.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing or failed DNS observations remain inconclusive. --include-inherited-dns explicitly adds a bounded DMARC tree walk and direct parent-delegation sample; records retain their queried owner and source. No message is sent and receiver enforcement is not inferred.",
         "The posture review performs bounded RDAP, DNS and MTA-STS publication checks without changing configuration."
       ],
       "variants": []
@@ -5954,7 +6036,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The command is offline, accepts 2 to 5 saved observations for one domain, and never treats labels as proof of network independence or majority agreement as truth.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6026,7 +6108,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "This command is offline and omits domains, queries, and raw evidence. Input families cannot be mixed, and retained samples are never assumed independent.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6098,7 +6180,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The command is offline. It distinguishes expected access constraints from collection results and does not contact a live registry.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6169,7 +6251,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The output is a sanitised template only. Its command-owned --profile selects fixture capability, --config is rejected, and contributors must not paste live responses or personal registration data into fixtures.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6240,7 +6322,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "This command is offline. Catalogue coverage does not test live reachability or decide registration or availability.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6314,7 +6396,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The command reads only the supplied document. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6385,7 +6467,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Calibration is offline and diagnostic. The summary form omits record identifiers, domains, and evidence; neither form trains, tunes, or changes the scoring model automatically.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6397,7 +6479,7 @@
       "command": "sharing-review",
       "capabilityFamilyId": "portable_evidence",
       "title": "Lint an artefact before deliberate sharing",
-      "requestPurpose": "Reads one artefact capped at 15 MiB, emits only bounded schema/version metadata and no content values, and performs no transmission.",
+      "requestPurpose": "Reads one bounded artefact, emits only schema/version metadata and no content values, and performs no transmission.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -6459,7 +6541,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The command is offline and emits only bounded schema/version metadata, no content values, and no raw evidence. Its result is a review aid, not legal advice or recipient authorisation.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6531,7 +6613,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The command never creates, stores, or transmits keys. Key custody and signer identity remain the operator's responsibility.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6603,7 +6685,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The report retains source states and timings but excludes targets, queries, endpoints, and raw evidence.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6675,7 +6757,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "The command is offline, accepts 2 to 20 bounded inputs for one domain, retains no filenames or raw registry payloads, and does not treat changed collection conditions as a domain change.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6752,7 +6834,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "One observed connection is point-in-time evidence and does not establish every address, edge, or historical certificate.",
         "The selected public endpoint receives one bounded certificate connection."
       ],
@@ -6763,7 +6845,7 @@
       "command": "verify-artifact",
       "capabilityFamilyId": "portable_evidence",
       "title": "Validate saved evidence offline",
-      "requestPurpose": "Reads one selected bounded artefact and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.",
+      "requestPurpose": "Reads one selected bounded artefact, ZIP or explicit evidence folder and, when explicitly supplied, one manifest whose selected entry is compared by exact bytes and canonical identity.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -6824,8 +6906,8 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Verification is offline and redacted. Encrypted archives require an explicitly supplied passphrase file; --strict-exit returns 4 when only an envelope or legacy projection integrity was verified.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Case exports are checked without repairing content; ordinary package review also counts original references with matching bytes. Ordinary folders allow only the declared layout; BagIt allows bounded nested payloads and checks SHA-256/SHA-512 manifests without interpreting payloads. Symbolic links are refused. BagIt fetch.txt is never fetched; missing files, mismatches and unsupported algorithms remain explicit. Package digests describe bytes, not filesystem metadata or authenticity. In scripts, use --strict-exit: incomplete verification returns 4. Default exit 0 means the report was produced, not that its checks passed.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -6836,7 +6918,7 @@
       "command": "verify-signature",
       "capabilityFamilyId": "portable_evidence",
       "title": "Verify a signed evidence package",
-      "requestPurpose": "Reads one selected signed package and optional local public key.",
+      "requestPurpose": "Reads one selected signed package, optional local public key and explicit fingerprint trust file. No automatic trust discovery or network requests.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -6881,7 +6963,7 @@
         ]
       },
       "credentialModel": "optional_public_key_file",
-      "credentialUse": "A selected local public key can be used for verification and is not transmitted.",
+      "credentialUse": "Selected local public keys and an optional fingerprint trust file are read only for verification, never transmitted or automatically retained. Trust output contains only the matching entry and a file digest.",
       "cancellation": "bounded_atomic",
       "partialResults": "explicit_document",
       "outcomes": [
@@ -6898,8 +6980,8 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "A valid signature proves package consistency for the embedded key. It does not upgrade failed or unsupported embedded-artefact assurance or establish the holder's real-world identity or authority.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "A valid signature proves package consistency for the embedded key, not identity, authority or evidence accuracy. With --trust-store-file, unknown, retired, revoked or future-reviewed entries exit 4 even if --public-key-file matches. Replacement fingerprints need their own trusted entry; no signing date overrides current revocation.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -6969,7 +7051,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
         "Planning is offline and plan-only. It does not execute commands, expand placeholders, read files, make requests, or submit evidence.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6998,7 +7080,8 @@
         "public_ip_address",
         "homepage_request",
         "tls_handshake",
-        "mta_sts_policy_request"
+        "mta_sts_policy_request",
+        "certificate_search_term"
       ],
       "dataDeliberatelyNotSent": [
         "browser_local_records",
@@ -7011,7 +7094,8 @@
       "recipientClasses": [
         "registry_service",
         "dns_resolver",
-        "target_public_service"
+        "target_public_service",
+        "certificate_transparency_service"
       ],
       "returnedDataCategories": [
         "bounded_workflow_state",
@@ -7054,14 +7138,16 @@
       },
       "documentStates": [
         "complete",
+        "partial",
         "awaiting_network_approval",
         "awaiting_analyst_selection",
+        "awaiting_review_confirmation",
         "step_failed"
       ],
       "scoringEffect": "none",
       "nonInferences": [
-        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Only installed recipe commands can run. Network steps require explicit approval for each invocation. Repeat --select in placeholder order for one step; each bounded value replaces one exact placeholder and cannot start with a hyphen, become an option, or invoke a shell.",
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Only installed recipe commands can run. Network steps require explicit approval for each invocation. New runs connect compatible earlier outputs using the recipe defaults. Use --use-artifact <step-id>:<input-number>=<earlier-step-id> to override a connection; input numbers start at 1. Repeat --select for remaining placeholders in order, or supply every input for a step to replace its connections with files. Values stay literal and cannot start with a hyphen or invoke a shell. Optional --interactive prompts on terminal stderr for missing inputs; a blank answer pauses. It grants neither network approval nor human-review confirmation. A step declaring human review still requires --confirm-review <step-id> for that invocation. Checkpoints do not grant later approvals. Resumes preserve recorded connections. Content digests identify retained output, not authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.",
         "Only fixed installed recipe steps can run, and every network invocation requires explicit approval."
       ],
       "variants": [
@@ -7086,7 +7172,8 @@
             "public_ip_address",
             "homepage_request",
             "tls_handshake",
-            "mta_sts_policy_request"
+            "mta_sts_policy_request",
+            "certificate_search_term"
           ],
           "dataDeliberatelyNotSent": [
             "browser_local_records",
@@ -7099,7 +7186,8 @@
           "recipientClasses": [
             "registry_service",
             "dns_resolver",
-            "target_public_service"
+            "target_public_service",
+            "certificate_transparency_service"
           ],
           "returnedDataCategories": [
             "bounded_workflow_state",
@@ -7142,12 +7230,14 @@
           },
           "documentStates": [
             "complete",
+            "partial",
             "awaiting_analyst_selection",
+            "awaiting_review_confirmation",
             "step_failed"
           ],
           "scoringEffect": "none",
           "nonInferences": [
-            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
             "Only fixed installed recipe steps can run, and every network invocation requires explicit approval."
           ]
         },
@@ -7215,13 +7305,15 @@
           },
           "documentStates": [
             "complete",
+            "partial",
             "awaiting_network_approval",
             "awaiting_analyst_selection",
+            "awaiting_review_confirmation",
             "step_failed"
           ],
           "scoringEffect": "none",
           "nonInferences": [
-            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
             "Only fixed installed recipe steps can run, and every network invocation requires explicit approval."
           ]
         }
@@ -7280,6 +7372,19 @@
       ]
     },
     {
+      "id": "case-drafts",
+      "privacyClass": "analyst_authored_sensitive",
+      "compatibilityIds": [
+        "browser.case-drafts"
+      ],
+      "privacyProfileIds": [
+        "case-drafts.privacy"
+      ],
+      "consumerFlowIds": [
+        "case-drafts.browser-case-drafts.consumer"
+      ]
+    },
+    {
       "id": "case-portability",
       "privacyClass": "analyst_authored_sensitive",
       "compatibilityIds": [
@@ -7300,6 +7405,7 @@
       ],
       "consumerFlowIds": [
         "case.browser.read-write",
+        "case.consumer.cli-edit",
         "case.consumer.cli-pack-build",
         "case.consumer.cli-pack-verify",
         "case.consumer.encrypted-workspace-build",
@@ -7316,6 +7422,19 @@
         "case.consumer.workspace-settings-build",
         "case.consumer.workspace-verify",
         "case.export.import"
+      ]
+    },
+    {
+      "id": "case-views",
+      "privacyClass": "analyst_authored_sensitive",
+      "compatibilityIds": [
+        "browser.case-views"
+      ],
+      "privacyProfileIds": [
+        "case-views.privacy"
+      ],
+      "consumerFlowIds": [
+        "case-views.browser-case-views.consumer"
       ]
     },
     {
@@ -7357,7 +7476,8 @@
         "domain-control-flight-recorder.cli-monitor-embedding",
         "domain-control-flight-recorder.cli-terminal-file",
         "domain-control-flight-recorder.cli-terminal-stdout",
-        "domain-control-flight-recorder.node-build"
+        "domain-control-flight-recorder.node-build",
+        "domain-control-flight-recorder.node-validate"
       ]
     },
     {
@@ -7378,6 +7498,7 @@
         "domain-control.signed-wrapper.v1"
       ],
       "consumerFlowIds": [
+        "domain-control.browser-build-input",
         "domain-control.browser-export",
         "domain-control.browser-import",
         "domain-control.cli-build",
@@ -7572,6 +7693,19 @@
       ]
     },
     {
+      "id": "review-session",
+      "privacyClass": "analyst_authored_sensitive",
+      "compatibilityIds": [
+        "browser.review-session"
+      ],
+      "privacyProfileIds": [
+        "review-session.privacy"
+      ],
+      "consumerFlowIds": [
+        "review-session.browser-review-session.consumer"
+      ]
+    },
+    {
       "id": "risk-calibration",
       "privacyClass": "analyst_authored_sensitive",
       "compatibilityIds": [
@@ -7707,16 +7841,17 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.brand-profile-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 8,
+      "currentVersion": 9,
       "supportedVersions": [
         6,
         7,
-        8
+        8,
+        9
       ],
       "futureVersionBehavior": "preserve_without_write",
       "migration": "normalize_to_current",
       "writeSemantics": "normalized_rewrite",
-      "byteBudget": 1048576,
+      "byteBudget": 4194304,
       "storageClass": "browser_profile_storage",
       "retentionControl": "browser_profile_and_user_controlled"
     },
@@ -7727,12 +7862,13 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.bulk-review-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 524288,
       "storageClass": "browser_profile_storage",
@@ -7745,12 +7881,13 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.bulk-session-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 4,
+      "currentVersion": 5,
       "supportedVersions": [
-        4
+        4,
+        5
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 4194304,
       "storageClass": "browser_profile_storage",
@@ -7775,18 +7912,55 @@
       "retentionControl": "browser_profile_and_user_controlled"
     },
     {
+      "id": "browser.case-drafts",
+      "familyId": "case-drafts",
+      "kind": "browser_store",
+      "schema": "whoisleuth.case-drafts",
+      "lifecycleSchema": "whoisleuth.case-drafts",
+      "coverageClass": "registered_schema",
+      "currentVersion": 1,
+      "supportedVersions": [
+        1
+      ],
+      "futureVersionBehavior": "preserve_without_write",
+      "migration": "exact_current_only",
+      "writeSemantics": "optimistic_replace",
+      "byteBudget": 8388608,
+      "storageClass": "browser_profile_storage",
+      "retentionControl": "browser_profile_and_user_controlled"
+    },
+    {
+      "id": "browser.case-views",
+      "familyId": "case-views",
+      "kind": "browser_store",
+      "schema": "whoisleuth.case-views",
+      "lifecycleSchema": "whoisleuth.case-views",
+      "coverageClass": "registered_schema",
+      "currentVersion": 1,
+      "supportedVersions": [
+        1
+      ],
+      "futureVersionBehavior": "preserve_without_write",
+      "migration": "exact_current_only",
+      "writeSemantics": "optimistic_replace",
+      "byteBudget": 524288,
+      "storageClass": "browser_profile_storage",
+      "retentionControl": "browser_profile_and_user_controlled"
+    },
+    {
       "id": "browser.cases",
       "familyId": "case-portability",
       "kind": "browser_store",
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.case-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 15,
+      "currentVersion": 16,
       "supportedVersions": [
         12,
         13,
         14,
-        15
+        15,
+        16
       ],
       "futureVersionBehavior": "preserve_without_write",
       "migration": "normalize_to_current",
@@ -7856,14 +8030,33 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.relationship-observation-store",
       "coverageClass": "registered_non_schema_identity",
+      "currentVersion": 2,
+      "supportedVersions": [
+        1,
+        2
+      ],
+      "futureVersionBehavior": "preserve_without_write",
+      "migration": "normalize_to_current",
+      "writeSemantics": "normalized_rewrite",
+      "byteBudget": 786432,
+      "storageClass": "browser_profile_storage",
+      "retentionControl": "browser_profile_and_user_controlled"
+    },
+    {
+      "id": "browser.review-session",
+      "familyId": "review-session",
+      "kind": "browser_store",
+      "schema": "whoisleuth.review-session",
+      "lifecycleSchema": "whoisleuth.review-session",
+      "coverageClass": "registered_schema",
       "currentVersion": 1,
       "supportedVersions": [
         1
       ],
       "futureVersionBehavior": "preserve_without_write",
       "migration": "exact_current_only",
-      "writeSemantics": "normalized_rewrite",
-      "byteBudget": 786432,
+      "writeSemantics": "optimistic_replace",
+      "byteBudget": 4194304,
       "storageClass": "browser_profile_storage",
       "retentionControl": "browser_profile_and_user_controlled"
     },
@@ -7910,10 +8103,11 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.website-snapshot-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 5,
+      "currentVersion": 6,
       "supportedVersions": [
         4,
-        5
+        5,
+        6
       ],
       "futureVersionBehavior": "preserve_without_write",
       "migration": "normalize_to_current",
@@ -7947,12 +8141,13 @@
       "schema": "whoisleuth.domain-control-flight-recorder",
       "lifecycleSchema": "whoisleuth.domain-control-flight-recorder",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "read_only",
       "writeSemantics": "read_only",
       "byteBudget": 33554432,
       "storageClass": "operator_controlled_output",
@@ -7965,12 +8160,13 @@
       "schema": "whoisleuth.domain-control-flight-recorder.input",
       "lifecycleSchema": "whoisleuth.domain-control-flight-recorder.input",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "read_only",
       "writeSemantics": "read_only",
       "byteBudget": 16777216,
       "storageClass": "operator_controlled_output",
@@ -7983,12 +8179,13 @@
       "schema": "whoisleuth.cli.domain-control-monitor",
       "lifecycleSchema": "whoisleuth.cli.domain-control-monitor",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "read_only",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": null,
       "storageClass": "operator_controlled_output",
@@ -8001,9 +8198,10 @@
       "schema": "whoisleuth.cli.domain-control-review",
       "lifecycleSchema": "whoisleuth.cli.domain-control-review",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "not_applicable",
       "migration": "read_only",
@@ -8019,12 +8217,13 @@
       "schema": "whoisleuth.domain-control-review",
       "lifecycleSchema": "whoisleuth.domain-control-review",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "read_only",
       "writeSemantics": "read_only",
       "byteBudget": null,
       "storageClass": "operator_controlled_output",
@@ -8037,12 +8236,13 @@
       "schema": "whoisleuth.domain-control-review-input",
       "lifecycleSchema": "whoisleuth.domain-control-review-input",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "read_only",
       "writeSemantics": "read_only",
       "byteBudget": null,
       "storageClass": "operator_controlled_output",
@@ -8055,12 +8255,13 @@
       "schema": "whoisleuth.cli.domain-control-review-input",
       "lifecycleSchema": "whoisleuth.cli.domain-control-review-input",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "read_only",
       "writeSemantics": "read_only",
       "byteBudget": 33554432,
       "storageClass": "operator_controlled_output",
@@ -8164,11 +8365,12 @@
       "schema": "whoisleuth.case-response-review-inputs",
       "lifecycleSchema": "whoisleuth.case-response-review-inputs",
       "coverageClass": "registered_schema",
-      "currentVersion": 3,
+      "currentVersion": 4,
       "supportedVersions": [
         1,
         2,
-        3
+        3,
+        4
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -8220,12 +8422,13 @@
       "schema": "whoisleuth.lookup-asset-graph",
       "lifecycleSchema": "whoisleuth.lookup-asset-graph",
       "coverageClass": "registered_schema",
-      "currentVersion": 2,
+      "currentVersion": 3,
       "supportedVersions": [
-        2
+        2,
+        3
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "read_only",
       "writeSemantics": "read_only",
       "byteBudget": null,
       "storageClass": "transient_process_memory",
@@ -8238,10 +8441,11 @@
       "schema": "whoisleuth.investigation-brief",
       "lifecycleSchema": "whoisleuth.investigation-brief",
       "coverageClass": "registered_schema",
-      "currentVersion": 2,
+      "currentVersion": 3,
       "supportedVersions": [
         1,
-        2
+        2,
+        3
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -8311,16 +8515,17 @@
       "schema": "whoisleuth.brand-profiles",
       "lifecycleSchema": "whoisleuth.brand-profiles",
       "coverageClass": "registered_schema",
-      "currentVersion": 8,
+      "currentVersion": 9,
       "supportedVersions": [
         6,
         7,
-        8
+        8,
+        9
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
       "writeSemantics": "non_destructive_merge",
-      "byteBudget": 2097152,
+      "byteBudget": 33554432,
       "storageClass": "deliberate_local_file",
       "retentionControl": "operator_controlled_after_export"
     },
@@ -8367,12 +8572,13 @@
       "schema": "whoisleuth.bulk-review",
       "lifecycleSchema": "whoisleuth.bulk-review",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 524288,
       "storageClass": "deliberate_local_file",
@@ -8385,9 +8591,10 @@
       "schema": "whoisleuth.bulk-review-manifest",
       "lifecycleSchema": "whoisleuth.bulk-review-manifest",
       "coverageClass": "registered_schema",
-      "currentVersion": 2,
+      "currentVersion": 3,
       "supportedVersions": [
-        2
+        2,
+        3
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -8403,12 +8610,13 @@
       "schema": "whoisleuth.bulk-sessions",
       "lifecycleSchema": "whoisleuth.bulk-sessions",
       "coverageClass": "registered_schema",
-      "currentVersion": 4,
+      "currentVersion": 5,
       "supportedVersions": [
-        4
+        4,
+        5
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 4194304,
       "storageClass": "deliberate_local_file",
@@ -8421,9 +8629,10 @@
       "schema": "whoisleuth.campaign-temporal-review",
       "lifecycleSchema": "whoisleuth.campaign-temporal-review",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "not_applicable",
       "migration": "read_only",
@@ -8457,11 +8666,12 @@
       "schema": "whoisleuth.case-report",
       "lifecycleSchema": "whoisleuth.case-report",
       "coverageClass": "registered_schema",
-      "currentVersion": 11,
+      "currentVersion": 12,
       "supportedVersions": [
         9,
         10,
-        11
+        11,
+        12
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -8477,12 +8687,13 @@
       "schema": "whoisleuth.case-response-packet",
       "lifecycleSchema": "whoisleuth.case-response-packet",
       "coverageClass": "registered_schema",
-      "currentVersion": 9,
+      "currentVersion": 10,
       "supportedVersions": [
         6,
         7,
         8,
-        9
+        9,
+        10
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -8498,17 +8709,18 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.case-export",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 15,
+      "currentVersion": 16,
       "supportedVersions": [
         12,
         13,
         14,
-        15
+        15,
+        16
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
       "writeSemantics": "non_destructive_merge",
-      "byteBudget": 2097152,
+      "byteBudget": 16777216,
       "storageClass": "deliberate_local_file",
       "retentionControl": "operator_controlled_after_export"
     },
@@ -8526,7 +8738,7 @@
       "futureVersionBehavior": "reject",
       "migration": "read_only",
       "writeSemantics": "read_only",
-      "byteBudget": 2097152,
+      "byteBudget": 16777216,
       "storageClass": "deliberate_local_file",
       "retentionControl": "operator_controlled_after_export"
     },
@@ -8645,9 +8857,10 @@
       "schema": "whoisleuth.domain-control-manifest",
       "lifecycleSchema": "whoisleuth.domain-control-manifest",
       "coverageClass": "registered_schema",
-      "currentVersion": 2,
+      "currentVersion": 3,
       "supportedVersions": [
-        2
+        2,
+        3
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -8663,12 +8876,13 @@
       "schema": "whoisleuth.domain-control-manifest-input",
       "lifecycleSchema": "whoisleuth.domain-control-manifest-input",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "read_only",
       "writeSemantics": "read_only",
       "byteBudget": 16777216,
       "storageClass": "deliberate_local_file",
@@ -8688,7 +8902,7 @@
       "futureVersionBehavior": "reject",
       "migration": "exact_current_only",
       "writeSemantics": "non_destructive_merge",
-      "byteBudget": 13985110,
+      "byteBudget": 44743339,
       "storageClass": "deliberate_local_file",
       "retentionControl": "operator_controlled_after_export"
     },
@@ -8735,10 +8949,11 @@
       "schema": "whoisleuth.investigation-capsule",
       "lifecycleSchema": "whoisleuth.investigation-capsule",
       "coverageClass": "registered_schema",
-      "currentVersion": 3,
+      "currentVersion": 4,
       "supportedVersions": [
         2,
-        3
+        3,
+        4
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -8790,9 +9005,11 @@
       "schema": "whoisleuth.mail-report-review",
       "lifecycleSchema": "whoisleuth.mail-report-review",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 3,
       "supportedVersions": [
-        1
+        1,
+        2,
+        3
       ],
       "futureVersionBehavior": "not_applicable",
       "migration": "read_only",
@@ -8808,9 +9025,10 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.internal.misp-indicators",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "not_applicable",
       "migration": "read_only",
@@ -8880,12 +9098,13 @@
       "schema": "whoisleuth.relationship-observations",
       "lifecycleSchema": "whoisleuth.relationship-observations",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 786432,
       "storageClass": "deliberate_local_file",
@@ -8952,9 +9171,10 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.internal.stix-indicators",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "not_applicable",
       "migration": "read_only",
@@ -9042,10 +9262,11 @@
       "schema": "whoisleuth.website-profile-snapshots",
       "lifecycleSchema": "whoisleuth.website-profile-snapshots",
       "coverageClass": "registered_schema",
-      "currentVersion": 5,
+      "currentVersion": 6,
       "supportedVersions": [
         4,
-        5
+        5,
+        6
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
@@ -9061,17 +9282,18 @@
       "schema": "whoisleuth.workspace-archive",
       "lifecycleSchema": "whoisleuth.workspace-archive",
       "coverageClass": "registered_schema",
-      "currentVersion": 8,
+      "currentVersion": 9,
       "supportedVersions": [
         5,
         6,
         7,
-        8
+        8,
+        9
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
       "writeSemantics": "non_destructive_merge",
-      "byteBudget": 10485760,
+      "byteBudget": 33554432,
       "storageClass": "deliberate_local_file",
       "retentionControl": "operator_controlled_after_export"
     },
@@ -9283,7 +9505,7 @@
       "id": "analyst-review-state.privacy",
       "familyId": "analyst-review-state",
       "classification": "analyst_authored_sensitive",
-      "projection": "browser_export",
+      "projection": "browser_import",
       "includedCategories": [
         "subject-identity",
         "material-fingerprint",
@@ -9300,12 +9522,63 @@
         "cookies",
         "certificate-transparency-history"
       ],
-      "notePolicy": "discarded",
-      "retention": "operator_controlled_output",
+      "notePolicy": "allowed_bounded",
+      "retention": "browser_indexeddb",
       "network": "none",
-      "sharingReview": "required",
+      "sharingReview": "not_applicable",
       "consumerFlowIds": [
         "analyst-review-state.browser-analyst-review-state.consumer"
+      ]
+    },
+    {
+      "id": "case-drafts.privacy",
+      "familyId": "case-drafts",
+      "classification": "analyst_authored_sensitive",
+      "projection": "browser_import",
+      "includedCategories": [
+        "case-reference",
+        "unfinished-form-values",
+        "local-revision",
+        "draft-time"
+      ],
+      "excludedCategories": [
+        "collected-source-payloads",
+        "password-controls",
+        "session-credentials",
+        "public-export"
+      ],
+      "notePolicy": "allowed_bounded",
+      "retention": "browser_indexeddb",
+      "network": "none",
+      "sharingReview": "not_applicable",
+      "consumerFlowIds": [
+        "case-drafts.browser-case-drafts.consumer"
+      ]
+    },
+    {
+      "id": "case-views.privacy",
+      "familyId": "case-views",
+      "classification": "analyst_authored_sensitive",
+      "projection": "browser_import",
+      "includedCategories": [
+        "saved-filter-name",
+        "case-status-and-disposition",
+        "search-text",
+        "sort-order",
+        "authored-times"
+      ],
+      "excludedCategories": [
+        "matching-case-records",
+        "source-evidence",
+        "collection-authorisation",
+        "public-response-packets"
+      ],
+      "notePolicy": "allowed_bounded",
+      "retention": "browser_indexeddb",
+      "network": "none",
+      "sharingReview": "not_applicable",
+      "consumerFlowIds": [
+        "case-views.browser-case-views.consumer"
       ]
     },
     {
@@ -9388,6 +9661,7 @@
       "network": "none",
       "sharingReview": "required",
       "consumerFlowIds": [
+        "case.consumer.cli-edit",
         "case.consumer.cli-pack-build",
         "case.consumer.encrypted-workspace-build",
         "case.consumer.export-build",
@@ -9611,7 +9885,8 @@
       "consumerFlowIds": [
         "domain-control-flight-recorder.cli-json-stdout",
         "domain-control-flight-recorder.cli-terminal-stdout",
-        "domain-control-flight-recorder.node-build"
+        "domain-control-flight-recorder.node-build",
+        "domain-control-flight-recorder.node-validate"
       ]
     },
     {
@@ -9961,6 +10236,7 @@
       "network": "none",
       "sharingReview": "not_applicable",
       "consumerFlowIds": [
+        "domain-control.browser-build-input",
         "domain-control.node-build",
         "domain-control.node-verify"
       ]
@@ -10312,6 +10588,32 @@
       "consumerFlowIds": [
         "relationship-portability.export-relationship-graph.consumer",
         "relationship-portability.export-reviewed-relationship-clusters.consumer"
+      ]
+    },
+    {
+      "id": "review-session.privacy",
+      "familyId": "review-session",
+      "classification": "analyst_authored_sensitive",
+      "projection": "browser_import",
+      "includedCategories": [
+        "review-filters",
+        "selected-review-reference",
+        "evidence-fingerprint",
+        "unfinished-review-forms",
+        "local-revision",
+        "save-time"
+      ],
+      "excludedCategories": [
+        "collected-source-payloads",
+        "session-credentials",
+        "public-export"
+      ],
+      "notePolicy": "allowed_bounded",
+      "retention": "browser_indexeddb",
+      "network": "none",
+      "sharingReview": "not_applicable",
+      "consumerFlowIds": [
+        "review-session.browser-review-session.consumer"
       ]
     },
     {
@@ -10776,7 +11078,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.mail-report-review",
-        "version": 1,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "analyst-interchange.privacy",
@@ -10797,7 +11099,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.internal.misp-indicators",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "analyst-interchange.privacy",
@@ -10869,7 +11171,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.internal.stix-indicators",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "analyst-interchange.privacy",
@@ -10964,10 +11266,70 @@
       },
       "privacyProfileId": "analyst-review-state.privacy",
       "requestMode": "none",
-      "retentionEffect": "operator_controlled_output",
+      "retentionEffect": "browser_indexeddb",
       "processingClasses": [
         "transient_processing",
-        "deliberate_local_file_export",
+        "browser_local_retention",
+        "offline_processing_no_request"
+      ],
+      "policyState": "current"
+    },
+    {
+      "id": "case-drafts.browser-case-drafts.consumer",
+      "familyId": "case-drafts",
+      "plane": "browser",
+      "operation": "validate-and-produce",
+      "acceptedContracts": [
+        {
+          "schema": "whoisleuth.case-drafts",
+          "versions": [
+            1
+          ],
+          "mode": "direct",
+          "discriminator": null
+        }
+      ],
+      "emittedContract": {
+        "schema": "whoisleuth.case-drafts",
+        "version": 1,
+        "discriminator": null
+      },
+      "privacyProfileId": "case-drafts.privacy",
+      "requestMode": "none",
+      "retentionEffect": "browser_indexeddb",
+      "processingClasses": [
+        "transient_processing",
+        "browser_local_retention",
+        "offline_processing_no_request"
+      ],
+      "policyState": "current"
+    },
+    {
+      "id": "case-views.browser-case-views.consumer",
+      "familyId": "case-views",
+      "plane": "browser",
+      "operation": "validate-and-produce",
+      "acceptedContracts": [
+        {
+          "schema": "whoisleuth.case-views",
+          "versions": [
+            1
+          ],
+          "mode": "direct",
+          "discriminator": null
+        }
+      ],
+      "emittedContract": {
+        "schema": "whoisleuth.case-views",
+        "version": 1,
+        "discriminator": null
+      },
+      "privacyProfileId": "case-views.privacy",
+      "requestMode": "none",
+      "retentionEffect": "browser_indexeddb",
+      "processingClasses": [
+        "transient_processing",
+        "browser_local_retention",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -10984,7 +11346,8 @@
             12,
             13,
             14,
-            15
+            15,
+            16
           ],
           "mode": "direct",
           "discriminator": null
@@ -10992,7 +11355,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.case-store",
-        "version": 15,
+        "version": 16,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.browser-state",
@@ -11006,6 +11369,37 @@
       "policyState": "current"
     },
     {
+      "id": "case.consumer.cli-edit",
+      "familyId": "case-portability",
+      "plane": "cli",
+      "operation": "review-and-edit-local-file",
+      "acceptedContracts": [
+        {
+          "schema": "whoisleuth.case-export",
+          "versions": [
+            15,
+            16
+          ],
+          "mode": "direct",
+          "discriminator": null
+        }
+      ],
+      "emittedContract": {
+        "schema": "whoisleuth.case-export",
+        "version": 16,
+        "discriminator": null
+      },
+      "privacyProfileId": "case.privacy.portable-output",
+      "requestMode": "none",
+      "retentionEffect": "operator_controlled_output",
+      "processingClasses": [
+        "transient_processing",
+        "deliberate_local_file_export",
+        "offline_processing_no_request"
+      ],
+      "policyState": "current"
+    },
+    {
       "id": "case.consumer.cli-pack-build",
       "familyId": "case-portability",
       "plane": "cli",
@@ -11014,7 +11408,8 @@
         {
           "schema": "whoisleuth.case-export",
           "versions": [
-            15
+            15,
+            16
           ],
           "mode": "direct",
           "discriminator": null
@@ -11073,7 +11468,8 @@
             5,
             6,
             7,
-            8
+            8,
+            9
           ],
           "mode": "direct",
           "discriminator": null
@@ -11128,7 +11524,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-export",
-        "version": 15,
+        "version": 16,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -11149,7 +11545,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-response-packet",
-        "version": 9,
+        "version": 10,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -11174,7 +11570,8 @@
             6,
             7,
             8,
-            9
+            9,
+            10
           ],
           "mode": "direct",
           "discriminator": null
@@ -11203,7 +11600,8 @@
             6,
             7,
             8,
-            9
+            9,
+            10
           ],
           "mode": "direct",
           "discriminator": null
@@ -11228,7 +11626,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-report",
-        "version": 11,
+        "version": 12,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -11252,7 +11650,8 @@
           "versions": [
             9,
             10,
-            11
+            11,
+            12
           ],
           "mode": "embedded",
           "discriminator": null
@@ -11277,7 +11676,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-response-review-inputs",
-        "version": 3,
+        "version": 4,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -11301,7 +11700,8 @@
           "versions": [
             1,
             2,
-            3
+            3,
+            4
           ],
           "mode": "direct",
           "discriminator": null
@@ -11326,7 +11726,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.workspace-archive",
-        "version": 8,
+        "version": 9,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -11372,7 +11772,8 @@
             5,
             6,
             7,
-            8
+            8,
+            9
           ],
           "mode": "direct",
           "discriminator": null
@@ -11409,7 +11810,8 @@
             12,
             13,
             14,
-            15
+            15,
+            16
           ],
           "mode": "direct",
           "discriminator": null
@@ -11593,7 +11995,8 @@
         {
           "schema": "whoisleuth.domain-control-flight-recorder.input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -11601,7 +12004,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.domain-control-flight-recorder",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "domain-control-flight-recorder.sensitive-output.v1",
@@ -11623,7 +12026,8 @@
         {
           "schema": "whoisleuth.domain-control-flight-recorder.input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -11631,7 +12035,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.domain-control-flight-recorder",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "domain-control-flight-recorder.sensitive.v1",
@@ -11651,7 +12055,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.domain-control-flight-recorder",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "domain-control-flight-recorder.monitor-output.v1",
@@ -11673,7 +12077,8 @@
         {
           "schema": "whoisleuth.domain-control-flight-recorder.input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -11681,7 +12086,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.domain-control-flight-recorder",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "domain-control-flight-recorder.sensitive-output.v1",
@@ -11703,7 +12108,8 @@
         {
           "schema": "whoisleuth.domain-control-flight-recorder.input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -11711,7 +12117,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.domain-control-flight-recorder",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "domain-control-flight-recorder.sensitive.v1",
@@ -11732,7 +12138,8 @@
         {
           "schema": "whoisleuth.domain-control-flight-recorder.input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -11740,9 +12147,35 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.domain-control-flight-recorder",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
+      "privacyProfileId": "domain-control-flight-recorder.sensitive.v1",
+      "requestMode": "none",
+      "retentionEffect": "transient_report",
+      "processingClasses": [
+        "transient_processing",
+        "offline_processing_no_request"
+      ],
+      "policyState": "current"
+    },
+    {
+      "id": "domain-control-flight-recorder.node-validate",
+      "familyId": "domain-control-flight-recorder",
+      "plane": "node",
+      "operation": "validate-document",
+      "acceptedContracts": [
+        {
+          "schema": "whoisleuth.domain-control-flight-recorder",
+          "versions": [
+            1,
+            2
+          ],
+          "mode": "direct",
+          "discriminator": null
+        }
+      ],
+      "emittedContract": null,
       "privacyProfileId": "domain-control-flight-recorder.sensitive.v1",
       "requestMode": "none",
       "retentionEffect": "transient_report",
@@ -11761,7 +12194,7 @@
         {
           "schema": "whoisleuth.cli.domain-control-monitor",
           "versions": [
-            1
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -11787,7 +12220,7 @@
         {
           "schema": "whoisleuth.cli.domain-control-monitor",
           "versions": [
-            1
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -11813,7 +12246,8 @@
         {
           "schema": "whoisleuth.cli.domain-control-monitor",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -11821,7 +12255,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.cli.domain-control-monitor",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "domain-control-monitor.sensitive-run.v1",
@@ -11843,7 +12277,7 @@
         {
           "schema": "whoisleuth.cli.domain-control-monitor",
           "versions": [
-            1
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -11869,7 +12303,8 @@
         {
           "schema": "whoisleuth.domain-control-review-input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -11877,7 +12312,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.domain-control-review",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "domain-control-review.sensitive-output.v1",
@@ -11899,7 +12334,8 @@
         {
           "schema": "whoisleuth.domain-control-review-input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -11907,7 +12343,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.domain-control-review",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "domain-control-review.sensitive.v1",
@@ -11928,7 +12364,8 @@
         {
           "schema": "whoisleuth.domain-control-review-input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -11936,7 +12373,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.domain-control-review",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "domain-control-review.sensitive-output.v1",
@@ -11958,7 +12395,8 @@
         {
           "schema": "whoisleuth.domain-control-review-input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -11966,7 +12404,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.domain-control-review",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "domain-control-review.sensitive.v1",
@@ -11987,7 +12425,8 @@
         {
           "schema": "whoisleuth.domain-control-review",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "embedded",
           "discriminator": null
@@ -12013,7 +12452,8 @@
         {
           "schema": "whoisleuth.cli.domain-control-review-input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -12021,7 +12461,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.cli.domain-control-review",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "domain-control-review.sensitive-output.v1",
@@ -12043,7 +12483,8 @@
         {
           "schema": "whoisleuth.cli.domain-control-review-input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -12051,7 +12492,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.cli.domain-control-review",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "domain-control-review.sensitive.v1",
@@ -12072,7 +12513,8 @@
         {
           "schema": "whoisleuth.cli.domain-control-review-input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -12080,7 +12522,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.cli.domain-control-review",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "domain-control-review.sensitive.v1",
@@ -12101,7 +12543,8 @@
         {
           "schema": "whoisleuth.cli.domain-control-review-input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -12109,7 +12552,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.cli.domain-control-review",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "domain-control-review.sensitive-output.v1",
@@ -12131,7 +12574,8 @@
         {
           "schema": "whoisleuth.cli.domain-control-review-input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -12139,7 +12583,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.cli.domain-control-review",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "domain-control-review.sensitive.v1",
@@ -12160,7 +12604,8 @@
         {
           "schema": "whoisleuth.domain-control-review-input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -12168,12 +12613,32 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.domain-control-review",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "domain-control-review.sensitive.v1",
       "requestMode": "none",
       "retentionEffect": "transient_report",
+      "processingClasses": [
+        "transient_processing",
+        "offline_processing_no_request"
+      ],
+      "policyState": "current"
+    },
+    {
+      "id": "domain-control.browser-build-input",
+      "familyId": "domain-control-manifest",
+      "plane": "browser",
+      "operation": "build-input",
+      "acceptedContracts": [],
+      "emittedContract": {
+        "schema": "whoisleuth.domain-control-manifest-input",
+        "version": 2,
+        "discriminator": null
+      },
+      "privacyProfileId": "domain-control.manifest-sensitive.v1",
+      "requestMode": "none",
+      "retentionEffect": "none",
       "processingClasses": [
         "transient_processing",
         "offline_processing_no_request"
@@ -12189,7 +12654,8 @@
         {
           "schema": "whoisleuth.domain-control-manifest-input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -12197,7 +12663,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.domain-control-manifest",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "domain-control.browser-export.v1",
@@ -12219,7 +12685,8 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -12245,7 +12712,8 @@
         {
           "schema": "whoisleuth.domain-control-manifest-input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -12253,7 +12721,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.domain-control-manifest",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "domain-control.cli-manifest.v1",
@@ -12275,7 +12743,8 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "embedded",
           "discriminator": null
@@ -12300,7 +12769,8 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -12325,7 +12795,8 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -12351,7 +12822,8 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -12376,7 +12848,8 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "embedded",
           "discriminator": null
@@ -12401,7 +12874,8 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -12426,7 +12900,8 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -12452,7 +12927,8 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "embedded",
           "discriminator": null
@@ -12477,7 +12953,8 @@
         {
           "schema": "whoisleuth.domain-control-manifest-input",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -12485,7 +12962,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.domain-control-manifest",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "domain-control.manifest-sensitive.v1",
@@ -12506,7 +12983,8 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "embedded",
           "discriminator": null
@@ -12531,7 +13009,8 @@
         {
           "schema": "whoisleuth.domain-control-manifest",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -12771,7 +13250,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.campaign-temporal-review",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "investigation-projections.privacy",
@@ -12862,7 +13341,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.investigation-brief",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "investigation.privacy.output",
@@ -12883,7 +13362,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.bulk-review-manifest",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "investigation.privacy.output",
@@ -12905,7 +13384,8 @@
         {
           "schema": "whoisleuth.lookup-asset-graph",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "embedded",
           "discriminator": null
@@ -12922,7 +13402,8 @@
           "schema": "whoisleuth.investigation-brief",
           "versions": [
             1,
-            2
+            2,
+            3
           ],
           "mode": "embedded",
           "discriminator": null
@@ -12930,7 +13411,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.investigation-capsule",
-        "version": 3,
+        "version": 4,
         "discriminator": null
       },
       "privacyProfileId": "investigation.privacy.output",
@@ -12972,7 +13453,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.lookup-asset-graph",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "investigation.privacy.output",
@@ -13047,7 +13528,8 @@
         {
           "schema": "whoisleuth.bulk-review-manifest",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -13056,7 +13538,8 @@
           "schema": "whoisleuth.investigation-capsule",
           "versions": [
             2,
-            3
+            3,
+            4
           ],
           "mode": "direct",
           "discriminator": null
@@ -13197,7 +13680,16 @@
       "familyId": "privacy-data-flow-catalogue",
       "plane": "shared",
       "operation": "generate-public-catalogue",
-      "acceptedContracts": [],
+      "acceptedContracts": [
+        {
+          "schema": "whoisleuth.privacy-data-flow-catalogue",
+          "versions": [
+            1
+          ],
+          "mode": "direct",
+          "discriminator": null
+        }
+      ],
       "emittedContract": {
         "schema": "whoisleuth.privacy-data-flow-catalogue",
         "version": 1,
@@ -13251,6 +13743,36 @@
       "processingClasses": [
         "transient_processing",
         "deliberate_local_file_export",
+        "offline_processing_no_request"
+      ],
+      "policyState": "current"
+    },
+    {
+      "id": "review-session.browser-review-session.consumer",
+      "familyId": "review-session",
+      "plane": "browser",
+      "operation": "validate-and-produce",
+      "acceptedContracts": [
+        {
+          "schema": "whoisleuth.review-session",
+          "versions": [
+            1
+          ],
+          "mode": "direct",
+          "discriminator": null
+        }
+      ],
+      "emittedContract": {
+        "schema": "whoisleuth.review-session",
+        "version": 1,
+        "discriminator": null
+      },
+      "privacyProfileId": "review-session.privacy",
+      "requestMode": "none",
+      "retentionEffect": "browser_indexeddb",
+      "processingClasses": [
+        "transient_processing",
+        "browser_local_retention",
         "offline_processing_no_request"
       ],
       "policyState": "current"
@@ -13616,7 +14138,8 @@
           "versions": [
             6,
             7,
-            8
+            8,
+            9
           ],
           "mode": "direct",
           "discriminator": null
@@ -13624,7 +14147,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.brand-profile-store",
-        "version": 8,
+        "version": 9,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.browser-state",
@@ -13646,7 +14169,8 @@
         {
           "schema": "whoisleuth.browser.bulk-session-store",
           "versions": [
-            4
+            4,
+            5
           ],
           "mode": "direct",
           "discriminator": null
@@ -13654,7 +14178,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.bulk-session-store",
-        "version": 4,
+        "version": 5,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.browser-state",
@@ -13766,7 +14290,8 @@
         {
           "schema": "whoisleuth.browser.relationship-observation-store",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -13774,7 +14299,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.relationship-observation-store",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.browser-state",
@@ -13796,7 +14321,8 @@
         {
           "schema": "whoisleuth.browser.bulk-review-store",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -13804,7 +14330,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.bulk-review-store",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.browser-state",
@@ -13917,7 +14443,8 @@
           "schema": "whoisleuth.browser.website-snapshot-store",
           "versions": [
             4,
-            5
+            5,
+            6
           ],
           "mode": "direct",
           "discriminator": null
@@ -13925,7 +14452,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.website-snapshot-store",
-        "version": 5,
+        "version": 6,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.browser-state",
@@ -13949,7 +14476,8 @@
           "versions": [
             6,
             7,
-            8
+            8,
+            9
           ],
           "mode": "direct",
           "discriminator": null
@@ -13974,7 +14502,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.brand-profiles",
-        "version": 8,
+        "version": 9,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.portable-output",
@@ -13996,7 +14524,8 @@
         {
           "schema": "whoisleuth.bulk-sessions",
           "versions": [
-            4
+            4,
+            5
           ],
           "mode": "direct",
           "discriminator": null
@@ -14021,7 +14550,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.bulk-sessions",
-        "version": 4,
+        "version": 5,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.portable-output",
@@ -14137,7 +14666,8 @@
         {
           "schema": "whoisleuth.relationship-observations",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -14162,7 +14692,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.relationship-observations",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.portable-output",
@@ -14184,7 +14714,8 @@
         {
           "schema": "whoisleuth.bulk-review",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -14209,7 +14740,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.bulk-review",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.portable-output",
@@ -14373,7 +14904,8 @@
           "schema": "whoisleuth.website-profile-snapshots",
           "versions": [
             4,
-            5
+            5,
+            6
           ],
           "mode": "direct",
           "discriminator": null
@@ -14398,7 +14930,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.website-profile-snapshots",
-        "version": 5,
+        "version": 6,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.portable-output",

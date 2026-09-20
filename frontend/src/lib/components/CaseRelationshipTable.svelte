@@ -74,7 +74,7 @@
   {#if table.rows.length}
     <div class="table-wrap">
       <table aria-describedby="relationship-table-limit">
-        <caption>Cross-case relationships from retained browser-local investigation evidence</caption>
+        <caption>Cross-case relationships from retained investigation evidence</caption>
         <thead><tr><th scope="col">Relationship</th><th scope="col">Observed value</th><th scope="col">Cases</th><th scope="col">Interpretation</th></tr></thead>
         <tbody>
           {#each table.rows as row (row.id)}

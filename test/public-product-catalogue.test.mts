@@ -66,15 +66,31 @@ describe('public product catalogue', () => {
 
     for (const [index, command] of catalogue.commands.entries()) {
       const definition = CLI_COMMAND_REGISTRY[index]!;
+      assert.equal(command.description, definition.reference.description);
       assert.equal(command.group, definition.help.group);
       assert.equal(command.common, definition.documentation.common);
       assert.equal(command.networkEffect, definition.execution.networkEffect);
       assert.deepEqual(command.inputs, definition.grammar.positionals);
       assert.deepEqual(command.importantOptions, definition.completion.options);
       assert.deepEqual(command.supportedSchemaIdentifiers, definition.documentation.supportedSchemaIdentifiers);
-      assert.deepEqual(command.outputFormats, definition.documentation.outputFormats);
+      assert.deepEqual(command.presentationOptions, definition.documentation.presentationOptions);
+      assert.equal(command.fileOutput, definition.grammar.options.some((option) => option.option === '--output'));
       assert.deepEqual(command.primaryEvidenceArtefacts, definition.documentation.primaryEvidenceArtefacts);
     }
+  });
+
+  test('separates native artefacts, format flags and output destinations', () => {
+    const commands = publicCliCatalogue().commands;
+    const exported = commands.find((command) => command.id === 'export')!;
+    assert.deepEqual(exported.primaryEvidenceArtefacts, ['Portable evidence report']);
+    assert.deepEqual(exported.presentationOptions, [
+      { option: '--markdown', format: 'Markdown' },
+      { option: '--html', format: 'HTML' },
+    ]);
+    assert.equal(exported.fileOutput, true);
+    const inventory = commands.find((command) => command.id === 'commands')!;
+    assert.deepEqual(inventory.primaryEvidenceArtefacts, []);
+    assert.deepEqual(inventory.presentationOptions, [{ option: '--json', format: 'JSON' }]);
   });
 
   test('keeps methodology and coverage tied to canonical contract owners', () => {
@@ -82,6 +98,11 @@ describe('public product catalogue', () => {
     const coverage = publicCoverage();
     const registry = registryStandardsCoverageSnapshot();
     assert.deepEqual(methodology.topics, METHODOLOGY_TOPICS);
+    const authority = methodology.topics.find((topic) => topic.id === 'authority');
+    assert.ok(authority);
+    assert.match(authority.summary, /registration publications take precedence/iu);
+    assert.match(authority.summary, /inconclusive.*positive authoritative DNS delegation.*registered status at medium confidence/iu);
+    assert.match(authority.summary, /Missing DNS never proves availability/u);
     assert.deepEqual(coverage.distinctions, COVERAGE_DISTINCTIONS);
     assert.equal(coverage.capabilities.length, CAPABILITY_MANIFEST.capabilities.length);
     assert.deepEqual(coverage.capabilities.map((item) => item.id), CAPABILITY_MANIFEST.capabilities.map((item) => item.id));

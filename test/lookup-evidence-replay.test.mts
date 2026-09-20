@@ -23,7 +23,7 @@ import { compareRegistrySources } from '../lib/registry-comparison.mts';
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
 import { loadLookupEvidenceV26Fixture } from './lookup-evidence-v26-fixture.mts';
 import { loadLookupEvidenceV27Fixture } from './lookup-evidence-v27-fixture.mts';
-import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
+import { buildFixtureRegistrarStanding as buildRegistrarStanding } from './registrar-standing-fixture.mts';
 import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,
@@ -157,7 +157,7 @@ test('replay validates and summarizes a current first-party export without raw r
   assert.equal(JSON.stringify(replay).includes('<script>'), true);
 });
 
-test('replay preserves the exact submitted hostname as its identity and graph root', async () => {
+test('replay preserves the submitted hostname and uses explicit observation scope as its graph root', async () => {
   const document = evidence();
   document.query = {
     submitted: 'portal.example.test',
@@ -165,6 +165,7 @@ test('replay preserves the exact submitted hostname as its identity and graph ro
     registrableDomain: 'example.test',
     type: 'domain',
   };
+  (document.analysis as { availability: Record<string, unknown> }).availability.observationHostname = 'portal.example.test';
   const replay = await parseLookupEvidenceReplay(JSON.stringify(document));
   assert.equal(replay.target, 'portal.example.test');
   assert.equal(replay.caseDomain, 'example.test');
@@ -220,7 +221,7 @@ test('replay requires explicit timestamps in supported documents', async () => {
 test('replay rejects reader-only Lookup evidence without mutating it', async () => {
   const unsupported = { schema: LOOKUP_EVIDENCE_SCHEMA, schemaVersion: 25 };
   const before = structuredClone(unsupported);
-  await assert.rejects(parseLookupEvidenceReplay(JSON.stringify(unsupported)), /schemas 26, 27 or 28/iu);
+  await assert.rejects(parseLookupEvidenceReplay(JSON.stringify(unsupported)), /Only Lookup evidence schemas .* can be replayed/iu);
   assert.deepEqual(unsupported, before);
 });
 

@@ -54,6 +54,7 @@ export function buildBoundedSearchIndex(
 ): BoundedSearchIndex {
   const limit = Math.max(0, Math.min(MAX_BOUNDED_SEARCH_DOCUMENTS, Math.trunc(maximumDocuments)));
   const selected = documents.slice(0, limit);
+  const fallbackIds = new Set<string>();
   const miniSearch = new MiniSearch<IndexedDocument>({
     fields: ['grams'],
     idField: 'id',
@@ -61,13 +62,14 @@ export function buildBoundedSearchIndex(
     tokenize: (value) => value.split(' ').filter(Boolean),
     processTerm: (term) => term,
   });
-  miniSearch.addAll(selected.map((document) => ({
-    id: document.id,
-    grams: [...new Set(document.terms
-      .slice(0, MAX_BOUNDED_SEARCH_TERMS_PER_DOCUMENT)
-      .filter((term) => typeof term === 'string' && term.length <= MAX_BOUNDED_SEARCH_TERM_LENGTH && !CONTROL_RE.test(term))
-      .flatMap(trigrams))].join(' '),
-  })));
+  miniSearch.addAll(selected.map((document) => {
+    const terms = document.terms.slice(0, MAX_BOUNDED_SEARCH_TERMS_PER_DOCUMENT)
+      .filter((term) => typeof term === 'string' && term.length <= MAX_BOUNDED_SEARCH_TERM_LENGTH && !CONTROL_RE.test(term));
+    // Acceleration must not remove a possible exact match from the caller's
+    // admitted document. Oversized or omitted terms use its bounded fallback.
+    if (terms.length !== document.terms.length) fallbackIds.add(document.id);
+    return { id: document.id, grams: [...new Set(terms.flatMap(trigrams))].join(' ') };
+  }));
 
   function matches(value: string): Set<string> {
     if (!value || value.length > MAX_BOUNDED_SEARCH_QUERY_LENGTH || CONTROL_RE.test(value)) return new Set();
@@ -80,10 +82,12 @@ export function buildBoundedSearchIndex(
     documentCount: selected.length,
     truncated: documents.length > selected.length,
     candidateIds(query: string, tokens: readonly string[] = []): ReadonlySet<string> {
+      if (!query || CONTROL_RE.test(query)) return new Set();
+      if (query.length > MAX_BOUNDED_SEARCH_QUERY_LENGTH) return new Set(selected.map((document) => document.id));
       const whole = matches(query);
-      if (tokens.length < 2) return whole;
+      if (tokens.length < 2) return new Set([...whole, ...fallbackIds]);
       const tokenMatches = intersect(tokens.map(matches));
-      return new Set([...whole, ...tokenMatches]);
+      return new Set([...whole, ...tokenMatches, ...fallbackIds]);
     },
   });
 }

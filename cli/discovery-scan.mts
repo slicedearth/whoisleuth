@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import { decodeBoundedUtf8 } from '../lib/bounded-file.mts';
+import { MAX_DISCOVERY_SUFFIX_LENGTH } from '../lib/registrable-domain.mts';
 
 import type { BulkLookupResult, BulkLookupOptions } from './bulk.mts';
 import { runBulkLookups } from './bulk.mts';
-import { REGISTERED_STATES, availabilityState, bulkDnsSummary } from './bulk-output.mts';
+import { REGISTERED_STATES, BULK_CSV_METADATA_COLUMNS, availabilityState, bulkCsvMetadataValues, bulkDnsSummary } from './bulk-output.mts';
 import { cliCsvCell } from './csv.mts';
 import { CliUsageError } from './errors.mts';
 import { terminalSafeJson } from './formatters/json.mts';
@@ -110,7 +111,7 @@ function parseDiscoveryScanAllowlist(
 function normalizedCandidate(candidate: Candidate) {
   const domain = boundedText(candidate.domain, 253).toLowerCase();
   const source = boundedText(candidate.source, 253).toLowerCase();
-  const tld = boundedText(candidate.tld, 63).toLowerCase();
+  const tld = boundedText(candidate.tld, MAX_DISCOVERY_SUFFIX_LENGTH).toLowerCase();
   const mutationTypes = Array.isArray(candidate.mutationTypes)
     ? [...new Set(candidate.mutationTypes.flatMap((value) => {
         const normalized = boundedText(value, 80);
@@ -274,7 +275,7 @@ function buildDiscoveryScanDocument(
     version: CLI_DISCOVERY_SCAN_VERSION,
     generatedAt: metadata.generatedAt,
     seed: metadata.seed,
-    mode: metadata.deep ? 'deep' : 'fast',
+    mode: metadata.deep ? 'deep' as const : 'fast' as const,
     generation: {
       preset: metadata.preset,
       keyboardLayout: metadata.keyboardLayout,
@@ -354,12 +355,14 @@ function formatDiscoveryScanJsonLines(document: ReturnType<typeof buildDiscovery
     : '';
 }
 
-function formatDiscoveryScanCsv(document: ReturnType<typeof buildDiscoveryScanDocument>): string {
-  const header = ['domain', 'availability', 'confidence', 'review_lane', 'mutation_types', 'a', 'aaaa', 'ns', 'mx', 'relationship_ids', 'error'];
+function formatDiscoveryScanCsv(document: ReturnType<typeof buildDiscoveryScanDocument>, includeMetadata = false): string {
+  const header = ['domain', 'availability', 'confidence', 'review_lane', 'mutation_types', 'a', 'aaaa', 'ns', 'mx', 'relationship_ids', 'error',
+    ...(includeMetadata ? BULK_CSV_METADATA_COLUMNS : [])];
   const rows = document.results.map((item) => [
     item.domain, item.availabilityState, item.confidence, item.review.lane, item.mutationTypes,
     item.dnsSummary.a, item.dnsSummary.aaaa, item.dnsSummary.ns, item.dnsSummary.mx,
     item.relationshipIds, 'error' in item ? item.error : '',
+    ...(includeMetadata ? bulkCsvMetadataValues(item, document) : []),
   ].map(cliCsvCell).join(','));
   return `${[header.join(','), ...rows].join('\n')}\n`;
 }

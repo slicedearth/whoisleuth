@@ -2,6 +2,7 @@ import { normalizeDomain, type CaseRecord } from './case-model.ts';
 import {
   MAX_CASE_ASSERTIONS,
   mergeCaseAssertions,
+  normalizeCaseAssertions,
   type CaseAssertionExternalEntityType,
   type CaseAssertionExternalProvenance,
   type CaseAssertionRecord,
@@ -546,11 +547,10 @@ function assertionKey(item: ExternalIntelligenceItem, digest: string): string {
   ].join('\u0000');
 }
 
-function assertionFrom(
+export function externalIntelligenceAssertionContent(
   item: ExternalIntelligenceItem,
   preview: ExternalIntelligencePreview,
-  now: string,
-): CaseAssertionRecord {
+): Omit<CaseAssertionRecord, 'id' | 'createdAt' | 'updatedAt'> {
   const provenance: CaseAssertionExternalProvenance = {
     origin: 'external_import',
     format: preview.format,
@@ -568,16 +568,25 @@ function assertionFrom(
     markings: [...item.markings],
   };
   const statement = `${preview.sourceName} reported ${item.entityType} ${item.entityValue} as an external ${item.claimType}.`;
-  return {
-    id: `external-${preview.sourceDigestSha256.slice(0, 16)}-${hash(assertionKey(item, preview.sourceDigestSha256))}`,
+  const record = normalizeCaseAssertions([{
     kind: 'unknown',
     statement: statement.slice(0, 2_000),
     rationale: 'Imported from a local intelligence file. WHOISleuth did not collect or independently verify this claim.',
     evidencePinIds: [],
     state: 'open',
+    provenance,
+  }], '1970-01-01T00:00:00.000Z')[0];
+  if (!record) throw new TypeError('The claim has no valid retained Case projection.');
+  const { id: _id, createdAt: _created, updatedAt: _updated, ...content } = record;
+  return content;
+}
+
+function assertionFrom(item: ExternalIntelligenceItem, preview: ExternalIntelligencePreview, now: string): CaseAssertionRecord {
+  return {
+    ...externalIntelligenceAssertionContent(item, preview),
+    id: `external-${preview.sourceDigestSha256.slice(0, 16)}-${hash(assertionKey(item, preview.sourceDigestSha256))}`,
     createdAt: now,
     updatedAt: now,
-    provenance,
   };
 }
 

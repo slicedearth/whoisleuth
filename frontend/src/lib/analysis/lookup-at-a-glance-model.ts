@@ -16,6 +16,8 @@ export type LookupAtAGlanceContributor = Readonly<{
   label: string;
   evidencePresentation: DecisionFactPresentationDescriptor;
   provenancePresentation: DecisionFactPresentationDescriptor;
+  observedAt: string | null;
+  references: readonly string[];
   limitations: readonly string[];
 }>;
 
@@ -27,6 +29,8 @@ export type LookupAtAGlanceItem = Readonly<{
   statePresentation: DecisionFactPresentationDescriptor;
   freshnessPresentation: DecisionFactPresentationDescriptor;
   contributors: readonly LookupAtAGlanceContributor[];
+  references: readonly string[];
+  contradictions: readonly string[];
   limitations: readonly string[];
 }>;
 
@@ -44,6 +48,7 @@ export type LookupAtAGlanceAggregate = Readonly<{
 export type LookupAtAGlanceModel = Readonly<{
   version: typeof LOOKUP_AT_A_GLANCE_VERSION;
   groups: readonly LookupAtAGlanceAggregate[];
+  items: readonly LookupAtAGlanceItem[];
 }>;
 
 type AggregateSpec = Readonly<{
@@ -143,13 +148,14 @@ function contributorProjection(
     label: contributor.label,
     evidencePresentation: DECISION_FACT_PRESENTATION_DESCRIPTORS.evidenceState[contributor.evidenceState],
     provenancePresentation: DECISION_FACT_PRESENTATION_DESCRIPTORS.provenance[contributor.provenance],
+    observedAt: contributor.observedAt,
+    references: Object.freeze([...contributor.references]),
     limitations: Object.freeze([...contributor.limitations]),
   })));
 }
 
 function itemProjection(
   fact: DecisionFact,
-  coverageDestination: boolean,
 ): LookupAtAGlanceItem {
   const contributors = contributorProjection(fact);
   const attributedLimitations = new Set(contributors.flatMap((contributor) => contributor.limitations));
@@ -163,12 +169,14 @@ function itemProjection(
       ? contributors[0]!.label
       : fact.question,
     detail: fact.conclusion,
-    destination: coverageDestination ? SOURCE_QUALITY_DESTINATION : factDestination(fact),
+    destination: factDestination(fact),
     statePresentation: isEvidenceFact
       ? DECISION_FACT_PRESENTATION_DESCRIPTORS.evidenceState[fact.evidenceState]
       : DECISION_FACT_PRESENTATION_DESCRIPTORS.consistency[fact.consistency],
     freshnessPresentation: DECISION_FACT_PRESENTATION_DESCRIPTORS.freshness[fact.freshness],
     contributors,
+    references: Object.freeze([...fact.references]),
+    contradictions: Object.freeze([...fact.contradictions]),
     limitations,
   });
 }
@@ -200,12 +208,18 @@ function aggregatePresentation(
 function aggregate(
   facts: readonly DecisionFact[],
   spec: AggregateSpec,
+  items: ReadonlyMap<string, LookupAtAGlanceItem>,
 ): LookupAtAGlanceAggregate {
   const matches = facts.filter(spec.matches);
   const contributingFactIds = Object.freeze(matches.map((fact) => fact.id));
   const displayedItems = Object.freeze(matches
     .slice(0, MAX_LOOKUP_AT_A_GLANCE_DISPLAYED_ITEMS)
-    .map((fact) => itemProjection(fact, spec.coverageDestination)));
+    .map((fact) => {
+      const item = items.get(fact.id)!;
+      return spec.coverageDestination
+        ? Object.freeze({ ...item, destination: SOURCE_QUALITY_DESTINATION })
+        : item;
+    }));
   const count = contributingFactIds.length;
   const omittedCount = count - displayedItems.length;
   if (count !== displayedItems.length + omittedCount) {
@@ -227,8 +241,11 @@ export function buildLookupAtAGlanceModel(
   facts: readonly DecisionFact[],
 ): LookupAtAGlanceModel {
   const canonicalFacts = buildDecisionFacts(facts);
+  const items = Object.freeze(canonicalFacts.map(itemProjection));
+  const itemsById = new Map(items.map((item) => [item.factId, item]));
   return Object.freeze({
     version: LOOKUP_AT_A_GLANCE_VERSION,
-    groups: Object.freeze(AGGREGATE_SPECS.map((spec) => aggregate(canonicalFacts, spec))),
+    groups: Object.freeze(AGGREGATE_SPECS.map((spec) => aggregate(canonicalFacts, spec, itemsById))),
+    items,
   });
 }

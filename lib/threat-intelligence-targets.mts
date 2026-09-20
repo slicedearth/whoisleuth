@@ -7,10 +7,13 @@ import {
   exactKeys,
   strictBoundedString,
 } from './bounded-contract-normalizers.mts';
+import {
+  CURATED_CONNECTOR_ENTITY_VALUES, CURATED_CONNECTOR_TARGET_EXPOSURES,
+  THREAT_INTELLIGENCE_TARGET_EXPOSURES,
+} from './threat-intelligence-types.mts';
 import type {
   CuratedConnectorEntityType,
   CuratedConnectorTarget,
-  CuratedConnectorTargetExposure,
   ThreatIntelligenceTarget,
   ThreatIntelligenceTargetExposure,
   ThreatIntelligenceTargetType,
@@ -18,53 +21,12 @@ import type {
 
 export const MAX_THREAT_INTELLIGENCE_URL_LENGTH = 2048;
 
-const TARGET_EXPOSURES: Readonly<
-  Record<
-    ThreatIntelligenceTargetType,
-    ReadonlySet<ThreatIntelligenceTargetExposure>
-  >
-> = Object.freeze({
-  domain: new Set<ThreatIntelligenceTargetExposure>(['registrable_domain']),
-  url: new Set<ThreatIntelligenceTargetExposure>([
-    'registrable_domain',
-    'hostname',
-    'origin',
-    'full_url',
-  ]),
+const TARGET_EXPOSURES: Readonly<Record<ThreatIntelligenceTargetType, readonly ThreatIntelligenceTargetExposure[]>> = Object.freeze({
+  domain: Object.freeze(['registrable_domain'] as const),
+  url: THREAT_INTELLIGENCE_TARGET_EXPOSURES,
 });
 
-export const CURATED_CONNECTOR_ENTITY_TYPES =
-  new Set<CuratedConnectorEntityType>([
-    'domain',
-    'hostname',
-    'url',
-    'ipv4',
-    'ipv6',
-    'asn',
-    'certificate',
-  ]);
-
-const CONNECTOR_TARGET_EXPOSURES: Readonly<
-  Record<
-    CuratedConnectorEntityType,
-    ReadonlySet<CuratedConnectorTargetExposure>
-  >
-> = Object.freeze({
-  domain: new Set<CuratedConnectorTargetExposure>(['registrable_domain']),
-  hostname: new Set<CuratedConnectorTargetExposure>(['hostname']),
-  url: new Set<CuratedConnectorTargetExposure>([
-    'registrable_domain',
-    'hostname',
-    'origin',
-    'full_url',
-  ]),
-  ipv4: new Set<CuratedConnectorTargetExposure>(['ip_address']),
-  ipv6: new Set<CuratedConnectorTargetExposure>(['ip_address']),
-  asn: new Set<CuratedConnectorTargetExposure>(['asn']),
-  certificate: new Set<CuratedConnectorTargetExposure>([
-    'certificate_fingerprint',
-  ]),
-});
+export const CURATED_CONNECTOR_ENTITY_TYPES = new Set<CuratedConnectorEntityType>(CURATED_CONNECTOR_ENTITY_VALUES);
 
 function normalizeCertificateFingerprint(value: unknown): string | null {
   const raw = strictBoundedString(value, 128);
@@ -86,7 +48,7 @@ export function normalizeThreatIntelligenceTarget(
   if (
     (type !== 'domain' && type !== 'url')
     || typeof exposure !== 'string'
-    || !TARGET_EXPOSURES[type].has(
+    || !TARGET_EXPOSURES[type].includes(
       exposure as ThreatIntelligenceTargetExposure,
     )
   ) {
@@ -161,7 +123,7 @@ export function normalizeCuratedConnectorTarget(
   );
   const normalizedExposure = enumValue(
     exposure,
-    CONNECTOR_TARGET_EXPOSURES[type],
+    new Set(CURATED_CONNECTOR_TARGET_EXPOSURES[type]),
     'Connector target exposure',
   );
 

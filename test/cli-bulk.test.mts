@@ -346,6 +346,62 @@ describe('bulk output and runner', () => {
     assert.match(csv, /,'@unexpected$/mu);
   });
 
+  test('optional CSV metadata preserves independent clocks, source states and compact CSV bytes', () => {
+    const items: BulkLookupResult[] = [{
+      index: 0, query: 'one.test', ok: true, classified: classified('one.test'),
+      observedAt: '2026-08-01T00:00:00.000Z', collectionOrigin: 'resumed_checkpoint',
+      result: { ...compactResult('one.test'), diagnostics: {
+        version: 4,
+        rdap: { status: 'success', registrar: { status: 'partial' }, endpoint: 'private-sentinel' },
+        whois: { status: 'skipped', message: 'private-sentinel' },
+        sslbl: { status: 'private-sentinel' },
+        extension: { status: 'success', token: 'fixture' },
+      } },
+    }, { index: 1, query: '=formula', ok: false, error: '@failure', observedAt: null }];
+    const document = buildCliBulkDocument(items, { generatedAt: '2026-08-02T00:00:00.000Z' });
+    const compact = formatBulkCsv(items);
+    assert.equal(compact.split('\n')[0], 'query,domain,outcome,availability,confidence,dns_status,a,aaaa,ns,mx,null_mx,spf,dmarc,error');
+    const enriched = formatBulkCsv(items, document);
+    const [header, first, second] = enriched.split('\n');
+    assert.equal(header, `${compact.split('\n')[0]},source_schema,source_version,observed_at,report_generated_at,collection_origin,scan_mode,diagnostics_version,source_health`);
+    assert.ok(first!.startsWith(`${compact.split('\n')[1]},${document.schema},${document.version},`));
+    assert.match(first!, /,2026-08-01T00:00:00\.000Z,2026-08-02T00:00:00\.000Z,resumed_checkpoint,fast,4,/u);
+    assert.match(first!, /""rdap"":""success"",""registrar_rdap"":""partial"",""whois"":""skipped""/u);
+    assert.match(first!, /""sslbl"":null/u);
+    assert.match(second!, /^'=formula,/u);
+    assert.match(second!, /,'@failure,whoisleuth\.cli\.bulk,3,unknown,2026-08-02T00:00:00\.000Z,current_run,fast,unknown,/u);
+    assert.doesNotMatch(enriched, /private-sentinel|fixture|extension|endpoint|token/u);
+    assert.equal(formatBulkCsv(items), compact);
+    assert.throws(() => formatBulkCsv(items, { ...document, results: document.results.slice(1) }), /count/u);
+    assert.throws(() => formatBulkCsv(items, { ...document, results: [...document.results].reverse() }), /identity/u);
+    assert.throws(() => formatBulkCsv(items, { ...document, results: new Array(document.results.length) }), /identity/u);
+    const invalidClocks = formatBulkCsv(items, {
+      ...document, generatedAt: 'not a timestamp',
+      results: document.results.map((item) => ({ ...item, observedAt: '2026-02-31T00:00:00Z' })),
+    });
+    assert.match(invalidClocks, /,unknown,unknown,resumed_checkpoint,/u);
+  });
+
+  test('metadata CSV is an explicit output choice and retains stderr event separation', async () => {
+    const stdout = capture();
+    const stderr = capture();
+    let requests = 0;
+    const code = await runCli(['bulk', '--csv-with-metadata', '--events'], {
+      stdout: stdout.stream, stderr: stderr.stream, now: () => '2026-08-02T00:00:00.000Z',
+      readBulkInput: async () => 'one.test\n', classifyQuery: classified,
+      runUnifiedLookup: async (item) => { requests += 1; return compactResult(item.value); },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(requests, 1);
+    assert.match(stdout.value(), /^query,domain,/u);
+    assert.match(stdout.value(), /report_generated_at/u);
+    assert.doesNotMatch(stdout.value(), /\x1b|"event":/u);
+    assert.match(stderr.value(), /"event":"started"/u);
+    for (const option of ['--csv', '--json', '--plan', '--quiet']) {
+      assert.throws(() => parseCliArguments(['bulk', '--csv-with-metadata', option]), CliUsageError);
+    }
+  });
+
   test('registered, inconclusive, and error filters preserve authority-aware states', () => {
     const item = (domain: string, state: string): BulkLookupResult => ({
       index: 0,

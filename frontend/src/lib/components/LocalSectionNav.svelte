@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { handlesLocalLink } from '$lib/link-activation';
 
   let {
     label,
@@ -67,8 +68,9 @@
   }
 
   function activateLink(event: MouseEvent, href: `#${string}`) {
+    if (!handlesLocalLink(event)) return;
     selectHref(href);
-    if (!onnavigate || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (!onnavigate) return;
     event.preventDefault();
     onnavigate(href);
   }
@@ -83,9 +85,9 @@
           .map((link) => ({ link, element: document.getElementById(link.href.slice(1)) }))
           .filter((entry): entry is { link: (typeof links)[number]; element: HTMLElement } => Boolean(entry.element));
         if (sections.length === 0) return;
-        const threshold = window.innerWidth <= 900 ? 138 : 112;
         let current = sections[0]?.link.href ?? '';
         for (const section of sections) {
+          const threshold = (Number.parseFloat(getComputedStyle(section.element).scrollMarginTop) || 0) + 2;
           if (section.element.getBoundingClientRect().top <= threshold) current = section.link.href;
         }
         if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {
@@ -120,7 +122,6 @@
     </label>
   {/if}
   <nav class="local-nav" aria-label={label} bind:this={navigation}>
-    {#if trackCurrent}<span class="local-nav-prompt" aria-hidden="true">trace://</span>{/if}
     {#each links as link}
       <a
         href={link.href}

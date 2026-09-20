@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import ts from 'typescript';
+import { parse as parseSvelte, type AST } from 'svelte/compiler';
 
 import { scanBoundedJson } from '../lib/bounded-json.mts';
 import {
@@ -37,49 +38,56 @@ const SCHEMA_METADATA_FILES = new Set([
   'tools/schema-source-coverage.mts',
   'tools/schema-source-parsers.mts',
 ]);
+// These owners propagate markers selected by runtime validators. Static source
+// inspection cannot resolve their values; occurrence counts prove no additional
+// correctness. Keep the narrow owner/role boundary and reject stale allowances.
 export const SCHEMA_DYNAMIC_USE_ALLOWLIST = Object.freeze([
-  ['cli/archive-inspect.mts', 'writer', 2, 'Copies validated archive markers into inspection projections.'],
-  ['cli/artifact-validation/signed-review.mts', 'reader', 1, 'Confirms a directly selected signed-review contract before family-specific validation.'],
-  ['cli/artifact-verify.mts', 'reader', 1, 'Compares bounded artifact markers during manifest verification.'],
-  ['cli/artifact-verify.mts', 'writer', 7, 'Projects verified canonical and bounded artifact markers into reports.'],
-  ['cli/evidence-signing.mts', 'writer', 1, 'Copies a verified source-artifact marker into signature metadata.'],
-  ['cli/export-evidence.mts', 'reader', 1, 'Checks a builder result against its injected canonical contract marker.'],
-  ['cli/formatters/json.mts', 'writer', 1, 'Projects the selected canonical CLI result marker.'],
-  ['cli/interchange-report.mts', 'reader', 1, 'Matches a bounded container marker to a reviewed interchange contract.'],
-  ['cli/interchange-report.mts', 'writer', 1, 'Copies the matched interchange marker into a report.'],
-  ['cli/investigation-manifest.mts', 'writer', 1, 'Projects a reviewed manifest-entry marker.'],
-  ['cli/retained-artifact-diff.mts', 'reader', 1, 'Requires bounded retained documents to declare the same marker.'],
-  ['cli/risk-calibration.mts', 'writer', 1, 'Copies the validated calibration marker into report metadata.'],
-  ['cli/sharing-review.mts', 'writer', 1, 'Projects a bounded reviewed artifact marker.'],
-  ['frontend/src/lib/analysis/case-evidence-checkpoint.ts', 'reader', 1, 'Compares a retained, normalised source-schema identity without selecting a schema handler.'],
-  ['frontend/src/lib/browser-local-data-definitions.ts', 'reader', 1, 'Compares the marker selected by a canonical collection definition.'],
-  ['frontend/src/lib/components/CaseRenderedCapture.svelte', 'reader', 1, 'Dispatches a selected local capture through the canonical manifest reader.'],
-  ['frontend/src/lib/components/ExternalFindingsImport.svelte', 'reader', 4, 'Dispatches bounded local imports through reviewed marker families.'],
-  ['frontend/src/routes/(console)/bulk/+page.svelte', 'writer', 1, 'Initialises a browser-local store from its reviewed contract constant.'],
-  ['packages/cases/case-response-model.mts', 'writer', 1, 'Copies bounded source-provenance fields after local normalisation.'],
-  ['packages/contracts/analyst-interchange.mts', 'writer', 1, 'Registers the reviewed external profile identity.'],
-  ['packages/contracts/case-supported-contract-baseline.mts', 'writer', 1, 'Projects a validated compatibility marker into the Case baseline.'],
-  ['packages/contracts/extracted-domain-lifecycle.mts', 'reader', 1, 'Matches immutable fixtures to registered lifecycle contracts.'],
-  ['packages/contracts/extracted-domain-lifecycle.mts', 'writer', 7, 'Projects statically registered lifecycle identities.'],
-  ['packages/contracts/privacy-data-flow-catalogue.mts', 'writer', 5, 'Projects validated canonical lifecycle identities.'],
-  ['packages/interchange/external-findings-converters.mts', 'reader', 1, 'Checks a marker supplied by a reviewed observation-row adapter.'],
-  ['packages/interchange/external-findings-import.mts', 'reader', 1, 'Compares bounded nested source-provenance markers.'],
-  ['packages/interchange/external-findings-import.mts', 'writer', 1, 'Copies a validated nested source-provenance marker.'],
-  ['packages/investigation/investigation-capsule.mts', 'writer', 1, 'Projects the linked evidence contract marker.'],
-  ['packages/monitoring/scheduled-monitor-model.mts', 'writer', 1, 'Copies a normalised monitor-state marker into an export.'],
-  ['packages/relationships/case-relationship-graph-export.mts', 'writer', 2, 'Copies canonical graph markers into portable projections.'],
-  ['packages/workspace/workspace-archive-crypto.mts', 'writer', 1, 'Copies a validated envelope marker into authenticated metadata.'],
-  ['packages/workspace/workspace-archive.mts', 'reader', 3, 'Compares bounded archive-section markers with canonical definitions.'],
-  ['packages/workspace/workspace-archive.mts', 'writer', 7, 'Projects canonical section markers into runtime definitions and manifests.'],
-  ['tools/evidence-storage-measurement.mts', 'writer', 1, 'Copies a validated measurement-fixture marker into the deterministic profile.'],
-  ['tools/first-use-analyst-study.mts', 'writer', 2, 'Projects fixed study-task markers into local reports.'],
-  ['tools/registry-fixture-freshness.mts', 'writer', 1, 'Copies fixed fixture provenance into a maintainer report.'],
-  ['tools/synthetic-analyst-journeys.mts', 'writer', 3, 'Projects fixed journey markers into maintainer results.'],
-  ['tools/technology-example-review.mts', 'writer', 3, 'Projects fixed review-input and provenance markers.'],
-  ['tools/technology-fixture-review.mts', 'reader', 1, 'Checks a bounded fixture against its reviewed source marker.'],
-  ['tools/technology-fixture-review.mts', 'writer', 1, 'Copies a fixed reviewed-fixture marker into a maintainer record.'],
-  ['tools/technology-review-candidate.mts', 'writer', 1, 'Copies a fixed review-input marker into a candidate record.'],
-  ['tools/technology-signature-benchmark.mts', 'writer', 2, 'Copies fixed signature-fixture markers into a benchmark record.'],
+  ['cli/archive-inspect.mts', 'writer', 'Copies validated archive markers into inspection projections.'],
+  ['cli/artifact-validation/signed-review.mts', 'reader', 'Confirms a directly selected signed-review contract before family-specific validation.'],
+  ['cli/artifact-verify.mts', 'reader', 'Compares bounded artifact markers during manifest verification.'],
+  ['cli/artifact-verify.mts', 'writer', 'Projects verified canonical and bounded artifact markers into reports.'],
+  ['cli/evidence-signing.mts', 'writer', 'Copies a verified source-artifact marker into signature metadata.'],
+  ['cli/export-evidence.mts', 'reader', 'Checks a builder result against its injected canonical contract marker.'],
+  ['cli/formatters/json.mts', 'writer', 'Projects the selected canonical CLI result marker.'],
+  ['cli/interchange-report.mts', 'reader', 'Matches a bounded container marker to a reviewed interchange contract.'],
+  ['cli/interchange-report.mts', 'writer', 'Copies the matched interchange marker into a report.'],
+  ['cli/investigation-artifacts.mts', 'reader', 'Checks fixed-recipe outputs against canonical format identities and existing reusable-input validators.'],
+  ['cli/investigation-artifacts.mts', 'writer', 'Copies the checked output identity into content-bound checkpoint metadata.'],
+  ['packages/investigation/investigation-manifest.mts', 'writer', 'Projects a reviewed manifest-entry marker.'],
+  ['cli/retained-artifact-diff.mts', 'reader', 'Requires bounded retained documents to declare the same marker.'],
+  ['cli/risk-calibration.mts', 'writer', 'Copies the validated calibration marker into report metadata.'],
+  ['cli/sharing-review.mts', 'writer', 'Projects a bounded reviewed artifact marker.'],
+  ['frontend/src/lib/analysis/case-evidence-checkpoint.ts', 'reader', 'Compares a retained, normalised source-schema identity without selecting a schema handler.'],
+  ['frontend/src/lib/browser-local-data-definitions.ts', 'reader', 'Compares the marker selected by a canonical collection definition.'],
+  ['frontend/src/lib/components/CaseRenderedCapture.svelte', 'reader', 'Dispatches a selected local capture through the canonical manifest reader.'],
+  ['frontend/src/lib/components/ExternalFindingsImport.svelte', 'reader', 'Dispatches bounded local imports through reviewed marker families.'],
+  ['frontend/src/routes/(console)/bulk/+page.svelte', 'writer', 'Initialises a browser-local store from its reviewed contract constant.'],
+  ['packages/cases/case-response-model.mts', 'writer', 'Copies bounded source-provenance fields after local normalisation.'],
+  ['packages/contracts/analyst-interchange.mts', 'writer', 'Registers the reviewed external profile identity.'],
+  ['packages/contracts/case-supported-contract-baseline.mts', 'writer', 'Projects a validated compatibility marker into the Case baseline.'],
+  ['packages/contracts/extracted-domain-lifecycle.mts', 'reader', 'Matches immutable fixtures to registered lifecycle contracts.'],
+  ['packages/contracts/extracted-domain-lifecycle.mts', 'writer', 'Projects statically registered lifecycle identities.'],
+  ['packages/contracts/privacy-data-flow-catalogue.mts', 'writer', 'Projects validated canonical lifecycle identities.'],
+  ['packages/interchange/external-findings-converters.mts', 'reader', 'Checks a marker supplied by a reviewed observation-row adapter.'],
+  ['packages/interchange/external-findings-import.mts', 'writer', 'Copies a validated nested source-provenance marker.'],
+  ['packages/investigation/investigation-capsule.mts', 'writer', 'Projects the linked evidence contract marker.'],
+  ['packages/investigation/investigation-capsule.mts', 'reader', 'Compares an exact external source marker after independent file identity verification.'],
+  ['packages/investigation/investigation-package.mts', 'reader', 'Matches bounded manifest markers to the included files and exact capsule source identities.'],
+  ['packages/investigation/investigation-package.mts', 'writer', 'Retains bounded source markers in an in-memory file-identity review, without selecting a source-format validator.'],
+  ['packages/monitoring/scheduled-monitor-model.mts', 'writer', 'Copies a normalised monitor-state marker into an export.'],
+  ['packages/relationships/case-relationship-graph-export.mts', 'writer', 'Copies canonical graph markers into portable projections.'],
+  ['packages/workspace/workspace-archive-crypto.mts', 'writer', 'Copies a validated envelope marker into authenticated metadata.'],
+  ['packages/workspace/workspace-archive.mts', 'reader', 'Compares bounded archive-section markers with canonical definitions.'],
+  ['packages/workspace/workspace-archive.mts', 'writer', 'Projects canonical section markers into runtime definitions and manifests.'],
+  ['tools/evidence-storage-measurement.mts', 'writer', 'Copies a validated measurement-fixture marker into the deterministic profile.'],
+  ['tools/first-use-analyst-study.mts', 'writer', 'Projects fixed study-task markers into local reports.'],
+  ['tools/registry-fixture-freshness.mts', 'writer', 'Copies fixed fixture provenance into a maintainer report.'],
+  ['tools/synthetic-analyst-journeys.mts', 'writer', 'Projects fixed journey markers into maintainer results.'],
+  ['tools/technology-example-review.mts', 'writer', 'Projects fixed review-input and provenance markers.'],
+  ['tools/technology-fixture-review.mts', 'reader', 'Checks a bounded fixture against its reviewed source marker.'],
+  ['tools/technology-fixture-review.mts', 'writer', 'Copies a fixed reviewed-fixture marker into a maintainer record.'],
+  ['tools/technology-review-candidate.mts', 'writer', 'Copies a fixed review-input marker into a candidate record.'],
+  ['tools/technology-signature-benchmark.mts', 'writer', 'Copies fixed signature-fixture markers into a benchmark record.'],
 ] as const);
 
 export type SourceOccurrence = Readonly<{
@@ -1216,320 +1224,127 @@ function discoverJsonSource(source: string, file: string): SourceFileDiscovery {
   };
 }
 
-function maskMatches(value: string[], source: string, pattern: RegExp): void {
-  for (const match of source.matchAll(pattern)) {
-    const start = match.index ?? 0;
-    for (let index = start; index < start + match[0].length; index += 1) {
-      if (value[index] !== '\n' && value[index] !== '\r') value[index] = ' ';
-    }
-  }
-}
-
-type ElementBlock = Readonly<{
-  start: number;
-  end: number;
-  contentStart: number;
-  contentEnd: number;
-}>;
-
-type MarkupExpressionBlock = Readonly<{
-  start: number;
-  contentStart: number;
-  contentEnd: number;
-}>;
-
-type MarkupOpeningTagBlock = Readonly<{
-  start: number;
-  end: number;
-  contentStart: number;
-  contentEnd: number;
-}>;
-
-function markupExpressionBlocks(source: string, file: string): MarkupExpressionBlock[] {
-  const blocks: MarkupExpressionBlock[] = [];
-  for (let start = 0; start < source.length; start += 1) {
-    if (source[start] !== '{') continue;
-    let depth = 1;
-    let quote: '"' | "'" | '`' | null = null;
-    let escaped = false;
-    let end = start + 1;
-    for (; end < source.length && depth > 0; end += 1) {
-      const character = source[end]!;
-      if (quote) {
-        if (escaped) escaped = false;
-        else if (character === '\\') escaped = true;
-        else if (character === quote) quote = null;
-        continue;
-      }
-      if (character === '"' || character === "'" || character === '`') {
-        quote = character;
-      } else if (character === '{') {
-        depth += 1;
-      } else if (character === '}') {
-        depth -= 1;
-      }
-    }
-    if (depth !== 0) throw new TypeError(`Schema source ${file} contains an unterminated markup expression.`);
-    const contentStart = start + 1;
-    const contentEnd = end - 1;
-    const first = source.slice(contentStart, contentEnd).trimStart()[0] ?? '';
-    if (!'#/:@'.includes(first)) {
-      blocks.push({ start, contentStart, contentEnd });
-      if (blocks.length > MAX_SCHEMA_SOURCE_BINDINGS) {
-        throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} markup expressions.`);
-      }
-    }
-    start = contentEnd;
-  }
-  return blocks;
-}
-
-function elementBlocks(source: string, tagName: 'script' | 'style', file: string): ElementBlock[] {
-  const lower = source.toLowerCase();
-  const opening = `<${tagName}`;
-  const closing = `</${tagName}>`;
-  const blocks: ElementBlock[] = [];
-  let cursor = 0;
-  while (cursor < source.length) {
-    const start = lower.indexOf(opening, cursor);
-    if (start < 0) break;
-    const boundary = lower[start + opening.length] ?? '';
-    if (boundary && !/[\s>/]/u.test(boundary)) {
-      cursor = start + opening.length;
-      continue;
-    }
-    let quote: '"' | "'" | null = null;
-    let openingEnd = -1;
-    for (let index = start + opening.length; index < source.length; index += 1) {
-      const character = source[index]!;
-      if (quote) {
-        if (character === quote) quote = null;
-      } else if (character === '"' || character === "'") {
-        quote = character;
-      } else if (character === '>') {
-        openingEnd = index;
-        break;
-      }
-    }
-    if (openingEnd < 0) throw new TypeError(`Schema source ${file} contains an unterminated <${tagName}> tag.`);
-    const contentStart = openingEnd + 1;
-    const contentEnd = lower.indexOf(closing, contentStart);
-    if (contentEnd < 0) throw new TypeError(`Schema source ${file} contains an unterminated <${tagName}> block.`);
-    const end = contentEnd + closing.length;
-    blocks.push({ start, end, contentStart, contentEnd });
-    if (blocks.length > MAX_SCHEMA_SOURCE_BINDINGS) {
-      throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} element blocks.`);
-    }
-    cursor = end;
-  }
-  return blocks;
-}
-
-function markupOpeningTagBlocks(source: string, file: string): MarkupOpeningTagBlock[] {
-  const blocks: MarkupOpeningTagBlock[] = [];
-  for (let start = 0; start < source.length; start += 1) {
-    if (source[start] !== '<' || !/[A-Za-z]/u.test(source[start + 1] ?? '')) continue;
-    let quote: '"' | "'" | '`' | null = null;
-    let escaped = false;
-    let braceDepth = 0;
-    let end = start + 1;
-    for (; end < source.length; end += 1) {
-      const character = source[end]!;
-      if (quote) {
-        if (escaped) escaped = false;
-        else if (character === '\\') escaped = true;
-        else if (character === quote) quote = null;
-        continue;
-      }
-      if (character === '"' || character === "'" || character === '`') {
-        quote = character;
-      } else if (character === '{') {
-        braceDepth += 1;
-      } else if (character === '}') {
-        braceDepth = Math.max(0, braceDepth - 1);
-      } else if (character === '>' && braceDepth === 0) {
-        break;
-      }
-    }
-    if (end >= source.length) throw new TypeError(`Schema source ${file} contains an unterminated markup tag.`);
-    blocks.push({ start, end: end + 1, contentStart: start + 1, contentEnd: end });
-    if (blocks.length > MAX_SCHEMA_SOURCE_BINDINGS) {
-      throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} markup tags.`);
-    }
-    start = end;
-  }
-  return blocks;
-}
-
-const SCHEMA_ATTRIBUTE_NAMED_REFERENCES = Object.freeze(new Map<string, string>([
-  ['NewLine', '\n'],
-  ['Tab', '\t'],
-  ['amp', '&'],
-  ['apos', "'"],
-  ['colon', ':'],
-  ['gt', '>'],
-  ['lowbar', '_'],
-  ['lt', '<'],
-  ['period', '.'],
-  ['quot', '"'],
-]));
-
-function decodeBoundedSchemaAttribute(value: string, file: string): Readonly<{ value: string; complete: boolean }> {
-  boundedCandidate(value, file);
-  let complete = true;
-  const decoded = value.replace(/&(#(?:[xX][0-9a-fA-F]+|\d+)|[A-Za-z][A-Za-z0-9]+);?/gu, (match, encoded: string) => {
-    if (encoded.startsWith('#')) {
-      const hexadecimal = encoded[1]?.toLowerCase() === 'x';
-      const digits = encoded.slice(hexadecimal ? 2 : 1);
-      const codePoint = Number.parseInt(digits, hexadecimal ? 16 : 10);
-      if (!Number.isSafeInteger(codePoint) || codePoint <= 0 || codePoint > 0x10ffff) {
-        complete = false;
-        return match;
-      }
-      return String.fromCodePoint(codePoint);
-    }
-    const named = SCHEMA_ATTRIBUTE_NAMED_REFERENCES.get(encoded);
-    if (named === undefined) {
-      complete = false;
-      return match;
-    }
-    return named;
-  });
-  return Object.freeze({ value: boundedCandidate(decoded, file), complete });
-}
-
 function discoverSvelteSource(source: string, file: string): SourceFileDiscovery {
-  const occurrences: SourceOccurrence[] = [];
-  const definitions: SourceDefinition[] = [];
-  const dynamicConstructions: DynamicConstruction[] = [];
-  const imports: SourceImportBinding[] = [];
-  const aliases: SourceSchemaAlias[] = [];
-  const emitters: SourceSchemaEmitter[] = [];
-  const localDeclarations: SourceLocalDeclaration[] = [];
+  // The component compiler owns script, expression, comment and entity syntax.
+  // Reuse the existing TypeScript schema analysis only on compiler-owned ranges.
+  let root: AST.Root;
+  try {
+    root = parseSvelte(source, { filename: file, modern: true });
+  } catch (cause) {
+    throw new TypeError(`Schema source ${file} must contain valid bounded Svelte syntax.`, { cause });
+  }
+  const result = {
+    occurrences: [] as SourceOccurrence[],
+    definitions: [] as SourceDefinition[],
+    dynamicConstructions: [] as DynamicConstruction[],
+    imports: [] as SourceImportBinding[],
+    aliases: [] as SourceSchemaAlias[],
+    emitters: [] as SourceSchemaEmitter[],
+    localDeclarations: [] as SourceLocalDeclaration[],
+  };
   const referencedSymbols = new Set<string>();
   const locateLine = lineLocator(source);
-  const uncommented = source.split('');
-  maskMatches(uncommented, source, /<!--[\s\S]*?-->/gu);
-  maskMatches(uncommented, source, /\{\/\*[\s\S]*?\*\/\}/gu);
-  const admittedSource = uncommented.join('');
-  const withoutScripts = admittedSource.split('');
-  for (const block of elementBlocks(admittedSource, 'script', file)) {
-    const content = admittedSource.slice(block.contentStart, block.contentEnd);
-    const contentOffset = block.contentStart;
-    const result = discoverTypeScriptSource(content, file, locateLine(contentOffset) - 1);
-    appendBounded(occurrences, result.occurrences, MAX_SCHEMA_SOURCE_OCCURRENCES, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_OCCURRENCES} identifier occurrences.`);
-    appendBounded(definitions, result.definitions, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-    appendBounded(dynamicConstructions, result.dynamicConstructions, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-    appendBounded(imports, result.imports, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-    appendBounded(aliases, result.aliases, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-    appendBounded(emitters, result.emitters, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-    appendBounded(localDeclarations, result.localDeclarations, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} local declarations.`);
-    for (const symbol of result.referencedSymbols) {
+  const merge = (incoming: SourceFileDiscovery, script = false): void => {
+    appendBounded(result.occurrences, incoming.occurrences, MAX_SCHEMA_SOURCE_OCCURRENCES,
+      `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_OCCURRENCES} identifier occurrences.`);
+    appendBounded(result.emitters, incoming.emitters, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds schema bindings.`);
+    appendBounded(result.dynamicConstructions, incoming.dynamicConstructions, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds schema bindings.`);
+    if (script) {
+      appendBounded(result.definitions, incoming.definitions, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds schema bindings.`);
+      appendBounded(result.imports, incoming.imports, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds schema bindings.`);
+      appendBounded(result.aliases, incoming.aliases, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds schema bindings.`);
+      appendBounded(result.localDeclarations, incoming.localDeclarations, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds local declarations.`);
+    }
+    for (const symbol of incoming.referencedSymbols) {
       if (!referencedSymbols.has(symbol) && referencedSymbols.size >= MAX_SCHEMA_SOURCE_BINDINGS) {
-        throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
+        throw new TypeError(`Schema source ${file} exceeds schema bindings.`);
       }
       referencedSymbols.add(symbol);
     }
-    for (let index = block.start; index < block.end; index += 1) {
-      withoutScripts[index] = ' ';
+  };
+  const sourceRange = (value: unknown): { start: number; end: number } => {
+    const node = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+    if (typeof node.start !== 'number' || typeof node.end !== 'number'
+      || !Number.isSafeInteger(node.start) || !Number.isSafeInteger(node.end)
+      || node.start < 0 || node.end < node.start || node.end > source.length) {
+      throw new TypeError(`Schema source ${file} contains an invalid compiler range.`);
     }
+    return { start: node.start, end: node.end };
+  };
+  const snippet = (value: unknown): string => {
+    const { start, end } = sourceRange(value);
+    return source.slice(start, end);
+  };
+  const expression = (node: unknown, schema = false): void => {
+    const value = snippet(node);
+    const wrapped = schema ? `const __MARKUP_VALUE = { schema: (${value}) };`
+      : `const __MARKUP_VALUE = (${value});`;
+    merge(discoverTypeScriptSource(wrapped, file, locateLine(sourceRange(node).start) - 1));
+  };
+  for (const script of [root.module, root.instance]) {
+    if (script) merge(discoverTypeScriptSource(snippet(script.content), file, locateLine(sourceRange(script.content).start) - 1), true);
   }
-  const markupCharacters = withoutScripts;
-  const markupSource = markupCharacters.join('');
-  for (const block of elementBlocks(markupSource, 'style', file)) {
-    for (let index = block.start; index < block.end; index += 1) markupCharacters[index] = ' ';
-  }
-  const markup = markupCharacters.join('');
-  const openingTags = markupOpeningTagBlocks(markup, file);
-  const recordMarkupSchemaValue = (rawValue: string, position: number): void => {
-    const line = locateLine(position);
-    const decoded = decodeBoundedSchemaAttribute(rawValue, file);
-    if (!decoded.complete) {
-      appendBounded(emitters, [{ identifier: null, file, line, symbol: null, role: 'writer' }], MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-      appendBounded(dynamicConstructions, [{ file, line, identifier: null, reason: 'unresolved_schema_emitter' }], MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-      return;
-    }
-    const identifier = exactSchemaIdentifier(decoded.value);
-    if (identifier) {
-      appendBounded(emitters, [{ identifier, file, line, symbol: null, role: 'writer' }], MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-      if (decoded.value !== rawValue) {
-        appendBounded(occurrences, [{ identifier, file, line }], MAX_SCHEMA_SOURCE_OCCURRENCES, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_OCCURRENCES} identifier occurrences.`);
+
+  const text = (value: string, start: number): void => {
+    for (const match of value.matchAll(CASE_INSENSITIVE_TOKEN_PATTERN)) {
+      const identifier = match[0]!;
+      const line = locateLine(start + (match.index ?? 0));
+      if (identifier === identifier.toLowerCase()) {
+        appendBounded(result.occurrences, [{ identifier, file, line }], MAX_SCHEMA_SOURCE_OCCURRENCES,
+          `Schema source ${file} exceeds identifier occurrences.`);
+      } else {
+        appendBounded(result.dynamicConstructions, [{ identifier: identifier.toLowerCase(), file, line, reason: 'case_changed' }],
+          MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds schema bindings.`);
       }
-    } else if (/whoisleuth/iu.test(decoded.value)) {
-      appendBounded(dynamicConstructions, [{ file, line, identifier: null, reason: 'malformed_schema_identifier' }], MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
     }
   };
-  for (const tag of openingTags) {
-    const content = markup.slice(tag.contentStart, tag.contentEnd);
-    const staticAttribute = /(?:^|\s)(?:bind:)?schema\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>{}]+))/giu;
-    for (const match of content.matchAll(staticAttribute)) {
-      const value = match[1] ?? match[2] ?? match[3] ?? '';
-      recordMarkupSchemaValue(value, tag.contentStart + (match.index ?? 0));
+  const stack: Array<{ node: unknown; depth: number }> = [{ node: root.fragment, depth: 0 }];
+  let nodes = 0;
+  while (stack.length) {
+    const { node: value, depth } = stack.pop()!;
+    if (!value || typeof value !== 'object') continue;
+    const node = value as Record<string, unknown>;
+    if (typeof node.type !== 'string') continue;
+    if (++nodes > MAX_SCHEMA_SOURCE_AST_NODES || depth > MAX_SCHEMA_SOURCE_AST_DEPTH) {
+      throw new TypeError(`Schema source ${file} exceeds bounded Svelte syntax nodes or nesting.`);
     }
-    const bareAttribute = /(?:^|\s)(?:bind:)?schema(?=\s|\/|$)(?!\s*=)/giu;
-    for (const match of content.matchAll(bareAttribute)) {
-      const line = locateLine(tag.contentStart + (match.index ?? 0));
-      appendBounded(emitters, [{ identifier: null, file, line, symbol: null, role: 'writer' }], MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-      appendBounded(dynamicConstructions, [{ file, line, identifier: null, reason: 'unresolved_schema_emitter' }], MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-    }
-  }
-  for (const block of markupExpressionBlocks(markup, file)) {
-    const expression = markup.slice(block.contentStart, block.contentEnd);
-    const prefix = markup.slice(Math.max(0, block.start - 80), block.start);
-    const directSchemaAttribute = /\bschema\s*=\s*$/iu.test(prefix);
-    const insideOpeningTag = openingTags.some((tag) => block.start > tag.start && block.start < tag.end);
-    const shorthandSchemaAttribute = insideOpeningTag && expression.trim() === 'schema';
-    const schemaSpreadAttribute = insideOpeningTag && /^\.\.\.\s*schema$/u.test(expression.trim());
-    if (shorthandSchemaAttribute || schemaSpreadAttribute) {
-      const line = locateLine(block.start);
-      appendBounded(emitters, [{ identifier: null, file, line, symbol: 'schema', role: 'writer' }], MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-      referencedSymbols.add('schema');
+    if (node.type === 'Comment') continue;
+    if (node.type === 'Text') {
+      const item = value as AST.Text;
+      text(item.data, item.start);
       continue;
     }
-    if (!directSchemaAttribute && !/(?:\bschema\b|whoisleuth)/iu.test(expression)) continue;
-    const wrapped = directSchemaAttribute
-      ? `const __MARKUP_VALUE = { schema: (${expression}) };`
-      : `const __MARKUP_VALUE = (${expression});`;
-    const result = discoverTypeScriptSource(wrapped, file, locateLine(block.contentStart) - 1);
-    appendBounded(dynamicConstructions, result.dynamicConstructions, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-    appendBounded(emitters, result.emitters, MAX_SCHEMA_SOURCE_BINDINGS, `Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-    for (const symbol of result.referencedSymbols) {
-      if (!referencedSymbols.has(symbol) && referencedSymbols.size >= MAX_SCHEMA_SOURCE_BINDINGS) {
-        throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
+    if (node.type === 'Attribute' && node.name === 'schema') {
+      const item = value as AST.Attribute;
+      const parts = item.value === true ? [] : Array.isArray(item.value) ? item.value : [item.value];
+      const code = parts.length ? parts.map((part) => part.type === 'Text'
+        ? JSON.stringify(part.data) : `(${snippet(part.expression)})`).join(' + ') : 'true';
+      merge(discoverTypeScriptSource(`const __MARKUP_VALUE = { schema: ${code} };`, file, locateLine(item.start) - 1));
+      continue;
+    }
+    if (node.type === 'BindDirective' && node.name === 'schema') {
+      expression((value as AST.BindDirective).expression, true);
+      continue;
+    }
+    if (node.type === 'SpreadAttribute') {
+      const item = value as AST.SpreadAttribute;
+      // A schema shorthand/spread is still a marker use, not a new definition.
+      expression(item.expression, item.expression.type === 'Identifier' && item.expression.name === 'schema');
+      continue;
+    }
+    for (const [key, child] of Object.entries(node).reverse()) {
+      if (key === 'expression' || key === 'test' || key === 'key') {
+        if (child && typeof child === 'object') expression(child);
+      } else if (key === 'declaration' && child && typeof child === 'object') {
+        merge(discoverTypeScriptSource(snippet(child), file, locateLine((child as AST.BaseNode).start) - 1), true);
+      } else if (Array.isArray(child)) {
+        for (let index = child.length - 1; index >= 0; index -= 1) stack.push({ node: child[index], depth: depth + 1 });
+      } else if (child && typeof child === 'object' && 'type' in child) {
+        stack.push({ node: child, depth: depth + 1 });
       }
-      referencedSymbols.add(symbol);
     }
   }
-  for (const match of markup.matchAll(CASE_INSENSITIVE_TOKEN_PATTERN)) {
-    const raw = match[0];
-    if (!raw) continue;
-    if (raw !== raw.toLowerCase()) {
-      if (dynamicConstructions.length >= MAX_SCHEMA_SOURCE_BINDINGS) {
-        throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_BINDINGS} schema bindings.`);
-      }
-      dynamicConstructions.push({
-        file,
-        line: locateLine(match.index ?? 0),
-        identifier: raw.toLowerCase(),
-        reason: 'case_changed',
-      });
-    } else {
-      if (occurrences.length >= MAX_SCHEMA_SOURCE_OCCURRENCES) {
-        throw new TypeError(`Schema source ${file} exceeds ${MAX_SCHEMA_SOURCE_OCCURRENCES} identifier occurrences.`);
-      }
-      occurrences.push({ identifier: raw, file, line: locateLine(match.index ?? 0) });
-    }
-  }
-  return {
-    occurrences,
-    definitions,
-    dynamicConstructions,
-    imports,
-    aliases,
-    emitters,
-    localDeclarations,
-    referencedSymbols: [...referencedSymbols].sort(),
-  };
+  return { ...result, referencedSymbols: [...referencedSymbols].sort() };
 }
 
 export function discoverSchemaIdentifiersInSource(source: string, file: string): SourceFileDiscovery {

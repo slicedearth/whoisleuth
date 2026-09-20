@@ -1,10 +1,14 @@
 import { defineSchemaCompatibility } from './schema-compatibility.mts';
-import { buildExtractedLifecycleFamilyV2 } from './extracted-domain-lifecycle.mts';
+import { buildExtractedLifecycleFamily } from './extracted-domain-lifecycle.mts';
 import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 
 export const INVESTIGATION_PROJECTION_CONTRACT_OWNER = 'packages/contracts/investigation-projections.mts';
 export const CAMPAIGN_TEMPORAL_REVIEW_SCHEMA = 'whoisleuth.campaign-temporal-review';
-export const CAMPAIGN_TEMPORAL_REVIEW_VERSION = 1;
+export const CAMPAIGN_TEMPORAL_REVIEW_VERSION = 2;
+export const CAMPAIGN_TEMPORAL_CANONICALIZATION_ROUTES = Object.freeze([
+  Object.freeze({ version: 1, canonicalization: 'sorted-json-v1' as const, explicit: false }),
+  Object.freeze({ version: CAMPAIGN_TEMPORAL_REVIEW_VERSION, canonicalization: 'sorted-json-v2' as const, explicit: true }),
+]);
 export const PARENT_DOMAIN_CAMPAIGN_REVIEW_SCHEMA = 'whoisleuth.parent-domain-campaign-review';
 export const PARENT_DOMAIN_CAMPAIGN_REVIEW_VERSION = 1;
 export const MAX_PARENT_DOMAIN_CAMPAIGN_REVIEW_BYTES = 512 * 1024;
@@ -18,10 +22,10 @@ export const INVESTIGATION_SEARCH_VERSION = 1;
 
 const CAMPAIGN_TEMPORAL_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.campaign-temporal-review', kind: 'export', schema: CAMPAIGN_TEMPORAL_REVIEW_SCHEMA,
-  currentVersion: CAMPAIGN_TEMPORAL_REVIEW_VERSION, supportedVersions: [CAMPAIGN_TEMPORAL_REVIEW_VERSION],
+  currentVersion: CAMPAIGN_TEMPORAL_REVIEW_VERSION, supportedVersions: [1, CAMPAIGN_TEMPORAL_REVIEW_VERSION],
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only',
   writeSemantics: 'read_only', byteBudget: null, owner: INVESTIGATION_PROJECTION_CONTRACT_OWNER,
-  note: 'Integrity-protected local projection of source-qualified case pins and sightings. Retained timestamps are not global first-seen or service-activation times.',
+  note: 'Integrity-protected local projection of source-qualified case pins and sightings. Version 2 declares locale-independent sorted-json-v2 integrity; version 1 retains its original undeclared sorted-json-v1 digest. Retained timestamps are not global first-seen or service-activation times.',
 });
 const PARENT_DOMAIN_CAMPAIGN_REVIEW_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.parent-domain-campaign-review', kind: 'export', schema: PARENT_DOMAIN_CAMPAIGN_REVIEW_SCHEMA,
@@ -58,7 +62,7 @@ export function serialiseInvestigationProjectionJson(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
-export const INVESTIGATION_PROJECTIONS_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(buildExtractedLifecycleFamilyV2({
+export const INVESTIGATION_PROJECTIONS_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(buildExtractedLifecycleFamily({
   id: 'investigation-projections',
   owner: INVESTIGATION_PROJECTION_CONTRACT_OWNER,
   serializerExportName: 'serialiseInvestigationProjectionJson',
@@ -73,7 +77,10 @@ export const INVESTIGATION_PROJECTIONS_LIFECYCLE_FAMILY = defineSchemaLifecycleF
       lifecycleSchema: CAMPAIGN_TEMPORAL_REVIEW_SCHEMA,
       requiredKeys: ['schema', 'version', 'generatedAt', 'campaign', 'review', 'integrity'], optionalKeys: [],
       hook: { module: 'packages/investigation/campaign-temporal-review.mts', exportName: 'buildCampaignTemporalExport', role: 'builder', runtime: 'shared' },
-      fixtures: [{ id: 'campaign-temporal-review-v1', path: 'test/fixtures/extracted-domain-lifecycle/campaign-temporal-review-v1.json', bytes: 534, sha256: '77340b4a096aa52a84d8a200aacf43d4f22a959fab66c54c4faae099089c2255', version: CAMPAIGN_TEMPORAL_REVIEW_VERSION }],
+      fixtures: [
+        { id: 'campaign-temporal-review-v1', path: 'test/fixtures/extracted-domain-lifecycle/campaign-temporal-review-v1.json', bytes: 534, sha256: '77340b4a096aa52a84d8a200aacf43d4f22a959fab66c54c4faae099089c2255', version: 1 },
+        { id: 'campaign-temporal-review-v2', path: 'test/fixtures/extracted-domain-lifecycle/campaign-temporal-review-v2.json', bytes: 1508, sha256: '8914d3c4b1715283b4426ffec75efec552b515e26f5e09bd7b1e8c66f1fc495a', version: CAMPAIGN_TEMPORAL_REVIEW_VERSION },
+      ],
     },
     {
       descriptor: PARENT_DOMAIN_CAMPAIGN_REVIEW_COMPATIBILITY,

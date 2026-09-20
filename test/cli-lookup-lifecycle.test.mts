@@ -62,7 +62,7 @@ function assertRecursivelyFrozen(value: unknown): void {
 describe('CLI Lookup schema lifecycle', () => {
   test('owns one immutable extensible version history and discriminated consumer boundary', () => {
     assert.equal(CLI_LOOKUP_SCHEMA_LIFECYCLE.id, 'cli-lookup');
-    assert.equal(CLI_LOOKUP_SCHEMA_LIFECYCLE.metadata.metadataVersion, 3);
+    assert.equal(CLI_LOOKUP_SCHEMA_LIFECYCLE.metadata.metadataVersion, 4);
     assert.equal(
       SCHEMA_LIFECYCLE_REGISTRY.some((family) => family.id === CLI_LOOKUP_SCHEMA_LIFECYCLE.id),
       true,

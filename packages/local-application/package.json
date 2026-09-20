@@ -1,0 +1,10 @@
+{
+  "name": "@slicedearth/whoisleuth-local",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "description": "Local domain intelligence console with an explicitly selected filesystem workspace.",
+  "bin": { "whoisleuth-local": "bin/whoisleuth-local.mts" },
+  "engines": { "node": ">=24.19.0" }
+}

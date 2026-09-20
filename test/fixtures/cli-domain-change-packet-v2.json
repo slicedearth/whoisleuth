@@ -1,0 +1,231 @@
+{
+  "schema": "whoisleuth.domain-change-packet",
+  "version": 2,
+  "generatedAt": "2026-08-05T06:00:00.000Z",
+  "domain": "example.test",
+  "reference": "CHG-42",
+  "state": "ready",
+  "gate": {
+    "pass": true,
+    "reasons": []
+  },
+  "summary": {
+    "changedAuthoritativeRecordSets": [
+      {
+        "owner": "example.test",
+        "type": "A",
+        "beforeValues": [
+          "192.0.2.10"
+        ],
+        "afterValues": [
+          "192.0.2.20"
+        ]
+      }
+    ],
+    "preChangeState": "ready",
+    "postChangeState": "ready",
+    "assuranceState": "ready"
+  },
+  "evidence": {
+    "preChange": {
+      "schema": "whoisleuth.domain-change.review",
+      "version": 1,
+      "generatedAt": "2026-08-05T06:00:00.000Z",
+      "domain": "example.test",
+      "state": "ready",
+      "authoritativeRecordMatrix": [
+        {
+          "owner": "example.test",
+          "type": "A",
+          "state": "aligned",
+          "observations": [
+            {
+              "label": "Authority A",
+              "source": "fixture authority",
+              "state": "observed",
+              "values": [
+                "192.0.2.10"
+              ],
+              "ttlRange": {
+                "minimum": 300,
+                "maximum": 300
+              }
+            },
+            {
+              "label": "Authority B",
+              "source": "fixture authority",
+              "state": "observed",
+              "values": [
+                "192.0.2.10"
+              ],
+              "ttlRange": {
+                "minimum": 300,
+                "maximum": 300
+              }
+            }
+          ]
+        }
+      ],
+      "resolverDivergenceMatrix": [],
+      "dnssecAutomation": {
+        "state": "not_observed",
+        "cdsObserved": false,
+        "cdnskeyObserved": false,
+        "csyncObserved": false,
+        "conflictingTypes": [],
+        "detail": "No CDS, CDNSKEY, or CSYNC record was supplied."
+      },
+      "acmeDependencies": [],
+      "certificate": {
+        "state": "observed",
+        "continuity": "retained",
+        "findings": []
+      },
+      "services": [],
+      "hsts": null,
+      "gate": {
+        "pass": true,
+        "reasons": []
+      },
+      "limitations": [
+        "This local review uses only analyst-supplied observations and makes no DNS, HTTP, certificate, certificate-authority, preload-list, or provider request.",
+        "Different observations can reflect propagation, caching, split-horizon DNS, resolver policy, or collection timing; they do not establish misconfiguration by themselves.",
+        "Partial or unavailable evidence is never treated as record absence. TXT values are represented only by SHA-256 digests.",
+        "DNSSEC automation readiness describes CDS, CDNSKEY, and CSYNC publication consistency; it does not validate a cryptographic chain or authorise a registry-side change.",
+        "HSTS preload state is an analyst-supplied, source-attributed observation and must be refreshed against the nominated source before a change."
+      ]
+    },
+    "postChange": {
+      "schema": "whoisleuth.domain-change.review",
+      "version": 1,
+      "generatedAt": "2026-08-05T06:00:00.000Z",
+      "domain": "example.test",
+      "state": "ready",
+      "authoritativeRecordMatrix": [
+        {
+          "owner": "example.test",
+          "type": "A",
+          "state": "aligned",
+          "observations": [
+            {
+              "label": "Authority A",
+              "source": "fixture authority",
+              "state": "observed",
+              "values": [
+                "192.0.2.20"
+              ],
+              "ttlRange": {
+                "minimum": 300,
+                "maximum": 300
+              }
+            },
+            {
+              "label": "Authority B",
+              "source": "fixture authority",
+              "state": "observed",
+              "values": [
+                "192.0.2.20"
+              ],
+              "ttlRange": {
+                "minimum": 300,
+                "maximum": 300
+              }
+            }
+          ]
+        }
+      ],
+      "resolverDivergenceMatrix": [],
+      "dnssecAutomation": {
+        "state": "not_observed",
+        "cdsObserved": false,
+        "cdnskeyObserved": false,
+        "csyncObserved": false,
+        "conflictingTypes": [],
+        "detail": "No CDS, CDNSKEY, or CSYNC record was supplied."
+      },
+      "acmeDependencies": [],
+      "certificate": {
+        "state": "observed",
+        "continuity": "retained",
+        "findings": []
+      },
+      "services": [],
+      "hsts": null,
+      "gate": {
+        "pass": true,
+        "reasons": []
+      },
+      "limitations": [
+        "This local review uses only analyst-supplied observations and makes no DNS, HTTP, certificate, certificate-authority, preload-list, or provider request.",
+        "Different observations can reflect propagation, caching, split-horizon DNS, resolver policy, or collection timing; they do not establish misconfiguration by themselves.",
+        "Partial or unavailable evidence is never treated as record absence. TXT values are represented only by SHA-256 digests.",
+        "DNSSEC automation readiness describes CDS, CDNSKEY, and CSYNC publication consistency; it does not validate a cryptographic chain or authorise a registry-side change.",
+        "HSTS preload state is an analyst-supplied, source-attributed observation and must be refreshed against the nominated source before a change."
+      ]
+    },
+    "assurance": {
+      "schema": "whoisleuth.domain-assurance",
+      "version": 2,
+      "generatedAt": "2026-08-05T06:00:00.000Z",
+      "result": {
+        "kind": "planned-change",
+        "domain": "example.test",
+        "reference": "CHG-42",
+        "window": {
+          "startsAt": "2026-08-05T05:00:00.000Z",
+          "endsAt": "2026-08-05T07:00:00.000Z"
+        },
+        "milestones": [
+          {
+            "id": "dns",
+            "label": "DNS published",
+            "expectedBy": "2026-08-05T06:00:00.000Z",
+            "evidenceSource": "saved authority evidence",
+            "state": "observed",
+            "observedAt": "2026-08-05T06:00:00.000Z",
+            "evidenceReference": "post-change:dns"
+          }
+        ],
+        "rollbackCriteria": [
+          {
+            "id": "rollback-resolution",
+            "condition": "Resolution is unavailable",
+            "owner": "Change lead",
+            "state": "not_met"
+          }
+        ],
+        "postChangeChecks": [
+          {
+            "id": "post-dns",
+            "label": "DNS agrees",
+            "expectedState": "Two authorities agree",
+            "evidenceSource": "saved authority evidence",
+            "state": "matched",
+            "evidenceReference": "post-change:dns"
+          }
+        ],
+        "review": {
+          "state": "ready",
+          "reasons": []
+        }
+      },
+      "limitations": [
+        "This review uses only analyst-supplied planning and observation metadata and makes no network request or configuration change.",
+        "Provider labels, readiness checks, and evidence references are analyst-authored assertions; they are not independently verified by this report.",
+        "A ready result means the supplied checklist is complete under this schema. It is not a guarantee of control, recovery, successful change, or safe retirement.",
+        "Do not include passwords, recovery codes, private keys, personal contact details, or other secrets in an assurance input."
+      ]
+    }
+  },
+  "limitations": [
+    "This packet is assembled only from analyst-supplied observations and planning metadata and makes no network request or configuration change.",
+    "A ready result means the supplied bounded checks passed; it does not prove control, propagation completion, successful recovery, or absence of unobserved dependencies.",
+    "Authoritative record-set changes are reported only when both sides contain complete consistent observations; gate reasons describe incomplete comparisons.",
+    "The integrity digest detects later changes to this packet but does not authenticate its author. Use a separately managed signing key when signer authentication is required."
+  ],
+  "integrity": {
+    "algorithm": "SHA-256",
+    "canonicalization": "sorted-json-v2",
+    "digestSha256": "sha256:5340d8ab912c054748ab705f625d29e79fa385a65758075f790d78e552434ecc"
+  }
+}

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { captureReviewFixture } from './capture-review-fixture.mts';
+import { readWebCaptureManifest } from '../packages/interchange/web-capture-import.mts';
 import {
   WEB_CAPTURE_SUMMARY_SCHEMA,
   WEB_CAPTURE_MANIFEST_SCHEMA,
@@ -9,6 +11,20 @@ import {
 } from '../frontend/src/lib/analysis/web-capture-import.ts';
 
 describe('sanitised web-capture import', () => {
+  test('preserves bounded declared conditions without inventing them for older captures', () => {
+    const { manifest } = captureReviewFixture();
+    assert.equal(readWebCaptureManifest(manifest).captures[0]!.conditions, null);
+    const conditions = { browser: 'chromium', browserVersion: '151.0', viewport: { width: 1024, height: 768 }, deviceScaleFactor: 1, locale: 'en-AU', timezone: 'UTC', colourScheme: 'light' };
+    const declared = { ...manifest, captures: [{ ...manifest.captures[0]!, conditions, observerLabel: 'Analyst A', vantageLabel: 'Office' }] };
+    const parsed = readWebCaptureManifest(declared);
+    assert.deepEqual(parsed.captures[0]!.conditions, conditions);
+    assert.equal(parsed.captures[0]!.observerLabel, 'Analyst A');
+    const retained = parsed.document.findings.map(finding => finding.summary).join(' ');
+    assert.match(retained, /1024.*768.*en-AU/u); assert.match(retained, /Analyst A/u);
+    for (const invalid of [{ ...conditions, timezone: 'x'.repeat(81) }, { ...conditions, viewport: { width: 0, height: 768 } }, { ...conditions, cookies: [] }]) {
+      assert.throws(() => readWebCaptureManifest({ ...declared, captures: [{ ...declared.captures[0]!, conditions: invalid }] }));
+    }
+  });
   test('requires explicit zones for the current manifest and rejects reader-only version 1', () => {
     const zoneLess = '2026-07-01T12:00:00.000';
     assert.throws(() => parseWebCaptureSummary({
@@ -149,7 +165,7 @@ describe('sanitised web-capture import', () => {
     });
     assert.equal(document.findings.length, 1);
     assert.match(document.findings[0]?.summary || '', /api\.example\.test.*1440x900.*DOM digest/isu);
-    assert.match(document.findings[0]?.limitations.join(' ') || '', /did not receive artefact bytes/iu);
+    assert.match(document.findings[0]?.limitations.join(' ') || '', /artefact bytes and separate byte checks are not retained/iu);
   });
 
   test('partitions maximum bounded manifest metadata without slicing supported evidence', () => {
@@ -172,6 +188,8 @@ describe('sanitised web-capture import', () => {
       source: { name: 'Local capture package', reference: null, collectedAt: '2026-08-01T00:00:00Z' },
       captures: [{
         domain: 'one.example.test', capturedAt: '2026-08-01T00:00:00Z', completeness: 'partial',
+        conditions: { browser: 'B'.repeat(40), browserVersion: 'V'.repeat(80), viewport: { width: 4096, height: 4096 }, deviceScaleFactor: 8, locale: 'L'.repeat(80), timezone: 'Z'.repeat(80), colourScheme: 'dark' },
+        observerLabel: 'O'.repeat(80), vantageLabel: 'N'.repeat(80),
         limitations: ['One bounded request was unavailable.'],
         page: { title, finalOrigin: 'https://one.example.test' },
         requestDomains,
@@ -187,6 +205,7 @@ describe('sanitised web-capture import', () => {
     assert.ok(first.length > 1);
     assert.ok(first.every((finding) => finding.completeness === 'partial' && finding.summary.length <= 900));
     const retained = first.map((finding) => finding.summary).join(' ');
+    for (const [letter, count] of [['B', 40], ['V', 80], ['L', 80], ['Z', 80], ['O', 80], ['N', 80]] as const) assert.ok(retained.includes(letter.repeat(count)));
     assert.ok(retained.includes(title));
     for (const domain of requestDomains) assert.ok(retained.includes(domain), domain);
     assert.match(retained, /maximum-capture\.png.*maximum-dom-digest\.json/isu);

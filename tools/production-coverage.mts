@@ -1,15 +1,24 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { decodeBoundedUtf8, readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
+import { MAX_FORWARDING_SOURCE_BYTES, moduleForwardingSpecifier, moduleIsTypeOnly } from './module-forwarding.mts';
 
 export const MAX_PRODUCTION_COVERAGE_BYTES = 16 * 1024 * 1024;
 export const MAX_PRODUCTION_COVERAGE_FILES = 2_000;
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SAFE_SOURCE_PATH = /^(?:[-a-zA-Z0-9._+()@\[\]]+\/)*[-a-zA-Z0-9._+()@\[\]]+$/u;
-const GENERATED_SOURCE = /(?:^|\/)(?:generated\/|[^/]+\.generated\.(?:mts|ts)$)/u;
+const SOURCE_ROOTS = Object.freeze([
+  'lib', 'cli', 'bin', 'frontend/src/lib', 'frontend/src/routes', 'netlify/functions', 'packages',
+]);
+const GENERATED_SOURCE_GLOBS = Object.freeze(['**/generated/**', '**/*.generated.mts', '**/*.generated.ts']);
+function generatedSource(source: string): boolean {
+  return GENERATED_SOURCE_GLOBS.some((pattern) => path.matchesGlob(source, pattern));
+}
 const RECORD_FIELDS = Object.freeze(['LF', 'LH', 'BRF', 'BRH', 'FNF', 'FNH'] as const);
 
 export type CoverageCount = Readonly<{
@@ -46,22 +55,17 @@ export type CoverageExclusion = Readonly<{
   owner: string;
 }>;
 
+// These are owners for files outside unit instrumentation, not instrumentation
+// filters. A file that becomes measured contributes normally to every coverage
+// threshold; its browser/framework owner can remain without a declaration edit.
 export const PRODUCTION_COVERAGE_EXCLUSIONS: readonly CoverageExclusion[] = Object.freeze([
-  Object.freeze({ source: 'cli/runner-types.mts', category: 'type_only', owner: 'tsconfig.json' }),
-  Object.freeze({ source: 'frontend/src/lib/analysis/case-evidence-model.ts', category: 'compatibility_re_export', owner: 'packages/cases/case-evidence-model.mts' }),
-  Object.freeze({ source: 'frontend/src/lib/analysis/case-migration-model.ts', category: 'compatibility_re_export', owner: 'packages/cases/case-migration-model.mts' }),
-  Object.freeze({ source: 'frontend/src/lib/analysis/case-record-operations.ts', category: 'compatibility_re_export', owner: 'packages/cases/case-record-operations.mts' }),
-  Object.freeze({ source: 'frontend/src/lib/analysis/case-storage-model.ts', category: 'compatibility_re_export', owner: 'packages/cases/case-storage-model.mts' }),
-  Object.freeze({ source: 'frontend/src/lib/analysis/ct-query.ts', category: 'compatibility_re_export', owner: 'lib/ct-query.mts' }),
-  Object.freeze({ source: 'frontend/src/lib/analysis/lookup-readable-report.ts', category: 'compatibility_re_export', owner: 'lib/lookup-readable-report.mts' }),
-  Object.freeze({ source: 'frontend/src/lib/analysis/lookup-task-guidance.ts', category: 'compatibility_re_export', owner: 'packages/investigation/lookup-task-guidance.mts' }),
-  Object.freeze({ source: 'frontend/src/lib/analysis/relationship-admission-preview.ts', category: 'compatibility_re_export', owner: 'packages/relationships/relationship-admission-preview.mts' }),
   Object.freeze({ source: 'frontend/src/lib/analyst-review-state.ts', category: 'browser_adapter', owner: 'e2e/analyst-operations.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/analyst-undo.ts', category: 'browser_adapter', owner: 'e2e/analyst-operations.spec.ts' }),
+  Object.freeze({ source: 'frontend/src/lib/browser-workspace-provider.ts', category: 'browser_adapter', owner: 'e2e/browser-workspaces.spec.ts' }),
+  Object.freeze({ source: 'frontend/src/lib/browser-workspace-unlock.ts', category: 'browser_adapter', owner: 'e2e/encrypted-workspaces.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/bulk-review.ts', category: 'browser_adapter', owner: 'e2e/bulk-analysis.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/bulk-sessions.ts', category: 'browser_adapter', owner: 'e2e/bulk-session-workflows.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/campaigns.ts', category: 'browser_adapter', owner: 'e2e/investigation-search.spec.ts' }),
-  Object.freeze({ source: 'frontend/src/lib/candidate-handoff.ts', category: 'browser_adapter', owner: 'e2e/candidate-handoff.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/capabilities.ts', category: 'browser_adapter', owner: 'e2e/capabilities.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/components/demo-stages/brands.ts', category: 'compatibility_re_export', owner: 'e2e/demo.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/components/demo-stages/bulk.ts', category: 'compatibility_re_export', owner: 'e2e/demo.spec.ts' }),
@@ -69,23 +73,24 @@ export const PRODUCTION_COVERAGE_EXCLUSIONS: readonly CoverageExclusion[] = Obje
   Object.freeze({ source: 'frontend/src/lib/components/demo-stages/monitor.ts', category: 'compatibility_re_export', owner: 'e2e/demo.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/console-command-navigation.ts', category: 'browser_adapter', owner: 'e2e/design-system.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/controllers/lookup-anchor-controller.ts', category: 'browser_adapter', owner: 'e2e/lookup-anchor-navigation.spec.ts' }),
+  Object.freeze({ source: 'frontend/src/lib/controllers/case-draft.svelte.ts', category: 'browser_adapter', owner: 'e2e/case-draft-recovery.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/ct-history.ts', category: 'browser_adapter', owner: 'e2e/discover.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/detection-rules.ts', category: 'browser_adapter', owner: 'e2e/hosted-monitoring.spec.ts' }),
-  Object.freeze({ source: 'frontend/src/lib/investigation-guide-storage.ts', category: 'browser_adapter', owner: 'e2e/investigation-guide.spec.ts' }),
-  Object.freeze({ source: 'frontend/src/lib/investigation-guide.ts', category: 'browser_adapter', owner: 'e2e/investigation-guide.spec.ts' }),
+  Object.freeze({ source: 'frontend/src/lib/download-local-file.ts', category: 'browser_adapter', owner: 'e2e/investigation-package.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/investigation-search.ts', category: 'browser_adapter', owner: 'e2e/investigation-search.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/investigation-templates.ts', category: 'browser_adapter', owner: 'e2e/dashboard.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/local-data-platform-probe.ts', category: 'browser_adapter', owner: 'e2e/local-data-platform.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/relationship-observations.ts', category: 'browser_adapter', owner: 'e2e/case-relationship-workflows.spec.ts' }),
+  Object.freeze({ source: 'frontend/src/lib/review-session.ts', category: 'browser_adapter', owner: 'e2e/review-session.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/shortlist.ts', category: 'browser_adapter', owner: 'e2e/shortlist-storage.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/website-snapshots.ts', category: 'browser_adapter', owner: 'e2e/hosted-monitoring.spec.ts' }),
+  Object.freeze({ source: 'frontend/src/lib/workers/investigation-package.worker.ts', category: 'browser_adapter', owner: 'e2e/investigation-package.spec.ts' }),
+  Object.freeze({ source: 'frontend/src/lib/workers/local-application.worker.ts', category: 'browser_adapter', owner: 'e2e/local-application.spec.ts' }),
   Object.freeze({ source: 'frontend/src/lib/workspace-archive.ts', category: 'browser_adapter', owner: 'e2e/dashboard.spec.ts' }),
   Object.freeze({ source: 'frontend/src/routes/(public)/guide/+page.ts', category: 'framework_entry', owner: 'e2e/public-guide.spec.ts' }),
   Object.freeze({ source: 'frontend/src/routes/(public)/resources/[slug]/+page.ts', category: 'framework_entry', owner: 'e2e/public-guide.spec.ts' }),
   Object.freeze({ source: 'frontend/src/routes/+layout.ts', category: 'framework_entry', owner: 'frontend/src/routes/+layout.svelte' }),
-  Object.freeze({ source: 'lib/netlify-function-types.mts', category: 'type_only', owner: 'tsconfig.json' }),
-  Object.freeze({ source: 'lib/whois-contracts.mts', category: 'type_only', owner: 'tsconfig.json' }),
-  Object.freeze({ source: 'packages/investigation/lookup-artefact-inputs.mts', category: 'type_only', owner: 'tsconfig.json' }),
+  Object.freeze({ source: 'lib/local-application-worker.mts', category: 'executable_entry', owner: 'test/local-application-host.test.mts' }),
 ]);
 
 export const PRODUCTION_COVERAGE_POLICY: CoveragePolicy = Object.freeze({
@@ -186,15 +191,6 @@ function sourceArea(source: string): string | null {
 }
 
 export function readProductionCoverageInventory(repositoryRoot = REPOSITORY_ROOT): readonly string[] {
-  const roots = Object.freeze([
-    'lib',
-    'cli',
-    'bin',
-    'frontend/src/lib',
-    'frontend/src/routes',
-    'netlify/functions',
-    'packages',
-  ]);
   const sources: string[] = [];
   const visit = (relativeDirectory: string): void => {
     const entries = readdirSync(path.join(repositoryRoot, relativeDirectory), { withFileTypes: true })
@@ -202,7 +198,7 @@ export function readProductionCoverageInventory(repositoryRoot = REPOSITORY_ROOT
     for (const entry of entries) {
       const relative = `${relativeDirectory}/${entry.name}`;
       if (entry.isDirectory()) visit(relative);
-      else if (entry.isFile() && /\.(?:mts|ts)$/u.test(entry.name) && !GENERATED_SOURCE.test(relative)) {
+      else if (entry.isFile() && /\.(?:mts|ts)$/u.test(entry.name) && !generatedSource(relative)) {
         if (!SAFE_SOURCE_PATH.test(relative)) throw new TypeError(`Production source inventory contains an unsafe path: ${relative}.`);
         sources.push(relative);
         if (sources.length > MAX_PRODUCTION_COVERAGE_FILES) throw new TypeError('Production source inventory exceeds the maintained file bound.');
@@ -211,11 +207,54 @@ export function readProductionCoverageInventory(repositoryRoot = REPOSITORY_ROOT
       }
     }
   };
-  for (const root of roots) visit(root);
+  for (const root of SOURCE_ROOTS) visit(root);
   if (existsSync(path.join(repositoryRoot, 'server.mts'))) sources.push('server.mts');
   const unique = [...new Set(sources)].sort();
   if (unique.length !== sources.length || unique.length < 1) throw new TypeError('Production source inventory must be non-empty and unique.');
   return Object.freeze(unique);
+}
+
+/** Erased types use their compiler; forwarding chains require a measured owner. */
+export async function discoverStructuralCoverageExclusions(
+  report: ProductionCoverageReport,
+  inventory: readonly string[],
+  repositoryRoot = REPOSITORY_ROOT,
+  explicitExclusions: readonly CoverageExclusion[] = PRODUCTION_COVERAGE_EXCLUSIONS,
+): Promise<readonly CoverageExclusion[]> {
+  if (inventory.length > MAX_PRODUCTION_COVERAGE_FILES) throw new TypeError('Production source inventory exceeds the maintained file bound.');
+  const sources = new Set(inventory);
+  const measured = new Set(report.records.map((record) => record.source));
+  const explicit = new Set(explicitExclusions.map((item) => item.source));
+  const forwards = new Map<string, string>();
+  const exclusions: CoverageExclusion[] = [];
+  for (const source of inventory) {
+    if (measured.has(source) || explicit.has(source)) continue;
+    const bytes = await readBoundedRegularFileWithin(repositoryRoot, source, {
+      maximumBytes: MAX_FORWARDING_SOURCE_BYTES, label: 'Production structural candidate',
+    });
+    const content = decodeBoundedUtf8(bytes, 'Production source');
+    if (moduleIsTypeOnly(content, source)) {
+      exclusions.push(Object.freeze({ source, category: 'type_only',
+        owner: source.startsWith('frontend/') ? 'frontend/tsconfig.json' : 'tsconfig.json' }));
+      continue;
+    }
+    const specifier = moduleForwardingSpecifier(content, source);
+    if (!specifier?.startsWith('.')) continue;
+    const owner = path.posix.normalize(path.posix.join(path.posix.dirname(source), specifier));
+    if (sources.has(owner)) forwards.set(source, owner);
+  }
+  for (const [source, firstOwner] of forwards) {
+    let owner: string | undefined = firstOwner;
+    const seen = new Set([source]);
+    while (owner && !seen.has(owner) && !measured.has(owner)) {
+      seen.add(owner);
+      owner = forwards.get(owner);
+    }
+    if (owner && measured.has(owner)) {
+      exclusions.push(Object.freeze({ source, category: 'compatibility_re_export', owner }));
+    }
+  }
+  return Object.freeze(exclusions);
 }
 
 function numericField(value: string, label: string): number {
@@ -230,7 +269,7 @@ function finishRecord(raw: MutableRecord, index: number): ProductionCoverageReco
   if (!SAFE_SOURCE_PATH.test(raw.source) || path.isAbsolute(raw.source) || raw.source.includes('..')) {
     throw new TypeError(`Coverage record ${index} has an unsafe source path.`);
   }
-  if (GENERATED_SOURCE.test(raw.source)) {
+  if (generatedSource(raw.source)) {
     throw new TypeError(`Generated source must not contribute to production coverage: ${raw.source}.`);
   }
   for (const field of RECORD_FIELDS) {
@@ -299,30 +338,37 @@ export function parseProductionCoverage(input: string): ProductionCoverageReport
   });
 }
 
-function assertThreshold(actual: CoverageCount, minimum: number, label: string): void {
+function thresholdProblem(actual: CoverageCount, minimum: number, label: string): string | null {
   if (!Number.isFinite(minimum) || minimum < 0 || minimum > 100) throw new TypeError(`${label} threshold is invalid.`);
-  if (actual.percentage + Number.EPSILON < minimum) {
-    throw new Error(`${label} is ${actual.percentage.toFixed(2)}%; required ${minimum.toFixed(2)}%.`);
-  }
+  return actual.percentage + Number.EPSILON < minimum
+    ? `${label} is ${actual.percentage.toFixed(2)}%; required ${minimum.toFixed(2)}%.`
+    : null;
 }
 
 export function validateProductionCoverage(
   report: ProductionCoverageReport,
   policy: CoveragePolicy = PRODUCTION_COVERAGE_POLICY,
 ): void {
+  const problems: string[] = [];
   const observedAreas = new Set(report.records.map((record) => sourceArea(record.source)).filter(Boolean));
   const missingAreas = policy.requiredAreas.filter((area) => !observedAreas.has(area));
-  if (missingAreas.length) throw new Error(`Production coverage is missing maintained runtime areas: ${missingAreas.join(', ')}.`);
-  assertThreshold(report.global.lines, policy.global.lines, 'Global line coverage');
-  assertThreshold(report.global.branches, policy.global.branches, 'Global branch coverage');
-  assertThreshold(report.global.functions, policy.global.functions, 'Global function coverage');
+  if (missingAreas.length) problems.push(`Production coverage is missing maintained runtime areas: ${missingAreas.join(', ')}.`);
+  for (const metric of ['lines', 'branches', 'functions'] as const) {
+    const problem = thresholdProblem(report.global[metric], policy.global[metric], `Global ${metric === 'branches' ? 'branch' : metric.slice(0, -1)} coverage`);
+    if (problem) problems.push(problem);
+  }
   for (const [source, thresholds] of Object.entries(policy.criticalFiles)) {
     const record = report.records.find((candidate) => candidate.source === source);
-    if (!record) throw new Error(`Production coverage is missing critical source ${source}.`);
-    assertThreshold(record.lines, thresholds.lines, `${source} line coverage`);
-    assertThreshold(record.branches, thresholds.branches, `${source} branch coverage`);
-    assertThreshold(record.functions, thresholds.functions, `${source} function coverage`);
+    if (!record) {
+      problems.push(`Production coverage is missing critical source ${source}.`);
+      continue;
+    }
+    for (const metric of ['lines', 'branches', 'functions'] as const) {
+      const problem = thresholdProblem(record[metric], thresholds[metric], `${source} ${metric === 'branches' ? 'branch' : metric.slice(0, -1)} coverage`);
+      if (problem) problems.push(problem);
+    }
   }
+  if (problems.length) throw new Error(problems.join('\n'));
 }
 
 export function validateProductionCoverageInventory(
@@ -337,20 +383,21 @@ export function validateProductionCoverageInventory(
   }
   const exclusionSources = exclusions.map((item) => item.source);
   if (new Set(exclusionSources).size !== exclusionSources.length) throw new TypeError('Production coverage exclusions must be unique.');
+  const problems: string[] = [];
   for (const exclusion of exclusions) {
-    if (!inventorySet.has(exclusion.source)) throw new Error(`Production coverage exclusion is stale or unknown: ${exclusion.source}.`);
+    if (!inventorySet.has(exclusion.source)) problems.push(`Production coverage exclusion is stale or unknown: ${exclusion.source}.`);
     if (!SAFE_SOURCE_PATH.test(exclusion.owner) || !ownerExists(exclusion.owner)) {
-      throw new Error(`Production coverage exclusion owner is missing for ${exclusion.source}.`);
+      problems.push(`Production coverage exclusion owner is missing for ${exclusion.source}.`);
     }
   }
   const observed = new Set(report.records.map((record) => record.source));
   const unknown = [...observed].filter((source) => !inventorySet.has(source));
-  if (unknown.length) throw new Error(`Production coverage measured unknown source files: ${unknown.join(', ')}.`);
-  const stale = exclusions.filter((item) => observed.has(item.source));
-  if (stale.length) throw new Error(`Production coverage exclusions are now measured and must be removed: ${stale.map((item) => item.source).join(', ')}.`);
-  const excluded = new Set(exclusionSources);
+  if (unknown.length) problems.push(`Production coverage measured unknown source files: ${unknown.join(', ')}.`);
+  const unmeasuredExclusions = exclusions.filter((item) => !observed.has(item.source));
+  const excluded = new Set(unmeasuredExclusions.map((item) => item.source));
   const missing = inventory.filter((source) => !observed.has(source) && !excluded.has(source));
-  if (missing.length) throw new Error(`Production coverage has unreviewed source omissions: ${missing.join(', ')}.`);
+  if (missing.length) problems.push(`Production coverage has unreviewed source omissions: ${missing.join(', ')}.`);
+  if (problems.length) throw new Error(problems.join('\n'));
   const categories: Record<CoverageExclusion['category'], number> = {
     type_only: 0,
     compatibility_re_export: 0,
@@ -358,11 +405,11 @@ export function validateProductionCoverageInventory(
     framework_entry: 0,
     executable_entry: 0,
   };
-  for (const exclusion of exclusions) categories[exclusion.category] += 1;
+  for (const exclusion of unmeasuredExclusions) categories[exclusion.category] += 1;
   return Object.freeze({
     sourceFiles: inventory.length,
     measuredFiles: report.records.length,
-    excludedFiles: exclusions.length,
+    excludedFiles: unmeasuredExclusions.length,
     exclusionsByCategory: Object.freeze(categories),
   });
 }
@@ -383,7 +430,7 @@ export function formatProductionCoverage(
   return [
     `Production coverage: ${report.records.length} executable source files.`,
     ...(inventory ? [
-      `Inventory closure: ${inventory.measuredFiles}/${inventory.sourceFiles} measured; ${inventory.excludedFiles} explicitly owned outside unit instrumentation `
+      `Inventory closure: ${inventory.measuredFiles}/${inventory.sourceFiles} measured; ${inventory.excludedFiles} owned outside unit instrumentation `
       + `(${inventory.exclusionsByCategory.type_only} type-only, ${inventory.exclusionsByCategory.compatibility_re_export} compatibility re-exports, `
       + `${inventory.exclusionsByCategory.browser_adapter} browser adapters, ${inventory.exclusionsByCategory.framework_entry} framework entries, `
       + `${inventory.exclusionsByCategory.executable_entry} executable entries).`,
@@ -393,15 +440,48 @@ export function formatProductionCoverage(
   ].join('\n');
 }
 
-export function main(args = process.argv.slice(2)): number {
+// Instrumentation and validation share the same source boundaries and global
+// floors. Generated files discovered in another package need no script edit.
+export function productionCoverageArguments(testPattern = 'test/*.test.mts'): string[] {
+  return [
+    '--test', '--test-concurrency=4', '--experimental-test-coverage',
+    ...Object.entries(PRODUCTION_COVERAGE_POLICY.global).map(([metric, minimum]) => `--test-coverage-${metric}=${minimum}`),
+    ...SOURCE_ROOTS.flatMap((root) => ['mts', 'ts'].map((extension) => `--test-coverage-include=${root}/**/*.${extension}`)),
+    '--test-coverage-include=server.mts',
+    ...GENERATED_SOURCE_GLOBS.map((pattern) => `--test-coverage-exclude=${pattern}`),
+    '--test-reporter=spec', '--test-reporter-destination=stdout',
+    '--test-reporter=lcov', '--test-reporter-destination=test-coverage.lcov',
+    testPattern,
+  ];
+}
+
+export async function main(args = process.argv.slice(2)): Promise<number> {
   try {
-    if (args.length > 1) throw new TypeError('Usage: node tools/production-coverage.mts [lcov-path]');
+    if (args.length === 1 && args[0] === '--run') {
+      const result = spawnSync(process.execPath, productionCoverageArguments(), {
+        cwd: REPOSITORY_ROOT, env: process.env, stdio: 'inherit',
+      });
+      if (result.error) throw result.error;
+      if (result.status !== 0) return result.status ?? 2;
+      args = [];
+    }
+    if (args.length > 1 || args[0]?.startsWith('-')) throw new TypeError('Usage: node tools/production-coverage.mts [--run|lcov-path]');
     const coveragePath = path.resolve(REPOSITORY_ROOT, args[0] ?? 'test-coverage.lcov');
     const size = statSync(coveragePath).size;
     if (size < 1 || size > MAX_PRODUCTION_COVERAGE_BYTES) throw new TypeError('LCOV file has an invalid byte count.');
     const report = parseProductionCoverage(readFileSync(coveragePath, 'utf8'));
-    validateProductionCoverage(report);
-    const inventory = validateProductionCoverageInventory(report);
+    const problems: string[] = [];
+    let inventory: CoverageInventorySummary | undefined;
+    try { validateProductionCoverage(report); }
+    catch (error) { problems.push(error instanceof Error ? error.message : 'Production coverage thresholds failed.'); }
+    // Inventory validation is independent of the measured percentages. Report
+    // both sets of failures from this run instead of hiding later omissions.
+    try {
+      const sources = readProductionCoverageInventory();
+      const structural = await discoverStructuralCoverageExclusions(report, sources);
+      inventory = validateProductionCoverageInventory(report, sources, [...PRODUCTION_COVERAGE_EXCLUSIONS, ...structural]);
+    } catch (error) { problems.push(error instanceof Error ? error.message : 'Production coverage inventory failed.'); }
+    if (problems.length) throw new Error(problems.join('\n'));
     process.stdout.write(`${formatProductionCoverage(report, inventory)}\n`);
     return 0;
   } catch (error) {
@@ -411,5 +491,5 @@ export function main(args = process.argv.slice(2)): number {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.exitCode = main();
+  process.exitCode = await main();
 }

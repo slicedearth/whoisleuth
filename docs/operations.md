@@ -55,6 +55,18 @@ proxy socket's request-limit bucket.
 Do not enable proxy trust on a directly internet-facing Node process, where a
 client could forge forwarded headers.
 
+Deployed network functions use the platform-provided runtime `SITE_ID` (or the
+legacy runtime marker) and a valid edge-assigned client address. Missing or
+ambiguous identity returns
+`503 RUNTIME_IDENTITY_UNAVAILABLE` before collection, rather than combining
+unrelated callers in an unknown-address bucket. Do not supply arbitrary
+forwarded headers to work around a misconfigured deployment.
+
+The standalone local application separates anonymous session checks from
+authenticated API capacity. Valid session fingerprints have bounded counters
+and share the existing aggregate API ceiling; launch-link attempts retain
+their own limit. No forwarded address can allocate a local identity.
+
 ## Emergency feature switches
 
 The generated [capability and data-flow contract](capability-manifest.md)
@@ -151,13 +163,16 @@ Express and functions share fixed-window request controls:
 
 | Route family | Default ceiling |
 | --- | ---: |
-| Login | 10 attempts per 5 minutes per client IP |
+| Login | 10 attempts per 5 minutes per IPv4 address or IPv6 /64 |
 | Lookup, RDAP, registry-scoped nameserver search, WHOIS, availability, Certificate Transparency, and posture | 1,000 requests per minute per client IP |
 | Scheduled-monitor management | 60 authenticated requests per minute per warm runtime and signed session, plus the general API limit |
 
 An exceeded limit returns HTTP 429 with `Retry-After`. The in-memory limiter is
 global to one Express process but local to each warm serverless instance. It is
 a burst control, not a distributed-abuse boundary or an upstream allowance.
+IPv4-mapped addresses share the ordinary IPv4 bucket. IPv6 /64 aggregation
+limits interface-address rotation but can also group users on one network;
+rotation across prefixes or runtime instances needs deployment-wide controls.
 
 Netlify adds code-based per-IP rules for login and the main Lookup route. Check
 the deploy log to confirm that both rules were applied. Direct function paths
@@ -172,6 +187,15 @@ Network-heavy authenticated operations also acquire an immediate lease:
 | `registry_deep` | Deep Lookup, WHOIS, Deep availability | 4 | 12 |
 | `certificate_search` | Certificate Transparency | 2 | 4 |
 | `posture_audit` | Official-domain settings review | 3 | 8 |
+
+Closing an Express collection request cancels its active transports and stops
+further retries, referrals and enrichment. Its lease remains held until the
+started collector settles; a system DNS lookup that cannot be interrupted
+still has to finish or reach its existing deadline. Posture audits use
+separate resolver instances, so cancelling one does not cancel another.
+Public RDAP bootstrap refreshes share one bounded request per bootstrap kind.
+Cancelling one reader leaves the others running; the final reader's departure
+cancels that transport. Target-specific requests retain independent cancellation.
 
 Exhausted concurrency returns HTTP 429 with
 `NETWORK_CONCURRENCY_LIMITED`. Leases are released after success or failure and
@@ -231,6 +255,13 @@ envelope in memory, and processes at most two existing Fast compact lookups and
 eight internal deliveries within a 24-second soft budget. Its encrypted cursor
 resumes bounded work after delays. Provider failures, conflicts, inconclusive
 observations, and deadlines cannot erase an earlier conclusive baseline.
+The same deadline covers storage, registry bootstrap, collection and completion.
+Expiry cancels active requests and defers unfinished observations; it does not
+record them as failed. A storage write already sent may still have committed,
+so the next tick rereads the cursor instead of blindly repeating the write.
+The Blob SDK can retain internal retry timers after cancellation, but the
+invocation-bound transport prevents those retries from making further requests.
+The soft budget is not a guarantee of process termination at exactly 24 seconds.
 
 Ordinary browser watchlists are not uploaded automatically. A signed-in analyst
 must deliberately schedule one through Monitor and can replace, restore, pause,

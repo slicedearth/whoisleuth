@@ -24,4 +24,17 @@ describe('bounded local candidate search', () => {
     assert.equal(index.truncated, true);
     assert.deepEqual([...index.candidateIds('o')], ['one']);
   });
+
+  test('candidate acceleration cannot hide caller-admitted terms beyond its own indexing bounds', () => {
+    const expanded = '\uFDFA'.repeat(30).normalize('NFKC');
+    const index = buildBoundedSearchIndex([
+      { id: 'many', terms: [...Array.from({ length: 32 }, (_, position) => `term-${position}`), 'last-visible-term'] },
+      { id: 'expanded', terms: [expanded] },
+      { id: 'unrelated', terms: ['unrelated.example'] },
+    ]);
+    assert.ok(index.candidateIds('last-visible-term').has('many'));
+    assert.ok(index.candidateIds(expanded).has('expanded'));
+    assert.deepEqual([...index.candidateIds('')], []);
+    assert.deepEqual([...index.candidateIds('bad\nquery')], []);
+  });
 });

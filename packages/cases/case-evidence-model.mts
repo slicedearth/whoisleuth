@@ -4,6 +4,10 @@
 import { normalizeHttpSummary } from './http-summary.mts';
 import { normalizeOpportunityModelVersion } from '../../lib/opportunity-scoring.mts';
 import { normalizeRiskModelVersion } from '../../lib/risk-scoring.mts';
+import { latestObservationCohort } from '../evidence/latest-observations.mts';
+import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { PUBLISHED_V2_3_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { validWebObservationMode } from '../evidence/lookup-target.mts';
 import {
   MAX_EVIDENCE_CHANGES,
   MAX_EVIDENCE_DETAIL_LENGTH,
@@ -55,7 +59,11 @@ function boolOrNull(value: unknown): boolean | null {
 // are deduplicated and the result is sorted deterministically (largest
 // contribution first, then label) so input order alone can never change a
 // snapshot's fingerprint and two equal factor sets in different order collapse.
-function normalizeFactors(value: unknown): EvidenceFactor[] {
+function compareFactors(a: EvidenceFactor, b: EvidenceFactor): number {
+  return b.points - a.points || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0);
+}
+
+function normalizeFactors(value: unknown, legacyOrder = false): EvidenceFactor[] {
   if (!Array.isArray(value)) return [];
   const seen = new Set<string>();
   const out: EvidenceFactor[] = [];
@@ -72,7 +80,7 @@ function normalizeFactors(value: unknown): EvidenceFactor[] {
     seen.add(key);
     out.push({ label, points });
   }
-  out.sort((a, b) => b.points - a.points || a.label.localeCompare(b.label));
+  out.sort(legacyOrder ? (a, b) => b.points - a.points || a.label.localeCompare(b.label) : compareFactors);
   return out.slice(0, MAX_EVIDENCE_FACTORS);
 }
 
@@ -144,6 +152,8 @@ const DEEP_SIGNAL_FIELDS: Array<keyof CaseEvidenceMaterial> = [
 // another. Deterministic ordering here is what makes the fingerprint stable.
 const MATERIAL_FIELD_ORDER: Array<keyof CaseEvidenceMaterial> = [
   'inputHostname',
+  'observationHostname',
+  'webObservationMode',
   'scanDepth',
   'availability', 'confidence', 'riskModelVersion', 'riskScore', 'opportunityModelVersion', 'opportunityScore',
   'riskFactors', 'opportunityFactors',
@@ -161,7 +171,7 @@ const MATERIAL_FIELD_ORDER: Array<keyof CaseEvidenceMaterial> = [
 // The canonical, comparison-safe value of a material field. Registrar casing,
 // nameserver order, and sub-day timestamps are collapsed so they can never
 // count as a "change"; a non-conclusive availability contributes nothing.
-function materialValue(field: keyof CaseEvidenceMaterial, snapshot: CaseEvidenceMaterial): unknown {
+function materialValue(field: keyof CaseEvidenceMaterial, snapshot: CaseEvidenceMaterial, legacyOrder = false): unknown {
   switch (field) {
     case 'availability':
       return typeof snapshot.availability === 'string' && CONCLUSIVE_AVAILABILITY.has(snapshot.availability)
@@ -180,9 +190,9 @@ function materialValue(field: keyof CaseEvidenceMaterial, snapshot: CaseEvidence
     case 'mutationTypes':
       return snapshot.mutationTypes;
     case 'riskFactors':
-      return snapshot.riskFactors.map((factor) => [factor.label, factor.points]);
+      return (legacyOrder ? snapshot.riskFactors : [...snapshot.riskFactors].sort(compareFactors)).map((factor) => [factor.label, factor.points]);
     case 'opportunityFactors':
-      return snapshot.opportunityFactors.map((factor) => [factor.label, factor.points]);
+      return (legacyOrder ? snapshot.opportunityFactors : [...snapshot.opportunityFactors].sort(compareFactors)).map((factor) => [factor.label, factor.points]);
     default:
       return snapshot[field] ?? null;
   }
@@ -197,7 +207,7 @@ function isEmptyMaterial(value: unknown): boolean {
 
 // Fields that describe the capture rather than assert evidence, so they never
 // on their own keep an otherwise-empty snapshot alive.
-const NON_EVIDENCE_MATERIAL = new Set(['inputHostname', 'scanDepth', 'confidence']);
+const NON_EVIDENCE_MATERIAL = new Set(['inputHostname', 'observationHostname', 'webObservationMode', 'scanDepth', 'confidence']);
 
 // A snapshot with no material evidence (only timestamps/source/depth, or only a
 // bare confidence/unknown-availability) is dropped rather than added to a
@@ -211,14 +221,13 @@ function hasMaterialEvidence(snapshot: CaseEvidenceMaterial): boolean {
 }
 
 // Deterministic string form of the material identity, keys in fixed order.
-function canonicalMaterialString(snapshot: CaseEvidenceMaterial): string {
+function canonicalMaterialString(snapshot: CaseEvidenceMaterial, legacyOrder = false): string {
   const canonical: Record<string, unknown> = {};
   for (const field of MATERIAL_FIELD_ORDER) {
-    const value = materialValue(field, snapshot);
-    // Preserve historical fingerprints when the new v14 observation-context
-    // field is absent. A retained hostname is still material and therefore
-    // separates otherwise-identical captures.
-    if (field === 'inputHostname' && value === null) continue;
+    const value = materialValue(field, snapshot, legacyOrder);
+    // Optional collection context does not alter historical fingerprints when
+    // absent; recorded context separates otherwise-identical captures.
+    if ((field === 'inputHostname' || field === 'observationHostname' || field === 'webObservationMode') && value === null) continue;
     canonical[field] = value;
   }
   return JSON.stringify(canonical);
@@ -248,14 +257,28 @@ function buildSnapshot(
 ): { snapshot: CaseEvidenceSnapshot; material: string } | null {
   if (!raw || typeof raw !== 'object') return null;
   const record = objectRecord(raw);
+  if (record.factorOrder !== undefined && record.factorOrder !== 'code-unit-v1') return null;
+  const historicalSchema = options.sourceVersion !== undefined && Number(options.sourceVersion) <= PUBLISHED_V2_3_CASE_SCHEMA_VERSION;
+  if (historicalSchema && record.factorOrder !== undefined) return null;
+  // Fieldless retained snapshots keep their original identity algorithm. New
+  // captures declare code-unit ordering; the declaration survives every save.
+  const legacyOrder = historicalSchema || (record.factorOrder === undefined && typeof record.fingerprint === 'string');
   const scanDepth = normalizeScanDepth(record.scanDepth);
   const httpSummary = normalizeHttpSummary(record);
   const acceptsProfileContext = options.sourceVersion === undefined || Number(options.sourceVersion) >= 12;
   const acceptsInputHostname = options.sourceVersion === undefined || Number(options.sourceVersion) >= 13;
+  const acceptsObservationHostname = options.sourceVersion === undefined || Number(options.sourceVersion) > PUBLISHED_V2_3_CASE_SCHEMA_VERSION;
+  const observationHostname = acceptsObservationHostname
+    ? normalizeEvidenceHostnameForCase(record.observationHostname, options.caseDomain)
+    : null;
+  if (acceptsObservationHostname && record.observationHostname != null && !observationHostname) return null;
+  if (acceptsObservationHostname && !validWebObservationMode(record.webObservationMode)) return null;
   const fields: CaseEvidenceMaterial = {
     inputHostname: acceptsInputHostname
       ? normalizeEvidenceHostnameForCase(record.inputHostname, options.caseDomain)
       : null,
+    ...(observationHostname ? { observationHostname } : {}),
+    ...(acceptsObservationHostname && scanDepth !== 'fast' && record.webObservationMode === 'selected_url' ? { webObservationMode: record.webObservationMode } : {}),
     scanDepth,
     availability: evidenceString(record.availability),
     confidence: evidenceString(record.confidence),
@@ -263,8 +286,8 @@ function buildSnapshot(
     riskScore: clampScore(record.riskScore),
     opportunityModelVersion: normalizeOpportunityModelVersion(record.opportunityModelVersion),
     opportunityScore: clampScore(record.opportunityScore),
-    riskFactors: normalizeFactors(record.riskFactors),
-    opportunityFactors: normalizeFactors(record.opportunityFactors),
+    riskFactors: normalizeFactors(record.riskFactors, legacyOrder),
+    opportunityFactors: normalizeFactors(record.opportunityFactors, legacyOrder),
     registrar: evidenceString(record.registrar),
     createdDate: lifecycleTimestamp(record.createdDate, options.sourceVersion),
     expiryDate: lifecycleTimestamp(record.expiryDate, options.sourceVersion),
@@ -350,10 +373,11 @@ function buildSnapshot(
       : DEFAULT_EVIDENCE_SOURCE;
 
   const material = canonicalMaterialString(fields);
-  const fingerprint = hashString(material);
+  const fingerprint = hashString(legacyOrder ? canonicalMaterialString(fields, true) : material);
   const snapshot: CaseEvidenceSnapshot = {
     id: `ev-${fingerprint}`,
     fingerprint,
+    ...(!legacyOrder ? { factorOrder: 'code-unit-v1' as const } : {}),
     firstCapturedAt,
     capturedAt,
     source,
@@ -393,7 +417,10 @@ function mergeDuplicateSnapshots(
     ? incoming.capturedAt
     : kept.capturedAt;
   const source = chooseSource(kept, incoming);
-  return { ...kept, firstCapturedAt, capturedAt, source };
+  // Preserve an existing historical identifier when a new capture contains
+  // the same evidence under the newer ordering declaration.
+  const base = kept.factorOrder && !incoming.factorOrder ? incoming : kept;
+  return { ...base, firstCapturedAt, capturedAt, source };
 }
 
 function compareSnapshotChrono(a: CaseEvidenceSnapshot, b: CaseEvidenceSnapshot): number {
@@ -447,17 +474,68 @@ function assignUniqueSnapshotIds(snapshots: CaseEvidenceSnapshot[]): CaseEvidenc
   });
 }
 
-/**
- * The most recent snapshot, or null. Lets UI render "the latest evidence"
- * without knowing the history is a bounded, deduplicated timeline.
- * @param {{ evidenceHistory?: CaseEvidenceSnapshot[] } | null | undefined} record
- * @returns {CaseEvidenceSnapshot | null}
- */
-export function latestCaseEvidence(
-  record: { evidenceHistory?: CaseEvidenceSnapshot[] } | null | undefined,
-): CaseEvidenceSnapshot | null {
+/** Select from an admitted history without assigning order to equal or unknown capture times. */
+export function currentCaseEvidence(
+  record: { evidenceHistory?: readonly CaseEvidenceSnapshot[] } | null | undefined,
+) {
   const history = record && Array.isArray(record.evidenceHistory) ? record.evidenceHistory : [];
-  return history.at(-1) ?? null;
+  const cohort = latestObservationCohort(history, (snapshot) => snapshot.capturedAt);
+  const snapshot = cohort.undated.length === 0 && cohort.latest.length === 1 ? cohort.latest[0]! : null;
+  return {
+    snapshot,
+    candidates: [...cohort.latest, ...cohort.undated],
+    capturedAt: cohort.observedAt,
+    limitation: cohort.undated.length
+      ? 'Retained snapshots include an unknown capture time. No single latest assessment is selected.'
+      : cohort.latest.length > 1
+        ? 'Distinct snapshots share the latest capture time. No single latest assessment is selected.'
+        : null,
+  };
+}
+
+/** The unique latest retained snapshot, or null for empty or temporally ambiguous evidence. */
+export function latestCaseEvidence(
+  record: { evidenceHistory?: readonly CaseEvidenceSnapshot[] } | null | undefined,
+): CaseEvidenceSnapshot | null {
+  return currentCaseEvidence(record).snapshot;
+}
+
+/** Chronological presentation and comparison admission shared by the browser and Case report. */
+export function caseEvidenceTimeline(history: readonly CaseEvidenceSnapshot[] | null | undefined) {
+  const dated = (history ?? []).map((snapshot) => ({
+    snapshot,
+    at: normalizeExplicitIsoTimestamp(snapshot.capturedAt),
+  }));
+  const counts = new Map<string, number>();
+  for (const { at } of dated) if (at) counts.set(at, (counts.get(at) ?? 0) + 1);
+  const hasUndated = dated.some(({ at }) => at === null);
+  dated.sort((a, b) => (a.at === b.at ? 0 : a.at === null ? 1 : b.at === null ? -1 : Date.parse(a.at) - Date.parse(b.at))
+    || (a.snapshot.id < b.snapshot.id ? -1 : a.snapshot.id > b.snapshot.id ? 1 : 0));
+  return dated.map(({ snapshot, at }, index) => {
+    const previous = dated[index - 1];
+    const isBaseline = index === 0 && !hasUndated && at !== null && counts.get(at) === 1;
+    const orderingLimitation = !at || (previous && !previous.at)
+      ? 'Capture order is unknown; no temporal change is inferred.'
+      : counts.get(at) !== 1 || (previous && counts.get(previous.at!) !== 1)
+        ? 'Equal-time snapshots have no unique before-and-after order; no temporal change is inferred.'
+        : null;
+    const comparable = previous && !orderingLimitation;
+    const changes = comparable ? compareCaseEvidence(previous.snapshot, snapshot) : [];
+    const incomparableReasons: Array<ReturnType<typeof caseEvidenceIncomparableReasons>[number] | 'other'> = orderingLimitation
+      ? ['other']
+      : comparable ? caseEvidenceIncomparableReasons(previous.snapshot, snapshot) : [];
+    if (comparable && !changes.length && !incomparableReasons.length
+      && canonicalMaterialString(previous.snapshot) !== canonicalMaterialString(snapshot)) incomparableReasons.push('other');
+    return {
+      snapshot,
+      isBaseline,
+      hasRepeatedObservation: snapshot.firstCapturedAt !== snapshot.capturedAt,
+      changes: changes.length ? changes : null,
+      hasIncomparableChange: incomparableReasons.length > 0,
+      incomparableReasons,
+      orderingLimitation,
+    };
+  });
 }
 
 /**
@@ -484,38 +562,38 @@ export function caseLookupTarget(
 //                  a mode change is never reported.
 //   (absent)     - always comparable (data available in every capture).
 const COMPARE_FIELDS: CompareFieldSpec[] = [
-  { field: 'availability', label: 'Availability', type: 'availability' },
-  { field: 'confidence', label: 'Confidence', type: 'token' },
-  { field: 'riskScore', label: 'Risk score', type: 'score', depthGate: 'comparable', modelGate: 'risk', direction: 'risk' },
-  { field: 'riskFactors', label: 'Risk factors', type: 'factors', depthGate: 'comparable', modelGate: 'risk' },
-  { field: 'opportunityScore', label: 'Opportunity score', type: 'score', modelGate: 'opportunity' },
-  { field: 'opportunityFactors', label: 'Opportunity factors', type: 'factors', modelGate: 'opportunity' },
-  { field: 'registrar', label: 'Registrar', type: 'registrar' },
-  { field: 'createdDate', label: 'Creation date', type: 'date' },
-  { field: 'expiryDate', label: 'Expiry date', type: 'date' },
-  { field: 'nameservers', label: 'Nameservers', type: 'set', emptyGuard: true },
-  { field: 'hasMx', label: 'MX', type: 'bool', depthGate: 'both-deep' },
-  { field: 'hasSpf', label: 'SPF', type: 'bool', depthGate: 'both-deep' },
-  { field: 'hasDmarc', label: 'DMARC', type: 'bool', depthGate: 'both-deep' },
-  { field: 'activityStatus', label: 'Website activity', type: 'token', depthGate: 'both-deep' },
-  { field: 'websiteProbeDetail', label: 'Website check detail', type: 'text', depthGate: 'both-deep' },
-  { field: 'pageTitle', label: 'Page title', type: 'text', depthGate: 'both-deep' },
-  { field: 'httpEvidenceStatus', label: 'HTTP evidence status', type: 'token', depthGate: 'both-deep' },
-  { field: 'httpFinalOrigin', label: 'Final website origin', type: 'text', depthGate: 'both-deep' },
-  { field: 'httpResponseStatus', label: 'HTTP response status', type: 'number', depthGate: 'both-deep' },
-  { field: 'httpTransportSecurity', label: 'Website transport', type: 'http-transport', depthGate: 'both-deep' },
-  { field: 'httpRedirectCount', label: 'HTTP redirect count', type: 'number', depthGate: 'both-deep' },
-  { field: 'httpCrossOriginRedirect', label: 'Cross-origin redirect', type: 'http-signal', depthGate: 'both-deep' },
-  { field: 'httpHttpsDowngrade', label: 'HTTPS downgrade', type: 'signal', depthGate: 'both-deep' },
-  { field: 'httpContentType', label: 'Website content type', type: 'token', depthGate: 'both-deep' },
-  { field: 'httpSecurityHeaders', label: 'Observed security headers', type: 'set', depthGate: 'both-deep' },
-  { field: 'faviconMatch', label: 'Official favicon match', type: 'signal', depthGate: 'both-deep' },
-  { field: 'faviconNearMatch', label: 'Official favicon near-match', type: 'signal', depthGate: 'both-deep' },
-  { field: 'reusesOfficialAssets', label: 'Official asset reuse', type: 'signal', depthGate: 'both-deep' },
-  { field: 'hasPasswordField', label: 'Password form', type: 'signal', depthGate: 'both-deep' },
-  { field: 'hasExternalFormAction', label: 'External form action', type: 'signal', depthGate: 'both-deep' },
-  { field: 'phishingLanguageMatch', label: 'Phishing language', type: 'phishing', depthGate: 'both-deep' },
-  { field: 'mutationTypes', label: 'Mutation types', type: 'set' },
+  { field: 'availability', scope: 'registration', label: 'Availability', type: 'availability' },
+  { field: 'confidence', scope: 'registration', label: 'Confidence', type: 'token' },
+  { field: 'riskScore', scope: 'web', label: 'Risk score', type: 'score', depthGate: 'comparable', modelGate: 'risk', direction: 'risk' },
+  { field: 'riskFactors', scope: 'web', label: 'Risk factors', type: 'factors', depthGate: 'comparable', modelGate: 'risk' },
+  { field: 'opportunityScore', scope: 'web', label: 'Opportunity score', type: 'score', modelGate: 'opportunity' },
+  { field: 'opportunityFactors', scope: 'web', label: 'Opportunity factors', type: 'factors', modelGate: 'opportunity' },
+  { field: 'registrar', scope: 'registration', label: 'Registrar', type: 'registrar' },
+  { field: 'createdDate', scope: 'registration', label: 'Creation date', type: 'date' },
+  { field: 'expiryDate', scope: 'registration', label: 'Expiry date', type: 'date' },
+  { field: 'nameservers', scope: 'registration', label: 'Nameservers', type: 'set', emptyGuard: true },
+  { field: 'hasMx', scope: 'hostname', label: 'MX', type: 'bool', depthGate: 'both-deep' },
+  { field: 'hasSpf', scope: 'hostname', label: 'SPF', type: 'bool', depthGate: 'both-deep' },
+  { field: 'hasDmarc', scope: 'hostname', label: 'DMARC', type: 'bool', depthGate: 'both-deep' },
+  { field: 'activityStatus', scope: 'web', label: 'Website activity', type: 'token', depthGate: 'both-deep' },
+  { field: 'websiteProbeDetail', scope: 'web', label: 'Website check detail', type: 'text', depthGate: 'both-deep' },
+  { field: 'pageTitle', scope: 'web', label: 'Page title', type: 'text', depthGate: 'both-deep' },
+  { field: 'httpEvidenceStatus', scope: 'web', label: 'HTTP evidence status', type: 'token', depthGate: 'both-deep' },
+  { field: 'httpFinalOrigin', scope: 'web', label: 'Final website origin', type: 'text', depthGate: 'both-deep' },
+  { field: 'httpResponseStatus', scope: 'web', label: 'HTTP response status', type: 'number', depthGate: 'both-deep' },
+  { field: 'httpTransportSecurity', scope: 'web', label: 'Website transport', type: 'http-transport', depthGate: 'both-deep' },
+  { field: 'httpRedirectCount', scope: 'web', label: 'HTTP redirect count', type: 'number', depthGate: 'both-deep' },
+  { field: 'httpCrossOriginRedirect', scope: 'web', label: 'Cross-origin redirect', type: 'http-signal', depthGate: 'both-deep' },
+  { field: 'httpHttpsDowngrade', scope: 'web', label: 'HTTPS downgrade', type: 'signal', depthGate: 'both-deep' },
+  { field: 'httpContentType', scope: 'web', label: 'Website content type', type: 'token', depthGate: 'both-deep' },
+  { field: 'httpSecurityHeaders', scope: 'web', label: 'Observed security headers', type: 'set', depthGate: 'both-deep' },
+  { field: 'faviconMatch', scope: 'web', label: 'Official favicon match', type: 'signal', depthGate: 'both-deep' },
+  { field: 'faviconNearMatch', scope: 'web', label: 'Official favicon near-match', type: 'signal', depthGate: 'both-deep' },
+  { field: 'reusesOfficialAssets', scope: 'web', label: 'Official asset reuse', type: 'signal', depthGate: 'both-deep' },
+  { field: 'hasPasswordField', scope: 'web', label: 'Password form', type: 'signal', depthGate: 'both-deep' },
+  { field: 'hasExternalFormAction', scope: 'web', label: 'External form action', type: 'signal', depthGate: 'both-deep' },
+  { field: 'phishingLanguageMatch', scope: 'web', label: 'Phishing language', type: 'phishing', depthGate: 'both-deep' },
+  { field: 'mutationTypes', scope: 'hostname', label: 'Mutation types', type: 'set' },
 ];
 
 function depthComparable(a: unknown, b: unknown): boolean {
@@ -563,7 +641,7 @@ export function caseEvidenceIncomparableReasons(
 ): Array<'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model'> {
   if (!previous || !current || previous.fingerprint === current.fingerprint) return [];
   const reasons: Array<'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model'> = [];
-  if (previous.inputHostname !== current.inputHostname) reasons.push('observation-context');
+  if (!sameObservationContext(previous, current)) reasons.push('observation-context');
   const hasRiskEvidence = previous.riskScore !== null || current.riskScore !== null
     || previous.riskFactors.length > 0 || current.riskFactors.length > 0;
   if (hasRiskEvidence && !riskModelComparable(previous, current)) reasons.push('risk-model');
@@ -585,6 +663,18 @@ function isPresent(value: unknown): boolean {
   if (typeof value === 'string') return value.trim() !== '';
   if (Array.isArray(value)) return value.length > 0;
   return true;
+}
+
+function sameObservationHostname(previous: CaseEvidenceSnapshot, current: CaseEvidenceSnapshot): boolean {
+  return previous.inputHostname === current.inputHostname
+    && (previous.observationHostname ?? null) === (current.observationHostname ?? null);
+}
+
+function sameObservationContext(previous: CaseEvidenceSnapshot, current: CaseEvidenceSnapshot): boolean {
+  // Compact Case snapshots deliberately omit URL paths and queries. A selected
+  // page cannot therefore establish a comparable website target here.
+  return sameObservationHostname(previous, current)
+    && previous.webObservationMode !== 'selected_url' && current.webObservationMode !== 'selected_url';
 }
 
 function setsEqual(a: unknown, b: unknown): boolean {
@@ -691,11 +781,9 @@ function compareField(
       return { before: b, after: a, tone: 'neutral' };
     }
     case 'factors': {
-      // Factors are already normalized (deduped + deterministically sorted), so
-      // a set comparison ignores input order and reports a genuine change in the
-      // score's composition even when the total is unchanged.
-      const b = Array.isArray(before) ? before : [];
-      const a = Array.isArray(after) ? after : [];
+      // Historical identity ordering is not a change in the factor set.
+      const b = normalizeFactors(before);
+      const a = normalizeFactors(after);
       if (setsEqual(b, a)) return null;
       return { before: b, after: a, tone: 'neutral' };
     }
@@ -726,8 +814,12 @@ export function compareCaseEvidence(
   const comparableDepth = depthComparable(previous.scanDepth, current.scanDepth);
   const comparableRiskModel = riskModelComparable(previous, current);
   const comparableOpportunityModel = opportunityModelComparable(previous, current);
+  const sameHostname = sameObservationHostname(previous, current);
+  const sameWebContext = sameObservationContext(previous, current);
   const changes: EvidenceChange[] = [];
   for (const spec of COMPARE_FIELDS) {
+    if (spec.scope === 'hostname' && !sameHostname) continue;
+    if (spec.scope === 'web' && !sameWebContext) continue;
     if (spec.depthGate === 'both-deep' && !bothDeep) continue;
     if (spec.depthGate === 'comparable' && !comparableDepth) continue;
     if (spec.modelGate === 'risk' && !comparableRiskModel) continue;

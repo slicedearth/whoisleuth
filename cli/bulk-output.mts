@@ -1,11 +1,38 @@
 import type { BulkLookupResult } from './bulk.mts';
 import { cliCsvCell } from './csv.mts';
+import { lookupDiagnosticStates } from '../lib/lookup-diagnostics.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 type UnknownRecord = Record<string, unknown>;
 type BulkResultFilter = 'all' | 'errors' | 'inconclusive' | 'registered';
 
 const REGISTERED_STATES = new Set(['expiring', 'for_sale', 'registered']);
 const MAX_DNS_VALUES_PER_TYPE = 100;
+const BULK_CSV_METADATA_COLUMNS = Object.freeze([
+  'source_schema', 'source_version', 'observed_at', 'report_generated_at',
+  'collection_origin', 'scan_mode', 'diagnostics_version', 'source_health',
+]);
+type CsvEvidenceMetadata = Readonly<{
+  schema: string;
+  version: number;
+  generatedAt: string;
+  mode: 'fast' | 'deep';
+  results: readonly Readonly<Record<string, unknown>>[];
+}>;
+
+function bulkCsvMetadataValues(item: Readonly<Record<string, unknown>>, metadata: Omit<CsvEvidenceMetadata, 'results'>): readonly unknown[] {
+  const diagnostics = record(item.diagnostics);
+  return [
+    metadata.schema,
+    metadata.version,
+    normalizeExplicitIsoTimestamp(item.observedAt) ?? 'unknown',
+    normalizeExplicitIsoTimestamp(metadata.generatedAt) ?? 'unknown',
+    item.collectionOrigin === 'current_run' || item.collectionOrigin === 'resumed_checkpoint' ? item.collectionOrigin : 'unknown',
+    metadata.mode,
+    Number.isSafeInteger(diagnostics.version) && Number(diagnostics.version) > 0 ? diagnostics.version : 'unknown',
+    JSON.stringify(lookupDiagnosticStates(item.diagnostics)),
+  ];
+}
 
 function record(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -83,12 +110,16 @@ function booleanCell(value: boolean | null): string {
   return value === null ? 'unknown' : value ? 'observed' : 'not_observed';
 }
 
-function formatBulkCsv(items: readonly BulkLookupResult[]): string {
+function formatBulkCsv(items: readonly BulkLookupResult[], metadata?: CsvEvidenceMetadata): string {
+  if (metadata && metadata.results.length !== items.length) throw new TypeError('CSV metadata does not match the selected result count.');
   const header = [
     'query', 'domain', 'outcome', 'availability', 'confidence', 'dns_status',
     'a', 'aaaa', 'ns', 'mx', 'null_mx', 'spf', 'dmarc', 'error',
+    ...(metadata ? BULK_CSV_METADATA_COLUMNS : []),
   ];
-  const rows = items.map((item) => {
+  const rows = items.map((item, index) => {
+    const retained = metadata?.results[index];
+    if (metadata && (!retained || retained.index !== item.index || retained.query !== item.query)) throw new TypeError('CSV metadata does not match the selected result identity.');
     const availability = item.ok ? record(record(item.result).availability) : {};
     const dns = bulkDnsSummary(item);
     return [
@@ -106,6 +137,7 @@ function formatBulkCsv(items: readonly BulkLookupResult[]): string {
       booleanCell(dns.hasSpf),
       booleanCell(dns.hasDmarc),
       item.ok ? '' : item.error,
+      ...(metadata && retained ? bulkCsvMetadataValues(retained, metadata) : []),
     ].map(cliCsvCell).join(',');
   });
   return `${[header.join(','), ...rows].join('\n')}\n`;
@@ -124,8 +156,10 @@ function formatBulkQueryList(items: readonly BulkLookupResult[]): string {
 
 export {
   REGISTERED_STATES,
+  BULK_CSV_METADATA_COLUMNS,
   availabilityState,
   bulkDnsSummary,
+  bulkCsvMetadataValues,
   formatBulkCsv,
   formatBulkDomainList,
   formatBulkQueryList,

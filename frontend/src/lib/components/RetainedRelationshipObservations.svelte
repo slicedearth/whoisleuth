@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import Pagination from '$lib/components/Pagination.svelte';
+  import RelationshipSourceEvidence from '$lib/components/RelationshipSourceEvidence.svelte';
   import type { RelationshipObservation } from '$lib/relationship-observations';
 
   const PAGE_SIZE = 10;
@@ -26,7 +27,8 @@
     page = Math.min(pageCount, Math.max(1, Math.trunc(value)));
   }
 
-  function date(value: string) {
+  function date(value: string | null) {
+    if (!value) return 'Source time not recorded';
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? 'Unknown time' : parsed.toLocaleString();
   }
@@ -111,6 +113,7 @@
             {#each record.domains as domain}<a class="btn small" href={`/lookup?q=${encodeURIComponent(domain)}`}>{domain}</a>{/each}
           </div>
           <p>{record.description}</p>
+          <RelationshipSourceEvidence sources={record.sourceEvidence} />
           {#if record.limitations.length}
             <details><summary>Provenance and limitations</summary><ul>{#each record.limitations as limitation}<li>{limitation}</li>{/each}</ul></details>
           {/if}

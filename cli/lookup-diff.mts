@@ -7,6 +7,7 @@ import {
 import { relationshipObservation } from '../packages/comparison/relationship-evidence.mts';
 import { CliUsageError } from './errors.mts';
 import { parseSavedLookupDocument, type SavedLookupDocument, type UnknownRecord } from './saved-lookup.mts';
+import { lookupObservationHostname } from '../packages/evidence/lookup-target.mts';
 
 export const CLI_LOOKUP_DIFF_SCHEMA = 'whoisleuth.cli.lookup-diff';
 export const CLI_LOOKUP_DIFF_VERSION = 1;
@@ -21,7 +22,7 @@ type CliLookupDiffDocument = Readonly<{
   limitations: readonly string[];
 }>;
 type LookupDiffOptions = Readonly<{
-  domainMode?: 'different' | 'same';
+  domainMode?: 'different' | 'same' | 'auto';
 }>;
 
 function text(value: unknown, maximum = 300): string | null {
@@ -150,14 +151,16 @@ function buildCliLookupDiff(
 ): CliLookupDiffDocument {
   const left = parseSavedLookupDocument(leftText, { label: 'Left lookup input' });
   const right = parseSavedLookupDocument(rightText, { label: 'Right lookup input' });
-  const domainMode = options.domainMode ?? 'different';
+  const domainMode = options.domainMode === 'auto'
+    ? left.registrableDomain === right.registrableDomain ? 'same' : 'different'
+    : options.domainMode ?? 'different';
   if (domainMode === 'different' && left.registrableDomain === right.registrableDomain) {
     throw new CliUsageError('Lookup diff requires documents for two different domains.');
   }
   if (domainMode === 'same' && left.registrableDomain !== right.registrableDomain) {
     throw new CliUsageError('Lookup history requires observations for the same domain.');
   }
-  const comparison = buildBulkDomainComparison(
+  const measuredComparison = buildBulkDomainComparison(
     lookupComparisonInput(left),
     lookupComparisonInput(right),
     domainMode === 'same' ? right.generatedAt : null,
@@ -166,7 +169,8 @@ function buildCliLookupDiff(
       ...(domainMode === 'same' ? { now: Date.parse(right.generatedAt) } : {}),
     },
   );
-  if (!comparison) throw new CliUsageError('Lookup documents could not be compared.');
+  if (!measuredComparison) throw new CliUsageError('Lookup documents could not be compared.');
+  const comparison = qualifyLookupComparison(measuredComparison, left, right, domainMode === 'same');
   return {
     schema: CLI_LOOKUP_DIFF_SCHEMA,
     version: CLI_LOOKUP_DIFF_VERSION,
@@ -183,6 +187,36 @@ function buildCliLookupDiff(
         ? 'An observed difference can reflect a domain change or changed collection conditions and does not by itself establish current state, intent, safety, or maliciousness.'
         : 'Shared infrastructure or matching values do not establish common ownership, control, intent, safety, or maliciousness.',
     ],
+  };
+}
+
+function qualifyLookupComparison(comparison: BulkDomainComparison, left: SavedLookupDocument, right: SavedLookupDocument, temporal: boolean): BulkDomainComparison {
+  const leftScope = recordOrEmpty(left.availability);
+  const rightScope = recordOrEmpty(right.availability);
+  const hostnameChanged = temporal && lookupObservationHostname(leftScope) !== lookupObservationHostname(rightScope);
+  const selectedPage = leftScope.webObservationMode === 'selected_url' || rightScope.webObservationMode === 'selected_url';
+  if (!hostnameChanged && !selectedPage) return comparison;
+  const limitation = 'The retained collection hostname differs or a selected URL has no retained complete path/query identity. Values remain visible, but those fields cannot establish change at the same target.';
+  const rows = comparison.rows.map((row) => {
+    const web = ['web', 'technology', 'identity'].includes(row.category);
+    const incomparable = hostnameChanged && !['registration', 'lifecycle', 'source'].includes(row.category)
+      || temporal && selectedPage && web;
+    return {
+      ...row,
+      ...(selectedPage && web ? { method: 'Bounded website observation; one or both captures concern a selected URL rather than the homepage' } : {}),
+      ...(incomparable ? {
+        state: 'not_recorded' as const,
+        source: `${row.source}; comparable target identity not recorded`,
+        leftSourceState: 'not_recorded' as const,
+        rightSourceState: 'not_recorded' as const,
+        limitations: [...row.limitations, limitation],
+      } : {}),
+    };
+  });
+  return {
+    ...comparison, rows,
+    counts: Object.fromEntries(Object.keys(comparison.counts).map((state) => [state, rows.filter((row) => row.state === state).length])) as BulkDomainComparison['counts'],
+    limitations: [...comparison.limitations, limitation],
   };
 }
 

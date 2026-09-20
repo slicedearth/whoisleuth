@@ -2,6 +2,7 @@
 // selection for domain, IP, and ASN queries.
 
 import net from 'node:net';
+import { abortable } from './abort.mts';
 
 import {
   fetchRdapDetailedWithTimeout,
@@ -13,6 +14,7 @@ type BootstrapData = { services: Array<[string[], string[]]> };
 type BootstrapOptions = {
   now?: () => number;
   fetchUpstream?: RdapFetch;
+  signal?: AbortSignal;
 };
 
 const BOOTSTRAP_TTL_MS = 60 * 60 * 1000;
@@ -21,7 +23,13 @@ const BOOTSTRAP_KINDS = new Set(['dns', 'ipv4', 'ipv6', 'asn']);
 const BOOTSTRAP_FETCH_TIMEOUT_MS = 7000;
 const MAX_RDAP_ENDPOINT_LENGTH = 2048;
 const bootstrapCache = new Map<string, { data: BootstrapData; fetchedAt: number }>();
-const bootstrapInflight = new Map<string, Promise<BootstrapData>>();
+type BootstrapFlight = {
+  request: Promise<BootstrapData>;
+  controller: AbortController;
+  readers: number;
+  settled: boolean;
+};
+const bootstrapInflight = new Map<string, BootstrapFlight>();
 
 function admitRdapEndpoint(value: unknown, options: { allowQuery?: boolean } = {}): string | null {
   if (typeof value !== 'string'
@@ -131,23 +139,21 @@ function validBootstrap(data: unknown): data is BootstrapData {
       && service[1].some((url: unknown) => typeof url === 'string' && /^https?:\/\//i.test(url))));
 }
 
-async function fetchBootstrap(kind: string, options: BootstrapOptions = {}): Promise<BootstrapData> {
-  if (!BOOTSTRAP_KINDS.has(kind)) throw new Error(`Unsupported RDAP bootstrap kind: ${kind}`);
-  const now = typeof options.now === 'function' ? options.now : Date.now;
-  const fetchUpstream = options.fetchUpstream || fetchRdapDetailedWithTimeout;
-  const cached = bootstrapCache.get(kind);
-  if (cached && now() - cached.fetchedAt < BOOTSTRAP_TTL_MS) return cached.data;
-  const inflight = bootstrapInflight.get(kind);
-  if (inflight) return inflight;
-
-  const request = (async () => {
+function startBootstrap(kind: string, options: BootstrapOptions): BootstrapFlight {
+  const now = options.now ?? Date.now;
+  const fetchUpstream = options.fetchUpstream ?? fetchRdapDetailedWithTimeout;
+  const controller = new AbortController();
+  const { signal } = controller;
+  const request = abortable(async () => {
     try {
+      signal.throwIfAborted();
       const requestedEndpoint = `https://data.iana.org/rdap/${kind}.json`;
       const response = await fetchUpstream(
         requestedEndpoint,
-        {},
+        { signal },
         BOOTSTRAP_FETCH_TIMEOUT_MS,
       );
+      signal.throwIfAborted();
       const finalEndpoint = admitRdapEndpoint(response.finalUrl ?? requestedEndpoint);
       if (finalEndpoint !== requestedEndpoint) {
         throw new Error(`IANA bootstrap redirected outside its fixed source endpoint for ${kind}`);
@@ -167,21 +173,67 @@ async function fetchBootstrap(kind: string, options: BootstrapOptions = {}): Pro
       bootstrapCache.set(kind, { data, fetchedAt: now() });
       return data;
     } catch (cause) {
+      signal.throwIfAborted();
       const fallback = bootstrapCache.get(kind);
       if (fallback && now() - fallback.fetchedAt <= BOOTSTRAP_STALE_TTL_MS) {
         return fallback.data;
       }
       throw cause;
-    } finally {
-      bootstrapInflight.delete(kind);
     }
-  })();
-  bootstrapInflight.set(kind, request);
-  return request;
+  }, signal);
+  const flight: BootstrapFlight = {
+    controller, readers: 0, settled: false,
+    request: request.finally(() => {
+      flight.settled = true;
+      if (bootstrapInflight.get(kind) === flight) bootstrapInflight.delete(kind);
+    }),
+  };
+  bootstrapInflight.set(kind, flight);
+  return flight;
+}
+
+async function fetchBootstrap(kind: string, options: BootstrapOptions = {}): Promise<BootstrapData> {
+  if (!BOOTSTRAP_KINDS.has(kind)) throw new Error(`Unsupported RDAP bootstrap kind: ${kind}`);
+  options.signal?.throwIfAborted();
+  const now = options.now ?? Date.now;
+  const cached = bootstrapCache.get(kind);
+  if (cached && now() - cached.fetchedAt < BOOTSTRAP_TTL_MS) return cached.data;
+  const flight = bootstrapInflight.get(kind) ?? startBootstrap(kind, options);
+  flight.readers++;
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    // One deadline releases only its reader. The fixed-source transport lives
+    // until the last reader leaves, and never caches a cancelled late response.
+    flight.readers--;
+    if (!flight.readers && !flight.settled) {
+      flight.controller.abort();
+      if (bootstrapInflight.get(kind) === flight) bootstrapInflight.delete(kind);
+    }
+  };
+  const { signal } = options;
+  let cancel = () => {};
+  const result = new Promise<BootstrapData>((resolve, reject) => {
+    // Attach before observing cancellation so even an abandoned queued flight
+    // retains a rejection handler. Release synchronously to avoid starting it.
+    flight.request.then(resolve, reject);
+    cancel = () => { release(); reject(signal?.reason); };
+    signal?.addEventListener('abort', cancel, { once: true });
+    if (signal?.aborted) cancel();
+  });
+  try {
+    return await result;
+  } finally {
+    signal?.removeEventListener('abort', cancel);
+    release();
+    if (flight.controller.signal.aborted) await flight.request.catch(() => {});
+  }
 }
 
 function clearRdapBootstrapCache() {
   bootstrapCache.clear();
+  for (const flight of bootstrapInflight.values()) flight.controller.abort();
   bootstrapInflight.clear();
 }
 
@@ -201,9 +253,9 @@ function uniqueRdapBases(urls: unknown): string[] {
     });
 }
 
-async function findRdapBases(type: string, value: string): Promise<string[]> {
+async function findRdapBases(type: string, value: string, options: BootstrapOptions = {}): Promise<string[]> {
   if (type === 'domain') {
-    const bootstrap = await fetchBootstrap('dns');
+    const bootstrap = await fetchBootstrap('dns', options);
     const tld = value.split('.').pop()?.toLowerCase() || '';
     for (const [tlds, urls] of bootstrap.services) {
       if (tlds.some((entry) => entry.toLowerCase() === tld)) return uniqueRdapBases(urls);
@@ -212,7 +264,7 @@ async function findRdapBases(type: string, value: string): Promise<string[]> {
   }
 
   if (type === 'ipv4' || type === 'ipv6') {
-    const bootstrap = await fetchBootstrap(type);
+    const bootstrap = await fetchBootstrap(type, options);
     const matcher = type === 'ipv4' ? ipInCidrV4 : ipInCidrV6;
     let best: string[] | null = null;
     let bestPrefix = -1;
@@ -231,7 +283,7 @@ async function findRdapBases(type: string, value: string): Promise<string[]> {
   }
 
   if (type === 'asn') {
-    const bootstrap = await fetchBootstrap('asn');
+    const bootstrap = await fetchBootstrap('asn', options);
     const number = parseInt(value.replace(/^AS/i, ''), 10);
     for (const [ranges, urls] of bootstrap.services) {
       for (const range of ranges) {

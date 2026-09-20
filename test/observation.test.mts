@@ -44,8 +44,8 @@ const FACADE_TYPE_COMPATIBILITY: readonly [
   ExactType<CanonicalScanMode, FacadeScanMode>,
 ] = [true, true, true, true, true];
 
-test('keeps the historical observation import as an exact contract facade', () => {
-  assert.deepEqual(Object.keys(observationContract).sort(), [
+test('keeps every historical observation export identical to its canonical owner', () => {
+  assert.deepEqual(Object.keys(observationFacade).sort(), [
     'MAX_OBSERVATION_DIAGNOSTICS',
     'MAX_OBSERVATION_LIMITATIONS',
     'MAX_OBSERVATION_LIMITATION_LENGTH',
@@ -56,14 +56,10 @@ test('keeps the historical observation import as an exact contract facade', () =
     'normalizeLegacyIsoTimestamp',
     'readObservationEnvelope',
   ]);
-  assert.deepEqual(Object.keys(observationFacade).sort(), Object.keys(observationContract).sort());
+  for (const key of Object.keys(observationFacade) as Array<keyof typeof observationFacade>) {
+    assert.equal(observationFacade[key], observationContract[key]);
+  }
   assert.deepEqual(FACADE_TYPE_COMPATIBILITY, [true, true, true, true, true]);
-  assert.equal(observationFacade.OBSERVATION_VERSION, observationContract.OBSERVATION_VERSION);
-  assert.equal(observationFacade.createObservation, observationContract.createObservation);
-  assert.equal(observationFacade.readObservationEnvelope, observationContract.readObservationEnvelope);
-  assert.equal(observationFacade.normalizeCtTimestamp, observationContract.normalizeCtTimestamp);
-  assert.equal(observationFacade.normalizeExplicitIsoTimestamp, observationContract.normalizeExplicitIsoTimestamp);
-  assert.equal(observationFacade.normalizeLegacyIsoTimestamp, observationContract.normalizeLegacyIsoTimestamp);
 });
 
 test('creates a deterministic bounded observation envelope', () => {
@@ -137,7 +133,8 @@ test('bounds untrusted limitation and diagnostic work before accumulation', () =
 
   let diagnosticOwnKeyReads = 0;
   let diagnosticDescriptorReads = 0;
-  const boundedDiagnostics = new Proxy({ attemptCount: 4 }, {
+  const diagnosticInput: Record<string, unknown> = { attemptCount: 4 };
+  const boundedDiagnostics = new Proxy(diagnosticInput, {
     ownKeys() {
       diagnosticOwnKeyReads += 1;
       throw new Error('must not enumerate untrusted diagnostic keys');
@@ -158,7 +155,14 @@ test('bounds untrusted limitation and diagnostic work before accumulation', () =
   assert.equal(bounded.limitations.length, 10);
   assert.deepEqual(bounded.diagnostics, { attemptCount: 4 });
   assert.equal(diagnosticOwnKeyReads, 0);
-  assert.ok(diagnosticDescriptorReads > 0 && diagnosticDescriptorReads <= 92);
+  assert.ok(diagnosticDescriptorReads > 0);
+  const ordinaryReads = diagnosticDescriptorReads;
+  for (let index = 0; index < 10_000; index += 1) diagnosticInput[`unknown${index}`] = 'not retained';
+  diagnosticDescriptorReads = 0;
+  const wide = createObservation({ diagnostics: boundedDiagnostics });
+  assert.equal(diagnosticDescriptorReads, ordinaryReads, 'Input key growth must not increase descriptor work');
+  assert.equal(diagnosticOwnKeyReads, 0);
+  assert.deepEqual(wide.diagnostics, { attemptCount: 4 });
 
   const cyclic: Record<string, unknown> = { status: 'error' };
   cyclic.detail = cyclic;

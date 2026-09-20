@@ -5,7 +5,7 @@
 // bounded record; the response body itself is discarded after parsing.
 
 import { safeFetchDetailed, readTextCapped } from './safe-fetch.mts';
-import { createObservation } from '../packages/evidence/observation.mts';
+import { createObservation, normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 type SecurityTxtState = 'present' | 'stale' | 'partial' | 'absent' | 'malformed' | 'unsupported' | 'unavailable';
 type SecurityTxtFetch = typeof safeFetchDetailed;
@@ -34,7 +34,6 @@ const CONTROL_CHARACTER_RE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u;
 const URI_CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/u;
 const FIELD_RE = /^([A-Za-z][A-Za-z-]*):[ \t]*(.*)$/u;
 const LANGUAGE_RE = /^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$/iu;
-const RFC3339_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u;
 const CONTACT_PROTOCOLS = new Set(['https:', 'mailto:', 'tel:']);
 const HTTPS_PROTOCOLS = new Set(['https:']);
 const ENCRYPTION_PROTOCOLS = new Set(['https:', 'dns:', 'openpgp4fpr:']);
@@ -211,7 +210,8 @@ function parseSecurityTxt(text: unknown, options: ParseOptions = {}) {
       preferredLanguages.push(...valid);
       malformedCount += languages.length - valid.length;
     } else if (field === 'expires') {
-      if (RFC3339_RE.test(value) && Number.isFinite(Date.parse(value))) expires.push(new Date(value).toISOString());
+      const expiry = normalizeExplicitIsoTimestamp(value);
+      if (expiry) expires.push(expiry);
       else malformedCount += 1;
     } else {
       ignoredCount += 1;
@@ -222,15 +222,18 @@ function parseSecurityTxt(text: unknown, options: ParseOptions = {}) {
   const boundedPolicies = uniqueBounded(policies);
   const boundedEncryption = uniqueBounded(encryption);
   const boundedCanonical = uniqueBounded(canonical);
+  const boundedCanonicalComparison = uniqueBounded(canonicalComparison);
+  const canonicalComparisonTruncated = valuesTruncated || boundedCanonicalComparison.truncated;
   const boundedLanguages = uniqueBounded(preferredLanguages);
-  valuesTruncated ||= [boundedContacts, boundedPolicies, boundedEncryption, boundedCanonical, boundedLanguages]
+  valuesTruncated ||= [boundedContacts, boundedPolicies, boundedEncryption, boundedCanonical, boundedCanonicalComparison, boundedLanguages]
     .some((entry) => entry.truncated);
   const expiresAt = expires.length === 1 ? expires[0] : null;
   const finalUrl = options.finalUrl ? normalizedHttpsUrl(options.finalUrl) : null;
   const finalComparisonUrl = options.finalUrl ? normalizedCanonicalComparisonUrl(options.finalUrl) : null;
   const canonicalMatches = boundedCanonical.values.length && finalUrl && finalComparisonUrl
-    ? canonicalComparison.slice(0, MAX_SECURITY_TXT_VALUES)
-        .some((value) => value === finalComparisonUrl)
+    ? boundedCanonicalComparison.values.includes(finalComparisonUrl)
+      ? true
+      : canonicalComparisonTruncated ? null : false
     : null;
   const stale = Boolean(expiresAt && Date.parse(expiresAt) <= (options.now ?? Date.now()));
   const requiredMalformed = boundedContacts.values.length === 0 || expires.length !== 1;

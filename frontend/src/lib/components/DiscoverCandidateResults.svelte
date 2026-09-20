@@ -159,17 +159,23 @@
             <small>{candidate.mutationLabel}</small>
             {#if candidate.scripts.length}<span class="script-summary">Scripts: {candidate.scripts.join(', ')}</span>{/if}
             <span class="candidate-badges">
-              {#if candidate.reviewCues.length}<span class="candidate-badge review" title={candidate.reviewCues.join(' · ')}>{candidate.reviewCues.length} review cue{candidate.reviewCues.length === 1 ? '' : 's'}</span>{/if}
               {#if candidate.unicodeDomain}<span class="candidate-badge">Internationalised</span>{/if}
               {#if candidate.mixedScript}<span class="candidate-badge warning">Mixed writing scripts</span>{/if}
               {#if candidate.referenceDomains.length}<span class="candidate-badge warning">Source or profile visual match</span>{/if}
               {#if candidate.ctObservationState}<span class={`ct-history-state ${candidate.ctObservationState}`}>{ctObservationLabel(candidate.ctObservationState)}</span>{/if}
             </span>
           </label>
+          {#if candidate.reviewCues.length}
+            <details class="candidate-context review-cues">
+              <summary>{candidate.reviewCues.length} review cue{candidate.reviewCues.length === 1 ? '' : 's'}<span class="sr-only"> for {candidate.domain}</span></summary>
+              <ul>{#each candidate.reviewCues as cue}<li>{cue}</li>{/each}</ul>
+            </details>
+          {/if}
           {#if candidate.referenceDomains.length}
-            <span class="reference-summary">
-              Visual match: {candidate.referenceDomains.slice(0, 3).join(', ')}{candidate.referenceDomains.length > 3 ? ` +${candidate.referenceDomains.length - 3} more` : ''}
-            </span>
+            <details class="candidate-context reference-matches">
+              <summary>{candidate.referenceDomains.length} visual match{candidate.referenceDomains.length === 1 ? '' : 'es'}<span class="sr-only"> for {candidate.domain}</span></summary>
+              <ul>{#each candidate.referenceDomains as domain}<li>{domain}</li>{/each}</ul>
+            </details>
           {/if}
           {#if candidate.certificateEvidence}
             {@const ct = candidate.certificateEvidence}
@@ -220,9 +226,10 @@
   .script-summary{display:block;margin-top:4px;color:var(--muted);font-size:var(--text-2xs)}
   .candidate-badges{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
   .candidate-badge{display:inline-block;padding:3px 8px;border:1px solid rgb(var(--accent-rgb) / .35);border-radius:99px;color:var(--accent);font:600 var(--text-2xs) var(--mono)}
-  .candidate-badge.review{background:rgb(var(--accent-rgb) / .06)}
   .candidate-badge.warning{border-color:rgb(var(--amber-rgb) / .45);color:var(--amber)}
-  .reference-summary{display:block;margin-top:6px;overflow-wrap:anywhere;color:var(--muted);font-size:var(--text-2xs)}
+  .candidate-context{margin-top:4px;color:var(--muted);font-size:var(--text-xs);line-height:1.5;overflow-wrap:anywhere}
+  .candidate-context summary{min-height:44px;align-content:center;cursor:pointer;color:var(--accent);font:600 var(--text-xs) var(--mono)}
+  .candidate-context ul{display:grid;gap:5px;margin:4px 0 8px;padding-left:18px}
   .ct-history-state{display:inline-block;padding:3px 8px;border:1px solid var(--border);border-radius:99px;color:var(--muted);font:600 var(--text-2xs) var(--mono)}.ct-history-state.first_observed{border-color:rgb(var(--accent2-rgb) / .45);color:var(--accent2)}.ct-history-state.reappeared{border-color:rgb(var(--amber-rgb) / .5);color:var(--amber)}.ct-history-state.history_unknown,.ct-history-state.unclassified_partial{border-style:dashed;color:var(--amber)}
   .ct-meta{display:flex;flex-wrap:wrap;gap:3px 10px;margin-top:6px}
   .ct-stat{color:var(--muted);font-size:var(--text-2xs)}

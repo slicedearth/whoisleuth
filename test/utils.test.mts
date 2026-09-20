@@ -213,8 +213,7 @@ describe('groupBySimilarFavicon', () => {
     assert.deepEqual(groups, []);
   });
 
-  test('retains the browser-facing forwarding export and malformed-input behaviour', () => {
-    assert.equal(utils.groupBySimilarFavicon, groupBySimilarFavicon);
+  test('rejects malformed input while retaining valid exact-match groups', () => {
     assert.deepEqual(groupBySimilarFavicon(null, 6), []);
     assert.deepEqual(groupBySimilarFavicon([
       null,

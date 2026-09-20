@@ -1,13 +1,16 @@
+import { openCaseClassification, openConsoleView, openInboxReview } from './console-navigation';
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
-import { caseRecord, openCaseResponseWorkspace } from './case-test-fixtures';
+import { caseRecord, snapshot, openCaseResponseWorkspace } from './case-test-fixtures';
 import {
   currentBrandProfileBrowserStore,
   expectNoHorizontalOverflow,
+  failNextBrowserLocalManifestWrite,
   migrateLegacyBrowserData,
   readBrowserLocalCollection,
   requiredValue,
+  useTheme,
 } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import type { CaseActionRecord } from '../frontend/src/lib/analysis/case-response-model.ts';
@@ -224,6 +227,7 @@ test('calendar export includes only selected follow-ups and keeps Case context o
     },
   }, { destination: '/monitor?view=inbox' });
 
+  await page.getByText('Case reports and follow-up tools', { exact: true }).click();
   const lifecycle = page.getByRole('region', { name: 'Contact and lifecycle review' });
   const exportButton = lifecycle.getByRole('button', { name: 'Export selected (0)' });
   await expect(exportButton).toBeDisabled();
@@ -254,6 +258,311 @@ test('calendar export includes only selected follow-ups and keeps Case context o
   expect(collectionRequests.count()).toBe(0);
 });
 
+test('calendar reaches and exports every matching event beyond the former five-hundred-event cap', async ({ page }, testInfo) => {
+  test.slow();
+  const collectionRequests = countCollectionRequests(page);
+  const records = Array.from({ length: 12 }, (_, caseIndex) => caseRecord({
+    id: `full-calendar-${caseIndex}`, domain: `full-calendar-${caseIndex}.invalid`,
+    actions: Array.from({ length: 50 }, (_, actionIndex) => {
+      const index = caseIndex * 50 + actionIndex;
+      const action = readyForReviewAction();
+      return { ...action, id: `calendar-action-${index}`, type: 'internal_review',
+        recipient: `Private calendar owner ${String(index).padStart(3, '0')}`,
+        dueAt: '2030-06-01T00:00:00.000Z', followUpAt: '2030-07-01T00:00:00.000Z',
+        history: action.history.map((event, eventIndex) => ({ ...event, id: `calendar-event-${index}-${eventIndex}` })),
+      };
+    }),
+  }));
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: records } }, { destination: '/monitor' });
+  const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 12 });
+  expect(saved.records).toHaveLength(12);
+  for (const record of saved.records) expect(record.value.actions).toHaveLength(50);
+  await page.getByText('Case reports and follow-up tools', { exact: true }).click();
+  const calendar = page.getByRole('region', { name: 'Contact and lifecycle review', exact: true });
+  await expect(calendar.getByRole('button', { name: 'Select matching (1200)', exact: true })).toBeEnabled();
+  await calendar.getByRole('combobox', { name: 'Event type', exact: true }).selectOption('action_follow_up');
+  await expect(calendar.getByRole('button', { name: 'Select matching (600)', exact: true })).toBeEnabled();
+  const pages = calendar.getByRole('navigation', { name: 'Lifecycle event pages', exact: true });
+  const timeline = calendar.getByRole('list', { name: 'Saved lifecycle review timeline', exact: true });
+  const owners = new Set<string>();
+  for (let pageNumber = 1; pageNumber <= 25; pageNumber++) {
+    await expect(pages.getByRole('status')).toHaveText(`Page ${pageNumber} of 25`);
+    await expect(timeline.getByRole('listitem')).toHaveCount(24);
+    for (const owner of await timeline.getByText(/^Recipient or owner: Private calendar owner \d{3}$/u).allTextContents()) owners.add(owner);
+    if (pageNumber < 25) {
+      const next = pages.getByRole('button', { name: 'Next', exact: true });
+      await next.focus(); await next.press('Enter');
+      await expect(next).toBeFocused();
+    }
+  }
+  expect(owners.size).toBe(600);
+  const last = timeline.getByRole('checkbox').last();
+  await last.focus(); await last.press('Space');
+  await expect(last).toBeChecked();
+  await expect(calendar.getByRole('button', { name: 'Export selected (1)', exact: true })).toBeEnabled();
+  await calendar.getByRole('button', { name: 'Select matching (600)', exact: true }).click();
+  const exportButton = calendar.getByRole('button', { name: 'Export selected (600)', exact: true });
+  const download = page.waitForEvent('download');
+  await exportButton.click();
+  const exported = Buffer.concat(await (await (await download).createReadStream()).toArray()).toString('utf8').replaceAll(/\r\n[ \t]/gu, '');
+  expect(exported.match(/BEGIN:VEVENT/gu)).toHaveLength(600);
+  expect(new Set(exported.match(/^UID:.+$/gmu)).size).toBe(600);
+  expect(exported).not.toMatch(/Private calendar owner|full-calendar-\d+/u);
+  await expect(exportButton).toBeFocused();
+  await expect(calendar.getByRole('status').filter({ hasText: /^Exported 600 selected/ })).toHaveText('Exported 600 selected review events.');
+  await calendar.getByRole('combobox', { name: 'Event type', exact: true }).selectOption('action_due');
+  await expect(calendar.getByRole('button', { name: 'Export selected (0)', exact: true })).toBeDisabled();
+  await calendar.getByRole('combobox', { name: 'Event type', exact: true }).selectOption('action_follow_up');
+  await expect(calendar.getByRole('button', { name: 'Export selected (600)', exact: true })).toBeEnabled();
+  await expect(timeline.getByRole('checkbox').first()).toBeChecked();
+  for (const width of [1280, 1024, 390, 320]) {
+    await page.setViewportSize({ width, height: width === 1280 ? 720 : width === 1024 ? 768 : width === 390 ? 844 : 700 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await timeline.getByRole('listitem').first().evaluate((item) => item.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
+      await expect(timeline.getByRole('listitem').first()).toBeInViewport({ ratio: 1 });
+      await expectNoHorizontalOverflow(page);
+      await testInfo.attach(`complete-calendar-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    }
+  }
+  expect(collectionRequests.count()).toBe(0);
+});
+
+test('platform reporting routes are unavailable before review and become usable inside the review window', async ({ page }, testInfo) => {
+  const collectionRequests = countCollectionRequests(page);
+  await page.clock.setFixedTime('2026-09-03T23:59:59.999Z');
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord({ id: 'platform-clock', domain: 'platform-clock.invalid' })] } }, { destination: '/cases?case=platform-clock' });
+  const workspace = await openCaseResponseWorkspace(page, 'platform-clock');
+  await openCaseClassification(page);
+  await workspace.getByLabel('Exact HTTP(S) URL').fill('https://t.me/example/7');
+  await workspace.getByRole('button', { name: 'Add incident link', exact: true }).click();
+  const routes = workspace.getByRole('region', { name: 'Official platform routes', exact: true });
+  await expect(routes.getByText('unavailable', { exact: true })).toBeVisible();
+  await expect(routes.getByRole('button', { name: 'Create drafting action', exact: true })).toHaveCount(0);
+  await expect(routes).toContainText('within its review window at this time');
+  for (const width of [1280, 1024, 390, 320]) {
+    await page.setViewportSize({ width, height: width === 1280 ? 720 : width === 1024 ? 768 : width === 390 ? 844 : 700 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await routes.getByRole('article').evaluate((item) => item.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
+      await expect(routes.getByRole('article')).toBeInViewport({ ratio: 1 });
+      await expectNoHorizontalOverflow(page);
+      await testInfo.attach(`unavailable-platform-route-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    }
+  }
+  await page.clock.setFixedTime('2026-09-04T00:00:00.000Z');
+  await page.reload();
+  const refreshed = await openCaseResponseWorkspace(page, 'platform-clock');
+  await openCaseClassification(page);
+  const reviewedRoutes = refreshed.getByRole('region', { name: 'Official platform routes', exact: true });
+  await expect(reviewedRoutes.getByText('found', { exact: true })).toBeVisible();
+  await expect(reviewedRoutes.getByRole('button', { name: 'Create drafting action', exact: true })).toBeEnabled();
+  expect(collectionRequests.count()).toBe(0);
+});
+
+test('calendar qualifies conflicting dates and exposes superseded follow-ups only on request', async ({ page }) => {
+  const review = { id: 'earlier-review', state: 'not_checked', observedAt: OBSERVED_AT, sourceClass: 'analyst', source: 'Fixture review', completeness: 'unknown', limitations: [], evidencePinId: null, sightingId: null, followUpAt: '2030-06-10T00:00:00.000Z', createdAt: OBSERVED_AT };
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [{
+    ...caseRecord({ id: 'calendar-conflict', domain: 'calendar-conflict.invalid' }),
+    evidenceHistory: [
+      { ...snapshot({ id: 'date-one', capturedAt: OBSERVED_AT }), expiryDate: '2030-01-01T00:00:00.000Z' },
+      { ...snapshot({ id: 'date-two', capturedAt: OBSERVED_AT }), expiryDate: '2030-02-01T00:00:00.000Z' },
+    ],
+    observedEffects: { reviews: [review, { ...review, id: 'later-review', observedAt: '2026-08-24T00:00:00.000Z', followUpAt: null }], omitted: 0, preV13HistoryUnavailable: false, limitations: [] },
+  }] } }, { destination: '/monitor' });
+  await page.getByText('Case reports and follow-up tools', { exact: true }).click();
+  const calendar = page.getByRole('region', { name: 'Contact and lifecycle review' });
+  await expect(calendar.getByText('No lifecycle review events match these filters.')).toBeVisible();
+  const disclosure = calendar.locator('summary', { hasText: 'Dates needing review (1)' });
+  await disclosure.focus(); await disclosure.press('Enter');
+  await expect(calendar.getByText(/latest observations disagree; no calendar date was selected/)).toBeVisible();
+  await calendar.getByLabel('Include completed actions and earlier effect reviews').check();
+  await expect(calendar.getByRole('list', { name: 'Saved lifecycle review timeline' }).getByRole('listitem')).toHaveCount(1);
+  await calendar.getByLabel('Include completed actions and earlier effect reviews').uncheck();
+  await expect(calendar.getByRole('button', { name: 'Export selected (0)' })).toBeDisabled();
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+  const reviewCase = calendar.getByRole('link', { name: 'calendar-conflict.invalid', exact: true });
+  await expect(reviewCase).toHaveAttribute('href', '/cases?case=calendar-conflict');
+  await reviewCase.focus(); await reviewCase.press('Enter');
+  await expect(page).toHaveURL(/\/cases\?case=calendar-conflict$/u);
+  await expect(page.locator('#case-response-calendar-conflict')).toBeVisible();
+  await openCaseResponseWorkspace(page, 'calendar-conflict');
+  await expectNoHorizontalOverflow(page);
+});
+
+test('saved reporting routes remain reachable across pages with explicit local freshness review', async ({ page }, testInfo) => {
+  test.slow();
+  const collectionRequests = countCollectionRequests(page);
+  await page.clock.setFixedTime('2026-09-10T10:00:00.000Z');
+  const reportingTypes = ['registrar_report', 'registry_report', 'network_hosting_report', 'security_contact_report', 'platform_report'] as const;
+  const records = Array.from({ length: 6 }, (_, caseIndex) => caseRecord({
+    id: `routes-${caseIndex}`, domain: `routes-${caseIndex}.invalid`,
+    actions: Array.from({ length: 50 }, (_, actionIndex) => {
+      const index = caseIndex * 50 + actionIndex;
+      const action = readyForReviewAction();
+      return { ...action, id: `route-${index}`, type: reportingTypes[index % reportingTypes.length],
+        recipient: `Fixture route ${String(index).padStart(3, '0')}`,
+        routeObservedAt: index === 0 ? null : '2026-09-10T09:00:00.123Z',
+        routeReviewAfter: '2026-09-10T13:00:00.000Z',
+        followUpAt: index === 299 ? '2026-09-10T11:00:00.000Z' : null,
+        history: action.history.map((event, eventIndex) => ({ ...event, id: `route-${index}-event-${eventIndex}` })),
+      };
+    }),
+  }));
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: records } }, { destination: '/monitor' });
+  await page.getByText('Case reports and follow-up tools', { exact: true }).click();
+  const lifecycle = page.getByRole('region', { name: 'Contact and lifecycle review', exact: true });
+  const routes = lifecycle.getByRole('region', { name: 'Saved reporting routes', exact: true });
+  await expect(routes.getByRole('status').first()).toHaveText('300 matching of 300 saved reporting routes.');
+  const pages = routes.getByRole('navigation', { name: 'Reporting route pages', exact: true });
+  const recipients = new Set<string>();
+  for (let index = 1; index <= 25; index += 1) {
+    await expect(pages.getByRole('status')).toHaveText(`Page ${index} of 25`);
+    const cards = routes.getByRole('article');
+    await expect(cards).toHaveCount(12);
+    for (const recipient of await cards.locator(':scope > small').filter({ hasText: /^Fixture route \d{3}$/u }).allTextContents()) recipients.add(recipient);
+    if (index < 25) {
+      await pages.getByRole('button', { name: 'Next', exact: true }).focus();
+      await pages.getByRole('button', { name: 'Next', exact: true }).press('Enter');
+      await expect(pages.getByRole('button', { name: 'Next', exact: true })).toBeFocused();
+    }
+  }
+  expect(recipients.size).toBe(300);
+  await expect(pages.getByRole('button', { name: 'Next', exact: true })).toHaveAttribute('aria-disabled', 'true');
+  await routes.getByRole('searchbox', { name: 'Find a route', exact: true }).fill('Fixture route 299');
+  await expect(routes.getByRole('article')).toHaveCount(1);
+  await expect(routes.getByRole('article')).toContainText('platform report');
+  await expect(routes.getByRole('article')).toContainText('Source observed: 2026-09-10T09:00:00.123Z');
+  await expect(routes.getByRole('article')).toContainText('Action follow-up: 2026-09-10T11:00:00.000Z');
+  await expect(routes.getByRole('article').getByRole('link', { name: 'Open case', exact: true })).toHaveAttribute('href', '/cases?case=routes-5&section=response');
+  await routes.getByRole('combobox', { name: 'Source review', exact: true }).selectOption('current');
+  await expect(routes.getByRole('article')).toHaveCount(1);
+  await expect(lifecycle.getByRole('list', { name: 'Saved lifecycle review timeline' }).getByRole('listitem')).toHaveCount(1);
+  await page.clock.setFixedTime('2026-09-10T14:00:00.000Z');
+  await lifecycle.getByRole('button', { name: 'Refresh local review', exact: true }).click();
+  await expect(lifecycle.getByText('Re-evaluated saved dates and routes. No collection was performed.')).toBeVisible();
+  await expect(routes.getByText('No saved reporting routes match these filters.', { exact: true })).toBeVisible();
+  await expect(lifecycle.getByText('No lifecycle review events match these filters.', { exact: true })).toBeVisible();
+  await routes.getByRole('combobox', { name: 'Source review', exact: true }).selectOption('due');
+  await expect(routes.getByRole('article')).toHaveCount(1);
+  await routes.getByRole('searchbox', { name: 'Find a route', exact: true }).fill('');
+  await expect(routes.getByRole('status').first()).toHaveText('299 matching of 300 saved reporting routes.');
+  await routes.getByRole('combobox', { name: 'Source review', exact: true }).selectOption('unconfirmed');
+  await expect(routes.getByRole('article')).toHaveCount(1);
+  await expect(routes.getByRole('article')).toContainText('Source observed: Unknown');
+  await routes.getByRole('combobox', { name: 'Source review', exact: true }).selectOption('all');
+  for (const width of [1280, 1024, 390, 320]) {
+    await page.setViewportSize({ width, height: width === 1280 ? 720 : width === 1024 ? 768 : width === 390 ? 844 : 700 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await routes.getByRole('heading', { name: 'Saved reporting routes', exact: true }).scrollIntoViewIfNeeded();
+      await routes.getByRole('article').first().evaluate((card) => card.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
+      await expectNoHorizontalOverflow(page);
+      await expect(routes.getByRole('article').first()).toBeInViewport({ ratio: 1 });
+      await testInfo.attach(`reporting-routes-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    }
+  }
+  expect(collectionRequests.count()).toBe(0);
+});
+
+test('focused inbox reviews keep separate drafts, exact times and keyboard-safe saves', async ({ page, context }, testInfo) => {
+  const collectionRequests = countCollectionRequests(page);
+  await page.clock.setFixedTime('2026-09-13T10:00:00.000Z');
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: ['first', 'second'].map((name) => caseRecord({
+      id: `inbox-${name}`, domain: `${name}.inbox.example`, status: 'reviewing',
+      actions: [readyForReviewAction()], createdAt: OBSERVED_AT, updatedAt: OBSERVED_AT,
+    })) },
+  }, { clearStorage: true, destination: '/monitor?view=inbox&queue=all' });
+  const inbox = page.getByRole('region', { name: 'Review inbox', exact: true });
+  const items = inbox.locator('.items > li');
+  const first = items.filter({ has: page.getByRole('heading', { name: 'Complete reviewed handoff for first.inbox.example', exact: true }) });
+  const second = items.filter({ has: page.getByRole('heading', { name: 'Complete reviewed handoff for second.inbox.example', exact: true }) });
+  await expect(items).toHaveCount(6);
+  await expect(inbox.getByRole('form', { name: /^Review decision for /u, includeHidden: true })).toHaveCount(1);
+  await openInboxReview(first);
+  await expect(inbox.getByRole('form', { name: /^Review decision for /u, includeHidden: true })).toHaveCount(2);
+  await expect(inbox.locator('.items > li > details[open]')).toHaveCount(1);
+  const form = first.getByRole('form', { name: 'Review decision for Complete reviewed handoff for first.inbox.example', exact: true });
+  await first.locator('details.lifecycle-controls > summary').click();
+  await form.getByRole('combobox', { name: 'Review outcome', exact: true }).selectOption('open');
+  await form.getByLabel('Rationale', { exact: true }).fill('Retained draft for the first independent review.');
+  await openInboxReview(second);
+  await expect(first.locator(':scope > details')).not.toHaveAttribute('open', '');
+  await expect(inbox.locator('.items > li > details[open]')).toHaveCount(1);
+  await openInboxReview(first);
+  await expect(form.getByLabel('Rationale', { exact: true })).toHaveValue('Retained draft for the first independent review.');
+  await expect(form.getByRole('combobox', { name: 'Review outcome', exact: true })).toHaveValue('open');
+
+  const exact = first.getByRole('button', { name: /^Copy exact observation time for Complete reviewed handoff for first\.inbox\.example:/u });
+  await expect(exact.locator('time')).toContainText('UTC');
+  const timestamp = await exact.getAttribute('title');
+  expect(timestamp).toBeTruthy();
+  await exact.focus(); await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(timestamp);
+  await expect(exact).toBeFocused();
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+    writeText: async () => { throw new DOMException('Fixture permission denial', 'NotAllowedError'); },
+  } }));
+  await exact.press('Enter');
+  await expect(first.getByText('Clipboard unavailable. Select the exact timestamp below.', { exact: true })).toBeVisible();
+  await expect(first.locator('.evidence-timestamp code')).toHaveText(timestamp!);
+
+  const before = await readBrowserLocalCollection(page, 'analyst_review_state');
+  const casesBefore = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  await failNextBrowserLocalManifestWrite(page, 'analyst_review_state');
+  const save = form.getByRole('button', { name: 'Record decision', exact: true });
+  await save.focus(); await page.keyboard.press('Enter');
+  await expect(first.getByRole('status')).toContainText(/quota|write|stored|save/iu);
+  await expect(save).toBeFocused();
+  await expect(form.getByLabel('Rationale', { exact: true })).toHaveValue('Retained draft for the first independent review.');
+  expect((await readBrowserLocalCollection(page, 'analyst_review_state')).records).toEqual(before.records);
+  await save.press('Enter');
+  await expect(first.getByRole('status')).toContainText('Review saved. Source evidence was not changed.');
+  await expect(form.getByRole('combobox', { name: 'Review outcome', exact: true })).toBeFocused();
+  await expect(form.getByLabel('Rationale', { exact: true })).toHaveValue('');
+  expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 })).records).toEqual(casesBefore.records);
+  const saved = await readBrowserLocalCollection(page, 'analyst_review_state', { minimumRecords: 1 });
+  expect(saved.records[0]!.value).toMatchObject({ disposition: 'open', rationale: 'Retained draft for the first independent review.' });
+
+  const next = first.getByRole('button', { name: 'Next item', exact: true });
+  const firstIndex = await items.evaluateAll((entries) => entries.findIndex(entry => entry.textContent?.includes('Complete reviewed handoff for first.inbox.example')));
+  await next.focus(); await page.keyboard.press('Enter');
+  await expect(items.nth(firstIndex + 1).locator(':scope > details > summary')).toBeFocused();
+  await expect(inbox.locator('.items > li > details[open]')).toHaveCount(1);
+  await items.nth(firstIndex + 1).getByRole('button', { name: 'Previous item', exact: true }).press('Enter');
+  await expect(first.locator(':scope > details > summary')).toBeFocused();
+
+  for (const width of [320, 390, 1024, 1280, 2560]) {
+    for (const theme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width, height: width <= 390 ? 844 : 900 });
+      await useTheme(page, theme);
+      await first.locator(':scope > details > summary').focus();
+      await expect(first.locator(':scope > details > summary')).toBeInViewport({ ratio: 1 });
+      await expectNoHorizontalOverflow(page);
+      const geometry = await form.evaluate(element => ({
+        width: element.getBoundingClientRect().width, scrollWidth: element.scrollWidth,
+        controls: [...element.querySelectorAll('input,select,textarea,button')].map(control => ({
+          left: control.getBoundingClientRect().left - element.getBoundingClientRect().left,
+          right: control.getBoundingClientRect().right - element.getBoundingClientRect().left,
+          height: control.getBoundingClientRect().height,
+        })),
+      }));
+      expect(geometry.controls).toHaveLength(5);
+      expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.width + 1);
+      for (const control of geometry.controls) {
+        expect(control.left).toBeGreaterThanOrEqual(-1);
+        expect(control.right).toBeLessThanOrEqual(geometry.width + 1);
+        if (width <= 390) expect(control.height).toBeGreaterThanOrEqual(44);
+      }
+      await page.screenshot({ path: testInfo.outputPath(`focused-inbox-${theme}-${width}.png`) });
+    }
+  }
+  expect(collectionRequests.count()).toBe(0);
+});
+
 test('one canonical Review Item lifecycle persists independently and recurs after material Case evidence changes', async ({ page }) => {
   const collectionRequests = countCollectionRequests(page);
   await migrateLegacyBrowserData(page, {
@@ -274,6 +583,7 @@ test('one canonical Review Item lifecycle persists independently and recurs afte
     has: page.getByRole('heading', { name: 'Complete reviewed handoff for lifecycle-review.invalid' }),
   });
   await expect(item).toBeVisible();
+  await openInboxReview(item);
   await expect(item).toContainText('packet');
   await expect(item).toContainText('open');
 
@@ -291,6 +601,22 @@ test('one canonical Review Item lifecycle persists independently and recurs afte
     hasText: 'Recorded suppressed for Complete reviewed handoff for lifecycle-review.invalid',
   })).toBeVisible();
   await expect(item).toHaveCount(0);
+  const queues = page.getByRole('group', { name: 'Review queue' });
+  const everything = queues.getByRole('button', { name: /^Everything/u });
+  await everything.click();
+  await expect(page).toHaveURL('/monitor?view=inbox&queue=all');
+  await expect(everything).toHaveAttribute('aria-pressed', 'true');
+  await expect(everything).toBeFocused();
+  await openInboxReview(item);
+  await expect(item.locator('details.lifecycle-controls > summary')).toContainText('suppressed');
+  await expect(item.locator('details.lifecycle-controls > summary')).not.toContainText('invalidated');
+  await page.goBack();
+  await expect(queues.getByRole('button', { name: /^Needs action/u })).toHaveAttribute('aria-pressed', 'true');
+  await expect(item).toHaveCount(0);
+  await page.goForward();
+  await expect(everything).toHaveAttribute('aria-pressed', 'true');
+  await openInboxReview(item);
+  await expect(item.locator('details.lifecycle-controls > summary')).toContainText('suppressed');
 
   const reviewStateAfter = await readBrowserLocalCollection(page, 'analyst_review_state', {
     minimumRecords: 1,
@@ -307,10 +633,10 @@ test('one canonical Review Item lifecycle persists independently and recurs afte
   });
   expect(casesAfterDecision.records.map((record) => record.value)).toEqual(casesBefore.records.map((record) => record.value));
 
-  await page.getByRole('tab', { name: /Cases/ }).click();
+  await openConsoleView(page, 'cases');
   const caseHead = page.locator('.case-head', { hasText: 'lifecycle-review.invalid' });
   await caseHead.click();
-  const workspace = await openCaseResponseWorkspace(page, 'case-lifecycle-review');
+  const workspace = await openCaseResponseWorkspace(page, 'case-lifecycle-review', 'advanced', 'Response');
   const actions = workspace.locator('details', { hasText: 'Track append-only response actions' });
   await actions.getByText('Track append-only response actions', { exact: true }).click();
   await actions.getByRole('button', { name: 'Review or append event' }).click();
@@ -318,7 +644,7 @@ test('one canonical Review Item lifecycle persists independently and recurs afte
   await actions.getByRole('button', { name: 'Append transition' }).click();
   await expect(actions).toContainText('Current projection: reviewed');
 
-  await page.getByRole('tab', { name: /Inbox/ }).click();
+  await openConsoleView(page, 'inbox');
   await page.getByRole('group', { name: 'Review queue' })
     .getByRole('button', { name: /^Changed since review/ }).click();
   const advancedFilters = page.locator('.review-inbox details.advanced-filters');
@@ -327,8 +653,59 @@ test('one canonical Review Item lifecycle persists independently and recurs afte
   await filters.getByLabel('Review state').selectOption('recurred');
   const recurred = page.locator('.review-inbox .items > li').filter({ hasText: 'lifecycle-review.invalid' });
   await expect(recurred).toBeVisible();
+  await openInboxReview(recurred);
   await expect(recurred.locator('details.lifecycle-controls > summary')).toContainText('invalidated');
   await expect(recurred.locator('details.lifecycle-controls > summary')).toContainText('recurred');
+  expect(collectionRequests.count()).toBe(0);
+});
+
+test('ambiguous and future certificate observations remain reviewable through the source Case', async ({ page }, testInfo) => {
+  const collectionRequests = countCollectionRequests(page);
+  const record = certificateCase();
+  record.evidencePins.push(certificatePin('pin-equal-time-issuer', 'tls.issuer', 'TLS issuer', 'Conflicting retained issuer', 'tls', 'Independent retained fixture observation'));
+  const key = certificatePin('pin-future-key', 'tls.spki_sha256', 'TLS public-key SHA-256', EXPECTED_SPKI_SHA256, 'tls', 'Future-dated retained fixture observation');
+  key.observedAt = '2099-01-01T00:00:00.000Z';
+  record.evidencePins.push(key);
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: currentBrandProfileBrowserStore([certificateProfile()]),
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [record] },
+  }, { clearStorage: true, destination: '/monitor?view=certificates' });
+  const inbox = page.getByRole('region', { name: 'Certificate review inbox' });
+  await inbox.getByLabel('Evidence class').selectOption('spki');
+  const future = inbox.locator('.findings > li');
+  await expect(future).toHaveCount(1);
+  await expect(future).toContainText('later than the review clock');
+  await expect(future).not.toContainText('Expected public key retained');
+  await future.locator('details.lifecycle-controls > summary').click();
+  await expect(future.getByLabel('Review outcome').locator('option[value="resolved"]')).toHaveJSProperty('disabled', true);
+  await inbox.getByLabel('Evidence class').selectOption('live_tls');
+  const ambiguous = inbox.locator('.findings > li').filter({ has: page.getByRole('heading', { name: 'Review retained TLS issuer context for certificate-operations.example' }) });
+  await expect(ambiguous).toContainText('2 retained facts in 1 Case');
+  await expect(ambiguous).toContainText('No single latest fact is selected');
+  const sourceLink = ambiguous.getByRole('link', { name: 'Review source Case', exact: true });
+  await expect(sourceLink).toHaveAttribute('href', '/cases?case=case-certificate-operations&section=evidence');
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await ambiguous.getByRole('heading').evaluate((element) => window.scrollTo({ top: Math.max(0, window.scrollY + element.getBoundingClientRect().top - 96), behavior: 'instant' }));
+      await expect(ambiguous.getByRole('heading')).toBeVisible();
+      await expect(sourceLink).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      await testInfo.attach(`certificate-context-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    }
+  }
+  await sourceLink.focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL('/cases?case=case-certificate-operations&section=evidence');
+  await expect(page.locator('#case-head-case-certificate-operations')).toBeVisible();
+  await expect(page.locator('#case-head-case-certificate-operations')).toBeFocused();
+  await page.goto('/monitor?view=inbox');
+  await page.getByRole('group', { name: 'Review queue' }).getByRole('button', { name: /^Changed since review/u }).click();
+  const review = page.locator('.review-inbox .items > li').filter({ has: page.getByRole('heading', { name: 'Review retained TLS issuer context for certificate-operations.example' }) });
+  await expect(review).toBeVisible();
+  await openInboxReview(review);
+  await expect(review).toContainText('inconclusive');
   expect(collectionRequests.count()).toBe(0);
 });
 

@@ -52,9 +52,9 @@ afterEach(async () => {
 });
 
 describe('reviewed technology reference-build intake', () => {
-  test('derives a target-free positive fixture and separately verifiable provenance', () => {
+  test('derives a target-free positive fixture and separately verifiable provenance', async () => {
     const html = '<!doctype html><html><head><meta name="generator" content="Docusaurus v3.10.2"></head><body>Reference wording</body></html>';
-    const result = buildTechnologyExampleReview(html, positiveOptions, { fixtures: [], sources: [] });
+    const result = await buildTechnologyExampleReview(html, positiveOptions, { fixtures: [], sources: [] });
     assert.equal(result.schema, TECHNOLOGY_EXAMPLE_REVIEW_SCHEMA);
     assert.equal(result.version, TECHNOLOGY_EXAMPLE_REVIEW_VERSION);
     assert.equal(result.fixture.kind, 'positive');
@@ -81,9 +81,9 @@ describe('reviewed technology reference-build intake', () => {
     assert.doesNotMatch(JSON.stringify(result), /Reference wording|fixture\.invalid|https?:\/\//u);
   });
 
-  test('distinguishes first, independent, and same-origin reviewed observations', () => {
+  test('distinguishes first, independent, and same-origin reviewed observations', async () => {
     const html = '<meta name="generator" content="Docusaurus">';
-    const repeated = buildTechnologyExampleReview(html, {
+    const repeated = await buildTechnologyExampleReview(html, {
       ...positiveOptions,
       id: 'reviewed-docusaurus-repeat-20260805',
     });
@@ -93,7 +93,7 @@ describe('reviewed technology reference-build intake', () => {
     assert.deepEqual(repeated.provenanceContext.repeatedSourceOriginExpectedIds, ['docusaurus']);
     assert.deepEqual(repeated.provenanceContext.independentSourceOriginExpectedIds, []);
 
-    const independent = buildTechnologyExampleReview(html, {
+    const independent = await buildTechnologyExampleReview(html, {
       ...positiveOptions,
       id: 'reviewed-docusaurus-independent-20260805',
       sourceReference: 'git:example/docusaurus-reference',
@@ -105,7 +105,7 @@ describe('reviewed technology reference-build intake', () => {
     assert.deepEqual(independent.provenanceContext.independentSourceOriginExpectedIds, ['docusaurus']);
     assert.deepEqual(independent.provenanceContext.repeatedSourceOriginExpectedIds, []);
 
-    const first = buildTechnologyExampleReview(
+    const first = await buildTechnologyExampleReview(
       '<main class="shopify-section"></main>',
       {
         ...positiveOptions,
@@ -124,8 +124,8 @@ describe('reviewed technology reference-build intake', () => {
     assert.deepEqual(first.provenanceContext.repeatedSourceOriginExpectedIds, []);
   });
 
-  test('derives a negative control only when the complete artefact produces no findings', () => {
-    const result = buildTechnologyExampleReview(
+  test('derives a negative control only when the complete artefact produces no findings', async () => {
+    const result = await buildTechnologyExampleReview(
       '<main>This Eleventy example explains the starter without implementation metadata.</main>',
       {
         ...positiveOptions,
@@ -142,8 +142,8 @@ describe('reviewed technology reference-build intake', () => {
     assert.deepEqual(result.fixture.expectedIds, []);
     assert.deepEqual(result.fixture.negativeFor, ['eleventy']);
     assert.doesNotMatch(JSON.stringify(result.fixture), /This Eleventy example explains the starter/u);
-    assert.throws(
-      () => buildTechnologyExampleReview(
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview(
         '<meta name="generator" content="Eleventy">',
         {
           ...positiveOptions,
@@ -155,7 +155,7 @@ describe('reviewed technology reference-build intake', () => {
       /unexpectedly detected/iu,
     );
 
-    const broadControl = buildTechnologyExampleReview(
+    const broadControl = await buildTechnologyExampleReview(
       '<main>Ordinary static starter</main>',
       {
         ...positiveOptions,
@@ -178,9 +178,9 @@ describe('reviewed technology reference-build intake', () => {
     assert.ok(broadControl.fixture.label.length <= MAX_REVIEWED_FIXTURE_LABEL_LENGTH);
   });
 
-  test('binds a containerised reference build to an immutable image digest', () => {
+  test('binds a containerised reference build to an immutable image digest', async () => {
     const buildEnvironment = 'oci:docker.io/library/ruby:3.4-bookworm@sha256:34c2dbcb42f6d5d638bb47735d39d6a0360e1431b92e5054e5f24161b712cb47';
-    const result = buildTechnologyExampleReview(
+    const result = await buildTechnologyExampleReview(
       '<meta name="generator" content="Jekyll v4.4.1">',
       {
         ...positiveOptions,
@@ -199,9 +199,9 @@ describe('reviewed technology reference-build intake', () => {
     assert.deepEqual(result.fixture.expectedIds, ['jekyll']);
   });
 
-  test('records a pinned build runtime for an official documentation example', () => {
+  test('records a pinned build runtime for an official documentation example', async () => {
     const buildEnvironment = 'oci:docker.io/library/node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43';
-    const result = buildTechnologyExampleReview(
+    const result = await buildTechnologyExampleReview(
       '<main ng-version="22.1.2"></main>',
       {
         ...positiveOptions,
@@ -221,8 +221,8 @@ describe('reviewed technology reference-build intake', () => {
     assert.deepEqual(result.fixture.expectedIds, ['angular']);
   });
 
-  test('records an exact four-part runtime version used by an official build', () => {
-    const result = buildTechnologyExampleReview(
+  test('records an exact four-part runtime version used by an official build', async () => {
+    const result = await buildTechnologyExampleReview(
       '<a href="index.php?route=common/home"></a>',
       {
         ...positiveOptions,
@@ -243,8 +243,8 @@ describe('reviewed technology reference-build intake', () => {
     assert.deepEqual(result.fixture.expectedIds, ['opencart']);
   });
 
-  test('records a locally permitted reference build without treating its runtime as open source', () => {
-    const result = buildTechnologyExampleReview(
+  test('records a locally permitted reference build without treating its runtime as open source', async () => {
+    const result = await buildTechnologyExampleReview(
       '<main>Default welcome page</main>',
       {
         ...positiveOptions,
@@ -273,8 +273,8 @@ describe('reviewed technology reference-build intake', () => {
     assert.deepEqual(result.fixture.expectedIds, ['craft-cms', 'nginx']);
   });
 
-  test('records a licensed repository artefact without inventing a build runtime', () => {
-    const result = buildTechnologyExampleReview(
+  test('records a licensed repository artefact without inventing a build runtime', async () => {
+    const result = await buildTechnologyExampleReview(
       '<html data-wf-page="private-page-id" data-wf-site="private-site-id"><main>Excluded copy</main></html>',
       {
         ...positiveOptions,
@@ -294,14 +294,27 @@ describe('reviewed technology reference-build intake', () => {
     assert.equal(result.provenance.runtimeReference, null);
     assert.equal(result.provenance.derivation, 'reviewed-repository-artifact');
     assert.deepEqual(result.fixture.input, {
-      html: '<main data-wf-page="fixture"></main>',
+      html: '<main data-wf-page="fixture"></main><main data-wf-site="fixture"></main>',
       observedAt: positiveOptions.observedAt,
     });
     assert.doesNotMatch(JSON.stringify(result), /private-page-id|private-site-id|Excluded copy/u);
   });
 
-  test('accepts public-domain repository artefacts without broadening source retention', () => {
-    const result = buildTechnologyExampleReview(
+  test('preserves the matched structural alternative instead of inventing a different platform marker', async () => {
+    for (const [html, expectedId, expectedMarkup] of [
+      ['<html data-wf-site="private-site-id"></html>', 'webflow', '<main data-wf-site="fixture"></main>'],
+      ['<script src="/_next/static/private-build.js"></script>', 'nextjs', '<link href="/_next/static/fixture.js">'],
+    ]) {
+      const result = await buildTechnologyExampleReview(html!, {
+        ...positiveOptions, expectedIds: [expectedId!],
+      }, { fixtures: [], sources: [] });
+      assert.equal(result.fixture.input.html, expectedMarkup);
+      assert.doesNotMatch(JSON.stringify(result.fixture), /private-site-id|private-build|__NEXT_DATA__/u);
+    }
+  });
+
+  test('accepts public-domain repository artefacts without broadening source retention', async () => {
+    const result = await buildTechnologyExampleReview(
       '<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="excluded-state">',
       {
         ...positiveOptions,
@@ -326,8 +339,8 @@ describe('reviewed technology reference-build intake', () => {
     assert.doesNotMatch(JSON.stringify(result), /excluded-state/u);
   });
 
-  test('records a reviewed official demonstration without inventing build or runtime provenance', () => {
-    const result = buildTechnologyExampleReview(
+  test('records a reviewed official demonstration without inventing build or runtime provenance', async () => {
+    const result = await buildTechnologyExampleReview(
       '<meta name="generator" content="TYPO3 CMS"><main>Excluded demonstration copy</main>',
       {
         ...positiveOptions,
@@ -354,8 +367,8 @@ describe('reviewed technology reference-build intake', () => {
     assert.deepEqual(result.fixture.expectedIds, ['apache-http-server', 'typo3']);
     assert.doesNotMatch(JSON.stringify(result), /Excluded demonstration copy|https?:\/\//u);
 
-    assert.throws(
-      () => buildTechnologyExampleReview('<meta name="generator" content="TYPO3 CMS">', {
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview('<meta name="generator" content="TYPO3 CMS">', {
         ...positiveOptions,
         id: 'official-typo3-demonstration-zone-less',
         expectedIds: ['typo3'],
@@ -369,7 +382,7 @@ describe('reviewed technology reference-build intake', () => {
       }),
       /explicit timezone/u,
     );
-    const offset = buildTechnologyExampleReview('<meta name="generator" content="TYPO3 CMS">', {
+    const offset = await buildTechnologyExampleReview('<meta name="generator" content="TYPO3 CMS">', {
       ...positiveOptions,
       id: 'official-typo3-demonstration-offset',
       expectedIds: ['typo3'],
@@ -384,9 +397,34 @@ describe('reviewed technology reference-build intake', () => {
     assert.equal(offset.provenance.sourceRevision, '2026-08-05T02:52:53.000Z');
   });
 
-  test('minimises response metadata and preserves explicit mixed controls', () => {
+  test('reviews a complete maximum-size artefact without retaining its unrelated source', async () => {
+    const tail = '<main data-wf-site="fixture"></main>';
+    const html = '<!--' + 'x'.repeat(MAX_TECHNOLOGY_EXAMPLE_HTML_BYTES - tail.length - 7) + '-->' + tail;
+    const result = await buildTechnologyExampleReview(html, {
+      ...positiveOptions, id: 'official-large-demonstration', expectedIds: ['webflow'],
+      licenceBasis: 'factual-observation', sourceReference: 'official:webflow/demo',
+      sourceRevision: positiveOptions.observedAt, sourceIntegrity: null,
+      sourceLicence: 'factual-observation', runtimeReference: null,
+      buildRecipe: 'official-public-demonstration',
+    });
+    assert.equal(result.provenance.sourceKind, 'demonstration');
+    assert.equal(result.provenance.sourceLicence, 'factual-observation');
+    assert.equal(result.fixture.licenseBasis, 'factual-observation');
+    assert.equal(result.fixture.input.html, tail);
+    assert.deepEqual(result.fixture.expectedIds, ['webflow']);
+    assert.ok(JSON.stringify(result).length < 8_192);
+    await assert.rejects(async () => await buildTechnologyExampleReview(html + ' ', {
+      ...positiveOptions, id: 'too-large-source',
+    }), /Reference HTML must be between/u);
+    await assert.rejects(async () => await buildTechnologyExampleReview('<main></main>', {
+      ...positiveOptions, id: 'invented-source-licence', licenceBasis: 'factual-observation',
+      sourceLicence: 'factual-observation',
+    }), /licen[cs]e|demonstration/u);
+  });
+
+  test('minimises response metadata and preserves explicit mixed controls', async () => {
     const buildEnvironment = 'oci:docker.io/library/drupal:11-apache@sha256:5fb998e12185c2861643ded29abf3dcabfc5d6741c443175fd62f5e6b25ffbf1';
-    const result = buildTechnologyExampleReview(
+    const result = await buildTechnologyExampleReview(
       '<main data-drupal-selector="fixture"></main>',
       {
         ...positiveOptions,
@@ -418,84 +456,84 @@ describe('reviewed technology reference-build intake', () => {
     assert.doesNotMatch(JSON.stringify(result), /2\.4\.68|8\.5\.9/u);
   });
 
-  test('rejects conflicting expectations and unverified or target-bearing provenance', () => {
+  test('rejects conflicting expectations and unverified or target-bearing provenance', async () => {
     const html = '<meta name="generator" content="Docusaurus">';
-    assert.throws(
-      () => buildTechnologyExampleReview(html, {
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview(html, {
         ...positiveOptions,
         negativeFor: ['docusaurus'],
       }),
       /both expected and forbidden/iu,
     );
-    assert.throws(
-      () => buildTechnologyExampleReview(html, {
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview(html, {
         ...positiveOptions,
         sourceReference: 'https://reference.invalid/source',
       }),
       /target-free npm package, repository, OCI image, or official demonstration/iu,
     );
-    assert.throws(
-      () => buildTechnologyExampleReview(html, {
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview(html, {
         ...positiveOptions,
         sourceIntegrity: null,
       }),
       /require a sha512/iu,
     );
-    assert.throws(
-      () => buildTechnologyExampleReview(html, {
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview(html, {
         ...positiveOptions,
         sourceRevision: 'latest',
       }),
       /Package revision version/iu,
     );
-    assert.throws(
-      () => buildTechnologyExampleReview(html, {
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview(html, {
         ...positiveOptions,
         sourceRevision: '3.10.2-01',
       }),
       /leading zeroes/iu,
     );
-    assert.throws(
-      () => buildTechnologyExampleReview(html, {
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview(html, {
         ...positiveOptions,
         sourceRevision: '3.10.2-a..b',
       }),
       /empty identifier/iu,
     );
-    assert.equal(buildTechnologyExampleReview(html, {
+    assert.equal((await buildTechnologyExampleReview(html, {
       ...positiveOptions,
       sourceRevision: '3.10.2-rc.1+build.4',
-    }).provenance.sourceRevision, '3.10.2-rc.1+build.4');
-    assert.throws(
-      () => buildTechnologyExampleReview(html, {
+    })).provenance.sourceRevision, '3.10.2-rc.1+build.4');
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview(html, {
         ...positiveOptions,
         runtimeReference: 'node@latest',
       }),
       /exact three- or four-part version/iu,
     );
-    assert.throws(
-      () => buildTechnologyExampleReview(html, {
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview(html, {
         ...positiveOptions,
         expectedIds: ['astro'],
       }),
       /do not match/iu,
     );
-    assert.throws(
-      () => buildTechnologyExampleReview(html, {
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview(html, {
         ...positiveOptions,
         buildRecipe: 'official-container-default',
       }),
       /require an immutable OCI build environment/iu,
     );
-    assert.throws(
-      () => buildTechnologyExampleReview(html, {
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview(html, {
         ...positiveOptions,
         buildEnvironment: 'oci:docker.io/library/node:latest@sha256:not-a-digest',
       }),
       /immutable OCI image reference/iu,
     );
-    assert.throws(
-      () => buildTechnologyExampleReview(html, {
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview(html, {
         ...positiveOptions,
         sourceReference: 'oci:docker.io/library/nginx',
         sourceRevision: '1.29-alpine',
@@ -505,22 +543,22 @@ describe('reviewed technology reference-build intake', () => {
       }),
       /same immutable image/iu,
     );
-    assert.throws(
-      () => buildTechnologyExampleReview(html, {
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview(html, {
         ...positiveOptions,
         responseHeaders: { server: 'Private value' },
       }),
       /does not support server/iu,
     );
-    assert.throws(
-      () => buildTechnologyExampleReview(html, {
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview(html, {
         ...positiveOptions,
         supportingEnvironments: ['oci:docker.io/library/mariadb:latest@sha256:not-a-digest'],
       }),
       /Supporting environments/iu,
     );
-    assert.throws(
-      () => buildTechnologyExampleReview('<main data-wf-page="fixture"></main>', {
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview('<main data-wf-page="fixture"></main>', {
         ...positiveOptions,
         sourceReference: 'git:example/static-export',
         sourceRevision: '92fd5b8da0f5c3d4164ae02fe605de363753e504',
@@ -530,16 +568,16 @@ describe('reviewed technology reference-build intake', () => {
       }),
       /Runtime reference/iu,
     );
-    assert.throws(
-      () => buildTechnologyExampleReview('<main data-wf-page="fixture"></main>', {
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview('<main data-wf-page="fixture"></main>', {
         ...positiveOptions,
         runtimeReference: null,
         buildRecipe: 'reviewed-repository-artifact',
       }),
       /repository source/iu,
     );
-    assert.throws(
-      () => buildTechnologyExampleReview('<meta name="generator" content="TYPO3 CMS">', {
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview('<meta name="generator" content="TYPO3 CMS">', {
         ...positiveOptions,
         id: 'invalid-demonstration',
         expectedIds: ['typo3'],
@@ -552,8 +590,8 @@ describe('reviewed technology reference-build intake', () => {
       }),
       /no inferred runtime version/iu,
     );
-    assert.throws(
-      () => buildTechnologyExampleReview('<meta name="generator" content="TYPO3 CMS">', {
+    await assert.rejects(
+      async () => await buildTechnologyExampleReview('<meta name="generator" content="TYPO3 CMS">', {
         ...positiveOptions,
         id: 'invalid-demonstration-licence',
         expectedIds: ['typo3'],
@@ -565,7 +603,7 @@ describe('reviewed technology reference-build intake', () => {
         runtimeReference: null,
         buildRecipe: 'official-public-demonstration',
       }),
-      /reviewed demonstration terms basis/iu,
+      /matching reviewed demonstration terms/iu,
     );
   });
 

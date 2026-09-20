@@ -9,7 +9,7 @@
 // registry/web responses, contacts, cookies, screenshots, and authentication
 // data. Reports contain only the normalized case record.
 
-import { caseEvidenceIncomparableReasons, compareCaseEvidence, latestCaseEvidence } from './case-model.mts';
+import { caseEvidenceTimeline, compareCaseEvidence, currentCaseEvidence } from './case-model.mts';
 import type { CaseEvidenceSnapshot, CaseRecord, EvidenceFactor } from './case-model.mts';
 import { httpSecurityHeaderLabel } from './http-summary.mts';
 import { analystInteroperabilityTags } from '../../lib/analyst-taxonomy.mts';
@@ -20,9 +20,11 @@ import {
 } from '../../lib/portable-generator.mts';
 import { buildCaseResponseLifecycleSummary, CASE_EVIDENCE_RELATION_STANCES } from './case-response-model.mts';
 import { normalizeCaseBrandProfileIds } from './case-brand-profile-references.mts';
+import { CASE_RECHECK_CONDITIONS } from './case-recheck-model.mts';
 import {
   CASE_REPORT_SCHEMA,
   CASE_REPORT_SCHEMA_VERSION,
+  PUBLISHED_V2_3_CASE_REPORT_SCHEMA_VERSION,
 } from '../contracts/case-portability.mts';
 
 // ---------------------------------------------------------------------------
@@ -31,7 +33,7 @@ import {
 
 export { CASE_REPORT_SCHEMA, CASE_REPORT_SCHEMA_VERSION };
 
-const LIMITATIONS_TEXT = [
+const PUBLISHED_V2_3_LIMITATIONS = Object.freeze([
   'This report contains normalised browser-local observations from WHOISleuth analyst cases.',
   'It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks.',
   'Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated.',
@@ -40,6 +42,11 @@ const LIMITATIONS_TEXT = [
   'Brand Profile references record an explicit analyst-selected association only; they do not establish ownership, attribution, intent, safety, or maliciousness.',
   'Provider workflow outcomes and independently observed technical effects remain separately attributed. A provider outcome does not establish independent remediation, absence, or safety; neither evidence family establishes legal sufficiency or provider performance.',
   'Generated locally in the browser. Review the package before sharing it.',
+]);
+const LIMITATIONS_TEXT = [
+  ...PUBLISHED_V2_3_LIMITATIONS.slice(0, 2),
+  'Snapshot hostnames are excluded; supporting DNS, TLS and web observations need not concern the Case registration domain.',
+  ...PUBLISHED_V2_3_LIMITATIONS.slice(2),
 ].join(' ');
 
 // ---------------------------------------------------------------------------
@@ -62,7 +69,7 @@ type ReportOptions = {
 };
 type ReportReason = 'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model' | 'other';
 type ReportChange = ReturnType<typeof compareCaseEvidence>[number];
-type ReportSnapshot = Omit<CaseEvidenceSnapshot, 'inputHostname'>;
+type ReportSnapshot = Omit<CaseEvidenceSnapshot, 'inputHostname' | 'observationHostname'>;
 type ReportTimelineEntry = {
   snapshot: ReportSnapshot;
   isBaseline: boolean;
@@ -78,6 +85,7 @@ type CaseReportJson = {
   application: PortableGeneratorMetadata;
   case: {
     id: string;
+    title: string;
     domain: string;
     status: CaseRecord['status'];
     disposition: CaseRecord['disposition'];
@@ -179,6 +187,7 @@ function pickKnownSnapshotFields(snapshot: CaseEvidenceSnapshot): ReportSnapshot
   return {
     id: snapshot.id,
     fingerprint: snapshot.fingerprint,
+    ...(snapshot.factorOrder ? { factorOrder: snapshot.factorOrder } : {}),
     firstCapturedAt: snapshot.firstCapturedAt,
     capturedAt: snapshot.capturedAt,
     source: snapshot.source,
@@ -251,54 +260,17 @@ export function buildCaseReport(
 
   // --- Build JSON report ---
 
-  const timelineEntries: ReportTimelineEntry[] = [];
-
-  if (Array.isArray(caseRecord.evidenceHistory) && caseRecord.evidenceHistory.length > 0) {
-    const chronological = [...caseRecord.evidenceHistory];
-    for (let i = 0; i < chronological.length; i++) {
-      const snapshot = chronological[i];
-      if (!snapshot) continue;
-      const isBaseline = i === 0;
-      const hasRepeatedObservation = snapshot.firstCapturedAt !== snapshot.capturedAt;
-
-      let changes: ReportChange[] | null = null;
-      let hasIncomparableChange = false;
-      let incomparableReasons: ReportReason[] = [];
-
-      if (!isBaseline) {
-        const previous = chronological[i - 1];
-        if (!previous) continue;
-        const rawChanges = compareCaseEvidence(previous, snapshot);
-        incomparableReasons = caseEvidenceIncomparableReasons(previous, snapshot) as ReportReason[];
-        const hostnameContextChanged = incomparableReasons.includes('observation-context');
-        if (rawChanges.length > 0 && !hostnameContextChanged) {
-          changes = rawChanges.map((change) => ({
-            field: change.field,
-            label: change.label,
-            before: change.before,
-            after: change.after,
-            tone: change.tone,
-          }));
-        } else if (snapshot.fingerprint !== previous.fingerprint
-          && incomparableReasons.length === 0
-        ) {
-          incomparableReasons = ['other'];
-        }
-        hasIncomparableChange = incomparableReasons.length > 0;
-      }
-
-      timelineEntries.push({
-        snapshot: pickKnownSnapshotFields(snapshot),
-        isBaseline,
-        hasRepeatedObservation,
-        changes,
-        hasIncomparableChange,
-        incomparableReasons,
-      });
-    }
-  }
-
-  const latest = latestCaseEvidence({ evidenceHistory: caseRecord.evidenceHistory ?? undefined });
+  const timeline = caseEvidenceTimeline(caseRecord.evidenceHistory);
+  const timelineEntries: ReportTimelineEntry[] = timeline.map((entry) => ({
+    snapshot: pickKnownSnapshotFields(entry.snapshot),
+    isBaseline: entry.isBaseline,
+    hasRepeatedObservation: entry.hasRepeatedObservation,
+    changes: entry.changes?.map(({ field, label, before, after, tone }) => ({ field, label, before, after, tone })) ?? null,
+    hasIncomparableChange: entry.hasIncomparableChange,
+    incomparableReasons: [...entry.incomparableReasons],
+  }));
+  const selection = currentCaseEvidence(caseRecord);
+  const latest = selection.snapshot;
   const currentAssessment = latest ? pickKnownSnapshotFields(latest) : null;
   const responseLifecycle = buildCaseResponseLifecycleSummary(caseRecord);
   const observedEffects = caseRecord.observedEffects ?? {
@@ -321,6 +293,7 @@ export function buildCaseReport(
     application: generator,
     case: {
       id: caseRecord.id,
+      title: caseRecord.title ?? '',
       domain: caseRecord.domain,
       status: caseRecord.status,
       disposition: caseRecord.disposition,
@@ -380,7 +353,7 @@ export function buildCaseReport(
       })),
     },
     responseLifecycle,
-    limitations: LIMITATIONS_TEXT,
+    limitations: [LIMITATIONS_TEXT, selection.limitation, ...new Set(timeline.map((entry) => entry.orderingLimitation))].filter(Boolean).join(' '),
   };
 
   // --- Build Markdown ---
@@ -388,6 +361,26 @@ export function buildCaseReport(
   const md = buildMarkdown(json, options.includeAttribution !== false);
 
   return { json, markdown: md };
+}
+
+/** Expected strict reader projection; historical disclosure wording is immutable. */
+export function buildCaseReportVerificationProjection(
+  caseRecord: CaseRecord,
+  options: ReportOptions,
+  schemaVersion: number,
+) {
+  const current = buildCaseReport(caseRecord, options).json;
+  if (schemaVersion === CASE_REPORT_SCHEMA_VERSION) return current;
+  if (schemaVersion !== PUBLISHED_V2_3_CASE_REPORT_SCHEMA_VERSION) {
+    throw new TypeError('No strict Case report projection is defined for this version.');
+  }
+  const { title: _title, ...publishedCase } = current.case;
+  return {
+    ...current,
+    case: publishedCase,
+    schemaVersion,
+    limitations: PUBLISHED_V2_3_LIMITATIONS.join(' ') + current.limitations.slice(LIMITATIONS_TEXT.length),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -406,6 +399,8 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
   const domain = escapeMarkdownInline(report.case.domain || 'unknown');
   lines.push(`# Case Report: ${domain}`);
   lines.push('');
+  if (report.case.title) { lines.push(`**Incident:** ${escapeMarkdownInline(report.case.title)}`); lines.push(''); }
+  lines.push(`**Case ID:** ${escapeMarkdownInline(report.case.id)}`);
 
   // Metadata
   lines.push(`**Generated:** ${escapeMarkdownInline(report.generatedAt)}`);
@@ -449,7 +444,9 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
     lines.push(`- **Scan depth:** ${escapeMarkdownInline(formatReportValue(a.scanDepth))}`);
     lines.push(`- **Source:** ${escapeMarkdownInline(formatReportValue(a.source))}`);
   } else {
-    lines.push('No evidence captured.');
+    lines.push(report.evidenceTimeline.length
+      ? 'Retained snapshots have no unique latest assessment. Review the timeline and limitations.'
+      : 'No evidence captured.');
   }
   lines.push('');
 
@@ -565,7 +562,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
     if (!response.evidencePins.length) lines.push('No evidence pins recorded.');
     for (const pin of response.evidencePins) {
       lines.push(`- **${escapeMarkdownInline(pin.label)}:** ${escapeMarkdownInline(pin.value)}`);
-      lines.push(`  Source: ${escapeMarkdownInline(pin.source)}; observed ${escapeMarkdownInline(pin.observedAt)}; completeness ${escapeMarkdownInline(pin.completeness)}.`);
+      lines.push(`  Source: ${escapeMarkdownInline(pin.source)}; observed ${escapeMarkdownInline(pin.observedAt ?? 'Time unavailable')}; completeness ${escapeMarkdownInline(pin.completeness)}.`);
       if (pin.limitations.length) lines.push(`  Limitations: ${escapeMarkdownInline(pin.limitations.join('; '))}`);
     }
     lines.push('');
@@ -573,7 +570,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
     lines.push('');
     if (!response.sightings.length) lines.push('No source-qualified sightings recorded.');
     for (const sighting of response.sightings) {
-      lines.push(`- **${escapeMarkdownInline(sighting.state.replaceAll('_', ' '))}:** ${escapeMarkdownInline(sighting.category)} (${escapeMarkdownInline(sighting.observedAt)})`);
+      lines.push(`- **${escapeMarkdownInline(sighting.state.replaceAll('_', ' '))}:** ${escapeMarkdownInline(sighting.category)} (${escapeMarkdownInline(sighting.observedAt ?? 'Observation time unavailable')})`);
       lines.push(`  Source: ${escapeMarkdownInline(sighting.source)}; class ${escapeMarkdownInline(sighting.sourceClass)}; completeness ${escapeMarkdownInline(sighting.completeness)}.`);
       if (sighting.evidencePinId) lines.push(`  Evidence pin: ${escapeMarkdownInline(sighting.evidencePinId)}`);
       if (sighting.limitations.length) lines.push(`  Limitations: ${escapeMarkdownInline(sighting.limitations.join('; '))}`);
@@ -593,6 +590,10 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
       for (const assertion of assertions) {
         lines.push(`- **${escapeMarkdownInline(assertion.state)}:** ${escapeMarkdownInline(assertion.statement)}`);
         if (assertion.rationale) lines.push(`  ${escapeMarkdownInline(assertion.rationale)}`);
+        if (assertion.recheck) {
+          lines.push(`  Recheck target: ${escapeMarkdownInline(assertion.recheck.targetHostname)}; comparison conditions: ${escapeMarkdownInline(assertion.recheck.conditions)}`);
+          if (assertion.recheck.baselinePinId) lines.push(`  Baseline evidence pin: ${escapeMarkdownInline(assertion.recheck.baselinePinId)}`);
+        }
         if (assertion.provenance) {
           lines.push(`  External provenance: ${escapeMarkdownInline(assertion.provenance.format.toUpperCase())}; source ${escapeMarkdownInline(assertion.provenance.sourceName)}; file SHA-256 ${escapeMarkdownInline(assertion.provenance.sourceDigestSha256)}.`);
           if (assertion.provenance.publisher) lines.push(`  Publisher: ${escapeMarkdownInline(assertion.provenance.publisher)}`);
@@ -676,9 +677,16 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
     ? `- Latest independently observed change time: ${escapeMarkdownInline(report.responseLifecycle.latestObservedChangeAt)}`
     : `- Latest independently observed change time: Withheld because the independent change state is ${escapeMarkdownInline(report.responseLifecycle.observedChangeState)}.`);
   if (observedEffect) lines.push(`- Latest independent review: ${escapeMarkdownInline(observedEffect.state.replaceAll('_', ' '))} at ${escapeMarkdownInline(observedEffect.observedAt)} from ${escapeMarkdownInline(observedEffect.source)}.`);
+  else if (response.observedEffects.reviews.length) lines.push('- A single latest independent review cannot be selected from the retained observation times. Review the individual records below.');
   if (!response.observedEffects.reviews.length) lines.push('- No independent observed-effect review recorded.');
   for (const review of response.observedEffects.reviews) {
     lines.push(`- **${escapeMarkdownInline(review.state.replaceAll('_', ' '))}** (${escapeMarkdownInline(review.observedAt)}): ${escapeMarkdownInline(review.source)}; class ${escapeMarkdownInline(review.sourceClass)}; completeness ${escapeMarkdownInline(review.completeness)}.`);
+    if (review.recheck) {
+      lines.push(`  Question ${escapeMarkdownInline(review.recheck.questionId)}: ${escapeMarkdownInline(review.recheck.question)}`);
+      lines.push(`  Recheck target: ${escapeMarkdownInline(review.recheck.targetHostname)}; retained comparison conditions: ${escapeMarkdownInline(review.recheck.conditions)}`);
+      lines.push(`  Condition comparison: ${escapeMarkdownInline(CASE_RECHECK_CONDITIONS[review.recheck.conditionsMatch])}`);
+      if (review.recheck.baselinePinId) lines.push(`  Baseline evidence pin: ${escapeMarkdownInline(review.recheck.baselinePinId)}`);
+    }
     if (review.evidencePinId) lines.push(`  Evidence pin: ${escapeMarkdownInline(review.evidencePinId)}`);
     if (review.sightingId) lines.push(`  Sighting: ${escapeMarkdownInline(review.sightingId)}`);
     if (review.followUpAt) lines.push(`  Scheduled local follow-up: ${escapeMarkdownInline(review.followUpAt)}`);

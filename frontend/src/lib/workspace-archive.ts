@@ -1,7 +1,8 @@
 import {
   MAX_WORKSPACE_ARCHIVE_BYTES,
   buildWorkspaceArchive,
-  previewWorkspaceArchive,
+  mergeReadyWorkspaceArchiveData,
+  prepareWorkspaceArchive,
   WORKSPACE_ARCHIVE_SECTION_IDS,
 } from './analysis/workspace-archive.ts';
 import type { WorkspaceArchivePreviewSection } from './analysis/workspace-archive.ts';
@@ -10,39 +11,18 @@ import {
   decryptWorkspaceArchive,
   encryptWorkspaceArchive,
 } from './analysis/workspace-archive-crypto.ts';
-import { enforceStoreBudget, mergeCases } from './analysis/case-model.ts';
-import type { CaseRecord } from './analysis/case-model.ts';
-import { assertCampaignStoreBudget, mergeCampaigns } from './analysis/campaign-model.ts';
-import { assertBrandProfileStoreBudget, mergeBrandProfiles } from './analysis/brand-profile-model.ts';
-import { assertWatchlistStoreBudget, mergeWatchlistStores } from './analysis/watchlist-store.ts';
-import { assertShortlistStoreBudget, mergeShortlistStores } from './analysis/shortlist-model.ts';
-import { assertDetectionRuleStoreBudget, mergeDetectionRules } from './analysis/detection-rule-model.ts';
-import { mergeRelationshipObservations } from './analysis/relationship-observation-model.ts';
-import { enforceBulkSessionStoreBudget, mergeBulkSessions } from './analysis/bulk-session-model.ts';
-import { mergeWebsiteSnapshots } from './analysis/website-snapshot-model.ts';
-import { mergeInvestigationTemplates } from './analysis/investigation-template-model.ts';
-import { mergeBulkReviewStores } from './analysis/bulk-review-model.ts';
-import { mergeAnalystReviewStateStores } from './analysis/analyst-review-state.ts';
 import { ACTIVE_PROFILE_KEY, activeProfileId, loadProfiles, setActiveProfile } from './brand-profiles';
-import { loadCampaigns } from './campaigns';
-import { loadCases } from './cases';
-import { loadDetectionRules } from './detection-rules';
-import { loadRelationshipObservations } from './relationship-observations';
-import { loadBulkSessions } from './bulk-sessions';
-import { loadWebsiteSnapshots } from './website-snapshots';
-import { loadInvestigationTemplates } from './investigation-templates';
-import { loadBulkReviewStore } from './bulk-review';
-import { loadAnalystReviewState } from './analyst-review-state';
-import { loadShortlist } from './shortlist';
+import { workspacePreferenceStorage } from './browser-workspace-context.ts';
 import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY, applyThemePreference, normalizeThemePreference, readThemePreference, setThemePreference } from './theme';
-import { loadWatchlists } from './watchlists';
 import {
   browserLocalDataCollection,
   browserLocalDataProvider,
+  readBrowserLocalDataCollections,
 } from './browser-local-data-service.ts';
 import type { AnyLocalDataCollectionDefinition } from './browser-local-data.ts';
 import { guardedWorkspaceRollback, guardedWorkspaceSettingsRollback } from './analysis/workspace-rollback.ts';
 import { rethrowUnknownWorkspaceCommit } from './analysis/workspace-import-outcome.ts';
+import { WORKSPACE_ARCHIVE_COLLECTIONS as SECTION_COLLECTIONS } from '../../../packages/contracts/browser-local-collection-manifest.mts';
 
 export { MAX_WORKSPACE_ARCHIVE_BYTES } from './analysis/workspace-archive.ts';
 export {
@@ -54,6 +34,7 @@ export {
 } from './analysis/workspace-archive-crypto.ts';
 
 export type WorkspaceArchiveSectionId = typeof WORKSPACE_ARCHIVE_SECTION_IDS[number];
+type WorkspacePreview = ReturnType<Awaited<ReturnType<typeof prepareWorkspaceArchive>>['preview']>;
 export type WorkspaceImportSummary = {
   id: string;
   added: number;
@@ -81,33 +62,9 @@ function importSummary(
 
 const SETTINGS_KEYS = [ACTIVE_PROFILE_KEY, THEME_STORAGE_KEY];
 async function localInput() {
-  const [cases, campaigns, brandProfiles, watchlists, shortlist, detectionRules, relationshipObservations, bulkSessions, websiteSnapshots, investigationTemplates, bulkReview, analystReviewState] = await Promise.all([
-    loadCases(),
-    loadCampaigns(),
-    loadProfiles(),
-    loadWatchlists(),
-    loadShortlist(),
-    loadDetectionRules(),
-    loadRelationshipObservations(),
-    loadBulkSessions(),
-    loadWebsiteSnapshots(),
-    loadInvestigationTemplates(),
-    loadBulkReviewStore(),
-    loadAnalystReviewState(),
-  ]);
+  const documents = await readBrowserLocalDataCollections(SECTION_COLLECTIONS.map(([, collection]) => collection));
   return {
-    cases,
-    campaigns,
-    brandProfiles,
-    watchlists,
-    shortlist,
-    detectionRules,
-    relationshipObservations,
-    bulkSessions,
-    websiteSnapshots,
-    investigationTemplates,
-    bulkReview,
-    analystReviewState,
+    ...Object.fromEntries(SECTION_COLLECTIONS.map(([section, collection]) => [section, documents[collection]])),
     settings: {
       activeProfileId: activeProfileId(),
       theme: readThemePreference(),
@@ -121,9 +78,9 @@ export async function createWorkspaceArchive(generatedAt = new Date().toISOStrin
 
 export async function createWorkspaceArchiveDownload(generatedAt = new Date().toISOString()) {
   const archive = await createWorkspaceArchive(generatedAt);
-  const content = `${JSON.stringify(archive, null, 2)}\n`;
+  const content = `${JSON.stringify(archive)}\n`;
   if (new TextEncoder().encode(content).byteLength > MAX_WORKSPACE_ARCHIVE_BYTES) {
-    throw new Error('Workspace archives are limited to 10 MiB. Export smaller collections separately before trying again.');
+    throw new Error(`Workspace archives are limited to ${MAX_WORKSPACE_ARCHIVE_BYTES / 1024 / 1024} MiB. Export smaller collections separately before trying again.`);
   }
   return {
     archive,
@@ -141,7 +98,7 @@ export async function createEncryptedWorkspaceArchiveDownload(
   const envelope = await encryptWorkspaceArchive(archive, passphrase);
   const content = `${JSON.stringify(envelope, null, 2)}\n`;
   if (new TextEncoder().encode(content).byteLength > MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES) {
-    throw new Error('The encrypted workspace archive exceeds its 13.4 MiB envelope limit.');
+    throw new Error(`The encrypted workspace archive exceeds its ${MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES}-byte envelope limit.`);
   }
   return {
     archive,
@@ -156,17 +113,26 @@ export async function decryptLocalWorkspaceArchive(raw: unknown, passphrase: str
   return decryptWorkspaceArchive(raw, passphrase);
 }
 
-export async function previewLocalWorkspaceArchive(raw: unknown, selectedSectionIds?: readonly string[]) {
-  return previewWorkspaceArchive(
-    raw,
-    await localInput(),
-    selectedSectionIds ? { selectedSectionIds } : {},
-  );
+export async function previewLocalWorkspaceArchive(raw: unknown, selectedSectionIds?: readonly string[]): Promise<WorkspacePreview> {
+  return (await prepareLocalWorkspaceArchive(raw)).preview(selectedSectionIds);
+}
+
+/** A page-scoped verified archive; local records are read afresh for every action. */
+export async function prepareLocalWorkspaceArchive(raw: unknown) {
+  const archive = await prepareWorkspaceArchive(raw);
+  async function preview(selectedSectionIds?: readonly string[]) {
+    return archive.preview(await localInput(), selectedSectionIds ? { selectedSectionIds } : {});
+  }
+  return Object.freeze({
+    read: archive.read,
+    preview,
+    merge: async (selectedIds: string[]) => mergeWorkspacePreview(await preview(selectedIds), selectedIds),
+  });
 }
 
 function snapshotSettings() {
   try {
-    return new Map(SETTINGS_KEYS.map((key) => [key, localStorage.getItem(key)]));
+    return new Map(SETTINGS_KEYS.map((key) => [key, (key === ACTIVE_PROFILE_KEY ? workspacePreferenceStorage() : localStorage).getItem(key)]));
   } catch {
     throw new Error('Could not read the browser-local workspace. Browser storage may be unavailable.');
   }
@@ -177,8 +143,9 @@ function restoreSettings(snapshot: Map<string, string | null>, applied: Map<stri
   const rollback = guardedWorkspaceSettingsRollback(current, applied, snapshot);
   for (const [key, value] of rollback.settings) {
     if (current.get(key) === value) continue;
-    if (value === null) localStorage.removeItem(key);
-    else localStorage.setItem(key, value);
+    const storage = key === ACTIVE_PROFILE_KEY ? workspacePreferenceStorage() : localStorage;
+    if (value === null) storage.removeItem(key);
+    else storage.setItem(key, value);
   }
   const theme = normalizeThemePreference(rollback.settings.get(THEME_STORAGE_KEY));
   applyThemePreference(theme);
@@ -210,27 +177,19 @@ async function applySettings(
 
 /** Revalidates the archive, then applies only selected ready sections. */
 export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: string[]) {
-  const preview = await previewLocalWorkspaceArchive(raw, selectedIds);
+  return (await prepareLocalWorkspaceArchive(raw)).merge(selectedIds);
+}
+
+async function mergeWorkspacePreview(
+  preview: WorkspacePreview,
+  selectedIds: string[],
+) {
   const selected = new Set(selectedIds);
   const sections = preview.sections.filter((section) => section.status === 'ready' && selected.has(section.id));
   if (!sections.length) throw new Error('Select at least one supported archive section to merge.');
   const settingsSnapshot = snapshotSettings();
   const dataSections = sections.filter((section) => section.id !== 'settings');
-  const sectionCollections = [
-    ['cases', 'cases'],
-    ['campaigns', 'campaigns'],
-    ['brandProfiles', 'brand_profiles'],
-    ['watchlists', 'watchlists'],
-    ['shortlist', 'shortlist'],
-    ['detectionRules', 'detection_rules'],
-    ['relationshipObservations', 'relationship_observations'],
-    ['bulkSessions', 'bulk_sessions'],
-    ['websiteSnapshots', 'website_snapshots'],
-    ['investigationTemplates', 'investigation_templates'],
-    ['bulkReview', 'bulk_review'],
-    ['analystReviewState', 'analyst_review_state'],
-  ] as const;
-  const definitionEntries = await Promise.all(sectionCollections.map(async ([section, collection]) => [
+  const definitionEntries = await Promise.all(SECTION_COLLECTIONS.map(async ([section, collection]) => [
     section,
     await browserLocalDataCollection(collection),
   ] as const));
@@ -249,60 +208,12 @@ export async function mergeLocalWorkspaceArchive(raw: unknown, selectedIds: stri
         previousDocuments = new Map(documents);
         const next = new Map(documents);
         const summaries: WorkspaceImportSummary[] = [];
-        for (const section of dataSections) {
-          if (section.id === 'cases') {
-            const currentCases = Array.isArray(documents.get('cases'))
-              ? documents.get('cases') as CaseRecord[]
-              : [];
-            const merged = mergeCases(currentCases, section.data);
-            const bounded = enforceStoreBudget(merged.cases);
-            next.set('cases', bounded.cases);
-            summaries.push(importSummary(section.id, { ...merged, pruned: bounded.pruned }));
-          } else if (section.id === 'campaigns') {
-            const result = mergeCampaigns(documents.get('campaigns'), section.data);
-            next.set('campaigns', assertCampaignStoreBudget(result.campaigns).campaigns);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'brandProfiles') {
-            const result = mergeBrandProfiles(documents.get('brand_profiles'), section.data);
-            next.set('brand_profiles', assertBrandProfileStoreBudget(result.profiles).profiles);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'watchlists') {
-            const result = mergeWatchlistStores(documents.get('watchlists'), section.data);
-            next.set('watchlists', assertWatchlistStoreBudget(result.watchlists).watchlists);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'shortlist') {
-            const result = mergeShortlistStores(documents.get('shortlist'), section.data);
-            next.set('shortlist', assertShortlistStoreBudget(result.entries).entries);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'detectionRules') {
-            const result = mergeDetectionRules(documents.get('detection_rules'), section.data);
-            next.set('detection_rules', assertDetectionRuleStoreBudget(result.rules).rules);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'relationshipObservations') {
-            const result = mergeRelationshipObservations(documents.get('relationship_observations'), section.data);
-            next.set('relationship_observations', result.observations);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'bulkSessions') {
-            const result = mergeBulkSessions(documents.get('bulk_sessions'), section.data);
-            next.set('bulk_sessions', enforceBulkSessionStoreBudget(result.sessions).store.sessions);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'websiteSnapshots') {
-            const result = mergeWebsiteSnapshots(documents.get('website_snapshots'), section.data);
-            next.set('website_snapshots', result.snapshots);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'investigationTemplates') {
-            const result = mergeInvestigationTemplates(documents.get('investigation_templates'), section.data);
-            next.set('investigation_templates', result.templates);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'bulkReview') {
-            const result = mergeBulkReviewStores(documents.get('bulk_review'), section.data);
-            next.set('bulk_review', result.store);
-            summaries.push(importSummary(section.id, result));
-          } else if (section.id === 'analystReviewState') {
-            const result = mergeAnalystReviewStateStores(documents.get('analyst_review_state'), section.data);
-            next.set('analyst_review_state', result.store);
-            summaries.push(importSummary(section.id, result));
-          } else continue;
+        const input = Object.fromEntries(SECTION_COLLECTIONS.map(([section, collection]) => [section, documents.get(collection)]));
+        for (const result of mergeReadyWorkspaceArchiveData(input, dataSections, preview.generatedAt)) {
+          const definition = definitionBySection.get(result.id);
+          if (!definition) throw new Error('The selected workspace section has no storage owner.');
+          next.set(definition.id, result.document);
+          summaries.push(importSummary(result.id, result));
         }
         appliedDocuments = new Map(next);
         return { documents: next, result: summaries };

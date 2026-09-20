@@ -1,4 +1,5 @@
 import { classifyQuery } from '../../lib/classify.mts';
+import { parseInheritedDnsSelection } from '../../lib/dns-inheritance-review.mts';
 import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors, normalizeMailProtectionProfile } from '../../lib/domain-posture.mts';
 import { operationBudgetTargetFor } from '../../lib/operation-budget.mts';
 import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../lib/netlify-network-guard.mts';
@@ -13,7 +14,7 @@ async function handleDomainPosture(
   event: Parameters<NetlifyFunctionHandler>[0],
   dependencies: DomainPostureHandlerDependencies = { checkDomainPosture },
 ): ReturnType<NetlifyFunctionHandler> {
-  const guard = guardNetlifyNetworkRequest(event, 'domain_posture');
+  const guard = guardNetlifyNetworkRequest(event, 'domain_posture', ['GET']);
   if (guard.response) return guard.response;
 
   const params = event.queryStringParameters || {};
@@ -35,11 +36,15 @@ async function handleDomainPosture(
     .filter((selector) => !selectors.includes(selector))
     .slice(0, Math.max(0, 10 - selectors.length));
   const mailProtectionProfile = normalizeMailProtectionProfile(params.mailProfile);
+  let includeInheritedDns: true | undefined;
+  try { includeInheritedDns = parseInheritedDnsSelection(params.includeInheritedDns); }
+  catch { return json(400, { error: 'includeInheritedDns must be 1 when requested.' }); }
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('domain_posture'), async () => {
     return json(200, await dependencies.checkDomainPosture(domain, {
       dkimSelectors: selectors,
       retiredDkimSelectors: retiredSelectors,
       mailProtectionProfile,
+      ...(includeInheritedDns ? { includeInheritedDns } : {}),
     }));
   });
 }

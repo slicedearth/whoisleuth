@@ -1,0 +1,140 @@
+.case-response-stage {
+  --control-h: 44px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.case-response-stage details {
+  min-width: 0;
+  border-block: 1px solid var(--border);
+}
+
+.case-response-stage summary {
+  padding: 12px 4px;
+  cursor: pointer;
+  font: 650 var(--text-sm) var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.case-response-stage details[open] > summary {
+  margin-bottom: 4px;
+}
+
+.case-response-stage .response-form,
+.case-response-stage .quick-form,
+.case-response-stage .stack,
+.case-response-stage .transition-form {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 8px 4px 16px;
+}
+
+.case-response-stage .two-columns,
+.case-response-stage .separate-times {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 20px;
+  min-width: 0;
+}
+
+.case-response-stage :is(input, select, textarea) {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.case-response-stage :is(input:not([type='checkbox']), select, textarea) {
+  width: 100%;
+}
+
+.case-response-stage :is(.field, fieldset, .choice) { min-width: 0; }
+.case-response-stage .field small { color: var(--muted); }
+.case-response-stage :is(.btn, .primary) { min-height: 44px; }
+.case-response-stage form > :is(.btn, .primary) { justify-self: start; }
+
+.case-response-stage .records {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0 4px 16px;
+  list-style: none;
+}
+
+.case-response-stage .records > li {
+  min-width: 0;
+  padding-block: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.case-response-stage .records :is(strong, small) { display: block; }
+.case-response-stage :is(.records, .retained-summary) p {
+  margin: 6px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.case-response-stage :is(.records small, .retained-summary small, .transition-timeline span) {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.case-response-stage .transition-form,
+.case-response-stage .closure-form {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.case-response-stage .transition-form > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.case-response-stage .transition-timeline {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.case-response-stage .transition-timeline li {
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+}
+.case-response-stage .transition-timeline li[data-applied='false'] { border-color: var(--amber); }
+.case-response-stage .history-warning {
+  margin: 8px 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--amber);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.case-response-stage .separate-times { margin: 0; }
+.case-response-stage .separate-times div { min-width: 0; }
+.case-response-stage .separate-times dt { color: var(--muted); font-size: var(--text-xs); }
+.case-response-stage .separate-times dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+.case-response-stage .pin-references { display: grid; gap: 10px; margin: 0; padding: 12px; border: 1px solid var(--border); }
+.case-response-stage legend { padding-inline: 5px; font-size: var(--text-xs); }
+.case-response-stage .choice { display: flex; align-items: flex-start; gap: 8px; padding-block: 4px; }
+.case-response-stage .choice input { width: auto; margin-top: 3px; }
+.case-response-stage .choice span { min-width: 0; overflow-wrap: anywhere; }
+.case-response-stage .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.case-response-stage .notice { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.6; overflow-wrap: anywhere; }
+.case-response-stage .retained-summary { min-width: 0; }
+.case-response-stage .retained-summary :is(strong, small) { display: block; }
+
+@media (max-width: 800px) {
+  .case-response-stage .two-columns,
+  .case-response-stage .separate-times { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 620px) {
+  .case-response-stage form > :is(.btn, .primary),
+  .case-response-stage .quick-form > :is(.btn, .primary) { width: 100%; }
+}

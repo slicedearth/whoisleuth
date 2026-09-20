@@ -15,6 +15,7 @@ describe('relationship admission preview', () => {
       method: 'Exact leaf-certificate SHA-256',
       value: 'a'.repeat(64),
       domains: ['second.example', 'first.example'],
+      sourceEvidence: ['first.example', 'second.example'].map((domain) => ({ domain, source: 'tls', status: 'success', observedAt: '2026-08-23T01:00:00.000Z', complete: true, truncated: false })),
       description: 'Compare source-qualified retained certificate observations.',
     }, {
       action: 'retain',
@@ -42,7 +43,7 @@ describe('relationship admission preview', () => {
       sourceIdentities: sources,
     });
     assert.equal(preview.connectedCount, MAX_RELATIONSHIP_ADMISSION_DOMAINS);
-    assert.equal(preview.sourceIdentities.length, MAX_RELATIONSHIP_ADMISSION_SOURCES);
+    assert.deepEqual(preview.sourceIdentities, ['unknown']);
     assert.equal(preview.truncated, true);
     assert.equal(preview.completeness, 'partial');
     assert.equal(preview.persistence, 'none');

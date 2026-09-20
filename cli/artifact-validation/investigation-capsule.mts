@@ -1,8 +1,9 @@
+import { investigationCapsuleContracts, MAX_LOOKUP_ASSET_NODES, MAX_LOOKUP_ASSET_EDGES, MAX_LOOKUP_ASSET_LIMITATIONS, MAX_LOOKUP_ASSET_INPUT_ROWS } from '../../packages/contracts/investigation-portability.mts';
 import {
   INVESTIGATION_CAPSULE_ANALYST_RECORDS_SCHEMA,
   INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION,
-  INVESTIGATION_CAPSULE_VERSION,
-  PUBLIC_INVESTIGATION_CAPSULE_VERSION,
+  investigationCapsuleProjectionsMatch,
+  type InvestigationCapsule,
 } from '../../packages/investigation/investigation-capsule.mts';
 import {
   LOOKUP_ASSET_GRAPH_SCHEMA,
@@ -11,7 +12,6 @@ import {
 import {
   PUBLIC_LOOKUP_INVESTIGATION_BRIEF_VERSION,
   LOOKUP_INVESTIGATION_BRIEF_SCHEMA,
-  LOOKUP_INVESTIGATION_BRIEF_VERSION,
   MAX_LOOKUP_INVESTIGATION_BRIEF_BYTES,
 } from '../../packages/investigation/lookup-investigation-brief.mts';
 import {
@@ -345,10 +345,10 @@ function validateDecisionFactProjection(value: unknown): void {
   }
 }
 
-function validateCurrentBrief(value: unknown): void {
+function validateCurrentBrief(value: unknown, expectedVersion: number): void {
   const brief = exact(value, ['schema', 'schemaVersion', 'generatedAt', 'target', 'targetType', 'task', 'taskLabel', 'question', 'summary', 'observation', 'decisionFacts', 'relationships', 'limitations'], 'Investigation capsule brief');
   if (brief.schema !== LOOKUP_INVESTIGATION_BRIEF_SCHEMA
-    || brief.schemaVersion !== LOOKUP_INVESTIGATION_BRIEF_VERSION) fail('Investigation capsule brief');
+    || brief.schemaVersion !== expectedVersion) fail('Investigation capsule brief');
   iso(brief.generatedAt, 'Investigation capsule brief generatedAt');
   text(brief.target, 'Investigation capsule brief target', 253);
   text(brief.targetType, 'Investigation capsule brief target type', 40);
@@ -369,21 +369,22 @@ function validateCurrentBrief(value: unknown): void {
   for (const key of ['registration', 'network', 'web'] as const) integer(thresholds[key], 'Investigation capsule freshness threshold', 0, 3650);
   validateDecisionFactProjection(brief.decisionFacts);
   const relationships = exact(brief.relationships, ['nodes', 'edges', 'truncated', 'kinds'], 'Investigation capsule relationship summary');
-  integer(relationships.nodes, 'Investigation capsule relationship node count', 0, 72);
-  integer(relationships.edges, 'Investigation capsule relationship edge count', 0, 120);
+  integer(relationships.nodes, 'Investigation capsule relationship node count', 0, expectedVersion === 2 ? 72 : MAX_LOOKUP_ASSET_NODES);
+  integer(relationships.edges, 'Investigation capsule relationship edge count', 0, expectedVersion === 2 ? 120 : MAX_LOOKUP_ASSET_EDGES);
   boolean(relationships.truncated, 'Investigation capsule relationship truncation');
-  strings(relationships.kinds, 'Investigation capsule relationship kinds', 12, 320);
+  strings(relationships.kinds, 'Investigation capsule relationship kinds', expectedVersion === 2 ? 12 : 64, 320);
   strings(brief.limitations, 'Investigation capsule brief limitations', 20, 320);
   if (new TextEncoder().encode(JSON.stringify(brief)).byteLength > MAX_LOOKUP_INVESTIGATION_BRIEF_BYTES) {
     fail('Investigation capsule brief byte limit');
   }
 }
 
-function validateGraph(value: unknown): void {
-  const graph = exact(value, ['version', 'targetId', 'nodes', 'edges', 'sources', 'truncated', 'limitations'], 'Investigation capsule graph');
-  if (graph.version !== LOOKUP_ASSET_GRAPH_VERSION) fail('Investigation capsule graph');
+function validateGraph(value: unknown, expectedVersion: number): void {
+  const current = expectedVersion === LOOKUP_ASSET_GRAPH_VERSION;
+  const graph = exact(value, ['version', 'targetId', 'nodes', 'edges', 'sources', 'truncated', 'limitations', ...(current ? ['coverage'] : [])], 'Investigation capsule graph');
+  if (graph.version !== expectedVersion) fail('Investigation capsule graph');
   text(graph.targetId, 'Investigation capsule graph target', 160);
-  const nodes = array(graph.nodes, 'Investigation capsule graph nodes', 72, 1);
+  const nodes = array(graph.nodes, 'Investigation capsule graph nodes', current ? MAX_LOOKUP_ASSET_NODES : 72, 1);
   const nodeIds = new Set<string>();
   for (const candidate of nodes) {
     const node = exact(candidate, ['id', 'label', 'kind', 'detail'], 'Investigation capsule graph node');
@@ -396,7 +397,7 @@ function validateGraph(value: unknown): void {
   }
   if (!nodeIds.has(graph.targetId as string)) fail('Investigation capsule graph target');
   const sourceIds = new Set<string>();
-  for (const candidate of array(graph.sources, 'Investigation capsule graph sources', 32)) {
+  for (const candidate of array(graph.sources, 'Investigation capsule graph sources', current ? 128 : 32)) {
     const source = exact(candidate, ['id', 'label', 'href', 'observedAt', 'completeness', 'limitations'], 'Investigation capsule graph source');
     const id = text(source.id, 'Investigation capsule graph source id', 160);
     if (sourceIds.has(id)) fail('Investigation capsule graph source ids');
@@ -405,9 +406,9 @@ function validateGraph(value: unknown): void {
     if (typeof source.href !== 'string' || !/^#[^\u0000-\u001f\u007f]{1,160}$/u.test(source.href)) fail('Investigation capsule graph source href');
     iso(source.observedAt, 'Investigation capsule graph source observedAt', true);
     enumeration(source.completeness, ['complete', 'partial', 'unknown'], 'Investigation capsule graph source completeness');
-    strings(source.limitations, 'Investigation capsule graph source limitations', 5, 320);
+    strings(source.limitations, 'Investigation capsule graph source limitations', current ? MAX_LOOKUP_ASSET_LIMITATIONS : 5, 320);
   }
-  const edges = array(graph.edges, 'Investigation capsule graph edges', 120);
+  const edges = array(graph.edges, 'Investigation capsule graph edges', current ? MAX_LOOKUP_ASSET_EDGES : 120);
   const edgeIds = new Set<string>();
   for (const candidate of edges) {
     const edge = exactOptional(candidate, ['id', 'sourceId', 'source', 'target', 'kind', 'label', 'sourceLabel', 'observedAt', 'completeness', 'limitations', 'lenses', 'href'], ['boundary'], 'Investigation capsule graph edge');
@@ -422,10 +423,30 @@ function validateGraph(value: unknown): void {
     text(edge.sourceLabel, 'Investigation capsule graph edge source label', 320);
     iso(edge.observedAt, 'Investigation capsule graph edge observedAt', true);
     enumeration(edge.completeness, ['complete', 'partial', 'unknown'], 'Investigation capsule graph edge completeness');
-    strings(edge.limitations, 'Investigation capsule graph edge limitations', 5, 320);
+    strings(edge.limitations, 'Investigation capsule graph edge limitations', current ? MAX_LOOKUP_ASSET_LIMITATIONS : 5, 320);
     strings(edge.lenses, 'Investigation capsule graph edge lenses', 4, 40).forEach((lens) => enumeration(lens, ['all', 'identity', 'delegation', 'certificate'], 'Investigation capsule graph edge lens'));
     if (typeof edge.href !== 'string' || !/^#[^\u0000-\u001f\u007f]{1,160}$/u.test(edge.href)) fail('Investigation capsule graph edge href');
     if (edge.boundary !== undefined) enumeration(edge.boundary, ['external', 'reviewed_profile', 'same_origin', 'same_registrable_domain', 'unresolved'], 'Investigation capsule graph edge boundary');
+  }
+  if (current) {
+    const coverage = exact(graph.coverage, ['inputs'], 'Investigation capsule graph coverage');
+    const ids = new Set<string>();
+    let incomplete = false;
+    for (const candidate of array(coverage.inputs, 'Investigation capsule graph input coverage', MAX_LOOKUP_ASSET_INPUT_ROWS)) {
+      const row = exact(candidate, ['id', 'supplied', 'inspected', 'admitted', 'invalid', 'duplicates', 'omitted'], 'Investigation capsule graph input coverage row');
+      const id = text(row.id, 'Investigation capsule graph input id', 160);
+      if (ids.has(id)) fail('Investigation capsule graph input ids');
+      ids.add(id);
+      const supplied = integer(row.supplied, 'Investigation capsule graph supplied input', 0, 0xffff_ffff);
+      const inspected = integer(row.inspected, 'Investigation capsule graph inspected input', 0, 800);
+      const admitted = integer(row.admitted, 'Investigation capsule graph admitted input', 0, inspected);
+      const invalid = integer(row.invalid, 'Investigation capsule graph invalid input', 0, inspected);
+      const duplicates = integer(row.duplicates, 'Investigation capsule graph duplicate input', 0, inspected);
+      const omitted = integer(row.omitted, 'Investigation capsule graph omitted input', 0, inspected);
+      if (inspected > supplied || admitted + invalid + duplicates + omitted !== inspected) fail('Investigation capsule graph input accounting');
+      incomplete ||= supplied > inspected || invalid > 0 || omitted > 0;
+    }
+    if (graph.truncated !== incomplete) fail('Investigation capsule graph coverage linkage');
   }
   boolean(graph.truncated, 'Investigation capsule graph truncation');
   strings(graph.limitations, 'Investigation capsule graph limitations', 20, 320);
@@ -460,8 +481,8 @@ function validateAnalystRecords(value: unknown): void {
 
 export function validateInvestigationCapsuleStructure(value: UnknownRecord): void {
   const root = exact(value, ['schema', 'schemaVersion', 'generatedAt', 'application', 'target', 'sourceContracts', 'investigationBrief', 'graphSnapshot', 'analystRecords', 'integrity', 'limitations'], 'Investigation capsule');
-  if (root.schemaVersion !== PUBLIC_INVESTIGATION_CAPSULE_VERSION
-    && root.schemaVersion !== INVESTIGATION_CAPSULE_VERSION) fail('Investigation capsule');
+  const expected = investigationCapsuleContracts(root.schemaVersion);
+  if (!expected) fail('Investigation capsule');
   iso(root.generatedAt, 'Investigation capsule generatedAt');
   const application = exact(root.application, ['name', 'version'], 'Investigation capsule application');
   if (application.name !== 'WHOISleuth' || typeof application.version !== 'string'
@@ -484,9 +505,7 @@ export function validateInvestigationCapsuleStructure(value: UnknownRecord): voi
   const expectedContractIds = root.analystRecords === null
     ? ['lookup-evidence', 'investigation-brief', 'asset-graph']
     : ['lookup-evidence', 'investigation-brief', 'asset-graph', 'analyst-records'];
-  const expectedBriefVersion = root.schemaVersion === INVESTIGATION_CAPSULE_VERSION
-    ? LOOKUP_INVESTIGATION_BRIEF_VERSION
-    : PUBLIC_LOOKUP_INVESTIGATION_BRIEF_VERSION;
+  const expectedBriefVersion = expected.brief;
   if (!sameValues(contracts.map((candidate) => (candidate as UnknownRecord).id), expectedContractIds)) fail('Investigation capsule source contracts');
   if (!byId.has('lookup-evidence') || !byId.has('investigation-brief') || !byId.has('asset-graph')
     || byId.get('lookup-evidence')?.embedded !== false
@@ -494,21 +513,20 @@ export function validateInvestigationCapsuleStructure(value: UnknownRecord): voi
     || byId.get('investigation-brief')?.version !== expectedBriefVersion
     || byId.get('investigation-brief')?.embedded !== true
     || byId.get('asset-graph')?.schema !== LOOKUP_ASSET_GRAPH_SCHEMA
-    || byId.get('asset-graph')?.version !== LOOKUP_ASSET_GRAPH_VERSION
+    || byId.get('asset-graph')?.version !== expected.graph
     || byId.get('asset-graph')?.embedded !== true
     || (byId.has('analyst-records') && (byId.get('analyst-records')?.schema !== INVESTIGATION_CAPSULE_ANALYST_RECORDS_SCHEMA
       || byId.get('analyst-records')?.version !== INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION
       || byId.get('analyst-records')?.embedded !== true))) fail('Investigation capsule source contracts');
-  if (root.schemaVersion === INVESTIGATION_CAPSULE_VERSION) validateCurrentBrief(root.investigationBrief);
-  else validatePublicBrief(root.investigationBrief);
-  validateGraph(root.graphSnapshot);
+  if (expectedBriefVersion === 1) validatePublicBrief(root.investigationBrief);
+  else validateCurrentBrief(root.investigationBrief, expectedBriefVersion);
+  validateGraph(root.graphSnapshot, expected.graph);
   validateAnalystRecords(root.analystRecords);
-  const brief = root.investigationBrief as UnknownRecord;
-  const graph = root.graphSnapshot as UnknownRecord;
-  if (target.value !== brief.target || target.type !== brief.targetType
-    || graph.targetId === undefined
-    || (brief.relationships as UnknownRecord).nodes !== (graph.nodes as unknown[]).length
-    || (brief.relationships as UnknownRecord).edges !== (graph.edges as unknown[]).length) fail('Investigation capsule projection linkage');
+  // The version-specific validators above independently establish these common fields.
+  const projections = root as unknown as InvestigationCapsule;
+  if (!investigationCapsuleProjectionsMatch(projections.target, projections.investigationBrief, projections.graphSnapshot)) {
+    fail('Investigation capsule projection linkage');
+  }
   const integrity = exact(root.integrity, ['algorithm', 'canonicalization', 'scope', 'briefDigest', 'graphDigest', 'analystRecordsDigest', 'digestSha256'], 'Investigation capsule integrity');
   if (integrity.algorithm !== 'SHA-256') fail('Investigation capsule integrity');
   if (integrity.canonicalization !== 'sorted-json-v2' || integrity.scope !== 'capsule excluding integrity') fail('Investigation capsule integrity');

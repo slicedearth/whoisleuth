@@ -36,6 +36,42 @@ const BASE = {
 };
 
 describe('DNS change rehearsal', () => {
+  test('preserves null MX and case-sensitive CAA values without inventing a planned change', () => {
+    const result = buildDnsChangeRehearsal({ ...BASE,
+      currentMx: [{ priority: 0, exchange: '' }], proposedMx: '0 .',
+      currentCaa: [{ critical: 0, tag: 'iodef', value: 'https://REPORTS.EXAMPLE/Case' }], proposedCaa: '0 iodef https://reports.example/Case',
+    });
+    assert.deepEqual(result.observed.mx, ['0 .']);
+    assert.deepEqual(result.proposed.mx, ['0 .']);
+    assert.equal(result.findings.find((item) => item.id === 'mx')?.state, 'ready');
+    assert.equal(result.findings.find((item) => item.id === 'caa')?.state, 'ready');
+    assert.deepEqual(buildDnsChangeRehearsalExport(result, { domain: BASE.domain }).analystProposed.caa, ['0 iodef https://reports.example/Case']);
+  });
+
+  test('withholds each record-family equivalence when intended values are invalid or omitted', () => {
+    const families = [
+      { id: 'ds', proposed: 'proposedDs', current: 'currentDs', values: Array.from({ length: 33 }, (_, index) => `${index + 1} 13 2 ${'a'.repeat(64)}`) },
+      { id: 'mx', proposed: 'proposedMx', current: 'currentMx', values: Array.from({ length: 33 }, (_, index) => `${index} mx${index}.example.test`) },
+      { id: 'caa', proposed: 'proposedCaa', current: 'currentCaa', values: Array.from({ length: 33 }, (_, index) => `0 issue ca${index}.example`) },
+    ];
+    for (const family of families) {
+      const valid = buildDnsChangeRehearsal({ ...BASE, [family.current]: family.values.slice(0, 1), [family.proposed]: family.values[0] });
+      assert.equal(valid.findings.find((item) => item.id === family.id)?.state, 'ready');
+      for (const [values, qualification] of [[`${family.values[0]}\ninvalid record`, '1 invalid'], [family.values.join('\n'), '1 over-bound']] as const) {
+        const result = buildDnsChangeRehearsal({ ...BASE, [family.current]: family.values.slice(0, 32), [family.proposed]: values });
+        assert.equal(result.ready, false);
+        assert.equal(result.findings.find((item) => item.id === family.id)?.state, 'blocked');
+        assert.ok(result.findings.find((item) => item.id === family.id)?.detail.includes(qualification));
+        const exported = buildDnsChangeRehearsalExport(result, { domain: BASE.domain });
+        assert.equal(exported.reviewState, 'unresolved');
+        assert.ok(exported.findings.find((item) => item.id === family.id)?.detail.includes(qualification));
+      }
+      const incompleteCurrent = buildDnsChangeRehearsal({ ...BASE, [family.current]: [family.values[0], 'invalid record'], [family.proposed]: family.values[0] });
+      assert.equal(incompleteCurrent.observed.complete, false);
+      assert.equal(incompleteCurrent.findings.find((item) => item.id === family.id)?.state, 'unknown');
+    }
+  });
+
   test('builds a ready local sequence without claiming a successful change', () => {
     const result = buildDnsChangeRehearsal(BASE);
     assert.equal(result.ready, true);

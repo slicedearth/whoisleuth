@@ -4,6 +4,8 @@ import net from 'node:net';
 
 import { registryDateIso } from './registry-dates.mts';
 import {
+  MAX_RDAP_STATUSES,
+  MAX_RDAP_REDACTIONS,
   type LooseRdapRecord,
   type NormalizedRdapDsData,
   type NormalizedRdapEvent,
@@ -19,6 +21,7 @@ type LooseRecord = LooseRdapRecord;
 type EntitySummary = RdapEntitySummary;
 
 const MAX_RDAP_ENTITIES = 100;
+const MAX_RDAP_EVENTS = 100;
 const MAX_RDAP_ENTITY_DEPTH = 6;
 const MAX_ENTITIES_PER_ROLE = 5;
 const MAX_VCARD_ENTRIES = 100;
@@ -26,7 +29,6 @@ const MAX_ENTITY_ROLES = 12;
 const MAX_CONTACT_VALUES = 8;
 const MAX_ENTITY_LINKS = 10;
 const MAX_RDAP_LINKS = 20;
-const MAX_RDAP_REDACTIONS = 100;
 const MAX_RDAP_VARIANT_GROUPS = 20;
 const MAX_RDAP_VARIANT_NAMES = 50;
 const MAX_RDAP_SERVER_TRUNCATION_REASONS = 8;
@@ -179,8 +181,10 @@ function contactValuesTruncated(vcardArray: unknown): boolean {
       return rawPart.length > 300 || /[\u0000-\u001f\u007f]/u.test(rawPart) || rawPart.trim() !== '';
     });
     const retainedParts = parts.filter((part): part is string => part !== null);
+    // Empty structured components publish no address; they are not omitted
+    // evidence. Supplied non-blank values still pass every validation bound.
     if (rejectedNonBlankPart
-      || boundedString(retainedParts.join(', '), 1000) === null) return true;
+      || (retainedParts.length > 0 && boundedString(retainedParts.join(', '), 1000) === null)) return true;
   }
   return false;
 }
@@ -498,16 +502,30 @@ function boundedEventString(value: unknown, maxLength: number): string | null {
   return value.trim() || null;
 }
 
-function normalizeRdapEvents(value: unknown): NormalizedRdapEvent[] {
-  if (!Array.isArray(value)) return [];
-  return value.slice(0, 100).map((event) => {
-    if (!event || typeof event !== 'object' || Array.isArray(event)) return null;
+function normalizedEventInventory(value: unknown): { items: NormalizedRdapEvent[]; truncated: boolean } {
+  if (!Array.isArray(value)) return { items: [], truncated: value !== undefined };
+  let truncated = value.length > MAX_RDAP_EVENTS;
+  const items: NormalizedRdapEvent[] = [];
+  for (const event of value.slice(0, MAX_RDAP_EVENTS)) {
+    if (!event || typeof event !== 'object' || Array.isArray(event)) {
+      truncated = true;
+      continue;
+    }
     const record = event as LooseRecord;
     const action = boundedEventString(record.eventAction, 100)?.toLowerCase().replace(/\s+/g, ' ') || null;
     const date = boundedEventString(record.eventDate, 64);
     const actor = boundedEventString(record.eventActor, 160);
-    return action || date ? { action, date, actor } : null;
-  }).filter((event): event is NormalizedRdapEvent => event !== null);
+    if (record.eventAction !== undefined && action === null
+      || record.eventDate !== undefined && date === null
+      || record.eventActor !== undefined && actor === null) truncated = true;
+    if (action || date) items.push({ action, date, actor });
+    else truncated = true;
+  }
+  return { items, truncated };
+}
+
+function normalizeRdapEvents(value: unknown): NormalizedRdapEvent[] {
+  return normalizedEventInventory(value).items;
 }
 
 function lifecycleDate(events: NormalizedRdapEvent[], action: string, newest: boolean): string | null {
@@ -676,7 +694,8 @@ function entityInventory(entities: unknown) {
 
 function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord | null {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-  const events = normalizeRdapEvents(data.events);
+  const eventInfo = normalizedEventInventory(data.events);
+  const events = eventInfo.items;
   const redactionInfo = normalizeRedactions(data.redacted);
   const noticesInfo = summarizeTextBlocks(data.notices);
   const remarksInfo = summarizeTextBlocks(data.remarks);
@@ -687,12 +706,11 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
   // to every RDAP object type. Unlike set-like fields, status order and
   // repetition remain as published for backwards compatibility.
   const statuses = Array.isArray(data.status)
-    ? data.status.slice(0, 100)
+    ? data.status.slice(0, MAX_RDAP_STATUSES)
         .map((status) => boundedString(status, 160))
         .filter((status): status is string => status !== null)
     : [];
-  const inspectedStatusCount = Array.isArray(data.status) ? Math.min(data.status.length, 100) : 0;
-  const inspectedEventCount = Array.isArray(data.events) ? Math.min(data.events.length, 100) : 0;
+  const inspectedStatusCount = Array.isArray(data.status) ? Math.min(data.status.length, MAX_RDAP_STATUSES) : 0;
   const common = {
     objectClassName: boundedString(data.objectClassName, 80, { lower: true }),
     language: boundedString(data.lang, 35, { lower: true }),
@@ -711,12 +729,10 @@ function parseRdapObject(type: string, data: LooseRecord): NormalizedRdapRecord 
     serverTruncationReasons,
     statuses,
     statusesTruncated: data.status !== undefined && (!Array.isArray(data.status)
-      || data.status.length > 100
+      || data.status.length > MAX_RDAP_STATUSES
       || statuses.length < inspectedStatusCount),
     events,
-    eventsTruncated: data.events !== undefined && (!Array.isArray(data.events)
-      || data.events.length > 100
-      || events.length < inspectedEventCount),
+    eventsTruncated: eventInfo.truncated,
     lifecycle: summarizeLifecycle(events),
   };
 

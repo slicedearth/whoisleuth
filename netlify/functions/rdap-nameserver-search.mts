@@ -18,7 +18,7 @@ async function handleRdapNameserverSearch(
   event: Parameters<NetlifyFunctionHandler>[0],
   dependencies: RdapNameserverSearchHandlerDependencies = { searchRdapNameserver },
 ): ReturnType<NetlifyFunctionHandler> {
-  const guard = guardNetlifyNetworkRequest(event, 'rdap_nameserver_search');
+  const guard = guardNetlifyNetworkRequest(event, 'rdap_nameserver_search', ['GET']);
   if (guard.response) return guard.response;
 
   return withNetlifyOperationBudget(

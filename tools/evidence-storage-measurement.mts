@@ -5,12 +5,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import ts from 'typescript';
-
 import {
   CASE_SCHEMA_VERSION,
-  CASE_PORTABILITY_LIFECYCLE_FAMILY,
-  CLI_CASE_PACK_CASE_REPORT_EPOCHS,
   MAX_CASE_PACK_CASES,
   MAX_CASE_STORE_BYTES,
 } from '../packages/contracts/case-portability.mts';
@@ -27,7 +23,8 @@ import { LOOKUP_EVIDENCE_SCHEMA, LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/e
 import { BROWSER_LOCAL_COLLECTION_MANIFEST } from '../packages/contracts/browser-local-collection-manifest.mts';
 
 export const EVIDENCE_STORAGE_MEASUREMENT_SCHEMA = 'whoisleuth.evidence-storage-measurement';
-export const EVIDENCE_STORAGE_MEASUREMENT_VERSION = 1;
+export const EVIDENCE_STORAGE_MEASUREMENT_VERSION = 2;
+export const EVIDENCE_STORAGE_MEASUREMENT_FIXTURE_VERSION = 1;
 export const EVIDENCE_STORAGE_MEASUREMENT_FIXTURE_SCHEMA = 'whoisleuth.evidence-storage-measurement-fixture';
 export const EVIDENCE_STORAGE_MEASUREMENT_FIXTURE_PATH = 'test/fixtures/evidence-storage/analyst-journeys-v1.json';
 export const EVIDENCE_STORAGE_MEASUREMENT_PROFILE_PATH = 'docs/evidence-storage-measurement-v1.json';
@@ -38,66 +35,7 @@ export const MAX_MEASUREMENT_SCENARIOS = 8;
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TEXT_ENCODER = new TextEncoder();
-const FIXED_DIGEST = `sha256:${'0'.repeat(64)}`;
-const CANONICALISATION = 'evidence-unit-json-v1';
 const EVIDENCE_FIELDS = Object.freeze(['evidenceHistory', 'evidencePins', 'decisions', 'actions'] as const);
-
-const COMPATIBILITY_SOURCE_PATHS = Object.freeze([
-  'packages/contracts/case-portability.mts',
-  'packages/cases/case-migration-model.mts',
-  'packages/cases/case-record-core.mts',
-  'packages/cases/case-evidence-model.mts',
-  'packages/cases/case-response-model.mts',
-  'packages/cases/case-investigation-branch-model.mts',
-  'packages/cases/case-response-packet.mts',
-  'packages/workspace/workspace-archive.mts',
-  'packages/workspace/workspace-archive-crypto.mts',
-  'cli/case-pack.mts',
-  'cli/offline-artifact-validation.mts',
-  'cli/artifact-validation/case-response.mts',
-  'cli/artifact-validation/structure-primitives.mts',
-  'cli/archive-inspect.mts',
-  'tools/case-contract-doc.mts',
-] as const);
-
-const HISTORICAL_BRANCH_MARKER = /(?:sourceVersion|importedVersion|LEGACY_|PREVIOUS_|SUPPORTED_(?:CASE|CLI|WORKSPACE)|CASE_IMPORT_VERSIONS|CASE_BROWSER_SUPPORTED_VERSIONS|CASE_REPORT_OUTPUT_VERSIONS|CASE_RESPONSE_PACKET_OUTPUT_VERSIONS|root\.version|schemaVersion\s*[<>=]|WORKSPACE_ARCHIVE_VERSION)/u;
-
-const STARTING_COMPATIBILITY_FOOTPRINT = Object.freeze({
-  revision: EVIDENCE_STORAGE_STARTING_REVISION,
-  compatibilityDescriptors: 9,
-  supportedVersionSlots: 54,
-  lifecycleContracts: 53,
-  legacyContracts: 32,
-  retiredOutputContracts: 12,
-  migrations: 29,
-  readerEdges: 10,
-  writerEdges: 9,
-  readerVersionSlots: 61,
-  lifecycleFixtures: 87,
-  lifecycleFixtureBytes: 579_486,
-  legacyAndRetiredFixtures: 45,
-  legacyAndRetiredFixtureBytes: 302_908,
-  lifecycleShapes: 19,
-  lifecycleBoundProfiles: 7,
-  lifecycleHooks: 18,
-  lifecycleSerialisationProfiles: 7,
-  lifecyclePrivacyProfiles: 3,
-  lifecycleConsumerEdges: 16,
-  versionSensitiveProductionLines: 365,
-  versionSensitiveBranches: 79,
-  generatedInventoryEntries: 9,
-  generatedDocumentationEntries: 17,
-  focusedVerification: Object.freeze({
-    testFiles: 13,
-    tests: 276,
-    passed: 276,
-    failed: 0,
-    skipped: 0,
-    durationMs: 35_068.222209,
-    elapsedSeconds: 35.24,
-    reliability: 'single_local_observation_not_drift_gated',
-  }),
-});
 
 type UnknownRecord = Record<string, unknown>;
 type ScenarioFixture = Readonly<{
@@ -215,7 +153,7 @@ export function validateEvidenceStorageMeasurementFixture(value: unknown): Measu
     'schema', 'version', 'startingRevision', 'generatedAt', 'scenarios',
     'startingCurrentFixtures', 'decisionThreshold',
   ], 'Evidence-storage measurement fixture');
-  if (source.schema !== EVIDENCE_STORAGE_MEASUREMENT_FIXTURE_SCHEMA || source.version !== 1) {
+  if (source.schema !== EVIDENCE_STORAGE_MEASUREMENT_FIXTURE_SCHEMA || source.version !== EVIDENCE_STORAGE_MEASUREMENT_FIXTURE_VERSION) {
     throw new TypeError('Evidence-storage measurement fixture uses an unsupported contract.');
   }
   if (source.startingRevision !== EVIDENCE_STORAGE_STARTING_REVISION) {
@@ -571,7 +509,7 @@ function browserProviderBytes(cases: readonly CaseRecord[], generatedAt: string)
   return Object.freeze({ payloadBytes, recordEnvelopeBytes, manifestBytes, contractBytes: recordEnvelopeBytes + manifestBytes });
 }
 
-function duplicateAndOverheadMeasurement(units: readonly EvidenceUnit[]) {
+function duplicateMeasurement(units: readonly EvidenceUnit[]) {
   const exact = new Map<string, EvidenceUnit[]>();
   const canonical = new Map<string, EvidenceUnit[]>();
   for (const unit of units) {
@@ -603,36 +541,7 @@ function duplicateAndOverheadMeasurement(units: readonly EvidenceUnit[]) {
     });
   }).sort((left, right) => left.kind.localeCompare(right.kind) || left.payloadDigest.localeCompare(right.payloadDigest));
 
-  let artifactBytes = 0;
-  let referenceBytes = 0;
-  let indexBytes = 0;
-  let orphanMetadataBytes = 0;
-  let collisionMetadataBytes = 0;
-  let repairPreviewMetadataBytes = 0;
-  for (const [key, values] of canonical) {
-    const canonicalPayload = key.slice(key.indexOf('\u0000') + 1);
-    const digest = sha256(canonicalPayload);
-    const kind = values[0]!.kind;
-    artifactBytes += jsonBytes({ version: 1, digest, kind, canonicalisation: CANONICALISATION, payload: JSON.parse(canonicalPayload) });
-    referenceBytes += values.length * jsonBytes({ version: 1, digest, kind });
-    indexBytes += jsonBytes({ version: 1, digest, kind, referenceCount: values.length, canonicalBytes: bytes(canonicalPayload), state: 'verified' });
-    orphanMetadataBytes += jsonBytes({ digest, state: 'referenced', referenceCount: values.length });
-    collisionMetadataBytes += jsonBytes({ digest, canonicalBytes: bytes(canonicalPayload), comparison: 'required' });
-    repairPreviewMetadataBytes += jsonBytes({ digest, state: 'present', boundedReferenceCount: values.length });
-  }
-  const manifestBytes = jsonBytes({
-    version: 1,
-    algorithm: 'SHA-256',
-    canonicalisation: CANONICALISATION,
-    artifactCount: canonical.size,
-    referenceCount: units.length,
-    digest: FIXED_DIGEST,
-  });
   const currentEligibleBytes = units.reduce((total, item) => total + jsonBytes(item.value), 0);
-  const operationalMetadataBytes = orphanMetadataBytes + collisionMetadataBytes + repairPreviewMetadataBytes;
-  const candidateBytesBeforeOperationalReserve = artifactBytes + referenceBytes + indexBytes + manifestBytes;
-  const candidateBytesAfterAllOverhead = candidateBytesBeforeOperationalReserve + operationalMetadataBytes;
-  const netSavingsBytes = currentEligibleBytes - candidateBytesAfterAllOverhead;
   return Object.freeze({
     eligiblePayloads: units.length,
     uniqueCanonicalPayloads: canonical.size,
@@ -644,19 +553,6 @@ function duplicateAndOverheadMeasurement(units: readonly EvidenceUnit[]) {
     grossExactDuplicateBytes: exactGroups.reduce((total, item) => total + item.grossDuplicateBytes, 0),
     grossCanonicalDuplicateBytes: canonicalGroups.reduce((total, item) => total + item.grossDuplicateBytes, 0),
     currentEligibleBytes,
-    artifactBytes,
-    referenceBytes,
-    manifestBytes,
-    indexBytes,
-    orphanMetadataBytes,
-    collisionMetadataBytes,
-    repairPreviewMetadataBytes,
-    operationalMetadataBytes,
-    candidateBytesBeforeOperationalReserve,
-    candidateBytesAfterAllOverhead,
-    netSavingsBytes,
-    deduplicableBytesAfterAllOverhead: Math.max(0, netSavingsBytes),
-    architectureDeltaBytes: candidateBytesAfterAllOverhead - currentEligibleBytes,
   });
 }
 
@@ -694,75 +590,6 @@ async function portableMeasurements(cases: readonly CaseRecord[], generatedAt: s
   });
 }
 
-function compatibilitySourceFootprint() {
-  let branchCount = 0;
-  const productionLines = new Set<string>();
-  for (const file of COMPATIBILITY_SOURCE_PATHS) {
-    const source = readFileSync(path.join(REPOSITORY_ROOT, file), 'utf8');
-    const lines = source.split('\n');
-    const syntax = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-    const visit = (node: ts.Node): void => {
-      if ((ts.isIfStatement(node) || ts.isConditionalExpression(node) || ts.isSwitchStatement(node))
-        && HISTORICAL_BRANCH_MARKER.test(node.getText(syntax))) {
-        branchCount += 1;
-        const start = syntax.getLineAndCharacterOfPosition(node.getStart(syntax)).line + 1;
-        const end = syntax.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
-        for (let line = start; line <= end; line += 1) {
-          const value = (lines[line - 1] ?? '').trim();
-          if (value && !value.startsWith('//') && !value.startsWith('/*') && !value.startsWith('*')) {
-            productionLines.add(`${file}:${line}`);
-          }
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(syntax);
-  }
-  return Object.freeze({
-    sourceFiles: COMPATIBILITY_SOURCE_PATHS.length,
-    versionSensitiveProductionLines: productionLines.size,
-    versionSensitiveBranches: branchCount,
-    method: 'TypeScript if, conditional, and switch nodes containing explicit historical-version markers; lines are unique nonblank non-comment lines spanned by those nodes.',
-  });
-}
-
-function currentCompatibilityFootprint() {
-  const family = CASE_PORTABILITY_LIFECYCLE_FAMILY;
-  const legacyContracts = family.contracts.filter((item) => item.lifecycle === 'legacy');
-  const retiredContracts = family.contracts.filter((item) => item.lifecycle === 'retired');
-  const historicalFixtureIds = new Set([...legacyContracts, ...retiredContracts].flatMap((item) => item.fixtureIds));
-  const historicalFixtures = family.fixtures.filter((item) => historicalFixtureIds.has(item.id));
-  const readers = family.metadata.consumerEdges.filter((item) => item.acceptedContracts.length > 0);
-  const writers = family.metadata.consumerEdges.filter((item) => item.emittedContract !== null);
-  const source = compatibilitySourceFootprint();
-  return Object.freeze({
-    compatibilityDescriptors: family.compatibility.length,
-    supportedVersionSlots: family.compatibility.reduce((total, item) => total + item.supportedVersions.length + (item.acceptsUnversionedLegacy ? 1 : 0), 0),
-    lifecycleContracts: family.contracts.length,
-    legacyContracts: legacyContracts.length,
-    retiredOutputContracts: retiredContracts.length,
-    migrations: family.contracts.filter((item) => item.migrationTarget !== null).length,
-    readerEdges: readers.length,
-    writerEdges: writers.length,
-    readerVersionSlots: readers.reduce((total, edge) => total + edge.acceptedContracts.reduce((sum, item) => sum + item.versions.length, 0), 0),
-    lifecycleFixtures: family.fixtures.length,
-    lifecycleFixtureBytes: family.fixtures.reduce((total, item) => total + item.bytes, 0),
-    legacyAndRetiredFixtures: historicalFixtures.length,
-    legacyAndRetiredFixtureBytes: historicalFixtures.reduce((total, item) => total + item.bytes, 0),
-    lifecycleShapes: family.metadata.shapes.length,
-    lifecycleBoundProfiles: family.metadata.boundProfiles.length,
-    lifecycleHooks: family.metadata.hooks.length,
-    lifecycleSerialisationProfiles: family.metadata.serialisationProfiles.length,
-    lifecyclePrivacyProfiles: family.metadata.privacyProfiles.length,
-    lifecycleConsumerEdges: family.metadata.consumerEdges.length,
-    versionSensitiveProductionLines: source.versionSensitiveProductionLines,
-    versionSensitiveBranches: source.versionSensitiveBranches,
-    generatedInventoryEntries: family.compatibility.length,
-    generatedDocumentationEntries: family.compatibility.length + CLI_CASE_PACK_CASE_REPORT_EPOCHS.length,
-    sourceMeasurement: source,
-  });
-}
-
 function fixtureIdentities(fixture: MeasurementFixture) {
   return fixture.startingCurrentFixtures.map((file) => {
     const content = readFileSync(path.join(REPOSITORY_ROOT, file));
@@ -776,8 +603,7 @@ async function measureScenario(fixture: MeasurementFixture, scenario: ScenarioFi
   const serialized = serializeCaseStore(cases);
   const strippedSerialized = serializeCaseStore(stripped);
   const browser = browserProviderBytes(cases, fixture.generatedAt);
-  const duplicate = duplicateAndOverheadMeasurement(evidenceUnits(cases));
-  const projectedCaseBytes = bytes(serialized) + duplicate.architectureDeltaBytes;
+  const duplicate = duplicateMeasurement(evidenceUnits(cases));
   const portable = await portableMeasurements(cases, fixture.generatedAt);
   return Object.freeze({
     id: scenario.id,
@@ -800,8 +626,6 @@ async function measureScenario(fixture: MeasurementFixture, scenario: ScenarioFi
       indexedDbManifestBytes: browser.manifestBytes,
       indexedDbSerializedContractBytes: browser.contractBytes,
       currentQuotaRatio: Number((bytes(serialized) / MAX_CASE_STORE_BYTES).toFixed(6)),
-      projectedContentAddressedBytes: projectedCaseBytes,
-      projectedQuotaRatio: Number((projectedCaseBytes / MAX_CASE_STORE_BYTES).toFixed(6)),
     }),
     duplication: duplicate,
     portable,
@@ -813,15 +637,6 @@ export async function buildEvidenceStorageMeasurementProfile(
 ) {
   const scenarios = [];
   for (const scenario of fixture.scenarios) scenarios.push(await measureScenario(fixture, scenario));
-  const representative = scenarios.find((item) => item.classification === 'representative_mixed');
-  if (!representative) throw new Error('Representative duplication scenario is unavailable.');
-  const netSavings = representative.duplication.deduplicableBytesAfterAllOverhead;
-  const netSavingsRatio = representative.browserLocal.serializedCaseBytes > 0
-    ? netSavings / representative.browserLocal.serializedCaseBytes
-    : 0;
-  const threshold = fixture.decisionThreshold;
-  const material = netSavings >= threshold.minimumRepresentativeNetSavingsBytes
-    && netSavingsRatio >= threshold.minimumRepresentativeNetSavingsRatio;
   return Object.freeze({
     schema: EVIDENCE_STORAGE_MEASUREMENT_SCHEMA,
     version: EVIDENCE_STORAGE_MEASUREMENT_VERSION,
@@ -846,34 +661,13 @@ export async function buildEvidenceStorageMeasurementProfile(
       browserCollectionCount: BROWSER_LOCAL_COLLECTION_MANIFEST.length,
     }),
     scenarios: Object.freeze(scenarios),
-    decision: Object.freeze({
-      outcome: material ? 'build' : 'no_build',
-      representativeScenario: representative.id,
-      representativeNetSavingsBytes: netSavings,
-      representativeNetSavingsRatio: Number(netSavingsRatio.toFixed(6)),
-      threshold,
-      rationale: material
-        ? 'Representative repeated immutable evidence exceeds both the absolute and proportional post-overhead thresholds.'
-        : 'Representative repeated immutable evidence does not recover the digest, reference, manifest, index, collision, orphan, and repair overhead required by a second persistence layer.',
-      reconsiderWhen: Object.freeze({
-        evidence: 'A refreshed representative corpus, not only a synthetic worst case, must meet both savings thresholds.',
-        minimumNetSavingsBytes: threshold.minimumRepresentativeNetSavingsBytes,
-        minimumNetSavingsRatio: threshold.minimumRepresentativeNetSavingsRatio,
-        quotaPressureRatio: threshold.minimumQuotaPressureRatio,
-      }),
-    }),
-    historicalCompatibility: Object.freeze({
-      starting: STARTING_COMPATIBILITY_FOOTPRINT,
-      postConsolidation: currentCompatibilityFootprint(),
-    }),
     limitations: Object.freeze([
       'The corpus contains reserved synthetic journeys and frozen current-format fixtures; it does not inspect browser profiles or investigation data.',
       'IndexedDB contract bytes are deterministic JSON projections of stored records and manifests, not an estimate of browser-engine page, key, or B-tree overhead.',
-      'Quota ratios compare the current and proposed logical Case representations with the 4 MiB application Case ceiling; they are not browser-origin quota estimates.',
+      'Quota ratios compare serialised Case bytes with the application Case ceiling; they are not browser-origin quota estimates.',
       'Portable evidence bytes are measured by rebuilding the same current archive or Case-pack with only evidence history, pins, decisions, and response actions removed.',
-      'The high-duplication boundary is deliberately synthetic and cannot by itself justify a second persistence abstraction.',
-      'Digest identity would establish only byte identity under the declared canonicalisation, not source truth, authority, ownership, or safety.',
-      'The focused verification duration is one local observation and is retained for maintenance context, not as a deterministic drift threshold.',
+      'All scenarios are synthetic; their duplication rates do not establish representative real-world usage.',
+      'Duplicate digests identify content under the stated exact or canonical comparison; they do not establish source truth, authorship, authority, ownership or safety.',
     ]),
   });
 }
@@ -883,12 +677,11 @@ export function formatEvidenceStorageMeasurementProfile(
 ): string {
   const lines = [
     'WHOISleuth evidence storage measurement',
-    `Starting revision: ${report.startingRevision}`,
-    `Decision: ${report.decision.outcome}`,
+    `Fixture revision: ${report.startingRevision}`,
   ];
   for (const scenario of report.scenarios) {
     lines.push(
-      `${scenario.id}: ${scenario.browserLocal.serializedCaseBytes} browser Case bytes; ${scenario.duplication.exactDuplicateGroupCount} exact duplicate groups; ${scenario.duplication.deduplicableBytesAfterAllOverhead} deduplicable bytes after overhead`,
+      `${scenario.id}: ${scenario.browserLocal.serializedCaseBytes} browser Case bytes; ${scenario.duplication.exactDuplicateGroupCount} exact duplicate groups; ${scenario.duplication.grossExactDuplicateBytes} repeated payload bytes`,
     );
   }
   lines.push('Use --json for the complete bounded profile.');
@@ -901,7 +694,7 @@ export async function checkEvidenceStorageMeasurementProfile(
   const actual = await buildEvidenceStorageMeasurementProfile();
   const expected = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, expectedPath), 'utf8'));
   if (JSON.stringify(expected) !== JSON.stringify(actual)) {
-    throw new Error('Evidence-storage measurement profile drifted; regenerate and review the measured decision before changing storage or compatibility contracts.');
+    throw new Error('Evidence-storage measurement profile drifted; regenerate and review the current byte and duplication measurements.');
   }
 }
 

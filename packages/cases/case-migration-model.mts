@@ -10,6 +10,7 @@ import {
   caseTimestampOrNull,
   normalizeCase,
   normalizeDomain,
+  normalizeCaseObjective,
   normalizeEvidenceHistory,
   normalizeNotes,
   normalizeReviewReasonCode,
@@ -30,6 +31,8 @@ import {
 import {
   CASE_REPORT_SCHEMA,
   PUBLIC_CASE_SCHEMA_VERSION,
+  PUBLISHED_V2_3_CASE_SCHEMA_VERSION,
+  INCIDENT_CASE_SCHEMA_VERSION,
   caseReportVersionMatchesCase,
   CLI_CASE_PACK_CURRENT_REDACTION_KEYS,
   CLI_CASE_PACK_INTEGRITY_KEYS,
@@ -42,6 +45,7 @@ import {
   CLI_CASE_PACK_VERSION,
 } from '../contracts/case-portability.mts';
 import { canonicalArtifactJsonV2 } from '../evidence/artifact-integrity.mts';
+import { readCaseAttachments, mergeCaseAttachments, type CaseAttachment } from './case-attachment-model.mts';
 import { assertBoundedJsonStructure } from '../../lib/bounded-json.mts';
 import {
   inspectCaseBrandProfileIds,
@@ -89,6 +93,7 @@ function compareCodeUnits(left: string, right: string): number {
 
 type ImportPatch = {
   domain: string;
+  title: string | undefined;
   rawId: string | null;
   status: CaseStatus | undefined;
   disposition: CaseDisposition | undefined;
@@ -107,6 +112,7 @@ type ImportPatch = {
   observedEffects: CaseObservedEffectHistory;
   closures: CaseClosureHistory;
   branches: CaseInvestigationBranch[];
+  attachments: CaseAttachment[] | undefined;
   tags: string[];
   notes: CaseNote[];
   createdAt: string | null;
@@ -137,8 +143,8 @@ function assignUniqueIds(cases: CaseRecord[]): void {
 
 /**
  * Recovers a clean, bounded store from the current versioned envelope or an
- * internal bare array, drops malformed records, keeps a single
- * case per domain (most recently updated wins), caps to MAX_CASES by recency,
+ * internal bare array, drops malformed records, preserves distinct current
+ * Case identities, caps to MAX_CASES by recency,
  * and guarantees globally unique safe ids. Retired, future, accessor-bearing,
  * sparse, or otherwise non-JSON envelopes fail before normalisation.
  * @param {unknown} raw
@@ -158,11 +164,11 @@ export function normalizeCaseStore(raw: unknown): CaseStore {
     if (sourceVersion > CASE_SCHEMA_VERSION) {
       throw new TypeError(`Case schema ${sourceVersion} is newer than the supported schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
     }
-    if (sourceVersion === CASE_SCHEMA_VERSION) {
-      assertCurrentCaseShape(raw);
+    if (sourceVersion >= PUBLISHED_V2_3_CASE_SCHEMA_VERSION) {
+      assertModernCaseShape(raw, sourceVersion);
     }
   }
-  const byDomain = new Map<string, CaseRecord>();
+  const byIdentity = new Map<string, CaseRecord>();
   for (const item of boundedCaseList(raw).items) {
     const normalized = normalizeCase(
       item,
@@ -171,36 +177,43 @@ export function normalizeCaseStore(raw: unknown): CaseStore {
       sourceVersion ?? CASE_SCHEMA_VERSION,
     );
     if (!normalized) continue;
-    const existing = byDomain.get(normalized.domain);
+    // Published domain-centred stores retain their original recovery rule.
+    // Current incidents share a domain without sharing analyst decisions.
+    const key = sourceVersion !== null && sourceVersion < INCIDENT_CASE_SCHEMA_VERSION
+      ? normalized.domain : `${normalized.domain}\u0000${normalized.id}`;
+    const existing = byIdentity.get(key);
     if (!existing || Date.parse(normalized.updatedAt) >= Date.parse(existing.updatedAt)) {
-      byDomain.set(normalized.domain, normalized);
+      byIdentity.set(key, normalized);
     }
   }
-  const cases = [...byDomain.values()]
+  const cases = [...byIdentity.values()]
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
     .slice(0, MAX_CASES);
   assignUniqueIds(cases);
   return { version: CASE_SCHEMA_VERSION, cases };
 }
 
-function assertCurrentCaseShape(raw: unknown): void {
+function assertModernCaseShape(raw: unknown, sourceVersion: number): void {
   for (const item of boundedCaseList(raw).items) {
     const itemRecord = objectRecord(item);
+    if (sourceVersion < INCIDENT_CASE_SCHEMA_VERSION && Object.hasOwn(itemRecord, 'attachments')) {
+      throw new TypeError('Retained file references require the current Case schema; no data was changed.');
+    }
     const evidenceHistory = itemRecord.evidenceHistory;
     for (const snapshot of Array.isArray(evidenceHistory) ? evidenceHistory : []) {
       const record = objectRecord(snapshot);
       if (Object.keys(record).length > 0 && !Object.hasOwn(record, 'inputHostname')) {
-        throw new TypeError(`Case schema ${CASE_SCHEMA_VERSION} evidence snapshots must declare their exact submitted hostname, including null; unreleased local Case checkpoints are not interpreted as the v2 format and no data was changed.`);
+        throw new TypeError(`Case schema ${sourceVersion} evidence snapshots must declare their exact submitted hostname, including null; no data was changed.`);
       }
     }
     const actions = itemRecord.actions;
     for (const action of Array.isArray(actions) ? actions : []) {
       const record = objectRecord(action);
       if (Object.keys(record).length > 0 && !Object.hasOwn(record, 'routeObservedAt')) {
-        throw new TypeError(`Case schema ${CASE_SCHEMA_VERSION} response actions must declare their route observation time, including null; unreleased local Case checkpoints are not interpreted as the current format and no data was changed.`);
+        throw new TypeError(`Case schema ${sourceVersion} response actions must declare their route observation time, including null; no data was changed.`);
       }
       if (Object.keys(record).length > 0 && !Object.hasOwn(record, 'routeReviewAfter')) {
-        throw new TypeError(`Case schema ${CASE_SCHEMA_VERSION} response actions must declare their route review deadline, including null; unreleased local Case checkpoints are not interpreted as the current format and no data was changed.`);
+        throw new TypeError(`Case schema ${sourceVersion} response actions must declare their route review deadline, including null; no data was changed.`);
       }
     }
     const decisions = itemRecord.decisions;
@@ -208,7 +221,7 @@ function assertCurrentCaseShape(raw: unknown): void {
       const record = objectRecord(decision);
       if (Object.keys(record).length > 0
         && (!Object.hasOwn(record, 'confidence') || !Object.hasOwn(record, 'confidenceBasis'))) {
-        throw new TypeError(`Case schema ${CASE_SCHEMA_VERSION} analyst decisions must declare confidence and its basis; unreleased local Case checkpoints are not interpreted as the current format and no data was changed.`);
+        throw new TypeError(`Case schema ${sourceVersion} analyst decisions must declare confidence and its basis; no data was changed.`);
       }
     }
   }
@@ -274,7 +287,7 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
     || null;
   const normalizedFallback = importFallback || '1970-01-01T00:00:00.000Z';
   const timestampOptions = {
-    legacyTimestamps: importedVersion < CASE_SCHEMA_VERSION,
+    legacyTimestamps: importedVersion < PUBLISHED_V2_3_CASE_SCHEMA_VERSION,
     sourceVersion: importedVersion,
   };
   const rawEvidence = Array.isArray(record.evidenceHistory) ? record.evidenceHistory : [];
@@ -318,6 +331,7 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
   return {
     domain,
     rawId: typeof record.id === 'string' ? record.id : null,
+    title: typeof record.title === 'string' && importedVersion >= INCIDENT_CASE_SCHEMA_VERSION ? normalizeCaseObjective(record.title) : undefined,
     status: isValidStatus(record.status) ? record.status : undefined,
     disposition: isValidDisposition(record.disposition) ? record.disposition : undefined,
     reviewReasonCode: Object.hasOwn(record, 'reviewReasonCode')
@@ -344,6 +358,7 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
     branches: importedVersion >= 11
       ? normalizeCaseInvestigationBranches(record.branches, normalizedFallback, branchReferences, timestampOptions)
       : [],
+    attachments: importedVersion >= INCIDENT_CASE_SCHEMA_VERSION ? readCaseAttachments(record.attachments) : undefined,
     tags: normalizeTags(record.tags),
     // Imported notes fall back only to the imported record's own timestamps
     // (never "now"), so a timestamp-less note gets a stable, deterministic time
@@ -402,6 +417,7 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
   return {
     id: '', // assigned by mergeCases so it can guarantee uniqueness against locals
     domain: patch.domain,
+    title: patch.title ?? '',
     status: patch.status ?? DEFAULT_STATUS,
     disposition: patch.disposition ?? DEFAULT_DISPOSITION,
     reviewReasonCode: patch.reviewReasonCode ?? null,
@@ -419,6 +435,7 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
     observedEffects: patch.observedEffects,
     closures: patch.closures,
     branches: patch.branches,
+    ...(patch.attachments === undefined ? {} : { attachments: patch.attachments }),
     createdAt: patch.createdAt || patch.updatedAt || now,
     updatedAt: patch.updatedAt || patch.createdAt || now,
   };
@@ -469,6 +486,7 @@ function applyImportPatch(
   const decisions = normalizeCaseDecisions(decisionSelection.records, fallback, pinIds);
   const trailSelection = retainLocalAuthoredRecords(local.manualTrail, patch.manualTrail, MAX_CASE_MANUAL_TRAIL_EVENTS);
   const manualTrail = normalizeCaseManualTrail(trailSelection.records, fallback);
+  const attachments = mergeCaseAttachments(local.attachments, patch.attachments);
   const authoredHistoryOmitted = patch.authoredHistoryOmitted
     + pinSelection.omitted
     + decisionSelection.omitted
@@ -477,6 +495,7 @@ function applyImportPatch(
     + sightingSelection.omitted;
   return { record: {
     ...local,
+    title: patch.title !== undefined && importNewer ? patch.title : local.title ?? '',
     status: patch.status !== undefined && importNewer ? patch.status : local.status,
     disposition: patch.disposition !== undefined && importNewer ? patch.disposition : local.disposition,
     reviewReasonCode: patch.reviewReasonCode !== undefined && importNewer ? patch.reviewReasonCode : local.reviewReasonCode ?? null,
@@ -492,6 +511,7 @@ function applyImportPatch(
     observedEffects,
     closures,
     branches: mergeCaseInvestigationBranches(local.branches ?? [], patch.branches, fallback, branchReferences),
+    ...(attachments === undefined ? {} : { attachments }),
     tags: normalizeTags([...local.tags, ...patch.tags]),
     notes: unionNotes(local.notes, patch.notes),
     createdAt: patch.createdAt && Date.parse(patch.createdAt) < Date.parse(local.createdAt) ? patch.createdAt : local.createdAt,
@@ -616,7 +636,7 @@ function caseCollectionImportEnvelope(importedRaw: unknown): Record<string, unkn
 
 /**
  * Merges an imported (already parsed) value into the local cases. Predictable
- * and idempotent: unknown records are skipped, existing domains merge without
+ * and idempotent: unknown records are skipped, matching Case identities merge without
  * losing newer local decisions, and new ones are added until the store bound is
  * reached. An imported envelope that declares a schema version newer than we
  * support is rejected up front (before any local data is touched) rather than
@@ -643,10 +663,10 @@ export function mergeCases(
     || !Array.isArray(importedEnvelope.cases)) {
     throw new Error(`Expected a well-formed WHOISleuth Case export using schema ${CASE_SCHEMA_VERSION}; no data was changed.`);
   }
-  if (importedVersion === CASE_SCHEMA_VERSION) assertCurrentCaseShape(importedEnvelope);
+  if (importedVersion !== null && importedVersion >= PUBLISHED_V2_3_CASE_SCHEMA_VERSION) assertModernCaseShape(importedEnvelope, importedVersion);
   const local = normalizeCaseStore(localCases).cases;
   const supportedImportedVersion = importedVersion ?? 0;
-  const byDomain = new Map(local.map((item) => [item.domain, item]));
+  const byId = new Map(local.map((item) => [item.id, item]));
   const usedIds = new Set(local.map((item) => item.id));
   let added = 0;
   let updated = 0;
@@ -655,24 +675,41 @@ export function mergeCases(
   let brandProfileReferencesOmitted = 0;
   let authoredHistoryOmitted = 0;
   const fallback = new Date(0).toISOString();
+  const importedIds = new Set<string>();
   for (const item of imported.items) {
     const patch = extractImportPatch(item, supportedImportedVersion);
     if (!patch) {
       skipped += 1;
       continue;
     }
-    const existing = byDomain.get(patch.domain);
+    const importedId = safeId(patch.rawId);
+    if (supportedImportedVersion >= INCIDENT_CASE_SCHEMA_VERSION && importedId) {
+      if (importedIds.has(importedId)) throw new Error('Incident Case imports cannot repeat a declared Case ID. No data was changed.');
+      importedIds.add(importedId);
+    }
+    let existing = importedId ? byId.get(importedId) : undefined;
+    if (existing && existing.domain !== patch.domain) {
+      if (supportedImportedVersion >= INCIDENT_CASE_SCHEMA_VERSION) throw new Error('An imported Case ID belongs to a different domain in this workspace. No data was changed.');
+      existing = undefined;
+    }
+    if (!existing && (supportedImportedVersion < INCIDENT_CASE_SCHEMA_VERSION || !importedId)) {
+      const matchingDomain = [...byId.values()].filter(record => record.domain === patch.domain);
+      if (matchingDomain.length > 1) {
+        throw new Error(`The imported record for ${patch.domain} has no matching Case identity and several incidents exist. Import it into a separate workspace to review it without merging incidents; no data was changed.`);
+      }
+      existing = matchingDomain[0];
+    }
     if (existing) {
       const merged = applyImportPatch(existing, patch);
-      byDomain.set(patch.domain, merged.record);
+      byId.set(existing.id, merged.record);
       brandProfileReferencesOmitted += patch.brandProfileReferencesOmitted + merged.brandProfileReferencesOmitted;
       authoredHistoryOmitted += merged.authoredHistoryOmitted;
       updated += 1;
-    } else if (byDomain.size < MAX_CASES) {
+    } else if (byId.size < MAX_CASES) {
       const record = caseFromPatch(patch, fallback);
       record.id = pickFreeId(patch.rawId, patch.domain, usedIds);
       usedIds.add(record.id);
-      byDomain.set(patch.domain, record);
+      byId.set(record.id, record);
       brandProfileReferencesOmitted += patch.brandProfileReferencesOmitted;
       authoredHistoryOmitted += patch.authoredHistoryOmitted;
       added += 1;
@@ -681,7 +718,7 @@ export function mergeCases(
     }
   }
   return {
-    cases: normalizeCaseStore([...byDomain.values()]).cases,
+    cases: normalizeCaseStore([...byId.values()]).cases,
     added,
     updated,
     skipped,

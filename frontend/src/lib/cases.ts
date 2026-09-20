@@ -1,3 +1,4 @@
+import { downloadLocalFile } from './download-local-file.ts';
 // Browser-local analyst case store. All validation, normalization, bounding,
 // merge, byte-budget, and export shaping live in analysis/case-model.ts (pure +
 // unit tested); this wrapper owns asynchronous provider access and downloads.
@@ -7,8 +8,11 @@ import {
   buildCaseExport,
   addCaseBrandProfileId,
   enforceStoreBudget,
+  prepareCaseStoreSave,
+  caseStoreSavePreviewIsCurrent,
   mergeCases,
-  normalizeDomain,
+  casesForDomain,
+  createCaseIncident as createCaseIncidentModel,
   openOrCreateCase,
   recordCaseConclusion as recordCaseConclusionModel,
   recordCaseInvestigationContext as recordCaseInvestigationContextModel,
@@ -17,14 +21,22 @@ import {
   updateCase,
 } from './analysis/case-model.ts';
 import type {
+  CaseStoreSavePreview,
   CaseInput,
+  CaseIncidentInput,
+  CaseOpenSelection,
   CaseConclusionInput,
   CasePatch,
   CaseRecord,
   ReviewedCaseDisposition,
 } from './analysis/case-model.ts';
-import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
+
+import { readBrowserLocalData, updateBrowserLocalData, browserLocalDataProvider, browserLocalDataCollection } from './browser-local-data-service.ts';
+import { removeCaseDraft } from '../../../packages/cases/case-drafts.mts';
+import type { CaseDraftReceipt, CaseDraftStore } from '../../../packages/contracts/case-drafts.mts';
+import { applyCaseReviewReturn, type CaseReviewReturn } from '../../../packages/cases/case-review-return.mts';
 import { LEGACY_CASES_KEY } from './browser-local-data-contract.ts';
+import { assertAnalystUndoCurrent } from './analysis/analyst-undo.ts';
 import {
   mergeExternalFindingsIntoCase,
   mergeExternalFindingsIntoCases,
@@ -39,6 +51,19 @@ import {
   buildRiskCalibrationDatasetExport,
   serializeRiskCalibrationDatasetExport,
 } from './analysis/risk-calibration-export.ts';
+
+export type CaseAssociationRetention = Readonly<{
+  id: string; profileId: string; operation: 'add' | 'remove'; preview: CaseStoreSavePreview;
+}>;
+
+export class CaseAssociationCapacityError extends Error {
+  readonly retention: CaseAssociationRetention;
+  constructor(retention: CaseAssociationRetention) {
+    super('Review the evidence snapshots that would be removed before changing this association. Nothing was changed.');
+    this.name = 'CaseAssociationCapacityError';
+    this.retention = retention;
+  }
+}
 
 export type RiskCalibrationExportPreview = Readonly<{
   selected: number;
@@ -193,17 +218,20 @@ export async function getCase(id: string): Promise<CaseRecord | null> {
 }
 
 export async function getCaseByDomain(domain: string): Promise<CaseRecord | null> {
-  const target = normalizeDomain(domain);
-  if (!target) return null;
-  return (await loadCases()).find((item) => item.domain === target) || null;
+  const matches = await getCasesByDomain(domain);
+  return matches.length === 1 ? matches[0]! : null;
+}
+
+export async function getCasesByDomain(domain: string): Promise<CaseRecord[]> {
+  return casesForDomain(await loadCases(), domain);
 }
 
 // Mutations return the record as it exists in the persisted, budget-bounded
 // store (never a pre-persist copy that might still hold evidence pruned to fit),
 // plus how many snapshots were pruned so the UI can warn.
-export async function openCase(input: CaseInput): Promise<{ record: CaseRecord; cases: CaseRecord[]; created: boolean; pruned: number }> {
+export async function openCase(input: CaseInput, selection: CaseOpenSelection = {}): Promise<{ record: CaseRecord; cases: CaseRecord[]; created: boolean; pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
-    const result = openOrCreateCase(current, input);
+    const result = openOrCreateCase(current, input, undefined, selection);
     if (!result.created) return {
       document: current,
       result: { record: result.record, cases: current, created: false as boolean, pruned: 0 },
@@ -214,12 +242,47 @@ export async function openCase(input: CaseInput): Promise<{ record: CaseRecord; 
   });
 }
 
-export async function editCase(id: string, patch: CasePatch): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
-  return updateBrowserLocalData('cases', (current) => {
-    const result = updateCase(current, id, patch);
+export async function createCaseIncident(input: CaseIncidentInput) {
+  return updateBrowserLocalData('cases', current => {
+    const result = createCaseIncidentModel(current, input);
     const { cases, pruned } = boundedCases(result.cases);
-    const record = cases.find((item) => item.id === id) ?? result.record;
-    return { document: cases, result: { record, cases, pruned } };
+    const record = cases.find(item => item.id === result.record.id);
+    if (!record) throw new Error('The new incident could not be retained. No data was changed.');
+    return { document: cases, result: { record, cases, created: true, pruned } };
+  });
+}
+
+function applyCasePatch(current: CaseRecord[], id: string, patch: CasePatch) {
+  const result = updateCase(current, id, patch);
+  const { cases, pruned } = boundedCases(result.cases);
+  const record = cases.find((item) => item.id === id) ?? result.record;
+  return { document: cases, result: { record, cases, pruned } };
+}
+
+export async function editCase(id: string, patch: CasePatch, draft?: CaseDraftReceipt): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
+  if (draft) {
+    const [provider, cases, drafts] = await Promise.all([browserLocalDataProvider(), browserLocalDataCollection('cases'), browserLocalDataCollection('case_drafts')]);
+    return provider.updateMany([cases, drafts], documents => {
+      const remaining = removeCaseDraft(documents.get('case_drafts') as CaseDraftStore, draft, id);
+      const change = applyCasePatch(documents.get('cases') as CaseRecord[], id, patch);
+      return { documents: new Map<string, unknown>([['cases', change.document], ['case_drafts', remaining]]), result: change.result };
+    });
+  }
+  return updateBrowserLocalData('cases', (current) => applyCasePatch(current, id, patch));
+}
+
+export async function editCaseTags(id: string, tags: string[]) {
+  return updateBrowserLocalData('cases', (current) => {
+    const previous = [...(current.find((record) => record.id === id)?.tags ?? [])];
+    const change = applyCasePatch(current, id, { tags });
+    return { ...change, result: { ...change.result, undo: { id, previous, expected: [...change.result.record.tags] } } };
+  });
+}
+
+export async function restoreCaseTags(undo: Awaited<ReturnType<typeof editCaseTags>>['undo']) {
+  return updateBrowserLocalData('cases', (current) => {
+    assertAnalystUndoCurrent(current.find((record) => record.id === undo.id)?.tags ?? null, undo.expected);
+    return applyCasePatch(current, undo.id, { tags: undo.previous });
   });
 }
 
@@ -288,6 +351,7 @@ async function updateCaseBrandProfileAssociation(
   id: string,
   profileId: string,
   operation: 'add' | 'remove',
+  retention?: CaseAssociationRetention,
 ): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
   return updateBrowserLocalData('cases', (current) => {
     const record = current.find((item) => item.id === id);
@@ -300,7 +364,13 @@ async function updateCaseBrandProfileAssociation(
     const result = unchanged
       ? { cases: current, record }
       : updateCase(current, id, { brandProfileIds });
-    const { cases, pruned } = boundedCases(result.cases);
+    const preview = prepareCaseStoreSave(current, result.cases);
+    if (preview.pruned && (!retention || retention.id !== id || retention.profileId !== profileId
+      || retention.operation !== operation || !caseStoreSavePreviewIsCurrent(current, retention.preview)
+      || JSON.stringify(preview.removed) !== JSON.stringify(retention.preview.removed))) {
+      throw new CaseAssociationCapacityError({ id, profileId, operation, preview });
+    }
+    const { cases, pruned } = preview;
     const persisted = cases.find((item) => item.id === id) ?? result.record;
     return { document: cases, result: { record: persisted, cases, pruned } };
   });
@@ -310,16 +380,18 @@ async function updateCaseBrandProfileAssociation(
 export function addCaseBrandProfileAssociation(
   id: string,
   profileId: string,
+  retention?: CaseAssociationRetention,
 ): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
-  return updateCaseBrandProfileAssociation(id, profileId, 'add');
+  return updateCaseBrandProfileAssociation(id, profileId, 'add', retention);
 }
 
 /** Retry-safe browser-local removal intent that preserves concurrent unrelated adds. */
 export function removeCaseBrandProfileAssociation(
   id: string,
   profileId: string,
+  retention?: CaseAssociationRetention,
 ): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
-  return updateCaseBrandProfileAssociation(id, profileId, 'remove');
+  return updateCaseBrandProfileAssociation(id, profileId, 'remove', retention);
 }
 
 export async function addCaseNote(id: string, body: string): Promise<{ record: CaseRecord; cases: CaseRecord[]; pruned: number }> {
@@ -327,10 +399,13 @@ export async function addCaseNote(id: string, body: string): Promise<{ record: C
 }
 
 export async function deleteCase(id: string): Promise<{ cases: CaseRecord[]; deleted: boolean }> {
-  return updateBrowserLocalData('cases', (current) => {
+  const [provider, casesDefinition, draftsDefinition] = await Promise.all([browserLocalDataProvider(), browserLocalDataCollection('cases'), browserLocalDataCollection('case_drafts')]);
+  return provider.updateMany([casesDefinition, draftsDefinition], documents => {
+    const current = documents.get('cases') as CaseRecord[];
     const cases = current.filter((item) => item.id !== id);
+    const drafts = documents.get('case_drafts') as CaseDraftStore;
     return {
-      document: cases,
+      documents: new Map<string, unknown>([['cases', cases], ['case_drafts', { ...drafts, records: drafts.records.filter(item => item.caseId !== id) }]]),
       result: { cases, deleted: cases.length !== current.length },
     };
   });
@@ -352,6 +427,13 @@ export async function importCases(value: unknown): Promise<{ cases: CaseRecord[]
         pruned,
       },
     };
+  });
+}
+
+export async function importCaseReviewReturn(preview: CaseReviewReturn, keys: readonly string[]) {
+  return updateBrowserLocalData('cases', current => {
+    const result = applyCaseReviewReturn(current, preview, keys);
+    return { document: result.cases, result };
   });
 }
 
@@ -440,14 +522,14 @@ export async function importExternalIntelligence(
 }
 
 export async function exportCases(): Promise<void> {
-  const payload = buildCaseExport(await loadCases());
+  exportCaseSnapshot(await loadCases());
+}
+
+/** Export the exact reviewed snapshot, including evidence pending possible removal. */
+export function exportCaseSnapshot(cases: CaseRecord[]): void {
+  const payload = buildCaseExport(cases);
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `whoisleuth-cases-${new Date().toISOString().slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadLocalFile(blob, `whoisleuth-cases-${new Date().toISOString().slice(0, 10)}.json`);
 }
 
 export async function exportRiskCalibrationDataset(
@@ -461,12 +543,7 @@ export async function exportRiskCalibrationDataset(
   const blob = new Blob([serializeRiskCalibrationDatasetExport(payload)], {
     type: 'application/json;charset=utf-8',
   });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `whoisleuth-risk-calibration-${new Date().toISOString().slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadLocalFile(blob, `whoisleuth-risk-calibration-${new Date().toISOString().slice(0, 10)}.json`);
   return { included: payload.records.length, excluded: payload.export.excluded };
 }
 

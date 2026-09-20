@@ -5,6 +5,7 @@ import {
   MAX_WORKSPACE_INPUT_OBJECT_KEYS,
   MAX_WORKSPACE_INPUT_STRING_CODE_UNITS,
 } from '../contracts/workspace-portability.mts';
+import { boundedJsonLimitsForBytes } from '../../lib/bounded-json.mts';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -39,8 +40,7 @@ function ownDataDescriptors(
   });
 }
 
-export function ordinaryWorkspaceRecord(value: unknown, label = 'Workspace input'): UnknownRecord | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+function ordinaryRecordDescriptors(value: object, label: string) {
   let prototype: object | null;
   try {
     prototype = Object.getPrototypeOf(value);
@@ -57,20 +57,38 @@ export function ordinaryWorkspaceRecord(value: unknown, label = 'Workspace input
   if (descriptors.some(([, descriptor]) => !descriptor.enumerable)) {
     throw inputError(label, 'non-enumerable object fields are not supported');
   }
+  return descriptors;
+}
+
+export function ordinaryWorkspaceRecord(value: unknown, label = 'Workspace input'): UnknownRecord | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  ordinaryRecordDescriptors(value, label);
   return value as UnknownRecord;
 }
 
-export function assertWorkspaceInputGraph(value: unknown, label = 'Workspace input'): void {
+export function assertWorkspaceInputGraph(
+  value: unknown,
+  label = 'Workspace input',
+  options: Readonly<{ maximumBytes?: number }> = {},
+): void {
+  const limits = options.maximumBytes === undefined ? null : boundedJsonLimitsForBytes(options.maximumBytes);
+  const maximumStringCodeUnits = limits?.maximumStringCodeUnits ?? MAX_WORKSPACE_INPUT_STRING_CODE_UNITS;
   const pending: Array<Readonly<{ value: unknown; depth: number; label: string }>> = [{ value, depth: 0, label }];
   const seen = new WeakSet<object>();
   let nodes = 0;
+  let values = 0;
+  let keys = 0;
   let stringCodeUnits = 0;
   while (pending.length) {
     const current = pending.pop()!;
     const candidate = current.value;
+    values += 1;
+    if (limits && values > limits.maximumValues) {
+      throw inputError(label, 'the graph exceeds the byte-budgeted value ceiling');
+    }
     if (typeof candidate === 'string') {
       stringCodeUnits += candidate.length;
-      if (stringCodeUnits > MAX_WORKSPACE_INPUT_STRING_CODE_UNITS) {
+      if (stringCodeUnits > maximumStringCodeUnits) {
         throw inputError(label, 'aggregate text exceeds the string ceiling');
       }
       continue;
@@ -86,7 +104,7 @@ export function assertWorkspaceInputGraph(value: unknown, label = 'Workspace inp
       throw inputError(label, 'the nesting depth exceeds the graph ceiling');
     }
     nodes += 1;
-    if (nodes > MAX_WORKSPACE_INPUT_GRAPH_NODES) {
+    if (!limits && nodes > MAX_WORKSPACE_INPUT_GRAPH_NODES) {
       throw inputError(label, 'the graph exceeds the node ceiling');
     }
     if (seen.has(candidate)) continue;
@@ -128,8 +146,15 @@ export function assertWorkspaceInputGraph(value: unknown, label = 'Workspace inp
       continue;
     }
 
-    const record = ordinaryWorkspaceRecord(candidate, current.label)!;
-    const descriptors = ownDataDescriptors(record, current.label);
+    const descriptors = ordinaryRecordDescriptors(candidate, current.label);
+    if (limits) {
+      keys += descriptors.length;
+      if (keys > limits.maximumKeys) throw inputError(label, 'the graph exceeds the byte-budgeted key ceiling');
+      stringCodeUnits += descriptors.reduce((total, [key]) => total + key.length, 0);
+      if (stringCodeUnits > maximumStringCodeUnits) {
+        throw inputError(label, 'aggregate text exceeds the string ceiling');
+      }
+    }
     for (const [key, descriptor] of descriptors) {
       pending.push({
         value: descriptor.value,

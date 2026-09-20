@@ -17,7 +17,7 @@
     <div>
       <p class="eyebrow">Owned domains</p>
       <h2 id="domain-control-centre-title">Domain controls</h2>
-      <p>Review lifecycle intent, expected settings, planned changes and shared dependencies across official domains. These records are browser-local and analyst-authored.</p>
+      <p>Review lifecycle intent, expected settings, planned changes and shared dependencies across official domains. These workspace records are analyst-authored.</p>
     </div>
   </header>
 
@@ -36,7 +36,7 @@
           <div><dt>Zone intent</dt><dd>{row.baseline?.zoneIntent.replaceAll('_', ' ') || 'Not configured'}</dd></div>
           <div><dt>Nameserver preflight</dt><dd class={`state-${row.nameserverPreflight}`}>{row.nameserverPreflight.replaceAll('_', ' ')}</dd></div>
           <div><dt>Baseline depth</dt><dd>{row.baselineFields}/11 fields</dd></div>
-          <div><dt>Latest observation</dt><dd>{date(row.latestObservationAt)}</dd></div>
+          <div><dt>Latest observation</dt><dd>{row.observationLimitation || date(row.latestObservationAt)}</dd></div>
           <div><dt>Recovery dependency</dt><dd>{row.baseline?.recoveryDependency || 'Not recorded'}</dd></div>
         </dl>
         {#if row.activeWindow}

@@ -1,6 +1,8 @@
+import { openCaseSection, openConsoleView } from './console-navigation';
 import type { Page } from '@playwright/test';
 import { expect } from './fixtures';
 import { migrateLegacyBrowserData } from './helpers';
+import type { CaseRecord } from '../packages/cases/case-record-contracts.mts';
 
 export interface SnapshotOverrides {
   id?: string;
@@ -97,6 +99,7 @@ export interface CaseOverrides {
   evidencePins?: unknown[];
   actions?: unknown[];
   assertions?: unknown[];
+  decisions?: CaseRecord['decisions'];
   manualTrail?: unknown[];
   branches?: unknown[];
   sightings?: unknown[];
@@ -119,6 +122,7 @@ export function caseRecord(overrides: CaseOverrides = {}) {
     evidencePins: overrides.evidencePins ?? [],
     actions: overrides.actions ?? [],
     assertions: overrides.assertions ?? [],
+    decisions: overrides.decisions ?? [],
     manualTrail: overrides.manualTrail ?? [],
     branches: overrides.branches ?? [],
     sightings: overrides.sightings ?? [],
@@ -136,36 +140,33 @@ export async function openSeededTimelineCase(
   await migrateLegacyBrowserData(page, {
     'whois-rdap-cases-v1': { version: schemaVersion, cases: records },
   }, { destination: '/monitor' });
-  await page.getByRole('tab', { name: /Cases/ }).click();
+  await openConsoleView(page, 'cases');
   await page.locator('.case-head', { hasText: domain }).click();
+  await openCaseSection(page, 'Evidence');
 }
 
 export async function openCasesView(page: Page) {
-  await page.goto('/monitor');
-  await page.getByRole('tab', { name: /Cases/ }).click();
+  await page.goto('/cases');
+  await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
 }
 
 export async function createCase(page: Page, domain: string) {
+  if (new URL(page.url()).searchParams.has('case')) await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   await page.locator('#new-case').fill(domain);
   await page.getByRole('button', { name: 'Open or create case' }).click();
-  const heading = page.locator('.case-head', { hasText: domain });
+  const heading = page.getByRole('heading', { name: domain, exact: true });
   await expect(heading).toBeVisible();
-  await expect(heading).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('navigation', { name: 'Case sections', exact: true })).toBeVisible();
 }
 
 export async function openCaseResponseWorkspace(
   page: Page,
   caseId = '',
   presentation: 'quick' | 'advanced' = 'advanced',
+  section: 'Evidence' | 'Assessment' | 'Response' = 'Evidence',
 ) {
-  const disclosure = caseId
-    ? page.locator(`#case-response-${caseId}`)
-    : page.locator('.response-disclosure:visible').last();
-  await expect(disclosure).toBeVisible();
-  if (await disclosure.getAttribute('open') === null) {
-    await disclosure.locator(':scope > summary').click();
-  }
-  const workspace = disclosure.locator('.response-workspace');
+  await openCaseSection(page, section);
+  const workspace = caseId ? page.locator(`#case-response-${caseId}`) : page.locator('.response-workspace');
   await expect(workspace).toBeVisible();
   const presentationControl = workspace
     .getByRole('group', { name: 'Case response presentation' })

@@ -2,6 +2,8 @@
 // remain authoritative. Explicit query profiles may alter only the first
 // referred registry query after a fixture-backed adapter is integrated.
 
+export const REGISTRY_STANDARDS_COVERAGE_SCHEMA = 'whoisleuth.registry-standards-coverage';
+
 type CoverageState = 'discovery_only' | 'access_documented' | 'fixture_verified';
 type RegistryClass = 'country-code' | 'generic' | 'generic-restricted' | 'sponsored' | 'infrastructure' | 'unknown';
 type WhoisQueryProfile =
@@ -37,7 +39,7 @@ type RegistryCompatibilityRow = RegistryCapability & {
 };
 
 type RegistryStandardsCoverageSnapshot = {
-  schema: 'whoisleuth.registry-standards-coverage';
+  schema: typeof REGISTRY_STANDARDS_COVERAGE_SCHEMA;
   version: number;
   verifiedAt: string;
   sources: {
@@ -82,7 +84,7 @@ const REGISTRY_CAPABILITIES_VERSION = 29;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const REGISTRY_STANDARDS_COVERAGE_SNAPSHOT = Object.freeze({
-  schema: 'whoisleuth.registry-standards-coverage' as const,
+  schema: REGISTRY_STANDARDS_COVERAGE_SCHEMA,
   version: 1,
   verifiedAt: '2026-08-03',
   sources: Object.freeze({

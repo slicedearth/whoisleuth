@@ -9,7 +9,11 @@ import { nonEmptyErrorMessage } from './error-detail.mts';
 import { safeFetch, readTextCapped } from './safe-fetch.mts';
 import { whoisleuthRequestHeaders } from './outbound-identity.mts';
 import { classifyMxRecords } from './dns-mx.mts';
+import { collectDnsInheritanceChecks } from './dns-inheritance-review.mts';
 import type { MxRecord } from './dns-mx.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import { DOMAIN_POSTURE_COMPARISON_VERSION, MAX_POSTURE_CHECK_RECORDS, POSTURE_CHECK_SOURCES, type DomainPostureCheck } from '../packages/evidence/domain-posture-context.mts';
+import { canonicalPostureRecords } from '../packages/evidence/domain-control-runtime.mts';
 import {
   parseSpfRecords,
   parseDmarcRecords,
@@ -40,6 +44,7 @@ const MISSING_DNS_CODES = new Set(['ENODATA', 'ENOTFOUND', 'ENONAME']);
 type DnsQuery = {
   records: unknown[];
   error: string | null;
+  observedAt?: string | null;
 };
 
 type DnssecQuery = {
@@ -60,11 +65,20 @@ type DomainPostureCollectorDependencies = Readonly<{
   resolveNs: (name: string) => Promise<unknown[]>;
   resolveCaa: (name: string) => Promise<unknown[]>;
   fetchRdapRecord: typeof fetchRdapRecord;
-  fetchMtaStsPolicy: (domain: string) => Promise<MtaStsPolicyFetch>;
+  fetchMtaStsPolicy: (domain: string, signal?: AbortSignal) => Promise<MtaStsPolicyFetch>;
   now: () => Date;
   setTimer: (callback: () => void, milliseconds: number) => DomainPostureTimerHandle;
   clearTimer: (handle: DomainPostureTimerHandle) => void;
+  collectDnsInheritanceChecks?: typeof collectDnsInheritanceChecks;
 }>;
+
+type DomainPostureOptions = {
+  dkimSelectors?: unknown[];
+  retiredDkimSelectors?: unknown[];
+  mailProtectionProfile?: unknown;
+  signal?: AbortSignal;
+  includeInheritedDns?: true;
+};
 
 type DkimQuery = DnsQuery & { selector: string; retired?: boolean };
 type MailProtectionProfile = 'defensive_no_mail' | 'parked' | 'standard';
@@ -74,17 +88,11 @@ type RegistryPostureEvidence = {
   dsRecordCount: number;
   dsDataTruncated?: boolean;
   error: string | null;
+  observedAt?: string | null;
+  statusesComplete?: boolean;
 };
-type CheckStatus = 'pass' | 'warning' | 'danger' | 'info';
-type PostureCheck = {
-  id: string;
-  label: string;
-  status: CheckStatus;
-  summary: string;
-  detail: string;
-  records: string[];
-  remediation: string;
-};
+type PostureCheck = DomainPostureCheck;
+type CheckStatus = DomainPostureCheck['status'];
 type CheckOptions = { detail?: string; records?: string[]; remediation?: string };
 type PostureInput = {
   spf: DnsQuery;
@@ -188,14 +196,19 @@ async function resolveDns(
   label: string,
   factory: () => Promise<unknown[]>,
   timeoutMs = DNS_TIMEOUT_MS,
-  timers?: Pick<DomainPostureCollectorDependencies, 'setTimer' | 'clearTimer'>,
+  timers?: Pick<DomainPostureCollectorDependencies, 'setTimer' | 'clearTimer'> & Partial<Pick<DomainPostureCollectorDependencies, 'now'>>,
 ): Promise<DnsQuery> {
+  const completed = (result: DnsQuery): DnsQuery => {
+    let observedAt: string | null = null;
+    try { const at = timers?.now?.(); observedAt = at instanceof Date && Number.isFinite(at.getTime()) ? at.toISOString() : null; } catch { /* Unknown source time remains explicit. */ }
+    return { ...result, observedAt };
+  };
   try {
-    return { records: await withTimeout(factory(), label, timeoutMs, timers), error: null };
+    return completed({ records: await withTimeout(factory(), label, timeoutMs, timers), error: null });
   } catch (err) {
     const error = errorRecord(err);
-    if (typeof error.code === 'string' && MISSING_DNS_CODES.has(error.code)) return { records: [], error: null };
-    return { records: [], error: nonEmptyErrorMessage(err, String(err)) };
+    if (typeof error.code === 'string' && MISSING_DNS_CODES.has(error.code)) return completed({ records: [], error: null });
+    return completed({ records: [], error: nonEmptyErrorMessage(err, String(err)) });
   }
 }
 
@@ -295,6 +308,11 @@ function dmarcCheck(query: DnsQuery, authorizations: DmarcExternalAuthorization[
   ];
   const external = authorizations.filter((authorization) => authorization.state !== 'self');
   const unresolvedExternal = external.filter((authorization) => authorization.state !== 'authorized');
+  const intendedDestinations = parsed.aggregateDestinations.length + parsed.failureDestinations.length;
+  const omittedDestinations = Math.max(0, intendedDestinations - authorizations.length);
+  if (omittedDestinations) {
+    details.push(`Reporting authorisation coverage: ${authorizations.length} of ${intendedDestinations} destinations reviewed; ${omittedDestinations} not checked within the bounded collection. Omitted destinations are not assumed authorised.`);
+  }
   if (external.length > 0) {
     details.push(
       `${external.length} external reporting destination${external.length === 1 ? '' : 's'} checked; `
@@ -319,11 +337,13 @@ function dmarcCheck(query: DnsQuery, authorizations: DmarcExternalAuthorization[
       remediation: 'Set sp and np to quarantine or reject unless weaker subdomain treatment is intentional.',
     });
   }
-  if (unresolvedExternal.length > 0) {
-    return check('dmarc', 'DMARC', 'warning', `Enforced at p=${parsed.policy}; external reporting authorization is incomplete`, {
+  if (unresolvedExternal.length > 0 || omittedDestinations > 0) {
+    return check('dmarc', 'DMARC', 'warning', `Enforced at p=${parsed.policy}; reporting authorisation is incomplete`, {
       detail: `${details.join(' ')} ${unresolvedExternal.map((authorization) => `${authorization.destination}: ${authorization.state}.`).join(' ')}`,
       records: parsed.records,
-      remediation: 'Publish the required external reporting authorisation record or remove the unavailable destination.',
+      remediation: omittedDestinations > 0
+        ? 'Review the unchecked destinations and confirm any required external reporting authorisation before relying on delivery.'
+        : 'Publish the required external reporting authorisation record or remove the unavailable destination.',
     });
   }
   if (!parsed.aggregateReporting) {
@@ -443,7 +463,10 @@ function matchesMtaPattern(host: unknown, pattern: unknown): boolean {
   const normalizedPattern = String(pattern || '').toLowerCase().replace(/\.+$/, '');
   if (normalizedPattern.startsWith('*.')) {
     const suffix = normalizedPattern.slice(1);
-    return normalizedHost.endsWith(suffix) && normalizedHost.length > suffix.length;
+    if (!normalizedHost.endsWith(suffix)) return false;
+    const label = normalizedHost.slice(0, -suffix.length);
+    // MTA-STS permits a wildcard for exactly one leftmost DNS label.
+    return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(label);
   }
   return normalizedHost === normalizedPattern;
 }
@@ -679,10 +702,11 @@ function defensiveMailProfileCheck(profile: MailProtectionProfile, input: Postur
 
 function registrationLockCheck(registry: RegistryPostureEvidence): PostureCheck {
   if (registry.error) return queryFailureCheck('registration_lock', 'Registration controls', registry.error);
-  const statuses = registry.statuses.map((status) => status.toLowerCase().replace(/[^a-z]/gu, ''));
+  const statuses = canonicalPostureRecords('registration_lock', registry.statuses) ?? [];
   if (statuses.length === 0) {
     return check('registration_lock', 'Registration controls', 'info', 'Registry lock state is unavailable', {
       detail: 'No normalised EPP status was returned. This does not describe registrar account security.',
+      records: registry.statuses,
     });
   }
   const transferLocks = statuses.filter((status) => ['clienttransferprohibited', 'servertransferprohibited'].includes(status));
@@ -750,14 +774,40 @@ function buildPostureReport(domain: string, input: PostureInput) {
     ...(input.registry && input.nameservers ? [nameserverCheck(input.nameservers, input.registry)] : []),
   ];
   const summary = { pass: 0, warning: 0, danger: 0, info: 0 };
-  for (const item of checks) summary[item.status] += 1;
+  for (const item of checks) {
+    summary[item.status] += 1;
+    const source = POSTURE_CHECK_SOURCES[item.id as keyof typeof POSTURE_CHECK_SOURCES];
+    const query = item.id === 'nameservers' ? input.nameservers : item.id === 'mx' ? input.mx : item.id === 'caa' ? input.caa : undefined;
+    const registry = item.id === 'registration_lock' ? input.registry : undefined;
+    if (!source || (!query && !registry)) continue;
+    const omittedRecords = Math.max(0, item.records.length - MAX_POSTURE_CHECK_RECORDS);
+    const records = item.records.slice(0, MAX_POSTURE_CHECK_RECORDS);
+    const error = query?.error ?? registry?.error;
+    const retained = canonicalPostureRecords(item.id, records);
+    const rawRecords = query?.records ?? registry?.statuses ?? [];
+    const raw = item.id === 'caa'
+      ? canonicalPostureRecords(item.id, rawRecords.map((record) => record && typeof record === 'object' ? caaDisplay(record as Record<string, unknown>) : record))
+      : canonicalPostureRecords(item.id, rawRecords);
+    const complete = !error && omittedRecords === 0 && retained !== null && raw !== null
+      && retained.length === raw.length && retained.every((value, index) => value === raw[index])
+      && (!registry || (registry.statusesComplete === true && records.length > 0));
+    item.sourceContext = {
+      version: DOMAIN_POSTURE_COMPARISON_VERSION, source,
+      observedAt: normalizeExplicitIsoTimestamp(query?.observedAt ?? registry?.observedAt),
+      state: error ? 'unavailable' : complete ? 'complete' : 'partial',
+      omittedRecords: complete ? 0 : omittedRecords || null,
+    };
+    item.records = records;
+  }
   return { domain, summary, checks };
 }
 
 async function fetchMtaStsPolicy(
   domain: string,
   fetcher: typeof safeFetch = safeFetch,
+  signal?: AbortSignal,
 ): Promise<MtaStsPolicyFetch> {
+  signal?.throwIfAborted();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), POLICY_TIMEOUT_MS);
   try {
@@ -766,7 +816,7 @@ async function fetchMtaStsPolicy(
     // following HTTP redirects for policy discovery. A zero-hop safe fetch
     // also keeps the returned body bound to the required policy host/path.
     const res = await fetcher(url, {
-      signal: controller.signal,
+      signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
       headers: whoisleuthRequestHeaders({ Accept: 'text/plain' }),
     }, 0);
     if (res.status !== 200) {
@@ -777,9 +827,11 @@ async function fetchMtaStsPolicy(
       return { text: '', contentType: res.headers.get('content-type'), error: `Policy endpoint returned HTTP ${res.status}.` };
     }
     const body = await readTextCapped(res, MAX_POLICY_BYTES);
+    signal?.throwIfAborted();
     if (body.truncated) return { text: '', contentType: res.headers.get('content-type'), error: `Policy exceeds ${MAX_POLICY_BYTES} bytes.` };
     return { text: body.text, contentType: res.headers.get('content-type'), error: null };
   } catch (err) {
+    signal?.throwIfAborted();
     return {
       text: '',
       contentType: null,
@@ -792,29 +844,18 @@ async function fetchMtaStsPolicy(
   }
 }
 
-async function checkDomainPosture(
+async function collectDomainPosture(
   domain: string,
   {
     dkimSelectors = [],
     retiredDkimSelectors = [],
     mailProtectionProfile = 'standard',
-  }: {
-    dkimSelectors?: unknown[];
-    retiredDkimSelectors?: unknown[];
-    mailProtectionProfile?: unknown;
-  } = {},
-  dependencies: DomainPostureCollectorDependencies = {
-    resolveTxt: (name) => dns.resolveTxt(name),
-    resolveMx: (name) => dns.resolveMx(name),
-    resolveNs: (name) => dns.resolveNs(name),
-    resolveCaa: (name) => dns.resolveCaa(name),
-    fetchRdapRecord,
-    fetchMtaStsPolicy: (name) => fetchMtaStsPolicy(name),
-    now: () => new Date(),
-    setTimer: (callback, milliseconds) => setTimeout(callback, milliseconds),
-    clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
-  },
+    includeInheritedDns,
+    signal,
+  }: DomainPostureOptions,
+  dependencies: DomainPostureCollectorDependencies,
 ) {
+  signal?.throwIfAborted();
   const normalizedDomain = normalizeAuditDomain(domain);
   if (!normalizedDomain) throw new Error('Invalid domain name for posture audit.');
   domain = normalizedDomain;
@@ -844,10 +885,11 @@ async function checkDomainPosture(
         ...await resolveDns(`TXT ${selector}._domainkey.${domain}`, () => dependencies.resolveTxt(`${selector}._domainkey.${domain}`), DNS_TIMEOUT_MS, dependencies),
       })),
     ]),
-    dependencies.fetchRdapRecord('domain', domain).catch((err: unknown) => ({
+    dependencies.fetchRdapRecord('domain', domain, signal ? { signal } : {}).catch((err: unknown) => ({
       error: nonEmptyErrorMessage(err, String(err)),
     })),
   ]);
+  signal?.throwIfAborted();
 
   const parsedMtaDns = mtaStsDns.error ? null : parseMtaStsDnsRecords(mtaStsDns.records);
   const enrichmentStartedAt = dependencies.now();
@@ -856,6 +898,7 @@ async function checkDomainPosture(
   }
   const enrichmentDeadline = enrichmentStartedAt.getTime() + POSTURE_ENRICHMENT_DEADLINE_MS;
   const resolveEnrichmentTxt = (name: string) => {
+    signal?.throwIfAborted();
     const observedAt = dependencies.now();
     if (!(observedAt instanceof Date) || !Number.isFinite(observedAt.getTime())) {
       return Promise.resolve({ records: [], error: 'The bounded posture-enrichment clock was unavailable.' });
@@ -864,11 +907,21 @@ async function checkDomainPosture(
     if (remaining <= 1) return Promise.resolve({ records: [], error: 'The bounded posture-enrichment deadline was reached.' });
     return resolveDns(`TXT ${name}`, () => dependencies.resolveTxt(name), Math.min(DNS_TIMEOUT_MS, remaining), dependencies);
   };
-  const [mtaStsPolicy, spfExpansion, dmarcAuthorizations] = await Promise.all([
-    parsedMtaDns?.valid ? dependencies.fetchMtaStsPolicy(domain) : Promise.resolve(null),
+  const enrichment = [
+    parsedMtaDns?.valid ? dependencies.fetchMtaStsPolicy(domain, signal) : Promise.resolve(null),
     expandSpfPolicy(domain, spf, resolveEnrichmentTxt),
     validateDmarcExternalReporting(domain, dmarc, resolveEnrichmentTxt),
-  ]);
+    includeInheritedDns === true
+      ? (dependencies.collectDnsInheritanceChecks
+        ? dependencies.collectDnsInheritanceChecks(domain, dmarc, nameservers, signal ? { signal } : {})
+        : Promise.reject(new TypeError('The explicit DNS review collector is unavailable.')))
+      : Promise.resolve([]),
+  ] as const;
+  // A rejected policy request must not release the operation's capacity while
+  // other started enrichment collectors are still settling.
+  const [mtaStsPolicy, spfExpansion, dmarcAuthorizations, inheritanceChecks] = await Promise.all(enrichment)
+    .finally(() => Promise.allSettled(enrichment));
+  signal?.throwIfAborted();
   const dnssec = !rdap
     ? { value: null, error: 'RDAP did not return a domain record.' }
     : 'error' in rdap
@@ -885,6 +938,8 @@ async function checkDomainPosture(
         dsRecordCount: parsedDomain.dsData.length,
         dsDataTruncated: parsedDomain.dsDataTruncated,
         error: null,
+        observedAt: normalizeExplicitIsoTimestamp(rdap && !('error' in rdap) ? rdap.fetchedAt : null),
+        statusesComplete: parsedDomain.statusesTruncated === false && parsedDomain.serverTruncated === false,
       }
     : {
         statuses: [],
@@ -921,6 +976,10 @@ async function checkDomainPosture(
   if (!(checkedAt instanceof Date) || !Number.isFinite(checkedAt.getTime())) {
     throw new TypeError('Domain-posture completion time must be valid.');
   }
+  for (const item of inheritanceChecks) {
+    report.checks.push(item);
+    report.summary[item.status] += 1;
+  }
   return {
     ...report,
     checkedAt: checkedAt.toISOString(),
@@ -931,6 +990,36 @@ async function checkDomainPosture(
     dmarcAuthorizations,
     externalDependencies,
   };
+}
+
+async function checkDomainPosture(
+  domain: string,
+  options: DomainPostureOptions = {},
+  dependencies?: DomainPostureCollectorDependencies,
+) {
+  options.signal?.throwIfAborted();
+  // Cancelling one audit must never cancel another audit's resolver.
+  const resolver = dependencies ? null : new dns.Resolver();
+  const cancel = () => resolver?.cancel();
+  options.signal?.addEventListener('abort', cancel, { once: true });
+  try {
+    options.signal?.throwIfAborted();
+    return await collectDomainPosture(domain, options, dependencies ?? {
+      resolveTxt: name => resolver!.resolveTxt(name),
+      resolveMx: name => resolver!.resolveMx(name),
+      resolveNs: name => resolver!.resolveNs(name),
+      resolveCaa: name => resolver!.resolveCaa(name),
+      fetchRdapRecord,
+      fetchMtaStsPolicy: (name, signal) => fetchMtaStsPolicy(name, safeFetch, signal),
+      now: () => new Date(),
+      setTimer: (callback, milliseconds) => setTimeout(callback, milliseconds),
+      clearTimer: handle => clearTimeout(handle as ReturnType<typeof setTimeout>),
+      collectDnsInheritanceChecks,
+    });
+  } finally {
+    options.signal?.removeEventListener('abort', cancel);
+    cancel();
+  }
 }
 
 export {
@@ -945,4 +1034,5 @@ export {
 
 export type {
   DomainPostureCollectorDependencies,
+  DomainPostureOptions,
 };

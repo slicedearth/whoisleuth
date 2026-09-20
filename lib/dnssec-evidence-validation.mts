@@ -170,6 +170,9 @@ function signatureTimeState(value: readonly DnssecRrsigRecord[], observedAt: unk
 
 function validateDnssecEvidence(input: DnssecEvidenceInput): DnssecEvidenceReport {
   const normalizedOwner = ownerName(input.ownerName);
+  const missingDs = input.dsRecords === undefined;
+  const malformedContainers = [input.dsRecords, input.dnskeyRecords, input.rrSigRecords]
+    .filter((value) => value !== undefined && !Array.isArray(value)).length;
   const rawDs = Array.isArray(input.dsRecords) ? input.dsRecords : [];
   const rawDnskeys = Array.isArray(input.dnskeyRecords) ? input.dnskeyRecords : [];
   const rawRrsigs = Array.isArray(input.rrSigRecords) ? input.rrSigRecords : [];
@@ -178,7 +181,8 @@ function validateDnssecEvidence(input: DnssecEvidenceInput): DnssecEvidenceRepor
   const rrsigs = rawRrsigs.slice(0, MAX_DNSSEC_RECORDS).map(normalizeRrsig).filter((item): item is DnssecRrsigRecord => item !== null);
   const rejectedCount = Math.min(rawDs.length, MAX_DNSSEC_RECORDS) - dsRecords.length
     + Math.min(rawDnskeys.length, MAX_DNSSEC_RECORDS) - dnskeys.length
-    + Math.min(rawRrsigs.length, MAX_DNSSEC_RECORDS) - rrsigs.length;
+    + Math.min(rawRrsigs.length, MAX_DNSSEC_RECORDS) - rrsigs.length
+    + malformedContainers;
   const truncated = rawDs.length > MAX_DNSSEC_RECORDS
     || rawDnskeys.length > MAX_DNSSEC_RECORDS
     || rawRrsigs.length > MAX_DNSSEC_RECORDS;
@@ -208,7 +212,9 @@ function validateDnssecEvidence(input: DnssecEvidenceInput): DnssecEvidenceRepor
     });
   }
 
-  const incompleteInput = rejectedCount > 0 || truncated;
+  const incompleteInput = missingDs || rejectedCount > 0 || truncated;
+  if (missingDs) findings.push('No DS record collection was supplied. Omitted input is not a verified empty collection.');
+  if (malformedContainers) findings.push(`${malformedContainers} record collection container(s) had an invalid type; their contents are unknown.`);
   if (input.delegationSigned === false && dsRecords.length === 0 && !incompleteInput) {
     findings.push('The supplied delegation state was unsigned and no DS records were supplied.');
     return Object.freeze({
@@ -253,7 +259,7 @@ function validateDnssecEvidence(input: DnssecEvidenceInput): DnssecEvidenceRepor
   if (input.delegationSigned === false && dsRecords.length === 0 && incompleteInput) {
     findings.push('The retained subset contains no usable DS record, but omitted or rejected records prevent a definitive unsigned conclusion.');
   }
-  if (rejectedCount > 0) findings.push(`${rejectedCount} malformed record(s) were rejected.`);
+  if (rejectedCount > 0) findings.push(`${rejectedCount} malformed record(s) or collection container(s) were rejected.`);
   if (truncated) findings.push('The supplied record set exceeded the review bound and was truncated.');
 
   const completeLocalRelationship = dsRecords.length > 0

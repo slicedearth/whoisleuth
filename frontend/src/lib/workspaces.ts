@@ -62,8 +62,8 @@ export const bulkNavigation = {
 
 export const monitorNavigation = {
     href: '/monitor',
-    label: 'Monitor',
-    detail: 'Review cases, prepare responses, campaigns, and follow-up',
+    label: 'Review inbox',
+    detail: 'Review changes, evidence gaps and due follow-ups',
     icon: 'case',
     keywords: ['respond', 'case', 'response', 'campaign', 'follow-up', 'inbox'],
     activeQuery: {
@@ -73,10 +73,18 @@ export const monitorNavigation = {
     },
   } satisfies NavigationItem;
 
+export const casesNavigation = {
+  href: '/cases',
+  label: 'Cases',
+  detail: 'Review evidence, record decisions, and prepare responses',
+  icon: 'case',
+  keywords: ['case', 'evidence', 'response', 'report', 'closure'],
+} satisfies NavigationItem;
+
 export const monitorAssuranceNavigation = {
     href: '/monitor?view=watchlists',
-    label: 'Watchlists & controls',
-    detail: 'Review monitoring history, watchlists, and local rules',
+    label: 'Monitoring',
+    detail: 'Manage watchlists, change history and controls',
     icon: 'watchlist',
     keywords: ['assure', 'monitoring', 'watchlist', 'timeline', 'history', 'change', 'rules', 'controls'],
     activeQuery: {
@@ -84,6 +92,20 @@ export const monitorAssuranceNavigation = {
       values: ['certificates', 'timeline', 'watchlists', 'rules'],
     },
   } satisfies NavigationItem;
+
+export const monitorViewNavigation = [
+  { group: 'Respond', views: [
+    { view: 'inbox', label: 'Inbox', detail: monitorNavigation.detail },
+    { view: 'campaigns', label: 'Campaigns', detail: 'Review linked domains and campaign evidence' },
+    { view: 'relationships', label: 'Relationships', detail: 'Review connections between saved observations' },
+  ] },
+  { group: 'Assure', views: [
+    { view: 'timeline', label: 'Timeline', detail: 'Compare recorded monitoring observations' },
+    { view: 'certificates', label: 'Certificates', detail: 'Review certificate expectations and changes' },
+    { view: 'watchlists', label: 'Watchlists', detail: 'Manage targets and deliberate monitoring checks' },
+    { view: 'rules', label: 'Custom rules', detail: 'Manage browser-local review rules' },
+  ] },
+] as const;
 
 export const brandsNavigation = {
     href: '/brands',
@@ -97,6 +119,7 @@ export const toolNavigation = [
   lookupNavigation,
   discoverNavigation,
   bulkNavigation,
+  casesNavigation,
   monitorNavigation,
   brandsNavigation,
 ];
@@ -243,7 +266,7 @@ export const consoleNavigationGroups: readonly NavigationGroup[] = [
   },
   {
     label: 'Respond',
-    items: [monitorNavigation],
+    items: [casesNavigation, monitorNavigation],
   },
   {
     label: 'Assure',
@@ -281,4 +304,21 @@ export function isProtectedDestination(currentUrl: URL): boolean {
   return protectedDestinations.some((item) => (
     new URL(item.href, currentUrl.origin).pathname === currentUrl.pathname
   ));
+}
+
+export function protectedReturnTarget(requested: string | null, origin: string): string {
+  const fallback = dashboard.href;
+  if (!requested || requested.length > 4_096 || !requested.startsWith('/')
+    || requested.startsWith('//') || /[\\\u0000-\u0020\u007f]/u.test(requested)) return fallback;
+  try {
+    const destination = new URL(requested, origin);
+    const pathname = requested.split(/[?#]/u, 1)[0];
+    if (destination.origin !== origin || destination.pathname !== pathname
+      || !isProtectedDestination(destination)) return fallback;
+    // Each destination already validates its own query and fragment state.
+    // Sign-in confines the redirect; it must not duplicate those page contracts.
+    return `${destination.pathname}${destination.search}${destination.hash}`;
+  } catch {
+    return fallback;
+  }
 }

@@ -26,7 +26,7 @@ function classifyMxRecords(records: readonly MxRecord[]): MxClassification {
   // of configuration. Not currently used for scoring (both cases already
   // correctly score as hasMx: false); exposed for callers that want to tell
   // the two apart.
-  const hasNullMx = records.length > 0 && realRecords.length === 0;
+  const hasNullMx = records.length === 1 && records[0]?.priority === 0 && realRecords.length === 0;
   return {
     hasMx: realRecords.length > 0,
     hasNullMx,

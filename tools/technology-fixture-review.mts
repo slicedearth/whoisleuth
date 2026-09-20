@@ -20,6 +20,7 @@ import {
   TECHNOLOGY_SIGNATURE_CATALOGUE,
   TECHNOLOGY_PROFILE_VERSION,
   analyzeWebsiteTechnology,
+  minimiseTechnologyMarkup,
   type TechnologyInput,
 } from '../lib/website-technology.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
@@ -49,61 +50,13 @@ const SHARED_VENDOR_HOSTS = new Set([
   'wixstatic.com',
   'static.squarespace.com',
   'static1.squarespace.com',
+  'assets.squarespace.com',
   'framerusercontent.com',
   'editmysite.com',
   'cloudfront.net',
 ]);
 const SHARED_VENDOR_HOST_RECONSTRUCTIONS: ReadonlyArray<readonly [RegExp, string]> = Object.freeze([
   [/^cdn\d+\.bigcommerce\.com$/iu, 'cdn11.bigcommerce.com'],
-]);
-const SAFE_MARKERS: ReadonlyArray<Readonly<{ marker: string; output: string }>> = Object.freeze([
-  { marker: '/wp-content/', output: '<link href="/wp-content/fixture.css">' },
-  { marker: '/wp-includes/', output: '<script src="/wp-includes/fixture.js"></script>' },
-  { marker: 'data-drupal-selector=', output: '<main data-drupal-selector="fixture"></main>' },
-  { marker: 'data-drupal-link-system-path=', output: '<main data-drupal-link-system-path="fixture"></main>' },
-  { marker: 'drupal-settings-json', output: '<script type="application/json" data-drupal-selector="drupal-settings-json"></script>' },
-  { marker: 'ghost/api/content/', output: '<link href="/ghost/api/content/">' },
-  { marker: 'data-ghost-search', output: '<main data-ghost-search></main>' },
-  { marker: 'shopify-section', output: '<section class="shopify-section"></section>' },
-  { marker: 'shopify.theme', output: '<main data-marker="shopify.theme"></main>' },
-  { marker: 'data-mage-init=', output: '<main data-mage-init="{}"></main>' },
-  { marker: 'type="text/x-magento-init"', output: '<script type="text/x-magento-init">{}</script>' },
-  { marker: "type='text/x-magento-init'", output: '<script type="text/x-magento-init">{}</script>' },
-  { marker: 'cdn11.bigcommerce.com/s-', output: '<link href="https://cdn11.bigcommerce.com/s-fixture/theme.css">' },
-  { marker: 'stencil-utils', output: '<script src="/stencil-utils.js"></script>' },
-  { marker: '/wp-content/plugins/woocommerce/', output: '<link href="/wp-content/plugins/woocommerce/fixture.css">' },
-  { marker: '/modules/ps_', output: '<link href="/modules/ps_fixture/fixture.css">' },
-  { marker: 'index.php?route=common/home', output: '<a href="index.php?route=common/home"></a>' },
-  { marker: 'image/catalog/opencart-logo.png', output: '<img src="image/catalog/opencart-logo.png" alt="">' },
-  { marker: 'data-mesh-id=', output: '<main data-mesh-id="fixture"></main>' },
-  { marker: 'squarespace-context', output: '<main data-marker="squarespace-context"></main>' },
-  { marker: 'data-wf-page=', output: '<main data-wf-page="fixture"></main>' },
-  { marker: 'data-wf-site=', output: '<main data-wf-site="fixture"></main>' },
-  { marker: 'data-framer-name=', output: '<main data-framer-name="fixture"></main>' },
-  { marker: 'id="wsite-base-style"', output: '<link id="wsite-base-style" href="/fixture.css">' },
-  { marker: "id='wsite-base-style'", output: '<link id="wsite-base-style" href="/fixture.css">' },
-  { marker: 'title="wsite-theme-css"', output: '<link title="wsite-theme-css" href="/fixture.css">' },
-  { marker: "title='wsite-theme-css'", output: '<link title="wsite-theme-css" href="/fixture.css">' },
-  { marker: ' ng-version=', output: '<main ng-version="fixture"></main>' },
-  { marker: ' name="__viewstate"', output: '<input name="__VIEWSTATE">' },
-  { marker: ' id="__viewstate"', output: '<input id="__VIEWSTATE">' },
-  { marker: 'id="__next_data__"', output: '<script id="__NEXT_DATA__"></script>' },
-  { marker: "id='__next_data__'", output: '<script id="__NEXT_DATA__"></script>' },
-  { marker: '/_next/static/', output: '<script src="/_next/static/fixture.js"></script>' },
-  { marker: 'id="__nuxt"', output: '<main id="__nuxt"></main>' },
-  { marker: "id='__nuxt'", output: '<main id="__nuxt"></main>' },
-  { marker: '/_nuxt/', output: '<script src="/_nuxt/fixture.js"></script>' },
-  { marker: 'id="___gatsby"', output: '<main id="___gatsby"></main>' },
-  { marker: "id='___gatsby'", output: '<main id="___gatsby"></main>' },
-  { marker: '/page-data/app-data.json', output: '<link href="/page-data/app-data.json">' },
-  { marker: 'data-sveltekit-preload-data=', output: '<a data-sveltekit-preload-data="hover"></a>' },
-  { marker: 'data-sveltekit-reload=', output: '<a data-sveltekit-reload></a>' },
-  { marker: 'href="/_app/immutable/', output: '<link href="/_app/immutable/fixture.css">' },
-  { marker: 'src="/_app/immutable/', output: '<script src="/_app/immutable/fixture.js"></script>' },
-  { marker: '<astro-island', output: '<astro-island></astro-island>' },
-  { marker: '<astro-slot', output: '<astro-slot></astro-slot>' },
-  { marker: 'href="/_astro/', output: '<link href="/_astro/fixture.css">' },
-  { marker: 'src="/_astro/', output: '<script src="/_astro/fixture.js"></script>' },
 ]);
 const REVIEW_INPUT_KEYS = new Set([
   'schema',
@@ -152,24 +105,24 @@ function text(value: unknown, label: string, maximum: number): string {
   return normalized;
 }
 
-function normalizeHeader(
+async function normalizeHeader(
   value: unknown,
   label: string,
   field: 'generator' | 'httpServer',
-): string | undefined {
+): Promise<string | undefined> {
   if (value === undefined || value === null || value === '') return undefined;
   const header = text(value, label, 160);
   if (EMAIL_RE.test(header) || IPV4_RE.test(header) || /https?:\/\//iu.test(header)) {
     throw new TypeError(`${label} contains target or contact material.`);
   }
-  const findings = analyzeWebsiteTechnology({ [field]: header }).findings;
+  const findings = (await analyzeWebsiteTechnology({ [field]: header })).findings;
   if (findings.length !== 1) {
     throw new TypeError(`${label} must produce exactly one recognised catalogue technology before it can be minimised.`);
   }
   const finding = findings[0];
   if (!finding) throw new TypeError(`${label} could not be minimised.`);
   const candidate = HEADER_CANONICAL_VALUES[finding.id] ?? finding.name;
-  const reconstructed = analyzeWebsiteTechnology({ [field]: candidate }).findings.map((item) => item.id);
+  const reconstructed = (await analyzeWebsiteTechnology({ [field]: candidate })).findings.map((item) => item.id);
   if (reconstructed.length !== 1 || reconstructed[0] !== finding.id) {
     throw new TypeError(`${label} has no privacy-safe canonical reconstruction.`);
   }
@@ -182,13 +135,11 @@ function normalizeMarkup(value: unknown): string | undefined {
   if (EMAIL_RE.test(markup) || IPV4_RE.test(markup) || /<!--|<style\b/iu.test(markup)) {
     throw new TypeError('Minimised HTML contains contact, address, comment, or style material.');
   }
-  const outputs = SAFE_MARKERS
-    .filter(({ marker }) => markup.includes(marker))
-    .map(({ output }) => output);
-  if (!outputs.length) {
-    throw new TypeError('Minimised HTML contains no recognised catalogue marker.');
+  const output = minimiseTechnologyMarkup({ html: markup });
+  if (!output) {
+    throw new TypeError('Minimised HTML contains no recognised structural catalogue marker.');
   }
-  return [...new Set(outputs)].join('');
+  return output;
 }
 
 function negativeMarkup(ids: readonly string[]): string {
@@ -242,7 +193,7 @@ function normalizeOrigins(value: unknown): string[] {
   return [...origins].sort();
 }
 
-function normalizeResponseHeaders(value: unknown): Record<string, string> {
+async function normalizeResponseHeaders(value: unknown): Promise<Record<string, string>> {
   if (value === undefined || value === null) return {};
   const headers = record(value);
   if (!headers || Object.keys(headers).length > MAX_REVIEWED_RESPONSE_HEADERS) {
@@ -257,7 +208,7 @@ function normalizeResponseHeaders(value: unknown): Record<string, string> {
     if (EMAIL_RE.test(headerValue) || IPV4_RE.test(headerValue) || /https?:\/\//iu.test(headerValue)) {
       throw new TypeError(`Response header ${name} contains target or contact material.`);
     }
-    const findings = analyzeWebsiteTechnology({ responseHeaders: { [name]: headerValue } }).findings;
+    const findings = (await analyzeWebsiteTechnology({ responseHeaders: { [name]: headerValue } })).findings;
     if (findings.length !== 1) {
       throw new TypeError(`Response header ${name} must produce exactly one recognised catalogue technology before it can be minimised.`);
     }
@@ -266,7 +217,7 @@ function normalizeResponseHeaders(value: unknown): Record<string, string> {
     if (!finding || !canonical) {
       throw new TypeError(`Response header ${name} has no privacy-safe canonical reconstruction.`);
     }
-    const reconstructed = analyzeWebsiteTechnology({ responseHeaders: { [name]: canonical } }).findings;
+    const reconstructed = (await analyzeWebsiteTechnology({ responseHeaders: { [name]: canonical } })).findings;
     if (reconstructed.length !== 1 || reconstructed[0]?.id !== finding.id) {
       throw new TypeError(`Response header ${name} has no stable canonical reconstruction.`);
     }
@@ -275,7 +226,7 @@ function normalizeResponseHeaders(value: unknown): Record<string, string> {
   return Object.fromEntries(Object.entries(output).sort(([left], [right]) => left.localeCompare(right)));
 }
 
-export function buildReviewedTechnologyFixture(raw: unknown): TechnologyReviewedFixture {
+export async function buildReviewedTechnologyFixture(raw: unknown): Promise<TechnologyReviewedFixture> {
   const source = record(raw);
   const input = record(source?.input);
   if (!source || source.schema !== TECHNOLOGY_REVIEW_INPUT_SCHEMA
@@ -314,8 +265,8 @@ export function buildReviewedTechnologyFixture(raw: unknown): TechnologyReviewed
     throw new TypeError('Reviewed input cannot both expect and forbid a technology id.');
   }
   const label = reviewedFixtureLabel(expectedIds, negativeFor);
-  const generator = normalizeHeader(input.generator, 'Generator value', 'generator');
-  const httpServer = normalizeHeader(input.httpServer, 'HTTP server value', 'httpServer');
+  const generator = await normalizeHeader(input.generator, 'Generator value', 'generator');
+  const httpServer = await normalizeHeader(input.httpServer, 'HTTP server value', 'httpServer');
   const html = expectedIds.length
     ? normalizeMarkup(input.html)
     : (() => {
@@ -327,7 +278,7 @@ export function buildReviewedTechnologyFixture(raw: unknown): TechnologyReviewed
       return canonical;
     })();
   const resourceOrigins = normalizeOrigins(input.resourceOrigins);
-  const responseHeaders = normalizeResponseHeaders(input.responseHeaders);
+  const responseHeaders = await normalizeResponseHeaders(input.responseHeaders);
   const normalizedInput: TechnologyInput = Object.freeze({
     ...(generator ? { generator } : {}),
     ...(httpServer ? { httpServer } : {}),
@@ -336,7 +287,7 @@ export function buildReviewedTechnologyFixture(raw: unknown): TechnologyReviewed
     ...(Object.keys(responseHeaders).length ? { responseHeaders: Object.freeze(responseHeaders) } : {}),
     observedAt,
   });
-  const observedIds = analyzeWebsiteTechnology(normalizedInput).findings.map((finding) => finding.id).sort();
+  const observedIds = (await analyzeWebsiteTechnology(normalizedInput)).findings.map((finding) => finding.id).sort();
   if (JSON.stringify(observedIds) !== JSON.stringify(expectedIds)) {
     throw new TypeError(`Minimised evidence observed [${observedIds.join(', ')}] instead of [${expectedIds.join(', ')}].`);
   }
@@ -386,7 +337,7 @@ export async function main(
     } catch {
       throw new TypeError('Technology review input must be valid JSON.');
     }
-    output.write(`${JSON.stringify(buildReviewedTechnologyFixture(parsed), null, 2)}\n`);
+    output.write(`${JSON.stringify(await buildReviewedTechnologyFixture(parsed), null, 2)}\n`);
     return 0;
   } catch (error) {
     errors.write(`${error instanceof Error ? error.message : 'Technology fixture review failed.'}\n`);

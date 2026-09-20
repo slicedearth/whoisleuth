@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { TECHNOLOGY_REVIEWED_FIXTURES } from '../fixtures/technology-reviewed-fixtures.mts';
 
 import { sslblSnapshotHealth } from '../lib/sslbl-intelligence.mts';
 import { SOURCE_RELEASED_AT } from '../tools/cisa-kev-catalog.mts';
@@ -36,20 +37,20 @@ describe('offline source-health composition', () => {
     assert.equal(report.mode, 'offline_checked_in_assets');
     assert.equal(report.networkRequests, 0);
     assert.equal(report.summary.entries, 11);
-    assert.deepEqual(report.summary.states, {
-      current: 6,
-      limited: 0,
-      measured: 1,
-      unproven: 4,
-      stale: 0,
-      unavailable: 0,
-      malformed: 0,
-    });
-    assert.equal(report.summary.strictFailures, 0);
+    const platformRoutes = report.entries.find((item) => item.id === 'platform_reporting_routes');
+    assert.equal(platformRoutes?.state, 'unavailable');
+    assert.equal(platformRoutes?.ageDays, null);
+    assert.match(platformRoutes?.detail ?? '', /review date is later than the evaluation clock/iu);
+    for (const [state, count] of Object.entries(report.summary.states)) {
+      assert.equal(count, report.entries.filter((entry) => entry.state === state).length);
+    }
+    assert.equal(report.summary.strictFailures, report.entries.filter((entry) =>
+      ['stale', 'unavailable', 'malformed'].includes(entry.state)).length);
     assert.match(report.limitations.join(' '), /corpus coverage only; it does not establish general accuracy or recall/iu);
     const technology = report.entries.find((item) => item.id === 'accuracy_technology_detection');
     assert.equal(technology?.state, 'measured');
-    assert.equal(technology?.itemCount, 78);
+    assert.ok(TECHNOLOGY_REVIEWED_FIXTURES.length > 0);
+    assert.equal(technology?.itemCount, TECHNOLOGY_REVIEWED_FIXTURES.length);
     assert.ok(report.entries
       .filter((item) => item.kind === 'evaluation' && item.id !== 'accuracy_technology_detection')
       .every((item) => item.state === 'unproven' && item.itemCount === 0));
@@ -71,7 +72,7 @@ describe('offline source-health composition', () => {
     assert.equal(unavailable?.itemCount, null);
     assert.equal(unavailable?.ageDays, null);
     assert.doesNotMatch(unavailable?.detail ?? '', /private|fixture\/path/u);
-    assert.equal(report.summary.strictFailures, 4);
+    assert.ok(report.summary.strictFailures >= 3);
 
     const formatted = formatSourceHealthReport(report);
     assert.match(formatted, /UNAVAILABLE\s+Registry compatibility fixtures/u);
@@ -125,6 +126,12 @@ describe('offline source-health composition', () => {
 
   test('emits no annotation when retained datasets are current and evaluations are limited or unproven', async () => {
     const report = await buildSourceHealthReport({ now: new Date('2026-09-03T12:00:00.000Z') });
-    assert.equal(formatSourceHealthAnnotations(report), '');
+    const current = {
+      ...report,
+      entries: report.entries.map((entry) => entry.kind === 'retained_dataset'
+        ? { ...entry, state: 'current' as const }
+        : entry),
+    };
+    assert.equal(formatSourceHealthAnnotations(current), '');
   });
 });

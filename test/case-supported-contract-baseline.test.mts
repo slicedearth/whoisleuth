@@ -33,7 +33,7 @@ function reviewedRemoval(reason = 'reviewed_support_window'): Record<string, unk
     id: 'reviewed-fixture-removal',
     reviewedAt: '2027-08-22',
     reason,
-    contracts: [{ compatibilityId: 'export.cases', versions: [16] }],
+    contracts: [{ compatibilityId: 'export.cases', versions: [CASE_SCHEMA_VERSION + 1] }],
     supportWindow: {
       firstRelease: '1.48.0',
       finalBroadReaderRelease: '1.49.0',
@@ -87,9 +87,9 @@ describe('durable Case supported-contract baseline', () => {
   test('rejects disappearance that reuses an old removal record', () => {
     const previous = mutableBaseline();
     previous.commitments.contracts.push({
-      key: 'export.cases@16',
+      key: `export.cases@${CASE_SCHEMA_VERSION + 1}`,
       compatibilityId: 'export.cases',
-      version: 16,
+      version: CASE_SCHEMA_VERSION + 1,
       lifecycle: 'current',
       readable: true,
       emitted: true,
@@ -117,9 +117,9 @@ describe('durable Case supported-contract baseline', () => {
   test('accepts a disappearance only with a fresh reviewed removal and complete evidence', () => {
     const previous = mutableBaseline();
     previous.commitments.contracts.push({
-      key: 'export.cases@16',
+      key: `export.cases@${CASE_SCHEMA_VERSION + 1}`,
       compatibilityId: 'export.cases',
-      version: 16,
+      version: CASE_SCHEMA_VERSION + 1,
       lifecycle: 'current',
       readable: true,
       emitted: true,
@@ -142,9 +142,9 @@ describe('durable Case supported-contract baseline', () => {
   test('rejects a future removal that is not a reviewed support-window decision', () => {
     const previous = mutableBaseline();
     previous.commitments.contracts.push({
-      key: 'export.cases@16',
+      key: `export.cases@${CASE_SCHEMA_VERSION + 1}`,
       compatibilityId: 'export.cases',
-      version: 16,
+      version: CASE_SCHEMA_VERSION + 1,
     });
     const current = mutableBaseline();
     current.removalRecords.push(reviewedRemoval('one_time_single_operator_consolidation'));

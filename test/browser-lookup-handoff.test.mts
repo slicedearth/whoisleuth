@@ -11,6 +11,7 @@ describe('browser lookup handoff', () => {
     assert.equal(handoff.disclosedValue, 'sub.example.test');
     assert.equal(handoff.destinationUrl, handoff.path);
     assert.equal(handoff.visibility, 'this_deployment');
+    assert.match(handoff.openingNotice, /fills Lookup but does not start collection/u);
     assert.deepEqual(handoff.discarded, ['credentials', 'port', 'path', 'query', 'fragment']);
     assert.doesNotMatch(`${handoff.domain}\n${handoff.path}`, /user|secret|8443|private|token/);
   });
@@ -28,6 +29,7 @@ describe('browser lookup handoff', () => {
     assert.equal(handoff.destinationUrl, 'http://127.0.0.1:4312/review?target=https%3A%2F%2Fsub.example.test%2F');
     assert.equal(handoff.visibility, 'local_device');
     assert.equal(handoff.opensNewContext, true);
+    assert.match(handoff.openingNotice, /discloses the displayed value to the exact displayed endpoint/u);
     assert.doesNotMatch(handoff.destinationUrl, /user|secret|8443|private|token|fragment/u);
   });
 

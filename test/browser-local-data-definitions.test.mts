@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import {
   BROWSER_LOCAL_COLLECTIONS,
   ANALYST_REVIEW_STATE_COLLECTION,
@@ -9,11 +10,14 @@ import {
   RELATIONSHIP_OBSERVATIONS_COLLECTION,
   SHORTLIST_COLLECTION,
   WATCHLISTS_COLLECTION,
+  WEBSITE_SNAPSHOTS_COLLECTION,
 } from '../frontend/src/lib/browser-local-data-definitions.ts';
 import {
   BrowserLocalDataError,
   isExpectedBrowserLocalDataFailure,
+  localDataStorageRecords,
   plaintextJsonCodec,
+  normalizeDefinition,
 } from '../frontend/src/lib/browser-local-data.ts';
 import type {
   AnyLocalDataCollectionDefinition,
@@ -46,6 +50,7 @@ async function shortlistStoredRecord(value: unknown): Promise<BrowserLocalStored
     collection: 'shortlist',
     id: 'priority.invalid',
     value,
+    maximumBytes: SHORTLIST_COLLECTION.maximumBytes,
   });
   return {
     key: ['shortlist', encoded.lookupKey],
@@ -69,11 +74,24 @@ function roundTrip(
 function roundTrip(definition: AnyLocalDataCollectionDefinition, document: unknown) {
   const normalized = definition.normalize(document);
   const before = definition.serialize(normalized);
-  const joined = definition.normalize(definition.join(definition.split(normalized), definition.schemaVersion));
+  const joined = definition.normalize(definition.join(localDataStorageRecords(definition, normalized), definition.schemaVersion));
   return { before, after: definition.serialize(joined), joined };
 }
 
 describe('browser-local collection definitions', () => {
+  test('every shipped collection satisfies the actual provider admission contract', () => {
+    for (const definition of BROWSER_LOCAL_COLLECTIONS) assert.equal(normalizeDefinition(definition), definition, definition.id);
+  });
+  test('public HTML baselines retain their algorithm through collection splitting and encoding', () => {
+    const archive = JSON.parse(readFileSync(new URL('./fixtures/workspace-html-baseline-v8-public.json', import.meta.url), 'utf8'));
+    const profiles = roundTrip(PROFILES_COLLECTION, archive.sections.brandProfiles);
+    assert.equal(profiles.before, profiles.after);
+    assert.equal(profiles.joined[0]?.pageBaseline?.fingerprintVersion, 1);
+    const snapshots = roundTrip(WEBSITE_SNAPSHOTS_COLLECTION, archive.sections.websiteSnapshots);
+    assert.equal(snapshots.before, snapshots.after);
+    assert.equal(snapshots.joined[0]?.profileProvenance.pageFingerprint.version, 1);
+  });
+
   test('degraded local-data views suppress only expected storage failures', () => {
     assert.equal(
       isExpectedBrowserLocalDataFailure(new BrowserLocalDataError('LOCAL_DATA_UNSUPPORTED', 'Unavailable.')),
@@ -128,6 +146,9 @@ describe('browser-local collection definitions', () => {
       investigation_templates: { schema: 'whoisleuth.investigation-templates', version: futureVersion('investigation_templates'), templates: [] },
       bulk_review: { schema: 'whoisleuth.bulk-review', version: futureVersion('bulk_review'), presets: [], rows: [] },
       analyst_review_state: { schema: 'whoisleuth.analyst-review-state', version: ANALYST_REVIEW_STATE_COLLECTION.schemaVersion + 1, records: [] },
+      case_drafts: { schema: 'whoisleuth.case-drafts', version: futureVersion('case_drafts'), records: [] },
+      case_views: { schema: 'whoisleuth.case-views', version: futureVersion('case_views'), views: [] },
+      review_session: { schema: 'whoisleuth.review-session', version: futureVersion('review_session'), records: [] },
     };
     const definitions = BROWSER_LOCAL_COLLECTIONS.filter(({ id }) => id !== 'cases');
     assert.deepEqual(

@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { CliUsageError } from './errors.mts';
-import { cliMetaActionForInvocation } from './command-reference.mts';
+import { cliInvocationOptionIndices, cliMetaActionForInvocation } from './command-reference.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
 
@@ -110,7 +110,8 @@ async function readConfigFile(path: string): Promise<string> {
 
 function suppliedGroups(argumentsList: readonly string[]): Set<string> {
   const groups = new Set<string>();
-  for (const argument of argumentsList) {
+  for (const index of cliInvocationOptionIndices(argumentsList)) {
+    const argument = argumentsList[index]!;
     const group = OPTION_GROUPS[argument as keyof typeof OPTION_GROUPS];
     if (group) groups.add(group);
     if (argument === '--deep') groups.add('scan');
@@ -127,10 +128,11 @@ export async function resolveCliProfileArguments(
   }> = {},
 ): Promise<string[]> {
   if (cliMetaActionForInvocation(argv)) return [...argv];
+  const optionIndices = cliInvocationOptionIndices(argv);
   // registry-scaffold owns --profile as the capability template to generate.
   // Do not reinterpret it as a global CLI-default profile.
   if (argv[0] === 'registry-scaffold') {
-    if (argv.includes('--config')) {
+    if (argv.some((argument, index) => argument === '--config' && optionIndices.has(index))) {
       throw new CliUsageError('registry-scaffold does not accept global CLI configuration options.');
     }
     return [...argv];
@@ -141,7 +143,7 @@ export async function resolveCliProfileArguments(
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === undefined) break;
-    if (argument === '--config' || argument === '--profile') {
+    if (optionIndices.has(index) && (argument === '--config' || argument === '--profile')) {
       const next = argv[++index];
       if (!next || next.startsWith('-')) throw new CliUsageError(`${argument} requires one value.`);
       if (argument === '--config') {
@@ -169,7 +171,7 @@ export async function resolveCliProfileArguments(
   const selected = document.profiles[selectedName];
   if (!selected) throw new CliUsageError(`CLI profile "${selectedName}" was not found.`);
   if (!retained.length) throw new CliUsageError('A CLI profile must accompany a command.');
-  const explicitGroups = suppliedGroups(retained.slice(1));
+  const explicitGroups = suppliedGroups(retained);
   const defaults: string[] = [];
   for (let index = 0; index < selected.arguments.length; index += 1) {
     const argument = selected.arguments[index]!;

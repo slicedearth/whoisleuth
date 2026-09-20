@@ -9,7 +9,10 @@ function abortable<T>(operation: () => T | Promise<T>, signal?: AbortSignal): Pr
     const aborted = () => reject(abortReason(signal));
     signal.addEventListener('abort', aborted, { once: true });
     Promise.resolve()
-      .then(operation)
+      .then(() => {
+        signal.throwIfAborted();
+        return operation();
+      })
       .then(resolve, reject)
       .finally(() => signal.removeEventListener('abort', aborted));
   });

@@ -1,6 +1,9 @@
 import { readFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { resolve } from 'node:path';
+import { BULK_REVIEW_MANIFEST_VERSION } from '../packages/contracts/investigation-portability.mts';
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, lookupDomainIdentity, openBulkFilters, openBulkWorkspaceTools, pseudoContent, readBrowserLocalCollection, runBulkScan, selectBulkResultView } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, holdBrowserLocalTransaction, lookupDomainIdentity, openBulkFilters, openBulkWorkspaceTools, pseudoContent, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
 import { captureDownloads, invalidDomains } from './bulk-analysis-fixtures';
 
 // Bulk queue, review, comparison and retained-work coverage.
@@ -68,7 +71,9 @@ test('offers bounded request pacing and preserves the operator choice during con
   await pacing.selectOption('gentle');
   await expect(page.locator('.mode-help')).toContainText('at most 2 lookups run in parallel');
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/u }).click();
+  await expect(page.getByRole('heading', { name: 'Bulk', exact: true })).toBeVisible();
   await expect(page.getByLabel('Request pacing')).toHaveValue('gentle');
 
   await page.getByLabel('Scan mode').selectOption('deep');
@@ -80,22 +85,69 @@ test('keeps the Bulk queue available when browser-local context cannot be loaded
   await failBrowserLocalReads(page);
   const navigation = page.locator('#console-navigation');
   await navigation.getByRole('link', { name: /^Dashboard/u }).click();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await navigation.getByRole('link', { name: /^Bulk/u }).click();
+  await expect(page.getByRole('heading', { name: 'Bulk', exact: true })).toBeVisible();
 
-  await expect(page.locator('.local-context-status')).toContainText('Some browser-local context could not be loaded');
+  await expect(page.locator('.local-context-status')).toContainText('Some saved context could not be loaded');
   await expect(page.locator('.local-context-status')).toContainText('profile');
   await expect(page.locator('#domains')).toBeEditable();
   await expect(page.getByText(/Saved Bulk sessions could not be read/u)).toHaveCount(0);
   await expect(page.getByText(/Saved views and review state could not be read/u)).toHaveCount(0);
   await openBulkWorkspaceTools(page);
   await expect(page.getByText(/Saved Bulk sessions could not be read/u)).toBeVisible();
+  const savedSessions = page.getByRole('region', { name: 'Saved Bulk sessions', exact: true });
+  await expect(savedSessions).toBeVisible();
+  await expect(savedSessions.getByRole('article')).toHaveCount(0);
+  await expect(page.getByText('No Bulk sessions have been saved in this workspace.', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Export sessions' })).toHaveCount(0);
+  await expect(page.getByLabel('Session name')).toHaveCount(0);
   await openBulkWorkspaceTools(page, 'review');
   await expect(page.getByText(/Saved views and review state could not be read/u)).toBeVisible();
   await page.locator('button.mobile-disclosure-toggle', { hasText: 'Shortlist' }).click();
   await expect(page.getByText(/The shortlist could not be read/u)).toBeVisible();
-  await expect(page.getByText(/No saved Bulk sessions yet/u)).toHaveCount(0);
   await expect(page.getByText(/No shortlisted domains/u)).toHaveCount(0);
 });
+
+for (const width of [320, 1_280]) {
+  for (const theme of ['light', 'dark'] as const) {
+    test(`distinguishes pending Bulk collections from empty or failed data at ${width}px in ${theme}`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 844 });
+      await useTheme(page, theme);
+      await expect(page.locator('#domains')).toBeEditable();
+      const release = await holdBrowserLocalTransaction(page);
+      try {
+        await openBulkWorkspaceTools(page);
+        await expect(page.getByRole('status').filter({ hasText: 'Saved Bulk sessions are still loading.' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Export sessions' })).toHaveCount(0);
+        await expect(page.getByLabel('Session name')).toHaveCount(0);
+        await openBulkWorkspaceTools(page, 'review');
+        await expect(page.getByRole('status').filter({ hasText: 'Saved views and review state are still loading.' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Save current view' })).toHaveCount(0);
+        await page.locator('button.mobile-disclosure-toggle', { hasText: 'Shortlist' }).click();
+        await expect(page.getByRole('status').filter({ hasText: 'The shortlist is still loading.' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Shortlist · —', exact: true })).toBeVisible();
+        await expect(page.getByText(/No Bulk sessions have been saved|No shortlisted domains|could not be read/u)).toHaveCount(0);
+        await expectNoHorizontalOverflow(page);
+        await page.screenshot({ path: testInfo.outputPath('loading-collections.png'), fullPage: true });
+      } finally {
+        await release();
+      }
+      await expect(page.getByRole('button', { name: 'Save current view' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Shortlist · 0', exact: true })).toBeVisible();
+      await expect(page.getByText('No shortlisted domains yet. Star a Bulk result to save it locally.')).toBeVisible();
+      await openBulkWorkspaceTools(page);
+      await expect(page.getByLabel('Session name')).toBeEditable();
+      const savedSessions = page.getByRole('region', { name: 'Saved Bulk sessions', exact: true });
+      await expect(savedSessions).toBeVisible();
+      await expect(savedSessions.getByRole('article')).toHaveCount(0);
+      await expect(page.getByText('No Bulk sessions have been saved in this workspace.', { exact: true })).toBeVisible();
+      await expect(page.getByText(/still loading|could not be read/u)).toHaveCount(0);
+      await expectNoHorizontalOverflow(page);
+      await page.screenshot({ path: testInfo.outputPath('ready-collections.png'), fullPage: true });
+    });
+  }
+}
 
 test('rejects an over-bound directly pasted Bulk list before scanning', async ({ page }) => {
   const input = `${'one.example,'.repeat(20_001)}one.example`;
@@ -125,7 +177,9 @@ test('retains successfully loaded Bulk context when one collection is unavailabl
   await failBrowserLocalCollectionReads(page, 'brand_profiles');
   const navigation = page.locator('#console-navigation');
   await navigation.getByRole('link', { name: /^Dashboard/u }).click();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await navigation.getByRole('link', { name: /^Bulk/u }).click();
+  await expect(page.getByRole('heading', { name: 'Bulk', exact: true })).toBeVisible();
   await expect(page.locator('.local-context-status')).toContainText('profile');
   await expect(page.locator('.local-context-status')).toContainText('Successfully loaded collections remain available');
   await openBulkWorkspaceTools(page);
@@ -169,8 +223,10 @@ test('keeps shortlist-derived analysis unavailable instead of inferring no selec
   await failBrowserLocalCollectionReads(page, 'shortlist');
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
   await expect(page).toHaveURL(/\/dashboard$/u);
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/u }).click();
   await expect(page).toHaveURL(/\/bulk$/u);
+  await expect(page.getByRole('heading', { name: 'Bulk', exact: true })).toBeVisible();
   await expect(page.locator('.local-context-status')).toContainText('shortlist');
   await page.locator('button.mobile-disclosure-toggle', { hasText: 'Shortlist' }).click();
   await expect(page.getByText(/The shortlist could not be read/u)).toBeVisible();
@@ -214,7 +270,9 @@ test('keeps case-derived indicator eligibility unavailable when Cases cannot be 
   await page.getByRole('button', { name: 'Save current session' }).click();
   await failBrowserLocalCollectionReads(page, 'cases');
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await page.locator('#console-navigation').getByRole('link', { name: /^Bulk/u }).click();
+  await expect(page.getByRole('heading', { name: 'Bulk', exact: true })).toBeVisible();
   await openBulkWorkspaceTools(page);
   await page.locator('.bulk-sessions article', { hasText: 'Unavailable case review' }).getByRole('button', { name: 'Load' }).click();
 
@@ -375,6 +433,7 @@ test('filters, groups, and selected-only actions use compact observed evidence',
         availability: {
           applicable: true,
           domain,
+          observedAt: '2026-07-20T00:05:00.000Z',
           state: limited ? 'registered' : 'available',
           confidence: 'high',
           registrar: limited ? { name: 'Example Registrar' } : null,
@@ -386,7 +445,7 @@ test('filters, groups, and selected-only actions use compact observed evidence',
         },
         diagnostics: {
           version: 7,
-          rdap: { status: limited ? 'partial' : 'complete' },
+          rdap: { status: limited ? 'partial' : 'complete', fetchedAt: '2026-07-20T00:00:00.000Z' },
           whois: { status: 'skipped' },
           availability: { status: 'complete' },
         },
@@ -427,6 +486,7 @@ test('filters, groups, and selected-only actions use compact observed evidence',
   await groups.getByRole('button', { name: 'Select group' }).click();
   await expect(page.getByText('1 selected in the filtered set')).toBeVisible();
 
+  await page.getByRole('combobox', { name: 'Desktop result sort', exact: true }).selectOption('confidence');
   const downloads = await captureDownloads(
     page,
     () => page.getByRole('button', { name: 'Export selected CSV' }).click(),
@@ -441,12 +501,22 @@ test('filters, groups, and selected-only actions use compact observed evidence',
   expect(content).toContain('limited-one.example');
   expect(content).not.toContain('available-two.example');
   expect(content).toContain('technology_ids,tls_issuer,tls_spki_sha256');
-  const manifestContent = JSON.parse(await readFile((await manifest!.path())!, 'utf8'));
+  const manifestPath = (await manifest!.path())!;
+  const manifestRaw = await readFile(manifestPath, 'utf8');
+  const manifestContent = JSON.parse(manifestRaw);
   expect(manifestContent).toMatchObject({
     schema: 'whoisleuth.bulk-review-manifest',
+    version: BULK_REVIEW_MANIFEST_VERSION,
     selection: { count: 1, domains: ['limited-one.example'] },
     lookupProfile: 'fast',
+    view: { sortKey: 'confidence' },
   });
+  expect(manifestContent.rows[0].sourceCoverage).toEqual(expect.arrayContaining([
+    { source: 'rdap', state: 'partial', observedAt: '2026-07-20T00:00:00.000Z' },
+    { source: 'whois', state: 'skipped', observedAt: null },
+    { source: 'availability', state: 'complete', observedAt: '2026-07-20T00:05:00.000Z' },
+  ]));
+  expect(manifestContent.rows[0].sourceCoverage[0].observedAt).not.toBe(manifestContent.generatedAt);
   expect(manifestContent.rows[0].profileContext).toEqual({
     sourceState: 'ready',
     activeProfileId: null,
@@ -454,6 +524,59 @@ test('filters, groups, and selected-only actions use compact observed evidence',
     limitation: '',
   });
   expect(manifestContent.integrity.digestSha256).toMatch(/^sha256:[a-f0-9]{64}$/u);
+  const { FORCE_COLOR: _forceColor, NO_COLOR: _noColor, ...environment } = process.env;
+  const verification = spawnSync(process.execPath, [resolve(process.cwd(), 'bin/whoisleuth.mts'), 'verify-artifact', manifestPath, '--json', '--strict-exit'], {
+    encoding: 'utf8', timeout: 30_000, maxBuffer: 2 * 1024 * 1024, env: environment,
+  });
+  expect(verification.status, verification.stderr).toBe(0);
+  expect(verification.stderr).toBe('');
+  expect(JSON.parse(verification.stdout)).toMatchObject({ state: 'verified', checks: { contentIntegrity: 'verified', structure: 'verified' } });
+
+  const restoreDigest = await page.evaluateHandle(() => {
+    const original = SubtleCrypto.prototype.digest;
+    SubtleCrypto.prototype.digest = () => Promise.reject(new Error('The selected manifest could not be prepared.'));
+    return () => { SubtleCrypto.prototype.digest = original; };
+  });
+  const failedDownloads: string[] = [];
+  const recordDownload = (item: import('@playwright/test').Download) => { failedDownloads.push(item.suggestedFilename()); };
+  page.on('download', recordDownload);
+  try {
+    await page.getByRole('button', { name: 'Export selected CSV' }).click();
+    const exportStatus = page.getByRole('status', { name: 'Bulk review action status', exact: true });
+    await expect(exportStatus).toHaveText('The selected manifest could not be prepared.');
+    await expect(exportStatus).toBeVisible();
+    expect(failedDownloads).toEqual([]);
+    await expect(page.getByText('1 selected in the filtered set')).toBeVisible();
+    for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+      await page.setViewportSize(viewport);
+      for (const theme of ['light', 'dark'] as const) {
+        await useTheme(page, theme);
+        await exportStatus.scrollIntoViewIfNeeded();
+        await expect(exportStatus).toBeInViewport();
+        await expectNoHorizontalOverflow(page);
+        const filters = page.getByRole('group', { name: 'Bulk result filters', exact: true });
+        await expect(filters).toBeVisible();
+        const splitWords = await filters.evaluate((element) => {
+          const split: string[] = [];
+          const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+          let node: Node | null;
+          while ((node = walker.nextNode())) for (const match of (node.textContent ?? '').matchAll(/\S+/gu)) {
+            const range = document.createRange();
+            range.setStart(node, match.index);
+            range.setEnd(node, match.index + match[0].length);
+            if (range.getClientRects().length > 1) split.push(match[0]);
+          }
+          return split;
+        });
+        expect(splitWords).toEqual([]);
+        await test.info().attach(`bulk-export-status-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      }
+    }
+  } finally {
+    page.off('download', recordDownload);
+    await restoreDigest.evaluate((restore) => restore());
+    await restoreDigest.dispose();
+  }
 });
 
 test('keeps an expected missing registry protocol out of limited Bulk outcomes', async ({ page }) => {
@@ -701,7 +824,7 @@ test('persists named review views and per-domain review state without restarting
   await openBulkWorkspaceTools(page, 'review');
   await page.getByLabel('New view name').fill('Limited active review');
   await page.getByRole('button', { name: 'Save current view' }).click();
-  await expect(page.locator('.review-views .review-status')).toContainText('Saved the “Limited active review” view.');
+  await expect(page.getByRole('status', { name: 'Bulk review action status', exact: true })).toContainText(/Saved.*Limited active review/u);
 
   const stored = await readBrowserLocalCollection(page, 'bulk_review', { minimumRecords: 2 });
   expect(JSON.stringify(stored.records)).not.toContain('availability');
@@ -719,7 +842,7 @@ test('persists named review views and per-domain review state without restarting
   await page.getByRole('button', { name: 'Load view' }).click();
   await expect(page.getByLabel('Filter by review state')).toHaveValue('reviewing');
   await expect(page.locator('.results-table')).toHaveCount(0);
-  await expect(page.locator('.review-views .review-status')).toContainText('No scan was started');
+  await expect(page.getByRole('status', { name: 'Bulk review action status', exact: true })).toContainText('No scan was started');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await openBulkWorkspaceTools(page, 'review');
@@ -894,7 +1017,9 @@ test('keeps the current queue, results, filters, sort, and page during console n
 
   const consoleNavigation = page.locator('#console-navigation');
   await consoleNavigation.getByRole('link', { name: /^Dashboard/ }).click();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await consoleNavigation.getByRole('link', { name: /^Bulk/ }).click();
+  await expect(page.getByRole('heading', { name: 'Bulk', exact: true })).toBeVisible();
   await openBulkFilters(page);
 
   await expect(page.locator('#domains')).toHaveValue(domains.join('\n'));

@@ -26,54 +26,62 @@ import {
 import { requiredValue } from './value-assertions.mts';
 
 describe('pageTitle', () => {
-  test('extracts and trims a <title> tag', () => {
+  test('HTML analysis carries caller cancellation through the library worker', async () => {
+    const controller = new AbortController();
+    const pending = extractHtmlSignals('<script>/*! jQuery v3.7.1 */</script>', 'example.test', { signal: controller.signal });
+    controller.abort();
+    await assert.rejects(pending, { name: 'AbortError' });
+    await assert.rejects(extractHtmlSignals('', 'example.test', { signal: controller.signal }), { name: 'AbortError' });
+  });
+
+  test('extracts and trims a <title> tag', async () => {
     const html = '<html><head><title>  Acme Bank - Secure Login  </title></head></html>';
-    assert.equal(extractHtmlSignals(html, 'example.com').pageTitle, 'Acme Bank - Secure Login');
+    assert.equal((await extractHtmlSignals(html, 'example.com')).pageTitle, 'Acme Bank - Secure Login');
   });
 
-  test('collapses internal whitespace/newlines', () => {
+  test('collapses internal whitespace/newlines', async () => {
     const html = '<title>Acme\n  Bank\tLogin</title>';
-    assert.equal(extractHtmlSignals(html, 'example.com').pageTitle, 'Acme Bank Login');
+    assert.equal((await extractHtmlSignals(html, 'example.com')).pageTitle, 'Acme Bank Login');
   });
 
-  test('strips terminal controls and default-ignorable characters before retaining a title', () => {
+  test('strips terminal controls and default-ignorable characters before retaining a title', async () => {
     const html = '<title>Account\x00\x07\x7f\u009b\u202e review\u00ad centre</title>';
-    const title = extractHtmlSignals(html, 'example.com').pageTitle;
+    const title = (await extractHtmlSignals(html, 'example.com')).pageTitle;
     assert.equal(title, 'Account review centre');
     assert.equal(/[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u.test(title), false);
   });
 
-  test('is null when there is no title tag', () => {
+  test('is null when there is no title tag', async () => {
     const html = '<html><body>no title here</body></html>';
-    assert.equal(extractHtmlSignals(html, 'example.com').pageTitle, null);
+    assert.equal((await extractHtmlSignals(html, 'example.com')).pageTitle, null);
   });
 
-  test('is null for an empty title tag', () => {
-    assert.equal(extractHtmlSignals('<title></title>', 'example.com').pageTitle, null);
+  test('is null for an empty title tag', async () => {
+    assert.equal((await extractHtmlSignals('<title></title>', 'example.com')).pageTitle, null);
   });
 
-  test('ignores title-like text in comments and scripts', () => {
+  test('ignores title-like text in comments and scripts', async () => {
     const html = '<!-- <title>Comment title</title> --><script>const value = "<title>Script title</title>";</script><title>Document title</title>';
-    assert.equal(extractHtmlSignals(html, 'example.com').pageTitle, 'Document title');
-    assert.equal(extractHtmlSignals('<!-- <title>Comment title</title> --><script>"<title>Script title</title>"</script>', 'example.com').pageTitle, null);
+    assert.equal((await extractHtmlSignals(html, 'example.com')).pageTitle, 'Document title');
+    assert.equal((await extractHtmlSignals('<!-- <title>Comment title</title> --><script>"<title>Script title</title>"</script>', 'example.com')).pageTitle, null);
   });
 
-  test('truncates a very long title', () => {
+  test('truncates a very long title', async () => {
     const longTitle = 'A'.repeat(300);
-    const result = requiredValue(extractHtmlSignals(`<title>${longTitle}</title>`, 'example.com').pageTitle);
+    const result = requiredValue((await extractHtmlSignals(`<title>${longTitle}</title>`, 'example.com')).pageTitle);
     assert.ok(result.length <= 201); // 200 chars + the ellipsis character
     assert.ok(result.endsWith('…'));
   });
 });
 
 describe('reviewed static page-pattern inputs', () => {
-  test('retains a bounded wallet prompt through the existing language cue', () => {
-    const result = extractHtmlSignals('<main><p>Enter your recovery phrase to continue</p></main>', 'example.test');
+  test('retains a bounded wallet prompt through the existing language cue', async () => {
+    const result = await extractHtmlSignals('<main><p>Enter your recovery phrase to continue</p></main>', 'example.test');
     assert.equal(result.phishingLanguageMatch, 'Reviewed English wallet or recovery-secret language');
   });
 
-  test('retains only whether a static form points off-origin', () => {
-    const result = extractHtmlSignals(
+  test('retains only whether a static form points off-origin', async () => {
+    const result = await extractHtmlSignals(
       '<form method="post" action="https://collector.test/private?token=secret"><input type="password"></form>',
       'example.test',
       { baseUrl: 'https://example.test/' },
@@ -86,17 +94,17 @@ describe('reviewed static page-pattern inputs', () => {
 });
 
 describe('hasPasswordField', () => {
-  test('detects a password input regardless of attribute order/quoting', () => {
-    assert.equal(extractHtmlSignals('<input type="password" name="pw">', 'example.com').hasPasswordField, true);
-    assert.equal(extractHtmlSignals("<input name='pw' type='password'>", 'example.com').hasPasswordField, true);
+  test('detects a password input regardless of attribute order/quoting', async () => {
+    assert.equal((await extractHtmlSignals('<input type="password" name="pw">', 'example.com')).hasPasswordField, true);
+    assert.equal((await extractHtmlSignals("<input name='pw' type='password'>", 'example.com')).hasPasswordField, true);
   });
 
-  test('is false with no password field', () => {
-    assert.equal(extractHtmlSignals('<input type="text" name="q">', 'example.com').hasPasswordField, false);
+  test('is false with no password field', async () => {
+    assert.equal((await extractHtmlSignals('<input type="text" name="q">', 'example.com')).hasPasswordField, false);
   });
 
-  test('ignores password-like attributes and markup in comments or scripts', () => {
-    const result = extractHtmlSignals(`
+  test('ignores password-like attributes and markup in comments or scripts', async () => {
+    const result = await extractHtmlSignals(`
       <!-- <input type="password"> -->
       <script>const field = '<input type="password">';</script>
       <input data-type="password" type="text">
@@ -108,64 +116,64 @@ describe('hasPasswordField', () => {
 });
 
 describe('phishingLanguageMatch', () => {
-  test('matches known urgency/credential-harvesting phrasing', () => {
+  test('matches known urgency/credential-harvesting phrasing', async () => {
     const html = '<body>Please verify your account to continue.</body>';
-    assert.equal(extractHtmlSignals(html, 'example.com').phishingLanguageMatch, 'Reviewed English account-verification language');
+    assert.equal((await extractHtmlSignals(html, 'example.com')).phishingLanguageMatch, 'Reviewed English account-verification language');
   });
 
-  test('is case-insensitive', () => {
+  test('is case-insensitive', async () => {
     const html = '<body>SECURITY ALERT: unusual activity detected</body>';
-    assert.equal(extractHtmlSignals(html, 'example.com').phishingLanguageMatch, 'Reviewed English urgent-action language');
+    assert.equal((await extractHtmlSignals(html, 'example.com')).phishingLanguageMatch, 'Reviewed English urgent-action language');
   });
 
-  test('is null for ordinary copy', () => {
+  test('is null for ordinary copy', async () => {
     const html = '<body>Welcome to our site. Browse our products below.</body>';
-    assert.equal(extractHtmlSignals(html, 'example.com').phishingLanguageMatch, null);
+    assert.equal((await extractHtmlSignals(html, 'example.com')).phishingLanguageMatch, null);
   });
 
-  test('control-bearing page text does not produce a retained signal', () => {
-    const match = extractHtmlSignals('<body>security alert\x07</body>', 'example.com').phishingLanguageMatch;
+  test('control-bearing page text does not produce a retained signal', async () => {
+    const match = (await extractHtmlSignals('<body>security alert\x07</body>', 'example.com')).phishingLanguageMatch;
     assert.equal(match, null);
   });
 
-  test('does not treat quoted attribute text after a greater-than character as visible copy', () => {
-    const match = extractHtmlSignals(
+  test('does not treat quoted attribute text after a greater-than character as visible copy', async () => {
+    const match = (await extractHtmlSignals(
       '<main data-rule="len>5" aria-label="Verify your account">Account help</main>',
       'example.com',
-    ).phishingLanguageMatch;
+    )).phishingLanguageMatch;
     assert.equal(match, null);
   });
 });
 
 describe('externalAssetHosts', () => {
-  test('collects hosts from absolute img/script/link src/href, deduped', () => {
+  test('collects hosts from absolute img/script/link src/href, deduped', async () => {
     const html = `
       <img src="https://evil-cdn.example/logo.png">
       <script src="//evil-cdn.example/app.js"></script>
       <link rel="stylesheet" href="https://other.example/style.css">
     `;
-    const hosts = extractHtmlSignals(html, 'lookalike.test').externalAssetHosts;
+    const hosts = (await extractHtmlSignals(html, 'lookalike.test')).externalAssetHosts;
     assert.deepEqual([...hosts].sort(), ['evil-cdn.example', 'other.example']);
   });
 
-  test('ignores relative URLs (same-origin, nothing external to extract)', () => {
+  test('ignores relative URLs (same-origin, nothing external to extract)', async () => {
     const html = '<img src="/img/logo.png"><script src="app.js"></script>';
-    assert.deepEqual(extractHtmlSignals(html, 'example.com').externalAssetHosts, []);
+    assert.deepEqual((await extractHtmlSignals(html, 'example.com')).externalAssetHosts, []);
   });
 
-  test('excludes the domain\'s own host (with or without a www. prefix)', () => {
+  test('excludes the domain\'s own host (with or without a www. prefix)', async () => {
     const html = '<img src="https://www.example.com/logo.png"><img src="https://example.com/hero.png">';
-    assert.deepEqual(extractHtmlSignals(html, 'example.com').externalAssetHosts, []);
+    assert.deepEqual((await extractHtmlSignals(html, 'example.com')).externalAssetHosts, []);
   });
 
-  test('only looks at img/script/link tags, not ordinary <a href> links', () => {
+  test('only looks at img/script/link tags, not ordinary <a href> links', async () => {
     const html = '<a href="https://example.com/real-site">Visit the real site</a>';
-    assert.deepEqual(extractHtmlSignals(html, 'lookalike.test').externalAssetHosts, []);
+    assert.deepEqual((await extractHtmlSignals(html, 'lookalike.test')).externalAssetHosts, []);
   });
 
-  test('rejects control-bearing external asset hosts', () => {
+  test('rejects control-bearing external asset hosts', async () => {
     const html = '<img src="https://evil\x07.example/logo.png"><img src="https://safe.example/logo.png">';
-    assert.deepEqual(extractHtmlSignals(html, 'lookalike.test').externalAssetHosts, ['safe.example']);
+    assert.deepEqual((await extractHtmlSignals(html, 'lookalike.test')).externalAssetHosts, ['safe.example']);
   });
 });
 
@@ -273,8 +281,8 @@ describe('pageIdentity', () => {
     assert.deepEqual(result.forms.externalActionOrigins, ['https://a.example', 'https://z.example']);
   });
 
-  test('resolves relative relationships against the first valid document base and compares the response origin', () => {
-    const result = extractHtmlSignals(`
+  test('resolves relative relationships against the first valid document base and compares the response origin', async () => {
+    const result = await extractHtmlSignals(`
       <head>
         <base href="https://collector.example.test/root/">
         <base href="https://ignored.example.test/">
@@ -297,8 +305,8 @@ describe('pageIdentity', () => {
     assert.equal(credentialSurface.forms.actions.sameOrigin, 0);
   });
 
-  test('keeps ordinary relative actions on the response origin without a document base', () => {
-    const result = extractHtmlSignals('<form action="submit"><input type="password"></form>', 'example.com', {
+  test('keeps ordinary relative actions on the response origin without a document base', async () => {
+    const result = await extractHtmlSignals('<form action="submit"><input type="password"></form>', 'example.com', {
       baseUrl: 'https://example.com/start/index.html',
       includeCredentialSurfaceProfile: true,
     });
@@ -307,8 +315,8 @@ describe('pageIdentity', () => {
     assert.equal(requiredValue(result.credentialSurfaceProfile).forms.actions.sameOrigin, 1);
   });
 
-  test('treats an invalid first document base as partial and ignores later bases', () => {
-    const result = extractHtmlSignals(`
+  test('treats an invalid first document base as partial and ignores later bases', async () => {
+    const result = await extractHtmlSignals(`
       <head><base href="javascript:invalid"><base href="https://ignored.example.test/"></head>
       <form action="submit"><input type="password"></form>
     `, 'example.com', {
@@ -391,8 +399,8 @@ describe('pageIdentity', () => {
     assert.deepEqual(result.forms.externalActionOrigins, []);
   });
 
-  test('can leave page identity absent while preserving established flat signals', () => {
-    const result = extractHtmlSignals('<title>Example</title><input type="password">', 'example.com', {
+  test('can leave page identity absent while preserving established flat signals', async () => {
+    const result = await extractHtmlSignals('<title>Example</title><input type="password">', 'example.com', {
       includePageIdentity: false,
     });
     assert.equal(result.pageIdentity, null);
@@ -405,8 +413,8 @@ describe('pageIdentity', () => {
     assert.equal(result.hasPasswordField, true);
   });
 
-  test('derives bounded technology indicators from the same captured HTML', () => {
-    const result = extractHtmlSignals('<meta name="generator" content="Hugo 0.1"><astro-island></astro-island>', 'example.com', {
+  test('derives bounded technology indicators from the same captured HTML', async () => {
+    const result = await extractHtmlSignals('<meta name="generator" content="Hugo 0.1"><astro-island></astro-island>', 'example.com', {
       httpServer: 'Caddy',
       responseHeaders: { 'x-powered-by': 'Express', 'x-private': 'discarded' },
       observedAt,
@@ -418,8 +426,8 @@ describe('pageIdentity', () => {
     assert.doesNotMatch(JSON.stringify(technologyProfile), /x-private|discarded/);
   });
 
-  test('derives page-role and static behaviour profiles from the shared parse', () => {
-    const result = extractHtmlSignals(`
+  test('derives page-role and static behaviour profiles from the shared parse', async () => {
+    const result = await extractHtmlSignals(`
       <main><form class="login"><input type="password"></form></main>
       <script>localStorage.setItem('private-key', 'private-value')</script>
     `, 'example.com', { observedAt });
@@ -433,8 +441,8 @@ describe('pageIdentity', () => {
     assert.doesNotMatch(JSON.stringify({ role, behavior }), /private-key|private-value|class="login"/u);
   });
 
-  test('summarizes bounded homepage publication declarations and static structure without retaining values', () => {
-    const result = extractHtmlSignals(`
+  test('summarizes bounded homepage publication declarations and static structure without retaining values', async () => {
+    const result = await extractHtmlSignals(`
       <html><head>
         <meta name="robots" content="index, noindex, follow, custom-directive">
         <meta name="twitter:card" content="summary_large_image">
@@ -493,70 +501,70 @@ describe('pageIdentity', () => {
     assert.doesNotMatch(JSON.stringify(publication), /Private|to[k]en=|blocking\.js|blocking\.css/u);
   });
 
-  test('keeps absent declarations distinct from partial or malformed captured metadata', () => {
-    const complete = requiredValue(requiredValue(extractHtmlSignals('<body><h3>Example</h3></body>', 'example.com').pageIdentity).publicationMetadata);
+  test('keeps absent declarations distinct from partial or malformed captured metadata', async () => {
+    const complete = requiredValue(requiredValue((await extractHtmlSignals('<body><h3>Example</h3></body>', 'example.com')).pageIdentity).publicationMetadata);
     assert.equal(complete.robots.status, 'not_observed');
     assert.equal(complete.twitterCard.status, 'not_observed');
     assert.equal(complete.complete, true);
 
-    const partial = requiredValue(requiredValue(extractHtmlSignals('<meta name="robots" content="index">', 'example.com', {
+    const partial = requiredValue(requiredValue((await extractHtmlSignals('<meta name="robots" content="index">', 'example.com', {
       sourceTruncated: true,
-    }).pageIdentity).publicationMetadata);
+    })).pageIdentity).publicationMetadata);
     assert.equal(partial.status, 'partial');
     assert.equal(partial.robots.status, 'partial');
     assert.equal(partial.twitterCard.status, 'partial');
     assert.equal(partial.complete, false);
     assert.equal(partial.truncated, true);
 
-    const malformed = requiredValue(requiredValue(extractHtmlSignals(
+    const malformed = requiredValue(requiredValue((await extractHtmlSignals(
       `<head><meta name="robots"><meta name="twitter:card" content="${'x'.repeat(1_025)}"></head>`,
       'example.com',
-    ).pageIdentity).publicationMetadata);
+    )).pageIdentity).publicationMetadata);
     assert.equal(malformed.robots.status, 'malformed');
     assert.equal(malformed.twitterCard.status, 'partial');
     assert.equal(malformed.status, 'partial');
     assert.equal(malformed.complete, false);
   });
 
-  test('observes implicit-head declarations while ignoring matching body metadata', () => {
-    const implicit = requiredValue(requiredValue(extractHtmlSignals(
+  test('observes implicit-head declarations while ignoring matching body metadata', async () => {
+    const implicit = requiredValue(requiredValue((await extractHtmlSignals(
       '<meta name="robots" content="noindex"><meta name="twitter:card" content="summary"><body>Example</body>',
       'example.com',
-    ).pageIdentity).publicationMetadata);
+    )).pageIdentity).publicationMetadata);
     assert.equal(implicit.robots.status, 'observed');
     assert.deepEqual(implicit.robots.directives, ['noindex']);
     assert.equal(implicit.twitterCard.status, 'observed');
     assert.equal(implicit.twitterCard.cardType, 'summary');
 
-    const bodyOnly = requiredValue(requiredValue(extractHtmlSignals(
+    const bodyOnly = requiredValue(requiredValue((await extractHtmlSignals(
       '<body><meta name="robots" content="noindex"><meta name="twitter:card" content="summary"></body>',
       'example.com',
-    ).pageIdentity).publicationMetadata);
+    )).pageIdentity).publicationMetadata);
     assert.equal(bodyOnly.robots.status, 'not_observed');
     assert.equal(bodyOnly.twitterCard.status, 'not_observed');
 
-    const afterBodyText = requiredValue(requiredValue(extractHtmlSignals(
+    const afterBodyText = requiredValue(requiredValue((await extractHtmlSignals(
       'Body text<meta name="robots" content="noindex"><meta name="twitter:card" content="summary">',
       'example.com',
-    ).pageIdentity).publicationMetadata);
+    )).pageIdentity).publicationMetadata);
     assert.equal(afterBodyText.robots.status, 'not_observed');
     assert.equal(afterBodyText.twitterCard.status, 'not_observed');
 
-    const afterLeadingTrivia = requiredValue(requiredValue(extractHtmlSignals(
+    const afterLeadingTrivia = requiredValue(requiredValue((await extractHtmlSignals(
       '  <!-- comment --><meta name="robots" content="noindex">',
       'example.com',
-    ).pageIdentity).publicationMetadata);
+    )).pageIdentity).publicationMetadata);
     assert.equal(afterLeadingTrivia.robots.status, 'observed');
   });
 
-  test('keeps bounded ambiguous meta attributes inside the publication validator contract', () => {
+  test('keeps bounded ambiguous meta attributes inside the publication validator contract', async () => {
     const fixtures = [
       `<meta name="${'x'.repeat(121)}" content="ignored">`,
       `<meta name="description" ${Array.from({ length: 129 }, (_, index) => `data-${index}="x"`).join(' ')}>`,
       `<meta name="${'x'.repeat(121)}" property="twitter:title" content="Example">`,
     ];
     for (const html of fixtures) {
-      const publication = requiredValue(requiredValue(extractHtmlSignals(html, 'example.com').pageIdentity).publicationMetadata);
+      const publication = requiredValue(requiredValue((await extractHtmlSignals(html, 'example.com')).pageIdentity).publicationMetadata);
       assert.equal(publication.status, 'partial');
       assert.equal(publication.truncated, true);
       assert.equal(publication.robots.truncated, true);
@@ -565,7 +573,7 @@ describe('pageIdentity', () => {
     }
   });
 
-  test('keeps combined malformed and truncated declarations inside the publication validator contract', () => {
+  test('keeps combined malformed and truncated declarations inside the publication validator contract', async () => {
     const fixtures = [
       {
         html: '<meta name="robots">',
@@ -581,11 +589,11 @@ describe('pageIdentity', () => {
       },
     ];
     for (const fixture of fixtures) {
-      const publication = requiredValue(requiredValue(extractHtmlSignals(
+      const publication = requiredValue(requiredValue((await extractHtmlSignals(
         fixture.html,
         'example.com',
         fixture.options,
-      ).pageIdentity).publicationMetadata);
+      )).pageIdentity).publicationMetadata);
       assert.equal(publication.status, 'partial');
       assert.equal(publication.truncated, true);
       assert.equal(publication.limitations.includes(PAGE_PUBLICATION_LIMITATIONS.malformed), true);
@@ -593,11 +601,11 @@ describe('pageIdentity', () => {
     }
   });
 
-  test('rejects impossible publication states and unrelated limitations', () => {
-    const publication = requiredValue(requiredValue(extractHtmlSignals(
+  test('rejects impossible publication states and unrelated limitations', async () => {
+    const publication = requiredValue(requiredValue((await extractHtmlSignals(
       '<head><meta name="robots" content="index"><meta name="twitter:title" content="Example"></head>',
       'example.com',
-    ).pageIdentity).publicationMetadata);
+    )).pageIdentity).publicationMetadata);
     assert.equal(validPagePublicationMetadata(publication), true);
 
     const emptyObservedRobots = structuredClone(publication);
@@ -617,10 +625,10 @@ describe('pageIdentity', () => {
     spuriousMalformedLimitation.limitations.push(PAGE_PUBLICATION_LIMITATIONS.malformed);
     assert.equal(validPagePublicationMetadata(spuriousMalformedLimitation), false);
 
-    const malformed = requiredValue(requiredValue(extractHtmlSignals(
+    const malformed = requiredValue(requiredValue((await extractHtmlSignals(
       '<meta name="robots">',
       'example.com',
-    ).pageIdentity).publicationMetadata);
+    )).pageIdentity).publicationMetadata);
     assert.equal(malformed.robots.status, 'malformed');
     const missingMalformedLimitation = structuredClone(malformed);
     missingMalformedLimitation.limitations = missingMalformedLimitation.limitations.filter(
@@ -629,28 +637,28 @@ describe('pageIdentity', () => {
     assert.equal(validPagePublicationMetadata(missingMalformedLimitation), false);
   });
 
-  test('separates exact image totals from locally unclassified attributes and document caps', () => {
-    const localAttributeCap = requiredValue(requiredValue(extractHtmlSignals(
+  test('separates exact image totals from locally unclassified attributes and document caps', async () => {
+    const localAttributeCap = requiredValue(requiredValue((await extractHtmlSignals(
       `<body><img alt="${'x'.repeat(2_049)}"></body>`,
       'example.com',
-    ).pageIdentity).publicationMetadata);
+    )).pageIdentity).publicationMetadata);
     assert.equal(localAttributeCap.images.total, 1);
     assert.equal(localAttributeCap.images.totalComplete, true);
     assert.equal(localAttributeCap.images.classificationComplete, false);
     assert.equal(localAttributeCap.images.altUnclassified, 1);
 
-    const documentCap = requiredValue(requiredValue(extractHtmlSignals(
+    const documentCap = requiredValue(requiredValue((await extractHtmlSignals(
       '<body><h1>Example</h1><img></body>',
       'example.com',
       { sourceTruncated: true },
-    ).pageIdentity).publicationMetadata);
+    )).pageIdentity).publicationMetadata);
     assert.equal(documentCap.headings.complete, false);
     assert.equal(documentCap.images.totalComplete, false);
     assert.equal(documentCap.renderBlockingCandidates.complete, false);
   });
 
-  test('reduces an early CSP meta policy to bounded qualification metadata', () => {
-    const result = extractHtmlSignals(`
+  test('reduces an early CSP meta policy to bounded qualification metadata', async () => {
+    const result = await extractHtmlSignals(`
       <html><head>
         <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-private-value'">
         <script>window.example = true</script>
@@ -666,7 +674,7 @@ describe('pageIdentity', () => {
     });
     assert.doesNotMatch(JSON.stringify(result.cspMetaPolicy), /private-value|sha256-/u);
 
-    const late = extractHtmlSignals(`
+    const late = await extractHtmlSignals(`
       <html><head>
         <script>window.example = true</script>
         <meta http-equiv="Content-Security-Policy" content="script-src 'self'">
@@ -675,8 +683,8 @@ describe('pageIdentity', () => {
     assert.equal(late.cspMetaPolicy?.inlineScriptConstrained, false);
   });
 
-  test('derives structured identity from the same captured HTML', () => {
-    const result = extractHtmlSignals(`
+  test('derives structured identity from the same captured HTML', async () => {
+    const result = await extractHtmlSignals(`
       <script type="application/ld+json">
         {"@type":"Organization","name":"Example publisher","url":"/about"}
       </script>
@@ -696,8 +704,8 @@ describe('pageIdentity', () => {
     }]);
   });
 
-  test('derives a privacy-minimized credential surface from the same captured HTML', () => {
-    const result = extractHtmlSignals(`
+  test('derives a privacy-minimized credential surface from the same captured HTML', async () => {
+    const result = await extractHtmlSignals(`
       <form method="post" action="https://identity.example/private?token=secret">
         <input type="email" name="private-email">
         <input autocomplete="current-password" value="private-password">
@@ -726,16 +734,16 @@ describe('pageIdentity', () => {
     assert.doesNotMatch(JSON.stringify(credentialSurfaceProfile), /private-email|private-password|token=|\/private/iu);
   });
 
-  test('can omit technology analysis while preserving page identity', () => {
-    const result = extractHtmlSignals('<meta name="generator" content="Hugo 0.1">', 'example.com', {
+  test('can omit technology analysis while preserving page identity', async () => {
+    const result = await extractHtmlSignals('<meta name="generator" content="Hugo 0.1">', 'example.com', {
       includeTechnologyProfile: false,
     });
     assert.equal(requiredValue(result.pageIdentity).source, 'html');
     assert.equal(result.technologyProfile, null);
   });
 
-  test('can omit structured identity analysis while preserving page identity', () => {
-    const result = extractHtmlSignals(
+  test('can omit structured identity analysis while preserving page identity', async () => {
+    const result = await extractHtmlSignals(
       '<script type="application/ld+json">{"@type":"Organization","name":"Example"}</script>',
       'example.com',
       { includeStructuredDataIdentity: false },
@@ -744,8 +752,8 @@ describe('pageIdentity', () => {
     assert.equal(result.structuredDataIdentity, null);
   });
 
-  test('can omit credential-surface analysis while preserving page identity', () => {
-    const result = extractHtmlSignals(
+  test('can omit credential-surface analysis while preserving page identity', async () => {
+    const result = await extractHtmlSignals(
       '<form><input type="password"></form>',
       'example.com',
       { includeCredentialSurfaceProfile: false },

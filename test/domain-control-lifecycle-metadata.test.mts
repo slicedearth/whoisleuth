@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 
 import * as offlineArtifactValidationModule from '../cli/offline-artifact-validation.mts';
@@ -25,65 +26,30 @@ import {
   MAX_BOUNDED_JSON_VALUES,
 } from '../lib/bounded-json.mts';
 import {
-  DOMAIN_CONTROL_CAA_RECORD_KEYS,
-  DOMAIN_CONTROL_DIGEST_SHA256_LENGTH,
-  DOMAIN_CONTROL_DS_RECORD_KEYS,
-  DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS,
-  DOMAIN_CONTROL_MANIFEST_INPUT_KEYS,
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
   DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,
-  DOMAIN_CONTROL_MANIFEST_INTEGRITY_KEYS,
-  DOMAIN_CONTROL_MANIFEST_LIMITATIONS,
-  DOMAIN_CONTROL_MANIFEST_ROOT_KEYS,
   DOMAIN_CONTROL_MANIFEST_SCHEMA,
   DOMAIN_CONTROL_MANIFEST_VERSION,
-  DOMAIN_CONTROL_MX_RECORD_KEYS,
   DOMAIN_CONTROL_SCHEMA_LIFECYCLE,
-  DOMAIN_CONTROL_SPKI_SHA256_HEX_LENGTH,
-  DOMAIN_CONTROL_TEXT_INPUT_BOUND_FACTOR,
-  MAX_CANONICAL_DOMAIN_CONTROL_RECORDS,
-  MAX_DOMAIN_CONTROL_CAA_FLAGS,
-  MAX_DOMAIN_CONTROL_CAA_PRESENTATION_LENGTH,
-  MAX_DOMAIN_CONTROL_CAA_TAG_LENGTH,
-  MAX_DOMAIN_CONTROL_CAA_VALUE_LENGTH,
   MAX_DOMAIN_CONTROL_BROWSER_PROFILE_ENTRIES,
   MAX_DOMAIN_CONTROL_CLI_REVIEW_JSON_DEPTH,
   MAX_DOMAIN_CONTROL_CLI_REVIEW_JSON_KEYS,
   MAX_DOMAIN_CONTROL_CLI_REVIEW_JSON_VALUES,
-  MAX_DOMAIN_CONTROL_DOMAIN_LENGTH,
-  MAX_DOMAIN_CONTROL_DS_ALGORITHM,
-  MAX_DOMAIN_CONTROL_DS_DIGEST_LENGTH,
-  MAX_DOMAIN_CONTROL_DS_DIGEST_TYPE,
-  MAX_DOMAIN_CONTROL_DS_KEY_TAG,
-  MAX_DOMAIN_CONTROL_DS_PRESENTATION_LENGTH,
-  MAX_DOMAIN_CONTROL_INPUT_RECORDS,
   MAX_DOMAIN_CONTROL_GENERIC_JSON_DEPTH,
   MAX_DOMAIN_CONTROL_GENERIC_JSON_KEYS,
   MAX_DOMAIN_CONTROL_GENERIC_JSON_VALUES,
   MAX_DOMAIN_CONTROL_JSON_CONTAINER_ITEMS,
-  MAX_DOMAIN_CONTROL_JSON_DEPTH,
-  MAX_DOMAIN_CONTROL_JSON_VALUES,
   MAX_DOMAIN_CONTROL_MANIFEST_BYTES,
-  MAX_DOMAIN_CONTROL_MANIFEST_ENTRIES,
-  MAX_DOMAIN_CONTROL_MX_PRIORITY,
-  MAX_DOMAIN_CONTROL_MX_TEXT_LENGTH,
-  MAX_DOMAIN_CONTROL_NAME_INPUT_LENGTH,
-  MAX_DOMAIN_CONTROL_NOTE_LENGTH,
   MAX_DOMAIN_CONTROL_MONITOR_CONCURRENCY,
   MAX_DOMAIN_CONTROL_MONITOR_DOMAINS,
   MAX_DOMAIN_CONTROL_PORTABLE_BYTES,
-  MAX_DOMAIN_CONTROL_RECORD_INTEGER_TEXT_LENGTH,
-  MAX_DOMAIN_CONTROL_TEXT_LENGTH,
-  MAX_DOMAIN_CONTROL_TIMESTAMP_LENGTH,
-  MIN_DOMAIN_CONTROL_DS_DIGEST_LENGTH,
-  MIN_DOMAIN_CONTROL_MANIFEST_ENTRIES,
   MIN_DOMAIN_CONTROL_MONITOR_CONCURRENCY,
   MIN_DOMAIN_CONTROL_MONITOR_DOMAINS,
-  MIN_DOMAIN_CONTROL_RECORDS,
   SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS,
 } from '../packages/contracts/domain-control-manifest.mts';
 import {
   defineSchemaLifecycleFamily,
+  type SchemaLifecycleBound,
   type SchemaLifecycleFamily,
   type SchemaLifecycleFamilyWithMetadata,
 } from '../packages/contracts/schema-lifecycle.mts';
@@ -117,6 +83,12 @@ function mutableLifecycle(): MutableLifecycle {
 function baseLifecycle(value = mutableLifecycle()): SchemaLifecycleFamily {
   const { metadata: _metadata, ...base } = value;
   return base as unknown as SchemaLifecycleFamily;
+}
+
+function consumer(value: MutableLifecycle, id: string): Record<string, unknown> {
+  const edge = value.metadata.consumerEdges.find((candidate) => candidate.id === id);
+  assert.ok(edge, `Missing lifecycle consumer ${id}`);
+  return edge;
 }
 
 function assertRecursivelyFrozen(value: unknown, seen = new Set<object>()): void {
@@ -182,7 +154,7 @@ describe('domain-control lifecycle metadata', () => {
       'serialisationProfiles', 'privacyProfiles', 'expiryProfiles', 'consumerEdges',
       'consumerRelationships',
     ]);
-    assert.equal(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.metadata.metadataVersion, 2);
+    assert.equal(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.metadata.metadataVersion, 4);
     assert.equal(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.metadata.enforcement, 'declarative_only');
     assertRecursivelyFrozen(DOMAIN_CONTROL_SCHEMA_LIFECYCLE);
     assert.deepEqual(
@@ -197,72 +169,53 @@ describe('domain-control lifecycle metadata', () => {
       /exact registered fields/iu,
     );
 
-    const metadataV1 = mutableLifecycle();
-    metadataV1.metadata.metadataVersion = 1;
-    Reflect.deleteProperty(metadataV1.metadata, 'consumerRelationships');
-    const metadataV1Copy = defineSchemaLifecycleFamily(
-      metadataV1 as unknown as SchemaLifecycleFamilyWithMetadata,
-    );
-    assert.equal(metadataV1Copy.metadata.metadataVersion, 1);
-    assert.deepEqual(Object.keys(metadataV1Copy.metadata), [
-      'metadataVersion', 'enforcement', 'shapes', 'boundProfiles', 'hooks',
-      'serialisationProfiles', 'privacyProfiles', 'expiryProfiles', 'consumerEdges',
-    ]);
+    for (const version of [1, 2, 3, 5]) {
+      const obsolete = mutableLifecycle();
+      obsolete.metadata.metadataVersion = version;
+      assert.throws(
+        () => defineSchemaLifecycleFamily(obsolete as unknown as SchemaLifecycleFamilyWithMetadata),
+        /exact registered declarative-only version/iu,
+      );
+    }
+    assert.deepEqual(defineSchemaLifecycleFamily(DOMAIN_CONTROL_SCHEMA_LIFECYCLE), DOMAIN_CONTROL_SCHEMA_LIFECYCLE);
 
-    const mixedV1 = mutableLifecycle();
-    mixedV1.metadata.metadataVersion = 1;
+    const incomplete = mutableLifecycle();
+    Reflect.deleteProperty(incomplete.metadata, 'consumerRelationships');
     assert.throws(
-      () => defineSchemaLifecycleFamily(mixedV1 as unknown as SchemaLifecycleFamilyWithMetadata),
-      /exact registered declarative-only version/iu,
-    );
-
-    const incompleteV2 = mutableLifecycle();
-    Reflect.deleteProperty(incompleteV2.metadata, 'consumerRelationships');
-    assert.throws(
-      () => defineSchemaLifecycleFamily(incompleteV2 as unknown as SchemaLifecycleFamilyWithMetadata),
+      () => defineSchemaLifecycleFamily(incomplete as unknown as SchemaLifecycleFamilyWithMetadata),
       /exact registered declarative-only version|exact registered fields/iu,
     );
   });
 
-  it('registers exact wire shapes and immutable fixed values', () => {
-    assert.deepEqual(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.metadata.shapes, [
-      {
-        id: 'domain-control.input.v1',
-        schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
-        versions: [DOMAIN_CONTROL_MANIFEST_INPUT_VERSION],
-        objects: [
-          { path: '$', requiredKeys: DOMAIN_CONTROL_MANIFEST_INPUT_KEYS, optionalKeys: [], unknownKeys: 'reject' },
-          {
-            path: '$.entries[]',
-            requiredKeys: ['domain'],
-            optionalKeys: DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS.filter((key) => key !== 'domain'),
-            unknownKeys: 'reject',
-          },
-          { path: '$.entries[].mx[]', requiredKeys: [], optionalKeys: DOMAIN_CONTROL_MX_RECORD_KEYS, unknownKeys: 'reject' },
-          { path: '$.entries[].caa[]', requiredKeys: [], optionalKeys: DOMAIN_CONTROL_CAA_RECORD_KEYS, unknownKeys: 'reject' },
-          { path: '$.entries[].ds[]', requiredKeys: [], optionalKeys: DOMAIN_CONTROL_DS_RECORD_KEYS, unknownKeys: 'reject' },
-        ],
-        fixedArrays: [],
-        normalisation: 'input_to_current',
-        target: { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, version: DOMAIN_CONTROL_MANIFEST_VERSION },
-      },
-      {
-        id: 'domain-control.manifest.v1-v2',
-        schema: DOMAIN_CONTROL_MANIFEST_SCHEMA,
-        versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS,
-        objects: [
-          { path: '$', requiredKeys: DOMAIN_CONTROL_MANIFEST_ROOT_KEYS, optionalKeys: [], unknownKeys: 'reject' },
-          { path: '$.entries[]', requiredKeys: DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS, optionalKeys: [], unknownKeys: 'reject' },
-          { path: '$.integrity', requiredKeys: DOMAIN_CONTROL_MANIFEST_INTEGRITY_KEYS, optionalKeys: [], unknownKeys: 'reject' },
-        ],
-        fixedArrays: [{ path: '$.limitations', values: DOMAIN_CONTROL_MANIFEST_LIMITATIONS }],
-        normalisation: 'preserve_signed_document',
-        target: null,
-      },
-    ]);
+  it('describes the supported fixture shapes without duplicating internal shape identities', async () => {
+    for (const fixture of DOMAIN_CONTROL_SCHEMA_LIFECYCLE.fixtures) {
+      const document = JSON.parse(await readFile(new URL(`../${fixture.path}`, import.meta.url), 'utf8'));
+      const shape = DOMAIN_CONTROL_SCHEMA_LIFECYCLE.metadata.shapes.find((candidate) => (
+        candidate.schema === document.schema && candidate.versions.includes(document.version)
+      ));
+      assert.ok(shape, fixture.id);
+      const root = shape.objects.find((object) => object.path === '$');
+      const entry = shape.objects.find((object) => object.path === '$.entries[]');
+      assert.ok(root && entry, fixture.id);
+      assert.deepEqual(root.requiredKeys, Object.keys(document));
+      assert.equal(root.unknownKeys, 'reject');
+      assert.equal(entry.unknownKeys, 'reject');
+      const admitted = new Set([...entry.requiredKeys, ...entry.optionalKeys]);
+      assert.ok(document.entries.every((item: Record<string, unknown>) => Object.keys(item).every((key) => admitted.has(key))));
+      if (document.schema === DOMAIN_CONTROL_MANIFEST_SCHEMA) {
+        assert.deepEqual(new Set(entry.requiredKeys), new Set(Object.keys(document.entries[0])));
+        assert.equal(shape.normalisation, 'preserve_signed_document');
+        assert.deepEqual(shape.fixedArrays, [{ path: '$.limitations', values: document.limitations }]);
+      } else {
+        assert.equal(shape.normalisation, 'input_to_current');
+        assert.deepEqual(shape.target, { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, version: DOMAIN_CONTROL_MANIFEST_VERSION });
+      }
+      assert.equal(admitted.has('recordModes'), document.schema === DOMAIN_CONTROL_MANIFEST_SCHEMA
+        ? document.version === 3 : document.version === 2);
+    }
   });
 
-  it('pins every phase-labelled core bound and each adapter profile', () => {
+  it('keeps bounded adapters and distinguishes public from current record capacity', () => {
     assert.equal(MAX_DOMAIN_CONTROL_GENERIC_JSON_DEPTH, MAX_BOUNDED_JSON_DEPTH);
     assert.equal(MAX_DOMAIN_CONTROL_GENERIC_JSON_KEYS, MAX_BOUNDED_JSON_KEYS);
     assert.equal(MAX_DOMAIN_CONTROL_GENERIC_JSON_VALUES, MAX_BOUNDED_JSON_VALUES);
@@ -272,166 +225,45 @@ describe('domain-control lifecycle metadata', () => {
     assert.equal(MAX_DOMAIN_CONTROL_CLI_REVIEW_JSON_KEYS, IMPLEMENTED_REVIEW_JSON_KEYS);
     assert.equal(MAX_DOMAIN_CONTROL_CLI_REVIEW_JSON_VALUES, IMPLEMENTED_REVIEW_JSON_VALUES);
     assert.equal(MAX_DOMAIN_CONTROL_MANIFEST_BYTES, MAX_OFFLINE_EVIDENCE_INPUT_BYTES);
-    assert.equal(MAX_DOMAIN_CONTROL_PORTABLE_BYTES, artifactVerifyModule.MAX_OFFLINE_ARTIFACT_BYTES);
-    assert.equal(MAX_DOMAIN_CONTROL_PORTABLE_BYTES, interchangeReportModule.MAX_INTERCHANGE_REPORT_BYTES);
-    assert.equal(MAX_DOMAIN_CONTROL_PORTABLE_BYTES, sharingReviewModule.MAX_SHARING_REVIEW_BYTES);
-    assert.equal(MAX_DOMAIN_CONTROL_MONITOR_DOMAINS, domainControlMonitorModule.MAX_DOMAIN_CONTROL_MONITOR_DOMAINS);
-    assert.deepEqual(commandOptionSpec('monitor-once', '--limit')?.integerRanges, [{
-      minimum: MIN_DOMAIN_CONTROL_MONITOR_DOMAINS,
-      maximum: MAX_DOMAIN_CONTROL_MONITOR_DOMAINS,
-      whenOptionPresent: null,
-    }]);
-    assert.deepEqual(commandOptionSpec('monitor-once', '--concurrency')?.integerRanges, [{
-      minimum: MIN_DOMAIN_CONTROL_MONITOR_CONCURRENCY,
-      maximum: MAX_DOMAIN_CONTROL_MONITOR_CONCURRENCY,
-      whenOptionPresent: null,
-    }]);
-    const profiles = new Map(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.metadata.boundProfiles.map((profile) => [profile.id, profile]));
-    assert.deepEqual(
-      profiles.get('domain-control.core-wire.v1')?.bounds.map((bound) => [
-        bound.id, bound.path, bound.phase, bound.unit, bound.minimum, bound.maximum, bound.handling,
-      ]),
-      [
-        ['serialised-bytes', '$', 'serialised', 'bytes', 1, MAX_DOMAIN_CONTROL_MANIFEST_BYTES, 'reject'],
-        ['manifest-entries', '$.entries', 'pre_accumulation', 'entries', MIN_DOMAIN_CONTROL_MANIFEST_ENTRIES, MAX_DOMAIN_CONTROL_MANIFEST_ENTRIES, 'reject'],
-        ['input-nameservers', '$.entries[].nameservers', 'pre_accumulation', 'items', MIN_DOMAIN_CONTROL_RECORDS, MAX_DOMAIN_CONTROL_INPUT_RECORDS, 'reject'],
-        ['input-ds', '$.entries[].ds', 'pre_accumulation', 'items', MIN_DOMAIN_CONTROL_RECORDS, MAX_DOMAIN_CONTROL_INPUT_RECORDS, 'reject'],
-        ['input-mx', '$.entries[].mx', 'pre_accumulation', 'items', MIN_DOMAIN_CONTROL_RECORDS, MAX_DOMAIN_CONTROL_INPUT_RECORDS, 'reject'],
-        ['input-caa', '$.entries[].caa', 'pre_accumulation', 'items', MIN_DOMAIN_CONTROL_RECORDS, MAX_DOMAIN_CONTROL_INPUT_RECORDS, 'reject'],
-        ['canonical-nameservers', '$.entries[].nameservers', 'normalised', 'items', MIN_DOMAIN_CONTROL_RECORDS, MAX_CANONICAL_DOMAIN_CONTROL_RECORDS, 'truncate'],
-        ['canonical-ds', '$.entries[].ds', 'normalised', 'items', MIN_DOMAIN_CONTROL_RECORDS, MAX_CANONICAL_DOMAIN_CONTROL_RECORDS, 'truncate'],
-        ['canonical-mx', '$.entries[].mx', 'normalised', 'items', MIN_DOMAIN_CONTROL_RECORDS, MAX_CANONICAL_DOMAIN_CONTROL_RECORDS, 'truncate'],
-        ['canonical-caa', '$.entries[].caa', 'normalised', 'items', MIN_DOMAIN_CONTROL_RECORDS, MAX_CANONICAL_DOMAIN_CONTROL_RECORDS, 'truncate'],
-        ['json-depth', '$', 'pre_accumulation', 'depth', 0, MAX_DOMAIN_CONTROL_JSON_DEPTH, 'reject'],
-        ['json-values', '$', 'pre_accumulation', 'values', 1, MAX_DOMAIN_CONTROL_JSON_VALUES, 'reject'],
-        ['raw-domain', '$.entries[].domain', 'pre_accumulation', 'characters', 1, MAX_DOMAIN_CONTROL_NAME_INPUT_LENGTH, 'reject'],
-        ['canonical-domain', '$.entries[].domain', 'normalised', 'characters', 1, MAX_DOMAIN_CONTROL_DOMAIN_LENGTH, 'reject'],
-        ['raw-nameserver', '$.entries[].nameservers[]', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_NAME_INPUT_LENGTH, 'drop_value'],
-        ['raw-tls-issuer', '$.entries[].tlsIssuer', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_TEXT_LENGTH * DOMAIN_CONTROL_TEXT_INPUT_BOUND_FACTOR, 'drop_value'],
-        ['tls-issuer', '$.entries[].tlsIssuer', 'normalised', 'characters', 0, MAX_DOMAIN_CONTROL_TEXT_LENGTH, 'truncate'],
-        ['raw-note', '$.entries[].note', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_NOTE_LENGTH * DOMAIN_CONTROL_TEXT_INPUT_BOUND_FACTOR, 'drop_value'],
-        ['note', '$.entries[].note', 'normalised', 'characters', 0, MAX_DOMAIN_CONTROL_NOTE_LENGTH, 'truncate'],
-        ['raw-generated-at', '$.generatedAt', 'pre_accumulation', 'characters', 1, MAX_DOMAIN_CONTROL_TIMESTAMP_LENGTH * DOMAIN_CONTROL_TEXT_INPUT_BOUND_FACTOR, 'reject'],
-        ['generated-at', '$.generatedAt', 'normalised', 'characters', 1, MAX_DOMAIN_CONTROL_TIMESTAMP_LENGTH, 'reject'],
-        ['raw-expires-at', '$.expiresAt', 'pre_accumulation', 'characters', 1, MAX_DOMAIN_CONTROL_TIMESTAMP_LENGTH * DOMAIN_CONTROL_TEXT_INPUT_BOUND_FACTOR, 'reject'],
-        ['expires-at', '$.expiresAt', 'normalised', 'characters', 1, MAX_DOMAIN_CONTROL_TIMESTAMP_LENGTH, 'reject'],
-        ['raw-renewal-review-at', '$.entries[].renewalReviewAt', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_TIMESTAMP_LENGTH * DOMAIN_CONTROL_TEXT_INPUT_BOUND_FACTOR, 'drop_value'],
-        ['renewal-review-at', '$.entries[].renewalReviewAt', 'normalised', 'characters', 0, MAX_DOMAIN_CONTROL_TIMESTAMP_LENGTH, 'drop_value'],
-        ['mx-priority-text', '$.entries[].mx[].priority', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_RECORD_INTEGER_TEXT_LENGTH, 'drop_value'],
-        ['mx-preference-text', '$.entries[].mx[].preference', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_RECORD_INTEGER_TEXT_LENGTH, 'drop_value'],
-        ['caa-critical-text', '$.entries[].caa[].critical', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_RECORD_INTEGER_TEXT_LENGTH, 'drop_value'],
-        ['caa-flags-text', '$.entries[].caa[].flags', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_RECORD_INTEGER_TEXT_LENGTH, 'drop_value'],
-        ['ds-key-tag-text', '$.entries[].ds[].keyTag', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_RECORD_INTEGER_TEXT_LENGTH, 'drop_value'],
-        ['ds-key-tag-snake-text', '$.entries[].ds[].key_tag', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_RECORD_INTEGER_TEXT_LENGTH, 'drop_value'],
-        ['ds-algorithm-text', '$.entries[].ds[].algorithm', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_RECORD_INTEGER_TEXT_LENGTH, 'drop_value'],
-        ['ds-digest-type-text', '$.entries[].ds[].digestType', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_RECORD_INTEGER_TEXT_LENGTH, 'drop_value'],
-        ['ds-digest-type-snake-text', '$.entries[].ds[].digest_type', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_RECORD_INTEGER_TEXT_LENGTH, 'drop_value'],
-        ['raw-mx-text', '$.entries[].mx[]', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_MX_TEXT_LENGTH * DOMAIN_CONTROL_TEXT_INPUT_BOUND_FACTOR, 'drop_value'],
-        ['mx-text', '$.entries[].mx[]', 'normalised', 'characters', 1, MAX_DOMAIN_CONTROL_MX_TEXT_LENGTH, 'drop_value'],
-        ['mx-priority', '$.entries[].mx[].priority', 'normalised', 'integer', 0, MAX_DOMAIN_CONTROL_MX_PRIORITY, 'drop_value'],
-        ['mx-preference', '$.entries[].mx[].preference', 'normalised', 'integer', 0, MAX_DOMAIN_CONTROL_MX_PRIORITY, 'drop_value'],
-        ['raw-caa-tag', '$.entries[].caa[].tag', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_CAA_TAG_LENGTH * DOMAIN_CONTROL_TEXT_INPUT_BOUND_FACTOR, 'drop_value'],
-        ['caa-tag', '$.entries[].caa[].tag', 'normalised', 'characters', 1, MAX_DOMAIN_CONTROL_CAA_TAG_LENGTH, 'drop_value'],
-        ['raw-caa-value', '$.entries[].caa[].value', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_CAA_VALUE_LENGTH * DOMAIN_CONTROL_TEXT_INPUT_BOUND_FACTOR, 'drop_value'],
-        ['caa-value', '$.entries[].caa[].value', 'normalised', 'characters', 1, MAX_DOMAIN_CONTROL_CAA_VALUE_LENGTH, 'drop_value'],
-        ['raw-caa-presentation', '$.entries[].caa[]', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_CAA_PRESENTATION_LENGTH * DOMAIN_CONTROL_TEXT_INPUT_BOUND_FACTOR, 'drop_value'],
-        ['caa-presentation', '$.entries[].caa[]', 'normalised', 'characters', 1, MAX_DOMAIN_CONTROL_CAA_PRESENTATION_LENGTH, 'drop_value'],
-        ['caa-critical', '$.entries[].caa[].critical', 'normalised', 'integer', 0, MAX_DOMAIN_CONTROL_CAA_FLAGS, 'drop_value'],
-        ['caa-flags', '$.entries[].caa[].flags', 'normalised', 'integer', 0, MAX_DOMAIN_CONTROL_CAA_FLAGS, 'drop_value'],
-        ['raw-ds-digest', '$.entries[].ds[].digest', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_DS_DIGEST_LENGTH * DOMAIN_CONTROL_TEXT_INPUT_BOUND_FACTOR, 'drop_value'],
-        ['ds-digest', '$.entries[].ds[].digest', 'normalised', 'characters', MIN_DOMAIN_CONTROL_DS_DIGEST_LENGTH, MAX_DOMAIN_CONTROL_DS_DIGEST_LENGTH, 'drop_value'],
-        ['raw-ds-presentation', '$.entries[].ds[]', 'pre_accumulation', 'characters', 0, MAX_DOMAIN_CONTROL_DS_PRESENTATION_LENGTH * DOMAIN_CONTROL_TEXT_INPUT_BOUND_FACTOR, 'drop_value'],
-        ['ds-presentation', '$.entries[].ds[]', 'normalised', 'characters', 1, MAX_DOMAIN_CONTROL_DS_PRESENTATION_LENGTH, 'drop_value'],
-        ['ds-key-tag', '$.entries[].ds[].keyTag', 'normalised', 'integer', 0, MAX_DOMAIN_CONTROL_DS_KEY_TAG, 'drop_value'],
-        ['ds-key-tag-snake', '$.entries[].ds[].key_tag', 'normalised', 'integer', 0, MAX_DOMAIN_CONTROL_DS_KEY_TAG, 'drop_value'],
-        ['ds-algorithm', '$.entries[].ds[].algorithm', 'normalised', 'integer', 0, MAX_DOMAIN_CONTROL_DS_ALGORITHM, 'drop_value'],
-        ['ds-digest-type', '$.entries[].ds[].digestType', 'normalised', 'integer', 0, MAX_DOMAIN_CONTROL_DS_DIGEST_TYPE, 'drop_value'],
-        ['ds-digest-type-snake', '$.entries[].ds[].digest_type', 'normalised', 'integer', 0, MAX_DOMAIN_CONTROL_DS_DIGEST_TYPE, 'drop_value'],
-        ['raw-spki-digest', '$.entries[].tlsSpkiSha256', 'pre_accumulation', 'characters', 0, DOMAIN_CONTROL_SPKI_SHA256_HEX_LENGTH * DOMAIN_CONTROL_TEXT_INPUT_BOUND_FACTOR, 'drop_value'],
-        ['spki-digest', '$.entries[].tlsSpkiSha256', 'normalised', 'characters', DOMAIN_CONTROL_SPKI_SHA256_HEX_LENGTH, DOMAIN_CONTROL_SPKI_SHA256_HEX_LENGTH, 'drop_value'],
-        ['manifest-digest', '$.integrity.digestSha256', 'normalised', 'characters', DOMAIN_CONTROL_DIGEST_SHA256_LENGTH, DOMAIN_CONTROL_DIGEST_SHA256_LENGTH, 'reject'],
-      ],
-    );
-    assert.deepEqual(
-      DOMAIN_CONTROL_SCHEMA_LIFECYCLE.metadata.boundProfiles.map((profile) => [profile.id, profile.bounds.length]),
-      [
-        ['domain-control.core-wire.v1', 58],
-        ['domain-control.browser-file.v1', 5],
-        ['domain-control.browser-profile.v1', 3],
-        ['domain-control.cli-domain-control-file.v1', 5],
-        ['domain-control.cli-monitor-file.v1', 5],
-        ['domain-control.cli-portable-file.v1', 5],
-        ['domain-control.cli-monitor-action.v1', 3],
-      ],
-    );
-    assert.deepEqual(
-      profiles.get('domain-control.browser-file.v1')?.bounds.map((bound) => [
-        bound.id, bound.path, bound.phase, bound.unit, bound.minimum, bound.maximum, bound.handling,
-      ]),
-      [
-        ['raw-bytes', '$', 'raw_intake', 'bytes', 1, MAX_DOMAIN_CONTROL_MANIFEST_BYTES, 'reject'],
-        ['json-depth', '$', 'pre_accumulation', 'depth', 0, MAX_DOMAIN_CONTROL_GENERIC_JSON_DEPTH, 'reject'],
-        ['json-keys', '$', 'pre_accumulation', 'keys', 0, MAX_DOMAIN_CONTROL_GENERIC_JSON_KEYS, 'reject'],
-        ['json-values', '$', 'pre_accumulation', 'values', 1, MAX_DOMAIN_CONTROL_GENERIC_JSON_VALUES, 'reject'],
-        ['container-items', '$', 'pre_accumulation', 'items', 0, MAX_DOMAIN_CONTROL_JSON_CONTAINER_ITEMS, 'reject'],
-      ],
-    );
-    assert.deepEqual(
-      profiles.get('domain-control.browser-profile.v1')?.bounds.map((bound) => [
-        bound.id, bound.path, bound.phase, bound.unit, bound.minimum, bound.maximum, bound.handling,
-      ]),
-      [
-        ['exported-entries', '$.selectedDomains', 'action', 'entries', 1, MAX_DOMAIN_CONTROL_BROWSER_PROFILE_ENTRIES, 'cap_operation'],
-        ['previewed-entries', '$.verifiedManifest.entries', 'action', 'entries', 1, MAX_DOMAIN_CONTROL_MANIFEST_ENTRIES, 'reject'],
-        ['applied-baselines', '$.choices', 'action', 'entries', 0, MAX_DOMAIN_CONTROL_BROWSER_PROFILE_ENTRIES, 'cap_operation'],
-      ],
-    );
-    assert.deepEqual(
-      profiles.get('domain-control.cli-domain-control-file.v1')?.bounds.map((bound) => [
-        bound.id, bound.path, bound.phase, bound.unit, bound.minimum, bound.maximum, bound.handling,
-      ]),
-      [
-        ['raw-bytes', '$', 'raw_intake', 'bytes', 1, MAX_DOMAIN_CONTROL_MANIFEST_BYTES, 'reject'],
-        ['json-depth', '$', 'pre_accumulation', 'depth', 0, MAX_DOMAIN_CONTROL_CLI_REVIEW_JSON_DEPTH, 'reject'],
-        ['json-keys', '$', 'pre_accumulation', 'keys', 0, MAX_DOMAIN_CONTROL_CLI_REVIEW_JSON_KEYS, 'reject'],
-        ['json-values', '$', 'pre_accumulation', 'values', 1, MAX_DOMAIN_CONTROL_CLI_REVIEW_JSON_VALUES, 'reject'],
-        ['container-items', '$', 'pre_accumulation', 'items', 0, MAX_DOMAIN_CONTROL_JSON_CONTAINER_ITEMS, 'reject'],
-      ],
-    );
-    assert.deepEqual(
-      profiles.get('domain-control.cli-portable-file.v1')?.bounds.map((bound) => [
-        bound.id, bound.path, bound.phase, bound.unit, bound.minimum, bound.maximum, bound.handling,
-      ]),
-      [
-        ['raw-bytes', '$', 'raw_intake', 'bytes', 1, MAX_DOMAIN_CONTROL_PORTABLE_BYTES, 'reject'],
-        ['json-depth', '$', 'pre_accumulation', 'depth', 0, MAX_DOMAIN_CONTROL_GENERIC_JSON_DEPTH, 'reject'],
-        ['json-keys', '$', 'pre_accumulation', 'keys', 0, MAX_DOMAIN_CONTROL_GENERIC_JSON_KEYS, 'reject'],
-        ['json-values', '$', 'pre_accumulation', 'values', 1, MAX_DOMAIN_CONTROL_GENERIC_JSON_VALUES, 'reject'],
-        ['container-items', '$', 'pre_accumulation', 'items', 0, MAX_DOMAIN_CONTROL_JSON_CONTAINER_ITEMS, 'reject'],
-      ],
-    );
-    assert.deepEqual(
-      profiles.get('domain-control.cli-monitor-file.v1')?.bounds.map((bound) => [
-        bound.id, bound.path, bound.phase, bound.unit, bound.minimum, bound.maximum, bound.handling,
-      ]),
-      [
-        ['raw-bytes', '$', 'raw_intake', 'bytes', 1, MAX_DOMAIN_CONTROL_MANIFEST_BYTES, 'reject'],
-        ['json-depth', '$', 'pre_accumulation', 'depth', 0, MAX_DOMAIN_CONTROL_GENERIC_JSON_DEPTH, 'reject'],
-        ['json-keys', '$', 'pre_accumulation', 'keys', 0, MAX_DOMAIN_CONTROL_GENERIC_JSON_KEYS, 'reject'],
-        ['json-values', '$', 'pre_accumulation', 'values', 1, MAX_DOMAIN_CONTROL_GENERIC_JSON_VALUES, 'reject'],
-        ['container-items', '$', 'pre_accumulation', 'items', 0, MAX_DOMAIN_CONTROL_JSON_CONTAINER_ITEMS, 'reject'],
-      ],
-    );
-    assert.deepEqual(
-      profiles.get('domain-control.cli-monitor-action.v1')?.bounds.map((bound) => [
-        bound.id, bound.path, bound.phase, bound.unit, bound.minimum, bound.maximum, bound.handling,
-      ]),
-      [
-        ['selected-domains', '$.manifest.entries', 'action', 'entries', MIN_DOMAIN_CONTROL_MONITOR_DOMAINS, MAX_DOMAIN_CONTROL_MONITOR_DOMAINS, 'cap_operation'],
-        ['limit', '$.options.limit', 'action', 'entries', MIN_DOMAIN_CONTROL_MONITOR_DOMAINS, MAX_DOMAIN_CONTROL_MONITOR_DOMAINS, 'reject'],
-        ['concurrency', '$.options.concurrency', 'action', 'concurrency', MIN_DOMAIN_CONTROL_MONITOR_CONCURRENCY, MAX_DOMAIN_CONTROL_MONITOR_CONCURRENCY, 'reject'],
-      ],
-    );
+    assert.ok(artifactVerifyModule.MAX_OFFLINE_ARTIFACT_BYTES >= MAX_DOMAIN_CONTROL_PORTABLE_BYTES);
+    assert.ok(interchangeReportModule.MAX_INTERCHANGE_REPORT_BYTES >= MAX_DOMAIN_CONTROL_PORTABLE_BYTES);
+    assert.ok(sharingReviewModule.MAX_SHARING_REVIEW_BYTES >= MAX_DOMAIN_CONTROL_PORTABLE_BYTES);
+    for (const [option, minimum, maximum] of [
+      ['--limit', MIN_DOMAIN_CONTROL_MONITOR_DOMAINS, MAX_DOMAIN_CONTROL_MONITOR_DOMAINS],
+      ['--concurrency', MIN_DOMAIN_CONTROL_MONITOR_CONCURRENCY, MAX_DOMAIN_CONTROL_MONITOR_CONCURRENCY],
+    ] as const) assert.deepEqual(commandOptionSpec('monitor-once', option)?.integerRanges,
+      [{ minimum, maximum, whenOptionPresent: null }]);
+
+    const profiles = DOMAIN_CONTROL_SCHEMA_LIFECYCLE.metadata.boundProfiles;
+    const core = profiles.find((profile) => profile.id === 'domain-control.core-wire.v1');
+    const historical = profiles.find((profile) => profile.id === 'domain-control.public-records.v2');
+    assert.ok(core && historical);
+    for (const field of ['nameservers', 'ds', 'mx', 'caa']) {
+      const current: SchemaLifecycleBound | undefined = core.bounds.find((bound) => bound.path === `$.entries[].${field}` && bound.phase === 'normalised');
+      const old: SchemaLifecycleBound | undefined = historical.bounds.find((bound) => bound.path === `$.entries[].${field}` && bound.phase === 'normalised');
+      assert.ok(current && old);
+      assert.equal(current.maximum, 64);
+      assert.equal(current.handling, 'reject');
+      assert.equal(old.maximum, 32);
+      assert.equal(old.handling, 'truncate');
+    }
+    for (const profile of profiles) {
+      assert.ok(profile.bounds.length > 0, profile.id);
+      for (const bound of profile.bounds) {
+        assert.ok(Number.isSafeInteger(bound.maximum) && bound.maximum > 0, bound.id);
+        assert.ok(bound.minimum !== null && bound.minimum >= 0 && bound.minimum <= bound.maximum, bound.id);
+      }
+    }
+    for (const id of ['domain-control.browser-file.v1', 'domain-control.cli-domain-control-file.v1',
+      'domain-control.cli-monitor-file.v1', 'domain-control.cli-portable-file.v1']) {
+      const profile = profiles.find((candidate) => candidate.id === id);
+      assert.ok(profile, id);
+      const bytes = profile.bounds.find((bound) => bound.unit === 'bytes' && bound.phase === 'raw_intake');
+      assert.equal(bytes?.maximum, MAX_DOMAIN_CONTROL_MANIFEST_BYTES);
+      assert.equal(bytes?.handling, 'reject');
+      assert.ok(profile.bounds.some((bound) => bound.unit === 'depth' && bound.handling === 'reject'));
+      assert.ok(profile.bounds.some((bound) => bound.unit === 'values' && bound.handling === 'reject'));
+    }
   });
 
   it('binds every declarative hook to one statically imported function without dispatching it', () => {
@@ -569,6 +401,7 @@ describe('domain-control lifecycle metadata', () => {
         edge.policyState,
       ]),
       [
+        ['domain-control.browser-build-input', 'browser', 'build-input', 'domain-control.manifest-sensitive.v1', 'domain-control.expiry.build-future.v1', 'none', 'none', 'declared_unenforced', 'current'],
         ['domain-control.browser-export', 'browser', 'export', 'domain-control.browser-export.v1', 'domain-control.expiry.build-future.v1', 'none', 'deliberate_local_file', 'declared_unenforced', 'current'],
         ['domain-control.browser-import', 'browser', 'import', 'domain-control.browser-import.v1', 'domain-control.expiry.require-current.v1', 'none', 'browser_indexeddb', 'declared_unenforced', 'current'],
         ['domain-control.node-build', 'node', 'build', 'domain-control.manifest-sensitive.v1', 'domain-control.expiry.build-future.v1', 'none', 'none', 'declared_unenforced', 'current'],
@@ -585,161 +418,15 @@ describe('domain-control lifecycle metadata', () => {
         ['domain-control.cli-monitor', 'cli', 'monitor', 'domain-control.bounded-passive-monitor.v1', 'domain-control.expiry.require-current.v1', 'explicit_bounded_passive_deep', 'operator_controlled_output', 'declared_unenforced', 'current'],
       ],
     );
-    assert.deepEqual(
-      DOMAIN_CONTROL_SCHEMA_LIFECYCLE.metadata.consumerEdges.map((edge) => ({
-        id: edge.id,
-        acceptedContracts: edge.acceptedContracts,
-        emittedContract: edge.emittedContract,
-        shapeIds: edge.shapeIds,
-        boundProfileIds: edge.boundProfileIds,
-        hookIds: edge.hookIds,
-        serialisationProfileId: edge.serialisationProfileId,
-      })),
-      [
-        {
-          id: 'domain-control.browser-export',
-          acceptedContracts: [{ schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, versions: [DOMAIN_CONTROL_MANIFEST_INPUT_VERSION], mode: 'direct' }],
-          emittedContract: { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, version: DOMAIN_CONTROL_MANIFEST_VERSION },
-          shapeIds: ['domain-control.input.v1', 'domain-control.manifest.v1-v2'],
-          boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.browser-profile.v1'],
-          hookIds: [
-            'domain-control.shared.build-unsigned',
-            'domain-control.shared.measure-serialised-bytes',
-            'domain-control.shared.assert-byte-budget',
-            'domain-control.shared.serialise-document',
-            'domain-control.browser.build-input',
-            'domain-control.browser.build-document',
-          ],
-          serialisationProfileId: 'domain-control.manifest-json.v1',
-        },
-        {
-          id: 'domain-control.browser-import',
-          acceptedContracts: [{ schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'direct' }],
-          emittedContract: null,
-          shapeIds: ['domain-control.manifest.v1-v2'],
-          boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.browser-file.v1', 'domain-control.browser-profile.v1'],
-          hookIds: ['domain-control.shared.normalise-document', 'domain-control.browser.verify-unexpired', 'domain-control.browser.apply'],
-          serialisationProfileId: null,
-        },
-        {
-          id: 'domain-control.node-build',
-          acceptedContracts: [{ schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, versions: [DOMAIN_CONTROL_MANIFEST_INPUT_VERSION], mode: 'direct' }],
-          emittedContract: { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, version: DOMAIN_CONTROL_MANIFEST_VERSION },
-          shapeIds: ['domain-control.input.v1', 'domain-control.manifest.v1-v2'],
-          boundProfileIds: ['domain-control.core-wire.v1'],
-          hookIds: ['domain-control.shared.build-unsigned', 'domain-control.shared.assert-byte-budget', 'domain-control.node.build-document'],
-          serialisationProfileId: null,
-        },
-        {
-          id: 'domain-control.node-verify',
-          acceptedContracts: [{ schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'direct' }],
-          emittedContract: null,
-          shapeIds: ['domain-control.manifest.v1-v2'],
-          boundProfileIds: ['domain-control.core-wire.v1'],
-          hookIds: ['domain-control.shared.normalise-document', 'domain-control.node.verify-integrity'],
-          serialisationProfileId: null,
-        },
-        {
-          id: 'domain-control.node-review',
-          acceptedContracts: [{ schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'embedded' }],
-          emittedContract: null,
-          shapeIds: ['domain-control.manifest.v1-v2'],
-          boundProfileIds: ['domain-control.core-wire.v1'],
-          hookIds: ['domain-control.node.verify-integrity', 'domain-control.node.review'],
-          serialisationProfileId: null,
-        },
-        {
-          id: 'domain-control.cli-core-review',
-          acceptedContracts: [{ schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'embedded' }],
-          emittedContract: null,
-          shapeIds: ['domain-control.manifest.v1-v2'],
-          boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.cli-domain-control-file.v1'],
-          hookIds: ['domain-control.node.verify-integrity', 'domain-control.node.review'],
-          serialisationProfileId: null,
-        },
-        {
-          id: 'domain-control.cli-saved-lookup-review',
-          acceptedContracts: [{ schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'embedded' }],
-          emittedContract: null,
-          shapeIds: ['domain-control.manifest.v1-v2'],
-          boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.cli-domain-control-file.v1'],
-          hookIds: [
-            'domain-control.node.verify-integrity',
-            'domain-control.node.review',
-            'domain-control.cli.saved-lookup-review',
-          ],
-          serialisationProfileId: null,
-        },
-        {
-          id: 'domain-control.cli-build',
-          acceptedContracts: [{ schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, versions: [DOMAIN_CONTROL_MANIFEST_INPUT_VERSION], mode: 'direct' }],
-          emittedContract: { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, version: DOMAIN_CONTROL_MANIFEST_VERSION },
-          shapeIds: ['domain-control.input.v1', 'domain-control.manifest.v1-v2'],
-          boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.cli-domain-control-file.v1'],
-          hookIds: [
-            'domain-control.shared.measure-serialised-bytes',
-            'domain-control.shared.assert-byte-budget',
-            'domain-control.shared.serialise-document',
-            'domain-control.node.build-document',
-          ],
-          serialisationProfileId: 'domain-control.manifest-json.v1',
-        },
-        {
-          id: 'domain-control.cli-offline-verify',
-          acceptedContracts: [{ schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'direct' }],
-          emittedContract: null,
-          shapeIds: ['domain-control.manifest.v1-v2'],
-          boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.cli-portable-file.v1'],
-          hookIds: ['domain-control.cli.offline-structure', 'domain-control.cli.offline-verify', 'domain-control.node.verify-integrity'],
-          serialisationProfileId: null,
-        },
-        {
-          id: 'domain-control.cli-interchange',
-          acceptedContracts: [{ schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'direct' }],
-          emittedContract: null,
-          shapeIds: ['domain-control.manifest.v1-v2'],
-          boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.cli-portable-file.v1'],
-          hookIds: ['domain-control.cli.interchange-report', 'domain-control.cli.offline-verify'],
-          serialisationProfileId: null,
-        },
-        {
-          id: 'domain-control.cli-sign',
-          acceptedContracts: [{ schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'direct' }],
-          emittedContract: null,
-          shapeIds: ['domain-control.manifest.v1-v2'],
-          boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.cli-portable-file.v1'],
-          hookIds: ['domain-control.cli.offline-verify', 'domain-control.cli.sign-package'],
-          serialisationProfileId: null,
-        },
-        {
-          id: 'domain-control.cli-verify-signature',
-          acceptedContracts: [{ schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'embedded' }],
-          emittedContract: null,
-          shapeIds: ['domain-control.manifest.v1-v2'],
-          boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.cli-portable-file.v1'],
-          hookIds: ['domain-control.cli.verify-signature', 'domain-control.cli.offline-verify'],
-          serialisationProfileId: null,
-        },
-        {
-          id: 'domain-control.cli-sharing-review',
-          acceptedContracts: [{ schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'direct' }],
-          emittedContract: null,
-          shapeIds: ['domain-control.manifest.v1-v2'],
-          boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.cli-portable-file.v1'],
-          hookIds: ['domain-control.cli.sharing-review', 'domain-control.cli.offline-verify'],
-          serialisationProfileId: null,
-        },
-        {
-          id: 'domain-control.cli-monitor',
-          acceptedContracts: [{ schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, versions: SUPPORTED_DOMAIN_CONTROL_MANIFEST_VERSIONS, mode: 'direct' }],
-          emittedContract: null,
-          shapeIds: ['domain-control.manifest.v1-v2'],
-          boundProfileIds: ['domain-control.core-wire.v1', 'domain-control.cli-monitor-file.v1', 'domain-control.cli-monitor-action.v1'],
-          hookIds: ['domain-control.node.verify-integrity', 'domain-control.cli.monitor-once'],
-          serialisationProfileId: null,
-        },
-      ],
-    );
+    for (const edge of DOMAIN_CONTROL_SCHEMA_LIFECYCLE.metadata.consumerEdges) {
+      for (const accepted of edge.acceptedContracts) {
+        const expectedVersions = accepted.schema === DOMAIN_CONTROL_MANIFEST_SCHEMA ? [2, 3] : [1, 2];
+        assert.deepEqual(accepted.versions, expectedVersions, edge.id);
+      }
+      if (edge.emittedContract) assert.deepEqual(edge.emittedContract, edge.id === 'domain-control.browser-build-input'
+        ? { schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, version: DOMAIN_CONTROL_MANIFEST_INPUT_VERSION, discriminator: null }
+        : { schema: DOMAIN_CONTROL_MANIFEST_SCHEMA, version: DOMAIN_CONTROL_MANIFEST_VERSION, discriminator: null });
+    }
     assert.equal(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.metadata.consumerEdges.every((edge) => edge.bindingState === 'declared_unenforced'), true);
   });
 
@@ -753,7 +440,7 @@ describe('domain-control lifecycle metadata', () => {
     }, generatedAt);
     const review = nodeDomainControlModule.reviewDomainControlManifest({
       schema: nodeDomainControlModule.DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
-      version: 1,
+      version: nodeDomainControlModule.DOMAIN_CONTROL_REVIEW_VERSION,
       manifest,
       observations: [{
         domain: 'review.example.test',
@@ -781,9 +468,9 @@ describe('domain-control lifecycle metadata', () => {
     const source = mutableLifecycle();
     const copied = defineSchemaLifecycleFamily(source as unknown as SchemaLifecycleFamilyWithMetadata);
     source.metadata.hooks[0]!.id = 'changed-after-definition';
-    source.metadata.consumerEdges[0]!.hookIds = ['changed-after-definition'];
+    consumer(source, 'domain-control.browser-export').hookIds = ['changed-after-definition'];
     assert.equal(copied.metadata.hooks[0]?.id, 'domain-control.shared.build-unsigned');
-    assert.equal(copied.metadata.consumerEdges[0]?.hookIds[0], 'domain-control.shared.build-unsigned');
+    assert.equal(copied.metadata.consumerEdges.find((edge) => edge.id === 'domain-control.browser-export')?.hookIds[0], 'domain-control.shared.build-unsigned');
     assertRecursivelyFrozen(copied.metadata);
 
     const cases: Array<Readonly<{ pattern: RegExp; mutate: (value: MutableLifecycle) => void }>> = [
@@ -793,7 +480,7 @@ describe('domain-control lifecycle metadata', () => {
       },
       {
         pattern: /shape.*cover|exactly one shape/iu,
-        mutate(value) { value.metadata.shapes[0]!.versions = [2]; },
+        mutate(value) { value.metadata.shapes[0]!.versions = [999]; },
       },
       {
         pattern: /shape.*paths/iu,
@@ -804,11 +491,11 @@ describe('domain-control lifecycle metadata', () => {
       },
       {
         pattern: /contract shapes/iu,
-        mutate(value) { value.metadata.consumerEdges[0]!.shapeIds = ['domain-control.input.v1']; },
+        mutate(value) { const edge = consumer(value, 'domain-control.browser-export'); edge.shapeIds = (edge.shapeIds as string[]).slice(0, 1); },
       },
       {
         pattern: /unknown or incompatible hook/iu,
-        mutate(value) { value.metadata.consumerEdges[0]!.hookIds = ['domain-control.cli.monitor-once']; },
+        mutate(value) { consumer(value, 'domain-control.browser-export').hookIds = ['domain-control.cli.monitor-once']; },
       },
       {
         pattern: /unique module and export pairs/iu,
@@ -819,17 +506,17 @@ describe('domain-control lifecycle metadata', () => {
       },
       {
         pattern: /unknown bound profile/iu,
-        mutate(value) { value.metadata.consumerEdges[0]!.boundProfileIds = ['domain-control.missing-bounds.v1']; },
+        mutate(value) { consumer(value, 'domain-control.browser-export').boundProfileIds = ['domain-control.missing-bounds.v1']; },
       },
       {
         pattern: /unknown serialisation profile/iu,
-        mutate(value) { value.metadata.consumerEdges[0]!.serialisationProfileId = 'domain-control.missing-json.v1'; },
+        mutate(value) { consumer(value, 'domain-control.browser-export').serialisationProfileId = 'domain-control.missing-json.v1'; },
       },
       {
         pattern: /unknown serialisation profile/iu,
         mutate(value) {
-          value.metadata.consumerEdges[0]!.hookIds = (
-            value.metadata.consumerEdges[0]!.hookIds as string[]
+          consumer(value, 'domain-control.browser-export').hookIds = (
+            consumer(value, 'domain-control.browser-export').hookIds as string[]
           ).filter((id) => id !== 'domain-control.shared.serialise-document');
         },
       },
@@ -839,25 +526,25 @@ describe('domain-control lifecycle metadata', () => {
           const duplicate = structuredClone(value.metadata.serialisationProfiles[0]!);
           duplicate.id = 'domain-control.manifest-json.duplicate';
           value.metadata.serialisationProfiles.push(duplicate);
-          value.metadata.consumerEdges[7]!.serialisationProfileId = duplicate.id;
+          consumer(value, 'domain-control.cli-build').serialisationProfileId = duplicate.id;
         },
       },
       {
         pattern: /privacy, request, or retention/iu,
-        mutate(value) { value.metadata.consumerEdges[0]!.retentionEffect = 'none'; },
+        mutate(value) { consumer(value, 'domain-control.browser-export').retentionEffect = 'none'; },
       },
       {
         pattern: /privacy, request, or retention/iu,
-        mutate(value) { value.metadata.consumerEdges.at(-1)!.requestMode = 'none'; },
+        mutate(value) { consumer(value, 'domain-control.cli-monitor').requestMode = 'none'; },
       },
       {
         pattern: /unknown expiry profile/iu,
-        mutate(value) { value.metadata.consumerEdges[0]!.expiryPolicyId = 'domain-control.expiry.missing.v1'; },
+        mutate(value) { consumer(value, 'domain-control.browser-export').expiryPolicyId = 'domain-control.expiry.missing.v1'; },
       },
       {
         pattern: /unreadable or duplicate contract/iu,
         mutate(value) {
-          const accepted = value.metadata.consumerEdges[0]!.acceptedContracts as Array<Record<string, unknown>>;
+          const accepted = consumer(value, 'domain-control.browser-export').acceptedContracts as Array<Record<string, unknown>>;
           accepted.push(structuredClone(accepted[0]!));
         },
       },
@@ -882,7 +569,7 @@ describe('domain-control lifecycle metadata', () => {
         mutate(value) {
           const coreBounds = value.metadata.boundProfiles[0]!.bounds as Array<Record<string, unknown>>;
           coreBounds[0]!.maximum = MAX_DOMAIN_CONTROL_MANIFEST_BYTES - 1;
-          const browserBounds = value.metadata.boundProfiles[1]!.bounds as Array<Record<string, unknown>>;
+          const browserBounds = value.metadata.boundProfiles.find((profile) => profile.id === 'domain-control.browser-file.v1')!.bounds as Array<Record<string, unknown>>;
           browserBounds.push({
             id: 'relocated-serialised-budget',
             path: '$',

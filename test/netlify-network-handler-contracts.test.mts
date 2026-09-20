@@ -10,6 +10,7 @@ import type { RdapHandlerDependencies } from '../netlify/functions/rdap.mts';
 import type { WhoisHandlerDependencies } from '../netlify/functions/whois.mts';
 import type { NetlifyFunctionEvent } from '../lib/netlify-function-types.mts';
 import { requiredValue } from './value-assertions.mts';
+import { eventFixtureForFetch } from './netlify-fetch-fixture.mts';
 
 process.env.SITE_PASSWORD ||= 'test-only-secret';
 process.env.SESSION_SECRET ||= 'test-only-session-signing-secret';
@@ -19,7 +20,7 @@ const [
   { createAvailabilityHandler },
   { createCtSearchHandler },
   { createDomainPostureHandler },
-  { createLookupHandler },
+  { createLookupHandler: createNativeLookupHandler },
   { createRdapNameserverSearchHandler },
   { createRdapHandler },
   { createWhoisHandler },
@@ -37,6 +38,7 @@ const [
 ]);
 
 let cookie = '';
+const createLookupHandler = (dependencies: LookupHandlerDependencies) => eventFixtureForFetch(createNativeLookupHandler(dependencies));
 before(() => {
   cookie = requiredValue(buildSessionCookie(createSessionToken(), { secure: true }).split(';')[0]);
 });
@@ -60,6 +62,25 @@ function fixtureService<T extends (...args: never[]) => unknown>(
 }
 
 describe('fixture-injected Netlify network handlers', () => {
+  test('selected URL POSTs retain guard and target parity with the local endpoint', async () => {
+    const calls: unknown[] = [];
+    const handler = createLookupHandler({
+      runUnifiedLookup: async (_classified, options) => { calls.push(options?.selectedUrl); return {} as Awaited<ReturnType<LookupHandlerDependencies['runUnifiedLookup']>>; },
+      createLookupHttpResponse: (() => ({ fixture: true })) as unknown as LookupHandlerDependencies['createLookupHttpResponse'],
+    });
+    const request = { ...event({ q: 'portal.example.test' }), httpMethod: 'POST',
+      headers: { ...event({}).headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ url: 'https://portal.example.test/review?a=private-example#local-fragment' }) };
+    const response = await handler(request);
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(calls, ['https://portal.example.test/review?a=private-example']);
+    assert.doesNotMatch(response.body ?? '', /private-example|local-fragment/);
+    assert.equal((await handler({ ...request, queryStringParameters: { q: 'portal.example.test', fast: '1' } })).statusCode, 400);
+    assert.equal((await handler({ ...request, httpMethod: 'DELETE' })).statusCode, 405);
+    assert.equal((await handler({ ...request, headers: { ...request.headers, 'sec-fetch-site': 'cross-site' } })).statusCode, 403);
+    assert.equal(calls.length, 1);
+  });
+
   test('projects availability success and skips service work for non-domain input', async () => {
     const calls: Array<readonly [string, Record<string, unknown>]> = [];
     const checkDomainAvailability = fixtureService<AvailabilityHandlerDependencies['checkDomainAvailability']>(
@@ -77,10 +98,16 @@ describe('fixture-injected Netlify network handlers', () => {
     assert.equal(calls.length, 1);
     assert.equal(calls[0]?.[0], 'example.test');
     assert.equal(calls[0]?.[1].fast, true);
+    assert.equal(calls[0]?.[1].observationHostname, undefined);
+
+    const deep = await handler(event({ q: 'sub.example.test' }));
+    assert.equal(deep.statusCode, 200);
+    assert.equal(calls[1]?.[0], 'example.test');
+    assert.equal(calls[1]?.[1].observationHostname, 'sub.example.test');
 
     const notApplicable = await handler(event({ q: '192.0.2.1' }));
     assert.deepEqual(body(notApplicable), { applicable: false, type: 'ipv4' });
-    assert.equal(calls.length, 1);
+    assert.equal(calls.length, 2);
   });
 
   test('projects WHOIS chain and parser output without transport traffic', async () => {
@@ -113,12 +140,22 @@ describe('fixture-injected Netlify network handlers', () => {
     assert.deepEqual(calls, [['domain', 'example.test']]);
     assert.equal(body(response).fixtureRdap, true);
 
+    const missingCalls: Array<readonly [string, string]> = [];
     const missing = createRdapHandler({
-      fetchRdapRecord: (async () => null) as RdapHandlerDependencies['fetchRdapRecord'],
+      fetchRdapRecord: (async (type: string, value: string) => {
+        missingCalls.push([type, value]);
+        return null;
+      }) as RdapHandlerDependencies['fetchRdapRecord'],
     });
     const missingResponse = await missing(event({ q: 'example.test' }));
     assert.equal(missingResponse.statusCode, 404);
     assert.match(String(body(missingResponse).error), /No RDAP registry found/u);
+    const absentFromCatalogue = await missing(event({ q: 'example.gt' }));
+    assert.equal(absentFromCatalogue.statusCode, 404);
+    assert.equal(body(absentFromCatalogue).source, undefined);
+    assert.match(String(body(absentFromCatalogue).error), /No RDAP registry found.*via IANA bootstrap/u);
+    assert.doesNotMatch(String(body(absentFromCatalogue).error), /collection was not attempted/u);
+    assert.deepEqual(missingCalls, [['domain', 'example.test'], ['domain', 'example.gt']]);
   });
 
   test('normalizes Certificate Transparency and nameserver-search inputs before fixture services', async () => {
@@ -219,6 +256,19 @@ describe('fixture-injected Netlify network handlers', () => {
     const rejected = await handler(event({ q: '192.0.2.1' }));
     assert.equal(rejected.statusCode, 400);
     assert.equal(calls.length, callsBeforeRejectedInput);
+  });
+
+  test('admits additional posture DNS only for the exact query opt-in', async () => {
+    const calls: unknown[] = [];
+    const handler = createDomainPostureHandler({ checkDomainPosture: fixtureService<DomainPostureHandlerDependencies['checkDomainPosture']>(async (_domain, options) => {
+      calls.push(options?.includeInheritedDns);
+      return {} as Awaited<ReturnType<DomainPostureHandlerDependencies['checkDomainPosture']>>;
+    }) });
+    assert.equal((await handler(event({ q: 'example.test' }))).statusCode, 200);
+    assert.equal((await handler(event({ q: 'example.test', includeInheritedDns: '1' }))).statusCode, 200);
+    assert.deepEqual(calls, [undefined, true]);
+    assert.equal((await handler(event({ q: 'example.test', includeInheritedDns: 'true' }))).statusCode, 400);
+    assert.equal(calls.length, 2);
   });
 
   test('sanitizes injected service failures at every handler boundary', async () => {

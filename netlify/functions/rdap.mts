@@ -1,5 +1,5 @@
 import { classifyQuery } from '../../lib/classify.mts';
-import { fetchRdapRecord } from '../../lib/rdap.mts';
+import { fetchRdapRecord, rdapUnavailableResponse } from '../../lib/rdap.mts';
 import { operationBudgetTargetFor } from '../../lib/operation-budget.mts';
 import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../lib/netlify-network-guard.mts';
 import { json, withNetlifyApiErrorBoundary } from '../../lib/http.mts';
@@ -13,7 +13,7 @@ async function handleRdap(
   event: Parameters<NetlifyFunctionHandler>[0],
   dependencies: RdapHandlerDependencies = { fetchRdapRecord },
 ): ReturnType<NetlifyFunctionHandler> {
-  const guard = guardNetlifyNetworkRequest(event, 'rdap');
+  const guard = guardNetlifyNetworkRequest(event, 'rdap', ['GET']);
   if (guard.response) return guard.response;
 
   const q = ((event.queryStringParameters && event.queryStringParameters.q) || '').trim();
@@ -29,7 +29,7 @@ async function handleRdap(
   return withNetlifyOperationBudget(guard.sessionKey, operationBudgetTargetFor('rdap'), async () => {
     const record = await dependencies.fetchRdapRecord(classified.type, classified.value);
     if (!record) {
-      return json(404, { error: `No RDAP registry found for "${q}" via IANA bootstrap` });
+      return json(404, rdapUnavailableResponse(classified.type, classified.value));
     }
 
     return json(200, {

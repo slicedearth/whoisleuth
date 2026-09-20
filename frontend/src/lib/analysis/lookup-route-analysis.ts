@@ -54,6 +54,7 @@ import {
   type RiskScoreSensitivity,
 } from './scoring.ts';
 import { entityDisplayName } from './utils.ts';
+import { lookupObservationHostname } from '../../../../packages/evidence/lookup-target.mts';
 
 export { latestLookupTimestamp } from './lookup-route-projections.ts';
 
@@ -256,7 +257,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     + comparison.counts.whois_unavailable
     + comparison.counts.rdap_incomplete
     + comparison.counts.whois_incomplete;
-  const observedPageBaseline = createPageBaseline(caseDomain, availability);
+  const observedPageBaseline = createPageBaseline(lookupObservationHostname(availability) ?? caseDomain, availability);
   const pageComparison = comparePageBaselines(profileContextReady ? profile?.pageBaseline : null, observedPageBaseline);
   const pageDisplay = buildLookupPageDisplay({
     pageIdentity,
@@ -315,7 +316,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     securityPosture,
     securityPostureSummary,
   });
-  const desiredCertificateBaseline = profile?.desiredPostureBaselines.find((item) => item.domain === caseDomain) ?? null;
+  const desiredCertificateBaseline = profile?.desiredPostureBaselines.find((item) => item.domain === (lookupObservationHostname(availability) ?? caseDomain)) ?? null;
   const certificatePolicyReview = buildCertificatePolicyReview({
     observedAt: lookupObservedAt,
     dnsEvidence,
@@ -327,7 +328,8 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     baseline: desiredCertificateBaseline,
   });
   const lookupAssetGraph = buildLookupAssetGraph({
-    target: caseDomain,
+    target: lookupObservationHostname(availability) ?? caseDomain,
+    registrationDomain: caseDomain,
     observedAt: lookupObservedAt,
     rdapEvidence: rdap,
     rdapParsed,
@@ -544,6 +546,8 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   };
   const caseEvidence = {
     inputHostname: typeof result?.inputHostname === 'string' ? result.inputHostname : null,
+    ...(typeof availability.observationHostname === 'string' ? { observationHostname: availability.observationHostname } : {}),
+    ...(availability.webObservationMode === 'selected_url' ? { webObservationMode: 'selected_url' as const } : {}),
     availability: boundedTechnologyText(availability.state, 40),
     confidence: boundedTechnologyText(availability.confidence, 40) || null,
     riskModelVersion: risk?.modelVersion ?? null,

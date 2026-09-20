@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { normalizeLookupSourceSettlement } from '../lib/lookup-source-progress.mts';
+import { LOOKUP_SOURCE_LABELS } from '../frontend/src/lib/analysis/lookup-source-labels.ts';
 import {
   createThreatIntelligenceResult,
   defineThreatIntelligenceProvider,
@@ -48,6 +49,41 @@ const FINDING = Object.freeze({
 });
 
 describe('Lookup source progress settlements', () => {
+  test('labels preserve source authority and distinguish archived intelligence from current collection', () => {
+    assert.match(LOOKUP_SOURCE_LABELS.rdap, /registry/iu);
+    assert.match(LOOKUP_SOURCE_LABELS.registrar_rdap, /registrar/iu);
+    assert.notEqual(LOOKUP_SOURCE_LABELS.rdap, LOOKUP_SOURCE_LABELS.registrar_rdap);
+    assert.match(LOOKUP_SOURCE_LABELS.external_intelligence, /archived/iu);
+    assert.equal(Object.isFrozen(LOOKUP_SOURCE_LABELS), true);
+    for (const label of Object.values(LOOKUP_SOURCE_LABELS)) {
+      assert.equal(label, label.trim());
+      assert.ok(label.length > 0);
+    }
+  });
+
+  test('never turns malformed, incomplete or unsupported source responses into successful progress', () => {
+    const rows = [
+      ['rdap', { upstreamStatus: 200 }, 'error', false],
+      ['rdap', { upstreamStatus: 200, parsed: { domain: 'example.test', serverTruncated: true } }, 'partial', true],
+      ['rdap', { upstreamStatus: 200, parsed: { domain: 'example.test', entitiesTruncated: true } }, 'partial', true],
+      ['rdap', { upstreamStatus: 404 }, 'not_found', false],
+      ['whois', [], 'error', false],
+      ['whois', [{ server: 'whois.iana.org', error: 'Fixture failure' }], 'error', false],
+      ['whois', [{ server: 'whois.iana.org', response: 'refer: whois.nic.test' }, { server: 'whois.nic.test', error: 'Fixture failure' }], 'partial', false],
+      ['whois', [{ server: 'whois.iana.org', response: 'No referral' }], 'unsupported', false],
+      ['domain_evidence', { state: 'unknown' }, 'partial', false],
+      ['registrar_rdap', {}, 'error', false],
+      ['network_context', { status: 'success', complete: false }, 'partial', false],
+      ['security_txt', { status: 'unsupported' }, 'unsupported', false],
+      ['reverse_dns', { status: 'skipped' }, 'skipped', false],
+    ] as const;
+    for (const [source, value, state, truncated] of rows) {
+      const result = normalizeLookupSourceSettlement(source, 'fulfilled', value);
+      assert.equal(result.state, state); assert.equal(result.truncated, truncated);
+      assert.equal(result.complete, state === 'not_found');
+      assert.doesNotMatch(JSON.stringify(result.fragment), /example\.test|Fixture failure|refer:/u);
+    }
+  });
   test('preserves every canonical optional-intelligence state and nested observation quality', () => {
     const sources = [
       'external_intelligence',

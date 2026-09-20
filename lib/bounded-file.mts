@@ -2,7 +2,9 @@ import { constants } from 'node:fs';
 import { lstat, open, realpath } from 'node:fs/promises';
 import path from 'node:path';
 
-const MAX_BOUNDED_FILE_BYTES = 64 * 1024 * 1024;
+// Caller-specific payload limits remain authoritative. The emergency ceiling
+// also admits a 64-MiB evidence package plus its bounded manifest/ZIP headers.
+const MAX_BOUNDED_FILE_BYTES = 128 * 1024 * 1024;
 
 type BoundedFileOptions = Readonly<{
   maximumBytes: number;

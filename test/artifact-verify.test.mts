@@ -23,6 +23,7 @@ import {
   sha256ArtifactDigest,
   sha256ArtifactDigestV2,
 } from '../frontend/src/lib/analysis/artifact-integrity.ts';
+import { buildLookupAssetGraph } from '../packages/investigation/lookup-asset-graph.mts';
 import { buildInvestigationCapsule } from '../frontend/src/lib/analysis/investigation-capsule.ts';
 import { buildBulkReviewManifest } from '../frontend/src/lib/analysis/bulk-review-export.ts';
 import {
@@ -79,15 +80,7 @@ const CAPSULE_OBSERVED_AT = '2026-08-04T00:00:00.000Z';
 const CAPSULE_GENERATED_AT = '2026-08-04T01:00:00.000Z';
 
 function currentCapsuleGraph() {
-  return {
-    version: 2 as const,
-    targetId: 'target-example',
-    nodes: [{ id: 'target-example', label: 'example.test', kind: 'target' as const, detail: 'Lookup target' }],
-    edges: [],
-    sources: [],
-    truncated: false,
-    limitations: [],
-  };
+  return buildLookupAssetGraph({ target: 'example.test' });
 }
 
 function currentCapsuleBrief(): LookupInvestigationBrief {
@@ -386,6 +379,7 @@ describe('offline artifact verifier', () => {
     assert.ok((report.summary.sectionCount ?? 0) > 0);
     assert.equal(report.summary.unsupportedSectionCount, 0);
     const terminal = formatOfflineArtifactVerification(report);
+    assert.match(terminal, /--strict-exit for exit 4 on incomplete verification; default exit 0 means the report was produced/u);
     assert.doesNotMatch(terminal, /fixture archive passphrase/u);
     assert.doesNotMatch(terminal, /"cases"/u);
   });
@@ -998,7 +992,7 @@ describe('offline artifact verifier', () => {
     })), /integrity checks/iu);
     await assert.rejects(verifyOfflineArtifact(JSON.stringify({
       ...capsule,
-      graphSnapshot: { ...capsule.graphSnapshot, nodes: [{ ...capsule.graphSnapshot.nodes[0]!, label: 'changed.test' }] },
+      graphSnapshot: { ...capsule.graphSnapshot, nodes: [{ ...capsule.graphSnapshot.nodes[0]!, detail: 'Changed retained description' }] },
     })), /embedded projection integrity/u);
 
     const strictCode = await runCli(['verify-artifact', '--json', '--strict-exit'], {

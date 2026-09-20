@@ -11,9 +11,9 @@
 </script>
 
 <section class="local-collection-state card {state}" aria-live="polite" aria-busy={state === 'loading'}>
-  <p class="eyebrow">Browser-local evidence</p>
-  <h2>{title}</h2>
-  <p>{detail}</p>
+  <p class="eyebrow">Saved evidence</p>
+  <h2>{state === 'loading' ? 'Loading saved work' : title}</h2>
+  <p>{state === 'loading' ? 'Reading saved data.' : detail}</p>
 </section>
 
 <style>

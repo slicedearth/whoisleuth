@@ -1,11 +1,13 @@
 // Covers lib/favicon.mts's extractIconUrls - discovering the favicon a page
 // actually declares via <link rel="...icon...">, rather than only probing
-// /favicon.ico. Motivated by real sites (e.g. npm) that serve no
-// /favicon.ico and only point to a CDN PNG this way.
+// /favicon.ico. Declared image candidates retain the same bounded fallback.
 
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildFaviconCandidates, extractIconUrls } from '../lib/favicon.mts';
+import { createHash } from 'node:crypto';
+import { buildFaviconCandidates, extractIconUrls, fetchFaviconHash } from '../lib/favicon.mts';
+import { MAX_FAVICON_BYTES, MAX_FAVICON_CANDIDATES } from '../lib/outbound-request-bounds.mts';
+import { EXACT_ONLY_GIF, EXACT_ONLY_SVG, faviconTransparencyFixtures } from './favicon-image-fixtures.mts';
 
 const BASE = 'https://example.com/';
 
@@ -15,7 +17,16 @@ describe('extractIconUrls', () => {
     assert.deepEqual(extractIconUrls(html, BASE), ['https://example.com/assets/fav.png']);
   });
 
-  test('resolves an absolute CDN href (the npm case)', () => {
+  test('uses the small precomputed icon projection without retaining or reparsing HTML', () => {
+    const htmlAnalysis = {
+      iconLinks: [{ href: 'brand.ico', priority: 0 }],
+      effectiveBaseUrl: 'https://example.test/assets/',
+    };
+    assert.deepEqual(extractIconUrls('', 'https://example.test/', htmlAnalysis), ['https://example.test/assets/brand.ico']);
+    assert.equal(buildFaviconCandidates('example.test', '', { htmlAnalysis })[0], 'https://example.test/assets/brand.ico');
+  });
+
+  test('resolves an absolute asset-host href', () => {
     const html = '<link rel="icon" type="image/png" href="https://static.example-cdn.com/abc.png">';
     assert.deepEqual(extractIconUrls(html, BASE), ['https://static.example-cdn.com/abc.png']);
   });
@@ -60,6 +71,87 @@ describe('extractIconUrls', () => {
 
   test('returns an empty list for HTML with no link tags', () => {
     assert.deepEqual(extractIconUrls('<html><body>no links</body></html>', BASE), []);
+  });
+
+  test('uses native attributes, excludes inert links and requires an actual icon relation', () => {
+    assert.deepEqual(extractIconUrls(`
+      <!-- <link rel=icon href=/comment.png> -->
+      <script/><link rel=icon href=/script.png></script>
+      <template><link rel=icon href=/template.png></template>
+      <link rel=not-an-icon href=/unrelated.png>
+      <link rel=icon href="/real?a=1&amp;b=2">
+    `, BASE), ['https://example.com/real?a=1&b=2']);
+  });
+
+  test('keeps bounded inline icons larger than the general attribute projection', () => {
+    const uri = `data:image/svg+xml,${encodeURIComponent(EXACT_ONLY_SVG.toString().replace('/>', `${' '.repeat(5000)}/>`))}`;
+    assert.deepEqual(extractIconUrls(`<link rel=icon href="${uri}">`, BASE), [uri]);
+  });
+
+  test('resolves page bases and preserves standard-icon priority within the candidate bound', () => {
+    const html = `<base href="/assets/"><link rel=apple-touch-icon href=touch.png>${Array.from({ length: MAX_FAVICON_CANDIDATES + 1 }, (_, index) => `<link rel=icon href=${index}.png>`).join('')}`;
+    assert.deepEqual(extractIconUrls(html, BASE), Array.from({ length: MAX_FAVICON_CANDIDATES }, (_, index) => `https://example.com/assets/${index}.png`));
+  });
+});
+
+describe('favicon image admission', () => {
+  test('shared HTTP error bodies cannot create favicon evidence or end candidate fallback', async () => {
+    let calls = 0;
+    for (const domain of ['alpha.example', 'beta.example']) {
+      assert.equal(await fetchFaviconHash(domain, { fetcher: async () => {
+        calls += 1;
+        return new Response('<!doctype html><title>Unavailable</title><p>Try later</p>', { headers: { 'content-type': 'image/png' } });
+      } }), null);
+    }
+    assert.equal(calls, MAX_FAVICON_CANDIDATES * 2);
+  });
+
+  test('continues after HTML and retains valid exact-only SVG and GIF bytes', async () => {
+    for (const bytes of [EXACT_ONLY_SVG, EXACT_ONLY_GIF]) {
+      let calls = 0;
+      const result = await fetchFaviconHash('example.test', { fetcher: async () => {
+        calls += 1;
+        return new Response(calls === 1 ? '<h1>Not found</h1>' : new Uint8Array(bytes));
+      } });
+      assert.deepEqual(result, { hash: createHash('sha256').update(bytes).digest('hex'), phash: null });
+      assert.equal(calls, 2);
+    }
+  });
+
+  test('hashes declared inline images without a request and rejects disguised HTML', async () => {
+    for (const bytes of [EXACT_ONLY_SVG, ...faviconTransparencyFixtures().map((fixture) => fixture.bytes)]) {
+      const result = await fetchFaviconHash('example.test', {
+        html: `<link rel=icon href="data:image/png;base64,${bytes.toString('base64')}">`,
+        fetcher: async () => { throw new Error('Inline image must not request a candidate.'); },
+      });
+      assert.equal(result?.hash, createHash('sha256').update(bytes).digest('hex'));
+    }
+    let calls = 0;
+    const result = await fetchFaviconHash('example.test', {
+      html: `<link rel=icon href="data:image/png;base64,${Buffer.from('<html>Error</html>').toString('base64')}">`,
+      fetcher: async () => { calls += 1; return new Response('', { status: 404 }); },
+    });
+    assert.equal(result, null);
+    assert.equal(calls, MAX_FAVICON_CANDIDATES - 1);
+  });
+
+  test('rejects incomplete containers, embedded SVG error pages and over-bound data', async () => {
+    const png = faviconTransparencyFixtures()[0]!.bytes;
+    for (const bytes of [
+      png.subarray(0, png.length - 1),
+      Buffer.from(`<html><body>${EXACT_ONLY_SVG}</body></html>`),
+      Buffer.from(`<title>Error</title>${EXACT_ONLY_SVG}`),
+      Buffer.from('<svg xmlns="http://www.w3.org/2000/svg">'),
+      Buffer.alloc(MAX_FAVICON_BYTES + 1),
+    ]) {
+      let calls = 0;
+      const result = await fetchFaviconHash('example.test', { fetcher: async () => {
+        calls += 1;
+        return new Response(new Uint8Array(bytes));
+      } });
+      assert.equal(result, null);
+      assert.equal(calls, MAX_FAVICON_CANDIDATES);
+    }
   });
 });
 

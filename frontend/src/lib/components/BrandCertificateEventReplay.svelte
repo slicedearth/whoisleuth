@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import { buildBrandCertificateEventReplay, type CertificateEventReplayState } from '$lib/analysis/brand-certificate-event-replay.ts';
   import type { BrandProfile } from '$lib/brand-profiles';
   import type { CaseRecord } from '$lib/cases';
@@ -13,8 +14,8 @@
     return 'Aligned';
   }
 
-  function date(value: string): string {
-    return new Date(value).toLocaleString();
+  function date(value: string | null): string {
+    return value ? new Date(value).toLocaleString() : 'Observation time unavailable';
   }
 </script>
 
@@ -28,7 +29,7 @@
     <span class="count">{replay.retainedEventCount} retained event{replay.retainedEventCount === 1 ? '' : 's'}</span>
   </header>
 
-  {#if unavailable}<p class="notice">Browser-local cases could not be read, so retained certificate-event comparisons are unavailable. No missing event is treated as alignment.</p>{/if}
+  {#if unavailable}<p class="notice">Saved cases could not be read, so retained certificate-event comparisons are unavailable. No missing event is treated as alignment.</p>{/if}
   {#if replay.truncated}<p class="notice">Only the newest {replay.retainedEventCount} bounded event groups are shown.</p>{/if}
   <div class="domain-list">
     {#each replay.domains as domainReview}
@@ -62,7 +63,7 @@
                     {/each}
                   </div>
                   <div class="names"><strong>Retained names</strong><p>{event.names.join(', ')}</p></div>
-                  <div class="case-links"><strong>Cases</strong>{#each event.caseReferences as reference}<a href={`/monitor?view=cases&case=${encodeURIComponent(reference.id)}`}>{reference.domain}</a>{/each}</div>
+                  <div class="case-links"><strong>Cases</strong>{#each event.caseReferences as reference}<a href={caseWorkspaceHref(reference.id, 'evidence')}>{reference.domain}</a>{/each}</div>
                   {#if event.limitations.length}<ul>{#each event.limitations as limitation}<li>{limitation}</li>{/each}</ul>{/if}
                 </div>
               </details>

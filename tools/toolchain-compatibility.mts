@@ -17,7 +17,7 @@ type MainOptions = Readonly<{
 }>;
 
 type Version = Readonly<{ major: number; minor: number; patch: number }>;
-export type UnitTestExecutable = 'bash' | 'zsh' | 'pwsh';
+export type UnitTestExecutable = 'bash' | 'zsh' | 'fish' | 'pwsh';
 type ExecutableProbe = (
   executable: string,
   args: readonly string[],
@@ -42,6 +42,10 @@ const UNIT_TEST_EXECUTABLE_REQUIREMENTS: Readonly<Record<UnitTestExecutable, Rea
   zsh: Object.freeze({
     environmentVariable: 'WHOISLEUTH_VERIFICATION_ZSH',
     probeArguments: Object.freeze(['-f', '-c', 'exit 0']),
+  }),
+  fish: Object.freeze({
+    environmentVariable: 'WHOISLEUTH_VERIFICATION_FISH',
+    probeArguments: Object.freeze(['--no-config', '--private', '-c', 'exit 0']),
   }),
   pwsh: Object.freeze({
     environmentVariable: 'WHOISLEUTH_VERIFICATION_PWSH',

@@ -310,6 +310,7 @@ function temporalRationales(
       for (let right = left + 1; right < ordered.length; right += 1) {
         const delta = Date.parse(ordered[right]!.createdAt) - Date.parse(ordered[left]!.createdAt);
         if (delta > CAMPAIGN_REGISTRATION_WINDOW_DAYS * MILLISECONDS_PER_DAY) break;
+        if (ordered[right]!.member.domain === ordered[left]!.member.domain) continue;
         edges.push({ source: ordered[left]!.member.caseId, target: ordered[right]!.member.caseId });
       }
     }
@@ -390,8 +391,8 @@ export function buildCampaignCohortReview(input: CampaignCohortReviewInput): Cam
   const rawCases = Array.isArray(input.cases) ? input.cases : [];
   const cases = normalizeCaseStore(rawCases.slice(0, MAX_CASE_INPUTS)).cases;
   omissions.caseInputs = Math.max(0, rawCases.length - cases.length);
-  const byDomain = new Map(cases.map((record) => [normalizeDomain(record?.domain), record]).filter(([domain]) => Boolean(domain)) as Array<[string, CaseRecord]>);
-  const linked = sources.cases === 'ready' ? domains.map((domain) => byDomain.get(domain)).filter((item): item is CaseRecord => Boolean(item)) : [];
+  const memberDomains = new Set(domains);
+  const linked = sources.cases === 'ready' ? cases.filter(record => memberDomains.has(record.domain)) : [];
   const rawProfiles = Array.isArray(input.profiles) ? input.profiles : [];
   const profiles = normalizeBrandProfileStore(rawProfiles.slice(0, MAX_PROFILE_INPUTS)).profiles;
   omissions.profileInputs = Math.max(0, rawProfiles.length - profiles.length);
@@ -411,7 +412,9 @@ export function buildCampaignCohortReview(input: CampaignCohortReviewInput): Cam
   }).sort((left, right) => (left.name ?? left.id).localeCompare(right.name ?? right.id));
   const selectedId = normalizeOpaqueReferenceId(input.selectedBrandProfileId);
   const selectedScope = selectedId ? scopeOptions.find((item) => item.id === selectedId) ?? null : null;
-  const scopedRecords = selectedScope ? linked.filter((record) => normalizeCaseBrandProfileIds(record.brandProfileIds).includes(selectedScope.id)).slice(0, MAX_CAMPAIGN_COHORT_MEMBERS) : [];
+  const matchingScope = selectedScope ? linked.filter((record) => normalizeCaseBrandProfileIds(record.brandProfileIds).includes(selectedScope.id)) : [];
+  const scopedRecords = matchingScope.slice(0, MAX_CAMPAIGN_COHORT_MEMBERS);
+  omissions.caseInputs += matchingScope.length - scopedRecords.length;
   const allowed = new Map(scopedRecords.map((record) => [record.id, member(record)]));
   const rationaleCandidates = selectedScope ? [
     ...relationshipRationales(input.relationshipSummary, allowed, omissions),

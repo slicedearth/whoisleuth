@@ -30,7 +30,7 @@ export function buildLocalRenderedCaptureHandoff(
   }
   const outputDirectory = captureDirectory(parsed.hostname, now);
   return Object.freeze({
-    command: `npm run capture:local -- ${shellQuote(parsed.exactUrl)} --output-dir ${outputDirectory} --authorize-rendered-capture`,
+    command: `./node_modules/.bin/whoisleuth-capture ${shellQuote(parsed.exactUrl)} --output-dir ${outputDirectory} --authorize-rendered-capture`,
     exactUrl: parsed.exactUrl,
     hostname: parsed.hostname,
     outputDirectory,

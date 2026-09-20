@@ -54,7 +54,7 @@
   .card-note{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .comparison-context{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .comparison-context strong{color:var(--text)}
-  .page-comparison-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;margin-top:13px}
+  .page-comparison-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));align-items:start;gap:12px;margin-top:13px}
   .page-comparison-grid article{min-width:0;padding:11px 12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   .page-comparison-grid article.comparison-same{border-color:rgb(var(--accent2-rgb) / .3)}
   .page-comparison-grid article.comparison-overlap{border-color:rgb(var(--amber-rgb) / .35)}

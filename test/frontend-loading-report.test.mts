@@ -136,6 +136,7 @@ describe('frontend loading report', () => {
     });
     assert.equal(missing.ready, false);
     assert.deepEqual(missing.summary.missingBudgetPaths, ['/dashboard']);
+    assert.match(formatFrontendLoadingReport(missing), /Missing route budgets: \/dashboard/);
 
     const exceeded = buildFrontendLoadingReport({
       manifest: fixtureManifest(),
@@ -147,6 +148,12 @@ describe('frontend loading report', () => {
     });
     assert.equal(exceeded.ready, false);
     assert.deepEqual(exceeded.summary.overBudgetPaths, ['/']);
+    assert.match(formatFrontendLoadingReport(exceeded), /Exceeded route budget: \/ by \d+ bytes/);
+    const multiple = buildFrontendLoadingReport({ manifest: fixtureManifest(), routeNodes: routes,
+      measureAsset: file => ({ file, bytes: 2_000, gzipBytes: 1_000 }), routeGzipBudgets: { '/': 1, '/dashboard': 1 } });
+    const failures = formatFrontendLoadingReport(multiple).split('\n').filter(line => line.startsWith('Exceeded route budget:'));
+    assert.equal(failures.length, 2);
+    assert.match(failures[0]!, /: \/ by/); assert.match(failures[1]!, /: \/dashboard by/);
   });
 
   test('fails closed when a public layout imports the workspace chunk', () => {

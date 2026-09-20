@@ -1,15 +1,9 @@
 import type { Page, Request } from '@playwright/test';
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
-import {
-  CASE_SCHEMA_VERSION,
-  LATEST_PUBLIC_CASE_SCHEMA_VERSION,
-  PUBLIC_CASE_SCHEMA_VERSION,
-  PUBLISHED_V2_CASE_SCHEMA_VERSION,
-} from '../packages/contracts/case-portability.mts';
 import { PUBLIC_COVERAGE_SUMMARY } from '../frontend/src/lib/generated/public-coverage-summary.ts';
 import { PUBLIC_METHODOLOGY } from '../frontend/src/lib/generated/public-methodology.ts';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow } from './helpers';
+import { expectNoHorizontalOverflow, openNativeLinkInNewTab, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
 
 function collectInvestigationRequests(page: Page): string[] {
@@ -22,6 +16,59 @@ function collectInvestigationRequests(page: Page): string[] {
   });
   return requests;
 }
+
+test('CLI workflow recipes and review confirmation remain reachable without empty planning groups', async ({ page }, testInfo) => {
+  await page.goto('/cli');
+  const workflows = page.locator('[aria-labelledby="runnable-recipes-title"]');
+  await expect(workflows.locator('li')).toHaveCount(10);
+  await expect(workflows).toContainText('certificate-anomaly');
+  await expect(workflows).toContainText('evidence-handoff');
+  await expect(page.getByRole('heading', { name: 'Planning templates', exact: true })).toHaveCount(0);
+  await page.goto('/cli#command-workflow-run');
+  const command = page.locator('.command-workspace');
+  await expect(command.getByRole('heading', { name: 'workflow-run', exact: true })).toBeVisible();
+  await expect(command).toContainText('--confirm-review');
+  await expect(command).toContainText('Checkpoints do not grant later approvals.');
+  await expect(command).toContainText('--interactive');
+  await expect(command).toContainText('New runs connect compatible earlier outputs');
+  await expect(command).toContainText('It grants neither network approval nor human-review confirmation.');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280, 2560]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expectNoHorizontalOverflow(page);
+      if (width === 320 || width === 1280) await command.screenshot({ path: testInfo.outputPath(`workflow-review-${theme}-${width}.png`) });
+    }
+  }
+});
+
+test('offline Case file guidance is reachable from tasks and direct command links', async ({ page }, testInfo) => {
+  const investigationRequests = collectInvestigationRequests(page);
+  await page.goto('/cli#command-case');
+  const command = page.locator('article[data-command-detail="case"]');
+  await expect(command.getByRole('heading', { name: 'case', exact: true })).toBeVisible();
+  await expect(command).toContainText('Mutations require --output');
+  await command.getByText('Operational boundary', { exact: true }).click();
+  await expect(command).toContainText('Not reproduced requires an existing saved question');
+  await command.getByText('Limits and contracts', { exact: true }).click();
+  await expect(command).toContainText('without pruning');
+  await expect(page.getByRole('link', { name: 'Case file inputs and examples' })).toHaveAttribute('href', /docs\/cli\.md#local-case-files$/u);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280, 2560]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expectNoHorizontalOverflow(page);
+      if (width === 320 || width === 1280) {
+        const skip = page.getByRole('link', { name: 'Skip to main content', exact: true });
+        await expect(skip).not.toBeFocused();
+        expect(await skip.evaluate(element => element.getBoundingClientRect().bottom)).toBeLessThanOrEqual(0);
+        await command.screenshot({ path: testInfo.outputPath(`case-files-${theme}-${width}.png`) });
+        await page.screenshot({ path: testInfo.outputPath(`case-files-viewport-${theme}-${width}.png`) });
+      }
+    }
+  }
+  expect(investigationRequests).toEqual([]);
+});
 
 test('keeps desktop and narrow public navigation complete and request-free', async ({ page }) => {
   const investigationRequests = collectInvestigationRequests(page);
@@ -114,6 +161,82 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
   expect(investigationRequests).toEqual([]);
 });
 
+test('long reference labels remain distinct and the mobile navigator works by keyboard', async ({ page }, testInfo) => {
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    await page.goto('/resources/reporting-and-takedown-guidance');
+    for (const viewport of [
+      { width: 1280, height: 720 }, { width: 1024, height: 768 },
+      { width: 390, height: 844 }, { width: 320, height: 700 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const browser = page.locator('.reference-browser');
+      const summary = browser.locator(':scope > summary');
+      await expect(summary).toHaveCount(1);
+      if (viewport.width > 1080) {
+        await expect(browser).toBeHidden();
+        await expect(page.locator('.reference-tree').getByRole('link', { name: 'Reporting and takedown guidance', exact: true })).toHaveAttribute('aria-current', 'page');
+      } else {
+        await expect(summary).toBeVisible();
+        await expect(summary.locator('span')).toHaveText('Browse documentation');
+        await expect(summary.locator('strong')).toHaveText('Reporting and takedown guidance');
+        const geometry = await summary.evaluate((element) => {
+          const a = element.querySelector('span')!.getBoundingClientRect();
+          const current = element.querySelector('strong')!;
+          const b = current.getBoundingClientRect();
+          const showsCurrent = getComputedStyle(current).display !== 'none';
+          const bounds = element.getBoundingClientRect();
+          return {
+            separated: !showsCurrent || a.right < b.left || a.bottom < b.top,
+            contained: [a, ...(showsCurrent ? [b] : [])].every((box) => box.left >= bounds.left && box.right <= bounds.right && box.bottom <= bounds.bottom),
+          };
+        });
+        expect(geometry.separated).toBe(true);
+        expect(geometry.contained).toBe(true);
+        await summary.focus();
+        await page.keyboard.press('Enter');
+        await expect(browser).toHaveAttribute('open', '');
+        await expect(browser.getByRole('link', { name: 'Reporting and takedown guidance', exact: true })).toHaveAttribute('aria-current', 'page');
+        await expect(summary).toBeFocused();
+        await page.keyboard.press('Space');
+        await expect(browser).not.toHaveAttribute('open', '');
+      }
+      await expectNoHorizontalOverflow(page);
+      await page.evaluate(() => scrollTo(0, 0));
+      if (viewport.width === 320 || viewport.width === 1280) {
+        await page.screenshot({ path: testInfo.outputPath(`reference-labels-${viewport.width}-${theme}.png`) });
+      }
+    }
+  }
+});
+
+test('reference pages expose the first recipe on mobile and constrain wide prose', async ({ page }) => {
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    await page.setViewportSize({ width: 320, height: 700 });
+    await page.goto('/cli');
+    const firstCommand = page.locator('.start-steps .copyable-command').first();
+    await expect(firstCommand.getByRole('button', { name: 'Copy run-once help command' })).toBeVisible();
+    await expect(firstCommand.locator('code')).toBeInViewport({ ratio: 1 });
+    const copy = firstCommand.getByRole('button', { name: 'Copy run-once help command' });
+    await copy.focus();
+    await expect(copy).toBeFocused();
+    await expect(copy).toBeInViewport({ ratio: 1 });
+    await expectNoHorizontalOverflow(page);
+
+    for (const width of [1920, 3840]) {
+      await page.setViewportSize({ width, height: 1080 });
+      await page.goto('/resources/lookalike-domain-checker');
+      const paragraph = page.locator('.reference-heading > p:not(.eyebrow)');
+      await expect(paragraph).toContainText('Similar spelling is a lead');
+      const proseBox = await paragraph.boundingBox();
+      expect(proseBox).not.toBeNull();
+      expect(proseBox!.width).toBeLessThanOrEqual(800);
+      await expectNoHorizontalOverflow(page);
+    }
+  }
+});
+
 test('filters and opens the canonical CLI catalogue entirely by keyboard', async ({ page }) => {
   const investigationRequests = collectInvestigationRequests(page);
   await page.goto('/cli');
@@ -150,6 +273,33 @@ test('keeps CLI catalogue filters shareable across reloads', async ({ page }) =>
   await page.reload();
   await expect(status).toHaveText(before ?? '');
   await expect(page).toHaveURL(/\?q=workflow&mode=offline&common=1#commands$/u);
+});
+
+test('signer trust guidance is reachable by direct command link at supported widths and themes', async ({ page }, testInfo) => {
+  const investigationRequests = collectInvestigationRequests(page);
+  for (const viewport of [
+    { width: 1280, height: 720 }, { width: 1024, height: 768 },
+    { width: 390, height: 844 }, { width: 320, height: 700 },
+  ]) {
+    for (const theme of ['light', 'dark'] as const) {
+      await page.setViewportSize(viewport);
+      await useTheme(page, theme);
+      await page.goto('/cli?q=verify-signature#command-verify-signature');
+      const detail = page.locator('article[data-command-detail="verify-signature"]');
+      await expect(detail).toBeVisible();
+      await expect(detail).toContainText('--trust-store-file');
+      await expect(detail).toContainText('whoisleuth.evidence-signer-trust-report');
+      await expect(detail).toBeFocused();
+      await detail.getByText('Operational boundary', { exact: true }).click();
+      await expect(detail.locator('.boundary p')).toBeVisible();
+      await expect(detail.locator('.boundary p')).toContainText('unknown, retired, revoked or future-reviewed entries exit 4');
+      await expectNoHorizontalOverflow(page);
+      await testInfo.attach(`signer-trust-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      await detail.getByRole('link', { name: /Back to 1 filtered command/u }).click();
+      await expect(page.locator('article[data-command="verify-signature"] .command-open')).toBeFocused();
+    }
+  }
+  expect(investigationRequests).toEqual([]);
 });
 
 test('preserves CLI filter and router state across public Back and Forward navigation', async ({ page }) => {
@@ -193,6 +343,87 @@ test('opens a directly linked CLI command without loading unrelated command deta
   expect(investigationRequests).toEqual([]);
 });
 
+test('command and return links preserve open-in-new-tab activation @timing-sensitive', { tag: '@cross-browser-critical' }, async ({ page }) => {
+  await page.goto('/cli#command-lookup');
+  const command = page.locator('[data-command-detail="lookup"]');
+  await expect(command).toBeVisible();
+  for (const link of [command.locator('.related-commands a').first(), command.locator('.back-to-results')]) {
+    await page.bringToFront();
+    await expect(link).toBeVisible();
+    const href = await link.getAttribute('href');
+    expect(href).toMatch(/^#(?:command-|commands)/u);
+    const expectedHref = new URL(href!, page.url()).href;
+    const expectedDetail = href!.startsWith('#command-') ? href!.slice('#command-'.length) : null;
+    const destination = await openNativeLinkInNewTab(page, link);
+    try {
+      // Read the actual document and usable destination together. The string
+      // URL matcher also waits for engine navigation bookkeeping, which can
+      // remain pending after this native modified-click destination is ready.
+      await expect.poll(() => destination.evaluate(() => ({
+        href: location.href,
+        ready: document.readyState,
+        clientReady: document.querySelector('[data-testid="public-cli-catalogue"]')?.getAttribute('data-client-ready'),
+        detail: document.querySelector('[data-command-detail]')?.getAttribute('data-command-detail') ?? null,
+      }))).toEqual({ href: expectedHref, ready: 'complete', clientReady: 'true', detail: expectedDetail });
+    } finally {
+      await destination.close();
+      await page.bringToFront();
+    }
+    await expect(page).toHaveURL(/#command-lookup$/u);
+    await expect(command).toBeVisible();
+  }
+});
+
+test('command details distinguish an artefact from its presentation and destination', async ({ page }) => {
+  await page.goto('/cli#command-export');
+  const command = page.locator('[data-command-detail="export"]');
+  await expect(command).toBeVisible();
+  await expect(command.locator('.command-facts')).toContainText('Portable evidence report');
+  const formats = command.locator('dt').filter({ hasText: /^Presentation options$/u }).locator('..');
+  await expect(formats).toContainText('--markdown');
+  await expect(formats).toContainText('--html');
+  await expect(formats).not.toContainText('--json');
+  await expect(command.locator('.command-facts')).toContainText('--output <file>');
+  await command.getByText('Limits and contracts', { exact: true }).click();
+  await expect(command.locator('.contract-details')).toContainText('Exit 0 reports command completion');
+});
+
+test('distinguishes compact and metadata CSV in responsive command details', async ({ page }, testInfo) => {
+  const requests = collectInvestigationRequests(page);
+  for (const commandId of ['bulk', 'discover-scan']) {
+    await page.goto(`/cli#command-${commandId}`);
+    const command = page.locator(`[data-command-detail="${commandId}"]`);
+    await expect(command).toBeVisible();
+    const presentations = command.locator('dt').filter({ hasText: /^Presentation options$/u }).locator('..');
+    await expect(presentations.getByText('--csv', { exact: true })).toBeVisible();
+    await expect(presentations.getByText('--csv-with-metadata', { exact: true })).toBeVisible();
+    await command.getByText('Operational boundary', { exact: true }).click();
+    const boundary = command.locator('.boundary p');
+    await expect(boundary).toContainText('separate observation and report times');
+    await expect(boundary).toContainText('--csv retains the compact columns');
+    if (commandId !== 'bulk') continue;
+    for (const viewport of [
+      { width: 1280, height: 720 }, { width: 1024, height: 768 },
+      { width: 390, height: 844 }, { width: 320, height: 700 },
+    ]) {
+      await page.setViewportSize(viewport);
+      for (const theme of ['light', 'dark'] as const) {
+        await useTheme(page, theme);
+        await presentations.scrollIntoViewIfNeeded();
+        await expect(presentations).toBeInViewport();
+        await expectNoHorizontalOverflow(page);
+        await testInfo.attach(`csv-options-${viewport.width}-${theme}`, {
+          body: await page.screenshot(), contentType: 'image/png',
+        });
+        await boundary.scrollIntoViewIfNeeded();
+        await expect(boundary).toBeInViewport();
+        await expectNoHorizontalOverflow(page);
+      }
+    }
+  }
+  expect(requests).toEqual([]);
+});
+
 test('opens a directly linked CLI workflow section after the responsive layout settles', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/cli#browser-handoff');
@@ -203,6 +434,36 @@ test('opens a directly linked CLI workflow section after the responsive layout s
     return box ? box.y >= 0 && box.y < 220 : false;
   }).toBe(true);
   await expectNoHorizontalOverflow(page);
+});
+
+test('keeps workflow partial-result and resume guidance readable across reference layouts', async ({ page }, testInfo) => {
+  const requests = collectInvestigationRequests(page);
+  await page.goto('/cli#command-workflow-run');
+  const detail = page.locator('article[data-command-detail="workflow-run"]');
+  await expect(detail).toBeVisible();
+  await expect(detail.locator('details.boundary')).toHaveJSProperty('open', true);
+  const boundary = detail.locator('details.boundary > p');
+  await expect(boundary).toBeVisible();
+  await expect(boundary).toContainText(/Partial collections pause for review.*not recollected.*resume/u);
+  await expect(boundary).toContainText('failed validation or export steps remain retryable');
+  await expect(boundary).toContainText(/diagnostics go to stderr/iu);
+  await expect(boundary).toContainText('--use-artifact <step-id>:<input-number>=<earlier-step-id>');
+  await expect(boundary).toContainText('Repeat --select for remaining placeholders in order');
+  await expect(boundary).toContainText(/not (?:proof of )?authenticity or freshness/u);
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 },
+    { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await boundary.scrollIntoViewIfNeeded();
+      await expect(boundary).toBeInViewport();
+      await expectNoHorizontalOverflow(page);
+      await testInfo.attach(`workflow-artifact-${viewport.width}-${theme}`, {
+        body: await page.screenshot(), contentType: 'image/png',
+      });
+    }
+  }
+  expect(requests).toEqual([]);
 });
 
 test('reveals related CLI commands even when the current filters exclude them', async ({ page }) => {
@@ -231,12 +492,30 @@ test('keeps the final CLI section current at the end of the document', async ({ 
   await expect(contents.getByRole('link', { name: 'More documentation' })).toHaveAttribute('aria-current', 'location');
 });
 
-test('renders methodology and deferred coverage from fixed metadata without requests', async ({ page }) => {
+test('renders methodology and deferred coverage from fixed metadata without requests', async ({ page }, testInfo) => {
   const investigationRequests = collectInvestigationRequests(page);
   await page.goto('/methodology');
   await expect(page.locator('.topic-grid article')).toHaveCount(PUBLIC_METHODOLOGY.topics.length);
   await expect(page.getByRole('heading', { name: 'Authority-aware registration decisions' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Deliberate non-inferences' })).toBeVisible();
+  const authority = page.locator('.topic-grid article').filter({ has: page.getByRole('heading', { name: 'Authority-aware registration decisions' }) });
+  await expect(authority).toContainText('positive authoritative DNS delegation can support registered status at medium confidence');
+  await expect(authority).toContainText('Missing DNS never proves availability');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const viewport of [
+      { width: 1280, height: 720 }, { width: 1024, height: 768 },
+      { width: 390, height: 844 }, { width: 320, height: 700 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await authority.scrollIntoViewIfNeeded();
+      await expect(authority).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      if (viewport.width === 320 || viewport.width === 1280) {
+        await page.screenshot({ path: testInfo.outputPath(`registration-authority-${viewport.width}-${theme}.png`) });
+      }
+    }
+  }
 
   await page.goto('/coverage');
   await expect(page.locator('.distinction-grid article')).toHaveCount(PUBLIC_COVERAGE_SUMMARY.distinctions.length);
@@ -260,13 +539,16 @@ test('contains an optional chunk preload failure without a page error', async ({
     return pathname === coverageChunkPath;
   };
   await page.route('**/*', (route) => (isCoverageChunk(route.request().url())
-    ? route.fulfill({ status: 200, contentType: 'text/javascript', body: 'throw new Error("synthetic chunk failure");' })
+    ? route.fulfill({ status: 200, contentType: 'text/javascript', body: 'globalThis.__coverageFailureEvaluated = true; throw new Error("synthetic chunk failure");' })
     : route.fallback()));
   const failedChunk = page.waitForRequest((request) => isCoverageChunk(request.url()));
   await page.goto('/coverage');
   await page.getByRole('button', { name: 'Open capability catalogue' }).hover();
   await failedChunk;
-  await expect.poll(() => pageErrors).toEqual([]);
+  await page.waitForFunction(() => Reflect.get(window, '__coverageFailureEvaluated') === true);
+  await page.getByRole('button', { name: 'Open capability catalogue' }).click();
+  await expect(page.getByRole('alert')).toContainText('Capability details could not be loaded.');
+  expect(pageErrors).toEqual([]);
 });
 
 test('opens, filters and downloads a large synthetic example without workspace access', async ({ page }) => {
@@ -282,6 +564,11 @@ test('opens, filters and downloads a large synthetic example without workspace a
   const gallery = page.getByTestId('public-example-gallery');
   const exampleCards = gallery.locator('article[data-example]');
   await expect(exampleCards).toHaveCount(4);
+  await expect(exampleCards.getByRole('button', { name: 'Open synthetic output' })).toHaveCount(4);
+  for (const button of await exampleCards.getByRole('button', { name: 'Open synthetic output' }).all()) {
+    await expect(button).not.toHaveAttribute('aria-controls');
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
+  }
   await expect(gallery.locator('.example-grid')).toHaveCSS('align-items', 'start');
   const unchangedPeerHeight = (await exampleCards.nth(1).boundingBox())?.height ?? 0;
   await exampleCards.nth(0).getByRole('button', { name: 'Open synthetic output' }).click();
@@ -297,11 +584,16 @@ test('opens, filters and downloads a large synthetic example without workspace a
   await expect(output).toHaveValue(/"schema": "whoisleuth\.cli\.case-pack"/u);
   await expect(output).toHaveValue(/"domain": "example\.test"/u);
   await expect(output).toHaveValue(/"digestSha256": "sha256:[a-f0-9]{64}"/u);
+  await expect(example.getByRole('button', { name: 'Close synthetic output' })).toHaveAttribute('aria-controls', 'example-output-case-handoff');
+  await expect(example.locator('#example-output-case-handoff')).toBeVisible();
 
   const downloadPromise = page.waitForEvent('download');
   await example.getByRole('button', { name: 'Download example' }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe('synthetic-reviewed-case-handoff.json');
+  await example.getByRole('button', { name: 'Close synthetic output' }).click();
+  await expect(example.locator('#example-output-case-handoff')).toHaveCount(0);
+  await expect(example.getByRole('button', { name: 'Open synthetic output' })).not.toHaveAttribute('aria-controls');
 
   const after = await page.evaluate(async () => ({
     local: Object.keys(localStorage).sort(),
@@ -322,10 +614,11 @@ test('uses Investigate, Respond and Assure as the only top-level product jobs', 
   await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await expect(page.getByTestId('practical-workflow')).toHaveCount(0);
-  await expect(page.getByText('Start or resume Investigate, Respond and Assure work.', { exact: true })).toBeVisible();
-  await expect(page.getByText('Verify', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Package', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Recheck', { exact: true })).toHaveCount(0);
+  const navigation = page.getByRole('navigation', { name: 'Console', exact: true });
+  for (const job of ['Investigate', 'Respond', 'Assure']) {
+    await expect(navigation.getByRole('group', { name: job, exact: true })).toBeVisible();
+  }
+  await expect(navigation.getByRole('group', { name: /^(Verify|Package|Recheck)$/u })).toHaveCount(0);
   expect(investigationRequests).toEqual([]);
 });
 
@@ -333,10 +626,9 @@ test('keeps privacy detail on the policy page and links to it from resources', a
   const investigationRequests = collectInvestigationRequests(page);
   await page.goto('/privacy');
   await expect(page.getByRole('heading', { name: 'Privacy policy', exact: true })).toBeVisible();
-  await expect(page.getByText(new RegExp(
-    `Current Case schema ${CASE_SCHEMA_VERSION}.*public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION}.*published-v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION} and ${LATEST_PUBLIC_CASE_SCHEMA_VERSION} remain readable`,
-    'iu',
-  ))).toBeVisible();
+  const compatibility = page.locator('p').filter({ has: page.getByText('Compatibility.', { exact: true }) });
+  await expect(compatibility).toBeVisible();
+  await expect(compatibility).toContainText('remain readable');
   await expect(page.getByTestId('privacy-data-flow-summary')).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: 'Footer' }).getByRole('link', { name: 'Privacy' })).toHaveAttribute('aria-current', 'page');
 

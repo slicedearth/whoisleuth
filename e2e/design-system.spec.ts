@@ -1,10 +1,62 @@
 import { expect, test } from './fixtures';
-import { boundingBox, currentBrandProfileBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData, useTheme } from './helpers';
+import { boundingBox, currentBrandProfileBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData, openLookupOptionalSources, useTheme } from './helpers';
 import { protectedDestinations } from '../frontend/src/lib/workspaces';
 import { consoleCommandNavigation } from '../frontend/src/lib/console-command-navigation';
 import { INTELLIGENCE_CAPABILITIES, sectionedLookupFixture } from './lookup-design-fixtures';
 
 // Shared visual-system, navigation and overflow coverage.
+
+test('native temporal fields share text-control sizing and theme while choices stay compact', async ({ page }) => {
+  await page.goto('/resources');
+  await page.evaluate(() => {
+    const group = document.createElement('fieldset');
+    group.id = 'native-control-fixture';
+    group.style.minWidth = '0';
+    group.style.maxWidth = '20rem';
+    const legend = document.createElement('legend');
+    legend.textContent = 'Native input controls';
+    group.append(legend);
+    for (const type of ['text', 'date', 'datetime-local', 'time', 'month', 'week', 'checkbox', 'radio']) {
+      const label = document.createElement('label');
+      label.className = 'field';
+      label.append(type);
+      const input = document.createElement('input');
+      input.type = type;
+      label.append(input);
+      group.append(label);
+    }
+    document.querySelector('main')!.append(group);
+  });
+  try {
+    const group = page.getByRole('group', { name: 'Native input controls', exact: true });
+    await expect(group.locator('input')).toHaveCount(8);
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const width of [320, 1280]) {
+        await page.setViewportSize({ width, height: 800 });
+        const inputs = await group.evaluate((element) => [...element.querySelectorAll('input')].map((input) => {
+          const style = getComputedStyle(input);
+          const box = input.getBoundingClientRect();
+          return { type: input.type, height: box.height, width: box.width, background: style.backgroundColor, border: style.borderRadius };
+        }));
+        const text = inputs.find((input) => input.type === 'text')!;
+        for (const input of inputs) {
+          if (input.type === 'checkbox' || input.type === 'radio') {
+            expect(input.width).toBeLessThanOrEqual(24);
+            expect(input.height).toBeLessThanOrEqual(24);
+          } else {
+            expect(input.height).toBeGreaterThanOrEqual(44);
+            expect(input.background).toBe(text.background);
+            expect(input.border).toBe(text.border);
+          }
+        }
+        await expectNoHorizontalOverflow(page);
+      }
+    }
+  } finally {
+    await page.evaluate(() => document.getElementById('native-control-fixture')?.remove());
+  }
+});
 
 test('the wordmark stays clean without a cursor-like status treatment across layouts', async ({ page }) => {
   const variants = [
@@ -114,8 +166,8 @@ test('data-dense analyst routes can use the available desktop workspace without 
 test('certificate monitoring highlights the Assure navigation destination', async ({ page }) => {
   await page.goto('/monitor?view=certificates');
   const navigation = page.locator('#console-navigation');
-  await expect(navigation.getByRole('link', { name: /^Watchlists & controls/u })).toHaveAttribute('aria-current', 'page');
-  await expect(navigation.getByRole('link', { name: /^Monitor/u })).not.toHaveAttribute('aria-current', 'page');
+  await expect(navigation.getByRole('link', { name: /^Monitoring/u })).toHaveAttribute('aria-current', 'page');
+  await expect(navigation.getByRole('link', { name: /^Review inbox/u })).not.toHaveAttribute('aria-current', 'page');
 });
 
 // A deep-ish result with enough evidence groups to exercise the section
@@ -130,6 +182,7 @@ test('optional intelligence checkboxes stay native-sized and aligned with their 
   await page.getByRole('radio', { name: /Deep/u }).check();
 
   const group = page.getByRole('group', { name: 'Optional third-party intelligence' });
+  await openLookupOptionalSources(page);
   await expect(group).toBeVisible();
 
   for (const size of [
@@ -214,20 +267,8 @@ test('the console command palette filters destinations and remains keyboard oper
   const search = dialog.getByRole('combobox', { name: 'Search pages and tools' });
   await expect(dialog).toBeVisible();
   await expect(search).toBeFocused();
-  const searchFrame = dialog.locator('.command-search');
-  await expect(search).toHaveCSS('box-shadow', 'none');
-  await expect.poll(() => dialog.getByRole('status').evaluate((element) => {
-    const styles = getComputedStyle(element);
-    return `${styles.width} ${styles.height} ${styles.clip}`;
-  })).toBe('1px 1px rect(0px, 0px, 0px, 0px)');
-  await expect.poll(() => searchFrame.evaluate((element) => {
-    const probe = document.createElement('span');
-    probe.style.color = 'var(--accent)';
-    document.body.append(probe);
-    const matchesAccent = getComputedStyle(element).borderColor === getComputedStyle(probe).color;
-    probe.remove();
-    return matchesAccent;
-  })).toBe(true);
+  await expect(dialog.getByRole('listbox', { name: 'Console destinations' })).toBeVisible();
+  await expect(dialog.getByRole('status')).toContainText(/Dashboard.*current page/u);
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
   await expect(dialog.getByRole('option', { name: /Dashboard/ })).toHaveAttribute('aria-current', 'page');
   await expect.poll(() => dialog.getByRole('option').evaluateAll((options) =>
@@ -249,6 +290,10 @@ test('the console command palette filters destinations and remains keyboard oper
   await search.press('Tab');
   await expect(dialog.getByRole('button', { name: 'Close command palette' })).toBeFocused();
   await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Pages and tools', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Saved work', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(search).toBeFocused();
   await search.fill('whois');
   await expect(dialog.getByRole('option', { name: /Lookup/ })).toBeVisible();
@@ -264,20 +309,17 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(dialog.getByRole('option', { name: /Registry support/ })).toBeVisible();
   await expect(dialog.getByRole('option')).toHaveCount(1);
   await search.fill('campaign');
-  await expect(dialog.getByRole('option', { name: /Monitor/ })).toBeVisible();
-  await expect(dialog.getByRole('option')).toHaveCount(1);
-  await search.fill('Start');
-  await expect(dialog.getByRole('option', { name: /Dashboard/ })).toBeVisible();
-  await expect(dialog.locator('[data-command-group]', { hasText: 'Start' })).toHaveCount(1);
-  await search.fill('Investigate');
-  await expect(dialog.getByRole('option')).toHaveCount(3);
-  await expect(dialog.locator('[data-command-group]')).toHaveText(['Investigate', 'Investigate', 'Investigate']);
-  await search.fill('Respond');
-  await expect(dialog.getByRole('option')).toHaveCount(1);
-  await expect(dialog.locator('[data-command-group]')).toHaveText(['Respond']);
-  await search.fill('Assure');
+  await expect(dialog.getByRole('option', { name: /^Review inbox/ })).toBeVisible();
+  await expect(dialog.getByRole('option', { name: /^Campaigns/ })).toBeVisible();
   await expect(dialog.getByRole('option')).toHaveCount(2);
-  await expect(dialog.locator('[data-command-group]')).toHaveText(['Assure', 'Assure']);
+  for (const group of ['Start', 'Investigate', 'Respond', 'Assure']) {
+    await search.fill(group);
+    const commands = consoleCommandNavigation.filter(command => command.group === group);
+    expect(commands.length).toBeGreaterThan(0);
+    await expect(dialog.getByRole('option')).toHaveCount(commands.length);
+    await expect(dialog.locator('.command-copy strong')).toHaveText(commands.map(command => command.label));
+    await expect(dialog.locator('[data-command-group]')).toHaveText(commands.map(command => command.group));
+  }
   await search.fill('Public');
   const publicMatches = consoleCommandNavigation.filter((command) => (
     `${command.label} ${command.detail} ${command.group} ${command.keywords.join(' ')}`.toLowerCase().includes('public')
@@ -286,8 +328,8 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(dialog.locator('.command-copy strong')).toHaveText(publicMatches.map((command) => command.label));
   await expect(dialog.locator('[data-command-group]')).toHaveText(publicMatches.map((command) => command.group));
   await expect(dialog.getByRole('option', { name: /Overview/u })).toBeVisible();
-  await search.fill('monitor');
-  await expect(dialog.getByRole('option', { name: /Monitor/ })).toBeVisible();
+  await search.fill('review inbox');
+  await expect(dialog.getByRole('option', { name: /^Review inbox/ })).toBeVisible();
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-0');
   await search.press('Enter');
   await expect(page).toHaveURL(/\/monitor$/);
@@ -379,9 +421,9 @@ test('the console command palette keeps every destination heading readable on mo
     await expect(dialog).toBeVisible();
     const options = dialog.getByRole('option');
     const headings = dialog.locator('.command-copy strong');
-    expect(await options.count()).toBeGreaterThan(0);
-    expect(await headings.count()).toBe(await options.count());
-    expect(await headings.evaluateAll((items) => items.every((heading) =>
+    await expect.poll(() => options.count()).toBeGreaterThan(0);
+    await expect(headings).toHaveCount(await options.count());
+    await expect.poll(() => headings.evaluateAll((items) => items.length > 0 && items.every((heading) =>
       heading.scrollWidth <= heading.clientWidth + 1
     ))).toBe(true);
     await page.keyboard.press('Escape');
@@ -399,10 +441,12 @@ test('console footer opens policy pages separately while the public footer stays
     context.waitForEvent('page'),
     consolePrivacy.click(),
   ]);
+  await publicPage.bringToFront();
   await publicPage.waitForLoadState('domcontentloaded');
   await expect(publicPage).toHaveURL(/\/privacy$/u);
   await expect(page).toHaveURL(/\/lookup$/u);
   await publicPage.close();
+  await page.bringToFront();
 
   await page.goto('/');
   const publicPrivacy = page.locator('footer.site-footer').getByRole('link', { name: 'Privacy', exact: true });
@@ -420,7 +464,7 @@ test('console reference navigation keeps public Resources separate without decor
   await expect(resources).toHaveAccessibleName(/Resources.*opens in a new tab/iu);
 });
 
-test('Lookup reports requested source families without implying staged completion', async ({ page }) => {
+test('Lookup describes pending collection without implying staged completion', async ({ page }) => {
   let releaseLookup: (() => void) | undefined;
   const lookupGate = new Promise<void>((resolve) => {
     releaseLookup = resolve;
@@ -439,10 +483,13 @@ test('Lookup reports requested source families without implying staged completio
   await page.getByRole('button', { name: 'Run lookup' }).click();
 
   const loadingStatus = page.locator('.loading-note');
-  await expect(loadingStatus).toContainText('Deep lookup is waiting for one final response');
-  await expect(page.locator('.collection-trace')).toContainText('Registry RDAP');
-  await expect(page.locator('.collection-trace')).toContainText('Domain evidence');
-  await expect(page.locator('.collection-trace')).not.toContainText('complete');
+  await expect(loadingStatus.getByRole('status')).toContainText('Collecting');
+  await expect(loadingStatus).toContainText('Only the final validated response can be retained.');
+  const progress = page.getByRole('region', { name: 'Lookup source progress' });
+  await expect(progress.getByRole('status')).toContainText('Waiting for source updates');
+  await expect(progress.getByRole('listitem')).toHaveCount(0);
+  await expect(page.locator('#result')).toHaveCount(0);
+  await expect(loadingStatus.getByRole('button', { name: 'Cancel lookup' })).toBeVisible();
   releaseLookup?.();
   await expect(page.locator('#result')).toBeVisible();
 });
@@ -494,6 +541,37 @@ test('long untrusted values wrap inside result tiles without page overflow', asy
   await expectNoHorizontalOverflow(page);
 });
 
+test('responsive geometry checks wait for rendered fit and reject persistent overflow', async ({ page }) => {
+  await page.goto('/demo');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const addOverflow = async () => {
+    await page.evaluate(() => {
+      const probe = document.createElement('div');
+      probe.id = 'layout-overflow-probe';
+      probe.setAttribute('aria-hidden', 'true');
+      Object.assign(probe.style, { position: 'absolute', left: '0', top: '0', width: 'calc(100vw + 40px)', height: '1px' });
+      document.body.append(probe);
+    });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeGreaterThan(1);
+  };
+  try {
+    await addOverflow();
+    const settledFit = expectNoHorizontalOverflow(page).then(() => null, error => error);
+    // Adjust real layout after the current render, without a clock-based delay.
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.getElementById('layout-overflow-probe')!.remove();
+      resolve();
+    }))));
+    expect(await settledFit).toBeNull();
+
+    await addOverflow();
+    await expect(expectNoHorizontalOverflow(page)).rejects.toThrow(/horizontal overflow/u);
+  } finally {
+    await page.evaluate(() => document.getElementById('layout-overflow-probe')?.remove());
+  }
+  await expectNoHorizontalOverflow(page);
+});
+
 test('every public and protected page renders without page-level overflow at narrow and wide widths', async ({ page }) => {
   test.slow();
   for (const path of ['/', ...protectedDestinations.map(({ href }) => href), '/privacy']) {
@@ -515,7 +593,8 @@ test('console and policy pages expose one consistent primary heading', async ({ 
     ['/lookup', 'Lookup', 'Investigate'],
     ['/discover', 'Discover', 'Investigate'],
     ['/bulk', 'Bulk', 'Investigate'],
-    ['/monitor', 'Monitor', 'Respond'],
+    ['/cases', 'Cases', 'Respond'],
+    ['/monitor', 'Review inbox', 'Respond'],
     ['/brands', 'Brands', 'Assure'],
     ['/registry-support', 'Registry support', 'Reference'],
     ['/privacy', 'Privacy policy', 'Policy'],
@@ -526,4 +605,24 @@ test('console and policy pages expose one consistent primary heading', async ({ 
     await expect(heading.getByRole('heading', { level: 1, name: title })).toBeVisible();
     await expect(heading.locator('.eyebrow')).toHaveText(eyebrow);
   }
+});
+
+test('Console pages keep their content below the header on tall displays', async ({ page }) => {
+  test.slow();
+  await page.setViewportSize({ width: 3840, height: 2160 });
+  await page.goto('/dashboard');
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(value => localStorage.setItem('whoisleuth:theme:v1', value), theme);
+    for (const path of ['/dashboard', '/lookup', '/discover', '/bulk', '/cases', '/monitor', '/brands', '/registry-support']) {
+      await page.goto(path);
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      await page.evaluate(() => window.scrollTo(0, 0));
+      const header = await page.getByRole('banner').boundingBox();
+      const main = await page.getByRole('main').boundingBox();
+      expect(header).not.toBeNull();
+      expect(main).not.toBeNull();
+      expect(Math.abs(main!.y - header!.y - header!.height), path).toBeLessThanOrEqual(1);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
 });

@@ -53,7 +53,7 @@ describe('transient Brand review inbox', () => {
     assert.deepEqual(inbox.activeProfile, { id: active.id, name: active.name });
     assert.equal(inbox.associatedCaseCount, 1);
     assert.deepEqual(inbox.items.map((item) => item.caseId), ['case-linked']);
-    assert.equal(inbox.items[0]?.source, 'Browser-local case');
+    assert.equal(inbox.items[0]?.source, 'Saved Case');
     assert.equal(inbox.items[0]?.completeness, 'inconclusive');
     assert.equal(inbox.items[0]?.brandProfileId, active.id);
     assert.match(inbox.items[0]?.href ?? '', /case=case-linked/u);
@@ -151,7 +151,7 @@ describe('transient Brand review inbox', () => {
       brandProfileId: 'profile-removed',
       caseId: 'case-unresolved',
       caseDomain: 'unresolved.invalid',
-      href: '/monitor?view=cases&case=case-unresolved',
+      href: '/cases?case=case-unresolved',
     });
   });
 

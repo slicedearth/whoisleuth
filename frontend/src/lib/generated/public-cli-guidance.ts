@@ -37,6 +37,10 @@ export const PUBLIC_CLI_GUIDANCE = {
       "command": "whoisleuth workflow-plan --list --json"
     },
     {
+      "label": "Create an offline Case file",
+      "command": "whoisleuth case open --domain example.test --output cases.json"
+    },
+    {
       "label": "Explain one recipe",
       "command": "whoisleuth workflow-plan --explain evidence-handoff"
     },

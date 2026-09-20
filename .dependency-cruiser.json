@@ -117,18 +117,6 @@
       }
     },
     {
-      "name": "cli-stays-out-of-frontend",
-      "severity": "error",
-      "comment": "Production CLI modules must obtain all behaviour from dependency-neutral owners and cannot reach frontend source through any path.",
-      "from": {
-        "path": "^(?:test/fixtures/architecture/)?cli(?:/|$)"
-      },
-      "to": {
-        "path": "^(?:test/fixtures/architecture/)?frontend/src(?:/|$)",
-        "reachable": true
-      }
-    },
-    {
       "name": "non-frontend-production-stays-out-of-frontend",
       "severity": "error",
       "comment": "Shared libraries, packages, hosted functions, root server code, CLI code, and maintainer tools must obtain production behaviour from dependency-neutral owners and cannot reach frontend source through any path.",
@@ -138,73 +126,6 @@
       "to": {
         "path": "^(?:test/fixtures/architecture/)?frontend/src(?:/|$)",
         "reachable": true
-      }
-    },
-    {
-      "name": "non-frontend-production-stays-out-of-frontend-presentation",
-      "severity": "error",
-      "comment": "CLI, shared library, package, function, and maintainer-tool code must not import frontend routes or components.",
-      "from": {
-        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|lib|netlify/functions|packages|tools)(?:/|$)|server\\.mts$)"
-      },
-      "to": {
-        "path": "^(?:test/fixtures/architecture/)?frontend/src/(?:routes|lib/components)(?:/|$)",
-        "reachable": true
-      }
-    },
-    {
-      "name": "case-consumers-use-domain-owner",
-      "severity": "error",
-      "comment": "CLI, shared library, package, function, and maintainer-tool code must import Case behaviour from the shared domain owner rather than the historical frontend compatibility facades.",
-      "from": {
-        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|lib|netlify/functions|packages|tools)(?:/|$)|server\\.mts$)"
-      },
-      "to": {
-        "path": "^(?:test/fixtures/architecture/)?frontend/src/lib/analysis/(?:case-(?:brand-profile-references|evidence-model|investigation-branch-model|migration-model|model|record-contracts|record-core|record-model|record-operations|report|response-model|response-packet|storage-model)|http-summary|opaque-reference-id)\\.(?:mts|ts)$"
-      }
-    },
-    {
-      "name": "workspace-consumers-use-domain-owner",
-      "severity": "error",
-      "comment": "Non-frontend consumers must import workspace collection behaviour from the shared owner rather than the historical frontend compatibility facades.",
-      "from": {
-        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|lib|netlify/functions|packages|tools)(?:/|$)|server\\.mts$)"
-      },
-      "to": {
-        "path": "^(?:test/fixtures/architecture/)?frontend/src/lib/analysis/(?:brand-profile-model|bulk-review-model|bulk-session-model|bulk-sort|campaign-model|ct-history|detection-rule-model|dns-record-normalization|investigation-guide|investigation-template-model|page-baseline|relationship-observation-model|shortlist-model|watchlist-history|watchlist-store|website-snapshot-model|workspace-archive(?:-crypto)?)\\.(?:mts|ts)$"
-      }
-    },
-    {
-      "name": "portable-domain-consumers-use-shared-owner",
-      "severity": "error",
-      "comment": "Non-frontend consumers must import investigation artefact, interchange, and comparison behaviour from shared package owners rather than historical frontend compatibility facades.",
-      "from": {
-        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|lib|netlify/functions|packages|tools)(?:/|$)|server\\.mts$)"
-      },
-      "to": {
-        "path": "^(?:test/fixtures/architecture/)?frontend/src/lib/analysis/(?:acquisition-decision-packet|acquisition-due-diligence|bulk-domain-comparison|bulk-mail-exposure|bulk-review-export|comparison-ledger-(?:bulk|contract|json|serialization)|evidence-coverage-ledger|external-findings-(?:converters|import)|investigation-capsule|lookup-asset-graph|lookup-claim-passport|lookup-claim-readiness|lookup-investigation-brief|page-similarity|relationship-evidence)\\.(?:mts|ts)$"
-      }
-    },
-    {
-      "name": "artifact-integrity-consumers-use-domain-owner",
-      "severity": "error",
-      "comment": "Non-frontend consumers must import canonicalisation and digest rules from the pure evidence-domain owner rather than the historical frontend facade.",
-      "from": {
-        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|lib|netlify/functions|packages|tools)(?:/|$)|server\\.mts$)"
-      },
-      "to": {
-        "path": "^(?:test/fixtures/architecture/)?frontend/src/lib/analysis/artifact-integrity\\.(?:mts|ts)$"
-      }
-    },
-    {
-      "name": "domain-control-consumers-use-domain-owner",
-      "severity": "error",
-      "comment": "Non-frontend consumers must import domain-control normalisation and manifest rules from the pure evidence owner rather than historical browser facades.",
-      "from": {
-        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|lib|netlify/functions|packages|tools)(?:/|$)|server\\.mts$)"
-      },
-      "to": {
-        "path": "^(?:test/fixtures/architecture/)?frontend/src/lib/analysis/domain-control-(?:manifest-core|records)\\.(?:mts|ts)$"
       }
     },
     {
@@ -276,7 +197,7 @@
       "severity": "error",
       "comment": "Application imports must resolve under the locked TypeScript and workspace configuration.",
       "from": {
-        "path": "^(?:bin|cli|frontend/src|lib|netlify/functions|packages|tools)(?:/|$)|^server\\.mts$"
+        "path": "^(?:test/fixtures/architecture/)?(?:(?:bin|cli|frontend/src|lib|netlify/functions|packages|tools)(?:/|$)|server\\.mts$)"
       },
       "to": {
         "couldNotResolve": true,
@@ -308,6 +229,8 @@
       "fileName": "tsconfig.dependency-cruiser.json"
     },
     "enhancedResolveOptions": {
+      "exportsFields": ["exports"],
+      "conditionNames": ["import", "require", "node", "default"],
       "extensions": [".mts", ".ts", ".svelte", ".mjs", ".js", ".json"]
     }
   }

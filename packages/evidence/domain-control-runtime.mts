@@ -1,3 +1,4 @@
+import { analystReviewAgeAt, ANALYST_REVIEW_STALE_AFTER_DAYS } from './review-age.mts';
 import {
   canonicalArtifactJsonFor,
   resolveArtifactCanonicalization,
@@ -5,6 +6,7 @@ import {
 } from './artifact-integrity.mts';
 import { normalizeDomain } from './domain-name.mts';
 import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from './observation.mts';
+import { MAX_POSTURE_CHECK_RECORDS } from './domain-posture-context.mts';
 import {
   DOMAIN_CONTROL_CAA_RECORD_KEYS,
   DOMAIN_CONTROL_DIGEST_SHA256_HEX_LENGTH,
@@ -21,9 +23,11 @@ import {
   DOMAIN_CONTROL_MANIFEST_VERSION,
   DOMAIN_CONTROL_MX_RECORD_KEYS,
   DOMAIN_CONTROL_RECORD_LIST_FIELDS,
+  DOMAIN_CONTROL_RECORD_MODE_OPTIONS,
   DOMAIN_CONTROL_SPKI_SHA256_HEX_LENGTH,
   DOMAIN_CONTROL_TEXT_INPUT_BOUND_FACTOR,
   MAX_CANONICAL_DOMAIN_CONTROL_RECORDS,
+  MAX_CURRENT_DOMAIN_CONTROL_RECORDS,
   MAX_DOMAIN_CONTROL_CAA_FLAGS,
   MAX_DOMAIN_CONTROL_CAA_PRESENTATION_LENGTH,
   MAX_DOMAIN_CONTROL_CAA_TAG_LENGTH,
@@ -49,6 +53,14 @@ import {
   MIN_DOMAIN_CONTROL_DS_DIGEST_LENGTH,
   MIN_DOMAIN_CONTROL_MANIFEST_ENTRIES,
   MIN_DOMAIN_CONTROL_RECORDS,
+  PUBLIC_DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS,
+  PUBLIC_DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,
+  PUBLIC_DOMAIN_CONTROL_MANIFEST_LIMITATIONS,
+  PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSION,
+  SUPPORTED_DOMAIN_CONTROL_MANIFEST_INPUT_VERSIONS,
+  type DomainControlRecordField,
+  type DomainControlRecordMode,
+  type DomainControlRecordModes,
 } from '../contracts/domain-control-manifest.mts';
 
 const DOMAIN_CONTROL_PASSPORT_VERSION = DOMAIN_CONTROL_MANIFEST_INPUT_VERSION;
@@ -68,6 +80,8 @@ export const DOMAIN_CONTROL_PASSPORT_LIMITATIONS = DOMAIN_CONTROL_MANIFEST_LIMIT
 const INPUT_KEYS = new Set<string>(DOMAIN_CONTROL_MANIFEST_INPUT_KEYS);
 const MANIFEST_KEYS = new Set<string>(DOMAIN_CONTROL_MANIFEST_ROOT_KEYS);
 const ENTRY_KEYS = new Set<string>(DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS);
+const PUBLIC_ENTRY_KEYS = new Set<string>(PUBLIC_DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS);
+const RECORD_MODE_KEYS = new Set<string>(DOMAIN_CONTROL_RECORD_LIST_FIELDS);
 const INTEGRITY_KEYS = new Set<string>(DOMAIN_CONTROL_MANIFEST_INTEGRITY_KEYS);
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const RECORD_LIST_FIELDS = DOMAIN_CONTROL_RECORD_LIST_FIELDS;
@@ -82,6 +96,7 @@ export type DomainControlPassportEntry = Readonly<{
   ds: readonly string[];
   mx: readonly string[];
   caa: readonly string[];
+  recordModes?: DomainControlRecordModes;
   tlsIssuer: string | null;
   tlsSpkiSha256: string | null;
   registrarLock: 'required' | 'not_required' | null;
@@ -91,7 +106,7 @@ export type DomainControlPassportEntry = Readonly<{
 
 export type UnsignedDomainControlPassport = Readonly<{
   schema: typeof DOMAIN_CONTROL_PASSPORT_SCHEMA;
-  version: typeof DOMAIN_CONTROL_MANIFEST_VERSION;
+  version: typeof DOMAIN_CONTROL_MANIFEST_VERSION | typeof PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSION;
   generatedAt: string;
   expiresAt: string;
   entries: readonly DomainControlPassportEntry[];
@@ -182,6 +197,7 @@ function boundedDataArray(
 type DomainControlRecordKind = 'caa' | 'ds' | 'mx';
 
 const MX_RECORD_KEYS = new Set<string>(DOMAIN_CONTROL_MX_RECORD_KEYS);
+const RESOLVER_MX_RECORD_KEYS = new Set([...MX_RECORD_KEYS, 'type']);
 const CAA_RECORD_KEYS = new Set<string>(DOMAIN_CONTROL_CAA_RECORD_KEYS);
 const DS_RECORD_KEYS = new Set<string>(DOMAIN_CONTROL_DS_RECORD_KEYS);
 const DS_DIGEST_PATTERN = new RegExp(`^[a-f0-9]{${MIN_DOMAIN_CONTROL_DS_DIGEST_LENGTH},${MAX_DOMAIN_CONTROL_DS_DIGEST_LENGTH}}$`, 'u');
@@ -275,21 +291,51 @@ function canonicalIntegerAlias(
   return normalised[0] ?? null;
 }
 
-export function canonicalMxRecord(value: unknown): string {
-  const item = structuredRecord(value, MX_RECORD_KEYS, 'Domain control MX record');
+type CanonicalMxParts = Readonly<{ priority: number | null; exchange: string }>;
+
+function mxRecordParts(value: unknown, resolverRecord = false): CanonicalMxParts | null {
+  const item = structuredRecord(value, resolverRecord ? RESOLVER_MX_RECORD_KEYS : MX_RECORD_KEYS, 'Domain control MX record');
   if (item) {
-    const host = canonicalStringAlias(item, ['exchange', 'host', 'value'], exchange, 'Domain control MX host');
+    if (resolverRecord && Object.hasOwn(item, 'type') && item.type !== 'MX') return null;
+    const host = canonicalStringAlias(item, ['exchange', 'host', 'value'], (value) => value === '' ? '.' : exchange(value), 'Domain control MX host');
     const priority = canonicalIntegerAlias(item, ['priority', 'preference'], MAX_DOMAIN_CONTROL_MX_PRIORITY, 'Domain control MX priority');
-    return host && priority !== null ? `${priority} ${host}` : '';
+    return host && priority !== null ? { priority, exchange: host } : null;
   }
   const candidate = recordText(value, MAX_DOMAIN_CONTROL_MX_TEXT_LENGTH).toLowerCase();
   const match = /^(\d{1,5})\s+(.+)$/u.exec(candidate);
   if (match) {
     const priority = recordInteger(match[1], MAX_DOMAIN_CONTROL_MX_PRIORITY);
     const host = exchange(match[2]);
-    return priority !== null && host ? `${priority} ${host}` : '';
+    return priority !== null && host ? { priority, exchange: host } : null;
   }
-  return exchange(candidate);
+  const host = exchange(candidate);
+  return host ? { priority: null, exchange: host } : null;
+}
+
+export function canonicalMxRecord(value: unknown): string {
+  const parts = mxRecordParts(value);
+  return !parts ? '' : parts.priority === null ? parts.exchange : `${parts.priority} ${parts.exchange}`;
+}
+
+function completeMxRecord(value: unknown, resolverRecord: boolean): Readonly<{ priority: number; exchange: string }> | null {
+  try {
+    const parts = mxRecordParts(value, resolverRecord);
+    return parts && parts.priority !== null
+      ? { priority: parts.priority, exchange: parts.exchange } : null;
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    return null;
+  }
+}
+
+/** Complete canonical records require a preference and retain the root exchange as '.'. */
+export function normalizeMxRecord(value: unknown): Readonly<{ priority: number; exchange: string }> | null {
+  return completeMxRecord(value, false);
+}
+
+/** Accept the native resolver's optional record type without broadening import shapes. */
+export function normalizeResolverMxRecord(value: unknown): Readonly<{ priority: number; exchange: string }> | null {
+  return completeMxRecord(value, true);
 }
 
 function caaValue(value: unknown, tag: string): string {
@@ -382,6 +428,89 @@ export function canonicalDomainControlRecordList(value: unknown, kind: DomainCon
   return [...new Set(retained)]
     .sort(compareCodeUnits)
     .slice(0, MAX_CANONICAL_DOMAIN_CONTROL_RECORDS);
+}
+
+/** Complete field values for posture review; an invalid value never becomes an absent record. */
+export function canonicalPostureRecords(checkId: string, values: readonly unknown[]): string[] | null {
+  if (values.length > MAX_POSTURE_CHECK_RECORDS) return null;
+  const normalise = checkId === 'nameservers' ? domainControlName
+    : checkId === 'mx' ? canonicalMxRecord : checkId === 'caa' ? canonicalCaaRecord
+      : checkId === 'registration_lock'
+        ? (value: unknown) => typeof value === 'string' && value.length <= 120 && !/[\u0000-\u001f\u007f]/u.test(value)
+          ? value.trim().toLowerCase().replace(/[\s_-]+/gu, '') : ''
+        : null;
+  if (!normalise) return null;
+  try {
+    const records = values.map(normalise);
+    if (records.some((value) => !value)) return null;
+    return [...new Set(records)].sort(compareCodeUnits);
+  } catch { return null; }
+}
+
+/** Complete current record inputs are rejected, not shortened, when invalid or over capacity. */
+export function canonicalDomainControlRecords(value: unknown, field: DomainControlRecordField): string[] {
+  if (value === undefined) return [];
+  const rows = boundedDataArray(value, `Domain control ${field}`, 0, MAX_DOMAIN_CONTROL_INPUT_RECORDS);
+  const normalise = field === 'nameservers' ? domainControlName : field === 'ds' ? canonicalDsRecord
+    : field === 'mx' ? canonicalMxRecord : canonicalCaaRecord;
+  const values = rows.map(normalise);
+  if (values.some((item) => !item)) throw new TypeError(`Domain control ${field} contains an invalid record.`);
+  const records = [...new Set(values)].sort(compareCodeUnits);
+  if (records.length > MAX_CURRENT_DOMAIN_CONTROL_RECORDS) throw new TypeError(`Domain control ${field} exceeds ${MAX_CURRENT_DOMAIN_CONTROL_RECORDS} records.`);
+  return records;
+}
+
+export function domainControlRecordMode(
+  entry: Pick<DomainControlPassportEntry, DomainControlRecordField> & { recordModes?: Readonly<Partial<DomainControlRecordModes>> },
+  field: DomainControlRecordField,
+): DomainControlRecordMode {
+  return entry.recordModes?.[field] ?? (entry[field].length ? 'expect_records' : 'unconfigured');
+}
+
+export function normalizeDomainControlRecordModes(
+  value: unknown,
+  records: Readonly<Record<DomainControlRecordField, readonly string[]>>,
+): DomainControlRecordModes {
+  const source = normalizeDeclaredDomainControlRecordModes(value);
+  return Object.freeze(Object.fromEntries(DOMAIN_CONTROL_RECORD_LIST_FIELDS.map((field) => {
+    const mode = Object.hasOwn(source, field) ? source[field] : (records[field].length ? 'expect_records' : 'unconfigured');
+    if ((mode === 'expect_records') !== (records[field].length > 0)) {
+      throw new TypeError(`Domain control ${field} requires records only in the specified-records mode.`);
+    }
+    return [field, mode];
+  }))) as DomainControlRecordModes;
+}
+
+export function normalizeDeclaredDomainControlRecordModes(value: unknown): Readonly<Partial<DomainControlRecordModes>> {
+  const source = value === undefined ? {} : boundedDataRecord(value, RECORD_MODE_KEYS, 'Domain control record modes');
+  if (!source) throw new TypeError('Domain control record modes must be an ordinary object.');
+  const modes: Partial<Record<DomainControlRecordField, DomainControlRecordMode>> = {};
+  for (const field of DOMAIN_CONTROL_RECORD_LIST_FIELDS) {
+    if (!Object.hasOwn(source, field)) continue;
+    const mode = source[field];
+    if (!DOMAIN_CONTROL_RECORD_MODE_OPTIONS.some((option) => option.value === mode)) throw new TypeError(`Domain control ${field} has an unsupported record mode.`);
+    modes[field] = mode as DomainControlRecordMode;
+  }
+  return Object.freeze(modes);
+}
+
+export function normalizeDomainControlRecordSettings(
+  value: Readonly<Partial<Record<DomainControlRecordField, unknown>> & { recordModes?: unknown }>,
+): Record<DomainControlRecordField, string[]> & { recordModes: DomainControlRecordModes } {
+  const records = {
+    nameservers: canonicalDomainControlRecords(value.nameservers, 'nameservers'),
+    ds: canonicalDomainControlRecords(value.ds, 'ds'),
+    mx: canonicalDomainControlRecords(value.mx, 'mx'),
+    caa: canonicalDomainControlRecords(value.caa, 'caa'),
+  };
+  return { ...records, recordModes: normalizeDomainControlRecordModes(value.recordModes, records) };
+}
+
+export function domainControlEvidenceAdmission(observedAt: unknown, now: unknown): string | null {
+  const age = analystReviewAgeAt(observedAt, now);
+  if (age === 'unknown') return 'A valid source observation time at or before the review is required.';
+  if (age === 'stale') return `The source observation is more than ${ANALYST_REVIEW_STALE_AFTER_DAYS} days old; collect a current observation before comparing expected settings.`;
+  return null;
 }
 
 class DomainControlJsonBudgetError extends Error {}
@@ -500,7 +629,7 @@ export function assertDomainControlPassportByteBudget(value: unknown, label = 'D
   domainControlPassportSerialisedBytes(value, label);
 }
 
-function boundedDomainControlPassportEntries(value: unknown, label: string): unknown[] {
+function boundedDomainControlPassportEntries(value: unknown, label: string, legacy = false): unknown[] {
   const entries = boundedDataArray(
     value,
     label,
@@ -508,7 +637,7 @@ function boundedDomainControlPassportEntries(value: unknown, label: string): unk
     MAX_DOMAIN_CONTROL_MANIFEST_ENTRIES,
   );
   return entries.map((entry) => {
-    const source = boundedDataRecord(entry, ENTRY_KEYS, `${label} entry`);
+    const source = boundedDataRecord(entry, legacy ? PUBLIC_ENTRY_KEYS : ENTRY_KEYS, `${label} entry`);
     if (!source) return entry;
     for (const field of RECORD_LIST_FIELDS) {
       if (!Object.hasOwn(source, field)) continue;
@@ -519,6 +648,10 @@ function boundedDomainControlPassportEntries(value: unknown, label: string): unk
       MAX_DOMAIN_CONTROL_INPUT_RECORDS,
       `${label} entry ${field} exceeds ${MAX_DOMAIN_CONTROL_INPUT_RECORDS} input records.`,
     );
+    }
+    if (Object.hasOwn(source, 'recordModes')) {
+      source.recordModes = boundedDataRecord(source.recordModes, RECORD_MODE_KEYS, `${label} entry record modes`);
+      if (!source.recordModes) throw new TypeError(`${label} entry record modes must be an ordinary object.`);
     }
     return source;
   });
@@ -560,7 +693,7 @@ function digest(value: unknown): string | null {
   return SPKI_DIGEST_PATTERN.test(candidate) ? candidate : null;
 }
 
-function normalizeEntry(value: unknown): DomainControlPassportEntry | null {
+function normalizeEntry(value: unknown, legacyRecords: boolean, includeModes: boolean): DomainControlPassportEntry | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const source = value as Record<string, unknown>;
   const domain = domainControlName(source.domain);
@@ -571,18 +704,22 @@ function normalizeEntry(value: unknown): DomainControlPassportEntry | null {
     && !tlsSpkiSha256) {
     throw new TypeError('Domain control TLS public-key fingerprint must be exactly 64 hexadecimal characters.');
   }
+  const records = {
+    nameservers: Object.freeze(legacyRecords ? hostnames(source.nameservers) : canonicalDomainControlRecords(source.nameservers, 'nameservers')),
+    ds: Object.freeze(legacyRecords ? canonicalDomainControlRecordList(source.ds, 'ds') : canonicalDomainControlRecords(source.ds, 'ds')),
+    mx: Object.freeze(legacyRecords ? canonicalDomainControlRecordList(source.mx, 'mx') : canonicalDomainControlRecords(source.mx, 'mx')),
+    caa: Object.freeze(legacyRecords ? canonicalDomainControlRecordList(source.caa, 'caa') : canonicalDomainControlRecords(source.caa, 'caa')),
+  };
   return Object.freeze({
     domain,
-    nameservers: Object.freeze(hostnames(source.nameservers)),
-    ds: Object.freeze(canonicalDomainControlRecordList(source.ds, 'ds')),
-    mx: Object.freeze(canonicalDomainControlRecordList(source.mx, 'mx')),
-    caa: Object.freeze(canonicalDomainControlRecordList(source.caa, 'caa')),
+    ...records,
+    ...(includeModes ? { recordModes: normalizeDomainControlRecordModes(source.recordModes, records) } : {}),
     tlsIssuer: text(source.tlsIssuer, MAX_DOMAIN_CONTROL_TEXT_LENGTH)?.toLowerCase() ?? null,
     tlsSpkiSha256,
     registrarLock: source.registrarLock === 'required' || source.registrarLock === 'not_required'
       ? source.registrarLock
       : null,
-    renewalReviewAt: timestamp(source.renewalReviewAt, true),
+    renewalReviewAt: timestamp(source.renewalReviewAt, legacyRecords),
     note: text(source.note, MAX_DOMAIN_CONTROL_NOTE_LENGTH),
   });
 }
@@ -590,24 +727,26 @@ function normalizeEntry(value: unknown): DomainControlPassportEntry | null {
 function buildUnsignedDomainControlPassportInternal(
   input: unknown,
   generatedAtValue: unknown,
-  options: Readonly<{ legacyGeneratedAt?: boolean; preserveEntryOrder?: boolean }> = {},
+  options: Readonly<{ legacyGeneratedAt?: boolean; preserveEntryOrder?: boolean; manifestVersion?: typeof DOMAIN_CONTROL_MANIFEST_VERSION | typeof PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSION }> = {},
 ): UnsignedDomainControlPassport {
   const source = boundedDataRecord(input, INPUT_KEYS, 'Domain control manifest input');
-  if (!source || source.schema !== DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA || source.version !== DOMAIN_CONTROL_MANIFEST_INPUT_VERSION) {
-    throw new TypeError(`Domain control manifest input must use ${DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA} version ${DOMAIN_CONTROL_MANIFEST_INPUT_VERSION}.`);
+  if (!source || source.schema !== DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA || !SUPPORTED_DOMAIN_CONTROL_MANIFEST_INPUT_VERSIONS.some((version) => version === source.version)) {
+    throw new TypeError(`Domain control manifest input must use ${DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA} version ${SUPPORTED_DOMAIN_CONTROL_MANIFEST_INPUT_VERSIONS.join(' or ')}.`);
   }
-  const inputEntries = boundedDomainControlPassportEntries(source.entries, 'Domain control manifest input');
+  const legacy = source.version === PUBLIC_DOMAIN_CONTROL_MANIFEST_INPUT_VERSION;
+  const version = options.manifestVersion ?? DOMAIN_CONTROL_MANIFEST_VERSION;
+  const inputEntries = boundedDomainControlPassportEntries(source.entries, 'Domain control manifest input', legacy);
   source.entries = inputEntries;
   assertDomainControlPassportByteBudget(source, 'Domain control manifest input');
   const generatedAt = timestamp(generatedAtValue, options.legacyGeneratedAt === true);
-  const expiresAt = timestamp(source.expiresAt, true);
+  const expiresAt = timestamp(source.expiresAt, legacy);
   if (!generatedAt) {
     throw new TypeError('Domain control manifest generation time must be valid and include an explicit timezone.');
   }
   if (!expiresAt || Date.parse(expiresAt) <= Date.parse(generatedAt)) {
     throw new TypeError('Domain control manifest expiry must be a valid time after generation.');
   }
-  const entries = inputEntries.map(normalizeEntry);
+  const entries = inputEntries.map((entry) => normalizeEntry(entry, legacy, version === DOMAIN_CONTROL_MANIFEST_VERSION));
   if (entries.some((entry) => entry === null)) throw new TypeError('Domain control manifest contains an invalid entry.');
   const normalizedEntries = entries as DomainControlPassportEntry[];
   if (new Set(normalizedEntries.map((entry) => entry.domain)).size !== normalizedEntries.length) {
@@ -618,11 +757,11 @@ function buildUnsignedDomainControlPassportInternal(
     : [...normalizedEntries].sort((left, right) => compareCodeUnits(left.domain, right.domain));
   return Object.freeze({
     schema: DOMAIN_CONTROL_PASSPORT_SCHEMA,
-    version: DOMAIN_CONTROL_MANIFEST_VERSION,
+    version,
     generatedAt,
     expiresAt,
     entries: Object.freeze(orderedEntries),
-    limitations: DOMAIN_CONTROL_PASSPORT_LIMITATIONS,
+    limitations: version === PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSION ? PUBLIC_DOMAIN_CONTROL_MANIFEST_LIMITATIONS : DOMAIN_CONTROL_PASSPORT_LIMITATIONS,
   });
 }
 
@@ -630,8 +769,8 @@ export function buildUnsignedDomainControlPassport(
   input: unknown,
   generatedAtValue: unknown,
   options: Readonly<{ legacyGeneratedAt?: boolean }> = {},
-): UnsignedDomainControlPassport {
-  return buildUnsignedDomainControlPassportInternal(input, generatedAtValue, options);
+): UnsignedDomainControlPassport & Readonly<{ version: typeof DOMAIN_CONTROL_MANIFEST_VERSION }> {
+  return buildUnsignedDomainControlPassportInternal(input, generatedAtValue, options) as UnsignedDomainControlPassport & Readonly<{ version: typeof DOMAIN_CONTROL_MANIFEST_VERSION }>;
 }
 
 type NormalizedDomainControlPassportDocument = Readonly<{
@@ -654,38 +793,37 @@ function normalizeDomainControlPassportDocumentInternal(value: unknown): Normali
     || !MANIFEST_DIGEST_PATTERN.test(integrity.digestSha256)) {
     throw new TypeError('Domain control manifest has an unsupported or malformed structure.');
   }
+  const canonicalization = resolveArtifactCanonicalization(source.version, integrity.canonicalization,
+    DOMAIN_CONTROL_MANIFEST_CANONICALIZATION_ROUTES, 'Domain control manifest');
+  const legacy = source.version === PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSION;
+  const expectedLimitations = legacy ? PUBLIC_DOMAIN_CONTROL_MANIFEST_LIMITATIONS : DOMAIN_CONTROL_PASSPORT_LIMITATIONS;
   let limitations: unknown[];
   try {
     limitations = boundedDataArray(
       source.limitations,
       'Domain control manifest limitations',
-      DOMAIN_CONTROL_PASSPORT_LIMITATIONS.length,
-      DOMAIN_CONTROL_PASSPORT_LIMITATIONS.length,
+      expectedLimitations.length,
+      expectedLimitations.length,
     );
   } catch {
     throw new TypeError('Domain control manifest has an unsupported or malformed structure.');
   }
-  if (limitations.some((item, index) => item !== DOMAIN_CONTROL_PASSPORT_LIMITATIONS[index])) {
+  if (limitations.some((item, index) => item !== expectedLimitations[index])) {
     throw new TypeError('Domain control manifest has an unsupported or malformed structure.');
   }
   source.limitations = limitations;
-  const manifestEntries = boundedDomainControlPassportEntries(source.entries, 'Domain control manifest');
+  const manifestEntries = boundedDomainControlPassportEntries(source.entries, 'Domain control manifest', legacy);
   source.entries = manifestEntries;
   source.integrity = integrity;
   assertDomainControlPassportByteBudget(source);
-  const canonicalization = resolveArtifactCanonicalization(
-    source.version,
-    integrity.canonicalization,
-    DOMAIN_CONTROL_MANIFEST_CANONICALIZATION_ROUTES,
-    'Domain control manifest',
-  );
   const baseUnsigned = buildUnsignedDomainControlPassportInternal({
     schema: DOMAIN_CONTROL_PASSPORT_INPUT_SCHEMA,
-    version: DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,
+    version: legacy ? PUBLIC_DOMAIN_CONTROL_MANIFEST_INPUT_VERSION : DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,
     expiresAt: source.expiresAt,
     entries: manifestEntries,
   }, source.generatedAt, {
     preserveEntryOrder: true,
+    manifestVersion: legacy ? PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSION : DOMAIN_CONTROL_MANIFEST_VERSION,
   });
   const unsigned = baseUnsigned;
   const { integrity: _integrity, ...suppliedUnsigned } = source;

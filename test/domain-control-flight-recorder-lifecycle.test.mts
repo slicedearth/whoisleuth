@@ -43,6 +43,9 @@ import {
   MAX_FLIGHT_RECORDER_WINDOW_ID_LENGTH,
   MAX_FLIGHT_RECORDER_WINDOW_REASON_LENGTH,
   MIN_FLIGHT_RECORDER_OBSERVATIONS,
+  PUBLIC_MAX_FLIGHT_RECORDER_INPUT_VALUES,
+  PUBLIC_MAX_FLIGHT_RECORDER_VALUES,
+  PUBLIC_MAX_FLIGHT_RECORDER_VALUE_LENGTH,
 } from '../packages/contracts/domain-control-flight-recorder.mts';
 import {
   DOMAIN_CONTROL_SCHEMA_LIFECYCLE,
@@ -83,7 +86,7 @@ async function fixture(name: string): Promise<string> {
 }
 
 describe('domain-control flight-recorder lifecycle', () => {
-  test('registers one immutable two-contract family with exact executable hooks', () => {
+  test('registers immutable public readers and current writers with executable hooks', () => {
     assert.deepEqual(
       SCHEMA_LIFECYCLE_REGISTRY.find((family) => family.id === DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE.id),
       DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE,
@@ -100,7 +103,9 @@ describe('domain-control flight-recorder lifecycle', () => {
       ]),
       [
         [DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, 1, 'input', true, false, 'reject'],
-        [DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, 1, 'document', true, true, 'reject'],
+        [DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, 2, 'input', true, false, 'reject'],
+        [DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, 1, 'document', true, false, 'reject'],
+        [DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, 2, 'document', true, true, 'reject'],
       ],
     );
     assert.equal(recursivelyFrozen(DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE), true);
@@ -119,15 +124,11 @@ describe('domain-control flight-recorder lifecycle', () => {
   });
 
   test('pins immutable input and output bytes and reproduces the current document exactly', async () => {
-    const inputRaw = await fixture('domain-control-flight-recorder-input-v1.json');
-    const outputRaw = await fixture('domain-control-flight-recorder-v1.json');
-    for (const [id, raw] of [
-      ['domain-control-flight-recorder-input-v1', inputRaw],
-      ['domain-control-flight-recorder-v1', outputRaw],
-    ] as const) {
-      const registered = DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE.fixtures
-        .find((candidate) => candidate.id === id);
-      assert.ok(registered, id);
+    const inputRaw = await fixture(`domain-control-flight-recorder-input-v${DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION}.json`);
+    const outputRaw = await fixture(`domain-control-flight-recorder-v${DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION}.json`);
+    for (const registered of DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE.fixtures) {
+      const id = registered.id;
+      const raw = await fixture(`${id}.json`);
       assert.equal(raw.endsWith('\n'), true, id);
       assert.equal(Buffer.byteLength(raw, 'utf8'), registered.bytes, id);
       assert.equal(createHash('sha256').update(raw).digest('hex'), registered.sha256, id);
@@ -182,7 +183,7 @@ describe('domain-control flight-recorder lifecycle', () => {
     assert.equal(MAX_FLIGHT_RECORDER_JSON_DEPTH, 8);
     assert.equal(MAX_FLIGHT_RECORDER_JSON_VALUES, 400_000);
     assert.equal(MAX_FLIGHT_RECORDER_SOURCE_LENGTH, 120);
-    assert.equal(MAX_FLIGHT_RECORDER_VALUE_LENGTH, 500);
+    assert.ok(MAX_FLIGHT_RECORDER_VALUE_LENGTH >= 1_024 + 20, 'A complete DS digest and its numeric fields fit.');
     assert.equal(MAX_FLIGHT_RECORDER_WINDOW_ID_LENGTH, 64);
     assert.equal(MAX_FLIGHT_RECORDER_WINDOW_REASON_LENGTH, 400);
     assert.deepEqual(DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE.metadata.expiryProfiles, [{
@@ -279,9 +280,9 @@ describe('domain-control flight-recorder lifecycle', () => {
 
     const invalidRetainedTail = JSON.parse(await fixture('domain-control-flight-recorder-input-v1.json')) as any;
     invalidRetainedTail.observations[0].fields[0].values = [
-      ...Array.from({ length: MAX_FLIGHT_RECORDER_VALUES }, (_, index) => `value-${index}`),
-      ...new Array(MAX_FLIGHT_RECORDER_INPUT_VALUES - MAX_FLIGHT_RECORDER_VALUES - 1).fill('value-0'),
-      'x'.repeat(MAX_FLIGHT_RECORDER_VALUE_LENGTH + 1),
+      ...Array.from({ length: PUBLIC_MAX_FLIGHT_RECORDER_VALUES }, (_, index) => `value-${index}`),
+      ...new Array(PUBLIC_MAX_FLIGHT_RECORDER_INPUT_VALUES - PUBLIC_MAX_FLIGHT_RECORDER_VALUES - 1).fill('value-0'),
+      'x'.repeat(PUBLIC_MAX_FLIGHT_RECORDER_VALUE_LENGTH + 1),
     ];
     assert.throws(
       () => flightRecorderModule.buildDomainControlFlightRecorder(invalidRetainedTail, GENERATED_AT),
@@ -300,13 +301,13 @@ describe('domain-control flight-recorder lifecycle', () => {
     input.observations.at(-1)!.observedAt = '2026-08-02T00:00:00.001Z';
     assert.throws(
       () => flightRecorderModule.buildDomainControlFlightRecorder(input, GENERATED_AT),
-      /observations cannot be later than generatedAt/u,
+      /captures cannot be later than generatedAt/u,
     );
   });
 
   test('routes frozen JSON and terminal output without making a request', async () => {
-    const input = await fixture('domain-control-flight-recorder-input-v1.json');
-    const expectedJson = await fixture('domain-control-flight-recorder-v1.json');
+    const input = await fixture(`domain-control-flight-recorder-input-v${DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION}.json`);
+    const expectedJson = await fixture(`domain-control-flight-recorder-v${DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION}.json`);
     let stdout = '';
     let requested = false;
     assert.equal(await runCli(['domain-control', '--json'], {
@@ -350,17 +351,16 @@ describe('domain-control flight-recorder lifecycle', () => {
     assert.equal(flightRecorderModule.DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA);
     assert.equal(flightRecorderModule.DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION, DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION);
     assert.equal(flightRecorderModule.DOMAIN_CONTROL_FLIGHT_RECORDER_FIELDS, DOMAIN_CONTROL_FLIGHT_RECORDER_FIELDS);
-    assert.deepEqual(
-      DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE.metadata.consumerEdges.map((edge) => edge.id),
-      [
-        'domain-control-flight-recorder.node-build',
-        'domain-control-flight-recorder.cli-json-stdout',
-        'domain-control-flight-recorder.cli-terminal-stdout',
-        'domain-control-flight-recorder.cli-json-file',
-        'domain-control-flight-recorder.cli-terminal-file',
-        'domain-control-flight-recorder.cli-monitor-embedding',
-      ],
-    );
+    const validator = DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE.metadata.hooks
+      .find((hook) => hook.exportName === 'validateDomainControlFlightRecorderDocument');
+    assert.ok(validator);
+    const reader = DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE.metadata.consumerEdges
+      .find((edge) => edge.hookIds.includes(validator.id) && edge.emittedContract === null);
+    assert.ok(reader, 'A standalone read-only validation path remains declared.');
+    assert.equal(reader.requestMode, 'none');
+    assert.deepEqual(reader.acceptedContracts.map((contract) => [contract.schema, contract.versions]), [
+      [DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, [1, 2]],
+    ]);
     const monitorEdge = DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA_LIFECYCLE.metadata.consumerEdges
       .find((edge) => edge.id === 'domain-control-flight-recorder.cli-monitor-embedding');
     assert.deepEqual(monitorEdge, {
@@ -368,8 +368,8 @@ describe('domain-control flight-recorder lifecycle', () => {
       plane: 'cli',
       operation: 'embed-after-current-manifest-bounded-passive-monitor',
       acceptedContracts: [],
-      emittedContract: { schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, version: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION },
-      shapeIds: ['domain-control-flight-recorder.document.v1'],
+      emittedContract: { schema: DOMAIN_CONTROL_FLIGHT_RECORDER_SCHEMA, version: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION, discriminator: null },
+      shapeIds: [`domain-control-flight-recorder.document.v${DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION}`],
       boundProfileIds: ['domain-control-flight-recorder.output-wire.v1', 'domain-control-flight-recorder.monitor-action.v1'],
       hookIds: ['domain-control-flight-recorder.node.validate-document', 'domain-control-flight-recorder.cli.monitor'],
       serialisationProfileId: null,

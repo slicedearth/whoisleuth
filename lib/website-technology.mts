@@ -8,9 +8,18 @@
 import { analyzeBrowserLibraries } from './browser-library-profile.mts';
 import { createObservation } from '../packages/evidence/observation.mts';
 import {
+  attributeValue,
+  createTechnologyMarkupContext,
+  elementMarker,
+  hasAttributes,
+  navigationMarker,
+  resourceMarker,
+  type TechnologyMarkupContext,
+  type TechnologyMarkupRule,
+} from './technology-markup.mts';
+import {
   MAX_STATIC_HTML_CHARS,
-  MAX_TAG_LENGTH,
-  MAX_TECHNOLOGY_TAGS,
+  MAX_STATIC_HTML_TAGS as MAX_TECHNOLOGY_TAGS,
   analyzeStaticHtml,
   type StaticHtmlAnalysis,
 } from './static-html-analysis.mts';
@@ -70,16 +79,16 @@ type TechnologyInput = {
   documentOrigin?: unknown;
   observedAt?: unknown;
   sourceTruncated?: unknown;
+  signal?: AbortSignal;
 };
-type MatchContext = {
-  html: string;
-  applicationHtml: string;
+type MatchContext = TechnologyMarkupContext & {
   generator: string;
   httpServer: string;
   resourceHosts: Set<string>;
   responseHeaders: ReadonlyMap<string, string>;
 };
 type SignatureEvidence = Omit<TechnologyEvidence, 'role'> & {
+  markupRules?: readonly TechnologyMarkupRule[];
   role?: TechnologyEvidenceRole;
   roleFor?: (context: MatchContext) => TechnologyEvidenceRole | undefined;
   confidence: TechnologyConfidence;
@@ -100,11 +109,10 @@ type TechnologySignatureDescriptor = Readonly<{
   category: TechnologyCategory;
   minimumEvidenceMatches: 1 | 2;
   requiresNonResourceEvidence: boolean;
-  evidence: ReadonlyArray<Readonly<Omit<SignatureEvidence, 'matches'>>>;
+  evidence: ReadonlyArray<Readonly<Omit<SignatureEvidence, 'matches' | 'markupRules'>>>;
 }>;
 
 const MAX_TECHNOLOGY_HTML_CHARS = MAX_STATIC_HTML_CHARS;
-const MAX_TECHNOLOGY_TAG_LENGTH = MAX_TAG_LENGTH;
 const MAX_RESOURCE_ORIGINS = 30;
 const MAX_GENERATOR_INPUT = 160;
 const MAX_SERVER_INPUT = 240;
@@ -129,33 +137,6 @@ function normalizedResourceHosts(value: unknown): Set<string> {
     }
   }
   return hosts;
-}
-
-function applicationMarkup(
-  markup: string,
-  resourceHosts: Set<string>,
-  effectiveBaseUrl: unknown,
-  documentOrigin: unknown,
-): string {
-  let resolutionBase: URL;
-  try {
-    resolutionBase = new URL(typeof effectiveBaseUrl === 'string' ? effectiveBaseUrl : 'https://document.invalid/');
-  } catch {
-    resolutionBase = new URL('https://document.invalid/');
-  }
-  const comparedOrigin = typeof documentOrigin === 'string' && /^https?:\/\//iu.test(documentOrigin)
-    ? documentOrigin
-    : null;
-  return markup.replace(/\s(src|href|poster|data)="([^"]*)"/giu, (attribute, name: string, value: string) => {
-    try {
-      const parsed = new URL(value, resolutionBase);
-      const knownExternalHost = resourceHosts.has(parsed.hostname.toLowerCase());
-      const offOrigin = comparedOrigin ? parsed.origin !== comparedOrigin : knownExternalHost;
-      return knownExternalHost && offOrigin ? ` ${name.toLowerCase()}=""` : attribute;
-    } catch {
-      return attribute;
-    }
-  });
 }
 
 const PASSIVE_TECHNOLOGY_HEADER_NAMES = Object.freeze([
@@ -217,22 +198,14 @@ function generatorEvidence(pattern: RegExp, description: string): SignatureEvide
   };
 }
 
-function htmlEvidence(markers: string[], description: string, confidence: TechnologyConfidence = 'high'): SignatureEvidence {
+function htmlEvidence(markupRules: readonly TechnologyMarkupRule[], description: string, confidence: TechnologyConfidence = 'high'): SignatureEvidence {
   return {
     source: 'static HTML',
     description,
     confidence,
-    matches: ({ html }) => markers.some((marker) => html.includes(marker)),
-  };
-}
-
-function resourcePathEvidence(markers: string[], description: string, confidence: TechnologyConfidence = 'high'): SignatureEvidence {
-  return {
-    source: 'static HTML',
-    description,
-    confidence,
-    matches: ({ html }) => markers.some((marker) => html.includes(marker)),
-    roleFor: ({ applicationHtml }) => markers.some((marker) => applicationHtml.includes(marker))
+    markupRules,
+    matches: (context) => markupRules.some((rule) => rule.matches(context)),
+    roleFor: (context) => markupRules.some((rule) => rule.matches(context) && !rule.embedded?.(context))
       ? undefined
       : 'embedded_dependency',
   };
@@ -273,7 +246,7 @@ function responseHeaderEvidence(
 ): SignatureEvidence {
   return {
     source: 'passive response header',
-    description,
+    description: `${name}: ${description}`,
     confidence,
     matches: ({ responseHeaders }) => {
       if (!responseHeaders.has(name)) return false;
@@ -303,14 +276,20 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     id: 'wordpress', name: 'WordPress', category: 'content management',
     evidence: [
       generatorEvidence(/^wordpress(?:\s|$)/i, 'Generator metadata identifies WordPress.'),
-      resourcePathEvidence(['/wp-content/', '/wp-includes/'], 'Static resource paths use WordPress conventions.', 'medium'),
+      htmlEvidence([
+        resourceMarker((url) => /\/wp-content\//iu.test(url.pathname), '/wp-content/fixture.css'),
+        resourceMarker((url) => /\/wp-includes\//iu.test(url.pathname), '/wp-includes/fixture.js'),
+      ], 'Static resource paths use WordPress conventions.', 'medium'),
     ],
   },
   {
     id: 'drupal', name: 'Drupal', category: 'content management',
     evidence: [
       generatorEvidence(/^drupal(?:\s|$)/i, 'Generator metadata identifies Drupal.'),
-      htmlEvidence(['data-drupal-selector=', 'data-drupal-link-system-path=', 'drupal-settings-json'], 'Static markup contains Drupal-specific attributes.'),
+      htmlEvidence([
+        elementMarker((element) => hasAttributes(element, 'data-drupal-selector'), '<main data-drupal-selector="fixture"></main>'),
+        elementMarker((element) => hasAttributes(element, 'data-drupal-link-system-path'), '<main data-drupal-link-system-path="fixture"></main>'),
+      ], 'Static markup contains Drupal-specific attributes.'),
       responseHeaderEvidence('x-drupal-cache', null, 'A Drupal-specific cache response header was observed.', 'medium'),
     ],
   },
@@ -322,7 +301,10 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     id: 'ghost', name: 'Ghost', category: 'content management',
     evidence: [
       generatorEvidence(/^ghost(?:\s|$)/i, 'Generator metadata identifies Ghost.'),
-      htmlEvidence(['ghost/api/content/', 'data-ghost-search'], 'Static markup contains Ghost-specific integration markers.'),
+      htmlEvidence([
+        elementMarker((element) => hasAttributes(element, 'data-ghost-search'), '<main data-ghost-search></main>'),
+        resourceMarker((url) => /\/ghost\/api\/content\//iu.test(url.pathname), '/ghost/api/content/'),
+      ], 'Static markup contains Ghost-specific integration markers.'),
     ],
   },
   {
@@ -343,7 +325,10 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     id: 'shopify', name: 'Shopify', category: 'commerce',
     requiresNonResourceEvidence: true,
     evidence: [
-      htmlEvidence(['shopify-section', 'shopify.theme'], 'Static markup contains Shopify-specific storefront markers.'),
+      htmlEvidence([
+        elementMarker((element) => attributeValue(element, 'class').split(/\s/u).includes('shopify-section')
+          || /^shopify-section(?:-|$)/u.test(attributeValue(element, 'id')), '<section class="shopify-section"></section>'),
+      ], 'Static markup contains Shopify-specific storefront markers.'),
       resourceEvidence(['cdn.shopify.com'], 'A retained resource origin uses the Shopify content network.'),
       responseHeaderEvidence('x-shopify-stage', null, 'A Shopify-specific platform response header was observed.', 'medium'),
       responseHeaderEvidence('x-sorting-hat-podid', null, 'A Shopify-specific routing response header was observed.', 'medium'),
@@ -364,7 +349,10 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   {
     id: 'adobe-commerce-magento', name: 'Adobe Commerce / Magento Open Source', category: 'commerce',
     evidence: [
-      htmlEvidence(['data-mage-init=', 'type="text/x-magento-init"', "type='text/x-magento-init'"], 'Static markup contains Commerce frontend initialisation markers.'),
+      htmlEvidence([
+        elementMarker((element) => hasAttributes(element, 'data-mage-init'), '<main data-mage-init="{}"></main>'),
+        elementMarker((element) => element.name === 'script' && attributeValue(element, 'type') === 'text/x-magento-init', '<script type="text/x-magento-init">{}</script>'),
+      ], 'Static markup contains Commerce frontend initialisation markers.'),
     ],
   },
   {
@@ -372,21 +360,27 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     minimumEvidenceMatches: 2,
     allowEmbeddedOnly: true,
     evidence: [
-      resourcePathEvidence(['cdn11.bigcommerce.com/s-', 'stencil-utils'], 'Static markup contains BigCommerce storefront asset markers.', 'medium'),
+      htmlEvidence([
+        resourceMarker((url) => /(?:^|\/)stencil-utils(?:[./-]|$)/iu.test(url.pathname), '/assets/stencil-utils.js'),
+        resourceMarker((url) => /^cdn\d+\.bigcommerce\.com$/iu.test(url.hostname) && /^\/s-[^/]+\//iu.test(url.pathname), 'https://cdn11.bigcommerce.com/s-fixture/theme.css'),
+      ], 'Static markup contains BigCommerce storefront asset markers.', 'medium'),
       resourcePatternEvidence(/^cdn\d+\.bigcommerce\.com$/i, 'A retained resource origin uses BigCommerce storefront delivery infrastructure.'),
     ],
   },
   {
     id: 'woocommerce', name: 'WooCommerce', category: 'commerce',
     evidence: [
-      htmlEvidence(['/wp-content/plugins/woocommerce/'], 'Static resource paths identify the WooCommerce plugin.'),
+      htmlEvidence([resourceMarker((url) => /\/wp-content\/plugins\/woocommerce\//iu.test(url.pathname), '/wp-content/plugins/woocommerce/fixture.css')], 'Static resource paths identify the WooCommerce plugin.'),
     ],
   },
   {
     id: 'opencart', name: 'OpenCart', category: 'commerce',
     evidence: [
       htmlEvidence(
-        ['index.php?route=common/home', 'image/catalog/opencart-logo.png'],
+        [
+          navigationMarker((url) => /\/index\.php$/iu.test(url.pathname) && url.searchParams.getAll('route').length === 1 && url.searchParams.get('route')?.toLowerCase() === 'common/home', 'index.php?route=common/home'),
+          resourceMarker((url) => /\/image\/catalog\/opencart-logo\.png$/iu.test(url.pathname), '/image/catalog/opencart-logo.png'),
+        ],
         'Static markup contains OpenCart routing or default asset conventions.',
       ),
     ],
@@ -394,7 +388,7 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   {
     id: 'prestashop', name: 'PrestaShop', category: 'commerce',
     evidence: [
-      htmlEvidence(['/modules/ps_'], 'Static resource paths use PrestaShop module conventions.'),
+      htmlEvidence([resourceMarker((url) => /\/modules\/ps_[^/]+\//iu.test(url.pathname), '/modules/ps_fixture/fixture.css')], 'Static resource paths use PrestaShop module conventions.'),
     ],
   },
   {
@@ -402,24 +396,29 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     requiresNonResourceEvidence: true,
     evidence: [
       generatorEvidence(/^wix(?:\.com)?(?:\s|$)/i, 'Generator metadata identifies Wix.'),
-      htmlEvidence(['data-mesh-id='], 'Static markup contains a Wix-specific document attribute.', 'medium'),
+      htmlEvidence([elementMarker((element) => hasAttributes(element, 'data-mesh-id'), '<main data-mesh-id="fixture"></main>')], 'Static markup contains a Wix-specific document attribute.', 'medium'),
       resourceEvidence(['static.parastorage.com', 'wixstatic.com'], 'A retained resource origin uses Wix delivery infrastructure.'),
     ],
   },
   {
     id: 'squarespace', name: 'Squarespace', category: 'site builder',
     requiresNonResourceEvidence: true,
+    allowEmbeddedOnly: true,
     evidence: [
       generatorEvidence(/^squarespace(?:\s|$)/i, 'Generator metadata identifies Squarespace.'),
-      htmlEvidence(['squarespace-context'], 'Static markup contains a Squarespace-specific document marker.', 'medium'),
-      resourceEvidence(['static.squarespace.com', 'static1.squarespace.com'], 'A retained resource origin uses Squarespace delivery infrastructure.'),
+      htmlEvidence([
+        resourceMarker((url) => url.hostname === 'assets.squarespace.com' && /^\/universal\/scripts-compressed\/[a-z0-9][a-z0-9.-]*\.js$/iu.test(url.pathname), 'https://assets.squarespace.com/universal/scripts-compressed/fixture.js'),
+      ], 'Static resource paths use Squarespace platform bundle conventions.', 'medium'),
     ],
   },
   {
     id: 'webflow', name: 'Webflow', category: 'site builder',
     evidence: [
       generatorEvidence(/^webflow(?:\s|$)/i, 'Generator metadata identifies Webflow.'),
-      htmlEvidence(['data-wf-page=', 'data-wf-site='], 'Static markup contains Webflow-specific document attributes.'),
+      htmlEvidence([
+        elementMarker((element) => hasAttributes(element, 'data-wf-page'), '<main data-wf-page="fixture"></main>'),
+        elementMarker((element) => hasAttributes(element, 'data-wf-site'), '<main data-wf-site="fixture"></main>'),
+      ], 'Static markup contains Webflow-specific document attributes.'),
     ],
   },
   {
@@ -427,7 +426,7 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     requiresNonResourceEvidence: true,
     evidence: [
       generatorEvidence(/^framer(?:\s|$)/i, 'Generator metadata identifies Framer.'),
-      htmlEvidence(['data-framer-name='], 'Static markup contains Framer-specific component attributes.'),
+      htmlEvidence([elementMarker((element) => hasAttributes(element, 'data-framer-name'), '<main data-framer-name="fixture"></main>')], 'Static markup contains Framer-specific component attributes.'),
       resourceEvidence(['framerusercontent.com'], 'A retained resource origin uses Framer delivery infrastructure.'),
     ],
   },
@@ -436,7 +435,7 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
     requiresNonResourceEvidence: true,
     evidence: [
       htmlEvidence(
-        ['id="wsite-base-style"', "id='wsite-base-style'", 'title="wsite-theme-css"', "title='wsite-theme-css'"],
+        [elementMarker((element) => element.name === 'link' && (attributeValue(element, 'id') === 'wsite-base-style' || attributeValue(element, 'title') === 'wsite-theme-css'), '<link id="wsite-base-style" href="/fixture.css">')],
         'Static markup contains Weebly-specific theme attributes.',
       ),
       resourceEvidence(['editmysite.com'], 'A retained resource origin uses Weebly delivery infrastructure.'),
@@ -444,36 +443,51 @@ const TECHNOLOGY_SIGNATURES: TechnologySignature[] = [
   },
   {
     id: 'angular', name: 'Angular', category: 'web framework',
-    evidence: [htmlEvidence([' ng-version='], 'Static markup contains Angular version metadata.')],
+    evidence: [htmlEvidence([elementMarker((element) => hasAttributes(element, 'ng-version'), '<main ng-version="fixture"></main>')], 'Static markup contains Angular version metadata.')],
   },
   {
     id: 'aspnet-web-forms', name: 'ASP.NET Web Forms', category: 'web framework',
-    evidence: [htmlEvidence([' name="__viewstate"', ' id="__viewstate"'], 'Static form markup contains the ASP.NET Web Forms view-state field.')],
+    evidence: [htmlEvidence([elementMarker((element) => element.name === 'input' && (attributeValue(element, 'name') === '__viewstate' || attributeValue(element, 'id') === '__viewstate'), '<input name="__VIEWSTATE">')], 'Static form markup contains the ASP.NET Web Forms view-state field.')],
   },
   {
     id: 'nextjs', name: 'Next.js', category: 'web framework',
-    evidence: [htmlEvidence(['id="__next_data__"', "id='__next_data__'", '/_next/static/'], 'Static markup contains Next.js bootstrap or asset markers.')],
+    evidence: [htmlEvidence([
+      elementMarker((element) => element.name === 'script' && attributeValue(element, 'id') === '__next_data__', '<script id="__NEXT_DATA__"></script>'),
+      resourceMarker((url) => /\/_next\/static\//iu.test(url.pathname), '/_next/static/fixture.js'),
+    ], 'Static markup contains Next.js bootstrap or asset markers.')],
   },
   {
     id: 'nuxt', name: 'Nuxt', category: 'web framework',
-    evidence: [htmlEvidence(['id="__nuxt"', "id='__nuxt'", '/_nuxt/'], 'Static markup contains Nuxt bootstrap or asset markers.')],
+    evidence: [htmlEvidence([
+      elementMarker((element) => attributeValue(element, 'id') === '__nuxt', '<main id="__nuxt"></main>'),
+      resourceMarker((url) => /\/_nuxt\//iu.test(url.pathname), '/_nuxt/fixture.js'),
+    ], 'Static markup contains Nuxt bootstrap or asset markers.')],
   },
   {
     id: 'gatsby', name: 'Gatsby', category: 'web framework',
-    evidence: [htmlEvidence(['id="___gatsby"', "id='___gatsby'", '/page-data/app-data.json'], 'Static markup contains Gatsby bootstrap or page-data markers.')],
+    evidence: [htmlEvidence([
+      elementMarker((element) => attributeValue(element, 'id') === '___gatsby', '<main id="___gatsby"></main>'),
+      resourceMarker((url) => /\/page-data\/app-data\.json$/iu.test(url.pathname), '/page-data/app-data.json'),
+    ], 'Static markup contains Gatsby bootstrap or page-data markers.')],
   },
   {
     id: 'sveltekit', name: 'SvelteKit', category: 'web framework',
     evidence: [
-      htmlEvidence(['data-sveltekit-preload-data=', 'data-sveltekit-reload='], 'Static markup contains SvelteKit-specific navigation attributes.'),
-      htmlEvidence(['href="/_app/immutable/', 'src="/_app/immutable/'], 'Static asset paths use SvelteKit build conventions.', 'medium'),
+      htmlEvidence([
+        elementMarker((element) => hasAttributes(element, 'data-sveltekit-preload-data'), '<a data-sveltekit-preload-data="hover"></a>'),
+        elementMarker((element) => hasAttributes(element, 'data-sveltekit-reload'), '<a data-sveltekit-reload></a>'),
+      ], 'Static markup contains SvelteKit-specific navigation attributes.'),
+      htmlEvidence([resourceMarker((url) => /\/_app\/immutable\//iu.test(url.pathname), '/_app/immutable/fixture.css')], 'Static asset paths use SvelteKit build conventions.', 'medium'),
     ],
   },
   {
     id: 'astro', name: 'Astro', category: 'web framework',
     evidence: [
-      htmlEvidence(['<astro-island', '<astro-slot'], 'Static markup contains Astro component-island elements.'),
-      htmlEvidence(['href="/_astro/', 'src="/_astro/'], 'Static asset paths use Astro build conventions.', 'medium'),
+      htmlEvidence([
+        elementMarker((element) => element.name === 'astro-island', '<astro-island></astro-island>'),
+        elementMarker((element) => element.name === 'astro-slot', '<astro-slot></astro-slot>'),
+      ], 'Static markup contains Astro component-island elements.'),
+      htmlEvidence([resourceMarker((url) => /\/_astro\//iu.test(url.pathname), '/_astro/fixture.css')], 'Static asset paths use Astro build conventions.', 'medium'),
     ],
   },
   {
@@ -570,33 +584,61 @@ const TECHNOLOGY_SIGNATURE_CATALOGUE: ReadonlyArray<TechnologySignatureDescripto
   })),
 );
 
-function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
+function technologyHtmlAnalysis(input: TechnologyInput): StaticHtmlAnalysis {
+  return input.htmlAnalysis ?? analyzeStaticHtml(input.html, {
+    ...(typeof input.documentOrigin === 'string' ? { baseUrl: input.documentOrigin } : {}),
+  });
+}
+
+// These are fixed semantic reconstructions, not copies of observed markup.
+// Keeping them beside the predicates removes a second keyword catalogue from
+// the contribution tools. Independent structural fixtures test the predicates.
+function minimiseTechnologyMarkup(input: TechnologyInput): string {
+  const analysis = technologyHtmlAnalysis(input);
+  if (analysis.inputLimitReached || analysis.tagLimitReached) {
+    throw new TypeError('Technology review markup exceeded the complete structural-analysis boundary.');
+  }
+  const context = createTechnologyMarkupContext(analysis, input.effectiveBaseUrl, input.documentOrigin);
+  const fragments = TECHNOLOGY_SIGNATURES.flatMap((signature) => signature.evidence.flatMap((evidence) => (
+    (evidence.markupRules ?? []).flatMap((rule) => rule.matches(context)
+      ? [rule.embedded?.(context) ? rule.embeddedReviewMarkup! : rule.reviewMarkup]
+      : [])
+  )));
+  return [...new Set(fragments)].join('');
+}
+
+function reconstructTechnologyHtmlEvidence(id: string, description: string, role?: TechnologyEvidenceRole): string {
+  const rules = TECHNOLOGY_SIGNATURES.find((signature) => signature.id === id)?.evidence
+    .find((evidence) => evidence.source === 'static HTML' && evidence.description === description)?.markupRules;
+  const markup = role === 'embedded_dependency'
+    ? rules?.find((rule) => rule.embeddedReviewMarkup)?.embeddedReviewMarkup
+    : rules?.[0]?.reviewMarkup;
+  if (!markup) throw new TypeError('The retained static clue has no current structural reconstruction.');
+  return markup;
+}
+
+async function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
+  input.signal?.throwIfAborted();
   // Existing direct callers pass minimised, already-derived page evidence rather
   // than the page body. The real collector declares false for header-only
   // responses, while an explicit malformed declaration also fails closed.
   const htmlAvailable = input.htmlAvailable === undefined
     ? true
     : input.htmlAvailable === true;
-  const htmlAnalysis = input.htmlAnalysis ?? analyzeStaticHtml(input.html);
-  const browserLibraryProfile = htmlAvailable ? analyzeBrowserLibraries({
+  const htmlAnalysis = htmlAvailable ? technologyHtmlAnalysis(input) : analyzeStaticHtml('');
+  const browserLibraryProfile = htmlAvailable ? await analyzeBrowserLibraries({
     htmlAnalysis,
     observedAt: input.observedAt,
     sourceTruncated: input.sourceTruncated,
+    ...(input.signal ? { signal: input.signal } : {}),
   }) : null;
   const context: MatchContext = {
-    html: htmlAnalysis.markup,
-    applicationHtml: '',
-    generator: boundedLowercase(input.generator, MAX_GENERATOR_INPUT),
+    ...createTechnologyMarkupContext(htmlAnalysis, input.effectiveBaseUrl, input.documentOrigin),
+    generator: htmlAvailable ? boundedLowercase(input.generator, MAX_GENERATOR_INPUT) : '',
     httpServer: boundedLowercase(input.httpServer, MAX_SERVER_INPUT),
-    resourceHosts: normalizedResourceHosts(input.resourceOrigins),
+    resourceHosts: htmlAvailable ? normalizedResourceHosts(input.resourceOrigins) : new Set<string>(),
     responseHeaders: normalizedResponseHeaders(input.responseHeaders),
   };
-  context.applicationHtml = applicationMarkup(
-    context.html,
-    context.resourceHosts,
-    input.effectiveBaseUrl,
-    input.documentOrigin,
-  );
   const findings: TechnologyFinding[] = [];
 
   for (const signature of TECHNOLOGY_SIGNATURES) {
@@ -647,7 +689,7 @@ function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
   if (!htmlAvailable) limitations.push('HTML page identity was unavailable; only bounded permitted response-header indicators were evaluated.');
   if (input.sourceTruncated === true) limitations.push('The captured homepage body was truncated, so technology indicators may be incomplete.');
   if (htmlAnalysis.inputLimitReached) limitations.push(`Only the first ${MAX_TECHNOLOGY_HTML_CHARS} HTML characters were evaluated.`);
-  if (htmlAnalysis.tagLimitReached) limitations.push(`Technology matching reached the ${MAX_TECHNOLOGY_TAGS}-tag or ${MAX_TECHNOLOGY_TAG_LENGTH}-character tag boundary.`);
+  if (htmlAnalysis.tagLimitReached) limitations.push('Static HTML construction or attribute projection reached a bound; later technology indicators may be missing.');
   if (findingLimitReached) limitations.push(`Only the first ${MAX_TECHNOLOGY_FINDINGS} technology findings were retained.`);
 
   return {
@@ -688,6 +730,8 @@ export {
   TECHNOLOGY_SIGNATURE_CATALOGUE,
   analyzeWebsiteTechnology,
   captureTechnologyResponseHeaders,
+  minimiseTechnologyMarkup,
+  reconstructTechnologyHtmlEvidence,
 };
 
 export type {

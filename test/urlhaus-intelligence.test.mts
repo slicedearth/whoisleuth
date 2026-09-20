@@ -91,6 +91,40 @@ function fixtureAdapter(
   });
 }
 
+test('provider record identifiers retain exact identity or are omitted, never shortened', async () => {
+  const exact = '123456789012345678901234';
+  for (const id of [exact, `${exact}5`, ` ${exact}`, `${exact}\n`, 123456]) {
+    const adapter = fixtureAdapter(() => jsonResponse(responseBody({ urls: [hostRecord({ id })] })));
+    const result = await adapter.lookupDomain('example.com', { env: ENABLED_ENV });
+    if (id === exact) {
+      assert.equal(result.state, 'success');
+      assert.equal(result.observation.complete, true);
+      assert.equal(result.findings.length, 1);
+      assert.equal(result.findings[0]?.id, exact);
+      assert.equal(result.findings[0]?.referenceUrl, `https://urlhaus.abuse.ch/url/${exact}/`);
+    } else {
+      assert.equal(result.state, 'partial');
+      assert.equal(result.observation.complete, false);
+      assert.deepEqual(result.findings, []);
+      assert.match(result.observation.limitations.join(' '), /1 provider record was omitted/u);
+    }
+  }
+});
+
+test('provider host and URL attribution rejects overlong identity inputs before normalisation', async () => {
+  const host = `example.com${' '.repeat(253)}`;
+  const wrongHost = await fixtureAdapter(() => jsonResponse(responseBody({ host })))
+    .lookupDomain('example.com', { env: ENABLED_ENV });
+  assert.equal(wrongHost.state, 'error');
+  assert.deepEqual(wrongHost.findings, []);
+  const overlongUrl = await fixtureAdapter(() => jsonResponse(responseBody({
+    urls: [hostRecord({ url: `https://example.com/${'a'.repeat(2048)}` })],
+  }))).lookupDomain('example.com', { env: ENABLED_ENV });
+  assert.equal(overlongUrl.state, 'partial');
+  assert.equal(overlongUrl.observation.complete, false);
+  assert.deepEqual(overlongUrl.findings, []);
+});
+
 describe('malware-host provider policy and configuration', () => {
   test('declares a search-only, no-cache, bounded fair-use provider', () => {
     assert.equal(URLHAUS_PROVIDER.id, 'urlhaus_host');

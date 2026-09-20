@@ -41,8 +41,10 @@ test('the website, browser favicons, and README use the same approved mark', asy
   assert.match(appHtml, /<link rel="icon" href="\/favicon\.ico" sizes="64x64">/);
   assert.match(appHtml, /<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg">/);
   assert.deepEqual([...ico.subarray(0, 8)], [0, 0, 1, 0, 1, 0, 64, 64]);
+  const head = appHtml.indexOf('%sveltekit.head%');
+  const theme = appHtml.indexOf('<script src="/theme-init.js"></script>');
   assert.ok(
-    appHtml.indexOf('%sveltekit.head%') < appHtml.indexOf('<script src="/theme-init.js"></script>'),
+    head >= 0 && theme >= 0 && head < theme,
     'the generated CSP meta policy must precede theme initialization',
   );
   assert.match(

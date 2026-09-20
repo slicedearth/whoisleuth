@@ -13,10 +13,14 @@ import {
   normalizeBulkSession,
   normalizeBulkSessionResult,
   normalizeBulkSessionStore,
+  serializeBulkSessionStore,
+  serializeNormalizedBulkSessions,
   summarizeBulkProfileContexts,
   type BulkProfileContextProvenance,
   unavailableBulkProfileContext,
   upsertBulkSession,
+  prepareBulkSessionSave,
+  bulkSessionSavePreviewIsCurrent,
 } from '../frontend/src/lib/analysis/bulk-session-model.ts';
 import { normalizeCaaCritical } from '../frontend/src/lib/analysis/dns-record-normalization.ts';
 
@@ -34,6 +38,22 @@ const ACTIVE_PROFILE_CONTEXT = Object.freeze({
   activeProfileId: 'profile-one',
   profileUpdatedAt: FIRST,
   limitation: '',
+});
+
+test('admitted Bulk storage formatting preserves exact compact bytes while unknown-input serialization retains admission', () => {
+  const store = normalizeBulkSessionStore({ schema: BULK_SESSION_SCHEMA, version: BULK_SESSION_SCHEMA_VERSION, sessions: [session('stored-session')] });
+  assert.equal(store.sessions.length, 1);
+  const expectedSessions = store.sessions.map((saved) => ({ ...saved, results: saved.results.map(({ profileContext: _profileContext, ...row }) => row) }));
+  const expected = JSON.stringify({ schema: BULK_SESSION_SCHEMA, version: BULK_SESSION_SCHEMA_VERSION, sessions: expectedSessions });
+  assert.equal(serializeNormalizedBulkSessions(store.sessions), expected);
+  assert.equal(serializeBulkSessionStore(store), expected);
+  assert.deepEqual(JSON.parse(expected).sessions[0].domains, ['priority.invalid']);
+  assert.equal(Object.hasOwn(JSON.parse(expected).sessions[0].results[0], 'profileContext'), false);
+  let accessed = false;
+  const hostile = Object.defineProperty({}, 'sessions', { enumerable: true, get: () => { accessed = true; return store.sessions; } });
+  assert.throws(() => serializeBulkSessionStore(hostile));
+  assert.equal(accessed, false);
+  assert.throws(() => serializeBulkSessionStore({ ...store, version: BULK_SESSION_SCHEMA_VERSION + 1 }), /unsupported/u);
 });
 
 function result(domain = 'priority.invalid', overrides: Record<string, unknown> = {}) {
@@ -131,6 +151,47 @@ function session(id = 'session-one', overrides: Record<string, unknown> = {}) {
 }
 
 describe('saved Bulk sessions', () => {
+  test('round trips independent source clocks without substituting row or session dates', () => {
+    const input = session('source-clocks', { results: [result('priority.invalid', { observedAt: LATER, sourceCoverage: [
+      { source: 'dns', state: 'complete', observedAt: FIRST },
+      { source: 'rdap', state: 'partial', observedAt: null },
+      { source: 'http', state: 'complete', observedAt: '2026-07-28T01:00:00' },
+    ] })] });
+    const normalized = normalizeBulkSessionStore([input]);
+    assert.deepEqual(normalized.sessions[0]?.results[0]?.sourceCoverage, [
+      { source: 'dns', state: 'complete', observedAt: FIRST },
+      { source: 'rdap', state: 'partial', observedAt: null },
+      { source: 'http', state: 'complete', observedAt: null },
+    ]);
+    assert.deepEqual(normalizeBulkSessionStore(JSON.parse(serializeBulkSessionStore(normalized))), normalized);
+  });
+  test('only current versioned stores inherit identical session context; logical rows and mixed contexts remain explicit', () => {
+    const normalized = normalizeBulkSessionStore([session()]);
+    const wire = JSON.parse(serializeBulkSessionStore(normalized));
+    assert.equal(Object.hasOwn(wire.sessions[0].results[0], 'profileContext'), false);
+    assert.deepEqual(normalizeBulkSessionStore(wire), normalized);
+    assert.equal(normalizeBulkSession(wire.sessions[0]), null);
+    assert.deepEqual(normalizeBulkSessionStore(wire.sessions).sessions, []);
+    wire.sessions[0].results[0].relationship.version = 2;
+    assert.deepEqual(normalizeBulkSessionStore({ ...wire, version: 4 }).sessions, []);
+    for (const invalid of [null, {}, { sourceState: 'mixed' }, { sourceState: 'ready', activeProfileId: 'missing-revision' }]) {
+      const explicit = structuredClone(wire);
+      explicit.sessions[0].results[0].profileContext = invalid;
+      assert.deepEqual(normalizeBulkSessionStore(explicit).sessions, []);
+    }
+    const mixed = normalizeBulkSessionStore([session('mixed', {
+      domains: ['one.invalid', 'two.invalid'],
+      results: [result('one.invalid'), result('two.invalid', { profileContext: ACTIVE_PROFILE_CONTEXT })],
+    })]);
+    const mixedWire = JSON.parse(serializeBulkSessionStore(mixed));
+    assert.equal(mixedWire.sessions[0].profileContext.sourceState, 'mixed');
+    assert.equal(mixedWire.sessions[0].results[0].profileContext.activeProfileId, null);
+    assert.equal(mixedWire.sessions[0].results[1].profileContext.activeProfileId, 'profile-one');
+    assert.deepEqual(normalizeBulkSessionStore(mixedWire), mixed);
+    delete mixedWire.sessions[0].results[0].profileContext;
+    assert.deepEqual(normalizeBulkSessionStore(mixedWire).sessions, []);
+  });
+
   test('sanitizes impossible ready-without-profile claims without turning legitimate false values into absence', () => {
     const impossible = normalizeBulkSessionResult(result('forged.invalid', {
       trusted: 'official',
@@ -466,6 +527,39 @@ describe('saved Bulk sessions', () => {
     assert.doesNotThrow(() => enforceBulkSessionStoreBudget(normalized));
   });
 
+  test('reports count-based eviction and never evicts local sessions during an import', () => {
+    const local = Array.from({ length: MAX_BULK_SESSIONS }, (_, index) => session(`local-${index}`, {
+      updatedAt: new Date(Date.parse(FIRST) + index * 1_000).toISOString(),
+    }));
+    const before = structuredClone(local);
+    const candidate = session('incoming', { updatedAt: LATER });
+    const saved = upsertBulkSession(local, candidate);
+    assert.equal(saved.pruned, 1);
+    assert.equal(saved.sessions.length, MAX_BULK_SESSIONS);
+    const imported = mergeBulkSessions(local, buildBulkSessionExport([candidate]));
+    assert.deepEqual(imported.sessions, normalizeBulkSessionStore(local).sessions);
+    assert.deepEqual({ added: imported.added, updated: imported.updated, skipped: imported.skipped, pruned: imported.pruned }, { added: 0, updated: 0, skipped: 1, pruned: 0 });
+    assert.deepEqual(local, before);
+  });
+
+  test('previews the exact retention consequences without changing saved work and invalidates stale approval', () => {
+    const local = normalizeBulkSessionStore(Array.from({ length: MAX_BULK_SESSIONS }, (_, index) => session(`local-${index}`, {
+      updatedAt: new Date(Date.parse(FIRST) + index * 1_000).toISOString(),
+    }))).sessions;
+    const before = structuredClone(local);
+    const preview = prepareBulkSessionSave(local, session('new', { updatedAt: LATER }));
+    assert.deepEqual(preview.removed.map((value) => value.id), ['local-0']);
+    assert.equal(preview.pruned, 1);
+    assert.ok(preview.removedBytes > 0);
+    assert.deepEqual(local, before);
+    assert.equal(bulkSessionSavePreviewIsCurrent(local, preview), true);
+    const changed = structuredClone(local);
+    changed.find((value) => value.id === 'local-0')!.name = 'Peer change with the same timestamp';
+    assert.equal(bulkSessionSavePreviewIsCurrent(changed, preview), false);
+    assert.equal(bulkSessionSavePreviewIsCurrent(local.slice(1), preview), false);
+    assert.equal(prepareBulkSessionSave([], session('new')).removed.length, 0);
+  });
+
   test('compares compact observations without treating missing rows as domain removal', () => {
     const comparison = compareBulkSessions(
       session('baseline', { updatedAt: FIRST }),
@@ -571,12 +665,12 @@ describe('saved Bulk sessions', () => {
     for (const version of [1, 2, 3]) {
       const unsupported = { ...exported, version };
       const before = structuredClone(unsupported);
-      assert.throws(() => mergeBulkSessions([], unsupported), /Expected Bulk session schema 4/u);
+      assert.throws(() => mergeBulkSessions([], unsupported), new RegExp(`Expected Bulk session schema ${BULK_SESSION_SCHEMA_VERSION}`, 'u'));
       assert.deepEqual(unsupported, before);
     }
     assert.throws(
-      () => mergeBulkSessions([], { ...exported, version: 5 }),
-      /newer schema 5/i,
+      () => mergeBulkSessions([], { ...exported, version: BULK_SESSION_SCHEMA_VERSION + 1 }),
+      /newer schema/i,
     );
   });
 

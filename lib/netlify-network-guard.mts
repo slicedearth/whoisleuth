@@ -10,7 +10,7 @@ import {
   NETLIFY_REQUEST_ORIGIN_CONTEXT,
   sessionFingerprintFromCookieHeader,
 } from './auth.mts';
-import { checkApiRateLimit, getClientIp } from './rate-limit.mts';
+import { checkApiRateLimit, serverlessClientIdentity } from './rate-limit.mts';
 import {
   featureDisabledError,
   networkFeaturePolicy,
@@ -39,9 +39,12 @@ type NetlifyGuardResult = {
 function guardNetlifyNetworkRequest(
   event: NetlifyFunctionEvent | null | undefined,
   feature?: NetworkFeatureId,
+  allowedMethods?: readonly string[],
 ): NetlifyGuardResult {
   const headers = event && event.headers ? event.headers : {};
-  const ip = getClientIp(headers);
+  const identity = serverlessClientIdentity(headers);
+  if (identity.error !== undefined) return { response: json(503, { error: identity.error, errorCode: 'RUNTIME_IDENTITY_UNAVAILABLE' }) };
+  const ip = identity.ip;
   const { allowed, retryAfterSeconds } = checkApiRateLimit(ip);
   if (!allowed) {
     return {
@@ -63,6 +66,14 @@ function guardNetlifyNetworkRequest(
       response: json(403, {
         error: 'Cross-site network request blocked',
         errorCode: 'CROSS_SITE_REQUEST_BLOCKED',
+      }),
+    };
+  }
+
+  if (allowedMethods && !allowedMethods.includes(event?.httpMethod ?? 'GET')) {
+    return {
+      response: json(405, { error: 'Method not allowed', errorCode: 'METHOD_NOT_ALLOWED' }, {
+        Allow: allowedMethods.join(', '),
       }),
     };
   }

@@ -1,5 +1,8 @@
 import {
   MAX_DESIRED_POSTURE_BASELINES,
+  brandPostureObservationContext,
+  currentDesiredPostureObservation,
+  desiredPostureObservations,
   type BrandProfile,
   type DesiredPostureBaseline,
   type DesiredPostureObservation,
@@ -11,6 +14,8 @@ import {
   type DesiredPostureComparison,
   type DesiredPostureComparisonField,
 } from './owned-domain-posture-review.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+import { MAX_POSTURE_CHECKS, MAX_POSTURE_CHECK_RECORDS } from '../../../../packages/evidence/domain-posture-context.mts';
 
 export const DOMAIN_POSTURE_MATRIX_VERSION = 1;
 
@@ -62,24 +67,13 @@ const STATES: readonly DomainPostureMatrixState[] = Object.freeze([
   'approved_window',
   'drift',
   'not_configured',
+  'observed',
   'review',
   'suppressed',
   'unavailable',
   'unknown',
   'unsupported',
 ]);
-
-function latestObservation(baseline: DesiredPostureBaseline): DesiredPostureObservation | null {
-  const retained = baseline.observationHistory?.length
-    ? baseline.observationHistory.slice(-12)
-    : baseline.previousObservation
-      ? [baseline.previousObservation]
-      : [];
-  return [...retained]
-    .filter((item) => Number.isFinite(Date.parse(item.observedAt)))
-    .sort((left, right) => left.observedAt.localeCompare(right.observedAt))
-    .at(-1) ?? null;
-}
 
 function baselineHref(domain: string): string {
   return `/brands?baseline=${encodeURIComponent(domain)}#desired-posture-baseline`;
@@ -107,14 +101,14 @@ function unconfiguredCell(domain: string, field: DesiredPostureComparisonField):
 function comparisonCell(
   domain: string,
   comparison: DesiredPostureComparison,
-  observation: DesiredPostureObservation | null,
+  hasObservation: boolean,
 ): DomainPostureMatrixCell {
   return Object.freeze({
     ...comparison,
     desired: Object.freeze([...comparison.desired]),
     observed: Object.freeze([...comparison.observed]),
     baselineHref: baselineHref(domain),
-    observationHref: observation ? `#${retainedPostureObservationId(domain)}` : null,
+    observationHref: hasObservation ? `#${retainedPostureObservationId(domain)}` : null,
   });
 }
 
@@ -122,10 +116,7 @@ export function buildDomainPostureMatrix(
   profile: BrandProfile,
   now: unknown = new Date().toISOString(),
 ): DomainPostureMatrix {
-  const parsedNow = Date.parse(String(now));
-  const generatedAt = Number.isFinite(parsedNow)
-    ? new Date(parsedNow).toISOString()
-    : new Date(Date.parse(profile.updatedAt)).toISOString();
+  const generatedAt = normalizeExplicitIsoTimestamp(now) ?? '';
   const baselines = new Map(
     profile.desiredPostureBaselines
       .slice(0, MAX_DESIRED_POSTURE_BASELINES)
@@ -147,9 +138,13 @@ export function buildDomainPostureMatrix(
         observationChecks: Object.freeze([]),
       });
     }
-    const observation = latestObservation(baseline);
+    const latest = currentDesiredPostureObservation(baseline);
+    const observation = latest.observation;
+    const hasObservation = desiredPostureObservations(baseline).length > 0;
     const comparisons = new Map(
-      buildDesiredPostureComparisonsFromObservation(baseline, observation, generatedAt)
+      buildDesiredPostureComparisonsFromObservation(baseline, observation, generatedAt, {
+        context: brandPostureObservationContext(profile, domain), limitation: latest.limitation,
+      })
         .map((comparison) => [comparison.field, comparison]),
     );
     return Object.freeze({
@@ -157,17 +152,17 @@ export function buildDomainPostureMatrix(
       baselineConfigured: true,
       baselineUpdatedAt: baseline.updatedAt,
       observationAt: observation?.observedAt ?? null,
-      observationId: observation ? retainedPostureObservationId(domain) : null,
+      observationId: hasObservation ? retainedPostureObservationId(domain) : null,
       lifecycle: baseline.lifecycle,
       zoneIntent: baseline.zoneIntent,
       cells: Object.freeze(DESIRED_POSTURE_COMPARISON_FIELDS.map((field) => {
         const comparison = comparisons.get(field);
-        return comparison ? comparisonCell(domain, comparison, observation) : unconfiguredCell(domain, field);
+        return comparison ? comparisonCell(domain, comparison, hasObservation) : unconfiguredCell(domain, field);
       })),
-      observationChecks: Object.freeze((observation?.checks ?? []).slice(0, 32).map((check) => Object.freeze({
+      observationChecks: Object.freeze((observation?.checks ?? []).slice(0, MAX_POSTURE_CHECKS).map((check) => Object.freeze({
         id: check.id,
         status: check.status,
-        records: Object.freeze(check.records.slice(0, 32)),
+        records: Object.freeze(check.records.slice(0, MAX_POSTURE_CHECK_RECORDS)),
       }))),
     });
   });
@@ -176,7 +171,7 @@ export function buildDomainPostureMatrix(
     rows.flatMap((row) => row.cells).filter((cell) => cell.state === state).length,
   ])) as Record<DomainPostureMatrixState, number>;
   const baselineCount = rows.filter((row) => row.baselineConfigured).length;
-  const observationCount = rows.filter((row) => row.observationAt).length;
+  const observationCount = rows.filter((row) => row.observationId).length;
   return Object.freeze({
     version: DOMAIN_POSTURE_MATRIX_VERSION,
     generatedAt,
@@ -192,7 +187,8 @@ export function buildDomainPostureMatrix(
     limitations: Object.freeze([
       'This matrix projects analyst-authored desired state and retained compact posture observations only. It performs no request and makes no uptime, ownership, control, or continuous-monitoring claim.',
       'Unavailable, unknown, unsupported, suppressed, and approved-window states remain distinct. They are never converted into alignment or proof that a configuration is safe.',
-      'Each cell links to the selected local baseline and, when present, the exact retained observation used for comparison.',
+      'Each cell links to the selected local baseline and retained source records. Equal or unknown capture times cannot establish a unique latest observation.',
+      ...(!generatedAt ? ['The matrix review time is unavailable.'] : []),
     ]),
   });
 }

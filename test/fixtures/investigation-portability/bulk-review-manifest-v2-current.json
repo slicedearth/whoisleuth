@@ -1,0 +1,76 @@
+{
+  "schema": "whoisleuth.bulk-review-manifest",
+  "version": 2,
+  "generatedAt": "2026-09-01T01:00:00.000Z",
+  "observedAt": "2026-09-01T00:00:00.000Z",
+  "lookupProfile": "deep",
+  "selection": {
+    "count": 2,
+    "domains": [
+      "review.example",
+      "failed.example"
+    ]
+  },
+  "view": {
+    "primaryFilter": "all",
+    "mutationFilter": "",
+    "signalFilters": [],
+    "sourceFilter": "",
+    "lifecycleFilter": "",
+    "ageFilter": "",
+    "mailFilter": "",
+    "registrarFilter": "",
+    "caseDispositionFilter": "",
+    "reviewStateFilter": "",
+    "groupBy": "",
+    "sortKey": "risk",
+    "sortDirection": -1
+  },
+  "rows": [
+    {
+      "domain": "review.example",
+      "reviewState": "reviewed",
+      "resultState": "complete",
+      "scanDepth": "deep",
+      "sourceCoverage": [
+        {
+          "source": "rdap",
+          "state": "partial"
+        },
+        {
+          "source": "dns",
+          "state": "unavailable"
+        }
+      ],
+      "profileContext": {
+        "sourceState": "unavailable",
+        "activeProfileId": null,
+        "profileUpdatedAt": null,
+        "limitation": "Profile context was unavailable."
+      }
+    },
+    {
+      "domain": "failed.example",
+      "reviewState": "unreviewed",
+      "resultState": "error",
+      "scanDepth": "deep",
+      "sourceCoverage": [],
+      "profileContext": {
+        "sourceState": "ready",
+        "activeProfileId": null,
+        "profileUpdatedAt": null,
+        "limitation": ""
+      }
+    }
+  ],
+  "limitations": [
+    "This manifest records the explicit review selection and view context for a separate CSV export.",
+    "It contains compact source states and bounded row-level Brand Profile provenance only, and excludes raw payloads, Profile contents, contact records, notes, and transient request state.",
+    "Reproducing the filters does not reproduce upstream responses or imply that evidence remains current."
+  ],
+  "integrity": {
+    "algorithm": "SHA-256",
+    "canonicalization": "sorted-json-v2",
+    "digestSha256": "sha256:ad2eb2930932743a2280133fefdbf3c67cf84128164836516a868368650ab790"
+  }
+}

@@ -10,6 +10,8 @@ export const MAX_EXTERNAL_FINDINGS_IMPORT_BYTES = 384 * 1024;
 export const MAX_EXTERNAL_FINDINGS = 100;
 export const MAX_EXTERNAL_FINDINGS_PER_DOMAIN = 20;
 export const MAX_EXTERNAL_FINDING_DOMAINS = 25;
+export const MAX_EXTERNAL_FINDING_LIMITATIONS = 8;
+export const MAX_EXTERNAL_FINDING_LIMITATION_LENGTH = 240;
 
 export const EXTERNAL_FINDING_ROWS_SCHEMA = 'whoisleuth.external-finding-rows';
 export const EXTERNAL_FINDING_ROWS_VERSION = 1;
@@ -169,7 +171,6 @@ export const EXTERNAL_OBSERVATION_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLif
   contracts: EXTERNAL_INTERCHANGE_CONTRACTS,
   fixtures: EXTERNAL_INTERCHANGE_FIXTURES,
   metadata: {
-    metadataVersion: 3,
     enforcement: 'declarative_only',
     shapes: [
       externalShape('external-interchange.findings.v4', EXTERNAL_FINDINGS_SCHEMA, [...SUPPORTED_EXTERNAL_FINDINGS_VERSIONS], ['schema', 'schemaVersion', 'source', 'findings'], 'preserve_document'),

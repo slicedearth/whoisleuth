@@ -11,6 +11,8 @@
 // applies globally on server.mts's one long-lived process, but only within
 // a single warm container on Netlify Functions.
 
+import { abortable } from './abort.mts';
+
 type CacheEntry = {
   value: unknown;
   expiresAt: number;
@@ -18,6 +20,7 @@ type CacheEntry = {
 };
 
 type CacheFactory<T = unknown> = () => T | Promise<T>;
+type CacheResult = Readonly<{ value: unknown; owned: boolean }>;
 
 const TTL_MS = 3 * 60 * 1000; // 3 minutes
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
@@ -83,30 +86,40 @@ function getCached(key: string): unknown | undefined {
     deleteEntry(key);
     return undefined;
   }
-  return entry.value;
+  return structuredClone(entry.value);
 }
 
-function setCached(key: string, value: unknown): void {
+function setCached(key: string, value: unknown): CacheResult {
   sweepExpiredEntries(Date.now());
   deleteEntry(key); // avoid double-counting bytes if this key is already cached
   const size = approxByteSize(value);
   // A value whose serialized size cannot be measured cannot participate in a
   // byte-bounded cache. Return it to the current caller without retaining it.
-  if (size === null) return;
-  store.set(key, { value, expiresAt: Date.now() + TTL_MS, size });
+  if (size === null || size > MAX_TOTAL_BYTES) return { value, owned: false };
+  let snapshot: unknown;
+  try { snapshot = structuredClone(value); }
+  catch { return { value, owned: false }; }
+  store.set(key, { value: snapshot, expiresAt: Date.now() + TTL_MS, size });
   totalBytes += size;
   while (store.size > 0 && (store.size > MAX_ENTRIES || totalBytes > MAX_TOTAL_BYTES)) {
     const oldestKey = store.keys().next().value;
     if (oldestKey === undefined) break;
     deleteEntry(oldestKey);
   }
+  return { value: snapshot, owned: true };
+}
+
+// Stored data and coalesced results belong to the cache, not to a caller. Each
+// consumer receives its own copy, including the first and concurrent callers.
+function callerResult(result: CacheResult): unknown {
+  return result.owned ? structuredClone(result.value) : result.value;
 }
 
 // Concurrent callers for the same key (e.g. a bulk scan's concurrent
 // workers, or a fast scan immediately followed by a deep-check, hitting the
 // same domain before the first lookup has even finished) share one
 // in-flight request instead of each starting their own.
-const inFlight = new Map<string, Promise<unknown>>();
+const inFlight = new Map<string, Promise<CacheResult>>();
 
 // `factory` may legitimately resolve to `null` (e.g. "no RDAP registry for
 // this TLD") - that's cached as a real result, distinct from `undefined`
@@ -115,24 +128,34 @@ const inFlight = new Map<string, Promise<unknown>>();
 // The cache intentionally holds heterogeneous public lookup results. Callers
 // supply distinct result contracts, so this internal compatibility boundary
 // stays dynamically typed rather than asserting one shared payload shape.
-async function cached<T>(key: string, factory: CacheFactory<T>): Promise<T> {
+async function cached<T>(key: string, factory: CacheFactory<T>, signal?: AbortSignal): Promise<T> {
+  signal?.throwIfAborted();
   const hit = getCached(key);
   if (hit !== undefined) return hit as T;
 
-  const pending = inFlight.get(key);
-  if (pending) return pending as Promise<T>;
+  // A deadline-scoped caller may reuse completed public data, but must own
+  // its cancellable work rather than aborting another caller's shared request.
+  if (signal) {
+    const value = await abortable(factory, signal);
+    signal.throwIfAborted();
+    return callerResult(setCached(key, value)) as T;
+  }
 
-  const promise = (async () => {
+  const pending = inFlight.get(key);
+  if (pending) return callerResult(await pending) as T;
+
+  // Register pending work before invoking the factory, including factories
+  // that throw synchronously. A rejected promise must never poison the key.
+  const promise = Promise.resolve().then(async () => {
     try {
       const value = await factory();
-      setCached(key, value);
-      return value;
+      return setCached(key, value);
     } finally {
       inFlight.delete(key);
     }
-  })();
+  });
   inFlight.set(key, promise);
-  return promise;
+  return callerResult(await promise) as T;
 }
 
 // Expired entries are swept lazily during cache activity. This preserves the

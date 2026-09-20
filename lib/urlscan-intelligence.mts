@@ -326,7 +326,7 @@ function createUrlscanIntelligenceAdapter(dependencies: AdapterDependencies = {}
       const overLimit = parsed.results.length > URLSCAN_MAX_RESULTS || parsed.has_more === true;
       const invalid = normalized.filter((item) => item === null).length;
       const reviewed = rawResults.length - invalid;
-      if (!findings.length && parsed.results.length === 0) {
+      if (parsed.results.length === 0 && !overLimit) {
         return result(targetDomain, {
           state: 'not_found',
           detail: `No archived malicious-verdict match was returned for the last ${URLSCAN_SEARCH_DAYS} days.`,

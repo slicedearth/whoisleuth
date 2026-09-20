@@ -163,8 +163,8 @@ describe('synthetic analyst journey contract', () => {
     assert.ok(assurance.journeyMappings.every((journey) => (
       journey.tests > 0
       && journey.shards.length > 0
-      && journey.mobileOutcome
-      && journey.accessibilityOutcome
+      && journey.mobileOutcome === null
+      && journey.accessibilityOutcome === null
     )));
   });
 });

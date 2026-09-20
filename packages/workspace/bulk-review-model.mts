@@ -1,12 +1,14 @@
 import { normalizeDomain } from '../cases/case-model.mts';
 import { CASE_DISPOSITIONS as CASE_DISPOSITION_OPTIONS } from '../cases/case-record-contracts.mts';
-import { normalizeBulkPresentationSortKey } from './bulk-sort.mts';
+import { BULK_SORT_KEYS, normalizeBulkPresentationSortKey } from './bulk-sort.mts';
 import type { BulkSortDirection, BulkSortKey } from './bulk-sort.mts';
+import { normalizeBulkResultColumns, type BulkResultColumn } from './bulk-columns.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, assertWorkspacePortableVersion, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import {
   BULK_REVIEW_SCHEMA,
   BULK_REVIEW_SCHEMA_VERSION,
+  BULK_REVIEW_EXPORT_SUPPORTED_VERSIONS,
   MAX_BULK_REVIEW_NAME_LENGTH,
   MAX_BULK_REVIEW_PRESETS,
   MAX_BULK_REVIEW_ROWS,
@@ -50,6 +52,7 @@ export type BulkReviewPresetView = {
   groupBy: BulkGroupBy;
   sortKey: BulkSortKey;
   sortDirection: BulkSortDirection;
+  columns: BulkResultColumn[];
 };
 
 export type BulkReviewPreset = {
@@ -85,7 +88,7 @@ const LIFECYCLE_FILTERS = new Set<string>(BULK_LIFECYCLE_FILTERS);
 const AGE_FILTERS = new Set<string>(BULK_AGE_FILTERS);
 const MAIL_FILTERS = new Set<string>(BULK_MAIL_FILTERS);
 const GROUPS = new Set<string>(BULK_GROUP_OPTIONS);
-const SORT_KEYS = new Set<BulkSortKey>(['domain', 'availability', 'confidence', 'risk', 'opportunity', 'activity', 'registrar', 'mutation']);
+const SORT_KEYS = new Set<BulkSortKey>(BULK_SORT_KEYS);
 const REVIEW_STATES = new Set<string>(BULK_REVIEW_STATES);
 const CASE_DISPOSITIONS = new Set(['', 'untracked', ...CASE_DISPOSITION_OPTIONS.map((item) => item.value)]);
 const SIGNAL_FILTERS = new Set(['favicon', 'password', 'phishing', 'asset_reuse', 'idn']);
@@ -138,6 +141,7 @@ function normalizeView(raw: unknown): BulkReviewPresetView {
     groupBy: setValue(value.groupBy, GROUPS) as BulkGroupBy,
     sortKey,
     sortDirection: value.sortDirection === 1 ? 1 : -1,
+    columns: normalizeBulkResultColumns(value.columns),
   };
 }
 
@@ -186,6 +190,10 @@ function sourceLists(raw: unknown): { presets: unknown[]; rows: unknown[] } {
 export function normalizeBulkReviewStore(raw: unknown): BulkReviewStore {
   assertWorkspaceInputGraph(raw, 'Bulk-review store');
   assertWorkspaceDeclaredVersion(raw, 'Bulk-review store');
+  const declaredVersion = record(raw).version;
+  if (typeof declaredVersion === 'number' && declaredVersion > BULK_REVIEW_SCHEMA_VERSION) {
+    throw new Error(`This Bulk review store uses newer schema ${declaredVersion}. Update the app before changing it.`);
+  }
   const fallback = new Date(0).toISOString();
   const source = sourceLists(raw);
   const presets = new Map<string, BulkReviewPreset>();
@@ -223,7 +231,7 @@ export function enforceBulkReviewBudget(raw: unknown): BulkReviewStore {
   while (byteLength(JSON.stringify(store)) > MAX_BULK_REVIEW_STORE_BYTES && store.rows.length) store.rows.pop();
   while (byteLength(JSON.stringify(store)) > MAX_BULK_REVIEW_STORE_BYTES && store.presets.length > 1) store.presets.pop();
   if (byteLength(JSON.stringify(store)) > MAX_BULK_REVIEW_STORE_BYTES) {
-    throw new Error('Bulk review preferences exceed the browser-local storage limit.');
+    throw new Error('Bulk review preferences exceed the workspace storage limit.');
   }
   return store;
 }
@@ -301,7 +309,7 @@ export function mergeBulkReviewStores(
   if (importedRecord.schema !== BULK_REVIEW_SCHEMA) {
     throw new Error('This file is not a WHOISleuth Bulk review export.');
   }
-  if (importedRecord.version !== BULK_REVIEW_SCHEMA_VERSION) {
+  if (!BULK_REVIEW_EXPORT_SUPPORTED_VERSIONS.some((version) => version === importedRecord.version)) {
     if (typeof importedRecord.version === 'number' && importedRecord.version > BULK_REVIEW_SCHEMA_VERSION) {
       throw new Error(`This Bulk review export uses newer schema ${importedRecord.version}. Update the app before importing it.`);
     }

@@ -13,6 +13,7 @@
   import LookupAssetGraph from '$lib/components/LookupAssetGraph.svelte';
   import LookupEvidenceCheckpoint from '$lib/components/LookupEvidenceCheckpoint.svelte';
   import LookupMetadataDisclosure from '$lib/components/LookupMetadataDisclosure.svelte';
+  import CasePicker from './CasePicker.svelte';
   import { buildLookupEvidenceReplayDiff } from '$lib/analysis/lookup-evidence-replay-diff.ts';
 
   let replay = $state<LookupEvidenceReplay | null>(null);
@@ -25,6 +26,7 @@
   let comparisonLoading = $state(false);
   let comparisonState = $state<'idle' | 'success' | 'error'>('idle');
   let caseRecord = $state<CaseRecord | null>(null);
+  let caseCandidates = $state.raw<CaseRecord[]>([]);
   let caseStatus = $state('');
   let caseBusy = $state(false);
   const replayAvailability = $derived(availabilityStatusDisplay(replay?.availability));
@@ -46,6 +48,7 @@
     replay = null;
     comparison = null;
     caseRecord = null;
+    caseCandidates = [];
     caseStatus = '';
     caseBusy = false;
     try {
@@ -63,9 +66,10 @@
       status = `Loaded ${file.name} locally${next.digestVerified ? ' and verified its checksum' : ''}. No source was contacted.`;
       const existing = next.caseDomain
         ? await caseController.refresh(next.caseDomain)
-        : { record: null, status: '' };
+        : { record: null, records: [], status: '' };
       if (generation !== replayGeneration) return;
       caseRecord = existing.record;
+      caseCandidates = existing.records;
       caseStatus = existing.status;
     } catch (cause) {
       if (generation !== replayGeneration) return;
@@ -86,9 +90,13 @@
     const result = await caseController.openReplay(
       caseDomain,
       buildLookupReplayCaseEvidence(current),
+      caseRecord ? { caseId: caseRecord.id } : {},
     );
     if (generation === replayGeneration && replay === current) {
-      caseRecord = result.record;
+      if (result.record) {
+        caseRecord = result.record;
+        caseCandidates = [...caseCandidates.filter(record => record.id !== result.record!.id), result.record];
+      }
       caseStatus = result.status;
       caseBusy = false;
     }
@@ -184,11 +192,12 @@
         {#if replay.caseDomain}
           <section class="case-handoff" aria-labelledby="replay-case-title">
             <div>
-              <p class="eyebrow">Browser-local handoff</p>
+              <p class="eyebrow">Saved handoff</p>
               <h3 id="replay-case-title">Continue this historical review in a Case</h3>
-              <p class="note">The Case uses {replay.caseDomain} as its registrable identity, retains {replay.target} as the observed hostname, and preserves the export time and imported provenance. This action does not refresh evidence or contact a source.</p>
+              <p class="note">Registration: {replay.caseDomain}. Submitted target: {replay.target}.{' '}{#if replay.observationHostname}DNS, TLS and web collection scope: {replay.observationHostname}.{' '}{/if}{#if replay.webObservationMode}Web evidence concerns a selected URL, not the homepage.{' '}{/if}Saving retains the export time and imported provenance without contacting a source.</p>
             </div>
-            <button class="btn" type="button" disabled={caseBusy} onclick={() => void saveReplayToCase()}>{caseBusy ? 'Saving…' : caseRecord ? 'Add replay evidence to Case' : 'Create browser-local Case'}</button>
+            {#if caseCandidates.length > 1}<CasePicker id="replay-incident-case" records={caseCandidates} selectedId={caseRecord?.id ?? ''} disabled={caseBusy} select={(id) => { caseRecord = caseCandidates.find(record => record.id === id) ?? null; caseStatus = ''; }} />{/if}
+            <button class="btn" type="button" disabled={caseBusy || (caseCandidates.length > 0 && !caseRecord)} onclick={() => void saveReplayToCase()}>{caseBusy ? 'Saving…' : caseRecord ? 'Add replay evidence to Case' : 'Create Case'}</button>
             <p class="case-status" role="status" aria-live="polite" aria-atomic="true">{caseStatus}</p>
             {#if caseRecord}<a class="case-link" href={`/monitor?case=${encodeURIComponent(caseRecord.id)}`}>Open Case in Respond →</a>{/if}
           </section>

@@ -26,19 +26,13 @@ full successful response contains:
   non-applicable result for IP/ASN input.
 - `diagnostics`: independent source status and provenance. Deep non-compact
   responses also include bounded orchestration timing described below.
-
-`GET /api/rdap-nameserver-search?nameserver=<hostname>&scope=<suffix>` is a
-separate authenticated Discover action. It accepts one normalised nameserver
-and one top-level registry suffix, selects the registry from IANA RDAP
-bootstrap data, and requests its RFC 9082 `nsLdhName` domain search. It does not
-change the Fast, Compact, Deep, availability, or monitoring contracts.
 - `networkContext`: for an eligible deep non-compact domain result, a
   separately attributed summary of one observed public endpoint address and
   its IP RDAP network registration.
 - `availability.technologyProfile`: for eligible deep non-compact domain
   results with captured website evidence, a versioned derived profile of
-  curated software and delivery indicators. Current profile version 11 uses one
-  standards-compliant bounded HTML tokenization pass and expands the curated
+  curated software and delivery indicators. The current profile uses one
+  standards-compliant bounded HTML tree-construction pass with the curated
   generator, element, attribute, static-asset, and resource-origin catalogue
   for common content, commerce, site-building, framework, and static-site
   platforms. It also carries a nested version-2 browser-library profile
@@ -50,6 +44,8 @@ change the Fast, Compact, Deep, availability, or monitoring contracts.
   bounded projected catalogue; retained advisory identifiers and weakness
   classes remain capped independently. A KEV match is prioritisation context,
   not evidence that the observed page exposes or executes affected code.
+  Invalid source CVE identifiers are omitted and disclosed without removing
+  their advisory matches. Published saved profiles remain readable.
   The accepted/current versions and bounds come from the
   [browser-safe child-profile contract](../lib/lookup-child-profile-contract.mts).
   Maintainers can run `npm run sources:health` for the single offline status
@@ -79,6 +75,12 @@ change the Fast, Compact, Deep, availability, or monitoring contracts.
 - `securityTxt`: only when explicitly selected for a deep single-domain
   request, a bounded normalised disclosure file for the exact submitted
   hostname. Add `security_txt=1` to request it. Fast and compact paths omit it.
+
+`GET /api/rdap-nameserver-search?nameserver=<hostname>&scope=<suffix>` is a
+separate authenticated Discover action. It accepts one normalised nameserver
+and one top-level registry suffix, selects the registry from IANA RDAP
+bootstrap data, and requests its RFC 9082 `nsLdhName` domain search. It is not
+part of Fast, Compact, Deep, availability or monitoring collection.
 
 `compact=1` returns only `availability` and `diagnostics`. Bulk uses this mode;
 raw RDAP JSON, WHOIS response bodies, and expanded registry contacts are not
@@ -129,26 +131,26 @@ response. Contributor review must remove personal data and operational tokens,
 retain only parser-relevant fields, record provenance, and add deterministic
 parser and failure-state coverage before updating the manifest digest.
 
-The version-1 page-role and client-behaviour profiles share the existing
-bounded static-HTML tokenization pass. They retain fixed labels, fixed evidence
+The page-role and client-behaviour profiles reuse the bounded native HTML
+analysis. They retain fixed labels, fixed evidence
 descriptions, bounded counts, completeness, and limitations only. They do not
 retain matched markup, page text, script contents, script references, URLs, or
 arbitrary attributes; they do not fetch referenced scripts or execute code.
 Their classifications are review aids rather than proof of purpose,
 legitimacy, vulnerability, tracking, intent, safety, or maliciousness.
 
-The browser waits for this single final response. It shows elapsed time and
-eligible branches as pending, without polling, streaming, or claiming that a
-source has completed early. Analyst cancellation, navigation away, or the
-40-second browser deadline stops the local wait and retains no incomplete
-response. Work already admitted by the server may still finish within its
-existing source and operation bounds.
+Full Deep clients may request `application/x-ndjson`. The versioned progress
+contract carries one start frame, one bounded state summary per planned source,
+and the ordinary final response. It excludes raw payloads from progress summaries
+and makes no additional requests. Duplicate, unplanned, out-of-order, malformed,
+over-bound or incomplete streams cannot become a result. The final envelope
+retains the ordinary 8 MiB and structural limits; the complete stream is bounded
+to 12 MiB. Fast, Compact and default clients use JSON. Unsupported streaming
+adapters return JSON without a second collection request.
 
-The repository also contains a deterministic offline incremental-transport
-spike. Its bounded start, source-settled, and final NDJSON events reject
-duplicate or out-of-plan sources and prohibit persistence until the ordinary
-final Lookup envelope passes validation. It is not connected to a frontend,
-API route, deployment adapter, or hosting provider.
+Cancellation, navigation away or the 40-second browser deadline retains no
+incomplete response. Already-admitted work may finish within its source bounds;
+the operation lease covers its remaining lifetime.
 
 For a deep, non-compact domain Lookup only, a successful registry RDAP object
 may publish a complete `rel="related"` HTTPS domain-object link at the
@@ -223,10 +225,8 @@ technology profile, signature evidence, certificate record, alternative names,
 chain, and TLS session details remain excluded. A source miss, failure, or
 partial result stays explicit and does not become an empty authoritative set.
 
-Node.js 24 does not expose HTTPS or SVCB through its documented high-level DNS
-resolver API, so WHOISleuth implements the small required DNS wire boundary
-in-house. It sends a type-65 HTTPS query to at most three validated literal
-addresses from the deployment's system resolver configuration, validates the
+The DNS wire collector sends a type-65 HTTPS query to at most three validated
+literal addresses from the deployment's system resolver configuration, validates the
 transaction, question, response bounds, record ordering, and parameter
 encoding, and uses TCP only when that same resolver returns a truncated UDP
 answer. No third-party DNS service is introduced. The domain Lookup does not
@@ -252,7 +252,7 @@ availability or Risk and is omitted from Fast, compact, Bulk, monitoring, and
 browser-local stores. A published PTR name is routing context, not proof of
 hosting control, ownership, intent, or maliciousness.
 
-The current deep TLS profile, version 3, extends the retained leaf-certificate
+The current deep TLS profile extends the retained leaf-certificate
 projection with the signature algorithm and OID, a capped extended-key-usage purpose list,
 fixed subject-alternative-name class counts, and classified Authority
 Information Access presence counts. It retains at most 100 SAN entries, 16
@@ -311,19 +311,17 @@ The envelope is additive and never replaces a source's existing payload or
 compatibility fields. Readers distinguish absent envelopes (legacy data),
 supported version 1, malformed values, and unsupported future versions. An
 absent envelope must not cause an otherwise valid legacy record to be rejected
-or rewritten. DNS and Certificate Transparency are the first adopters; other
-registry diagnostics retain their existing versioned contract until an
-additive migration provides material value.
+or rewritten. Each source's payload and diagnostic contract remains separate.
 
 ## Browser-local common evidence envelope
 
 The browser-local investigation layer has a separate version-1 common evidence
-envelope for incrementally adapting already retained evidence into typed
+envelope for projecting retained evidence into typed
 entities, observations, relationships, artefact references, and analyst
 assertions. This is not the network-source envelope above and it does not add a
 second persistent database.
 
-The first adapter reads only the bounded retained-relationship collection. It
+The relationship adapter reads the bounded retained-relationship collection. It
 preserves the authoritative collection and upstream relationship-evidence
 schema versions, source and observation time, collection depth when known,
 completeness, truncation, derivation, and stated limitations. Deterministic
@@ -334,18 +332,15 @@ arrays reserve those typed boundaries without inventing records.
 The adapter performs no writes or network requests. It reuses the owning
 collection normalizer, refuses malformed and unsupported future schemas,
 enforces entity, observation, relationship, reference, limitation, record, and
-serialised-byte caps, and records its own quota and rollback state. The
-IndexedDB collection and workspace archive remain authoritative; discarding
-the in-memory envelope is the complete rollback. Other collections can adopt
-the envelope one at a time only when their current schema remains authoritative
-and the adapter provides demonstrated search or graph value.
+serialised-byte caps. The IndexedDB collection and workspace archive remain
+authoritative; the in-memory envelope is disposable.
 
 ## Capability discovery
 
 The generated [privacy and data-flow catalogue](privacy-data-flow-catalogue.md)
 and [JSON](privacy-data-flow-catalogue.json) list the static privacy boundaries
-for capabilities, CLI commands and portable formats. It is fixed documentation, not a new runtime endpoint; it neither changes nor
-extends the version-1 `/api/capabilities` response.
+for capabilities, CLI commands and portable formats. These are static references,
+separate from the version-1 `/api/capabilities` runtime response.
 
 Authenticated clients can request `GET /api/capabilities`. Version 1 returns a
 server-authoritative runtime identifier and a bounded feature list using
@@ -397,10 +392,8 @@ server-derived `operationFeature` and `operationFeatureModelVersion: 1`.
 Version 1 distinguishes fast/deep ordinary Lookup, fast/deep compact Bulk,
 direct RDAP, registry-scoped nameserver search, direct WHOIS, fast/deep
 availability, Certificate Transparency, and domain-posture requests. The
-feature is accounting provenance rather than
-proof of browser behaviour: compact mode is the Bulk contract, but a custom
-client can select a different compatible response shape, so future durable
-enforcement must also retain deployment-wide totals.
+feature identifies the selected collection contract, not the client interface:
+a custom client can request the compact response used by Bulk.
 
 When a configured fixed-window allowance is exhausted, the endpoint returns
 HTTP `429`, `errorCode: NETWORK_USAGE_LIMITED`, a bounded `Retry-After`, and a
@@ -618,8 +611,9 @@ The principal collection limits are:
 
 The `*Truncated` fields disclose when relevant upstream input exceeded these
 normalised limits. Invalid values are discarded without discarding valid
-neighbours. The raw source remains available only in full Lookup and deliberate
-evidence export.
+neighbours. Full Lookup can expose transient raw publications for inspection.
+Current evidence exports retain the supported minimised projection, not raw
+RDAP or WHOIS bodies or expanded contacts.
 
 ## Normalised WHOIS data
 
@@ -728,7 +722,7 @@ cache storage, transfer savings, delivery-provider identity, performance,
 privacy, or safety.
 
 Eligible captured HTML can carry nested `pageIdentity.publicationMetadata`
-version 1. One bounded tokenizer pass retains only fixed robots and Twitter
+version 1. The shared bounded document parser retains only fixed robots and Twitter
 Card declaration classes, heading counts, image alternative-text categories,
 and conservative explicit-head static blocking candidates. Raw declarations,
 titles, handles, URLs, image text, and resource paths are discarded. Partial
@@ -738,11 +732,14 @@ performance, identity, ownership, safety, or maliciousness conclusions.
 ## Evidence export and privacy boundary
 
 Lookup evidence uses schema `whoisleuth.lookup-evidence`. Exact v1 version 26,
-published v2 version 27, and current version 28 form its complete durable reader
+published v2 versions 27 and 28, and current version 29 form its complete durable reader
 boundary. Version 27 added bounded homepage publication and delivery/cache
 metadata and the privacy-minimised registration projection. Version 28 adds a
 bounded registrar-standing projection from the checked-in IANA registrar-ID and
-current-year ICANN compliance-notice catalogues. Other historical reader shapes
+current-year ICANN compliance-notice catalogues. Version 29 adds the explicit
+DNS, TLS and web observation hostname. Registration identity stays separately
+attributed; readers preserve the registrable-domain scope of older captures.
+Other historical reader shapes
 and unreleased checkpoints are unsupported.
 
 The document can contain query context, explicitly projected diagnostics,
@@ -790,8 +787,8 @@ human-readable view of that JSON contract rather than defining additional
 evidence schemas. Both escape upstream strings, disclose omitted list values,
 and exclude raw RDAP JSON and full WHOIS responses. HTML adds no scripts,
 forms, active links, or external resources and includes a restrictive embedded
-Content Security Policy. The versioned JSON package remains the authoritative
-machine-readable export when complete captured source material is required.
+Content Security Policy. The versioned JSON package contains the complete
+supported minimised evidence projection, not the original source payloads.
 The Console's readable Markdown download uses a strict known-field projection
 of the typed Lookup response. It is created entirely in the browser, makes no
 network request, writes no browser-local record, and excludes raw registry and
@@ -802,15 +799,15 @@ network registration and bounded reverse-DNS context when collected. ASN
 reports present normalised routing registration fields without inventing
 reverse-DNS evidence. The separate JSON action retains the richer schema
 contract described above.
-When schema-version 26 or 27 JSON retains a supported version-5, version-6, or version-7
-`diagnostics.registryAccess` object, both readable formats include its bounded
+When supported evidence retains a `diagnostics.registryAccess` object,
+both readable formats include its bounded
 suffix, WHOIS and RDAP access profiles, and limitation in collection
 diagnostics. This remains collection context only and cannot decide
 registration, availability, ownership, safety, or maliciousness. The readable
 formats also include the bounded observed network registration and its
 origin-host limitation when that source is present.
 
-Schema versions 26 and 27 can also retain the bounded normalised security.txt source
+Supported evidence can also retain the bounded normalised security.txt source
 from an explicitly requested deep Lookup. It excludes the response body and
 does not make publication an authorisation, availability, or Risk signal.
 
@@ -821,8 +818,8 @@ future version must not be silently interpreted as an older version.
 Bulk responses, watchlists, and case snapshots retain compact derived evidence
 only. Expanded contact inventories, raw RDAP JSON, raw WHOIS bodies, and endpoint
 response payloads do not enter those browser-local stores. Exact public and
-current Case and watchlist formats remain readable because registry enrichment
-does not rewrite their storage shape.
+current Case and watchlist formats are listed in the
+[portable compatibility reference](portable-domain-contracts.md).
 
 ## Compatibility rules
 

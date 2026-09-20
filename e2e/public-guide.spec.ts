@@ -1,6 +1,43 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow } from './helpers';
+import { expectNoHorizontalOverflow, useTheme } from './helpers';
 import { PUBLIC_RESOURCES } from '../frontend/src/lib/public-resources';
+import { PUBLIC_REFERENCE_DESTINATIONS } from '../frontend/src/lib/public-reference-navigation';
+import { toolGuides, referenceGuides } from '../frontend/src/lib/public-guide';
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`every reference introduction remains readable on mobile and tablet in ${theme}`, async ({ page }, testInfo) => {
+    test.slow();
+    const measurements: unknown[] = [];
+    await useTheme(page, theme);
+    for (const destination of PUBLIC_REFERENCE_DESTINATIONS) {
+      await page.goto(destination.href);
+      for (const viewport of [{ width: 320, height: 700 }, { width: 390, height: 844 }, { width: 768, height: 1024 }]) {
+        await page.setViewportSize(viewport);
+        await page.evaluate(() => scrollTo(0, 0));
+        await expect(page.locator('main h1')).toHaveCount(1);
+        await expect(page.locator('main h1')).toBeInViewport({ ratio: 1 });
+        await expect(page.getByRole('navigation', { name: 'Breadcrumb', exact: true })).toBeVisible();
+        await expect(page.getByText('Browse documentation', { exact: true })).toBeVisible();
+        await expectNoHorizontalOverflow(page);
+        const bodyTop = await page.locator('.reference-body').evaluate(element => element.getBoundingClientRect().top);
+        measurements.push({ href: destination.href, theme, ...viewport, bodyTop });
+        expect(bodyTop, `${destination.href} places all practical content below the first viewport`).toBeLessThan(viewport.height);
+        if (viewport.width === 320) await page.screenshot({ path: testInfo.outputPath(`${destination.href.replaceAll('/', '-')}-${theme}-320.png`) });
+      }
+    }
+    await testInfo.attach('reference-introductions.json', { body: JSON.stringify(measurements), contentType: 'application/json' });
+  });
+}
+
+test('delivered third-party notices include browser framework code independently of dependency classification', async ({ request }) => {
+  const response = await request.get('/third-party-notices.txt');
+  expect(response.ok()).toBe(true);
+  const notice = await response.text();
+  expect(notice).toMatch(/^svelte@\d+\.\d+\.\d+\nRelationship: bundled browser dependency/mu);
+  expect(notice).toMatch(/^@sveltejs\/kit@\d+\.\d+\.\d+\nRelationship: bundled browser dependency/mu);
+  expect(notice).not.toMatch(/^(?:typescript|eslint|@playwright\/test)@/mu);
+  expect(notice).not.toContain('This is the production-package base.');
+});
 
 test('reference section navigation is available before client hydration', async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
@@ -9,8 +46,17 @@ test('reference section navigation is available before client hydration', async 
     await page.goto('/cli');
     const sections = page.getByRole('navigation', { name: 'CLI sections' });
     await expect(sections).toBeVisible();
-    await expect(sections.getByRole('link')).toHaveCount(6);
-    await expect(sections.getByRole('link', { name: 'Command reference' })).toHaveAttribute('href', '#commands');
+    const commands = sections.getByRole('link', { name: 'Command reference' });
+    await expect(commands).toHaveAttribute('href', '#commands');
+    await expect(sections.getByRole('link', { name: 'Capture companion' })).toHaveAttribute('href', '#capture-companion');
+    const targets = await sections.getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('href')));
+    expect(new Set(targets).size).toBe(targets.length);
+    for (const target of targets) {
+      expect(target).toMatch(/^#[a-z][a-z0-9-]*$/u);
+      await expect(page.locator(target!)).toHaveCount(1);
+    }
+    await commands.click();
+    await expect(page).toHaveURL(/\/cli#commands$/u);
   } finally {
     await context.close();
   }
@@ -154,7 +200,7 @@ test('public resources offer task-specific source boundaries on desktop and mobi
   await expect(page.locator('.page-sections')).toBeVisible();
   await expect(page.locator('.resource-grid article')).toHaveCount(PUBLIC_RESOURCES.length);
   await page.locator('.resource-grid').getByRole('link', { name: 'RDAP versus WHOIS', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'RDAP versus WHOIS: why registration sources disagree' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'RDAP versus WHOIS', exact: true })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Public navigation' }).getByRole('link', { name: 'Resources' })).toHaveAttribute('aria-current', 'location');
   await expect(page.getByRole('table', { name: 'Evidence sources and limitations' })).toBeVisible();
   await expect(page.getByRole('row')).toHaveCount(4);
@@ -200,7 +246,7 @@ test('public resources offer task-specific source boundaries on desktop and mobi
   await expectNoHorizontalOverflow(page);
 
   await page.goto('/resources/reporting-and-takedown-guidance');
-  await expect(page.getByRole('heading', { name: 'Prepare and track an abuse or infringement report' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Prepare an abuse or infringement report' })).toBeVisible();
   const reportingReferences = page.locator('#primary-references');
   await expect(reportingReferences.getByRole('heading', { name: 'Official reporting guidance' })).toBeVisible();
   await expect(reportingReferences).toContainText('verify the current reporting route, eligibility and disclosure terms');
@@ -244,14 +290,23 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(practice.getByRole('button', { name: 'Next decision' })).toBeEnabled();
   const toolCards = page.locator('.tool-guide article');
   const referenceCards = page.locator('.reference-guide article');
-  await expect(toolCards).toHaveCount(5);
-  await expect(referenceCards).toHaveCount(1);
+  await expect(toolCards).toHaveCount(toolGuides.length);
+  await expect(toolCards.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
+  await expect(referenceCards).toHaveCount(referenceGuides.length);
   const desktopCardWidths = await toolCards.evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().width));
-  expect(desktopCardWidths.at(-1) ?? 0).toBeGreaterThan((desktopCardWidths[0] ?? 0) * 1.9);
+  const ordinaryWidth = desktopCardWidths[0]!;
+  expect(ordinaryWidth).toBeGreaterThan(0);
+  for (const [index, width] of desktopCardWidths.entries()) {
+    if (index === desktopCardWidths.length - 1 && desktopCardWidths.length % 2 !== 0) {
+      expect(width).toBeGreaterThan(ordinaryWidth * 1.9);
+    } else {
+      expect(Math.abs(width - ordinaryWidth)).toBeLessThanOrEqual(1);
+    }
+  }
   expect((await referenceCards.first().boundingBox())?.width ?? 0).toBeGreaterThan((desktopCardWidths[0] ?? 0) * 1.9);
-  const finalToolDefinitionRows = toolCards.last().locator('dl > div');
-  expect(await finalToolDefinitionRows.nth(0).evaluate((row) => Math.round(row.getBoundingClientRect().top)))
-    .toBe(await finalToolDefinitionRows.nth(1).evaluate((row) => Math.round(row.getBoundingClientRect().top)));
+  const wideDefinitionRows = (toolGuides.length % 2 ? toolCards.last() : referenceCards.first()).locator('dl > div');
+  expect(await wideDefinitionRows.nth(0).evaluate((row) => Math.round(row.getBoundingClientRect().top)))
+    .toBe(await wideDefinitionRows.nth(1).evaluate((row) => Math.round(row.getBoundingClientRect().top)));
   const resultLayout = page.getByRole('article', { name: 'Start with the decision, then open the evidence you need' });
   await expect(resultLayout).toBeVisible();
   await expect(resultLayout.getByText('Relationships and history', { exact: true })).toBeVisible();
@@ -280,8 +335,8 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await page.setViewportSize({ width: 320, height: 700 });
   const mobileCardWidths = await toolCards.evaluateAll((cards) => cards.map((card) => Math.round(card.getBoundingClientRect().width)));
   expect(new Set(mobileCardWidths).size).toBe(1);
-  expect(await finalToolDefinitionRows.nth(0).evaluate((row) => Math.round(row.getBoundingClientRect().top)))
-    .toBeLessThan(await finalToolDefinitionRows.nth(1).evaluate((row) => Math.round(row.getBoundingClientRect().top)));
+  expect(await wideDefinitionRows.nth(0).evaluate((row) => Math.round(row.getBoundingClientRect().top)))
+    .toBeLessThan(await wideDefinitionRows.nth(1).evaluate((row) => Math.round(row.getBoundingClientRect().top)));
   await expectNoHorizontalOverflow(page);
 });
 
@@ -290,8 +345,10 @@ test('privacy policy offers concise section navigation at desktop and mobile wid
 
   const sectionNavigation = page.getByRole('navigation', { name: 'Privacy policy sections' });
   await expect(sectionNavigation).toBeVisible();
-  await expect(sectionNavigation.getByRole('link')).toHaveCount(8);
   const headingIds = await page.locator('.policy h2[id]').evaluateAll((headings) => headings.map((heading) => heading.id));
+  expect(headingIds.length).toBeGreaterThan(0);
+  expect(new Set(headingIds).size).toBe(headingIds.length);
+  await expect(sectionNavigation.getByRole('link')).toHaveCount(headingIds.length);
   const indexedIds = await sectionNavigation.getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('href')?.slice(1)));
   expect(indexedIds).toEqual(headingIds);
   const security = sectionNavigation.getByRole('link', { name: 'Security' });
@@ -332,42 +389,34 @@ test('homepage and guide remain usable on a narrow mobile viewport', async ({ pa
   await expectNoHorizontalOverflow(page);
 });
 
-test('public footer keeps an even compact rhythm on mobile', async ({ page }) => {
-  await page.setViewportSize({ width: 412, height: 915 });
-  await page.goto('/');
-
-  const footer = page.locator('footer.site-footer');
-  const links = footer.locator('.footer-links a');
-  await expect(footer).toBeVisible();
-  await expect(footer.getByRole('link', { name: 'Privacy', exact: true })).toHaveAttribute('href', '/privacy');
-  await expect(footer.getByRole('link', { name: 'Terms', exact: true })).toHaveAttribute('href', '/terms');
-  await expect(footer.getByRole('link', { name: 'Request policy', exact: true })).toHaveAttribute('href', '/request-policy');
-  await expect(footer.getByRole('link', { name: 'Contact', exact: true })).toHaveAttribute('href', '/contact');
-  await expect(links).toHaveCount(5);
-  const footerHrefs = await links.evaluateAll((elements) => elements.map((element) => element.getAttribute('href')));
-  expect(new Set(footerHrefs).size).toBe(footerHrefs.length);
-
-  const linkLayout = await links.evaluateAll((elements) => elements.map((element) => {
-    const box = element.getBoundingClientRect();
-    const style = getComputedStyle(element);
-    return {
-      height: box.height,
-      y: box.y,
-      marginLeft: style.marginLeft,
-      marginRight: style.marginRight,
-      paddingLeft: style.paddingLeft,
-      paddingRight: style.paddingRight
-    };
-  }));
-
-  expect(linkLayout.every((link) => link.height <= 32)).toBe(true);
-  const rows = [...new Set(linkLayout.map((link) => Math.round(link.y)))].sort((a, b) => a - b);
-  expect(rows.length).toBeLessThanOrEqual(3);
-  expect(rows.slice(1).every((row, index) => row - rows[index]! <= 40)).toBe(true);
-  expect(linkLayout.every((link) => link.marginLeft === '0px' && link.marginRight === '0px')).toBe(true);
-  expect(linkLayout.every((link) => link.paddingLeft === '0px' && link.paddingRight === '0px')).toBe(true);
-  expect((await footer.boundingBox())?.height).toBeLessThan(210);
-  await expectNoHorizontalOverflow(page);
+test('public footer keeps five links in balanced accessible mobile rows', async ({ page }) => {
+  for (const width of [320, 390, 412]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/');
+    const footer = page.locator('footer.site-footer');
+    const links = footer.locator('.footer-links a');
+    await expect(footer).toBeVisible();
+    for (const [label, href] of [['Privacy', '/privacy'], ['Terms', '/terms'], ['Request policy', '/request-policy'], ['Contact', '/contact']] as const) {
+      await expect(footer.getByRole('link', { name: label, exact: true })).toHaveAttribute('href', href);
+    }
+    await expect(links).toHaveCount(5);
+    const layout = await links.evaluateAll((elements) => elements.map((element) => {
+      const { x, y, width, height } = element.getBoundingClientRect();
+      return { x, y, width, height, href: element.getAttribute('href') };
+    }));
+    expect(new Set(layout.map(link => link.href)).size).toBe(5);
+    expect(layout.every(link => link.height >= 44 && link.x >= 0 && link.x + link.width <= width)).toBe(true);
+    const rows = [...new Set(layout.map(link => Math.round(link.y)))];
+    expect(rows.map(row => layout.filter(link => Math.round(link.y) === row).length)).toEqual([3, 2]);
+    for (const [index, link] of layout.entries()) {
+      for (const other of layout.slice(index + 1)) {
+        const overlaps = Math.min(link.x + link.width, other.x + other.width) > Math.max(link.x, other.x)
+          && Math.min(link.y + link.height, other.y + other.height) > Math.max(link.y, other.y);
+        expect(overlaps).toBe(false);
+      }
+    }
+    await expectNoHorizontalOverflow(page);
+  }
 });
 
 test('authenticated console groups its public reference without duplicating Ctrl+K', async ({ page }) => {

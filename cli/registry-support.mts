@@ -3,10 +3,10 @@ import {
   type RegistryCompatibilityRow,
   type RegistryStandardsCoverageSnapshot,
 } from '../lib/registry-capabilities.mts';
+import { REGISTRY_STANDARDS_COVERAGE_SCHEMA } from '../lib/registry-capability-catalogue.mts';
 
 const REGISTRY_SUPPORT_SCHEMA = 'whoisleuth.cli.registry-support';
 const REGISTRY_SUPPORT_SCHEMA_VERSION = 4;
-const REGISTRY_STANDARDS_COVERAGE_SCHEMA = 'whoisleuth.registry-standards-coverage';
 const MAX_REGISTRY_SUPPORT_TEXT_LENGTH = 2048;
 const MAX_REGISTRY_SUPPORT_REFERENCES = 20;
 const MAX_REGISTRY_SUPPORT_REFERENCE_LENGTH = 2048;

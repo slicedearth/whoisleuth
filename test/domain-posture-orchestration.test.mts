@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { deferred } from './deferred.mts';
 
 import {
   checkDomainPosture,
@@ -24,9 +25,12 @@ type FixtureOptions = Readonly<{
 
 function registryRecord(overrides: Readonly<Record<string, unknown>> = {}) {
   return {
+    fetchedAt: OBSERVED_AT,
     parsed: {
       dnssec: 'Signed',
       statuses: ['client transfer prohibited'],
+      statusesTruncated: false,
+      serverTruncated: false,
       nameservers: ['ns1.example.net', 'ns2.example.net'],
       dsData: [{ keyTag: 12345 }],
       dsDataTruncated: false,
@@ -93,6 +97,112 @@ function checkById(
 }
 
 describe('domain-posture collection orchestration', () => {
+  test('additional DNS collection requires explicit selection and reuses the exact-name observations', async () => {
+    const fixture = completeFixture();
+    const additional = { id: 'dmarc_inheritance', label: 'Inherited DMARC policy', status: 'info' as const, summary: 'Exact-name policy.', detail: 'Publication only.', records: [], remediation: '' };
+    let calls = 0;
+    const dependencies = { ...fixture.dependencies, collectDnsInheritanceChecks: async (...args: Parameters<NonNullable<DomainPostureCollectorDependencies['collectDnsInheritanceChecks']>>) => {
+      calls++; assert.equal(args[0], 'example.test');
+      assert.deepEqual(args[1].records, ['v=DMARC1; p=reject; sp=reject; np=reject; rua=mailto:aggregate@reports.example.net']);
+      assert.deepEqual(args[2].records, ['ns2.example.net.', 'ns1.example.net.']);
+      assert.equal(args[3]?.signal, controller.signal);
+      return [additional];
+    } };
+    const controller = new AbortController();
+    const ordinary = await checkDomainPosture('example.test', {}, dependencies);
+    assert.equal(calls, 0); assert.equal(ordinary.checks.some(item => item.id === additional.id), false);
+    const selected = await checkDomainPosture('example.test', { includeInheritedDns: true, signal: controller.signal }, dependencies);
+    assert.equal(calls, 1); assert.deepEqual(checkById(selected, additional.id), additional);
+    assert.equal(selected.summary.info, ordinary.summary.info + 1);
+    assert.equal(selected.checks.length, ordinary.checks.length + 1);
+  });
+
+  test('cancellation starts no collection or enrichment and drains already-started sources', async () => {
+    const untouched = completeFixture();
+    await assert.rejects(checkDomainPosture('example.test', { signal: AbortSignal.abort(new Error('fixture cancellation')) }, untouched.dependencies), /fixture cancellation/u);
+    assert.deepEqual(untouched.calls, []);
+
+    const controller = new AbortController();
+    const mx = deferred<unknown[]>(), registry = deferred<null>();
+    const started = deferred<void>();
+    const fixture = fixtureDependencies({ mx: mx.promise });
+    let settled = false;
+    const result = checkDomainPosture('example.test', { signal: controller.signal }, {
+      ...fixture.dependencies,
+      fetchRdapRecord: async (_type, _domain, options) => {
+        assert.equal(options?.signal, controller.signal); started.resolve(); return registry.promise;
+      },
+      fetchMtaStsPolicy: async () => assert.fail('cancelled initial collection must not start enrichment'),
+    });
+    void result.then(() => { settled = true; }, () => { settled = true; });
+    const rejected = assert.rejects(result, /fixture cancellation/u);
+    await started.promise;
+    controller.abort(new Error('fixture cancellation'));
+    registry.reject(controller.signal.reason);
+    await Promise.resolve();
+    assert.equal(settled, false);
+    mx.resolve([]);
+    await rejected;
+    assert.equal(fixture.calls.length, 8);
+  });
+
+  test('cancelled policy enrichment waits for the other started source before releasing', async () => {
+    const controller = new AbortController(), started = deferred<void>();
+    const policy = deferred<{ text: string; contentType: string | null; error: string | null }>();
+    const spf = deferred<unknown[]>();
+    const fixture = completeFixture();
+    let settled = false;
+    const result = checkDomainPosture('example.test', { signal: controller.signal }, {
+      ...fixture.dependencies,
+      resolveTxt: name => name === '_spf.example.net' ? spf.promise : fixture.dependencies.resolveTxt(name),
+      fetchMtaStsPolicy: async (_domain, signal) => {
+        assert.equal(signal, controller.signal); started.resolve(); return policy.promise;
+      },
+    });
+    void result.then(() => { settled = true; }, () => { settled = true; });
+    const rejected = assert.rejects(result, /fixture cancellation/u);
+    await started.promise;
+    controller.abort(new Error('fixture cancellation'));
+    policy.reject(controller.signal.reason);
+    await Promise.resolve();
+    assert.equal(settled, false);
+    spf.resolve(['v=spf1 -all']);
+    await rejected;
+  });
+
+  test('uses DNS completion and retained registry fetch times without adding requests', async () => {
+    const fixture = completeFixture(['ns1.example.net.', 'NS1.EXAMPLE.NET.', 'ns2.example.net.']);
+    const original = fixture.dependencies.fetchRdapRecord;
+    const fetchRdapRecord = (async (...args: Parameters<typeof original>) => ({
+      ...await original(...args), fetchedAt: '2026-08-29T00:00:00.000Z',
+    })) as typeof original;
+    const report = await checkDomainPosture('example.test', {}, { ...fixture.dependencies, fetchRdapRecord });
+    assert.deepEqual(checkById(report, 'nameservers').sourceContext, { version: 1, source: 'dns_ns', observedAt: OBSERVED_AT, state: 'complete', omittedRecords: 0 });
+    assert.deepEqual(checkById(report, 'mx').sourceContext, { version: 1, source: 'dns_mx', observedAt: OBSERVED_AT, state: 'complete', omittedRecords: 0 });
+    assert.deepEqual(checkById(report, 'caa').sourceContext, { version: 1, source: 'dns_caa', observedAt: OBSERVED_AT, state: 'complete', omittedRecords: 0 });
+    assert.deepEqual(checkById(report, 'registration_lock').sourceContext, { version: 1, source: 'registry_rdap', observedAt: '2026-08-29T00:00:00.000Z', state: 'complete', omittedRecords: 0 });
+    assert.equal(fixture.calls.filter((call) => call.startsWith('NS ')).length, 1);
+    assert.equal(fixture.calls.filter((call) => call.startsWith('RDAP ')).length, 1);
+  });
+
+  test('missing, malformed and truncated sources do not acquire complete comparison context', async () => {
+    const fixture = fixtureDependencies({
+      ns: new Error('Fixture resolver unavailable'),
+      mx: [{ priority: 10, exchange: 'mail.example.test' }, { invalid: true }],
+      caa: [{ critical: 0, unsupported: 'value' }],
+      rdap: registryRecord({ statusesTruncated: true }),
+    });
+    const report = await checkDomainPosture('example.test', {}, fixture.dependencies);
+    assert.equal(checkById(report, 'nameservers').sourceContext?.state, 'unavailable');
+    assert.equal(checkById(report, 'mx').sourceContext?.state, 'partial');
+    assert.equal(checkById(report, 'caa').sourceContext?.state, 'partial');
+    assert.equal(checkById(report, 'registration_lock').sourceContext?.state, 'partial');
+    const legacy = registryRecord();
+    delete (legacy as Partial<typeof legacy>).fetchedAt;
+    const unknown = await checkDomainPosture('example.test', {}, fixtureDependencies({ rdap: legacy }).dependencies);
+    assert.equal(checkById(unknown, 'registration_lock').sourceContext?.observedAt, null);
+  });
+
   test('maps complete injected DNS, RDAP, MTA-STS and time evidence into stable source-attributed output', async () => {
     const first = completeFixture();
     const second = completeFixture(['ns1.example.net.', 'ns2.example.net.']);
@@ -178,15 +288,20 @@ describe('domain-posture collection orchestration', () => {
 
   test('shares one enrichment deadline across SPF and DMARC follow-up work', async () => {
     const start = Date.parse(OBSERVED_AT);
-    const times = [start, start + 6_501, start + 6_501, start + 7_000];
+    let clock = start;
     const fixture = fixtureDependencies({
       txt: {
         'example.test': ['v=spf1 include:_spf.example.net -all'],
         '_dmarc.example.test': ['v=DMARC1; p=reject; rua=mailto:aggregate@reports.example.net'],
+        '_mta-sts.example.test': ['v=STSv1; id=fixture'],
       },
-      now: () => new Date(times.shift() ?? start + 7_000),
+      now: () => new Date(clock),
     });
-    const report = await checkDomainPosture('example.test', {}, fixture.dependencies);
+    const fetchMtaStsPolicy = async () => {
+      clock = start + 6_501;
+      return { text: '', contentType: null, error: 'Fixture policy unavailable' };
+    };
+    const report = await checkDomainPosture('example.test', {}, { ...fixture.dependencies, fetchMtaStsPolicy });
 
     assert.equal(report.spfExpansion.state, 'partial');
     assert.match(requiredValue(report.spfExpansion.branches.find((branch) => branch.domain === '_spf.example.net')).issues.join(' '), /deadline/u);
@@ -194,15 +309,15 @@ describe('domain-posture collection orchestration', () => {
     assert.match(report.dmarcAuthorizations[0]?.error ?? '', /deadline/u);
     assert.ok(!fixture.calls.includes('TXT _spf.example.net'));
     assert.ok(!fixture.calls.includes('TXT example.test._report._dmarc.reports.example.net'));
-    assert.equal(report.checkedAt, new Date(start + 7_000).toISOString());
+    assert.equal(report.checkedAt, new Date(clock).toISOString());
   });
 
   test('bounds selectors, SPF policy expansion and DMARC reporting authorisations', async () => {
     const includes = Array.from({ length: 14 }, (_, index) => `_spf${index}.example.net`);
-    const destinations = Array.from({ length: 14 }, (_, index) => `rua=mailto:r${index}@reports${index}.example.net`).join('; ');
+    const destinations = Array.from({ length: 14 }, (_, index) => `mailto:r${index}@reports${index}.example.net`).join(',');
     const txt: Record<string, FixtureValue> = {
       'example.test': [`v=spf1 ${includes.map((name) => `include:${name}`).join(' ')} -all`],
-      '_dmarc.example.test': [`v=DMARC1; p=reject; ${destinations}`],
+      '_dmarc.example.test': [`v=DMARC1; p=reject; rua=${destinations}`],
     };
     for (const include of includes) txt[include] = ['v=spf1 -all'];
     const fixture = fixtureDependencies({ txt });
@@ -218,7 +333,22 @@ describe('domain-posture collection orchestration', () => {
     assert.equal(report.spfExpansion.lookupLimit, 10);
     assert.ok(report.spfExpansion.lookupsUsed <= report.spfExpansion.lookupLimit);
     assert.ok(report.spfExpansion.branches.length <= 32);
-    assert.ok(report.dmarcAuthorizations.length <= 10);
+    assert.equal(report.dmarcAuthorizations.length, 10);
+    assert.match(requiredValue(report.checks.find((item) => item.id === 'dmarc')).detail, /10 of 14 destinations reviewed; 4 not checked/u);
+  });
+
+  test('does not present capped self-reporting destinations as complete external authorisation', async () => {
+    const self = Array.from({ length: 10 }, (_, index) => `mailto:r${index}@example.test`);
+    const fixture = fixtureDependencies({ txt: {
+      '_dmarc.example.test': [`v=DMARC1; p=reject; rua=${[...self, 'mailto:report@reports.example.net'].join(',')}`],
+    } });
+    const report = await checkDomainPosture('example.test', {}, fixture.dependencies);
+    assert.equal(report.dmarcAuthorizations.length, 10);
+    assert.ok(report.dmarcAuthorizations.every((item) => item.state === 'self'));
+    const dmarc = requiredValue(report.checks.find((item) => item.id === 'dmarc'));
+    assert.equal(dmarc.status, 'warning');
+    assert.match(dmarc.detail, /10 of 11 destinations reviewed; 1 not checked/u);
+    assert.ok(!fixture.calls.some((call) => call.includes('_report._dmarc.reports.example.net')));
   });
 
   test('does not start collection for an invalid target or fetch MTA-STS without a valid advertisement', async () => {

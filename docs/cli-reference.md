@@ -12,20 +12,8 @@ contains the exhaustive recipient, retention and export metadata.
 
 ## Installation
 
-Public releases require Node.js 24 or later. Release verification uses the
-exact Node.js 24 maintainer runtime and separately exercises the installed
-package on Node.js 26:
-
-```bash
-npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisleuth --help
-npm install --global --ignore-scripts @slicedearth/whoisleuth-cli
-whoisleuth doctor
-```
-
-The scoped package and application share one semantic version. The package
-requires no dependency lifecycle scripts and does not call the hosted
-WHOISleuth deployment. From a repository checkout, replace `whoisleuth` with
-`node bin/whoisleuth.mts`.
+Use the [installation guide](cli.md#installation) for runtime requirements,
+installation and updates. The CLI runs locally without a hosted account.
 
 ## Find and inspect commands
 
@@ -46,6 +34,13 @@ command position as Lookup shorthand. Use explicit `lookup` where input needs
 supported URL-like normalisation. Credentials, paths, queries, fragments, ports
 and unsupported special-use targets are rejected by the shorthand.
 
+Explicit `lookup` normally uses only a pasted URL's hostname. Add
+`--deep --exact-url` to collect that page's path and query instead of the
+homepage; fragments are not sent. `--plan` discloses this scope without making
+requests or copying the URL into the plan. Use stdin to keep a sensitive URL
+out of shell history. Saved request provenance omits queries, but paths and
+page-derived text still require review before sharing.
+
 `registry-scaffold` has a separate fixture contract: its `--profile` selects one
 fixed fixture profile and shared `--config` profiles are rejected. It produces
 sanitised local fixture material and makes no registry request.
@@ -63,12 +58,8 @@ disclosures without collecting. Fast is the Lookup default. Deep adds the
 applicable registration, DNS, HTTP, TLS, page, technology and network context.
 Optional browser providers are not implicit CLI actions.
 
-`mail-headers` is an offline review of one analyst-selected RFC-style header
-block. It reports domain-only identity, header-reported authentication,
-exact-domain alignment, and bounded `Received` routing. It retains no address
-local parts, display names, subject, body, attachment, or raw header value in
-its output. It does not independently validate SPF, DKIM, DMARC, or ARC and
-does not treat divergence as proof of abuse.
+The [message-header review](cli.md#message-header-review) is offline and reports
+publisher claims, not independent DNS or cryptographic validation.
 
 `dnssec-validate` and `mail-transport` are isolated authorised actions. Both
 require a selected literal public resolver, a local trust-anchor document and
@@ -77,6 +68,8 @@ transport handles at most three selected MX hosts sequentially, sends `EHLO`
 and uses `STARTTLS` only when advertised. It does not send mail, authenticate,
 test relay, enumerate recipients or retry automatically. DNSSEC, TLSA/DANE,
 PKIX, STARTTLS and SMTP transport remain separate evidence states.
+STARTTLS detection uses the full bounded reply. If the retained capability
+inventory is shortened, the report remains partial and names the omission.
 
 The repository-only rendered-capture package is outside hosted and distributable
 collection. It executes remote page JavaScript only for an explicitly
@@ -91,10 +84,19 @@ refused. Output goes to the terminal unless a command supports `--output`.
 Private output is written atomically and an existing path is refused unless
 replacement is explicit.
 
+`--` ends option processing. All later arguments are literal positional inputs,
+including names such as `--help`. Use `./-evidence.json` for a hyphen-prefixed
+filename when completing paths across shells. Options must precede `--`.
+
 Terminal text is the default. JSON, JSONL, CSV, Markdown, HTML and domain-only
 formats are available only where the installed command declares them.
 Redirected and machine output contains no ANSI or progress text. Diagnostics
 and optional target-free `--events` output use standard error.
+
+For `bulk` and `discover-scan`, `--csv-with-metadata` adds the source schema and
+version, observation and report times, collection origin, scan mode, diagnostic
+version and source-health states. Missing clocks remain `unknown`; a null
+source state is unmeasured, not a negative result. `--csv` keeps the compact columns.
 
 `--fail-on` and `--strict-exit` expose selected evidence states to automation
 without changing the result document. Review focused help for the policies a
@@ -116,22 +118,63 @@ Readers accept only their declared public and current versions. Unknown,
 unreleased historical and future schemas fail before partial interpretation;
 an invalid import is not treated as an empty document.
 
-`inspect-archive` reads current workspace archive v8 and exact versions 5, 6 and 7. It
+`inspect-archive` reads current workspace archive v9 and exact versions 5–8. It
 reports section metadata and digest-only search results unless `--reveal` is
 explicitly selected. It never searches notes, contacts or arbitrary raw fields.
 
 `export` reads supported saved Lookup v1 or v2 and writes current Lookup
-evidence schema 28. Published v2 schema 27 and exact v1 schema 26 remain
-readable. Versions 27 and 28 exclude raw registration payloads, expanded
+evidence schema 29. Published v2 schemas 27 and 28 and exact v1 schema 26 remain
+readable. Versions 27–29 exclude raw registration payloads, expanded
 contacts, credentials, complete query-bearing URLs and provider payloads;
-schema 28 can also retain the bounded, separately attributed registrar-standing
-projection shown by Lookup.
+schemas 28 and 29 also retain the bounded registrar-standing projection.
+Schema 29 identifies the hostname used for DNS, TLS and web observations,
+separately from the registrable domain used by registration sources. Older
+evidence retains its original collection scope.
 
 `verify-artifact` checks a recognised structure and its applicable integrity
 contract. `interchange-report` describes retained and omitted fields.
 `sign-artifact` and `verify-signature` keep artefact validity, signature
 validity and signer trust separate. None of these checks establishes that
 evidence is accurate, current, safe to share or attributable to a person.
+
+### Signer trust
+
+Use `verify-signature package.json --trust-store-file trust.json --json` to
+check an explicitly selected fingerprint policy offline. The result contains
+the ordinary signature verification and a separate current trust decision.
+Only a matching `trusted` entry succeeds; unknown, `retired`, `revoked` or
+future-reviewed entries return exit code 4, including with `--quiet`.
+Malformed files return 2. Without this option, the existing verification
+output is unchanged. A supplied `--public-key-file` must also match.
+
+The trust file contains no keys. For example:
+
+```json
+{
+  "schema": "whoisleuth.evidence-signer-trust-store",
+  "version": 1,
+  "entries": [{
+    "keyIdSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "label": "Evidence reviewer",
+    "status": "trusted",
+    "updatedAt": "2026-09-01T00:00:00.000Z",
+    "note": "Fingerprint confirmed through the established contact channel."
+  }]
+}
+```
+
+Replace the example fingerprint with the SHA-256 fingerprint of the signer's
+SPKI DER public-key bytes, confirmed through an authenticated channel—not
+merely copied from the package being checked. Review rotation and revocation
+updates through that channel. On rotation, mark the old entry `retired` and
+optionally record `successorKeyIdSha256`; independently confirm and add the
+replacement entry. Use `revoked` for a withdrawn trust decision. Neither a
+successor link nor a claimed signing date overrides current status.
+
+Files support 1,024 distinct entries within 4 MiB. Labels and single-line notes
+allow 160 and 2,048 characters respectively. Reports include only the matching
+entry and the exact file digest. Keep the file and any saved reports under your
+own retention policy. No automatic key discovery, key storage or trust refresh occurs.
 
 ## Command-family boundaries
 
@@ -144,17 +187,20 @@ evidence is accurate, current, safe to share or attributable to a person.
 - Bulk applies one declared collection contract per target. Fast accepts up to
   500 targets and Deep up to 50; each target remains a separate request.
 - Respond commands package browser-created Cases and prepare local packets,
-  reports and sharing reviews. They do not create durable Cases, submit,
-  publish, notify or grant recipient authorisation.
+  reports and sharing reviews. The offline [`case` workflow](cli.md#local-case-files)
+  also creates and updates ordinary local Case files through explicit, conflict-checked
+  output. Neither workflow submits, publishes, notifies or grants recipient authorisation.
 - Assurance, comparison and calibration commands describe supplied or retained
   evidence. They do not tune the running model, change infrastructure or turn an
   analyst label into observed truth.
 - `workflow-plan` lists fixed installed recipes without executing them.
   `workflow-run` executes only installed steps, requires approval for network
   work and pauses at unresolved analyst selections. Repeat
-  `--select <step-id>=<path-or-value>` in placeholder order to resume a selected
-  step; version-1 checkpoints remain readable and version 2 retains the exact
-  selections in the local checkpoint.
+  `--select <step-id>=<path-or-value>` for remaining placeholders in order, or bind
+  a compatible earlier output with `--use-artifact <step-id>:<input-number>=<earlier-step-id>`.
+  Checkpoints retain exact selections and bindings and distinguish incomplete
+  collection from retryable failures; see [resuming a fixed workflow](cli.md#resuming-a-fixed-workflow)
+  for the supported versions and resume behaviour.
 
 Use the installed focused help for positional inputs, exact ceilings, options,
 network effects, outputs and command-specific exit behaviour.

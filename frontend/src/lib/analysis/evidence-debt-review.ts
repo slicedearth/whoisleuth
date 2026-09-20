@@ -1,4 +1,9 @@
-import type { CaseRecord } from './case-model.ts';
+import { caseLookupTarget, type CaseRecord } from './case-model.ts';
+import { caseWorkspaceHref } from './case-response-stage.ts';
+import { normalizeExplicitIsoTimestamp, readObservationTime } from '../../../../packages/evidence/observation.mts';
+import { latestObservationCohort } from '../../../../packages/evidence/latest-observations.mts';
+import { MAX_CASES, MAX_CASE_EVIDENCE_PINS } from '../../../../packages/contracts/case-portability.mts';
+import { MAX_BULK_SESSIONS, MAX_BULK_SESSION_ROWS, MAX_BULK_SESSION_SOURCES } from '../../../../packages/contracts/workspace-portability.mts';
 import { caseStatusIsClosed } from './case-record-decisions.ts';
 import {
   BULK_REVIEW_STALE_AFTER_DAYS,
@@ -8,6 +13,7 @@ import {
 } from './bulk-source-coverage.ts';
 import type {
   BulkSession,
+  BulkSessionResult,
   BulkSessionSourceCoverage,
 } from './bulk-session-model.ts';
 import { stableComparisonLedgerId } from './comparison-ledger-serialization.ts';
@@ -18,7 +24,6 @@ import {
 import {
   EVIDENCE_DEBT_STATES,
   EVIDENCE_DEBT_VERSION,
-  MAX_EVIDENCE_DEBT_BULK_ROWS,
   MAX_EVIDENCE_DEBT_CASE_PINS,
   MAX_EVIDENCE_DEBT_ITEMS,
   MAX_EVIDENCE_DEBT_MATRIX_ROWS,
@@ -93,9 +98,7 @@ function boundedText(value: unknown, maximum: number): string {
 }
 
 function timestamp(value: unknown): string | null {
-  const text = boundedText(value, 64);
-  const parsed = Date.parse(text);
-  return text && Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  return normalizeExplicitIsoTimestamp(value);
 }
 
 function normalizeState(value: unknown): string {
@@ -103,6 +106,10 @@ function normalizeState(value: unknown): string {
 }
 
 function sourceId(value: unknown): string {
+  return boundedText(value, 80) || 'unknown';
+}
+
+function sourceKind(value: unknown): string {
   return boundedText(value, 80)
     .toLowerCase()
     .replace(/[\s-]+/gu, '_')
@@ -121,11 +128,7 @@ function sourceLabel(value: unknown): string {
     tls: 'TLS',
     whois: 'WHOIS',
   };
-  return known[sourceId(source)] ?? source.replaceAll('_', ' ');
-}
-
-function ageDays(value: string, nowMs: number): number {
-  return Math.max(0, Math.floor((nowMs - Date.parse(value)) / DAY_MS));
+  return known[sourceKind(source)] ?? source.replaceAll('_', ' ');
 }
 
 function sortStates(states: Iterable<EvidenceDebtState>): EvidenceDebtState[] {
@@ -155,7 +158,8 @@ function itemSort(left: Candidate, right: Candidate): number {
   if (left.priority !== right.priority) return left.priority === 'high' ? -1 : 1;
   const state = (STATE_RANK.get(left.primaryState) ?? 99) - (STATE_RANK.get(right.primaryState) ?? 99);
   if (state) return state;
-  const time = Date.parse(left.observedAt) - Date.parse(right.observedAt);
+  const time = Number(left.observedAt !== null) - Number(right.observedAt !== null)
+    || (left.observedAt && right.observedAt ? Date.parse(left.observedAt) - Date.parse(right.observedAt) : 0);
   if (time) return time;
   return compareText(left.id, right.id);
 }
@@ -174,19 +178,19 @@ function emptyCounts(): Record<EvidenceDebtState, number> {
 function debtForBulkSource(
   domain: string,
   observation: BulkSessionSourceCoverage,
-  observedAt: string,
-  nowMs: number,
+  observedAt: string | null,
+  now: string | null,
 ): EvidenceDebtState[] {
   const states: EvidenceDebtState[] = [];
   const normalized = normalizeState(observation.state);
   if (normalized === 'partial') states.push('partial');
   else if (normalized === 'error' || normalized === 'unavailable') states.push('unavailable');
   else if (normalized === 'unsupported' && !isExpectedUnsupportedBulkSource(domain, observation)) states.push('unsupported');
-  if (
-    normalized !== 'skipped'
-    && normalized !== 'unsupported'
-    && ageDays(observedAt, nowMs) >= BULK_REVIEW_STALE_AFTER_DAYS
-  ) states.push('stale');
+  if (normalized !== 'skipped' && normalized !== 'unsupported') {
+    const age = readObservationTime(observedAt, now).ageDays;
+    if (age === null) states.push('partial');
+    else if (age >= BULK_REVIEW_STALE_AFTER_DAYS) states.push('stale');
+  }
   return sortStates(states);
 }
 
@@ -196,32 +200,35 @@ function debtForCasePin(
   sourceState: unknown,
   completeness: unknown,
   truncated: unknown,
-  observedAt: string,
-  nowMs: number,
+  observedAt: string | null,
+  now: string | null,
 ): EvidenceDebtState[] {
   const rawState = normalizeState(sourceState);
   if (rawState === 'skipped') return [];
   if (rawState === 'unsupported' && isExpectedUnsupportedBulkSource(domain, {
-    source: sourceId(source),
+    source: sourceKind(source),
     state: rawState,
   })) return [];
   const states: EvidenceDebtState[] = [];
   const mapped = STATE_ALIASES[rawState];
   if (mapped) states.push(mapped);
+  const age = readObservationTime(observedAt, now).ageDays;
+  if (age === null && rawState !== 'unsupported') states.push('partial');
   if (truncated === true || completeness === 'partial') states.push('partial');
   if ((completeness === 'inconclusive' || completeness === 'unknown') && rawState !== 'unsupported') {
     states.push('unavailable');
   }
   if (
     rawState !== 'unsupported'
-    && nowMs - Date.parse(observedAt) > CASE_EVIDENCE_STALE_AFTER_DAYS * DAY_MS
+    && age !== null && observedAt !== null && now !== null
+    && Date.parse(now) - Date.parse(observedAt) > CASE_EVIDENCE_STALE_AFTER_DAYS * DAY_MS
   ) {
     states.push('stale');
   }
   return sortStates(states);
 }
 
-function nextForCase(states: readonly EvidenceDebtState[], domain: string, caseId: string, source: string): Readonly<{
+function nextForCase(states: readonly EvidenceDebtState[], target: string, caseId: string, source: string): Readonly<{
   action: EvidenceDebtNextAction;
   href: string;
 }> {
@@ -232,50 +239,60 @@ function nextForCase(states: readonly EvidenceDebtState[], domain: string, caseI
   ) {
     return {
       action: 'case_review',
-      href: `/monitor?view=cases&case=${encodeURIComponent(caseId)}#case-response-${encodeURIComponent(caseId)}`,
+      href: caseWorkspaceHref(caseId, 'evidence'),
     };
   }
   return {
     action: 'deep_lookup',
-    href: `/lookup?q=${encodeURIComponent(domain)}&depth=deep`,
+    href: `/lookup?q=${encodeURIComponent(target)}&depth=deep&case=${encodeURIComponent(caseId)}`,
   };
 }
 
 function buildBulkCandidates(
   sessions: readonly BulkSession[],
-  nowMs: number,
+  now: string | null,
   retention: MutableRetention,
-): { candidates: Candidate[]; totalRows: number; olderObservations: number } {
-  const rows = sessions.slice(0, 10).flatMap((session) => session.results.map((result) => ({
-    session,
-    result,
-    observedAt: timestamp(session.updatedAt) ?? new Date(0).toISOString(),
-  })));
-  rows.sort((left, right) => (
-    Date.parse(right.observedAt) - Date.parse(left.observedAt)
-    || compareText(left.session.id, right.session.id)
-    || compareText(left.result.domain, right.result.domain)
-  ));
-  const seen = new Set<string>();
+): { candidates: Candidate[]; totalRows: number; olderObservations: number; omittedRows: number; omittedSources: number } {
+  type SourceObservation = { session: BulkSession; result: BulkSessionResult; observation: BulkSessionSourceCoverage; observedAt: string | null };
+  const groups = new Map<string, SourceObservation[]>();
+  let totalRows = 0;
+  let omittedRows = 0;
+  let omittedSources = 0;
+  for (const session of sessions.slice(0, MAX_BULK_SESSIONS)) {
+    totalRows += session.results.length;
+    omittedRows += Math.max(0, session.results.length - MAX_BULK_SESSION_ROWS);
+    for (const result of session.results.slice(0, MAX_BULK_SESSION_ROWS)) {
+      if (!result.sourceCoverage.length) retention.bulkRowsWithoutCoverage += 1;
+      omittedSources += Math.max(0, result.sourceCoverage.length - MAX_BULK_SESSION_SOURCES);
+      for (const observation of result.sourceCoverage.slice(0, MAX_BULK_SESSION_SOURCES)) {
+        if (observation.state === 'skipped') retention.explicitlySkipped += 1;
+        if (observation.state === 'not_found') retention.explicitlyNotFound += 1;
+        if (observation.state === 'skipped' || isExpectedUnsupportedBulkSource(result.domain, observation)) continue;
+        const key = JSON.stringify([result.domain, observation.source, result.scanDepth]);
+        const group = groups.get(key) ?? [];
+        group.push({ session, result, observation, observedAt: timestamp(observation.observedAt) });
+        groups.set(key, group);
+      }
+    }
+  }
   const candidates: Candidate[] = [];
   let olderObservations = 0;
-  for (const { session, result, observedAt } of rows.slice(0, MAX_EVIDENCE_DEBT_BULK_ROWS)) {
-    if (!result.sourceCoverage.length) retention.bulkRowsWithoutCoverage += 1;
-    for (const observation of result.sourceCoverage.slice(0, 12)) {
-      if (observation.state === 'skipped') retention.explicitlySkipped += 1;
-      if (observation.state === 'not_found') retention.explicitlyNotFound += 1;
+  for (const group of groups.values()) {
+    const cohort = latestObservationCohort(group, (item) => readObservationTime(item.observedAt, now).ageDays === null ? null : item.observedAt);
+    olderObservations += cohort.superseded;
+    const conflicting = new Set(cohort.latest.map((item) => item.observation.state)).size > 1;
+    for (const { session, result, observation, observedAt } of [...cohort.latest, ...cohort.undated]) {
       const normalizedSource = sourceId(observation.source);
-      const latestKey = `${result.domain}\u0000${normalizedSource}`;
-      if (seen.has(latestKey)) {
-        olderObservations += 1;
-        continue;
-      }
-      seen.add(latestKey);
-      const states = debtForBulkSource(result.domain, observation, observedAt, nowMs);
+      const applicable = observation.state !== 'skipped' && !isExpectedUnsupportedBulkSource(result.domain, observation);
+      const states = sortStates([
+        ...debtForBulkSource(result.domain, observation, observedAt, now),
+        ...(applicable && conflicting ? ['conflicting' as const] : []),
+        ...(applicable && cohort.latest.length > 0 && cohort.undated.length > 0 ? ['partial' as const] : []),
+      ]);
       if (!states.length) continue;
       const label = sourceLabel(observation.source);
       candidates.push(Object.freeze({
-        id: stableComparisonLedgerId('debt-bulk', [session.id, result.domain, normalizedSource, observedAt, ...states]),
+        id: stableComparisonLedgerId('debt-bulk', [session.id, result.domain, observation.source, result.scanDepth, observedAt, ...states]),
         owner: 'bulk',
         ownerId: session.id,
         ownerLabel: boundedText(session.name, 100) || 'Saved Bulk session',
@@ -288,7 +305,10 @@ function buildBulkCandidates(
         observedAt,
         detail: `${label} is retained as ${observation.state.replaceAll('_', ' ')} in ${boundedText(session.name, 100) || 'a saved Bulk session'}.`,
         limitations: Object.freeze([
-          `Bulk source age uses the saved session time and becomes stale after ${BULK_REVIEW_STALE_AFTER_DAYS} days.`,
+          ...(readObservationTime(observedAt, now).ageDays === null ? ['Source age is unavailable; the session save time does not establish freshness.'] : []),
+          ...(conflicting ? ['Equal-time source states disagree; no single latest state is selected.'] : []),
+          ...(cohort.latest.length > 0 && cohort.undated.length > 0 ? ['Other retained observations have no comparable source time and cannot be ranked as older.'] : []),
+          `Source observations become stale after ${BULK_REVIEW_STALE_AFTER_DAYS} days. Older dated observations remain in their saved sessions.`,
         ]),
         reviewHref: '/bulk#bulk-sessions-title',
         nextAction: 'retry',
@@ -298,16 +318,15 @@ function buildBulkCandidates(
       }));
     }
   }
-  return { candidates, totalRows: rows.length, olderObservations };
+  return { candidates, totalRows, olderObservations, omittedRows, omittedSources };
 }
 
 function buildCaseCandidates(
   cases: readonly CaseRecord[],
-  nowIso: string,
-  nowMs: number,
+  nowIso: string | null,
   retention: MutableRetention,
-): { candidates: Candidate[]; totalPins: number } {
-  const active = cases.slice(0, 500).filter((record) => {
+): { candidates: Candidate[]; totalPins: number; omittedPins: number } {
+  const active = cases.slice(0, MAX_CASES).filter((record) => {
     if (caseStatusIsClosed(record.status)) {
       retention.resolvedCasesExcluded += 1;
       return false;
@@ -315,19 +334,23 @@ function buildCaseCandidates(
     if (!record.evidencePins.length) retention.casesWithoutPins += 1;
     return true;
   });
+  let omittedPins = 0;
   const pins = active.flatMap((record) => {
-    const dismissedPinIds = currentCaseEvidenceGapDismissedPinIds(record, nowIso);
+    omittedPins += Math.max(0, record.evidencePins.length - MAX_CASE_EVIDENCE_PINS);
+    const dismissedPinIds = nowIso ? currentCaseEvidenceGapDismissedPinIds(record, nowIso) : new Set<string>();
     retention.reviewedCasePinsExcluded += dismissedPinIds.size;
     return record.evidencePins
+      .slice(0, MAX_CASE_EVIDENCE_PINS)
       .filter((pin) => !dismissedPinIds.has(pin.id))
       .map((pin) => ({
         record,
         pin,
-        observedAt: timestamp(pin.observedAt) ?? timestamp(pin.createdAt) ?? new Date(0).toISOString(),
+        observedAt: timestamp(pin.observedAt),
       }));
   });
   pins.sort((left, right) => (
-    Date.parse(right.observedAt) - Date.parse(left.observedAt)
+    Number(left.observedAt !== null) - Number(right.observedAt !== null)
+    || (left.observedAt && right.observedAt ? Date.parse(right.observedAt) - Date.parse(left.observedAt) : 0)
     || compareText(left.record.id, right.record.id)
     || compareText(left.pin.id, right.pin.id)
   ));
@@ -336,11 +359,11 @@ function buildCaseCandidates(
     const rawState = normalizeState(pin.sourceState);
     if (rawState === 'skipped') retention.explicitlySkipped += 1;
     if (rawState === 'not_found') retention.explicitlyNotFound += 1;
-    const states = debtForCasePin(record.domain, pin.source, pin.sourceState, pin.completeness, pin.truncated, observedAt, nowMs);
+    const states = debtForCasePin(record.domain, pin.source, pin.sourceState, pin.completeness, pin.truncated, observedAt, nowIso);
     if (!states.length) continue;
     const normalizedSource = sourceId(pin.source);
     const label = sourceLabel(pin.source);
-    const next = nextForCase(states, record.domain, record.id, normalizedSource);
+    const next = nextForCase(states, caseLookupTarget(record), record.id, sourceKind(pin.source));
     candidates.push(Object.freeze({
       id: stableComparisonLedgerId('debt-case', [record.id, pin.id, normalizedSource, observedAt, ...states]),
       owner: 'case',
@@ -354,8 +377,11 @@ function buildCaseCandidates(
       priority: itemPriority(states),
       observedAt,
       detail: `${pin.label} is an explicit retained pin with ${states.map((state) => state.replaceAll('_', ' ')).join(' and ')} evidence.`,
-      limitations: Object.freeze(boundedLimitations(pin.limitations)),
-      reviewHref: `/monitor?view=cases&case=${encodeURIComponent(record.id)}#case-response-${encodeURIComponent(record.id)}`,
+      limitations: Object.freeze(boundedLimitations([
+        ...(readObservationTime(observedAt, nowIso).ageDays === null ? ['The source age is unavailable; freshness cannot be determined from the save time.'] : []),
+        ...pin.limitations,
+      ])),
+      reviewHref: caseWorkspaceHref(record.id, 'evidence'),
       nextAction: next.action,
       nextHref: next.href,
       expectedEffect: next.action === 'case_review'
@@ -366,7 +392,7 @@ function buildCaseCandidates(
         : 'Case review uses retained browser-local evidence and starts no request.',
     }));
   }
-  return { candidates, totalPins: pins.length };
+  return { candidates, totalPins: pins.length, omittedPins };
 }
 
 function buildMatrix(candidates: readonly Candidate[]): EvidenceDebtMatrixRow[] {
@@ -407,8 +433,7 @@ export function buildEvidenceDebtReview(input: Readonly<{
     bulk?: EvidenceDebtSourceState;
   }>;
 }>, nowRaw = new Date().toISOString()): EvidenceDebtReview {
-  const now = timestamp(nowRaw) ?? new Date().toISOString();
-  const nowMs = Date.parse(now);
+  const now = timestamp(nowRaw);
   const sourceStates = Object.freeze({
     bulk: input.sourceStates?.bulk ?? 'ready',
     cases: input.sourceStates?.cases ?? 'ready',
@@ -422,11 +447,11 @@ export function buildEvidenceDebtReview(input: Readonly<{
     reviewedCasePinsExcluded: 0,
   };
   const bulk = sourceStates.bulk === 'ready'
-    ? buildBulkCandidates(input.bulkSessions ?? [], nowMs, retention)
-    : { candidates: [], totalRows: 0, olderObservations: 0 };
+    ? buildBulkCandidates(input.bulkSessions ?? [], now, retention)
+    : { candidates: [], totalRows: 0, olderObservations: 0, omittedRows: 0, omittedSources: 0 };
   const cases = sourceStates.cases === 'ready'
-    ? buildCaseCandidates(input.cases ?? [], now, nowMs, retention)
-    : { candidates: [], totalPins: 0 };
+    ? buildCaseCandidates(input.cases ?? [], now, retention)
+    : { candidates: [], totalPins: 0, omittedPins: 0 };
   const candidates = [...bulk.candidates, ...cases.candidates].sort(itemSort);
   const items = Object.freeze(candidates.slice(0, MAX_EVIDENCE_DEBT_ITEMS));
   const allMatrix = buildMatrix(candidates);
@@ -436,24 +461,28 @@ export function buildEvidenceDebtReview(input: Readonly<{
   const omissions = Object.freeze({
     items: Math.max(0, candidates.length - items.length),
     matrixRows: Math.max(0, allMatrix.length - matrix.length),
-    bulkRows: Math.max(0, bulk.totalRows - MAX_EVIDENCE_DEBT_BULK_ROWS),
-    casePins: Math.max(0, cases.totalPins - MAX_EVIDENCE_DEBT_CASE_PINS),
+    bulkRows: bulk.omittedRows,
+    casePins: cases.omittedPins,
     olderBulkObservations: bulk.olderObservations,
+    bulkSessions: sourceStates.bulk === 'ready' ? Math.max(0, (input.bulkSessions?.length ?? 0) - MAX_BULK_SESSIONS) : 0,
+    cases: sourceStates.cases === 'ready' ? Math.max(0, (input.cases?.length ?? 0) - MAX_CASES) : 0,
+    bulkSources: bulk.omittedSources,
   });
   const truncated = omissions.items > 0
     || omissions.matrixRows > 0
     || omissions.bulkRows > 0
-    || omissions.casePins > 0;
+    || omissions.casePins > 0 || omissions.bulkSessions > 0 || omissions.cases > 0 || omissions.bulkSources > 0;
   const countsComplete = sourceStates.bulk === 'ready'
     && sourceStates.cases === 'ready'
     && omissions.bulkRows === 0
-    && omissions.casePins === 0;
+    && omissions.casePins === 0 && omissions.bulkSessions === 0 && omissions.cases === 0 && omissions.bulkSources === 0;
   return Object.freeze({
     version: EVIDENCE_DEBT_VERSION,
     items,
     matrix,
     counts: Object.freeze({ ...counts, all: candidates.length }),
     sourceStates,
+    evaluatedAt: now,
     countsComplete,
     truncated,
     omissions,

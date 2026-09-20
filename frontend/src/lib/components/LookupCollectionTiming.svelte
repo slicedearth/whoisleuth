@@ -5,21 +5,10 @@
   } from '$lib/analysis/lookup-response.ts';
   import { formatCollectionDuration } from '$lib/analysis/lookup-display-shared.ts';
   import { projectCollectionTiming } from '$lib/analysis/visualization-models.ts';
+  import { LOOKUP_SOURCE_LABELS as sourceLabels } from '$lib/analysis/lookup-source-labels.ts';
 
   let { timing, embedded = false }: { timing: LookupTiming; embedded?: boolean } = $props();
 
-  const sourceLabels: Record<LookupTimingSource, string> = {
-    rdap: 'Registry RDAP',
-    whois: 'WHOIS chain',
-    domain_evidence: 'Domain evidence',
-    reverse_dns: 'Reverse DNS',
-    registrar_rdap: 'Registrar RDAP',
-    network_context: 'Network context',
-    security_txt: 'security.txt',
-    external_intelligence: 'Archived web intelligence',
-    malware_host_intelligence: 'Malware host intelligence',
-    malware_ioc_intelligence: 'Malware infrastructure intelligence',
-  };
   const chart = $derived(projectCollectionTiming(timing.sources, timing.totalMs));
 
   function displaySourceLabel(source: string): string {

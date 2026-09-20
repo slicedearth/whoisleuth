@@ -1,31 +1,10 @@
 # Threat Model
 
-This threat model describes the WHOISleuth product boundary accepted in the
-[product decision](product-boundary.md). It supplements the
+This threat model covers the [current product boundaries](product-boundary.md).
+It supplements the
 [architecture orientation](architecture.md), [security policy](../SECURITY.md),
 and [privacy notice](../PRIVACY.md). It is not a claim that upstream public data
 is correct, complete, current, or safe.
-
-## Security objectives
-
-WHOISleuth should:
-
-- prevent an investigated target or imported artefact from reaching private or
-  reserved network resources;
-- keep credentials, sessions, analyst notes, raw payloads, personal data, and
-  deliberate local evidence within their documented custody boundaries;
-- preserve source identity, observation time, completeness, truncation, and
-  limitations through derivation, storage, export, replay, and comparison;
-- prevent malformed, oversized, duplicate-key, deeply nested, or future-version
-  input from escaping its bound or being silently reinterpreted;
-- keep active actions deliberate, authorised, rate-bounded, cancellable where
-  promised, and separate from ordinary Lookup, Bulk, monitoring, and offline
-  review;
-- make signed, hashed, or cryptographically validated claims only about the
-  exact bytes, projection, key, trust anchor, and validation family checked;
-  and
-- fail closed when a required security, privacy, authority, schema, or budget
-  condition cannot be established.
 
 ## Protected assets
 
@@ -97,6 +76,8 @@ or publication of different bytes from those reviewed.
 | CLI process | Local planning, collection, review, verification and files | Arguments, terminal bytes, environment, files, network responses | Command and execution-plane contracts, bounded input/output, private atomic writes, terminal sanitisation, explicit network plans |
 | Portable evidence | Interoperability and review | JSON, archives, signatures, digests, timestamps and nested documents | Duplicate-key-aware bounded parsing, exact envelopes, version routing, canonicalisation, structural and semantic validation |
 | Optional worker | Bounded monitoring or processing | Schedule, compact target set, store state and upstream responses | Separate configuration, encryption where promised, least data, budget and retry bounds, no general evidence custody |
+| Optional rendered capture | Explicit local rendering and artefact creation | Page scripts, subresources, browser teardown traffic and output paths | Browser sandbox, pinned collector, browser-lifetime deny-only proxy, disabled alternate transports, bounded private writes, explicit partial evidence |
+| Optional local application | Loopback access to a selected filesystem workspace | Local requests, stored records, concurrent writes and lost acknowledgements | Authenticated loopback boundary, exact origin admission, bounded transactions and durable operation receipts |
 
 ## Principal threats and controls
 
@@ -112,6 +93,13 @@ Residual risk includes changes in public address allocation, upstream DNS
 compromise, and protocol-specific behaviours that are outside the validated
 connection. Evidence remains point-in-time.
 
+The capture companion supplies every admitted response through the pinned Node
+collector. A deny-only loopback proxy refuses direct browser connections even
+after page routing is removed; speculative DNS and direct QUIC are disabled.
+The browser is closed before connection accounting and the manifest are final.
+This boundary does not contain a browser-engine compromise: untrusted rendering
+still belongs in a disposable, operating-system-restricted environment.
+
 ### Resource exhaustion
 
 Requests, bodies, decompression, arrays, objects, keys, strings, nesting,
@@ -120,9 +108,8 @@ entries, aggregate bytes, browser stores, and rendered output require limits
 before accumulation or expensive parsing. A post-parse or post-read size check
 is not sufficient.
 
-Residual risk is bounded process disruption within the configured limit. The
-limits are therefore chosen with the deployment and local runtime in mind and
-must be reviewed when formats or environments change.
+Residual risk includes process disruption within the configured bounds. Byte
+and operation limits do not guarantee identical memory or latency across runtimes.
 
 ### Evidence confusion and false certainty
 
@@ -146,6 +133,15 @@ profile, extension, same-origin script, or someone with local access. The
 privacy notice states that limitation. Portable encryption protects only the
 promised archive bytes under its key-lifecycle limits.
 
+Optional encrypted named workspaces protect record values and identifiers while
+locked. Authenticated records and collection membership reject undetected
+substitution, omission and reordering. Names, sizes, counts and times remain
+visible. An older valid database can be replayed, and browser deletion remains
+possible; this is not tamper-proof storage or a backup. Keys are document-local,
+tabs unlock independently, and no passphrase-reset service exists. Unlocked
+same-origin code, privileged extensions and a compromised device remain outside
+this protection.
+
 ### Import, export, and cryptographic overclaim
 
 An envelope, structure, digest, signature, trust chain, timestamp, DNSSEC proof,
@@ -160,12 +156,11 @@ retained. Exporters and their strict readers must form a tested closure.
 
 ### Active-operation abuse
 
-Active mail, DNSSEC, or future protocol actions require explicit operator scope,
+Active mail and DNSSEC commands require explicit operator scope,
 disclosure, acknowledgement, bounded public targets, strict command and input
 separation, deadlines, rate budgets, and fixture-only automated tests. They
 must never send mail, authenticate, enumerate recipients, test relay, expand
-into Fast or Compact, or retry automatically unless a later approved contract
-explicitly says so.
+into Fast or Compact, or retry automatically.
 
 ### Authentication and hosted custody
 
@@ -192,7 +187,7 @@ release-candidate assembly, archive digests, and installed-package workflows
 must refer to the exact candidate. A passing source test does not prove that a
 different package or deployment contains the reviewed bytes.
 
-## Deliberate non-goals
+## Out of scope
 
 WHOISleuth does not claim to provide:
 

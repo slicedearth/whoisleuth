@@ -20,13 +20,14 @@ import {
   REQUEST_TIMEOUT_MS,
 } from '../lib/distributed-operation-budget.mts';
 import { plannedLookupProgressSources } from '../lib/lookup-source-progress.mts';
+import { INVESTIGATION_RUN_STATES } from '../packages/contracts/investigation-run.mts';
+
 import { computeOpportunityScore } from '../lib/opportunity-scoring.mts';
 import { computeRiskScore } from '../lib/risk-scoring.mts';
 import {
   MAX_CYCLE_DELIVERIES,
   MAX_CYCLE_LOOKUPS,
   MAX_CYCLE_MS,
-  MIN_LOOKUP_WINDOW_MS,
 } from '../lib/scheduled-monitor-cycle.mts';
 import {
   MAX_CAPTURE_HOSTS,
@@ -58,6 +59,15 @@ import { CLI_COMMAND_SEMANTICS } from '../packages/contracts/cli-command-semanti
 import { buildBulkCollectionPreflight, buildLookupCollectionPreflight } from '../frontend/src/lib/analysis/collection-preflight.ts';
 import { renderCapabilityManifestMarkdown } from '../tools/capability-manifest-renderer.mts';
 import { OUTPUT_PATH, retainedDocument, writeAtomically } from '../tools/capability-manifest.mts';
+
+test('registration capability wording preserves precedence and the positive-only DNS fallback', () => {
+  const availability = CAPABILITY_MANIFEST.capabilities.find((entry) => entry.id === 'availability');
+  assert.ok(availability);
+  const explanation = availability.privacyLimitations.join(' ');
+  assert.match(explanation, /registration publications take precedence/iu);
+  assert.match(explanation, /inconclusive.*positive authoritative DNS delegation.*registered status at medium confidence/iu);
+  assert.match(explanation, /Missing DNS never proves availability/u);
+});
 
 const EXPECTED_CAPABILITY_IDS = [
   'lookup',
@@ -306,7 +316,7 @@ describe('canonical capability manifest', () => {
     assert.ok(bulkPlan.action === 'bulk' && bulkPlan.plan);
     assert.ok(discoveryPlan.action === 'discover-scan' && discoveryPlan.plan);
 
-    for (const command of ['verify-artifact', 'interchange-report', 'inspect-archive'] as const) {
+    for (const command of ['manifest', 'verify-artifact', 'interchange-report', 'inspect-archive'] as const) {
       assert.equal(cliOperationForCommand(command)?.credentialModel, 'optional_secret_passphrase_file');
     }
     assert.equal(cliOperationForCommand('verify-signature')?.credentialModel, 'optional_public_key_file');
@@ -329,8 +339,10 @@ describe('canonical capability manifest', () => {
     assert.deepEqual(cliOperationForCommand('workflow-run')?.outcomes, ['complete', 'partial', 'blocked']);
     assert.deepEqual(
       cliOperationForCommand('workflow-run')?.documentStates,
-      ['complete', 'awaiting_network_approval', 'awaiting_analyst_selection', 'step_failed'],
+      INVESTIGATION_RUN_STATES,
     );
+    assert.ok(cliOperationForCommand('workflow-run')?.recipients.includes('certificate_transparency_service'));
+    assert.ok(cliOperationForCommand('workflow-run')?.disclosedData.includes('certificate_search_term'));
   });
 
   test('matches feature-policy dependencies and operation-budget identities exactly', () => {
@@ -386,7 +398,7 @@ describe('canonical capability manifest', () => {
       maxLookups: MAX_CYCLE_LOOKUPS,
       maxProcessedDeliveries: MAX_CYCLE_DELIVERIES,
       softCycleBudgetMs: MAX_CYCLE_MS,
-      minLookupWindowMs: MIN_LOOKUP_WINDOW_MS,
+      minLookupWindowMs: 0,
     });
     assert.deepEqual(budgets.planes, ['hosted_bounded_passive']);
     assert.deepEqual(budgets.scanModes, []);

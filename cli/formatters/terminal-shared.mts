@@ -23,7 +23,8 @@ type TerminalBulkMetadata = {
   filter?: 'all' | 'errors' | 'inconclusive' | 'registered';
 };
 
-function safeTerminalValue(value: unknown, fallback = '—'): string {
+function safeTerminalValue(value: unknown, fallback = '—', maximum = MAX_TERMINAL_VALUE_LENGTH): string {
+  if (!Number.isSafeInteger(maximum) || maximum < 1) throw new TypeError('Terminal text requires a positive finite character bound.');
   if (value === null || value === undefined || value === '') return fallback;
   const normalized = String(value)
     .replace(/[\x00-\x1f\x7f-\x9f]+/g, ' ')
@@ -31,8 +32,8 @@ function safeTerminalValue(value: unknown, fallback = '—'): string {
     .replace(/\s+/g, ' ')
     .trim();
   if (!normalized) return fallback;
-  return normalized.length > MAX_TERMINAL_VALUE_LENGTH
-    ? `${normalized.slice(0, MAX_TERMINAL_VALUE_LENGTH - 1)}…`
+  return normalized.length > maximum
+    ? `${normalized.slice(0, maximum - 1)}…`
     : normalized;
 }
 

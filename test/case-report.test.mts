@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import * as caseReport from '../frontend/src/lib/analysis/case-report.ts';
+import { appendCaseEvidencePin } from '../packages/cases/case-response-model.mts';
 import type { CaseRecord } from '../frontend/src/lib/analysis/case-record-contracts.ts';
 import { recordValue, requiredValue } from './value-assertions.mts';
 
@@ -90,6 +91,14 @@ describe('schema identity', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildCaseReport JSON', () => {
+  test('full reports retain optional import identity without adding it to other evidence', () => {
+    const pins = appendCaseEvidencePin([], { label: 'Imported observation', value: 'Retained value', importContentSha256: 'c'.repeat(64) }, ISO);
+    const both = appendCaseEvidencePin(pins, { label: 'Analyst observation', value: 'Another value' }, LATER);
+    const { json } = caseReport.buildCaseReport(caseRecord({ evidencePins: both }), { generatedAt: LATEST });
+    assert.equal(json.analystResponse.evidencePins[0]!.importContentSha256, 'c'.repeat(64));
+    assert.equal(Object.hasOwn(json.analystResponse.evidencePins[1]!, 'importContentSha256'), false);
+  });
+
   test('no-evidence case produces valid report', () => {
     const rec = caseRecord({ evidenceHistory: [] });
     const { json } = caseReport.buildCaseReport(rec, { generatedAt: ISO });
@@ -215,6 +224,24 @@ describe('buildCaseReport JSON', () => {
     assert.match(markdown, /Latest provider outcome time: 2026-06-01/iu);
     assert.match(markdown, /Latest independently observed change time: 2026-07-01/iu);
     assert.match(markdown, /does not establish independent remediation/iu);
+  });
+
+  test('reports valid registration changes without cross-hostname page or score deltas', () => {
+    const rec = caseRecord({ evidenceHistory: [
+      snapshot({ id: 'first', fingerprint: 'first', inputHostname: 'login.example.test', riskScore: 80, hasPasswordField: true, registrar: 'Old registrar' }),
+      snapshot({ id: 'second', fingerprint: 'second', inputHostname: 'www.example.test', riskScore: 10, hasPasswordField: false, registrar: 'New registrar', capturedAt: LATER }),
+    ] });
+    const { json } = caseReport.buildCaseReport(rec, { generatedAt: LATEST });
+    const entry = requiredValue(json.evidenceTimeline.find((item) => !item.isBaseline));
+    assert.deepEqual(entry.changes?.map((change) => change.field), ['registrar']);
+    assert.ok(entry.incomparableReasons.includes('observation-context'));
+  });
+
+  test('keeps snapshot observation hostnames out of both report formats', () => {
+    const rec = caseRecord({ evidenceHistory: [snapshot({ inputHostname: 'submitted.example.test', observationHostname: 'observed.example.test' })] });
+    const result = caseReport.buildCaseReport(rec, { generatedAt: LATEST });
+    assert.doesNotMatch(JSON.stringify(result.json), /submitted\.example\.test|observed\.example\.test/u);
+    assert.doesNotMatch(result.markdown, /submitted\.example\.test|observed\.example\.test/u);
   });
 
   test('single-snapshot baseline', () => {

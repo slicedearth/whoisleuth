@@ -1,10 +1,13 @@
 import express from 'express';
 import type { IncomingHttpHeaders } from 'node:http';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import type { Request, Response } from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { classifyQuery } from './lib/classify.mts';
-import { fetchRdapRecord } from './lib/rdap.mts';
+import { fetchRdapRecord, rdapUnavailableResponse } from './lib/rdap.mts';
 import {
   RdapNameserverSearchInputError,
   searchRdapNameserver,
@@ -13,6 +16,9 @@ import { buildWhoisChain, parseWhoisChain } from './lib/whois.mts';
 import { checkDomainAvailability } from './lib/availability.mts';
 import { runUnifiedLookup, LOOKUP_ERROR_CODES } from './lib/lookup.mts';
 import { createLookupHttpResponse } from './lib/lookup-response-contract.mts';
+import { MAX_LOOKUP_SELECTION_BODY_BYTES } from './lib/lookup-selected-request.mts';
+import { prepareLookupHttpOperation } from './lib/lookup-http-operation.mts';
+import { createLookupProgressBody, LOOKUP_PROGRESS_CONTENT_TYPE } from './lib/lookup-progress-http.mts';
 import {
   CANONICAL_TRAILING_SLASH_REDIRECTS,
   PERMANENT_ROUTE_REDIRECTS,
@@ -21,6 +27,7 @@ import {
 import { searchCertificateTransparency } from './lib/ct-search.mts';
 import { isCtQueryError, normalizeCtQuery } from './lib/ct-query.mts';
 import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors, normalizeMailProtectionProfile } from './lib/domain-posture.mts';
+import { parseInheritedDnsSelection } from './lib/dns-inheritance-review.mts';
 import { capabilityReport } from './lib/capabilities.mts';
 import {
   COOKIE_NAME,
@@ -47,6 +54,7 @@ import {
   trustsForwardedHeaders,
 } from './lib/rate-limit.mts';
 import type { RateLimitChecker } from './lib/rate-limit.mts';
+import { strictHeader } from './lib/request-header-facts.mts';
 import {
   defaultOperationBudget,
   operationBudgetError,
@@ -56,7 +64,7 @@ import {
 } from './lib/operation-budget.mts';
 import { featureDisabledError, networkFeaturePolicy } from './lib/feature-policy.mts';
 import type { NetworkFeatureId, NetworkFeaturePolicy } from './lib/feature-policy.mts';
-import { MAX_API_JSON_BODY_BYTES, apiErrorResponseFor, apiUnexpectedErrorResponse } from './lib/http.mts';
+import { MAX_API_JSON_BODY_BYTES, apiErrorResponseFor, apiUnexpectedErrorResponse, readRequestTextCapped } from './lib/http.mts';
 import { HTTP_BASELINE_CONTENT_SECURITY_POLICY } from './lib/security-headers.mts';
 import {
   MAX_CONTACT_ROUTE_BODY_BYTES,
@@ -66,6 +74,7 @@ import {
 } from './lib/contact-route.mts';
 
 type RequestLike = {
+  method?: string;
   protocol: string;
   headers: IncomingHttpHeaders;
   socket?: { remoteAddress?: string | null | undefined } | undefined;
@@ -77,6 +86,7 @@ type RequestLike = {
 
 type ResponseLike = {
   headersSent?: boolean;
+  destroyed?: boolean;
   setHeader: (name: string, value: string) => unknown;
   status: (statusCode: number) => ResponseLike;
   json: (body: unknown) => unknown;
@@ -130,6 +140,7 @@ function sendUnexpectedApiError(
   res: ResponseLike,
   errorCode: unknown = 'INTERNAL_ERROR',
 ) {
+  if (res.destroyed || res.headersSent) return;
   const response = apiUnexpectedErrorResponse(errorCode);
   return res.status(response.statusCode).json(response.body);
 }
@@ -206,8 +217,8 @@ function isHttps(req: RequestLike): boolean {
 // that have not opted into trusting forwarded client identity. A forged
 // value can only add Secure (fail closed); it cannot remove the attribute.
 function usesSecureCookies(req: RequestLike): boolean {
-  const forwarded = req.headers['x-forwarded-proto'];
-  return isHttps(req) || (typeof forwarded === 'string' && forwarded.toLowerCase() === 'https');
+  const forwarded = strictHeader(req.headers, 'x-forwarded-proto');
+  return isHttps(req) || (forwarded.state === 'valid' && forwarded.value?.toLowerCase() === 'https');
 }
 
 function requestOriginContext(req: RequestLike): RequestOriginContext {
@@ -261,20 +272,31 @@ function requireFeature(feature: NetworkFeatureId) {
 
 async function withExpressOperationBudget<T>(
   req: RequestLike,
-  res: ResponseLike,
+  res: Response,
   operationTarget: OperationTarget,
-  callback: () => Promise<T>,
+  callback: (signal: AbortSignal) => Promise<T>,
 ) {
+  if (res.destroyed) return;
   const sessionKey = sessionFingerprintFromCookieHeader(req.headers.cookie);
   if (!sessionKey) {
     return res.status(401).json({ error: 'Authentication required', errorCode: LOOKUP_ERROR_CODES.AUTH_REQUIRED });
   }
-  const outcome = await runWithOperationBudget(defaultOperationBudget, operationTarget, sessionKey, callback);
-  if (!outcome.allowed) {
-    res.setHeader('Retry-After', String(outcome.denial.retryAfterSeconds));
-    return res.status(operationBudgetHttpStatus(outcome.denial)).json(operationBudgetError(outcome.denial));
+  const controller = new AbortController();
+  const closed = () => controller.abort();
+  res.once('close', closed);
+  if (res.destroyed) closed();
+  try {
+    const outcome = await runWithOperationBudget(defaultOperationBudget, operationTarget, sessionKey, () =>
+      controller.signal.aborted ? undefined : callback(controller.signal));
+    if (res.destroyed) return;
+    if (!outcome.allowed) {
+      res.setHeader('Retry-After', String(outcome.denial.retryAfterSeconds));
+      return res.status(operationBudgetHttpStatus(outcome.denial)).json(operationBudgetError(outcome.denial));
+    }
+    return outcome.value;
+  } finally {
+    res.off('close', closed);
   }
-  return outcome.value;
 }
 
 app.post('/api/login', (req: RequestLike, res: ResponseLike, next: Next) => {
@@ -348,42 +370,61 @@ function registerNetworkApiRoutes(
   target: ExpressApplication,
   services: NetworkRouteServices = DEFAULT_NETWORK_ROUTE_SERVICES,
 ): void {
-  target.get('/api/lookup', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('lookup'), async (req: RequestLike, res: ResponseLike) => {
-    const q = queryText(req.query.q);
-    if (!q) return res.status(400).json({ error: 'Missing query parameter "q"', errorCode: LOOKUP_ERROR_CODES.MISSING_QUERY });
-
-    let classified;
-    try {
-      classified = classifyQuery(q);
-    } catch {
-      return res.status(400).json({ error: 'Invalid query', errorCode: LOOKUP_ERROR_CODES.INVALID_QUERY });
-    }
-
-    const fast = req.query.fast === '1' || req.query.fast === 'true';
-    const compact = req.query.compact === '1' || req.query.compact === 'true';
-    const externalIntelligence = req.query.intelligence === '1' || req.query.intelligence === 'true';
-    const malwareHostIntelligence = req.query.malware === '1' || req.query.malware === 'true';
-    const malwareIocIntelligence = req.query.ioc === '1' || req.query.ioc === 'true';
-    const securityTxt = req.query.security_txt === '1' || req.query.security_txt === 'true';
-    return withExpressOperationBudget(req, res, operationBudgetTargetFor('lookup', { fast, compact }), async () => {
+  const handleLookup = async (req: Request & { networkFeaturePolicy?: NetworkFeaturePolicy }, res: Response) => {
+    const operation = prepareLookupHttpOperation({ params: req.query, method: req.method,
+      contentType: req.headers['content-type'], accept: req.headers.accept, body: req.body,
+      featurePolicy: req.networkFeaturePolicy ?? networkFeaturePolicy() });
+    if (!operation.ok) return res.status(operation.status).json(operation.body);
+    return withExpressOperationBudget(req, res, operationBudgetTargetFor('lookup', operation.options), async (signal) => {
       try {
-        const result = await services.runUnifiedLookup(classified, {
-          fast,
-          compact,
-          externalIntelligence,
-          malwareHostIntelligence,
-          malwareIocIntelligence,
-          securityTxt,
-          ...(req.networkFeaturePolicy ? { featurePolicy: req.networkFeaturePolicy } : {}),
-        });
-        res.json(services.createLookupHttpResponse(q, classified, result));
-      } catch (err) {
-        sendUnexpectedApiError(res, LOOKUP_ERROR_CODES.LOOKUP_FAILED);
+        if (operation.streaming) {
+          const controller = new AbortController();
+          const stream = createLookupProgressBody({ sources: operation.sources, signal: AbortSignal.any([signal, controller.signal]),
+            run: (settled, signal) => operation.run(services, signal, settled) });
+          res.setHeader('Content-Type', `${LOOKUP_PROGRESS_CONTENT_TYPE}; charset=utf-8`);
+          res.setHeader('Cache-Control', 'no-store');
+          res.flushHeaders();
+          try { await pipeline(Readable.fromWeb(stream.body as import('node:stream/web').ReadableStream<Uint8Array>), res); }
+          finally { controller.abort(); await stream.completion; }
+        } else {
+          const result = await operation.run(services, signal);
+          if (!signal.aborted) res.json(result);
+        }
+      } catch {
+        if (!res.headersSent && !res.destroyed) sendUnexpectedApiError(res, LOOKUP_ERROR_CODES.LOOKUP_FAILED);
       }
     });
-  });
+  };
+  const lookupGuards = [apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('lookup')];
+  target.get('/api/lookup', ...lookupGuards, handleLookup);
+  target.post('/api/lookup', ...lookupGuards, async (req, res, next) => {
+    if (req.headers['content-encoding'] && req.headers['content-encoding'] !== 'identity') {
+      res.status(415).json({ error: 'Selected URL requests must use uncompressed JSON.' }); return;
+    }
+    const controller = new AbortController();
+    const aborted = () => controller.abort();
+    req.once('aborted', aborted);
+    try {
+      const body = await readRequestTextCapped({
+        body: Readable.toWeb(req) as ReadableStream<Uint8Array>,
+        headers: new Headers(req.headers['content-length'] ? { 'content-length': req.headers['content-length'] } : {}),
+        signal: controller.signal,
+      }, MAX_LOOKUP_SELECTION_BODY_BYTES);
+      if (body.status !== 'ok') {
+        if (res.destroyed) return;
+        res.setHeader('Connection', 'close');
+        res.once('finish', () => req.destroy());
+        res.status(body.status === 'too_large' ? 413 : body.status === 'invalid_encoding' ? 400 : 408)
+          .json({ error: body.status === 'too_large' ? 'Selected URL request is too large.' : body.status === 'invalid_encoding' ? 'Invalid request encoding.' : 'Request body read timed out.' });
+        return;
+      }
+      req.body = body.body;
+      next();
+    } catch (error) { next(error); }
+    finally { req.off('aborted', aborted); }
+  }, handleLookup);
 
-  target.get('/api/rdap', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('rdap'), async (req: RequestLike, res: ResponseLike) => {
+  target.get('/api/rdap', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('rdap'), async (req: RequestLike, res: Response) => {
     const q = queryText(req.query.q);
     if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
@@ -394,11 +435,12 @@ function registerNetworkApiRoutes(
       return res.status(400).json({ error: 'Invalid query' });
     }
 
-    return withExpressOperationBudget(req, res, operationBudgetTargetFor('rdap'), async () => {
+    return withExpressOperationBudget(req, res, operationBudgetTargetFor('rdap'), async (signal) => {
       try {
-        const record = await services.fetchRdapRecord(classified.type, classified.value);
+        const record = await services.fetchRdapRecord(classified.type, classified.value, { signal });
+        if (signal.aborted) return;
         if (!record) {
-          return res.status(404).json({ error: `No RDAP registry found for "${q}" via IANA bootstrap` });
+          return res.status(404).json(rdapUnavailableResponse(classified.type, classified.value));
         }
 
         res.status(200).json({
@@ -414,15 +456,18 @@ function registerNetworkApiRoutes(
     });
   });
 
-  target.get('/api/rdap-nameserver-search', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('rdap_nameserver_search'), async (req: RequestLike, res: ResponseLike) => {
-    return withExpressOperationBudget(req, res, operationBudgetTargetFor('rdap_nameserver_search'), async () => {
+  target.get('/api/rdap-nameserver-search', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('rdap_nameserver_search'), async (req: RequestLike, res: Response) => {
+    return withExpressOperationBudget(req, res, operationBudgetTargetFor('rdap_nameserver_search'), async (signal) => {
       try {
         const result = await services.searchRdapNameserver(
           queryText(req.query.nameserver),
           queryText(req.query.scope),
+          { signal },
         );
+        if (signal.aborted) return;
         return res.status(200).json(result);
       } catch (error) {
+        if (signal.aborted) return;
         if (error instanceof RdapNameserverSearchInputError) {
           return res.status(400).json({ error: error.message, errorCode: error.code });
         }
@@ -431,7 +476,7 @@ function registerNetworkApiRoutes(
     });
   });
 
-  target.get('/api/whois', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('whois'), async (req: RequestLike, res: ResponseLike) => {
+  target.get('/api/whois', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('whois'), async (req: RequestLike, res: Response) => {
     const q = queryText(req.query.q);
     if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
@@ -442,9 +487,10 @@ function registerNetworkApiRoutes(
       return res.status(400).json({ error: 'Invalid query' });
     }
 
-    return withExpressOperationBudget(req, res, operationBudgetTargetFor('whois'), async () => {
+    return withExpressOperationBudget(req, res, operationBudgetTargetFor('whois'), async (signal) => {
       try {
-        const chain = await services.buildWhoisChain(classified.value);
+        const chain = await services.buildWhoisChain(classified.value, { signal });
+        if (signal.aborted) return;
         res.json({
           query: q,
           type: classified.type,
@@ -459,7 +505,7 @@ function registerNetworkApiRoutes(
     });
   });
 
-  target.get('/api/availability', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('availability'), async (req: RequestLike, res: ResponseLike) => {
+  target.get('/api/availability', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('availability'), async (req: RequestLike, res: Response) => {
     const q = queryText(req.query.q);
     if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
@@ -474,12 +520,15 @@ function registerNetworkApiRoutes(
     }
 
     const fast = req.query.fast === '1' || req.query.fast === 'true';
-    return withExpressOperationBudget(req, res, operationBudgetTargetFor('availability', { fast }), async () => {
+    return withExpressOperationBudget(req, res, operationBudgetTargetFor('availability', { fast }), async (signal) => {
       try {
         const result = await services.checkDomainAvailability(classified.value, {
           fast,
+          signal,
+          ...(!fast ? { observationHostname: classified.inputHostname } : {}),
           ...(req.networkFeaturePolicy ? { featurePolicy: req.networkFeaturePolicy } : {}),
         });
+        if (signal.aborted) return;
         // domain is the registrable domain actually looked up; inputHostname
         // preserves what the user typed so the UI can note when a subdomain query
         // was resolved to its registrable domain (and never call the subdomain
@@ -498,7 +547,7 @@ function registerNetworkApiRoutes(
     });
   });
 
-  target.get('/api/ct-search', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('certificate_transparency'), async (req: RequestLike, res: ResponseLike) => {
+  target.get('/api/ct-search', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('certificate_transparency'), async (req: RequestLike, res: Response) => {
     let q: string;
     try {
       q = normalizeCtQuery(req.query.q);
@@ -508,9 +557,10 @@ function registerNetworkApiRoutes(
     }
     if (!q) return res.status(400).json({ error: 'Missing query parameter "q"', errorCode: 'MISSING_QUERY' });
 
-    return withExpressOperationBudget(req, res, operationBudgetTargetFor('certificate_transparency'), async () => {
+    return withExpressOperationBudget(req, res, operationBudgetTargetFor('certificate_transparency'), async (signal) => {
       try {
-        const result = await services.searchCertificateTransparency(q);
+        const result = await services.searchCertificateTransparency(q, { signal });
+        if (signal.aborted) return;
         res.json({ keyword: q, ...result });
       } catch (err) {
         sendUnexpectedApiError(res);
@@ -518,7 +568,7 @@ function registerNetworkApiRoutes(
     });
   });
 
-  target.get('/api/domain-posture', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('domain_posture'), async (req: RequestLike, res: ResponseLike) => {
+  target.get('/api/domain-posture', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('domain_posture'), async (req: RequestLike, res: Response) => {
     const q = queryText(req.query.q);
     if (!q) return res.status(400).json({ error: 'Missing query parameter "q"' });
 
@@ -537,13 +587,19 @@ function registerNetworkApiRoutes(
       .filter((selector) => !selectors.includes(selector))
       .slice(0, Math.max(0, 10 - selectors.length));
     const mailProtectionProfile = normalizeMailProtectionProfile(queryText(req.query.mailProfile));
-    return withExpressOperationBudget(req, res, operationBudgetTargetFor('domain_posture'), async () => {
+    let includeInheritedDns: true | undefined;
+    try { includeInheritedDns = parseInheritedDnsSelection(req.query.includeInheritedDns); }
+    catch { return res.status(400).json({ error: 'includeInheritedDns must be 1 when requested.' }); }
+    return withExpressOperationBudget(req, res, operationBudgetTargetFor('domain_posture'), async (signal) => {
       try {
-        res.json(await services.checkDomainPosture(domain, {
+        const result = await services.checkDomainPosture(domain, {
           dkimSelectors: selectors,
           retiredDkimSelectors: retiredSelectors,
           mailProtectionProfile,
-        }));
+          ...(includeInheritedDns ? { includeInheritedDns } : {}),
+          signal,
+        });
+        if (!signal.aborted) res.json(result);
       } catch (err) {
         sendUnexpectedApiError(res);
       }

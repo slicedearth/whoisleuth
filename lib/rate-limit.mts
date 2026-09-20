@@ -13,11 +13,12 @@
 // globally; on Netlify Functions each container has its own memory, so it
 // only limits bursts within a single warm container rather than across the
 // whole deployment. Still worth having as a cheap first line of defense -
-// just not a substitute for a shared store (e.g. Redis) under serious
-// distributed abuse.
+// just not a substitute for deployment-wide controls under distributed abuse.
+
+import { addressValue } from '../packages/contracts/ip-address.mts';
+import { strictHeader, lastHeaderToken, type HeaderInput } from './request-header-facts.mts';
 
 type EnvironmentInput = Record<string, unknown>;
-type HeaderInput = Readonly<Record<string, string | readonly string[] | undefined>>;
 type RateLimitBucket = { count: number; resetAt: number };
 type RateLimitConfig = { limit: number; windowMs: number };
 type RateLimitDecision = {
@@ -104,8 +105,9 @@ function createRateLimitChecker(
 function createScopedRateLimitCheckers(
   maximumBucketsPerScope = MAX_RATE_LIMIT_BUCKETS_PER_SCOPE,
 ): ScopedRateLimitCheckers {
+  const login = createRateLimitChecker(LOGIN_RATE_LIMIT, maximumBucketsPerScope);
   return Object.freeze({
-    login: createRateLimitChecker(LOGIN_RATE_LIMIT, maximumBucketsPerScope),
+    login: (key: string, now?: number) => login(loginRateIdentity(key), now),
     api: createRateLimitChecker(API_RATE_LIMIT, maximumBucketsPerScope),
     contactRoute: createRateLimitChecker(CONTACT_ROUTE_RATE_LIMIT, maximumBucketsPerScope),
     scheduledMonitorManagement: createRateLimitChecker(
@@ -117,6 +119,16 @@ function createScopedRateLimitCheckers(
       maximumBucketsPerScope,
     ),
   });
+}
+
+function loginRateIdentity(key: string): string {
+  const address = addressValue(key);
+  if (!address) return key;
+  if (address.family === 4) return `v4:${address.value}`;
+  // Mapped IPv4 and its dotted spelling share a bucket. Ordinary IPv6 login
+  // attempts share their /64 rather than rotating through interface addresses.
+  if (address.value >> 32n === 0xffffn) return `v4:${Number(address.value & 0xffffffffn)}`;
+  return `v6:${(address.value >> 64n).toString(16)}/64`;
 }
 
 // Expired buckets are swept lazily during rate-limit checks. This avoids an
@@ -148,11 +160,7 @@ function getForwardedProtocol(
   env: EnvironmentInput | null | undefined = process.env,
 ): string | null {
   if (!trustsForwardedHeaders(env)) return null;
-  const h = headers || {};
-  const value = h['x-forwarded-proto'] || h['X-Forwarded-Proto'];
-  if (typeof value !== 'string') return null;
-  const parts = value.split(',').map((part) => part.trim().toLowerCase()).filter(Boolean);
-  return parts.at(-1) ?? null;
+  return lastHeaderToken(headers, 'x-forwarded-proto')?.toLowerCase() ?? null;
 }
 
 function getClientIp(
@@ -160,7 +168,6 @@ function getClientIp(
   fallback?: string | null,
   env: EnvironmentInput | null | undefined = process.env,
 ): string {
-  const h = headers || {};
   if (!trustsForwardedHeaders(env)) return fallback || 'unknown';
 
   // Netlify's own edge-assigned client IP is authoritative inside that
@@ -169,21 +176,33 @@ function getClientIp(
   // proxy: common reverse proxies overwrite X-Forwarded-For but may pass
   // unfamiliar client-supplied headers through unchanged.
   if (isNetlifyRuntime(env)) {
-    const nfIp = h['x-nf-client-connection-ip'];
-    if (typeof nfIp === 'string' && nfIp) return nfIp;
+    const nfIp = strictHeader(headers, 'x-nf-client-connection-ip');
+    if (nfIp.state === 'valid' && addressValue(nfIp.value)) return nfIp.value;
   }
 
   // Each hop *appends* to the end of X-Forwarded-For, so with exactly one
   // trusted proxy in front of this app, the *last* entry is the one that
   // proxy added - the first is whatever the original client claimed, which
   // is exactly what a spoofing client would set.
-  const forwardedFor = h['x-forwarded-for'] || h['X-Forwarded-For'];
-  if (typeof forwardedFor === 'string' && forwardedFor) {
-    const parts = forwardedFor.split(',').map((p) => p.trim());
-    return parts.at(-1) || fallback || 'unknown';
-  }
+  const forwardedFor = lastHeaderToken(headers, 'x-forwarded-for');
+  if (forwardedFor && addressValue(forwardedFor)) return forwardedFor;
 
   return fallback || 'unknown';
+}
+
+/** Deployed function entrypoints must not silently collapse onto an unknown identity. */
+export function serverlessClientIdentity(headers: HeaderInput, env: EnvironmentInput = process.env): Readonly<{ ip: string; error?: never } | { ip?: never; error: string }> {
+  // SITE_ID is documented at function runtime; NETLIFY is not guaranteed
+  // outside the build. This platform-specific admission does not opt Express
+  // into proxy trust merely because its environment contains a site identifier.
+  const siteId = typeof env.SITE_ID === 'string' && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/iu.test(env.SITE_ID);
+  const deployed = isNetlifyRuntime(env) || env.SITE_ID !== undefined || env.NODE_ENV === 'production'
+    || ['production', 'deploy-preview', 'branch-deploy'].includes(String(env.CONTEXT ?? ''));
+  if (!deployed) return { ip: 'unknown' };
+  if (!isNetlifyRuntime(env) && !siteId) return { error: 'The serverless runtime site identity is unavailable.' };
+  const client = strictHeader(headers, 'x-nf-client-connection-ip');
+  return client.state === 'valid' && addressValue(client.value) ? { ip: client.value }
+    : { error: 'The serverless edge client identity is unavailable or invalid.' };
 }
 
 // Login attempts: brute-forcing the shared password is the main threat

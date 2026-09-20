@@ -108,7 +108,7 @@ export function buildLookupInvestigationBrief(
   const limitedSources = input.quality.entries
     .filter((entry) => entry.state !== 'complete')
     .map((entry) => `${entry.label}: ${entry.statusLabel}`);
-  const graphKinds = uniqueText(input.graph.edges.map((edge) => edge.label), 12);
+  const graphKinds = uniqueText(input.graph.edges.map((edge) => edge.label), 64);
 
   const brief: LookupInvestigationBrief = Object.freeze({
     schema: LOOKUP_INVESTIGATION_BRIEF_SCHEMA,
@@ -135,10 +135,10 @@ export function buildLookupInvestigationBrief(
       kinds: Object.freeze(graphKinds),
     }),
     limitations: Object.freeze(uniqueText([
-      ...limitedSources,
-      ...input.graph.limitations,
       'This brief is a deterministic organisation of collected and derived evidence, not an attribution, ownership, safety, availability, or maliciousness conclusion.',
       'Analyst assertions, hypotheses, and decisions must remain separate from observed evidence.',
+      ...input.graph.limitations,
+      ...limitedSources,
     ])),
   });
   if (new TextEncoder().encode(JSON.stringify(brief)).byteLength > MAX_LOOKUP_INVESTIGATION_BRIEF_BYTES) {

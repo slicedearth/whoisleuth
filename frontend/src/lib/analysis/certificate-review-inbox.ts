@@ -2,11 +2,15 @@ import { buildBrandCertificateEventReplay } from './brand-certificate-event-repl
 import type { BrandProfile, DesiredPostureBaseline } from './brand-profile-model.ts';
 import type { CaseRecord } from './case-model.ts';
 import { certificateSanPatternMatches } from './certificate-policy-review.ts';
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+import { latestObservationCohort } from '../../../../packages/evidence/latest-observations.mts';
+import { canonicalPostureRecords } from '../../../../packages/evidence/domain-control-runtime.mts';
 import {
   MAX_ANALYST_REVIEW_ITEMS,
   analystReviewLifecycle,
   analystReviewMaterialFingerprint,
   analystReviewSubjectKey,
+  analystReviewAgeAt,
   type AnalystReviewCompleteness,
   type AnalystReviewEvidenceFamily,
   type AnalystReviewItem,
@@ -26,6 +30,8 @@ export type CertificateEvidenceClass = 'certificate_transparency' | 'live_tls' |
 export type CertificateReviewFindingKind =
   | 'expected_observation'
   | 'expected_renewal'
+  | 'ambiguous_observation'
+  | 'incomplete_observation'
   | 'renewal'
   | 'retained_certificate_digest'
   | 'unexpected_issuer'
@@ -70,14 +76,16 @@ export type CertificateReviewInbox = Readonly<{
 }>;
 
 type RetainedFact = Readonly<{
+  pinId: string;
+  field: string;
   value: string;
-  observedAt: string;
+  observedAt: string | null;
   source: string;
   completeness: AnalystReviewCompleteness;
   caseId: string;
   limitations: readonly string[];
 }>;
-type RetainedFactIndex = ReadonlyMap<string, RetainedFact>;
+type RetainedFactIndex = ReadonlyMap<string, readonly RetainedFact[]>;
 
 const SHA256_RE = /^[a-f0-9]{64}$/iu;
 const INCOMPLETE_SOURCE_STATES = new Set([
@@ -86,17 +94,16 @@ const INCOMPLETE_SOURCE_STATES = new Set([
   'conflicting',
   'error',
   'failed',
+  'inconclusive',
   'partial',
   'rate_limited',
   'skipped',
+  'stale',
+  'timeout',
+  'truncated',
   'unavailable',
   'unsupported',
 ]);
-
-function age(observedAt: string, now: string): AnalystReviewItem['age'] {
-  const days = Math.max(0, Date.parse(now) - Date.parse(observedAt)) / 86_400_000;
-  return days > 30 ? 'stale' : days > 7 ? 'aging' : 'current';
-}
 
 function baseline(profile: BrandProfile, domain: string): DesiredPostureBaseline | null {
   return profile.desiredPostureBaselines.find((candidate) => candidate.domain === domain) ?? null;
@@ -110,15 +117,9 @@ function fieldValueIsUsable(field: string, value: string): boolean {
   if (['tls.certificate_sha256', 'tls.spki_sha256', 'tls.spkisha256', 'tls.public_key_sha256'].includes(field)) {
     return SHA256_RE.test(value);
   }
-  if (field === 'tls.valid_to') return Number.isFinite(Date.parse(value));
+  if (field === 'tls.valid_to') return normalizeExplicitIsoTimestamp(value) !== null;
+  if (field === 'dns.caa') return canonicalPostureRecords('caa', value.split(' · ')) !== null;
   return value.trim().length > 0;
-}
-
-function retainedFactOrder(left: RetainedFact, right: RetainedFact): number {
-  return right.observedAt.localeCompare(left.observedAt)
-    || left.caseId.localeCompare(right.caseId)
-    || left.source.localeCompare(right.source)
-    || left.value.localeCompare(right.value);
 }
 
 function buildRetainedFactIndex(records: readonly CaseRecord[]): RetainedFactIndex {
@@ -132,11 +133,11 @@ function buildRetainedFactIndex(records: readonly CaseRecord[]): RetainedFactInd
     'tls.spkisha256',
     'tls.valid_to',
   ]);
-  const output = new Map<string, RetainedFact>();
+  const output = new Map<string, RetainedFact[]>();
   for (const record of records) {
     for (const pin of record.evidencePins) {
       const field = pin.field?.toLowerCase() ?? '';
-      if (!fields.has(field) || !fieldValueIsUsable(field, pin.value)) continue;
+      if (!fields.has(field)) continue;
       const sourceState = pin.sourceState?.toLowerCase().replace(/[\s-]+/gu, '_') ?? '';
       const completeness: AnalystReviewCompleteness = pin.truncated === true
         || pin.completeness === 'partial'
@@ -146,6 +147,8 @@ function buildRetainedFactIndex(records: readonly CaseRecord[]): RetainedFactInd
           ? 'complete'
           : 'inconclusive';
       const candidate: RetainedFact = {
+        pinId: pin.id,
+        field,
         value: pin.value,
         observedAt: pin.observedAt,
         source: pin.source,
@@ -154,25 +157,38 @@ function buildRetainedFactIndex(records: readonly CaseRecord[]): RetainedFactInd
         limitations: pin.limitations,
       };
       const key = retainedFactKey(record.domain, field);
-      const existing = output.get(key);
-      if (!existing || retainedFactOrder(candidate, existing) < 0) output.set(key, candidate);
+      const existing = output.get(key) ?? [];
+      existing.push(candidate);
+      output.set(key, existing);
     }
   }
   return output;
 }
 
-function retainedFact(
+function currentRetainedFact(
   index: RetainedFactIndex,
   domain: string,
   fields: readonly string[],
-): RetainedFact | null {
-  const candidates = fields
-    .flatMap((field) => {
-      const candidate = index.get(retainedFactKey(domain, field));
-      return candidate ? [candidate] : [];
-    })
-    .sort(retainedFactOrder);
-  return candidates[0] ?? null;
+  now: string,
+) {
+  const cohort = latestObservationCohort(fields.flatMap((field) => index.get(retainedFactKey(domain, field)) ?? []), (candidate) => candidate.observedAt);
+  const candidates = [...cohort.latest, ...cohort.undated];
+  const fact = cohort.undated.length === 0 && cohort.latest.length === 1 ? cohort.latest[0]! : null;
+  const limitation = cohort.undated.length
+    ? 'Retained facts include an unknown observation time. No single latest fact is selected.'
+    : cohort.latest.length > 1
+      ? 'Distinct retained facts share the latest observation time. No single latest fact is selected.'
+      : fact && !fieldValueIsUsable(fact.field, fact.value)
+        ? 'The latest retained fact has an unusable value. An older observation is not substituted.'
+        : fact && analystReviewAgeAt(fact.observedAt, now) === 'unknown'
+          ? 'The source observation is later than the review clock, or that clock is unavailable. No current comparison is made.'
+        : null;
+  return {
+    fact: !limitation && fact && cohort.observedAt ? { ...fact, observedAt: cohort.observedAt } : null,
+    candidates,
+    observedAt: cohort.undated.length ? '' : cohort.observedAt ?? '',
+    limitation,
+  };
 }
 
 function retainedValues(value: string): string[] {
@@ -183,23 +199,13 @@ function retainedValues(value: string): string[] {
     .sort();
 }
 
-function exactSetMatch(left: readonly string[], right: readonly string[]): boolean {
-  const leftValues = [...new Set(left.map((item) => item.trim().toLowerCase()).filter(Boolean))].sort();
-  const rightValues = [...new Set(right.map((item) => item.trim().toLowerCase()).filter(Boolean))].sort();
-  return leftValues.length === rightValues.length
-    && leftValues.every((item, index) => item === rightValues[index]);
-}
-
-function changeWindowAt(desired: DesiredPostureBaseline, observedAt: string) {
-  const observed = Date.parse(observedAt);
+function changeWindowAt(desired: DesiredPostureBaseline, observedAt: string | null) {
+  const observed = Date.parse(normalizeExplicitIsoTimestamp(observedAt) ?? '');
   if (!Number.isFinite(observed)) return null;
   return desired.approvedChangeWindows.find((window) => (
-    Date.parse(window.startsAt) <= observed && observed <= Date.parse(window.endsAt)
+    Date.parse(normalizeExplicitIsoTimestamp(window.startsAt) ?? '') <= observed
+      && observed <= Date.parse(normalizeExplicitIsoTimestamp(window.endsAt) ?? '')
   )) ?? null;
-}
-
-function safeTime(value: string | null, fallback: string): string {
-  return value && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : fallback;
 }
 
 function finding(
@@ -235,7 +241,7 @@ function finding(
     caseDomain: input.domain,
     observedAt: input.observedAt,
     dueAt: input.kind === 'expiry' || input.kind === 'expired_acknowledgement' ? input.notAfter : null,
-    age: age(input.observedAt, input.now),
+    age: analystReviewAgeAt(input.observedAt, input.now),
     completeness: input.completeness,
     nextAction: input.state === 'unavailable' || input.state === 'partial' ? 'refresh' : 'review',
     rankingReason: input.kind === 'retained_certificate_digest'
@@ -264,17 +270,43 @@ function availabilityFinding(
   now: string,
 ): CertificateReviewFinding[] {
   const output: CertificateReviewFinding[] = [];
-  const liveIssuer = retainedFact(retainedFacts, domain, ['tls.issuer']);
-  if (desired.tlsIssuer) {
+  function select(fields: readonly string[], label: string, evidenceClass: CertificateEvidenceClass, identity: string) {
+    const selected = currentRetainedFact(retainedFacts, domain, fields, now);
+    if (selected.limitation) {
+      // Each Case contributes one digest, keeping the identity input bounded by
+      // the admitted Case count without omitting any retained field candidate.
+      const byCase = new Map<string, string[]>();
+      for (const candidate of selected.candidates) {
+        const values = byCase.get(candidate.caseId) ?? [];
+        values.push(analystReviewMaterialFingerprint([candidate]));
+        byCase.set(candidate.caseId, values);
+      }
+      const material = [...byCase].map(([id, values]) => analystReviewMaterialFingerprint([id, values.sort()])).sort();
+      output.push(finding({
+        profileId: profile.id, profileName: profile.name, domain,
+        kind: 'ambiguous_observation', state: 'partial', evidenceClass,
+        label: `Review retained ${label} context for ${domain}`,
+        detail: `${selected.limitation} ${selected.candidates.length} retained fact${selected.candidates.length === 1 ? '' : 's'} in ${byCase.size} Case${byCase.size === 1 ? '' : 's'} require source review.`,
+        observedAt: selected.observedAt, notAfter: null, certificateSha256: null, spkiSha256: null,
+        sources: ['Retained Case evidence'], limitations: [selected.limitation],
+        stableIdentity: [profile.id, domain, identity], materialIdentity: [fields, material],
+        completeness: 'inconclusive', caseId: byCase.size === 1 ? [...byCase.keys()][0]! : null, now,
+      }));
+    }
+    return selected;
+  }
+  const issuerSelection = select(['tls.issuer'], 'TLS issuer', 'live_tls', 'live-tls-issuer');
+  const liveIssuer = issuerSelection.fact;
+  if (desired.tlsIssuer && !issuerSelection.limitation) {
     const matches = liveIssuer?.value.toLowerCase() === desired.tlsIssuer.toLowerCase();
     output.push(finding({
       profileId: profile.id,
       profileName: profile.name,
       domain,
-      kind: !liveIssuer ? 'live_unavailable' : matches ? 'expected_observation' : 'unexpected_issuer',
+      kind: !liveIssuer ? 'live_unavailable' : liveIssuer.completeness !== 'complete' ? 'incomplete_observation' : matches ? 'expected_observation' : 'unexpected_issuer',
       state: !liveIssuer ? 'unavailable' : liveIssuer.completeness !== 'complete' ? 'partial' : matches ? 'expected' : 'review',
       evidenceClass: 'live_tls',
-      label: !liveIssuer ? `Live TLS issuer unavailable for ${domain}` : matches ? `Expected live TLS issuer retained for ${domain}` : `Unexpected live TLS issuer retained for ${domain}`,
+      label: !liveIssuer ? `Live TLS issuer unavailable for ${domain}` : liveIssuer.completeness !== 'complete' ? `Review incomplete live TLS issuer for ${domain}` : matches ? `Expected live TLS issuer retained for ${domain}` : `Unexpected live TLS issuer retained for ${domain}`,
       detail: !liveIssuer
         ? 'An issuer expectation is configured, but no separately typed retained live TLS issuer fact is available.'
         : liveIssuer.completeness !== 'complete'
@@ -282,7 +314,7 @@ function availabilityFinding(
           : matches
             ? 'The retained live TLS issuer at its observation time matches the reviewed baseline.'
             : 'The retained live TLS issuer at its observation time differs from the reviewed baseline. This is a review lead, not proof of unauthorised use.',
-      observedAt: liveIssuer?.observedAt ?? desired.updatedAt,
+      observedAt: liveIssuer?.observedAt ?? '',
       notAfter: null,
       certificateSha256: null,
       spkiSha256: null,
@@ -299,8 +331,9 @@ function availabilityFinding(
     }));
   }
 
-  const liveNames = retainedFact(retainedFacts, domain, ['tls.san_dns_names']);
-  if (desired.tlsSanPatterns.length) {
+  const namesSelection = select(['tls.san_dns_names'], 'TLS certificate names', 'live_tls', 'live-tls-san');
+  const liveNames = namesSelection.fact;
+  if (desired.tlsSanPatterns.length && !namesSelection.limitation) {
     const observedNames = liveNames ? retainedValues(liveNames.value) : [];
     const matches = desired.tlsSanPatterns.every((pattern) => (
       observedNames.some((name) => certificateSanPatternMatches(pattern, name))
@@ -312,10 +345,10 @@ function availabilityFinding(
       profileId: profile.id,
       profileName: profile.name,
       domain,
-      kind: !liveNames ? 'live_unavailable' : matches ? 'expected_observation' : wildcard ? 'unexpected_wildcard' : 'unexpected_san',
+      kind: !liveNames ? 'live_unavailable' : liveNames.completeness !== 'complete' ? 'incomplete_observation' : matches ? 'expected_observation' : wildcard ? 'unexpected_wildcard' : 'unexpected_san',
       state: !liveNames ? 'unavailable' : liveNames.completeness !== 'complete' ? 'partial' : matches ? 'expected' : 'review',
       evidenceClass: 'live_tls',
-      label: !liveNames ? `Live TLS certificate names unavailable for ${domain}` : matches ? `Expected live TLS certificate names retained for ${domain}` : `Unexpected live TLS certificate names retained for ${domain}`,
+      label: !liveNames ? `Live TLS certificate names unavailable for ${domain}` : liveNames.completeness !== 'complete' ? `Review incomplete live TLS certificate names for ${domain}` : matches ? `Expected live TLS certificate names retained for ${domain}` : `Unexpected live TLS certificate names retained for ${domain}`,
       detail: !liveNames
         ? 'Certificate-name expectations are configured, but no separately typed retained live TLS SAN fact is available.'
         : liveNames.completeness !== 'complete'
@@ -323,7 +356,7 @@ function availabilityFinding(
           : matches
             ? 'The complete retained live TLS certificate names at their observation time cover the reviewed SAN patterns.'
             : 'The complete retained live TLS certificate names at their observation time do not cover every reviewed SAN pattern. This needs analyst review.',
-      observedAt: liveNames?.observedAt ?? desired.updatedAt,
+      observedAt: liveNames?.observedAt ?? '',
       notAfter: null,
       certificateSha256: null,
       spkiSha256: null,
@@ -340,7 +373,7 @@ function availabilityFinding(
     }));
   }
 
-  const liveDigest = retainedFact(retainedFacts, domain, ['tls.certificate_sha256']);
+  const liveDigest = select(['tls.certificate_sha256'], 'certificate digest', 'certificate_digest', 'live-certificate-digest').fact;
   if (liveDigest) {
     output.push(finding({
       profileId: profile.id,
@@ -370,7 +403,7 @@ function availabilityFinding(
     }));
   }
 
-  const liveExpiry = retainedFact(retainedFacts, domain, ['tls.valid_to']);
+  const liveExpiry = select(['tls.valid_to'], 'certificate expiry', 'live_tls', 'live-certificate-expiry').fact;
   if (liveExpiry) {
     const notAfter = new Date(liveExpiry.value).toISOString();
     const expiryDays = (Date.parse(notAfter) - Date.parse(now)) / 86_400_000;
@@ -403,23 +436,26 @@ function availabilityFinding(
     }
   }
 
-  const spki = retainedFact(retainedFacts, domain, ['tls.spki_sha256', 'tls.spkisha256', 'tls.public_key_sha256']);
-  if (desired.tlsSpkiSha256) {
+  const keySelection = select(['tls.spki_sha256', 'tls.spkisha256', 'tls.public_key_sha256'], 'public key', 'spki', 'spki');
+  const spki = keySelection.fact;
+  if (desired.tlsSpkiSha256 && !keySelection.limitation) {
     const matches = spki?.value.toLowerCase() === desired.tlsSpkiSha256.toLowerCase();
     output.push(finding({
       profileId: profile.id,
       profileName: profile.name,
       domain,
-      kind: !spki ? 'live_unavailable' : matches ? 'expected_observation' : 'unexpected_key',
+      kind: !spki ? 'live_unavailable' : spki.completeness !== 'complete' ? 'incomplete_observation' : matches ? 'expected_observation' : 'unexpected_key',
       state: !spki ? 'unavailable' : spki.completeness !== 'complete' ? 'partial' : matches ? 'expected' : 'review',
       evidenceClass: 'spki',
-      label: !spki ? `Live public-key evidence unavailable for ${domain}` : matches ? `Expected public key retained for ${domain}` : `Unexpected public key retained for ${domain}`,
+      label: !spki ? `Live public-key evidence unavailable for ${domain}` : spki.completeness !== 'complete' ? `Review incomplete public-key evidence for ${domain}` : matches ? `Expected public key retained for ${domain}` : `Unexpected public key retained for ${domain}`,
       detail: !spki
         ? 'An expected SPKI SHA-256 value is configured, but no separately typed retained live public-key observation is available. Certificate digests are not substituted.'
-        : matches
+        : spki.completeness !== 'complete'
+          ? 'The retained public-key evidence is incomplete, so it cannot establish an expectation match or difference.'
+          : matches
           ? 'The retained SPKI SHA-256 value matches the reviewed baseline.'
           : 'The retained SPKI SHA-256 value differs from the reviewed baseline. This is a review lead, not proof of unauthorised use.',
-      observedAt: spki?.observedAt ?? desired.updatedAt,
+      observedAt: spki?.observedAt ?? '',
       notAfter: null,
       certificateSha256: null,
       spkiSha256: spki?.value ?? null,
@@ -435,24 +471,29 @@ function availabilityFinding(
       now,
     }));
   }
-  const caa = retainedFact(retainedFacts, domain, ['dns.caa']);
-  if (desired.caa.length) {
-    const observed = caa ? retainedValues(caa.value) : [];
-    const matches = Boolean(caa && exactSetMatch(observed, desired.caa));
+  const caaSelection = select(['dns.caa'], 'CAA', 'caa', 'caa');
+  const caa = caaSelection.fact;
+  if (desired.caa.length && !caaSelection.limitation) {
+    const observed = caa ? canonicalPostureRecords('caa', caa.value.split(' · ')) : null;
+    const expected = canonicalPostureRecords('caa', desired.caa);
+    const matches = observed !== null && expected !== null && observed.length === expected.length
+      && observed.every((value, index) => value === expected[index]);
     output.push(finding({
       profileId: profile.id,
       profileName: profile.name,
       domain,
-      kind: !caa ? 'live_unavailable' : matches ? 'expected_observation' : 'unexpected_caa',
+      kind: !caa ? 'live_unavailable' : caa.completeness !== 'complete' ? 'incomplete_observation' : matches ? 'expected_observation' : 'unexpected_caa',
       state: !caa ? 'unavailable' : caa.completeness !== 'complete' ? 'partial' : matches ? 'expected' : 'review',
       evidenceClass: 'caa',
-      label: !caa ? `Current CAA evidence unavailable for ${domain}` : matches ? `Expected CAA evidence retained for ${domain}` : `CAA differs from reviewed posture for ${domain}`,
+      label: !caa ? `Current CAA evidence unavailable for ${domain}` : caa.completeness !== 'complete' ? `Review incomplete CAA evidence for ${domain}` : matches ? `Expected CAA evidence retained for ${domain}` : `CAA differs from reviewed posture for ${domain}`,
       detail: !caa
         ? 'CAA expectations are configured, but no retained current CAA fact is available. Historical certificate publication cannot establish current DNS policy.'
-        : matches
+        : caa.completeness !== 'complete'
+          ? 'The retained CAA evidence is incomplete, so it cannot establish an expectation match or difference.'
+          : matches
           ? 'The latest separately retained CAA fact exactly matches the reviewed posture.'
           : 'The latest separately retained CAA fact does not exactly match the reviewed posture. Recheck current evidence before deciding what changed.',
-      observedAt: caa?.observedAt ?? desired.updatedAt,
+      observedAt: caa?.observedAt ?? '',
       notAfter: null,
       certificateSha256: null,
       spkiSha256: null,
@@ -498,7 +539,7 @@ export function buildCertificateReviewInbox(
   recordsValue: readonly CaseRecord[],
   options: Readonly<{ now?: string; profileId?: string; reviewState?: AnalystReviewStateStore }> = {},
 ): CertificateReviewInbox {
-  const now = safeTime(options.now ?? new Date().toISOString(), new Date(0).toISOString());
+  const now = normalizeExplicitIsoTimestamp(options.now ?? new Date().toISOString()) ?? '';
   const profiles = profilesValue.slice(0, 100).filter((profile) => !options.profileId || profile.id === options.profileId);
   const records = recordsValue.slice(0, 500);
   const retainedFacts = buildRetainedFactIndex(records);
@@ -537,9 +578,18 @@ export function buildCertificateReviewInbox(
       domains.add(domainReview.domain);
       const desired = baseline(profile, domainReview.domain);
       if (desired) addFindings(availabilityFinding(profile, domainReview.domain, desired, retainedFacts, now));
-      const events = [...domainReview.events].sort((left, right) => left.observedAt.localeCompare(right.observedAt));
-      let previousDigest: string | null = null;
-      for (const event of events) {
+      const events = domainReview.events.map((event) => ({ event, time: normalizeExplicitIsoTimestamp(event.observedAt) }))
+        .sort((left, right) => (left.time === right.time ? 0 : left.time === null ? 1 : right.time === null ? -1 : left.time.localeCompare(right.time))
+          || left.event.eventId.localeCompare(right.event.eventId));
+      const timeCounts = new Map<string, number>();
+      for (const { time } of events) if (time) timeCounts.set(time, (timeCounts.get(time) ?? 0) + 1);
+      const hasUndated = events.some(({ time }) => time === null);
+      for (const [index, { event, time }] of events.entries()) {
+        const previous = events[index - 1];
+        const orderKnown = !hasUndated && time !== null && timeCounts.get(time) === 1
+          && (!previous || (previous.time !== null && timeCounts.get(previous.time) === 1));
+        const orderingLimitation = !orderKnown
+          ? 'Equal or unknown observation times do not establish a certificate renewal sequence.' : null;
         const issuer = event.clauses.find((clause) => clause.id === 'issuer');
         const san = event.clauses.find((clause) => clause.id === 'san_patterns');
         const wildcard = event.names.some((name) => name.startsWith('*.'));
@@ -547,17 +597,18 @@ export function buildCertificateReviewInbox(
           : issuer?.state === 'review' ? 'unexpected_issuer'
           : san?.state === 'review' ? wildcard ? 'unexpected_wildcard' : 'unexpected_san'
             : 'expected_observation';
-        const incomplete = event.completeness !== 'complete' || !event.namesComplete || event.state === 'indeterminate';
+        const incomplete = event.completeness !== 'complete' || !event.namesComplete || event.state === 'indeterminate'
+          || analystReviewAgeAt(event.observedAt, now) === 'unknown';
         const caseId = event.caseReferences[0]?.id ?? null;
         const notAfter = event.notAfter;
         const expiryDays = notAfter ? (Date.parse(notAfter) - Date.parse(now)) / 86_400_000 : Number.POSITIVE_INFINITY;
         const expiryKind = expiryDays <= 0 ? 'expired_acknowledgement' : expiryDays <= CERTIFICATE_EXPIRY_REVIEW_DAYS ? 'expiry' : null;
         const reviewedWindow = desired ? changeWindowAt(desired, event.observedAt) : null;
-        const changedDigest = Boolean(previousDigest && previousDigest !== event.certificateSha256);
+        const changedDigest = Boolean(orderKnown && previous && previous.event.certificateSha256 !== event.certificateSha256);
         const postureDifference = clauseReview === 'unexpected_issuer'
           || clauseReview === 'unexpected_san'
           || clauseReview === 'unexpected_wildcard';
-        const kind = expiryKind
+        const kind = incomplete ? 'incomplete_observation' : expiryKind
           ?? (postureDifference
             ? clauseReview
             : changedDigest
@@ -567,7 +618,8 @@ export function buildCertificateReviewInbox(
           : expiryDays <= 0 ? 'expired'
             : kind === 'expected_observation' || kind === 'expected_renewal' ? 'expected'
               : 'review';
-        const label = kind === 'expired_acknowledgement' ? `Acknowledge retained certificate expiry for ${domainReview.domain}`
+        const label = kind === 'incomplete_observation' ? `Review incomplete certificate publication for ${domainReview.domain}`
+          : kind === 'expired_acknowledgement' ? `Acknowledge retained certificate expiry for ${domainReview.domain}`
           : kind === 'expiry' ? `Retained certificate expiry is approaching for ${domainReview.domain}`
             : kind === 'renewal' ? `Review retained certificate renewal for ${domainReview.domain}`
               : kind === 'expected_renewal' ? `Expected certificate renewal retained for ${domainReview.domain}`
@@ -584,7 +636,7 @@ export function buildCertificateReviewInbox(
           evidenceClass: 'certificate_transparency',
           label,
           detail: incomplete
-            ? 'The retained event is incomplete, so issuer and certificate-name differences remain indeterminate.'
+            ? 'The retained event is incomplete or its observation time cannot be placed at or before this review. Issuer and certificate-name differences remain indeterminate.'
             : kind === 'expected_observation'
               ? 'The retained publication event matches the reviewed issuer and certificate-name posture.'
               : kind === 'renewal'
@@ -596,13 +648,14 @@ export function buildCertificateReviewInbox(
                 : kind === 'expiry' || kind === 'expired_acknowledgement'
                   ? `The retained not-after time is ${notAfter}. Acknowledgement changes only the Review Item lifecycle.`
                   : 'The retained publication event differs from the reviewed posture and needs analyst review.',
-          observedAt: event.observedAt,
+          observedAt: event.observedAt ?? '',
           notAfter,
           certificateSha256: event.certificateSha256,
           spkiSha256: null,
           sources: event.sources,
           limitations: [
             ...event.limitations,
+            ...(orderingLimitation ? [orderingLimitation] : []),
             'This is historical Certificate Transparency or imported publication evidence; it is not proof of live deployment.',
             ...(reviewedWindow ? ['An approved change window records reviewed analyst intent only and does not prove that a certificate change was authorised or completed.'] : []),
           ],
@@ -612,7 +665,6 @@ export function buildCertificateReviewInbox(
           caseId,
           now,
         })]);
-        previousDigest = event.certificateSha256;
       }
     }
   }

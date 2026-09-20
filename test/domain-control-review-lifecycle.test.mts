@@ -70,30 +70,12 @@ import { buildSchemaCompatibilityInventory } from '../tools/schema-compatibility
 
 const GENERATED_AT = '2026-08-20T00:00:00.000Z';
 
-const FIXTURES = [
-  ['domain-control-review-input-v1', 'domain-control-review-input-v1.json'],
-  ['domain-control-review-v1', 'domain-control-review-v1.json'],
-  ['cli-domain-control-review-input-v1', 'cli-domain-control-review-input-v1.json'],
-  ['cli-domain-control-review-v1', 'cli-domain-control-review-v1.json'],
-] as const;
-
 const MODULES: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
   'lib/domain-control-manifest.mts': nodeReviewModule,
   'cli/domain-control-monitor.mts': monitorModule,
   'cli/domain-control-observations.mts': cliReviewModule,
   'cli/formatters/json.mts': jsonFormatterModule,
 };
-
-const EXPECTED_HOOKS = [
-  ['domain-control-review.node.verify-manifest', 'integrity_verifier', 'node', 'lib/domain-control-manifest.mts', 'verifyDomainControlManifest'],
-  ['domain-control-review.node.build-core', 'reviewer', 'node', 'lib/domain-control-manifest.mts', 'reviewDomainControlManifest'],
-  ['domain-control-review.node.validate-core', 'structure_validator', 'node', 'lib/domain-control-manifest.mts', 'validateDomainControlReviewDocument'],
-  ['domain-control-review.node.format-core-terminal', 'serialiser', 'node', 'lib/domain-control-manifest.mts', 'formatDomainControlResult'],
-  ['domain-control-review.cli.build-saved-lookup', 'reviewer', 'cli', 'cli/domain-control-observations.mts', 'buildCliDomainControlReview'],
-  ['domain-control-review.cli.format-saved-terminal', 'serialiser', 'cli', 'cli/domain-control-observations.mts', 'formatCliDomainControlReview'],
-  ['domain-control-review.cli.serialise-json', 'serialiser', 'cli', 'cli/formatters/json.mts', 'formatJsonDocument'],
-  ['domain-control-review.cli.monitor', 'monitor', 'cli', 'cli/domain-control-monitor.mts', 'runDomainControlMonitor'],
-] as const;
 
 function recursivelyFrozen(value: unknown, seen = new Set<object>()): boolean {
   if (!value || typeof value !== 'object' || seen.has(value)) return true;
@@ -103,7 +85,7 @@ function recursivelyFrozen(value: unknown, seen = new Set<object>()): boolean {
 }
 
 describe('domain-control review schema lifecycle', () => {
-  test('registers one immutable four-contract family with exact executable hooks', () => {
+  test('registers supported public readers and current writers with callable hooks', () => {
     assert.deepEqual(
       SCHEMA_LIFECYCLE_REGISTRY.find((family) => family.id === DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE.id),
       DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE,
@@ -120,18 +102,16 @@ describe('domain-control review schema lifecycle', () => {
       ]),
       [
         [DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, 1, 'input', true, false, 'reject'],
-        [DOMAIN_CONTROL_REVIEW_SCHEMA, 1, 'document', true, true, 'reject'],
-        [CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, 1, 'input', true, true, 'reject'],
-        [CLI_DOMAIN_CONTROL_REVIEW_SCHEMA, 1, 'document', false, true, 'not_applicable'],
+        [DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, 2, 'input', true, false, 'reject'],
+        [DOMAIN_CONTROL_REVIEW_SCHEMA, 1, 'document', true, false, 'reject'],
+        [DOMAIN_CONTROL_REVIEW_SCHEMA, 2, 'document', true, true, 'reject'],
+        [CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, 1, 'input', true, false, 'reject'],
+        [CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, 2, 'input', true, false, 'reject'],
+        [CLI_DOMAIN_CONTROL_REVIEW_SCHEMA, 1, 'document', false, false, 'not_applicable'],
+        [CLI_DOMAIN_CONTROL_REVIEW_SCHEMA, 2, 'document', false, true, 'not_applicable'],
       ],
     );
     assert.equal(recursivelyFrozen(DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE), true);
-    assert.deepEqual(
-      DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE.metadata.hooks.map((hook) => [
-        hook.id, hook.role, hook.runtime, hook.module, hook.exportName,
-      ]),
-      EXPECTED_HOOKS,
-    );
     for (const hook of DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE.metadata.hooks) {
       const module = MODULES[hook.module];
       assert.ok(module, hook.module);
@@ -142,21 +122,20 @@ describe('domain-control review schema lifecycle', () => {
 
   test('pins every fixture byte and reproduces both current review documents exactly', async () => {
     const rawById = new Map<string, string>();
-    for (const [id, filename] of FIXTURES) {
-      const raw = await readFile(new URL(`./fixtures/${filename}`, import.meta.url), 'utf8');
-      const fixture = DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE.fixtures.find((candidate) => candidate.id === id);
-      assert.ok(fixture, id);
+    for (const fixture of DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE.fixtures) {
+      const { id } = fixture;
+      const raw = await readFile(new URL(`../${fixture.path}`, import.meta.url), 'utf8');
       assert.equal(raw.endsWith('\n'), true, id);
       assert.equal(Buffer.byteLength(raw, 'utf8'), fixture.bytes, id);
       assert.equal(createHash('sha256').update(raw).digest('hex'), fixture.sha256, id);
       rawById.set(id, raw);
     }
 
-    const coreInput = JSON.parse(rawById.get('domain-control-review-input-v1')!);
+    const coreInput = JSON.parse(rawById.get(`domain-control-review-input-v${DOMAIN_CONTROL_REVIEW_VERSION}`)!);
     const coreOutput = nodeReviewModule.reviewDomainControlManifest(coreInput, GENERATED_AT);
-    assert.equal(formatJsonDocument(coreOutput), rawById.get('domain-control-review-v1'));
+    assert.equal(formatJsonDocument(coreOutput), rawById.get(`domain-control-review-v${DOMAIN_CONTROL_REVIEW_VERSION}`));
     const validatedCoreOutput = nodeReviewModule.validateDomainControlReviewDocument(
-      JSON.parse(rawById.get('domain-control-review-v1')!),
+      JSON.parse(rawById.get(`domain-control-review-v${DOMAIN_CONTROL_REVIEW_VERSION}`)!),
     );
     assert.deepEqual(validatedCoreOutput, coreOutput);
     assert.equal(recursivelyFrozen(validatedCoreOutput), true);
@@ -167,16 +146,24 @@ describe('domain-control review schema lifecycle', () => {
         (document.counts as Record<string, unknown>).drift = 1;
       },
     ]) {
-      const candidate = JSON.parse(rawById.get('domain-control-review-v1')!) as Record<string, unknown>;
+      const candidate = JSON.parse(rawById.get(`domain-control-review-v${DOMAIN_CONTROL_REVIEW_VERSION}`)!) as Record<string, unknown>;
       mutate(candidate);
       assert.throws(() => nodeReviewModule.validateDomainControlReviewDocument(candidate));
     }
 
     const cliOutput = cliReviewModule.buildCliDomainControlReview(
-      rawById.get('cli-domain-control-review-input-v1')!,
+      rawById.get(`cli-domain-control-review-input-v${CLI_DOMAIN_CONTROL_REVIEW_VERSION}`)!,
       GENERATED_AT,
     );
-    assert.equal(formatJsonDocument(cliOutput), rawById.get('cli-domain-control-review-v1'));
+    assert.equal(formatJsonDocument(cliOutput), rawById.get(`cli-domain-control-review-v${CLI_DOMAIN_CONTROL_REVIEW_VERSION}`));
+    const historical = rawById.get('domain-control-review-v1')!;
+    assert.equal(formatJsonDocument(nodeReviewModule.validateDomainControlReviewDocument(JSON.parse(historical))), historical);
+    assert.equal(nodeReviewModule.reviewDomainControlManifest(
+      JSON.parse(rawById.get('domain-control-review-input-v1')!), GENERATED_AT,
+    ).version, DOMAIN_CONTROL_REVIEW_VERSION);
+    assert.equal(cliReviewModule.buildCliDomainControlReview(
+      rawById.get('cli-domain-control-review-input-v1')!, GENERATED_AT,
+    ).version, CLI_DOMAIN_CONTROL_REVIEW_VERSION);
   });
 
   test('validates supported supplied manifest order and maximum DS and CAA presentations', () => {
@@ -276,7 +263,7 @@ describe('domain-control review schema lifecycle', () => {
     assert.equal(MAX_DOMAIN_CONTROL_REVIEW_TEXT_LENGTH, 500);
 
     const coreBounds = DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE.metadata.boundProfiles
-      .find((profile) => profile.id === 'domain-control-review.core.v1')?.bounds;
+      .find((profile) => profile.id === `domain-control-review.core.v${DOMAIN_CONTROL_REVIEW_VERSION}`)?.bounds;
     assert.ok(coreBounds);
     for (const field of DOMAIN_CONTROL_REVIEW_FIELDS) {
       const boundId = field.replace(/([A-Z])/gu, '-$1').toLowerCase();
@@ -293,7 +280,7 @@ describe('domain-control review schema lifecycle', () => {
           .map((bound) => [bound.id, bound.maximum, bound.handling]),
         [
           [`${boundId}-input-values`, MAX_DOMAIN_CONTROL_REVIEW_FIELD_INPUT_VALUES, 'reject'],
-          [`${boundId}-values`, MAX_CANONICAL_DOMAIN_CONTROL_RECORDS, 'truncate'],
+          [`${boundId}-values`, 64, 'reject'],
           [`${boundId}-source-input`, MAX_DOMAIN_CONTROL_REVIEW_SOURCE_INPUT_LENGTH, 'reject'],
           [`${boundId}-source`, MAX_DOMAIN_CONTROL_REVIEW_SOURCE_LENGTH, 'truncate'],
           [`${boundId}-observed-at-input`, MAX_DOMAIN_CONTROL_TIMESTAMP_LENGTH * 4, 'reject'],
@@ -301,6 +288,11 @@ describe('domain-control review schema lifecycle', () => {
         ],
       );
     }
+    const publicBounds = DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE.metadata.boundProfiles
+      .find((profile) => profile.id === 'domain-control-review.core.v1')?.bounds;
+    assert.ok(publicBounds);
+    assert.equal(publicBounds.find((bound) => bound.id === 'nameservers-values')?.maximum, 32);
+    assert.equal(publicBounds.find((bound) => bound.id === 'nameservers-values')?.handling, 'reject');
     assert.deepEqual(
       coreBounds.filter((bound) => bound.path.endsWith('.values[]'))
         .map((bound) => [bound.id, bound.maximum, bound.handling]),
@@ -367,7 +359,7 @@ describe('domain-control review schema lifecycle', () => {
     );
 
     const signedAsUnsigned = structuredClone(DOMAIN_CONTROL_SCHEMA_LIFECYCLE) as any;
-    signedAsUnsigned.metadata.shapes.find((shape: { id: string }) => shape.id === 'domain-control.manifest.v1-v2')
+    signedAsUnsigned.metadata.shapes.find((shape: { schema: string }) => shape.schema === nodeReviewModule.DOMAIN_CONTROL_MANIFEST_SCHEMA)
       .normalisation = 'preserve_document';
     assert.throws(
       () => defineSchemaLifecycleFamily(signedAsUnsigned),
@@ -391,19 +383,19 @@ describe('domain-control review schema lifecycle', () => {
     );
   });
 
-  test('limits not-applicable future handling to current emitted-only documents', () => {
+  test('rejects not-applicable future handling on readable contracts', () => {
     const readableInput = structuredClone(DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE) as any;
     readableInput.contracts[0].futureVersionBehaviour = 'not_applicable';
     assert.throws(
       () => defineSchemaLifecycleFamily(readableInput),
-      /limited to current emitted-only documents/u,
+      /limited to.*(?:output|document)/u,
     );
 
     const readableDocument = structuredClone(DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE) as any;
-    readableDocument.contracts[3].readable = true;
+    readableDocument.contracts.find((contract: { schema: string; emitted: boolean }) => contract.schema === CLI_DOMAIN_CONTROL_REVIEW_SCHEMA && contract.emitted).readable = true;
     assert.throws(
       () => defineSchemaLifecycleFamily(readableDocument),
-      /limited to current emitted-only documents/u,
+      /limited to.*(?:output|document)/u,
     );
 
   });
@@ -428,37 +420,16 @@ describe('domain-control review schema lifecycle', () => {
 
   test('declares and executes explicit review output and monitor embedding routes', async () => {
     const edges = DOMAIN_CONTROL_REVIEW_SCHEMA_LIFECYCLE.metadata.consumerEdges;
-    assert.deepEqual(edges.map((edge) => edge.id), [
-      'domain-control-review.node-core',
-      'domain-control-review.cli-core-json-stdout',
-      'domain-control-review.cli-core-terminal-stdout',
-      'domain-control-review.cli-core-json-file',
-      'domain-control-review.cli-core-terminal-file',
-      'domain-control-review.cli-saved-lookup-library',
-      'domain-control-review.cli-saved-json-stdout',
-      'domain-control-review.cli-saved-terminal-stdout',
-      'domain-control-review.cli-saved-json-file',
-      'domain-control-review.cli-saved-terminal-file',
-      'domain-control-review.cli-monitor-embedding',
+    const monitor = edges.find((edge) => edge.operation === 'embed-review-after-bounded-passive-collection');
+    assert.ok(monitor);
+    assert.deepEqual(monitor.acceptedContracts.map(({ schema, versions, mode }) => ({ schema, versions, mode })), [
+      { schema: DOMAIN_CONTROL_REVIEW_SCHEMA, versions: [1, 2], mode: 'embedded' },
     ]);
-    const monitor = edges.at(-1);
-    assert.deepEqual(monitor && {
-      acceptedContracts: monitor.acceptedContracts,
-      boundProfileIds: monitor.boundProfileIds,
-      hookIds: monitor.hookIds,
-      privacyProfileId: monitor.privacyProfileId,
-      expiryPolicyId: monitor.expiryPolicyId,
-      requestMode: monitor.requestMode,
-      retentionEffect: monitor.retentionEffect,
-    }, {
-      acceptedContracts: [{ schema: DOMAIN_CONTROL_REVIEW_SCHEMA, versions: [DOMAIN_CONTROL_REVIEW_VERSION], mode: 'embedded' }],
-      boundProfileIds: ['domain-control-review.monitor-action.v1'],
-      hookIds: ['domain-control-review.node.validate-core', 'domain-control-review.cli.monitor'],
-      privacyProfileId: 'domain-control-review.monitor-output.v1',
-      expiryPolicyId: 'domain-control-review.expiry-require-current.v1',
-      requestMode: 'explicit_bounded_passive_deep',
-      retentionEffect: 'operator_controlled_output',
-    });
+    assert.equal(monitor.requestMode, 'explicit_bounded_passive_deep');
+    assert.equal(monitor.retentionEffect, 'operator_controlled_output');
+    assert.ok(monitor.hookIds.includes('domain-control-review.node.validate-core'));
+    assert.ok(monitor.hookIds.includes('domain-control-review.cli.monitor'));
+    assert.ok(edges.filter((edge) => edge !== monitor).every((edge) => edge.requestMode === 'none'));
 
     const input = await readFile(new URL('./fixtures/cli-domain-control-review-input-v1.json', import.meta.url), 'utf8');
     let terminalOutput = '';

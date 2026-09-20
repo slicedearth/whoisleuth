@@ -22,7 +22,7 @@ describe('pinned CISA KEV projection', () => {
     assert.equal(CISA_KEV_CATALOG.catalogVersion, SOURCE_VERSION);
     assert.equal(CISA_KEV_CATALOG.releasedAt, SOURCE_RELEASED_AT);
     assert.equal(CISA_KEV_CATALOG.sourceSha256, SOURCE_SHA256);
-    assert.equal(CISA_KEV_CATALOG.identifiers.length, 1_687);
+    assert.equal(CISA_KEV_CATALOG.identifiers.length, 1_695);
   });
 
   test('projects only unique valid identifiers in deterministic order', () => {
@@ -45,5 +45,13 @@ describe('pinned CISA KEV projection', () => {
     assert.deepEqual(parseArguments(['--source', '/tmp/kev.json', '--check']), { mode: 'check', source: '/tmp/kev.json' });
     assert.throws(() => parseArguments([]), /Usage/);
     assert.throws(() => parseArguments(['--source', '/tmp/kev.json', '--check', '--write']), /Usage/);
+  });
+
+  test('accepts explicit fractional release instants and rejects malformed catalogue times', () => {
+    for (const time of ['2026-08-01T00:00:00.0000Z', '2026-08-01', '2026-08-01T00:00:00', '2026-02-30T00:00:00Z']) {
+      const source = { catalogVersion: 'fixture-v1', dateReleased: time, count: 1, vulnerabilities: [{ cveID: 'CVE-2026-1234' }] };
+      if (time.endsWith('.0000Z')) assert.deepEqual(projectCatalogue(source, 'fixture-v1', time), ['CVE-2026-1234']);
+      else assert.throws(() => projectCatalogue(source, 'fixture-v1', time), /invalid release timestamp/u);
+    }
   });
 });

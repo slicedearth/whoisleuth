@@ -6,7 +6,7 @@ import { sectionedLookupFixture } from './lookup-design-fixtures';
 // Lookup response bounds, disclosure, analyst-task and URL reconciliation coverage.
 
 function analystQuestion(page: import('@playwright/test').Page) {
-  return page.getByRole('region', { name: 'Choose evidence depth for the question' })
+  return page.getByRole('region', { name: 'Question and depth guidance' })
     .getByLabel('Analyst question');
 }
 
@@ -83,12 +83,12 @@ test('Lookup analyst question and disclosure controls change presentation withou
   expect(lookupRequests).toHaveLength(1);
   expect(fixtureResponses).toBe(1);
 
-  const controls = page.getByRole('region', { name: 'Choose what to review' });
+  const controls = page.getByRole('region', { name: 'Evidence families' });
   const task = analystQuestion(page);
   const localNav = page.getByRole('navigation', { name: 'Result sections' });
   await expect(task).toHaveValue('general');
   await expect(controls.getByLabel('Detail')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Analyst assessment' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Evidence overview' })).toBeVisible();
   const atAGlance = page.locator('.at-a-glance');
   const glanceGeometry = await atAGlance.evaluate((section) => {
     const intro = section.querySelector('.glance-intro');
@@ -149,7 +149,13 @@ test('Lookup analyst question and disclosure controls change presentation withou
     const element = metric as HTMLElement;
     return { left: element.offsetLeft, top: element.offsetTop, width: element.offsetWidth };
   }));
-  await expect(atAGlance.locator('.glance-grid')).toHaveCSS('align-items', 'start');
+  const readingOrder = await atAGlance.evaluate((section) => {
+    const observations = section.querySelector('[aria-labelledby="lookup-key-findings-title"]');
+    const reviews = section.querySelector('[aria-labelledby="lookup-next-review-title"]');
+    if (!observations || !reviews) throw new Error('Expected both populated evidence sections.');
+    return reviews.getBoundingClientRect().top - observations.getBoundingClientRect().bottom;
+  });
+  expect(readingOrder).toBeGreaterThanOrEqual(0);
   const nextActionsBeforeDisclosure = await atAGlance.locator('.next-actions .next-action').evaluateAll((actions) => (
     actions.map((action) => ({
       href: action.getAttribute('href'),
@@ -240,7 +246,9 @@ test('Lookup analyst question and disclosure controls change presentation withou
     for (const [key, item] of Object.entries(value)) { keys.push(key); inspectKeys(item); }
   };
   inspectKeys(passport);
-  expect(keys).not.toEqual(expect.arrayContaining(['requestUrl', 'finalUrl', 'contacts', 'rawWhois', 'credential']));
+  for (const forbidden of ['requestUrl', 'finalUrl', 'contacts', 'rawWhois', 'credential']) {
+    expect(keys, `Portable passport must exclude ${forbidden} independently`).not.toContain(forbidden);
+  }
   expect(JSON.stringify(passport)).not.toMatch(/\/home|abuse@example\.test|Fixture Registrar/iu);
   await expect(detailedAssessment.getByRole('status')).toContainText('Downloaded a portable passport for Registration-state statement.');
   expect(await page.evaluate(() => (window as typeof window & { __claimPassportWrites?: number }).__claimPassportWrites)).toBe(0);
@@ -331,7 +339,7 @@ test('Lookup analyst question and disclosure controls change presentation withou
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.locator('#result')).toBeVisible();
   await expect(analystQuestion(page)).toHaveValue('acquisition');
-  await expect(page.getByRole('region', { name: 'Choose what to review' }).getByLabel('Detail')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Evidence families' }).getByLabel('Detail')).toHaveCount(0);
   expect(lookupRequests).toHaveLength(2);
   expect(fixtureResponses).toBe(2);
 });

@@ -13,7 +13,7 @@ import {
   parseRiskCalibrationDashboard,
   RISK_CALIBRATION_SUMMARY_MAX_BYTES,
 } from '../frontend/src/lib/analysis/risk-calibration-dashboard.ts';
-import { buildRiskCalibrationSummaryReport } from '../lib/risk-calibration-summary.mts';
+import { buildRiskCalibrationSummaryReport, parseRiskCalibrationSummaryReport } from '../lib/risk-calibration-summary.mts';
 import { explainRiskScore, explainRiskScoreV7, RISK_MODEL_VERSION, RISK_REVIEW_THRESHOLD } from '../lib/risk-scoring.mts';
 
 const NOW = '2026-08-10T00:00:00.000Z';
@@ -43,6 +43,23 @@ function summaryReport() {
     previousModelVersion: 7,
     explainPreviousRiskScore: explainRiskScoreV7,
   }));
+}
+
+function singleScoreSummary(score: number | null, disposition: 'confirmed_abuse' | 'expected' | 'suspicious') {
+  const dataset = parseRiskCalibrationDataset(JSON.stringify({
+    schema: RISK_CALIBRATION_DATASET_SCHEMA,
+    version: RISK_CALIBRATION_DATASET_VERSION,
+    records: [{
+      id: 'single-review', domain: 'single.example.test', analystDisposition: disposition,
+      evidence: { availability: 'registered', scanDepth: 'deep' },
+    }],
+  }));
+  const explained = explainRiskScore({ availability: 'registered' });
+  assert.ok(explained);
+  return buildRiskCalibrationSummaryReport(buildRiskCalibrationReport(dataset,
+    () => score === null ? null : { ...explained, score }, {
+      generatedAt: NOW, modelVersion: RISK_MODEL_VERSION, reviewThreshold: RISK_REVIEW_THRESHOLD,
+    }));
 }
 
 describe('browser-local Risk calibration dashboard', () => {
@@ -84,6 +101,58 @@ describe('browser-local Risk calibration dashboard', () => {
     };
     assert.equal(parseRiskCalibrationDashboard(JSON.stringify(older)).modelCompatibility, 'older');
     assert.equal(parseRiskCalibrationDashboard(JSON.stringify(newer)).modelCompatibility, 'newer');
+  });
+
+  test('reconciles each dimension with the same global confusion counts', () => {
+    for (const disposition of ['confirmed_abuse', 'expected'] as const) {
+      const high = singleScoreSummary(100, disposition);
+      const low = singleScoreSummary(0, disposition);
+      assert.doesNotThrow(() => parseRiskCalibrationSummaryReport(JSON.stringify(low)));
+      for (const dimension of ['review_reason', 'scan_depth'] as const) {
+        const donor = low.strata.find((stratum) => stratum.dimension === dimension);
+        assert.ok(donor);
+        const inconsistent = { ...high, strata: high.strata.map((stratum) =>
+          stratum.dimension === dimension ? { ...stratum, metrics: donor.metrics } : stratum) };
+        const text = JSON.stringify(inconsistent);
+        for (const parse of [parseRiskCalibrationSummaryReport, parseRiskCalibrationDashboard]) {
+          assert.throws(() => parse(text), /strata disagree with the current-threshold confusion counts/u);
+        }
+      }
+    }
+  });
+
+  test('raising a threshold cannot increase either positive classification count', () => {
+    for (const disposition of ['confirmed_abuse', 'expected'] as const) {
+      const high = singleScoreSummary(100, disposition);
+      const low = singleScoreSummary(0, disposition);
+      const inconsistent = { ...high, thresholds: high.thresholds.map((metric, index) =>
+        index === 0 ? low.thresholds[index] : metric) };
+      for (const parse of [parseRiskCalibrationSummaryReport, parseRiskCalibrationDashboard]) {
+        assert.throws(() => parse(JSON.stringify(inconsistent)), /positive classifications increase at a higher threshold/u);
+      }
+      const decreasing = singleScoreSummary(45, disposition);
+      assert.doesNotThrow(() => parseRiskCalibrationDashboard(JSON.stringify(decreasing)));
+    }
+  });
+
+  test('accepts single-class, excluded, unscored and mixed populations without inventing metrics', () => {
+    for (const disposition of ['confirmed_abuse', 'expected', 'suspicious'] as const) {
+      for (const score of [null, 0, 100]) {
+        const summary = singleScoreSummary(score, disposition);
+        const dashboard = parseRiskCalibrationDashboard(JSON.stringify(summary));
+        assert.equal(dashboard.includedLabels, score === null || disposition === 'suspicious' ? 0 : 1);
+      }
+    }
+    const raw = calibrationDataset();
+    const dataset = parseRiskCalibrationDataset(JSON.stringify({ ...raw, records: [
+      ...raw.records,
+      { id: 'excluded', domain: 'excluded.example.test', analystDisposition: 'suspicious', evidence: { availability: 'registered', scanDepth: 'fast' } },
+    ] }));
+    const summary = buildRiskCalibrationSummaryReport(buildRiskCalibrationReport(dataset, explainRiskScore, {
+      generatedAt: NOW, modelVersion: RISK_MODEL_VERSION, reviewThreshold: RISK_REVIEW_THRESHOLD,
+    }));
+    assert.equal(summary.summary.excluded, 1);
+    assert.equal(parseRiskCalibrationDashboard(JSON.stringify(summary)).includedLabels, 40);
   });
 
   test('rejects full reports, retained targets, inconsistent metrics, and oversized text', () => {

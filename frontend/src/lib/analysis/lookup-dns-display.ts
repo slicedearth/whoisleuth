@@ -9,6 +9,7 @@ import {
 } from './lookup-display-shared.ts';
 import { MAX_LOOKUP_DNS_RECORDS_PER_TYPE, MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS } from '../../../../lib/lookup-network-evidence-bounds.mts';
 import { MAX_OBSERVATION_DIAGNOSTICS } from '../../../../packages/evidence/observation.mts';
+import { normalizeMxRecord } from '../../../../packages/evidence/domain-control-runtime.mts';
 
 function httpsServiceBindingValue(value: unknown): string {
   const record = rec(value);
@@ -71,15 +72,12 @@ function httpsServiceBindingValue(value: unknown): string {
 }
 
 function boundedDnsRecordValue(name: string, value: unknown): string {
+  if (name === 'mx') {
+    const mx = normalizeMxRecord(value);
+    return mx ? `${mx.priority} ${mx.exchange}` : '';
+  }
   if (typeof value === 'string') return boundedTechnologyText(value, 1024);
   const record = rec(value);
-  if (name === 'mx') {
-    const priority = Number(record.priority);
-    const exchange = boundedTechnologyText(record.exchange, 253);
-    return Number.isSafeInteger(priority) && priority >= 0 && priority <= 0xffff && exchange
-      ? `${priority} ${exchange}`
-      : '';
-  }
   if (name === 'caa') {
     const critical = Number(record.critical);
     const tag = boundedTechnologyText(record.tag, 15);
@@ -147,13 +145,16 @@ export function buildLookupDnsDisplay(input: {
   };
   const dnsDisplay = (name: string) => {
     const projection = dnsProjection(name);
+    const diagnostic = rec(rec(dnsEvidence.diagnostics)[name]);
+    const incompleteSource = diagnostic.truncated === true
+      || typeof diagnostic.discarded === 'number' && diagnostic.discarded > 0;
     if (projection.value) {
-      return projection.malformed
+      return projection.malformed || incompleteSource
         ? `${projection.value} · additional malformed or excess values withheld`
         : projection.value;
     }
     if (projection.malformed) return 'Not established (malformed evidence)';
-    const diagnostic = rec(rec(dnsEvidence.diagnostics)[name]);
+    if (incompleteSource) return 'Not established (partial source)';
     if (dnsEvidence.status === 'skipped' || diagnostic.status === 'skipped') return 'Not evaluated';
     if (diagnostic.status === 'success' || diagnostic.status === 'not_found') return 'Not observed';
     if (diagnostic.status === 'error' || diagnostic.status === 'partial'
@@ -269,6 +270,7 @@ export function buildLookupDnsDisplay(input: {
   }));
   const dnsDelegation = delegation.delegationHealthVersion === 1
     ? {
+        domain: boundedTechnologyText(delegation.domain, 253),
         status: statusLabel(show(delegation.status)),
         complete: delegation.complete === true,
         detail: boundedTechnologyText(delegation.detail, 300),

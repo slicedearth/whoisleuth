@@ -8,12 +8,14 @@ import {
   RUNNABLE_INVESTIGATION_PLAN_RECIPES,
 } from '../cli/investigation-plan.mts';
 import { runInvestigationRecipe } from '../cli/investigation-run.mts';
+import { runCli } from '../cli/runner.mts';
+import { buildCliLookupDocument } from '../cli/saved-lookup.mts';
+import { CLI_CT_SEARCH_SCHEMA_VERSION, CLI_DISCOVER_SCHEMA_VERSION, CLI_POSTURE_SCHEMA_VERSION } from '../cli/formatters/json.mts';
+import { CLI_DISCOVERY_SCAN_VERSION } from '../cli/discovery-scan.mts';
 import { requestLookup, type LookupRequestOptions } from '../lib/lookup-request.mts';
-import {
-  CAPABILITY_MANIFEST,
-  CAPABILITY_OUTCOME_STATES,
-  type CapabilityOutcomeState,
-} from '../packages/contracts/capability-manifest.mts';
+import { buildBulkSessionExport, mergeBulkSessions, normalizeBulkSessionStore, serializeBulkSessionStore } from '../packages/workspace/bulk-session-model.mts';
+import { richBulkSessionStore } from './bulk-session-fixture.mts';
+import { requiredValue } from './value-assertions.mts';
 import {
   BRAND_PROFILE_SCHEMA,
   BRAND_PROFILE_SCHEMA_VERSION,
@@ -197,26 +199,30 @@ describe('bounded verification state machines', () => {
     ), { ...PROPERTY_PARAMETERS, numRuns: Math.min(PROPERTY_PARAMETERS.numRuns, 30) });
   });
 
-  test('preserves partial, blocked, unavailable, unsupported, and stale source identities', (context) => {
+  test('preserves admitted limited source identities through storage, export and import', (context) => {
     replay(context, 'evidence source states');
-    const requiredStates = ['partial', 'blocked', 'unavailable', 'unsupported', 'stale'] as const;
-    const declaredOutcomes = CAPABILITY_MANIFEST.capabilities.flatMap((item) => item.outcomes);
-    for (const state of requiredStates) {
-      assert.ok(CAPABILITY_OUTCOME_STATES.includes(state));
-      assert.ok(declaredOutcomes.includes(state));
-    }
+    const requiredStates = ['partial', 'unavailable', 'unsupported', 'skipped', 'error', 'not_found'] as const;
     fc.assert(fc.property(
-      fc.array(fc.constantFrom(...requiredStates), { minLength: 1, maxLength: 40 }),
+      fc.array(fc.constantFrom(...requiredStates), { minLength: 1, maxLength: 10 }),
       (sequence) => {
-        const retained = new Map<string, CapabilityOutcomeState>();
-        sequence.forEach((state, index) => retained.set(`source-${index % 8}`, state));
-        for (const [source, state] of retained) {
-          assert.match(source, /^source-\d$/u);
-          assert.equal(CAPABILITY_OUTCOME_STATES.find((candidate) => candidate === state), state);
-          assert.notEqual(state, 'complete');
+        const raw = richBulkSessionStore(1);
+        const expected = sequence.map((state, index) => ({ source: `source-${index}`, state, observedAt: index % 2 ? NOW : null }));
+        const row = requiredValue(requiredValue(raw.sessions[0]).results[0]);
+        row.sourceCoverage = expected.map((item) => ({ ...item, rawSource: 'Private fixture source payload' }));
+        Object.assign(row, { rawWhois: 'Private fixture WHOIS body', notes: 'Private fixture analyst note' });
+        const before = structuredClone(raw);
+        const retained = normalizeBulkSessionStore(raw);
+        const restored = normalizeBulkSessionStore(JSON.parse(serializeBulkSessionStore(retained)));
+        const exported = buildBulkSessionExport(restored, NOW);
+        const imported = mergeBulkSessions([], JSON.parse(JSON.stringify(exported)));
+        for (const sessions of [retained.sessions, restored.sessions, exported.sessions, imported.sessions]) {
+          const actual = requiredValue(requiredValue(sessions[0]).results[0]);
+          assert.deepEqual(actual.sourceCoverage, expected);
+          assert.doesNotMatch(JSON.stringify(sessions), /Private fixture/u);
         }
+        assert.deepEqual(raw, before);
       },
-    ), PROPERTY_PARAMETERS);
+    ), { ...PROPERTY_PARAMETERS, examples: [[requiredStates.slice()]] });
   });
 
   test('runs only fixed workflow prefixes and pauses at network or analyst approval boundaries', async (context) => {
@@ -228,28 +234,63 @@ describe('bounded verification state machines', () => {
         const subject = recipe === 'lookalike-review' ? 'Example Organisation' : 'workflow-state.example';
         const plan = buildInvestigationPlan(recipe, subject, NOW);
         const calls: Array<{ command: string; arguments: readonly string[]; mode: string }> = [];
+        const outputs: string[] = [];
         const result = await runInvestigationRecipe(recipe, subject, {
           approveNetwork,
           resumeInput: null,
           generatedAt: NOW,
-          execute: async (command, args) => {
-            const step = plan.steps.find((item) => item.command === command
-              && item.arguments.length === args.length
-              && item.arguments.every((argument, index) => argument === args[index]));
+          execute: async (command, args, inputs) => {
+            const step = plan.steps[calls.length];
             assert.ok(step);
+            assert.equal(command, step.command);
+            assert.equal(args.length, step.arguments.length);
+            step.arguments.forEach((argument, index) => {
+              if (/^<[^>]+>$/u.test(argument)) {
+                const reused = inputs.get(args[index]!);
+                assert.ok(reused !== undefined && outputs.includes(reused), 'Substituted inputs must be exact earlier outputs.');
+              } else assert.equal(args[index], argument);
+            });
+            for (const reference of inputs.keys()) assert.ok(args.includes(reference), 'No undeclared input may enter a command.');
+            assert.ok(step.mode !== 'network' || approveNetwork, 'Network steps require this invocation to approve them.');
             calls.push({ command, arguments: args, mode: step.mode });
-            return { exitCode: 0, stdout: JSON.stringify({ schema: step.produces }) };
+            if (step.mode === 'offline' && command !== 'discover') {
+              let stdout = '', stderr = '';
+              const read = (name?: string | null) => {
+                assert.ok(name && inputs.has(name), 'Offline workflow steps may read only their supplied evidence.');
+                return inputs.get(name)!;
+              };
+              const exitCode = await runCli([command, ...args], {
+                now: () => NOW, stdout: { write(value) { stdout += value; } }, stderr: { write(value) { stderr += value; } },
+                readArtifactInput: read, readExportInput: read, readCompareInput: read, readSourceReliabilityInput: read, readDiffInput: read,
+              });
+              assert.equal(stderr, '');
+              outputs.push(JSON.stringify(JSON.parse(stdout)));
+              return { exitCode, stdout };
+            }
+            assert.ok(['lookup', 'discover', 'posture', 'discover-scan', 'ct-search'].includes(command), 'New collection seams need an explicit fixture.');
+            const output = command === 'lookup' ? buildCliLookupDocument(subject, {
+              type: 'domain', value: subject, inputHostname: subject, registrableDomain: subject, isSubdomain: false,
+            }, { diagnostics: { rdap: { status: 'unsupported' }, whois: { status: 'skipped' } }, availability: {} }, NOW, 'deep') : {
+              schema: step.produces,
+              version: command === 'discover' ? CLI_DISCOVER_SCHEMA_VERSION
+                : command === 'posture' ? CLI_POSTURE_SCHEMA_VERSION
+                  : command === 'ct-search' ? CLI_CT_SEARCH_SCHEMA_VERSION : CLI_DISCOVERY_SCAN_VERSION,
+            };
+            const stdout = JSON.stringify(output); outputs.push(stdout);
+            return { exitCode: 0, stdout };
           },
         });
         assert.deepEqual(result.completedSteps.map((item) => item.id), plan.steps.slice(0, result.completedSteps.length).map((item) => item.id));
         assert.equal(result.currentStep?.id, plan.steps[result.completedSteps.length]?.id);
-        assert.ok(result.state === 'awaiting_network_approval' || result.state === 'awaiting_analyst_selection');
+        assert.ok(result.state === 'complete' || result.state === 'awaiting_network_approval' || result.state === 'awaiting_analyst_selection');
         assert.equal(calls.some((call) => call.mode === 'network') && !approveNetwork, false);
         assert.equal(result.networkApprovedForThisRun, approveNetwork);
         if (result.state === 'awaiting_network_approval') assert.equal(result.currentStep?.mode, 'network');
-        else assert.ok(result.currentStep?.arguments.some((argument) => /^<[^>]+>$/u.test(argument)));
+        else if (result.state === 'awaiting_analyst_selection') assert.ok(result.currentStep?.arguments.some((argument) => /^<[^>]+>$/u.test(argument)));
+        else { assert.equal(result.currentStep, null); assert.equal(result.completedSteps.length, plan.steps.length); }
       },
-    ), PROPERTY_PARAMETERS);
+    ), { ...PROPERTY_PARAMETERS, examples: RUNNABLE_INVESTIGATION_PLAN_RECIPES.flatMap(recipe =>
+      [false, true].map(approval => [recipe, approval] as [typeof recipe, boolean])) });
   });
 });
 

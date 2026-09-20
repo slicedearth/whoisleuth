@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
-import { expandLookupFamilies, expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection } from './helpers';
+import { readFile } from 'node:fs/promises';
+import { expandLookupFamilies, expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import {
   BROWSER_LIBRARY_PROFILE_VERSION,
@@ -7,10 +8,11 @@ import {
   WEBSITE_SECURITY_POSTURE_VERSION,
 } from '../lib/lookup-child-profile-contract.mts';
 import { TLS_PROFILE_VERSION } from '../lib/lookup-network-evidence-bounds.mts';
+import { analyzeWebsiteTechnology } from '../lib/website-technology.mts';
+import { analyzeWebsiteSecurityPosture } from '../lib/website-security-posture.mts';
 
-// Every value here is deliberately dotless (no TLD), so classifyQuery on the
-// server rejects it with a 400 before any RDAP/WHOIS/DNS call - these tests
-// never trigger a live lookup, only client-side parsing/navigation.
+// Lookup fixtures use reserved targets or locally rejected inputs. The shared
+// browser and server guards prevent live collection.
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -22,6 +24,121 @@ test.beforeEach(async ({ page }) => {
   });
   await page.goto('/lookup');
 });
+
+for (const viewport of [
+  { width: 1280, height: 720 }, { width: 1024, height: 768 },
+  { width: 390, height: 844 }, { width: 320, height: 700 },
+]) {
+  for (const theme of ['light', 'dark'] as const) {
+    test(`web evidence identifies limited sources and posture reviews at ${viewport.width}px in ${theme}`, async ({ page }, testInfo) => {
+      await page.setViewportSize(viewport);
+      await useTheme(page, theme);
+      const securityPosture = analyzeWebsiteSecurityPosture({
+        observedAt: '2026-09-01T00:00:00.000Z',
+        http: { source: 'http', status: 'success', complete: true, transportSecurity: 'https', response: {
+          status: 200, securityHeaders: {
+            strictTransportSecurity: 'max-age=31536000', xFrameOptions: 'DENY',
+            xContentTypeOptions: 'nosniff', referrerPolicy: 'no-referrer',
+          },
+        } },
+        pageIdentity: { source: 'html', status: 'success', complete: true,
+          forms: { count: 0, insecureActionCount: 0, truncated: false },
+          resources: { externalOrigins: [], truncated: false },
+        },
+        tls: { source: 'tls', status: 'error', complete: false },
+        dns: { source: 'dns', status: 'success', complete: true, records: { caa: [] }, diagnostics: { caa: { status: 'not_found' } } },
+        dnssec: 'signed',
+      });
+      // Source-state counts are deliberately not the presentation's review count.
+      expect(securityPosture.summary.potentialExposure).toBe(0);
+      await page.route('**/api/lookup?*', async (route) => route.fulfill({
+        status: 200, contentType: 'application/json', body: JSON.stringify({
+          query: 'posture.example.test', type: 'domain', registrableDomain: 'example.test',
+          rdap: { parsed: {} }, whois: { parsed: {}, chain: [] },
+          availability: { state: 'registered', domain: 'example.test', securityPosture },
+          networkContext: {
+            contextVersion: 1, version: 1, source: 'ip_rdap', scanMode: 'deep',
+            status: 'partial', complete: false, truncated: true,
+            observedAt: '2026-09-01T00:00:00.000Z', durationMs: 10,
+            detail: 'Network registration was retained, but the source record is incomplete. Some IP RDAP contact records or fields were omitted during bounded normalisation.',
+            limitations: ['Some IP RDAP contact records or fields were omitted during bounded normalisation.'],
+            endpoint: { address: '93.184.216.34', family: 4, selectedFrom: 'tls_connection' },
+            rdap: { endpoint: 'https://network.example/rdap/ip/93.184.216.34', httpStatus: 200,
+              transportSecurity: 'https', fetchedAt: '2026-09-01T00:00:00.000Z', attempts: [] },
+            network: { name: 'Example network', holder: 'Example network holder', cidrs: ['93.184.216.0/24'] },
+            diagnostics: { requestCount: 1, addressSource: 'tls_connection', httpStatus: 200, cidrCount: 1 },
+            abuseRouting: [],
+          },
+          diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+        }),
+      }));
+      await page.locator('#query').fill('posture.example.test');
+      await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+      const web = page.locator('#web-evidence');
+      const limitedMetric = web.locator('.metric').filter({ hasText: /limited/ });
+      await expect(limitedMetric).toHaveText('5 limited');
+      await expect(web.locator('.family-summary .description')).toContainText('Observed network context (partial)');
+      await expandLookupFamilies(page);
+      const network = web.locator('.network-context');
+      await expect(network).toHaveCount(1);
+      await expect(page.locator('#registry .network-context')).toHaveCount(0);
+      await expect(network.locator(':scope > summary')).toContainText('IP RDAP contact records or fields');
+      await network.locator(':scope > summary').focus();
+      await network.locator(':scope > summary').press('Enter');
+      await expect(network.getByText('Example network holder', { exact: true })).toBeVisible();
+      await network.locator('.limitations > summary').click();
+      await expect(network.getByRole('listitem')).toContainText('IP RDAP contact records or fields');
+      await expectNoHorizontalOverflow(page);
+      const summaryOverflow = await web.locator('.family-summary .metric, .family-summary .description').evaluateAll((elements) =>
+        elements.filter((element) => element.scrollWidth > element.clientWidth + 1).map((element) => element.textContent));
+      expect(summaryOverflow).toEqual([]);
+      await network.screenshot({ path: testInfo.outputPath(`network-${viewport.width}-${theme}.png`) });
+      await web.locator('.family-summary').screenshot({ path: testInfo.outputPath(`source-summary-${viewport.width}-${theme}.png`) });
+      await page.evaluate(() => { window.location.hash = '#evidence-network'; });
+      await expect.poll(() => network.locator(':scope > summary').evaluate((summary) => {
+        const bounds = summary.getBoundingClientRect();
+        return bounds.top >= 0 && bounds.bottom <= window.innerHeight
+          && [bounds.top + 4, bounds.bottom - 4].every((y) =>
+            summary.contains(document.elementFromPoint(bounds.left + bounds.width / 2, y)));
+      })).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`network-viewport-${viewport.width}-${theme}.png`) });
+      const card = page.locator('.security-posture-card');
+      const disclosure = card.locator(':scope > summary');
+      await expect(card).not.toHaveAttribute('open', '');
+      await expect(disclosure).toContainText('Needs review 2 · Other findings 8 · Could not assess 1');
+      await disclosure.focus();
+      await disclosure.press('Enter');
+      await expect(card).toHaveAttribute('open', '');
+      await expect(disclosure).toBeFocused();
+      const counts = card.getByRole('group', { name: 'Passive security posture summary' });
+      for (const [label, count] of [['Needs review', '2'], ['Other findings', '8'], ['Could not assess', '1']] as const) {
+        await expect(counts.getByRole('article', { name: label, exact: true }).locator('strong')).toHaveText(count);
+      }
+      const rows = card.locator('.posture-grid > article');
+      await expect(rows).toHaveCount(11);
+      for (const label of ['Content Security Policy not observed', 'CAA records not observed']) {
+        const row = rows.filter({ has: page.getByRole('heading', { name: label, exact: true }) });
+        await expect(row.getByText('Needs review', { exact: true })).toBeVisible();
+      }
+      const unavailable = rows.filter({ has: page.getByRole('heading', { name: 'TLS posture unavailable', exact: true }) });
+      await expect(unavailable.getByText('Could not assess', { exact: true })).toBeVisible();
+      const noCleartext = rows.filter({ has: page.getByRole('heading', { name: 'No cleartext resource origin observed', exact: true }) });
+      await expect(noCleartext).toBeVisible();
+      await expect(noCleartext.locator('.state')).toHaveCount(0);
+      await expect(card.locator('.state').filter({ hasText: /^(Observed|Not observed|No exposure observed)$/ })).toHaveCount(0);
+      await expectNoHorizontalOverflow(page);
+      const clippedText = await card.locator('.finding-head h5, .state, .posture-summary small').evaluateAll((elements) => elements
+        .filter((element) => element.scrollWidth > element.clientWidth + 1)
+        .map((element) => element.textContent));
+      expect(clippedText).toEqual([]);
+      await card.screenshot({ path: testInfo.outputPath(`posture-${viewport.width}-${theme}.png`) });
+      await disclosure.focus();
+      await disclosure.press('Enter');
+      await expect(card).not.toHaveAttribute('open', '');
+      await expect(disclosure).toBeFocused();
+    });
+  }
+}
 
 test('deep DNS evidence distinguishes observed records from partial resolver failure', async ({ page }) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
@@ -141,6 +258,71 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
   await expect(healthyState).toHaveCount(1);
   await expect(healthyState).toHaveCSS('white-space', 'nowrap');
   await expectNoHorizontalOverflow(page);
+});
+
+test('DNS rehearsal retains null MX and exposes incomplete intent in the view and download', async ({ page }, testInfo) => {
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'rehearsal.example.test', type: 'domain', registrableDomain: 'example.test',
+      rdap: { parsed: {} }, whois: { parsed: {}, chain: [] },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+      availability: { state: 'registered', domain: 'example.test', dns: {
+        status: 'success', source: 'dns', scanMode: 'deep', complete: true, truncated: false,
+        records: { a: [], aaaa: [], ns: [], cname: [], spf: [], dmarc: [],
+          mx: [{ priority: 0, exchange: '' }],
+          caa: [{ critical: 0, tag: 'iodef', value: 'https://reports.example/Case?Ticket=One' }],
+        }, diagnostics: {},
+        delegation: {
+          delegationHealthVersion: 1, version: 1, status: 'partial',
+          observedAt: '2026-09-01T00:00:00.000Z', scanMode: 'deep', source: 'dns_delegation',
+          durationMs: 0, complete: false, truncated: false,
+          detail: 'Direct authority evidence is incomplete.', limitations: [],
+          parent: { state: 'success', nameservers: ['ns1.example'], error: null },
+          registry: { nameservers: ['ns1.example'], nameserverDetails: [], delegationSigned: false, dsRecordCount: 0, truncated: false },
+          authorities: [], recordMatrix: [], findings: [],
+        },
+      } },
+    }),
+  }));
+  await page.locator('#query').fill('rehearsal.example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  const card = page.locator('.dns-card');
+  await card.locator(':scope > summary').click();
+  await expect(card.getByText('0 .', { exact: true })).toBeVisible();
+  await card.getByText('Plan a domain control change', { exact: true }).click();
+  await card.getByLabel('Intended MX routing', { exact: false }).fill('0 .');
+  await card.getByLabel('Intended CAA policy', { exact: false }).fill('0 iodef https://REPORTS.EXAMPLE/Case?Ticket=One');
+  await card.getByRole('button', { name: 'Evaluate rehearsal' }).click();
+  await expect(card.getByText('MX routing is unchanged', { exact: true })).toBeVisible();
+  await expect(card.getByText('CAA policy is unchanged', { exact: true })).toBeVisible();
+  await card.getByLabel('Intended MX routing', { exact: false }).fill('0 .\ninvalid record');
+  await expect(card.getByText('MX routing intent is incomplete', { exact: true })).toBeVisible();
+  await expect(card.getByText(/1 admitted, 1 invalid and 0 over-bound intended records/u)).toBeVisible();
+
+  const pendingDownload = page.waitForEvent('download');
+  await card.getByRole('button', { name: 'Download reviewed checklist' }).click();
+  const download = await pendingDownload;
+  const downloadPath = await download.path();
+  expect(downloadPath).not.toBeNull();
+  const exported = JSON.parse(await readFile(downloadPath!, 'utf8'));
+  expect(exported.reviewState).toBe('unresolved');
+  expect(exported.observed.mx).toEqual(['0 .']);
+  expect(exported.analystProposed.caa).toEqual(['0 iodef https://reports.example/Case?Ticket=One']);
+  expect(exported.findings.find((finding: { id: string }) => finding.id === 'mx').state).toBe('blocked');
+
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 },
+    { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);
+      await expectNoHorizontalOverflow(page);
+      await card.getByText('MX routing intent is incomplete', { exact: true }).scrollIntoViewIfNeeded();
+      await expect(card.getByText('MX routing intent is incomplete', { exact: true })).toBeInViewport();
+      if (viewport.width === 320) await page.screenshot({ path: testInfo.outputPath(`dns-rehearsal-${theme}.png`) });
+    }
+  }
 });
 
 test('HTTP evidence presents bounded redirect provenance and response metadata', async ({ page }) => {
@@ -315,7 +497,7 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
             { id: 'fixture-runtime', name: 'Fixture Runtime', category: 'application runtime', confidence: 'medium', roles: ['framework_runtime'], evidence: [{ source: 'passive response header', role: 'framework_runtime', description: 'A generic retained header indicates the fixture runtime.' }] },
           ],
           browserLibraryProfile: {
-            profileVersion: BROWSER_LIBRARY_PROFILE_VERSION, version: 1, status: 'success', observedAt: '2026-07-13T00:00:00.000Z',
+            profileVersion: BROWSER_LIBRARY_PROFILE_VERSION, version: 1, status: 'success', observedAt: '2026-07-12T00:00:00.000Z',
             scanMode: 'deep', source: 'derived', durationMs: null, complete: true, truncated: false,
             catalog: { name: 'Retire.js', version: 'retire.js-5.4.3', sourceRevision: '56ea22d889656f4fbfe47b7df58d410a06ea59b7' },
             knownExploitedCatalog: { name: 'CISA KEV', version: 'fixture-catalogue', releasedAt: '2026-07-01T00:00:00.000Z' },
@@ -538,18 +720,26 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
     .toContainText('No retained indicator');
   await expect(technologyCard.getByText('Authoritative nameservers', { exact: true }).locator('..'))
     .toContainText('ns1.example.test');
-  await expect(technologyCard.getByText(/Nameserver identity remains DNS evidence/i)).toBeVisible();
-  await expect(technologyCard.getByText(/do not establish provider ownership, control, a concealed origin, safety or maliciousness/i)).toBeVisible();
+  await expect(technologyCard.getByText(/Nameservers describe DNS infrastructure/i)).toBeVisible();
+  await expect(technologyCard.getByText(/does not identify a concealed origin host/i)).toBeVisible();
   await expect(technologyCard.getByText('Origin host', { exact: true }).locator('..'))
     .toContainText('Not established');
+  const technologyLimits = technologyCard.getByText('Technology sources and limits', { exact: true });
+  await technologyLimits.focus();
+  await technologyLimits.press('Enter');
+  await expect(technologyLimits).toBeFocused();
   await expect(technologyCard.getByText(/unmatched technology may still be present/i)).toBeVisible();
   await expect(technologyCard.getByText('Generator metadata identifies the fixture CMS.', { exact: true })).toBeVisible();
   await expect(technologyCard.getByRole('heading', { name: 'Fixture Delivery Platform With An Exceptionally Long Provider Display Name' })).toBeVisible();
   await expect(technologyCard.getByRole('heading', { name: 'Observed browser libraries' })).toBeVisible();
   await expect(technologyCard.getByRole('heading', { name: /Fixture Library 1\.2\.3/i })).toBeVisible();
   await expect(technologyCard.getByText('1 advisory match', { exact: true })).toBeVisible();
-  await expect(technologyCard.getByText(/does not download or execute referenced scripts/i)).toBeVisible();
-  await expect(technologyCard.getByText(/make no additional request and do not affect availability or Risk scoring/i)).toBeVisible();
+  await technologyCard.getByText('Library sources and limits', { exact: true }).click();
+  await expect(technologyCard.getByText(/Referenced scripts are not downloaded or executed/i)).toBeVisible();
+  await expect(technologyCard.getByText(/without additional requests or changes to availability or Risk scoring/i)).toBeVisible();
+  await expect(technologyCard.locator(':scope > .evidence-body > .observation-time time')).toHaveAttribute('datetime', '2026-07-13T00:00:00.000Z');
+  await expect(technologyCard.locator('.library-profile > .observation-time time')).toHaveAttribute('datetime', '2026-07-12T00:00:00.000Z');
+  await expect(technologyCard.locator('.observation-time')).toContainText(['old at review', 'old at review']);
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
   await expect(technologyCard.getByText('Application-platform indicator', { exact: true }).locator('..'))
@@ -567,9 +757,14 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expect(postureCard).toHaveAttribute('open', '');
   await expect(postureCard.getByText('HTTPS transport observed', { exact: true })).toBeVisible();
   await expect(postureCard.getByText('Content Security Policy not observed', { exact: true })).toBeVisible();
-  await expect(postureCard.getByText('Not observed', { exact: true }).last()).toBeVisible();
-  await expect(postureCard.getByText('No exposure observed', { exact: true })).toBeVisible();
-  await expect(postureCard.getByText('Review', { exact: true }).first()).toBeVisible();
+  const postureCounts = postureCard.getByRole('group', { name: 'Passive security posture summary' });
+  await expect(postureCounts.getByRole('article', { name: 'Needs review', exact: true }).locator('strong')).toHaveText('1');
+  await expect(postureCounts.getByRole('article', { name: 'Other findings', exact: true }).locator('strong')).toHaveText('2');
+  await expect(postureCounts.getByRole('article', { name: 'Could not assess', exact: true }).locator('strong')).toHaveText('0');
+  const missingCsp = postureCard.locator('.posture-grid > article').filter({ has: page.getByRole('heading', { name: 'Content Security Policy not observed', exact: true }) });
+  await expect(missingCsp.getByText('Needs review', { exact: true })).toBeVisible();
+  await expect(postureCard.getByText('No cleartext resource origin observed', { exact: true })).toBeVisible();
+  await expect(postureCard.locator('.state')).toHaveText(['Needs review']);
   await expect(postureCard.getByText(/review signals, not confirmed vulnerabilities/i)).toBeVisible();
 
   const pageComparison = page.locator('.page-comparison');
@@ -627,6 +822,53 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expectNoHorizontalOverflow(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
+});
+
+test('real library projection retains advisory aliases and discloses malformed source identifiers', async ({ page }, testInfo) => {
+  const technologyProfile = await analyzeWebsiteTechnology({
+    html: '<script src="/jquery-1.12.4.js"></script><script>/* dwr-1.1.3.jar */</script>',
+    observedAt: '2026-09-08T00:00:00.000Z',
+  });
+  expect(technologyProfile.browserLibraryProfile?.findings.map((finding) => finding.id)).toEqual(expect.arrayContaining(['DWR', 'jquery']));
+  await page.route('**/api/lookup?*', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      query: 'library-evidence.test', type: 'domain', registrableDomain: 'library-evidence.test',
+      availability: { state: 'registered', confidence: 'high', domain: 'library-evidence.test', technologyProfile },
+      rdap: { upstreamStatus: 200, parsed: {} }, whois: { parsed: {}, chain: [] },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
+    }),
+  }));
+  await page.locator('#query').fill('library-evidence.test');
+  await page.getByRole('radio', { name: /Deep/u }).check();
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  const technology = page.locator('.technology-card');
+  const disclosure = technology.locator(':scope > summary');
+  await disclosure.focus();
+  await disclosure.press('Enter');
+  await expect(disclosure).toBeFocused();
+  const libraries = technology.getByRole('region', { name: 'Observed browser libraries' });
+  await expect(libraries).toBeVisible();
+  await expect(libraries.locator('.evidence-status')).toHaveText('partial');
+  await expect(libraries.getByRole('heading', { name: 'DWR 1.1.3' })).toBeVisible();
+  await expect(libraries.getByRole('heading', { name: 'jquery 1.12.4' })).toBeVisible();
+  await expect(libraries).toContainText('CVE-2014-5325');
+  await expect(libraries).toContainText('GHSA-');
+  await expect(libraries).not.toContainText('CVE-2007-01-09');
+  await libraries.getByText('Library sources and limits · incomplete analysis', { exact: true }).click();
+  await expect(libraries).toContainText('1 supplied CVE identifier entry was omitted');
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768 }, { width: 390, height: 844 }, { width: 320, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);
+      await libraries.scrollIntoViewIfNeeded();
+      await expect(libraries).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      if ([320, 1280].includes(viewport.width)) await page.screenshot({ path: testInfo.outputPath(`library-provenance-${viewport.width}-${theme}.png`) });
+    }
+  }
 });
 
 test('completed technology analysis distinguishes an unmatched catalogue from source success', async ({ page }) => {

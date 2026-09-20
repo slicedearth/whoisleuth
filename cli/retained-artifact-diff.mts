@@ -137,7 +137,7 @@ function parseBulkExport(root: UnknownRecord): ParsedBulkExport {
     const rawSession = record(candidate);
     const rawResults = Array.isArray(rawSession?.results) ? rawSession.results : null;
     const rawDomains = Array.isArray(rawSession?.domains) ? rawSession.domains : null;
-    const session = normalizeBulkSession(candidate);
+    const session = normalizeBulkSession(candidate, version);
     if (!session || !rawResults || !rawDomains
       || rawResults.length > MAX_BULK_SESSION_ROWS
       || rawResults.length !== session.results.length
@@ -430,7 +430,7 @@ export function buildCliRetainedArtifactDiff(
   if (left.schema !== right.schema) throw new CliUsageError('diff requires two retained documents from the same supported artifact family.');
   if (left.schema === SAVED_LOOKUP_SCHEMA) {
     if (options.leftSessionId || options.rightSessionId) throw new CliUsageError('Saved-session selectors apply only to Bulk session exports.');
-    return buildCliLookupDiff(leftRaw, rightRaw, generatedAt);
+    return buildCliLookupDiff(leftRaw, rightRaw, generatedAt, { domainMode: 'auto' });
   }
   if (left.schema === BULK_SESSION_SCHEMA) return buildBulkLedger(leftRaw, rightRaw, left, right, options, generatedAt);
   if (left.schema === DOMAIN_PORTFOLIO_REVIEW_SCHEMA) {

@@ -29,6 +29,7 @@ import {
   type CliNetworkEffect,
 } from '../cli/command-reference.mts';
 import { buildShellCompletion } from '../cli/completion.mts';
+import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../packages/investigation/investigation-manifest.mts';
 import {
   runDiscriminatedCommandHandler,
   type DiscriminatedCommandHandlerMap,
@@ -60,6 +61,23 @@ import {
 } from './support/shell-completion-harness.mts';
 
 const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url));
+
+test('large option vocabularies remain complete without overwhelming focused usage', () => {
+  const help = commandHelp('verify-artifact');
+  assert.match(help, /Default exit 0 means the report was produced, not that its checks passed/u);
+  assert.match(COMMAND_USAGE['verify-artifact'], /--manifest-entry <manifest-entry>/u);
+  assert.doesNotMatch(COMMAND_USAGE['verify-artifact'], /artifact-129/u);
+  const specification = commandOptionSpec('verify-artifact', '--manifest-entry')!;
+  const details = help.split('--manifest-entry values:\n')[1];
+  assert.ok(details);
+  for (const value of specification.values) assert.ok(details.split('\n').includes(`  ${value}`));
+  assert.equal(parseCliArguments(['verify-artifact', 'evidence.json', '--manifest', 'manifest.json', '--manifest-entry', specification.values.at(-1)!]).action, 'verify-artifact');
+});
+
+test('export guidance preserves the independently published evidence versions', () => {
+  assert.match(COMMAND_DETAILS.export.boundary, /published v2 schemas 27, 28/u);
+  assert.match(COMMAND_DETAILS.export.boundary, /exact v1 schema 26/u);
+});
 
 function assertDeepFrozen(value: unknown, path = 'registry', seen = new Set<object>()): void {
   if (value === null || typeof value !== 'object' || seen.has(value)) return;
@@ -129,6 +147,8 @@ function minimumArguments(command: CliCommand): readonly string[] {
   // Recipe discovery is a purpose-specific mode: the mechanical grammar permits
   // either two positional values or one of these discovery options.
   if (command === 'workflow-plan') argv.push('--list');
+  // Case creation can omit a source; the minimal read operation cannot.
+  if (command === 'case') argv.push('cases.json');
   return Object.freeze(argv);
 }
 
@@ -247,7 +267,7 @@ describe('canonical CLI command registry', () => {
     assert.equal(commandOptionSpec('workflow-run', '--select')?.occurrence, 'repeatable');
     assert.equal(commandOptionSpec('bulk', '--resume')?.valueKind, 'flag');
     assert.deepEqual(commandPositionalSpecs('manifest'), [
-      { name: 'artefacts', valueKind: 'file', minimum: 1, maximum: 16, values: [], inputSource: 'argv', requiredWhenOptions: [] },
+      { name: 'artefacts', valueKind: 'file', minimum: 1, maximum: MAX_INVESTIGATION_MANIFEST_ARTIFACTS, values: [], inputSource: 'argv', requiredWhenOptions: [] },
     ]);
     assert.deepEqual(commandPositionalSpecs('page-compare'), [
       { name: 'sources', valueKind: 'file', minimum: 2, maximum: 2, values: [], inputSource: 'argv', requiredWhenOptions: [] },
@@ -355,6 +375,24 @@ describe('canonical CLI command registry', () => {
       const source = readFileSync(new URL(`../${relativePath}`, import.meta.url), 'utf8');
       assert.doesNotMatch(source, /['"`]--(?:help|version)['"`]|['"`]-[hV]['"`]/u, relativePath);
     }
+  });
+
+  test('treats every argument after the option separator as a literal positional value', () => {
+    for (const source of ['--help', '-h', '--config', '--profile', '--', '-evidence.json']) {
+      const action = parseCliArguments(['verify-artifact', '--json', '--', source]);
+      assert.equal(action.action, 'verify-artifact');
+      if (action.action !== 'verify-artifact') throw new Error('Expected artifact verification.');
+      assert.equal(action.source, source);
+      assert.equal(action.output, 'json');
+      assert.equal(cliMetaActionForInvocation(['verify-artifact', '--', source]), null);
+    }
+    assert.equal(cliMetaActionForInvocation(['lookup', '--observer', '--help']), null);
+    assert.throws(() => parseCliArguments(['lookup', '--observer', '--help', '--plan', 'example.test']), /--observer requires/u);
+    assert.throws(() => parseCliArguments(['verify-artifact', '--output', '--', '-evidence.json']), /requires one bounded file path/u);
+    assert.equal(cliInvocationNetworkEffect('lookup', ['--', '--plan']), 'network');
+    assert.equal(cliInvocationNetworkEffect('doctor', ['--', '--network']), 'offline');
+    assert.equal(cliInvocationNetworkEffect('workflow-run', ['--', '--approve-network']), 'offline');
+    assert.equal(cliInvocationNetworkEffect('lookup', ['--observer', '--plan']), 'network');
   });
 
   test('binds every declared option constraint to parser rejection', () => {
@@ -569,7 +607,7 @@ describe('canonical CLI command registry', () => {
       group: 'respond',
       mode: 'offline',
     });
-    assert.deepEqual(filtered, ['case-pack', 'export']);
+    assert.deepEqual(filtered, ['case', 'case-pack', 'export']);
     assert.deepEqual(selectCliCommands(CLI_COMMAND_REGISTRY, {
       common: true,
       group: 'investigate',
@@ -589,6 +627,7 @@ describe('canonical CLI command registry', () => {
   });
 
   test('keeps fixed workflow steps aligned with invocation-level network effects', () => {
+    assert.deepEqual(RUNNABLE_INVESTIGATION_PLAN_RECIPES, INVESTIGATION_PLAN_RECIPES);
     for (const recipe of INVESTIGATION_PLAN_RECIPES) {
       const subject = recipe === 'lookalike-review' ? 'Example Brand' : 'example.test';
       const plan = buildInvestigationPlan(recipe, subject, '2026-08-16T00:00:00.000Z');
@@ -720,7 +759,7 @@ describe('canonical CLI command registry', () => {
     const powershellCandidates = preparePowerShellCompletionBatch(powershell, powershellLines, REPOSITORY_ROOT);
     for (const script of [bash, zsh, fish, powershell]) {
       assert.match(script, /workflow-run/u);
-      for (const recipe of ['domain-triage', 'lookalike-review', 'owned-domain-review', 'historical-comparison']) {
+      for (const recipe of RUNNABLE_INVESTIGATION_PLAN_RECIPES) {
         assert.match(script, new RegExp(recipe, 'u'));
       }
       for (const policy of ['source-failure', 'inconclusive', 'danger', 'material-drift']) {
@@ -750,12 +789,10 @@ describe('canonical CLI command registry', () => {
     assert.deepEqual(bashCandidates(['whoisleuth', 'discover-scan', 'example.test', '--tlds', '--deep', '--scan-limit', '']).length, 500);
     assert.deepEqual(bashCandidates(['whoisleuth', 'discover-scan', 'example.test', '--chunk-size', '']).length, 100);
     assert.deepEqual(bashCandidates(['whoisleuth', 'monitor-once', '--limit', '']).length, 20);
-    assert.deepEqual(bashCandidates(['whoisleuth', 'workflow-run', '']), [
-      'domain-triage', 'lookalike-review', 'owned-domain-review', 'historical-comparison',
-    ]);
+    assert.deepEqual(bashCandidates(['whoisleuth', 'workflow-run', '']), RUNNABLE_INVESTIGATION_PLAN_RECIPES);
     assert.ok(bashCandidates(['whoisleuth', 'completion', '--']).includes('--help'));
     assert.ok(bashCandidates(['whoisleuth', 'workflow-plan', '--']).includes('--json'));
-    assert.deepEqual(bashCandidates(['whoisleuth', 'verify-artifact', '--manifest-entry', '']).length, 16);
+    assert.deepEqual(bashCandidates(['whoisleuth', 'verify-artifact', '--manifest-entry', '']), commandOptionSpec('verify-artifact', '--manifest-entry')!.values);
     assert.deepEqual(bashCandidates(['whoisleuth', 'lookup', 'example.test', '--fail-on', '']), [
       'source-failure', 'inconclusive', 'danger',
     ]);
@@ -798,7 +835,7 @@ describe('canonical CLI command registry', () => {
     assert.deepEqual(powershellCandidates('whoisleuth not-a-command -'), ['--help', '-h']);
     for (const [line, offersFiles] of powershellFileCases) {
       assert.equal(
-        powershellCandidates(line).some((candidate) => candidate.endsWith('package.json')),
+        powershellCandidates(line).some((candidate) => /[/\\]package\.json'?$/u.test(candidate)),
         offersFiles,
         line,
       );
@@ -828,17 +865,16 @@ describe('canonical CLI command registry', () => {
     }
   });
 
-  test('keeps the installed registry authoritative and documents the scaffold bootstrap exception', () => {
+  test('documents the scaffold bootstrap exception in the reference and installed help', () => {
     const reference = readFileSync(new URL('../docs/cli-reference.md', import.meta.url), 'utf8');
-    assert.match(reference, /Installed `whoisleuth <command> --help`,[\s\S]*exact grammar, option and[\s\S]*command authorities/iu);
-    assert.doesNotMatch(reference, /This release supports/iu);
-    for (const source of [
-      reference,
+    for (const source of [reference, HELP]) {
+      assert.match(source, /registry-scaffold[\s\S]*--profile[\s\S]*--config/iu);
+    }
+    for (const guide of [
       readFileSync(new URL('../docs/cli.md', import.meta.url), 'utf8'),
       readFileSync(new URL('../packages/cli/README.md', import.meta.url), 'utf8'),
-      HELP,
     ]) {
-      assert.match(source, /registry-scaffold[\s\S]*--profile[\s\S]*--config/iu);
+      assert.match(guide, /cli-reference\.md/u);
     }
   });
 

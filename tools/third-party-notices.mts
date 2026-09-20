@@ -3,7 +3,9 @@
 import { randomUUID } from 'node:crypto';
 import { opendir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import type { Plugin } from 'vite';
 import {
   boundedSafeRelativePath,
   compareCodeUnits,
@@ -11,15 +13,18 @@ import {
   requireJsonRecord as record,
 } from './maintainer-tool-helpers.mts';
 import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
-import { parseBoundedJsonObject } from '../lib/bounded-json.mts';
+import { parseBoundedJson, parseBoundedJsonObject } from '../lib/bounded-json.mts';
 
 type JsonRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
 type NoticeMode = 'check' | 'write';
+type BundledDependency = Readonly<{ name: string; version: string }>;
 type InventoryOptions = Readonly<{
   directDependencyNames?: readonly string[];
+  bundledDependencies?: readonly BundledDependency[];
   scopeLabel?: string;
   lockfileValue?: unknown;
+  omitOptionalDependencies?: boolean;
 }>;
 type MainOptions = Readonly<{
   repositoryRoot?: string;
@@ -36,6 +41,7 @@ export type ProductionPackage = Readonly<{
 }>;
 
 export const THIRD_PARTY_NOTICE_PATH = 'frontend/static/third-party-notices.txt';
+const BROWSER_LICENSE_METADATA_PATH = '.vite/browser-licenses.json';
 export const MAX_NOTICE_LOCKFILE_BYTES = 5 * 1024 * 1024;
 export const MAX_NOTICE_PACKAGES = 500;
 export const MAX_NOTICE_LOCKFILE_PACKAGE_ENTRIES = 20_000;
@@ -85,7 +91,7 @@ function reviewedLicense(value: unknown, identifier: string): string {
   return license;
 }
 
-function packageNameFromInstallPath(installPath: string): string {
+export function packageNameFromInstallPath(installPath: string): string {
   boundedSafeRelativePath(installPath, 'Package install path', 1024);
   const segments = installPath.split('/');
   let packageName = '';
@@ -112,7 +118,7 @@ function packageNameFromInstallPath(installPath: string): string {
   return boundedToken(packageName, 'Package name', 214);
 }
 
-function resolveInstalledDependency(
+export function resolveInstalledDependency(
   packages: JsonRecord,
   fromInstallPath: string,
   dependencyName: string,
@@ -131,7 +137,7 @@ function resolveInstalledDependency(
   return Object.hasOwn(packages, rootCandidate) ? rootCandidate : null;
 }
 
-function dependencyClosure(packages: JsonRecord, directDependencyNames: readonly string[]): Set<string> {
+function dependencyClosure(packages: JsonRecord, directDependencyNames: readonly string[], omitOptional = false): Set<string> {
   if (!directDependencyNames.length || directDependencyNames.length > MAX_NOTICE_DIRECT_DEPENDENCIES) {
     throw new TypeError('Scoped production inventory must name a bounded non-empty direct dependency set.');
   }
@@ -148,16 +154,26 @@ function dependencyClosure(packages: JsonRecord, directDependencyNames: readonly
     if (selected.size >= MAX_NOTICE_PACKAGES) throw new TypeError('Scoped production dependency closure exceeds its package limit.');
     selected.add(installPath);
     const packageEntry = record(packages[installPath], `package-lock.json package ${installPath}`);
+    const optional = new Set(dependencyNames(packageEntry.optionalDependencies, `${installPath} optional dependencies`));
+    const peerMetadata = packageEntry.peerDependenciesMeta === undefined ? {} : record(packageEntry.peerDependenciesMeta, `${installPath} peer metadata`);
     for (const dependencyName of [
-      ...dependencyNames(packageEntry.dependencies, `${installPath} dependencies`),
-      ...dependencyNames(packageEntry.optionalDependencies, `${installPath} optional dependencies`),
-      ...dependencyNames(packageEntry.peerDependencies, `${installPath} peer dependencies`),
+      // Optional declarations override the same regular dependency, as in npm.
+      ...dependencyNames(packageEntry.dependencies, `${installPath} dependencies`).filter(name => !omitOptional || !optional.has(name)),
+      ...(omitOptional ? [] : optional),
+      ...dependencyNames(packageEntry.peerDependencies, `${installPath} peer dependencies`).filter(name =>
+        !omitOptional || peerMetadata[name] === undefined || record(peerMetadata[name], `${installPath} peer metadata`).optional !== true),
     ]) {
       const dependencyPath = resolveInstalledDependency(packages, installPath, dependencyName);
       if (dependencyPath && !selected.has(dependencyPath)) queue.push(dependencyPath);
     }
   }
   return selected;
+}
+
+export function productionDependencyInstallPaths(lockfileValue: unknown, directDependencyNames: readonly string[]): readonly string[] {
+  const packages = record(record(lockfileValue, 'Lockfile').packages, 'Locked packages');
+  if (Object.keys(packages).length > MAX_NOTICE_LOCKFILE_PACKAGE_ENTRIES) throw new TypeError('Lockfile exceeds its package-entry limit.');
+  return Object.freeze([...dependencyClosure(packages, directDependencyNames)].sort(compareCodeUnits));
 }
 
 export function collectProductionPackages(
@@ -177,22 +193,32 @@ export function collectProductionPackages(
     ? {}
     : record(packages.frontend, 'package-lock.json frontend workspace');
   const requestedDirectNames = options.directDependencyNames;
+  if (requestedDirectNames && options.bundledDependencies) {
+    throw new TypeError('CLI and bundled-browser dependency inventories must remain separate.');
+  }
+  if (options.omitOptionalDependencies && !requestedDirectNames) {
+    throw new TypeError('Optional dependency omission requires an explicit packaged runtime scope.');
+  }
+  const bundled = bundledDependencyIds(options.bundledDependencies ?? []);
+  const missingBundled = new Set(bundled);
   const directNames = new Set(requestedDirectNames ?? [
       ...dependencyNames(root.dependencies, 'root dependencies'),
       ...dependencyNames(root.optionalDependencies, 'root optional dependencies'),
       ...dependencyNames(frontend.dependencies, 'frontend dependencies'),
       ...dependencyNames(frontend.optionalDependencies, 'frontend optional dependencies'),
     ]);
-  const selectedPaths = requestedDirectNames ? dependencyClosure(packages, requestedDirectNames) : null;
+  const selectedPaths = requestedDirectNames ? dependencyClosure(packages, requestedDirectNames, options.omitOptionalDependencies) : null;
   const collected = new Map<string, ProductionPackage>();
 
   for (const [installPath, rawPackage] of Object.entries(packages)) {
     if (!installPath.startsWith('node_modules/') || (selectedPaths && !selectedPaths.has(installPath))) continue;
     const packageEntry = record(rawPackage, `package-lock.json package ${installPath}`);
-    if (packageEntry.dev === true || packageEntry.link === true) continue;
+    if (packageEntry.link === true) continue;
     const name = packageNameFromInstallPath(installPath);
     const version = boundedToken(packageEntry.version, `${name} version`, 128);
     const identifier = `${name}@${version}`;
+    if (packageEntry.dev === true && !selectedPaths && !bundled.has(identifier)) continue;
+    missingBundled.delete(identifier);
     const declaredLicense = packageEntry.license ?? LICENSE_OVERRIDES.get(identifier);
     const license = reviewedLicense(declaredLicense, identifier);
     const existing = collected.get(identifier);
@@ -208,11 +234,107 @@ export function collectProductionPackages(
     }
   }
 
+  if (missingBundled.size) throw new TypeError('Bundled browser dependency identity is absent from the locked inventory.');
+
   if (collected.size === 0 || collected.size > MAX_NOTICE_PACKAGES) {
     throw new TypeError('Production dependency inventory is empty or exceeds its package limit.');
   }
   return [...collected.values()]
     .sort((left, right) => compareCodeUnits(left.name, right.name) || compareCodeUnits(left.version, right.version));
+}
+
+function bundledDependencyIds(dependencies: readonly BundledDependency[]): Set<string> {
+  if (!Array.isArray(dependencies) || dependencies.length > MAX_NOTICE_PACKAGES) {
+    throw new TypeError('Bundled browser dependency inventory exceeds its package limit.');
+  }
+  return new Set(dependencies.map((dependency) => {
+    const name = packageNameFromInstallPath(`node_modules/${dependency.name}`);
+    return `${name}@${boundedToken(dependency.version, `${name} version`, 128)}`;
+  }));
+}
+
+/** Consume the bundler's delivered-module inventory; never infer it from dev flags. */
+export function browserThirdPartyNoticesPlugin(repositoryRoot: string, workerModules: () => readonly string[] = () => []): Plugin {
+  return {
+    name: 'whoisleuth-browser-notices',
+    configEnvironment(name) {
+      return { build: { license: name === 'client' ? { fileName: BROWSER_LICENSE_METADATA_PATH } : false } };
+    },
+    generateBundle: {
+      order: 'post',
+      async handler(_options, bundle) {
+        if (this.environment.name !== 'client') return;
+        const asset = bundle[BROWSER_LICENSE_METADATA_PATH];
+        if (!asset || asset.type !== 'asset') throw new TypeError('Bundled browser licence inventory is missing.');
+        if (Buffer.byteLength(asset.source) > MAX_NOTICE_OUTPUT_BYTES) throw new TypeError('Bundled browser licence inventory exceeds its byte limit.');
+        const values = parseBoundedJson(typeof asset.source === 'string' ? asset.source : Buffer.from(asset.source).toString('utf8'), {
+          label: 'Bundled browser licences', maximumBytes: MAX_NOTICE_OUTPUT_BYTES,
+          limits: { maximumDepth: 4, maximumContainerItems: MAX_NOTICE_PACKAGES, maximumStringCodeUnits: MAX_NOTICE_DOCUMENT_BYTES },
+        });
+        if (!Array.isArray(values)) throw new TypeError('Bundled browser licences must be an array.');
+        const bundledDependencies = values.map((value) => {
+          const entry = record(value, 'Bundled browser licence');
+          return { name: boundedToken(entry.name, 'Bundled package name', 214), version: boundedToken(entry.version, 'Bundled package version', 128) };
+        });
+        // Generated runtime helpers are virtual modules, which the standard inventory excludes.
+        // Attribute only helpers that actually contribute code to their installed producer.
+        const deliveredWorkerModules = workerModules();
+        bundledDependencies.push(...await workerModuleDependencies(repositoryRoot, deliveredWorkerModules));
+        const helperPackages = new Set<string>();
+        const renderedModuleIds = new Set(deliveredWorkerModules);
+        for (const output of Object.values(bundle)) {
+          if (output.type !== 'chunk') continue;
+          for (const [id, module] of Object.entries(output.modules)) {
+            if (module.renderedLength === 0) continue;
+            renderedModuleIds.add(id);
+          }
+        }
+        for (const id of renderedModuleIds) {
+          if (id === '\0vite/preload-helper.js' || id === '\0vite/modulepreload-polyfill.js') helperPackages.add('vite');
+          if (id === '\0rolldown/runtime.js') helperPackages.add('rolldown');
+        }
+        for (const name of helperPackages) {
+          const resolveFromProject = createRequire(path.join(repositoryRoot, 'frontend', 'package.json'));
+          const producerRequire = name === 'rolldown'
+            ? createRequire(resolveFromProject.resolve('vite/package.json'))
+            : resolveFromProject;
+          const manifest = record(await readBoundedJson(producerRequire.resolve(`${name}/package.json`)), 'Runtime helper package');
+          if (manifest.name !== name) throw new TypeError('Runtime helper package identity is inconsistent.');
+          bundledDependencies.push({ name, version: boundedToken(manifest.version, 'Runtime helper version', 128) });
+        }
+        const source = await buildThirdPartyNotices(repositoryRoot, { bundledDependencies });
+        delete bundle[BROWSER_LICENSE_METADATA_PATH];
+        this.emitFile({ type: 'asset', fileName: path.posix.basename(THIRD_PARTY_NOTICE_PATH), source });
+      },
+    },
+  };
+}
+
+async function workerModuleDependencies(repositoryRoot: string, modules: readonly string[]): Promise<BundledDependency[]> {
+  if (modules.length > 4_096) throw new TypeError('Worker licence module inventory exceeds its bound.');
+  if (!modules.length) return [];
+  const root = await realpath(repositoryRoot);
+  const nodeModulesRoot = await realpath(path.join(root, 'node_modules'));
+  const installPaths = new Set<string>();
+  for (const id of modules) {
+    if (id.length > 4_096) throw new TypeError('Worker licence module path exceeds its bound.');
+    if (id.startsWith('\0') || !id.replaceAll('\\', '/').includes('/node_modules/')) continue;
+    const relative = path.relative(root, await realpath(id.split('?', 1)[0]!)).split(path.sep).join('/');
+    const parts = relative.split('/');
+    const nodeModules = parts.lastIndexOf('node_modules');
+    const installPath = parts.slice(0, nodeModules + (parts[nodeModules + 1]?.startsWith('@') ? 3 : 2)).join('/');
+    packageNameFromInstallPath(installPath);
+    installPaths.add(installPath);
+    if (installPaths.size > MAX_NOTICE_PACKAGES) throw new TypeError('Worker licence package inventory exceeds its bound.');
+  }
+  return Promise.all([...installPaths].sort(compareCodeUnits).map(async (installPath) => {
+    const name = packageNameFromInstallPath(installPath);
+    const directory = await realpath(path.join(root, installPath));
+    if (!pathIsWithin(nodeModulesRoot, directory)) throw new TypeError('Worker package resolves outside node_modules.');
+    const manifest = record(await readBoundedJson(path.join(directory, 'package.json')), 'Worker package');
+    if (manifest.name !== name) throw new TypeError('Worker package identity is inconsistent.');
+    return { name, version: boundedToken(manifest.version, 'Worker package version', 128) };
+  }));
 }
 
 async function readBoundedText(filename: string, maxBytes: number): Promise<string> {
@@ -309,13 +431,19 @@ export async function buildThirdPartyNotices(
     throw new TypeError('node_modules resolves outside the repository root.');
   }
   const prefix = [
-    `WHOISleuth ${options.scopeLabel ?? 'website'} third-party production dependency notices`,
+    `WHOISleuth ${options.scopeLabel ?? 'website'} third-party ${options.directDependencyNames ? 'production dependency' : 'dependency'} notices`,
     '',
-    'Generated deterministically from package-lock.json and the installed production',
-    'dependency packages. Do not edit this file directly; run npm run licenses:update.',
+    options.bundledDependencies
+      ? 'Generated deterministically from package-lock.json and the installed dependency packages.'
+      : 'Generated deterministically from package-lock.json and the installed production',
+    options.bundledDependencies
+      ? 'Do not edit this file directly; run npm run build.'
+      : 'dependency packages. Do not edit this file directly; run npm run licenses:update.',
     options.directDependencyNames
-      ? 'The inventory is the exact transitive closure of the packaged CLI runtime dependencies.'
-      : 'The inventory includes exact locked versions and excludes development-only packages.',
+      ? 'The inventory is the exact transitive closure of the packaged runtime dependencies.'
+      : options.bundledDependencies
+        ? 'The inventory includes production packages and dependencies in the delivered browser bundle, regardless of development classification.'
+        : 'This is the production-package base. Each production build adds its delivered browser dependencies to this notice.',
     '',
     `Package count: ${packages.length}`,
     '',
@@ -328,7 +456,9 @@ export async function buildThirdPartyNotices(
     const block = [
       '='.repeat(80),
       `${packageEntry.name}@${packageEntry.version}`,
-      `Relationship: ${packageEntry.direct ? 'direct production dependency' : 'transitive production dependency'}`,
+      `Relationship: ${options.bundledDependencies?.some((entry) => entry.name === packageEntry.name && entry.version === packageEntry.version)
+        ? 'bundled browser dependency'
+        : packageEntry.direct ? 'direct production dependency' : 'transitive production dependency'}`,
       `Declared licence: ${packageEntry.license}`,
       ...documents.flatMap((document) => [
         `Licence source: ${document.source}`,

@@ -63,22 +63,18 @@ control.
 
 WHOISleuth does not provide multi-tenant accounts, shared case custody,
 background workspace synchronisation, role-based collaboration or automated
-enforcement. Those are outside the current product rather than partially
-implemented features.
+enforcement.
 
 ## Compatibility
 
-Version 2.3.0 is the current writer in this checkout. It directly supports the
-exact durable formats published by release 2.2.0, earlier supported public
-formats, and the direct migrations documented in the generated
+The current writer supports the exact public formats and direct migrations
+documented in the generated
 [Case portability reference](case-contracts.md) and the
-[portable compatibility reference](portable-domain-contracts.md). Reader-only
-historical formats and unreleased development checkpoints are not public
-compatibility commitments.
+[portable compatibility reference](portable-domain-contracts.md). Unreleased
+development checkpoints are not supported formats.
 
-The durable schemas, exports, browser stores and CLI contracts published by
-v2.0.1, v2.1.0 and v2.2.0 are supported boundaries. A later release must preserve them
-or provide an explicit, tested and non-destructive migration or export path.
+Supported published schemas, exports, browser stores and CLI contracts have
+fixture-backed readers or explicit, non-destructive migration paths.
 Malformed and unsupported future data fails closed; browser-local future data
 is preserved without rewrite where its storage contract promises that
 behaviour.

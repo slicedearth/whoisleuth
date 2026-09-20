@@ -9,7 +9,7 @@
   }: {
     eyebrow: string;
     title: string;
-    description: string;
+    description?: string;
     children?: Snippet;
   } = $props();
 </script>
@@ -18,7 +18,7 @@
   <div>
     <p class="eyebrow">{eyebrow}</p>
     <h1>{title}</h1>
-    <p>{description}</p>
+    {#if description}<p>{description}</p>{/if}
   </div>
   {#if children}{@render children()}{/if}
 </section>

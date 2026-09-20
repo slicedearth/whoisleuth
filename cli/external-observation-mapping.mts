@@ -13,7 +13,10 @@ import {
   MAX_EXTERNAL_FINDINGS,
   MAX_EXTERNAL_FINDINGS_PER_DOMAIN,
   MAX_EXTERNAL_FINDING_DOMAINS,
+  MAX_EXTERNAL_FINDING_LIMITATIONS,
+  MAX_EXTERNAL_FINDING_LIMITATION_LENGTH,
   parseExternalFindingsDocument,
+  retainExternalFindingLimitations,
   type ExternalFindingCategory,
   type ExternalFindingEvidenceClass,
 } from '../packages/interchange/external-findings-import.mts';
@@ -68,8 +71,8 @@ function domain(value: unknown, label: string): string {
 
 function limitations(value: unknown): readonly string[] {
   if (value === undefined) return Object.freeze([]);
-  if (!Array.isArray(value) || value.length > 8) throw new TypeError('profile.limitations must contain no more than 8 entries.');
-  return Object.freeze([...new Set(value.map((entry, index) => requireBoundedString(entry, `profile.limitations[${index}]`, 240)))]);
+  if (!Array.isArray(value) || value.length > MAX_EXTERNAL_FINDING_LIMITATIONS) throw new TypeError(`profile.limitations must contain no more than ${MAX_EXTERNAL_FINDING_LIMITATIONS} entries.`);
+  return Object.freeze([...new Set(value.map((entry, index) => requireBoundedString(entry, `profile.limitations[${index}]`, MAX_EXTERNAL_FINDING_LIMITATION_LENGTH)))]);
 }
 
 export function mapExternalObservations(inputRaw: unknown) {
@@ -152,11 +155,10 @@ export function mapExternalObservations(inputRaw: unknown) {
     source,
     findings: selected.map((finding) => ({
       ...finding,
-      limitations: [
-        ...finding.limitations,
+      limitations: retainExternalFindingLimitations(finding.limitations, [
         `Mapped locally with declarative profile ${profile.id} version ${profile.version}; the profile does not verify the upstream field semantics.`,
-        ...(truncated ? ['The supplied records exceeded the browser import boundary; only the first deterministic bounded findings were retained.'] : []),
-      ].slice(0, 8),
+        ...(truncated ? [`The supplied records exceeded the browser import boundary; ${selected.length} of ${seen.size} unique findings were retained in deterministic order.`] : []),
+      ]),
     })),
   };
   return parseExternalFindingsDocument(document);

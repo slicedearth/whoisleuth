@@ -45,11 +45,17 @@ WHOISleuth uses three analyst jobs: **Investigate**, **Respond** and **Assure**.
 | **Discover** | Generate lookalikes or review certificate and registry observations. |
 | **Bulk** | Triage and compare a selected domain set. |
 | **Brands** | Record official scope, reviewed baselines and owned-domain controls. |
-| **Monitor** | Review Cases, changes, response preparation, watchlists and local rules. |
+| **Cases** | Retain evidence, assess findings and prepare response packets. |
+| **Monitor** | Review changes, watchlists, follow-ups and local rules. |
 
 The public [Resources hub](https://www.whoisleuth.com/resources) is the shortest
 user guide. [Application documentation](docs/application-guide.md) covers the
 browser tools and saved work.
+
+The optional [local application](packages/local-application/README.md) runs the
+same Console on loopback with an explicitly selected filesystem workspace.
+Saved records, drafts and original files stay in that folder, not IndexedDB.
+Its plaintext workspace and encrypted portable backups are separate.
 
 ## Privacy and safety
 
@@ -93,27 +99,19 @@ npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisle
 [Getting started](docs/getting-started.md) for local development and browser
 tests, or the [CLI guide](docs/cli.md) for installed commands.
 
+For changes to the project, see [Contributing](CONTRIBUTING.md).
+
 ## Architecture
 
-The application is a TypeScript modular monolith:
-
-- `packages/` owns runtime-neutral contracts and domain rules;
-- `lib/` owns shared bounded hosted/runtime services;
-- `frontend/` owns SvelteKit routes, browser state and IndexedDB adapters;
-- `cli/` and `bin/` own local command grammar, handlers and terminal output;
-- Express and Netlify functions adapt the same hosted request boundary.
-
-The backend has no general investigation database. The browser decides which
-bounded records to retain or export. The CLI has separate offline, networked and
-authorised-active contracts. See [architecture](docs/architecture.md),
+The application is a TypeScript modular monolith with shared domain rules,
+browser-local storage and separate browser, CLI and deployment adapters. The
+backend has no general investigation database. See [architecture](docs/architecture.md),
 [current product boundaries](docs/product-boundary.md) and the
 [threat model](docs/threat-model.md).
 
-Version 2.3.0 is the current writer in this checkout. It directly reads the
-exact durable formats published by release 2.2.0 and the retained public
-formats written by releases 2.0.0, 2.0.1, 2.1.0 and 1.47.4. Exact Case and workspace readers are listed
-in the generated [Case portability reference](docs/case-contracts.md); other
-current writers and direct migrations are in the
+Supported public formats and current Case and workspace writers are listed
+in the generated [Case portability reference](docs/case-contracts.md). Other
+current writers and direct migrations are described in the
 [portable compatibility reference](docs/portable-domain-contracts.md).
 
 ## Documentation
@@ -136,11 +134,8 @@ current writers and direct migrations are in the
 Start with the checks relevant to your change:
 
 ```bash
-npm test
-npm run typecheck
-npm run check
-npm run build
-git diff --check
+npm run verification:focused -- --list
+npm run verification:focused
 ```
 
 The complete gate matrix, including browser, architecture, privacy,

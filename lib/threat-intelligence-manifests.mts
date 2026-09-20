@@ -14,19 +14,13 @@ import {
   THREAT_INTELLIGENCE_CONTRACT_VERSION,
 } from './threat-intelligence-runtime.mts';
 import type {
-  CuratedConnectorCollection,
-  CuratedConnectorCredentialMode,
   CuratedConnectorCredentials,
   CuratedConnectorDefinition,
   CuratedConnectorEntityType,
   CuratedConnectorInput,
-  CuratedConnectorKind,
   CuratedConnectorLimits,
   CuratedConnectorMatrixEntry,
   CuratedConnectorOutputs,
-  CuratedConnectorRelationshipType,
-  CuratedConnectorTargetExposure,
-  ThreatIntelligenceCapability,
   ThreatIntelligenceProviderDefinition,
   ThreatIntelligenceProviderLimits,
   ThreatIntelligenceProviderMatrixEntry,
@@ -34,6 +28,16 @@ import type {
   ThreatIntelligenceProviderTerms,
   ThreatIntelligenceTargetExposure,
 } from './threat-intelligence-runtime.mts';
+import {
+  boundedInteger, boundedHttpsUrl, enumValue, exactKeys, isRecord, strictBoundedString,
+} from './bounded-contract-normalizers.mts';
+import {
+  THREAT_INTELLIGENCE_CAPABILITIES, THREAT_INTELLIGENCE_TARGET_EXPOSURES,
+  CURATED_CONNECTOR_KINDS, CURATED_CONNECTOR_COLLECTIONS, CURATED_CONNECTOR_CREDENTIAL_MODES,
+  CURATED_CONNECTOR_ENTITY_VALUES, CURATED_CONNECTOR_RELATIONSHIP_TYPES,
+  CURATED_CONNECTOR_TARGET_EXPOSURES,
+  CURATED_CONNECTOR_RELATIONSHIP_ENDPOINTS as CONNECTOR_RELATIONSHIP_ENDPOINTS,
+} from './threat-intelligence-types.mts';
 import { normalizeLegacyIsoTimestamp } from '../packages/evidence/observation.mts';
 
 const MAX_PROVIDER_ID_LENGTH = 40;
@@ -43,17 +47,8 @@ const MAX_REQUEST_BUDGET = 1_000_000;
 const MAX_CONNECTOR_SCOPES = 20;
 const MAX_CONNECTOR_SCOPE_LENGTH = 80;
 
-const CAPABILITIES = new Set<ThreatIntelligenceCapability>([
-  'domain_lookup',
-  'url_lookup',
-  'indicator_search',
-]);
-const URL_EXPOSURES = new Set<ThreatIntelligenceTargetExposure>([
-  'registrable_domain',
-  'hostname',
-  'origin',
-  'full_url',
-]);
+const CAPABILITIES = new Set(THREAT_INTELLIGENCE_CAPABILITIES);
+const URL_EXPOSURES = new Set(THREAT_INTELLIGENCE_TARGET_EXPOSURES);
 const COMMERCIAL_USE = new Set(['allowed', 'restricted', 'unknown'] as const);
 const ATTRIBUTION = new Set(['required', 'not_required', 'unknown'] as const);
 const CACHING = new Set([
@@ -75,170 +70,18 @@ const REDISTRIBUTION = new Set([
   'prohibited',
   'unknown',
 ] as const);
-const CONNECTOR_KINDS = new Set<CuratedConnectorKind>([
-  'discovery',
-  'enrichment',
-]);
-const CONNECTOR_COLLECTIONS = new Set<CuratedConnectorCollection>([
-  'passive',
-  'active',
-  'third_party',
-]);
-const CONNECTOR_CREDENTIAL_MODES = new Set<CuratedConnectorCredentialMode>([
-  'none',
-  'optional',
-  'required',
-]);
-const CONNECTOR_ENTITY_TYPES = new Set<CuratedConnectorEntityType>([
-  'domain',
-  'hostname',
-  'url',
-  'ipv4',
-  'ipv6',
-  'asn',
-  'certificate',
-]);
-const CONNECTOR_RELATIONSHIP_TYPES = new Set<CuratedConnectorRelationshipType>([
-  'domain_resolves_to_ip',
-  'domain_uses_nameserver',
-  'domain_uses_mail_server',
-  'domain_presented_certificate',
-  'certificate_names_domain',
-  'ip_hosts_domain',
-  'domain_related_to_domain',
-]);
-const CONNECTOR_TARGET_EXPOSURES: Readonly<
-  Record<CuratedConnectorEntityType, ReadonlySet<CuratedConnectorTargetExposure>>
-> = Object.freeze({
-  domain: new Set<CuratedConnectorTargetExposure>(['registrable_domain']),
-  hostname: new Set<CuratedConnectorTargetExposure>(['hostname']),
-  url: new Set<CuratedConnectorTargetExposure>([
-    'registrable_domain',
-    'hostname',
-    'origin',
-    'full_url',
-  ]),
-  ipv4: new Set<CuratedConnectorTargetExposure>(['ip_address']),
-  ipv6: new Set<CuratedConnectorTargetExposure>(['ip_address']),
-  asn: new Set<CuratedConnectorTargetExposure>(['asn']),
-  certificate: new Set<CuratedConnectorTargetExposure>([
-    'certificate_fingerprint',
-  ]),
-});
-const CONNECTOR_RELATIONSHIP_ENDPOINTS: Readonly<
-  Record<
-    CuratedConnectorRelationshipType,
-    Readonly<{
-      from: ReadonlySet<CuratedConnectorEntityType>;
-      to: ReadonlySet<CuratedConnectorEntityType>;
-    }>
-  >
-> = Object.freeze({
-  domain_resolves_to_ip: {
-    from: new Set<CuratedConnectorEntityType>(['domain', 'hostname']),
-    to: new Set<CuratedConnectorEntityType>(['ipv4', 'ipv6']),
-  },
-  domain_uses_nameserver: {
-    from: new Set<CuratedConnectorEntityType>(['domain']),
-    to: new Set<CuratedConnectorEntityType>(['hostname']),
-  },
-  domain_uses_mail_server: {
-    from: new Set<CuratedConnectorEntityType>(['domain']),
-    to: new Set<CuratedConnectorEntityType>(['hostname']),
-  },
-  domain_presented_certificate: {
-    from: new Set<CuratedConnectorEntityType>(['domain', 'hostname']),
-    to: new Set<CuratedConnectorEntityType>(['certificate']),
-  },
-  certificate_names_domain: {
-    from: new Set<CuratedConnectorEntityType>(['certificate']),
-    to: new Set<CuratedConnectorEntityType>(['domain', 'hostname']),
-  },
-  ip_hosts_domain: {
-    from: new Set<CuratedConnectorEntityType>(['ipv4', 'ipv6']),
-    to: new Set<CuratedConnectorEntityType>(['domain', 'hostname']),
-  },
-  domain_related_to_domain: {
-    from: new Set<CuratedConnectorEntityType>(['domain', 'hostname']),
-    to: new Set<CuratedConnectorEntityType>(['domain', 'hostname']),
-  },
-});
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
-
-function exactKeys(
-  value: unknown,
-  allowed: ReadonlySet<string>,
-  label: string,
-): asserts value is Record<string, unknown> {
-  if (!isRecord(value)) throw new TypeError(`${label} must be an object`);
-  const unknown = Object.keys(value).find((key) => !allowed.has(key));
-  if (unknown) {
-    throw new TypeError(`${label} contains an unknown field: ${unknown}`);
-  }
-}
-
-function strictBoundedString(value: unknown, maximum: number): string | null {
-  if (
-    typeof value !== 'string' ||
-    value.length > maximum ||
-    /[\u0000-\u001f\u007f]/u.test(value)
-  ) {
-    return null;
-  }
-  const normalized = value.trim().replace(/\s+/gu, ' ');
-  return normalized && normalized.length <= maximum ? normalized : null;
-}
+const CONNECTOR_KINDS = new Set(CURATED_CONNECTOR_KINDS);
+const CONNECTOR_COLLECTIONS = new Set(CURATED_CONNECTOR_COLLECTIONS);
+const CONNECTOR_CREDENTIAL_MODES = new Set(CURATED_CONNECTOR_CREDENTIAL_MODES);
+const CONNECTOR_ENTITY_TYPES = new Set(CURATED_CONNECTOR_ENTITY_VALUES);
+const CONNECTOR_RELATIONSHIP_TYPES = new Set(CURATED_CONNECTOR_RELATIONSHIP_TYPES);
 
 function isoTimestamp(value: unknown): string | null {
   return normalizeLegacyIsoTimestamp(value);
 }
 
 function httpsUrl(value: unknown): string | null {
-  const raw = strictBoundedString(value, MAX_URL_LENGTH);
-  if (!raw) return null;
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
-      return null;
-    }
-    const normalized = parsed.toString();
-    return normalized.length <= MAX_URL_LENGTH ? normalized : null;
-  } catch {
-    return null;
-  }
-}
-
-function enumValue<T extends string>(
-  value: unknown,
-  allowed: ReadonlySet<T>,
-  label: string,
-): T {
-  if (typeof value !== 'string' || !allowed.has(value as T)) {
-    throw new TypeError(`${label} is invalid`);
-  }
-  return value as T;
-}
-
-function boundedInteger(
-  value: unknown,
-  minimum: number,
-  maximum: number,
-  label: string,
-): number {
-  if (
-    typeof value !== 'number' ||
-    !Number.isSafeInteger(value) ||
-    value < minimum ||
-    value > maximum
-  ) {
-    throw new TypeError(
-      `${label} must be an integer between ${minimum} and ${maximum}`,
-    );
-  }
-  return value;
+  return boundedHttpsUrl(value, MAX_URL_LENGTH);
 }
 
 function normalizeTargets(value: unknown): ThreatIntelligenceProviderTargets {
@@ -520,7 +363,7 @@ function normalizeConnectorInputs(value: unknown): readonly CuratedConnectorInpu
     );
     const exposure = enumValue(
       item.exposure,
-      CONNECTOR_TARGET_EXPOSURES[type],
+      new Set(CURATED_CONNECTOR_TARGET_EXPOSURES[type]),
       'Connector input exposure',
     );
     if (seen.has(type)) {

@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   CRITICAL_MUTATION_MANIFEST,
+  assertUniqueCriticalMutationPattern,
   MAX_CRITICAL_MUTATION_TEXT_BYTES,
 } from './critical-mutation-manifest.mts';
 
@@ -28,10 +29,7 @@ if (!target.startsWith(`${repositoryRoot}${path.sep}`) || fileURLToPath(targetUr
   throw new TypeError('Critical mutation target escaped the repository root.');
 }
 const retainedSource = readFileSync(target, 'utf8');
-if (retainedSource.split(mutant.search).length !== 2
-  || retainedSource.split('\n')[mutant.line - 1]?.includes(mutant.search.trim()) !== true) {
-  throw new TypeError('Critical mutation source location or exact pattern drifted.');
-}
+assertUniqueCriticalMutationPattern(retainedSource, mutant.search, `Critical mutant ${mutant.id}`);
 
 let applications = 0;
 registerHooks({
@@ -43,7 +41,7 @@ registerHooks({
       : Buffer.isBuffer(loaded.source) || loaded.source instanceof Uint8Array
         ? Buffer.from(loaded.source).toString('utf8')
         : '';
-    if (source.split(mutant.search).length !== 2) throw new TypeError('Critical mutation did not match exactly once at load time.');
+    assertUniqueCriticalMutationPattern(source, mutant.search, `Critical mutant ${mutant.id} at load time`);
     applications += 1;
     return { ...loaded, source: source.replace(mutant.search, mutant.replacement) };
   },

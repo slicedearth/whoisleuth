@@ -14,6 +14,7 @@ import {
   DOMAIN_CONTROL_MANIFEST_SCHEMA,
   DOMAIN_CONTROL_MANIFEST_VERSION,
   DOMAIN_CONTROL_SCHEMA_LIFECYCLE,
+  PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSION,
 } from '../packages/contracts/domain-control-manifest.mts';
 import {
   defineSchemaLifecycleFamily,
@@ -66,38 +67,43 @@ async function rawFixture(id: string): Promise<Readonly<{ raw: string; document:
 }
 
 describe('domain-control schema lifecycle', () => {
-  it('owns one exact current input and output contract', () => {
+  it('owns current writers and the exact supported public readers', () => {
     assertRecursivelyFrozen(DOMAIN_CONTROL_SCHEMA_LIFECYCLE);
     assert.equal(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.id, 'domain-control-manifest');
     assert.equal(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.owner, 'packages/contracts/domain-control-manifest.mts');
     assert.equal(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.privacy, 'analyst_authored_sensitive');
-    assert.deepEqual(DOMAIN_CONTROL_MANIFEST_READABLE_VERSIONS, [DOMAIN_CONTROL_MANIFEST_VERSION]);
-    assert.deepEqual(DOMAIN_CONTROL_MANIFEST_CANONICALIZATION_ROUTES, [{
-      version: DOMAIN_CONTROL_MANIFEST_VERSION,
+    assert.deepEqual(DOMAIN_CONTROL_MANIFEST_READABLE_VERSIONS, [2, 3]);
+    assert.deepEqual(DOMAIN_CONTROL_MANIFEST_CANONICALIZATION_ROUTES, DOMAIN_CONTROL_MANIFEST_READABLE_VERSIONS.map((version) => ({
+      version,
       canonicalization: 'sorted-json-v2',
       explicit: true,
-    }]);
+    })));
     assert.equal(DOMAIN_CONTROL_MANIFEST_CURRENT_CANONICALIZATION, 'sorted-json-v2');
     assert.deepEqual(
       new Set(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.contracts.map(({ schema }) => schema)),
       new Set([DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, DOMAIN_CONTROL_MANIFEST_SCHEMA]),
     );
-    assert.ok(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.contracts.every(({ lifecycle }) => lifecycle === 'current'));
+    assert.deepEqual(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.contracts.filter(({ lifecycle }) => lifecycle === 'current')
+      .map(({ schema, version }) => [schema, version]), [
+      [DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, DOMAIN_CONTROL_MANIFEST_INPUT_VERSION],
+      [DOMAIN_CONTROL_MANIFEST_SCHEMA, DOMAIN_CONTROL_MANIFEST_VERSION],
+    ]);
     assert.deepEqual(
       new Set(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.fixtures.map(({ id }) => id)),
-      new Set(['domain-control-manifest-input-v1', 'domain-control-manifest-v2']),
+      new Set(['domain-control-manifest-input-v1', 'domain-control-manifest-v2',
+        'domain-control-manifest-input-v2', 'domain-control-manifest-v3']),
     );
     assert.deepEqual(DOMAIN_CONTROL_SCHEMA_LIFECYCLE.compatibility, [
       DOMAIN_CONTROL_MANIFEST_INPUT_COMPATIBILITY,
       DOMAIN_CONTROL_MANIFEST_COMPATIBILITY,
     ]);
-    assert.equal(DOMAIN_CONTROL_MANIFEST_INPUT_VERSION, 1);
+    assert.equal(DOMAIN_CONTROL_MANIFEST_INPUT_VERSION, 2);
   });
 
   it('produces and verifies the exact current fixture in both runtimes', async () => {
     const [{ document: input }, current] = await Promise.all([
-      rawFixture('domain-control-manifest-input-v1'),
-      rawFixture('domain-control-manifest-v2'),
+      rawFixture(`domain-control-manifest-input-v${DOMAIN_CONTROL_MANIFEST_INPUT_VERSION}`),
+      rawFixture(`domain-control-manifest-v${DOMAIN_CONTROL_MANIFEST_VERSION}`),
     ]);
     const nodeManifest = buildDomainControlManifest(input, GENERATED_AT);
     const browserManifest = await buildDomainControlPassport(input, GENERATED_AT);
@@ -107,11 +113,16 @@ describe('domain-control schema lifecycle', () => {
     assert.equal((await verifyDomainControlPassport(current.document, GENERATED_AT)).version, DOMAIN_CONTROL_MANIFEST_VERSION);
     assert.equal(
       (current.document.integrity as Record<string, unknown>).digestSha256,
-      DOMAIN_CONTROL_SCHEMA_LIFECYCLE.fixtures.find(({ id }) => id === 'domain-control-manifest-v2')?.contentDigestSha256,
+      DOMAIN_CONTROL_SCHEMA_LIFECYCLE.fixtures.find(({ schema, version }) => schema === DOMAIN_CONTROL_MANIFEST_SCHEMA
+        && version === DOMAIN_CONTROL_MANIFEST_VERSION)?.contentDigestSha256,
     );
+    const historical = await rawFixture(`domain-control-manifest-v${PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSION}`);
+    assert.equal(`${JSON.stringify(verifyDomainControlManifest(historical.document), null, 2)}\n`, historical.raw);
+    assert.equal(`${JSON.stringify(await verifyDomainControlPassport(historical.document, GENERATED_AT), null, 2)}\n`, historical.raw);
+    await rawFixture('domain-control-manifest-input-v1');
   });
 
-  it('uses locale-independent current bytes and rejects reader-only versions without mutation', async () => {
+  it('uses locale-independent current bytes and rejects unsupported versions without mutation', async () => {
     const input = {
       schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
       version: DOMAIN_CONTROL_MANIFEST_INPUT_VERSION,

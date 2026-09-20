@@ -6,21 +6,13 @@ import {
   isInformativePerceptualHash,
 } from '../../../../lib/perceptual-hash-comparison.mts';
 import { recordOrNull } from '../../../../lib/json-record.mts';
+import { MAX_LOOKUP_INPUT_CHARACTERS } from '../../../../packages/evidence/lookup-target.mts';
+import { emailRecipient } from '../../../../packages/evidence/email-recipient.mts';
 
-export { groupBySimilarFavicon } from '../../../../packages/comparison/favicon-similarity.mts';
-
-// Deliberately conservative (no +tags, no comments, no quoted local parts) -
-// this only gates whether a WHOIS/RDAP-sourced string is safe to drop into a
-// mailto: URI as the recipient, not a general email validator. mailto:
-// treats a comma as an additional-recipient separator (RFC 6068), so a
-// registrant/abuse-contact field containing e.g. "person@example.test,cc@hostile.example"
-// would silently add a second recipient to the outreach/abuse draft the user
-// opens - rejecting anything outside a single plain address closes that off.
-const SIMPLE_EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 const MAX_ENTITY_DISPLAY_LENGTH = 300;
 
 export function isValidEmailAddress(value: unknown): value is string {
-  return typeof value === 'string' && SIMPLE_EMAIL_RE.test(value.trim());
+  return emailRecipient(value) !== null;
 }
 
 // RDAP and compact availability results represent a registrar as an entity,
@@ -89,7 +81,7 @@ function splitDelimitedLine(line: string, delimiter: string = ','): string[] {
 }
 
 const DOMAIN_HEADER_NAMES = ['domain', 'domain_name', 'domain name', 'hostname', 'name'];
-export const MAX_DOMAIN_INPUT_CHARACTERS = 2 * 1024 * 1024;
+export const MAX_DOMAIN_INPUT_CHARACTERS = MAX_LOOKUP_INPUT_CHARACTERS;
 export const MAX_DOMAIN_INPUT_BYTES = 2 * 1024 * 1024;
 export const MAX_DOMAIN_INPUT_LINES = 10_000;
 export const MAX_DOMAIN_INPUT_SEPARATORS = 20_000;

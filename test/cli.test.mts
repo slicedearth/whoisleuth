@@ -8,6 +8,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { Readable, Writable } from 'node:stream';
 
 import { CLI_COMMANDS, CliUsageError, parseCliArguments } from '../cli/arguments.mts';
+import { CLI_COMMAND_REGISTRY } from '../cli/command-reference.mts';
 import { boundedCliErrorMessage } from '../cli/errors.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { buildCliLookupDocument } from '../cli/formatters/json.mts';
@@ -15,7 +16,7 @@ import { formatTerminalLookup, safeTerminalValue } from '../cli/formatters/termi
 import { MAX_STDIN_BYTES, readStdinBounded, runCli } from '../cli/runner.mts';
 import type { ClassifiedQuery } from '../lib/classify.mts';
 import type { LookupSourceSettlement } from '../lib/lookup.mts';
-import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
+import { buildFixtureRegistrarStanding as buildRegistrarStanding } from './registrar-standing-fixture.mts';
 import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,
@@ -297,7 +298,7 @@ describe('CLI argument parsing', () => {
     assert.equal(await runCli(['export', '--help'], { stdout: exportStdout.stream, stderr: stderr.stream }), EXIT_CODES.SUCCESS);
     assert.match(exportStdout.value(), /Saved Lookup versions 1 and 2/u);
     assert.match(exportStdout.value(), /Current schema-\d+ exports/u);
-    assert.match(exportStdout.value(), /published v2 schema \d+ and exact v1 schema \d+ remain readable/u);
+    assert.match(exportStdout.value(), /published v2 schemas 27, 28 and exact v1 schema 26 remain readable/u);
     assert.match(exportStdout.value(), /other historical and unreleased shapes are unsupported/u);
     assert.equal(stderr.value(), '');
   });
@@ -336,9 +337,14 @@ describe('CLI argument parsing', () => {
     const filtered = JSON.parse(filteredStdout.value());
     assert.equal(filtered.schema, catalogue.schema);
     assert.equal(filtered.version, 1);
-    assert.deepEqual(filtered.commands.map((entry: { command: string }) => entry.command), [
-      'case-pack', 'export',
-    ]);
+    assert.ok(filtered.commands.some((entry: { command: string }) => entry.command === 'case-pack'));
+    for (const entry of filtered.commands) {
+      const definition = CLI_COMMAND_REGISTRY.find(command => command.command === entry.command);
+      assert.ok(definition, 'filtered results must name a registered command');
+      assert.equal(definition.help.group, 'respond');
+      assert.equal(definition.documentation.common, true);
+      assert.equal(entry.collection.mode, 'offline');
+    }
     assert.ok(filtered.commands.every((entry: Record<string, unknown>) => (
       Object.keys(entry).sort().join(',') === 'boundary,collection,command,description,example,usage'
     )));
@@ -469,7 +475,7 @@ describe('CLI argument parsing', () => {
     });
     assert.throws(
       () => parseCliArguments(['inspect-archive', '--expect-content-digest', 'sha256:nope']),
-      /64 lowercase hexadecimal/iu,
+      /64 lowercase hex/iu,
     );
     assert.deepEqual(parseCliArguments([
       'sign-artifact',
@@ -491,6 +497,7 @@ describe('CLI argument parsing', () => {
       action: 'verify-signature',
       source: 'signed.json',
       publicKeySource: 'public.pem',
+      trustStoreSource: null,
       output: 'json',
       quiet: false,
       color: true,
@@ -614,6 +621,51 @@ describe('CLI lookup runner', () => {
       'rdap', 'whois', 'domain_evidence', 'registrar_rdap', 'network_context',
     ]);
     assert.equal(plan.planning.sources.find((source: { source: string }) => source.source === 'registrar_rdap').conditional, true);
+  });
+
+  test('Fast preflight does not label the submitted child hostname as a collected observation', async () => {
+    const stdout = capture();
+    const code = await runCli(['lookup', 'login.example.test', '--fast', '--plan'], {
+      stdout: stdout.stream, stderr: capture().stream,
+      runUnifiedLookup: async () => { throw new Error('A plan must not collect evidence'); },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.match(stdout.value(), /Target: example\.test/u);
+    assert.match(stdout.value(), /Submitted hostname: login\.example\.test/u);
+    assert.doesNotMatch(stdout.value(), /Observation hostname:/u);
+  });
+
+  test('explicit URL plans disclose network scope without retaining the input URL or collecting it', async () => {
+    const stdout = capture();
+    const code = await runCli(['lookup', 'https://login.example.test/review?a=private-example#local-fragment', '--deep', '--exact-url', '--plan', '--json'], {
+      stdout: stdout.stream, stderr: capture().stream,
+      runUnifiedLookup: async () => { throw new Error('Plans cannot collect'); },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    const plan = JSON.parse(stdout.value());
+    assert.equal(plan.target.query, 'login.example.test');
+    assert.equal(plan.planning.networkRequestsMade, false);
+    assert.match(plan.planning.sources.find((item: {source:string}) => item.source === 'domain_evidence').disclosure, /selected URL path and query/);
+    assert.doesNotMatch(stdout.value(), /private-example|local-fragment|\/review/);
+    assert.throws(() => parseCliArguments(['lookup', 'https://example.test/path', '--exact-url']), /deep/);
+  });
+
+  test('explicit URL collection passes the selected target only to the collector and saves the hostname as query', async () => {
+    const stdout = capture();
+    let calls = 0;
+    const code = await runCli(['lookup', 'https://login.example.com/review?a=private-example#local-fragment', '--deep', '--exact-url', '--json'], {
+      stdout: stdout.stream, stderr: capture().stream,
+      runUnifiedLookup: async (classified, options) => {
+        calls += 1;
+        assert.equal(classified.value, 'example.com');
+        assert.equal(options?.selectedUrl, 'https://login.example.com/review?a=private-example');
+        return lookupResult();
+      },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS);
+    assert.equal(calls, 1);
+    assert.equal(JSON.parse(stdout.value()).query, 'login.example.com');
+    assert.doesNotMatch(stdout.value(), /private-example|local-fragment/);
   });
 
   test('invalid input is a usage error and never calls lookup', async () => {
@@ -1209,7 +1261,8 @@ test('terminal deep lookup summarizes current website evidence without exposing 
         summary: { observed: 3, potentialExposure: 1, observedAbsence: 2, unavailable: 1 },
         findings: Array.from({ length: 6 }, (_, index) => ({
           label: `Posture label ${index + 1}`,
-          state: index % 2 ? 'observed' : 'unavailable',
+          state: index === 3 ? 'observed_absence' : index % 2 ? 'observed' : 'unavailable',
+          tone: index === 3 ? 'review' : 'configured',
           detail: 'private-posture-detail-must-not-render',
         })),
       },
@@ -1278,13 +1331,16 @@ test('terminal deep lookup summarizes current website evidence without exposing 
   assert.match(terminal, /Example Commerce \(commerce platform, high signature strength\)/);
   assert.match(terminal, /JS libraries\s+Success · 2 apparent · 1 with catalogue advisory match/);
   assert.match(terminal, /Posture\s+Partial/);
-  assert.match(terminal, /Posture counts 3 observed · 1 potential exposure · 2 observed absence · 1 unavailable/);
+  assert.match(terminal, /Posture checks Needs review 1 · Other findings 2 · Could not assess 3/);
   assert.match(verbose, /Alt names\s+example\.com, www\.example\.com, 192\.0\.2\.44/);
   assert.match(verbose, /Purposes\s+TLS Web Server Authentication/);
   assert.match(verbose, /Findings\s+Wildcard certificate/);
   assert.match(verbose, /Snapshot date\s+2026-07-23T00:00:00\.000Z/);
   assert.match(verbose, /SHA-1\s+abababababababababababababababababababab/);
   assert.match(verbose, /Posture labels\s+.*\+1 more/);
+  assert.match(verbose, /Posture label 4 \(Needs review\)/);
+  assert.match(verbose, /Posture label 1 \(Could not assess\)/);
+  assert.doesNotMatch(verbose, /Posture label \d \((?:Observed|Observed Absence|Not observed)\)/);
   assert.match(verbose, /Client labels\s+.*\+2 more/);
   assert.match(verbose, /Image alt\s+missing 1 · empty 0 · non-empty 1 · unclassified 0/);
   assert.match(verbose, /Cache timing\s+max-age 3600s · s-maxage 120s · Age 45s/);

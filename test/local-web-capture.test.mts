@@ -8,7 +8,7 @@ import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import zlib from 'node:zlib';
 
-import type { Browser, Route } from '@playwright/test';
+import type { Route } from '@playwright/test';
 
 import {
   MAX_CAPTURE_HOSTS,
@@ -22,8 +22,10 @@ import {
   installDomProjectionIntrinsics,
   parseCaptureArguments,
   sanitizeCaptureText,
+  type CaptureBrowser,
 } from '../packages/web-capture/capture.mts';
 import { startAnchoredArtifactWriter } from '../packages/web-capture/anchored-artifact-writer.mts';
+import { launchCaptureBrowser } from '../packages/web-capture/browser.mts';
 import {
   WEB_CAPTURE_COMPARISON_SCHEMA,
   compareRenderedCaptures,
@@ -134,6 +136,7 @@ function fakeBrowser(options: {
   rejectCloseSubresourceAbort?: boolean;
   stallDomProjection?: boolean;
   networkApisDisabled?: boolean;
+  blockedDirectConnections?: number;
 } = {}) {
   let routeHandler: ((route: Route) => Promise<void>) | null = null;
   const page = {
@@ -198,13 +201,33 @@ function fakeBrowser(options: {
   };
   return {
     newContext: async () => context,
+    version: () => '151.0.0.0',
+    blockedDirectConnections: () => options.blockedDirectConnections ?? 0,
+    once: () => {},
     close: async () => {},
-  } as unknown as Browser;
+  } as unknown as CaptureBrowser;
 }
 
 describe('optional local rendered capture package', () => {
+  test('keeps the browser sandbox and a bounded launch deadline without fallback', async () => {
+    const instance = fakeBrowser();
+    const result = await launchCaptureBrowser(5000, { launch: async options => {
+      assert.equal(options?.headless, true);
+      assert.equal(options.chromiumSandbox, true);
+      assert.ok(options.timeout! > 0 && options.timeout! <= 5000);
+      assert.match(options.proxy!.server, /^http:\/\/127\.0\.0\.1:\d+$/u);
+      assert.equal(options.proxy!.bypass, '<-loopback>');
+      assert.ok(options.args?.includes('--dns-prefetch-disable'));
+      assert.ok(options.args?.includes('--disable-quic'));
+      return instance;
+    } });
+    assert.equal(result, instance);
+    await result.close();
+    for (const timeout of [0, -1, Infinity, 30001]) assert.throws(() => launchCaptureBrowser(timeout), /bounded deadline/u);
+    await assert.rejects(() => launchCaptureBrowser(1000, { launch: async () => { throw new Error('Sandbox unavailable'); } }), /Sandbox unavailable/u);
+  });
   test('entry point fails closed with bounded usage for incomplete capture and comparison commands', () => {
-    for (const args of [[], ['compare']]) {
+    for (const args of [['https://example.test'], ['compare']]) {
       const result = spawnSync(process.execPath, [CAPTURE_ENTRY, ...args], {
         cwd: path.dirname(CAPTURE_ENTRY),
         encoding: 'utf8',
@@ -215,6 +238,18 @@ describe('optional local rendered capture package', () => {
       assert.equal(result.stdout, '');
       assert.match(result.stderr, /^Capture error: Usage: whoisleuth-capture/u);
       assert.ok(Buffer.byteLength(result.stderr, 'utf8') < 1_024);
+    }
+  });
+
+  test('help and version work offline without a browser installation', () => {
+    for (const args of [[], ['--help'], ['-h'], ['compare', '--help'], ['--version']]) {
+      const result = spawnSync(process.execPath, [CAPTURE_ENTRY, ...args], {
+        encoding: 'utf8', timeout: 10_000,
+        env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: path.join(tmpdir(), 'absent-capture-browser-fixture') },
+      });
+      assert.equal(result.status, 0); assert.equal(result.stderr, '');
+      if (args[0] === '--version') assert.match(result.stdout, /^\d+\.\d+\.\d+\n$/u);
+      else assert.match(result.stdout, /Compare verifies selected local artefacts and makes no network requests/u);
     }
   });
 
@@ -545,6 +580,22 @@ describe('optional local rendered capture package', () => {
     );
   });
 
+  test('bounds explicit observer declarations and repeatable comparison exclusions', () => {
+    const capture = ['https://example.test', '--output-dir', 'selected', '--authorize-rendered-capture'];
+    assert.deepEqual(Object.fromEntries(Object.entries(parseCaptureArguments([...capture, '--observer', 'Analyst A', '--vantage', 'Office'])).filter(([key]) => key.endsWith('Label'))), { observerLabel: 'Analyst A', vantageLabel: 'Office' });
+    for (const tail of [['--observer'], ['--observer', 'a'.repeat(81)], ['--vantage', 'A', '--vantage', 'B'], ['--observer', 'A\u0000B']]) {
+      assert.throws(() => parseCaptureArguments([...capture, ...tail]));
+    }
+    assert.deepEqual(parseCaptureCompareArguments(['left.json', 'right.json', '--mask', '0,0,1,1', '--mask', '1,2,3,4']).masks, [
+      { kind: 'redact', x: 0, y: 0, width: 1, height: 1 }, { kind: 'redact', x: 1, y: 2, width: 3, height: 4 },
+    ]);
+    for (const coordinates of ['0,0,0,1', '-1,0,1,1', '0,0,1.5,1', '0,0,10001,1', '0,0,1,1,1']) {
+      assert.throws(() => parseCaptureCompareArguments(['left.json', 'right.json', '--mask', coordinates]));
+    }
+    assert.equal(parseCaptureCompareArguments(['left.json', 'right.json', ...Array.from({ length: 64 }, () => ['--mask', '0,0,1,1']).flat()]).masks?.length, 64);
+    assert.throws(() => parseCaptureCompareArguments(['left.json', 'right.json', ...Array.from({ length: 65 }, () => ['--mask', '0,0,1,1']).flat()]));
+  });
+
   test('writes import-compatible private metadata without retaining DOM text or request paths', async () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-test-'));
     const destination = path.join(parent, 'capture');
@@ -577,6 +628,7 @@ describe('optional local rendered capture package', () => {
       assert.deepEqual(resolved, ['example.test', 'example.test', 'static.example.test']);
       const capture = manifest.captures[0]!;
       assert.equal(capture.completeness, 'complete');
+      assert.deepEqual(capture.conditions, { browser: 'chromium', browserVersion: '151.0.0.0', viewport: { width: 1024, height: 768 }, deviceScaleFactor: 1, locale: 'en-US', timezone: 'UTC', colourScheme: 'light' });
       assert.equal(capture.artifacts[0]?.perceptualHash?.length, 16);
       const imported = parseWebCaptureManifest(manifest);
       assert.equal(imported.findings.length, 1);
@@ -686,10 +738,27 @@ describe('optional local rendered capture package', () => {
       assert.equal(comparison.renderedDom.counts.elements.delta, 1);
       assert.deepEqual(comparison.integrity.left, { screenshot: true, perceptualHash: true, domDigest: true });
       assert.match(formatRenderedCaptureComparison(comparison), /Rendered capture comparison/u);
+      assert.equal(comparison.pixelChanges.state, 'same_pixels');
+      assert.equal(comparison.pixelChanges.comparedPixels, 1024 * 768);
+      assert.equal(comparison.observationContext.time.spanMilliseconds, 300000);
+      assert.equal(comparison.observationContext.independence, 'not_verified');
+      assert.equal(comparison.observationContext.labels, 'incomplete');
+      const excluded = await compareRenderedCaptures(leftManifest, rightManifest, '2026-08-01T00:10:00.000Z', [{ kind: 'redact', x: 0, y: 0, width: 1024, height: 768 }]);
+      assert.equal(excluded.pixelChanges.state, 'all_excluded');
+      assert.equal(excluded.pixelChanges.changedPercent, null);
+      assert.match(formatRenderedCaptureComparison(excluded), /Excluded region: 0,0,1024,768/u);
+      await assert.rejects(() => compareRenderedCaptures(leftManifest, rightManifest, undefined, [{ kind: 'redact', x: 1024, y: 0, width: 1, height: 1 }]));
       assert.doesNotMatch(JSON.stringify(comparison), /private text|capture-compare-test|manifest\.json|Account|Review/u);
 
       const originalLeftManifest = await readFile(leftManifest, 'utf8');
       const originalRightManifest = await readFile(rightManifest, 'utf8');
+      const legacy = JSON.parse(originalRightManifest);
+      delete legacy.captures[0].conditions;
+      await writeFile(rightManifest, JSON.stringify(legacy));
+      const legacyComparison = await compareRenderedCaptures(leftManifest, rightManifest);
+      assert.equal(legacyComparison.observationContext.rows.find(row => row.id === 'viewport')?.state, 'unknown');
+      assert.equal(legacyComparison.pixelChanges.state, 'same_pixels');
+      await writeFile(rightManifest, originalRightManifest);
       await assert.rejects(
         () => compareRenderedCaptures(leftManifest, rightManifest, '2026-08-01T00:10:00'),
         /explicit timezone/u,
@@ -875,7 +944,7 @@ describe('optional local rendered capture package', () => {
     const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-late-browser-test-'));
     const destination = path.join(parent, 'capture');
     const deadline = controlledDeadlineScheduler();
-    let resolveLaunch!: (browser: Browser) => void;
+    let resolveLaunch!: (browser: CaptureBrowser) => void;
     let signalLaunch!: () => void;
     let signalClose!: () => void;
     const launchStarted = new Promise<void>((resolve) => { signalLaunch = resolve; });
@@ -886,7 +955,7 @@ describe('optional local rendered capture package', () => {
     const lateBrowser = {
       newContext: async () => { contextCount += 1; throw new Error('late browser must not create a context'); },
       close: async () => { closeCount += 1; signalClose(); },
-    } as unknown as Browser;
+    } as unknown as CaptureBrowser;
     try {
       const capture = captureRenderedPage({
         targetUrl: 'https://example.test/', outputDirectory: destination, timeoutMs: 1_000,
@@ -894,7 +963,7 @@ describe('optional local rendered capture package', () => {
         launchBrowser: async (timeoutMs) => {
           launchTimeout = timeoutMs;
           signalLaunch();
-          return new Promise<Browser>((resolve) => { resolveLaunch = resolve; });
+          return new Promise<CaptureBrowser>((resolve) => { resolveLaunch = resolve; });
         },
         writeArtifact: async () => { throw new Error('late browser must not write artefacts'); },
         deadlineScheduler: deadline.scheduler,
@@ -1156,6 +1225,28 @@ describe('optional local rendered capture package', () => {
     } finally {
       await rm(parent, { recursive: true, force: true });
     }
+  });
+
+  test('seals direct-connection accounting after browser shutdown and retains no destination', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-direct-test-'));
+    let closed = false;
+    const instance = {
+      ...fakeBrowser(),
+      close: async () => { closed = true; },
+      blockedDirectConnections: () => { assert.equal(closed, true); return 2; },
+    };
+    try {
+      const manifest = await captureRenderedPage({
+        targetUrl: 'https://example.test/', outputDirectory: path.join(parent, 'capture'), timeoutMs: 5000,
+      }, {
+        launchBrowser: async () => instance,
+        fetchResource: fakeFetchResource,
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+      });
+      assert.equal(manifest.captures[0]?.completeness, 'partial');
+      assert.ok(manifest.captures[0]?.limitations.some(value => value.startsWith('Additional direct browser')));
+      assert.equal(parseWebCaptureManifest(manifest).findings.length, 1);
+    } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   test('does not retain a browser-requested host that fails public-address validation', async () => {

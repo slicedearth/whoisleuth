@@ -29,8 +29,8 @@ type InteractionId =
   | 'bulk_analysis_transition'
   | 'bulk_cohort_outliers'
   | 'lookup_dns_evidence'
-  | 'case_response_preparation'
-  | 'case_response_packet'
+  | 'case_workspace_open'
+  | 'case_response_section'
   | 'dashboard_command_palette';
 
 type InteractionBudget = Readonly<{
@@ -103,47 +103,39 @@ type DeferredInteractionSampleSet = Readonly<{
 // The CLI filter row measures one real keyboard refinement after a prefilled
 // multi-result query. That keeps the browser recent-input semantics while
 // excluding artificial driver time for a no-delay multi-character sequence.
-// Case expansion/preparation and response disclosure are distinct rows. The
-// first ends when the workspace is attached inside its closed disclosure; the
-// second ends only when that prepared workspace and its controls are visible.
+// Case selection ends when its Summary and section navigation are usable.
+// Response navigation is separate and ends when its response controls are usable.
 // Bulk Analysis likewise owns a separate transition/preload row before the
 // cohort-outlier disclosure is measured. Each phase keeps its own observations.
-// Retain the reviewed asset and layout bounds: transfer adds 20% and rounds up
-// to 1 KiB; layout adds 50% and rounds up to 0.005 with a 0.01 floor. A prepared
-// interaction still requires zero transfer. Elapsed-time observations are not
-// inputs to these bounds and are not promoted into universal timing limits.
-const INTERACTION_RESOURCE_BASELINE = Object.freeze({
-  cli_command_detail: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
-  cli_catalogue_filter: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
-  examples_large_output: Object.freeze({ assetEncodedTransferBytes: 12_481, layoutShiftScore: 0 }),
-  demo_later_stage: Object.freeze({ assetEncodedTransferBytes: 8_012, layoutShiftScore: 0 }),
-  monitor_relationships_view: Object.freeze({ assetEncodedTransferBytes: 96_089, layoutShiftScore: 0 }),
-  brands_portfolio_workbench: Object.freeze({ assetEncodedTransferBytes: 10_450, layoutShiftScore: 0 }),
-  bulk_analysis_transition: Object.freeze({ assetEncodedTransferBytes: 60_308, layoutShiftScore: 0 }),
-  bulk_cohort_outliers: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
-  lookup_dns_evidence: Object.freeze({ assetEncodedTransferBytes: 69_985, layoutShiftScore: 0 }),
-  case_response_preparation: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
-  case_response_packet: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
-  dashboard_command_palette: Object.freeze({ assetEncodedTransferBytes: 0, layoutShiftScore: 0 }),
+// These are transfer ceilings, not historical measurements. Prepared
+// interactions require zero new assets; the portfolio ceiling includes its
+// source-qualified retained-history view. Each run reports actual transfer,
+// timing and layout separately. Elapsed time is not an acceptance threshold.
+const INTERACTION_TRANSFER_LIMITS: Readonly<Record<InteractionId, number>> = Object.freeze({
+  cli_command_detail: 0,
+  cli_catalogue_filter: 0,
+  examples_large_output: 15 * 1024,
+  demo_later_stage: 10 * 1024,
+  monitor_relationships_view: 113 * 1024,
+  brands_portfolio_workbench: 32 * 1024,
+  bulk_analysis_transition: 71 * 1024,
+  bulk_cohort_outliers: 0,
+  lookup_dns_evidence: 83 * 1024,
+  case_workspace_open: 0,
+  case_response_section: 0,
+  dashboard_command_palette: 0,
 });
 
-function roundUp(value: number, quantum: number): number {
-  return Math.ceil(value / quantum) * quantum;
-}
-
 function interactionBudget(interaction: InteractionId): InteractionBudget {
-  const observed = INTERACTION_RESOURCE_BASELINE[interaction];
   return Object.freeze({
-    assetEncodedTransferBytes: observed.assetEncodedTransferBytes === 0
-      ? 0
-      : roundUp(observed.assetEncodedTransferBytes * 1.2, 1024),
-    layoutShiftScore: Math.max(0.01, roundUp(observed.layoutShiftScore * 1.5, 0.005)),
+    assetEncodedTransferBytes: INTERACTION_TRANSFER_LIMITS[interaction],
+    layoutShiftScore: 0.01,
     residualLayoutShiftScore: 0.01,
   });
 }
 
 const INTERACTION_BUDGETS: Readonly<Record<InteractionId, InteractionBudget>> = Object.freeze(
-  Object.fromEntries(Object.keys(INTERACTION_RESOURCE_BASELINE).map((interaction) => (
+  Object.fromEntries(Object.keys(INTERACTION_TRANSFER_LIMITS).map((interaction) => (
     [interaction, interactionBudget(interaction as InteractionId)]
   ))) as Record<InteractionId, InteractionBudget>,
 );
@@ -642,7 +634,7 @@ async function prepareCaseResponseFixture(page: Page, caseId: string): Promise<v
       version: CASE_SCHEMA_VERSION,
       cases: [caseRecord({ id: caseId, domain: 'response.example.test' })],
     },
-  }, { clearStorage: true, destination: '/monitor?view=cases' });
+  }, { clearStorage: true, destination: '/cases' });
   await expect(page.locator(`#case-head-${caseId}`)).toBeVisible();
 }
 
@@ -765,10 +757,10 @@ test('measures a later fictional demo stage without opening production storage',
     },
     action: () => start.click(),
     browserReadiness: {
-      start: { event: 'click', selector: '#demo-workspace button.primary' },
+      start: { event: 'click', selector: '#demo-workspace button' },
       targets: [
         { selector: '#brand-heading', exactText: 'Define the official identity' },
-        { selector: '#demo-workspace .profile-handoff button.primary', requireEnabled: true },
+        { selector: '#demo-workspace .profile-handoff button', requireEnabled: true },
       ],
     },
     ready: heading,
@@ -826,6 +818,7 @@ test('measures a deferred Brand Profile tool with a fictional active profile', a
         [PROFILES_KEY]: currentBrandProfileBrowserStore([brandProfileFixture()]),
         [ACTIVE_PROFILE_KEY]: 'deferred-profile',
       }, { clearStorage: true, destination: '/brands' });
+      await page.getByRole('tab', { name: 'Tools', exact: true }).click();
       await expect(workbench).toBeEnabled();
       await expect(heading).toHaveCount(0);
     },
@@ -969,22 +962,20 @@ test('measures a deferred Lookup evidence family from deterministic fixture evid
   await expectNoHorizontalOverflow(page);
 });
 
-test('measures Case expansion through hidden response-workspace preparation', async ({ page }, testInfo) => {
+test('measures Case selection through a usable Summary and section navigation', async ({ page }, testInfo) => {
   const caseId = 'deferred-preparation-case';
   const caseHeading = page.locator(`#case-head-${caseId}`);
-  const caseBody = page.locator(`#case-body-${caseId}`);
-  const disclosure = page.locator(`#case-response-${caseId}`);
-  const summary = disclosure.locator(':scope > summary');
-  const responseWorkspace = disclosure.locator('.response-workspace');
+  const detail = page.locator(`[data-case-detail="${caseId}"]`);
+  const sectionLink = detail.getByRole('link', { name: 'Evidence', exact: true });
 
   await measureDeferredInteraction({
     page,
     testInfo,
-    interaction: 'case_response_preparation',
-    path: '/monitor',
+    interaction: 'case_workspace_open',
+    path: '/cases',
     prepare: async () => {
       await prepareCaseResponseFixture(page, caseId);
-      await expect(disclosure).toHaveCount(0);
+      await expect(detail).toHaveCount(0);
     },
     action: async () => {
       await caseHeading.focus();
@@ -993,60 +984,57 @@ test('measures Case expansion through hidden response-workspace preparation', as
     browserReadiness: {
       start: { event: 'click', selector: `#case-head-${caseId}` },
       targets: [
-        { selector: `#case-body-${caseId}` },
-        { selector: `#case-response-${caseId}` },
-        { selector: `#case-response-${caseId} .response-workspace`, visibility: 'attached' },
-        { selector: `#case-response-${caseId} > summary`, requireEnabled: true },
+        { selector: `[data-case-detail="${caseId}"]` },
+        { selector: '.case-sections a[aria-current="page"]' },
+        { selector: '.case-sections a[href$="section=evidence"]', requireEnabled: true },
+        { selector: '[aria-label="Retained Case records"]' },
       ],
     },
-    ready: responseWorkspace,
-    readyControl: summary,
-    readyPresentation: 'attached_hidden',
+    ready: detail,
+    readyControl: sectionLink,
     requireAsset: false,
   });
-  await expect(caseHeading).toHaveAttribute('aria-expanded', 'true');
-  await expect(caseBody).toBeVisible();
-  await expect(disclosure).not.toHaveAttribute('open', '');
+  await expect(page.getByRole('region', { name: 'Saved Cases', exact: true })).toHaveCount(0);
+  await expect(detail.getByRole('link', { name: 'Summary', exact: true })).toHaveAttribute('aria-current', 'page');
   await expectNoHorizontalOverflow(page);
 });
 
-test('measures disclosure of the prepared Case response and packet workspace', async ({ page }, testInfo) => {
+test('measures Case Response section activation through usable response controls', async ({ page }, testInfo) => {
   const caseId = 'deferred-response-case';
   const caseHeading = page.locator(`#case-head-${caseId}`);
-  const disclosure = page.locator(`#case-response-${caseId}`);
-  const summary = disclosure.locator(':scope > summary');
-  const responseWorkspace = disclosure.locator('.response-workspace');
-  const advancedPresentation = disclosure.getByRole('button', { name: 'Advanced', exact: true });
+  const detail = page.locator(`[data-case-detail="${caseId}"]`);
+  const responseLink = detail.getByRole('navigation', { name: 'Case sections' }).getByRole('link', { name: 'Response', exact: true });
+  const actions = detail.getByRole('region', { name: 'Case response actions', exact: true });
+  const recipient = actions.getByRole('textbox', { name: 'Recipient or owner', exact: true });
 
   await measureDeferredInteraction({
     page,
     testInfo,
-    interaction: 'case_response_packet',
-    path: '/monitor',
+    interaction: 'case_response_section',
+    path: '/cases',
     prepare: async () => {
       await prepareCaseResponseFixture(page, caseId);
-      await expect(disclosure).toHaveCount(0);
+      await expect(detail).toHaveCount(0);
       await caseHeading.click();
-      await expect(disclosure).toBeVisible();
-      await expect(responseWorkspace).toBeAttached();
-      await expect(responseWorkspace).toBeHidden();
+      await expect(responseLink).toBeVisible();
+      await expect(detail.getByRole('region', { name: 'Case response actions', exact: true, includeHidden: true })).toBeHidden();
     },
     action: async () => {
-      await summary.focus();
+      await responseLink.focus();
       await page.keyboard.press('Enter');
     },
     browserReadiness: {
-      start: { event: 'click', selector: '#case-response-deferred-response-case > summary' },
+      start: { event: 'click', selector: '.case-sections a[href$="section=response"]' },
       targets: [
-        { selector: '#case-response-deferred-response-case .response-workspace' },
-        { selector: '#case-response-deferred-response-case .presentation-switch button:nth-child(2)', requireEnabled: true },
+        { selector: '#case-response-decision-deferred-response-case' },
+        { selector: '#case-response-decision-deferred-response-case input[required][maxlength="320"]', requireEnabled: true },
       ],
     },
-    ready: responseWorkspace,
-    readyControl: advancedPresentation,
+    ready: actions,
+    readyControl: recipient,
     requireAsset: false,
   });
-  await expect(disclosure).toHaveAttribute('open', '');
+  await expect(responseLink).toHaveAttribute('aria-current', 'page');
   await expectNoHorizontalOverflow(page);
 });
 

@@ -333,6 +333,15 @@ export function parseRiskCalibrationSummaryReport(raw: string): RiskCalibrationS
     positive,
     negative,
   )));
+  for (let index = 1; index < thresholds.length; index += 1) {
+    const lower = thresholds[index - 1]!;
+    const higher = thresholds[index]!;
+    // The population and class totals are already fixed by thresholdMetrics.
+    // Raising the threshold can remove positive classifications, never add them.
+    if (higher.truePositive > lower.truePositive || higher.falsePositive > lower.falsePositive) {
+      throw new Error('Risk calibration positive classifications increase at a higher threshold.');
+    }
+  }
 
   if (!Array.isArray(root.strata) || root.strata.length > MAX_RISK_CALIBRATION_SUMMARY_STRATA) {
     throw new Error('Risk calibration strata must be a bounded array.');
@@ -368,12 +377,17 @@ export function parseRiskCalibrationSummaryReport(raw: string): RiskCalibrationS
       metrics: thresholdMetrics(stratum.metrics, `${label} metrics`, currentReviewThreshold, sampleCount),
     });
   }));
+  const currentMetrics = thresholds.find((metric) => metric.threshold === currentReviewThreshold)!;
   for (const dimension of ['review_reason', 'scan_depth'] as const) {
-    const dimensionTotal = strata
-      .filter((stratum) => stratum.dimension === dimension)
-      .reduce((sum, stratum) => sum + stratum.sampleCount, 0);
+    const members = strata.filter((stratum) => stratum.dimension === dimension);
+    const dimensionTotal = members.reduce((sum, stratum) => sum + stratum.sampleCount, 0);
     if (dimensionTotal !== positive + negative) {
       throw new Error(`Risk calibration ${dimension.replace('_', '-')} strata do not cover every included label exactly once.`);
+    }
+    for (const field of ['truePositive', 'falsePositive', 'trueNegative', 'falseNegative'] as const) {
+      if (members.reduce((sum, stratum) => sum + stratum.metrics[field], 0) !== currentMetrics[field]) {
+        throw new Error(`Risk calibration ${dimension.replace('_', '-')} strata disagree with the current-threshold confusion counts.`);
+      }
     }
   }
 

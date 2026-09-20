@@ -38,7 +38,10 @@ const NZ_NOT_FOUND_RE = /^[ \t]*query_status[ \t]*:[ \t]*220(?:\s|$)/im;
 const NZ_POSITIVE_RE = /^[ \t]*query_status[ \t]*:[ \t]*(?:200|210)(?:\s|$)/im;
 const NZ_TEMPORARY_FAILURE_RE = /^[ \t]*query_status[ \t]*:[ \t]*4\d{2}(?:\s|$)/im;
 
-const RATE_LIMIT_LINE_RE = /^[ \t]*(?:[%#*;>-]+[ \t]*)?(?:(?:error|status)[ \t:.-]+)?(?:whois[ \t]+limit[ \t]+exceeded|query[ \t]+(?:rate[ \t-]*)?limit[ \t]+exceeded|(?:request|query)[ \t]+limit[ \t]+(?:exceeded|reached)|rate[ \t-]*limit(?:[ \t]+exceeded)?|too[ \t]+many[ \t]+(?:requests|queries)|quota[ \t]+exceeded|number[ \t]+of[^\r\n]{0,120}[ \t]+exceeded|(?:requests?|queries?)[ \t]+(?:are[ \t]+)?throttled|throttled|(?:service[ \t]+)?temporarily[ \t]+unavailable|(?:please[ \t]+)?try[ \t]+again[ \t]+later|please[ \t]+wait)\b[^\r\n]{0,240}$/im;
+// A refusal describes this response; a footer describing permitted query
+// frequency does not. Keep explicit refusals ahead of echoed domain fields.
+const RATE_LIMIT_LINE_RE = /^[ \t]*(?:[%#*;>-]+[ \t]*)?(?:(?:error|status)[ \t:.-]+)?(?:whois[ \t]+limit[ \t]+exceeded|query[ \t]+(?:rate[ \t-]*)?limit[ \t]+exceeded|(?:request|query)[ \t]+limit[ \t]+(?:exceeded|reached)|rate[ \t-]*limit(?:ed|[ \t]+(?:exceeded|reached))|too[ \t]+many[ \t]+(?:requests|queries)|quota[ \t]+exceeded|number[ \t]+of[^\r\n]{0,120}[ \t]+exceeded|(?:requests?|queries?)[ \t]+(?:are[ \t]+)?throttled|throttled|(?:service[ \t]+)?temporarily[ \t]+unavailable)\b[^\r\n]{0,240}$/im;
+const RETRY_LINE_RE = /^[ \t]*(?:[%#*;>-]+[ \t]*)?(?:(?:error|status)[ \t:.-]+)?(?:rate[ \t-]*limit|(?:please[ \t]+)?try[ \t]+again[ \t]+later|please[ \t]+wait(?:[ \t]+\d{1,6}[ \t]+(?:seconds?|minutes?|hours?))?(?:[ \t]+(?:and[ \t]+)?(?:retry|try[ \t]+again)(?:[ \t]+later)?)?)[.!]?[ \t]*$/im;
 
 const POSITIVE_REGISTRATION_RE = /^[ \t*]*(?:Domain(?:[ \t]+Name)?|domainname|Registrar|Registrar WHOIS Server|Creation Date|Created(?: On)?|Registry Expiry Date|Registered(?: On)?|Name Server|nserver|Sponsoring Registrar)[ \t.]*:[ \t]*\S/im;
 const POSITIVE_BRACKET_RE = /\[(?:Domain Name|Registrant|Name Server)\][ \t]*\S/i;
@@ -74,7 +77,7 @@ function classifyHopEvidence(hop: WhoisHop, index: number): string {
   if (hop.error) return 'error';
   const text = hop.response || '';
   if (!text.trim()) return 'inconclusive';
-  if (RATE_LIMIT_LINE_RE.test(text)) return 'rate_limited';
+  if (RATE_LIMIT_LINE_RE.test(text) || RETRY_LINE_RE.test(text)) return 'rate_limited';
   if (NZ_TEMPORARY_FAILURE_RE.test(text)) return 'rate_limited';
   if (NZ_NOT_FOUND_RE.test(text)) return 'negative';
   if (
@@ -160,4 +163,12 @@ export function analyzeWhoisChainAuthority(chain: unknown): WhoisAuthority {
         ? 'complete'
         : 'partial',
   };
+}
+
+/** Collection status shared by final and incremental Lookup presentation. */
+export function whoisCollectionStatus(chain: unknown): 'error' | 'unsupported' | 'complete' | 'partial' {
+  const source = normalizeWhoisChain(chain);
+  if (!source.length || source[0]?.error) return 'error';
+  if (source.length === 1) return 'unsupported';
+  return analyzeWhoisChainAuthority(source).chainStatus;
 }

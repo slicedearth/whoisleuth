@@ -5,6 +5,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 
 import { CliUsageError } from './errors.mts';
 import type { WritableTerminal } from './terminal-presentation.mts';
+import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../packages/contracts/investigation-package-limits.mts';
 
 export const MAX_CLI_OUTPUT_BYTES = 32 * 1024 * 1024;
 const MAX_CLI_OUTPUT_PATH_LENGTH = 4096;
@@ -17,11 +18,13 @@ const pendingOutputFiles = new Map<string, PendingOutputFile>();
 
 type BufferedOutput = Readonly<{
   stream: WritableTerminal;
+  writeBinary(value: Uint8Array): void;
   value(): string;
 }>;
+type BinaryBufferedOutput = Readonly<{ stream: WritableTerminal; writeBinary(value: Uint8Array): void; value(): Uint8Array }>;
 
 type OutputFileHandle = Readonly<{
-  writeFile(content: string, options: Readonly<{ encoding: 'utf8' }>): Promise<unknown>;
+  writeFile(content: string | Uint8Array, options: Readonly<{ encoding: 'utf8' }>): Promise<unknown>;
   sync(): Promise<void>;
   close(): Promise<void>;
 }>;
@@ -60,14 +63,25 @@ function safeOutputPath(value: unknown): string {
   return resolve(value);
 }
 
-function createBufferedOutput(): BufferedOutput {
+function createBufferedOutput(): BufferedOutput;
+function createBufferedOutput(options: { binary: boolean }): BufferedOutput | BinaryBufferedOutput;
+function createBufferedOutput(options: { binary: boolean } = { binary: false }): BufferedOutput | BinaryBufferedOutput {
   const chunks: string[] = [];
+  const binaryChunks: Uint8Array[] = [];
   let bytes = 0;
+  const writeBinary = (chunk: Uint8Array): void => {
+    if (!options.binary || !(chunk instanceof Uint8Array)) throw new CliUsageError('Binary output requires an explicit package destination.');
+    if (chunk.byteLength > MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES - bytes) throw new CliUsageError('Binary package output exceeds its byte limit.');
+    bytes += chunk.byteLength;
+    binaryChunks.push(new Uint8Array(chunk));
+  };
   return Object.freeze({
+    writeBinary,
     stream: {
       isTTY: false,
       columns: 80,
       write(chunk: string | Uint8Array) {
+        if (options.binary) throw new CliUsageError('Binary package output cannot contain terminal text.');
         const value = typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
         bytes += Buffer.byteLength(value, 'utf8');
         if (bytes > MAX_CLI_OUTPUT_BYTES) {
@@ -77,20 +91,28 @@ function createBufferedOutput(): BufferedOutput {
         return true;
       },
     },
-    value: () => chunks.join(''),
-  });
+    value: () => {
+      if (!options.binary) return chunks.join('');
+      const result = new Uint8Array(bytes);
+      let offset = 0;
+      for (const chunk of binaryChunks) { result.set(chunk, offset); offset += chunk.byteLength; }
+      return result;
+    },
+  }) as BufferedOutput | BinaryBufferedOutput;
 }
 
 async function writePrivateFile(
   pathValue: unknown,
-  content: string,
-  options: { force?: boolean; existingFileMessage?: string } = {},
+  content: string | Uint8Array,
+  options: { force?: boolean; existingFileMessage?: string; beforePublish?: () => Promise<void> } = {},
   operations: OutputFileOperations = OUTPUT_FILE_OPERATIONS,
 ): Promise<string> {
   const target = safeOutputPath(pathValue);
-  if (Buffer.byteLength(content, 'utf8') > MAX_CLI_OUTPUT_BYTES) {
-    throw new CliUsageError(`Generated output is limited to ${MAX_CLI_OUTPUT_BYTES} bytes.`);
+  const maximumBytes = typeof content === 'string' ? MAX_CLI_OUTPUT_BYTES : MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES;
+  if ((typeof content === 'string' ? Buffer.byteLength(content, 'utf8') : content.byteLength) > maximumBytes) {
+    throw new CliUsageError(`Generated output is limited to ${maximumBytes} bytes.`);
   }
+  const captured = typeof content === 'string' ? content : new Uint8Array(content);
   const directory = dirname(target);
   const temporary = join(directory, `.${basename(target)}.${process.pid}.${operations.randomUUID()}.tmp`);
   let temporaryCreated = false;
@@ -103,11 +125,12 @@ async function writePrivateFile(
       settled: false,
     });
     try {
-      await handle.writeFile(content, { encoding: 'utf8' });
+      await handle.writeFile(captured, { encoding: 'utf8' });
       await handle.sync();
     } finally {
       await handle.close();
     }
+    await options.beforePublish?.();
     if (options.force) {
       await operations.rename(temporary, target);
       temporaryCreated = false;

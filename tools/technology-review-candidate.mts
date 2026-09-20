@@ -22,10 +22,13 @@ import {
 import {
   TECHNOLOGY_SIGNATURE_CATALOGUE,
   analyzeWebsiteTechnology,
+  reconstructTechnologyHtmlEvidence,
   type TechnologyEvidence,
+  type TechnologyEvidenceRole,
   type TechnologyInput,
 } from '../lib/website-technology.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
+import { TECHNOLOGY_EVIDENCE_ROLE_ORDER } from '../lib/technology-evidence-role.mts';
 import {
   boundedControlFreeText as boundedText,
   canonicalControlFreeTimestamp as timestamp,
@@ -63,42 +66,6 @@ const SERVER_VALUES: Readonly<Record<string, string>> = Object.freeze({
   cloudflare: 'Cloudflare', netlify: 'Netlify',
   vercel: 'Vercel', nginx: 'nginx', 'apache-http-server': 'Apache',
   'microsoft-iis': 'Microsoft-IIS', litespeed: 'LiteSpeed', caddy: 'Caddy',
-});
-const STATIC_MARKUP: Readonly<Record<string, string>> = Object.freeze({
-  wordpress: '<link href="/wp-content/fixture.css">',
-  drupal: '<main data-drupal-selector="fixture"></main>',
-  ghost: '<main data-ghost-search></main>',
-  shopify: '<section class="shopify-section"></section>',
-  'adobe-commerce-magento': '<main data-mage-init="{}"></main>',
-  bigcommerce: '<link href="https://cdn11.bigcommerce.com/s-fixture/theme.css">',
-  woocommerce: '<link href="/wp-content/plugins/woocommerce/fixture.css">',
-  prestashop: '<link href="/modules/ps_fixture/fixture.css">',
-  opencart: '<a href="index.php?route=common/home"></a>',
-  wix: '<main data-mesh-id="fixture"></main>',
-  squarespace: '<main data-marker="squarespace-context"></main>',
-  webflow: '<main data-wf-page="fixture"></main>',
-  framer: '<main data-framer-name="fixture"></main>',
-  weebly: '<link id="wsite-base-style" href="/fixture.css">',
-  angular: '<main ng-version="fixture"></main>',
-  'aspnet-web-forms': '<input name="__VIEWSTATE">',
-  nextjs: '<script id="__NEXT_DATA__"></script>',
-  nuxt: '<main id="__nuxt"></main>',
-  gatsby: '<main id="___gatsby"></main>',
-  sveltekit: '<a data-sveltekit-preload-data="hover"></a>',
-  astro: '<astro-island></astro-island>',
-});
-const STATIC_ALTERNATES: Readonly<Record<string, ReadonlyArray<Readonly<{
-  description: string;
-  markup: string;
-}>>>> = Object.freeze({
-  sveltekit: Object.freeze([Object.freeze({
-    description: 'Static asset paths use SvelteKit build conventions.',
-    markup: '<link href="/_app/immutable/fixture.css">',
-  })]),
-  astro: Object.freeze([Object.freeze({
-    description: 'Static asset paths use Astro build conventions.',
-    markup: '<link href="/_astro/fixture.css">',
-  })]),
 });
 const RESOURCE_ORIGINS: Readonly<Record<string, string>> = Object.freeze({
   shopify: 'https://cdn.shopify.com', bigcommerce: 'https://cdn11.bigcommerce.com',
@@ -140,6 +107,7 @@ function addEvidence(
   technologyId: string,
   source: TechnologyEvidenceSource,
   description: string,
+  role: TechnologyEvidenceRole | undefined,
 ): void {
   if (source === 'generator metadata') {
     const value = GENERATOR_VALUES[technologyId];
@@ -154,9 +122,7 @@ function addEvidence(
     return;
   }
   if (source === 'static HTML') {
-    const alternate = STATIC_ALTERNATES[technologyId]?.find((item) => item.description === description)?.markup;
-    const value = alternate ?? STATIC_MARKUP[technologyId];
-    if (!value) throw new TypeError(`${technologyId} has no reviewed static-markup reconstruction.`);
+    const value = reconstructTechnologyHtmlEvidence(technologyId, description, role);
     const fragments = input.html instanceof Set ? input.html as Set<string> : new Set<string>();
     fragments.add(value);
     input.html = fragments;
@@ -180,10 +146,10 @@ function addEvidence(
   input.responseHeaders = headers;
 }
 
-export function reconstructTechnologyReviewProfile(
+export async function reconstructTechnologyReviewProfile(
   rawProfile: unknown,
   confirmedIds: readonly string[],
-): ReconstructedTechnologyReviewProfile {
+): Promise<ReconstructedTechnologyReviewProfile> {
   const profile = record(rawProfile);
   if (!profile || profile.status !== 'success' || profile.complete !== true || profile.truncated === true) {
     throw new TypeError('Technology review candidates require complete, successful technology evidence.');
@@ -216,7 +182,11 @@ export function reconstructTechnologyReviewProfile(
       if (!signature.evidence.some((candidate) => candidate.source === source && candidate.description === description)) {
         throw new TypeError(`Technology finding ${id} contains evidence outside the current catalogue.`);
       }
-      addEvidence(reconstructed, id, source, description);
+      const role = item?.role as TechnologyEvidenceRole | undefined;
+      if (role !== undefined && !TECHNOLOGY_EVIDENCE_ROLE_ORDER.includes(role)) {
+        throw new TypeError(`Technology finding ${id} contains an unsupported evidence role.`);
+      }
+      addEvidence(reconstructed, id, source, description, role);
     }
   }
   const expectedIds = [...new Set(confirmedIds.map((id) => boundedText(id, 'Expected technology id', 64).toLowerCase()))].sort();
@@ -231,7 +201,7 @@ export function reconstructTechnologyReviewProfile(
     ...(reconstructed.resourceOrigins instanceof Set ? { resourceOrigins: [...reconstructed.resourceOrigins].sort() } : {}),
     ...(record(reconstructed.responseHeaders) ? { responseHeaders: Object.fromEntries(Object.entries(record(reconstructed.responseHeaders) ?? {}).sort()) } : {}),
   });
-  const rebuiltIds = analyzeWebsiteTechnology(input).findings.map((finding) => finding.id).sort();
+  const rebuiltIds = (await analyzeWebsiteTechnology(input)).findings.map((finding) => finding.id).sort();
   if (JSON.stringify(rebuiltIds) !== JSON.stringify(expectedIds)) {
     throw new TypeError(`Target-free reconstruction produced [${rebuiltIds.join(', ')}] instead of [${expectedIds.join(', ')}].`);
   }
@@ -242,13 +212,13 @@ export function reconstructTechnologyReviewProfile(
   });
 }
 
-export function buildTechnologyReviewCandidate(
+export async function buildTechnologyReviewCandidate(
   document: SavedLookupDocument,
   options: CandidateOptions,
-): UnknownRecord {
+): Promise<UnknownRecord> {
   if (document.mode !== 'deep') throw new TypeError('Technology review candidates require a saved Deep lookup.');
   const availability = record(document.availability);
-  const reconstructed = reconstructTechnologyReviewProfile(
+  const reconstructed = await reconstructTechnologyReviewProfile(
     availability?.technologyProfile,
     options.expectedIds,
   );
@@ -309,7 +279,7 @@ export async function main(
       label: 'Saved lookup input',
     });
     const document = parseSavedLookupDocument(raw.toString('utf8'));
-    output.write(`${JSON.stringify(buildTechnologyReviewCandidate(document, options), null, 2)}\n`);
+    output.write(`${JSON.stringify(await buildTechnologyReviewCandidate(document, options), null, 2)}\n`);
     return 0;
   } catch (error) {
     errors.write(`${error instanceof Error ? error.message : 'Technology review candidate failed.'}\n`);

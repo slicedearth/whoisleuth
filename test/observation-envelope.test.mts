@@ -25,6 +25,7 @@ function retainedIp() {
     type: 'ip_address',
     normalizedValue: '192.0.2.24',
     domains: ['second.invalid', 'first.invalid'],
+    sourceEvidence: ['first.invalid', 'second.invalid'].map((domain) => ({ domain, source: 'dns', status: 'success', observedAt: OBSERVED_AT, complete: true, truncated: false })),
   }, {
     observedAt: OBSERVED_AT,
     retainedAt: RETAINED_AT,

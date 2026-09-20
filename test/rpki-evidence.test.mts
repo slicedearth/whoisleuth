@@ -11,6 +11,23 @@ const SNAPSHOT = {
 };
 
 describe('local RPKI route review', () => {
+  test('rejects coerced origins and treats AS0 authorisations as a denial rather than a valid route', () => {
+    for (const originAsn of [undefined, null, false, true, '', ' ', [], {}, '1e2', '0x10', 0, 'AS0']) {
+      const report = reviewRpkiRoute({ routePrefix: '192.0.2.0/24', originAsn, authorizations: { roas: [{ prefix: '192.0.2.0/24', maxLength: 24, asn: 0 }] } });
+      assert.equal(report.state, 'invalid_input', JSON.stringify(originAsn));
+      assert.equal(report.matchingAuthorizationCount, 0);
+    }
+    const denied = reviewRpkiRoute({ routePrefix: '192.0.2.0/24', originAsn: 64496, authorizations: { roas: [{ prefix: '192.0.2.0/24', maxLength: 24, asn: 0 }] } });
+    assert.equal(denied.state, 'invalid');
+    assert.equal(denied.coveringAuthorizationCount, 1);
+    assert.equal(denied.matches[0]?.asn, 0);
+    for (const asn of [null, false, true, '', []]) {
+      const report = reviewRpkiRoute({ routePrefix: '192.0.2.0/24', originAsn: 64496, authorizations: { roas: [{ prefix: '192.0.2.0/24', maxLength: 24, asn }] } });
+      assert.equal(report.state, 'partial');
+      assert.equal(report.rejectedCount, 1);
+    }
+  });
+
   test('distinguishes valid, wrong-origin, excessive-prefix, and uncovered routes', () => {
     assert.equal(reviewRpkiRoute({
       routePrefix: '192.0.2.0/24',

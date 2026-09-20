@@ -4,6 +4,8 @@ import {
   type CapabilityId,
   type CliCommand,
 } from './cli-command-semantics.mts';
+import { SCHEDULED_MONITOR_CYCLE_BUDGET } from './scheduled-monitor-bounds.mts';
+import { INVESTIGATION_RUN_STATES } from './investigation-run.mts';
 
 const CAPABILITY_MANIFEST_SCHEMA = 'whoisleuth.capability-manifest';
 const CAPABILITY_MANIFEST_VERSION = 1 as const;
@@ -57,6 +59,7 @@ type CapabilityDataClass =
   | 'dns_question'
   | 'public_ip_address'
   | 'homepage_request'
+  | 'selected_url_request'
   | 'tls_handshake'
   | 'certificate_search_term'
   | 'mail_transport_commands'
@@ -340,7 +343,6 @@ function offlinePolicy(
 const OFFLINE_ALL_OR_NOTHING = offlinePolicy('all_or_nothing', STATIC_OUTCOMES);
 const OFFLINE_PER_ITEM = offlinePolicy('explicit_per_item');
 const OFFLINE_PER_SOURCE = offlinePolicy('explicit_per_source');
-const OFFLINE_DOCUMENT = offlinePolicy('explicit_document');
 const OFFLINE_PASSPHRASE_DOCUMENT = offlinePolicy(
   'explicit_document', COMPLETE_OR_PARTIAL, 'optional_secret_passphrase_file',
 );
@@ -350,7 +352,7 @@ const CLI_OPERATION_POLICY = Object.freeze({
   doctor: Object.freeze({ kind: 'doctor' }),
   commands: Object.freeze({ kind: 'static' }),
   manual: Object.freeze({ kind: 'static' }),
-  manifest: OFFLINE_ALL_OR_NOTHING,
+  manifest: offlinePolicy('all_or_nothing', STATIC_OUTCOMES, 'optional_secret_passphrase_file'),
   'map-observations': OFFLINE_PER_ITEM,
   'oam-export': OFFLINE_PER_ITEM,
   lookup: Object.freeze({ kind: 'lookup', command: 'lookup' }),
@@ -386,6 +388,7 @@ const CLI_OPERATION_POLICY = Object.freeze({
   'mail-headers': OFFLINE_PER_ITEM,
   'review-evidence': offlinePolicy('explicit_document', ['complete', 'partial', 'blocked']),
   brief: OFFLINE_PER_SOURCE,
+  case: OFFLINE_ALL_OR_NOTHING,
   'case-pack': OFFLINE_ALL_OR_NOTHING,
   'domain-control': OFFLINE_PER_SOURCE,
   'monitor-once': Object.freeze({ kind: 'monitor' }),
@@ -451,7 +454,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     trigger: 'explicit_browser_action',
     networkMode: 'bounded_passive',
     scanModes: ['fast', 'compact', 'deep', 'monitor'],
-    disclosedData: ['normalised_target', 'registry_query', 'whois_query', 'dns_question', 'public_ip_address', 'homepage_request', 'tls_handshake'],
+    disclosedData: ['normalised_target', 'registry_query', 'whois_query', 'dns_question', 'public_ip_address', 'homepage_request', 'selected_url_request', 'tls_handshake'],
     recipients: ['registry_service', 'dns_resolver', 'target_public_service'],
     requestBudget: 'variant_specific',
     responseBudget: 'collector_specific',
@@ -467,6 +470,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     privacyLimitations: [
       'Targets are disclosed only to the source families eligible for the selected mode.',
       'Fast, Compact, Deep and monitoring retain distinct request, evidence and storage boundaries.',
+      'Only explicit selected-URL collection in a single full Deep Lookup sends a path and query; fragments are excluded.',
       'A source failure or omission remains explicit and never establishes absence or safety.',
     ],
     featurePolicyId: 'lookup',
@@ -587,8 +591,8 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     partialResults: 'explicit_document',
     outcomes: COMPLETE_OR_LIMITED,
     privacyLimitations: [
-      'Only authoritative registration evidence can establish an availability decision.',
-      'DNS, page, mail and heuristic evidence cannot decide registration existence.',
+      'Authoritative registration publications take precedence. When they are inconclusive, positive authoritative DNS delegation can support registered status at medium confidence.',
+      'Missing DNS never proves availability. Page, mail and heuristic evidence cannot decide registration existence.',
     ],
     featurePolicyId: 'availability',
     operationBudgetVariants: [
@@ -605,7 +609,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     trigger: 'authenticated_request',
     networkMode: 'conditional_bounded_passive',
     scanModes: ['fast', 'compact', 'deep', 'monitor'],
-    disclosedData: ['normalised_target', 'dns_question', 'homepage_request', 'tls_handshake'],
+    disclosedData: ['normalised_target', 'dns_question', 'homepage_request', 'selected_url_request', 'tls_handshake'],
     recipients: ['dns_resolver', 'target_public_service'],
     requestBudget: 'collector_specific',
     responseBudget: 'collector_specific',
@@ -621,6 +625,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     privacyLimitations: [
       'Each source retains its own state, observation time, completeness and limitations.',
       'Fast and Compact never inherit the richer Deep request or storage contract.',
+      'A URL path and query are sent only after separate selection in a full Deep Lookup.',
     ],
   }),
   freezeCapability({
@@ -652,13 +657,13 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
   }),
   freezeCapability({
     id: CAPABILITY_IDS.WEBSITE_PROBE,
-    title: 'Bounded homepage and static page evidence',
+    title: 'Bounded homepage or selected static page evidence',
     job: 'investigate',
     planes: ['hosted_bounded_passive'],
     trigger: 'authenticated_request',
     networkMode: 'bounded_passive',
     scanModes: ['deep'],
-    disclosedData: ['normalised_target', 'dns_question', 'homepage_request'],
+    disclosedData: ['normalised_target', 'dns_question', 'homepage_request', 'selected_url_request'],
     recipients: ['dns_resolver', 'target_public_service'],
     requestBudget: 'collector_specific',
     responseBudget: 'collector_specific',
@@ -673,6 +678,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     outcomes: COMPLETE_OR_LIMITED,
     privacyLimitations: [
       'Static captured evidence is not a browser execution, vulnerability test or proof of page purpose.',
+      'Selected-URL collection sends the path and query only after explicit selection; retained paths and page-derived text still require privacy review.',
       'Complete query-bearing URLs, cookies, credentials, scripts and raw page content are not retained.',
     ],
     featurePolicyId: 'website_probe',
@@ -911,6 +917,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     outcomes: COMPLETE_OR_LIMITED,
     privacyLimitations: [
       'Posture findings describe bounded public registry, DNS and MTA-STS publication evidence and never change configuration.',
+      'Inherited DMARC and direct parent delegation require a separate opt-in: at most seven ancestor TXT questions, one parent NS discovery and A/AAAA discovery for at most two parent servers, followed by one pinned public-address DNS/TCP question per server. No messages are sent; recursive policy and direct referral observations remain separate.',
     ],
     featurePolicyId: 'domain_posture',
     featurePolicyDependencies: ['dns_intelligence'],
@@ -1064,7 +1071,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
   }),
   freezeCapability({
     id: CAPABILITY_IDS.ANALYST_CASES,
-    title: 'Browser-local analyst cases and Review Item lifecycle',
+    title: 'Saved analyst Cases and Review Item lifecycle',
     job: 'respond',
     planes: ['browser_local'],
     trigger: 'explicit_browser_action',
@@ -1084,7 +1091,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     partialResults: 'explicit_document',
     outcomes: LOCAL_OUTCOMES,
     privacyLimitations: [
-      'Cases and the bounded analyst Review Item lifecycle overlay remain in the current browser profile unless deliberately exported.',
+      'Cases and Review Items remain in the selected workspace unless deliberately exported: the current browser profile for the browser deployment, or the selected filesystem folder in the standalone local application.',
       'Review decisions retain stable subject identity, the reviewed material fingerprint, rationale, timestamps, expiry and bounded associations; current titles, evidence summaries and source values remain derived.',
       'Analyst assertions, response actions and Review Item lifecycle decisions never rewrite their source evidence or start collection, reporting, monitoring or enforcement.',
       'Missing, partial, stale, truncated or unavailable evidence cannot resolve a Review Item; changed material evidence and expired decisions return it to review.',
@@ -1093,7 +1100,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
   }),
   freezeCapability({
     id: CAPABILITY_IDS.WATCHLISTS,
-    title: 'Browser-local watchlists and monitoring views',
+    title: 'Saved watchlists and monitoring views',
     job: 'assure',
     planes: ['browser_local'],
     trigger: 'explicit_browser_action',
@@ -1113,7 +1120,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     partialResults: 'explicit_per_source',
     outcomes: LOCAL_OUTCOMES,
     privacyLimitations: [
-      'Browser-local monitoring state is not refreshed automatically unless a separately configured worker is used.',
+      'Saved monitoring state is not refreshed automatically unless a separately configured worker is used.',
     ],
     legacyCapability: { status: 'local_only', execution: 'browser', scanModes: ['fast', 'deep'] },
   }),
@@ -1168,6 +1175,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
       'Integrity, structure, signature and content assurance remain separate checks.',
       'Browser exports require an explicit browser action; CLI exports, verification and review require an explicit CLI command.',
       'Sharing a generated artefact is a deliberate action outside the collection runtime.',
+      'Evidence packages retain selected JSON, screenshots and opaque file bytes unchanged, without redaction. Whole-package encryption is optional; ordinary ZIPs and folders remain unencrypted. Review uploads nothing and changes no saved records; workspace import requires a separate preview and confirmation.',
     ],
   }),
   freezeCapability({
@@ -1216,7 +1224,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     cancellation: 'step_stops_admission',
     partialResults: 'explicit_step',
     outcomes: ['complete', 'partial', 'blocked'],
-    documentStates: ['complete', 'awaiting_network_approval', 'awaiting_analyst_selection', 'step_failed'],
+    documentStates: INVESTIGATION_RUN_STATES,
     privacyLimitations: [
       'Only installed fixed-recipe steps can run, and each network invocation requires explicit approval.',
       'Analyst-selection placeholders pause without interpretation or collection.',
@@ -1247,12 +1255,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
       'The worker retains only the documented compact encrypted projection and is not general evidence custody.',
       'Disabling collection does not delete retained ciphertext; deletion remains deliberate.',
     ],
-    workerCycleBudget: {
-      maxLookups: 2,
-      maxProcessedDeliveries: 8,
-      softCycleBudgetMs: 24_000,
-      minLookupWindowMs: 16_000,
-    },
+    workerCycleBudget: SCHEDULED_MONITOR_CYCLE_BUDGET,
     legacyCapability: {
       status: 'unavailable', execution: 'worker', scanModes: ['fast'],
       reason: 'Scheduled monitoring is not configured.',
@@ -1484,7 +1487,7 @@ function lookupCliVariants(command: 'lookup' | 'bulk' | 'discover-scan'): readon
       : [
           'normalised_target', 'registry_query', 'whois_query', 'dns_question',
           'homepage_request', 'tls_handshake',
-          ...(command === 'lookup' ? ['public_ip_address' as const] : []),
+          ...(command === 'lookup' ? ['public_ip_address' as const, 'selected_url_request' as const] : []),
         ],
     recipients: mode === 'fast'
       ? ['registry_service', 'dns_resolver']
@@ -1681,17 +1684,19 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
     });
   }
   if (policy.kind === 'workflow_run') {
+    const disclosedData = ['normalised_target', 'registry_query', 'whois_query', 'dns_question', 'public_ip_address', 'homepage_request', 'tls_handshake', 'mta_sts_policy_request', 'certificate_search_term'] as const;
+    const recipients = ['registry_service', 'dns_resolver', 'target_public_service', 'certificate_transparency_service'] as const;
     return passiveCliOperation(command, capabilityId, {
       planes: ['local_cli_offline', 'local_cli_network'],
       networkMode: 'conditional_bounded_passive',
-      disclosedData: ['normalised_target', 'registry_query', 'whois_query', 'dns_question', 'public_ip_address', 'homepage_request', 'tls_handshake', 'mta_sts_policy_request'],
-      recipients: ['registry_service', 'dns_resolver', 'target_public_service'],
+      disclosedData,
+      recipients,
       requestBudget: 'variant_specific',
       authorisation: 'explicit_network_approval',
       cancellation: 'step_stops_admission',
       partialResults: 'explicit_step',
       outcomes: ['complete', 'partial', 'blocked'],
-      documentStates: ['complete', 'awaiting_network_approval', 'awaiting_analyst_selection', 'step_failed'],
+      documentStates: INVESTIGATION_RUN_STATES,
       variants: [
         {
           id: 'unapproved_run',
@@ -1711,15 +1716,15 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
           cancellation: 'step_stops_admission',
           partialResults: 'explicit_step',
           outcomes: ['complete', 'partial', 'blocked'],
-          documentStates: ['complete', 'awaiting_network_approval', 'awaiting_analyst_selection', 'step_failed'],
+          documentStates: INVESTIGATION_RUN_STATES,
         },
         {
           id: 'approved_run',
           planes: ['local_cli_offline', 'local_cli_network'],
           trigger: 'explicit_cli_command',
           networkMode: 'conditional_bounded_passive',
-          disclosedData: ['normalised_target', 'registry_query', 'whois_query', 'dns_question', 'public_ip_address', 'homepage_request', 'tls_handshake', 'mta_sts_policy_request'],
-          recipients: ['registry_service', 'dns_resolver', 'target_public_service'],
+          disclosedData,
+          recipients,
           requestBudget: 'workflow_step_specific',
           responseBudget: 'collector_specific',
           concurrency: 'command_bounded',
@@ -1731,7 +1736,7 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
           cancellation: 'step_stops_admission',
           partialResults: 'explicit_step',
           outcomes: ['complete', 'partial', 'blocked'],
-          documentStates: ['complete', 'awaiting_analyst_selection', 'step_failed'],
+          documentStates: INVESTIGATION_RUN_STATES.filter((state) => state !== 'awaiting_network_approval'),
         },
       ],
       privacyLimitations: [

@@ -15,9 +15,9 @@ Every file includes its generation time and a false-positive warning. These are 
 
 The response-policy export uses a 60-second TTL and a bounded 32-bit serial derived from the generation time. Its QNAME owners are relative and are interpreted beneath the policy-zone origin selected by the receiving DNS configuration; the `CNAME .` response target remains absolute. The hosts and dnsmasq formats use the local IPv4 sink address `0.0.0.0`; environments requiring a different policy should transform the reviewed file after export.
 
-STIX exports intentionally omit a confidence value and malicious-activity classification. Risk scores are included only as custom heuristic provenance. An Observed Data object represents the domain result separately from its inferred Indicator, and the timestamp basis states whether the time came from the scan or from export generation.
+STIX exports omit confidence and malicious-activity classifications. Risk scores are custom heuristic provenance. Version 2 uses Observed Data only when the source time is known; otherwise a Note preserves the candidate's context without inventing a sighting. Indicator validity begins at export creation, separately from source observation time.
 
-MISP event JSON exports use undefined threat level, initial analysis state, organisation-only distribution, and `published: false`. Domain attributes inherit the event distribution but set `to_ids: false` and disable correlation. The attribute comment carries bounded heuristic provenance and the same timestamp-basis disclosure. Importing the file does not publish it; a MISP analyst must still review local sharing, correlation, and IDS settings before changing them.
+MISP event JSON exports use undefined threat level, initial analysis state, organisation-only distribution, and `published: false`. Domain attributes set `to_ids: false` and disable correlation. Version 2 omits optional seen times when the source time is unknown. Importing does not publish the event or approve operational use.
 
 The Cases view can also preview bounded STIX 2.1 bundles and MISP events as
 external intelligence. A local import does not restore Bulk results or treat

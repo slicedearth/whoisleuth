@@ -83,11 +83,9 @@ interface ParsedRelationship {
 }
 
 interface PendingPath {
-  seed: InvestigationLineageEntity;
   seedMethods: string[];
   current: InvestigationLineageEntity;
   steps: InvestigationLineageStep[];
-  visitedEntityIds: Set<string>;
   complete: boolean | null;
   truncated: boolean;
   limitations: string[];
@@ -240,37 +238,49 @@ export function buildInvestigationLineage(
     if (!adjacency.has(from.id)) adjacency.set(from.id, []);
     adjacency.get(from.id)?.push(relationship);
   }
-  for (const outgoing of adjacency.values()) outgoing.sort((left, right) => left.id.localeCompare(right.id));
-
   const paths: InvestigationLineagePath[] = [];
   const seeds = [...seedMethods.keys()]
     .map((id) => entities.get(id))
     .filter((value): value is InvestigationLineageEntity => value !== undefined)
     .sort((left, right) => left.id.localeCompare(right.id));
   for (const seed of seeds) {
-    const retainedTargets = new Set<string>();
+    // Breadth-first discovery fixes the first shortest path deterministically.
+    // Alternate paths remain in the source graph; they must not re-expand a
+    // target or replace its provenance with a more favourable observation.
+    const discovered = new Set([seed.id]);
     const queue: PendingPath[] = [{
-      seed,
       seedMethods: [...(seedMethods.get(seed.id) ?? [])].sort(),
       current: seed,
       steps: [],
-      visitedEntityIds: new Set([seed.id]),
       complete: true,
       truncated: false,
       limitations: [],
     }];
     let seedPathCount = 0;
-    while (queue.length) {
-      const pending = queue.shift();
-      if (!pending) break;
+    let relationshipVisits = 0;
+    // Each admitted relationship can be inspected at most once per seed.
+    // This structural work guard also catches accidental repeated expansion;
+    // it does not depend on a device-specific execution time. The queue has
+    // at most one root plus MAX_INVESTIGATION_LINEAGE_PATHS_PER_SEED targets.
+    traversal: for (let next = 0; next < queue.length; next += 1) {
+      const pending = queue[next]!;
       const outgoing = adjacency.get(pending.current.id) ?? [];
       for (const relationship of outgoing) {
+        if (relationshipVisits >= relationships.length) {
+          truncated = true;
+          break traversal;
+        }
+        relationshipVisits += 1;
         const target = entities.get(relationship.to);
-        if (!target || pending.visitedEntityIds.has(target.id)) continue;
-        if (pending.steps.length >= MAX_INVESTIGATION_LINEAGE_STEPS) {
+        if (!target || discovered.has(target.id)) continue;
+        if (pending.steps.length >= MAX_INVESTIGATION_LINEAGE_STEPS
+          || seedPathCount >= MAX_INVESTIGATION_LINEAGE_PATHS_PER_SEED
+          || paths.length >= MAX_INVESTIGATION_LINEAGE_PATHS) {
           truncated = true;
           continue;
         }
+        discovered.add(target.id);
+        seedPathCount += 1;
         const step: InvestigationLineageStep = {
           position: pending.steps.length + 1,
           relationshipId: relationship.id,
@@ -287,48 +297,33 @@ export function buildInvestigationLineage(
         ]);
         const pathTruncated = pending.truncated || relationship.truncated;
         const pathComplete = mergeComplete(pending.complete, relationship.complete);
-        if (!retainedTargets.has(target.id)) {
-          if (seedPathCount >= MAX_INVESTIGATION_LINEAGE_PATHS_PER_SEED
-            || paths.length >= MAX_INVESTIGATION_LINEAGE_PATHS) {
-            truncated = true;
-            break;
-          }
-          retainedTargets.add(target.id);
-          seedPathCount += 1;
-          const semantic = `${seed.id}\u0000${steps.map((item) => item.relationshipId).join('\u0000')}`;
-          paths.push({
-            id: `lineage:${digest(semantic)}`,
-            seed,
-            seedMethods: pending.seedMethods,
-            immediateParent: pending.current,
-            target,
-            hopCount: steps.length,
-            scopeDistance: steps.length,
-            discoveryMethod: relationship.method,
-            classification: strongestClassification(steps),
-            steps,
-            complete: pathComplete,
-            truncated: pathTruncated,
-            limitations: pathLimitations,
-          });
-        }
-        if (steps.length < MAX_INVESTIGATION_LINEAGE_STEPS
-          && seedPathCount < MAX_INVESTIGATION_LINEAGE_PATHS_PER_SEED
-          && paths.length < MAX_INVESTIGATION_LINEAGE_PATHS) {
-          queue.push({
-            seed,
-            seedMethods: pending.seedMethods,
-            current: target,
-            steps,
-            visitedEntityIds: new Set([...pending.visitedEntityIds, target.id]),
-            complete: pathComplete,
-            truncated: pathTruncated,
-            limitations: pathLimitations,
-          });
-        }
+        const semantic = `${seed.id}\u0000${steps.map((item) => item.relationshipId).join('\u0000')}`;
+        paths.push({
+          id: `lineage:${digest(semantic)}`,
+          seed,
+          seedMethods: pending.seedMethods,
+          immediateParent: pending.current,
+          target,
+          hopCount: steps.length,
+          scopeDistance: steps.length,
+          discoveryMethod: relationship.method,
+          classification: strongestClassification(steps),
+          steps,
+          complete: pathComplete,
+          truncated: pathTruncated,
+          limitations: pathLimitations,
+        });
+        // Inspect boundary nodes too: an unseen child proves omission, while
+        // a cycle or a duplicate at the exact bound does not imply truncation.
+        queue.push({
+          seedMethods: pending.seedMethods,
+          current: target,
+          steps,
+          complete: pathComplete,
+          truncated: pathTruncated,
+          limitations: pathLimitations,
+        });
       }
-      if (paths.length >= MAX_INVESTIGATION_LINEAGE_PATHS
-        || seedPathCount >= MAX_INVESTIGATION_LINEAGE_PATHS_PER_SEED) break;
     }
   }
 

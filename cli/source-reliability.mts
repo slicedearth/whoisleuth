@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer';
 
 import { canonicalArtifactJson } from '../packages/evidence/artifact-integrity.mts';
 import { scanBoundedJson } from '../lib/bounded-json.mts';
+import { LOOKUP_SOURCE_STATES, lookupDiagnosticStates, type LookupSourceState as SourceState } from '../lib/lookup-diagnostics.mts';
 import {
   normalizeExplicitIsoTimestamp,
   normalizeLegacyIsoTimestamp,
@@ -11,28 +12,18 @@ import {
   MAX_CLI_LOOKUP_BYTES,
 } from '../packages/contracts/cli-lookup.mts';
 import { normalizeCliLookupDocument } from './saved-lookup.mts';
+import { CLI_BULK_SCHEMA, CLI_BULK_ITEM_SCHEMA, CLI_BULK_SCHEMA_VERSION } from './formatters/json.mts';
+import { LOOKUP_THREAT_INTELLIGENCE_PROVIDERS } from '../lib/lookup-threat-provider-inventory.mts';
+import { MAX_THREAT_INTELLIGENCE_PROVIDERS } from '../lib/lookup-response-contract.mts';
+import { THREAT_INTELLIGENCE_SCHEMA, THREAT_INTELLIGENCE_CONTRACT_VERSION } from '../lib/threat-intelligence-types.mts';
 
 export const SOURCE_RELIABILITY_REPORT_SCHEMA = 'whoisleuth.source-reliability-report';
 export const SOURCE_RELIABILITY_REPORT_VERSION = 1;
 export const MAX_SOURCE_RELIABILITY_INPUT_BYTES = 12 * 1024 * 1024;
 export const MAX_SOURCE_RELIABILITY_DOCUMENTS = 100;
 export const MAX_SOURCE_RELIABILITY_SOURCES = 64;
-export const MAX_SOURCE_RELIABILITY_TRAVERSAL_NODES = 25_000;
 
 type UnknownRecord = Record<string, unknown>;
-type SourceState =
-  | 'success'
-  | 'partial'
-  | 'not_found'
-  | 'skipped'
-  | 'error'
-  | 'unsupported'
-  | 'not_applicable'
-  | 'unavailable'
-  | 'rate_limited'
-  | 'complete'
-  | 'disabled'
-  | 'stale';
 type SourceAccumulator = {
   states: Map<SourceState, number>;
   observationDurations: number[];
@@ -119,25 +110,9 @@ export type SourceReliabilityReport = Readonly<{
 }>;
 
 const SOURCE_RE = /^[a-z][a-z0-9_-]{0,39}$/u;
-const STATES = new Set<SourceState>([
-  'success',
-  'partial',
-  'not_found',
-  'skipped',
-  'error',
-  'unsupported',
-  'not_applicable',
-  'unavailable',
-  'rate_limited',
-  'complete',
-  'disabled',
-  'stale',
-]);
-const LOOKUP_SCHEMAS = new Set([
-  CLI_LOOKUP_SCHEMA,
-  'whoisleuth.cli.bulk',
-  'whoisleuth.cli.bulk.item',
-]);
+const STATES = new Set<SourceState>(LOOKUP_SOURCE_STATES);
+const BULK_HEALTH_VERSIONS = new Set([1, 2, CLI_BULK_SCHEMA_VERSION]);
+const PROVIDER_IDS = new Set(LOOKUP_THREAT_INTELLIGENCE_PROVIDERS.map((provider) => provider.id));
 const REPORT_KEYS = new Set([
   'schema',
   'version',
@@ -290,9 +265,9 @@ function parseLookupDocuments(values: readonly UnknownRecord[]): UnknownRecord[]
         throw new TypeError('Source reliability input requires a supported bounded CLI Lookup document.');
       }
     }
-    const supported = document.version === 1;
-    if (!LOOKUP_SCHEMAS.has(schema) || !supported) {
-      throw new TypeError('Source reliability input requires CLI Lookup version 1 or 2, version 1 Bulk or Bulk-item documents, or only source reliability reports.');
+    if ((schema !== CLI_BULK_SCHEMA && schema !== CLI_BULK_ITEM_SCHEMA)
+      || typeof document.version !== 'number' || !BULK_HEALTH_VERSIONS.has(document.version)) {
+      throw new TypeError('Source reliability input requires supported CLI Lookup, Bulk or Bulk-item documents, or only source reliability reports.');
     }
     return document;
   });
@@ -347,33 +322,20 @@ function collectTiming(document: UnknownRecord, store: Map<string, SourceAccumul
 }
 
 function collectDiagnostics(document: UnknownRecord, store: Map<string, SourceAccumulator>): void {
-  const diagnostics = record(document.diagnostics);
-  if (!diagnostics) return;
-  const fixed: Array<[string, unknown]> = [
-    ['rdap', record(diagnostics.rdap)?.status],
-    ['registrar_rdap', record(record(diagnostics.rdap)?.registrar)?.status],
-    ['whois', record(diagnostics.whois)?.status],
-    ['availability', record(diagnostics.availability)?.status],
-    ['reverse_dns', record(diagnostics.reverseDns)?.status],
-    ['network_context', record(diagnostics.network)?.status],
-    ['security_txt', record(diagnostics.securityTxt)?.status],
-    ['sslbl', record(diagnostics.sslbl)?.status],
-  ];
-  for (const [source, value] of fixed) {
-    const state = safeState(value);
+  for (const [source, state] of Object.entries(lookupDiagnosticStates(document.diagnostics))) {
     if (state) addState(store, source, state);
   }
 }
 
-function collectObservation(value: UnknownRecord, store: Map<string, SourceAccumulator>): void {
-  if (value.version !== 1
+function collectObservation(raw: unknown, source: string, store: Map<string, SourceAccumulator>): void {
+  const value = record(raw);
+  if (!value || value.version !== 1 || value.source !== source
     || typeof value.observedAt !== 'string'
     || typeof value.complete !== 'boolean'
     || typeof value.truncated !== 'boolean'
     || !Array.isArray(value.limitations)) return;
-  const source = safeSource(value.source);
   const state = safeState(value.status);
-  if (!source || !state) return;
+  if (!state) return;
   const item = accumulator(store, source);
   item.observationSamples += 1;
   addState(store, source, state);
@@ -382,43 +344,64 @@ function collectObservation(value: UnknownRecord, store: Map<string, SourceAccum
   if (value.truncated === true) item.truncated += 1;
 }
 
-function traverse(document: UnknownRecord, store: Map<string, SourceAccumulator>): void {
-  let visited = 0;
-  const stack: Array<{ value: unknown; depth: number }> = [{ value: document, depth: 0 }];
-  while (stack.length) {
-    const current = stack.pop();
-    if (!current) continue;
-    if (current.depth > 12) {
-      throw new TypeError('Source reliability input exceeds the 12-level traversal limit.');
+function collectLookupHealth(document: UnknownRecord, store: Map<string, SourceAccumulator>): void {
+  collectDiagnostics(document, store);
+  collectTiming(document, store);
+  const availability = record(document.availability);
+  const dns = record(availability?.dns);
+  const technology = record(availability?.technologyProfile);
+  // Only collector-owned envelopes have health semantics. Raw publications,
+  // parsed registration extensions and nested provider findings remain opaque.
+  const observations: Array<[string, unknown]> = [
+    ['dns', dns], ['dns', dns?.caaPolicy], ['dns_delegation', dns?.delegation],
+    ['http', availability?.http], ['tls', availability?.tls],
+    ['html', availability?.pageIdentity],
+  ];
+  const fullLookup = document.schema === CLI_LOOKUP_SCHEMA;
+  if (fullLookup) observations.push(
+    ['html', availability?.credentialSurfaceProfile], ['html', availability?.structuredDataIdentity],
+    ['derived', technology], ['derived', technology?.browserLibraryProfile],
+    ['derived', availability?.pageRoleProfile], ['derived', availability?.clientBehaviorProfile],
+    ['derived', availability?.securityPosture], ['reverse_dns', document.reverseDns],
+    ['ip_rdap', document.networkContext], ['security_txt', document.securityTxt], ['sslbl', document.sslbl],
+  );
+  for (const [source, observation] of observations) collectObservation(observation, source, store);
+  if (!fullLookup) return;
+  const providers = record(document.threatIntelligence)?.providers;
+  if (providers === undefined) return;
+  if (!Array.isArray(providers) || providers.length > MAX_THREAT_INTELLIGENCE_PROVIDERS) {
+    throw new TypeError(`Source reliability input exceeds the ${MAX_THREAT_INTELLIGENCE_PROVIDERS}-provider health boundary.`);
+  }
+  const seen = new Set<string>();
+  for (const rawProvider of providers) {
+    const provider = record(rawProvider);
+    const source = record(provider?.provider)?.id;
+    if (provider?.schema !== THREAT_INTELLIGENCE_SCHEMA || provider.version !== THREAT_INTELLIGENCE_CONTRACT_VERSION
+      || typeof source !== 'string' || !PROVIDER_IDS.has(source)
+      || record(provider.observation)?.source !== source) continue;
+    if (seen.has(source)) throw new TypeError('Source reliability input contains duplicate provider health identities.');
+    seen.add(source);
+    collectObservation(provider?.observation, source, store);
+    if (provider?.state === 'rate_limited') addState(store, source, 'rate_limited');
+  }
+}
+
+function collectDocumentHealth(document: UnknownRecord, store: Map<string, SourceAccumulator>): void {
+  if (document.schema === CLI_LOOKUP_SCHEMA) {
+    collectLookupHealth(document, store);
+    return;
+  }
+  const items = document.schema === CLI_BULK_SCHEMA ? document.results : [document];
+  if (!Array.isArray(items) || items.length > 1_000) {
+    throw new TypeError('Source reliability Bulk input requires at most 1000 result items.');
+  }
+  for (const rawItem of items) {
+    const item = record(rawItem);
+    if (!item || item.schema !== CLI_BULK_ITEM_SCHEMA || item.version !== document.version
+      || typeof item.ok !== 'boolean') {
+      throw new TypeError('Source reliability Bulk input contains an invalid result envelope.');
     }
-    if (visited >= MAX_SOURCE_RELIABILITY_TRAVERSAL_NODES) {
-      throw new TypeError(`Source reliability input exceeds the ${MAX_SOURCE_RELIABILITY_TRAVERSAL_NODES}-node traversal limit.`);
-    }
-    visited += 1;
-    const object = record(current.value);
-    if (object) {
-      collectDiagnostics(object, store);
-      collectTiming(object, store);
-      collectObservation(object, store);
-      if (object.state === 'rate_limited') {
-        const source = safeSource(record(object.observation)?.source);
-        if (source) addState(store, source, 'rate_limited');
-      }
-      const children = Object.values(object);
-      if (children.length > 200) {
-        throw new TypeError('Source reliability input contains an object with more than 200 fields.');
-      }
-      for (const child of children) {
-        if (child && typeof child === 'object') stack.push({ value: child, depth: current.depth + 1 });
-      }
-    } else if (Array.isArray(current.value)) {
-      if (current.value.length > 1_000) {
-        throw new TypeError('Source reliability input contains an array with more than 1000 items.');
-      }
-      for (const child of current.value) {
-        if (child && typeof child === 'object') stack.push({ value: child, depth: current.depth + 1 });
-      }
-    }
+    if (item.ok) collectLookupHealth(item, store);
   }
 }
 
@@ -813,7 +796,7 @@ export function buildSourceReliabilityReport(
       lookupModes[mode] += 1;
       const sampleDate = lookupDocumentTimestamp(document);
       if (sampleDate) sampleDates.push(sampleDate);
-      traverse(document, store);
+      collectDocumentHealth(document, store);
     }
   }
   sampleDates.sort();

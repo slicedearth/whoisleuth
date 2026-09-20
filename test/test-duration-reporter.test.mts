@@ -32,8 +32,8 @@ describe('test duration report', () => {
     assert.match(report, /Measured 3 tests across 2 files; 0 failed\./u);
     assert.match(report, /Accepted totals: 3 passed, 0 failed, 0 cancelled, 0 skipped, 0 todo\./u);
     assert.match(report, /Unit lane duration: 37\.0 ms\./u);
-    assert.ok(report.indexOf('test/first.test.mts: 25.0 ms') < report.indexOf('test/second.test.mts: 12.0 ms'));
-    assert.ok(report.indexOf('slow case: 25.0 ms') < report.indexOf('medium case: 10.0 ms'));
+    assert.match(report, /test\/first\.test\.mts: 25\.0 ms[\s\S]*test\/second\.test\.mts: 12\.0 ms/u);
+    assert.match(report, /slow case: 25\.0 ms[\s\S]*medium case: 10\.0 ms/u);
     assert.doesNotMatch(report, /quick case/u);
   });
 
@@ -124,6 +124,14 @@ describe('test duration report', () => {
     assert.match(formatTestDurationHealth(health), /Median of 3 complete runs/u);
     assert.match(formatTestDurationHealth(health), /test\/a\.test\.mts: 20 ms \(\+10 ms, \+100%\)/u);
     assert.match(formatTestDurationHealth(health), /not rewritten automatically/u);
+    const withoutB = { ...profile, files: profile.files.slice(0, 1) };
+    const expanded = buildTestDurationHealth([run(10, 30, 90), run(30, 20, 110), run(20, 10, 100)],
+      withoutB, ['test/a.test.mts', 'test/b.test.mts']);
+    assert.deepEqual(expanded.unmeasured, [{ file: 'test/b.test.mts', observedMedianMs: 20 }]);
+    assert.equal(expanded.observedAggregateMs, 20);
+    assert.equal(expanded.retainedAggregateMs, 10);
+    assert.equal(expanded.aggregateDeltaMs, 10, 'compare only files with retained observations');
+    assert.match(formatTestDurationHealth(expanded), /test\/b\.test\.mts: 20 ms observed; no retained measurement/u);
   });
 
   it('rejects partial, repeated, malformed, and inventory-inconsistent timing data', () => {

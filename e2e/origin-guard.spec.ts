@@ -1,12 +1,53 @@
 import { expect, test } from '@playwright/test';
+import { createServer } from 'node:net';
 import { BASE_URL } from './constants.ts';
-import { ALLOWED_ORIGIN, installNetworkGuard, isAllowedRequestOrigin } from './fixtures';
+import { ALLOWED_ORIGIN, installNetworkGuard, installBrowserGuards, isAllowedRequestOrigin, test as guardedTest } from './fixtures';
+
+guardedTest('the default context receives the service-worker block before guard installation', async ({ serviceWorkers }) => {
+  expect(serviceWorkers).toBe('block');
+});
 
 // Exercises the predicate every spec's automatic network guard
 // (fixtures.ts's networkAndConsoleGuard) relies on, so a change that
 // weakens or removes the origin check gets caught here even in a run where
 // no test happens to make an off-origin request.
 test.describe('network origin guard', () => {
+  test('guards existing pages, later pages and separately created contexts with real negative controls', async ({ browser, browserName }) => {
+    let connections = 0;
+    const sink = createServer(socket => { connections++; socket.destroy(); });
+    await new Promise<void>((resolve, reject) => { sink.once('error', reject); sink.listen(0, '127.0.0.1', resolve); });
+    const address = sink.address();
+    if (!address || typeof address === 'string') throw new Error('Loopback fixture did not start.');
+    const existing = await browser.newContext();
+    const first = await existing.newPage();
+    const guard = await installBrowserGuards(browser, { browserName, networkGuardOrigin: ALLOWED_ORIGIN,
+      allowExpectedBulkLookup400Noise: false, allowExpectedLookup429Noise: false,
+      allowExpectedLookup504Noise: false, allowExpectedLogout500Noise: false });
+    let disposed = false;
+    const owned = [existing];
+    try {
+      const separate = await browser.newContext(); owned.push(separate);
+      const independentlyOwned = await browser.newPage(); owned.push(independentlyOwned.context());
+      const pages = [first, await existing.newPage(), await separate.newPage(), independentlyOwned];
+      for (const [index, page] of pages.entries()) {
+        const target = `http://127.0.0.1:${address.port}/denied-${index}`;
+        const failed = page.waitForEvent('requestfailed', request => request.url() === target);
+        await page.evaluate(url => fetch(url).then(() => 'unexpected', () => 'denied'), target);
+        expect((await failed).failure()?.errorText).toContain('ERR_BLOCKED_BY_CLIENT');
+        const error = page.waitForEvent('pageerror');
+        await page.evaluate(value => { queueMicrotask(() => { throw new Error(value); }); }, `page-${index}-sentinel`);
+        await error;
+      }
+      await guard.dispose(); disposed = true;
+      expect(connections).toBe(0);
+      expect(guard.offOriginRequests).toEqual(pages.map((_, index) => `GET http://127.0.0.1:${address.port}/denied-${index}`));
+      expect(guard.consoleIssues.filter(value => value.startsWith('pageerror:'))).toEqual(pages.map((_, index) => `pageerror: page-${index}-sentinel`));
+    } finally {
+      if (!disposed) await guard.dispose();
+      for (const context of owned) await context.close();
+      await new Promise<void>((resolve, reject) => sink.close(error => error ? reject(error) : resolve()));
+    }
+  });
   test('allows the local test server origin and rejects everything else', () => {
     expect(ALLOWED_ORIGIN).toBe(BASE_URL);
 

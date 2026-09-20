@@ -54,8 +54,8 @@ const options = Object.freeze({
 });
 
 describe('technology review candidate intake', () => {
-  test('reconstructs target-free fixture input from a saved complete Deep lookup', () => {
-    const candidate = buildTechnologyReviewCandidate(savedLookup(), options);
+  test('reconstructs target-free fixture input from a saved complete Deep lookup', async () => {
+    const candidate = await buildTechnologyReviewCandidate(savedLookup(), options);
     assert.deepEqual(candidate, {
       schema: 'whoisleuth.technology-fixture-review-input',
       version: 2,
@@ -68,27 +68,24 @@ describe('technology review candidate intake', () => {
       input: { html: '<link href="/_app/immutable/fixture.css">' },
     });
     assert.doesNotMatch(JSON.stringify(candidate), /private-target|query|registrableDomain/u);
-    const reviewed = buildReviewedTechnologyFixture(candidate);
+    const reviewed = await buildReviewedTechnologyFixture(candidate);
     assert.deepEqual(reviewed.expectedIds, ['sveltekit']);
   });
 
-  test('reconstructs compatible passive-header findings without raw identifiers', () => {
+  test('reconstructs compatible passive-header findings without raw identifiers', async () => {
     const document = savedLookup({
       availability: {
         technologyProfile: {
           source: 'derived', status: 'success', complete: true, truncated: false,
           observedAt: '2026-08-05T09:00:00.000Z',
-          findings: [{
-            id: 'fastly',
-            evidence: [{
-              source: 'passive response header',
-              description: 'The passive X-Served-By response header contains a Fastly cache-node identifier.',
-            }],
-          }],
+          findings: (await analyzeWebsiteTechnology({
+            responseHeaders: { 'x-served-by': 'cache-private-123-SYD' },
+            observedAt: '2026-08-05T09:00:00.000Z',
+          })).findings,
         },
       },
     });
-    const candidate = buildTechnologyReviewCandidate(document, {
+    const candidate = await buildTechnologyReviewCandidate(document, {
       ...options,
       id: 'reviewed-fastly-header',
       expectedIds: ['fastly'],
@@ -98,9 +95,24 @@ describe('technology review candidate intake', () => {
     });
   });
 
-  test('requires complete current evidence and exact analyst confirmation', () => {
-    assert.throws(
-      () => buildTechnologyReviewCandidate(savedLookup({
+  test('does not turn an embedded path into an application-platform claim during review', async () => {
+    const profile = await analyzeWebsiteTechnology({
+      html: '<script src="https://assets.example.test/_next/static/private.js"></script>',
+      observedAt: '2026-08-05T09:00:00.000Z',
+    });
+    const candidate = await buildTechnologyReviewCandidate(savedLookup({ availability: { technologyProfile: profile } }), {
+      ...options, expectedIds: ['nextjs'],
+    });
+    const reviewed = await buildReviewedTechnologyFixture(candidate);
+    assert.deepEqual((await analyzeWebsiteTechnology(reviewed.input)).findings.map(({ id, roles }) => [id, roles]), [
+      ['nextjs', ['embedded_dependency']],
+    ]);
+    assert.doesNotMatch(JSON.stringify(reviewed), /assets\.example|private\.js/u);
+  });
+
+  test('requires complete current evidence and exact analyst confirmation', async () => {
+    await assert.rejects(
+      async () => await buildTechnologyReviewCandidate(savedLookup({
         availability: {
           technologyProfile: {
             status: 'partial', complete: false, truncated: true,
@@ -110,12 +122,12 @@ describe('technology review candidate intake', () => {
       }), options),
       /complete, successful/iu,
     );
-    assert.throws(
-      () => buildTechnologyReviewCandidate(savedLookup(), { ...options, expectedIds: ['astro'] }),
+    await assert.rejects(
+      async () => await buildTechnologyReviewCandidate(savedLookup(), { ...options, expectedIds: ['astro'] }),
       /do not match the saved findings/iu,
     );
-    assert.throws(
-      () => buildTechnologyReviewCandidate(savedLookup({
+    await assert.rejects(
+      async () => await buildTechnologyReviewCandidate(savedLookup({
         availability: {
           technologyProfile: {
             status: 'success', complete: true, truncated: false,
@@ -152,11 +164,11 @@ describe('technology review candidate intake', () => {
     );
   });
 
-  test('reconstructs every catalogue signature exercised by complete synthetic evidence', () => {
+  test('reconstructs every catalogue signature exercised by complete synthetic evidence', async () => {
     const reconstructedIds = new Set<string>();
     let index = 0;
     for (const fixture of TECHNOLOGY_SIGNATURE_FIXTURES) {
-      const profile = analyzeWebsiteTechnology({
+      const profile = await analyzeWebsiteTechnology({
         ...fixture.input,
         observedAt: '2026-08-05T09:00:00.000Z',
       });
@@ -164,14 +176,14 @@ describe('technology review candidate intake', () => {
       index += 1;
       const expectedIds = profile.findings.map((finding) => finding.id).sort();
       const document = savedLookup({ availability: { technologyProfile: profile } });
-      const candidate = buildTechnologyReviewCandidate(document, {
+      const candidate = await buildTechnologyReviewCandidate(document, {
         id: `reviewed-catalogue-contract-${index}`,
         expectedIds,
         licenceBasis: 'factual-observation',
         reviewedAt: '2026-08-05T11:00:00.000Z',
       });
       assert.deepEqual(
-        buildReviewedTechnologyFixture(candidate).expectedIds,
+        (await buildReviewedTechnologyFixture(candidate)).expectedIds,
         expectedIds,
         fixture.id,
       );

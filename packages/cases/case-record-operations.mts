@@ -2,6 +2,8 @@
 // record normalization, and analyst updates.
 
 import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
+import { parseCredentialFreeHttpUrl } from '../evidence/lookup-target.mts';
+import { selectExistingCase, type CaseOpenSelection } from './case-selection.mts';
 import {
   appendCaseAction,
   appendCaseAssertion,
@@ -26,7 +28,6 @@ import {
   type CaseEvidenceRelationStance,
 } from './case-response-model.mts';
 import {
-  CASE_SCHEMA_VERSION,
   MAX_CASES,
   MAX_NOTES_PER_CASE,
   type CaseEvidenceSnapshot,
@@ -34,6 +35,9 @@ import {
   type CasePatch,
   type CaseRecord,
 } from './case-record-contracts.mts';
+import { PUBLISHED_V2_3_CASE_SCHEMA_VERSION, INCIDENT_CASE_SCHEMA_VERSION, MAX_CASE_OBJECTIVE_LENGTH } from '../contracts/case-portability.mts';
+import { readCaseAttachments } from './case-attachment-model.mts';
+import { assertCurrentRecheckQuestion, assertRecheckNonReproduction, readCaseRecheckAnswerContext } from './case-recheck-model.mts';
 import {
   caseDispositionSupportsDefensiveResponse,
   caseStatusIsClosed,
@@ -82,7 +86,7 @@ export {
 };
 export type { ReviewedCaseDisposition };
 
-export const MAX_CASE_OBJECTIVE_LENGTH = 320;
+export { MAX_CASE_OBJECTIVE_LENGTH };
 export const MAX_CASE_INCIDENT_URL_LENGTH = 1_850;
 export const INCIDENT_CONTEXT_STATEMENT_PREFIX = 'Investigate incident URL: ';
 const OBJECTIVE_PREFIX = 'Objective: ';
@@ -117,15 +121,8 @@ export function normalizeCaseObjective(value: unknown): string {
 }
 
 export function parseIncidentUrlContext(value: unknown): IncidentUrlContext | null {
-  if (typeof value !== 'string' || !value || value.length > MAX_CASE_INCIDENT_URL_LENGTH) return null;
-  if (/[\u0000-\u001f\u007f]/u.test(value) || value.trim() !== value) return null;
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    return null;
-  }
-  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || !parsed.hostname) return null;
+  const parsed = parseCredentialFreeHttpUrl(value, MAX_CASE_INCIDENT_URL_LENGTH);
+  if (!parsed) return null;
   const hostname = parsed.hostname.toLowerCase().replace(/\.$/u, '');
   const registrableDomain = canonicalRegistrableDomain(hostname);
   if (!registrableDomain) return null;
@@ -245,7 +242,7 @@ export function normalizeCase(
   const createdAt = existing ? existing.createdAt : caseTimestampOrNull(record.createdAt, sourceVersion) || now;
   const updatedAt = caseTimestampOrNull(record.updatedAt, sourceVersion) || createdAt;
   const timestampOptions = {
-    legacyTimestamps: sourceVersion != null && sourceVersion < CASE_SCHEMA_VERSION,
+    legacyTimestamps: sourceVersion != null && sourceVersion < PUBLISHED_V2_3_CASE_SCHEMA_VERSION,
     ...(sourceVersion === undefined ? {} : { sourceVersion }),
   };
   const evidencePins = normalizeCaseEvidencePins(record.evidencePins, updatedAt, timestampOptions);
@@ -271,9 +268,11 @@ export function normalizeCase(
   );
   const normalizedStatus = normalizeStatus(record.status);
   const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
+  const attachments = readCaseAttachments(record.attachments);
   return {
     id: existing ? existing.id : safeId(record.id) || deterministicId(domain),
     domain,
+    title: sourceVersion != null && sourceVersion < INCIDENT_CASE_SCHEMA_VERSION ? '' : normalizeCaseObjective(record.title),
     status: caseStatusRequiresClosure(normalizedStatus)
       && closures.records.length === 0 && !closures.preV13HistoryUnavailable
       ? 'reviewing'
@@ -294,6 +293,7 @@ export function normalizeCase(
     observedEffects,
     closures,
     branches: normalizeCaseInvestigationBranches(record.branches, updatedAt, branchReferences, timestampOptions),
+    ...(attachments === undefined ? {} : { attachments }),
     createdAt,
     updatedAt,
   };
@@ -335,6 +335,12 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
         new Set(sightings.map((item) => item.id)),
       )
     : normalizeCaseObservedEffectHistory(undefined, now);
+  for (const review of observedEffects.reviews) {
+    if (!review.recheck) continue;
+    assertCurrentRecheckQuestion(review.recheck, assertions);
+    assertRecheckNonReproduction(review.state, review.recheck, review.completeness, evidencePins,
+      evidencePins.find(pin => pin.id === review.evidencePinId), review.observedAt);
+  }
   const closures = input.closure !== undefined
     ? appendCaseClosure(normalizeCaseClosureHistory(undefined, now), input.closure, now, observedEffects, actions)
     : normalizeCaseClosureHistory(undefined, now);
@@ -344,6 +350,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
   return {
     id: makeId(),
     domain,
+    title: normalizeCaseObjective(input.title),
     status: input.closure !== undefined ? 'resolved' : normalizeStatus(input.status),
     disposition: normalizeDisposition(input.disposition),
     reviewReasonCode: normalizeReviewReasonCode(input.reviewReasonCode),
@@ -377,7 +384,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
 }
 
 /**
- * Opens the existing case for a domain, or creates one. Returns a new array
+ * Opens an explicitly selected or unambiguous Case, or creates one. Returns a new array
  * (callers persist it) plus the resolved record and whether it was created.
  * @param {CaseRecord[]} cases
  * @param {{ domain: unknown, status?: unknown, disposition?: unknown, source?: unknown, tags?: unknown, evidence?: unknown, note?: unknown }} input
@@ -388,14 +395,38 @@ export function openOrCreateCase(
   cases: CaseRecord[],
   input: CaseInput,
   nowIso?: string,
+  selection: CaseOpenSelection = {},
 ): { cases: CaseRecord[]; record: CaseRecord; created: boolean } {
   const domain = normalizeDomain(input.domain);
   if (!domain) throw new Error('A valid domain is required to open a case.');
-  const existing = cases.find((item) => item.domain === domain);
+  const existing = selectExistingCase(cases, domain, selection);
   if (existing) return { cases, record: existing, created: false };
   if (cases.length >= MAX_CASES) throw new Error(`Cases are limited to ${MAX_CASES}. Delete or export some first.`);
   const record = createCase({ ...input, domain }, nowIso);
+  if (cases.some(existingCase => existingCase.id === record.id)) throw new Error('A unique Case ID could not be allocated. No data was changed; try again.');
   return { cases: [record, ...cases], record, created: true };
+}
+
+export type CaseIncidentInput = Readonly<{
+  domain: unknown;
+  title: unknown;
+  reuse?: Readonly<{ caseId: string; snapshotId: string }>;
+}>;
+
+/** Start a separate incident; reuse only the deliberately selected observation. */
+export function createCaseIncident(cases: CaseRecord[], input: CaseIncidentInput, nowIso?: string) {
+  const domain = normalizeDomain(input.domain);
+  const title = normalizeCaseObjective(input.title);
+  if (!domain) throw new Error('Enter a valid domain for the incident.');
+  if (!title) throw new Error('Enter a title that distinguishes this incident.');
+  if (typeof input.title === 'string' && input.title.trim().length > MAX_CASE_OBJECTIVE_LENGTH) throw new Error(`Incident titles are limited to ${MAX_CASE_OBJECTIVE_LENGTH} characters.`);
+  let evidence: CaseEvidenceSnapshot | undefined;
+  if (input.reuse) {
+    const source = cases.find(record => record.id === input.reuse?.caseId && record.domain === domain);
+    evidence = source?.evidenceHistory.find(snapshot => snapshot.id === input.reuse?.snapshotId);
+    if (!evidence) throw new Error('The selected source observation is no longer available for this domain. No Case was created.');
+  }
+  return openOrCreateCase(cases, { domain, title, ...(evidence ? { evidence: structuredClone(evidence) } : {}) }, nowIso, { newIncident: true });
 }
 
 /**
@@ -421,6 +452,9 @@ export function updateCase(
   if (index < 0) throw new Error('That case no longer exists.');
   const current = cases[index];
   if (!current) throw new Error('That case no longer exists.');
+  if (patch.title !== undefined && patch.expectedTitle !== undefined && patch.expectedTitle !== (current.title ?? '')) {
+    throw new Error('The incident title changed after this draft was started. Reload and review the current title before saving; your draft has not been applied.');
+  }
   let notes = current.notes;
   if (patch.note !== undefined) {
     const body = normalizeNoteBody(patch.note);
@@ -487,6 +521,13 @@ export function updateCase(
     new Set(sightings.map((item) => item.id)),
   );
   if (patch.observedEffectReview !== undefined) {
+    const review = objectRecord(patch.observedEffectReview);
+    const context = readCaseRecheckAnswerContext(review.recheck);
+    if (context) {
+      assertCurrentRecheckQuestion(context, assertions);
+      assertRecheckNonReproduction(review.state as import('./case-response-records.mts').CaseObservedEffectState, context,
+        String(review.completeness), evidencePins, evidencePins.find(pin => pin.id === review.evidencePinId), typeof review.observedAt === 'string' ? review.observedAt : null);
+    }
     observedEffects = appendCaseObservedEffectReview(
       observedEffects,
       patch.observedEffectReview,
@@ -511,6 +552,7 @@ export function updateCase(
   }
   const record: CaseRecord = {
     ...current,
+    title: patch.title === undefined ? current.title ?? '' : normalizeCaseObjective(patch.title),
     status: patch.closure !== undefined
       ? 'resolved'
       : patch.status !== undefined ? normalizeStatus(patch.status) : current.status,
@@ -541,10 +583,9 @@ export function updateCase(
   return { cases: next, record };
 }
 
-export type CaseConclusionEvidence = Readonly<{
-  pin: unknown;
-  stance: CaseEvidenceRelationStance;
-}>;
+export type CaseConclusionEvidence = Readonly<{ stance: CaseEvidenceRelationStance } & (
+  { pin: unknown; pinId?: never } | { pinId: string; pin?: never }
+)>;
 
 export type CaseConclusionInput = Readonly<{
   disposition: unknown;
@@ -556,8 +597,8 @@ export type CaseConclusionInput = Readonly<{
 
 /**
  * Records one reviewed conclusion as a single pure Case mutation. The selected
- * observations become bounded Case pins before the decision is created, so the
- * decision cannot point at absent evidence. Counterevidence is retained as a
+ * observations become bounded Case pins or reference existing retained pins,
+ * so the decision cannot point at absent evidence. Counterevidence is retained as a
  * separate resolved contradiction assertion rather than being hidden inside a
  * favourable disposition.
  */
@@ -590,15 +631,33 @@ export function recordCaseConclusion(
   const current = cases.find((item) => item.id === id);
   if (!current) throw new Error('That case no longer exists.');
   const existingPinIds = new Set(current.evidencePins.map((pin) => pin.id));
-  const withPins = updateCase(cases, id, {
-    evidencePins: input.evidence.map((item) => item.pin),
-  }, now);
+  const selectedExisting = new Set<string>();
+  for (const item of input.evidence) {
+    if (Object.hasOwn(item, 'pin') === Object.hasOwn(item, 'pinId')) throw new Error('Select one new pin or one retained pin ID for each conclusion fact.');
+    if (Object.hasOwn(item, 'pinId')) {
+      if (typeof item.pinId !== 'string' || !existingPinIds.has(item.pinId)) throw new Error('The selected conclusion pin is no longer retained in this Case.');
+      if (selectedExisting.has(item.pinId)) throw new Error('Select each retained conclusion pin once.');
+      selectedExisting.add(item.pinId);
+    }
+  }
+  const newEvidence = input.evidence.filter(item => Object.hasOwn(item, 'pin'));
+  const withPins = newEvidence.length
+    ? updateCase(cases, id, { evidencePins: newEvidence.map(item => item.pin) }, now)
+    : { cases, record: current };
   const addedPins = withPins.record.evidencePins.filter((pin) => !existingPinIds.has(pin.id));
-  if (addedPins.length !== input.evidence.length) {
+  if (addedPins.length !== newEvidence.length) {
     throw new Error('The selected conclusion evidence could not be retained completely.');
   }
+  let nextAdded = 0;
+  const selectedPins = input.evidence.map(item => {
+    const pin = Object.hasOwn(item, 'pinId')
+      ? withPins.record.evidencePins.find(pin => pin.id === item.pinId)
+      : addedPins[nextAdded++];
+    if (!pin) throw new Error('The selected conclusion evidence could not be retained completely.');
+    return pin;
+  });
 
-  const supportingPinIds = addedPins.flatMap((pin, index) => (
+  const supportingPinIds = selectedPins.flatMap((pin, index) => (
     input.evidence[index]?.stance === 'supports' ? [pin.id] : []
   ));
   let concluded = updateCase(withPins.cases, id, {
@@ -611,7 +670,7 @@ export function recordCaseConclusion(
     },
   }, now);
 
-  const contradictionRelations = addedPins.flatMap((pin, index) => (
+  const contradictionRelations = selectedPins.flatMap((pin, index) => (
     input.evidence[index]?.stance === 'contradicts'
       ? [{ evidencePinId: pin.id, stance: 'contradicts' as const }]
       : []
@@ -628,7 +687,7 @@ export function recordCaseConclusion(
       },
     }, now);
   }
-  const unresolvedRelations = addedPins.flatMap((pin, index) => (
+  const unresolvedRelations = selectedPins.flatMap((pin, index) => (
     input.evidence[index]?.stance === 'unresolved'
       ? [{ evidencePinId: pin.id, stance: 'unresolved' as const }]
       : []
@@ -694,12 +753,15 @@ export function recordCaseRecheckOutcome(
     followUpAt?: unknown;
     limitations?: unknown;
     collectionDepth?: unknown;
+    recheck?: import('./case-recheck-model.mts').CaseRecheckAnswerContext;
+    observationHostname?: unknown;
   }>,
   nowIso?: string,
 ): { cases: CaseRecord[]; record: CaseRecord } {
   const now = caseTimestampOrNull(nowIso) || new Date().toISOString();
   const current = cases.find((item) => item.id === id);
   if (!current) throw new Error('That case no longer exists.');
+  if (input.recheck && input.observationHostname !== input.recheck.targetHostname) throw new Error('This recheck concerns a different or unknown hostname. Recollect the saved question target before recording its answer.');
   const beforePinIds = new Set(current.evidencePins.map((pin) => pin.id));
   const withPin = updateCase(cases, id, {
     evidencePin: {
@@ -711,6 +773,7 @@ export function recordCaseRecheckOutcome(
       sourceState: 'reviewed',
       observedAt: input.observedAt,
       collectionDepth: input.collectionDepth,
+      observationHostname: input.observationHostname,
       completeness: input.completeness,
       truncated: false,
       limitations: input.limitations,
@@ -728,6 +791,7 @@ export function recordCaseRecheckOutcome(
       evidencePinId: comparisonPin.id,
       followUpAt: input.followUpAt,
       limitations: input.limitations,
+      ...(input.recheck ? { recheck: input.recheck } : {}),
     },
   }, now);
 }

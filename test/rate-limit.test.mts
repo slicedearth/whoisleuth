@@ -6,11 +6,69 @@ import {
   getClientIp,
   getForwardedProtocol,
   CONTACT_ROUTE_RATE_LIMIT,
+  LOGIN_RATE_LIMIT,
   PRERENDERED_HTML_RATE_LIMIT,
   trustsForwardedHeaders,
+  serverlessClientIdentity,
 } from '../lib/rate-limit.mts';
+import { headerFact, strictHeader, lastHeaderToken } from '../lib/request-header-facts.mts';
+
+test('header facts reject ambiguous inputs without merging origin and proxy policies', () => {
+  const chain = { 'X-Forwarded-Proto': 'http, https' };
+  assert.deepEqual(headerFact(chain, 'x-forwarded-proto'), { state: 'valid', value: 'http, https' });
+  assert.equal(strictHeader(chain, 'x-forwarded-proto').state, 'invalid');
+  assert.equal(lastHeaderToken(chain, 'x-forwarded-proto'), 'https');
+  for (const headers of [
+    { 'x-forwarded-proto': 'https', 'X-Forwarded-Proto': 'http' },
+    { 'x-forwarded-proto': ['https'] }, { 'x-forwarded-proto': 'https\n' },
+    { 'x-forwarded-proto': 'x'.repeat(2049) },
+  ]) {
+    assert.equal(headerFact(headers, 'x-forwarded-proto').state, 'invalid');
+    assert.equal(getForwardedProtocol(headers, { TRUST_PROXY: '1' }), null);
+  }
+  assert.equal(getClientIp({ 'x-forwarded-for': 'not-an-address' }, '192.0.2.1', { TRUST_PROXY: '1' }), '192.0.2.1');
+  assert.equal(getClientIp({ 'x-forwarded-for': '192.0.2.2,' }, '192.0.2.1', { TRUST_PROXY: '1' }), '192.0.2.1');
+  assert.equal(getClientIp({ 'x-forwarded-for': '192.0.2.2', 'X-Forwarded-For': '192.0.2.3' }, '192.0.2.1', { TRUST_PROXY: '1' }), '192.0.2.1');
+});
+
+test('deployed serverless identity refuses missing markers, malformed addresses and spoofed alternatives', () => {
+  const valid = { 'x-nf-client-connection-ip': '192.0.2.1' };
+  assert.deepEqual(serverlessClientIdentity(valid, { NETLIFY: 'true' }), { ip: '192.0.2.1' });
+  assert.deepEqual(serverlessClientIdentity({ 'X-Nf-Client-Connection-Ip': '2001:db8::1' }, { NETLIFY: '1' }), { ip: '2001:db8::1' });
+  const runtime = { SITE_ID: '01234567-89ab-cdef-0123-456789abcdef', NODE_ENV: 'production' };
+  assert.deepEqual(serverlessClientIdentity(valid, runtime), { ip: '192.0.2.1' });
+  assert.equal(trustsForwardedHeaders(runtime), false, 'function identity cannot opt a generic host into proxy trust');
+  assert.match(serverlessClientIdentity(valid, { NODE_ENV: 'production', TRUST_PROXY: '1' }).error!, /site identity/u);
+  for (const headers of [{}, { 'x-forwarded-for': '192.0.2.1' }, { 'x-nf-client-connection-ip': '192.0.2.1,192.0.2.2' },
+    { ...valid, 'X-Nf-Client-Connection-Ip': '192.0.2.2' }, { 'x-nf-client-connection-ip': 'not-an-address' }]) {
+    assert.match(serverlessClientIdentity(headers, { NETLIFY: 'true' }).error!, /client identity/u);
+  }
+  assert.deepEqual(serverlessClientIdentity({}, {}), { ip: 'unknown' }, 'local fixture execution does not claim deployed identity');
+});
 
 describe('fixed-window bucket bounds', () => {
+  test('aggregates rotating IPv6 login addresses by /64 without merging adjacent prefixes', () => {
+    const checkers = createScopedRateLimitCheckers();
+    for (let index = 1; index <= LOGIN_RATE_LIMIT.limit; index++) {
+      assert.equal(checkers.login(`2001:db8:1:2::${index.toString(16)}`, 1_000).allowed, true);
+    }
+    assert.equal(checkers.login('2001:0DB8:0001:0002:1234:5678:abcd:ffff', 1_001).allowed, false);
+    assert.equal(checkers.login('2001:db8:1:3::1', 1_001).allowed, true);
+    assert.equal(checkers.api('2001:db8:1:2::1', 1_001).allowed, true);
+    assert.equal(checkers.login('2001:db8:1:2::1', 1_000 + LOGIN_RATE_LIMIT.windowMs).allowed, true);
+  });
+
+  test('maps equivalent IPv4 login identities together without merging neighbouring addresses', () => {
+    const checkers = createScopedRateLimitCheckers();
+    for (let index = 0; index < LOGIN_RATE_LIMIT.limit; index++) {
+      assert.equal(checkers.login('192.0.2.1', 1_000).allowed, true);
+    }
+    assert.equal(checkers.login('::ffff:192.0.2.1', 1_001).allowed, false);
+    assert.equal(checkers.login('::ffff:c000:201', 1_001).allowed, false);
+    assert.equal(checkers.login('192.0.2.2', 1_001).allowed, true);
+    assert.equal(checkers.login('::ffff:192.0.2.2', 1_001).allowed, true);
+  });
+
   test('evicts the oldest identity at capacity instead of locking out every new identity', () => {
     const check = createRateLimitChecker({ limit: 2, windowMs: 60_000 }, 2);
 

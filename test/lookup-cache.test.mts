@@ -7,6 +7,74 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { _storeBytes, _storeSize, cached, MAX_ENTRIES, MAX_TOTAL_BYTES } from '../lib/lookup-cache.mts';
+import { deferred } from './deferred.mts';
+
+test('producer, concurrent consumers and later readers cannot mutate each other', async () => {
+  const source = { observations: [{ status: 'partial', values: ['retained'] }], absent: undefined };
+  const original = structuredClone(source);
+  const work = deferred<typeof source>();
+  let calls = 0;
+  const first = cached('lookup-cache-test:owned', () => { calls++; return work.promise; });
+  const second = cached('lookup-cache-test:owned', () => { calls++; return work.promise; });
+  work.resolve(source);
+  const [one, two] = await Promise.all([first, second]);
+  assert.equal(calls, 1);
+  source.observations[0]!.values.push('producer change');
+  one.observations[0]!.status = 'complete';
+  one.observations[0]!.values.push('consumer change');
+  assert.deepEqual(two, original);
+  const later = await cached('lookup-cache-test:owned', () => { throw new Error('Unexpected cache miss.'); });
+  assert.deepEqual(later, original);
+  assert.notEqual(later, two);
+  assert.ok(Object.hasOwn(later, 'absent'), 'copying must preserve undefined fields rather than using a lossy JSON round trip');
+});
+
+test('cancellable successful callers also receive independent cached values', async () => {
+  const source = { values: ['retained'] };
+  const received = await cached('lookup-cache-test:owned-signal', () => source, new AbortController().signal);
+  source.values.push('producer change');
+  received.values.push('consumer change');
+  assert.deepEqual(await cached('lookup-cache-test:owned-signal', () => source), { values: ['retained'] });
+});
+
+test('non-cloneable values do not enter the shared cache', async () => {
+  let calls = 0;
+  const value = { unsupported: () => 'not retained' };
+  for (let i = 0; i < 2; i++) assert.equal(await cached('lookup-cache-test:noncloneable', () => { calls++; return value; }), value);
+  assert.equal(calls, 2);
+});
+
+test('cancellable work cannot cancel a shared caller or cache a late result', async () => {
+  const key = 'lookup-cache-test:independent-cancellation';
+  const controller = new AbortController();
+  const ordinary = deferred<string>();
+  const signalled = deferred<string>();
+  const started = deferred<void>();
+  const shared = cached(key, () => ordinary.promise);
+  const interrupted = cached(key, () => { started.resolve(); return signalled.promise; }, controller.signal);
+  await started.promise;
+  controller.abort();
+  await assert.rejects(interrupted, { name: 'AbortError' });
+  signalled.resolve('cancelled value');
+  ordinary.resolve('independent value');
+  assert.equal(await shared, 'independent value');
+  assert.equal(await cached(key, () => 'unexpected replacement'), 'independent value');
+  assert.equal(await cached('lookup-cache-test:signal-success', () => 'complete', new AbortController().signal), 'complete');
+  assert.equal(await cached('lookup-cache-test:signal-success', () => 'unexpected replacement'), 'complete');
+});
+
+test('a synchronous factory failure is shared once and does not poison a later attempt', async () => {
+  let calls = 0;
+  const failure = new Error('Synthetic cache factory failure.');
+  const factory = () => { calls += 1; throw failure; };
+  const settled = await Promise.allSettled([
+    cached('lookup-cache-test:sync-failure', factory),
+    cached('lookup-cache-test:sync-failure', factory),
+  ]);
+  assert.equal(calls, 1);
+  assert.deepEqual(settled, [{ status: 'rejected', reason: failure }, { status: 'rejected', reason: failure }]);
+  assert.equal(await cached('lookup-cache-test:sync-failure', () => 'recovered'), 'recovered');
+});
 
 test('the cache never grows past MAX_ENTRIES, even when every key is unique', async () => {
   const extra = 50;

@@ -2,6 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as baseline from '../frontend/src/lib/analysis/page-baseline.ts';
 import { requiredValue } from './value-assertions.mts';
+import { PAGE_FINGERPRINT_TOKEN_LIMITS } from '../packages/contracts/page-fingerprints.mts';
 
 const ISO = '2026-07-13T04:05:06.000Z';
 const SHA_A = 'a'.repeat(64);
@@ -52,6 +53,26 @@ function availability(overrides = {}) {
 }
 
 describe('official-site page baseline', () => {
+  test('keeps public fingerprint bounds fixed and admits the full current token interval', () => {
+    const stored = requiredValue(baseline.createPageBaseline('example.com', availability()));
+    for (const version of [1, 2] as const) {
+      const maximum = version === 1 ? 4_096 : PAGE_FINGERPRINT_TOKEN_LIMITS[version];
+      const candidate = {
+        ...stored,
+        fingerprintVersion: version,
+        normalizedHtml: { ...stored.normalizedHtml, tokenCount: maximum },
+        domStructure: { ...stored.domStructure, nodeCount: maximum, parser: baseline.PAGE_FINGERPRINT_PARSERS[version] },
+      };
+      assert.ok(baseline.normalizePageBaseline(candidate));
+      assert.equal(baseline.normalizePageBaseline({
+        ...candidate, normalizedHtml: { ...candidate.normalizedHtml, tokenCount: maximum + 1 },
+      }), null);
+      assert.equal(baseline.normalizePageBaseline({
+        ...candidate, domStructure: { ...candidate.domStructure, nodeCount: maximum + 1 },
+      }), null);
+    }
+  });
+
   test('builds the bounded current schema from a deep page-identity response', () => {
     const result = requiredValue(baseline.createPageBaseline('EXAMPLE.COM.', availability()));
     assert.deepEqual(result, {

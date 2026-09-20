@@ -73,6 +73,11 @@ exercises every documented command help boundary, writes a SHA-256 digest, and
 refuses a tag that does not match the root application version. Existing output
 files are not overwritten.
 
+The candidate also records the fresh installation's transitive dependency
+identities in `installed-dependencies.json`. The release workflow audits that
+graph before approval, in addition to the repository lockfile; see the
+[dependency audit policy](dependency-maintenance.md#production-audit-policy).
+
 Registry publication is deliberately separate from candidate assembly. The
 CLI package is declared as [dual-use security
 software](https://docs.npmjs.com/policies/dual-use/). The tagged release workflow

@@ -1,8 +1,31 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { buildDesiredPostureHistory, buildOwnedDomainPostureReview } from '../frontend/src/lib/analysis/owned-domain-posture-review.ts';
+import { buildDesiredPostureHistory, buildOwnedDomainPostureReview, filterPostureComparisons, type DesiredPostureComparison } from '../frontend/src/lib/analysis/owned-domain-posture-review.ts';
 import type { BrandProfile } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import type { DomainPostureHttpResponse } from '../frontend/src/lib/analysis/client-response-contracts.ts';
+import { brandPostureObservationContext } from '../frontend/src/lib/analysis/brand-profile-model.ts';
+import { postureObservation, postureSource } from './posture-observation-fixture.mts';
+
+test('comparison filters keep unknowns distinct and preserve all source rows', () => {
+  const states: DesiredPostureComparison['state'][] = ['aligned', 'approved_window', 'drift', 'not_configured', 'observed', 'review', 'suppressed', 'unavailable', 'unknown', 'unsupported'];
+  const rows: DesiredPostureComparison[] = states.map(state => ({ field: 'nameservers', label: state, state,
+    desired: state === 'aligned' || state === 'drift' ? ['ns1.example'] : [], observed: [], explanation: 'Fixture comparison', suppressionReason: '', approvedWindowSummary: '' }));
+  const before = structuredClone(rows);
+  const baseline = { nameservers: [], ds: [], mx: [], caa: [] };
+  assert.deepEqual(filterPostureComparisons(rows, 'different', baseline).map(row => row.state), ['approved_window', 'drift', 'suppressed']);
+  assert.deepEqual(filterPostureComparisons(rows, 'unknown', baseline).map(row => row.state), ['unavailable', 'unknown', 'unsupported']);
+  assert.deepEqual(filterPostureComparisons(rows, 'all', baseline), before);
+  assert.deepEqual(rows, before);
+});
+
+test('configured filtering includes expected absence but not observation-only or unconfigured fields', () => {
+  const baseline = { nameservers: [], ds: [], mx: [], caa: ['0 issue "ca.example"'],
+    recordModes: { nameservers: 'unconfigured', ds: 'observe_only', mx: 'expect_none', caa: 'expect_records' } as const };
+  const rows: DesiredPostureComparison[] = (['nameservers', 'ds', 'mx', 'caa'] as const).map(field => ({ field, label: field,
+    state: 'unknown', desired: baseline[field], observed: [], explanation: 'No current observation', suppressionReason: '', approvedWindowSummary: '' }));
+  assert.deepEqual(filterPostureComparisons(rows, 'configured', baseline).map(row => row.field), ['mx', 'caa']);
+  assert.deepEqual(filterPostureComparisons(rows, 'unknown', baseline), rows);
+});
 
 const profile = {
   id: 'profile-1',
@@ -40,8 +63,8 @@ const report = {
   mailProtectionProfile: 'standard',
   summary: { danger: 0, info: 1, pass: 2, warning: 1 },
   checks: [
-    { id: 'registration_lock', label: 'Registration controls', status: 'pass', summary: 'Observed', detail: '', records: [], remediation: '' },
-    { id: 'mx', label: 'Mail exchange', status: 'pass', summary: 'Observed', detail: '', records: [], remediation: '' },
+    { id: 'registration_lock', label: 'Registration controls', status: 'pass', summary: 'Observed', detail: '', records: ['client transfer prohibited'], remediation: '', sourceContext: postureSource('registry_rdap', '2026-06-01T00:00:00.000Z') },
+    { id: 'mx', label: 'Mail exchange', status: 'pass', summary: 'Observed', detail: '', records: [], remediation: '', sourceContext: postureSource('dns_mx', '2026-06-01T00:00:00.000Z') },
     { id: 'spf', label: 'SPF', status: 'warning', summary: 'Review', detail: '', records: [], remediation: '' },
     { id: 'mta_sts', label: 'MTA-STS', status: 'info', summary: 'Unavailable', detail: '', records: [], remediation: '' },
   ],
@@ -92,10 +115,10 @@ describe('owned-domain posture review', () => {
         approvedChangeWindows: [],
         suppressions: [{ field: 'mx', reason: 'Reviewed mail transition.', expiresAt: null }],
         note: '',
-        previousObservation: {
+        previousObservation: postureObservation(profile, 'example.test', {
           observedAt: '2026-05-01T00:00:00.000Z',
-          checks: [{ id: 'registration_lock', status: 'warning' as const, records: [] }],
-        },
+          checks: [{ id: 'registration_lock', status: 'warning' as const, records: ['ok'], sourceContext: postureSource('registry_rdap', '2026-05-01T00:00:00.000Z') }],
+        }),
         updatedAt: '2026-05-01T00:00:00.000Z',
       }],
     } satisfies BrandProfile;
@@ -105,10 +128,10 @@ describe('owned-domain posture review', () => {
         ...report.checks.map((check) => check.id === 'mx'
           ? { ...check, records: ['20 other-mail.example.test'] }
           : check),
-        { id: 'nameservers', label: 'Nameservers', status: 'pass' as const, summary: 'Observed', detail: '', records: ['ns1.example.test'], remediation: '' },
+        { id: 'nameservers', label: 'Nameservers', status: 'pass' as const, summary: 'Observed', detail: '', records: ['ns1.example.test'], remediation: '', sourceContext: postureSource('dns_ns', report.checkedAt) },
       ],
     } satisfies DomainPostureHttpResponse;
-    const review = buildOwnedDomainPostureReview(configured, withRecords, '2026-06-01T00:00:00.000Z');
+    const review = buildOwnedDomainPostureReview(configured, withRecords, '2026-06-01T00:00:00.000Z', brandPostureObservationContext(profile, report.domain));
     assert.equal(review.baselineComparisons.find((item) => item.field === 'nameservers')?.state, 'aligned');
     assert.equal(review.baselineComparisons.find((item) => item.field === 'mx')?.state, 'suppressed');
     assert.equal(review.baselineComparisons.find((item) => item.field === 'ds')?.state, 'unsupported');
@@ -153,11 +176,11 @@ describe('owned-domain posture review', () => {
 
   test('compares retained posture history only across checks present in both observations', () => {
     const history = buildDesiredPostureHistory([
-      { observedAt: '2026-05-01T00:00:00.000Z', checks: [{ id: 'mx', status: 'pass', records: ['10 mail.example.test'] }] },
-      { observedAt: '2026-06-01T00:00:00.000Z', checks: [
-        { id: 'mx', status: 'warning', records: ['20 mail.example.test'] },
+      postureObservation(profile, report.domain, { observedAt: '2026-05-01T00:00:00.000Z', checks: [{ id: 'mx', status: 'pass', records: ['10 mail.example.test'], sourceContext: postureSource('dns_mx', '2026-05-01T00:00:00.000Z') }] }),
+      postureObservation(profile, report.domain, { observedAt: '2026-06-01T00:00:00.000Z', checks: [
+        { id: 'mx', status: 'warning', records: ['20 mail.example.test'], sourceContext: postureSource('dns_mx', '2026-06-01T00:00:00.000Z') },
         { id: 'dmarc', status: 'pass', records: ['v=DMARC1; p=reject'] },
-      ] },
+      ] }),
     ]);
 
     assert.equal(history.length, 1);

@@ -1,4 +1,9 @@
 import { Buffer } from 'node:buffer';
+import { latestObservationCohort } from '../packages/evidence/latest-observations.mts';
+import { canonicalCaaRecord, canonicalDsRecord, canonicalMxRecord, canonicalDomainControlRecords, canonicalPostureRecords } from '../packages/evidence/domain-control-runtime.mts';
+import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import { postureTransferRestriction } from '../packages/evidence/domain-posture-context.mts';
+import { MAX_DOMAIN_CONTROL_INPUT_RECORDS, PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSION } from '../packages/contracts/domain-control-manifest.mts';
 
 import {
   scanBoundedJson,
@@ -9,6 +14,8 @@ import {
   CLI_DOMAIN_CONTROL_REVIEW_LIMITATIONS,
   CLI_DOMAIN_CONTROL_REVIEW_SCHEMA,
   CLI_DOMAIN_CONTROL_REVIEW_VERSION,
+  PUBLIC_CLI_DOMAIN_CONTROL_REVIEW_VERSION,
+  SUPPORTED_CLI_DOMAIN_CONTROL_REVIEW_VERSIONS,
   DOMAIN_CONTROL_REVIEW_VERSION,
   MAX_DOMAIN_CONTROL_REVIEW_INPUT_BYTES,
   MAX_DOMAIN_CONTROL_REVIEW_JSON_DEPTH,
@@ -16,9 +23,11 @@ import {
   MAX_DOMAIN_CONTROL_REVIEW_JSON_VALUES,
   MAX_DOMAIN_CONTROL_REVIEW_LOOKUPS,
   MIN_DOMAIN_CONTROL_REVIEW_LOOKUPS,
+  type DomainControlReviewField,
 } from '../packages/contracts/domain-control-review.mts';
 import {
-  DOMAIN_CONTROL_FLIGHT_RECORDER_FIELDS,
+  MAX_FLIGHT_RECORDER_VALUES,
+  mergeConcurrentDomainControlFields,
   type DomainControlFlightRecorderField,
   type DomainControlFlightRecorderObservation,
   type DomainControlObservationState,
@@ -47,6 +56,11 @@ const CLI_REVIEW_INPUT_KEY_SET = new Set<string>(CLI_DOMAIN_CONTROL_REVIEW_INPUT
 
 type Field = DomainControlFlightRecorderObservation['fields'][number];
 
+export const DOMAIN_CONTROL_REVIEW_SOURCE_FIELDS: Readonly<Partial<Record<DomainControlFlightRecorderField, DomainControlReviewField>>> = Object.freeze({
+  registry_nameservers: 'nameservers', delegation_ds: 'ds', mail_exchangers: 'mx', caa_policy: 'caa',
+  tls_certificate: 'tlsIssuer', tls_public_key: 'tlsSpkiSha256', registrar_lock: 'registrarLock',
+});
+
 function record(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
 }
@@ -60,49 +74,30 @@ function state(value: unknown): DomainControlObservationState {
 }
 
 function text(value: unknown, maximum = 500): string | null {
-  if (typeof value !== 'string') return null;
-  const normalized = value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').replace(/\s+/gu, ' ').trim().slice(0, maximum);
+  if (typeof value !== 'string' || value.length > maximum || /[\u0000-\u001f\u007f]/u.test(value)) return null;
+  const normalized = value.trim();
   return normalized || null;
 }
 
-function list(value: unknown, normalizer: (item: unknown) => string | null = (item) => text(item)): string[] {
-  if (!Array.isArray(value)) return [];
-  return [...new Set(value.slice(0, 128).flatMap((item) => {
-    const normalized = normalizer(item);
-    return normalized ? [normalized.toLowerCase()] : [];
-  }))].sort().slice(0, 32);
+function sourceClock(...values: unknown[]): string | null {
+  const declared = values.filter((value) => value !== undefined && value !== null);
+  const times = declared.map(normalizeExplicitIsoTimestamp);
+  return times.length && times.every((time) => time !== null && time === times[0]) ? times[0]! : null;
 }
 
-function hostname(value: unknown): string | null {
-  return text(value, 253)?.toLowerCase().replace(/\.$/u, '') ?? null;
+function sourceState(value: UnknownRecord): DomainControlObservationState {
+  const result = state(value.status);
+  return result === 'observed' && (value.complete === false || value.truncated === true) ? 'partial' : result;
 }
 
-function mxValue(value: unknown): string | null {
-  const item = record(value);
-  const exchange = hostname(item.exchange ?? item.host ?? item.value);
-  if (!exchange) return text(value);
-  const priority = Number.isSafeInteger(item.priority) && Number(item.priority) >= 0 ? Number(item.priority) : null;
-  return priority === null ? exchange : `${priority} ${exchange}`;
-}
-
-function caaValue(value: unknown): string | null {
-  const item = record(value);
-  const tag = text(item.tag, 32)?.toLowerCase();
-  const recordValue = text(item.value, 500)?.toLowerCase();
-  if (!tag || !recordValue) return text(value);
-  const critical = Number.isSafeInteger(item.critical) ? Number(item.critical) : Number.isSafeInteger(item.flags) ? Number(item.flags) : 0;
-  return `${critical} ${tag} ${recordValue}`;
-}
-
-function dsValue(value: unknown): string | null {
-  const item = record(value);
-  const keyTag = Number.isSafeInteger(item.keyTag) ? item.keyTag : null;
-  const algorithm = Number.isSafeInteger(item.algorithm) ? item.algorithm : null;
-  const digestType = Number.isSafeInteger(item.digestType) ? item.digestType : null;
-  const digest = text(item.digest, 512)?.toLowerCase();
-  return keyTag !== null && algorithm !== null && digestType !== null && digest
-    ? `${keyTag} ${algorithm} ${digestType} ${digest}`
-    : text(value);
+function dnsRecordState(dns: UnknownRecord, name: string): DomainControlObservationState {
+  const query = record(record(dns.diagnostics)[name]);
+  if (!Object.keys(query).length) return sourceState(dns);
+  const values = record(dns.records)[name];
+  const contradictoryAbsence = query.status === 'not_found' && Array.isArray(values) && values.length > 0;
+  if ((query.status === 'success' || query.status === 'not_found') && query.truncated === false && query.discarded === 0
+    && !contradictoryAbsence && (query.error === undefined || query.error === null)) return 'observed';
+  return state(query.status) === 'observed' || query.status === 'not_found' ? 'partial' : state(query.status);
 }
 
 function field(
@@ -110,78 +105,140 @@ function field(
   source: string,
   sourceState: DomainControlObservationState,
   values: readonly string[],
+  observedAt: string | null,
 ): Field {
-  return Object.freeze({ id, source, state: sourceState, values: Object.freeze([...values].sort()) });
+  return Object.freeze({ id, source, state: sourceState, values: Object.freeze([...values].sort()), observedAt });
+}
+
+function recordField(
+  id: DomainControlFlightRecorderField,
+  source: string,
+  sourceState: DomainControlObservationState,
+  input: unknown,
+  normalize: (value: unknown) => string,
+  observedAt: string | null,
+): Field {
+  const rows = Array.isArray(input) ? input.slice(0, MAX_DOMAIN_CONTROL_INPUT_RECORDS) : [];
+  const values = new Set<string>();
+  let invalid = Array.isArray(input) || (input === undefined && sourceState !== 'observed') ? 0 : 1;
+  for (const row of rows) {
+    let value = '';
+    try {
+      value = normalize(row);
+    } catch (error) {
+      if (!(error instanceof TypeError)) throw error;
+    }
+    if (value) values.add(value);
+    else invalid += 1;
+  }
+  const sorted = [...values].sort();
+  const omitted = Math.max(0, (Array.isArray(input) ? input.length : 0) - rows.length)
+    + Math.max(0, sorted.length - MAX_FLIGHT_RECORDER_VALUES);
+  return field(
+    id,
+    invalid || omitted ? `${source} (${invalid} invalid; ${omitted} omitted records)` : source,
+    sourceState === 'observed' && (invalid || omitted) ? 'partial' : sourceState,
+    sorted.slice(0, MAX_FLIGHT_RECORDER_VALUES),
+    observedAt,
+  );
 }
 
 function diagnostic(document: SavedLookupDocument, key: string): DomainControlObservationState {
-  return state(record(document.diagnostics)[key] && record(record(document.diagnostics)[key]).status);
+  return sourceState(record(record(document.diagnostics)[key]));
 }
 
-function registryParsed(document: SavedLookupDocument): Readonly<{ parsed: UnknownRecord; source: string; sourceState: DomainControlObservationState }> {
+function registryClock(document: SavedLookupDocument, key: 'rdap' | 'whois'): string | null {
+  const detail = record(record(document.diagnostics)[key]);
+  const publication = record(document[key]);
+  const named = key === 'rdap' ? 'fetchedAt' : 'queriedAt';
+  return sourceClock(detail.observedAt, detail[named], publication.observedAt, publication[named]);
+}
+
+function registryParsed(document: SavedLookupDocument): Readonly<{ parsed: UnknownRecord; source: string; sourceState: DomainControlObservationState; observedAt: string | null }> {
   const rdapState = diagnostic(document, 'rdap');
   const whoisState = diagnostic(document, 'whois');
   const rdap = record(record(document.rdap).parsed);
-  if (rdapState === 'observed' && Object.keys(rdap).length) return { parsed: rdap, source: 'Registry RDAP', sourceState: rdapState };
+  if (rdapState === 'observed' && Object.keys(rdap).length) return { parsed: rdap, source: 'Registry RDAP', sourceState: rdapState, observedAt: registryClock(document, 'rdap') };
   const whois = record(record(document.whois).parsed);
-  return { parsed: whois, source: 'WHOIS', sourceState: whoisState };
+  return { parsed: whois, source: 'WHOIS', sourceState: whoisState, observedAt: registryClock(document, 'whois') };
 }
 
-function lockValue(parsed: UnknownRecord): string[] {
-  const statuses = list(parsed.statuses ?? parsed.status, (item) => text(item, 120)?.replace(/[\s_-]+/gu, '').toLowerCase() ?? null);
-  return [statuses.some((item) => item.includes('transferprohibited')) ? 'required' : 'not_required'];
+function lockValue(parsed: UnknownRecord): string | null {
+  const input = parsed.statuses ?? parsed.status;
+  const statuses = Array.isArray(input) ? canonicalPostureRecords('registration_lock', input) : null;
+  return statuses ? postureTransferRestriction(statuses) : null;
 }
 
 function pageIdentityValue(availability: UnknownRecord): string[] {
   const identity = record(availability.pageIdentity);
   const components = [
-    text(identity.bodySha256 ?? availability.pageBodySha256, 64),
-    text(identity.faviconHash ?? availability.faviconHash, 128),
-    text(identity.title ?? availability.pageTitle, 240),
+    text(identity.bodySha256, 64),
+    text(identity.faviconHash, 128),
+    text(identity.title, 240),
   ].filter((item): item is string => Boolean(item));
-  return components.length ? [components.join(' | ').toLowerCase()] : [];
+  return components.length ? [components.join(' | ')] : [];
 }
 
 export function domainControlObservationFromSavedLookup(document: SavedLookupDocument): DomainControlFlightRecorderObservation {
   const availability = record(document.availability);
   const dns = record(availability.dns);
   const dnsRecords = record(dns.records);
+  const dnsAt = sourceClock(dns.observedAt, dns.checkedAt);
   const delegation = record(dns.delegation);
   const delegationRecords = record(delegation.records);
   const tls = record(availability.tls);
-  const tlsState = state(tls.status);
+  const tlsState = sourceState(tls);
+  const tlsAt = sourceClock(tls.observedAt, tls.checkedAt);
   const certificate = record(tls.certificate);
   const publicKey = record(certificate.publicKey);
   const http = record(availability.http);
-  const httpState = state(http.status);
   const registry = registryParsed(document);
   const rdapParsed = record(record(document.rdap).parsed);
   const rdapState = diagnostic(document, 'rdap');
-  const dnsState = state(dns.status);
+  const rdapAt = registryClock(document, 'rdap');
+  const scalar = (id: DomainControlFlightRecorderField, source: string, status: DomainControlObservationState, value: unknown, observedAt: string | null, maximum = 500) =>
+    recordField(id, source, status, [value], (item) => text(item, maximum) ?? '', observedAt);
+  const hostname = (value: unknown) => canonicalDomainControlRecords([value], 'nameservers')[0] ?? '';
+  const identity = record(availability.pageIdentity);
+  const identityValues = pageIdentityValue(availability);
   const fields: Field[] = [
-    field('registrar', registry.source, registry.sourceState, list([record(registry.parsed.registrar).name ?? registry.parsed.registrar], (item) => text(item, 300))),
-    field('registrar_lock', registry.source, registry.sourceState, registry.sourceState === 'observed' ? lockValue(registry.parsed) : []),
-    field('registry_dnssec', 'Registry RDAP', rdapState, list([rdapParsed.dnssec], (item) => text(item, 80))),
-    field('registry_nameservers', 'Registry RDAP', rdapState, list(rdapParsed.nameservers, hostname)),
-    field('whois_nameservers', 'WHOIS', diagnostic(document, 'whois'), list(record(record(document.whois).parsed).nameservers, hostname)),
-    field('delegated_nameservers', 'DNS', dnsState, list(dnsRecords.ns, hostname)),
-    field('delegation_ds', 'DNS delegation', state(delegation.status), list(delegationRecords.ds, dsValue)),
-    field('mail_exchangers', 'DNS', dnsState, list(dnsRecords.mx, mxValue)),
-    field('caa_policy', 'DNS', dnsState, list(record(dns.caaPolicy).records ?? dnsRecords.caa, caaValue)),
-    field('tls_certificate', 'TLS', tlsState, list([certificate.fingerprintSha256 ?? tls.fingerprintSha256], (item) => text(item, 128))),
-    field('tls_public_key', 'TLS', tlsState, list([publicKey.fingerprintSha256 ?? tls.spkiSha256], (item) => text(item, 128))),
-    field('http_origin', 'HTTP', httpState, list([http.finalOrigin ?? availability.httpFinalOrigin], (item) => text(item, 500))),
-    field('page_identity', 'Static page identity', state(record(availability.pageIdentity).status ?? availability.pageIdentityStatus ?? http.status), pageIdentityValue(availability)),
+    scalar('registrar', registry.source, registry.sourceState, record(registry.parsed.registrar).name ?? registry.parsed.registrar, registry.observedAt, 300),
+    scalar('registrar_lock', registry.source, registry.sourceState, lockValue(registry.parsed), registry.observedAt, 20),
+    scalar('registry_dnssec', 'Registry RDAP', rdapState, rdapParsed.dnssec, rdapAt, 80),
+    recordField('registry_nameservers', 'Registry RDAP', rdapState, rdapParsed.nameservers, hostname, rdapAt),
+    recordField('whois_nameservers', 'WHOIS', diagnostic(document, 'whois'), record(record(document.whois).parsed).nameservers, hostname, registryClock(document, 'whois')),
+    recordField('delegated_nameservers', 'DNS NS', dnsRecordState(dns, 'ns'), dnsRecords.ns, hostname, dnsAt),
+    recordField('delegation_ds', 'DNS delegation', Object.hasOwn(delegationRecords, 'ds') ? sourceState(delegation) : 'unsupported', delegationRecords.ds, canonicalDsRecord, sourceClock(delegation.observedAt)),
+    recordField('mail_exchangers', 'DNS MX', dnsRecordState(dns, 'mx'), dnsRecords.mx, canonicalMxRecord, dnsAt),
+    recordField('caa_policy', 'DNS CAA', dnsRecordState(dns, 'caa'), dnsRecords.caa, canonicalCaaRecord, dnsAt),
+    scalar('tls_certificate', 'TLS', tlsState, certificate.fingerprintSha256 ?? tls.fingerprintSha256, tlsAt, 128),
+    scalar('tls_public_key', 'TLS', tlsState, publicKey.fingerprintSha256 ?? tls.spkiSha256, tlsAt, 128),
+    scalar('http_origin', 'HTTP', sourceState(http), http.finalOrigin, sourceClock(http.observedAt, http.checkedAt)),
+    field('page_identity', 'Static page identity', sourceState(identity) === 'observed' && !identityValues.length ? 'partial' : sourceState(identity), identityValues, sourceClock(identity.observedAt)),
   ];
   return Object.freeze({
-    domain: document.registrableDomain,
-    observedAt: document.generatedAt,
-    collectionDepth: document.mode,
-    fields: Object.freeze(fields.filter((item) => DOMAIN_CONTROL_FLIGHT_RECORDER_FIELDS.includes(item.id))),
+    domain: document.registrableDomain, capturedAt: document.generatedAt, collectionDepth: document.mode,
+    fields: Object.freeze(fields.map((item) => item.state === 'observed' && item.observedAt !== null
+      && Date.parse(item.observedAt) > Date.parse(document.generatedAt) ? Object.freeze({ ...item, state: 'partial' as const }) : item)),
+  });
+}
+
+function reviewFields(document: SavedLookupDocument, observation: DomainControlFlightRecorderObservation): Field[] {
+  return observation.fields.map((candidate) => {
+    if (candidate.id !== 'tls_certificate') return candidate;
+    const issuer = record(record(record(document.availability).tls).certificate).issuer;
+    const value = record(issuer);
+    const commonNames = Array.isArray(value.commonNames) ? value.commonNames : [];
+    const organisationNames = Array.isArray(value.organizationNames) ? value.organizationNames : [];
+    return recordField(candidate.id, candidate.source, candidate.state,
+      [commonNames[0] ?? organisationNames[0] ?? issuer], (item) => text(item, 300) ?? '', candidate.observedAt);
   });
 }
 
 export function buildCliDomainControlReview(inputText: string, generatedAt = new Date().toISOString()) {
+  const reviewTime = normalizeExplicitIsoTimestamp(generatedAt);
+  if (!reviewTime) throw new CliUsageError('Domain-control review time must include a valid explicit timezone.');
+  generatedAt = reviewTime;
   if (Buffer.byteLength(inputText, 'utf8') > MAX_DOMAIN_CONTROL_REVIEW_INPUT_BYTES) {
     throw new CliUsageError(`Domain-control review input is limited to ${MAX_DOMAIN_CONTROL_REVIEW_INPUT_BYTES} bytes.`);
   }
@@ -210,7 +267,7 @@ export function buildCliDomainControlReview(inputText: string, generatedAt = new
   }
   const input = record(parsed);
   if (input.schema !== CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA
-    || input.version !== CLI_DOMAIN_CONTROL_REVIEW_VERSION
+    || !SUPPORTED_CLI_DOMAIN_CONTROL_REVIEW_VERSIONS.some((version) => version === input.version)
     || !Array.isArray(input.lookups)) {
     throw new CliUsageError(`Domain-control review input must use ${CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA} version ${CLI_DOMAIN_CONTROL_REVIEW_VERSION}.`);
   }
@@ -222,40 +279,47 @@ export function buildCliDomainControlReview(inputText: string, generatedAt = new
     throw new CliUsageError(`Domain-control review requires from ${MIN_DOMAIN_CONTROL_REVIEW_LOOKUPS} to ${MAX_DOMAIN_CONTROL_REVIEW_LOOKUPS} saved Lookup documents.`);
   }
   const manifest = verifyDomainControlManifest(input.manifest);
-  const lookups = input.lookups.map((item, index) => parseSavedLookupDocument(JSON.stringify(item), { label: `Lookup ${index + 1}` }));
-  const latest = new Map<string, SavedLookupDocument>();
-  for (const lookup of lookups) {
-    const current = latest.get(lookup.registrableDomain);
-    if (!current || Date.parse(lookup.generatedAt) > Date.parse(current.generatedAt)) latest.set(lookup.registrableDomain, lookup);
+  if (input.version === PUBLIC_CLI_DOMAIN_CONTROL_REVIEW_VERSION && manifest.version !== PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSION) {
+    throw new CliUsageError(`Public domain-control review input version ${PUBLIC_CLI_DOMAIN_CONTROL_REVIEW_VERSION} requires manifest version ${PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSION}.`);
   }
-  const observations = [...latest.values()].map(domainControlObservationFromSavedLookup);
+  const lookups = input.lookups.map((item, index) => parseSavedLookupDocument(JSON.stringify(item), { label: `Lookup ${index + 1}` }));
+  const byDomain = new Map<string, SavedLookupDocument[]>();
+  for (const lookup of lookups) {
+    const group = byDomain.get(lookup.registrableDomain) ?? [];
+    group.push(lookup);
+    byDomain.set(lookup.registrableDomain, group);
+  }
+  let ignoredHistoricalLookups = 0;
+  const selected = [...byDomain.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([domain, documents]) => {
+    const cohort = latestObservationCohort(documents, (document) => document.generatedAt);
+    ignoredHistoricalLookups += cohort.superseded;
+    const captures = cohort.latest.map((document) => ({ document, observation: domainControlObservationFromSavedLookup(document) }));
+    const first = captures[0];
+    if (!first || !cohort.observedAt || cohort.undated.length) throw new CliUsageError('Saved Lookup observation times could not be ordered.');
+    const mergedFields = mergeConcurrentDomainControlFields(captures.map((capture) => capture.observation.fields));
+    const futureCapture = Date.parse(cohort.observedAt) > Date.parse(generatedAt);
+    const observation: DomainControlFlightRecorderObservation = Object.freeze({
+      domain,
+      capturedAt: cohort.observedAt,
+      collectionDepth: captures.every((capture) => capture.observation.collectionDepth === first.observation.collectionDepth)
+        ? first.observation.collectionDepth : 'unknown',
+      fields: futureCapture ? mergedFields.map((field) => ({ ...field, state: 'partial' as const })) : mergedFields,
+    });
+    const fields = mergeConcurrentDomainControlFields(captures.map((capture) => reviewFields(capture.document, capture.observation)));
+    return { observation, reviewFields: futureCapture || observation.collectionDepth === 'unknown'
+      ? fields.map((field) => ({ ...field, state: 'partial' as const })) : fields };
+  });
+  const observations = selected.map((item) => item.observation);
   const review = reviewDomainControlManifest({
     schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
     version: DOMAIN_CONTROL_REVIEW_VERSION,
     manifest,
-    observations: observations.map((item) => ({
-      domain: item.domain,
-      fields: Object.fromEntries(item.fields.flatMap((candidate) => {
-        const mapping: Partial<Record<DomainControlFlightRecorderField, string>> = {
-          registry_nameservers: 'nameservers',
-          delegation_ds: 'ds',
-          mail_exchangers: 'mx',
-          caa_policy: 'caa',
-          tls_certificate: 'tlsIssuer',
-          tls_public_key: 'tlsSpkiSha256',
-          registrar_lock: 'registrarLock',
-        };
-        const target = mapping[candidate.id];
+    observations: selected.map(({ observation, reviewFields: fields }) => ({
+      domain: observation.domain,
+      fields: Object.fromEntries(fields.flatMap((candidate) => {
+        const target = DOMAIN_CONTROL_REVIEW_SOURCE_FIELDS[candidate.id];
         if (!target) return [];
-        const candidateValues = candidate.id === 'tls_certificate'
-          ? list([record(record(record(latest.get(item.domain)?.availability).tls).certificate).issuer], (value) => {
-              const issuer = record(value);
-              const commonNames = Array.isArray(issuer.commonNames) ? issuer.commonNames : [];
-              const organisationNames = Array.isArray(issuer.organizationNames) ? issuer.organizationNames : [];
-              return text(commonNames[0] ?? organisationNames[0] ?? value, 300);
-            })
-          : candidate.values;
-        return [[target, { state: candidate.state, values: candidateValues, source: candidate.source, observedAt: item.observedAt }]];
+        return [[target, { state: candidate.state, values: candidate.values, source: candidate.source, observedAt: candidate.observedAt }]];
       })),
     })),
   }, generatedAt);
@@ -268,7 +332,7 @@ export function buildCliDomainControlReview(inputText: string, generatedAt = new
     input: Object.freeze({
       lookupsReceived: lookups.length,
       latestDomainObservations: observations.length,
-      ignoredHistoricalLookups: lookups.length - observations.length,
+      ignoredHistoricalLookups,
     }),
     limitations: CLI_DOMAIN_CONTROL_REVIEW_LIMITATIONS,
   });

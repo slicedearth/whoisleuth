@@ -1,12 +1,14 @@
-import type {
-  WebsiteIdentityDigests,
-  WebsiteProfileSnapshot,
+import {
+  MAX_WEBSITE_SNAPSHOTS,
+  WEBSITE_SNAPSHOT_COLLECTION_LIMITS,
+  websiteSnapshotFieldComplete,
+  websiteSnapshotProfileComparability,
+  type WebsiteIdentityDigests,
+  type WebsiteProfileSnapshot,
 } from './website-snapshot-model.ts';
 
-export const WEBSITE_PROFILE_CLUSTER_VERSION = 2;
-export const MAX_WEBSITE_PROFILE_CLUSTERS = 80;
-export const MAX_WEBSITE_PROFILE_CLUSTER_DOMAINS = 20;
-export const MAX_WEBSITE_PROFILE_SNAPSHOTS_REVIEWED = 120;
+export const WEBSITE_PROFILE_CLUSTER_VERSION = 4;
+export const MAX_WEBSITE_PROFILE_SNAPSHOTS_REVIEWED = MAX_WEBSITE_SNAPSHOTS * 2;
 export const MIN_WEBSITE_PROFILE_SIMILARITY = 30;
 
 export type WebsiteProfileContribution = Readonly<{
@@ -43,7 +45,7 @@ export type WebsiteProfileCluster = Readonly<{
 }>;
 
 export type WebsiteProfileClusterSummary = Readonly<{
-  version: 2;
+  version: typeof WEBSITE_PROFILE_CLUSTER_VERSION;
   snapshotsReviewed: number;
   domainsReviewed: number;
   clusters: readonly WebsiteProfileCluster[];
@@ -71,7 +73,7 @@ type ClusterInput = {
 
 function latestPerDomain(snapshots: readonly WebsiteProfileSnapshot[]): WebsiteProfileSnapshot[] {
   const latest = new Map<string, WebsiteProfileSnapshot>();
-  for (const snapshot of snapshots.slice(0, MAX_WEBSITE_PROFILE_SNAPSHOTS_REVIEWED)) {
+  for (const snapshot of snapshots) {
     const current = latest.get(snapshot.domain);
     if (!current || snapshot.observedAt > current.observedAt
       || (snapshot.observedAt === current.observedAt && snapshot.savedAt > current.savedAt)) {
@@ -123,9 +125,7 @@ function exactCluster(input: ClusterInput): WebsiteProfileCluster | null {
   }
   if (byDomain.size < 2) return null;
   const domains = [...byDomain.keys()].sort();
-  const retainedDomains = domains.slice(0, MAX_WEBSITE_PROFILE_CLUSTER_DOMAINS);
-  const truncated = domains.length > retainedDomains.length;
-  const observations = retainedDomains.map((domain) => {
+  const observations = domains.map((domain) => {
     const history = byDomain.get(domain) ?? [];
     const range = observationRange(history);
     const latest = latestPerDomain(history)[0] ?? history[0];
@@ -135,7 +135,8 @@ function exactCluster(input: ClusterInput): WebsiteProfileCluster | null {
       observedAt: latest?.observedAt ?? range.lastObservedAt,
       firstObservedAt: range.firstObservedAt,
       lastObservedAt: range.lastObservedAt,
-      complete: history.every((snapshot) => snapshot.complete),
+      complete: history.every((snapshot) => websiteSnapshotFieldComplete(snapshot,
+        input.kind === 'technology' ? 'technology' : 'identity')),
       truncated: history.some((snapshot) => snapshot.truncated),
     };
   });
@@ -147,26 +148,25 @@ function exactCluster(input: ClusterInput): WebsiteProfileCluster | null {
     evidence: input.evidence,
     score: null,
     contributingFields: [],
-    domains: retainedDomains,
+    domains,
     firstObservedAt: range.firstObservedAt,
     lastObservedAt: range.lastObservedAt,
     observations,
     complete: observations.every((snapshot) => snapshot.complete && !snapshot.truncated),
-    truncated,
+    truncated: observations.some((observation) => observation.truncated),
     limitations: [
       'This relationship is an exact match between explicitly saved compact website-profile observations.',
       input.kind === 'technology'
         ? 'A shared technology is common across unrelated sites and does not prove common ownership, authorship, hosting, intent, or coordination.'
         : 'A shared value or digest can reflect a common service, template, library, placeholder, analytics configuration, or copied content and does not prove common control, intent, or coordination.',
       'First and last observed times describe this browser-local saved history, not internet-wide first or last use.',
-      ...(truncated ? [`The cluster exceeds ${MAX_WEBSITE_PROFILE_CLUSTER_DOMAINS} domains and is capped.`] : []),
     ],
   };
 }
 
 function intersection(left: readonly string[], right: readonly string[]): string[] {
   const rightSet = new Set(right);
-  return [...new Set(left.filter((value) => rightSet.has(value)))].sort().slice(0, 8);
+  return [...new Set(left.filter((value) => rightSet.has(value)))].sort();
 }
 
 function hammingDistance64(left: string | null, right: string | null): number | null {
@@ -210,7 +210,7 @@ function setContribution(
 ): WebsiteProfileContribution | null {
   const shared = intersection(left, right);
   if (!shared.length) return null;
-  const ratio = shared.length / Math.max(left.length, right.length, 1);
+  const ratio = shared.length / Math.max(new Set(left).size, new Set(right).size, 1);
   const appliedWeight = Math.max(1, Math.round(weight * ratio));
   return {
     field,
@@ -226,7 +226,7 @@ function similarityCluster(
   left: WebsiteProfileSnapshot,
   right: WebsiteProfileSnapshot,
 ): WebsiteProfileCluster | null {
-  const contributions = [
+  const candidates = [
     exactContribution('faviconHash', left, right, 24),
     exactContribution('normalizedHtml', left, right, 20),
     exactContribution('trackingIdentifiers', left, right, 14),
@@ -264,7 +264,7 @@ function similarityCluster(
   ].filter((item): item is WebsiteProfileContribution => item !== null);
   const textDistance = hammingDistance64(left.identity.visibleText, right.identity.visibleText);
   if (textDistance !== null && textDistance <= 12) {
-    contributions.push({
+    candidates.push({
       field: 'identity.visibleText',
       label: 'Visible-text fingerprint',
       method: 'simhash_distance',
@@ -273,6 +273,13 @@ function similarityCluster(
       sharedValues: [],
     });
   }
+  const contributions = candidates.filter((item) => {
+    const field = item.field === 'technologies' ? 'technology' : item.field;
+    return websiteSnapshotFieldComplete(left, field) && websiteSnapshotFieldComplete(right, field)
+      && (field !== 'technology' || websiteSnapshotProfileComparability(left, right, 'technology') === 'comparable')
+      && (!field.startsWith('identity') || field === 'identity.faviconHash'
+        || websiteSnapshotProfileComparability(left, right, 'pageFingerprint') === 'comparable');
+  });
   const score = Math.min(100, contributions.reduce((total, item) => total + item.weight, 0));
   const strongField = contributions.some((item) => [
     'identity.faviconHash',
@@ -322,11 +329,25 @@ function similarityCluster(
 export function buildWebsiteProfileClusters(
   snapshots: readonly WebsiteProfileSnapshot[],
 ): WebsiteProfileClusterSummary {
-  const retainedSnapshots = snapshots.slice(0, MAX_WEBSITE_PROFILE_SNAPSHOTS_REVIEWED);
+  const fieldOmissions = new Map<string, number>();
+  const boundedField = <T>(values: readonly T[], maximum: number, label: string): readonly T[] => {
+    if (values.length <= maximum) return values;
+    fieldOmissions.set(label, (fieldOmissions.get(label) ?? 0) + values.length - maximum);
+    return values.slice(0, maximum);
+  };
+  const retainedSnapshots = snapshots.slice(0, MAX_WEBSITE_PROFILE_SNAPSHOTS_REVIEWED).map((snapshot) => {
+    const technologies = boundedField(snapshot.technologies, WEBSITE_SNAPSHOT_COLLECTION_LIMITS.technologies, 'technology values');
+    const resourceHosts = boundedField(snapshot.identityValues.resourceHosts, WEBSITE_SNAPSHOT_COLLECTION_LIMITS.resourceHosts, 'resource hosts');
+    const trackingIdentifiers = boundedField(snapshot.identityValues.trackingIdentifiers, WEBSITE_SNAPSHOT_COLLECTION_LIMITS.trackingIdentifiers, 'tracking identifiers');
+    const formActionOrigins = boundedField(snapshot.identityValues.formActionOrigins, WEBSITE_SNAPSHOT_COLLECTION_LIMITS.formActionOrigins, 'form-action origins');
+    if (technologies === snapshot.technologies && resourceHosts === snapshot.identityValues.resourceHosts
+      && trackingIdentifiers === snapshot.identityValues.trackingIdentifiers && formActionOrigins === snapshot.identityValues.formActionOrigins) return snapshot;
+    return { ...snapshot, technologies: [...technologies], identityValues: { resourceHosts, trackingIdentifiers, formActionOrigins }, complete: false, truncated: true };
+  });
   const latest = latestPerDomain(retainedSnapshots);
   const values = new Map<string, ClusterInput>();
   for (const snapshot of retainedSnapshots) {
-    for (const technology of snapshot.technologies.slice(0, 40)) {
+    for (const technology of snapshot.technologies) {
       add(values, {
         kind: 'technology',
         key: `technology:${technology.id}`,
@@ -337,9 +358,11 @@ export function buildWebsiteProfileClusters(
     for (const [field, label] of Object.entries(IDENTITY_LABELS) as Array<[keyof WebsiteIdentityDigests, string]>) {
       const digest = snapshot.identity[field];
       if (!digest) continue;
+      const version = snapshot.profileProvenance.pageFingerprint.version;
+      if (field !== 'faviconHash' && version === null) continue;
       add(values, {
         kind: 'identity',
-        key: `identity:${field}:${digest}`,
+        key: `identity:${field}:${field === 'faviconHash' ? 'exact-image' : version}:${digest}`,
         label,
         evidence: `${digest.slice(0, 12)}…`,
       }, snapshot);
@@ -389,14 +412,17 @@ export function buildWebsiteProfileClusters(
       || left.kind.localeCompare(right.kind)
       || left.label.localeCompare(right.label)
     ));
-  const clusters = allClusters.slice(0, MAX_WEBSITE_PROFILE_CLUSTERS);
   return {
     version: WEBSITE_PROFILE_CLUSTER_VERSION,
     snapshotsReviewed: retainedSnapshots.length,
     domainsReviewed: latest.length,
-    clusters,
-    truncated: allClusters.length > clusters.length || snapshots.length > retainedSnapshots.length,
+    clusters: allClusters,
+    truncated: fieldOmissions.size > 0 || snapshots.length > retainedSnapshots.length || retainedSnapshots.some((snapshot) => snapshot.truncated),
     limitations: [
+      ...(snapshots.length > retainedSnapshots.length
+        ? [`Snapshot admission: reviewed ${retainedSnapshots.length} of ${snapshots.length} supplied snapshots; ${snapshots.length - retainedSnapshots.length} were not inspected.`] : []),
+      ...[...fieldOmissions].map(([label, count]) => `Snapshot field admission: ${count} additional ${label} were not inspected. Affected snapshots are partial and add no similarity weight.`),
+      `${exactClusters.length} exact clusters and ${similarityClusters.length} weighted relationships are available to search. Every admitted domain remains in its cluster.`,
       'This view is derived locally from browser-saved compact snapshots and makes no request.',
       'Exact clusters can include compatible historical saved observations; weighted relationships compare only the latest retained snapshot per domain.',
       'Unavailable, truncated, and schema-incompatible components add no similarity weight and are not converted into absence or difference.',

@@ -14,7 +14,7 @@ import {
   type JsonObject,
   type LookupHttpResponse,
 } from '../lib/lookup-response-contract.mts';
-import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
+import { buildFixtureRegistrarStanding as buildRegistrarStanding } from './registrar-standing-fixture.mts';
 
 function lookupResponse(overrides: Partial<LookupHttpResponse> = {}): LookupHttpResponse {
   return {

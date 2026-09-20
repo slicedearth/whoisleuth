@@ -12,7 +12,7 @@ import {
   httpDeliveryMetadataFixture,
   pagePublicationMetadataFixture,
 } from './homepage-metadata-fixtures.mts';
-import { buildRegistrarStanding } from '../lib/registrar-standing.mts';
+import { buildFixtureRegistrarStanding as buildRegistrarStanding } from './registrar-standing-fixture.mts';
 
 describe('saved Lookup compatibility', () => {
   test('accepts the frozen v1 document and a current v2 document without rewriting either version', async () => {

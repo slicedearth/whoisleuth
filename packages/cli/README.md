@@ -51,14 +51,7 @@ only `bulk` accepts multiple targets.
 
 ## Command groups
 
-| Group | Common commands |
-| --- | --- |
-| Investigate | `lookup`, `bulk`, `discover`, `ct-search`, `posture`, `http`, `tls`, `compare`, `mail-headers`, `brief` |
-| Respond | `case-pack`, `change-packet`, `sharing-review`, `export` |
-| Assure | `dnssec-validate`, `mail-transport`, `domain-control`, `assurance`, `workflow-plan`, `diff`, `inspect-archive`, `verify-artifact` |
-| Utilities | `doctor`, `commands`, `completion`, `manual`, `registry-scaffold` |
-
-Use the installed registry for the complete inventory:
+Use the installed registry to browse Investigate, Respond, Assure and Utilities:
 
 ```bash
 whoisleuth commands --group investigate
@@ -66,10 +59,6 @@ whoisleuth commands --group respond --mode offline
 whoisleuth commands --json
 whoisleuth manual | man -l -
 ```
-
-`registry-scaffold` has a separate fixture contract: its `--profile` selects a
-fixed fixture profile and it rejects shared `--config` profiles. It creates
-sanitised local fixture material.
 
 ## Collection and output
 
@@ -86,9 +75,24 @@ or domain-only output only where declared. `--output` writes a private local
 file atomically and refuses an existing path unless `--force` is selected.
 `--strict-exit` and `--fail-on` expose selected evidence states to automation.
 
-Exit codes are 0 for completion, 2 for invalid input, 3 for collection or
-comparison failure, 4 for a partial result or unmet selected evidence policy,
-70 for internal bootstrap failure, 130 for cancellation and 143 for SIGTERM.
+`case open --domain example.test --output cases.json` creates an ordinary local
+Case file. `case show`, `note`, `pin`, `assess` and `recheck` review or update it
+offline. Mutations require explicit output and preserve earlier retained evidence;
+see `docs/cli.md#local-case-files` for JSON inputs and conflict handling. Working
+files contain private analyst content, not attached file bytes.
+
+`manifest --package --output evidence.wlep --passphrase-file ./passphrase.txt`
+encrypts selected evidence files and their manifest. Use the same explicit
+passphrase file with `verify-artifact --package` to authenticate and verify it
+offline. Ordinary ZIPs and folder exports remain unencrypted; see `docs/cli.md`
+for complete examples and file-handling boundaries.
+
+`workflow-run` pauses on a partial collection. Resume retains it without
+recollection and keeps exit code 4 even if later steps finish. Failed validation
+or export steps remain retryable. See `docs/cli.md` for checkpoint compatibility.
+
+The included `docs/cli-reference.md` lists common exit codes and compatibility
+contracts. A completed command can still contain partial source evidence.
 
 ## Repository checkout
 

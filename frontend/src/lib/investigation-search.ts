@@ -6,20 +6,9 @@ import { loadCampaigns } from './campaigns';
 import { loadCases } from './cases';
 import { loadRelationshipObservations } from './relationship-observations';
 import { buildInvestigationProjection } from './analysis/investigation-projection.ts';
-import {
-  buildInvestigationSearchIndex,
-  markInvestigationSearchSourcesUnavailable,
-  type InvestigationSearchIndex,
-} from './analysis/investigation-search.ts';
 import type { InvestigationProjection, InvestigationStoreName } from './analysis/investigation-projection.ts';
 import type { InvestigationProjectionInput } from './analysis/investigation-projection.ts';
-
-/** Builds the disposable index from already loaded browser-local collections. */
-export function buildLocalInvestigationSearchIndex(
-  collections: InvestigationProjectionInput,
-): InvestigationSearchIndex {
-  return buildInvestigationSearchIndex(buildInvestigationProjection(collections));
-}
+import { createInvestigationSearchSession } from './investigation-search-session.ts';
 
 /** Builds a disposable projection from the current browser's bounded stores. */
 export async function loadLocalInvestigationProjection(): Promise<InvestigationProjection> {
@@ -37,8 +26,7 @@ export async function loadLocalInvestigationProjection(): Promise<InvestigationP
   });
 }
 
-/** Builds a disposable index after a deliberate browser-local read. */
-export async function loadLocalInvestigationSearchIndex(): Promise<InvestigationSearchIndex> {
+async function readLocalInvestigationCollections() {
   const results = await Promise.allSettled([
     loadCases(),
     loadCampaigns(),
@@ -46,7 +34,7 @@ export async function loadLocalInvestigationSearchIndex(): Promise<Investigation
     loadRelationshipObservations(),
   ]);
   if (results.every((result) => result.status === 'rejected')) {
-    throw new Error('Saved context is unavailable because browser-local collections could not be read.');
+    throw new Error('Saved context is unavailable because workspace collections could not be read.');
   }
   const [cases, campaigns, brandProfiles, relationshipObservations] = results;
   const unavailableStores: InvestigationStoreName[] = [];
@@ -54,11 +42,17 @@ export async function loadLocalInvestigationSearchIndex(): Promise<Investigation
   if (campaigns?.status === 'rejected') unavailableStores.push('campaigns');
   if (brandProfiles?.status === 'rejected') unavailableStores.push('brandProfiles');
   if (relationshipObservations?.status === 'rejected') unavailableStores.push('relationshipObservations');
-  const index = buildLocalInvestigationSearchIndex({
+  const collections: InvestigationProjectionInput = {
     cases: cases?.status === 'fulfilled' ? cases.value : undefined,
     campaigns: campaigns?.status === 'fulfilled' ? campaigns.value : undefined,
     brandProfiles: brandProfiles?.status === 'fulfilled' ? brandProfiles.value : undefined,
     relationshipObservations: relationshipObservations?.status === 'fulfilled' ? relationshipObservations.value : undefined,
-  });
-  return markInvestigationSearchSourcesUnavailable(index, unavailableStores);
+  };
+  return { collections, unavailableStores };
+}
+
+/** Keeps the disposable index and query execution off the browser's main thread. */
+export async function loadLocalInvestigationSearchSession(signal?: AbortSignal) {
+  const { collections, unavailableStores } = await readLocalInvestigationCollections();
+  return createInvestigationSearchSession(collections, unavailableStores, signal ? { signal } : {});
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { parseWhoisChain } from '../lib/whois.mts';
 import { requiredValue } from './value-assertions.mts';
+import { projectLookupEvidenceWhoisPublication } from '../lib/evidence-export.mts';
 
 function roleContact(
   parsed: ReturnType<typeof parseWhoisChain>,
@@ -23,6 +24,30 @@ function parseRegistry(response: string) {
 }
 
 describe('bounded WHOIS lifecycle and contact normalization', () => {
+  test('rejects modified nameserver identities and qualifies shortened duplicate statuses through export', () => {
+    const exact = `${'a'.repeat(63)}.${'b'.repeat(63)}.${'c'.repeat(63)}.${'d'.repeat(56)}.test`;
+    assert.equal(exact.length, 253);
+    const accepted = parseRegistry(`Domain Name: example.test\nName Server: ${exact}`);
+    assert.deepEqual(accepted.nameservers, [exact]);
+    assert.deepEqual(accepted.fieldsTruncated, []);
+    for (const value of [`${exact}.invalid`, 'ns1.example.test/extra', 'ns1.example.test_unsafe', 'invalid..example.test']) {
+      const parsed = parseRegistry(`Domain Name: example.test\nName Server: ${value}\nName Server: ns2.example.test`);
+      assert.deepEqual(parsed.nameservers, ['ns2.example.test']);
+      assert.ok(parsed.fieldsTruncated.includes('nameservers'));
+      const exported = projectLookupEvidenceWhoisPublication(parsed);
+      assert.deepEqual(exported?.nameservers, ['ns2.example.test']);
+      assert.deepEqual(exported?.fieldsTruncated, ['nameservers']);
+    }
+    const prefix = `Published ${'a'.repeat(150)}`;
+    assert.equal(prefix.length, 160);
+    const parsed = parseRegistry(`Domain Name: example.test\n[状態] ${prefix}\n[状態] ${prefix} plus other terms`);
+    assert.deepEqual(parsed.statuses, [prefix]);
+    assert.ok(parsed.fieldsTruncated.includes('statuses'));
+    const exported = projectLookupEvidenceWhoisPublication(parsed);
+    assert.deepEqual(exported?.statuses, [prefix]);
+    assert.deepEqual(exported?.fieldsTruncated, ['statuses']);
+  });
+
   test('preserves compatibility scalars while publishing role-based contacts', () => {
     const parsed = parseRegistry([
       'Domain Name: EXAMPLE.COM',

@@ -7,17 +7,18 @@ import {
 } from '../lib/interchange-fidelity-registry.mts';
 import {
   offlineArtifactSatisfiesAssurance,
+  MAX_OFFLINE_ARTIFACT_BYTES,
+  parseOfflineArtifactJson,
   verifyOfflineArtifact,
 } from './artifact-verify.mts';
 import {
   mergeBrandProfiles,
 } from '../packages/workspace/brand-profile-model.mts';
-import { parseBoundedJsonObject } from './bounded-json.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 
 export const INTERCHANGE_FIDELITY_REPORT_SCHEMA = 'whoisleuth.interchange-fidelity-report';
 export const INTERCHANGE_FIDELITY_REPORT_VERSION = 2;
-export const MAX_INTERCHANGE_REPORT_BYTES = 15 * 1024 * 1024;
+export const MAX_INTERCHANGE_REPORT_BYTES = MAX_OFFLINE_ARTIFACT_BYTES;
 
 type UnknownRecord = Record<string, unknown>;
 type VerificationState = 'envelope_valid' | 'integrity_valid' | 'not_verified' | 'structure_valid' | 'unsupported_version' | 'verified';
@@ -73,10 +74,7 @@ function parseInput(raw: string): UnknownRecord {
   if (bytes < 1 || bytes > MAX_INTERCHANGE_REPORT_BYTES) {
     throw new TypeError(`Interchange input must be between 1 byte and ${MAX_INTERCHANGE_REPORT_BYTES} bytes.`);
   }
-  return parseBoundedJsonObject(raw.replace(/^\uFEFF/u, ''), {
-    label: 'Interchange input',
-    maximumBytes: MAX_INTERCHANGE_REPORT_BYTES,
-  });
+  return parseOfflineArtifactJson(raw.replace(/^\uFEFF/u, ''));
 }
 
 function nestedRecord(value: UnknownRecord, path: readonly string[]): UnknownRecord | null {
@@ -184,7 +182,7 @@ export async function buildInterchangeFidelityReport(
         assuranceSatisfied = validation.skipped === 0 && contract.requiredAssurance === 'structure';
       } else {
         const verification = await verifyOfflineArtifact(raw, { passphrase: options.passphrase ?? null });
-        verificationState = verification.state;
+        verificationState = verification.state === 'partial' ? 'not_verified' : verification.state;
         assuranceSatisfied = contract.requiredAssurance === 'whole_integrity'
           ? offlineArtifactSatisfiesAssurance(verification, 'whole_integrity')
           : contract.requiredAssurance === 'applicable_integrity'

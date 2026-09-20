@@ -2,9 +2,9 @@
 // United States Government work; do not edit by hand.
 
 const CISA_KEV_CATALOG = Object.freeze({
-  catalogVersion: "2026.08.31",
-  releasedAt: "2026-08-31T14:55:13.3856Z",
-  sourceSha256: "2043ec4073019154e781f687359bfd9759e4d1ca9a18befc99fbe0c4c93bbde8",
+  catalogVersion: "2026.09.04",
+  releasedAt: "2026-09-04T16:47:03.5197Z",
+  sourceSha256: "f92f4cef4bba9b8c69c1a34deeb825af3810ffb6a0447042d16df894751da2cf",
   sourceUrl: "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
   identifiers: Object.freeze([
   "CVE-2002-0367",
@@ -1657,9 +1657,11 @@ const CISA_KEV_CATALOG = Object.freeze({
   "CVE-2026-48172",
   "CVE-2026-48282",
   "CVE-2026-48558",
+  "CVE-2026-48710",
   "CVE-2026-48907",
   "CVE-2026-48908",
   "CVE-2026-48939",
+  "CVE-2026-49869",
   "CVE-2026-50522",
   "CVE-2026-50751",
   "CVE-2026-5281",
@@ -1673,6 +1675,7 @@ const CISA_KEV_CATALOG = Object.freeze({
   "CVE-2026-56291",
   "CVE-2026-58644",
   "CVE-2026-59310",
+  "CVE-2026-59822",
   "CVE-2026-60004",
   "CVE-2026-60137",
   "CVE-2026-63030",
@@ -1690,10 +1693,15 @@ const CISA_KEV_CATALOG = Object.freeze({
   "CVE-2026-8037",
   "CVE-2026-81578",
   "CVE-2026-82078",
+  "CVE-2026-82329",
+  "CVE-2026-83548",
+  "CVE-2026-83549",
   "CVE-2026-8398",
   "CVE-2026-8452",
+  "CVE-2026-85046",
   "CVE-2026-9082",
-  "CVE-2026-9198"
+  "CVE-2026-9198",
+  "CVE-2026-9586"
 ]),
 });
 

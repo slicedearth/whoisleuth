@@ -2,7 +2,6 @@
 // record normalization, and analyst updates.
 
 import {
-  CASE_SCHEMA_VERSION,
   CASE_REVIEW_REASONS,
   CASE_SOURCES,
   DEFAULT_DISPOSITION,
@@ -26,6 +25,7 @@ import {
   statusLabel,
 } from './case-record-decisions.mts';
 import { normalizeExplicitIsoTimestamp, normalizeLegacyIsoTimestamp } from '../evidence/observation.mts';
+import { PUBLISHED_V2_3_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
 import { canonicalRegistrableDomain } from '../../lib/registrable-domain.mts';
 
 // Forward-version policy (two distinct guarantees):
@@ -196,7 +196,7 @@ export function caseTimestampOrNull(value: unknown, sourceVersion?: number | nul
   if (explicit) return explicit;
   return sourceVersion !== undefined
     && sourceVersion !== null
-    && sourceVersion < CASE_SCHEMA_VERSION
+    && sourceVersion < PUBLISHED_V2_3_CASE_SCHEMA_VERSION
     ? normalizeLegacyIsoTimestamp(value)
     : null;
 }

@@ -1,16 +1,17 @@
 <script lang="ts">
+  import { tick } from 'svelte';
+  import ExternalImportReview, { type ExternalImportPreview } from './ExternalImportReview.svelte';
   import { parseBoundedJson } from '$lib/bounded-json';
   import {
     EXTERNAL_FINDINGS_SCHEMA,
     importExternalFindings,
+    importExternalFindingsIntoCase,
     importExternalIntelligence,
     MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
     MAX_EXTERNAL_INTELLIGENCE_IMPORT_BYTES,
     parseExternalFindingsDocument,
     parseExternalIntelligenceDocument,
     type CaseRecord,
-    type ExternalFindingsDocument,
-    type ExternalIntelligencePreview,
   } from '$lib/cases';
   import {
     EXTERNAL_FINDING_ROWS_SCHEMA,
@@ -49,19 +50,12 @@
     onmessage: (message: string) => void;
   } = $props();
 
-  type Preview =
-    | Readonly<{ kind: 'findings'; document: ExternalFindingsDocument }>
-    | Readonly<{ kind: 'intelligence'; document: ExternalIntelligencePreview }>;
-
-  let preview = $state<Preview | null>(null);
+  let preview = $state<ExternalImportPreview | null>(null);
   let conversionReport = $state<ExternalFindingConversionReport | null>(null);
   let applying = $state(false);
   let parsing = $state(false);
   let selectionGeneration = 0;
-  let targetCaseId = $state('');
-  const findingsPreview = $derived(preview?.kind === 'findings' ? preview.document : null);
-  const intelligencePreview = $derived(preview?.kind === 'intelligence' ? preview.document : null);
-  const domains = $derived(findingsPreview ? [...new Set(findingsPreview.findings.map((finding) => finding.domain))] : []);
+  let fileInput: HTMLInputElement;
 
   async function reconcileCommitted(cases: CaseRecord[], success: string): Promise<void> {
     try {
@@ -70,16 +64,13 @@
     } catch {
       try {
         oncommitted(cases);
-        onmessage(`${success} The import was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the browser-local read.`);
+        onmessage(`${success} The import was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.`);
       } catch {
         onmessage(`${success} The import was saved, but Cases could not be reread or reconciled in the current view. Reload before importing another document.`);
       }
     }
   }
 
-  function countLabel(count: number, singular: string): string {
-    return `${count} ${singular}${count === 1 ? '' : 's'}`;
-  }
 
   async function sourceDigest(bytes: ArrayBuffer): Promise<string> {
     if (!globalThis.crypto?.subtle) throw new Error('Browser cryptography is unavailable for the required source-file digest.');
@@ -93,7 +84,6 @@
     const generation = ++selectionGeneration;
     preview = null;
     conversionReport = null;
-    targetCaseId = '';
     parsing = Boolean(file);
     if (!file) return;
     try {
@@ -229,94 +219,60 @@
     }
   }
 
-  async function applyImport() {
-    if (!preview || parsing || applying) return;
+  async function applyImport(selected: ExternalImportPreview, targetCaseId: string) {
+    if (!preview || selected.kind !== preview.kind || parsing || applying) return;
+    const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     applying = true;
     try {
-      if (preview.kind === 'findings') {
-        const result = await importExternalFindings(preview.document);
+      if (selected.kind === 'findings' && targetCaseId) {
+        const result = await importExternalFindingsIntoCase(targetCaseId, selected.document);
+        await reconcileCommitted(result.cases, `Imported ${result.findingsAdded} findings into the selected incident Case; ${result.duplicatesSkipped} duplicates skipped.`);
+      } else if (selected.kind === 'findings') {
+        const result = await importExternalFindings(selected.document);
         await reconcileCommitted(result.cases, `Imported ${result.findingsAdded} finding${result.findingsAdded === 1 ? '' : 's'} into ${result.casesCreated} new and ${result.casesUpdated} existing case${result.casesCreated + result.casesUpdated === 1 ? '' : 's'}${result.duplicatesSkipped ? `; skipped ${result.duplicatesSkipped} duplicate${result.duplicatesSkipped === 1 ? '' : 's'}` : ''}${result.pruned ? `; pruned ${result.pruned} old evidence snapshot${result.pruned === 1 ? '' : 's'} to stay within storage` : ''}.`);
       } else {
         if (!targetCaseId) throw new Error('Select an existing case before merging external intelligence.');
-        const result = await importExternalIntelligence(targetCaseId, preview.document);
+        const result = await importExternalIntelligence(targetCaseId, selected.document);
         await reconcileCommitted(result.cases, `Merged ${result.assertionsAdded} external assertion${result.assertionsAdded === 1 ? '' : 's'} into ${result.record.domain}${result.duplicatesSkipped ? `; skipped ${result.duplicatesSkipped} existing assertion${result.duplicatesSkipped === 1 ? '' : 's'}` : ''}${result.capacitySkipped ? `; skipped ${result.capacitySkipped} at the case assertion limit` : ''}. No collection, scoring, or case creation was started.`);
       }
       preview = null;
       conversionReport = null;
-      targetCaseId = '';
     } catch (cause) {
       onmessage(cause instanceof Error ? cause.message : 'External findings could not be imported.');
     } finally {
       applying = false;
+      await tick();
+      const active = document.activeElement;
+      if (active === origin || active === null || active === document.body || active === document.documentElement) {
+        const target = origin?.isConnected ? origin : fileInput;
+        target?.focus({ preventScroll: true });
+      }
     }
+  }
+
+  async function cancelReview() {
+    if (applying) return;
+    const origin = document.activeElement;
+    preview = null;
+    conversionReport = null;
+    await tick();
+    if (origin && !origin.isConnected && document.activeElement === document.body) fileInput?.focus();
   }
 </script>
 
 <details class="external-import card" aria-busy={parsing}>
   <summary>Import bounded external findings</summary>
   <div class="import-body">
-    <p>Preview the strict <code>whoisleuth.external-findings</code>, sanitised capture summary or artefact-metadata manifest, documented domain, DNS, or certificate observation rows, fixed-column CSV/JSON rows, a bounded STIX 2.1 bundle, a bounded MISP event, or a strict WARC/WACZ response archive locally before changing a case. WARC processing rejects or discards request records, sensitive headers, downloads, unsupported response types, excessive records, and mismatched supported record digests. WACZ processing additionally bounds ZIP expansion and verifies its declared WARC resources before applying the same WARC privacy filter. Imports never fetch references, run code, alter dispositions, start collection, score claims, publish events, or submit data elsewhere.</p>
-    <label class="btn file-btn">{parsing ? 'Reading selected file…' : 'Choose JSON, CSV, WARC, or WACZ'}<input type="file" accept="application/json,text/csv,application/warc,application/wacz,.json,.csv,.warc,.wacz" onchange={selectFile} disabled={parsing || applying}></label>
-    {#if findingsPreview}
-      <section class="preview" aria-labelledby="external-findings-preview-title">
-        <header>
-          <div><p class="eyebrow">Validated findings preview</p><h3 id="external-findings-preview-title">{findingsPreview.source.name}</h3></div>
-          <span>{countLabel(findingsPreview.findings.length, 'finding')} · {countLabel(domains.length, 'domain')}</span>
-        </header>
-        {#if conversionReport}
-          <div class="preview-metrics" role="group" aria-label="Observation conversion summary">
-            <span><strong>{conversionReport.accepted}</strong> accepted</span>
-            <span><strong>{conversionReport.rejected}</strong> rejected</span>
-            <span><strong>{conversionReport.duplicates}</strong> duplicate</span>
-            <span><strong>{conversionReport.truncated ? 'yes' : 'no'}</strong> truncated</span>
-          </div>
-          {#if conversionReport.exclusions.length}
-            <details class="excluded"><summary>Review conversion exclusions</summary>
-              <ul>{#each conversionReport.exclusions as exclusion}<li><strong>Row {exclusion.row}</strong><p>{exclusion.reason}</p></li>{/each}</ul>
-            </details>
-          {/if}
-        {/if}
-        <ul>
-          {#each findingsPreview.findings.slice(0, 8) as finding}
-            <li><strong>{finding.domain}</strong><span>{finding.category} · {finding.evidenceClass.replaceAll('_', ' ')} · {finding.completeness}</span><p>{finding.summary}</p></li>
-          {/each}
-        </ul>
-        {#if findingsPreview.findings.length > 8}<p class="preview-note">Showing 8 of {findingsPreview.findings.length} validated findings.</p>{/if}
-        <div class="actions"><button class="primary" type="button" onclick={() => void applyImport()} disabled={parsing || applying}>{applying ? 'Importing…' : 'Import into cases'}</button><button class="btn" type="button" onclick={() => { preview = null; conversionReport = null; }} disabled={parsing || applying}>Cancel</button></div>
-      </section>
-    {:else if intelligencePreview}
-      <section class="preview" aria-labelledby="external-intelligence-preview-title">
-        <header>
-          <div><p class="eyebrow">Validated {intelligencePreview.format.toUpperCase()} preview</p><h3 id="external-intelligence-preview-title">{intelligencePreview.sourceName}</h3></div>
-          <span>{countLabel(intelligencePreview.items.length, 'claim')} · {countLabel(intelligencePreview.exclusions.length, 'exclusion')}</span>
-        </header>
-        <div class="preview-metrics" role="group" aria-label="External intelligence normalisation summary">
-          <span><strong>{intelligencePreview.items.length}</strong> accepted</span>
-          <span><strong>{intelligencePreview.duplicatesSkipped}</strong> duplicate</span>
-          <span><strong>{intelligencePreview.conflicts.length}</strong> conflict</span>
-          <span><strong>{intelligencePreview.exclusions.length}</strong> excluded</span>
-        </div>
-        {#if intelligencePreview.truncated}<p class="preview-warning">Partial preview. An object, exclusion, or retained-claim bound was reached.</p>{/if}
-        <ul>
-          {#each intelligencePreview.items.slice(0, 8) as item}
-            <li><strong>{item.entityValue}</strong><span>{item.entityType} · {item.claimType}{item.confidence === null ? '' : ` · confidence ${item.confidence}`}</span><p>{item.publisher ?? intelligencePreview.publisher ?? 'Publisher not declared'}{item.markings.length ? ` · ${item.markings.join(', ')}` : ''}</p><p>{item.observedAt ? `Observed ${item.observedAt}` : 'Observation time not declared'}{item.createdAt ? ` · created ${item.createdAt}` : ''}{item.modifiedAt ? ` · modified ${item.modifiedAt}` : ''}</p></li>
-          {/each}
-        </ul>
-        {#if intelligencePreview.items.length > 8}<p class="preview-note">Showing 8 of {intelligencePreview.items.length} accepted claims.</p>{/if}
-        {#if intelligencePreview.conflicts.length || intelligencePreview.exclusions.length}
-          <details class="excluded"><summary>Review conflicts and exclusions</summary>
-            <ul>
-              {#each [...intelligencePreview.conflicts, ...intelligencePreview.exclusions].slice(0, 20) as item}
-                <li><strong>{item.type}</strong><span>{item.externalId ?? 'No external identifier'}</span><p>{item.reason}</p></li>
-              {/each}
-            </ul>
-          </details>
-        {/if}
-        <label class="case-target">Merge into existing case<select bind:value={targetCaseId} disabled={parsing || applying || !intelligencePreview.items.length}><option value="">Select a case</option>{#each cases as record}<option value={record.id}>{record.domain}</option>{/each}</select></label>
-        {#if !cases.length}<p class="preview-warning">Open a case before importing external intelligence. This importer never creates one automatically.</p>{/if}
-        <p class="preview-note">The source file SHA-256 digest, external identifier, publisher, declared observation, creation and modification timestamps, labels, markings, confidence, and normalised entity are retained on each imported assertion. Validity and update times are not presented as observations. Claims remain separate from collected evidence.</p>
-        <div class="actions"><button class="primary" type="button" onclick={() => void applyImport()} disabled={parsing || applying || !targetCaseId || !intelligencePreview.items.length}>{applying ? 'Merging…' : 'Merge assertions into case'}</button><button class="btn" type="button" onclick={() => { preview = null; targetCaseId = ''; }} disabled={parsing || applying}>Cancel</button></div>
-      </section>
+    <p>Review local evidence before adding it to Cases. Imports do not collect data, change analyst dispositions or submit reports.</p>
+    <details class="formats"><summary>Supported files and limits</summary>
+      <p>Findings, sanitised capture manifests, observation rows and fixed-column CSV/JSON: 384 KiB. STIX 2.1 bundles and MISP events: 512 KiB. WARC/WACZ archives: 8 MiB.</p>
+      <p>Archive import retains sanitised response evidence, not raw requests, sensitive headers or unsupported content. WACZ resources must pass their declared integrity checks. References are never fetched. See the <a href="/cli">CLI reference</a> for the supported interchange formats.</p>
+    </details>
+    <label class="btn file-btn">{parsing ? 'Reading selected file…' : 'Choose JSON, CSV, WARC, or WACZ'}<input bind:this={fileInput} type="file" accept="application/json,text/csv,application/warc,application/wacz,.json,.csv,.warc,.wacz" onchange={selectFile} disabled={parsing || applying}></label>
+    {#if preview && !parsing}
+      {#key preview}
+        <ExternalImportReview {preview} {conversionReport} {cases} {applying} onimport={applyImport} oncancel={() => { void cancelReview(); }} />
+      {/key}
     {/if}
   </div>
 </details>
@@ -328,22 +284,7 @@
   details[open]>summary{border-bottom:1px solid var(--border)}
   .import-body{display:grid;gap:10px;padding:13px}
   .import-body>p{max-width:880px;margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
-  code{color:var(--accent);font-size:var(--text-2xs)}
+  .formats summary{padding:4px 0;min-height:30px}
+  .formats p{max-width:75ch;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .file-btn{justify-self:start}
-  .preview{display:grid;gap:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-  .preview header{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px}
-  .preview h3{margin:0;font-size:var(--text-md)}
-  .preview header>span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}
-  .preview ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0;padding:0;list-style:none}
-  .preview li{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
-  .preview li strong,.preview li span{display:block;overflow-wrap:anywhere}
-  .preview li span{margin-top:2px;color:var(--muted);font:var(--text-2xs) var(--mono)}
-  .preview li p{margin:5px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
-  .preview-note{margin:0;color:var(--muted);font-size:var(--text-2xs)}
-  .preview-metrics{display:flex;flex-wrap:wrap;gap:7px}.preview-metrics span{padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font:650 var(--text-2xs) var(--mono)}.preview-metrics strong{color:var(--accent)}
-  .preview-warning{margin:0;color:var(--amber);font:650 var(--text-xs) var(--mono)}
-  .case-target{display:grid;gap:5px;max-width:480px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}
-  .excluded{padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.excluded>summary{padding:0;border:0}.excluded ul{margin-top:8px}
-  .actions{display:flex;flex-wrap:wrap;gap:8px}
-  @media(max-width:680px){.preview ul{grid-template-columns:minmax(0,1fr)}.actions button{flex:1}}
 </style>

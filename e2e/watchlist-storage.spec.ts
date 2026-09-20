@@ -1,3 +1,4 @@
+import { openConsoleView } from './console-navigation';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, readBrowserLocalCollection } from './helpers';
 
@@ -17,7 +18,7 @@ async function seed(page: import('@playwright/test').Page, value: unknown) {
   const stored = currentBrowserLocalDocument('watchlists', value);
   await page.addInitScript(({ key, stored: fixture }) => localStorage.setItem(key, JSON.stringify(fixture)), { key: WATCHLIST_KEY, stored });
   await page.goto('/monitor');
-  await page.getByRole('tab', { name: /Watchlists/ }).click();
+  await openConsoleView(page, 'watchlists');
 }
 
 test('a future watchlist schema is never overwritten by an older app', async ({ page }) => {
@@ -156,7 +157,10 @@ test('watchlist history focuses one domain without implying complete coverage', 
   await expectNoHorizontalOverflow(page);
 
   await domainHistory.getByRole('button', { name: 'Open case' }).click();
-  await expect(page.getByRole('tab', { name: /Cases/ })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.locator('.case.open')).toContainText('priority.invalid');
-  await expect(page.getByRole('status')).toContainText('Watchlist history remains separately attributed');
+  await expect(page).toHaveURL(/\/cases\?case=/u);
+  await page.getByRole('button', { name: 'Toggle navigation', exact: true }).click();
+  await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true })).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
+  await expect(page.locator('article.case-detail')).toContainText('priority.invalid');
+  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('Watchlist history remains separately attributed');
 });

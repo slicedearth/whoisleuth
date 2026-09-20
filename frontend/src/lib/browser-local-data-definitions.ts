@@ -17,12 +17,14 @@ import {
 } from './analysis/brand-profile-model.ts';
 import type { BrandProfile } from './analysis/brand-profile-model.ts';
 import {
+  WATCHLIST_SCHEMA,
   normalizeWatchlistStore,
   serializeWatchlistStore,
   watchlistStoreVersion,
 } from './analysis/watchlist-store.ts';
 import type { WatchlistCollection, WatchlistEntry } from './analysis/watchlist-store.ts';
 import {
+  SHORTLIST_SCHEMA,
   normalizeShortlistStore,
   serializeShortlistStore,
   shortlistStoreVersion,
@@ -51,9 +53,10 @@ import {
 import type { RelationshipObservation } from './analysis/relationship-observation-model.ts';
 import {
   BULK_SESSION_SCHEMA,
+  bulkSessionStorageValue,
   bulkSessionStoreVersion,
   normalizeBulkSessionStore,
-  serializeBulkSessionStore,
+  serializeNormalizedBulkSessions,
 } from './analysis/bulk-session-model.ts';
 import type { BulkSession } from './analysis/bulk-session-model.ts';
 import {
@@ -116,8 +119,18 @@ import {
   LEGACY_WEBSITE_SNAPSHOTS_KEY,
 } from './browser-local-data-contract.ts';
 import { BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID } from '../../../packages/contracts/browser-local-collection-manifest.mts';
+import { CASE_DRAFT_SCHEMA, type CaseDraftRecord, type CaseDraftStore } from '../../../packages/contracts/case-drafts.mts';
+import { emptyCaseDraftStore, normalizeCaseDraftStore, serializeCaseDraftStore, caseDraftStoreVersion } from '../../../packages/cases/case-drafts.mts';
+import { caseAttachmentReferences } from '../../../packages/cases/case-attachment-model.mts';
+import { CASE_VIEWS_SCHEMA, type CaseViewsStore, type SavedCaseView } from '../../../packages/contracts/case-views-contract.mts';
+import { caseViewsStoreVersion, emptyCaseViewsStore, normalizeCaseViewsStore, serializeCaseViewsStore } from '../../../packages/workspace/case-views.mts';
+import { REVIEW_SESSION_SCHEMA, type ReviewSessionRecord, type ReviewSessionStore } from '../../../packages/contracts/review-session-contract.mts';
+import { emptyReviewSessionStore, normalizeReviewSessionStore, reviewSessionStoreVersion, serializeReviewSessionStore } from '../../../packages/workspace/review-session.mts';
 
 export type BrowserLocalCollectionValueMap = Readonly<{
+  review_session: ReviewSessionRecord;
+  case_drafts: CaseDraftRecord;
+  case_views: SavedCaseView;
   cases: CaseRecord;
   campaigns: CampaignRecord;
   brand_profiles: BrandProfile;
@@ -134,6 +147,9 @@ export type BrowserLocalCollectionValueMap = Readonly<{
 }>;
 
 export type BrowserLocalCollectionDocumentMap = Readonly<{
+  review_session: ReviewSessionStore;
+  case_drafts: CaseDraftStore;
+  case_views: CaseViewsStore;
   cases: CaseRecord[];
   campaigns: CampaignRecord[];
   brand_profiles: BrandProfile[];
@@ -190,7 +206,7 @@ function arrayOrVersionedList(
 
 function watchlistVersionedRoot(raw: unknown): boolean {
   const value = record(raw);
-  return value?.schema === 'whoisleuth.watchlists'
+  return value?.schema === WATCHLIST_SCHEMA
     && positiveVersion(value.version)
     && record(value.watchlists) !== null;
 }
@@ -206,6 +222,7 @@ export const CASES_COLLECTION: LocalDataCollectionDefinition<CaseRecord[]> = Obj
   version: parseStoreVersion,
   serialize: serializeCaseStore,
   split: (cases) => recordsFromArray(cases, (record) => record.id),
+  binaryReferences: caseAttachmentReferences,
   join: (records, schemaVersion) => ({ version: schemaVersion, cases: arrayFromRecords(records) }),
 });
 
@@ -243,7 +260,7 @@ export const WATCHLISTS_COLLECTION: LocalDataCollectionDefinition<WatchlistColle
   serialize: serializeWatchlistStore,
   split: (watchlists) => Object.entries(watchlists).map(([id, value]) => ({ id, value })),
   join: (records, schemaVersion) => ({
-    schema: 'whoisleuth.watchlists',
+    schema: WATCHLIST_SCHEMA,
     version: schemaVersion,
     watchlists: Object.fromEntries(records.map((record) => [record.id, record.value])),
   }),
@@ -253,12 +270,12 @@ export const SHORTLIST_COLLECTION: LocalDataCollectionDefinition<ShortlistRecord
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.shortlist,
   legacyKey: LEGACY_SHORTLIST_KEY,
   empty: () => [],
-  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'entries', { schema: 'whoisleuth.shortlist' }),
+  acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'entries', { schema: SHORTLIST_SCHEMA }),
   normalize: (raw) => normalizeShortlistStore(raw).entries,
   version: shortlistStoreVersion,
   serialize: serializeShortlistStore,
   split: (entries) => recordsFromArray(entries, (record) => record.domain),
-  join: (records, schemaVersion) => ({ schema: 'whoisleuth.shortlist', version: schemaVersion, entries: arrayFromRecords(records) }),
+  join: (records, schemaVersion) => ({ schema: SHORTLIST_SCHEMA, version: schemaVersion, entries: arrayFromRecords(records) }),
 });
 
 export const CT_HISTORY_COLLECTION: LocalDataCollectionDefinition<CtHistoryStore> = Object.freeze({
@@ -308,8 +325,9 @@ export const BULK_SESSIONS_COLLECTION: LocalDataCollectionDefinition<BulkSession
   acceptLegacyRoot: (raw) => arrayOrVersionedList(raw, 'sessions', { schema: BULK_SESSION_SCHEMA }),
   normalize: (raw) => normalizeBulkSessionStore(raw).sessions,
   version: bulkSessionStoreVersion,
-  serialize: serializeBulkSessionStore,
+  serialize: serializeNormalizedBulkSessions,
   split: (sessions) => recordsFromArray(sessions, (record) => record.id),
+  storageRecords: (sessions) => recordsFromArray(sessions.map(bulkSessionStorageValue), (record) => record.id),
   join: (records, schemaVersion) => ({
     schema: BULK_SESSION_SCHEMA,
     version: schemaVersion,
@@ -388,7 +406,46 @@ export const ANALYST_REVIEW_STATE_COLLECTION: LocalDataCollectionDefinition<Anal
     : analystReviewStateStoreFromRecords(records.map((record) => record.value)),
 });
 
+export const CASE_DRAFTS_COLLECTION: LocalDataCollectionDefinition<CaseDraftStore> = Object.freeze({
+  ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.case_drafts,
+  legacyKey: 'whoisleuth-case-drafts-v1',
+  legacyRollback: false,
+  empty: emptyCaseDraftStore,
+  acceptLegacyRoot: (raw) => record(raw)?.schema === CASE_DRAFT_SCHEMA && positiveVersion(record(raw)?.version) && Array.isArray(record(raw)?.records),
+  normalize: normalizeCaseDraftStore,
+  version: caseDraftStoreVersion,
+  serialize: serializeCaseDraftStore,
+  split: (store) => store.records.map(value => ({ id: value.id, value })),
+  join: (records, version) => ({ schema: CASE_DRAFT_SCHEMA, version, records: records.map(item => item.value) }),
+});
+
+export const CASE_VIEWS_COLLECTION: LocalDataCollectionDefinition<CaseViewsStore> = Object.freeze({
+  ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.case_views,
+  legacyKey: 'whoisleuth-case-views-v1',
+  legacyRollback: false,
+  empty: emptyCaseViewsStore,
+  acceptLegacyRoot: (raw) => record(raw)?.schema === CASE_VIEWS_SCHEMA && positiveVersion(record(raw)?.version) && Array.isArray(record(raw)?.views),
+  normalize: normalizeCaseViewsStore,
+  version: caseViewsStoreVersion,
+  serialize: serializeCaseViewsStore,
+  split: (store) => store.views.map(value => ({ id: value.id, value })),
+  join: (records, version) => ({ schema: CASE_VIEWS_SCHEMA, version, views: records.map(item => item.value) }),
+});
+
+export const REVIEW_SESSION_COLLECTION: LocalDataCollectionDefinition<ReviewSessionStore> = Object.freeze({
+  ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.review_session,
+  legacyKey: 'whoisleuth-review-session-v1', legacyRollback: false,
+  empty: emptyReviewSessionStore,
+  acceptLegacyRoot: raw => record(raw)?.schema === REVIEW_SESSION_SCHEMA && positiveVersion(record(raw)?.version) && Array.isArray(record(raw)?.records),
+  normalize: normalizeReviewSessionStore, version: reviewSessionStoreVersion, serialize: serializeReviewSessionStore,
+  split: store => store.records.map(value => ({ id: value.id, value })),
+  join: (records, version) => ({ schema: REVIEW_SESSION_SCHEMA, version, records: records.map(item => item.value) }),
+});
+
 export const BROWSER_LOCAL_COLLECTIONS = Object.freeze([
+  REVIEW_SESSION_COLLECTION,
+  CASE_DRAFTS_COLLECTION,
+  CASE_VIEWS_COLLECTION,
   CASES_COLLECTION,
   CAMPAIGNS_COLLECTION,
   PROFILES_COLLECTION,
@@ -446,6 +503,7 @@ export async function decodeBrowserLocalCollectionRecord<Collection extends Brow
     collection,
     lookupKey: record.lookupKey,
     payload: record.payload,
+    maximumBytes: definition.maximumBytes,
   });
   const normalizedDocument = definition.normalize(definition.join(
     [{ id: decoded.id, value: decoded.value }],

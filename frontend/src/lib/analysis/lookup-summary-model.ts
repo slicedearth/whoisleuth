@@ -324,7 +324,7 @@ function buildSignals(
     ? availability.domainAgeDays
     : null;
   const age = fmtAge(domainAgeDays);
-  if (age) pushSignal(signals, { label: age, tone: 'neutral' });
+  if (age) pushSignal(signals, { label: `Domain age: ${age}`, tone: 'neutral' });
 
   const expiresInDays = typeof availability.expiresInDays === 'number'
     ? availability.expiresInDays
@@ -332,7 +332,7 @@ function buildSignals(
   const expiry = fmtExpiresIn(expiresInDays);
   if (expiry && expiresInDays !== null) {
     pushSignal(signals, {
-      label: expiry,
+      label: `Registration ${expiry}`,
       tone: expiresInDays <= 60 ? 'warn' : 'neutral',
     });
   }

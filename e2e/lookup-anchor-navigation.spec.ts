@@ -1,8 +1,84 @@
 import { expect, test } from './fixtures';
 import { expectLookupTargetAligned, sectionedLookupFixture } from './lookup-design-fixtures';
 import { productionChunkPath } from './production-build';
+import { expectNoHorizontalOverflow, useTheme } from './helpers';
+import { skippedTlsObservation } from '../lib/tls-intelligence.mts';
+import { analyzeWebsiteTechnology } from '../lib/website-technology.mts';
+import { analyzeStructuredDataIdentity } from '../lib/structured-data-identity.mts';
+import { analyzeWebsiteSecurityPosture } from '../lib/website-security-posture.mts';
 
 // Lookup section and evidence-map anchor stability coverage.
+
+test('evidence cards and source labels remain separated across map and mobile layouts', async ({ page }, testInfo) => {
+  const domain = 'evidence-geometry.invalid';
+  const fixture = sectionedLookupFixture(domain);
+  const observedAt = '2026-07-13T00:00:00.000Z';
+  const html = '<html><head><script type="application/ld+json">{"@type":"Organization","name":"Fixture organisation"}</script></head><body>Fixture</body></html>';
+  const tls = { ...skippedTlsObservation('Not collected in this fixture.'), observedAt };
+  Object.assign(fixture.availability, {
+    tls,
+    structuredDataIdentity: analyzeStructuredDataIdentity({ html, baseUrl: `https://${domain}/`, observedAt }),
+    technologyProfile: await analyzeWebsiteTechnology({ html, observedAt }),
+    securityPosture: analyzeWebsiteSecurityPosture({ http: fixture.availability.http, tls, observedAt }),
+  });
+  await page.route('**/api/lookup?*', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify(fixture),
+  }));
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    await page.goto('/lookup');
+    await page.locator('#query').fill(domain);
+    await page.getByRole('button', { name: 'Run lookup' }).click();
+    await expect(page.getByText('1 published route', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Expand Relationships and history evidence' }).click();
+    const topology = page.getByRole('region', { name: 'Where this result came from' });
+    const sources = topology.getByRole('list', { name: 'Evidence item status' });
+    await expect(sources.getByRole('listitem').first()).toBeVisible();
+    const count = await sources.getByRole('listitem').count();
+    expect(count).toBe(10);
+    for (const viewport of [
+      { width: 2560, height: 1440 }, { width: 1280, height: 720 }, { width: 1024, height: 768 },
+      { width: 390, height: 844 }, { width: 320, height: 700 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await topology.scrollIntoViewIfNeeded();
+      const graphic = topology.locator('.topology-frame');
+      await expect(graphic).toHaveCount(1);
+      if (viewport.width > 700) {
+        await expect(graphic).toBeVisible();
+        const boxes = await graphic.locator('.source-node > .node-surface').evaluateAll((elements) => elements.map((element) => {
+          const box = element.getBoundingClientRect();
+          return { x: box.x, y: box.y, right: box.right, bottom: box.bottom };
+        }));
+        expect(boxes).toHaveLength(count);
+        const midpoint = (Math.min(...boxes.map((box) => box.x)) + Math.max(...boxes.map((box) => box.x))) / 2;
+        expect(boxes.filter((box) => box.x < midpoint)).toHaveLength(3);
+        expect(boxes.filter((box) => box.x > midpoint)).toHaveLength(7);
+        for (let a = 0; a < boxes.length; a += 1) for (let b = a + 1; b < boxes.length; b += 1) {
+          expect(boxes[a]!.right <= boxes[b]!.x || boxes[b]!.right <= boxes[a]!.x
+            || boxes[a]!.bottom < boxes[b]!.y || boxes[b]!.bottom < boxes[a]!.y).toBe(true);
+        }
+      } else {
+        await expect(graphic).toBeHidden();
+        for (const item of await sources.getByRole('listitem').all()) await expect(item).toBeVisible();
+      }
+      const mappedCount = topology.locator('.topology-summary > strong');
+      await expect(mappedCount).toHaveText('10');
+      expect(await mappedCount.evaluate((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return range.getClientRects().length;
+      })).toBe(1);
+      await expectNoHorizontalOverflow(page);
+      if ([2560, 1280, 320].includes(viewport.width)) {
+        if (viewport.width === 320) await mappedCount.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: testInfo.outputPath(`evidence-map-${viewport.width}-${theme}.png`) });
+        await sources.getByRole('listitem').last().scrollIntoViewIfNeeded();
+        await page.screenshot({ path: testInfo.outputPath(`evidence-map-end-${viewport.width}-${theme}.png`) });
+      }
+    }
+  }
+});
 
 test('Lookup section and mapped-evidence navigation settle at the requested anchor', async ({ page }) => {
   test.slow();

@@ -8,6 +8,7 @@
 // Express server and the Netlify Functions.
 
 import { parse } from 'tldts';
+import { setTimeout as sleep } from 'node:timers/promises';
 
 import { normalizeCtQuery } from './ct-query.mts';
 import { safeFetch, readTextCapped } from './safe-fetch.mts';
@@ -27,7 +28,8 @@ import {
 type CtRow = Record<string, unknown>;
 type CtDependencies = {
   fetcher?: typeof safeFetch;
-  delay?: (ms: number) => Promise<void>;
+  delay?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  signal?: AbortSignal;
 };
 type CtGroup = {
   hostnames: Set<string>;
@@ -114,23 +116,26 @@ function normalizeHostname(raw: string): string | null {
   return HOSTNAME_RE.test(h) && isValidAsciiHostname(h, { requireLowercase: true }) ? h : null;
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return sleep(ms, undefined, signal ? { signal } : {});
 }
 
 async function fetchCrtSh(keyword: string, attempt = 0, dependencies: CtDependencies = {}): Promise<CtRow[]> {
+  dependencies.signal?.throwIfAborted();
   const fetcher = dependencies.fetcher || safeFetch;
   const wait = dependencies.delay || delay;
   const controller = new AbortController();
+  const signal = dependencies.signal ? AbortSignal.any([dependencies.signal, controller.signal]) : controller.signal;
   const timeout = setTimeout(() => controller.abort(), CRT_SH_TIMEOUT_MS);
   try {
     let res: Response;
     try {
       res = await fetcher(`https://crt.sh/?q=${encodeURIComponent(keyword)}&output=json`, {
         headers: whoisleuthRequestHeaders({ Accept: 'application/json' }),
-        signal: controller.signal,
+        signal,
       }, 0);
     } catch (err) {
+      dependencies.signal?.throwIfAborted();
       if (!(err instanceof Error) || err.name !== 'AbortError') throw err;
       if (attempt < MAX_TIMEOUT_RETRIES) return fetchCrtSh(keyword, attempt + 1, dependencies);
       throw new Error(
@@ -145,7 +150,8 @@ async function fetchCrtSh(keyword: string, attempt = 0, dependencies: CtDependen
       // undici's own idle-timeout eventually notices.
       await res.body?.cancel().catch(() => {});
       if (RETRYABLE_STATUSES.has(res.status) && attempt < MAX_RETRIES) {
-        await wait(RETRY_DELAY_MS * (attempt + 1));
+        await wait(RETRY_DELAY_MS * (attempt + 1), dependencies.signal);
+        dependencies.signal?.throwIfAborted();
         return fetchCrtSh(keyword, attempt + 1, dependencies);
       }
       throw new Error(
@@ -156,6 +162,7 @@ async function fetchCrtSh(keyword: string, attempt = 0, dependencies: CtDependen
     }
 
     const { text, truncated } = await readTextCapped(res, CRT_SH_MAX_BYTES, { fatalUtf8: true });
+    signal.throwIfAborted();
     if (truncated) {
       throw new Error(
         `crt.sh returned more than ${CRT_SH_MAX_BYTES / (1024 * 1024)}MB of results for "${keyword}" - try a narrower/more specific keyword.`
@@ -540,6 +547,7 @@ function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatc
 // ---------------------------------------------------------------------------
 
 async function searchCertificateTransparency(keyword: unknown, dependencies: CtDependencies = {}) {
+  dependencies.signal?.throwIfAborted();
   const startedAt = Date.now();
   const trimmed = normalizeCtQuery(keyword);
   if (!trimmed) {

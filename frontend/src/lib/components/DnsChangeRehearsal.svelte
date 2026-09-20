@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import {
     buildDnsChangeRehearsal,
     buildDnsChangeRehearsalExport,
@@ -76,12 +77,7 @@
 
   function downloadReview() {
     const payload = buildDnsChangeRehearsalExport(result, { domain });
-    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `whoisleuth-dns-change-rehearsal-${domain}-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadLocalFile(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }), `whoisleuth-dns-change-rehearsal-${domain}-${new Date().toISOString().slice(0, 10)}.json`);
   }
 </script>
 

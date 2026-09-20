@@ -5,6 +5,8 @@ import {
   MAX_SECURITY_POSTURE_FINDINGS,
   WEBSITE_SECURITY_POSTURE_VERSION,
   analyzeWebsiteSecurityPosture,
+  securityPostureReview,
+  summarizeSecurityPostureReview,
 } from '../lib/website-security-posture.mts';
 import type { PostureFinding } from '../lib/website-security-posture.mts';
 
@@ -88,6 +90,44 @@ function byId(
 }
 
 describe('passive website security posture', () => {
+  test('counts missing controls as review findings without treating absence itself as adverse', () => {
+    const result = analyze({
+      http: http({ response: { status: 200, securityHeaders: {} } }),
+      dns: dns({ records: { caa: [] }, diagnostics: { caa: { status: 'not_found' } } }),
+    });
+    const before = structuredClone(result);
+    assert.equal(result.summary.potentialExposure, 0);
+    assert.equal(summarizeSecurityPostureReview(result.findings).needsReview, 6);
+    assert.deepEqual(securityPostureReview(byId(result, 'content_security_policy_absent')), { kind: 'needsReview', label: 'Needs review' });
+    assert.deepEqual(securityPostureReview(byId(result, 'caa_absent')), { kind: 'needsReview', label: 'Needs review' });
+    const cleartextAbsences = result.findings.filter((finding) => finding.category === 'forms and resources' && finding.state === 'observed_absence');
+    assert.equal(cleartextAbsences.length, 2);
+    for (const finding of cleartextAbsences) {
+      assert.deepEqual(securityPostureReview(finding), { kind: 'otherFindings', label: null });
+    }
+    assert.deepEqual(result, before);
+  });
+
+  test('keeps incomplete and unknown posture states separate from assessed findings', () => {
+    for (const state of ['unavailable', 'future_state', null, undefined, { toString() { throw new Error('must not coerce'); } }]) {
+      for (const tone of ['review', 'configured', 'neutral']) {
+        assert.deepEqual(securityPostureReview({ state, tone }), { kind: 'unavailable', label: 'Could not assess' });
+      }
+    }
+    assert.deepEqual(securityPostureReview({ state: 'potential_exposure', tone: 'configured' }), { kind: 'needsReview', label: 'Needs review' });
+    assert.deepEqual(securityPostureReview({ state: 'observed', tone: 'review' }), { kind: 'needsReview', label: 'Needs review' });
+    assert.deepEqual(securityPostureReview({ state: 'observed', tone: 'neutral' }), { kind: 'otherFindings', label: null });
+    assert.deepEqual(summarizeSecurityPostureReview(null), { needsReview: 0, otherFindings: 0, unavailable: 0 });
+    assert.deepEqual(summarizeSecurityPostureReview([
+      { state: 'observed_absence', tone: 'review' },
+      { state: 'observed_absence', tone: 'configured' },
+      { state: 'unavailable', tone: 'review' },
+    ]), { needsReview: 1, otherFindings: 1, unavailable: 1 });
+    assert.deepEqual(summarizeSecurityPostureReview(Array.from({ length: MAX_SECURITY_POSTURE_FINDINGS + 1 }, () => ({ state: 'observed', tone: 'review' }))), {
+      needsReview: MAX_SECURITY_POSTURE_FINDINGS, otherFindings: 0, unavailable: 0,
+    });
+  });
+
   test('emits a versioned complete derived observation from existing evidence', () => {
     const result = analyze();
     assert.equal(result.postureVersion, WEBSITE_SECURITY_POSTURE_VERSION);

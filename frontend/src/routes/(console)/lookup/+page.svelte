@@ -9,48 +9,51 @@
   import type { LookupVisualView } from '$lib/components/LookupVisualWorkspace.svelte';
   import LookupEvidenceReplay from '$lib/components/LookupEvidenceReplay.svelte';
   import LookupEvidenceCheckpoint from '$lib/components/LookupEvidenceCheckpoint.svelte';
+  import LookupSourceCheckpoint from '$lib/components/LookupSourceCheckpoint.svelte';
+  import type { CheckpointFact } from '$lib/analysis/case-evidence-checkpoint.ts';
   import LookupForm from '$lib/components/LookupForm.svelte';
   import LookupTaskGuidance from '$lib/components/LookupTaskGuidance.svelte';
   import LookupWebEvidenceSection from '$lib/components/LookupWebEvidenceSection.svelte';
   import LookupSavedContextPreview from '$lib/components/LookupSavedContextPreview.svelte';
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
+  import { lookupObservationHostname } from '../../../../../packages/evidence/lookup-target.mts';
   import LookupPresentationControls from '$lib/components/LookupPresentationControls.svelte';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
-  import { compareCaseEvidence, DEFAULT_DISPOSITION, dispositionLabel as caseDispositionLabel, isReviewedCaseDisposition, parseIncidentUrlContext, statusLabel as caseStatusLabel, type CaseRecord, type CaseTransitionExpectation, type EvidenceChange } from '$lib/cases';
+  import { compareCaseEvidence, DEFAULT_DISPOSITION, dispositionLabel as caseDispositionLabel, isReviewedCaseDisposition, parseIncidentUrlContext, statusLabel as caseStatusLabel, type CaseRecord, type CaseTransitionExpectation } from '$lib/cases';
+  import { caseEvidenceIncomparableReasons, latestCaseEvidence } from '$lib/analysis/case-model.ts';
   import { loadWatchlists, saveSingleDomainWatchlist } from '$lib/watchlists';
   import type { LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
-  import { buildLookupEvidence, evidenceFilename, serializeLookupEvidence } from '$lib/analysis/evidence-export.ts';
   import {
-    formatLookupInvestigationBriefMarkdown,
-    lookupInvestigationBriefFilename,
-  } from '$lib/analysis/lookup-investigation-brief.ts';
+    prepareLookupEvidenceExport,
+    exportLookupEvidence,
+    exportLookupReadableReport,
+    exportLookupInvestigationBrief,
+    exportLookupClaimPassport,
+  } from '$lib/analysis/lookup-exports.ts';
   import {
     createLookupViewModel,
     type LookupHttpResponse,
   } from '$lib/analysis/lookup-response.ts';
   import {
     boundedTechnologyText,
-    dateTimeAttribute,
     formatDate,
     records,
     show,
-    statusLabel,
     stringList,
   } from '$lib/analysis/lookup-display-model.ts';
   import { buildLookupRouteAnalysis } from '$lib/analysis/lookup-route-analysis.ts';
-  import {
-    buildLookupClaimPassport,
-  } from '$lib/analysis/lookup-claim-passport.ts';
   import type { LookupClaimId } from '$lib/analysis/lookup-claim-readiness.ts';
-  import type { LookupFreshnessPolicyInput, LookupFreshnessThresholds } from '$lib/analysis/lookup-source-refresh.ts';
+  import type { LookupFreshnessPolicyInput, LookupFreshnessThresholds, LookupSourceRefreshLedger } from '$lib/analysis/lookup-source-refresh.ts';
   import {
     LOOKUP_CLIENT_TIMEOUT_MS,
   } from '$lib/analysis/lookup-request.ts';
+  import { prepareSelectedLookupUrl } from '../../../../../packages/evidence/lookup-target.mts';
   import {
     buildLookupRequestUrl,
+    prepareLookupCollectionTarget,
     buildLookupResultSectionLinks,
     lookupEvidenceFamilyForHref,
     lookupEvidenceTargetForHref,
@@ -70,17 +73,16 @@
     defaultLookupWatchlistName,
     lookupWatchlistsForDomain,
   } from '$lib/analysis/lookup-watchlist-handoff.ts';
-  import {
-    buildLookupReadableReport,
-    lookupReadableReportFilename,
-  } from '$lib/analysis/lookup-readable-report.ts';
   import { buildServiceDependencyReview } from '$lib/analysis/service-dependency-review.ts';
   import { parseDomainInput } from '$lib/analysis/utils.ts';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, featureCapability, type CapabilityGetter } from '$lib/capabilities';
-  import { readLookupWorkflowState, writeLookupWorkflowState } from '$lib/console-workflow-state.ts';
+  import { readLookupWorkflowState, writeLookupWorkflowState, selectConsoleCase, setCaseNavigationContext } from '$lib/console-workflow-state.ts';
+  import { normalizeOpaqueReferenceId } from '../../../../../packages/cases/opaque-reference-id.mts';
+  import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import { preloadBestEffort } from '$lib/idle-preload';
   import { LookupRequestController } from '$lib/controllers/lookup-request-controller';
-  import { LookupCaseController, type LookupCaseActionResult, type LookupConclusionEvidenceSelection } from '$lib/controllers/lookup-case-controller';
+  import type { LookupProgressUpdate } from '../../../../../lib/lookup-progress-http.mts';
+  import { LookupCaseController, type LookupCaseActionResult, type LookupConclusionEvidenceSelection, type LookupRecheckComparison, type LookupRecheckOutcomeInput } from '$lib/controllers/lookup-case-controller';
   import { LookupAnchorController } from '$lib/controllers/lookup-anchor-controller';
   import {
     MAX_OBSERVATION_LIMITATIONS,
@@ -92,24 +94,35 @@
 
   let query=$state('');
   let lookupMode=$state<LookupMode>('fast');
+  let collectSelectedUrl=$state(false);
   let loading=$state(false);
   let loadingElapsedMs=$state(0);
+  let sourceProgress=$state<LookupProgressUpdate|null>(null);
   let includeExternalIntelligence=$state(false);
   let includeMalwareHostIntelligence=$state(false);
   let includeMalwareIocIntelligence=$state(false);
   let includeSecurityTxt=$state(false);
   let error=$state('');
   let result=$state<LookupHttpResponse|null>(null);
+  let sourceRefreshLedger=$state<LookupSourceRefreshLedger|null>(null);
+  $effect(()=>{result;sourceRefreshLedger=null;});
   let completedLookupTarget=$state('');
   let completedIncidentUrl=$state('');
   let completedLookupDepth=$state<LookupMode|null>(null);
+  const linkedCaseReference = $derived(page.url.searchParams.get('case'));
+  const invalidCaseReference = $derived(linkedCaseReference !== null && normalizeOpaqueReferenceId(linkedCaseReference) === null);
+  $effect(() => {
+    if (linkedCaseReference !== null) selectConsoleCase(normalizeOpaqueReferenceId(linkedCaseReference));
+  });
   let profile=$state<BrandProfile|null>(null);
   let profileSourceState=$state<ActiveBrandProfileSourceState>('loading');
   let draftStatus=$state('');
   let evidenceExportStatus=$state('');
   let caseRecord=$state<CaseRecord|null>(null);let caseNote=$state('');let caseStatus=$state('');
+  let caseCandidates=$state.raw<CaseRecord[]>([]);
+  let caseSourceState=$state<'loading'|'ready'|'unavailable'>('loading');
   let caseDisposition=$state(DEFAULT_DISPOSITION);let caseReviewReason=$state('');
-  let caseRecheckComparison=$state<Readonly<{available:boolean;changes:EvidenceChange[];observedAt:string;detail:string}>|null>(null);
+  let caseRecheckComparison=$state<LookupRecheckComparison|null>(null);
   let caseActionBusy=$state(false);
   let caseActionGeneration=0;
   let linkedWatchlistNames=$state<string[]>([]);
@@ -149,7 +162,7 @@
   const entries=$derived(parsedInput.entries);
   const lookupEntries=$derived.by(()=>{
     const trimmed=query.trim();
-    return taskView==='incident'&&/^[a-z][a-z\d+.-]*:\/\//iu.test(trimmed)?[trimmed]:entries;
+    return /^[a-z][a-z\d+.-]*:\/\//iu.test(trimmed)&&!/[\r\n]/u.test(trimmed)?[trimmed]:entries;
   });
   const securityTxtEligible=$derived.by(()=>{
     if(lookupEntries.length!==1)return false;
@@ -158,6 +171,8 @@
   const lookupView=$derived(createLookupViewModel(result));
   const validatedResponseJson=$derived.by(()=>result ? JSON.stringify(result, null, 2) : '');
   const availability=$derived(lookupView.availability);
+  const observationHostname=$derived(availability.dns || availability.tls || availability.http
+    ? lookupObservationHostname(availability) : null);
   const rdap=$derived(lookupView.rdap);
   const registrarRdap=$derived(lookupView.registrarRdap);
   const whois=$derived(lookupView.whois);
@@ -170,8 +185,6 @@
   const registrarStanding=$derived(lookupView.registrarStanding);
   const reverseDns=$derived(lookupView.reverseDns);
   const observedNetworkContext=$derived(lookupView.observedNetworkContext);
-  const observedNetworkEndpoint=$derived(lookupView.observedNetworkEndpoint);
-  const observedNetworkRdap=$derived(lookupView.observedNetworkRdap);
   const securityTxt=$derived(lookupView.securityTxt);
   const sslbl=$derived(lookupView.sslbl);
   const threatIntelligenceProviders=$derived(lookupView.threatIntelligenceProviders);
@@ -216,6 +229,11 @@
   const limitedComparisonCount=$derived(lookupAnalysis.limitedComparisonCount);
   const caseDomain=$derived(lookupAnalysis.caseDomain);
   const caseObservationTarget=$derived(String(result?.inputHostname||caseDomain).trim().toLowerCase());
+  function preserveLookupReturn() {
+    if (!caseRecord) return;
+    const params = new URLSearchParams({ q: completedLookupTarget, depth: lookupEvidenceDepth, task: taskView });
+    setCaseNavigationContext(caseRecord.id, `/lookup?${params}#case-response`, 'Lookup');
+  }
   const observedPageBaseline=$derived(lookupAnalysis.observedPageBaseline);
   const pageComparison=$derived(lookupAnalysis.pageComparison);
   const pageDisplay=$derived(lookupAnalysis.pageDisplay);
@@ -228,7 +246,7 @@
   const activationContext=$derived(lookupAnalysis.activationContext);
   const acquisitionDueDiligence=$derived(lookupAnalysis.acquisitionDueDiligence);
   const serviceDependencyReview=$derived(buildServiceDependencyReview({
-    domain:caseDomain,
+    domain:observationHostname??caseDomain,
     dnsEvidence,
     dnsRecords,
     httpEvidence,
@@ -246,15 +264,7 @@
   const evidenceQualityMatrix=$derived(lookupAnalysis.evidenceQualityMatrix);
   const lookupSummary=$derived(lookupAnalysis.lookupSummary);
   const lookupInvestigationBrief=$derived(lookupAnalysis.lookupInvestigationBrief);
-  function portableOutputBoundFailure(cause:unknown):boolean{
-    return (cause instanceof TypeError||cause instanceof RangeError)
-      &&/(?:Lookup response|Lookup evidence|Readable Lookup report).*(?:bound|exceed|limit)/iu.test(cause.message);
-  }
-  const lookupEvidenceProjection=$derived.by(()=>{
-    if(!result)return {document:null,error:null};
-    try{return {document:buildLookupEvidence(result,{idnAnalysis,applicationVersion:__WHOISLEUTH_VERSION__}),error:null};}
-    catch(cause){if(!portableOutputBoundFailure(cause))throw cause;return {document:null,error:'Portable evidence and readable report exports are unavailable because this response exceeds the bounded evidence structure. The separately attributed Lookup result remains available.'};}
-  });
+  const lookupEvidenceProjection=$derived(prepareLookupEvidenceExport(result, {idnAnalysis,applicationVersion:__WHOISLEUTH_VERSION__}));
   const lookupEvidenceDocument=$derived(lookupEvidenceProjection.document);
   const evidenceTopologyTarget=$derived(lookupAnalysis.evidenceTopologyTarget);
   const evidenceTopologyProjection=$derived(projectEvidenceTopology(evidenceTopologyTarget,evidenceTopologyNodes));
@@ -267,13 +277,20 @@
     try{profile=await activeProfile();profileSourceState='ready';}
     catch{profile=null;profileSourceState='unavailable';}
   }
-  async function refreshCase(expectedRevision:number|null=null){
+  async function refreshCase(expectedRevision:number|null=null,preferredCase:Pick<CaseRecord,'id'|'domain'>|null=caseRecord){
     const requestedDomain=caseDomain;
+    const requestedRevision=expectedRevision??lookupRevision;
     const actionGeneration=caseActionGeneration;
-    const next=await lookupCaseController.refresh(requestedDomain);
-    if(actionGeneration!==caseActionGeneration||(expectedRevision!==null&&(expectedRevision!==lookupRevision||caseDomain!==requestedDomain)))return;
+    caseSourceState='loading';
+    let linkedId='';
+    const linkedQuery=page.url.searchParams.get('q');
+    try{if(linkedQuery&&prepareLookupCollectionTarget(linkedQuery)===completedLookupTarget)linkedId=linkedCaseReference??'';}catch{/* Invalid URL input does not select a Case. */}
+    const next=await lookupCaseController.refresh(requestedDomain,preferredCase?.domain===requestedDomain?preferredCase.id:linkedId);
+    if(actionGeneration!==caseActionGeneration||requestedRevision!==lookupRevision||caseDomain!==requestedDomain)return;
     caseRecord=next.record;
+    caseCandidates=next.records;
     caseStatus=next.status;
+    caseSourceState=next.sourceState;
     caseDisposition=next.record?.disposition??DEFAULT_DISPOSITION;
     caseReviewReason=next.record?.reviewReasonCode??'';
   }
@@ -301,6 +318,7 @@
     afterPublish:(next:LookupCaseActionResult)=>void=()=>{},
   ):Promise<LocalMutationOutcome>{
     if(caseActionBusy)return 'stale';
+    if(caseSourceState!=='ready')return'rejected';
     const generation=++caseActionGeneration;
     const revision=lookupRevision;
     const domain=caseDomain;
@@ -309,19 +327,39 @@
     try{
       const next=await action();
       if(generation!==caseActionGeneration||revision!==lookupRevision||domain!==caseDomain||(caseRecord?.id||'')!==recordId)return 'stale';
-      caseRecord=next.record;
+      if(next.record) {
+        caseRecord=next.record;
+        caseCandidates=[...caseCandidates.filter(record=>record.id!==next.record!.id),next.record];
+      }
       caseStatus=next.status;
+      if(next.sourceState)caseSourceState=next.sourceState;
+      else if(next.record)caseSourceState='ready';
       afterPublish(next);
-      return next.mutationOutcome??'committed';
+      if (next.mutationOutcome === 'committed' && next.record) selectConsoleCase(next.record.id);
+      return next.mutationOutcome;
     }finally{
       if(generation===caseActionGeneration)caseActionBusy=false;
     }
   }
-  async function openLookupCase(){const domain=caseDomain;const evidence=caseEvidence;const depth=lookupEvidenceDepth;await performCaseAction(()=>lookupCaseController.open(domain,evidence,depth),(next)=>{caseDisposition=next.record?.disposition??DEFAULT_DISPOSITION;caseReviewReason=next.record?.reviewReasonCode??'';});}
+  function selectLookupCase(id:string){
+    if(caseActionBusy)return;
+    const selected=caseCandidates.find(record=>record.id===id);
+    if(!selected)return;
+    invalidateCaseActions();caseRecord=selected;caseNote='';caseStatus='';
+    caseDisposition=selected.disposition;caseReviewReason=selected.reviewReasonCode??'';
+    caseRecheckComparison=null;selectConsoleCase(selected.id);
+  }
+  async function openLookupCase(){const domain=caseDomain;const evidence=caseEvidence;const depth=lookupEvidenceDepth;const selection=caseRecord?{caseId:caseRecord.id}:{};await performCaseAction(()=>lookupCaseController.open(domain,evidence,depth,selection),(next)=>{caseDisposition=next.record?.disposition??DEFAULT_DISPOSITION;caseReviewReason=next.record?.reviewReasonCode??'';});}
+  async function createLookupIncident(title:string){
+    const domain=caseDomain;const evidence=caseEvidence;const depth=lookupEvidenceDepth;
+    return performCaseAction(()=>lookupCaseController.open(domain,evidence,depth,{newIncident:true},title),(next)=>{
+      if(next.mutationOutcome==='committed'){caseDisposition=next.record?.disposition??DEFAULT_DISPOSITION;caseReviewReason=next.record?.reviewReasonCode??'';caseRecheckComparison=null;}
+    });
+  }
   async function addLookupNote(){const record=caseRecord;const note=caseNote;await performCaseAction(()=>lookupCaseController.appendNote(record,note),(next)=>{if(next.clearNote)caseNote='';});}
   async function recordLookupConclusion(rationale:string,selections:readonly LookupConclusionEvidenceSelection[]){const record=caseRecord;const disposition=caseDisposition;const reason=caseReviewReason;return performCaseAction(()=>lookupCaseController.recordConclusion(record,checkpointFacts,disposition,reason,rationale,selections),(next)=>{caseDisposition=next.record?.disposition??DEFAULT_DISPOSITION;caseReviewReason=next.record?.reviewReasonCode??'';});}
   async function recordLookupInvestigationContext(objective:string,retainExactUrl:boolean){const record=caseRecord;const incidentUrl=completedIncidentUrl;return performCaseAction(()=>lookupCaseController.recordInvestigationContext(record,{objective,incidentUrl,retainExactUrl}));}
-  async function recordLookupRecheckOutcome(input:Readonly<{state:string;completeness:string;source:string;followUpAt:string|null;limitations:readonly string[];comparisonSummary:string}>){const record=caseRecord;const comparison=caseRecheckComparison;if(!comparison?.available)return false;return performCaseAction(()=>lookupCaseController.recordRecheckOutcome(record,{...input,observedAt:comparison.observedAt,collectionDepth:lookupEvidenceDepth}));}
+  async function recordLookupRecheckOutcome(input:LookupRecheckOutcomeInput):Promise<LocalMutationOutcome>{const record=caseRecord;const comparison=caseRecheckComparison;if(!comparison?.available)return 'rejected';return performCaseAction(()=>lookupCaseController.recordRecheckOutcome(record,{...input,observedAt:comparison.observedAt,collectionDepth:lookupEvidenceDepth,observationHostname:caseObservationTarget}));}
   async function recordAbuseRecipient(route:Parameters<LookupCaseController['recordRecipient']>[1]){const record=caseRecord;await performCaseAction(()=>lookupCaseController.recordRecipient(record,route));}
   async function saveLookupWatchlist(){
     if(watchlistActionBusy)return;
@@ -337,14 +375,14 @@
       if(generation!==watchlistActionGeneration||revision!==lookupRevision||target!==caseObservationTarget)return;
       watchlistName=saved.name;
       watchlistStatus=saved.created
-        ? `Created the browser-local watchlist “${saved.name}” with this ${lookupEvidenceDepth} observation.`
+        ? `Created the watchlist “${saved.name}” with this ${lookupEvidenceDepth} observation.`
         : saved.changes.length
           ? `Updated “${saved.name}” and retained ${saved.changes.length} material change${saved.changes.length===1?'':'s'}.`
           : `Updated “${saved.name}”; no comparable material change was observed.`;
       await refreshWatchlistContext(revision);
     }catch(cause){
       if(generation!==watchlistActionGeneration||revision!==lookupRevision||target!==caseObservationTarget)return;
-      watchlistStatus=cause instanceof Error?cause.message:'Could not save the browser-local watchlist observation.';
+      watchlistStatus=cause instanceof Error?cause.message:'Could not save the watchlist observation.';
     }finally{
       if(generation===watchlistActionGeneration)watchlistActionBusy=false;
     }
@@ -352,18 +390,21 @@
   async function recheckLookupCase(){
     const target=caseObservationTarget;
     if(!target||loading)return;
-    const before=caseRecord?.evidenceHistory.at(-1)??null;
+    const before=latestCaseEvidence(caseRecord);
     caseRecheckComparison=null;
     query=target;
     lookupMode=lookupEvidenceDepth;
     await runLookup({refreshCaseEvidence:true});
     if(error)return;
-    const after=caseRecord?.evidenceHistory.at(-1)??null;
-    if(!before||!after){caseRecheckComparison={available:false,changes:[],observedAt:after?.capturedAt??'',detail:'A prior and current retained Case observation are required before a comparison can be reviewed.'};return;}
+    const after=latestCaseEvidence(caseRecord);
+    if(!before||!after){caseRecheckComparison={available:false,changes:[],observedAt:after?.capturedAt??'',detail:'A uniquely latest prior and current Case observation are required. Review any equal-time or undated snapshots before comparing.'};return;}
+    if(Date.parse(after.capturedAt)<=Date.parse(before.capturedAt)){caseRecheckComparison={available:false,changes:[],observedAt:after.capturedAt,detail:'No later Case capture is available. Equal or earlier capture times cannot establish a recheck outcome.'};return;}
     const changes=compareCaseEvidence(before,after);
+    if(caseEvidenceIncomparableReasons(before,after).includes('observation-context')){caseRecheckComparison={available:false,changes,observedAt:after.capturedAt,detail:'These captures concern different or unknown hostnames. Only registration fields can be compared; recheck the same hostname before recording an observed-effect outcome.'};return;}
     caseRecheckComparison={available:true,changes,observedAt:after.capturedAt,detail:changes.length?`${changes.length} comparable material change${changes.length===1?' was':'s were'} found.`:'No comparable material field change was found. This does not prove the page or behaviour is absent.'};
   }
   async function saveEvidenceCheckpoint(selectedFields:string[],transitionExpectations:Readonly<Record<string,CaseTransitionExpectation>>={}){const record=caseRecord;const facts=checkpointFacts;return performCaseAction(()=>lookupCaseController.recordCheckpoint(record,facts,[...selectedFields],{...transitionExpectations}));}
+  async function saveRefreshedCheckpoint(facts:readonly CheckpointFact[],selectedFields:string[]){const record=caseRecord;return performCaseAction(()=>lookupCaseController.recordCheckpoint(record,facts,[...selectedFields]));}
   function cancelLookup(){lookupRequestController.cancel();}
   function visualViewForTask(value:LookupTaskView):LookupVisualView{
     if(value==='acquisition'||value==='owned')return 'timeline';
@@ -382,6 +423,7 @@
     lookupRequestController.invalidate();
     loading=false;
     loadingElapsedMs=0;
+    sourceProgress=null;
   }
   function clearCompletedLookupContext(){
     invalidateCaseActions();
@@ -390,7 +432,8 @@
     completedLookupTarget='';
     completedIncidentUrl='';
     completedLookupDepth=null;
-    caseRecord=null;
+    caseRecord=null;caseCandidates=[];
+    caseSourceState='loading';
     caseNote='';
     caseStatus='';
     caseDisposition=DEFAULT_DISPOSITION;
@@ -443,6 +486,7 @@
   function preloadLookupSection(sectionId:string){
     const loads:Array<Promise<unknown>>=[];
     if(sectionId==='web-evidence'){
+      if(observedNetworkContext.contextVersion===1)loads.push(import('$lib/components/LookupNetworkContext.svelte'));
       if(result?.type==='domain')loads.push(import('$lib/components/WebsiteSnapshotManager.svelte'));
       if(reverseDns.source==='reverse_dns'||dnsEvidence.source==='dns')loads.push(import('$lib/components/LookupDnsEvidence.svelte'));
       if(dnsEvidence.source==='dns'&&serviceDependencyReview)loads.push(import('$lib/components/LookupServiceDependencyReview.svelte'));
@@ -462,7 +506,6 @@
       if(registryAccess.suffix)loads.push(import('$lib/components/RegistryAccessNotice.svelte'));
       loads.push(import('$lib/components/LookupRegistrySources.svelte'));
       if(result?.type==='domain'&&Array.isArray(rdapParsed.redactions)&&rdapParsed.redactions.length)loads.push(import('$lib/components/RegistrationDisclosurePlanner.svelte'));
-      if(observedNetworkContext.contextVersion===1)loads.push(import('$lib/components/LookupNetworkContext.svelte'));
     }else if(sectionId==='relationships-history'){
       loads.push(import('$lib/components/LookupVisualWorkspace.svelte'));
     }else if(sectionId==='source-quality'){
@@ -622,8 +665,9 @@
     const now=new Date().toISOString();
     return buildLookupWebsiteSnapshot({
       id:crypto.randomUUID?crypto.randomUUID():`website-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      domain:caseDomain,
+      domain:observationHostname??caseDomain,
       observedAt:lookupObservedAt||now,
+      ...(availability.webObservationMode==='selected_url'?{webObservationMode:'selected_url' as const}:{}),
       savedAt:now,
       lookupEvidenceDepth,
       technologyProfile,
@@ -638,28 +682,17 @@
     });
   }
   function downloadEvidence(){
-    if(!result)return;
-    if(!lookupEvidenceDocument){evidenceExportStatus=`Evidence JSON was not created. ${lookupEvidenceProjection.error||'Evidence export is unavailable for this result.'}`;return;}
-    evidenceExportStatus='';
-    try{
-      const body=serializeLookupEvidence(lookupEvidenceDocument,true);
-      const url=URL.createObjectURL(new Blob([body],{type:'application/json'}));
-      const anchor=document.createElement('a');anchor.href=url;anchor.download=evidenceFilename(result);anchor.click();URL.revokeObjectURL(url);
-    }catch(cause){
-      if(!portableOutputBoundFailure(cause))throw cause;
-      evidenceExportStatus='Evidence export was not created because the retained result exceeds the portable evidence bounds.';
-    }
+    const status=exportLookupEvidence(result,lookupEvidenceProjection);
+    if(status!==null)evidenceExportStatus=status;
   }
   function downloadReadableReport(includeAttribution=true){
-    if(!result)return;
-    if(lookupEvidenceProjection.error){evidenceExportStatus=`Readable report was not created. ${lookupEvidenceProjection.error}`;return;}
-    try{const body=buildLookupReadableReport(result,{risk,decisionFacts:lookupDecisionFacts,applicationVersion:__WHOISLEUTH_VERSION__,includeAttribution});const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupReadableReportFilename(result);anchor.click();URL.revokeObjectURL(url);}
-    catch(cause){if(!portableOutputBoundFailure(cause))throw cause;evidenceExportStatus='Readable report export was not created because the retained result exceeds its bounded report structure.';}
+    const status=exportLookupReadableReport(result,lookupEvidenceProjection,{risk,decisionFacts:lookupDecisionFacts,applicationVersion:__WHOISLEUTH_VERSION__,includeAttribution});
+    if(status!==null)evidenceExportStatus=status;
   }
-  function downloadInvestigationBrief(){if(!result)return;const body=formatLookupInvestigationBriefMarkdown(lookupInvestigationBrief);const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=lookupInvestigationBriefFilename(lookupInvestigationBrief);anchor.click();URL.revokeObjectURL(url);}
+  function downloadInvestigationBrief(){if(result)exportLookupInvestigationBrief(lookupInvestigationBrief);}
   async function downloadClaimPassport(claimId:LookupClaimId):Promise<string>{
     if(!result)throw new Error('Run a Lookup before exporting a claim passport.');
-    const exported=await buildLookupClaimPassport({
+    return exportLookupClaimPassport({
       readiness:lookupClaimReadiness,
       claimId,
       targetType:result.type,
@@ -670,9 +703,6 @@
       riskModelVersion:risk?.modelVersion,
       applicationVersion:__WHOISLEUTH_VERSION__,
     });
-    const url=URL.createObjectURL(new Blob([exported.content],{type:'application/json;charset=utf-8'}));
-    const anchor=document.createElement('a');anchor.href=url;anchor.download=exported.filename;anchor.click();URL.revokeObjectURL(url);
-    return `Downloaded a portable passport for ${exported.document.claim.label}.`;
   }
   async function copyDraft(text:string,label:string){try{await navigator.clipboard.writeText(text);draftStatus=`Copied ${label} to the clipboard.`;}catch{draftStatus='Clipboard access was unavailable. Use the email draft link instead.';}}
   function resultSectionLinks(){return buildLookupResultSectionLinks({
@@ -687,29 +717,45 @@
     if(parsedInput.tooLarge){error='The pasted domain list exceeds the bounded input limit.';return;}
     if(!lookupEntries.length||loading)return;
     if(lookupEntries.length>1){
+      let targets:string[];
+      try{targets=lookupEntries.slice(0,2000).map(prepareLookupCollectionTarget);}
+      catch(cause){error=cause instanceof Error?cause.message:'Lookup targets could not be prepared.';return;}
       result=null;error='';
-      const handoffResult=saveCandidateHandoff('manual',lookupEntries.slice(0,2000).map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));
+      const handoffResult=saveCandidateHandoff('manual',targets.map(domain=>({domain:domain.toLowerCase(),source:'manual input',mutationTypes:[]})));
       if(!handoffResult.saved){error='This browser could not retain the selected domains for Bulk. Check site-storage access and try again.';return;}
       await goto(`/bulk?source=manual&handoff=${handoffResult.token}`);
       return;
     }
 
-    invalidateCaseActions();
-    invalidateWatchlistActions();
-    lookupAnchorController?.stop();
-    loading=true;loadingElapsedMs=0;error='';result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseNote='';caseStatus='';caseDisposition=DEFAULT_DISPOSITION;caseReviewReason='';caseRecheckComparison=null;linkedWatchlistNames=[];watchlistSourceState='loading';watchlistStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;evidenceExportStatus='';
     const submittedEntry=lookupEntries[0];if(!submittedEntry)return;
     const submittedIncident=taskView==='incident'&&/^[a-z][a-z\d+.-]*:\/\//iu.test(submittedEntry)
       ? parseIncidentUrlContext(submittedEntry)
       : null;
     if(taskView==='incident'&&/^[a-z][a-z\d+.-]*:\/\//iu.test(submittedEntry)&&!submittedIncident){
       error='Incident URLs must be absolute HTTP(S) URLs without credentials and within the Case URL bound.';
-      loading=false;
       return;
     }
-    const target=taskView==='incident'&&submittedIncident?submittedIncident.hostname:submittedEntry;
+    let target:string;
+    let selectedUrl:string|undefined;
+    try{
+      target=prepareLookupCollectionTarget(submittedEntry);
+      if(collectSelectedUrl){
+        if(lookupMode!=='deep'||!securityTxtSupported)throw new TypeError('Selected URL collection requires an enabled Deep website observation.');
+        selectedUrl=prepareSelectedLookupUrl(submittedEntry,target);
+      }
+    }
+    catch(cause){error=cause instanceof Error?cause.message:'Lookup target could not be prepared.';return;}
+    const preferredCase=caseRecord?{id:caseRecord.id,domain:caseRecord.domain}:null;
+    invalidateCaseActions();
+    invalidateWatchlistActions();
+    lookupAnchorController?.stop();
+    caseSourceState='loading';
+    loading=true;loadingElapsedMs=0;error='';result=null;completedLookupTarget='';completedLookupDepth=null;caseRecord=null;caseCandidates=[];caseNote='';caseStatus='';caseDisposition=DEFAULT_DISPOSITION;caseReviewReason='';caseRecheckComparison=null;linkedWatchlistNames=[];watchlistSourceState='loading';watchlistStatus='';serviceDependencyScope='';serviceDependencyFalsePositives='';expandedResultSections=[];detailedAssessmentOpen=false;evidenceExportStatus='';
+    sourceProgress=null;
     const requestedLookupMode=lookupMode;
     const requestRevision=++lookupRevision;
+    const revealIntent=lookupAnchorController?.captureRevealIntent();
+    const requestCurrent=()=>pageActive&&requestRevision===lookupRevision&&lookupEntries[0]===submittedEntry&&lookupMode===requestedLookupMode;
     const lookupUrl=buildLookupRequestUrl(target,{
       mode:lookupMode,
       includeExternalIntelligence,
@@ -728,24 +774,29 @@
         lookupUrl,
         (elapsedMs)=>{loadingElapsedMs=elapsedMs;},
         refreshProfileContext,
+        { ...(selectedUrl ? { selectedUrl } : {}),
+          ...(requestedLookupMode==='deep' ? { onProgress:(update:LookupProgressUpdate)=>{if(requestCurrent())sourceProgress=update;} } : {}),
+        },
       );
-      if(completed.state==='stale'||!pageActive||requestRevision!==lookupRevision||lookupEntries[0]!==submittedEntry||lookupMode!==requestedLookupMode)return;
+      if(completed.state==='stale'||!requestCurrent())return;
       const outcome=completed.outcome;
       if(!outcome.ok){error=outcome.message;return;}
       result=outcome.value;completedLookupTarget=target;completedIncidentUrl=submittedIncident?.exactUrl??'';completedLookupDepth=requestedLookupMode;
-      await Promise.all([refreshCase(requestRevision),refreshWatchlistContext(requestRevision)]);
-      if(!pageActive||requestRevision!==lookupRevision||lookupEntries[0]!==submittedEntry||lookupMode!==requestedLookupMode)return;
-      if(options.refreshCaseEvidence)await openLookupCase();
-      if(!pageActive||requestRevision!==lookupRevision||lookupEntries[0]!==submittedEntry||lookupMode!==requestedLookupMode)return;
-      requestAnimationFrame(()=>{
-        if(options.refreshCaseEvidence){void navigateToResultSection('#case-response');return;}
-        if(window.location.hash&&lookupEvidenceFamilyForHref(window.location.hash))navigateToCurrentLookupHash();
-        else document.querySelector('#result')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
-      });
+      await Promise.all([refreshCase(requestRevision,preferredCase),refreshWatchlistContext(requestRevision)]);
+      if(!requestCurrent())return;
+      if(options.refreshCaseEvidence&&revealIntent?.current())await openLookupCase();
+      if(!requestCurrent())return;
+      loading=false;
+      await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
+      if(!requestCurrent()||!revealIntent?.current())return;
+      if(options.refreshCaseEvidence){void navigateToResultSection('#case-response');return;}
+      if(window.location.hash&&lookupEvidenceFamilyForHref(window.location.hash))navigateToCurrentLookupHash();
+      else document.querySelector('#result')?.scrollIntoView({behavior:'instant',block:'start'});
     }catch{
       if(pageActive&&requestRevision===lookupRevision)error='Lookup request could not be prepared.';
     }finally{
-      if(pageActive&&requestRevision===lookupRevision)loading=false;
+      revealIntent?.dispose();
+      if(pageActive&&requestRevision===lookupRevision){loading=false;sourceProgress=null;}
     }
   }
   async function submit(event:SubmitEvent){
@@ -755,14 +806,16 @@
 </script>
 
 <svelte:head><title>Lookup · WHOISleuth</title></svelte:head>
-<PageHeading eyebrow="Investigate" title="Lookup" description="Look up a domain, IP address, or ASN using RDAP and WHOIS, with DNS, HTTP, and bounded TLS/certificate checks for domains." />
-<LookupTaskGuidance task={taskView} {lookupMode} ontask={setTaskView} onmode={(mode) => { lookupMode = mode; invalidateLookupForInputChange(); clearCompletedLookupContext(); }} />
+<PageHeading eyebrow="Investigate" title="Lookup" description="Collect evidence for a domain, IP address or ASN." />
+{#if invalidCaseReference}<p class="local-context-status" role="status">The Case reference is invalid. No Case was selected.</p>{/if}
 <LookupForm
   bind:query
   task={taskView}
   bind:lookupMode
+  bind:collectSelectedUrl
   {loading}
   {loadingElapsedMs}
+  {sourceProgress}
   loadingDeadlineMs={LOOKUP_CLIENT_TIMEOUT_MS}
   entryCount={lookupEntries.length}
   duplicateCount={parsedInput.duplicates}
@@ -782,7 +835,11 @@
   onsubmit={submit}
   oncancel={cancelLookup}
   onquerychange={handleLookupQueryChange}
-/>
+>
+  {#snippet guidance()}
+    <LookupTaskGuidance task={taskView} {lookupMode} ontask={setTaskView} onmode={(mode) => { lookupMode = mode; invalidateLookupForInputChange(); clearCompletedLookupContext(); }} />
+  {/snippet}
+</LookupForm>
 
 <LookupSavedContextPreview {query} />
 
@@ -792,7 +849,10 @@
 
 {#if result}
   <section class="result-root" id="result" use:evidenceLinkNavigation>
-    <LookupResultHeader title={show(result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} onExport={downloadEvidence} onReportExport={downloadReadableReport} onBriefExport={downloadInvestigationBrief} />
+    <LookupResultHeader title={show(result.inputHostname||result.registrableDomain||result.query)} state={show(availability.state)} isSubdomain={Boolean(result.isSubdomain)} registrableDomain={show(result.registrableDomain)} inputHostname={show(result.inputHostname)} {observationHostname} selectedUrl={availability.webObservationMode === 'selected_url'}
+      observedAt={lookupObservedAt} depth={lookupEvidenceDepth} caseHref={caseDomain ? caseRecord ? caseWorkspaceHref(caseRecord.id) : '#case-response' : null}
+      caseLabel={caseRecord ? 'Open saved Case' : caseSourceState === 'ready' ? 'Keep in Case' : 'Case context'} onCaseOpen={preserveLookupReturn}
+      onExport={downloadEvidence} onReportExport={downloadReadableReport} onBriefExport={downloadInvestigationBrief} />
     {#if evidenceExportStatus||lookupEvidenceProjection.error}<p class:portable-evidence-status={Boolean(lookupEvidenceProjection.error)} class="local-context-status" role="status" aria-atomic="true">{evidenceExportStatus||lookupEvidenceProjection.error}</p>{/if}
 
     <LookupPresentationControls
@@ -812,6 +872,7 @@
         reviewActions={lookupReviewActionModel}
         {lookupDecisionFacts}
         signals={lookupSummary.signals}
+        readiness={lookupClaimReadiness}
       />
 
       {#if availability.applicable!==false}
@@ -878,8 +939,19 @@
         onready={restoreDeferredLookupTarget}
         setServiceDependencyScope={(value) => serviceDependencyScope = value}
         setServiceDependencyFalsePositives={(value) => serviceDependencyFalsePositives = value}
+        {sourceCheckpoint}
       />
     {/if}
+    {/snippet}
+
+    {#snippet sourceCheckpoint(category: CheckpointFact['category'], label: string)}
+      {#if result?.type === 'domain'}
+        {#key result}
+          <LookupSourceCheckpoint {label} facts={checkpointFacts.filter(fact => fact.category === category)}
+            record={caseRecord} ready={caseSourceState === 'ready'} busy={caseActionBusy} status={caseStatus}
+            oncreate={openLookupCase} onsave={saveEvidenceCheckpoint} />
+        {/key}
+      {/if}
     {/snippet}
 
     {#snippet registrySection()}
@@ -931,15 +1003,8 @@
         /></div>
       {/if}
 
-      {#if observedNetworkContext.contextVersion===1}
-        <div class="evidence-component" id="evidence-network"><DeferredSurface
-          load={()=>import('$lib/components/LookupNetworkContext.svelte')}
-          loadingLabel="Loading observed network context…"
-          unavailableLabel="Observed network context could not be loaded."
-          onready={restoreDeferredLookupTarget}
-          props={{status:statusLabel(boundedTechnologyText(observedNetworkContext.status||'unsupported',40)),detail:boundedTechnologyText(observedNetworkContext.detail||'Observed network context was unavailable.',300),address:boundedTechnologyText(observedNetworkEndpoint.address,64),addressSource:pageDisplay.observedNetworkSourceLabel,rdapEndpoint:boundedTechnologyText(observedNetworkRdap.endpoint,2048),httpStatus:observedNetworkRdap.httpStatus?String(observedNetworkRdap.httpStatus):'',fetchedAt:dateTimeAttribute(observedNetworkRdap.fetchedAt)||'',rows:pageDisplay.observedNetworkRows,limitations:pageDisplay.observedNetworkLimitations}}
-        /></div>
-      {/if}
+      {@render sourceCheckpoint('registration', 'Registration')}
+
       {/if}
     </section>
     {/snippet}
@@ -980,13 +1045,13 @@
         onshow={()=>void showSectionDetail('source-quality')}
         onhide={()=>void hideSectionDetail('source-quality')}
       />
-      {#if sectionDetailVisible('source-quality')}
+      {#if sectionDetailVisible('source-quality') && result}
         <DeferredSurface
           load={()=>import('$lib/components/LookupEvidenceQuality.svelte')}
           loadingLabel="Loading source-quality review…"
           unavailableLabel="Source-quality review could not be loaded."
           onready={restoreDeferredLookupTarget}
-          props={{matrix:evidenceQualityMatrix,lookupDecisionFacts,refreshPlan:lookupSourceRefreshPlan,query:String(result?.query||caseDomain),depth:lookupEvidenceDepth,timing:lookupTiming,onpolicychange:setFreshnessPolicy}}
+          props={{matrix:evidenceQualityMatrix,lookupDecisionFacts,refreshPlan:lookupSourceRefreshPlan,original:result,refreshLedger:sourceRefreshLedger,onrefreshchange:(value:LookupSourceRefreshLedger)=>sourceRefreshLedger=value,caseTarget:{record:caseRecord,ready:caseSourceState==='ready',busy:caseActionBusy,status:caseStatus,oncreate:openLookupCase,onsave:saveRefreshedCheckpoint},depth:lookupEvidenceDepth,timing:lookupTiming,onpolicychange:setFreshnessPolicy}}
         />
         <DeferredSurface
           load={()=>import('$lib/components/LookupOverviewFacts.svelte')}
@@ -1005,7 +1070,7 @@
         <LookupFamilySummary
           label="Case and response"
           description="Save reviewed evidence, keep analyst assertions separate, and prepare human-reviewed response routes without sending anything automatically."
-          metrics={[caseRecord?'Case saved':'No case saved', `${abuseRecipientResolution.recipients.length} published routes`]}
+          metrics={[caseSourceState==='ready'?(caseRecord?'Case saved':'No case saved'):caseSourceState==='loading'?'Case loading':'Case unavailable', `${abuseRecipientResolution.recipients.length} published ${abuseRecipientResolution.recipients.length===1?'route':'routes'}`]}
           expanded={sectionDetailVisible('case-response')}
           onpreload={()=>preloadLookupSection('case-response')}
           onshow={()=>void showSectionDetail('case-response')}
@@ -1017,7 +1082,7 @@
           loadingLabel="Loading Case and response workspace…"
           unavailableLabel="The Case and response workspace could not be loaded."
           onready={restoreDeferredLookupTarget}
-          props={{domain:caseDomain,lookupTarget:caseObservationTarget,lookupDepth:lookupEvidenceDepth,task:taskView,incidentUrl:completedIncidentUrl,recheckComparison:caseRecheckComparison,record:caseRecord,note:caseNote,caseStatus,caseDisposition,caseReviewReason,checkpointFacts,draftStatus,outreach,recipientResolution:abuseRecipientResolution,linkedWatchlistNames,watchlistSourceState,watchlistName,watchlistStatus,setNote:(value:string)=>caseNote=value,setCaseDisposition:(value:string)=>{caseDisposition=value;if(!isReviewedCaseDisposition(value))caseReviewReason='';},setCaseReviewReason:(value:string)=>caseReviewReason=value,setWatchlistName:(value:string)=>watchlistName=value,createCase:openLookupCase,addNote:addLookupNote,recordConclusion:recordLookupConclusion,recordInvestigationContext:recordLookupInvestigationContext,recordRecheckOutcome:recordLookupRecheckOutcome,saveToWatchlist:saveLookupWatchlist,recheckCase:recheckLookupCase,recordRecipient:recordAbuseRecipient,copyDraft,statusLabel:caseStatusLabel,dispositionLabel:caseDispositionLabel,actionBusy:caseActionBusy,watchlistBusy:watchlistActionBusy}}
+          props={{oncaseopen:preserveLookupReturn,domain:caseDomain,lookupTarget:caseObservationTarget,lookupDepth:lookupEvidenceDepth,task:taskView,incidentUrl:completedIncidentUrl,recheckComparison:caseRecheckComparison,record:caseRecord,cases:caseCandidates,selectCase:selectLookupCase,createIncident:createLookupIncident,note:caseNote,caseStatus,caseSourceState,retryCaseRead:()=>refreshCase(),caseDisposition,caseReviewReason,checkpointFacts,draftStatus,outreach,recipientResolution:abuseRecipientResolution,linkedWatchlistNames,watchlistSourceState,watchlistName,watchlistStatus,setNote:(value:string)=>caseNote=value,setCaseDisposition:(value:string)=>{caseDisposition=value;if(!isReviewedCaseDisposition(value))caseReviewReason='';},setCaseReviewReason:(value:string)=>caseReviewReason=value,setWatchlistName:(value:string)=>watchlistName=value,createCase:openLookupCase,addNote:addLookupNote,recordConclusion:recordLookupConclusion,recordInvestigationContext:recordLookupInvestigationContext,recordRecheckOutcome:recordLookupRecheckOutcome,saveToWatchlist:saveLookupWatchlist,recheckCase:recheckLookupCase,recordRecipient:recordAbuseRecipient,copyDraft,statusLabel:caseStatusLabel,dispositionLabel:caseDispositionLabel,actionBusy:caseActionBusy,watchlistBusy:watchlistActionBusy}}
         />
         {#if caseRecord && checkpointFacts.length && taskView === 'acquisition'}
           <LookupEvidenceCheckpoint
@@ -1094,7 +1159,7 @@
 {/if}
 
 <style>
-  .result-root{min-width:0;overflow-x:clip;overflow-clip-margin:3px}
+  .result-root{min-width:0;overflow-x:clip;overflow-clip-margin:3px;scroll-margin-top:var(--local-nav-anchor-offset,72px)}
   .evidence-sections{display:flow-root}
   .detailed-assessment{margin-top:12px;padding:0;overflow:hidden}
   .detailed-assessment>summary{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:14px;cursor:pointer;list-style:none}

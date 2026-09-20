@@ -336,7 +336,7 @@
   .topology-heading h4{margin:0;font-size:var(--text-lg)}
   .topology-heading p:not(.eyebrow){max-width:680px;margin:5px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .topology-summary{display:grid;flex:0 0 auto;min-width:70px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);text-align:right}
-  .topology-summary strong{color:var(--accent);font:750 var(--text-xl) var(--mono)}
+  .topology-summary strong{color:var(--accent);font:750 var(--text-xl) var(--mono);white-space:nowrap}
   .topology-summary span{color:var(--muted);font:var(--text-2xs) var(--mono);text-transform:uppercase}
   .topology-summary small{color:var(--muted);font:var(--text-2xs) var(--mono);white-space:nowrap}
   .visual-key{display:flex;flex-wrap:wrap;align-items:center;gap:5px 10px;margin-top:13px;color:var(--muted);font:var(--text-2xs) var(--mono)}
@@ -357,7 +357,7 @@
   .key-state{margin-left:auto}
   .key-state i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent2);box-shadow:0 0 5px rgb(var(--accent2-rgb) / .35)}
   .topology-frame{max-width:100%;margin-top:14px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);overscroll-behavior-x:contain}
-  .topology-frame>svg{display:block;width:100%;min-width:680px;height:auto;max-height:500px}
+  .topology-frame>svg{display:block;width:100%;min-width:680px;height:auto}
   .graph-background{fill:var(--panel-raised)}
   .grid-line{fill:none;stroke:color-mix(in srgb,var(--border) 55%,transparent);stroke-width:1}
   .topology-edges path{fill:none;stroke:color-mix(in srgb,var(--accent) 58%,var(--border));stroke-width:2;transition:opacity .16s,stroke-width .16s,filter .16s}
@@ -394,16 +394,16 @@
   .source-rail{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(138px,100%),1fr));gap:7px;margin:10px 0 0;padding:0;list-style:none}
   .source-rail li{min-width:0}
   .source-rail li{--source-color:var(--muted)}
-  .source-rail a,.source-rail li>div{display:grid;grid-template-columns:26px minmax(0,1fr);gap:7px;align-items:center;min-height:42px;padding:6px 7px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);text-decoration:none;transition:border-color .16s,background .16s,box-shadow .16s}
+  .source-rail a,.source-rail li>div{display:grid;grid-template-columns:26px minmax(0,1fr);gap:7px;align-items:center;min-height:44px;padding:6px 7px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);text-decoration:none;transition:border-color .16s,background .16s,box-shadow .16s}
   .source-rail a:hover,.source-rail a:focus-visible,.source-rail li.active a,.source-rail li.active>div{border-color:var(--accent);background:rgb(var(--accent-rgb) / .06);box-shadow:inset 2px 0 var(--accent)}
   .source-glyph{display:grid;width:24px;height:24px;place-items:center;border:1px solid color-mix(in srgb,var(--source-color) 68%,var(--border));border-radius:50%;background:color-mix(in srgb,var(--source-color) 8%,transparent);color:var(--source-color)}
   .source-glyph :global(.source-icon){width:16px;height:16px}
   .source-copy{min-width:0}
-  .source-copy strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .source-copy strong{display:block;overflow-wrap:anywhere}
   .source-copy strong{font:650 var(--text-xs) var(--mono)}
   .source-copy small{display:none}
-  .source-family{display:block;color:var(--muted);font:650 .5rem var(--mono);letter-spacing:.06em;text-transform:uppercase}
-  .source-state{grid-column:2;padding:0;border:0;color:var(--muted);font:650 .55rem var(--mono);text-transform:uppercase}
+  .source-family{display:block;color:var(--muted);font:650 var(--text-2xs) var(--mono);letter-spacing:.04em;text-transform:uppercase}
+  .source-state{grid-column:2;padding:0;border:0;color:var(--muted);font:650 var(--text-2xs) var(--mono);overflow-wrap:anywhere}
   .state-success .source-state{color:var(--success)}
   .state-partial .source-state,.state-warning .source-state,.state-inconclusive .source-state,.state-rate_limited .source-state{color:var(--amber)}
   .state-error .source-state{color:var(--danger)}
@@ -413,20 +413,21 @@
   .embedded{padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
   .embedded .topology-frame{margin-top:0;border:0;border-radius:0}
   .compact .topology-frame>svg{min-width:0;max-height:260px}
-  .compact .source-rail{grid-template-columns:repeat(3,minmax(0,1fr));padding:8px;margin:0;border-top:1px solid var(--border)}
-  .compact .source-rail a,.compact .source-rail li>div{display:flex;gap:6px;min-height:0;padding:5px 7px}
+  .compact .source-rail{grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));padding:8px;margin:0;border-top:1px solid var(--border)}
+  .compact .source-rail a,.compact .source-rail li>div{display:flex;flex-wrap:wrap;gap:6px;min-height:44px;padding:7px}
   .compact .source-copy small,.compact .source-glyph,.compact .source-family{display:none}
-  .compact .source-copy strong{font-size:.61rem}
-  .compact .source-state{margin-left:auto;padding:2px 4px;font-size:.5rem}
+  .compact .source-copy strong{font-size:var(--text-xs)}
+  .compact .source-state{margin-left:auto;padding:2px 4px;font-size:var(--text-2xs)}
   @keyframes source-reveal{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
   @media(prefers-reduced-motion:reduce){.source-node{animation:none;transition:none}.topology-edges path,.source-rail a,.source-rail li>div{transition:none}}
   @media(max-width:700px){
-    .topology-heading{align-items:stretch;flex-direction:column}.topology-summary{display:flex;align-items:baseline;justify-content:flex-start;gap:6px;min-width:0;text-align:left}
+    .topology-heading{align-items:stretch;flex-direction:column}.topology-summary{grid-template-columns:auto minmax(0,1fr);align-items:baseline;gap:4px 7px;min-width:0;text-align:left}
+    .topology-summary small{grid-column:1 / -1}
     .key-intro{flex-basis:100%}.key-state{flex-basis:100%;margin-left:0}
     .topology-frame{display:none}
     .mobile-target{display:grid;position:relative;gap:2px;margin-top:14px;padding:10px 12px 11px;border:1px solid var(--accent);border-radius:var(--radius-md);background:color-mix(in srgb,var(--accent) 9%,var(--panel));box-shadow:0 0 18px rgb(var(--accent-rgb) / .08)}
     .mobile-target::after{content:"";position:absolute;bottom:-19px;left:11px;height:18px;border-left:1.5px solid color-mix(in srgb,var(--accent) 58%,var(--border))}
-    .mobile-target span{color:var(--accent);font:750 .52rem var(--mono);letter-spacing:.12em;text-transform:uppercase}
+    .mobile-target span{color:var(--accent);font:750 var(--text-2xs) var(--mono);letter-spacing:.06em;text-transform:uppercase}
     .mobile-target strong,.mobile-target small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .mobile-target strong{font:750 var(--text-sm) var(--mono)}
     .mobile-target small{color:var(--muted);font:var(--text-2xs) var(--mono)}
@@ -438,8 +439,8 @@
     .source-glyph,.compact .source-glyph{display:grid;width:28px;height:28px;grid-row:1 / span 2}
     .source-glyph :global(.source-icon){width:18px;height:18px}
     .source-copy strong,.compact .source-copy strong{font-size:var(--text-xs)}
-    .source-copy small,.compact .source-copy small{display:block;overflow:hidden;margin-top:2px;color:var(--muted);font-size:.6rem;line-height:1.3;text-overflow:ellipsis;white-space:nowrap}
-    .source-family,.compact .source-family{display:inline;margin-right:6px;font-size:.5rem}
-    .source-state,.compact .source-state{grid-column:2;margin:0;padding:0;font-size:.52rem}
+    .source-copy small,.compact .source-copy small{display:block;margin-top:2px;color:var(--muted);font-size:var(--text-xs);line-height:1.5;overflow-wrap:anywhere}
+    .source-family,.compact .source-family{display:inline;margin-right:6px;font-size:var(--text-2xs)}
+    .source-state,.compact .source-state{grid-column:2;margin:0;padding:0;font-size:var(--text-2xs)}
   }
 </style>

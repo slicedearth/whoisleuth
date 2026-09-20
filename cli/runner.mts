@@ -87,7 +87,7 @@ function usageEventReason(error: unknown): string {
   return 'invalid_input';
 }
 
-async function runParsedCli(args: CliArguments, dependencies: CliDependencies = {}): Promise<number> {
+async function runParsedCli(args: CliArguments, dependencies: CliDependencies = {}, writeBinaryOutput?: (value: Uint8Array) => void): Promise<number> {
   const stdout = dependencies.stdout || process.stdout;
   const stderr = dependencies.stderr || process.stderr;
   const environment = dependencies.environment || process.env;
@@ -168,6 +168,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       terminal,
       presentation: (color: boolean) => terminalPresentation(stdout, color, environment, palette),
       writeStdout: (value: string) => write(stdout, value),
+      ...(writeBinaryOutput ? { writeBinaryOutput } : {}),
       writeStderr: (value: string) => write(stderr, value),
       readSingleInput,
       readInput,
@@ -332,19 +333,62 @@ async function runCliCommand(argv: unknown, dependencies: CliDependencies = {}):
     return EXIT_CODES.INTERNAL_ERROR;
   }
   if (!args.destination) return runParsedCli(args, dependencies);
-  const buffered = createBufferedOutput();
-  const code = await runParsedCli(args, { ...dependencies, stdout: buffered.stream });
-  if (code !== EXIT_CODES.SUCCESS && code !== EXIT_CODES.PARTIAL_FAILURE) return code;
+  const buffered = createBufferedOutput({ binary: args.action === 'manifest' && args.package === true });
+  let checkpoint: Readonly<{ publish(content: string): Promise<void>; release(): Promise<number> }> | null = null;
+  let capturedSource: string | null = null;
   try {
-    await writePrivateFile(args.destination, buffered.value(), { force: args.force === true });
+    if (args.action === 'workflow-run') {
+      const { prepareInvestigationCheckpoint } = await import('./investigation-checkpoint.mts');
+      const workflowCheckpoint = await prepareInvestigationCheckpoint({
+        destination: args.destination, resumeSource: args.resumeSource, force: args.force === true,
+        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      });
+      checkpoint = workflowCheckpoint;
+      capturedSource = workflowCheckpoint.resumeInput;
+    } else if (args.action === 'case') {
+      const { prepareLocalDocumentWrite } = await import('./local-document-checkpoint.mts');
+      const { MAX_EDITABLE_CASE_INPUT_BYTES, MAX_EDITABLE_CASE_OUTPUT_BYTES } = await import('../packages/contracts/case-portability.mts');
+      const caseCheckpoint = await prepareLocalDocumentWrite({
+        destination: args.destination, source: args.source, force: args.force === true, label: 'Case',
+        allowSourceReplacement: args.operation !== 'show',
+        maximumInputBytes: MAX_EDITABLE_CASE_INPUT_BYTES, maximumOutputBytes: MAX_EDITABLE_CASE_OUTPUT_BYTES,
+        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      });
+      checkpoint = caseCheckpoint;
+      capturedSource = caseCheckpoint.sourceInput;
+    }
+    const code = await runParsedCli(args, {
+      ...dependencies, stdout: buffered.stream,
+      ...(args.action === 'workflow-run' && args.resumeSource && capturedSource !== null
+        ? { workflowResumeInput: capturedSource }
+        : {}),
+      ...(args.action === 'case' && capturedSource !== null ? { caseFileInput: capturedSource } : {}),
+    }, buffered.writeBinary);
+    if (code !== EXIT_CODES.SUCCESS && code !== EXIT_CODES.PARTIAL_FAILURE) return code;
+    const content = buffered.value();
+    if (checkpoint) {
+      if (typeof content !== 'string') throw new TypeError('Local document output must be text.');
+      await checkpoint.publish(content);
+    } else await writePrivateFile(args.destination, content, {
+      force: args.force === true,
+      beforePublish: async () => { dependencies.signal?.throwIfAborted(); },
+    });
     return code;
   } catch (error) {
+    if (isCancellation(error, dependencies.signal)) {
+      write(stderr, 'Cancelled by analyst.\n');
+      return EXIT_CODES.CANCELLED;
+    }
     if (error instanceof CliUsageError) {
       write(stderr, `Usage error: ${boundedCliErrorMessage(error, 'Output file could not be written')}\n`);
       return EXIT_CODES.USAGE;
     }
     write(stderr, `Output failed: ${boundedCliErrorMessage(error, 'Output file could not be written')}\n`);
     return EXIT_CODES.LOOKUP_FAILED;
+  } finally {
+    if (checkpoint && await checkpoint.release() > 0) {
+      write(stderr, `${args.action === 'case' ? 'Case' : 'Workflow'} cleanup warning: File ownership changed or a lease could not be removed. Inspect the selected directory before resuming.\n`);
+    }
   }
 }
 

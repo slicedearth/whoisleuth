@@ -101,7 +101,7 @@ function websiteSnapshot(
     savedAt: observedAt,
     complete: true,
     truncated: false,
-    profileProvenance: { technology: { version: 11, state: 'known' }, securityPosture: { version: 2, state: 'known' } },
+    profileProvenance: { pageFingerprint: { version: 1, state: 'known' }, technology: { version: 11, state: 'known' }, securityPosture: { version: 2, state: 'known' } },
     technologies: [{ id: 'cms', name: 'Example CMS', category: 'framework', confidence: 'high', roles: ['framework_runtime'] }],
     posture: [{ id: 'headers', state: 'present' }],
     identity: identity(),
@@ -852,6 +852,19 @@ describe('retained comparison adapters', () => {
     assert.equal(index.truncated, true);
   });
 
+  test('does not inspect saved Bulk rows when no comparison pair was requested', () => {
+    const sessions = new Array<unknown>(10);
+    Object.defineProperty(sessions, 0, { get() { throw new Error('Unselected Bulk rows were inspected.'); } });
+    for (const bulkPairs of [undefined, []]) {
+      const index = buildComparisonLedgerIndex({ bulkSessions: sessions, bulkPairs });
+      assert.deepEqual(index.items, []);
+      assert.equal(index.truncated, false);
+      assert.ok(Object.values(index.omissions).every((count) => count === 0));
+      const details = buildComparisonLedgerDetails({ bulkSessions: sessions, bulkPairs }, {});
+      assert.deepEqual(details.rows, []);
+    }
+  });
+
   test('never creates a Bulk ledger item until an exact pair is supplied', () => {
     const earlier = bulkSession('bulk-earlier', 'Earlier saved session', EARLIER, [
       bulkResult('shared.reservation.invalid'),
@@ -1232,7 +1245,7 @@ describe('retained comparison adapters', () => {
     assert.equal(index.omissions.invalidRecords, 1);
   });
 
-  test('deduplicates explicit Bulk pairs before deriving their comparison', () => {
+  test('deduplicates explicit Bulk pair identities and reports every omitted duplicate', () => {
     const earlier = bulkSession('bulk-dedupe-earlier', 'Earlier', EARLIER, [bulkResult('dedupe.reservation.invalid')]);
     const later = bulkSession('bulk-dedupe-later', 'Later', LATER, [bulkResult('dedupe.reservation.invalid')]);
     const pair = { earlierSessionId: earlier.id, laterSessionId: later.id };

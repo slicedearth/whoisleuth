@@ -153,6 +153,24 @@ function capture() {
 }
 
 describe('retained artifact diff', () => {
+  test('compares public schema 4 context with current compact rows without inferring profile authority', () => {
+    const publicExport = {
+      schema: BULK_SESSION_SCHEMA,
+      version: 4,
+      generatedAt: EARLIER,
+      sessions: [bulkSession('public', EARLIER, [bulkResult('retained.example')])],
+      limitations: [],
+    };
+    const current = bulkExport([bulkSession('current', LATER, [bulkResult('retained.example', { availability: 'available' })])], LATER);
+    const result = buildCliRetainedArtifactDiff(JSON.stringify(publicExport), current, {}, LATER);
+    assert.equal(result.schema, CLI_COMPARISON_LEDGER_SCHEMA);
+    if (result.schema !== CLI_COMPARISON_LEDGER_SCHEMA) throw new Error('Expected comparison ledger.');
+    assert.equal(result.details.rows.some((row) => row.field === 'Availability' && row.state === 'different'), true);
+    assert.equal(result.details.rows.some((row) => row.field === 'Risk score'), false);
+    Reflect.deleteProperty(publicExport.sessions[0]!.results[0]!, 'profileContext');
+    assert.throws(() => buildCliRetainedArtifactDiff(JSON.stringify(publicExport), current, {}, LATER), /malformed/u);
+  });
+
   test('dispatches current Bulk exports through the bounded comparison ledger without retaining paths', () => {
     const left = bulkExport([bulkSession('same-session', EARLIER, [bulkResult('retained.example')])], EARLIER);
     const right = bulkExport([bulkSession('same-session', LATER, [bulkResult('retained.example', { availability: 'available' })])], LATER);

@@ -1,4 +1,6 @@
+import { openCaseMetadata, openCaseSection, openConsoleView } from './console-navigation';
 import type { Page, Request } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import {
   currentBrandProfileBrowserStore,
@@ -11,6 +13,7 @@ import {
   migrateLegacyBrowserData,
   readBrowserLocalCollection,
   requiredValue,
+  useTheme,
 } from './helpers';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION, MAX_CASE_STORE_BYTES, normalizeCaseStore, serializeCaseStore, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
@@ -149,8 +152,7 @@ function expectNoFeatureApiRequests(requests: readonly string[]): void {
 }
 
 async function openCasesTab(page: Page): Promise<void> {
-  await page.locator('#console-navigation').getByRole('link', { name: /^Monitor/u }).click();
-  await page.getByRole('tab', { name: /Cases/ }).click();
+  await openConsoleView(page, 'cases');
 }
 
 test('adds and removes exact associations by keyboard, restores focus, and preserves them through profile deletion', async ({ page }) => {
@@ -161,6 +163,7 @@ test('adds and removes exact associations by keyboard, restores focus, and prese
     [profileFixture(), profileFixture({ id: SECOND_PROFILE_ID, name: 'Second fixture profile' })],
   ), { destination: '/monitor?view=cases&case=associated-case' });
 
+  await openCaseMetadata(page);
   const associations = page.getByRole('region', { name: 'Brand Profile associations' });
   await expect(associations).toBeVisible();
 
@@ -216,12 +219,12 @@ test('adds and removes exact associations by keyboard, restores focus, and prese
   await page.locator('#console-navigation').getByRole('link', { name: /^Brands/u }).click();
   const inbox = page.getByRole('region', { name: 'Brand review inbox' });
   await expect(inbox).toContainText('Review associated.invalid');
-  await expect(inbox).toContainText('Browser-local case');
+  await expect(inbox).toContainText('Saved Case');
   await expect(inbox).toContainText('inconclusive');
 
   const profileCard = page.locator('article.profile').filter({ has: page.getByRole('heading', { name: 'Fixture profile', exact: true }) });
   await profileCard.getByRole('button', { name: `Edit Fixture profile (${PROFILE_ID})` }).click();
-  const editor = page.locator('section.form');
+  const editor = page.getByRole('form', { name: 'Brand Profile', exact: true });
   await expect(page.getByLabel('Brand name')).toBeFocused();
   await expect.poll(() => editor.evaluate((element) => {
     const inboxElement = document.querySelector('.brand-review');
@@ -263,6 +266,8 @@ test('keeps disjoint association intents across concurrent browser tabs', async 
   ), { destination });
   await secondPage.goto(destination);
 
+  await openCaseMetadata(page);
+  await openCaseMetadata(secondPage);
   const firstAssociations = page.getByRole('region', { name: 'Brand Profile associations' });
   const secondAssociations = secondPage.getByRole('region', { name: 'Brand Profile associations' });
   await expect(firstAssociations).toBeVisible();
@@ -282,6 +287,8 @@ test('keeps disjoint association intents across concurrent browser tabs', async 
   expect(new Set(stored.brandProfileIds)).toEqual(new Set([PROFILE_ID, SECOND_PROFILE_ID]));
 
   await Promise.all([page.reload(), secondPage.reload()]);
+  await openCaseMetadata(page);
+  await openCaseMetadata(secondPage);
   const reloadedFirst = page.getByRole('region', { name: 'Brand Profile associations' });
   const reloadedSecond = secondPage.getByRole('region', { name: 'Brand Profile associations' });
   await expect(reloadedFirst).toContainText(PROFILE_ID);
@@ -301,6 +308,7 @@ test('keeps disjoint association intents across concurrent browser tabs', async 
 
   await secondPage.reload();
   await secondPage.setViewportSize({ width: 390, height: 844 });
+  await openCaseMetadata(secondPage);
   const mobileAssociations = secondPage.getByRole('region', { name: 'Brand Profile associations' });
   await expect(mobileAssociations).toContainText(longProfileName);
   await expect(mobileAssociations).toContainText(LONG_PROFILE_ID);
@@ -310,20 +318,51 @@ test('keeps disjoint association intents across concurrent browser tabs', async 
   await secondPage.close();
 });
 
-test('reconciles a committed association when its immediate Case reread fails', async ({ page }) => {
+test('previews association storage pressure, exports or cancels, and reconciles an explicitly pruned write', async ({ page }, testInfo) => {
   const boundedCases=nearBudgetCaseSnapshot();
   await page.goto('/monitor');
   await migrateLegacyBrowserData(page, storageEntries(boundedCases), { clearStorage:true,destination: '/monitor?view=cases&case=post-write-case' });
 
+  await openCaseMetadata(page);
   const associations = page.getByRole('region', { name: 'Brand Profile associations' });
   await expect(associations).toBeVisible();
-  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: boundedCases.length });
   await associations.getByLabel('Add Brand Profile').selectOption(PROFILE_ID);
   await associations.getByRole('button', { name: 'Add association' }).click();
+
+  const review = page.getByRole('region', { name: 'Review Case storage changes' });
+  await expect(review).toBeVisible();
+  await expect(review.getByRole('heading')).toBeFocused();
+  await expect(review).toContainText('pruned-other.invalid');
+  await expect(review).toContainText('no evidence snapshots would remain');
+  expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: boundedCases.length })).toEqual(before);
+  for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720], [2560, 1440], [3840, 2160]] as const) {
+    await page.setViewportSize({ width, height });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expect(review.getByRole('button', { name: 'Remove listed snapshots and save' })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      await page.screenshot({ path: testInfo.outputPath(`case-storage-${width}-${theme}.png`), fullPage: true });
+    }
+  }
+  const downloadEvent = page.waitForEvent('download');
+  await review.getByRole('button', { name: 'Export current Cases' }).click();
+  const download = await downloadEvent;
+  const exported = JSON.parse(await readFile(requiredValue(await download.path(), 'Case export missing'), 'utf8')) as { cases: CaseRecord[] };
+  expect(exported.cases).toEqual(boundedCases);
+  await review.getByRole('button', { name: 'Cancel change' }).click();
+  await expect(review).toHaveCount(0);
+  await expect(associations.getByLabel('Add Brand Profile')).toBeFocused();
+  expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: boundedCases.length })).toEqual(before);
+  await associations.getByRole('button', { name: 'Add association' }).click();
+  await expect(review).toBeVisible();
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
+  await review.getByRole('button', { name: 'Remove listed snapshots and save' }).click();
 
   await expect(page.getByRole('status').filter({ hasText: 'Brand Profile association saved' })).toContainText('complete committed Case snapshot');
   await expect(associations).toContainText('Fixture profile');
   await expect(associations).toBeFocused();
+  await expect(review).toHaveCount(0);
   const stored = requiredValue(
     (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1, minimumRevision: 2 })).records.find((record)=>record.value.id==='post-write-case'),
     'The committed association fixture is missing.',
@@ -331,8 +370,10 @@ test('reconciles a committed association when its immediate Case reread fails', 
   expect(stored.brandProfileIds).toEqual([PROFILE_ID]);
   const committedSnapshot=await readBrowserLocalCollection(page,'cases',{minimumRecords:1,minimumRevision:2});
   expect(requiredValue(committedSnapshot.records.find((record)=>record.value.id==='pruned-other-case'),'The prunable other Case is missing.').value.evidenceHistory).toHaveLength(0);
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   await page.getByLabel('Search').fill('pruned-other.invalid');
   await page.locator('.case-head',{hasText:'pruned-other.invalid'}).click();
+  await openCaseSection(page, 'Evidence');
   await expect(page.getByRole('heading',{name:'Evidence timeline 0 snapshots'})).toBeVisible();
 });
 
@@ -345,6 +386,7 @@ test('focuses the stable association region after removing the last unresolved r
     '',
   ), { destination: '/monitor?view=cases&case=unresolved-focus-case' });
 
+  await openCaseMetadata(page);
   const associations = page.getByRole('region', { name: 'Brand Profile associations' });
   await expect(associations.getByLabel('Add Brand Profile')).toBeDisabled();
   await associations.getByRole('button', { name: `Remove association with unavailable profile ${missingId}` }).click();
@@ -428,6 +470,7 @@ test('keeps loading explicit and fails every Case association mutation closed wh
   await failBrowserLocalCollectionReads(page, 'brand_profiles');
   await openCasesTab(page);
   await page.locator('.case-head', { hasText: 'preserved.invalid' }).click();
+  await openCaseMetadata(page);
   const associations = page.getByRole('region', { name: 'Brand Profile associations' });
   await expect(associations).toContainText('Profile details unavailable');
   await expect(associations).toContainText('association changes are unavailable');
@@ -544,6 +587,7 @@ test('installs complete committed profile snapshots across stale tabs and prefer
 
   await page.reload();
   const committedCard = page.locator('article.profile').filter({ has: page.getByRole('heading', { name: 'Committed fixture profile', exact: true }) });
+  await expect(committedCard.getByRole('button', { name: `Delete Committed fixture profile (${PROFILE_ID})` })).toBeEnabled();
   await page.evaluate((key) => {
     const originalGetItem = Storage.prototype.getItem;
     Storage.prototype.getItem = function getItem(name: string) {
@@ -558,7 +602,8 @@ test('installs complete committed profile snapshots across stale tabs and prefer
   await deletePromise;
 
   await expect(page.getByRole('status').filter({ hasText: 'Deleted "Committed fixture profile"' })).toContainText('deletion was committed, but the active-profile preference could not be updated or reread');
-  await expect(page.getByRole('button', { name: /Edit Concurrent fixture profile/u })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Refresh saved profiles', exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: /Edit Concurrent fixture profile/u })).toBeDisabled();
   storedProfiles = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRevision: 3 });
   expect(storedProfiles.records).toHaveLength(1);
   expect(storedProfiles.records[0]?.value.name).toBe('Concurrent fixture profile');
@@ -566,7 +611,7 @@ test('installs complete committed profile snapshots across stale tabs and prefer
   await secondPage.close();
 });
 
-test('recovers focus to the source alert when profile deletion closes the collection', async ({ page }) => {
+test('profile deletion separates a committed read failure from a rejected write', async ({ page }) => {
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, storageEntries([], [profileFixture()], ''), { destination: '/brands' });
   const deleteButton=page.getByRole('button',{name:`Delete Fixture profile (${PROFILE_ID})`});
@@ -576,32 +621,34 @@ test('recovers focus to the source alert when profile deletion closes the collec
   const deletePromise=deleteButton.click();
   const dialog=await dialogPromise;await dialog.accept();await deletePromise;
   const alert=page.locator('#brand-profile-source-state');
-  await expect(alert).toBeFocused();
+  await expect(alert).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Refresh saved profiles', exact: true })).toBeFocused();
   await expect(page.getByRole('button',{name:'New profile'})).toBeDisabled();
   await expect(page.getByRole('status').filter({hasText:'Deleted "Fixture profile"'})).toContainText('deletion was committed, but Brand Profiles could not be reread');
 
   await page.reload();
   await migrateLegacyBrowserData(page, storageEntries([], [profileFixture()], ''), { destination: '/brands' });
   await expect(page.getByRole('button',{name:`Delete Fixture profile (${PROFILE_ID})`})).toBeVisible();
+  const before = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
   await failBrowserLocalManifestWrites(page,'brand_profiles');
   const retryDialogPromise=page.waitForEvent('dialog');
   const retryPromise=page.getByRole('button',{name:`Delete Fixture profile (${PROFILE_ID})`}).click();
   const retryDialog=await retryDialogPromise;await retryDialog.accept();await retryPromise;
-  await expect(page.locator('#brand-profile-source-state')).toBeFocused();
-  await expect(page.getByRole('status').filter({hasText:'Could not delete profile'})).toContainText('Brand Profiles are unavailable');
+  await expect(page.getByRole('button',{name:`Delete Fixture profile (${PROFILE_ID})`})).toBeFocused();
+  await expect(page.locator('#brand-profile-source-state')).toHaveCount(0);
+  await expect(page.getByRole('status').filter({hasText:'Could not delete profile'})).toContainText(/write|storage|quota/iu);
+  await expect(page.getByRole('button',{name:'New profile'})).toBeEnabled();
+  const after = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  expect(after.manifest.revision).toBe(before.manifest.revision);
+  expect(after.records).toEqual(before.records);
 });
 
-test('keeps healthy Profiles available after an unreadable import and clears preference failure after activation succeeds', async ({ page }) => {
+test('keeps healthy Profiles available after a rejected import and clears preference failure after activation succeeds', async ({ page }) => {
   await page.goto('/brands');
   await migrateLegacyBrowserData(page, storageEntries([], [profileFixture()], ''), { destination: '/brands' });
   await expect(page.getByRole('heading',{name:'Fixture profile',exact:true})).toBeVisible();
-  await page.evaluate(()=>{
-    const original=File.prototype.text;
-    let pending=true;
-    File.prototype.text=function text(){if(pending){pending=false;return Promise.reject(new DOMException('Fixture file could not be read','NotReadableError'));}return original.call(this);};
-  });
   await page.locator('label.file-btn input[type="file"]').setInputFiles({name:'profiles.json',mimeType:'application/json',buffer:Buffer.from('{}')});
-  await expect(page.getByRole('status').filter({hasText:'Fixture file could not be read'})).toBeVisible();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('This JSON file is not a WHOISleuth Brand Profile export.');
   await expect(page.getByRole('heading',{name:'Fixture profile',exact:true})).toBeVisible();
   await expect(page.locator('#brand-profile-source-state')).toHaveCount(0);
 
@@ -619,6 +666,33 @@ test('keeps healthy Profiles available after an unreadable import and clears pre
   await expect(radio).toBeChecked();
   await expect(page.getByText(/active-profile preference could not be read/iu)).toHaveCount(0);
   await expect(page.getByRole('region',{name:'Brand review inbox'}).locator('.review-heading > strong')).toHaveText('0 review items');
+});
+
+test('a saved active-profile preference is not reported as unwritten when its recovery read fails', async ({ page }) => {
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, storageEntries([], [profileFixture()], ''), { destination: '/brands' });
+  const before = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  await page.evaluate((key) => {
+    const original = Storage.prototype.setItem;
+    let pending = true;
+    Storage.prototype.setItem = function setItem(name: string, value: string) {
+      if (pending && this === localStorage && name === key) { pending = false; throw new DOMException('Preference write denied', 'QuotaExceededError'); }
+      return original.call(this, name, value);
+    };
+  }, ACTIVE_PROFILE_KEY);
+  const radio = page.getByRole('radio', { name: 'Set Fixture profile active', exact: true });
+  await radio.click();
+  await expect(page.getByRole('status').filter({ hasText: 'active-profile preference is unavailable' })).toBeVisible();
+  await failNextBrowserLocalCollectionRead(page, 'brand_profiles');
+  await radio.click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toContainText('active-profile preference was saved, but saved profiles could not be refreshed');
+  expect(await page.evaluate((key) => localStorage.getItem(key), ACTIVE_PROFILE_KEY)).toBe(PROFILE_ID);
+  await expect(page.locator('#brand-profile-source-state')).toBeVisible();
+  await page.getByRole('button', { name: 'Refresh saved profiles', exact: true }).click();
+  await expect(radio).toBeChecked();
+  const after = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  expect(after.manifest.revision).toBe(before.manifest.revision);
+  expect(after.records).toEqual(before.records);
 });
 
 test('propagates unavailable active-profile context across Lookup, Bulk and Discover without requests or negative inference', async ({ page }) => {

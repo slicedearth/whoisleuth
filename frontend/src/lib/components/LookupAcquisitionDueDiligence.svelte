@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
   import type {
     AcquisitionDueDiligence,
     AcquisitionReviewState,
@@ -55,12 +56,7 @@
         synthetic,
         review,
       });
-      const url = URL.createObjectURL(new Blob([exported.content], { type: 'application/json' }));
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = exported.filename;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      downloadLocalFile(new Blob([exported.content], { type: 'application/json' }), exported.filename);
       exportStatus = `Downloaded a ${exported.document.analystReview.state}${synthetic ? ' synthetic' : ''} acquisition review. No request or submission was made.`;
     } catch (cause) {
       exportStatus = cause instanceof Error ? cause.message : 'Could not export the acquisition review.';

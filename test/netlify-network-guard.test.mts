@@ -16,8 +16,9 @@ import {
   OPERATION_CLASSES,
   defaultOperationBudget,
 } from '../lib/operation-budget.mts';
-import { withNetlifyOperationBudget } from '../lib/netlify-network-guard.mts';
+import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../lib/netlify-network-guard.mts';
 import { requiredValue } from './value-assertions.mts';
+import { eventFixtureForFetch } from './netlify-fetch-fixture.mts';
 
 let cookie = '';
 before(() => {
@@ -35,7 +36,7 @@ function sameOriginHeaders() {
 }
 
 const [
-  { handler: lookupHandler },
+  { default: nativeLookupHandler },
   { handler: rdapHandler },
   { handler: rdapNameserverSearchHandler },
   { handler: whoisHandler },
@@ -52,6 +53,7 @@ const [
   import('../netlify/functions/domain-posture.mts'),
 ]);
 
+const lookupHandler = eventFixtureForFetch(nativeLookupHandler);
 type NetworkHandler = typeof lookupHandler;
 type NetworkHandlerEntry = readonly [string, NetworkHandler];
 type DisabledNetworkHandlerEntry = readonly [string, string, NetworkHandler];
@@ -87,6 +89,25 @@ async function withEnvironment<T>(name: string, value: string, callback: () => P
 }
 
 describe('direct serverless network paths', () => {
+  test('a missing deployed edge identity fails diagnostically before rate or collection admission', async () => {
+    await withEnvironment('NETLIFY', 'true', async () => {
+      const denied = guardNetlifyNetworkRequest({ headers: sameOriginHeaders() });
+      assert.equal(denied.response?.statusCode, 503);
+      assert.equal(JSON.parse(denied.response?.body ?? '{}').errorCode, 'RUNTIME_IDENTITY_UNAVAILABLE');
+      const admitted = guardNetlifyNetworkRequest({ headers: { ...sameOriginHeaders(), 'x-nf-client-connection-ip': '192.0.2.44' } });
+      assert.equal(admitted.response, null);
+    });
+  });
+  for (const [name, handler] of networkHandlers.filter(([name]) => name !== 'lookup')) {
+    test(`${name} refuses write methods before query validation or collection`, async () => {
+      for (const httpMethod of ['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']) {
+        const response = await handler({ httpMethod, headers: sameOriginHeaders(), queryStringParameters: {} });
+        assert.equal(response.statusCode, 405, httpMethod);
+        assert.equal(response.headers.Allow, 'GET');
+        assert.equal(JSON.parse(requiredValue(response.body)).errorCode, 'METHOD_NOT_ALLOWED');
+      }
+    });
+  }
   for (const [name, handler] of networkHandlers) {
     test(`${name} requires authentication before doing network work`, async () => {
       const response = await handler({ headers: {}, queryStringParameters: { q: 'example.com' } });

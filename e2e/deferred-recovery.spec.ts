@@ -1,3 +1,4 @@
+import { openConsoleView } from './console-navigation';
 import type { Page, Route } from '@playwright/test';
 
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
@@ -16,6 +17,41 @@ import {
 } from './performance-sampling.ts';
 
 const CASES_KEY = 'whois-rdap-cases-v1';
+
+test('a failed opening action preserves an already loaded panel and does not repeat the action', async ({ page }, testInfo) => {
+  await page.goto('/demo#case-practice');
+  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  await expect(practice).toBeVisible();
+  await page.evaluate(() => {
+    const original = HTMLElement.prototype.focus;
+    let calls = 0;
+    Object.defineProperty(window, '__openingActionCalls', { get: () => calls });
+    HTMLElement.prototype.focus = function (...args) {
+      if (this.id === 'case-practice-title' && ++calls === 1) throw new Error('private opening-action sentinel');
+      return original.apply(this, args);
+    };
+  });
+  await practice.getByRole('button', { name: 'Discard practice and restart', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'This section loaded, but its opening action could not finish.' })).toBeVisible();
+  await expect(practice).toBeVisible();
+  await expect(practice.locator('..')).toHaveAttribute('data-deferred-state', 'ready');
+  const label = practice.locator('form[data-recovery-form="evidence-pin"]').getByLabel('Label', { exact: true });
+  await label.fill('The loaded form is still usable');
+  await expect(label).toHaveValue('The loaded form is still usable');
+  for (const [theme, width] of [['light', 320], ['dark', 1280]] as const) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`opening-action-${theme}-${width}.png`), fullPage: true });
+  }
+  expect(await page.evaluate(() => (window as unknown as { __openingActionCalls: number }).__openingActionCalls)).toBe(1);
+  await expect(page.locator('body')).not.toContainText('private opening-action sentinel');
+  await expect(page.getByRole('button', { name: 'Reload page', exact: true })).toHaveCount(0);
+  await practice.getByRole('button', { name: 'Discard practice and restart', exact: true }).click();
+  await expect(practice.getByRole('heading', { name: 'Practise a Case review', exact: true })).toBeFocused();
+  await expect(label).toHaveValue('');
+  await expect(page.getByText('This section loaded, but its opening action could not finish.', { exact: false })).toHaveCount(0);
+});
 
 function isChunk(route: Route, pathname: string): boolean {
   return new URL(route.request().url()).pathname === pathname;
@@ -135,9 +171,9 @@ test('CLI navigation readiness waits for working client-side filtering', async (
   }
 });
 
-test('Case preparation readiness cannot complete while its deferred workspace is held', async ({ page }) => {
+test('Case readiness cannot complete while its selected workspace is held', async ({ page }) => {
   const caseId = 'held-response-preparation';
-  const chunkPath = productionChunkPath('src/lib/components/CaseResponseWorkspace.svelte');
+  const chunkPath = productionChunkPath('src/lib/components/CaseDetail.svelte');
   let releaseChunk = () => {};
   const chunkReleased = new Promise<void>((resolve) => { releaseChunk = resolve; });
   let requestSeen = false;
@@ -162,10 +198,7 @@ test('Case preparation readiness cannot complete while its deferred workspace is
       },
     }, { clearStorage: true, destination: '/monitor?view=cases' });
     const caseHeading = page.locator(`#case-head-${caseId}`);
-    const caseBody = page.locator(`#case-body-${caseId}`);
-    const disclosure = page.locator(`#case-response-${caseId}`);
-    const summary = disclosure.locator(':scope > summary');
-    const responseWorkspace = disclosure.locator('.response-workspace');
+    const detail = page.locator(`[data-case-detail="${caseId}"]`);
     await expect(caseHeading).toBeVisible();
     await expect.poll(() => requestSeen, {
       message: 'waiting for the Case response module request to be held',
@@ -175,25 +208,19 @@ test('Case preparation readiness cannot complete while its deferred workspace is
     await beginBrowserInteractionReadiness(page, {
       start: { event: 'click', selector: `#case-head-${caseId}` },
       targets: [
-        { selector: `#case-body-${caseId}` },
-        { selector: `#case-response-${caseId}` },
-        { selector: `#case-response-${caseId} .response-workspace`, visibility: 'attached' },
-        { selector: `#case-response-${caseId} > summary`, requireEnabled: true },
+        { selector: `[data-case-detail="${caseId}"]` },
+        { selector: '.case-sections a[aria-current="page"]', requireEnabled: true },
+        { selector: '[aria-label="Retained Case records"]' },
       ],
     });
     await caseHeading.click();
-    await expect(caseBody).toBeVisible();
-    await expect(disclosure).toBeVisible();
-    await expect(responseWorkspace).toHaveCount(0);
+    await expect(page).toHaveURL(`/cases?case=${caseId}`);
+    await expect(detail).toHaveCount(0);
     await waitForAnimationFrames(page);
     expect(await isBrowserInteractionReadinessMarked(page)).toBe(false);
 
-    // Native disclosure is immediate, but a fast reveal cannot substitute for
-    // the held preparation phase or manufacture usable response controls.
-    await summary.click();
-    await expect(disclosure).toHaveAttribute('open', '');
-    await expect(responseWorkspace).toHaveCount(0);
-    await expect(disclosure.getByRole('button', { name: 'Advanced', exact: true })).toHaveCount(0);
+    await expect(page.getByText('Opening Case…', { exact: true })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Case sections' })).toHaveCount(0);
     await waitForAnimationFrames(page);
     expect(await isBrowserInteractionReadinessMarked(page)).toBe(false);
 
@@ -203,8 +230,10 @@ test('Case preparation readiness cannot complete while its deferred workspace is
       timeout: 5_000,
     }).toBe(true);
     expect((await readBrowserInteractionReadiness(page)).browserReadyMs).toBeGreaterThan(0);
-    await expect(responseWorkspace).toBeVisible();
-    await expect(disclosure.getByRole('button', { name: 'Advanced', exact: true })).toBeEnabled();
+    await expect(detail).toBeVisible();
+    const response = detail.getByRole('navigation', { name: 'Case sections' }).getByRole('link', { name: 'Response', exact: true });
+    await response.click();
+    await expect(detail.getByRole('textbox', { name: 'Recipient or owner', exact: true })).toBeEnabled();
     await expectNoHorizontalOverflow(page);
   } finally {
     releaseChunk();
@@ -239,7 +268,7 @@ test('a pending protected module reaches a terminal reload state and ignores lat
   });
 
   await page.goto('/monitor');
-  await page.getByRole('tab', { name: /^Relationships\b/u }).click();
+  await openConsoleView(page, 'relationships');
   await requested;
   const placeholder = page.locator('[data-deferred-placeholder="workspace"]').first();
   await expect(placeholder).toBeVisible();
@@ -260,6 +289,62 @@ test('a pending protected module reaches a terminal reload state and ignores lat
   await expect(unavailable.getByRole('button', { name: 'Reload page' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
+
+for (const navigation of ['back', 'another command', 'another page'] as const) {
+  test(`late CLI catalogue completion respects navigation to ${navigation}`, async ({ page }) => {
+    const chunkPath = productionChunkPath('src/lib/generated/public-cli-catalogue.ts');
+    let release = () => {};
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let heldRequests = 0;
+    await page.route('**/*', async (route) => {
+      if (!isChunk(route, chunkPath)) { await route.fallback(); return; }
+      heldRequests += 1;
+      await held;
+      const response = await route.fetch();
+      await route.fulfill({ response, body: `${await response.text()}\nglobalThis.__cliSelectionModuleEvaluated = true;` });
+    });
+    try {
+      await page.goto('/cli#commands');
+      const catalogue = page.getByTestId('public-cli-catalogue');
+      await expect(catalogue).toHaveAttribute('data-client-ready', 'true');
+      await catalogue.locator('article[data-command="commands"] .command-open').click();
+      await expect(page).toHaveURL('/cli#command-commands');
+      await expect.poll(() => heldRequests).toBe(1);
+      await expect(catalogue.locator('[data-command-detail]')).toHaveCount(0);
+      if (navigation === 'back') {
+        await page.goBack();
+        await expect(page).toHaveURL('/cli#commands');
+      } else if (navigation === 'another command') {
+        await catalogue.locator('article[data-command="doctor"] .command-open').click();
+        await expect(page).toHaveURL('/cli#command-doctor');
+      } else {
+        await page.getByRole('navigation', { name: 'Public navigation' }).getByRole('link', { name: 'Resources', exact: true }).click();
+        await expect(page).toHaveURL('/resources');
+        await expect(page.getByRole('heading', { name: 'Guides for common investigation tasks' })).toBeVisible();
+      }
+      const focusBeforeRelease = await page.evaluateHandle(() => document.activeElement);
+      release();
+      await page.waitForFunction(() => Reflect.get(globalThis, '__cliSelectionModuleEvaluated') === true);
+      await waitForAnimationFrames(page);
+      if (navigation === 'another command') {
+        await expect(catalogue.locator('[data-command-detail="doctor"]')).toBeVisible();
+        await expect(catalogue.locator('[data-command-detail]')).toHaveCount(1);
+        await expect(page).toHaveURL('/cli#command-doctor');
+      } else {
+        await expect(page.locator('[data-command-detail]')).toHaveCount(0);
+        await expect(page).toHaveURL(navigation === 'back' ? '/cli#commands' : '/resources');
+        expect(await page.evaluate((previous) => document.activeElement === previous, focusBeforeRelease)).toBe(true);
+      }
+      if (navigation === 'back') {
+        await page.goForward();
+        await expect(catalogue.locator('[data-command-detail="commands"]')).toBeVisible();
+        await expect(page).toHaveURL('/cli#command-commands');
+      }
+      expect(heldRequests).toBe(1);
+      await focusBeforeRelease.dispose();
+    } finally { release(); }
+  });
+}
 
 test('a cached CLI module failure recovers only after the accessible reload action', async ({ page }) => {
   const chunkPath = productionChunkPath('src/lib/generated/public-cli-catalogue.ts');

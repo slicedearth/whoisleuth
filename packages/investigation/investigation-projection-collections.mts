@@ -230,10 +230,17 @@ function projectCaseSnapshot(
 ): void {
   const observedAt = timestamp(snapshot.capturedAt);
   if (!observedAt) return;
+  // Historical root-target captures have an unambiguous scope. A submitted
+  // subdomain alone does not establish where supporting evidence was collected.
+  const hostname = snapshot.observationHostname
+    ?? (snapshot.inputHostname === caseRecord.domain ? snapshot.inputHostname : null);
+  const submittedEntity = snapshot.inputHostname
+    ? addEntity('domain', snapshot.inputHostname, snapshot.inputHostname, { domain: snapshot.inputHostname }) : null;
+  const hostnameEntity = hostname ? addEntity('domain', hostname, hostname, { domain: hostname }) : null;
   const observation = addObservation({
     id: stableId('observation', `case-evidence|${caseRecord.id}|${snapshot.id}|${observedAt}`),
     kind: 'case_evidence',
-    entityIds: [caseEntity.id, domainEntity.id],
+    entityIds: [...new Set([caseEntity.id, domainEntity.id, ...(submittedEntity ? [submittedEntity.id] : []), ...(hostnameEntity ? [hostnameEntity.id] : [])])],
     store: 'cases',
     recordId: caseRecord.id,
     source: text(snapshot.source, 40) || 'unknown',
@@ -250,6 +257,7 @@ function projectCaseSnapshot(
     },
     limitations: [
       'Compact case evidence does not retain a complete source-health or source-truncation envelope.',
+      ...(!hostname ? ['The collection hostname is unknown; hostname-scoped relationships are not inferred from the submitted target or Case parent.'] : []),
       ...(snapshot.scanDepth === 'unknown' ? ['Scan depth is unknown, so deep-only fields are not comparable.'] : []),
     ],
   });
@@ -270,7 +278,7 @@ function projectCaseSnapshot(
       }, observation);
     }
   }
-  if (snapshot.scanDepth === 'deep' && snapshot.httpEvidenceStatus
+  if (hostnameEntity && snapshot.scanDepth === 'deep' && snapshot.httpEvidenceStatus
     && ['success', 'partial'].includes(snapshot.httpEvidenceStatus)) {
     const origin = httpOrigin(snapshot.httpFinalOrigin);
     const entity = origin ? addEntity('http_origin', origin, origin, { origin }) : null;
@@ -278,7 +286,7 @@ function projectCaseSnapshot(
       linkObservationEntity(observation, entity);
       addRelationship({
         type: 'domain_reached_http_origin',
-        from: domainEntity.id,
+        from: hostnameEntity.id,
         to: entity.id,
         classification: 'normalized',
         method: 'Exact normalised final HTTP(S) origin from comparable deep evidence',
@@ -287,7 +295,7 @@ function projectCaseSnapshot(
   }
 }
 
-const caseByDomain = new Map<string, InvestigationEntity>();
+const casesByDomain = new Map<string, InvestigationEntity[]>();
 const orderedCases = [...cases.records].sort((left, right) => (
   String(right.updatedAt).localeCompare(String(left.updatedAt))
   || String(left.domain).localeCompare(String(right.domain))
@@ -297,14 +305,15 @@ for (const caseRecord of orderedCases) {
   const domain = normalizeDomain(caseRecord.domain);
   if (!domain) continue;
   const domainEntity = addEntity('domain', domain, domain, { domain });
-  const caseEntity = addEntity('case', caseRecord.id, domain, {
+  const caseEntity = addEntity('case', caseRecord.id, caseRecord.title || domain, {
     caseId: caseRecord.id,
     domain,
+    name: caseRecord.title ?? '',
     status: text(caseRecord.status, 40),
     disposition: text(caseRecord.disposition, 40),
   });
   if (!domainEntity || !caseEntity) continue;
-  caseByDomain.set(domain, caseEntity);
+  casesByDomain.set(domain, [...(casesByDomain.get(domain) ?? []), caseEntity]);
   const observedAt = timestamp(caseRecord.updatedAt);
   if (!observedAt) continue;
   const caseObservation = addObservation({
@@ -453,8 +462,7 @@ for (const campaign of campaigns.records) {
       classification: 'direct',
       method: 'Canonical domain membership stored on the analyst campaign',
     }, campaignObservation);
-    const caseEntity = caseByDomain.get(domain);
-    if (caseEntity) {
+    for (const caseEntity of casesByDomain.get(domain) ?? []) {
       linkObservationEntity(campaignObservation, caseEntity);
       addRelationship({
         type: 'campaign_contains_case',
@@ -565,7 +573,7 @@ if (relationshipObservationEnvelope?.state === 'ready') {
     const projected = addObservation({
       id: stableId(
         'observation',
-        `retained-relationship|${envelopeObservation.sourceRecordId}|${envelopeObservation.observedAt}`,
+        `retained-relationship|${envelopeObservation.sourceRecordId}|${envelopeObservation.id}`,
       ),
       kind: 'retained_relationship_observation',
       entityIds: mappedEntityIds,

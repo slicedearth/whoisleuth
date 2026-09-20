@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
-import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { playwrightPerformanceAuthorityArguments } from './playwright-execution-contract.mts';
+import { runPlaywrightProcess } from './playwright-process.mts';
 import {
   createHostedBrowserWorkspace,
   runHostedBrowserWorkspace,
@@ -15,14 +16,13 @@ import {
 import {
   localPortIsFree,
   npmExecutableName,
-  readBoundedStableRegularFileSync,
 } from './maintainer-tool-helpers.mts';
 import {
   aggregatePlaywrightShardTimings,
   renderBrowserShardTimingSummary,
 } from './playwright-shard-aggregate.mts';
 import {
-  MAX_PLAYWRIGHT_RESULTS_BYTES,
+  readPlaywrightResultData,
   summarizePlaywrightResults,
   type PlaywrightResultSummary,
 } from './playwright-results-summary.mts';
@@ -40,10 +40,9 @@ import {
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_BASE_PORT = 4180;
 const MAX_PORT_SEARCH = 100;
-const activeChildren = new Set<ChildProcess>();
-let interruptionRequested = false;
+const interruption = new AbortController();
 
-type SuiteOptions = Readonly<{ useBuild: boolean }>;
+type SuiteOptions = Readonly<{ useBuild: boolean; criticalOnly: boolean }>;
 
 type FunctionalRun = Readonly<{
   label: string;
@@ -60,10 +59,10 @@ type FunctionalRunDependencies = Readonly<{
 }>;
 
 function parseOptions(args: readonly string[]): SuiteOptions {
-  if (args.length > 1 || args.some((value) => value !== '--use-build')) {
-    throw new TypeError('Usage: node tools/playwright-balanced-suite.mts [--use-build]');
+  if (args.length > 2 || new Set(args).size !== args.length || args.some((value) => !['--use-build', '--critical-only'].includes(value))) {
+    throw new TypeError('Usage: node tools/playwright-balanced-suite.mts [--use-build] [--critical-only]');
   }
-  return Object.freeze({ useBuild: args.includes('--use-build') });
+  return Object.freeze({ useBuild: args.includes('--use-build'), criticalOnly: args.includes('--critical-only') });
 }
 
 function configuredBasePort(): number {
@@ -103,32 +102,20 @@ function runBuild(): void {
   if (child.status !== 0) throw new Error(`Frontend build failed with exit code ${child.status ?? 2}.`);
 }
 
-function runProcess(
+async function runProcess(
   executionRoot: string,
   label: string,
   args: readonly string[],
   environment: NodeJS.ProcessEnv,
 ): Promise<number> {
-  return new Promise((resolve, reject) => {
-    process.stdout.write(`Starting ${label}.\n`);
-    const child = spawn(process.execPath, args, {
-      cwd: executionRoot,
-      env: environment,
-      stdio: 'inherit',
-    });
-    activeChildren.add(child);
-    child.once('error', reject);
-    child.once('exit', (code, signal) => {
-      activeChildren.delete(child);
-      if (signal) {
-        process.stderr.write(`${label} stopped by ${signal}.\n`);
-        resolve(2);
-      } else {
-        process.stdout.write(`${label} finished with exit code ${code ?? 2}.\n`);
-        resolve(code ?? 2);
-      }
-    });
+  process.stdout.write(`Starting ${label}.\n`);
+  const code = await runPlaywrightProcess(args, {
+    cwd: executionRoot,
+    env: environment,
+    signal: interruption.signal,
   });
+  process.stdout.write(`${label} finished with exit code ${code}.\n`);
+  return code;
 }
 
 function runEnvironment(
@@ -145,7 +132,7 @@ function runEnvironment(
     WHOISLEUTH_BUILD_REVISION: revision,
     WHOISLEUTH_E2E_PORT: String(port),
     WHOISLEUTH_PLAYWRIGHT_RUN_KIND: kind,
-    ...(shard ? { WHOISLEUTH_PLAYWRIGHT_SHARD: shard } : {}),
+    WHOISLEUTH_PLAYWRIGHT_SHARD: shard ?? '',
     ...(kind === 'performance' ? { WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1' } : {}),
   };
   return {
@@ -155,13 +142,7 @@ function runEnvironment(
 }
 
 function resultData(executionRoot: string, environment: NodeJS.ProcessEnv): unknown {
-  const filename = playwrightJsonResultsPath(executionRoot, environment);
-  const bytes = readBoundedStableRegularFileSync(
-    filename,
-    MAX_PLAYWRIGHT_RESULTS_BYTES,
-    `Playwright ${playwrightRunArtifacts(environment).identity} result data`,
-  );
-  return JSON.parse(bytes.toString('utf8')) as unknown;
+  return readPlaywrightResultData(playwrightJsonResultsPath(executionRoot, environment));
 }
 
 function resultSummary(environment: NodeJS.ProcessEnv, parsed: unknown): PlaywrightResultSummary {
@@ -182,17 +163,14 @@ function verifyHostedBrowserHealth(reports: readonly unknown[]): string {
       `--environment=${process.platform}-${process.arch}-node${process.versions.node.split('.')[0]}-serial-shards`,
       '--sample-basis=complete-four-shard-functional-run',
     ]);
-    if (candidate.inventoryFingerprint !== result.aggregate.inventoryFingerprint) {
-      throw new TypeError('Local browser timing candidate does not match the executed test inventory.');
+    if (result.aggregate.files.some((measured) => !candidate.files.some((item) =>
+      item.file === measured.file && item.weightMs === measured.weightMs && item.sampleCount === measured.sampleCount))) {
+      throw new TypeError('Local browser timing candidate does not retain every executed measurement.');
     }
     return renderBrowserShardTimingSummary(result.summary);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
-}
-
-function stopChildren(): void {
-  for (const child of activeChildren) child.kill('SIGTERM');
 }
 
 export async function runFunctionalRunsSerially(
@@ -231,17 +209,40 @@ export async function runFunctionalRunsSerially(
   });
 }
 
-async function runSuite(workspace: HostedBrowserWorkspace): Promise<number> {
+async function criticalBrowserSummary(workspace: HostedBrowserWorkspace, port: number): Promise<PlaywrightResultSummary> {
+  const environment = runEnvironment(workspace.root, port, 'functional', workspace.revision);
+  const code = await runProcess(workspace.root, 'critical cross-browser checks', [
+    path.join(workspace.root, 'node_modules/@playwright/test/cli.js'),
+    'test', '--config=e2e/cross-browser.config.ts', '--grep=@cross-browser-critical', '--workers=1', '--retries=0',
+  ], environment);
+  if (code !== 0) throw new Error(`Critical cross-browser checks failed with exit ${code}.`);
+  const report = resultData(workspace.root, environment);
+  const summary = summarizePlaywrightResults(report, 'critical cross-browser');
+  const reportDirectory = path.join(REPOSITORY_ROOT, 'playwright-results');
+  mkdirSync(reportDirectory, { recursive: true });
+  writeFileSync(path.join(reportDirectory, 'critical-browser.json'), `${JSON.stringify(report)}\n`, { mode: 0o600 });
+  if (!summary.total || summary.failed || summary.flaky || summary.retried || summary.skipped || summary.truncated) {
+    throw new Error('Critical cross-browser evidence is empty, incomplete, skipped, retried or failed.');
+  }
+  return summary;
+}
+
+async function runSuite(workspace: HostedBrowserWorkspace, criticalOnly: boolean): Promise<number> {
   const executionRoot = workspace.root;
   const playwrightCli = path.join(executionRoot, 'node_modules', '@playwright', 'test', 'cli.js');
   const shardRunner = path.join(executionRoot, 'tools', 'playwright-balanced-shard.mts');
 
-  if (interruptionRequested) return 130;
+  if (interruption.signal.aborted) return 130;
 
   const plan = buildBalancedBrowserShardPlan(readVerificationTimingProfile());
   const ports = await selectPortRange(plan.shardCount + 1);
   try {
-    if (interruptionRequested) return 130;
+    if (interruption.signal.aborted) return 130;
+    if (criticalOnly) {
+      const summary = await criticalBrowserSummary(workspace, ports[0]!);
+      process.stdout.write(`Accepted critical browser suite: ${summary.passed}/${summary.total} passed; 0 failed, flaky, retried or skipped.\n`);
+      return 0;
+    }
     const performanceEnvironment = runEnvironment(
       executionRoot,
       ports[plan.shardCount]!,
@@ -254,7 +255,7 @@ async function runSuite(workspace: HostedBrowserWorkspace): Promise<number> {
       playwrightPerformanceAuthorityArguments(playwrightCli),
       performanceEnvironment,
     );
-    if (interruptionRequested) return 130;
+    if (interruption.signal.aborted) return 130;
     if (performanceExit !== 0) return performanceExit;
     const performanceResult = resultData(executionRoot, performanceEnvironment);
 
@@ -277,16 +278,18 @@ async function runSuite(workspace: HostedBrowserWorkspace): Promise<number> {
       execute: (run) => runProcess(executionRoot, run.label, run.args, run.environment),
       verifyPortFree: (run) => requirePortRangeFree([run.port]),
       readResult: (run) => resultData(executionRoot, run.environment),
-      isInterrupted: () => interruptionRequested,
+      isInterrupted: () => interruption.signal.aborted,
     });
     if (functionalResult.interrupted) return 130;
     if (functionalResult.exits.some((code) => code !== 0)) return 2;
 
     const functionalResults = functionalResult.reports;
     process.stdout.write(verifyHostedBrowserHealth(functionalResults));
+    const criticalSummary = await criticalBrowserSummary(workspace, ports[0]!);
     const summaries = [
       resultSummary(performanceEnvironment, performanceResult),
       ...functionalRuns.map((run, index) => resultSummary(run.environment, functionalResults[index])),
+      criticalSummary,
     ];
     const totals = summaries.reduce((summary, item) => ({
       total: summary.total + item.total,
@@ -311,18 +314,17 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     const options = parseOptions(args);
     if (!options.useBuild) runBuild();
     const workspace = createHostedBrowserWorkspace(REPOSITORY_ROOT);
-    return await runHostedBrowserWorkspace(workspace, () => runSuite(workspace), () => interruptionRequested);
+    return await runHostedBrowserWorkspace(workspace, () => runSuite(workspace, options.criticalOnly), () => interruption.signal.aborted);
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : 'Balanced Playwright suite failed.'}\n`);
-    return interruptionRequested ? 130 : 2;
+    return interruption.signal.aborted ? 130 : 2;
   }
 }
 
 function installSignalHandlers(): void {
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-    process.once(signal, () => {
-      interruptionRequested = true;
-      stopChildren();
+    process.on(signal, () => {
+      interruption.abort();
       process.exitCode = 130;
     });
   }

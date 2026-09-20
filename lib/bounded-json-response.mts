@@ -65,13 +65,17 @@ function boundedPositiveInteger(value: unknown, fallback: number, maximum: numbe
     : fallback;
 }
 
-export async function readJsonResponseCapped(
+/** Binary and JSON consumers supply their own finite admission budget. */
+export async function readResponseBytesCapped(
   response: Response,
-  maximumBytes = STANDARD_JSON_RESPONSE_BYTES,
+  maxBytes: number,
   signal?: AbortSignal,
-  validateRawJson?: (raw: string) => void,
-): Promise<unknown> {
-  const maxBytes = boundedPositiveInteger(maximumBytes, STANDARD_JSON_RESPONSE_BYTES, LARGE_JSON_RESPONSE_BYTES);
+): Promise<Uint8Array | null> {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) throw new TypeError('A positive finite response byte limit is required.');
+  if (signal?.aborted) {
+    await response.body?.cancel().catch(() => {});
+    throw signal.reason ?? new DOMException('Response read was cancelled.', 'AbortError');
+  }
   const declared = response.headers.get('content-length');
   if (declared && /^\d+$/u.test(declared)) {
     const bytes = Number(declared);
@@ -87,6 +91,8 @@ export async function readJsonResponseCapped(
   signal?.addEventListener('abort', cancelOnAbort, { once: true });
   const chunks: Uint8Array[] = [];
   let total = 0;
+  let block: Uint8Array | undefined;
+  let blockUsed = 0;
   try {
     while (true) {
       const read = reader.read();
@@ -98,7 +104,17 @@ export async function readJsonResponseCapped(
         await reader.cancel().catch(() => {});
         throw new BoundedJsonResponseError('response_too_large', `JSON response exceeded ${maxBytes} bytes.`);
       }
-      chunks.push(value);
+      // Tiny streamed chunks must not create an unbounded object overhead
+      // before the byte limit is reached. Retain fixed-size owned blocks.
+      for (let offset = 0; offset < value.byteLength;) {
+        if (!block || blockUsed === block.byteLength) {
+          block = new Uint8Array(Math.min(64 * 1024, maxBytes - (total - value.byteLength + offset)));
+          chunks.push(block); blockUsed = 0;
+        }
+        const length = Math.min(block.byteLength - blockUsed, value.byteLength - offset);
+        block.set(value.subarray(offset, offset + length), blockUsed);
+        blockUsed += length; offset += length;
+      }
     }
   } finally {
     signal?.removeEventListener('abort', cancelOnAbort);
@@ -108,9 +124,22 @@ export async function readJsonResponseCapped(
   const bytes = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
+    const length = Math.min(chunk.byteLength, total - offset);
+    bytes.set(chunk.subarray(0, length), offset);
+    offset += length;
   }
+  return bytes;
+}
+
+export async function readJsonResponseCapped(
+  response: Response,
+  maximumBytes = STANDARD_JSON_RESPONSE_BYTES,
+  signal?: AbortSignal,
+  validateRawJson?: (raw: string) => void,
+): Promise<unknown> {
+  const maxBytes = boundedPositiveInteger(maximumBytes, STANDARD_JSON_RESPONSE_BYTES, LARGE_JSON_RESPONSE_BYTES);
+  const bytes = await readResponseBytesCapped(response, maxBytes, signal);
+  if (bytes === null) return null;
   let raw: string;
   try {
     raw = new TextDecoder('utf-8', { fatal: true }).decode(bytes);

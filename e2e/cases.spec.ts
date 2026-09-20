@@ -1,97 +1,92 @@
+import { openCaseClassification, openCaseMetadata, openCaseSection, openConsoleView, openInboxReview } from './console-navigation';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
-import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue } from './helpers';
+import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
 import { caseRecord, createCase, openCaseResponseWorkspace, openCasesView, snapshot } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
 import { caseWorkspaceActionStatus, currentActionFixture, openPacketWizardStep, operationsReportActionStatus, reviewInboxActionStatus } from './case-response-fixtures';
 import { caseNumber, formattedCaseNumber } from '../packages/cases/case-workflow-metadata.mts';
+import type { WebsiteProfileSnapshot } from '../packages/workspace/website-snapshot-model.mts';
 
 // Monitor workflows, retained evidence and local control coverage.
 
-test('Monitor views support roving keyboard navigation', async ({ page }) => {
+test('Monitor views support roving keyboard navigation within the selected workspace', async ({ page }) => {
   await page.goto('/monitor');
   const tabs = page.getByRole('tablist', { name: 'Monitor views' });
-  await expect(page.locator('.view-group', { hasText: 'Respond' })).toBeVisible();
-  await expect(page.locator('.view-group', { hasText: 'Assure' })).toBeVisible();
+  await expect(tabs.getByRole('tab')).toHaveCount(3);
   const inbox = tabs.getByRole('tab', { name: /^Inbox/ });
   await inbox.focus();
   await inbox.press('ArrowRight');
-  await expect(tabs.getByRole('tab', { name: /^Cases/ })).toBeFocused();
-  await expect(tabs.getByRole('tab', { name: /^Cases/ })).toHaveAttribute('aria-selected', 'true');
-  await expect(page).toHaveURL('/monitor?view=cases');
-  await tabs.getByRole('tab', { name: /^Cases/ }).press('End');
-  await expect(tabs.getByRole('tab', { name: /^Custom rules/ })).toBeFocused();
-  await expect(page).toHaveURL('/monitor?view=rules');
+  await expect(tabs.getByRole('tab', { name: /^Campaigns/ })).toBeFocused();
+  await expect(page).toHaveURL('/monitor?view=campaigns');
+  await tabs.getByRole('tab', { name: /^Campaigns/ }).press('End');
+  await expect(tabs.getByRole('tab', { name: /^Relationships/ })).toBeFocused();
+  await expect(page).toHaveURL('/monitor?view=relationships');
+  await openConsoleView(page, 'timeline');
   const timeline = tabs.getByRole('tab', { name: /^Timeline/ });
   await timeline.focus();
   await timeline.press('ArrowRight');
   await expect(tabs.getByRole('tab', { name: /^Certificates/ })).toBeFocused();
   await tabs.getByRole('tab', { name: /^Certificates/ }).press('ArrowRight');
   await expect(tabs.getByRole('tab', { name: /^Watchlists/ })).toBeFocused();
-  await expect(tabs.getByRole('tab', { name: /^Watchlists/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page).toHaveURL('/monitor?view=watchlists');
   await page.reload();
   await expect(page.getByRole('tab', { name: /^Watchlists/ })).toHaveAttribute('aria-selected', 'true');
 });
-test('Monitor workflow destinations preserve active state and browser back and forward history', async ({ page }) => {
+
+test('console workflow destinations preserve active state and browser history', async ({ page }) => {
   await page.goto('/monitor');
-  const navigation = page.getByRole('navigation', { name: 'Console' });
-  const respondLink = navigation.getByRole('link', { name: /^Monitor/u });
-  const assureLink = navigation.getByRole('link', { name: /^Watchlists & controls/u });
-  await expect(respondLink).toHaveAttribute('aria-current', 'page');
-  await expect(assureLink).not.toHaveAttribute('aria-current', 'page');
-
-  await page.getByRole('tab', { name: /^Cases/u }).click();
-  await expect(page).toHaveURL('/monitor?view=cases');
-  await expect(respondLink).toHaveAttribute('aria-current', 'page');
-  await page.getByRole('tab', { name: /^Watchlists/u }).click();
+  const navigation = page.getByRole('navigation', { name: 'Console', exact: true });
+  const respond = navigation.getByRole('link', { name: 'Review inbox', exact: true });
+  const cases = navigation.getByRole('link', { name: 'Cases', exact: true });
+  const monitoring = navigation.getByRole('link', { name: 'Monitoring', exact: true });
+  await expect(respond).toHaveAttribute('aria-current', 'page');
+  await cases.click();
+  await expect(page).toHaveURL('/cases');
+  await expect(cases).toHaveAttribute('aria-current', 'page');
+  await expect(respond).not.toHaveAttribute('aria-current', 'page');
+  await monitoring.click();
   await expect(page).toHaveURL('/monitor?view=watchlists');
-  await expect(assureLink).toHaveAttribute('aria-current', 'page');
-  await expect(respondLink).not.toHaveAttribute('aria-current', 'page');
-
+  await expect(monitoring).toHaveAttribute('aria-current', 'page');
   await page.goBack();
-  await expect(page).toHaveURL('/monitor?view=cases');
-  await expect(page.getByRole('tab', { name: /^Cases/u })).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL('/cases');
+  await expect(cases).toHaveAttribute('aria-current', 'page');
   await page.goBack();
   await expect(page).toHaveURL('/monitor');
-  await expect(page.getByRole('tab', { name: /^Inbox/u })).toHaveAttribute('aria-selected', 'true');
+  await expect(respond).toHaveAttribute('aria-current', 'page');
   await page.goForward();
-  await expect(page).toHaveURL('/monitor?view=cases');
+  await expect(page).toHaveURL('/cases');
   await page.goForward();
   await expect(page).toHaveURL('/monitor?view=watchlists');
-  await expect(page.getByRole('tab', { name: /^Watchlists/u })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: /^Watchlists/ })).toHaveAttribute('aria-selected', 'true');
 });
 
-test('Monitor keeps its URL, default view, and guided-route cleanup consistent', async ({ page }) => {
+test('legacy Case destinations retain guided inputs and canonical navigation clears them', async ({ page }) => {
   await page.goto('/monitor?view=cases');
-  await expect(page.getByRole('tab', { name: /^Cases/ })).toHaveAttribute('aria-selected', 'true');
-
-  await page.locator('#console-navigation a[href="/monitor"]').click();
+  await expect(page).toHaveURL('/cases');
+  await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
+  await openConsoleView(page, 'inbox');
   await expect(page).toHaveURL('/monitor');
-  await expect(page.getByRole('tab', { name: /^Inbox/ })).toHaveAttribute('aria-selected', 'true');
   await page.reload();
   await expect(page.getByRole('tab', { name: /^Inbox/ })).toHaveAttribute('aria-selected', 'true');
-
   await page.goto('/monitor?view=not-a-view');
   await expect(page.getByRole('tab', { name: /^Inbox/ })).toHaveAttribute('aria-selected', 'true');
 
   await page.goto('/monitor?view=cases&investigation=1&domain=guided.invalid&response=1#case-review-queue');
-  await expect(page.getByRole('tab', { name: /^Cases/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL('/cases?investigation=1&domain=guided.invalid&response=1#case-review-queue');
   await expect(page.locator('#case-review-queue')).toBeFocused();
-  await page.getByRole('tab', { name: /^Inbox/ }).click();
-  await expect(page).toHaveURL('/monitor?view=inbox');
+  await openConsoleView(page, 'inbox');
+  await expect(page).toHaveURL('/monitor');
   await page.reload();
   await expect(page.getByRole('tab', { name: /^Inbox/ })).toHaveAttribute('aria-selected', 'true');
 
-  const monitorLink = page.locator('#console-navigation a[href="/monitor"]');
-  await monitorLink.evaluate((link) => {
+  await page.locator('#console-navigation a[href="/monitor"]').evaluate((link) => {
     link.setAttribute('href', '/monitor?view=cases&investigation=1&domain=guided.invalid#case-review-queue');
     (link as HTMLAnchorElement).click();
   });
-  await expect(page).toHaveURL('/monitor?view=cases&investigation=1&domain=guided.invalid#case-review-queue');
+  await expect(page).toHaveURL('/cases?investigation=1&domain=guided.invalid#case-review-queue');
   await expect(page.getByRole('heading', { name: '1 domain carried from Bulk' })).toBeVisible();
   await expect(page.locator('#case-review-queue')).toBeFocused();
-
   for (const reservedName of ['__proto__', 'constructor']) {
     await page.goto(`/monitor?view=watchlists&watchlist=${reservedName}`);
     await expect(page.getByRole('tab', { name: /^Watchlists/u })).toHaveAttribute('aria-selected', 'true');
@@ -100,21 +95,20 @@ test('Monitor keeps its URL, default view, and guided-route cleanup consistent',
   }
 });
 
-test('Monitor reports unreadable browser-local collections without false empty states', async ({ page }) => {
+test('Cases and monitoring report unreadable collections without false empty states', async ({ page }) => {
   await page.goto('/monitor');
-  const navigation = page.locator('#console-navigation');
-  await expect(navigation.getByRole('link', { name: /^Dashboard/u })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Dashboard', exact: true })).toBeVisible();
   await failBrowserLocalCollectionReads(page, 'cases');
   await failBrowserLocalCollectionReads(page, 'watchlists');
-  await navigation.getByRole('link', { name: /^Dashboard/u }).click();
-  await navigation.getByRole('link', { name: /^Monitor/u }).click();
-
-  await expect(page.locator('.local-context-status')).toContainText('Some browser-local context could not be loaded');
-  await expect(page.getByRole('tab', { name: /^Cases/ }).locator('span')).toHaveAttribute('aria-label', 'count unavailable');
-  await page.getByRole('tab', { name: /^Cases/ }).click();
+  await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Dashboard', exact: true }).click();
+  await expect(page).toHaveURL('/dashboard');
+  await openConsoleView(page, 'inbox');
+  await expect(page.locator('.local-context-status')).toContainText('Some saved context could not be loaded');
+  await openConsoleView(page, 'cases');
   await expect(page.getByRole('heading', { name: 'Cases unavailable' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'No cases yet' })).toHaveCount(0);
-  await page.getByRole('tab', { name: /^Watchlists/ }).click();
+  await openConsoleView(page, 'watchlists');
+  await expect(page.getByRole('tab', { name: /^Watchlists/ }).locator('span')).toHaveAttribute('aria-label', 'count unavailable');
   await expect(page.getByRole('heading', { name: 'Watchlists unavailable' })).toBeVisible();
   await expect(page.getByText(/No watchlists/i)).toHaveCount(0);
 });
@@ -157,6 +151,7 @@ test('recorded operations reporting stays aggregate, source-qualified, and usabl
     },
   });
 
+  await page.getByText('Case reports and follow-up tools', { exact: true }).click();
   const report = page.locator('.operations-report');
   await expect(report).toContainText('2 current action records across 2 of 3 inspected Cases');
   await expect(report.getByText('Ready for review', { exact: true })).toBeVisible();
@@ -234,10 +229,10 @@ test('response lifecycle surfaces remain accessible across major desktop and mob
     await page.setViewportSize({ width: surface.width, height: surface.height });
     await page.evaluate((theme) => localStorage.setItem('whoisleuth:theme:v1', theme), surface.theme);
     await page.reload();
-    await page.getByRole('tab', { name: /Cases/ }).click();
+    await openConsoleView(page, 'cases');
     const head = page.locator('.case-head', { hasText: 'response-layout.invalid' });
-    if (await head.getAttribute('aria-expanded') !== 'true') await head.click();
-    const workspace = await openCaseResponseWorkspace(page);
+    if (!new URL(page.url()).searchParams.has('case')) await head.click();
+    const workspace = await openCaseResponseWorkspace(page, '', 'advanced', 'Response');
     const actions = workspace.locator('details', { hasText: 'Track append-only response actions' });
     await actions.getByText('Track append-only response actions', { exact: true }).click();
     const actionTimelines = actions.getByRole('list', { name: 'Response action transition timelines' });
@@ -265,30 +260,32 @@ test('@timing-sensitive a case created from Monitor persists across a reload', a
   await createCase(page, 'tracked.invalid');
 
   await expect(caseWorkspaceActionStatus(page)).toHaveText(/Opened a new case for tracked\.invalid/);
-  const head = page.locator('.case-head', { hasText: 'tracked.invalid' });
+  const head = page.locator('.case-heading', { hasText: 'tracked.invalid' });
   await expect(head.locator('.badge').first()).toHaveText('New');
   await expect(head.locator('.badge').nth(1)).toHaveText('Unreviewed');
 
   await page.reload();
-  await page.getByRole('tab', { name: /Cases/ }).click();
-  await expect(page.locator('.case-head', { hasText: 'tracked.invalid' })).toBeVisible();
+  await openConsoleView(page, 'cases');
+  await expect(page.getByRole('heading', { name: 'tracked.invalid', exact: true })).toBeVisible();
 });
 
-test('a Case keeps its stable reference, controlled types, exact incident links and reporting route together', async ({ page }) => {
+test('a Case keeps its stable reference, controlled types, exact incident links and reporting route together', async ({ page }, testInfo) => {
+  test.slow();
   await openCasesView(page);
   await createCase(page, 'reported-content.invalid');
   const initial = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   const stored = requiredValue(initial.records[0], 'The created Case is missing.').value;
   const expectedNumber = caseNumber(stored.id);
-  const head = page.locator('.case-head', { hasText: 'reported-content.invalid' });
+  const head = page.locator('.case-heading', { hasText: 'reported-content.invalid' });
   await expect(head).toContainText(`Case …${expectedNumber.slice(-8)}`);
 
   const workspace = await openCaseResponseWorkspace(page);
+  await openCaseClassification(page);
   await expect(workspace.locator('.case-number code')).toHaveText(formattedCaseNumber(stored.id), { useInnerText: true });
   await workspace.getByRole('checkbox', { name: /^Phishing/u }).check();
   await workspace.getByRole('checkbox', { name: /^Trademark infringement/u }).check();
   await workspace.getByRole('checkbox', { name: /^Copyright infringement/u }).check();
-  await workspace.getByRole('button', { name: 'Save Case types' }).click();
+  await workspace.getByRole('button', { name: 'Save Case types', exact: true }).click();
   await expect(caseWorkspaceActionStatus(page)).toContainText('Saved Case types');
   await expect(workspace.locator('.case-types')).not.toHaveAttribute('open', '');
   await expect(workspace.locator('.case-types').locator(':scope > summary')).toContainText('Phishing, Trademark infringement and 1 more');
@@ -304,19 +301,46 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
   await expect(routes).toContainText('TikTok');
   await expect(routes).toContainText('Report an account or content');
   await expect(routes).toContainText('Submit a trademark or counterfeit report');
+  const trademarkRoute = routes.locator('.route', { hasText: 'Submit a trademark or counterfeit report' });
+  const copyrightRoute = routes.locator('.route', { hasText: 'Submit a copyright report' });
+  await trademarkRoute.getByRole('checkbox').first().check();
+  await expect(copyrightRoute.getByRole('checkbox').first()).not.toBeChecked();
+  await workspace.locator('.case-types').locator(':scope > summary').click();
+  await workspace.getByRole('checkbox', { name: /^Trademark infringement/u }).uncheck();
+  await expect(trademarkRoute).toHaveCount(0);
+  await expect(copyrightRoute.getByRole('checkbox').first()).not.toBeChecked();
+  await workspace.getByRole('checkbox', { name: /^Trademark infringement/u }).check();
+  await expect(trademarkRoute.getByRole('checkbox').first()).not.toBeChecked();
+  await workspace.getByRole('button', { name: 'Save Case types', exact: true }).click();
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Saved Case types');
   await routes.locator('.route', { hasText: 'Report an account or content' }).getByRole('button', { name: 'Create drafting action' }).click();
   await expect(caseWorkspaceActionStatus(page)).toContainText('Nothing was submitted');
+  for (const width of [1280, 1024, 390, 320]) {
+    await page.setViewportSize({ width, height: width === 1280 ? 720 : width === 1024 ? 768 : width === 390 ? 844 : 700 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await trademarkRoute.getByRole('group', { name: 'Preparation checklist', exact: true }).scrollIntoViewIfNeeded();
+      await expect(trademarkRoute.getByRole('checkbox').first()).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      await testInfo.attach(`route-checklist-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    }
+  }
 
   const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
+  await openCaseSection(page, 'Response');
   await packet.getByText('Prepare a reviewed abuse evidence packet', { exact: true }).click();
   await expect(packet.getByLabel('Abuse category')).toHaveValue('Phishing, Trademark infringement and 1 more');
   await expect(packet.getByLabel('Exact abusive HTTP(S) URLs')).toHaveValue(incidentUrl);
 
+  await openCaseMetadata(page);
   await page.getByLabel('Additional tags').fill('priority-review');
   await page.getByRole('button', { name: 'Save tags' }).click();
-  const updated = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1, minimumRevision: initial.manifest.revision + 4 });
+  await expect.poll(async () => {
+    const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+    return saved.records.find((item) => item.value.id === stored.id)?.value.tags;
+  }).toEqual(['case-type:phishing', 'case-type:trademark_infringement', 'case-type:copyright_infringement', 'priority-review']);
+  const updated = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   const updatedCase = requiredValue(updated.records[0], 'The updated Case is missing.').value;
-  expect(updatedCase.tags).toEqual(['case-type:phishing', 'case-type:trademark_infringement', 'case-type:copyright_infringement', 'priority-review']);
   expect(updatedCase.assertions).toEqual(expect.arrayContaining([expect.objectContaining({ statement: `Incident target URL: ${incidentUrl}`, state: 'open' })]));
   expect(updatedCase.actions).toEqual(expect.arrayContaining([expect.objectContaining({
     type: 'platform_report',
@@ -325,11 +349,13 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
   })]));
 
   await page.reload();
-  await page.getByRole('tab', { name: /Cases/ }).click();
+  await openConsoleView(page, 'cases');
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   await page.getByLabel('Search').fill('copyright infringement');
   const restoredHead = page.locator('.case-head', { hasText: 'reported-content.invalid' });
-  if (await restoredHead.getAttribute('aria-expanded') !== 'true') await restoredHead.click();
-  await expect(page.locator('.tag.case-type', { hasText: 'Phishing' })).toBeVisible();
+  await expect(page.locator('.tag', { hasText: 'Phishing' })).toBeVisible();
+  await restoredHead.click();
+  await openCaseMetadata(page);
   await expect(page.getByLabel('Additional tags')).toHaveValue('priority-review');
   await expectNoHorizontalOverflow(page);
 });
@@ -385,8 +411,9 @@ test('the evidence-gap inbox filters and dismisses a stale failed source on mobi
   await detailFilters.getByRole('combobox', { name: 'Next action', exact: true }).selectOption('refresh');
   const item = page.locator('.review-inbox .items li', { hasText: 'gap-mobile.invalid' });
   await expect(item).toBeVisible();
+  await openInboxReview(item);
   await expect(item).toContainText('stale');
-  await expect(item.getByRole('link', { name: 'Refresh evidence' })).toHaveAttribute('href', '/lookup?q=gap-mobile.invalid&depth=deep');
+  await expect(item.getByRole('link', { name: 'Refresh evidence' })).toHaveAttribute('href', '/lookup?q=gap-mobile.invalid&depth=deep&case=case-gap-mobile');
   await item.getByRole('combobox').selectOption('accepted_limitation');
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
@@ -421,6 +448,7 @@ test('the mobile review inbox reveals and focuses a saved Bulk session', async (
   });
 
   const item = page.locator('.review-inbox .items li', { hasText: 'Continue Incomplete review' });
+  await openInboxReview(item);
   await item.getByRole('link', { name: 'Review' }).click();
 
   await expect(page).toHaveURL(/\/bulk#bulk-sessions-title$/u);
@@ -434,17 +462,18 @@ test('the mobile review inbox reveals and focuses a saved Bulk session', async (
 test('status and disposition edits persist across a reload', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'triage.invalid');
+  await openCaseMetadata(page);
 
-  await page.locator('.case-body .field-grid select').first().selectOption('escalated');
-  await page.locator('.case-body .field-grid select').nth(1).selectOption('confirmed_abuse');
+  await page.locator('.metadata-fields .field-grid select').first().selectOption('escalated');
+  await page.locator('.metadata-fields .field-grid select').nth(1).selectOption('confirmed_abuse');
 
-  const head = page.locator('.case-head', { hasText: 'triage.invalid' });
+  const head = page.locator('.case-heading', { hasText: 'triage.invalid' });
   await expect(head.locator('.badge').first()).toHaveText('Escalated');
   await expect(head.locator('.badge').nth(1)).toHaveText('Confirmed abuse');
 
   await page.reload();
-  await page.getByRole('tab', { name: /Cases/ }).click();
-  const reloaded = page.locator('.case-head', { hasText: 'triage.invalid' });
+  await openConsoleView(page, 'cases');
+  const reloaded = page.locator('.case-heading', { hasText: 'triage.invalid' });
   await expect(reloaded.locator('.badge').first()).toHaveText('Escalated');
   await expect(reloaded.locator('.badge').nth(1)).toHaveText('Confirmed abuse');
 });
@@ -476,7 +505,7 @@ test('reviewed cases export an explicitly selected privacy-bounded Risk calibrat
       ],
     },
   });
-  await page.getByRole('tab', { name: /Cases/ }).click();
+  await openConsoleView(page, 'cases');
 
   const reviewed = page.getByRole('article').filter({
     has: page.getByText('reviewed-calibration.invalid', { exact: true }),
@@ -484,8 +513,9 @@ test('reviewed cases export an explicitly selected privacy-bounded Risk calibrat
   const unreviewed = page.getByRole('article').filter({
     has: page.getByText('unreviewed-calibration.invalid', { exact: true }),
   });
-  const exportButton = page.getByRole('button', { name: 'Review calibration export (0)' });
-  await expect(exportButton).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Review calibration export/u })).toHaveCount(0);
+  await page.getByText('Advanced Case tools', { exact: true }).click();
+  await page.getByRole('button', { name: 'Select Cases for calibration export', exact: true }).click();
   await expect(unreviewed.getByRole('checkbox', { name: 'Include in offline Risk calibration export' })).toBeDisabled();
 
   await reviewed.getByRole('checkbox', { name: 'Include in offline Risk calibration export' }).check();
@@ -527,6 +557,7 @@ test('reviewed cases export an explicitly selected privacy-bounded Risk calibrat
 
   await page.setViewportSize({ width: 390, height: 844 });
   await reviewed.getByRole('checkbox', { name: 'Include in offline Risk calibration export' }).uncheck();
+  await expect(page.getByRole('button', { name: /^Review calibration export/u })).toHaveCount(0);
   await reviewed.getByRole('checkbox', { name: 'Include in offline Risk calibration export' }).check();
   await page.getByRole('button', { name: 'Review calibration export (1)' }).click();
   await expect(page.getByRole('dialog', { name: 'Confirm Risk calibration dataset' })).toBeVisible();
@@ -537,6 +568,7 @@ test('reviewed cases export an explicitly selected privacy-bounded Risk calibrat
 test('case tags offer bounded in-tab undo', async ({ page }) => {
   await openCasesView(page);
   await createCase(page, 'undo-review.invalid');
+  await openCaseMetadata(page);
 
   const tags = page.getByLabel('Tags');
   await tags.fill('review, phishing');
@@ -544,6 +576,32 @@ test('case tags offer bounded in-tab undo', async ({ page }) => {
   await expect(page.getByRole('region', { name: 'Undo analyst change' })).toContainText('undo-review.invalid');
   await page.getByRole('region', { name: 'Undo analyst change' }).getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(tags).toHaveValue('');
+});
+
+test('Case tag undo preserves a newer change from another tab', async ({ page }) => {
+  await page.clock.setFixedTime('2026-09-08T00:00:00.000Z');
+  await openCasesView(page);
+  await createCase(page, 'undo-conflict.invalid');
+  await openCaseMetadata(page);
+  const other = await page.context().newPage();
+  try {
+    await other.goto('/monitor?view=cases');
+    await other.locator('.case-head', { hasText: 'undo-conflict.invalid' }).click();
+    await openCaseMetadata(other);
+    await page.getByRole('textbox', { name: /^Additional tags\b/u }).fill('first-review');
+    await page.getByRole('button', { name: 'Save tags', exact: true }).click();
+    const undo = page.getByRole('region', { name: 'Undo analyst change' });
+    await expect(undo).toBeVisible();
+    await other.getByRole('textbox', { name: /^Additional tags\b/u }).fill('later-review');
+    await other.getByRole('button', { name: 'Save tags', exact: true }).click();
+    await expect.poll(async () => (await readBrowserLocalCollection(other, 'cases')).records[0]?.value.tags).toEqual(['later-review']);
+    await undo.getByRole('button', { name: 'Undo', exact: true }).click();
+    await expect(page.getByText('The saved value changed after this action. Undo was not applied; the newer changes were preserved.', { exact: true })).toBeVisible();
+    const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+    expect(stored.records[0]?.value.tags).toEqual(['later-review']);
+  } finally {
+    await other.close();
+  }
 });
 
 test('projects retained evidence into a filterable source-attributed timeline', async ({ page }) => {
@@ -640,16 +698,17 @@ test('projects retained evidence into a filterable source-attributed timeline', 
   await expect(workspace).toContainText('Derived relationship');
   const pinnedEvidence = workspace.locator('.timeline-list article', { hasText: 'Evidence pin' });
   await pinnedEvidence.getByRole('link', { name: /Open Case · timeline-case\.invalid/u }).click();
-  await expect(page).toHaveURL('/monitor?view=cases&case=timeline-case#case-response-timeline-case');
-  await expect(page.locator('#case-response-timeline-case')).toBeFocused();
-  await page.getByRole('tab', { name: /^Timeline/u }).click();
+  await expect(page).toHaveURL('/cases?case=timeline-case&section=evidence');
+  await expect(page.getByRole('navigation', { name: 'Case sections', exact: true }).getByRole('link', { name: 'Evidence', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('#case-head-timeline-case')).toBeFocused();
+  await openConsoleView(page, 'timeline');
   await expect(page.getByRole('region', { name: 'Investigation timeline' })).toBeVisible();
   await page.getByLabel('Area').selectOption('bulk');
   await expect(workspace.locator('.timeline-list article')).toHaveCount(1);
   await expect(workspace).toContainText('Timeline Bulk review retained');
   await page.getByRole('button', { name: 'Clear filters' }).click();
   await page.getByLabel('Freshness').selectOption('stale');
-  await expect(workspace.locator('.timeline-list article')).toHaveCount(2);
+  await expect(workspace.locator('.timeline-list article')).toHaveCount(1);
   await page.getByRole('button', { name: 'Clear filters' }).click();
   await page.getByLabel('Type').selectOption('change');
   await expect(workspace.locator('.timeline-list article')).toHaveCount(1);
@@ -658,8 +717,8 @@ test('projects retained evidence into a filterable source-attributed timeline', 
   await expect(page).toHaveURL('/monitor?view=watchlists&watchlist=Timeline%20watchlist');
   await expect(page.getByRole('heading', { name: 'Timeline watchlist' })).toBeVisible();
   await expect(page.locator('#watchlist-history')).toBeFocused();
-  await page.getByRole('tab', { name: /^Timeline/u }).click();
-  await page.getByLabel('Entity').selectOption('timeline-related.invalid');
+  await openConsoleView(page, 'timeline');
+  await page.getByRole('searchbox', { name: 'Entity', exact: true }).fill('timeline-related.invalid');
   await expect(workspace.locator('.timeline-list article')).toHaveCount(1);
   await expect(workspace.getByRole('link', { name: /Open Retained relationship/ })).toHaveAttribute('href', /view=relationships/);
 
@@ -667,7 +726,28 @@ test('projects retained evidence into a filterable source-attributed timeline', 
   await expectNoHorizontalOverflow(page);
 });
 
-test('saved website profiles form searchable cross-domain pivots without another request', async ({ page }) => {
+test('the timeline renders every supported Case snapshot after storage admission', async ({ page }) => {
+  await page.goto('/monitor?view=timeline');
+  const start = Date.parse('2026-07-22T00:00:00.000Z');
+  const history = Array.from({ length: 25 }, (_, index) => snapshot({
+    registrar: `Fixture registrar ${index}`,
+    capturedAt: new Date(start + index * 60_000).toISOString(),
+  }));
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord({ evidenceHistory: history })] },
+  });
+  const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(stored.records[0]?.value.evidenceHistory).toHaveLength(25);
+  const timeline = page.getByRole('region', { name: 'Investigation timeline' });
+  await expect(timeline.locator('.timeline-list article')).toHaveCount(25);
+  await expect(timeline.locator('.partial')).toHaveCount(0);
+  const observed = await timeline.locator('article dl div', { has: page.getByText('Observed', { exact: true }) }).locator('time').evaluateAll((elements) => elements.map((element) => element.getAttribute('datetime')));
+  expect(new Set(observed)).toEqual(new Set(history.map((item) => item.capturedAt)));
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+});
+
+test('saved website profiles form searchable cross-domain pivots without another request', async ({ page }, testInfo) => {
   const observedAt = '2026-07-01T00:00:00.000Z';
   const identity = {
     normalizedHtml: 'a'.repeat(64),
@@ -676,19 +756,31 @@ test('saved website profiles form searchable cross-domain pivots without another
     formStructure: null,
     resourceHosts: null,
     trackingIdentifiers: null,
-    faviconHash: null,
+    faviconHash: 'b'.repeat(64),
   };
-  const snapshotRecord = (domain: string, id: string) => ({
+  const snapshotRecord = (domain: string, id: string): WebsiteProfileSnapshot => ({
     id,
     domain,
     observedAt,
     savedAt: '2026-07-02T00:00:00.000Z',
     complete: true,
     truncated: false,
-    technologies: [{ id: 'example-commerce', name: 'Example commerce', category: 'commerce', confidence: 'high' }],
+    profileProvenance: {
+      technology: { version: 1, state: 'known' }, securityPosture: { version: 1, state: 'known' },
+      pageFingerprint: { version: 1, state: 'known' },
+    },
+    technologies: [{ id: 'example-commerce', name: 'Example commerce', category: 'commerce', confidence: 'high', roles: [] }],
     posture: [],
     identity,
+    identityValues: { resourceHosts: [], trackingIdentifiers: [], formActionOrigins: [] },
     sources: [{ source: 'http', state: 'success' }],
+    dependencies: [],
+    certificate: null,
+  });
+  const collectorRequests: string[] = [];
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(pathname)) collectorRequests.push(pathname);
   });
   await page.goto('/monitor?view=relationships');
   await migrateLegacyBrowserData(page, {
@@ -701,9 +793,22 @@ test('saved website profiles form searchable cross-domain pivots without another
   });
 
   const workspace = page.getByRole('region', { name: 'Cross-domain website pivots' });
+  await expect(workspace.getByText('50/100 across 3 contributing fields', { exact: true })).toBeVisible();
   await expect(workspace.getByText('Example commerce', { exact: true })).toBeVisible();
   await expect(workspace.getByRole('link', { name: 'first.invalid' }).first()).toBeVisible();
   await expect(workspace.getByRole('link', { name: 'second.invalid' }).first()).toBeVisible();
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-website-snapshots-v1': currentBrowserLocalDocument('website_snapshots', {
+      snapshots: ['first', 'second'].map((name) => {
+        const record = snapshotRecord(`${name}.invalid`, `profile-${name}`);
+        return { ...record, profileProvenance: {
+          ...record.profileProvenance, pageFingerprint: { version: null, state: 'legacy_unknown' },
+        } };
+      }),
+    }),
+  });
+  await expect(workspace.getByText('30/100 across 2 contributing fields', { exact: true })).toBeVisible();
+  await expect(workspace.getByText('50/100 across 3 contributing fields', { exact: true })).toHaveCount(0);
   await workspace.getByLabel('Search saved profiles').fill('DOM structure');
   await expect(workspace.getByText('No saved website-profile cluster matches these filters.')).toBeVisible();
   await workspace.getByLabel('Search saved profiles').fill('second.invalid');
@@ -711,6 +816,27 @@ test('saved website profiles form searchable cross-domain pivots without another
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-website-snapshots-v1': currentBrowserLocalDocument('website_snapshots', {
+      snapshots: [
+        { ...snapshotRecord('first.invalid', 'profile-first'), sources: [{ source: 'http', state: 'partial' }] },
+        snapshotRecord('second.invalid', 'profile-second'),
+      ],
+    }),
+  });
+  await expect(workspace.getByText('Example commerce', { exact: true })).toBeVisible();
+  await expect(workspace.getByText('Weighted website-profile relationship', { exact: true })).toHaveCount(0);
+  await expect(workspace.locator('.cluster-head > strong')).toHaveText(['2 domains', '2 domains', '2 domains']);
+  const observedDomain = workspace.locator('li', { has: page.getByRole('link', { name: 'first.invalid', exact: true }) });
+  expect(await observedDomain.count()).toBeGreaterThan(0);
+  for (const observation of await observedDomain.all()) await expect(observation).toContainText('Partial saved evidence');
+  await workspace.getByLabel('Relationship type').selectOption('similarity');
+  await expect(workspace.getByText('No saved website-profile cluster matches these filters.')).toBeVisible();
+  await workspace.getByLabel('Relationship type').selectOption('all');
+  await expectNoHorizontalOverflow(page);
+  await workspace.getByText('Example commerce', { exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath('partial-profile-pivots.png') });
+  expect(collectorRequests).toEqual([]);
 });
 
 test('custom detection rules evaluate existing cases without rewriting built-in scores', async ({ page }) => {
@@ -721,7 +847,7 @@ test('custom detection rules evaluate existing cases without rewriting built-in 
       cases: [caseRecord({ domain: 'rule-match.invalid', evidenceHistory: [snapshot({ riskScore: 65, hasPasswordField: true })] })],
     },
   });
-  await page.getByRole('tab', { name: /Custom rules/ }).click();
+  await openConsoleView(page, 'rules');
 
   await page.getByLabel('Name', { exact: true }).fill('Password page above threshold');
   await page.getByLabel('Custom contribution').fill('15');
@@ -765,10 +891,10 @@ test('shows saved custom rules when the tab opens before browser-local loading f
       }],
     },
   });
-  await expect(page.locator('a[href="/monitor"]').first()).toBeVisible();
-  await holdBrowserLocalReads(page, 4_000, 'a[href="/monitor"]');
+  await expect(page.locator('a[href="/monitor?view=watchlists"]').first()).toBeVisible();
+  await holdBrowserLocalReads(page, 4_000, 'a[href="/monitor?view=watchlists"]');
   await page.waitForURL(/\/monitor(?:\?|$)/u);
-  await page.getByRole('tab', { name: /Custom rules/ }).click();
+  await openConsoleView(page, 'rules');
 
   await expect(page.getByRole('region', { name: 'Custom detection rules' })
     .getByRole('article').filter({ hasText: 'Delayed custom rule' })).toBeVisible({ timeout: 10_000 });
@@ -776,14 +902,14 @@ test('shows saved custom rules when the tab opens before browser-local loading f
 
 test('custom rules persist, can be disabled, and export a versioned safe schema', async ({ page }) => {
   await page.goto('/monitor');
-  await page.getByRole('tab', { name: /Custom rules/ }).click();
+  await openConsoleView(page, 'rules');
   await page.getByLabel('Name', { exact: true }).fill('Registered domains');
   await page.getByRole('button', { name: 'Create custom rule' }).click();
   const customRules = page.getByRole('region', { name: 'Custom detection rules' });
   await expect(customRules.getByRole('article').filter({ hasText: 'Registered domains' })).toBeVisible();
 
-  await page.getByRole('tab', { name: /Cases/ }).click();
-  await page.getByRole('tab', { name: /Custom rules/ }).click();
+  await openConsoleView(page, 'cases');
+  await openConsoleView(page, 'rules');
   await expect(page.getByRole('region', { name: 'Custom detection rules' }).getByRole('article').filter({ hasText: 'Registered domains' })).toBeVisible();
 
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -813,7 +939,7 @@ test('custom rules persist, can be disabled, and export a versioned safe schema'
 test('custom-rule controls and results avoid horizontal overflow on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/monitor');
-  await page.getByRole('tab', { name: /Custom rules/ }).click();
+  await openConsoleView(page, 'rules');
   await page.getByLabel('Name', { exact: true }).fill('Mobile layout rule');
   await page.getByRole('button', { name: 'Create custom rule' }).click();
   await expectNoHorizontalOverflow(page);

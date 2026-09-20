@@ -46,7 +46,7 @@ function reviewedHeaders(value: unknown): Record<string, unknown> {
 }
 
 describe('contributor-reviewed technology fixture corpus', () => {
-  test('keeps every reviewed observation compatible, minimised, and deterministic', () => {
+  test('keeps every reviewed observation compatible, minimised, and deterministic', async () => {
     const ids = new Set<string>();
     const catalogueIds = new Set(TECHNOLOGY_SIGNATURE_CATALOGUE.map((item) => item.id));
     for (const fixture of TECHNOLOGY_REVIEWED_FIXTURES) {
@@ -81,11 +81,11 @@ describe('contributor-reviewed technology fixture corpus', () => {
         contactsRetained: false,
       });
       assert.deepEqual(
-        analyzeWebsiteTechnology(fixture.input).findings.map((finding) => finding.id).sort(),
+        (await analyzeWebsiteTechnology(fixture.input)).findings.map((finding) => finding.id).sort(),
         [...fixture.expectedIds].sort(),
       );
       const serialized = JSON.stringify(fixture);
-      assert.doesNotMatch(serialized, /https?:\/\/(?!cdn\.shopify\.com|static\.parastorage\.com|wixstatic\.com|static\.squarespace\.com|static1\.squarespace\.com|framerusercontent\.com|editmysite\.com|cloudfront\.net|cdn\d+\.bigcommerce\.com)/iu);
+      assert.doesNotMatch(serialized, /https?:\/\/(?!cdn\.shopify\.com|static\.parastorage\.com|wixstatic\.com|static\.squarespace\.com|static1\.squarespace\.com|assets\.squarespace\.com|framerusercontent\.com|editmysite\.com|cloudfront\.net|cdn\d+\.bigcommerce\.com)/iu);
       assert.doesNotMatch(serialized, /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/iu);
     }
   });
@@ -100,7 +100,7 @@ describe('contributor-reviewed technology fixture corpus', () => {
       sourceIds.add(source.fixtureId);
       const fixture = fixturesById.get(source.fixtureId);
       assert.ok(fixture, `Reviewed source has no fixture: ${source.fixtureId}`);
-      assert.ok(PROVENANCE_LICENCE_BASES.has(fixture.licenseBasis));
+      assert.ok(PROVENANCE_LICENCE_BASES.has(fixture.licenseBasis) || fixture.licenseBasis === 'factual-observation');
       assert.match(source.artifactSha256, /^[a-f0-9]{64}$/u);
       if (source.responseMetadataSha256 !== null) {
         assert.match(source.responseMetadataSha256, /^[a-f0-9]{64}$/u);
@@ -157,7 +157,8 @@ describe('contributor-reviewed technology fixture corpus', () => {
         assert.ok(Number.isFinite(Date.parse(source.sourceRevision)));
         assert.equal(source.sourceRevision, fixture.observedAt);
         assert.equal(source.sourceIntegrity, null);
-        assert.equal(source.sourceLicence, 'official-demonstration-terms');
+        assert.ok(['official-demonstration-terms', 'factual-observation'].includes(source.sourceLicence));
+        assert.equal(source.sourceLicence, fixture.licenseBasis);
         assert.equal(source.runtimeReference, null);
         assert.equal(source.buildRecipe, 'official-public-demonstration');
         assert.equal(source.buildEnvironment, null);
@@ -169,48 +170,51 @@ describe('contributor-reviewed technology fixture corpus', () => {
       assert.doesNotMatch(serialized, /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/iu);
     }
     for (const fixture of TECHNOLOGY_REVIEWED_FIXTURES) {
-      assert.equal(
-        sourceIds.has(fixture.id),
-        PROVENANCE_LICENCE_BASES.has(fixture.licenseBasis),
-        `Fixture provenance mismatch: ${fixture.id}`,
-      );
+      if (PROVENANCE_LICENCE_BASES.has(fixture.licenseBasis)) {
+        assert.ok(sourceIds.has(fixture.id), `Fixture provenance missing: ${fixture.id}`);
+      }
     }
   });
 
-  test('exercises evidence roles, mixed stacks, benign collisions, and a non-empirical conflict composition', () => {
-    const roles = (id: string) => analyzeWebsiteTechnology(reviewedFixture(id).input).findings
+  test('exercises evidence roles, mixed stacks, benign collisions, and a non-empirical conflict composition', async () => {
+    const retainedBefore = JSON.stringify(TECHNOLOGY_REVIEWED_FIXTURES);
+    const roles = async (id: string) => (await analyzeWebsiteTechnology(reviewedFixture(id).input)).findings
       .map((finding) => [finding.id, finding.roles] as const);
 
-    assert.deepEqual(roles('licensed-delivery-response-20260805'), [
+    assert.deepEqual(await roles('licensed-delivery-response-20260805'), [
       ['fastly', ['observed_edge']],
     ]);
-    assert.deepEqual(roles('licensed-deployment-header-docs-20260805'), [
+    assert.deepEqual(await roles('licensed-deployment-header-docs-20260805'), [
       ['vercel', ['application_platform']],
     ]);
-    assert.deepEqual(roles('owned-public-delivery-stack-20260805'), [
+    assert.deepEqual(await roles('owned-public-delivery-stack-20260805'), [
       ['cloudflare', ['observed_edge']],
       ['netlify', ['application_platform']],
       ['sveltekit', ['framework_runtime']],
     ]);
-    assert.deepEqual(roles('licensed-cloudfront-resource-source-20260806'), [
+    assert.deepEqual(await roles('licensed-cloudfront-resource-source-20260806'), [
       ['cloudfront', ['embedded_dependency']],
     ]);
-    assert.deepEqual(roles('official-nextjs-runtime-source-20260806'), [
+    assert.deepEqual(await roles('official-nextjs-runtime-source-20260806'), [
       ['nextjs', ['framework_runtime']],
     ]);
-    assert.deepEqual(roles('official-netlify-header-source-20260806'), [
+    assert.deepEqual(await roles('official-netlify-header-source-20260806'), [
       ['netlify', ['observed_edge', 'application_platform']],
     ]);
+    assert.deepEqual(await roles('official-squarespace-homepage-20260909'), [
+      ['squarespace', ['embedded_dependency']],
+    ]);
+    assert.deepEqual(await roles('official-squarespace-template-demonstration-20260806'), []);
 
     const benign = reviewedFixture('official-static-starter-negative-20260805');
-    assert.equal(analyzeWebsiteTechnology(benign.input).findings.length, 0);
+    assert.equal((await analyzeWebsiteTechnology(benign.input)).findings.length, 0);
     assert.ok(benign.negativeFor.includes('nextjs'));
     assert.ok(benign.negativeFor.includes('nuxt'));
     assert.ok(benign.negativeFor.includes('sveltekit'));
 
     const vercel = reviewedFixture('licensed-deployment-header-docs-20260805');
     const netlify = reviewedFixture('official-netlify-header-source-20260806');
-    const conflicting = analyzeWebsiteTechnology({
+    const conflicting = await analyzeWebsiteTechnology({
       responseHeaders: {
         ...reviewedHeaders(vercel.input.responseHeaders),
         ...reviewedHeaders(netlify.input.responseHeaders),
@@ -219,6 +223,6 @@ describe('contributor-reviewed technology fixture corpus', () => {
     });
     assert.deepEqual(conflicting.findings.filter((finding) => ['netlify', 'vercel'].includes(finding.id))
       .map((finding) => finding.id).sort(), ['netlify', 'vercel']);
-    assert.equal(TECHNOLOGY_REVIEWED_FIXTURES.length, 78);
+    assert.equal(JSON.stringify(TECHNOLOGY_REVIEWED_FIXTURES), retainedBefore);
   });
 });

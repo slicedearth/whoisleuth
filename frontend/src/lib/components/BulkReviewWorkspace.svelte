@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import {
     BULK_REVIEW_STATES,
     type BulkReviewFilter,
@@ -6,6 +7,9 @@
     type BulkReviewPresetView,
     type BulkReviewStore,
   } from '$lib/bulk-review';
+  import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome';
+  import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
+  import type { BrowserLocalCollectionLoadState } from '$lib/browser-local-data-service';
 
   let {
     store,
@@ -15,33 +19,64 @@
     saveView,
     loadView,
     deleteView,
-    status,
     sourceState = 'ready',
   }: {
     store: BulkReviewStore;
     currentView: BulkReviewPresetView;
     reviewFilter: BulkReviewFilter;
     setReviewFilter: (value: BulkReviewFilter) => void;
-    saveView: (name: string, view: BulkReviewPresetView) => void | Promise<void>;
+    saveView: (name: string, view: BulkReviewPresetView) => Promise<LocalMutationOutcome>;
     loadView: (preset: BulkReviewPreset) => void;
     deleteView: (preset: BulkReviewPreset) => void | Promise<void>;
-    status: string;
-    sourceState?: 'loading' | 'ready' | 'unavailable';
+    sourceState?: BrowserLocalCollectionLoadState;
   } = $props();
 
   let name = $state('');
   let selectedId = $state('');
+  let saving = $state(false);
+  let componentRoot = $state<HTMLElement>();
+  const draft = createDraftRevision(() => 'bulk-review-view');
+
+  async function save() {
+    if (saving) return;
+    const origin = document.activeElement;
+    saving = true;
+    const unchanged = draft.capture();
+    try {
+      if (clearsLocalMutationDraft(await saveView(name, currentView)) && unchanged()) name = '';
+    } finally {
+      saving = false;
+      await tick();
+      restoreSubmittedFocus(origin, document.getElementById('bulk-review-view-name'), componentRoot);
+    }
+  }
 
   function selectedPreset(): BulkReviewPreset | null {
     return store.presets.find((item) => item.id === selectedId) ?? null;
   }
+
+  async function remove() {
+    const preset = selectedPreset();
+    if (!preset || saving) return;
+    const submitted = $state.snapshot(preset);
+    const origin = document.activeElement;
+    saving = true;
+    try {
+      await deleteView(submitted);
+      if (selectedId === submitted.id && !store.presets.some((value) => value.id === submitted.id)) selectedId = '';
+    } finally {
+      saving = false;
+      await tick();
+      restoreSubmittedFocus(origin, document.getElementById('bulk-review-saved-view'), componentRoot);
+    }
+  }
 </script>
 
-<section id="bulk-review-views" class="review-views card" aria-labelledby="bulk-review-views-title">
+<section id="bulk-review-views" class="review-views card" bind:this={componentRoot} aria-labelledby="bulk-review-views-title">
   <div>
     <p class="eyebrow">Review results</p>
     <h2 id="bulk-review-views-title">Saved views and review queue</h2>
-    <p>Save the current filters, grouping, and sort order. Per-domain review state stays separate from case disposition and does not start or resume a scan.</p>
+    <p>Save filters, List columns, grouping and sort order for the currently loaded Bulk results. Choose columns in the List view. Views do not retain a target list, Brand Profile or scan authorisation. Per-domain review state stays separate from Case disposition.</p>
   </div>
   {#if sourceState === 'ready'}
   <div class="controls">
@@ -59,16 +94,15 @@
     </label>
     <div class="view-actions">
       <button class="btn" type="button" disabled={!selectedPreset()} onclick={() => { const preset = selectedPreset(); if (preset) loadView(preset); }}>Load view</button>
-      <button class="btn danger-text" type="button" disabled={!selectedPreset()} onclick={() => { const preset = selectedPreset(); if (preset) void deleteView(preset); }}>Delete</button>
+      <button class="btn danger-text" type="button" disabled={saving || !selectedPreset()} onclick={remove}>Delete</button>
     </div>
-    <form onsubmit={(event) => { event.preventDefault(); void saveView(name, currentView); name = ''; }}>
+    <form oninput={draft.changed} onchange={draft.changed} onsubmit={(event) => { event.preventDefault(); void save(); }}>
       <label for="bulk-review-view-name">New view name<input id="bulk-review-view-name" bind:value={name} maxlength="80" placeholder="High-risk mail review"></label>
-      <button class="btn" type="submit">Save current view</button>
+      <button class="btn" type="submit" disabled={saving || !name.trim()}>Save current view</button>
     </form>
   </div>
-  <p class="review-status" role="status">{status}</p>
   {:else}
-    <p class="source-state {sourceState}" role={sourceState === 'unavailable' ? 'alert' : 'status'}>Saved views and review state {sourceState === 'loading' ? 'are still loading' : 'could not be read'}. Review filtering, counts, and mutations remain unavailable; reload to retry without overwriting unknown saved work.</p>
+    <p class="source-state {sourceState}" role={sourceState === 'unavailable' ? 'alert' : 'status'}>Saved views and review state {sourceState === 'idle' ? 'have not been loaded' : sourceState === 'loading' ? 'are still loading' : 'could not be read'}.{#if sourceState === 'unavailable'} Reload to retry; saved work has not been changed.{/if}</p>
   {/if}
 </section>
 
@@ -78,10 +112,9 @@
   .review-views>div>p:last-child{margin-top:7px;color:var(--muted);font-size:var(--text-sm);line-height:1.5}
   .controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
   label{display:grid;gap:5px;font:650 var(--text-xs) var(--mono)}
-  .view-actions{display:flex;align-items:end;gap:7px}
+  .view-actions{display:flex;grid-column:1/-1;flex-wrap:wrap;align-items:end;gap:7px}.view-actions>button{flex-shrink:0}
   .controls form{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-column:1/-1;gap:7px;align-items:end}
   .danger-text{color:var(--danger)}
-  .review-status{grid-column:1/-1;color:var(--accent);font-size:var(--text-xs)}.source-state{margin:0;padding:10px 12px;border:1px dotted var(--muted);border-radius:var(--radius-sm);color:var(--muted);font-size:var(--text-xs);line-height:1.5}.source-state.loading{border-style:solid}
-  .review-status:empty{display:none}
+  .source-state{margin:0;padding:10px 12px;border:1px dotted var(--muted);border-radius:var(--radius-sm);color:var(--muted);font-size:var(--text-xs);line-height:1.5}.source-state.loading{border-style:solid}
   @media(max-width:760px){.review-views,.controls{grid-template-columns:1fr}.controls form{grid-template-columns:1fr}.view-actions .btn{flex:1}}
 </style>

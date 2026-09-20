@@ -20,6 +20,7 @@ export interface BoundedInvestigationProjection {
   entities: unknown[];
   observations: unknown[];
   relationships: unknown[];
+  inputCounts: Readonly<{ entities: number; observations: number; relationships: number }> | null;
   limitations: unknown;
   truncated: boolean;
   detail: string;
@@ -52,6 +53,7 @@ function unavailable(
     entities: [],
     observations: [],
     relationships: [],
+    inputCounts: null,
     limitations: [],
     truncated: false,
     detail,
@@ -92,6 +94,7 @@ export function readBoundedInvestigationProjection(value: unknown): BoundedInves
     entities: projection.entities.slice(0, MAX_PROJECTION_ENTITIES),
     observations: projection.observations.slice(0, MAX_PROJECTION_OBSERVATIONS),
     relationships: projection.relationships.slice(0, MAX_PROJECTION_RELATIONSHIPS),
+    inputCounts: { entities: projection.entities.length, observations: projection.observations.length, relationships: projection.relationships.length },
     limitations: projection.limitations,
     truncated: projection.truncated === true
       || projection.entities.length > MAX_PROJECTION_ENTITIES

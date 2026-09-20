@@ -13,6 +13,7 @@ import {
   CASE_PORTABILITY_LIFECYCLE_FAMILY,
   CASE_SCHEMA_VERSION,
   CLI_CASE_PACK_SCHEMA,
+  CLI_CASE_PACK_WRITER_FIXTURE_ID,
   LATEST_PUBLIC_APPLICATION_VERSION,
 } from '../packages/contracts/case-portability.mts';
 import { requireJsonRecord as record } from './maintainer-tool-helpers.mts';
@@ -276,25 +277,13 @@ export async function inspectReleaseVersionDerivedOutputs(
   repositoryRoot: string,
   releaseVersion: string,
 ): Promise<ReleaseVersionDerivedOutputIdentity> {
-  const casePackFixtures = CASE_PORTABILITY_LIFECYCLE_FAMILY.fixtures.filter(
-    (fixture) => fixture.schema === CLI_CASE_PACK_SCHEMA,
+  const fixture = CASE_PORTABILITY_LIFECYCLE_FAMILY.fixtures.find(
+    (fixture) => fixture.schema === CLI_CASE_PACK_SCHEMA && fixture.id === CLI_CASE_PACK_WRITER_FIXTURE_ID,
   );
-  if (casePackFixtures.length < 1 || casePackFixtures.length > 32) {
-    throw new TypeError('Release version check requires a bounded Case-pack fixture inventory.');
-  }
-  let checkedFixtures = 0;
-  let checkedReports = 0;
-  for (const fixture of casePackFixtures) {
-    const value = await readBoundedJson(path.join(repositoryRoot, fixture.path));
-    const root = record(value, 'Case-pack fixture');
-    if (root.version !== CASE_SCHEMA_VERSION) continue;
-    checkedReports += assertReleaseVersionDerivedCasePack(root, releaseVersion);
-    checkedFixtures += 1;
-  }
-  if (checkedFixtures < 1) {
-    throw new TypeError('Release version check found no fixture for the current Case writer.');
-  }
-  return Object.freeze({ checkedFixtures, checkedReports });
+  if (!fixture) throw new TypeError('Release version check found no fixture for the current Case writer.');
+  const value = await readBoundedJson(path.join(repositoryRoot, fixture.path));
+  const checkedReports = assertReleaseVersionDerivedCasePack(value, releaseVersion);
+  return Object.freeze({ checkedFixtures: 1, checkedReports });
 }
 
 export function formatReleaseVersionReport(report: ReturnType<typeof buildReleaseVersionReport>): string {

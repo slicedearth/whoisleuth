@@ -1,3 +1,5 @@
+import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
+
 export const DISCLOSURE_POLICY_HEALTH_VERSION = 1;
 
 export type DisclosurePolicyHealth = Readonly<{
@@ -30,11 +32,11 @@ export function buildDisclosurePolicyHealth(
   now: unknown = new Date().toISOString(),
 ): DisclosurePolicyHealth {
   const sourceState = typeof input.state === 'string' ? input.state : 'unavailable';
-  const nowMs = Number.isFinite(Date.parse(String(now))) ? Date.parse(String(now)) : 0;
-  const expiryMs = typeof input.expiresAt === 'string' && Number.isFinite(Date.parse(input.expiresAt))
-    ? Date.parse(input.expiresAt)
-    : null;
-  const expiryDays = expiryMs === null ? null : Math.ceil((expiryMs - nowMs) / 86_400_000);
+  const evaluatedAt = normalizeExplicitIsoTimestamp(now);
+  const expiresAt = normalizeExplicitIsoTimestamp(input.expiresAt);
+  const delta = evaluatedAt && expiresAt ? Date.parse(expiresAt) - Date.parse(evaluatedAt) : null;
+  const expired = delta !== null && delta <= 0;
+  const expiryDays = delta === null ? null : Math.ceil(delta / 86_400_000) || 0;
   const coverage = {
     contacts: count(input.contacts),
     policies: count(input.policies),
@@ -45,12 +47,12 @@ export function buildDisclosurePolicyHealth(
   if (coverage.contacts === 0) review.push('No supported disclosure contact was retained.');
   if (coverage.policies === 0) review.push('No supported disclosure policy reference was retained.');
   if (expiryDays === null) review.push('No valid expiry time was retained.');
-  else if (expiryDays < 0) review.push('The published disclosure policy is expired.');
+  else if (expired) review.push('The published disclosure policy is expired.');
   else if (expiryDays <= 30) review.push(`The published disclosure policy expires in ${expiryDays} day${expiryDays === 1 ? '' : 's'}.`);
   const unavailable = !['present', 'stale'].includes(sourceState);
   const state = unavailable
     ? 'unavailable'
-    : expiryDays !== null && expiryDays < 0
+    : expired
       ? 'expired'
       : expiryDays !== null && expiryDays <= 30
         ? 'expiring'

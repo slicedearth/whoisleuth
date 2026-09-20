@@ -1,0 +1,1065 @@
+{
+  "source": {
+    "title": "PhiUSIIL Phishing URL (Website)",
+    "authors": [
+      "Arvind Prasad",
+      "Shalini Chandra"
+    ],
+    "year": 2024,
+    "reference": "https://archive.ics.uci.edu/dataset/967/phiusiil+phishing+url+dataset",
+    "citation": "https://doi.org/10.1016/j.cose.2023.103545",
+    "licence": "CC-BY-4.0",
+    "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "archiveUrl": "https://archive.ics.uci.edu/static/public/967/phiusiil%2Bphishing%2Burl%2Bdataset.zip",
+    "archiveSha256": "0a639fd03aea6308c5b1c10c92aa23c2ce1505447a9137271865cd0badc9a59a",
+    "csvSha256": "a236549cd369cd80bd478ff8e1779cbf44c58d5c3f79f7a51a1adbed7d06d1c6"
+  },
+  "sourceRows": 235795,
+  "invalidUrls": 0,
+  "domainGroups": 175509,
+  "mixedLabelDomainGroups": 120,
+  "population": {
+    "evaluation:1:0:0": 54373,
+    "development:1:0:0": 54118,
+    "development:1:1:0": 8090,
+    "evaluation:0:0:0": 53393,
+    "evaluation:1:1:0": 8328,
+    "development:0:0:0": 41968,
+    "evaluation:0:1:0": 3037,
+    "development:1:1:1": 1142,
+    "development:1:0:1": 3792,
+    "evaluation:1:0:1": 3892,
+    "evaluation:1:1:1": 1115,
+    "development:0:1:0": 2116,
+    "evaluation:0:0:1": 68,
+    "development:0:1:1": 88,
+    "evaluation:0:1:1": 197,
+    "development:0:0:1": 78
+  },
+  "rows": [
+    {
+      "sourceRow": 207405,
+      "domainGroup": "7732887c1a4d2c3f911e41e6f67425b14471c49c611b9f3662e4448be7b03b92",
+      "split": "development",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 202770,
+      "domainGroup": "5712ec044cb2de159accdfbdfe180caabcb13db7ab9723b945ba99f374f46430",
+      "split": "development",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 63801,
+      "domainGroup": "3d01d6bfa7e131c23b638fb55029ecf8dfd1d3e4090b10fb891b46c0e8082805",
+      "split": "development",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 190805,
+      "domainGroup": "04197509af66a3500a21a9959ab3c1c2f696df8cd244c54bcf46dd1a98144bbc",
+      "split": "development",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 105392,
+      "domainGroup": "3bbc5f3dec96e1f1b2255599400c3db20c44f5ff26205fe354c41d2cf76ff474",
+      "split": "development",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 206642,
+      "domainGroup": "5595ea52d82eab6a901dacda7fc7c370cefc1df9ca1fdde850f6bdd8d4bdf498",
+      "split": "development",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 179885,
+      "domainGroup": "711b951b39d3e6eb71b29f2759caf3eebe11a771f3f3e53fe72bd304817e4a3a",
+      "split": "development",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 106810,
+      "domainGroup": "62e83c85729b99147ce7f8b876bc3c7499f6fea598c946ada87abfdcf6d7d28d",
+      "split": "development",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 201936,
+      "domainGroup": "0a739a3e3622b41d8c0b11415d452fbc774feb0c65ff7c763023aa0139680f28",
+      "split": "development",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 140681,
+      "domainGroup": "5c2c4296dda54cd9353aabb11c9a199b107d5a7a5fbf83af70b3d1c24fc39e58",
+      "split": "development",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 199447,
+      "domainGroup": "08dee63a4db185adc562d4135c28106bd7190cc16f1a188d4579d5afe146f859",
+      "split": "development",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 154971,
+      "domainGroup": "1ff6ea4013a49735d94b4682de4c7cfcd4c78ba7f73571afe9d97811d38eb490",
+      "split": "development",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 218794,
+      "domainGroup": "0931b331c697b159d580aabb8a430695da768052c14342a6ba78a7327dd37a06",
+      "split": "development",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 132260,
+      "domainGroup": "51157ed9ede1496dd9fe70409dc7fee079133a483f3994cebc585ab0e9c5ba91",
+      "split": "development",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 177510,
+      "domainGroup": "28c533fecd3eaf40ea5f5643f9fc436388681c463f54a94ff8bd7571d7c3a879",
+      "split": "development",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 79159,
+      "domainGroup": "052ef8f27ef7ad1a9b5d7ed45084eaee620977f439e4915ded86c2e588d7c5f3",
+      "split": "development",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 200057,
+      "domainGroup": "2c47c5da0bb954170c47cde837efdd51e9f6d8ba545570ed7935c6aeaf513404",
+      "split": "development",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 190390,
+      "domainGroup": "193733151f5c0b47af71193d46f473793c741961147e585d4bebf67e42f7e5c1",
+      "split": "development",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 104023,
+      "domainGroup": "10ae6ed5fc56966d277536a8a4b471c6dcd1bb1f2cfa73900999ae0899a79047",
+      "split": "development",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 139472,
+      "domainGroup": "3ddaaf8ec26923c1f629da97c1269db105ec238c88103782a012e40183626a37",
+      "split": "development",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 40611,
+      "domainGroup": "637b539f6c3d414a8ff39bd102d80db1cf01d7bae58297c2337c187e1f1176e6",
+      "split": "development",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 27257,
+      "domainGroup": "2d4b17fd24208213a32c627b16bcc5d817879dc37ac432f486b7424f0ced81b9",
+      "split": "development",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 27357,
+      "domainGroup": "5dbd3d35fb6b830071883297abe13af4afabbe589b123307b5716f33dfa84994",
+      "split": "development",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 163491,
+      "domainGroup": "35c1e22d7826fc3bb7aa5c81c45c6372f02bcc3dc086bf221b01d93d03aa66db",
+      "split": "development",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 105368,
+      "domainGroup": "476c09a289937884246ff33d17836dde4ab731c7996da0501b9172dd39a7a365",
+      "split": "development",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 112092,
+      "domainGroup": "75dfc2ac50f5a562017c3f73fcb9b82b1e0307f85830c25eae5f7043f4bcbb9f",
+      "split": "development",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 93432,
+      "domainGroup": "0c6dac67aa32ffcbd53c0ac30c309b4a79f9395638892c4fb364a4822bb1ef9c",
+      "split": "development",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 202989,
+      "domainGroup": "0ccea8f03b792f399b6af433bc1f33153e9121c494bdc521207f89aa51368e2f",
+      "split": "development",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 187693,
+      "domainGroup": "3a88f57bce246f1e68dbe41682591bbf8680c12153912d172e445427f64da2d6",
+      "split": "development",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 124577,
+      "domainGroup": "6a5d74b8868ca59a2f9817fe915dc471d9e32555a03072aa6775192f63448b6c",
+      "split": "development",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 142961,
+      "domainGroup": "769ccf6adc7c13bde1b3fc567fe6116122d21316decd029c34f054616fb8c9ae",
+      "split": "development",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 137630,
+      "domainGroup": "5c5062535d29ae84d1f79b0926146bf703409eaa0dbe5f2fd7dff6d6b9269270",
+      "split": "development",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 196206,
+      "domainGroup": "7f6cd6829b60507ffa2629ea1fbc6ef5b357c797483e4d3402714b49f0550d45",
+      "split": "development",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 51505,
+      "domainGroup": "7a6f237dce691c3fc91a4862901ce3544553bc331dbff194e9cbe8fd245a0e2c",
+      "split": "development",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 198589,
+      "domainGroup": "15f471db8bdd12238a799ce3447f6b31a30f51998a779ed0b16cf9084db36c34",
+      "split": "development",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 88943,
+      "domainGroup": "460dd4efdc02340b8e8649ec422136fffd09179ec7ce093c5bb9e79ff6cec908",
+      "split": "development",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 197467,
+      "domainGroup": "1d67bbc9737b3cd194e4b9fa3150988771a38cb58f61d34f2e3375678412bc3e",
+      "split": "development",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 185563,
+      "domainGroup": "603efedba76a465becfba54ca94c6bdf87b68e6b23e7ccd35b74e749d4589ea8",
+      "split": "development",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 139656,
+      "domainGroup": "51d12ac737e8b7218cfaa4fd86315ce7197d6c07f657537a2572338c2e8ba5aa",
+      "split": "development",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 208208,
+      "domainGroup": "153f94b4eb034ce06082e397993590b9733cfe1989e3aa01fc9f9f5715eec256",
+      "split": "development",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 148123,
+      "domainGroup": "1d52b6d3c879b5de76d0b049bfa8e48395dee786d73017df6d779ab733e5c052",
+      "split": "development",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 22999,
+      "domainGroup": "1684a2bac0814f484c103d7a98a5ac3c94324f720269809a2ddeeb989c73e53a",
+      "split": "development",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 48007,
+      "domainGroup": "156eb3a85bf1d9cd07201927d81a7365fff400d6045ae7aabd5f9c5785691e7a",
+      "split": "development",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 87841,
+      "domainGroup": "2db40aaab127ed78a75570edd25afc9d34be1b78988be09170a63c9043f8364b",
+      "split": "development",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 19374,
+      "domainGroup": "4348300b57e31ae86009c0b7f5e91e1b7b31fff77b34f88e066842a6972f5dc5",
+      "split": "development",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 100738,
+      "domainGroup": "4dcc8280f840f6729d0ef000ac34c45325b31d2ee659e097a623cd8507d560ac",
+      "split": "development",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 87605,
+      "domainGroup": "4907b6f43a1dfd4a786c908e939ce0793bcb9759a28fa16bb879b88ef19326ec",
+      "split": "development",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 233278,
+      "domainGroup": "7a6abaa300608ebd7c3bec5aa99f9d024425f7cda8d23bb1bd178a14dc640261",
+      "split": "development",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 217461,
+      "domainGroup": "7e475ef1aaa28f0a1eea1171169a80e4ba52f1bfbb7b5afd8f81f1cbe8f70e0e",
+      "split": "development",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 15125,
+      "domainGroup": "36cd5cbc9c27bcc15b8d8666f070662fd281b6bd039ab34c27ea5f1ac921fc22",
+      "split": "development",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 23838,
+      "domainGroup": "1ba7727aa65071c0c6b6e8e4c7e090330e8bd1353022e5db5ad53213634b91a7",
+      "split": "development",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 49525,
+      "domainGroup": "62c07d4c504a2d4008f44f1c326b0eefedfae6d04990cad80c03ddd2c9d8e82a",
+      "split": "development",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 121222,
+      "domainGroup": "46d11f1933585ace30f06fde649d6a3eeaa3c84bee632b5bf885aa4b59acc8da",
+      "split": "development",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 80413,
+      "domainGroup": "4217ab14e08ae343532c8ed1d684585c41bec21e0f388ce45ce7d43ad80df148",
+      "split": "development",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 233300,
+      "domainGroup": "7ed969df8b8a38d71a130c4349d872385c8f8d658cf8e32db89d18a5b8443345",
+      "split": "development",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 99827,
+      "domainGroup": "3cca009ee432b21eafbf901b8e3eb9a5aac0acd8c807a99d03e4814d672b1c2f",
+      "split": "development",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 166860,
+      "domainGroup": "061ddf9c0ba66c962fa6a653ceba521faace7ab966e835064259768c08d14fed",
+      "split": "development",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 171338,
+      "domainGroup": "019a2d3adadec4d8d046b072e676509ef5f03e056592c84f0ace3f14423c6099",
+      "split": "development",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 218323,
+      "domainGroup": "31f0c390733dce384058ef6bd4c7b0e198c30e06ddf53204b665a5258773000d",
+      "split": "development",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 131154,
+      "domainGroup": "629ded3187a731fbbc884a6ef6e95a60cb62019a289a05120c84e95aebe4b7ff",
+      "split": "development",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 95616,
+      "domainGroup": "0d558ff4e629858a992449d73431fa4d50255ef6e00154138a8c3d2759661307",
+      "split": "development",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 87123,
+      "domainGroup": "2b03cbdeb779ca7118a04d89be1846b51ba987e2f6eae0379b7f4ef69251f32f",
+      "split": "development",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 20278,
+      "domainGroup": "3a1e16c6a0ba08b8ed7d1f620724802b14fbef8431d12394d3e0cac80c0e03c9",
+      "split": "development",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 128351,
+      "domainGroup": "452f170ca3395e23c3e811c46cd508436457e6bfc6ab2e430195620446772842",
+      "split": "development",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 211247,
+      "domainGroup": "8ecccbdb101e6813d264f81e57de67bfd68743958ccb44d2334bb31acfd83816",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 139781,
+      "domainGroup": "d0101317024b69c15072759b786c5431298c9f9f01e9e4352407f205362f2de1",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 76475,
+      "domainGroup": "ae6b1680c0c5386c359b238b021446deb8c30b2b14d10a42acc43bdb0a1fb3f9",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 106025,
+      "domainGroup": "8d3d04af61f404d9d323c52cb6321b6ffb7dfc1ba8121c558eea987a1848d354",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 128876,
+      "domainGroup": "9a2afdfdff239e9af9da0fd398a5379483767d3147844bca5eac0b2ca98783ef",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 84263,
+      "domainGroup": "9ee9985d02a23e642438c0ec0606ed8a1d51dd2117c1c5851ce87187f76caa66",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 7330,
+      "domainGroup": "f968d26a8f733cc2a8ec9335699d9342ee2e45f8f68b32da9773e263f97c455a",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 143464,
+      "domainGroup": "f812c16e2ccdf1018afc52c83af282f3bd75c974b1caa6d62ed6d8ed7fbd2171",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 63252,
+      "domainGroup": "e723babf97bfd91dbabca879ddbe2970feb60baa1543552f176847ab1b80ec68",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 214027,
+      "domainGroup": "99fbab7c23b291d29ee233f6834d1f6c056cf3d76b344e2f4058e373ad2a30e7",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 70932,
+      "domainGroup": "8d93463da3afb88308260efe1b235e8becff3f1ea81542e652924376d154cbce",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 159707,
+      "domainGroup": "a644ab073b87300ebdacc15531fc016036e57488fdbd8bc220621f90512ee2c1",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 214647,
+      "domainGroup": "abd506cd03a9fcfa717fb002799f056fb644d8a70e9c5532a354878f3e62c7c5",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 150415,
+      "domainGroup": "fca17e8ff7c4fbfc534525984b1fe16993e304324bb13738ce52c672d9cd3347",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 70288,
+      "domainGroup": "ea1e43dc28b19f81bc5ecdf2cca844a1e4d6c3a002bf69b331b68e87377d93a0",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 92455,
+      "domainGroup": "be027db9eb7377fb612b467e97d56835467ff403bf1f8f0d3b1bd67840187d2f",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 216394,
+      "domainGroup": "8d15d289b2dd9d70ca542eaca74af18dc36c58c1b8a602f4afa2af2456d444a6",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 144500,
+      "domainGroup": "b3e2a6c91677da4c159ebef46f8c27c1293365fc7389b35e1946b2677e4dabf3",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 222153,
+      "domainGroup": "d227e0a2b1cc1cd04a27cc38803aa55432b5d343c9bd92f494c2267d932dfd36",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 92594,
+      "domainGroup": "ad157996611b1526b3a9856386d595884f4facd7a1d12a58ea69609393e15658",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 10770,
+      "domainGroup": "9d09ea8b822486330a570d49a7ab4ff54363afa5ef0749488d44052a448775d7",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 144801,
+      "domainGroup": "f76976987fccace5246a512be2dbef07d4bf7d541ca71744c3de7b784589a31e",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 208067,
+      "domainGroup": "8086284b70e53c6b4103a4ecf7b2276f8391379aaf6bfe9bad8a6988ec610cea",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 112653,
+      "domainGroup": "facd1941026901d10d655b4e8c6e4d74ed7d0d5e64e74f6ecf29c9c74fde2da6",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 231126,
+      "domainGroup": "b382a2edcea9a1facbf42664af93c1f1414f0a9486d09507eed97e62e6bc0092",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 222702,
+      "domainGroup": "93251dd6ba5cbc6e5e9d81bf1231b99ffafc390bfebbad9cecf97c69a22662bf",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 205622,
+      "domainGroup": "e2084621e690d2357799f44a9d798e86d12a9ead0ee616230238684287c81bbf",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 88767,
+      "domainGroup": "b1442c9b7b789f7a5c80f7740cc8334bee9d0fbff754b71307e4b9591c1fbb09",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 90762,
+      "domainGroup": "a5c2adc73de696be8fa50c6095ad316e9c3809f352b775a14168d66680ece6e9",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 231148,
+      "domainGroup": "ebd568bba1d1809be6a410a51da672b3b48e3c4b1b702c88c0437c2260b12497",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 229862,
+      "domainGroup": "dbdf4d39127cbac6ce1a1d680007ee703b18cba6b85aa28e2bdf633a06abe2c5",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 55693,
+      "domainGroup": "8709e93857ba2677f56579347bb6dc6274c881c7270ad5a983e71d76e4a649d2",
+      "split": "evaluation",
+      "label": 0,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 74743,
+      "domainGroup": "e8b82564aab7dbca6e1ea6d3c28bbfb55b6cc627624e25089ac0943ee77a620e",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 58112,
+      "domainGroup": "fbefe8fed0cfc896bee8e1dc8bde50fab6eba8c65ffebcf1a7461ad57d2f21d8",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 211799,
+      "domainGroup": "c08afbd2e65d421fbe2099e025a10eb0a38d6386810384a59c7ad571ca3e39c8",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 75523,
+      "domainGroup": "f3c584668621798fe2ef0b37838811280c75c328676ffe4fc08c4412ab0216fb",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 216460,
+      "domainGroup": "bbf50c21ab8722e356f787edea825cfb73ef87c000ce444eeaa58ecf1ec10fa3",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 96311,
+      "domainGroup": "edb001af3118030c7950235fdff10048507de742b350a34de3f80c6d3229d607",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 119665,
+      "domainGroup": "d42308d5f87c076d01685cc30f19daaac3563080f0ccf358d32faee9d16bef18",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 38585,
+      "domainGroup": "aa9a5fc91f033ab965a703fc1b507346728192238bcc46abf412e496c89573c8",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 27013,
+      "domainGroup": "f95dffa64ead0881485e06c75d153feb54f1523b1efa42251c04b76f0424fb19",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 173278,
+      "domainGroup": "87facf71ba28fbc8ada5210b82903f786c53c429f027e3e6f6fe46ebc7f719d7",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 54953,
+      "domainGroup": "8492ba028747b0ee082c0c75dc8f19c58205195086f1deca48c2da94980968c7",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 165120,
+      "domainGroup": "b60b5b658eee6f90a943ecd7b321464e4ebd225e8ef6866fd148ffca39c43d9f",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 37542,
+      "domainGroup": "d9da2071c96f47bb8c534577a32407f435474d1d817c135626062d977a49c77b",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 37045,
+      "domainGroup": "cf784c63f142827f5916c63f555793098c42e3a7e39b4712474590e5e4eb2ae1",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 152604,
+      "domainGroup": "f90757087f6062c80bf4ad8da3e9ccf094db5b78444e99938ae253d1af081870",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 212197,
+      "domainGroup": "8f5fc6b8b5437a02534b752c969bade2393303a2a3e7c39182a0f99a146e6aa5",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": false,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 169026,
+      "domainGroup": "c4a06dc8d7a9b1eb1c7f30983ce670ca96b0b6a516978565b1cb9a803fc81449",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 61791,
+      "domainGroup": "c799c30bda1b9ce2cb6ba1a368a7b208972d4f6cb22526ea71e44af8d4bccf02",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 159886,
+      "domainGroup": "d79c41963ea5509880060d6d77b16509b8e32459672def159e5a57057908b3ac",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 221476,
+      "domainGroup": "b8645b1a9062b7afb826ce2a73d9450bf52c9c09d7a6933b31dd388e769530b2",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 34819,
+      "domainGroup": "d8bfe1b0b77dcdf9ebc09f6e26731471fe918d21025515613ad4a2eba39aec60",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 121618,
+      "domainGroup": "ed1c846e41bbecbee580c20854215d3f9d75ebfec6e7600517d1943cd51a221c",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 13616,
+      "domainGroup": "de84861d0b8df829f0c865db09d8aa99ce7e34b87aa031967380f7af2e6510e5",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 14506,
+      "domainGroup": "8080a84c66accba3d8de83e1e56902d31fefbe991774fa906885e429a169b8f4",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": false
+    },
+    {
+      "sourceRow": 86904,
+      "domainGroup": "c07262ae003d95847f0892007aae4a6c6a483b83e7e30bb60d383677fa4365c0",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 97434,
+      "domainGroup": "8302238bed078ef5d6353cb68f2942ed1098ba09088b6ef08a3c261d18384c7e",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 140931,
+      "domainGroup": "87b14f4e281ba08569d85e854f6b20606f73ba97cb67129193ac2d49b68ecb70",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 45103,
+      "domainGroup": "a63b51ea64b3330e1df1c4d3ea1f17894a76f2b799054a996275e572d4569e0f",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 39686,
+      "domainGroup": "8ed3eda56696b08194990b03e70a5cf549baa24c19dfc78b6bc72f56e3e782c1",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 70576,
+      "domainGroup": "d8611f414adaa48c98a7e9dff6f20a0d3b220dc27005fd67ab9a4e16a3725ec5",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 177485,
+      "domainGroup": "aa865a2f652050d4d967d315837c69cf140195004ab58f06c1090757b78160d8",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": true
+    },
+    {
+      "sourceRow": 7006,
+      "domainGroup": "aa95ce8d297a6a6dedf3ffe846a53f1b3246e8624e335ee8f8168cdace4f4cc3",
+      "split": "evaluation",
+      "label": 1,
+      "passwordField": true,
+      "externalFormSubmit": true
+    }
+  ]
+}

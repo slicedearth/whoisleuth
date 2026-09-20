@@ -28,30 +28,48 @@ export const SUPPORTED_BULK_MAIL_EXPOSURE_EXPORT_VERSIONS = Object.freeze([BULK_
 export const MAX_BULK_MAIL_EXPOSURE_ROWS = 2_000;
 
 export const BULK_REVIEW_MANIFEST_SCHEMA = 'whoisleuth.bulk-review-manifest';
-export const BULK_REVIEW_MANIFEST_VERSION = 2;
-export const SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS = Object.freeze([BULK_REVIEW_MANIFEST_VERSION] as const);
+export const BULK_REVIEW_MANIFEST_VERSION = 3;
+export const SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS = Object.freeze([2, BULK_REVIEW_MANIFEST_VERSION] as const);
 
 export const INVESTIGATION_CAPSULE_SCHEMA = 'whoisleuth.investigation-capsule';
-export const INVESTIGATION_CAPSULE_VERSION = 3;
+export const INVESTIGATION_CAPSULE_VERSION = 4;
 export const PUBLIC_INVESTIGATION_CAPSULE_VERSION = 2;
 export const SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS = Object.freeze([
   PUBLIC_INVESTIGATION_CAPSULE_VERSION,
+  3,
   INVESTIGATION_CAPSULE_VERSION,
 ] as const);
 export const INVESTIGATION_CAPSULE_ANALYST_RECORDS_SCHEMA = 'whoisleuth.case-analyst-records';
 export const INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION = 1;
 
 export const LOOKUP_INVESTIGATION_BRIEF_SCHEMA = 'whoisleuth.investigation-brief';
-export const LOOKUP_INVESTIGATION_BRIEF_VERSION = 2;
+export const LOOKUP_INVESTIGATION_BRIEF_VERSION = 3;
 export const PUBLIC_LOOKUP_INVESTIGATION_BRIEF_VERSION = 1;
 export const SUPPORTED_LOOKUP_INVESTIGATION_BRIEF_VERSIONS = Object.freeze([
   PUBLIC_LOOKUP_INVESTIGATION_BRIEF_VERSION,
+  2,
   LOOKUP_INVESTIGATION_BRIEF_VERSION,
 ] as const);
 export const MAX_LOOKUP_INVESTIGATION_BRIEF_BYTES = 128 * 1024;
 
 export const LOOKUP_ASSET_GRAPH_SCHEMA = 'whoisleuth.lookup-asset-graph';
-export const LOOKUP_ASSET_GRAPH_VERSION = 2;
+export const LOOKUP_ASSET_GRAPH_VERSION = 3;
+export const SUPPORTED_LOOKUP_ASSET_GRAPH_VERSIONS = Object.freeze([2, LOOKUP_ASSET_GRAPH_VERSION] as const);
+// Offline-parser emergency bounds exceed every relationship that the bounded
+// graph inputs can produce. The writer does not truncate nodes or edges.
+export const MAX_LOOKUP_ASSET_NODES = 8_192;
+export const MAX_LOOKUP_ASSET_EDGES = 8_192;
+export const MAX_LOOKUP_ASSET_LIMITATIONS = 16;
+export const MAX_LOOKUP_ASSET_INPUT_ROWS = 160;
+
+export function investigationCapsuleContracts(version: unknown): Readonly<{ brief: number; graph: number }> | null {
+  switch (version) {
+    case 2: return { brief: 1, graph: 2 };
+    case 3: return { brief: 2, graph: 2 };
+    case INVESTIGATION_CAPSULE_VERSION: return { brief: LOOKUP_INVESTIGATION_BRIEF_VERSION, graph: LOOKUP_ASSET_GRAPH_VERSION };
+    default: return null;
+  }
+}
 
 export const INVESTIGATION_DOMAIN_COMPATIBILITY_FACADES = Object.freeze([
   ['frontend/src/lib/analysis/acquisition-decision-packet.ts', 'packages/investigation/acquisition-decision-packet.mts'],
@@ -104,7 +122,7 @@ export const BULK_REVIEW_MANIFEST_COMPATIBILITY = defineSchemaCompatibility({
   currentVersion: BULK_REVIEW_MANIFEST_VERSION, supportedVersions: SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS,
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only',
   byteBudget: MAX_INVESTIGATION_PORTABLE_BYTES, owner: INVESTIGATION_PORTABILITY_CONTRACT_OWNER,
-  note: 'Version 2 uses deterministic sorted-json-v2 integrity for one bounded Bulk review selection while excluding raw payloads, contacts, notes, and transient request state.',
+  note: 'Version 3 retains nullable batch, row and source observation times in one selected Bulk review with deterministic sorted-json-v2 integrity. Published version 2 remains readable without inventing absent source times. Raw payloads, contacts, notes and transient request state are excluded.',
 });
 
 export const INVESTIGATION_CAPSULE_COMPATIBILITY = defineSchemaCompatibility({
@@ -112,14 +130,14 @@ export const INVESTIGATION_CAPSULE_COMPATIBILITY = defineSchemaCompatibility({
   currentVersion: INVESTIGATION_CAPSULE_VERSION, supportedVersions: SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS,
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only',
   byteBudget: MAX_INVESTIGATION_PORTABLE_BYTES, owner: INVESTIGATION_PORTABILITY_CONTRACT_OWNER,
-  note: 'Version 3 embeds investigation brief v2 with canonical Decision Facts; the v1.47.4 version 2 and v2 version 3 retain whole-capsule sorted-json-v2 integrity.',
+  note: 'Version 4 embeds brief v3 and graph v3 with projection coverage. Versions 2 and 3 remain readable with their exact embedded contracts and whole-capsule sorted-json-v2 integrity.',
 });
 
 export const LOOKUP_ASSET_GRAPH_COMPATIBILITY = defineSchemaCompatibility({
   id: 'derived.lookup-asset-graph', kind: 'derived', schema: LOOKUP_ASSET_GRAPH_SCHEMA,
   tier: 'durable_interchange',
-  currentVersion: LOOKUP_ASSET_GRAPH_VERSION, supportedVersions: [LOOKUP_ASSET_GRAPH_VERSION],
-  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only',
+  currentVersion: LOOKUP_ASSET_GRAPH_VERSION, supportedVersions: SUPPORTED_LOOKUP_ASSET_GRAPH_VERSIONS,
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'read_only',
   byteBudget: null, owner: INVESTIGATION_PORTABILITY_CONTRACT_OWNER,
   note: 'Bounded relationship projection embedded in investigation capsules; source attribution and incomplete evidence remain explicit.',
 });
@@ -139,7 +157,7 @@ export const LOOKUP_INVESTIGATION_BRIEF_COMPATIBILITY = defineSchemaCompatibilit
   currentVersion: LOOKUP_INVESTIGATION_BRIEF_VERSION, supportedVersions: SUPPORTED_LOOKUP_INVESTIGATION_BRIEF_VERSIONS,
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only', writeSemantics: 'none',
   byteBudget: MAX_LOOKUP_INVESTIGATION_BRIEF_BYTES, owner: INVESTIGATION_PORTABILITY_CONTRACT_OWNER,
-  note: 'Version 2 replaces the public version-1 summary and decision-entry arrays with one bounded canonical Decision Fact projection; public version 1 remains structurally verified when embedded in supported capsule versions.',
+  note: 'Version 3 summarises the complete retained graph with canonical Decision Facts. Versions 1 and 2 retain their exact historical relationship bounds within supported capsules.',
 });
 
 export const INVESTIGATION_PORTABILITY_COMPATIBILITY = Object.freeze([
@@ -155,17 +173,24 @@ export const INVESTIGATION_PORTABILITY_COMPATIBILITY = Object.freeze([
 ]);
 
 const INVESTIGATION_FIXTURES = Object.freeze([
+  { id: 'investigation-capsule-v4', path: 'test/fixtures/investigation-portability/investigation-capsule-v4.json', bytes: 9005, sha256: 'a1c193ab16fe79cbd39182b4a554e09ce785f71c19aa8185f442a3cc06d54830', schema: INVESTIGATION_CAPSULE_SCHEMA, version: 4, role: 'current' as const },
+  { id: 'lookup-asset-graph-v3', path: 'test/fixtures/investigation-portability/lookup-asset-graph-v3.json', bytes: 8821, sha256: 'b37ce0d3cc18af95e09dc0e34b6a610a7e0fcbb9ab095b5da6a0d72c54d63c30', schema: LOOKUP_ASSET_GRAPH_SCHEMA, version: 3, role: 'current' as const },
+  { id: 'lookup-investigation-brief-v3', path: 'test/fixtures/investigation-portability/lookup-investigation-brief-v3.json', bytes: 1779, sha256: '49b78aa7b7c620ac521c329a30af990b33114e4122028e277e1419b352944e8b', schema: LOOKUP_INVESTIGATION_BRIEF_SCHEMA, version: 3, role: 'current' as const },
   { id: 'acquisition-decision-v2', path: 'test/fixtures/investigation-portability/acquisition-decision-v2.json', bytes: 6_278, sha256: '1c1b5c2fcea2886dae5661085f605d95317b89bb6d9774cb8967a754ef8165bf', schema: ACQUISITION_DECISION_PACKET_SCHEMA, version: 2, role: 'current' as const },
   { id: 'lookup-claim-passport-v1', path: 'test/fixtures/investigation-portability/lookup-claim-passport-v1.json', bytes: 2_011, sha256: 'dbf1c3975282e340b6639162a0555aeaed42c06abe92ed3b354409ce73c284a4', schema: LOOKUP_CLAIM_PASSPORT_SCHEMA, version: 1, role: 'current' as const },
   { id: 'bulk-domain-comparison-v4', path: 'test/fixtures/investigation-portability/bulk-domain-comparison-v4.json', bytes: 17_079, sha256: 'b718af34c8f5f1ba4427807cd149561bc1b7e605a6e74206a694beaee078cc2d', schema: BULK_DOMAIN_COMPARISON_SCHEMA, version: 4, role: 'current' as const },
   { id: 'bulk-mail-exposure-v2', path: 'test/fixtures/investigation-portability/bulk-mail-exposure-v2.json', bytes: 2_582, sha256: '9ff6c4c9f2dda4c5451daf8fb11e36a3ee15b513a09ad3c93515cc37df5d6660', schema: BULK_MAIL_EXPOSURE_SCHEMA, version: 2, role: 'current' as const },
-  { id: 'bulk-review-manifest-v2', path: 'test/fixtures/investigation-portability/bulk-review-manifest-v2.json', bytes: 1_657, sha256: '1c90f4d0661357fc277360cc924f2464e463f9c8bd815a6b45408e95e1caf7d3', schema: BULK_REVIEW_MANIFEST_SCHEMA, version: 2, role: 'current' as const },
+  { id: 'bulk-review-manifest-v2', path: 'test/fixtures/investigation-portability/bulk-review-manifest-v2-current.json', bytes: 2_118, sha256: 'b4e209df9bc0e1c8be8a34d4f4aac486df9d0a4e1a1f750b9a21ab6e0d35b7b6', schema: BULK_REVIEW_MANIFEST_SCHEMA, version: 2, role: 'historical' as const },
+  { id: 'bulk-review-manifest-v3', path: 'test/fixtures/investigation-portability/bulk-review-manifest-v3.json', bytes: 2_422, sha256: '0ee1022140b8d19a92100806f0091c197be0ffec0faae808721c47d7cb96d9ad', schema: BULK_REVIEW_MANIFEST_SCHEMA, version: 3, role: 'current' as const },
+  // Synthetic integrity examples deliberately combine independently versioned
+  // contracts. Their application labels are not captured-release provenance;
+  // historical/current here describes the supported capsule schema only.
   { id: 'investigation-capsule-v2', path: 'test/fixtures/investigation-capsule-v2.json', bytes: 3_286, sha256: 'fb71cb243020d401e3653bb714f9de07a71b81622fcf83c0027599b763dda070', schema: INVESTIGATION_CAPSULE_SCHEMA, version: 2, role: 'historical' as const },
-  { id: 'investigation-capsule-v3', path: 'test/fixtures/investigation-portability/investigation-capsule-v3.json', bytes: 6_132, sha256: '685123c8bd152ee1a8074441bcd56bbde9fb0304aa4a320ee9b37d02061ed82a', schema: INVESTIGATION_CAPSULE_SCHEMA, version: 3, role: 'current' as const },
-  { id: 'lookup-asset-graph-v2', path: 'test/fixtures/investigation-portability/lookup-asset-graph-v2.json', bytes: 1_157, sha256: '455397a2b2987180d54657199e76c4dc175e01aed0fa83d945a6f3ec30bdcd49', schema: LOOKUP_ASSET_GRAPH_SCHEMA, version: 2, role: 'current' as const },
+  { id: 'investigation-capsule-v3', path: 'test/fixtures/investigation-portability/investigation-capsule-v3.json', bytes: 6_132, sha256: '685123c8bd152ee1a8074441bcd56bbde9fb0304aa4a320ee9b37d02061ed82a', schema: INVESTIGATION_CAPSULE_SCHEMA, version: 3, role: 'historical' as const },
+  { id: 'lookup-asset-graph-v2', path: 'test/fixtures/investigation-portability/lookup-asset-graph-v2.json', bytes: 1_157, sha256: '455397a2b2987180d54657199e76c4dc175e01aed0fa83d945a6f3ec30bdcd49', schema: LOOKUP_ASSET_GRAPH_SCHEMA, version: 2, role: 'historical' as const },
   { id: 'investigation-analyst-records-v1', path: 'test/fixtures/investigation-portability/investigation-analyst-records-v1.json', bytes: 624, sha256: '0730116afef29e52b448e150f6755e89ec1189c2fbc6ec4ef8cfc4b41f677456', schema: INVESTIGATION_CAPSULE_ANALYST_RECORDS_SCHEMA, version: 1, role: 'current' as const },
   { id: 'lookup-investigation-brief-v1', path: 'test/fixtures/investigation-portability/lookup-investigation-brief-v1.json', bytes: 1_651, sha256: 'bc21c886671370659149c3e494c7e6061302569308823c69ef96f0c601dadbab', schema: LOOKUP_INVESTIGATION_BRIEF_SCHEMA, version: 1, role: 'historical' as const },
-  { id: 'lookup-investigation-brief-v2', path: 'test/fixtures/investigation-portability/lookup-investigation-brief-v2.json', bytes: 1_724, sha256: '25d0133318df8daa00848e6a2c03913478beb30818a4959298ec1500b6aaa0fd', schema: LOOKUP_INVESTIGATION_BRIEF_SCHEMA, version: 2, role: 'current' as const },
+  { id: 'lookup-investigation-brief-v2', path: 'test/fixtures/investigation-portability/lookup-investigation-brief-v2.json', bytes: 1_724, sha256: '25d0133318df8daa00848e6a2c03913478beb30818a4959298ec1500b6aaa0fd', schema: LOOKUP_INVESTIGATION_BRIEF_SCHEMA, version: 2, role: 'historical' as const },
 ].map((fixture) => Object.freeze({
   ...fixture,
   contentDigestSha256: null,
@@ -213,7 +238,7 @@ const INVESTIGATION_CONTRACTS = Object.freeze([
   ...SUPPORTED_BULK_MAIL_EXPOSURE_EXPORT_VERSIONS.map((version) => investigationContract({ compatibilityId: BULK_MAIL_EXPOSURE_COMPATIBILITY.id, schema: BULK_MAIL_EXPOSURE_SCHEMA, version, currentVersion: BULK_MAIL_EXPOSURE_EXPORT_VERSION, canonicalisation: 'sorted-json-v2', byteBudget: MAX_INVESTIGATION_PORTABLE_BYTES })),
   ...SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS.map((version) => investigationContract({ compatibilityId: BULK_REVIEW_MANIFEST_COMPATIBILITY.id, schema: BULK_REVIEW_MANIFEST_SCHEMA, version, currentVersion: BULK_REVIEW_MANIFEST_VERSION, canonicalisation: 'sorted-json-v2', byteBudget: MAX_INVESTIGATION_PORTABLE_BYTES })),
   ...SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS.map((version) => investigationContract({ compatibilityId: INVESTIGATION_CAPSULE_COMPATIBILITY.id, schema: INVESTIGATION_CAPSULE_SCHEMA, version, currentVersion: INVESTIGATION_CAPSULE_VERSION, canonicalisation: 'sorted-json-v2', byteBudget: MAX_INVESTIGATION_PORTABLE_BYTES })),
-  investigationContract({ compatibilityId: LOOKUP_ASSET_GRAPH_COMPATIBILITY.id, schema: LOOKUP_ASSET_GRAPH_SCHEMA, version: LOOKUP_ASSET_GRAPH_VERSION, currentVersion: LOOKUP_ASSET_GRAPH_VERSION, canonicalisation: null, byteBudget: null }),
+  ...SUPPORTED_LOOKUP_ASSET_GRAPH_VERSIONS.map((version) => investigationContract({ compatibilityId: LOOKUP_ASSET_GRAPH_COMPATIBILITY.id, schema: LOOKUP_ASSET_GRAPH_SCHEMA, version, currentVersion: LOOKUP_ASSET_GRAPH_VERSION, canonicalisation: null, byteBudget: null })),
   investigationContract({ compatibilityId: INVESTIGATION_CAPSULE_ANALYST_RECORDS_COMPATIBILITY.id, schema: INVESTIGATION_CAPSULE_ANALYST_RECORDS_SCHEMA, version: INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION, currentVersion: INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION, canonicalisation: null, byteBudget: null }),
   ...SUPPORTED_LOOKUP_INVESTIGATION_BRIEF_VERSIONS.map((version) => investigationContract({ compatibilityId: LOOKUP_INVESTIGATION_BRIEF_COMPATIBILITY.id, schema: LOOKUP_INVESTIGATION_BRIEF_SCHEMA, version, currentVersion: LOOKUP_INVESTIGATION_BRIEF_VERSION, canonicalisation: null, byteBudget: MAX_LOOKUP_INVESTIGATION_BRIEF_BYTES })),
 ]);
@@ -242,11 +267,12 @@ const INVESTIGATION_SHAPES = Object.freeze([
   investigationShape('investigation.domain-comparison.v4', BULK_DOMAIN_COMPARISON_SCHEMA, [...SUPPORTED_BULK_DOMAIN_COMPARISON_EXPORT_VERSIONS], ['schema', 'version', 'generatedAt', 'comparison', 'integrity'], 'preserve_signed_document'),
   investigationShape('investigation.mail-exposure.v2', BULK_MAIL_EXPOSURE_SCHEMA, [...SUPPORTED_BULK_MAIL_EXPOSURE_EXPORT_VERSIONS], ['schema', 'version', 'report', 'integrity'], 'preserve_signed_document'),
   investigationShape('investigation.bulk-review.v2', BULK_REVIEW_MANIFEST_SCHEMA, [...SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS], ['schema', 'version', 'generatedAt', 'observedAt', 'lookupProfile', 'selection', 'view', 'rows', 'limitations', 'integrity'], 'preserve_signed_document'),
-  investigationShape('investigation.capsule.v2-v3', INVESTIGATION_CAPSULE_SCHEMA, [...SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS], ['schema', 'schemaVersion', 'generatedAt', 'application', 'target', 'sourceContracts', 'investigationBrief', 'graphSnapshot', 'analystRecords', 'limitations', 'integrity'], 'preserve_signed_document'),
-  investigationShape('investigation.asset-graph.v2', LOOKUP_ASSET_GRAPH_SCHEMA, [LOOKUP_ASSET_GRAPH_VERSION], ['version', 'targetId', 'nodes', 'edges', 'sources', 'truncated', 'limitations'], 'preserve_document'),
+  investigationShape('investigation.capsule.v2-v4', INVESTIGATION_CAPSULE_SCHEMA, [...SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS], ['schema', 'schemaVersion', 'generatedAt', 'application', 'target', 'sourceContracts', 'investigationBrief', 'graphSnapshot', 'analystRecords', 'limitations', 'integrity'], 'preserve_signed_document'),
+  investigationShape('investigation.asset-graph.v2', LOOKUP_ASSET_GRAPH_SCHEMA, [2], ['version', 'targetId', 'nodes', 'edges', 'sources', 'truncated', 'limitations'], 'preserve_document'),
+  investigationShape('investigation.asset-graph.v3', LOOKUP_ASSET_GRAPH_SCHEMA, [LOOKUP_ASSET_GRAPH_VERSION], ['version', 'targetId', 'nodes', 'edges', 'sources', 'coverage', 'truncated', 'limitations'], 'preserve_document'),
   investigationShape('investigation.analyst-records.v1', INVESTIGATION_CAPSULE_ANALYST_RECORDS_SCHEMA, [INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION], ['caseId', 'status', 'disposition', 'decisions', 'assertions'], 'preserve_document'),
   investigationShape('investigation.brief.v1', LOOKUP_INVESTIGATION_BRIEF_SCHEMA, [PUBLIC_LOOKUP_INVESTIGATION_BRIEF_VERSION], ['schema', 'schemaVersion', 'generatedAt', 'target', 'targetType', 'task', 'taskLabel', 'question', 'summary', 'observation', 'verifiedFacts', 'contradictions', 'unknowns', 'nextActions', 'relationships', 'limitations'], 'preserve_document'),
-  investigationShape('investigation.brief.v2', LOOKUP_INVESTIGATION_BRIEF_SCHEMA, [LOOKUP_INVESTIGATION_BRIEF_VERSION], ['schema', 'schemaVersion', 'generatedAt', 'target', 'targetType', 'task', 'taskLabel', 'question', 'summary', 'observation', 'decisionFacts', 'relationships', 'limitations'], 'preserve_document'),
+  investigationShape('investigation.brief.v2-v3', LOOKUP_INVESTIGATION_BRIEF_SCHEMA, [2, LOOKUP_INVESTIGATION_BRIEF_VERSION], ['schema', 'schemaVersion', 'generatedAt', 'target', 'targetType', 'task', 'taskLabel', 'question', 'summary', 'observation', 'decisionFacts', 'relationships', 'limitations'], 'preserve_document'),
 ]);
 
 const investigationConsumerCommon = Object.freeze({
@@ -264,7 +290,6 @@ export const INVESTIGATION_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleF
   contracts: INVESTIGATION_CONTRACTS,
   fixtures: INVESTIGATION_FIXTURES,
   metadata: {
-    metadataVersion: 3,
     enforcement: 'declarative_only',
     shapes: INVESTIGATION_SHAPES,
     boundProfiles: [
@@ -283,6 +308,11 @@ export const INVESTIGATION_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleF
       { id: 'investigation.derived.bounds', bounds: [
         { id: 'projection-items', path: '$', phase: 'normalised', unit: 'items', minimum: 0, maximum: 2_000, handling: 'truncate' },
       ] },
+      { id: 'investigation.graph.bounds', bounds: [
+        { id: 'nodes', path: 'nodes', phase: 'normalised', unit: 'items', minimum: 0, maximum: MAX_LOOKUP_ASSET_NODES, handling: 'reject' },
+        { id: 'edges', path: 'edges', phase: 'normalised', unit: 'items', minimum: 0, maximum: MAX_LOOKUP_ASSET_EDGES, handling: 'reject' },
+        { id: 'input-coverage', path: 'coverage.inputs', phase: 'normalised', unit: 'items', minimum: 0, maximum: MAX_LOOKUP_ASSET_INPUT_ROWS, handling: 'reject' },
+      ] },
     ],
     hooks: [
       { id: 'investigation.offline.structure', role: 'structure_validator', runtime: 'cli', module: 'cli/offline-artifact-validation.mts', exportName: 'validateOfflineArtifactStructure' },
@@ -299,7 +329,7 @@ export const INVESTIGATION_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleF
       { id: 'investigation.brief.build', role: 'builder', runtime: 'shared', module: 'packages/investigation/lookup-investigation-brief.mts', exportName: 'buildLookupInvestigationBrief' },
     ],
     serialisationProfiles: [{
-      id: 'investigation.capsule.json.v2-v3',
+      id: 'investigation.capsule.json.v2-v4',
       schema: INVESTIGATION_CAPSULE_SCHEMA,
       versions: [...SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS],
       mediaType: 'application/json',
@@ -330,7 +360,7 @@ export const INVESTIGATION_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleF
           { schema: INVESTIGATION_CAPSULE_SCHEMA, versions: [...SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS], mode: 'direct' },
         ],
         emittedContract: null,
-        shapeIds: ['investigation.acquisition.v2', 'investigation.claim-passport.v1', 'investigation.domain-comparison.v4', 'investigation.mail-exposure.v2', 'investigation.bulk-review.v2', 'investigation.capsule.v2-v3'],
+        shapeIds: ['investigation.acquisition.v2', 'investigation.claim-passport.v1', 'investigation.domain-comparison.v4', 'investigation.mail-exposure.v2', 'investigation.bulk-review.v2', 'investigation.capsule.v2-v4'],
         boundProfileIds: ['investigation.portable.bounds', 'investigation.passport.bounds'],
         hookIds: ['investigation.offline.structure', 'investigation.offline.verify'],
         serialisationProfileId: null,
@@ -339,15 +369,15 @@ export const INVESTIGATION_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleF
       {
         id: 'investigation.consumer.capsule-compose', plane: 'shared', operation: 'compose-and-verify-capsule',
         acceptedContracts: [
-          { schema: LOOKUP_ASSET_GRAPH_SCHEMA, versions: [LOOKUP_ASSET_GRAPH_VERSION], mode: 'embedded' },
+          { schema: LOOKUP_ASSET_GRAPH_SCHEMA, versions: [...SUPPORTED_LOOKUP_ASSET_GRAPH_VERSIONS], mode: 'embedded' },
           { schema: INVESTIGATION_CAPSULE_ANALYST_RECORDS_SCHEMA, versions: [INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION], mode: 'embedded' },
           { schema: LOOKUP_INVESTIGATION_BRIEF_SCHEMA, versions: [...SUPPORTED_LOOKUP_INVESTIGATION_BRIEF_VERSIONS], mode: 'embedded' },
         ],
         emittedContract: { schema: INVESTIGATION_CAPSULE_SCHEMA, version: INVESTIGATION_CAPSULE_VERSION },
-        shapeIds: ['investigation.asset-graph.v2', 'investigation.analyst-records.v1', 'investigation.brief.v1', 'investigation.brief.v2', 'investigation.capsule.v2-v3'],
-        boundProfileIds: ['investigation.portable.bounds', 'investigation.brief.bounds', 'investigation.derived.bounds'],
+        shapeIds: ['investigation.asset-graph.v2', 'investigation.asset-graph.v3', 'investigation.analyst-records.v1', 'investigation.brief.v1', 'investigation.brief.v2-v3', 'investigation.capsule.v2-v4'],
+        boundProfileIds: ['investigation.portable.bounds', 'investigation.brief.bounds', 'investigation.derived.bounds', 'investigation.graph.bounds'],
         hookIds: ['investigation.capsule.build', 'investigation.capsule.verify', 'investigation.capsule.serialise'],
-        serialisationProfileId: 'investigation.capsule.json.v2-v3',
+        serialisationProfileId: 'investigation.capsule.json.v2-v4',
         privacyProfileId: 'investigation.privacy.output', retentionEffect: 'operator_controlled_output', ...investigationConsumerCommon,
       },
       ...([
@@ -356,9 +386,9 @@ export const INVESTIGATION_PORTABILITY_LIFECYCLE_FAMILY = defineSchemaLifecycleF
         ['investigation.consumer.domain-comparison-build', BULK_DOMAIN_COMPARISON_SCHEMA, BULK_DOMAIN_COMPARISON_EXPORT_VERSION, 'investigation.domain-comparison.v4', 'investigation.domain-comparison.build', 'investigation.portable.bounds'],
         ['investigation.consumer.mail-exposure-build', BULK_MAIL_EXPOSURE_SCHEMA, BULK_MAIL_EXPOSURE_EXPORT_VERSION, 'investigation.mail-exposure.v2', 'investigation.mail-exposure.build', 'investigation.portable.bounds'],
         ['investigation.consumer.bulk-review-build', BULK_REVIEW_MANIFEST_SCHEMA, BULK_REVIEW_MANIFEST_VERSION, 'investigation.bulk-review.v2', 'investigation.bulk-review.build', 'investigation.portable.bounds'],
-        ['investigation.consumer.graph-build', LOOKUP_ASSET_GRAPH_SCHEMA, LOOKUP_ASSET_GRAPH_VERSION, 'investigation.asset-graph.v2', 'investigation.graph.build', 'investigation.derived.bounds'],
+        ['investigation.consumer.graph-build', LOOKUP_ASSET_GRAPH_SCHEMA, LOOKUP_ASSET_GRAPH_VERSION, 'investigation.asset-graph.v3', 'investigation.graph.build', 'investigation.graph.bounds'],
         ['investigation.consumer.analyst-records-project', INVESTIGATION_CAPSULE_ANALYST_RECORDS_SCHEMA, INVESTIGATION_CAPSULE_ANALYST_RECORDS_VERSION, 'investigation.analyst-records.v1', 'investigation.capsule.build', 'investigation.derived.bounds'],
-        ['investigation.consumer.brief-build', LOOKUP_INVESTIGATION_BRIEF_SCHEMA, LOOKUP_INVESTIGATION_BRIEF_VERSION, 'investigation.brief.v2', 'investigation.brief.build', 'investigation.brief.bounds'],
+        ['investigation.consumer.brief-build', LOOKUP_INVESTIGATION_BRIEF_SCHEMA, LOOKUP_INVESTIGATION_BRIEF_VERSION, 'investigation.brief.v2-v3', 'investigation.brief.build', 'investigation.brief.bounds'],
       ] as const).map(([id, schema, version, shapeId, hookId, boundProfileId]) => ({
         id, plane: 'shared' as const, operation: 'build-current-projection', acceptedContracts: [],
         emittedContract: { schema, version }, shapeIds: [shapeId], boundProfileIds: [boundProfileId],

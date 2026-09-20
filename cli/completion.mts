@@ -11,7 +11,8 @@ import {
   type CompletionShell,
 } from './command-reference.mts';
 
-const MAX_CLI_COMPLETION_BYTES = 32 * 1024;
+// Emergency bound for one static script; input and execution bounds are independent.
+const MAX_CLI_COMPLETION_BYTES = 1024 * 1024;
 const HELP_META_ACTION = metaActionDefinition('help');
 const VERSION_META_ACTION = metaActionDefinition('version');
 const COMMAND_META_ALIASES = Object.freeze([...HELP_META_ACTION.aliases]);
@@ -117,10 +118,80 @@ function commandOptionPatterns(kinds: readonly string[]): string {
     .map((option) => `${command}:${option}`)).join('|');
 }
 
+function completionExclusions(): ReadonlyMap<string, readonly string[]> {
+  const exclusions = new Map<string, Set<string>>();
+  let changed = false;
+  const add = (command: CliCommand, selected: string, excluded: string) => {
+    const key = `${command}:${selected}`;
+    const values = exclusions.get(key) ?? new Set<string>();
+    if (!values.has(excluded)) { values.add(excluded); changed = true; }
+    exclusions.set(key, values);
+  };
+  for (const definition of CLI_COMMAND_REGISTRY) {
+    for (const constraint of definition.grammar.constraints) {
+      if (constraint.kind === 'mutually_exclusive') {
+        for (const selected of constraint.options) {
+          for (const excluded of constraint.options) {
+            if (selected !== excluded) add(definition.command, selected, excluded);
+          }
+        }
+      } else if (constraint.kind === 'excludes_all' || constraint.kind === 'value_excludes') {
+        const selected = constraint.kind === 'value_excludes'
+          ? `${constraint.option}=${constraint.value}` : constraint.option;
+        for (const excluded of constraint.excludedOptions) {
+          add(definition.command, selected, excluded);
+          add(definition.command, excluded, selected);
+        }
+      }
+    }
+  }
+  do {
+    changed = false;
+    for (const definition of CLI_COMMAND_REGISTRY) {
+      for (const constraint of definition.grammar.constraints) {
+        if (constraint.kind !== 'requires_all' && constraint.kind !== 'requires_any') continue;
+        const required = constraint.requiredOptions;
+        for (const [key, blocked] of exclusions) {
+          if (!key.startsWith(`${definition.command}:`)) continue;
+          const unavailable = required.map((option) => blocked.has(option));
+          if (constraint.kind === 'requires_all' ? unavailable.some(Boolean) : unavailable.every(Boolean)) {
+            add(definition.command, key.slice(definition.command.length + 1), constraint.option);
+          }
+        }
+        const requiredExclusions = required.map((option) => exclusions.get(`${definition.command}:${option}`) ?? new Set<string>());
+        for (const blocked of new Set(requiredExclusions.flatMap((values) => [...values]))) {
+          if (constraint.kind === 'requires_all' || requiredExclusions.every((values) => values.has(blocked))) {
+            add(definition.command, constraint.option, blocked);
+          }
+        }
+      }
+    }
+  } while (changed);
+  return new Map([...exclusions].map(([key, values]) => [key, [...values]]));
+}
+
+const COMPLETION_EXCLUSIONS = completionExclusions();
+
+function groupedCompletionExclusions(): readonly Readonly<{ keys: readonly string[]; excluded: string }>[] {
+  const groups = new Map<string, string[]>();
+  for (const [key, values] of COMPLETION_EXCLUSIONS) {
+    const excluded = [...values].sort().join(' ');
+    const keys = groups.get(excluded) ?? [];
+    keys.push(key);
+    groups.set(excluded, keys);
+  }
+  return [...groups].map(([excluded, keys]) => ({ keys, excluded }));
+}
+
+function repeatableOptions(command: CliCommand): readonly string[] {
+  return commandDefinition(command).grammar.options
+    .filter((option) => option.occurrence === 'repeatable').map((option) => option.option);
+}
+
 function bashCompletion(): string {
-  const cases = CLI_COMMANDS.map((command) => `    ${command}) options="${commandOptions(command)}"; value_options="${optionNamesByKind(command, ['enum', 'file', 'integer', 'policy_list', 'text']).join(' ')}"; file_limit=${maximumFilePositionals(command)} ;;`).join('\n');
-  const commandValueCases = COMMAND_VALUE_OPTION_GROUPS.map((group) => `    ${group.commands.map((command) => `${command}:${group.option}`).join('|')}) COMPREPLY=( $(compgen -W "${group.values.join(' ')}" -- "\${current}") ); return ;;`).join('\n');
-  const valueCases = Object.entries(VALUE_OPTIONS).map(([option, values]) => `    ${option}) COMPREPLY=( $(compgen -W "${values.join(' ')}" -- "\${current}") ); return ;;`).join('\n');
+  const cases = CLI_COMMANDS.map((command) => `    ${command}) options="${commandOptions(command)}"; value_options="${optionNamesByKind(command, ['enum', 'file', 'integer', 'policy_list', 'text']).join(' ')}"; repeat_options="${repeatableOptions(command).join(' ')}"; file_limit=${maximumFilePositionals(command)} ;;`).join('\n');
+  const commandValueCases = COMMAND_VALUE_OPTION_GROUPS.map((group) => `    ${group.commands.map((command) => `${command}:${group.option}`).join('|')}) _whoisleuth_complete_values "${group.values.join(' ')}"; return ;;`).join('\n');
+  const valueCases = Object.entries(VALUE_OPTIONS).map(([option, values]) => `    ${option}) _whoisleuth_complete_values "${values.join(' ')}"; return ;;`).join('\n');
   const integerCases = CLI_COMMAND_REGISTRY.flatMap((definition) => definition.grammar.options
     .filter((option) => option.valueKind === 'integer')
     .map((option) => {
@@ -145,8 +216,28 @@ _whoisleuth_direct_lookup_target() {
   case " ${CLI_COMMANDS.join(' ')} " in *" \${candidate} "*) return 1 ;; esac
   "\${COMP_WORDS[0]}" "\${candidate}" --plan --json >/dev/null 2>&1
 }
+_whoisleuth_complete_files() {
+  local candidate
+  COMPREPLY=()
+  # Readline handles quoting and escapes; preserve each path as one candidate.
+  while IFS= read -r candidate; do
+    COMPREPLY+=("\${candidate}")
+  done < <(compgen -o default -- "\${1}")
+}
+_whoisleuth_exclusions() {
+  case "\${1}:\${2}" in
+${groupedCompletionExclusions().map((group) => `    ${group.keys.join('|')}) printf '%s' '${group.excluded}' ;;`).join('\n')}
+  esac
+}
+_whoisleuth_complete_values() {
+  local candidate
+  COMPREPLY=()
+  for candidate in $(compgen -W "\${1}" -- "\${current}"); do
+    [[ " \${blocked_options} " == *" \${previous}=\${candidate} "* ]] || COMPREPLY+=("\${candidate}")
+  done
+}
 _whoisleuth_completion() {
-  local current previous command options value_options file_limit positional_count expect_value foreign_option word integer_values seen_options i
+  local current previous command options value_options repeat_options file_limit positional_count expect_value foreign_option word integer_values seen_options i ended blocked_options value_option candidate available
   current="\${COMP_WORDS[COMP_CWORD]}"
   previous="\${COMP_WORDS[COMP_CWORD-1]}"
   command="\${COMP_WORDS[1]}"
@@ -165,18 +256,28 @@ ${cases}
   expect_value=0
   foreign_option=0
   seen_options=""
+  repeat_options="\${repeat_options:-}"
+  blocked_options=""
+  ended=0
+  value_option=""
   for ((i=2; i<COMP_CWORD; i++)); do
     word="\${COMP_WORDS[i]}"
-    if (( expect_value )); then expect_value=0; continue; fi
+    if (( expect_value )); then
+      blocked_options="\${blocked_options} $(_whoisleuth_exclusions "\${command}" "\${value_option}=\${word}")"
+      expect_value=0; continue
+    fi
+    if (( ended )); then ((positional_count+=1)); continue; fi
+    if [[ "\${word}" == -- ]]; then ended=1; continue; fi
     if [[ "\${word}" == -* ]]; then
       if [[ " \${options} " != *" \${word} "* ]]; then foreign_option=1; continue; fi
       seen_options="\${seen_options} \${word}"
-      [[ " \${value_options} " == *" \${word} "* ]] && expect_value=1
+      blocked_options="\${blocked_options} $(_whoisleuth_exclusions "\${command}" "\${word}")"
+      if [[ " \${value_options} " == *" \${word} "* ]]; then expect_value=1; value_option="\${word}"; fi
     else
       ((positional_count+=1))
     fi
   done
-  if [[ " \${options} " == *" \${previous} "* ]]; then
+  if (( ! ended && expect_value )) && [[ " \${options} " == *" \${previous} "* ]]; then
     case "\${command}:\${previous}" in
 ${commandValueCases}
     esac
@@ -184,7 +285,7 @@ ${commandValueCases}
 ${valueCases}
     esac
     case "\${command}:\${previous}" in
-      ${commandOptionPatterns(['file'])}) COMPREPLY=( $(compgen -f -- "\${current}") ); return ;;
+      ${commandOptionPatterns(['file'])}) _whoisleuth_complete_files "\${current}"; return ;;
 ${integerCases}
       ${commandOptionPatterns(['text'])}) COMPREPLY=(); return ;;
     esac
@@ -192,21 +293,30 @@ ${integerCases}
   case "\${command}:\${positional_count}" in
 ${positionalValueCases}
   esac
-  if (( file_limit > positional_count && foreign_option == 0 && expect_value == 0 )) && [[ "\${current}" != -* ]]; then
-    COMPREPLY=( $(compgen -f -- "\${current}") )
+  if (( file_limit > positional_count && foreign_option == 0 && expect_value == 0 )) && { (( ended )) || [[ "\${current}" != -* ]]; }; then
+    _whoisleuth_complete_files "\${current}"
     return
   fi
-  COMPREPLY=( $(compgen -W "\${options}" -- "\${current}") )
+  COMPREPLY=()
+  (( ended || foreign_option || expect_value )) && return
+  available=""
+  for candidate in \${options}; do
+    [[ " \${blocked_options} " == *" \${candidate} "* ]] && continue
+    if [[ " \${seen_options} " == *" \${candidate} "* && " \${repeat_options} " != *" \${candidate} "* ]]; then continue; fi
+    if (( COMP_CWORD > 2 )) && [[ " ${COMMAND_META_ALIASES.join(' ')} " == *" \${candidate} "* ]]; then continue; fi
+    available="\${available} \${candidate}"
+  done
+  COMPREPLY=( $(compgen -W "\${available}" -- "\${current}") )
 }
-complete -F _whoisleuth_completion whoisleuth
+complete -o filenames -F _whoisleuth_completion whoisleuth
 `;
 }
 
 function zshCompletion(): string {
   const commandEntries = CLI_COMMANDS.map((command) => `'${command}:${COMMAND_DESCRIPTIONS[command] || command}'`).join(' ');
-  const cases = CLI_COMMANDS.map((command) => `    ${command}) options=(${commandOptions(command)}); value_options=(${optionNamesByKind(command, ['enum', 'file', 'integer', 'policy_list', 'text']).join(' ')}); file_limit=${maximumFilePositionals(command)} ;;`).join('\n');
-  const commandValueCases = COMMAND_VALUE_OPTION_GROUPS.map((group) => `    ${group.commands.map((command) => `${command}:${group.option}`).join('|')}) compadd -- ${group.values.join(' ')}; return ;;`).join('\n');
-  const valueCases = Object.entries(VALUE_OPTIONS).map(([option, values]) => `    ${option}) compadd -- ${values.join(' ')}; return ;;`).join('\n');
+  const cases = CLI_COMMANDS.map((command) => `    ${command}) options=(${commandOptions(command)}); value_options=(${optionNamesByKind(command, ['enum', 'file', 'integer', 'policy_list', 'text']).join(' ')}); repeat_options=(${repeatableOptions(command).join(' ')}); file_limit=${maximumFilePositionals(command)} ;;`).join('\n');
+  const commandValueCases = COMMAND_VALUE_OPTION_GROUPS.map((group) => `    ${group.commands.map((command) => `${command}:${group.option}`).join('|')}) _whoisleuth_values ${group.values.join(' ')}; return ;;`).join('\n');
+  const valueCases = Object.entries(VALUE_OPTIONS).map(([option, values]) => `    ${option}) _whoisleuth_values ${values.join(' ')}; return ;;`).join('\n');
   const integerCases = CLI_COMMAND_REGISTRY.flatMap((definition) => definition.grammar.options
     .filter((option) => option.valueKind === 'integer')
     .map((option) => {
@@ -229,10 +339,23 @@ _whoisleuth_direct_lookup_target() {
   [[ " ${CLI_COMMANDS.join(' ')} " == *" \${candidate} "* ]] && return 1
   "\${words[1]}" "\${candidate}" --plan --json >/dev/null 2>&1
 }
+_whoisleuth_exclusions() {
+  case "\${1}:\${2}" in
+${groupedCompletionExclusions().map((group) => `    ${group.keys.join('|')}) print -r -- '${group.excluded}' ;;`).join('\n')}
+  esac
+}
+_whoisleuth_values() {
+  local candidate
+  local -a values
+  for candidate in "$@"; do
+    [[ " \${blocked_options} " == *" \${previous}=\${candidate} "* ]] || values+=("\${candidate}")
+  done
+  (( \${#values} )) && compadd -- \${values[@]}
+}
 _whoisleuth() {
-  local command previous word
-  local -a options commands value_options seen_options
-  integer file_limit=0 positional_count=0 expect_value=0 foreign_option=0 i
+  local command previous word blocked_options="" value_option="" candidate
+  local -a options commands value_options seen_options repeat_options available
+  integer file_limit=0 positional_count=0 expect_value=0 foreign_option=0 ended=0 i
   commands=(${commandEntries} ${[
     ...HELP_META_ACTION.aliases.map((alias) => `'${alias}:Show help'`),
     ...VERSION_META_ACTION.aliases.map((alias) => `'${alias}:Show version'`),
@@ -252,16 +375,22 @@ ${cases}
   esac
   for ((i=3; i<CURRENT; i++)); do
     word="\${words[i]}"
-    if (( expect_value )); then expect_value=0; continue; fi
+    if (( expect_value )); then
+      blocked_options="\${blocked_options} $(_whoisleuth_exclusions "\${command}" "\${value_option}=\${word}")"
+      expect_value=0; continue
+    fi
+    if (( ended )); then ((positional_count+=1)); continue; fi
+    if [[ "\${word}" == -- ]]; then ended=1; continue; fi
     if [[ "\${word}" == -* ]]; then
       if [[ " \${options[*]} " != *" \${word} "* ]]; then foreign_option=1; continue; fi
       seen_options+=("\${word}")
-      [[ " \${value_options[*]} " == *" \${word} "* ]] && expect_value=1
+      blocked_options="\${blocked_options} $(_whoisleuth_exclusions "\${command}" "\${word}")"
+      if [[ " \${value_options[*]} " == *" \${word} "* ]]; then expect_value=1; value_option="\${word}"; fi
     else
       ((positional_count+=1))
     fi
   done
-  if [[ " \${options[*]} " == *" \${previous} "* ]]; then
+  if (( ! ended && expect_value )) && [[ " \${options[*]} " == *" \${previous} "* ]]; then
     case "\${command}:\${previous}" in
 ${commandValueCases}
     esac
@@ -277,11 +406,18 @@ ${integerCases}
   case "\${command}:\${positional_count}" in
 ${positionalValueCases}
   esac
-  if (( file_limit > positional_count && foreign_option == 0 && expect_value == 0 )) && [[ "\${words[CURRENT]}" != -* ]]; then
+  if (( file_limit > positional_count && foreign_option == 0 && expect_value == 0 )) && { (( ended )) || [[ "\${words[CURRENT]}" != -* ]]; }; then
     _files
     return
   fi
-  compadd -- \${options[@]}
+  (( ended || foreign_option || expect_value )) && return
+  for candidate in \${options[@]}; do
+    [[ " \${blocked_options} " == *" \${candidate} "* ]] && continue
+    if [[ " \${seen_options[*]} " == *" \${candidate} "* && " \${repeat_options[*]} " != *" \${candidate} "* ]]; then continue; fi
+    if (( CURRENT > 3 )) && [[ " ${COMMAND_META_ALIASES.join(' ')} " == *" \${candidate} "* ]]; then continue; fi
+    available+=("\${candidate}")
+  done
+  (( \${#available} )) && compadd -- \${available[@]}
 }
 if [[ "\${funcstack[1]}" == "_whoisleuth" ]]; then
   _whoisleuth "\$@"
@@ -297,7 +433,13 @@ function fishCompletion(): string {
   ));
   const optionGroups = new Map<string, { option: string; arity: 0 | 1; file: boolean; commands: CliCommand[] }>();
   for (const definition of CLI_COMMAND_REGISTRY) {
-    for (const option of definition.grammar.options) {
+    const options = [
+      ...definition.grammar.options,
+      ...definition.grammar.metaActions.map((id) => ({
+        option: longMetaAlias(metaActionDefinition(id)), arity: 0 as const, valueKind: 'flag',
+      })),
+    ];
+    for (const option of options) {
       const key = `${option.option}\u0000${option.arity}\u0000${option.valueKind === 'file'}`;
       const group = optionGroups.get(key) ?? {
         option: option.option,
@@ -312,14 +454,14 @@ function fishCompletion(): string {
   const optionLines = [...optionGroups.values()].map((group) => {
     const condition = `__whoisleuth_command_is ${group.commands.join(' ')}`
       + (group.commands.includes('lookup') ? '; or __whoisleuth_direct_lookup_target' : '');
-    return `complete -c whoisleuth -n '${condition}'${group.option === HELP_LONG_ALIAS ? ` -s ${HELP_SHORT_ALIAS.slice(1)}` : ''} -l ${group.option.slice(2)}${group.arity === 1 ? ' -r' : ''}${group.file ? ' -F' : ''}`;
+    return `complete -c whoisleuth -n 'begin; ${condition}; end; and __whoisleuth_option_available ${group.option}'${group.option === HELP_LONG_ALIAS ? ` -s ${HELP_SHORT_ALIAS.slice(1)}` : ''} -l ${group.option.slice(2)}${group.arity === 1 ? group.file ? ' -r -F' : ' -r -f' : ''}`;
   });
   const commandValueLines = COMMAND_VALUE_OPTION_GROUPS.flatMap((group) => {
     const lines = [
-      `complete -c whoisleuth -n '__whoisleuth_command_is ${group.commands.join(' ')}; and __fish_prev_arg_in ${group.option}' -a '${group.values.join(' ')}'`,
+      `complete -c whoisleuth -n '__whoisleuth_command_is ${group.commands.join(' ')}; and __fish_prev_arg_in ${group.option}' -l ${group.option.slice(2)} -r -f -a '(__whoisleuth_values ${group.option} ${group.values.join(' ')})'`,
     ];
     if (group.commands.includes('lookup')) {
-      lines.push(`complete -c whoisleuth -n '__whoisleuth_direct_lookup_target; and __fish_prev_arg_in ${group.option}' -a '${group.values.join(' ')}'`);
+      lines.push(`complete -c whoisleuth -n '__whoisleuth_direct_lookup_target; and __fish_prev_arg_in ${group.option}' -l ${group.option.slice(2)} -r -f -a '(__whoisleuth_values ${group.option} ${group.values.join(' ')})'`);
     }
     return lines;
   });
@@ -329,10 +471,10 @@ function fishCompletion(): string {
       ? `__fish_prev_arg_in ${option}`
       : `__whoisleuth_command_is ${commands.join(' ')}; and __fish_prev_arg_in ${option}`;
     const lines = commands.length > 0
-      ? [`complete -c whoisleuth -n '${namedCondition}' -a '${values.join(' ')}'`]
+      ? [`complete -c whoisleuth -n '${namedCondition}' -l ${option.slice(2)} -r -f -a '(__whoisleuth_values ${option} ${values.join(' ')})'`]
       : [];
     if (commands.includes('lookup')) {
-      lines.push(`complete -c whoisleuth -n '__whoisleuth_direct_lookup_target; and __fish_prev_arg_in ${option}' -a '${values.join(' ')}'`);
+      lines.push(`complete -c whoisleuth -n '__whoisleuth_direct_lookup_target; and __fish_prev_arg_in ${option}' -l ${option.slice(2)} -r -f -a '(__whoisleuth_values ${option} ${values.join(' ')})'`);
     }
     return lines;
   });
@@ -341,6 +483,7 @@ function fishCompletion(): string {
     .flatMap((option) => option.integerRanges.map((range) => {
       const qualifiers = [
         `__fish_prev_arg_in ${option.option}`,
+        `and __whoisleuth_value_expected ${option.option}`,
         `and __whoisleuth_command_is ${definition.command}`,
         ...(range.whenOptionPresent
           ? [`and __whoisleuth_seen ${definition.command} ${range.whenOptionPresent}`]
@@ -348,24 +491,14 @@ function fishCompletion(): string {
             ? [`and not __whoisleuth_seen ${definition.command} ${option.integerRanges.find((candidate) => candidate.whenOptionPresent)?.whenOptionPresent}`]
             : []),
       ].join('; ');
-      return `complete -c whoisleuth -n '${qualifiers}' -a '(__whoisleuth_integer_values ${range.minimum} ${range.maximum})'`;
+      return `complete -c whoisleuth -n '${qualifiers}' -l ${option.option.slice(2)} -r -f -a '(__whoisleuth_integer_values ${range.minimum} ${range.maximum})'`;
     })));
-  const positionalCases = [...new Set([
-    ...FILE_POSITIONAL_COMMANDS,
-    ...CLI_COMMANDS.filter((command) => positionalEnumValues(command).length > 0),
-    ...CLI_COMMAND_REGISTRY.filter((definition) => definition.grammar.options
-      .some((option) => option.integerRanges.some((range) => range.whenOptionPresent !== null)))
-      .map((definition) => definition.command),
-  ])].map((command) => {
+  const positionalCases = CLI_COMMANDS.map((command) => {
     const definition = commandDefinition(command);
     const commandValueOptions = definition.grammar.options
-      .filter((option) => option.scope === 'command' && option.arity === 1)
+      .filter((option) => option.arity === 1)
       .map((option) => option.option);
-    const positioning = FILE_POSITIONAL_COMMANDS.includes(command)
-      || positionalEnumValues(command).length > 0;
-    return `    case ${command}\n${positioning
-      ? `        set options $options ${definition.completion.options.join(' ')}\n`
-      : '        set strict 0\n'}        set value_options $value_options ${commandValueOptions.join(' ')}\n        set limit ${maximumFilePositionals(command)}`;
+    return `    case ${command}\n        set options ${commandOptions(command)}\n        set value_options ${commandValueOptions.join(' ')}\n        set repeat_options ${repeatableOptions(command).join(' ')}\n        set limit ${maximumFilePositionals(command)}`;
   }).join('\n');
   const positionalEnumLines = CLI_COMMANDS.flatMap((command) => {
     const values = positionalEnumValues(command);
@@ -411,56 +544,113 @@ function __whoisleuth_integer_values
         set value (math $value + 1)
     end
 end
+function __whoisleuth_exclusions
+    switch "$argv[1]:$argv[2]"
+${groupedCompletionExclusions().map((group) => `    case ${group.keys.map((key) => `'${key}'`).join(' ')}\n        printf '%s\\n' ${group.excluded}`).join('\n')}
+    end
+end
 function __whoisleuth_position_state
     set -l expected_command $argv[1]
     set -l words (commandline -opc)
     test (count $words) -ge 2; or return 1
     set -l command $words[2]
-    test "$command" = "$expected_command"; or return 1
-    set -l options ${COMMAND_META_ALIASES.join(' ')} --output --force --config --profile --palette
-    set -l value_options --output --config --profile --palette
+    if not contains -- $command ${CLI_COMMANDS.join(' ')}
+        __whoisleuth_direct_lookup_target; or return 1
+        set command lookup
+    end
+    if test -n "$expected_command"
+        test "$command" = "$expected_command"; or return 1
+    end
+    set -l options
+    set -l value_options
+    set -l repeat_options
     set -l limit 0
-    set -l strict 1
     switch $command
 ${positionalCases}
         case '*'
             return 1
     end
     set -l expect_value 0
+    set -l value_option @none
+    set -l ended 0
     set -l positional_count 0
     set -l seen
+    set -l blocked
     for word in $words[3..-1]
         if test $expect_value -eq 1
+            set -a blocked (__whoisleuth_exclusions $command "$value_option=$word")
             set expect_value 0
+            set value_option @none
+            continue
+        end
+        if test $ended -eq 1
+            set positional_count (math $positional_count + 1)
+            continue
+        end
+        if test "$word" = --
+            set ended 1
             continue
         end
         if string match -q -- '-*' $word
-            if test $strict -eq 1
-                contains -- $word $options; or return 1
-            end
+            contains -- $word $options; or return 1
             set -a seen $word
-            contains -- $word $value_options; and set expect_value 1
+            set -a blocked (__whoisleuth_exclusions $command $word)
+            if contains -- $word $value_options
+                set expect_value 1
+                set value_option $word
+            end
         else
             set positional_count (math $positional_count + 1)
         end
     end
-    test $expect_value -eq 0; or return 1
-    echo $positional_count $limit $seen
+    # Rows: position, file limit, pending option, separator, argument count,
+    # supplied options, excluded options/values, and repeatable options.
+    printf '%s\\n' $positional_count $limit $value_option $ended (math (count $words) - 2) "seen $seen" "blocked $blocked" "repeat $repeat_options"
 end
 function __whoisleuth_position_is
     set -l state (__whoisleuth_position_state $argv[2]); or return 1
+    test "$state[3]" = @none; or return 1
     test $state[1] -eq $argv[1]
 end
 function __whoisleuth_file_position
     set -l words (commandline -opc)
     test (count $words) -ge 2; or return 1
-    set -l state (__whoisleuth_position_state $words[2]); or return 1
+    set -l state (__whoisleuth_position_state); or return 1
     test $state[2] -gt $state[1]; or return 1
+    test "$state[3]" = @none; or return 1
+    test $state[4] -eq 1; and return 0
     not string match -qr -- ^- (commandline -ct)
 end
 function __whoisleuth_seen
     set -l s (__whoisleuth_position_state $argv[1]); or return 1
-    contains -- $argv[2] $s[3..-1]
+    contains -- $argv[2] (string split ' ' -- $s[6])
+end
+function __whoisleuth_option_available
+    set -l state (__whoisleuth_position_state); or return 1
+    test $state[4] -eq 0; or return 1
+    if test "$state[3]" != @none
+        test "$state[3]" = "$argv[1]"
+        return $status
+    end
+    contains -- $argv[1] (string split ' ' -- $state[7]); and return 1
+    if contains -- $argv[1] (string split ' ' -- $state[6])
+        contains -- $argv[1] (string split ' ' -- $state[8]); or return 1
+    end
+    if test $state[5] -gt 0
+        contains -- $argv[1] ${COMMAND_META_ALIASES.join(' ')}; and return 1
+    end
+    return 0
+end
+function __whoisleuth_value_expected
+    set -l state (__whoisleuth_position_state); or return 1
+    test $state[4] -eq 0; and test "$state[3]" = "$argv[1]"
+end
+function __whoisleuth_values
+    set -l state (__whoisleuth_position_state); or return 1
+    test $state[4] -eq 0; and test "$state[3]" = "$argv[1]"; or return 1
+    for value in $argv[2..-1]
+        contains -- "$argv[1]=$value" (string split ' ' -- $state[7]); or printf '%s\\n' $value
+    end
 end
 complete -c whoisleuth -f
 ${[HELP_META_ACTION, VERSION_META_ACTION].map((action) => (
@@ -509,9 +699,27 @@ function powershellCompletion(): string {
 Register-ArgumentCompleter -Native -CommandName whoisleuth -ScriptBlock {
   param($wordToComplete, $commandAst, $cursorPosition)
   $noMatch = { [System.Management.Automation.CompletionResult]::new(' ', 'no matches', 'ParameterValue', 'No completion available') }
+  $completeFiles = {
+    param($prefix)
+    $files = @([System.Management.Automation.CompletionCompleters]::CompleteFilename($prefix))
+    foreach ($file in $files) {
+      # Native arguments need literal paths, not provider wildcard escapes.
+      $path = $file.ToolTip
+      if ($file.ResultType -eq 'ProviderContainer') { $path += [IO.Path]::DirectorySeparatorChar }
+      $literal = "'" + [System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent($path) + "'"
+      [System.Management.Automation.CompletionResult]::new($literal, $file.ListItemText, $file.ResultType, $file.ToolTip)
+    }
+    if ($files.Count -eq 0) { & $noMatch }
+  }
   $commands = @(${CLI_COMMANDS.map((command) => `'${command}'`).join(', ')})
   $options = @{
 ${Object.entries(commandOptions).map(([command, options]) => `    '${command}' = @(${options.map((option) => `'${option}'`).join(', ')})`).join('\n')}
+  }
+  $repeatOptions = @{
+${CLI_COMMANDS.filter((command) => repeatableOptions(command).length > 0).map((command) => `    '${command}' = @(${repeatableOptions(command).map((option) => `'${option}'`).join(', ')})`).join('\n')}
+  }
+  $exclusions = @{
+${[...COMPLETION_EXCLUSIONS].map(([key, excluded]) => `    '${key}' = @(${excluded.map((option) => `'${option}'`).join(', ')})`).join('\n')}
   }
   $values = @{
 ${[
@@ -558,13 +766,35 @@ ${Object.entries(conditionalIntegerRanges).map(([key, range]) => `    '${key}' =
   if ($directLookup) { $command = 'lookup' }
   $commandKnown = $options.ContainsKey($command)
   $activeOptions = if ($commandKnown) { $options[$command] } else { @(${COMMAND_META_ALIASES.map((alias) => `'${alias}'`).join(', ')}) }
-  $previousOwned = $activeOptions -contains $previous
-  if ($previousOwned -and $fileOptions.ContainsKey($command) -and $fileOptions[$command] -contains $previous) {
-    $files = @(Get-ChildItem -Path "${'$'}wordToComplete*" -File -ErrorAction SilentlyContinue)
-    $files | ForEach-Object {
-      [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, 'ProviderItem', $_.FullName)
+  $positionCount = 0
+  $expectValue = $false
+  $foreignOption = $false
+  $ended = $false
+  $valueOption = ''
+  $seenOptions = @()
+  $blockedOptions = @()
+  for ($index = 2; $index -le $previousIndex; $index += 1) {
+    $word = $elements[$index]
+    if ($expectValue) {
+      $key = "${'$'}{command}:${'$'}valueOption=$word"
+      if ($exclusions.ContainsKey($key)) { $blockedOptions += $exclusions[$key] }
+      $expectValue = $false; continue
     }
-    if ($files.Count -eq 0) { & $noMatch }
+    if ($ended) { $positionCount += 1; continue }
+    if ($word -eq '--') { $ended = $true; continue }
+    if ($word.StartsWith('-')) {
+      if ($activeOptions -notcontains $word) { $foreignOption = $true; continue }
+      $seenOptions += $word
+      $key = "${'$'}{command}:$word"
+      if ($exclusions.ContainsKey($key)) { $blockedOptions += $exclusions[$key] }
+      if ($valueOptions.ContainsKey($command) -and $valueOptions[$command] -contains $word) { $expectValue = $true; $valueOption = $word }
+    } else {
+      $positionCount += 1
+    }
+  }
+  $previousOwned = -not $ended -and $expectValue -and $activeOptions -contains $previous
+  if ($previousOwned -and $fileOptions.ContainsKey($command) -and $fileOptions[$command] -contains $previous) {
+    & $completeFiles $wordToComplete
     return
   }
   if ($previousOwned -and $textOptions.ContainsKey($command) -and $textOptions[$command] -contains $previous) {
@@ -572,21 +802,6 @@ ${Object.entries(conditionalIntegerRanges).map(([key, range]) => `    '${key}' =
     $listItemText = if ([string]::IsNullOrEmpty($wordToComplete)) { 'value' } else { [string]$wordToComplete }
     [System.Management.Automation.CompletionResult]::new($completionText, $listItemText, 'ParameterValue', 'Enter a value')
     return
-  }
-  $positionCount = 0
-  $expectValue = $false
-  $foreignOption = $false
-  $seenOptions = @()
-  for ($index = 2; $index -le $previousIndex; $index += 1) {
-    $word = $elements[$index]
-    if ($expectValue) { $expectValue = $false; continue }
-    if ($word.StartsWith('-')) {
-      if ($activeOptions -notcontains $word) { $foreignOption = $true; continue }
-      $seenOptions += $word
-      if ($valueOptions.ContainsKey($command) -and $valueOptions[$command] -contains $word) { $expectValue = $true }
-    } else {
-      $positionCount += 1
-    }
   }
   $integerKey = "${'$'}{command}:${'$'}previous"
   if ($previousOwned -and $integerRanges.ContainsKey($integerKey)) {
@@ -611,6 +826,7 @@ ${Object.entries(conditionalIntegerRanges).map(([key, range]) => `    '${key}' =
   if ($previousOwned -and $values.ContainsKey($valueKey)) {
     $matched = $false
     foreach ($candidate in $values[$valueKey]) {
+      if ($blockedOptions -contains "$previous=$candidate") { continue }
       if ($candidate.StartsWith($wordToComplete, [System.StringComparison]::OrdinalIgnoreCase)) {
         [System.Management.Automation.CompletionResult]::new($candidate, $candidate, 'ParameterValue', $candidate)
         $matched = $true
@@ -631,14 +847,11 @@ ${Object.entries(conditionalIntegerRanges).map(([key, range]) => `    '${key}' =
     if (-not $matched) { & $noMatch }
     return
   }
-  if ($fileLimits.ContainsKey($command) -and $fileLimits[$command] -gt $positionCount -and -not $foreignOption -and -not $expectValue -and -not $wordToComplete.StartsWith('-')) {
-    $files = @(Get-ChildItem -Path "${'$'}wordToComplete*" -File -ErrorAction SilentlyContinue)
-    $files | ForEach-Object {
-      [System.Management.Automation.CompletionResult]::new($_.FullName, $_.Name, 'ProviderItem', $_.FullName)
-    }
-    if ($files.Count -eq 0) { & $noMatch }
+  if ($fileLimits.ContainsKey($command) -and $fileLimits[$command] -gt $positionCount -and -not $foreignOption -and -not $expectValue -and ($ended -or -not $wordToComplete.StartsWith('-'))) {
+    & $completeFiles $wordToComplete
     return
   }
+  if ($ended -or $foreignOption -or $expectValue) { & $noMatch; return }
   $candidates = if ($rootCompletion -and -not $directLookup) {
     @($commands) + @(${ROOT_META_ALIASES.map((alias) => `'${alias}'`).join(', ')})
   } elseif ($commandKnown) {
@@ -648,6 +861,9 @@ ${Object.entries(conditionalIntegerRanges).map(([key, range]) => `    '${key}' =
   }
   $matched = $false
   foreach ($candidate in $candidates) {
+    if ($blockedOptions -contains $candidate) { continue }
+    if ($seenOptions -contains $candidate -and (-not $repeatOptions.ContainsKey($command) -or $repeatOptions[$command] -notcontains $candidate)) { continue }
+    if ($previousIndex -ge 2 -and @(${COMMAND_META_ALIASES.map((alias) => `'${alias}'`).join(', ')}) -contains $candidate) { continue }
     if ($candidate.StartsWith($wordToComplete, [System.StringComparison]::OrdinalIgnoreCase)) {
       [System.Management.Automation.CompletionResult]::new($candidate, $candidate, 'ParameterValue', $candidate)
       $matched = $true

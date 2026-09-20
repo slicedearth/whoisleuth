@@ -35,6 +35,7 @@ import {
 import { MAX_DOMAIN_NAME_LENGTH } from '../packages/contracts/domain-name.mts';
 import {
   DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
+  DOMAIN_CONTROL_REVIEW_VERSION,
   buildDomainControlManifest,
   reviewDomainControlManifest,
   verifyDomainControlManifest,
@@ -79,6 +80,44 @@ function input(entry: Record<string, unknown> = { domain: 'example.test' }): Rec
 }
 
 describe('pure domain-control runtime ownership', () => {
+  test('accepts native MX metadata only at the resolver boundary', () => {
+    const native = { priority: 10, exchange: 'MX.Example.Test.', type: 'MX' };
+    assert.deepEqual(domainControlContract.normalizeResolverMxRecord(native), { priority: 10, exchange: 'mx.example.test' });
+    assert.deepEqual(domainControlContract.normalizeResolverMxRecord({ priority: 10, exchange: 'mx.example.test' }), { priority: 10, exchange: 'mx.example.test' });
+    assert.deepEqual(domainControlContract.normalizeResolverMxRecord({ priority: 0, exchange: '', type: 'MX' }), { priority: 0, exchange: '.' });
+    assert.equal(domainControlContract.normalizeMxRecord(native), null);
+    assert.throws(() => domainControlContract.canonicalMxRecord(native), /unknown field: type/);
+    assert.deepEqual(native, { priority: 10, exchange: 'MX.Example.Test.', type: 'MX' });
+  });
+
+  test('rejects malformed resolver MX metadata without invoking accessors', () => {
+    for (const extra of [
+      { type: 'TXT' }, { type: 'mx' }, { type: null }, { type: 'MX', unexpected: true },
+      { type: 'MX', host: 'other.example.test' }, { type: 'MX', preference: 20 },
+      { type: 'MX', priority: 65_536 }, { type: 'MX', exchange: 'invalid host' },
+    ]) {
+      assert.equal(domainControlContract.normalizeResolverMxRecord({ priority: 10, exchange: 'mx.example.test', ...extra }), null);
+    }
+    let reads = 0;
+    const accessor = Object.defineProperty({ priority: 10, exchange: 'mx.example.test' }, 'type', {
+      enumerable: true, get() { reads += 1; return 'MX'; },
+    });
+    assert.equal(domainControlContract.normalizeResolverMxRecord(accessor), null);
+    assert.equal(reads, 0);
+  });
+
+  test('normalises complete MX records without confusing root exchange with missing input', () => {
+    for (const value of ['0 .', { priority: 0, exchange: '' }, { preference: 0, host: '.' }]) {
+      assert.deepEqual(domainControlContract.normalizeMxRecord(value), { priority: 0, exchange: '.' });
+    }
+    for (const value of [null, '', '.', 'mail.example.test', { priority: true, exchange: '.' },
+      { priority: 0 }, { priority: 0, exchange: '.', host: 'mail.example.test' }]) {
+      assert.equal(domainControlContract.normalizeMxRecord(value), null);
+    }
+    assert.equal(domainControlContract.canonicalMxRecord('mail.example.test'), 'mail.example.test');
+    assert.throws(() => domainControlContract.canonicalMxRecord({ priority: 0, exchange: '.', host: 'mail.example.test' }), TypeError);
+  });
+
   test('keeps both historical frontend paths as exact runtime and type facades', () => {
     const expectedCoreExports = [
       'DOMAIN_CONTROL_MANIFEST_VERSION',
@@ -115,7 +154,7 @@ describe('pure domain-control runtime ownership', () => {
   test('derives raw wire shapes and executable bounds from dependency-neutral contracts', () => {
     assert.deepEqual(DOMAIN_CONTROL_MANIFEST_INPUT_KEYS, ['schema', 'version', 'expiresAt', 'entries']);
     assert.deepEqual(DOMAIN_CONTROL_MANIFEST_ROOT_KEYS, ['schema', 'version', 'generatedAt', 'expiresAt', 'entries', 'limitations', 'integrity']);
-    assert.deepEqual(DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS, ['domain', 'nameservers', 'ds', 'mx', 'caa', 'tlsIssuer', 'tlsSpkiSha256', 'registrarLock', 'renewalReviewAt', 'note']);
+    assert.deepEqual(DOMAIN_CONTROL_MANIFEST_ENTRY_KEYS, ['domain', 'nameservers', 'ds', 'mx', 'caa', 'tlsIssuer', 'tlsSpkiSha256', 'registrarLock', 'renewalReviewAt', 'note', 'recordModes']);
     assert.deepEqual(DOMAIN_CONTROL_MANIFEST_INTEGRITY_KEYS, ['algorithm', 'canonicalization', 'digestSha256']);
     assert.deepEqual(DOMAIN_CONTROL_RECORD_LIST_FIELDS, ['nameservers', 'ds', 'mx', 'caa']);
     assert.deepEqual(DOMAIN_CONTROL_MX_RECORD_KEYS, ['exchange', 'host', 'value', 'priority', 'preference']);
@@ -261,7 +300,7 @@ describe('pure domain-control runtime ownership', () => {
     assert.deepEqual(verifyDomainControlManifest(structuredClone(manifest)), manifest);
     const review = reviewDomainControlManifest({
       schema: DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA,
-      version: 1,
+      version: DOMAIN_CONTROL_REVIEW_VERSION,
       manifest,
       observations: [{
         domain: 'example.test',
@@ -388,9 +427,11 @@ describe('pure domain-control runtime ownership', () => {
     }
   });
 
-  test('serialises the exact current document to its portable bytes', async () => {
-    const raw = await readFile(new URL('./fixtures/domain-control-manifest-v2.json', import.meta.url), 'utf8');
-    assert.equal(domainControlContract.serializeDomainControlManifest(JSON.parse(raw)), raw);
+  test('serialises supported public and current documents to their portable bytes', async () => {
+    for (const version of [2, 3]) {
+      const raw = await readFile(new URL(`./fixtures/domain-control-manifest-v${version}.json`, import.meta.url), 'utf8');
+      assert.equal(domainControlContract.serializeDomainControlManifest(JSON.parse(raw)), raw);
+    }
   });
 
   test('returns only the detached validated snapshot from Node and browser verifiers', async () => {
