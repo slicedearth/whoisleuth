@@ -572,10 +572,13 @@ describe('continuous integration workflow', () => {
       path.join(root, 'node_modules/@playwright/test/cli.js'), 'test',
       '--config=e2e/cross-browser.config.ts', '--grep=@cross-browser-critical', '--list', '--reporter=json',
     ], {
-      cwd: root, encoding: 'utf8', timeout: 30_000, maxBuffer: 4 * 1024 * 1024,
+      // This loads the complete critical-specification import graph. Bound a
+      // stalled inventory process without making cold discovery speed a gate.
+      cwd: root, encoding: 'utf8', timeout: 3 * 60_000, maxBuffer: 4 * 1024 * 1024,
       env: { ...environment, WHOISLEUTH_PLAYWRIGHT_SHARD: '' },
     });
-    assert.equal(child.status, 0, child.stderr || child.error?.message);
+    assert.ifError(child.error);
+    assert.equal(child.status, 0, child.stderr);
     type Suite = { suites?: Suite[]; specs?: { title: string; tests: { projectName: string; expectedStatus: string }[] }[] };
     const report = JSON.parse(child.stdout) as { suites: Suite[]; errors: unknown[] };
     assert.deepEqual(report.errors, []);
