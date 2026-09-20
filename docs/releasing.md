@@ -71,7 +71,8 @@ pins direct runtime dependencies to the exact versions exercised by the
 reviewed lockfile, adds public-access and provenance metadata, installs and
 exercises every documented command help boundary, writes a SHA-256 digest, and
 refuses a tag that does not match the root application version. Existing output
-files are not overwritten.
+files are not overwritten. The emitted release report must also satisfy the
+post-publication verifier's candidate contract before it can be handed off.
 
 The candidate also records the fresh installation's transitive dependency
 identities in `installed-dependencies.json`. The release workflow audits that
@@ -106,8 +107,10 @@ metadata, retains the raw candidate and registry gzip digests separately, and
 requires the decompressed tar payload to be byte-identical to the explicitly
 selected reviewed candidate. npm staging may recompress the gzip envelope
 without changing that tar payload. The check also binds package measurements,
-exact dependency pins, and source metadata. Registry signature and SLSA
-provenance records are reported as observed metadata; this check does not
+exact dependency pins from the selected candidate, and source metadata. The
+dependency comparison uses that candidate, not the current checkout's package
+inventory; later inventory changes do not alter the expected pins. Registry signature
+and SLSA provenance records are reported as observed metadata; this check does not
 independently verify their cryptography. It never installs or executes the
 published package and does not inherit npm credentials. The manual workflow
 requires both the version and the release-workflow run ID so it downloads the

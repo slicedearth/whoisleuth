@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 
-import { normalizeSemanticVersion } from './release-version-check.mts';
+import { normalizeBoundedSemanticVersion } from '../lib/semantic-version.mts';
 import {
   WHOISLEUTH_PROJECT_URL,
   WHOISLEUTH_SOURCE_ISSUES_URL,
@@ -19,7 +19,7 @@ import {
   MAX_CLI_PACKAGE_PACKED_BYTES,
   MAX_CLI_PACKAGE_UNPACKED_BYTES,
   type CliPackageReport,
-} from './cli-package.mts';
+} from './cli-package-contract.mts';
 import {
   boundedPositiveInteger as boundedInteger,
   sha256Bytes as sha256,
@@ -68,14 +68,11 @@ const MAX_CANDIDATE_REPORT_BYTES = 64 * 1024;
 const MAX_ERROR_LENGTH = 512;
 const MAX_CLI_PACKAGE_TAR_BYTES = MAX_CLI_PACKAGE_UNPACKED_BYTES + (MAX_CLI_PACKAGE_PROCESSING_ITEMS * 2 * 512) + 1_024;
 export const PUBLISHED_CLI_REQUEST_TIMEOUT_MS = 120_000;
-const RUNTIME_DEPENDENCIES = Object.freeze([
-  '@peculiar/x509',
-  'maxmind',
-  'parse5',
-  'reflect-metadata',
-  'tldts',
-  'undici',
-]);
+const MAX_RUNTIME_DEPENDENCIES = 64;
+
+function normalizeSemanticVersion(value: unknown): string {
+  return normalizeBoundedSemanticVersion(value, 'Release');
+}
 
 function record(value: unknown, label: string): JsonRecord {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${label} must be a JSON object.`);
@@ -95,6 +92,18 @@ function boundedString(value: unknown, label: string, maximum = 512): string {
     throw new TypeError(`${label} must be a non-empty bounded string.`);
   }
   return value;
+}
+
+function runtimeDependencies(value: unknown, label: string): Readonly<Record<string, string>> {
+  const dependencies = record(value, label);
+  const names = Object.keys(dependencies);
+  boundedInteger(names.length, `${label} count`, MAX_RUNTIME_DEPENDENCIES);
+  return Object.freeze(Object.fromEntries(names.map((name) => {
+    if (name.length > 214 || !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/u.test(name)) {
+      throw new TypeError(`${label} contains an invalid package name.`);
+    }
+    return [name, normalizeSemanticVersion(dependencies[name])];
+  })));
 }
 
 function boundedError(value: unknown): string {
@@ -255,9 +264,7 @@ export function validateCandidateReport(value: unknown, expectedVersionValue: un
   if (typeof report.archiveSha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(report.archiveSha256)) {
     throw new TypeError('Reviewed candidate archive SHA-256 is invalid.');
   }
-  const dependencies = record(report.runtimeDependencies, 'Reviewed runtime dependencies');
-  exactKeys(dependencies, RUNTIME_DEPENDENCIES, 'Reviewed runtime dependencies');
-  for (const name of RUNTIME_DEPENDENCIES) normalizeSemanticVersion(dependencies[name]);
+  runtimeDependencies(report.runtimeDependencies, 'Reviewed runtime dependencies');
   if (!Array.isArray(report.installedChecks)
     || report.installedChecks.length === 0
     || report.installedChecks.length > MAX_CLI_PACKAGE_PROCESSING_ITEMS
@@ -289,9 +296,7 @@ export function validatePublishedManifest(value: unknown, expectedVersionValue: 
   if (repository.type !== 'git' || repository.url !== SOURCE_REPOSITORY || manifest.homepage !== PACKAGE_HOMEPAGE || bugs.url !== PACKAGE_ISSUES) {
     throw new TypeError('Published package source and support links do not match the reviewed contract.');
   }
-  const dependencies = record(manifest.dependencies, 'Published runtime dependencies');
-  exactKeys(dependencies, RUNTIME_DEPENDENCIES, 'Published runtime dependencies');
-  const runtimeDependencies = Object.freeze(Object.fromEntries(RUNTIME_DEPENDENCIES.map((name) => [name, normalizeSemanticVersion(dependencies[name])])));
+  const dependencies = runtimeDependencies(manifest.dependencies, 'Published runtime dependencies');
   const dist = record(manifest.dist, 'Published distribution metadata');
   const integrity = boundedString(dist.integrity, 'Published integrity', 256);
   const shasum = boundedString(dist.shasum, 'Published shasum', 64);
@@ -311,7 +316,7 @@ export function validatePublishedManifest(value: unknown, expectedVersionValue: 
     boundedString(signature.keyid, `Published registry signature ${index + 1} key`, 256);
     boundedString(signature.sig, `Published registry signature ${index + 1} value`, 2_048);
   }
-  return Object.freeze({ integrity, shasum, tarball, fileCount, unpackedBytes, runtimeDependencies, registrySignatureCount: dist.signatures.length });
+  return Object.freeze({ integrity, shasum, tarball, fileCount, unpackedBytes, runtimeDependencies: dependencies, registrySignatureCount: dist.signatures.length });
 }
 
 export async function checkPublishedCli(
@@ -345,6 +350,11 @@ export async function checkPublishedCli(
     timeoutMs,
   );
   const published = validatePublishedManifest(parseJson(metadataBytes, 'Published package metadata', MAX_METADATA_BYTES), expectedVersion);
+  const dependencyNames = Object.keys(candidate.runtimeDependencies);
+  if (Object.keys(published.runtimeDependencies).length !== dependencyNames.length
+    || dependencyNames.some((name) => published.runtimeDependencies[name] !== candidate.runtimeDependencies[name])) {
+    throw new TypeError('Published runtime dependencies do not match the reviewed candidate.');
+  }
   const publishedArchive = await fetchResponseBytes(
     fetcher,
     published.tarball,
@@ -361,9 +371,6 @@ export async function checkPublishedCli(
     throw new TypeError('Published tar payload is not byte-identical to the reviewed candidate.');
   }
   if (published.fileCount !== candidate.packedEntryCount || published.unpackedBytes !== candidate.unpackedBytes) throw new TypeError('Published archive measurements do not match the reviewed candidate.');
-  if (RUNTIME_DEPENDENCIES.some((name) => published.runtimeDependencies[name] !== candidate.runtimeDependencies[name])) {
-    throw new TypeError('Published runtime dependencies do not match the reviewed candidate.');
-  }
 
   return Object.freeze({
     schema: PUBLISHED_CLI_CHECK_SCHEMA,

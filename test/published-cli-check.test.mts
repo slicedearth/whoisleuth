@@ -18,7 +18,7 @@ import {
 } from '../tools/published-cli-check.mts';
 import {
   MAX_CLI_PACKAGE_PROCESSING_ITEMS,
-} from '../tools/cli-package.mts';
+} from '../tools/cli-package-contract.mts';
 
 const VERSION = '1.33.0';
 const PACKAGE_NAME = '@slicedearth/whoisleuth-cli';
@@ -107,6 +107,39 @@ function fixtureFetcher(manifest = publishedManifest(), archive = ARCHIVE): Fetc
 }
 
 describe('published CLI verification', () => {
+  test('binds dependencies to the selected candidate, preserving older reports and refusing added, missing or changed pins', async () => {
+    const dependencies = { ...candidateReport().runtimeDependencies, fflate: '0.8.3' };
+    const candidate = candidateReport({ runtimeDependencies: dependencies });
+    await withCandidate(({ report, archive }) => checkPublishedCli(VERSION, report, archive, {
+      fetcher: fixtureFetcher(publishedManifest({ dependencies })),
+    }), candidate);
+    const { fflate: _omitted, ...missing } = dependencies;
+    for (const changed of [missing, { ...dependencies, fflate: '0.8.2' }, { ...dependencies, 'unexpected-package': '1.0.0' }]) {
+      let archiveRequests = 0;
+      await assert.rejects(() => withCandidate(({ report, archive }) => checkPublishedCli(VERSION, report, archive, {
+        fetcher: async (input, init) => {
+          if (String(input).includes('/-/whoisleuth-cli-')) archiveRequests++;
+          return fixtureFetcher(publishedManifest({ dependencies: changed }))(input, init);
+        },
+      }), candidate), /runtime dependencies do not match the reviewed candidate/u);
+      assert.equal(archiveRequests, 0);
+    }
+  });
+
+  test('bounds dependency names and counts and requires exact versions on both sides', () => {
+    for (const dependencies of [
+      null, [], {},
+      { '../outside': '1.0.0' },
+      { ['x'.repeat(215)]: '1.0.0' },
+      { 'selected-package': '^1.0.0' },
+      { 'selected-package': 'file:../outside' },
+      Object.fromEntries(Array.from({ length: 65 }, (_, index) => [`selected-${index}`, '1.0.0'])),
+    ]) {
+      assert.throws(() => validateCandidateReport(candidateReport({ runtimeDependencies: dependencies }), VERSION), TypeError);
+      assert.throws(() => validatePublishedManifest(publishedManifest({ dependencies }), VERSION), TypeError);
+    }
+  });
+
   test('binds an npm-normalized manifest and recompressed registry archive to the exact reviewed tar payload without execution', async () => {
     assert.notDeepEqual(RECOMPRESSED_ARCHIVE, ARCHIVE);
     const manifest = publishedManifest({ author: { name: 'slicedearth' } }, RECOMPRESSED_ARCHIVE);
