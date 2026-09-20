@@ -26,6 +26,23 @@ import { buildThirdPartyNotices } from './third-party-notices.mts';
 import { checkInstalledSigningTrust } from './cli-signing-package-check.mts';
 import { checkInstalledCaseFiles } from './cli-case-package-check.mts';
 import { installedDependencyEvidence } from './installed-dependency-evidence.mts';
+import { validateCandidateReport } from './published-cli-check.mts';
+import {
+  CLI_PACKAGE_REPORT_SCHEMA,
+  CLI_PACKAGE_REPORT_VERSION,
+  MAX_CLI_PACKAGE_PROCESSING_ITEMS,
+  MAX_CLI_PACKAGE_PACKED_BYTES,
+  MAX_CLI_PACKAGE_UNPACKED_BYTES,
+  type CliPackageReport,
+} from './cli-package-contract.mts';
+export {
+  CLI_PACKAGE_REPORT_SCHEMA,
+  CLI_PACKAGE_REPORT_VERSION,
+  MAX_CLI_PACKAGE_PROCESSING_ITEMS,
+  MAX_CLI_PACKAGE_PACKED_BYTES,
+  MAX_CLI_PACKAGE_UNPACKED_BYTES,
+  type CliPackageReport,
+} from './cli-package-contract.mts';
 import {
   boundedPositiveInteger as positiveInteger,
   requireJsonRecord as record,
@@ -52,22 +69,6 @@ type DependencyEntry = Readonly<{
 type DependencyModule = Readonly<{
   source?: unknown;
   dependencies?: unknown;
-}>;
-
-export type CliPackageReport = Readonly<{
-  schema: typeof CLI_PACKAGE_REPORT_SCHEMA;
-  version: typeof CLI_PACKAGE_REPORT_VERSION;
-  packageName: string;
-  packageVersion: string;
-  sourceModuleCount: number;
-  packedEntryCount: number;
-  packedBytes: number;
-  unpackedBytes: number;
-  runtimeDependencies: Readonly<Record<string, string>>;
-  installedChecks: readonly string[];
-  publicationEnabled: boolean;
-  archiveFilename: string | null;
-  archiveSha256: string | null;
 }>;
 
 export type CliPackageInventory = Readonly<{
@@ -104,20 +105,11 @@ type CliPackageCompilerClosure = Readonly<{
 
 const execFile = promisify(execFileCallback);
 
-export const CLI_PACKAGE_REPORT_SCHEMA = 'whoisleuth.cli-package-check';
-export const CLI_PACKAGE_REPORT_VERSION = 3;
 export const MAX_CLI_PACKAGE_GRAPH_BYTES = 8 * 1024 * 1024;
-// Emergency work bound, not a release inventory or a refactoring budget.
-// Each phase may visit at most 4,096 items; independent byte limits and process
-// deadlines also apply. For tar validation this bounds header/padding overhead
-// to 4 MiB (two 512-byte records per entry), in addition to unpacked file bytes.
-export const MAX_CLI_PACKAGE_PROCESSING_ITEMS = 4_096;
 export const MAX_CLI_PACKAGE_SOURCE_BYTES = 8 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES = 32 * 1024 * 1024;
 export const MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES = 8 * 1024 * 1024;
-export const MAX_CLI_PACKAGE_PACKED_BYTES = 2 * 1024 * 1024;
-export const MAX_CLI_PACKAGE_UNPACKED_BYTES = 6 * 1024 * 1024;
 export const CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS = 120_000;
 export const CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS = 15_000;
 
@@ -1466,6 +1458,7 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       archiveSha256,
     });
     if (publicationEnabled) {
+      validateCandidateReport(report, packageVersion);
       const artifactDirectory = path.resolve(options.artifactDirectory as string);
       await writeFile(path.join(artifactDirectory, 'cli-package-report.json'), `${JSON.stringify(report, null, 2)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o644 });
       await writeFile(path.join(artifactDirectory, 'installed-dependencies.json'), `${JSON.stringify(dependencies, null, 2)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o644 });

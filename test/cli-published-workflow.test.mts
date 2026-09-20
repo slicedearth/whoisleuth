@@ -6,12 +6,18 @@ import { fileURLToPath } from 'node:url';
 
 const WORKFLOW = readFileSync(new URL('../.github/workflows/cli-published-check.yml', import.meta.url), 'utf8');
 const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const BLOCK_COMPILER_LOADER = `data:text/javascript,${encodeURIComponent(`
-  import { registerHooks } from 'node:module';
+const BLOCK_PACKAGE_LOADER = `data:text/javascript,${encodeURIComponent(`
+  import { isBuiltin, registerHooks } from 'node:module';
+  import path from 'node:path';
   registerHooks({
     resolve(specifier, context, nextResolve) {
-      if (specifier === 'typescript') throw new Error('The compiler was loaded by the post-publication verifier.');
-      return nextResolve(specifier, context);
+      if (!isBuiltin(specifier) && !specifier.startsWith('.') && !path.isAbsolute(specifier)
+        && !specifier.startsWith('file:') && !specifier.startsWith('data:')) {
+        throw new Error('Package dependencies are unavailable: ' + specifier);
+      }
+      const resolved = nextResolve(specifier, context);
+      if (resolved.url.includes('/node_modules/')) throw new Error('Package dependencies are unavailable: ' + specifier);
+      return resolved;
     },
   });
 `)}`;
@@ -37,14 +43,19 @@ describe('published CLI verification workflow', () => {
     assert.doesNotMatch(WORKFLOW, /(?:npm exec|npx|whoisleuth --version|whoisleuth doctor)/u);
   });
 
-  test('loads its verifier without resolving the compiler dependency', () => {
+  test('executes verification fixtures with every external package unavailable', () => {
     const result = spawnSync(process.execPath, [
       '--import',
-      BLOCK_COMPILER_LOADER,
+      BLOCK_PACKAGE_LOADER,
       '--input-type=module',
       '--eval',
-      'await import("./tools/published-cli-check.mts");',
-    ], { cwd: REPOSITORY_ROOT, encoding: 'utf8' });
+      `
+        import assert from 'node:assert/strict';
+        await assert.rejects(() => import('typescript'), /Package dependencies are unavailable: typescript/u);
+        await assert.rejects(() => import('tldts'), /Package dependencies are unavailable: tldts/u);
+        await import('./test/published-cli-check.test.mts');
+      `,
+    ], { cwd: REPOSITORY_ROOT, encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024 });
     assert.equal(result.status, 0, result.stderr || result.stdout);
   });
 });

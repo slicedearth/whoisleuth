@@ -22,6 +22,7 @@ import {
   selectMaterializedCliPackageSources,
   validatePackedCliFiles,
 } from '../tools/cli-package.mts';
+import { validateCandidateReport } from '../tools/published-cli-check.mts';
 
 const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -319,6 +320,22 @@ describe('scoped CLI package contract', () => {
       access: 'public',
       provenance: true,
     });
+  });
+
+  test('accepts the actual current package writer pins in the publication contract without a second inventory', async () => {
+    const readJson = async (filename: string) => JSON.parse(await readFile(new URL(filename, import.meta.url), 'utf8'));
+    const [root, template, lock] = await Promise.all([
+      readJson('../package.json'), readJson('../packages/cli/package.template.json'), readJson('../package-lock.json'),
+    ]);
+    const manifest = buildCliPackageManifest(root, template, lock, { publicationEnabled: true });
+    const candidate = {
+      schema: 'whoisleuth.cli-package-check', version: 3,
+      packageName: manifest.name, packageVersion: root.version,
+      sourceModuleCount: 1, packedEntryCount: 1, packedBytes: 1, unpackedBytes: 1,
+      runtimeDependencies: manifest.dependencies, installedChecks: ['help'], publicationEnabled: true,
+      archiveFilename: `whoisleuth-cli-${root.version}.tgz`, archiveSha256: '0'.repeat(64),
+    };
+    assert.deepEqual(validateCandidateReport(candidate, root.version).runtimeDependencies, manifest.dependencies);
   });
 
   test('refuses an unscoped or publication-enabled template', () => {
