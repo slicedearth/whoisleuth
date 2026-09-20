@@ -1,8 +1,11 @@
 import { requiredValue } from './value-assertions.mts';
 import assert from 'node:assert/strict';
+import type { spawn } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { access, mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { PassThrough } from 'node:stream';
 import { describe, test } from 'node:test';
 
 import {
@@ -101,13 +104,16 @@ describe('local CodeQL input handling', () => {
     assert.equal(codeqlRamMegabytes(16 * GiB, 0, 'linux'), 14950);
     assert.equal(codeqlRamMegabytes(16 * GiB, 4 * GiB, 'linux'), 3072);
     assert.equal(codeqlRamMegabytes(4 * GiB, 16 * GiB, 'linux'), 3072);
+    assert.equal(codeqlRamMegabytes(4 * GiB, 2 ** 64, 'linux'), 3072);
     assert.equal(codeqlRamMegabytes(4 * GiB, 0, 'win32'), 2560);
     assert.throws(() => codeqlRamMegabytes(2 * GiB, 0, 'linux'), /operating-system reserve/u);
     assert.throws(() => codeqlRamMegabytes(16 * GiB, GiB, 'linux'), /environment permits 0 MiB/u);
     for (const invalid of [0, -1, NaN, Infinity]) {
       assert.throws(() => codeqlRamMegabytes(invalid, 0), /environment memory limit/u);
     }
-    assert.throws(() => codeqlRamMegabytes(4 * GiB, -1), /environment memory limit/u);
+    for (const invalid of [-1, 0.5, NaN, Infinity]) {
+      assert.throws(() => codeqlRamMegabytes(4 * GiB, invalid), /environment memory limit/u);
+    }
   });
 
   test('preserves both ends of bounded diagnostics', () => {
@@ -309,31 +315,30 @@ describe('bounded CodeQL process execution', () => {
     );
   });
 
-  test('waits for the terminated child to close before rejecting its deadline', async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-codeql-close-'));
-    const marker = path.join(directory, 'closed.txt');
-    try {
-      const startedAt = performance.now();
-      await assert.rejects(
-        runProcessBounded(process.execPath, ['-e', [
-          "const { writeFileSync } = require('node:fs');",
-          'const marker = process.argv[1];',
-          "process.on('SIGTERM', () => setTimeout(() => { writeFileSync(marker, 'closed'); process.exit(0); }, 80));",
-          'setInterval(() => {}, 1000);',
-        ].join(' ') , marker], {
-          cwd: process.cwd(),
-          // Leave enough startup margin for this child to install its signal
-          // handler even when the full test suite is running in parallel.
-          timeoutMs: 500,
-          maxOutputBytes: 1024,
-        }),
-        /process deadline/iu,
-      );
-      assert.ok(performance.now() - startedAt >= 550);
-      assert.equal(await readFile(marker, 'utf8'), 'closed');
-    } finally {
-      await rm(directory, { recursive: true, force: true });
-    }
+  test('waits for the terminated child to close before rejecting its deadline', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const child = Object.assign(new EventEmitter(), {
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      kill: context.mock.fn(() => true),
+    });
+    let settled = false;
+    const execution = runProcessBounded('example-analyser', [], {
+      cwd: process.cwd(), timeoutMs: 100, maxOutputBytes: 1024,
+    }, (() => child) as unknown as typeof spawn);
+    void execution.then(() => { settled = true; }, () => { settled = true; });
+    const rejection = assert.rejects(execution, /process deadline/iu);
+    context.mock.timers.tick(100);
+    assert.deepEqual(child.kill.mock.calls.map(call => call.arguments), [['SIGTERM']]);
+    await Promise.resolve();
+    assert.equal(settled, false, 'requesting termination does not mean the child has closed');
+    child.emit('close', 0);
+    await rejection;
+    assert.equal(settled, true);
+    context.mock.timers.tick(2000);
+    assert.equal(child.kill.mock.callCount(), 1, 'closing the child cancels forced termination');
+    child.stdout.destroy();
+    child.stderr.destroy();
   });
 });
 

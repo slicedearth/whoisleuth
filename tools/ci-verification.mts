@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FRONTEND_BROWSER_ARTIFACT_PATHS } from './frontend-build-integrity.mts';
 import { npmExecutableName } from './maintainer-tool-helpers.mts';
+import { codeqlRamMegabytes } from './local-codeql.mts';
 import {
   resolveUnitTestExecutables,
   unitTestExecutableEnvironment,
@@ -446,6 +447,7 @@ export function assertHostedCiParity(
 export function formatLocalCiPlan(): string {
   return [
     'Playwright browser-cache writability',
+    'security analyser memory allocation',
     'changed-line secret scan',
     ...CI_PREFLIGHT_SCRIPTS,
     'locked install (install-time audit disabled; scheduled and release audits are separate)',
@@ -504,6 +506,7 @@ export function main(args = process.argv.slice(2)): number {
     }
     cleanup = true;
     assertPlaywrightBrowserCacheWritable();
+    process.stdout.write(`Security analyser memory budget: ${codeqlRamMegabytes()} MiB.\n`);
     const unitEnvironment = unitTestExecutableEnvironment(resolveUnitTestExecutables());
     const cliRuntime = cliRuntimeExecutable();
     const range = localCiRevisionRange();

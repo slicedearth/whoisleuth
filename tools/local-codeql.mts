@@ -433,9 +433,10 @@ async function runProcessBounded(
   command: string,
   args: readonly string[],
   options: ProcessOptions,
+  spawnProcess: typeof spawn = spawn,
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, [...args], {
+    const child = spawnProcess(command, [...args], {
       cwd: options.cwd,
       env: process.env,
       shell: false,
@@ -530,9 +531,12 @@ function codeqlRamMegabytes(
   platform: NodeJS.Platform = process.platform,
 ): number {
   if (!Number.isSafeInteger(systemMemoryBytes) || systemMemoryBytes <= 0
-    || !Number.isSafeInteger(constrainedMemoryBytes) || constrainedMemoryBytes < 0) {
+    || !Number.isInteger(constrainedMemoryBytes) || constrainedMemoryBytes < 0) {
     throw new TypeError('CodeQL requires a valid environment memory limit.');
   }
+  // Some runtimes report the cgroup's unsigned "unlimited" sentinel rather
+  // than zero. It may exceed safe integer precision, but physical RAM still
+  // bounds the calculation before any memory arithmetic is performed.
   const memoryBytes = constrainedMemoryBytes > 0
     ? Math.min(systemMemoryBytes, constrainedMemoryBytes)
     : systemMemoryBytes;
