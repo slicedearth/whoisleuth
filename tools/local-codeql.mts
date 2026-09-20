@@ -101,8 +101,7 @@ const MAX_DISPLAYED_FINDINGS = 100;
 const MAX_FINDING_TEXT_LENGTH = 500;
 const MAX_FINDING_PATH_LENGTH = 1000;
 const MAX_CODEQL_COMMAND_LENGTH = 4096;
-const MIN_CODEQL_RAM_MB = 1024;
-const MAX_CODEQL_RAM_MB = 4096;
+const MIN_CODEQL_RAM_MB = 2048;
 const CODEQL_THREADS = 2;
 const CODEQL_TEMP_DIRECTORY_PREFIX = 'whoisleuth-codeql-';
 const CODEQL_STALE_DIRECTORY_AGE_MS = 24 * 60 * 60 * 1000;
@@ -525,9 +524,29 @@ function parseCodeqlVersion(stdout: string): string {
   return boundedText(stdout.split(/\r?\n/u)[0], 'unknown', 100);
 }
 
-function codeqlRamMegabytes(systemMemoryBytes = totalmem()): number {
-  const halfSystemMemory = Math.floor(systemMemoryBytes / (2 * 1024 * 1024));
-  return Math.max(MIN_CODEQL_RAM_MB, Math.min(MAX_CODEQL_RAM_MB, halfSystemMemory));
+function codeqlRamMegabytes(
+  systemMemoryBytes = totalmem(),
+  constrainedMemoryBytes = process.constrainedMemory(),
+  platform: NodeJS.Platform = process.platform,
+): number {
+  if (!Number.isSafeInteger(systemMemoryBytes) || systemMemoryBytes <= 0
+    || !Number.isSafeInteger(constrainedMemoryBytes) || constrainedMemoryBytes < 0) {
+    throw new TypeError('CodeQL requires a valid environment memory limit.');
+  }
+  const memoryBytes = constrainedMemoryBytes > 0
+    ? Math.min(systemMemoryBytes, constrainedMemoryBytes)
+    : systemMemoryBytes;
+  const memoryMiB = Math.floor(memoryBytes / (1024 * 1024));
+  // Match the hosted analyser's OS reserve: 1 GiB (1.5 on Windows), plus
+  // 5% above 8 GiB for page tables. Do not halve RAM or cap larger runners.
+  // https://github.com/github/codeql-action/blob/main/src/util.ts
+  const reserveMiB = (platform === 'win32' ? 1536 : 1024)
+    + Math.max(0, memoryMiB - 8192) * 0.05;
+  const ramMiB = Math.floor(memoryMiB - reserveMiB);
+  if (ramMiB < MIN_CODEQL_RAM_MB) {
+    throw new RangeError(`CodeQL needs at least ${MIN_CODEQL_RAM_MB} MiB after the operating-system reserve; this environment permits ${Math.max(0, ramMiB)} MiB. Increase the environment memory allocation before running analysis.`);
+  }
+  return ramMiB;
 }
 
 function boundedDiagnostic(value: unknown, maximum = 1000): string {
@@ -684,6 +703,7 @@ function processFailure(command: string, result: ProcessResult): Error {
 async function runLocalCodeql(options: LocalCodeqlOptions = {}): Promise<LocalCodeqlReport> {
   const analysis = CODEQL_ANALYSES.find(item => item.language === (options.language ?? CODEQL_LANGUAGE));
   if (!analysis) throw new TypeError('Unsupported local CodeQL language.');
+  const ramMiB = codeqlRamMegabytes();
   const repositoryRoot = path.resolve(options.repositoryRoot ?? PROJECT_ROOT);
   const codeqlCommand = await findCodeqlCommand(options.codeqlCommand);
   const runProcess = options.runProcess ?? runProcessBounded;
@@ -714,6 +734,8 @@ async function runLocalCodeql(options: LocalCodeqlOptions = {}): Promise<LocalCo
       'database', 'create', databasePath,
       `--language=${analysis.language}`,
       `--source-root=${repositoryRoot}`,
+      `--threads=${CODEQL_THREADS}`,
+      `--ram=${ramMiB}`,
     ], processOptions);
     if (createResult.exitCode !== 0) throw processFailure('CodeQL database creation', createResult);
 
@@ -724,7 +746,7 @@ async function runLocalCodeql(options: LocalCodeqlOptions = {}): Promise<LocalCo
       `--sarif-category=${analysis.language}`,
       `--output=${sarifPath}`,
       `--threads=${CODEQL_THREADS}`,
-      `--ram=${codeqlRamMegabytes()}`,
+      `--ram=${ramMiB}`,
     ], processOptions);
     if (analyzeResult.exitCode !== 0) throw processFailure('CodeQL analysis', analyzeResult);
 
@@ -827,7 +849,6 @@ export {
   MAX_CODEQL_TEMP_ROOT_ENTRIES,
   MAX_CODEQL_TEMP_MARKER_BYTES,
   MAX_STALE_CODEQL_DIRECTORY_REMOVALS,
-  MAX_CODEQL_RAM_MB,
   MAX_CODEQL_FINDINGS,
   MAX_CODEQL_OUTPUT_BYTES,
   MAX_CODEQL_SARIF_BYTES,

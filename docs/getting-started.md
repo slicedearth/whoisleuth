@@ -120,6 +120,11 @@ reconciliation, action execution and deployment acceptance still involve hosted
 services; Linux rehearsal does not certify those services or replace required
 checks on the merge candidate.
 
+Static security analysis honours operating-system and container memory limits,
+reserves memory for the operating system, and refuses an allocation below the
+analyser's minimum before creating a database. Larger codebases may need more
+than the minimum; see the [analyser hardware guidance](https://docs.github.com/en/code-security/reference/code-scanning/codeql/hardware-resources-for-codeql).
+
 For an approved version change, `npm run release:prepare -- <version>` updates
 the two application manifests and regenerates public examples through their
 existing owner. It creates no commit, tag or publication. `npm run release:check`

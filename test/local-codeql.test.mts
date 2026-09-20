@@ -11,7 +11,6 @@ import {
   CODEQL_STALE_DIRECTORY_AGE_MS,
   CODEQL_THREADS,
   KNOWN_CODEQL_FINDINGS,
-  MAX_CODEQL_RAM_MB,
   MAX_CODEQL_FINDINGS,
   MAX_CODEQL_SARIF_BYTES,
   classifyCodeqlFindings,
@@ -95,9 +94,23 @@ describe('local CodeQL input handling', () => {
     assert.equal(parseCodeqlVersion('{bad json'), '{bad json');
   });
 
-  test('uses at most half of system memory and preserves both ends of diagnostics', () => {
-    assert.equal(codeqlRamMegabytes(8 * 1024 * 1024 * 1024), MAX_CODEQL_RAM_MB);
-    assert.equal(codeqlRamMegabytes(2 * 1024 * 1024 * 1024), 1024);
+  test('respects environment memory limits and reserves operating-system capacity', () => {
+    const GiB = 1024 * 1024 * 1024;
+    assert.equal(codeqlRamMegabytes(4 * GiB, 0, 'linux'), 3072);
+    assert.equal(codeqlRamMegabytes(8 * GiB, 0, 'darwin'), 7168);
+    assert.equal(codeqlRamMegabytes(16 * GiB, 0, 'linux'), 14950);
+    assert.equal(codeqlRamMegabytes(16 * GiB, 4 * GiB, 'linux'), 3072);
+    assert.equal(codeqlRamMegabytes(4 * GiB, 16 * GiB, 'linux'), 3072);
+    assert.equal(codeqlRamMegabytes(4 * GiB, 0, 'win32'), 2560);
+    assert.throws(() => codeqlRamMegabytes(2 * GiB, 0, 'linux'), /operating-system reserve/u);
+    assert.throws(() => codeqlRamMegabytes(16 * GiB, GiB, 'linux'), /environment permits 0 MiB/u);
+    for (const invalid of [0, -1, NaN, Infinity]) {
+      assert.throws(() => codeqlRamMegabytes(invalid, 0), /environment memory limit/u);
+    }
+    assert.throws(() => codeqlRamMegabytes(4 * GiB, -1), /environment memory limit/u);
+  });
+
+  test('preserves both ends of bounded diagnostics', () => {
     const diagnostic = boundedDiagnostic(`start ${'x'.repeat(2000)} terminal failure`, 100);
     assert.ok(diagnostic.startsWith('start '));
     assert.ok(diagnostic.endsWith('terminal failure'));
@@ -378,6 +391,7 @@ describe('local CodeQL orchestration', () => {
     assert.ok(analyzeCall.args.includes('--format=sarif-latest'));
     assert.ok(analyzeCall.args.includes(`--threads=${CODEQL_THREADS}`));
     assert.ok(analyzeCall.args.some((arg) => arg.startsWith('--ram=')));
+    assert.equal(createCall.args.find((arg) => arg.startsWith('--ram=')), analyzeCall.args.find((arg) => arg.startsWith('--ram=')));
     assert.equal(calls.flatMap((call) => call.args).includes('upload-results'), false);
     assert.equal(calls.flatMap((call) => call.args).includes('--command'), false);
   });
