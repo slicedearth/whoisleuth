@@ -243,10 +243,17 @@ describe('CLI shell completion', () => {
 
   test('Fish dispatches command, option-value and direct-target completions natively', () => {
     const script = buildShellCompletion('fish');
-    const syntax = spawnSync(unitTestExecutablePath('fish'), ['--no-config', '--private', '--no-execute'], {
-      ...SHELL_COMPLETION_PROCESS_OPTIONS, input: script,
-    });
+    // Older Fish readers misclassify socket-backed stdin as a directory.
+    // Pass source explicitly while retaining the shell's native syntax check.
+    const syntaxArguments = ['--no-config', '--private', '--no-execute', '-c'];
+    const syntax = spawnSync(unitTestExecutablePath('fish'), [...syntaxArguments, `${script}\necho syntax-must-not-execute`], SHELL_COMPLETION_PROCESS_OPTIONS);
     assertSuccessfulShellProcess(syntax, 'Fish completion syntax');
+    assert.equal(syntax.stdout, '');
+    const malformed = spawnSync(unitTestExecutablePath('fish'), [...syntaxArguments, 'function missing_end\n'], SHELL_COMPLETION_PROCESS_OPTIONS);
+    assert.equal(malformed.error, undefined);
+    assert.equal(malformed.signal, null);
+    assert.ok(Number.isInteger(malformed.status) && malformed.status! > 0);
+    assert.notEqual(malformed.stderr.trim(), '');
     const cases = [
       ['whoisleuth completion ', ['bash', 'zsh', 'fish', 'powershell']],
       ['whoisleuth lookup --h', ['--help', '--html']],

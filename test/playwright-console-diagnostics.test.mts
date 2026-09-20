@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { isInjectedBrowserLayoutDiagnostic, isCancelledSessionPageDiagnostic, isPolicyFixtureDiagnostic } from '../tools/playwright-execution-contract.mts';
+import { isInjectedBrowserLayoutDiagnostic, isCancelledSessionPageDiagnostic, isNativePreloadTimingDiagnostic, isPolicyFixtureDiagnostic } from '../tools/playwright-execution-contract.mts';
 
 test('native policy diagnostics cannot suppress application errors or errors from another document', () => {
   const origin = 'http://127.0.0.1:4173', fixture = `${origin}/__policy-fixture`;
@@ -40,4 +40,24 @@ test('session cancellation diagnostics require the exact browser, origin, endpoi
     ['webkit', 'TypeError: Load failed', origin, true, true],
     ['webkit', message + ' additional failure', origin, true, true],
   ] as const) assert.equal(isCancelledSessionPageDiagnostic(browser, text, source, cancelled, navigated), false);
+});
+
+test('native preload timing diagnostics require a completed local script and cannot hide other console failures', () => {
+  const origin = 'http://127.0.0.1:4180';
+  const resource = `${origin}/_app/immutable/chunks/fixture-build.js`;
+  const text = `The resource ${resource} was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it wasn't preloaded for nothing.`;
+  const completed = new Set([resource]);
+  assert.equal(isNativePreloadTimingDiagnostic('webkit', 'warning', text, '', origin, completed), true);
+  assert.equal(isNativePreloadTimingDiagnostic('webkit', 'warning', text, '', origin, new Set()), false);
+  for (const [browser, type, message, source, allowed] of [
+    ['chromium', 'warning', text, '', origin], ['firefox', 'warning', text, '', origin],
+    ['webkit', 'error', text, '', origin], ['webkit', 'warning', text, resource, origin],
+    ['webkit', 'warning', text, '', 'http://127.0.0.1:4181'],
+    ['webkit', 'warning', text + ' Another error', '', origin],
+    ['webkit', 'warning', text.replace('.js ', '.css '), '', origin],
+    ['webkit', 'warning', text.replace('fixture-build.js', 'fixture-build.js?other'), '', origin],
+    ['webkit', 'warning', text.replace('/_app/immutable/chunks/', '/api/'), '', origin],
+    ['webkit', 'warning', text.replace('127.0.0.1', 'example.test'), '', origin],
+    ['webkit', 'warning', 'Application warning', '', origin],
+  ]) assert.equal(isNativePreloadTimingDiagnostic(browser!, type!, message!, source!, allowed!, completed), false);
 });

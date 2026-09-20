@@ -307,7 +307,7 @@ test('unfinished Case forms use the encrypted workspace and remain outside its p
   expect(JSON.stringify(await decryptWorkspaceArchive(JSON.parse(content), BACKUP_PASSWORD))).not.toContain('recovery-only sentence');
 });
 
-test('encrypted workspace stays locked across reloads and supports a separately encrypted backup round trip', { tag: '@cross-browser-critical' }, async ({ page, context }) => {
+test('encrypted workspace stays locked across reloads and supports a separately encrypted backup round trip', { tag: ['@cross-browser-critical', '@timing-sensitive'] }, async ({ page, context }) => {
   const unexpected: string[] = [];
   page.on('request', request => { const path = new URL(request.url()).pathname; if (path.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(path)) unexpected.push(path); });
   await page.goto('/dashboard');
@@ -351,9 +351,8 @@ test('encrypted workspace stays locked across reloads and supports a separately 
 
   const peer = await context.newPage();
   try {
+    await peer.addInitScript(({ key, id }) => sessionStorage.setItem(key, id), { key: SELECTION, id: row.id });
     await peer.goto('/dashboard');
-    await peer.evaluate(({ key, id }) => sessionStorage.setItem(key, id), { key: SELECTION, id: row.id });
-    await peer.reload();
     await expect(peer.getByRole('heading', { name: `Unlock ${row.name}`, exact: true })).toBeVisible();
     await expect(peer.locator('body')).not.toContainText(DOMAIN);
   } finally { await peer.close(); }
@@ -365,6 +364,7 @@ test('encrypted workspace stays locked across reloads and supports a separately 
   await expect(page.getByRole('link', { name: 'Privacy (opens in a new tab)', exact: true })).toHaveAttribute('target', '_blank');
   await page.goto('/privacy');
   await expect(page).toHaveURL(/\/privacy$/u);
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
   await page.goBack();
   await expect(page.getByRole('heading', { name: `Unlock ${row.name}`, exact: true })).toBeVisible();
   await expect(page.locator('body')).not.toContainText(DOMAIN);

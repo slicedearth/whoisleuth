@@ -171,7 +171,7 @@ test('encrypted package creation and unlock preserve exact files, private state 
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
 });
 
-test('idle search indexing cannot displace a pressed package disclosure', async ({ page }, testInfo) => {
+test('idle search indexing cannot displace a pressed package disclosure', { tag: '@timing-sensitive' }, async ({ page }, testInfo) => {
   let release = () => {};
   const released = new Promise<void>(resolve => { release = resolve; });
   let held = false;
@@ -186,12 +186,21 @@ test('idle search indexing cannot displace a pressed package disclosure', async 
     const bounds = await summary.boundingBox();
     if (!bounds) throw new Error('The package disclosure is absent.');
     const scroll = await page.evaluate(() => window.scrollY);
-    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    const pressedPoint = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+    const rasterPixel = await page.evaluate(() => 1 / devicePixelRatio);
+    await page.mouse.move(pressedPoint.x, pressedPoint.y);
     await page.mouse.down();
     release();
     await expect(page.locator('.investigation-search .index-count')).toHaveText('2 searchable items');
     await expect(page.locator('.recent-work .result-list > li')).toHaveCount(2);
-    expect(await summary.boundingBox()).toEqual(bounds);
+    const settledBounds = await summary.boundingBox();
+    if (!settledBounds) throw new Error('The pressed package disclosure disappeared.');
+    // Fractional layout rounding is not a displaced pointer target. Keep the
+    // geometry within one raster pixel and independently verify hit testing.
+    for (const key of ['x', 'y', 'width', 'height'] as const) {
+      expect(Math.abs(settledBounds[key] - bounds[key]), key).toBeLessThanOrEqual(rasterPixel);
+    }
+    expect(await summary.evaluate((element, point) => element.contains(document.elementFromPoint(point.x, point.y)), pressedPoint)).toBe(true);
     expect(await page.evaluate(() => window.scrollY)).toBe(scroll);
     await page.mouse.up();
     await expect(panel.getByLabel('Package purpose', { exact: true })).toBeVisible();

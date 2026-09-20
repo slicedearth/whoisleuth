@@ -20,8 +20,7 @@ import {
   MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES, MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES, MAX_CLI_PACKAGE_GRAPH_BYTES,
   CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
 } from './cli-package.mts';
-import { optionalPackageInputs, assertInstalledPackageDependencies, emittedPackageFiles, optionalPackageLock, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles } from './optional-package.mts';
-import { buildThirdPartyNotices } from './third-party-notices.mts';
+import { optionalPackageInputs, assertInstalledPackageDependencies, emittedPackageFiles, optionalPackageLock, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles, buildOptionalPackageNotices } from './optional-package.mts';
 import { pathIsWithin, requireJsonRecord as object } from './maintainer-tool-helpers.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -91,7 +90,7 @@ export async function checkLocalApplicationPackage(repositoryRoot = ROOT, candid
       const destination = path.join(runtime, relative); await mkdir(path.dirname(destination), { recursive: true }); await writeFile(destination, bytes);
     }
     for (const [source, destination] of SUPPORT) { await mkdir(path.dirname(path.join(staged, destination)), { recursive: true }); await writeFile(path.join(staged, destination), metadata.get(source)!.bytes); }
-    const notices = await buildThirdPartyNotices(root, { directDependencyNames: inputs.dependencies, scopeLabel: 'Local application server', lockfileValue: lockfile });
+    const notices = await buildOptionalPackageNotices(root, inputs.dependencies, 'Local application server', lockfile);
     await writeFile(path.join(staged, 'third-party-notices.txt'), notices);
     await writeFile(path.join(staged, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
     await writeFile(path.join(staged, 'package-lock.json'), JSON.stringify(optionalPackageLock(manifest, lockfile), null, 2) + '\n');
@@ -112,7 +111,7 @@ export async function checkLocalApplicationPackage(repositoryRoot = ROOT, candid
     await assertCliPackageSourceSnapshot(root, sources); await assertCliPackageSourceSnapshot(root, metadata);
     await assertCliPackageSourceSnapshot(root, compiler, MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES);
     assert.deepEqual(assertFrontendBuildIntegrity(root), build);
-    assert.equal(await buildThirdPartyNotices(root, { directDependencyNames: inputs.dependencies, scopeLabel: 'Local application server', lockfileValue: lockfile }), notices);
+    assert.equal(await buildOptionalPackageNotices(root, inputs.dependencies, 'Local application server', lockfile), notices);
     await writeFile(path.join(installed, 'package.json'), '{"private":true}\n');
     await run('npm', ['install', '--offline', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund', path.join(packed, pack.filename)], installed);
     const packageRoot = path.join(installed, 'node_modules', ...manifest.name.split('/'));

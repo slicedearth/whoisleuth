@@ -18,9 +18,8 @@ import {
   MAX_CLI_PACKAGE_COMPILER_CONTEXT_BYTES, MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES,
   MAX_CLI_PACKAGE_GRAPH_BYTES, CLI_PACKAGE_LONG_PROCESS_TIMEOUT_MS,
 } from './cli-package.mts';
-import { buildThirdPartyNotices } from './third-party-notices.mts';
 import { playwrightBrowserCacheDirectory } from './ci-verification.mts';
-import { optionalPackageInputs, assertInstalledPackageDependencies, emittedPackageFiles, optionalPackageLock, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles } from './optional-package.mts';
+import { optionalPackageInputs, assertInstalledPackageDependencies, emittedPackageFiles, optionalPackageLock, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles, buildOptionalPackageNotices } from './optional-package.mts';
 
 const execFile = promisify(execFileCallback);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -113,7 +112,7 @@ export async function checkCapturePackage(repositoryRoot = ROOT, candidateDirect
     await compilePackageSources(root, temporary, runtime, sourceRoot, [ENTRY], { compilerRoot: sourceRoot, dependencyRoot: sourceRoot });
     const runtimeFiles = await emittedPackageFiles(staged);
     if (!runtimeFiles.includes('runtime/packages/web-capture/anchored-artifact-writer.mjs')) throw new Error('Capture package is missing its isolated artefact writer.');
-    const notices = await buildThirdPartyNotices(root, { directDependencyNames: inputs.dependencies, scopeLabel: 'Capture companion', lockfileValue: parse(metadata.get('package-lock.json')!.bytes) });
+    const notices = await buildOptionalPackageNotices(root, inputs.dependencies, 'Capture companion', parse(metadata.get('package-lock.json')!.bytes));
     for (const [source, destination] of SUPPORT) await writeFile(path.join(staged, destination), metadata.get(source)!.bytes);
     await writeFile(path.join(runtime, PACKAGE_SOURCE), JSON.stringify({ name: manifest.name, version: manifest.version, type: 'module' }) + '\n');
     const applicationVersion = normalizeBoundedStableSemanticVersion(parse(metadata.get('package.json')!.bytes).version);
@@ -137,7 +136,7 @@ export async function checkCapturePackage(repositoryRoot = ROOT, candidateDirect
     await assertCliPackageSourceSnapshot(root, sources);
     await assertCliPackageSourceSnapshot(root, metadata);
     await assertCliPackageSourceSnapshot(root, compiler, MAX_CLI_PACKAGE_COMPILER_CONTEXT_FILE_BYTES);
-    assert.equal(await buildThirdPartyNotices(root, { directDependencyNames: inputs.dependencies, scopeLabel: 'Capture companion', lockfileValue: parse(metadata.get('package-lock.json')!.bytes) }), notices, 'Capture licence inputs changed.');
+    assert.equal(await buildOptionalPackageNotices(root, inputs.dependencies, 'Capture companion', parse(metadata.get('package-lock.json')!.bytes)), notices, 'Capture licence inputs changed.');
     await writeFile(path.join(installed, 'package.json'), '{"private":true}\n');
     await run('npm', ['install', '--offline', '--package-lock=true', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund', path.join(packed, pack.filename)], installed);
     const packageRoot = path.join(installed, 'node_modules', ...String(manifest.name).split('/'));

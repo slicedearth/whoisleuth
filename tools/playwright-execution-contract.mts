@@ -42,6 +42,13 @@ export function isCancelledSessionPageDiagnostic(browserName: string, message: s
     && message === `/${url.host}/api/session due to access control checks.`;
 }
 
+/** Native preload timing is observational; failed loads and application warnings are not. */
+export function isNativePreloadTimingDiagnostic(browserName: string, type: string, text: string, messageUrl: string, origin: string, completedScripts: ReadonlySet<string>): boolean {
+  if (browserName !== 'webkit' || type !== 'warning' || messageUrl !== '') return false;
+  const match = /^The resource (http:\/\/127\.0\.0\.1:\d{1,5}\/_app\/immutable\/(?:chunks|nodes|entry)\/[A-Za-z0-9_.-]+\.js) was preloaded using link preload but not used within a few seconds from the window's load event\. Please make sure it wasn't preloaded for nothing\.$/u.exec(text);
+  return !!match && match[1]!.startsWith(origin + '/_app/immutable/') && completedScripts.has(match[1]!);
+}
+
 export function isPlaywrightPerformanceAuthoritySpec(file: string): boolean {
   const normalized = file.replaceAll('\\', '/');
   return PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPECS.some((candidate) => (

@@ -35,8 +35,11 @@ can stay offline without selecting newer transitive versions.
 
 Browser installation is explicit and downloads the matching browser; help and
 offline comparison do not need it. The browser sandbox remains enabled. On
-Linux, install the operating-system libraries required by the browser before
-capture. The companion has its own version; it is not an additional main-CLI command.
+Linux, install the operating-system libraries required by the browser and ensure
+the operating system permits its sandbox. Some distributions require an
+[executable-specific user-namespace profile](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md).
+Capture fails closed when the sandbox cannot start; it does not fall back to an
+unsandboxed browser. The companion has its own version; it is not an additional main-CLI command.
 
 Maintainers can add `--browser-smoke` before `--candidate` to exercise the installed
 archive with an already installed browser and synthetic response fixtures.

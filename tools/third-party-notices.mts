@@ -24,6 +24,7 @@ type InventoryOptions = Readonly<{
   bundledDependencies?: readonly BundledDependency[];
   scopeLabel?: string;
   lockfileValue?: unknown;
+  omitOptionalDependencies?: boolean;
 }>;
 type MainOptions = Readonly<{
   repositoryRoot?: string;
@@ -136,7 +137,7 @@ export function resolveInstalledDependency(
   return Object.hasOwn(packages, rootCandidate) ? rootCandidate : null;
 }
 
-function dependencyClosure(packages: JsonRecord, directDependencyNames: readonly string[]): Set<string> {
+function dependencyClosure(packages: JsonRecord, directDependencyNames: readonly string[], omitOptional = false): Set<string> {
   if (!directDependencyNames.length || directDependencyNames.length > MAX_NOTICE_DIRECT_DEPENDENCIES) {
     throw new TypeError('Scoped production inventory must name a bounded non-empty direct dependency set.');
   }
@@ -153,10 +154,14 @@ function dependencyClosure(packages: JsonRecord, directDependencyNames: readonly
     if (selected.size >= MAX_NOTICE_PACKAGES) throw new TypeError('Scoped production dependency closure exceeds its package limit.');
     selected.add(installPath);
     const packageEntry = record(packages[installPath], `package-lock.json package ${installPath}`);
+    const optional = new Set(dependencyNames(packageEntry.optionalDependencies, `${installPath} optional dependencies`));
+    const peerMetadata = packageEntry.peerDependenciesMeta === undefined ? {} : record(packageEntry.peerDependenciesMeta, `${installPath} peer metadata`);
     for (const dependencyName of [
-      ...dependencyNames(packageEntry.dependencies, `${installPath} dependencies`),
-      ...dependencyNames(packageEntry.optionalDependencies, `${installPath} optional dependencies`),
-      ...dependencyNames(packageEntry.peerDependencies, `${installPath} peer dependencies`),
+      // Optional declarations override the same regular dependency, as in npm.
+      ...dependencyNames(packageEntry.dependencies, `${installPath} dependencies`).filter(name => !omitOptional || !optional.has(name)),
+      ...(omitOptional ? [] : optional),
+      ...dependencyNames(packageEntry.peerDependencies, `${installPath} peer dependencies`).filter(name =>
+        !omitOptional || peerMetadata[name] === undefined || record(peerMetadata[name], `${installPath} peer metadata`).optional !== true),
     ]) {
       const dependencyPath = resolveInstalledDependency(packages, installPath, dependencyName);
       if (dependencyPath && !selected.has(dependencyPath)) queue.push(dependencyPath);
@@ -191,6 +196,9 @@ export function collectProductionPackages(
   if (requestedDirectNames && options.bundledDependencies) {
     throw new TypeError('CLI and bundled-browser dependency inventories must remain separate.');
   }
+  if (options.omitOptionalDependencies && !requestedDirectNames) {
+    throw new TypeError('Optional dependency omission requires an explicit packaged runtime scope.');
+  }
   const bundled = bundledDependencyIds(options.bundledDependencies ?? []);
   const missingBundled = new Set(bundled);
   const directNames = new Set(requestedDirectNames ?? [
@@ -199,7 +207,7 @@ export function collectProductionPackages(
       ...dependencyNames(frontend.dependencies, 'frontend dependencies'),
       ...dependencyNames(frontend.optionalDependencies, 'frontend optional dependencies'),
     ]);
-  const selectedPaths = requestedDirectNames ? dependencyClosure(packages, requestedDirectNames) : null;
+  const selectedPaths = requestedDirectNames ? dependencyClosure(packages, requestedDirectNames, options.omitOptionalDependencies) : null;
   const collected = new Map<string, ProductionPackage>();
 
   for (const [installPath, rawPackage] of Object.entries(packages)) {

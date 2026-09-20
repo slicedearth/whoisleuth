@@ -147,6 +147,11 @@ jobs:
         run: npm run frontend:build:integrity
       - name: Install Playwright Chromium
         run: npm run test:e2e:install
+      - name: Permit the pinned browser to create its sandbox
+        if: ${{ matrix.kind == 'functional' }}
+        run: |
+          node tools/ci-browser-sandbox.mts > "$RUNNER_TEMP/whoisleuth-chromium.apparmor"
+          sudo apparmor_parser --replace "$RUNNER_TEMP/whoisleuth-chromium.apparmor"
       - name: Run Playwright functional shard
         if: ${{ matrix.kind == 'functional' }}
         run: npm run test:e2e:shard -- --run=${{ matrix.shard }}

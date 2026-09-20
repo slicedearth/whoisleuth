@@ -5,6 +5,7 @@ import path from 'node:path';
 import { describe, test } from 'node:test';
 import { build } from 'vite';
 import { frontendWorkerBuild } from '../tools/frontend-worker-build.mts';
+import { buildOptionalPackageNotices } from '../tools/optional-package.mts';
 
 import {
   buildThirdPartyNotices,
@@ -58,6 +59,62 @@ describe('third-party production dependency notices', () => {
       { name: 'alpha', version: '1.0.0', license: 'MIT', direct: true, installPath: 'node_modules/alpha' },
       { name: 'shared', version: '3.0.0', license: 'BSD-3-Clause', direct: false, installPath: 'node_modules/shared' },
     ]);
+  });
+
+  test('omits optional edges rather than packages required through another dependency', () => {
+    const base = fixtureLockfile();
+    const lockfile = { ...base, packages: { ...base.packages,
+      'node_modules/alpha': { ...base.packages['node_modules/alpha'],
+        optionalDependencies: { native: '1.0.0' },
+        peerDependencies: { 'optional-peer': '1.0.0' },
+        peerDependenciesMeta: { 'optional-peer': { optional: true } },
+      },
+      'node_modules/native': { version: '1.0.0', license: 'MIT', optional: true, dependencies: { 'native-child': '1.0.0' } },
+      'node_modules/native-child': { version: '1.0.0', license: 'MIT', optional: true },
+      'node_modules/optional-peer': { version: '1.0.0', license: 'MIT', optional: true },
+    } };
+    const scope = { directDependencyNames: ['alpha'], omitOptionalDependencies: true };
+    assert.deepEqual(collectProductionPackages(lockfile, scope).map(item => item.name), ['alpha', 'shared']);
+    assert.deepEqual(collectProductionPackages(lockfile, { directDependencyNames: ['alpha'] }).map(item => item.name),
+      ['alpha', 'native', 'native-child', 'optional-peer', 'shared']);
+    assert.throws(() => collectProductionPackages(lockfile, { omitOptionalDependencies: true }), /explicit packaged runtime scope/u);
+
+    const required = { ...lockfile, packages: { ...lockfile.packages,
+      'node_modules/beta': { ...base.packages['node_modules/beta'], dependencies: { native: '1.0.0' }, peerDependencies: { 'optional-peer': '1.0.0' } },
+    } };
+    assert.deepEqual(collectProductionPackages(required, { ...scope, directDependencyNames: ['alpha', 'beta'] }).map(item => item.name),
+      ['alpha', 'beta', 'native', 'native-child', 'optional-peer', 'shared']);
+    assert.deepEqual(collectProductionPackages(lockfile, { ...scope, directDependencyNames: ['native'] }).map(item => item.name), ['native', 'native-child']);
+  });
+
+  test('honours an optional declaration overriding a regular dependency of the same name', () => {
+    const base = fixtureLockfile();
+    const lockfile = { ...base, packages: { ...base.packages,
+      'node_modules/alpha': { ...base.packages['node_modules/alpha'], optionalDependencies: { shared: '3.0.0' } },
+    } };
+    assert.deepEqual(collectProductionPackages(lockfile, { directDependencyNames: ['alpha'], omitOptionalDependencies: true }).map(item => item.name), ['alpha']);
+  });
+
+  test('companion notices are identical with optional host packages absent or present and still require mandatory documents', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-optional-notices-'));
+    try {
+      const base = fixtureLockfile();
+      const lockfile = { ...base, packages: { ...base.packages,
+        'node_modules/alpha': { ...base.packages['node_modules/alpha'], optionalDependencies: { native: '1.0.0' } },
+        'node_modules/native': { version: '1.0.0', license: 'MIT', optional: true, os: ['darwin'] },
+      } };
+      await writeFixturePackage(directory, 'alpha', 'Alpha licence');
+      await writeFixturePackage(directory, 'shared', 'Shared licence');
+      const absent = await buildOptionalPackageNotices(directory, ['alpha'], 'Fixture companion', lockfile);
+      assert.match(absent, /Package count: 2/u);
+      assert.doesNotMatch(absent, /native@/u);
+      await assert.rejects(buildThirdPartyNotices(directory, { directDependencyNames: ['alpha'], lockfileValue: lockfile }), { code: 'ENOENT' });
+      await writeFixturePackage(directory, 'native', 'Optional native licence');
+      assert.equal(await buildOptionalPackageNotices(directory, ['alpha'], 'Fixture companion', lockfile), absent);
+      assert.match(await buildThirdPartyNotices(directory, { directDependencyNames: ['alpha'], lockfileValue: lockfile }), /native@1\.0\.0/u);
+      await rm(path.join(directory, 'node_modules/shared'), { recursive: true });
+      await assert.rejects(buildOptionalPackageNotices(directory, ['alpha'], 'Fixture companion', lockfile), { code: 'ENOENT' });
+    } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
   test('includes only the dev-declared dependencies identified in the delivered bundle', () => {

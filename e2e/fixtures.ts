@@ -5,6 +5,7 @@ import {
   PLAYWRIGHT_NETWORK_GUARD_ROUTE_PATTERN,
   isInjectedBrowserLayoutDiagnostic,
   isCancelledSessionPageDiagnostic,
+  isNativePreloadTimingDiagnostic,
   isPolicyFixtureDiagnostic,
 } from '../tools/playwright-execution-contract.mts';
 import { ALLOWED_ORIGIN } from './constants.ts';
@@ -137,7 +138,17 @@ export async function installBrowserGuards(browser: Browser, options: GuardOptio
       const onPage = (page: Page) => {
         if (pages.has(page)) return;
         let cancelledSession = false, navigated = false;
+        const completedScripts = new Set<string>();
+        const successfulScripts = new Set<string>();
         const pendingErrors: Error[] = [];
+        const pendingNativeWarnings: { text: string; url: string }[] = [];
+        const onResponse = (response: import('@playwright/test').Response) => {
+          if (response.status() === 200 && response.request().resourceType() === 'script'
+            && response.url().startsWith(networkGuardOrigin + '/_app/immutable/')) successfulScripts.add(response.url());
+        };
+        const onFinished = (request: import('@playwright/test').Request) => {
+          if (successfulScripts.has(request.url())) completedScripts.add(request.url());
+        };
         const onFailed = (request: import('@playwright/test').Request) => {
           if (request.url() === networkGuardOrigin + '/api/session'
             && /cancelled|canceled|aborted|interrupted/iu.test(request.failure()?.errorText ?? '')) cancelledSession = true;
@@ -148,6 +159,7 @@ export async function installBrowserGuards(browser: Browser, options: GuardOptio
           if (type !== 'error' && type !== 'warning') return;
           const text = message.text(), url = message.location().url;
           if (isInjectedBrowserLayoutDiagnostic(browserName, type, text, url)) { diagnostic(text); return; }
+          if (browserName === 'webkit' && type === 'warning') { pendingNativeWarnings.push({ text, url }); return; }
           if (allowExpectedPolicyFixtureDiagnostics && isPolicyFixtureDiagnostic(browserName, type, text, url, page.url(), networkGuardOrigin)) { diagnostic(text); return; }
           if (type === 'error' && ((isLookupEndpointUrl(url, networkGuardOrigin)
             && ((allowExpectedBulkLookup400Noise && CHROME_HTTP_400_NOISE_RE.test(text))
@@ -159,9 +171,17 @@ export async function installBrowserGuards(browser: Browser, options: GuardOptio
         const onError = (error: Error) => { pendingErrors.push(error); };
         page.on('console', onConsole); page.on('pageerror', onError);
         page.on('requestfailed', onFailed); page.on('framenavigated', onNavigation);
+        page.on('response', onResponse); page.on('requestfinished', onFinished);
         pages.set(page, () => {
           page.off('console', onConsole); page.off('pageerror', onError);
           page.off('requestfailed', onFailed); page.off('framenavigated', onNavigation);
+          page.off('response', onResponse); page.off('requestfinished', onFinished);
+          // The native warning can precede requestfinished in the protocol.
+          // Require a completed response at teardown, not event arrival order.
+          for (const { text, url } of pendingNativeWarnings) {
+            if (isNativePreloadTimingDiagnostic(browserName, 'warning', text, url, networkGuardOrigin, completedScripts)) diagnostic(text);
+            else consoleIssues.push(`console.warning: ${text}`);
+          }
           for (const error of pendingErrors) {
             // Browser events can arrive in either order. Classify only after
             // recording this same page's cancelled session request and navigation.
@@ -213,8 +233,11 @@ export const test = base.extend<Options & Fixtures>({
   allowExpectedLogout500Noise: [false, { option: true }],
   allowExpectedPolicyFixtureDiagnostics: [false, { option: true }],
   networkAndConsoleGuard: [
-    async ({ browser, browserName, networkGuardOrigin, allowExpectedBulkLookup400Noise,
+    async ({ browser, context, browserName, networkGuardOrigin, allowExpectedBulkLookup400Noise,
       allowExpectedLookup429Noise, allowExpectedLookup504Noise, allowExpectedLogout500Noise, allowExpectedPolicyFixtureDiagnostics }, use, testInfo) => {
+      // Depend on the default context so guard failures are recorded before
+      // its trace-retention decision, including failures detected at teardown.
+      void context;
       const guard = await installBrowserGuards(browser, { browserName, networkGuardOrigin, allowExpectedBulkLookup400Noise,
         allowExpectedLookup429Noise, allowExpectedLookup504Noise, allowExpectedLogout500Noise,
         allowExpectedPolicyFixtureDiagnostics: allowExpectedPolicyFixtureDiagnostics ?? false });

@@ -3,12 +3,17 @@ import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { MAX_CLI_PACKAGE_PROCESSING_ITEMS, validatePackedCliFiles } from './cli-package.mts';
 import { boundedSafeRelativePath, requireJsonRecord as object } from './maintainer-tool-helpers.mts';
-import { productionDependencyInstallPaths } from './third-party-notices.mts';
+import { buildThirdPartyNotices, productionDependencyInstallPaths } from './third-party-notices.mts';
 import { readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
 
 const MAX_BUNDLED_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_BUNDLED_TOTAL_BYTES = 320 * 1024 * 1024;
 type PackageFileIdentity = Readonly<{ bytes: number; sha256: string }>;
+
+/** Both bundled companions install with --omit=optional on every platform. */
+export function buildOptionalPackageNotices(root: string, dependencies: readonly string[], scopeLabel: string, lockfileValue: unknown): Promise<string> {
+  return buildThirdPartyNotices(root, { directDependencyNames: dependencies, scopeLabel, lockfileValue, omitOptionalDependencies: true });
+}
 
 /** Shared closure mechanics; each optional package retains its own entry points and policy. */
 export function optionalPackageInputs(value: unknown, policy: Readonly<{
