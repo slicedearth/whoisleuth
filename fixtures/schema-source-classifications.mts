@@ -4,9 +4,6 @@ export const SCHEMA_SOURCE_CLASSIFICATIONS = Object.freeze([
     kind: 'exempt',
     reason: 'serialised_unversioned',
     owner: 'frontend/src/lib/analysis/case-lifecycle-calendar.ts',
-    sourceUses: Object.freeze([
-      Object.freeze({ file: 'frontend/src/lib/analysis/case-lifecycle-calendar.ts', literalOccurrences: 1, dynamicConstructions: 0 }),
-    ]),
     relatedEntryIds: Object.freeze([]),
     note: 'The iCalendar output carries a schema marker on events but no application-version marker or local import contract.',
   }),
@@ -15,9 +12,6 @@ export const SCHEMA_SOURCE_CLASSIFICATIONS = Object.freeze([
     kind: 'exempt',
     reason: 'legacy_unsupported',
     owner: 'lib/interchange-fidelity-registry.mts',
-    sourceUses: Object.freeze([
-      Object.freeze({ file: 'lib/interchange-fidelity-registry.mts', literalOccurrences: 1, dynamicConstructions: 0 }),
-    ]),
     relatedEntryIds: Object.freeze([]),
     note: 'The legacy document is deliberately unsupported by every interchange reader and writer.',
   }),
@@ -38,9 +32,6 @@ export const SCHEMA_SOURCE_CLASSIFICATIONS = Object.freeze([
     kind: 'exempt',
     reason: 'identifier_only',
     owner: 'packages/workspace/investigation-guide.mts',
-    sourceUses: Object.freeze([
-      Object.freeze({ file: 'packages/workspace/investigation-guide.mts', literalOccurrences: 1, dynamicConstructions: 0 }),
-    ]),
     relatedEntryIds: Object.freeze(['tab.investigation-guide']),
     note: 'The identifier labels the versioned tab-local model rather than its serialised contract; its portable summary has a separate inventoried schema.',
   }),
@@ -55,9 +46,6 @@ export const SCHEMA_SOURCE_CLASSIFICATIONS = Object.freeze([
     kind: 'exempt',
     reason: 'identifier_only',
     owner: 'lib/local-geoip-evidence.mts',
-    sourceUses: Object.freeze([
-      Object.freeze({ file: 'lib/local-geoip-evidence.mts', literalOccurrences: 1, dynamicConstructions: 0 }),
-    ]),
     relatedEntryIds: Object.freeze([]),
     note: 'Stable source-facade constants label the local GeoIP evidence family but are not emitted or read as a document contract.',
   }),
@@ -78,9 +66,6 @@ export const SCHEMA_SOURCE_CLASSIFICATIONS = Object.freeze([
     kind: 'exempt',
     reason: 'transient_projection',
     owner: 'frontend/src/lib/analysis/idn-registry-policy.ts',
-    sourceUses: Object.freeze([
-      Object.freeze({ file: 'frontend/src/lib/analysis/idn-registry-policy.ts', literalOccurrences: 1, dynamicConstructions: 0 }),
-    ]),
     relatedEntryIds: Object.freeze([]),
     note: 'The parsed registry policy is transient and is not persisted, downloaded, or read back as a document.',
   }),
@@ -89,9 +74,6 @@ export const SCHEMA_SOURCE_CLASSIFICATIONS = Object.freeze([
     kind: 'member',
     reason: 'provenance_marker',
     owner: 'packages/contracts/offline-comparison.mts',
-    sourceUses: Object.freeze([
-      Object.freeze({ file: 'packages/contracts/offline-comparison.mts', literalOccurrences: 1, dynamicConstructions: 0 }),
-    ]),
     relatedEntryIds: Object.freeze(['derived.observation-envelope']),
     note: 'The marker identifies nested upstream provenance inside the common observation envelope rather than a standalone document.',
   }),

@@ -51,6 +51,11 @@ emitted-file validation in `tools/package-source.mts`. Each builder owns its
 entry points, runtime dependencies, allowed support files and installed checks.
 The optional packages do not load the CLI builder to compile shared code.
 
+Schema source discovery inventories literal identities and their canonical
+definitions. References and runtime propagation need no per-file registration.
+Domain validators and independent historical fixtures verify format behaviour;
+source discovery does not substitute for those checks.
+
 The Cases route uses the Case workspace component for its list, filters,
 selection, drafts and collection refresh. Monitor's legacy Cases URL redirects
 there; Monitor owns inbox, watchlist, campaign and relationship projections.
