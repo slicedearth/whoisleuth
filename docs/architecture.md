@@ -240,9 +240,12 @@ exhaustive metadata.
 
 ## Data ownership and persistence
 
-The shared workspace provider owns collection validation, preparation,
-reconciliation and revision checks. Its transaction adapter supplies record and
-file I/O. The browser adapter uses IndexedDB. The optional local application
+`browser-local-data.ts` coordinates migration, updates, reconciliation and
+revision checks through the shared `LocalDataStorage` transaction interface.
+`browser-local-data-content.ts` owns record preparation, codecs and snapshot
+verification; workers use it without importing persistence. The
+`browser-indexeddb-storage.ts` adapter owns database lifetime and bounded
+transaction I/O. The optional local application
 uses an authenticated loopback adapter and a dedicated Node SQLite worker;
 there is no browser-database fallback in that mode. SQLite commits include all
 changed collections, original files and an operation receipt in one transaction.

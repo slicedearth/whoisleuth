@@ -92,14 +92,14 @@ import type { AnalystReviewStateRecord, AnalystReviewStateStore } from './analys
 import {
   BrowserLocalDataError,
   plaintextJsonCodec,
-} from './browser-local-data.ts';
+} from './browser-local-data-content.ts';
 import type {
   AnyLocalDataCollectionDefinition,
   BrowserLocalCollectionManifest,
   BrowserLocalStoredRecord,
   LocalDataCollectionDefinition,
   LocalDataRecord,
-} from './browser-local-data.ts';
+} from './browser-local-data-content.ts';
 import {
   LEGACY_BULK_REVIEW_KEY,
   LEGACY_ANALYST_REVIEW_STATE_KEY,

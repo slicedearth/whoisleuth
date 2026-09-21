@@ -7,7 +7,7 @@ export { WorkspaceDestinationStartError as WorkspaceRecoveryStartError } from '.
 import { currentBrowserWorkspaceId } from './browser-workspace-context.ts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../packages/contracts/selected-file-limits.mts';
 import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../../../packages/contracts/investigation-package-limits.mts';
-import type { AnyLocalDataCollectionDefinition } from './browser-local-data.ts';
+import type { AnyLocalDataCollectionDefinition } from './browser-local-data-content.ts';
 import type { CaseRecord } from '../../../packages/cases/case-model.mts';
 
 export type WorkspaceRecoveryReport = ReturnType<typeof compareRecoveredWorkspace> & Readonly<{

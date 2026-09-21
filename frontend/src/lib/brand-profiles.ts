@@ -20,7 +20,7 @@ import type { BrandProfile } from './analysis/brand-profile-model.ts';
 export type { BrandProfile } from './analysis/brand-profile-model.ts';
 import { normalizePageBaseline } from './analysis/page-baseline.ts';
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
-import { BrowserLocalDataError } from './browser-local-data.ts';
+import { BrowserLocalDataError } from './browser-local-data-content.ts';
 import { loadBrowserLocalDataPreparation } from './browser-local-data-worker.ts';
 import { assertLocalRecordCurrent, LocalRecordConflictError } from './local-mutation-outcome.ts';
 import { LEGACY_PROFILES_KEY } from './browser-local-data-contract.ts';

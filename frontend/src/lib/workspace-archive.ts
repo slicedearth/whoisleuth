@@ -19,7 +19,7 @@ import {
   browserLocalDataProvider,
   readBrowserLocalDataCollections,
 } from './browser-local-data-service.ts';
-import type { AnyLocalDataCollectionDefinition } from './browser-local-data.ts';
+import type { AnyLocalDataCollectionDefinition } from './browser-local-data-content.ts';
 import { guardedWorkspaceRollback, guardedWorkspaceSettingsRollback } from './analysis/workspace-rollback.ts';
 import { rethrowUnknownWorkspaceCommit } from './analysis/workspace-import-outcome.ts';
 import { WORKSPACE_ARCHIVE_COLLECTIONS as SECTION_COLLECTIONS } from '../../../packages/contracts/browser-local-collection-manifest.mts';

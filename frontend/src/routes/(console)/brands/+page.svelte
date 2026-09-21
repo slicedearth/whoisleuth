@@ -14,7 +14,7 @@
   import { createPageBaseline, normalizePageBaseline } from '$lib/analysis/page-baseline.ts';
   import { loadCases, type CaseRecord } from '$lib/cases';
   import { loadRelationshipObservations, type RelationshipObservation } from '$lib/relationship-observations';
-  import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
+import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   import type { DesiredPostureBaseline, OfficialChannel, ProtectionAttestation, RightsReference } from '$lib/analysis/brand-profile-model.ts';
   import { brandPostureCollectionFingerprint, brandPostureObservationContext, currentDesiredPostureObservation, desiredPostureObservations, normalizeDesiredPostureObservationHistory } from '$lib/analysis/brand-profile-model.ts';
   import { buildDesiredPostureObservation, type DomainPostureAuditResult as AuditResult } from '$lib/analysis/owned-domain-posture-review.ts';

@@ -1,5 +1,5 @@
 import { decodeBase64url, encodeBase64url } from '../../../lib/base64url.mts';
-import { BrowserLocalDataError, decodeLocalDataJsonRecord, plaintextJsonCodec, type BrowserLocalDataCodec } from './browser-local-data.ts';
+import { BrowserLocalDataError, decodeLocalDataJsonRecord, plaintextJsonCodec, type BrowserLocalDataCodec } from './browser-local-data-content.ts';
 import { BROWSER_WORKSPACE_ENCRYPTION_CODEC, MAX_BROWSER_WORKSPACE_PASSPHRASE_BYTES, MIN_BROWSER_WORKSPACE_PASSPHRASE_CHARACTERS, readBrowserWorkspaceEncryption, type BrowserWorkspaceEncryption } from './browser-workspace-encryption-model.ts';
 import { DEFAULT_BROWSER_WORKSPACE, requireBrowserWorkspaceId } from './browser-workspace-context.ts';
 import { readRetainedFileReference, readVerifiedRetainedFileBytes, verifyRetainedFile } from '../../../packages/evidence/retained-file.mts';

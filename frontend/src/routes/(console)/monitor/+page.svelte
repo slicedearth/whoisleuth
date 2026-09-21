@@ -3,7 +3,7 @@
   import { getContext, onDestroy, tick, untrack } from 'svelte';
   import { goto } from '$app/navigation';
   import { parseBoundedJson } from '$lib/bounded-json';
-  import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
+import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { setCaseNavigationContext } from '$lib/console-workflow-state';
   import MonitorViewTabs from '$lib/components/MonitorViewTabs.svelte';

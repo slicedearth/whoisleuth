@@ -3,7 +3,7 @@
   import { beforeNavigate, goto } from '$app/navigation';
   import { onMount, tick, untrack } from 'svelte';
   import { parseBoundedJson } from '$lib/bounded-json';
-  import { BrowserLocalDataError } from '$lib/browser-local-data.ts';
+import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   import { registerAnalystUndo } from '$lib/analyst-undo';
   import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
   import { hasUnprotectedCaseDrafts } from '$lib/controllers/case-draft.svelte.ts';

@@ -8,7 +8,7 @@
   import { readSelectedConsoleCase, selectConsoleCase, subscribeSelectedConsoleCase } from '$lib/console-workflow-state.ts';
   import { activeProfile } from '$lib/brand-profiles';
   import { loadCases, type CaseRecord } from '$lib/cases';
-  import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data.ts';
+import { isExpectedBrowserLocalDataFailure } from '$lib/browser-local-data-content.ts';
   import type { BrandProfile } from '$lib/analysis/brand-profile-model.ts';
   import { buildInvestigationHandoffReadiness } from '$lib/analysis/investigation-handoff-readiness.ts';
   import { buildGuidedCollectionPreflight } from '$lib/analysis/collection-preflight.ts';

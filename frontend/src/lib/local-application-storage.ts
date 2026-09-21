@@ -1,4 +1,4 @@
-import { BrowserLocalDataError } from './browser-local-data.ts';
+import { BrowserLocalDataError } from './browser-local-data-content.ts';
 import { readResponseBytesCapped } from './bounded-json-response.ts';
 import { isLocalApplication, localApplicationWorkspaceId } from './local-application-context.ts';
 import { runBrowserWorkerOperation } from './browser-worker-operation.ts';
