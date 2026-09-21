@@ -136,8 +136,10 @@ to change a patch number.
 Performance reports retain samples, execution context, readiness, long tasks
 and layout evidence. Elapsed time is observational, not a limit calibrated to
 one development machine. Compare repeated workloads under comparable
-conditions. Functional readiness, network boundaries, byte limits and bounded
-timeouts remain enforced.
+conditions. Interaction reports separate deliberate expansion from movement
+after usable paint: transition movement is observational; post-readiness
+stability and cold-page layout checks remain blocking. Functional readiness,
+network boundaries, byte limits and bounded timeouts remain enforced.
 
 Coverage includes loaded production TypeScript and independent critical I/O
 floors. Exclusions must identify their type, build, browser or process check.

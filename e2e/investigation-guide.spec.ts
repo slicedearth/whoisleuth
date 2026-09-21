@@ -627,6 +627,56 @@ test('request review is keyboard-operable and opening a tool does not claim comp
   expect(stored.stages[0].outcome).toBe('pending');
 });
 
+test('return control follows every visibility change in a delivered batch', { tag: '@timing-sensitive' }, async ({ page }) => {
+  type BatchControl = { hold: () => void; ratios: () => number[]; flush: () => void };
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.addInitScript(() => {
+    const NativeObserver = IntersectionObserver;
+    const pending = new Map<IntersectionObserver, { callback: IntersectionObserverCallback; entries: IntersectionObserverEntry[] }>();
+    let holding = false;
+    Object.defineProperty(window, '__guideIntersectionBatch', { value: {
+      hold: () => { holding = true; },
+      ratios: () => [...pending.values()].flatMap(batch => batch.entries.map(entry => entry.intersectionRatio)),
+      flush: () => {
+        holding = false;
+        for (const [observer, batch] of pending) batch.callback(batch.entries, observer);
+        pending.clear();
+      },
+    } });
+    window.IntersectionObserver = class extends NativeObserver {
+      constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+        super((entries, observer) => {
+          if (!holding || !entries.every(entry => entry.target.matches('.current-action'))) {
+            callback(entries, observer);
+            return;
+          }
+          const batch = pending.get(observer) ?? { callback, entries: [] };
+          batch.entries.push(...entries);
+          pending.set(observer, batch);
+        }, options);
+      }
+    };
+  });
+  await startRecipe(page);
+  const action = currentAction(page);
+  const control = page.getByRole('button', { name: 'Return to guided investigation: Collect domain evidence' });
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect(control).toBeVisible();
+  await page.evaluate(() => (window as typeof window & { __guideIntersectionBatch: BatchControl }).__guideIntersectionBatch.hold());
+  await action.evaluate(element => element.scrollIntoView({ block: 'center' }));
+  const ratios = () => page.evaluate(() => (window as typeof window & { __guideIntersectionBatch: BatchControl }).__guideIntersectionBatch.ratios());
+  await expect.poll(async () => (await ratios()).some(ratio => ratio >= 0.6)).toBe(true);
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect.poll(async () => (await ratios()).at(-1)).toBe(0);
+  // Real browser observations are delivered together, as under a busy event
+  // loop. A visible first entry must not hide the later off-screen state.
+  await page.evaluate(() => (window as typeof window & { __guideIntersectionBatch: BatchControl }).__guideIntersectionBatch.flush());
+  await expect(control).toBeVisible();
+  await control.click();
+  await expect(action).toBeFocused();
+  await expect(action).toBeInViewport({ ratio: 0.2 });
+});
+
 test('return control recovers when the first action-panel scroll is displaced', { tag: '@timing-sensitive' }, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 568 });
   await startRecipe(page);

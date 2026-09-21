@@ -14,16 +14,13 @@ test('minimal decoration exposes measurable contrast on plain reference surfaces
       await page.setViewportSize({ width, height: width === 320 ? 700 : 1080 });
       await page.goto('/resources');
       await expect(page.locator('body')).toHaveCSS('background-image', 'none');
-      const cards = page.locator('.goal-paths article');
-      await expect(cards.first()).toBeVisible();
-      const backgrounds = await cards.evaluateAll(elements => elements.map(element => ({
-        background: getComputedStyle(element).backgroundColor, image: getComputedStyle(element).backgroundImage,
-      })));
-      expect(backgrounds.length).toBeGreaterThan(0);
-      for (const background of backgrounds) {
-        expect(background.image).toBe('none');
-        expect(background.background).toMatch(/^rgb\(/u);
-      }
+      const paths = page.locator('.goal-paths article');
+      await expect(paths.first()).toBeVisible();
+      const images = await paths.evaluateAll(elements => elements.map(element => getComputedStyle(element).backgroundImage));
+      expect(images.length).toBeGreaterThan(0);
+      expect(images.every(image => image === 'none')).toBe(true);
+      // Contrast must be measurable against the rendered surface, including
+      // transparent items that inherit it; an opaque card is not a contract.
       const contrast = await new AxeBuilder({ page }).include('.reference-heading').include('.goal-paths').withRules(['color-contrast']).analyze();
       await testInfo.attach(`plain-contrast-${theme}-${width}.json`, { body: JSON.stringify({ passes: contrast.passes, incomplete: contrast.incomplete, violations: contrast.violations }), contentType: 'application/json' });
       expect(contrast.violations).toEqual([]);

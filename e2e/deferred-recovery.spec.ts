@@ -136,6 +136,7 @@ test('interaction observations exclude setup and retain movement before the driv
       scope.__whoisleuthInteractionReadiness.readyAt = 150;
       scope.emitInteractionEntries('layout-shift', [
         { startTime: 120, value: 0.002 },
+        { startTime: 130, value: 0.007, hadRecentInput: true },
         { startTime: 160, value: 0.003, hadRecentInput: true },
         { startTime: 200, value: 0.005, hadRecentInput: false },
       ]);
@@ -143,6 +144,7 @@ test('interaction observations exclude setup and retain movement before the driv
     expect(await readInteractionRuntimeProbe(page)).toEqual({
       longTaskSupported: true, longTaskCount: 1, longTaskTotalMs: 30,
       layoutShiftSupported: true, layoutShiftCount: 3, layoutShiftScore: 0.011,
+      transitionLayoutShiftCount: 3, transitionLayoutShiftScore: 0.013,
       residualLayoutShiftCount: 2, residualLayoutShiftScore: 0.008,
     });
   } finally {

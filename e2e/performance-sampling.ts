@@ -50,6 +50,8 @@ export type InteractionRuntimeProbe = Readonly<{
   layoutShiftSupported: boolean;
   layoutShiftCount: number;
   layoutShiftScore: number;
+  transitionLayoutShiftCount: number;
+  transitionLayoutShiftScore: number;
   residualLayoutShiftCount: number;
   residualLayoutShiftScore: number;
 }>;
@@ -68,6 +70,8 @@ export function resetInteractionRuntimeProbe(): void {
     layoutShiftSupported: false,
     layoutShiftCount: 0,
     layoutShiftScore: 0,
+    transitionLayoutShiftCount: 0,
+    transitionLayoutShiftScore: 0,
     residualLayoutShiftCount: 0,
     residualLayoutShiftScore: 0,
     observers: [] as PerformanceObserver[],
@@ -106,6 +110,9 @@ export function resetInteractionRuntimeProbe(): void {
         if (marks.readyAt !== null && shift.startTime >= marks.readyAt) {
           probe.residualLayoutShiftCount += 1;
           probe.residualLayoutShiftScore += shift.value;
+        } else {
+          probe.transitionLayoutShiftCount += 1;
+          probe.transitionLayoutShiftScore += shift.value;
         }
       }
     });
@@ -125,6 +132,8 @@ export async function readInteractionRuntimeProbe(page: Page): Promise<Interacti
       layoutShiftSupported: probe?.layoutShiftSupported ?? false,
       layoutShiftCount: probe?.layoutShiftCount ?? 0,
       layoutShiftScore: Math.round((probe?.layoutShiftScore ?? 0) * 10_000) / 10_000,
+      transitionLayoutShiftCount: probe?.transitionLayoutShiftCount ?? 0,
+      transitionLayoutShiftScore: Math.round((probe?.transitionLayoutShiftScore ?? 0) * 10_000) / 10_000,
       residualLayoutShiftCount: probe?.residualLayoutShiftCount ?? 0,
       residualLayoutShiftScore: Math.round((probe?.residualLayoutShiftScore ?? 0) * 10_000) / 10_000,
     };

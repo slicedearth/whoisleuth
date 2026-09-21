@@ -37,7 +37,6 @@ type InteractionId =
 
 type InteractionBudget = Readonly<{
   assetEncodedTransferBytes: number;
-  layoutShiftScore: number;
   residualLayoutShiftScore: number;
 }>;
 
@@ -62,6 +61,8 @@ type DeferredInteractionMeasurement = Readonly<{
   layoutShiftSupported: boolean;
   layoutShiftCount: number;
   layoutShiftScore: number;
+  transitionLayoutShiftCount: number;
+  transitionLayoutShiftScore: number;
   residualLayoutShiftCount: number;
   residualLayoutShiftScore: number;
   investigationRequestCount: number;
@@ -101,7 +102,8 @@ type DeferredInteractionSampleSet = Readonly<{
 // These are transfer ceilings, not historical measurements. Prepared
 // interactions require zero new assets; the portfolio ceiling includes its
 // source-qualified retained-history view. Each run reports actual transfer,
-// timing and layout separately. Elapsed time is not an acceptance threshold.
+// timing and layout separately. Elapsed time and pre-readiness transition
+// movement are observations; movement after usable paint remains bounded.
 const INTERACTION_TRANSFER_LIMITS: Readonly<Record<InteractionId, number>> = Object.freeze({
   cli_command_detail: 0,
   cli_catalogue_filter: 0,
@@ -120,7 +122,6 @@ const INTERACTION_TRANSFER_LIMITS: Readonly<Record<InteractionId, number>> = Obj
 function interactionBudget(interaction: InteractionId): InteractionBudget {
   return Object.freeze({
     assetEncodedTransferBytes: INTERACTION_TRANSFER_LIMITS[interaction],
-    layoutShiftScore: 0.01,
     residualLayoutShiftScore: 0.01,
   });
 }
@@ -298,6 +299,8 @@ async function measureDeferredInteractionSample(
       layoutShiftSupported: captured.runtime.layoutShiftSupported,
       layoutShiftCount: captured.runtime.layoutShiftCount,
       layoutShiftScore: captured.runtime.layoutShiftScore,
+      transitionLayoutShiftCount: captured.runtime.transitionLayoutShiftCount,
+      transitionLayoutShiftScore: captured.runtime.transitionLayoutShiftScore,
       residualLayoutShiftCount: captured.runtime.residualLayoutShiftCount,
       residualLayoutShiftScore: captured.runtime.residualLayoutShiftScore,
       investigationRequestCount: captured.investigationRequests.length,
@@ -312,8 +315,9 @@ async function measureDeferredInteractionSample(
         'Transfer includes same-origin JavaScript and CSS completed after the explicit action.',
         'The Chromium run must expose long-task and layout-shift observers; zero means none were observed.',
         'Layout shift excludes entries associated with recent input, matching the browser CLS definition.',
+        'Transition layout shift includes every entry between input and browser-owned readiness. It reports expansion and other transition movement without a recent-input exemption or acceptance ceiling.',
         'Residual layout shift includes every entry from browser-owned usable readiness through eight observation frames, including movement before host assertions complete.',
-        'Transfer and layout ceilings are reviewed resource and presentation regression limits, not elapsed-time targets.',
+        'Transfer and post-readiness layout ceilings remain blocking; deliberate expansion is not treated as movement after an already usable interface.',
         'Elapsed time and long-task duration are observations for the recorded execution context, not universal performance guarantees or CI timing thresholds.',
       ]),
     });
@@ -336,7 +340,6 @@ async function measureDeferredInteractionSample(
     expect(measurement.usableMs).toBeGreaterThan(0);
     expect(measurement.longTaskSupported).toBe(true);
     expect(measurement.layoutShiftSupported).toBe(true);
-    expect(measurement.layoutShiftScore).toBeLessThanOrEqual(budget.layoutShiftScore);
     expect(measurement.residualLayoutShiftScore).toBeLessThanOrEqual(budget.residualLayoutShiftScore);
     expect(captured.investigationRequests, 'module loading must not start an investigation or collection request').toEqual([]);
     return measurement;

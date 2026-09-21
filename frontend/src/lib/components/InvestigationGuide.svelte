@@ -214,10 +214,15 @@
     actionVisible = actionExposureRatio(panel) >= usefulActionExposure;
     if (typeof IntersectionObserver === 'undefined') return;
     let active = true;
-    const observer = new IntersectionObserver(([entry]) => {
+    const observer = new IntersectionObserver((entries) => {
       if (!active || !panel.isConnected) return;
-      const ratio = entry?.isIntersecting ? entry.intersectionRatio : 0;
-      actionVisible = ratio >= (actionVisible ? usefulActionExposure : returnControlHideExposure);
+      // One delivery can include several threshold crossings. Apply each in
+      // order so hysteresis retains the latest state, not a stale first entry.
+      for (const entry of entries) {
+        if (entry.target !== panel) continue;
+        const ratio = entry.isIntersecting ? entry.intersectionRatio : 0;
+        actionVisible = ratio >= (actionVisible ? usefulActionExposure : returnControlHideExposure);
+      }
     }, { threshold: [0, usefulActionExposure, returnControlHideExposure] });
     observer.observe(panel);
     return () => { active = false; observer.disconnect(); };
