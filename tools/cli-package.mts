@@ -26,9 +26,6 @@ import {
   WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL,
 } from '../packages/analysis/project-metadata.mts';
 import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
-import { CLI_INVESTIGATION_RUN_SCHEMA, CLI_INVESTIGATION_RUN_VERSION, MAX_INVESTIGATION_RUN_BYTES } from '../packages/contracts/investigation-run.mts';
-import { CLI_CASE_PACK_WRITER_FIXTURE_ID } from '../packages/contracts/case-portability.mts';
-import { assertReleaseVersionDerivedCasePack } from './release-version-check.mts';
 import {
   readBoundedRegularFile,
   readBoundedRegularFileWithin,
@@ -37,6 +34,11 @@ import { normalizeSemanticVersion } from './release-version-check.mts';
 import { buildThirdPartyNotices } from './third-party-notices.mts';
 import { checkInstalledSigningTrust } from './cli-signing-package-check.mts';
 import { checkInstalledCaseFiles } from './cli-case-package-check.mts';
+import { createInstalledCliRunner } from './installed-cli-check.mts';
+import { checkInstalledCliDiscovery } from './cli-discovery-package-check.mts';
+import { checkInstalledCliEvidence } from './cli-evidence-package-check.mts';
+import { checkInstalledCliWorkflows } from './cli-workflow-package-check.mts';
+import { checkInstalledCliIncidents } from './cli-incident-package-check.mts';
 import { installedDependencyEvidence } from './installed-dependency-evidence.mts';
 import { validateCandidateReport } from './published-cli-check.mts';
 import {
@@ -57,11 +59,12 @@ export {
 } from './cli-package-contract.mts';
 import {
   boundedPositiveInteger as positiveInteger,
+  boundedUnpaddedText as boundedString,
+  boundedSafeRelativePath as safeRelativePath,
   requireJsonRecord as record,
 } from './maintainer-tool-helpers.mts';
 import {
   CLI_COMMAND_REGISTRY,
-  CLI_COMMANDS,
   type CliHandlerOwner,
 } from '../cli/command-reference.mts';
 
@@ -105,7 +108,7 @@ type ParsedArguments = Readonly<{
 }>;
 
 const execFile = promisify(execFileCallback);
-export const CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS = 15_000;
+export { CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS } from './installed-cli-check.mts';
 
 const LOCAL_SOURCE_PATTERN = /^(?:bin|cli|lib|frontend\/src\/lib|packages\/(?!(?:web-capture|local-application)\/)[A-Za-z0-9._-]+)\/[A-Za-z0-9._/-]+\.(?:mts|ts|json)$/u;
 const CLI_RUNTIME_ENTRY_MODULES = Object.freeze(['bin/whoisleuth.mts', 'cli/runner.mts']);
@@ -207,21 +210,6 @@ export const CLI_PACKAGE_SUPPORT_FILES = Object.freeze([
 const CLI_PACKAGE_COMPILER_CONTEXT_FILES = Object.freeze([
   'frontend/package.json',
 ]);
-
-function boundedString(value: unknown, label: string, maxLength = 240): string {
-  if (typeof value !== 'string' || value.length === 0 || value.length > maxLength || value.trim() !== value) {
-    throw new TypeError(`${label} must be a non-empty bounded string.`);
-  }
-  return value;
-}
-
-function safeRelativePath(value: unknown, label: string): string {
-  const candidate = boundedString(value, label, 512);
-  if (path.isAbsolute(candidate) || candidate.includes('\\') || candidate.split('/').some((part) => !part || part === '.' || part === '..')) {
-    throw new TypeError(`${label} is not a safe repository-relative path.`);
-  }
-  return candidate;
-}
 
 function dependencies(value: unknown): readonly DependencyEntry[] {
   if (value === undefined) return [];
@@ -484,26 +472,6 @@ function parsePackResult(value: unknown): JsonRecord {
   return record(value[0], 'npm pack result');
 }
 
-async function runInstalledCheck(executable: string, args: readonly string[], label: string, expectedExitCode = 0, expectedDiagnostics?: RegExp): Promise<string> {
-  let output: { stdout: string; stderr: string };
-  let exitCode = 0;
-  try {
-    output = await execFile(process.execPath, [executable, ...args], {
-      encoding: 'utf8', timeout: CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS,
-      killSignal: 'SIGTERM', maxBuffer: 2 * 1024 * 1024,
-      env: packageProcessEnvironment({ FORCE_COLOR: '0', NO_COLOR: '1' }),
-    });
-  } catch (cause) {
-    const error = cause as { code?: unknown; stdout?: unknown; stderr?: unknown; killed?: unknown };
-    if (error.code !== expectedExitCode || error.killed || typeof error.stdout !== 'string' || typeof error.stderr !== 'string') throw cause;
-    exitCode = Number(error.code);
-    output = { stdout: error.stdout, stderr: error.stderr };
-  }
-  if (exitCode !== expectedExitCode) throw new TypeError(`Installed CLI ${label} returned an unexpected exit code.`);
-  if (expectedDiagnostics ? !expectedDiagnostics.test(output.stderr) : output.stderr) throw new TypeError(`Installed CLI ${label} wrote unexpected diagnostics.`);
-  return output.stdout;
-}
-
 export async function checkCliPackage(repositoryRoot: string, options: CliPackageOptions = {}): Promise<CliPackageReport> {
   const publicationEnabled = options.publicationEnabled === true;
   if (publicationEnabled && (!options.artifactDirectory || !options.expectedTag)) {
@@ -569,7 +537,6 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       'package.template.json',
     );
     const lockfile = parseBoundedJsonBytes(snapshotBytes(manifestSnapshot, 'package-lock.json'), 'package-lock.json');
-    const expectedCommands = CLI_COMMANDS;
     const manifest = buildCliPackageManifest(rootManifest, templateManifest, lockfile, { publicationEnabled });
     await materializePackageSourceSnapshot(sourceRoot, sourceSnapshot);
     await materializePackageSourceSnapshot(sourceRoot, manifestSnapshot);
@@ -764,302 +731,13 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     } else if (installedManifest.private !== true || Object.hasOwn(installedManifest, 'publishConfig')) {
       throw new TypeError('Installed package check does not retain its private publication boundary.');
     }
-    const help = await runInstalledCheck(executable, ['--help'], 'help');
-    if (!help.startsWith('WHOISleuth CLI\n')
-      || !help.includes('Fast lookup is the default; deep collection')
-      || !help.includes('eligible interactive terminal opens a bounded launcher')) {
-      throw new TypeError('Installed CLI help contract failed.');
-    }
-    const zeroArgumentHelp = await runInstalledCheck(executable, [], 'zero-argument redirected help');
-    if (zeroArgumentHelp !== help) throw new TypeError('Installed CLI zero-argument redirected invocation did not preserve static help.');
-    const shortHelp = await runInstalledCheck(executable, ['-h'], 'short help');
-    if (shortHelp !== help) throw new TypeError('Installed CLI short help alias did not preserve static help.');
-    const version = await runInstalledCheck(executable, ['--version'], 'version');
-    if (version !== `${packageVersion}\n`) throw new TypeError('Installed CLI version does not match the generated package manifest.');
-    const shortVersion = await runInstalledCheck(executable, ['-V'], 'short version');
-    if (shortVersion !== version) throw new TypeError('Installed CLI short version alias did not preserve the package version.');
-    const doctor = await runInstalledCheck(executable, ['doctor', '--json'], 'doctor');
-    const doctorDocument = record(JSON.parse(doctor), 'Installed doctor output');
-    if (doctorDocument.schema !== 'whoisleuth.cli.doctor' || doctorDocument.networkRequested !== false) {
-      throw new TypeError('Installed offline doctor command returned the wrong contract.');
-    }
-    const commands = await runInstalledCheck(executable, ['commands', '--json'], 'commands');
-    const commandCatalogue = record(JSON.parse(commands), 'Installed command catalogue');
-    if (commandCatalogue.schema !== 'whoisleuth.cli.command-catalogue'
-      || commandCatalogue.version !== 1
-      || !Array.isArray(commandCatalogue.commands)
-      || Object.keys(commandCatalogue).sort().join(',') !== 'commands,packageVersion,schema,version') {
-      throw new TypeError('Installed command catalogue returned the wrong contract.');
-    }
-    const lookupPlan = await runInstalledCheck(executable, ['lookup', 'example.test', '--deep', '--plan', '--json'], 'lookup plan');
-    const lookupPlanDocument = record(JSON.parse(lookupPlan), 'Installed Lookup plan');
-    if (lookupPlanDocument.schema !== 'whoisleuth.cli.lookup-plan'
-      || record(lookupPlanDocument.planning, 'Installed Lookup plan collection').networkRequestsMade !== false) {
-      throw new TypeError('Installed offline Lookup plan returned the wrong contract.');
-    }
-    const directLookupPlan = await runInstalledCheck(executable, ['example.test', '--deep', '--plan', '--json'], 'direct Lookup plan');
-    const directLookupPlanDocument = record(JSON.parse(directLookupPlan), 'Installed direct Lookup plan');
-    if (directLookupPlanDocument.schema !== 'whoisleuth.cli.lookup-plan'
-      || record(directLookupPlanDocument.planning, 'Installed direct Lookup plan collection').networkRequestsMade !== false
-      || record(directLookupPlanDocument.target, 'Installed direct Lookup target').query !== record(lookupPlanDocument.target, 'Installed Lookup target').query
-      || directLookupPlanDocument.mode !== lookupPlanDocument.mode) {
-      throw new TypeError('Installed direct target did not preserve the offline Lookup plan contract.');
-    }
-    const selectedUrlPlan = await runInstalledCheck(executable, ['lookup', 'https://portal.example.test/review?item=private-example#local-fragment',
-      '--deep', '--exact-url', '--plan', '--json'], 'selected URL plan');
-    const selectedUrlPlanDocument = record(JSON.parse(selectedUrlPlan), 'Installed selected URL plan');
-    if (selectedUrlPlanDocument.schema !== 'whoisleuth.cli.lookup-plan'
-      || record(selectedUrlPlanDocument.target, 'Installed selected URL target').query !== 'portal.example.test'
-      || record(selectedUrlPlanDocument.planning, 'Installed selected URL planning').networkRequestsMade !== false
-      || !selectedUrlPlan.includes('selected URL path and query')
-      || /private-example|local-fragment|\/review/u.test(selectedUrlPlan)) {
-      throw new TypeError('Installed selected URL plan did not preserve its offline disclosure boundary.');
-    }
-    const completionChecks = [
-      ['bash', '-F _whoisleuth_completion whoisleuth', '--palette', '--save-lookup'],
-      ['zsh', '#compdef whoisleuth', '--palette', '--save-lookup'],
-      ['fish', 'complete -c whoisleuth', '-l palette', '-l save-lookup'],
-      ['powershell', 'Register-ArgumentCompleter -Native -CommandName whoisleuth', '--palette', '--save-lookup'],
-    ] as const;
-    for (const [shell, marker, paletteMarker, saveLookupMarker] of completionChecks) {
-      const completion = await runInstalledCheck(executable, ['completion', shell], `${shell} completion`);
-      if (!completion.includes(marker) || !completion.includes(paletteMarker) || !completion.includes(saveLookupMarker)) {
-        throw new TypeError(`Installed ${shell} completion command returned the wrong script.`);
-      }
-    }
-    const manual = await runInstalledCheck(executable, ['manual'], 'manual');
-    if (!manual.startsWith('.TH WHOISLEUTH 1')
-      || !manual.includes('.SS diff')
-      || !manual.includes('\\-\\-save\\-lookup')
-      || !manual.includes('--palette')) {
-      throw new TypeError('Installed CLI manual command returned the wrong document.');
-    }
-    const registrySupport = await runInstalledCheck(executable, ['registry-support', 'example.test', '--json'], 'registry-support');
-    const registryDocument = record(JSON.parse(registrySupport), 'Installed registry-support output');
-    if (registryDocument.schema !== 'whoisleuth.cli.registry-support') throw new TypeError('Installed offline registry-support command returned the wrong schema.');
-    const discovery = await runInstalledCheck(executable, [
-      'discover',
-      'example.test',
-      '--families',
-      'character_omission',
-      '--tlds',
-      'test',
-      '--json',
-    ], 'discover');
-    const discoveryDocument = record(JSON.parse(discovery), 'Installed discover output');
-    if (discoveryDocument.schema !== 'whoisleuth.cli.discover') throw new TypeError('Installed offline discover command returned the wrong schema.');
-    if (!Array.isArray(discoveryDocument.candidates) || discoveryDocument.candidates.length === 0) {
-      throw new TypeError('Installed offline discover command returned no candidates.');
-    }
-    const discoveryScanHelp = await runInstalledCheck(executable, ['discover-scan', '--help'], 'discover-scan help');
-    if (!discoveryScanHelp.includes('whoisleuth discover-scan') || !discoveryScanHelp.includes('This command performs network collection.')) {
-      throw new TypeError('Installed discover-scan help did not preserve its explicit network boundary.');
-    }
-    const mailHeaderFixture = path.join(temporaryRoot, 'message.eml');
-    await writeFile(mailHeaderFixture, [
-      'Authentication-Results: mx.example.test; spf=pass; dkim=pass; dmarc=pass',
-      'From: private-person@example.test',
-      'Subject: private subject',
-      '',
-      'private body',
-    ].join('\r\n'), { encoding: 'utf8', mode: 0o600 });
-    const mailHeaderReview = record(JSON.parse(await runInstalledCheck(
-      executable,
-      ['mail-headers', mailHeaderFixture, '--json'],
-      'mail-header review',
-    )), 'Installed mail-header review');
-    const mailHeaderProvenance = record(mailHeaderReview.provenance, 'Installed mail-header provenance');
-    if (mailHeaderReview.schema !== 'whoisleuth.cli.mail-header-review'
-      || mailHeaderProvenance.bodyRetained !== false
-      || mailHeaderProvenance.attachmentsRetained !== false
-      || mailHeaderProvenance.localPartsRetained !== false
-      || JSON.stringify(mailHeaderReview).includes('private-person')
-      || JSON.stringify(mailHeaderReview).includes('private subject')
-      || JSON.stringify(mailHeaderReview).includes('private body')) {
-      throw new TypeError('Installed offline mail-header review did not preserve its privacy boundary.');
-    }
-
-    const commandHelpChecks: string[] = [];
-    const packageSource = path.join(temporaryRoot, 'package-source.json');
-    const packageOpaque = path.join(temporaryRoot, 'package-source.bin');
-    const packageOutput = path.join(temporaryRoot, 'evidence.zip');
-    await writeFile(packageSource, await readBoundedRegularFileWithin(repositoryRoot, 'test/fixtures/cli-lookup-v1.json', {
-      maximumBytes: 1024 * 1024, minimumBytes: 1, label: 'Public saved Lookup fixture',
-    }), { flag: 'wx', mode: 0o600 });
-    await writeFile(packageOpaque, new Uint8Array([0, 255, 128, 1]), { flag: 'wx', mode: 0o600 });
-    const packageCreation = await runInstalledCheck(executable, ['manifest', packageSource, packageOpaque,
-      '--workflow', 'Evidence review', '--package', '--output', packageOutput], 'evidence package creation');
-    if (packageCreation !== '') throw new TypeError('Binary package creation emitted terminal content.');
-    const packageReview = record(JSON.parse(await runInstalledCheck(executable,
-      ['verify-artifact', packageOutput, '--package', '--json', '--strict-exit'], 'evidence package verification')), 'Installed evidence package review');
-    const packageDetails = record(packageReview.package, 'Installed evidence package details');
-    const packageChecks = record(packageReview.checks, 'Installed evidence package checks');
-    if (packageReview.state !== 'verified' || packageDetails.storageEffect !== 'none'
-      || packageDetails.signatureTrust !== 'not_checked' || packageDetails.timestampAssurance !== 'not_checked'
-      || packageChecks.contentIntegrity !== 'verified' || packageChecks.contentIntegrityScope !== 'manifest_and_files'
-      || !Array.isArray(packageDetails.entries) || packageDetails.entries.length !== 2
-      || record(packageDetails.entries[0], 'Installed package JSON').state !== 'admitted'
-      || record(packageDetails.entries[1], 'Installed package binary').state !== 'opaque'
-      || record(packageDetails.entries[1], 'Installed package binary').byteLength !== 4) {
-      throw new TypeError('Installed package round trip did not preserve file identity and separate assurance.');
-    }
-    const folderOutput = path.join(temporaryRoot, 'evidence-folder');
-    const encryptedOutput = path.join(temporaryRoot, 'evidence.wlep');
-    const packagePassphrase = path.join(temporaryRoot, 'package-passphrase.txt');
-    await writeFile(packagePassphrase, 'selected package fixture passphrase\n', { flag: 'wx', mode: 0o600 });
-    const encryptedCreation = await runInstalledCheck(executable, ['manifest', packageSource, packageOpaque,
-      '--workflow', 'Evidence review', '--package', '--passphrase-file', packagePassphrase, '--output', encryptedOutput], 'encrypted evidence package creation');
-    const encryptedReview = record(JSON.parse(await runInstalledCheck(executable,
-      ['verify-artifact', encryptedOutput, '--package', '--passphrase-file', packagePassphrase, '--json', '--strict-exit'], 'encrypted evidence package verification')), 'Installed encrypted package review');
-    if (encryptedCreation !== '' || encryptedReview.state !== 'verified'
-      || record(encryptedReview.checks, 'Encrypted package checks').authenticatedEncryption !== 'verified'
-      || JSON.stringify(record(encryptedReview.package, 'Encrypted package details').entries) !== JSON.stringify(packageDetails.entries)
-      || JSON.stringify(encryptedReview).includes('selected package fixture passphrase')) {
-      throw new TypeError('Installed encrypted package round trip did not authenticate unchanged files privately.');
-    }
-    await runInstalledCheck(executable, ['verify-artifact', encryptedOutput, '--package', '--json'],
-      'encrypted evidence package locked refusal', 3, /^Artefact verification failed: [^\r\n]+\n$/u);
-    const folderManifest = record(JSON.parse(await runInstalledCheck(executable, ['manifest', packageSource, packageOpaque,
-      '--workflow', 'Evidence review', '--folder', folderOutput, '--json'], 'evidence folder creation')), 'Installed folder manifest');
-    const folderReview = record(JSON.parse(await runInstalledCheck(executable,
-      ['verify-artifact', '--folder', folderOutput, '--json', '--strict-exit'], 'evidence folder verification')), 'Installed folder verification');
-    const folderDetails = record(folderReview.package, 'Installed folder details');
-    const folderBytes = await readBoundedRegularFileWithin(folderOutput, 'artifacts/artifact-2', { maximumBytes: 4, expectedBytes: 4, label: 'Installed folder binary' });
-    if (folderManifest.schema !== 'whoisleuth.investigation-manifest' || folderReview.state !== 'verified'
-      || JSON.stringify(folderDetails.entries) !== JSON.stringify(packageDetails.entries)
-      || !folderBytes.equals(Buffer.from([0, 255, 128, 1]))
-      || !Array.isArray(folderReview.limitations) || !folderReview.limitations.some(value => typeof value === 'string' && value.includes('not filesystem metadata'))) {
-      throw new TypeError('Installed folder output did not preserve exact files and separate container identity.');
-    }
-    const bagItZip = path.join(temporaryRoot, 'bagit.zip'), bagItFolder = path.join(temporaryRoot, 'bagit-folder');
-    if (await runInstalledCheck(executable, ['manifest', packageSource, packageOpaque, '--workflow', 'Evidence review',
-      '--bagit', '--package', '--output', bagItZip], 'BagIt ZIP creation') !== '') throw new TypeError('BagIt creation emitted terminal binary content.');
-    await runInstalledCheck(executable, ['manifest', packageSource, packageOpaque, '--workflow', 'Evidence review',
-      '--bagit', '--folder', bagItFolder, '--quiet'], 'BagIt folder creation');
-    for (const [label, selection] of [['ZIP', [bagItZip, '--package']], ['folder', ['--folder', bagItFolder]]] as const) {
-      const reviewed = record(JSON.parse(await runInstalledCheck(executable, ['verify-artifact', ...selection,
-        '--bagit', '--json', '--strict-exit'], `BagIt ${label} verification`)), 'Installed BagIt review');
-      const bag = record(reviewed.bagit, 'Installed BagIt details');
-      if (reviewed.state !== 'integrity_valid' || bag.state !== 'valid' || bag.checksumsVerified !== true || bag.complete !== true
-        || !Array.isArray(bag.entries) || bag.entries.length !== 2 || record(bag.entries[1], 'BagIt binary').byteLength !== 4
-        || record(reviewed.checks, 'BagIt checks').authenticatedEncryption !== 'not_applicable'
-        || JSON.stringify(reviewed).includes('package-source')) throw new TypeError('Installed BagIt verification did not preserve bounded, redacted integrity semantics.');
-    }
-    const bagItBytes = await readBoundedRegularFileWithin(bagItFolder, 'data/artifact-2', { maximumBytes: 4, expectedBytes: 4, label: 'Installed BagIt binary' });
-    if (!bagItBytes.equals(Buffer.from([0, 255, 128, 1]))) throw new TypeError('Installed BagIt output changed selected file bytes.');
-    await rm(path.join(bagItFolder, 'data/artifact-2'));
-    const missingBag = record(JSON.parse(await runInstalledCheck(executable, ['verify-artifact', '--folder', bagItFolder,
-      '--bagit', '--json', '--strict-exit'], 'BagIt incomplete verification', 4)), 'Installed incomplete BagIt review');
-    if (missingBag.state !== 'partial' || record(missingBag.bagit, 'Incomplete BagIt details').state !== 'incomplete') throw new TypeError('Installed BagIt verification concealed an absent original.');
-    const originalManifestBytes = await readBoundedRegularFileWithin(folderOutput, 'manifest.json', {
-      maximumBytes: 512 * 1024, minimumBytes: 1, label: 'Installed folder manifest',
-    });
-    const refusal = await runInstalledCheck(executable, ['manifest', packageSource, '--workflow', 'Evidence review', '--folder', folderOutput, '--quiet'],
-      'evidence folder replacement refusal', 2, /^Usage error: [^\r\n]+\n$/u);
-    const preservedManifestBytes = await readBoundedRegularFileWithin(folderOutput, 'manifest.json', {
-      maximumBytes: 512 * 1024, minimumBytes: 1, label: 'Installed folder manifest',
-    });
-    if (refusal !== '' || !preservedManifestBytes.equals(originalManifestBytes)) throw new TypeError('Folder replacement refusal changed the existing manifest or emitted success output.');
-    const signingChecks = await checkInstalledSigningTrust(repositoryRoot, temporaryRoot,
-      (args, label, code) => runInstalledCheck(executable, args, label, code));
-    const workflowFixture = path.join(temporaryRoot, 'workflow.json');
-    await writeFile(workflowFixture, await readBoundedRegularFileWithin(repositoryRoot, 'test/fixtures/cli-investigation-run-v2.json', {
-      maximumBytes: MAX_INVESTIGATION_RUN_BYTES, minimumBytes: 1, label: 'Public workflow checkpoint fixture',
-    }), { mode: 0o600, flag: 'wx' });
-    const workflow = record(JSON.parse(await runInstalledCheck(executable, [
-      'workflow-run', 'domain-triage', 'example.test', '--resume', workflowFixture,
-      '--use-artifact', 'export:1=collect', '--use-artifact', 'verify:1=export', '--json',
-    ], 'offline workflow artefact reuse', 4)), 'Installed workflow');
-    if (workflow.schema !== CLI_INVESTIGATION_RUN_SCHEMA || workflow.version !== CLI_INVESTIGATION_RUN_VERSION || workflow.state !== 'partial'
-      || !Array.isArray(workflow.completedSteps) || workflow.completedSteps.length !== 3
-      || record(workflow.completedSteps[1], 'Installed workflow export').command !== 'export'
-      || record(workflow.completedSteps[2], 'Installed workflow verification').command !== 'verify-artifact') {
-      throw new TypeError('Installed workflow did not retain and reuse the partial public observation offline.');
-    }
-    const handoffEvidence = path.join(temporaryRoot, 'handoff-evidence.json');
-    const handoffCases = path.join(temporaryRoot, 'handoff-cases.json');
-    const handoffCheckpoint = path.join(temporaryRoot, 'handoff-checkpoint.json');
-    const publicCases = record(JSON.parse((await readBoundedRegularFileWithin(repositoryRoot,
-      'test/fixtures/case-lifecycle/cli-case-pack-v2-case-v15.json', {
-        maximumBytes: MAX_INVESTIGATION_RUN_BYTES, minimumBytes: 1, label: 'Public Case-pack fixture',
-      })).toString('utf8')), 'Public Case-pack fixture');
-    await writeFile(handoffEvidence, JSON.stringify(record(workflow.completedSteps[1], 'Retained export').result), { flag: 'wx', mode: 0o600 });
-    await writeFile(handoffCases, JSON.stringify({ version: publicCases.version, exportedAt: publicCases.exportedAt, cases: publicCases.cases }), { flag: 'wx', mode: 0o600 });
-    const handoff = record(JSON.parse(await runInstalledCheck(executable, [
-      'workflow-run', 'evidence-handoff', 'Example review', '--select', `verify=${handoffEvidence}`,
-      '--select', `package=${handoffCases}`, '--confirm-review', 'package', '--json',
-    ], 'offline handoff review boundary')), 'Installed handoff');
-    if (handoff.state !== 'awaiting_review_confirmation' || record(handoff.currentStep, 'Handoff review step').id !== 'lint'
-      || !Array.isArray(handoff.completedSteps) || handoff.completedSteps.length !== 2
-      || JSON.stringify(handoff.artifactBindings) !== JSON.stringify([{ stepId: 'lint', input: 1, sourceStepId: 'package' }])) {
-      throw new TypeError('Installed handoff did not pause before the separately declared sharing review.');
-    }
-    await writeFile(handoffCheckpoint, JSON.stringify(handoff), { flag: 'wx', mode: 0o600 });
-    const resumedHandoff = record(JSON.parse(await runInstalledCheck(executable, [
-      'workflow-run', 'evidence-handoff', 'Example review', '--resume', handoffCheckpoint, '--json',
-    ], 'offline handoff checkpoint approval isolation')), 'Resumed handoff');
-    if (resumedHandoff.state !== 'awaiting_review_confirmation' || !Array.isArray(resumedHandoff.reviewsConfirmedForThisRun)
-      || resumedHandoff.reviewsConfirmedForThisRun.length !== 0) throw new TypeError('A handoff checkpoint granted a review confirmation.');
-    const reviewedHandoff = record(JSON.parse(await runInstalledCheck(executable, [
-      'workflow-run', 'evidence-handoff', 'Example review', '--resume', handoffCheckpoint, '--confirm-review', 'lint', '--json',
-    ], 'offline handoff completion')), 'Reviewed handoff');
-    if (reviewedHandoff.state !== 'complete' || !Array.isArray(reviewedHandoff.completedSteps)
-      || reviewedHandoff.completedSteps.length !== 3 || reviewedHandoff.networkApprovedForThisRun !== false) {
-      throw new TypeError('Installed handoff did not finish offline after the selected review confirmation.');
-    }
-    const caseFileChecks = await checkInstalledCaseFiles(temporaryRoot, (args, label, code, diagnostics) =>
-      runInstalledCheck(executable, args, label, code, diagnostics));
-    const incidentChecks: string[] = [];
-    const currentPack = record(JSON.parse((await readBoundedRegularFileWithin(repositoryRoot,
-      `test/fixtures/case-lifecycle/${CLI_CASE_PACK_WRITER_FIXTURE_ID}.json`, {
-        maximumBytes: MAX_INVESTIGATION_RUN_BYTES, minimumBytes: 1, label: 'Current Case-pack fixture',
-      })).toString('utf8')), 'Current Case-pack fixture');
-    if (!Array.isArray(currentPack.cases) || !currentPack.cases.length) throw new TypeError('Current Case fixture has no records.');
-    const sourceIncident = record(currentPack.cases[0], 'Current incident fixture');
-    const incidentInput = path.join(temporaryRoot, 'incident-cases.json');
-    await writeFile(incidentInput, JSON.stringify({ version: currentPack.version, exportedAt: currentPack.exportedAt, cases: [
-      { ...sourceIncident, id: 'installed-incident-first', title: 'First private incident title' },
-      { ...sourceIncident, id: 'installed-incident-second', title: 'Second private incident title' },
-    ] }), { mode: 0o600, flag: 'wx' });
-    for (const audience of ['internal', 'trusted', 'public']) {
-      const output = await runInstalledCheck(executable, ['case-pack', incidentInput, '--audience', audience, '--reviewed', '--json'], `incident pack ${audience}`);
-      const pack = record(JSON.parse(output), 'Installed incident pack');
-      assertReleaseVersionDerivedCasePack(pack, packageVersion);
-      if (!Array.isArray(pack.cases) || pack.cases.length !== 2
-        || new Set(pack.cases.map(item => record(item, 'Installed incident').id)).size !== 2
-        || new Set(pack.cases.map(item => record(item, 'Installed incident').domain)).size !== 1
-        || (audience !== 'internal' && /private incident title/u.test(output))) {
-        throw new TypeError('Installed incident pack lost Case identity or exposed a shared-audience title.');
-      }
-      const incidentOutput = path.join(temporaryRoot, `incidents-${audience}.json`);
-      await writeFile(incidentOutput, output, { mode: 0o600, flag: 'wx' });
-      const verified = record(JSON.parse(await runInstalledCheck(executable,
-        ['verify-artifact', incidentOutput, '--json', '--strict-exit'], `incident pack ${audience} verification`)), 'Installed incident verification');
-      if (verified.state !== 'verified') throw new TypeError('The installed incident pack did not verify offline.');
-      incidentChecks.push(`incident-pack-${audience}`, `incident-pack-${audience}-verification`);
-    }
-    const catalogueCommands = commandCatalogue.commands.map((entry, index) => boundedString(
-      record(entry, `Installed command catalogue entry ${index + 1}`).command,
-      `Installed command catalogue entry ${index + 1} command`,
-      80,
-    ));
-    if (catalogueCommands.length !== expectedCommands.length
-      || catalogueCommands.some((command, index) => command !== expectedCommands[index])) {
-      throw new TypeError('Installed command catalogue must match the canonical command registry and order.');
-    }
-    for (const [index, entry] of commandCatalogue.commands.entries()) {
-      if (Object.keys(record(entry, `Installed command catalogue entry ${index + 1}`)).sort().join(',')
-        !== 'boundary,collection,command,description,example,usage') {
-        throw new TypeError(`Installed command catalogue entry ${index + 1} has an unsupported shape.`);
-      }
-    }
-    for (const command of catalogueCommands) {
-      const commandHelp = await runInstalledCheck(executable, [command, '--help'], `${command} help`);
-      if (!commandHelp.includes(`whoisleuth ${command}`)) {
-        throw new TypeError(`Installed ${command} help did not preserve its command contract.`);
-      }
-      commandHelpChecks.push(`${command}-help`);
-    }
+    const installed = createInstalledCliRunner(executable);
+    await checkInstalledCliDiscovery(temporaryRoot, packageVersion, installed.run);
+    await checkInstalledCliEvidence(repositoryRoot, temporaryRoot, installed.run);
+    await checkInstalledSigningTrust(repositoryRoot, temporaryRoot, installed.run);
+    await checkInstalledCliWorkflows(repositoryRoot, temporaryRoot, installed.run);
+    await checkInstalledCaseFiles(temporaryRoot, installed.run);
+    await checkInstalledCliIncidents(repositoryRoot, temporaryRoot, packageVersion, installed.run);
 
     let archiveFilename: string | null = null;
     let archiveSha256: string | null = null;
@@ -1077,45 +755,9 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
 
     const installedChecks = Object.freeze([
       'installed-transitive-dependency-identities',
-      'help',
-      'short-help',
-      'zero-argument-help',
-      'version',
-      'short-version',
-      'doctor',
-      'commands',
-      'lookup-plan',
-      'direct-lookup-plan',
-      'selected-url-plan',
-      ...completionChecks.map(([shell]) => `${shell}-completion`),
-      'manual',
-      'registry-support',
-      'discover',
-      'discover-scan-network-boundary',
-      'mail-header-review',
-      'offline-workflow-artifact-reuse',
-      'offline-handoff-review-boundary',
-      'offline-handoff-checkpoint-approval-isolation',
-      'offline-handoff-completion',
-      ...incidentChecks,
-      ...caseFileChecks,
-      'evidence-package-creation',
-      'evidence-package-verification',
-      'encrypted-evidence-package-creation',
-      'encrypted-evidence-package-verification',
-      'encrypted-evidence-package-locked-refusal',
-      'evidence-folder-creation',
-      'evidence-folder-verification',
-      'evidence-folder-replacement-refusal',
-      'bagit-zip-creation',
-      'bagit-zip-verification',
-      'bagit-folder-creation',
-      'bagit-folder-verification',
-      'bagit-incomplete-verification',
-      ...signingChecks,
       'domain-control-deep-imports',
       ...installedHandlerChecks,
-      ...commandHelpChecks,
+      ...installed.completed(),
     ]);
     if (installedChecks.length === 0 || installedChecks.length > MAX_CLI_PACKAGE_PROCESSING_ITEMS) {
       throw new TypeError('Installed CLI checks exceed the package processing bound.');

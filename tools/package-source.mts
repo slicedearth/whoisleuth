@@ -13,21 +13,6 @@ import { MAX_PACKAGE_PROCESSING_ITEMS, MAX_PACKAGE_GRAPH_BYTES, MAX_PACKAGE_SOUR
 const execFile = promisify(execFileCallback);
 type JsonRecord = Record<string, unknown>;
 
-function boundedString(value: unknown, label: string, maxLength = 240): string {
-  if (typeof value !== 'string' || value.length === 0 || value.length > maxLength || value.trim() !== value) {
-    throw new TypeError(`${label} must be a non-empty bounded string.`);
-  }
-  return value;
-}
-
-function safeRelativePath(value: unknown, label: string): string {
-  const candidate = boundedString(value, label, 512);
-  if (path.isAbsolute(candidate) || candidate.includes('\\') || candidate.split('/').some((part) => !part || part === '.' || part === '..')) {
-    throw new TypeError(`${label} is not a safe repository-relative path.`);
-  }
-  return candidate;
-}
-
 type PackageSourceIdentity = Readonly<{ bytes: Buffer; digestSha256: string }>;
 
 export type PackageSourceSnapshot = ReadonlyMap<string, PackageSourceIdentity>;
@@ -92,7 +77,7 @@ export function packageProcessEnvironment(overrides: NodeJS.ProcessEnv = {}): No
 }
 
 export async function copyPackageFile(stagingRoot: string, destination: string, bytes: Buffer): Promise<void> {
-  const safeDestination = safeRelativePath(destination, 'Package destination');
+  const safeDestination = boundedSafeRelativePath(destination, 'Package destination');
   const destinationPath = path.join(stagingRoot, safeDestination);
   await mkdir(path.dirname(destinationPath), { recursive: true });
   await writeFile(destinationPath, bytes, { flag: 'wx', mode: 0o644 });
@@ -107,7 +92,7 @@ export async function capturePackageSourceSnapshot(
   const maximumFileBytes = state?.maximumFileBytes ?? MAX_PACKAGE_FILE_BYTES;
   const maximumBytes = state?.maximumBytes ?? MAX_PACKAGE_SOURCE_BYTES;
   for (const source of sources) {
-    const safeSource = safeRelativePath(source, 'Package source');
+    const safeSource = boundedSafeRelativePath(source, 'Package source');
     const bytes = await readBoundedRegularFileWithin(repositoryRoot, safeSource, {
       maximumBytes: maximumFileBytes,
       minimumBytes: 1,
@@ -357,7 +342,7 @@ export function validateCompiledPackageFiles(
     throw new TypeError(`Packed package contains ${observed} entries; expected between 1 and ${MAX_PACKAGE_PROCESSING_ITEMS}.`);
   }
   const entries = Object.freeze(packResult.files.map((entry, index) => (
-    safeRelativePath(record(entry, `Packed entry ${index + 1}`).path, `Packed entry ${index + 1} path`)
+    boundedSafeRelativePath(record(entry, `Packed entry ${index + 1}`).path, `Packed entry ${index + 1} path`)
   )));
   if (new Set(entries).size !== entries.length || options.exact && entries.length !== requiredEntries.length) {
     throw new TypeError('Packed package differs from its complete compiled output inventory.');

@@ -98,7 +98,7 @@ describe('scoped CLI package contract', () => {
       files: Array.from({ length: MAX_CLI_PACKAGE_PROCESSING_ITEMS + 1 }, (_, index) => ({ path: `lib/item-${index}.mjs` })),
     }), /expected between 1 and/u);
     assert.throws(() => validateCompiledPackageFiles({ files: [{ path: 'package.json' }] }, ['bin/whoisleuth.mjs']), /is missing/u);
-    assert.throws(() => validateCompiledPackageFiles({ files: [{ path: '../outside.mjs' }] }), /safe repository-relative path/u);
+    assert.throws(() => validateCompiledPackageFiles({ files: [{ path: '../outside.mjs' }] }), /safe relative path/u);
     assert.throws(() => validateCompiledPackageFiles({ files: [{ path: 'test/private.mjs' }] }), /excluded application or test path/u);
     assert.throws(() => validateCompiledPackageFiles({ files: [{ path: 'lib/source.mts' }] }), /source or source-map/u);
     assert.throws(() => validateCompiledPackageFiles({ files: [{ path: 'package.json' }, { path: 'lib/extra.mjs' }] },
@@ -229,7 +229,7 @@ describe('scoped CLI package contract', () => {
   });
 
   test('rejects unresolved, traversing, and incomplete dependency graphs', () => {
-    assert.throws(() => selectPackageSources({ modules: [{ source: '../bin/whoisleuth.mts' }] }), /safe repository-relative path/u);
+    assert.throws(() => selectPackageSources({ modules: [{ source: '../bin/whoisleuth.mts' }] }), /safe relative path/u);
     assert.throws(() => selectPackageSources({
       modules: [
         { source: 'bin/whoisleuth.mts', dependencies: [{ module: '../cli/missing.mts', couldNotResolve: true }] },

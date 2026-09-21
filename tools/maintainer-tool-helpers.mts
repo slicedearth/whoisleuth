@@ -50,6 +50,13 @@ export function boundedControlFreeText(value: unknown, label: string, maximum: n
   return value.trim();
 }
 
+export function boundedUnpaddedText(value: unknown, label: string, maximum = 240): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > maximum || value.trim() !== value) {
+    throw new TypeError(`${label} must be a non-empty bounded string.`);
+  }
+  return value;
+}
+
 export function canonicalControlFreeTimestamp(value: unknown, label: string): string {
   const normalized = normalizeExplicitIsoTimestamp(boundedControlFreeText(value, label, 64));
   if (!normalized) throw new TypeError(`${label} must be a valid timestamp with an explicit timezone.`);
@@ -106,6 +113,7 @@ export function boundedSafeRelativePath(value: unknown, label: string, maximum =
     || value.includes('\\')
     || hasMaintainerUnsafeCharacters(value)
     || path.posix.isAbsolute(value)
+    || path.win32.isAbsolute(value)
     || path.posix.normalize(value) !== value
     || value.split('/').some((part) => !part || part === '.' || part === '..')) {
     throw new TypeError(`${label} must be a bounded safe relative path.`);

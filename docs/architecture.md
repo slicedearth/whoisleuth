@@ -49,6 +49,9 @@ adapters.
 Package builders share bounded source discovery, snapshots, compilation and
 emitted-file validation in `tools/package-source.mts`. Each builder owns its
 entry points, runtime dependencies, allowed support files and installed checks.
+CLI installation checks are grouped by discovery, evidence containers, workflow
+resumption, Case exports and signing. Their shared process runner records completed
+invocations directly; package assembly does not maintain a second check inventory.
 The optional packages do not load the CLI builder to compile shared code.
 
 Schema source discovery inventories literal identities and their canonical

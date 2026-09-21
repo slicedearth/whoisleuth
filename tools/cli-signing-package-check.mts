@@ -4,9 +4,9 @@ import { join } from 'node:path';
 import { readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
 import { SIGNER_TRUST_STORE_SCHEMA, SIGNER_TRUST_STORE_VERSION } from '../cli/signer-trust.mts';
 
-type RunInstalled = (args: readonly string[], label: string, expectedExitCode?: number) => Promise<string>;
+import type { RunInstalledCli } from './installed-cli-check.mts';
 
-export async function checkInstalledSigningTrust(root: string, temporaryRoot: string, run: RunInstalled): Promise<readonly string[]> {
+export async function checkInstalledSigningTrust(root: string, temporaryRoot: string, run: RunInstalledCli): Promise<void> {
   const fixture = join(temporaryRoot, 'signing-manifest.json');
   await writeFile(fixture, await readBoundedRegularFileWithin(root, 'test/fixtures/case-lifecycle/case-response-packet-v8.json', {
     maximumBytes: 64 * 1024, minimumBytes: 1, label: 'Published response-packet fixture',
@@ -48,5 +48,4 @@ export async function checkInstalledSigningTrust(root: string, temporaryRoot: st
       throw new TypeError('Installed quiet signer policy emitted output.');
     }
   }
-  return ['offline-signing-and-verification', 'offline-signer-trust-policy'];
 }
