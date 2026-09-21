@@ -686,9 +686,14 @@ export function buildVerificationOwnershipPlan(
     const owner = ownershipRule(changedPath, directImpacts);
     const discoverRouteCoverage = ['frontend-user-interface', 'frontend-model'].includes(owner.id)
       && directImpacts.length === 1;
-    const routes = discoverRouteCoverage ? routeConsumers.get(changedPath) ?? [] : [];
+    const consumers = routeConsumers.get(changedPath) ?? [];
+    const routes = discoverRouteCoverage ? consumers.filter(file => file.startsWith('frontend/src/routes/')) : [];
     const routeImpacts = routes.flatMap(matchingRules);
-    const impacts = [...new Map([...directImpacts, ...routeImpacts].map(rule => [rule.id, rule])).values()];
+    // A helper extracted from a storage or loading owner inherits that owner's
+    // cross-cutting checks through real imports, not a new filename exception.
+    const inheritedImpacts = consumers.filter(file => !file.startsWith('frontend/src/routes/'))
+      .flatMap(matchingRules).filter(rule => rule.impactOnly);
+    const impacts = [...new Map([...directImpacts, ...routeImpacts, ...inheritedImpacts].map(rule => [rule.id, rule])).values()];
     const focusedUnitChecks = uniqueSorted([
       ...impacts.flatMap((rule) => rule.focusedUnit),
       ...exactFocusedChecks(changedPath),
@@ -799,7 +804,8 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
       ...importedTestConsumers(importedPaths.filter(file => !file.endsWith('.svelte')), graph, inventory),
       ...importedTestConsumers(components, graph, inventory, false),
     ]);
-    const routes = graph.modules.map(module => module.source).filter(file => file.startsWith('frontend/src/routes/'));
+    const routes = graph.modules.map(module => module.source).filter(file => file.startsWith('frontend/src/routes/')
+      || file.startsWith('frontend/src/') && RULES.some(rule => rule.impactOnly && rule.matches(file)));
     routeConsumers = importedTestConsumers(frontendPaths, graph, routes, false);
     // Known owners retain their conservative browser coverage. Positive import
     // evidence additionally follows shared support into its browser consumers;

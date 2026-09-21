@@ -495,6 +495,17 @@ describe('verification architecture contracts', () => {
     assert.equal(family.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
   });
 
+  test('an extracted frontend helper inherits its persistence owner without a filename registration', () => {
+    const file = 'frontend/src/lib/ordinary-transaction-helper.ts';
+    const plan = buildVerificationOwnershipPlan([file], new Map(), new Map(), new Map([
+      [file, ['frontend/src/lib/browser-local-data.ts', 'frontend/src/routes/(console)/bulk/+page.svelte']],
+    ]));
+    assert.ok(plan.impactAreas.includes('browser-local persistence and migration behaviour'));
+    assert.ok(plan.focusedUnitChecks.includes('test/workspace-rollback.test.mts'));
+    assert.ok(plan.focusedBrowserChecks.includes('e2e/watchlist-storage.spec.ts'));
+    assert.ok(plan.mandatorySpecialisedChecks.includes('schema-inventory'));
+  });
+
   test('keeps document-only checks offline and avoids application compilation and browser work', async () => {
     for (const file of ['README.md', 'docs/getting-started.md', 'packages/cases/README.md', 'docs/cli.md', 'SECURITY.md', 'TRADEMARKS.md', 'PRIVACY.md', 'docs/capability-manifest.md']) {
       const plan = await createVerificationOwnershipPlan([file]);

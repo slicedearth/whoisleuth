@@ -111,6 +111,8 @@ export const PRODUCTION_COVERAGE_POLICY: CoveragePolicy = Object.freeze({
     'cli/formatters/terminal-lookup.mts': Object.freeze({ lines: 95, branches: 85, functions: 100 }),
     'cli/formatters/terminal-command-formats.mts': Object.freeze({ lines: 95, branches: 55, functions: 90 }),
     'frontend/src/lib/browser-local-data.ts': Object.freeze({ lines: 80, branches: 65, functions: 75 }),
+    'frontend/src/lib/browser-local-data-content.ts': Object.freeze({ lines: 80, branches: 65, functions: 75 }),
+    'frontend/src/lib/browser-indexeddb-storage.ts': Object.freeze({ lines: 80, branches: 65, functions: 75 }),
     'frontend/src/lib/controllers/lookup-case-controller.ts': Object.freeze({ lines: 95, branches: 90, functions: 95 }),
     'frontend/src/lib/analysis/brand-profile-signals.ts': Object.freeze({ lines: 95, branches: 90, functions: 100 }),
     'frontend/src/lib/analysis/lookup-dns-display.ts': Object.freeze({ lines: 95, branches: 80, functions: 100 }),

@@ -217,6 +217,9 @@ describe('production coverage policy', () => {
     assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['frontend/src/lib/browser-local-data.ts'], {
       lines: 80, branches: 65, functions: 75,
     });
+    for (const source of ['frontend/src/lib/browser-local-data-content.ts', 'frontend/src/lib/browser-indexeddb-storage.ts']) {
+      assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles[source], { lines: 80, branches: 65, functions: 75 });
+    }
     assert.deepEqual(PRODUCTION_COVERAGE_POLICY.criticalFiles['frontend/src/lib/controllers/lookup-case-controller.ts'], {
       lines: 95, branches: 90, functions: 95,
     });
