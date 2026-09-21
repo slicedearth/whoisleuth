@@ -1,11 +1,5 @@
-import type { BulkSortDirection, BulkSortKey } from './analysis/bulk-sort.ts';
 import type { BulkPacing } from './analysis/bulk-pacing.ts';
-import type {
-  BulkAgeFilter,
-  BulkGroupBy,
-  BulkMailFilter,
-  BulkSourceFilter,
-} from './analysis/bulk-triage.ts';
+import type { BulkReviewPresetView } from '../../../packages/workspace/bulk-review-model.mts';
 import type { LookupHttpResponse } from './analysis/lookup-response.ts';
 import type { BulkProfileContextProvenance } from './analysis/bulk-session-model.ts';
 import { normalizeOpaqueReferenceId } from '../../../packages/cases/opaque-reference-id.mts';
@@ -39,18 +33,7 @@ export type BulkWorkflowState<Result> = {
   results: Result[];
   /** Missing only for transient workflow state created before Bulk session schema v4. */
   profileContext?: BulkProfileContextProvenance;
-  filter: 'all' | 'available' | 'registered' | 'high_risk' | 'trusted' | 'profile_unevaluated' | 'errors';
-  mutationFilter: string;
-  signalFilters: string[];
-  sourceFilter?: BulkSourceFilter;
-  lifecycleFilter?: string;
-  ageFilter?: BulkAgeFilter;
-  mailFilter?: BulkMailFilter;
-  registrarFilter?: string;
-  caseDispositionFilter?: string;
-  groupBy?: BulkGroupBy;
-  sortKey: BulkSortKey;
-  sortDirection: BulkSortDirection;
+  view: BulkReviewPresetView;
   page: number;
   status: string;
   indicatorFormat: 'domains' | 'hosts' | 'dnsmasq' | 'rpz' | 'stix' | 'misp';
