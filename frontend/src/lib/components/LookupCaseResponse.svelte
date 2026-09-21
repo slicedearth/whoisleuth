@@ -75,7 +75,7 @@
     incidentUrl: string;
     recheckComparison: LookupRecheckComparison | null;
     record: CaseRecord | null;
-    cases?: CaseRecord[];
+    cases?: readonly CaseRecord[];
     selectCase: (id: string) => void;
     createIncident: (title: string) => Promise<LocalMutationOutcome>;
     oncaseopen: () => void;
