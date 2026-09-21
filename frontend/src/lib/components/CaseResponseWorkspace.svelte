@@ -1,6 +1,9 @@
 <script lang="ts">
   import { tick, type ComponentProps, type Snippet } from 'svelte';
-  import { caseInvestigationContext, caseTypeSummary, dispositionLabel, editCase, importCaseReviewReturn, type CaseRecord } from '$lib/cases';
+  import { caseInvestigationContext } from '../../../../packages/cases/case-incident-context.mts';
+  import { caseTypeSummary } from '../../../../packages/cases/case-workflow-metadata.mts';
+  import { dispositionLabel } from '../../../../packages/cases/case-record-decisions.mts';
+  import { editCase, importCaseReviewReturn, type CaseRecord } from '../cases.ts';
   import { handlesLocalLink } from '$lib/link-activation';
   import { failedLocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
   import { reviewClock } from '$lib/review-clock.ts';

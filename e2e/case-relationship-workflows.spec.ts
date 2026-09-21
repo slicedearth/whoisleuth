@@ -9,7 +9,7 @@ import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoH
 
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { COMMON_INFRASTRUCTURE_SNAPSHOT } from '../frontend/src/lib/analysis/common-infrastructure.ts';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
 
 const COHORT_PROFILE_ID = 'cohort_profile_exact';

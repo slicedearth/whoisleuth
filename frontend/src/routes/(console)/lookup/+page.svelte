@@ -21,8 +21,17 @@
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import PageHeading from '$lib/components/PageHeading.svelte';
   import { activeProfile, type ActiveBrandProfileSourceState, type BrandProfile } from '$lib/brand-profiles';
-  import { compareCaseEvidence, dispositionLabel as caseDispositionLabel, parseIncidentUrlContext, statusLabel as caseStatusLabel, type CaseRecord, type CaseTransitionExpectation } from '$lib/cases';
-  import { caseEvidenceIncomparableReasons, latestCaseEvidence } from '$lib/analysis/case-model.ts';
+  import { compareCaseEvidence } from '../../../../../packages/cases/case-evidence-model.mts';
+  import {
+    dispositionLabel as caseDispositionLabel,
+    statusLabel as caseStatusLabel,
+  } from '../../../../../packages/cases/case-record-decisions.mts';
+  import { parseIncidentUrlContext } from '../../../../../packages/cases/case-incident-context.mts';
+  import type { CaseRecord, CaseTransitionExpectation } from '../../../lib/cases.ts';
+  import {
+    caseEvidenceIncomparableReasons,
+    latestCaseEvidence,
+  } from '../../../../../packages/cases/case-evidence-model.mts';
   import { loadWatchlists, saveSingleDomainWatchlist } from '$lib/watchlists';
   import type { LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
@@ -135,6 +144,8 @@
     select: selectConsoleCase,
   });
   let caseState: LookupCaseState = $state.raw(lookupCaseWorkspace.state);
+  // Draft edits do not invalidate the evidence analysis for an unchanged record.
+  const caseRecord = $derived(caseState.record);
   const capabilityReport=getContext<CapabilityGetter>(CAPABILITY_CONTEXT);
   const lookupDisabled=$derived(disabledCapability(capabilityReport?.()||null,'lookup'));
   const lookupLimitations=$derived(disabledCapabilities(capabilityReport?.()||null,['rdap','whois','availability','dns_intelligence','website_probe','tls_intelligence']));
@@ -194,7 +205,7 @@
     profile,
     profileSourceState,
     task:taskView,
-    hasReviewedCaseRecipient:Boolean(caseState.record?.actions.some((action)=>Boolean(action.recipient)&&Boolean(action.contactSource))),
+    hasReviewedCaseRecipient:Boolean(caseRecord?.actions.some((action)=>Boolean(action.recipient)&&Boolean(action.contactSource))),
     completedLookupDepth: observation.depth,
     ...(freshnessPolicyInput?{freshnessPolicy:freshnessPolicyInput}:{}),
   }));
@@ -219,9 +230,9 @@
   const caseDomain=$derived(lookupAnalysis.caseDomain);
   const caseObservationTarget=$derived(String(observation.response?.inputHostname||caseDomain).trim().toLowerCase());
   function preserveLookupReturn() {
-    if (!caseState.record) return;
+    if (!caseRecord) return;
     const params = new URLSearchParams({ q: observation.target, depth: lookupEvidenceDepth, task: taskView });
-    setCaseNavigationContext(caseState.record.id, `/lookup?${params}#case-response`, 'Lookup');
+    setCaseNavigationContext(caseRecord.id, `/lookup?${params}#case-response`, 'Lookup');
   }
   const observedPageBaseline=$derived(lookupAnalysis.observedPageBaseline);
   const pageComparison=$derived(lookupAnalysis.pageComparison);
@@ -268,7 +279,7 @@
   }
   async function refreshCase(
     expectedRevision: number | null = null,
-    preferredCase: Pick<CaseRecord, 'id' | 'domain'> | null = caseState.record,
+    preferredCase: Pick<CaseRecord, 'id' | 'domain'> | null = caseRecord,
   ) {
     if (expectedRevision !== null && expectedRevision !== lookupRevision) return;
     let linkedId = '';
@@ -309,7 +320,7 @@
     const domain = caseDomain;
     const evidence = caseEvidence;
     const depth = lookupEvidenceDepth;
-    const selection = caseState.record ? { caseId: caseState.record.id } : {};
+    const selection = caseRecord ? { caseId: caseRecord.id } : {};
     await performCaseAction(
       () => lookupCaseController.open(domain, evidence, depth, selection),
       next => lookupCaseWorkspace.synchroniseDecision(next.record),
@@ -384,21 +395,21 @@
   async function recheckLookupCase(){
     const target=caseObservationTarget;
     if(!target||loading)return;
-    const before=latestCaseEvidence(caseState.record);
+    const before=latestCaseEvidence(caseRecord);
     lookupCaseWorkspace.setComparison(null);
     query=target;
     lookupMode=lookupEvidenceDepth;
     await runLookup({refreshCaseEvidence:true});
     if(error)return;
-    const after=latestCaseEvidence(caseState.record);
+    const after=latestCaseEvidence(caseRecord);
     if(!before||!after){lookupCaseWorkspace.setComparison({available:false,changes:[],observedAt:after?.capturedAt??'',detail:'A uniquely latest prior and current Case observation are required. Review any equal-time or undated snapshots before comparing.'});return;}
     if(Date.parse(after.capturedAt)<=Date.parse(before.capturedAt)){lookupCaseWorkspace.setComparison({available:false,changes:[],observedAt:after.capturedAt,detail:'No later Case capture is available. Equal or earlier capture times cannot establish a recheck outcome.'});return;}
     const changes=compareCaseEvidence(before,after);
     if(caseEvidenceIncomparableReasons(before,after).includes('observation-context')){lookupCaseWorkspace.setComparison({available:false,changes,observedAt:after.capturedAt,detail:'These captures concern different or unknown hostnames. Only registration fields can be compared; recheck the same hostname before recording an observed-effect outcome.'});return;}
     lookupCaseWorkspace.setComparison({available:true,changes,observedAt:after.capturedAt,detail:changes.length?`${changes.length} comparable material change${changes.length===1?' was':'s were'} found.`:'No comparable material field change was found. This does not prove the page or behaviour is absent.'});
   }
-  async function saveEvidenceCheckpoint(selectedFields:string[],transitionExpectations:Readonly<Record<string,CaseTransitionExpectation>>={}){const record=caseState.record;const facts=checkpointFacts;return performCaseAction(()=>lookupCaseController.recordCheckpoint(record,facts,[...selectedFields],{...transitionExpectations}));}
-  async function saveRefreshedCheckpoint(facts:readonly CheckpointFact[],selectedFields:string[]){const record=caseState.record;return performCaseAction(()=>lookupCaseController.recordCheckpoint(record,facts,[...selectedFields]));}
+  async function saveEvidenceCheckpoint(selectedFields:string[],transitionExpectations:Readonly<Record<string,CaseTransitionExpectation>>={}){const record=caseRecord;const facts=checkpointFacts;return performCaseAction(()=>lookupCaseController.recordCheckpoint(record,facts,[...selectedFields],{...transitionExpectations}));}
+  async function saveRefreshedCheckpoint(facts:readonly CheckpointFact[],selectedFields:string[]){const record=caseRecord;return performCaseAction(()=>lookupCaseController.recordCheckpoint(record,facts,[...selectedFields]));}
   function cancelLookup(){lookupRequestController.cancel();}
   function visualViewForTask(value:LookupTaskView):LookupVisualView{
     if(value==='acquisition'||value==='owned')return 'timeline';
@@ -713,7 +724,7 @@
       }
     }
     catch(cause){error=cause instanceof Error?cause.message:'Lookup target could not be prepared.';return;}
-    const preferredCase=caseState.record?{id:caseState.record.id,domain:caseState.record.domain}:null;
+    const preferredCase=caseRecord?{id:caseRecord.id,domain:caseRecord.domain}:null;
     lookupAnchorController?.stop();
     clearCompletedLookupContext(true);
     loading = true;
@@ -818,8 +829,8 @@
 {#if observation.response}
   <section class="result-root" id="result" use:evidenceLinkNavigation>
     <LookupResultHeader title={show(observation.response.inputHostname||observation.response.registrableDomain||observation.response.query)} state={show(availability.state)} isSubdomain={Boolean(observation.response.isSubdomain)} registrableDomain={show(observation.response.registrableDomain)} inputHostname={show(observation.response.inputHostname)} {observationHostname} selectedUrl={availability.webObservationMode === 'selected_url'}
-      observedAt={lookupObservedAt} depth={lookupEvidenceDepth} caseHref={caseDomain ? caseState.record ? caseWorkspaceHref(caseState.record.id) : '#case-response' : null}
-      caseLabel={caseState.record ? 'Open saved Case' : caseState.sourceState === 'ready' ? 'Keep in Case' : 'Case context'} onCaseOpen={preserveLookupReturn}
+      observedAt={lookupObservedAt} depth={lookupEvidenceDepth} caseHref={caseDomain ? caseRecord ? caseWorkspaceHref(caseRecord.id) : '#case-response' : null}
+      caseLabel={caseRecord ? 'Open saved Case' : caseState.sourceState === 'ready' ? 'Keep in Case' : 'Case context'} onCaseOpen={preserveLookupReturn}
       onExport={downloadEvidence} onReportExport={downloadReadableReport} onBriefExport={downloadInvestigationBrief} />
     {#if observation.exportStatus||lookupEvidenceProjection.error}<p class:portable-evidence-status={Boolean(lookupEvidenceProjection.error)} class="local-context-status" role="status" aria-atomic="true">{observation.exportStatus||lookupEvidenceProjection.error}</p>{/if}
 
@@ -867,7 +878,7 @@
             loadingLabel="Loading portable investigation hand-off…"
             unavailableLabel="The portable investigation hand-off could not be loaded."
             placeholder="panel"
-            props={{applicationVersion:__WHOISLEUTH_VERSION__,lookupEvidence:lookupEvidenceDocument,brief:lookupInvestigationBrief,graph:lookupAssetGraph,caseRecord: caseState.record}}
+            props={{applicationVersion:__WHOISLEUTH_VERSION__,lookupEvidence:lookupEvidenceDocument,brief:lookupInvestigationBrief,graph:lookupAssetGraph,caseRecord: caseRecord}}
           />
         {/if}
 
@@ -916,7 +927,7 @@
       {#if observation.response?.type === 'domain'}
         {#key observation.response}
           <LookupSourceCheckpoint {label} facts={checkpointFacts.filter(fact => fact.category === category)}
-            record={caseState.record} ready={caseState.sourceState === 'ready'} busy={caseState.busy} status={caseState.status}
+            record={caseRecord} ready={caseState.sourceState === 'ready'} busy={caseState.busy} status={caseState.status}
             oncreate={openLookupCase} onsave={saveEvidenceCheckpoint} />
         {/key}
       {/if}
@@ -967,7 +978,7 @@
           load={()=>import('$lib/components/RegistrationDisclosurePlanner.svelte')}
           loadingLabel="Loading registration-disclosure planner…"
           unavailableLabel="The disclosure planner could not be loaded."
-          props={{domain:caseDomain,observedAt:lookupObservedAt,registryRdapEndpoint:boundedTechnologyText(rdap.endpoint,2048),rdapParsed,registrar:registryDisplay.registrarRdap,caseReference:caseState.record?.id??''}}
+          props={{domain:caseDomain,observedAt:lookupObservedAt,registryRdapEndpoint:boundedTechnologyText(rdap.endpoint,2048),rdapParsed,registrar:registryDisplay.registrarRdap,caseReference:caseRecord?.id??''}}
         /></div>
       {/if}
 
@@ -1019,7 +1030,7 @@
           loadingLabel="Loading source-quality review…"
           unavailableLabel="Source-quality review could not be loaded."
           onready={restoreDeferredLookupTarget}
-          props={{matrix:evidenceQualityMatrix,lookupDecisionFacts,refreshPlan:lookupSourceRefreshPlan,original:observation.response,refreshLedger:observation.refreshLedger,onrefreshchange:(value:LookupSourceRefreshLedger)=>observation.refreshLedger=value,caseTarget:{record:caseState.record,ready:caseState.sourceState==='ready',busy:caseState.busy,status:caseState.status,oncreate:openLookupCase,onsave:saveRefreshedCheckpoint},depth:lookupEvidenceDepth,timing:lookupTiming,onpolicychange:setFreshnessPolicy}}
+          props={{matrix:evidenceQualityMatrix,lookupDecisionFacts,refreshPlan:lookupSourceRefreshPlan,original:observation.response,refreshLedger:observation.refreshLedger,onrefreshchange:(value:LookupSourceRefreshLedger)=>observation.refreshLedger=value,caseTarget:{record:caseRecord,ready:caseState.sourceState==='ready',busy:caseState.busy,status:caseState.status,oncreate:openLookupCase,onsave:saveRefreshedCheckpoint},depth:lookupEvidenceDepth,timing:lookupTiming,onpolicychange:setFreshnessPolicy}}
         />
         <DeferredSurface
           load={()=>import('$lib/components/LookupOverviewFacts.svelte')}
@@ -1038,7 +1049,7 @@
         <LookupFamilySummary
           label="Case and response"
           description="Save reviewed evidence, keep analyst assertions separate, and prepare human-reviewed response routes without sending anything automatically."
-          metrics={[caseState.sourceState==='ready'?(caseState.record?'Case saved':'No case saved'):caseState.sourceState==='loading'?'Case loading':'Case unavailable', `${abuseRecipientResolution.recipients.length} published ${abuseRecipientResolution.recipients.length===1?'route':'routes'}`]}
+          metrics={[caseState.sourceState==='ready'?(caseRecord?'Case saved':'No case saved'):caseState.sourceState==='loading'?'Case loading':'Case unavailable', `${abuseRecipientResolution.recipients.length} published ${abuseRecipientResolution.recipients.length===1?'route':'routes'}`]}
           expanded={sectionDetailVisible('case-response')}
           onpreload={()=>preloadLookupSection('case-response')}
           onshow={()=>void showSectionDetail('case-response')}
@@ -1050,12 +1061,12 @@
           loadingLabel="Loading Case and response workspace…"
           unavailableLabel="The Case and response workspace could not be loaded."
           onready={restoreDeferredLookupTarget}
-          props={{oncaseopen:preserveLookupReturn,domain:caseDomain,lookupTarget:caseObservationTarget,lookupDepth:lookupEvidenceDepth,task:taskView,incidentUrl:observation.incidentUrl,recheckComparison:caseState.comparison,record:caseState.record,cases:caseState.candidates,selectCase:selectLookupCase,createIncident:createLookupIncident,note:caseState.note,caseStatus: caseState.status,caseSourceState: caseState.sourceState,retryCaseRead:()=>refreshCase(),caseDisposition: caseState.disposition,caseReviewReason: caseState.reviewReason,checkpointFacts,draftStatus: observation.draftStatus,outreach,recipientResolution:abuseRecipientResolution,linkedWatchlistNames: watchlistState.names,watchlistSourceState: watchlistState.sourceState,watchlistName: watchlistState.name,watchlistStatus: watchlistState.status,setNote:(value:string)=>lookupCaseWorkspace.setNote(value),setCaseDisposition:(value:string)=>lookupCaseWorkspace.setDisposition(value),setCaseReviewReason:(value:string)=>lookupCaseWorkspace.setReviewReason(value),setWatchlistName:(value:string)=>watchlistState.name=value,createCase:openLookupCase,addNote:addLookupNote,recordConclusion:recordLookupConclusion,recordInvestigationContext:recordLookupInvestigationContext,recordRecheckOutcome:recordLookupRecheckOutcome,saveToWatchlist:saveLookupWatchlist,recheckCase:recheckLookupCase,recordRecipient:recordAbuseRecipient,copyDraft,statusLabel:caseStatusLabel,dispositionLabel:caseDispositionLabel,actionBusy:caseState.busy,watchlistBusy:watchlistState.busy}}
+          props={{oncaseopen:preserveLookupReturn,domain:caseDomain,lookupTarget:caseObservationTarget,lookupDepth:lookupEvidenceDepth,task:taskView,incidentUrl:observation.incidentUrl,recheckComparison:caseState.comparison,record:caseRecord,cases:caseState.candidates,selectCase:selectLookupCase,createIncident:createLookupIncident,note:caseState.note,caseStatus: caseState.status,caseSourceState: caseState.sourceState,retryCaseRead:()=>refreshCase(),caseDisposition: caseState.disposition,caseReviewReason: caseState.reviewReason,checkpointFacts,draftStatus: observation.draftStatus,outreach,recipientResolution:abuseRecipientResolution,linkedWatchlistNames: watchlistState.names,watchlistSourceState: watchlistState.sourceState,watchlistName: watchlistState.name,watchlistStatus: watchlistState.status,setNote:(value:string)=>lookupCaseWorkspace.setNote(value),setCaseDisposition:(value:string)=>lookupCaseWorkspace.setDisposition(value),setCaseReviewReason:(value:string)=>lookupCaseWorkspace.setReviewReason(value),setWatchlistName:(value:string)=>watchlistState.name=value,createCase:openLookupCase,addNote:addLookupNote,recordConclusion:recordLookupConclusion,recordInvestigationContext:recordLookupInvestigationContext,recordRecheckOutcome:recordLookupRecheckOutcome,saveToWatchlist:saveLookupWatchlist,recheckCase:recheckLookupCase,recordRecipient:recordAbuseRecipient,copyDraft,statusLabel:caseStatusLabel,dispositionLabel:caseDispositionLabel,actionBusy:caseState.busy,watchlistBusy:watchlistState.busy}}
         />
-        {#if caseState.record && checkpointFacts.length && taskView === 'acquisition'}
+        {#if caseRecord && checkpointFacts.length && taskView === 'acquisition'}
           <LookupEvidenceCheckpoint
             facts={checkpointFacts}
-            pins={caseState.record.evidencePins}
+            pins={caseRecord.evidencePins}
             onsave={saveEvidenceCheckpoint}
             actionBusy={caseState.busy}
           />

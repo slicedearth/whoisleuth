@@ -1,13 +1,11 @@
 import { caseWorkspaceHref } from './case-response-stage.ts';
+import { MAX_CASES, MAX_EVIDENCE_SNAPSHOTS_PER_CASE } from '../../../../packages/contracts/case-portability.mts';
 import {
-  MAX_CASES,
-  MAX_EVIDENCE_SNAPSHOTS_PER_CASE,
   caseEvidenceIncomparableReasons,
   compareCaseEvidence,
-  normalizeCase,
-  type CaseEvidenceSnapshot,
-  type CaseRecord,
-} from './case-model.ts';
+} from '../../../../packages/cases/case-evidence-model.mts';
+import { normalizeCase } from '../../../../packages/cases/case-record-operations.mts';
+import type { CaseEvidenceSnapshot, CaseRecord } from './case-model.ts';
 import {
   comparisonLedgerCollector,
   comparisonLedgerInputArray,

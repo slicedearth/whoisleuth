@@ -1,4 +1,4 @@
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { RELATIONSHIP_EVIDENCE_VERSION } from '../contracts/offline-comparison.mts';
 import { RELATIONSHIP_TYPES, qualifyRelationshipSources, type RelationshipContribution } from '../comparison/relationship-provenance.mts';

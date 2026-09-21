@@ -3,7 +3,7 @@
 // this module owns validation, comparison, retention, and schema shaping so it
 // can be exercised under node --test.
 
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import { normalizeCtQuery } from '../analysis/ct-query.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { assertWorkspaceDeclaredVersion, assertWorkspaceInputGraph, ordinaryWorkspaceRecord } from './hostile-input.mts';

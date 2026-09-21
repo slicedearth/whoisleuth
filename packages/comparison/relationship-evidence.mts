@@ -4,7 +4,7 @@
 // module deliberately produces no aggregate score and is never a persistence
 // boundary.
 
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import { groupBySimilarFavicon } from './favicon-similarity.mts';
 import {
   qualifyRelationshipSources, relationshipSourceEvidence, normalizeRelationshipSourceProjection,

@@ -1,4 +1,4 @@
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import { parse } from 'tldts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 

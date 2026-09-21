@@ -8,7 +8,8 @@
     type BrowserHandoffDisclosureFormat,
     type BrowserLookupHandoff,
   } from '$lib/analysis/browser-lookup-handoff.ts';
-  import { caseStatusIsClosed, editCase, loadCases, type CaseRecord } from '$lib/cases';
+  import { caseStatusIsClosed } from '../../../../packages/cases/case-record-decisions.mts';
+  import { editCase, loadCases, type CaseRecord } from '../cases.ts';
 
   let input = $state('');
   let destinationKind = $state<BrowserHandoffDestinationKind>('lookup');

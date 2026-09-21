@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { page } from '$app/state';
-  import { getCase, dispositionLabel, statusLabel } from '$lib/cases';
+  import { getCase } from '../cases.ts';
+  import { dispositionLabel, statusLabel } from '../../../../packages/cases/case-record-decisions.mts';
   import { formattedCaseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
   import { caseWorkspaceContext } from '$lib/analysis/case-workspace-context';
   import { selectConsoleCase } from '$lib/console-workflow-state';

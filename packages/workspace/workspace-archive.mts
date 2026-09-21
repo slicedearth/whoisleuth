@@ -2,11 +2,8 @@
 // authority for normalization and merge semantics; this module only packages
 // their portable contracts, verifies integrity, and previews conflicts.
 
-import {
-  buildCaseExport,
-  enforceStoreBudget,
-  mergeCases,
-} from '../cases/case-model.mts';
+import { buildCaseExport, enforceStoreBudget } from '../cases/case-storage-model.mts';
+import { mergeCases } from '../cases/case-migration-model.mts';
 import type { CaseRecord } from '../cases/case-model.mts';
 import {
   assertBrandProfileStoreBudget,

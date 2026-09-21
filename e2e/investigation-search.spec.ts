@@ -1,8 +1,10 @@
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectFocusedResultsVisible, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, useTheme } from './helpers';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { productionChunkPath } from './production-build';
-import { normalizeCaseStore, serializeCaseStore, MAX_CASE_STORE_BYTES } from '../packages/cases/case-model.mts';
+import { normalizeCaseStore } from '../packages/cases/case-migration-model.mts';
+import { serializeCaseStore } from '../packages/cases/case-storage-model.mts';
+import { MAX_CASE_STORE_BYTES } from '../packages/contracts/case-portability.mts';
 
 const NOW = '2026-07-19T00:00:00.000Z';
 

@@ -6,7 +6,11 @@
 import { analyzeBoundedRelationshipGraph } from '../../../../lib/bounded-relationship-graph.mts';
 import { MAX_PROFILES, normalizeBrandProfileStore, type BrandProfile } from './brand-profile-model.ts';
 import { normalizeCaseBrandProfileIds } from './case-brand-profile-references.ts';
-import { latestCaseEvidence, MAX_CASES, normalizeCaseStore, normalizeDomain, type CaseRecord } from './case-model.ts';
+import { latestCaseEvidence } from '../../../../packages/cases/case-evidence-model.mts';
+import { MAX_CASES } from '../../../../packages/contracts/case-portability.mts';
+import { normalizeCaseStore } from '../../../../packages/cases/case-migration-model.mts';
+import { normalizeDomain } from '../../../../packages/evidence/domain-name.mts';
+import type { CaseRecord } from './case-model.ts';
 import type { CasePinCompleteness } from './case-response-model.ts';
 import { MAX_CASE_RELATIONSHIP_GROUPS, type CaseRelationshipGroup, type CaseRelationshipSummary } from './case-relationships.ts';
 import { classifyCommonInfrastructureAddress } from './common-infrastructure.ts';

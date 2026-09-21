@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { caseLookupTarget, type CaseRecord } from '$lib/cases';
+  import { caseLookupTarget } from '../../../../packages/cases/case-evidence-model.mts';
+  import type { CaseRecord } from '../cases.ts';
   import { caseRecheckQuestions, readCaseRecheckContext } from '../../../../packages/cases/case-recheck-model.mts';
   import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';

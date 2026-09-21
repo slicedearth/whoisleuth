@@ -1,9 +1,6 @@
-import {
-  normalizeDomain,
-  openOrCreateCase,
-  updateCase,
-  type CaseRecord,
-} from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
+import { openOrCreateCase, updateCase } from '../cases/case-record-operations.mts';
+import type { CaseRecord } from '../cases/case-model.mts';
 import { canonicalRegistrableDomain } from '../analysis/registrable-domain.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { canonicalArtifactJsonV2 } from '../evidence/artifact-integrity.mts';

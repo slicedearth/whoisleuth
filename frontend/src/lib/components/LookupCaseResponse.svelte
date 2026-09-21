@@ -1,13 +1,12 @@
 <script lang="ts">
   import { recipientMailto } from '../../../../packages/evidence/email-recipient.mts';
+  import { CASE_DISPOSITIONS, isReviewedCaseDisposition } from '../../../../packages/cases/case-record-decisions.mts';
+  import { CASE_REVIEW_REASONS } from '../../../../packages/cases/case-record-contracts.mts';
   import {
-    CASE_DISPOSITIONS,
-    isReviewedCaseDisposition,
-    CASE_REVIEW_REASONS,
     caseInvestigationContext,
     parseIncidentUrlContext,
-    type CaseRecord,
-  } from '$lib/cases';
+  } from '../../../../packages/cases/case-incident-context.mts';
+  import type { CaseRecord } from '../cases.ts';
   import type {
     AbuseRecipientResolution,
     ResolvedAbuseRecipient,

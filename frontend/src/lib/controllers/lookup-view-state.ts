@@ -1,5 +1,5 @@
 import type { LookupHttpResponse } from '../../../../lib/lookup-response-contract.mts';
-import { parseIncidentUrlContext } from '../../../../packages/cases/case-record-operations.mts';
+import { parseIncidentUrlContext } from '../../../../packages/cases/case-incident-context.mts';
 import type { LookupSourceRefreshLedger } from '../analysis/lookup-source-refresh.ts';
 import { lookupResultDepth } from '../analysis/lookup-presentation.ts';
 import type { LookupWorkflowState } from '../console-workflow-state.ts';

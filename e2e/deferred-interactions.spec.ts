@@ -4,7 +4,7 @@ import { CLI_COMMANDS } from '../cli/command-reference.mts';
 import { ALLOWED_ORIGIN, expect, test } from './fixtures';
 import { caseRecord } from './case-test-fixtures';
 import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import {
   PERFORMANCE_SAMPLE_COUNT,
   PERFORMANCE_TIMING_POLICY,

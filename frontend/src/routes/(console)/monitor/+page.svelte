@@ -38,7 +38,7 @@
   import type { ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
   import { deleteWatchlist, exportWatchlists, importWatchlists, loadWatchlists, MAX_WATCHLIST_IMPORT_BYTES, restoreHostedWatchlist as restoreHostedWatchlistAtomically, writeWatchlists, type WatchlistEntry, type Watchlists } from '$lib/watchlists';
   import { editCase, loadCases, openCase, type CaseRecord } from '$lib/cases';
-  import { casesForDomain } from '$lib/analysis/case-model.ts';
+  import { casesForDomain } from '../../../../../packages/cases/case-selection.mts';
   import { loadCampaigns, type CampaignRecord } from '$lib/campaigns';
   import { loadDetectionRules, type DetectionRule } from '$lib/detection-rules';
   import {

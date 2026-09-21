@@ -9,7 +9,7 @@
 // registry/web responses, contacts, cookies, screenshots, and authentication
 // data. Reports contain only the normalized case record.
 
-import { caseEvidenceTimeline, compareCaseEvidence, currentCaseEvidence } from './case-model.mts';
+import { caseEvidenceTimeline, compareCaseEvidence, currentCaseEvidence } from './case-evidence-model.mts';
 import type { CaseEvidenceSnapshot, CaseRecord, EvidenceFactor } from './case-model.mts';
 import { httpSecurityHeaderLabel } from './http-summary.mts';
 import { analystInteroperabilityTags } from '../analysis/analyst-taxonomy.mts';

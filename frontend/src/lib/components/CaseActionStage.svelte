@@ -1,9 +1,12 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import {
-    CASE_ACTION_EVENT_SOURCE_CLASSES, CASE_ACTION_STATES, CASE_ACTION_TYPES, CASE_PROVIDER_OUTCOMES,
-    type CaseRecord, type CaseActionRecord, type CaseActionState,
-  } from '$lib/cases';
+    CASE_ACTION_EVENT_SOURCE_CLASSES,
+    CASE_ACTION_STATES,
+    CASE_ACTION_TYPES,
+    CASE_PROVIDER_OUTCOMES,
+  } from '../../../../packages/cases/case-response-records.mts';
+  import type { CaseRecord, CaseActionRecord, CaseActionState } from '../cases.ts';
   import { isLegalCaseActionTransition, type CaseActionEventSourceClass } from '$lib/analysis/case-response-model.ts';
   import { isoFromUtcInput, utcInputFromIso, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';

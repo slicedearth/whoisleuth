@@ -2,7 +2,7 @@
 // Sessions retain compact derived rows and source states, never raw registry,
 // WHOIS, HTTP, TLS, page, or provider payloads.
 
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import { normalizeCaaCritical } from './dns-record-normalization.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { RELATIONSHIP_EVIDENCE_VERSION } from '../contracts/offline-comparison.mts';

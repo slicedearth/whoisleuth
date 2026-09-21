@@ -1,8 +1,5 @@
-import {
-  normalizeCaseStore,
-  parseStoreVersion,
-  serializeCaseStore,
-} from './analysis/case-model.ts';
+import { normalizeCaseStore, parseStoreVersion } from '../../../packages/cases/case-migration-model.mts';
+import { serializeCaseStore } from '../../../packages/cases/case-storage-model.mts';
 import type { CaseRecord } from './analysis/case-model.ts';
 import {
   campaignStoreVersion,

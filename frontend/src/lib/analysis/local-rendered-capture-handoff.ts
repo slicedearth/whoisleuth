@@ -1,4 +1,4 @@
-import { parseIncidentUrlContext } from './case-model.ts';
+import { parseIncidentUrlContext } from '../../../../packages/cases/case-incident-context.mts';
 
 export type LocalRenderedCaptureHandoff = Readonly<{
   command: string;

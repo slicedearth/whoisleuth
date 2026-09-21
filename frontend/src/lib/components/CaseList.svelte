@@ -1,6 +1,12 @@
 <script lang="ts">
   import Pagination from '$lib/components/Pagination.svelte';
-  import { caseFreeformTags, caseNumber, caseTypeRecords, dispositionLabel, isReviewedCaseDisposition, statusLabel, type CaseRecord } from '$lib/cases';
+  import { caseFreeformTags, caseNumber, caseTypeRecords } from '../../../../packages/cases/case-workflow-metadata.mts';
+  import {
+    dispositionLabel,
+    isReviewedCaseDisposition,
+    statusLabel,
+  } from '../../../../packages/cases/case-record-decisions.mts';
+  import type { CaseRecord } from '../cases.ts';
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
   import { handlesLocalLink } from '$lib/link-activation';
 

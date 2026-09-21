@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { CASE_REVIEW_REASONS, dispositionLabel, type RiskCalibrationExportPreview } from '$lib/cases';
+  import { CASE_REVIEW_REASONS } from '../../../../packages/cases/case-record-contracts.mts';
+  import { dispositionLabel } from '../../../../packages/cases/case-record-decisions.mts';
+  import type { RiskCalibrationExportPreview } from '../cases.ts';
 
   let {
     preview,

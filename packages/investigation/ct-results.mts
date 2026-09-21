@@ -11,10 +11,7 @@
 // re-derives registrable domains in the browser - it only normalizes and
 // bounds what the server sent.
 
-import {
-  MAX_EVIDENCE_DOMAIN_INPUT_LENGTH,
-  normalizeEvidenceDomain,
-} from '../cases/case-model.mts';
+import { MAX_EVIDENCE_DOMAIN_INPUT_LENGTH, normalizeEvidenceDomain } from '../cases/case-record-core.mts';
 import { MAX_CANDIDATE_SOURCE_LENGTH } from '../analysis/candidate-provenance-bounds.mts';
 import { normalizeCtTimestamp } from '../evidence/observation.mts';
 import {

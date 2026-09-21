@@ -1,4 +1,5 @@
-import { caseLookupTarget, type CaseRecord } from './case-model.ts';
+import { caseLookupTarget } from '../../../../packages/cases/case-evidence-model.mts';
+import type { CaseRecord } from './case-model.ts';
 import { caseWorkspaceHref } from './case-response-stage.ts';
 import { normalizeExplicitIsoTimestamp, readObservationTime } from '../../../../packages/evidence/observation.mts';
 import { latestObservationCohort } from '../../../../packages/evidence/latest-observations.mts';

@@ -11,21 +11,46 @@
   import { readCaseNavigationContext, selectConsoleCase } from '$lib/console-workflow-state';
   import { monitorRouteKey, monitorRouteTarget } from '$lib/controllers/monitor-route-controller.ts';
   import { caseWorkspaceHref } from '$lib/analysis/case-response-stage.ts';
-  import { casesForDomain, type CaseIncidentInput } from '$lib/analysis/case-model.ts';
+  import { casesForDomain } from '../../../../packages/cases/case-selection.mts';
+  import type { CaseIncidentInput } from '../analysis/case-model.ts';
   import { filterCaseList } from '../../../../packages/cases/case-list-view.mts';
   import type { CaseViewFilters } from '../../../../packages/contracts/case-views-contract.mts';
   import { loadInvestigationGuide } from '$lib/investigation-guide';
   import { loadProfiles, type BrandProfile } from '$lib/brand-profiles';
   import type { ParentDomainCampaignSourceState } from '$lib/analysis/parent-domain-campaign-review.ts';
   import {
-    addCaseBrandProfileAssociation, addCaseNote, CASE_DISPOSITIONS, CASE_STATUSES,
-    caseFreeformTags, caseTagsWithTypes, caseTypeIds, deleteCase,
-    dispositionLabel, editCase, editCaseTags, restoreCaseTags, exportCases,
-    exportRiskCalibrationDataset, importCases, loadCases, MAX_CASE_IMPORT_BYTES,
-    openCase, createCaseIncident, previewRiskCalibrationDataset, removeCaseBrandProfileAssociation,
-    statusLabel, type CaseRecord, type RiskCalibrationExportPreview,
-    CaseAssociationCapacityError, exportCaseSnapshot, type CaseAssociationRetention,
-  } from '$lib/cases';
+    addCaseBrandProfileAssociation,
+    addCaseNote,
+    deleteCase,
+    editCase,
+    editCaseTags,
+    restoreCaseTags,
+    exportCases,
+    exportRiskCalibrationDataset,
+    importCases,
+    loadCases,
+    openCase,
+    createCaseIncident,
+    previewRiskCalibrationDataset,
+    removeCaseBrandProfileAssociation,
+    type CaseRecord,
+    type RiskCalibrationExportPreview,
+    CaseAssociationCapacityError,
+    exportCaseSnapshot,
+    type CaseAssociationRetention,
+  } from '../cases.ts';
+  import {
+    CASE_DISPOSITIONS,
+    CASE_STATUSES,
+    dispositionLabel,
+    statusLabel,
+  } from '../../../../packages/cases/case-record-decisions.mts';
+  import {
+    caseFreeformTags,
+    caseTagsWithTypes,
+    caseTypeIds,
+  } from '../../../../packages/cases/case-workflow-metadata.mts';
+  import { MAX_CASE_IMPORT_BYTES } from '../../../../packages/contracts/case-portability.mts';
   import LocalCollectionState from '$lib/components/LocalCollectionState.svelte';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
   import CaseWorkspaceToolbar from '$lib/components/CaseWorkspaceToolbar.svelte';

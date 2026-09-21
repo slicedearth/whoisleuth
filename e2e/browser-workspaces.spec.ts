@@ -2,7 +2,7 @@ import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
 import { BROWSER_LOCAL_COLLECTIONS, type BrowserLocalCollectionId } from '../frontend/src/lib/browser-local-data-definitions';
 import { buildWorkspaceArchive, readWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
-import { createCase } from '../packages/cases/case-model.mts';
+import { createCase } from '../packages/cases/case-record-operations.mts';
 
 import { DIRECTORY, SELECTION, DEFAULT_DATABASE, NOW, namedDatabase, manager, indicator, directoryRows, openManager, createWorkspace, switchWorkspace, openArchive } from './browser-workspace-fixtures';
 

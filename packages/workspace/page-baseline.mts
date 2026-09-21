@@ -3,7 +3,7 @@
 // HTML, URLs, headers, redirect inventories, and parser diagnostics never
 // cross this storage boundary.
 
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import { isInformativePerceptualHash as isInformativeFaviconHash } from '../analysis/perceptual-hash-comparison.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { PAGE_FINGERPRINT_TOKEN_LIMITS } from '../contracts/page-fingerprints.mts';

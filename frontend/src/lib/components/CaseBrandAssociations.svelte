@@ -1,7 +1,8 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import type { BrandProfile } from '$lib/brand-profiles';
-  import { MAX_CASE_BRAND_PROFILE_IDS, type CaseRecord } from '$lib/cases';
+  import { MAX_CASE_BRAND_PROFILE_IDS } from '../../../../packages/contracts/case-portability.mts';
+  import type { CaseRecord } from '../cases.ts';
 
   let {
     record,

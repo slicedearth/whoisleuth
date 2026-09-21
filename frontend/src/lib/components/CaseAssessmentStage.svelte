@@ -1,9 +1,13 @@
 <script lang="ts">
   import {
-    CASE_ASSERTION_KINDS, CASE_ASSERTION_STATES, CASE_DECISION_CONFIDENCE_LEVELS,
-    CASE_DISPOSITIONS, CASE_EVIDENCE_RELATION_STANCES,
-    CASE_REVIEW_REASONS, isReviewedCaseDisposition, type CaseRecord, type CaseEvidenceRelationStance,
-  } from '$lib/cases';
+    CASE_ASSERTION_KINDS,
+    CASE_ASSERTION_STATES,
+    CASE_DECISION_CONFIDENCE_LEVELS,
+    CASE_EVIDENCE_RELATION_STANCES,
+  } from '../../../../packages/cases/case-response-records.mts';
+  import { CASE_DISPOSITIONS, isReviewedCaseDisposition } from '../../../../packages/cases/case-record-decisions.mts';
+  import { CASE_REVIEW_REASONS } from '../../../../packages/cases/case-record-contracts.mts';
+  import type { CaseRecord, CaseEvidenceRelationStance } from '../cases.ts';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
   import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
   import CaseDraftRecovery from './CaseDraftRecovery.svelte';

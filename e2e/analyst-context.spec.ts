@@ -9,7 +9,7 @@ import {
   migrateLegacyBrowserData,
   useTheme,
 } from './helpers';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 
 const OBSERVED_AT = '2026-08-01T02:00:00.000Z';
 

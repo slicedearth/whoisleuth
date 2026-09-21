@@ -4,7 +4,7 @@
 // candidate-handoff.ts is a thin sessionStorage wrapper around buildHandoff /
 // parseHandoff.
 
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import { normalizeCtProvenance } from './ct-results.mts';
 import type { CtProvenance } from './ct-results.mts';
 import { MAX_CANDIDATE_SOURCE_LENGTH } from '../analysis/candidate-provenance-bounds.mts';

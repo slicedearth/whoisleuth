@@ -1,6 +1,6 @@
 // Only the source metadata needed to qualify an observed relationship crosses
 // this boundary. Collection and retention times are never source-time fallbacks.
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import { normalizeExplicitIsoTimestamp, readObservationEnvelope, type ObservationStatus } from '../evidence/observation.mts';
 
 export const RELATIONSHIP_TYPES = Object.freeze([

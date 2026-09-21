@@ -10,7 +10,7 @@ import { openImageReview } from './case-image-fixtures';
 import { storedFiles } from './case-attachment-fixtures';
 import { buildWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
 import { encryptWorkspaceArchive } from '../packages/workspace/workspace-archive-crypto.mts';
-import { createCase } from '../packages/cases/case-model.mts';
+import { createCase } from '../packages/cases/case-record-operations.mts';
 import type { CaseAttachment } from '../packages/cases/case-attachment-model.mts';
 import { decryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
 

@@ -2,13 +2,9 @@
 // transient relationship observations. It introduces no persistence or
 // network work: entities and edges remain traceable to bounded source records.
 
-import {
-  CASE_SCHEMA_VERSION,
-  MAX_CASES,
-  normalizeCaseStore,
-  type CaseRecord,
-  type CaseEvidenceSnapshot,
-} from '../cases/case-model.mts';
+import { CASE_SCHEMA_VERSION, MAX_CASES } from '../contracts/case-portability.mts';
+import { normalizeCaseStore } from '../cases/case-migration-model.mts';
+import type { CaseRecord, CaseEvidenceSnapshot } from '../cases/case-model.mts';
 import {
   BRAND_PROFILE_SCHEMA_VERSION,
   MAX_PROFILES,

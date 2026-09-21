@@ -1,32 +1,33 @@
 import {
   CASE_IMPORT_VERSIONS,
   CASE_SCHEMA_VERSION,
-  DEFAULT_DISPOSITION,
-  DEFAULT_SOURCE,
-  DEFAULT_STATUS,
   MAX_CASES,
   MAX_NOTES_PER_CASE,
+} from '../contracts/case-portability.mts';
+import { DEFAULT_DISPOSITION, DEFAULT_STATUS, isValidDisposition, isValidStatus } from './case-record-decisions.mts';
+import { DEFAULT_SOURCE } from './case-record-contracts.mts';
+import {
   deterministicId,
   caseTimestampOrNull,
-  normalizeCase,
-  normalizeDomain,
-  normalizeCaseObjective,
-  normalizeEvidenceHistory,
   normalizeNotes,
   normalizeReviewReasonCode,
   normalizeTags,
   objectRecord,
   safeId,
-  isValidDisposition,
   isValidSource,
-  isValidStatus,
-  type CaseDisposition,
-  type CaseEvidenceSnapshot,
-  type CaseNote,
-  type CaseRecord,
-  type CaseSource,
-  type CaseStatus,
-  type CaseStore,
+} from './case-record-core.mts';
+import { normalizeCase } from './case-record-operations.mts';
+import { normalizeCaseObjective } from './case-incident-context.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
+import { normalizeEvidenceHistory } from './case-evidence-model.mts';
+import type {
+  CaseDisposition,
+  CaseEvidenceSnapshot,
+  CaseNote,
+  CaseRecord,
+  CaseSource,
+  CaseStatus,
+  CaseStore,
 } from './case-record-model.mts';
 import {
   CASE_REPORT_SCHEMA,

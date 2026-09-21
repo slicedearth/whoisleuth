@@ -1,7 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { buildCaseExport, createCase, updateCase, type CaseRecord } from '../packages/cases/case-model.mts';
+import { buildCaseExport } from '../packages/cases/case-storage-model.mts';
+import { createCase, updateCase } from '../packages/cases/case-record-operations.mts';
+import type { CaseRecord } from '../packages/cases/case-model.mts';
 import { currentBrowserLocalDocument, migrateLegacyBrowserData, readBrowserLocalCollection, failNextBrowserLocalManifestWrite, failNextBrowserLocalCollectionReadAfterWrite, expectNoHorizontalOverflow, useTheme } from './helpers';
 import { openCaseSection } from './console-navigation';
 import { FILE_BYTES, FILE_NAME, selectOriginal, storedFiles } from './case-attachment-fixtures';

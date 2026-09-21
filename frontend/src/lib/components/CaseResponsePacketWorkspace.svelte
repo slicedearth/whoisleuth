@@ -4,12 +4,9 @@
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CasePacketPrintPreview from './CasePacketPrintPreview.svelte';
   import { caseEvidenceChoiceName } from '$lib/analysis/case-evidence-presentation.ts';
-  import {
-    caseInvestigationContext,
-    caseResponseIncidentUrls,
-    caseTypeSummary,
-    type CaseRecord,
-  } from '$lib/cases';
+  import { caseInvestigationContext } from '../../../../packages/cases/case-incident-context.mts';
+  import { caseResponseIncidentUrls, caseTypeSummary } from '../../../../packages/cases/case-workflow-metadata.mts';
+  import type { CaseRecord } from '../cases.ts';
   import {
     buildCaseResponsePacket,
     buildCaseResponsePreflight,

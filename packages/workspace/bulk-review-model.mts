@@ -1,4 +1,4 @@
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import { CASE_DISPOSITIONS as CASE_DISPOSITION_OPTIONS } from '../cases/case-record-contracts.mts';
 import { BULK_SORT_KEYS, normalizeBulkPresentationSortKey } from './bulk-sort.mts';
 import type { BulkSortDirection, BulkSortKey } from './bulk-sort.mts';

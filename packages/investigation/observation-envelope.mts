@@ -3,7 +3,7 @@
 // collection at a time into this disposable form for search and graph use;
 // they never rewrite, delete, or silently migrate the source collection.
 
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import { RELATIONSHIP_EVIDENCE_SCHEMA } from '../comparison/relationship-evidence.mts';
 import {
   MAX_RELATIONSHIP_OBSERVATIONS,

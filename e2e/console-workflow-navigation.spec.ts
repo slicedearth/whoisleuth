@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures';
 import { openInboxReview } from './console-navigation';
 import { caseRecord, createCase, snapshot } from './case-test-fixtures';
-import { CASE_SCHEMA_VERSION } from '../packages/cases/case-model.mts';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, holdBrowserLocalTransaction, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
 

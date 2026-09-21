@@ -2,7 +2,7 @@ import { openConsoleView } from './console-navigation';
 import type { Page, Route } from '@playwright/test';
 
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { caseRecord } from './case-test-fixtures';
 import { ALLOWED_ORIGIN, expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';

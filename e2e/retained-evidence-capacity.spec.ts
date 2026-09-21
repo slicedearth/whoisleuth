@@ -1,7 +1,8 @@
 import { openConsoleView } from './console-navigation';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
-import { createCase, serializeCaseStore } from '../packages/cases/case-model.mts';
+import { createCase } from '../packages/cases/case-record-operations.mts';
+import { serializeCaseStore } from '../packages/cases/case-storage-model.mts';
 import { createRelationshipObservation } from '../packages/workspace/relationship-observation-model.mts';
 
 const NOW = '2026-09-10T00:00:00.000Z';

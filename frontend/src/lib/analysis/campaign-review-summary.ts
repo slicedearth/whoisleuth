@@ -1,4 +1,5 @@
-import { latestCaseEvidence, type CaseRecord } from './case-record-model.ts';
+import { latestCaseEvidence } from '../../../../packages/cases/case-evidence-model.mts';
+import type { CaseRecord } from './case-record-model.ts';
 import { isReviewedCaseDisposition } from './case-record-decisions.ts';
 import { casesForDomains } from '../../../../packages/cases/case-selection.mts';
 

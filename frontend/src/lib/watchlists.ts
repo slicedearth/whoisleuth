@@ -13,7 +13,7 @@ import {
   normalizeWatchlistName,
   serializeWatchlistStore,
 } from './analysis/watchlist-store.ts';
-import { normalizeDomain } from './analysis/case-model.ts';
+import { normalizeDomain } from '../../../packages/evidence/domain-name.mts';
 import type {
   WatchlistCollection,
   WatchlistEntry,

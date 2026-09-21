@@ -2,7 +2,7 @@ import { expect, test } from './fixtures';
 import { openCaseSection } from './console-navigation';
 import { boundingBox, expectNoHorizontalOverflow } from './helpers';
 import { readFileSync } from 'node:fs';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { CASE_REPORT_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-report';
 
 const packageVersion = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;

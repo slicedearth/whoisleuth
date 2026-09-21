@@ -6,16 +6,15 @@
   import {
     CASE_TYPES,
     MAX_CASE_INCIDENT_TARGETS,
-    buildCaseTypeEvidenceReadiness,
     caseIncidentTargetAssertion,
     caseIncidentTargets,
     caseNumber,
     caseTagsWithTypes,
     caseTypeIds,
     formattedCaseNumber,
-    editCase,
-    type CaseRecord,
-  } from '$lib/cases';
+  } from '../../../../packages/cases/case-workflow-metadata.mts';
+  import { buildCaseTypeEvidenceReadiness } from '../../../../packages/cases/case-type-evidence-readiness.mts';
+  import { editCase, type CaseRecord } from '../cases.ts';
   import {
     resolvePlatformReportingRoutes,
     platformReportingCatalogueHealth,

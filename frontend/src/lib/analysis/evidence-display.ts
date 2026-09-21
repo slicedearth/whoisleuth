@@ -3,7 +3,11 @@
 // latestCaseEvidence) and produces display-ready derivations and formatted
 // values. No browser globals, no DOM access — Node-testable with node --test.
 
-import { caseEvidenceTimeline, compareCaseEvidence, latestCaseEvidence } from './case-model.ts';
+import {
+  caseEvidenceTimeline,
+  compareCaseEvidence,
+  latestCaseEvidence,
+} from '../../../../packages/cases/case-evidence-model.mts';
 import type { CaseEvidenceSnapshot } from './case-model.ts';
 import { httpSecurityHeaderLabel } from './http-summary.ts';
 

@@ -4,15 +4,19 @@
   import { parseBoundedJson } from '$lib/bounded-json';
   import {
     EXTERNAL_FINDINGS_SCHEMA,
+    MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
+  } from '../../../../packages/contracts/external-observation-interchange.mts';
+  import {
     importExternalFindings,
     importExternalFindingsIntoCase,
     importExternalIntelligence,
-    MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
-    MAX_EXTERNAL_INTELLIGENCE_IMPORT_BYTES,
-    parseExternalFindingsDocument,
-    parseExternalIntelligenceDocument,
     type CaseRecord,
-  } from '$lib/cases';
+  } from '../cases.ts';
+  import {
+    MAX_EXTERNAL_INTELLIGENCE_IMPORT_BYTES,
+    parseExternalIntelligenceDocument,
+  } from '../analysis/external-intelligence-import.ts';
+  import { parseExternalFindingsDocument } from '../../../../packages/interchange/external-findings-import.mts';
   import {
     EXTERNAL_FINDING_ROWS_SCHEMA,
     CERTIFICATE_OBSERVATION_ROWS_SCHEMA,

@@ -1,4 +1,4 @@
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import {
   MAX_NAMESERVERS_PER_ROW,
   RELATIONSHIP_EVIDENCE_SCHEMA,

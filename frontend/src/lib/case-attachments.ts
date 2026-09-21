@@ -1,5 +1,6 @@
 import { addCaseAttachments, assertDerivedCaseAttachmentSource, readCaseAttachment, removeCaseAttachment, type CaseAttachment } from '../../../packages/cases/case-attachment-model.mts';
-import { enforceStoreBudget, type CaseRecord } from '../../../packages/cases/case-model.mts';
+import { enforceStoreBudget } from '../../../packages/cases/case-storage-model.mts';
+import type { CaseRecord } from '../../../packages/cases/case-model.mts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../packages/contracts/selected-file-limits.mts';
 import { captureRetainedFiles } from '../../../packages/evidence/retained-file.mts';
 import { sha256ArtifactBytes } from '../../../packages/evidence/artifact-integrity.mts';

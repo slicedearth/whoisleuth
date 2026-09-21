@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { CaseRecord } from '$lib/cases';
   import { evidenceTime } from '$lib/analysis/evidence-time.ts';
-  import { currentCaseEvidence } from '$lib/analysis/case-record-model.ts';
+  import { currentCaseEvidence } from '../../../../packages/cases/case-evidence-model.mts';
   import {
     currentEvidenceSummary,
     deriveTimeline,

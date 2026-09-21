@@ -1,9 +1,7 @@
 import {
   addCaseNote,
-  dispositionLabel,
   editCase,
   getCasesByDomain,
-  isReviewedCaseDisposition,
   openCase,
   recordCaseConclusion,
   recordCaseInvestigationContext,
@@ -11,6 +9,7 @@ import {
   type CaseConclusionInput,
   type CaseRecord,
 } from '../cases.ts';
+import { dispositionLabel, isReviewedCaseDisposition } from '../../../../packages/cases/case-record-decisions.mts';
 import type { CaseOpenSelection } from '../analysis/case-model.ts';
 import type { EvidenceChange } from '../cases.ts';
 import type { CaseRecheckAnswerContext } from '../../../../packages/cases/case-recheck-model.mts';

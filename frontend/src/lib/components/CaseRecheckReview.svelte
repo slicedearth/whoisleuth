@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { CASE_OBSERVED_EFFECT_SOURCE_CLASSES, CASE_OBSERVED_EFFECT_STATES, CASE_PIN_COMPLETENESS, type CaseRecord } from '$lib/cases';
+  import {
+    CASE_OBSERVED_EFFECT_SOURCE_CLASSES,
+    CASE_OBSERVED_EFFECT_STATES,
+    CASE_PIN_COMPLETENESS,
+  } from '../../../../packages/cases/case-response-records.mts';
+  import type { CaseRecord } from '../cases.ts';
   import { caseRecheckEvidence } from '$lib/analysis/case-evidence-presentation.ts';
   import { isoFromUtcInput, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';

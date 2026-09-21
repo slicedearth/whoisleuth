@@ -51,9 +51,7 @@ import {
 import {
   type CaseRecord,
 } from './case-model.mts';
-import {
-  caseDispositionSupportsDefensiveResponse,
-} from './case-record-operations.mts';
+import { caseDispositionSupportsDefensiveResponse } from './case-record-decisions.mts';
 import {
   buildCaseActionOutcomeSummary,
   buildCaseResponseLifecycleSummary,

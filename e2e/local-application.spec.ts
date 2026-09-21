@@ -8,7 +8,9 @@ import { selectOriginal, openRetainedFiles, FILE_BYTES, FILE_NAME } from './case
 import { downloadWorkspaceArchive, downloadEncryptedWorkspaceArchive, reviewWorkspaceBackup, workspaceArchiveRegion } from './workspace-backup';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
 import { caseStoreAtCapacity } from '../test/workspace-backup-capacity-fixture.mts';
-import { serializeCaseStore, normalizeCaseStore, MAX_CASE_STORE_BYTES } from '../packages/cases/case-model.mts';
+import { serializeCaseStore } from '../packages/cases/case-storage-model.mts';
+import { normalizeCaseStore } from '../packages/cases/case-migration-model.mts';
+import { MAX_CASE_STORE_BYTES } from '../packages/contracts/case-portability.mts';
 import { MAX_SELECTED_FILE_TOTAL_BYTES } from '../packages/contracts/selected-file-limits.mts';
 
 async function pinForm(page: import('@playwright/test').Page) {

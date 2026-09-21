@@ -1,4 +1,5 @@
-import { normalizeDomain, type CaseRecord } from './case-model.ts';
+import { normalizeDomain } from '../../../../packages/evidence/domain-name.mts';
+import type { CaseRecord } from './case-model.ts';
 import {
   MAX_CASE_ASSERTIONS,
   mergeCaseAssertions,

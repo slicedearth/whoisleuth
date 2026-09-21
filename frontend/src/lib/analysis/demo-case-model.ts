@@ -1,4 +1,4 @@
-import { normalizeCase } from './case-model.ts';
+import { normalizeCase } from '../../../../packages/cases/case-record-operations.mts';
 import { deriveTimeline } from './evidence-display.ts';
 import {
   normalizeSyntheticDemoState,

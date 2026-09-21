@@ -75,9 +75,18 @@ The packet component owns one transient manual-handoff preview. Its generator
 supplies text and structured output; input identity and the existing
 freshness-bound review digest govern reuse. No preview is stored in the Case.
 
-Lookup's route coordinates collection and local context. Its export module owns
-portable-output preparation, download status and file delivery; evidence-quality
-and decision-review views share the contributor presentation projection.
+Lookup's route composes collection and local context. The result-state factory
+owns observation reset and restoration. Its Case workspace owns draft selection,
+read/write generations and publication; request and persistence controllers remain
+separate. Bulk's scan controller owns cancellation, pause, progress, settled rows
+and disposal; its view-state owner projects filters to navigation and saved presets.
+Routes subscribe to those states and derive analysis from record/result identity,
+not from unrelated progress or draft updates.
+
+Lookup's export module owns portable-output preparation and file delivery;
+evidence-quality and decision-review views share the contributor presentation
+projection. Pure incident-URL parsing and retention projection live in
+`case-incident-context.mts`, separate from Case mutation and storage.
 
 The shared investigation package owns graph relationships, source clocks and
 input coverage. The browser owns visual grouping, search and pagination.

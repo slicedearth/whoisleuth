@@ -3,13 +3,10 @@
 // ownership, coordination, intent, or maliciousness conclusions. No network
 // request, aggregate score, or new persisted record is produced here.
 
-import {
-  type CaseEvidenceSnapshot,
-  MAX_CASES,
-  MAX_EVIDENCE_SNAPSHOTS_PER_CASE,
-  normalizeDomain,
-  normalizeSnapshot,
-} from '../cases/case-model.mts';
+import type { CaseEvidenceSnapshot } from '../cases/case-model.mts';
+import { MAX_CASES, MAX_EVIDENCE_SNAPSHOTS_PER_CASE } from '../contracts/case-portability.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
+import { normalizeSnapshot } from '../cases/case-evidence-model.mts';
 import {
   INVESTIGATION_SCHEMA_VERSION_FIELDS,
   MAX_PROJECTION_LIMITATIONS,

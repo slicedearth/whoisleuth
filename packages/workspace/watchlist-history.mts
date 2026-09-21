@@ -5,7 +5,7 @@
 
 import { explainRiskScore, normalizeRiskModelVersion } from '../analysis/risk-scoring.mts';
 import { HTTP_SECURITY_HEADER_TOKENS, normalizeHttpSummary } from '../cases/http-summary.mts';
-import { normalizeDomain } from '../cases/case-model.mts';
+import { normalizeDomain } from '../evidence/domain-name.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { registryDateIso } from '../evidence/registry-dates.mts';
 import {

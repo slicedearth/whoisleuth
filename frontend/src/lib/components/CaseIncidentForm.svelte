@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { casesForDomain, type CaseRecord, type CaseIncidentInput } from '$lib/analysis/case-model.ts';
+  import { casesForDomain } from '../../../../packages/cases/case-selection.mts';
+  import type { CaseRecord, CaseIncidentInput } from '../analysis/case-model.ts';
   import { caseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
   import { MAX_CASE_OBJECTIVE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
 

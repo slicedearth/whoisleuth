@@ -10,7 +10,7 @@ import {
   readBrowserLocalCollection,
   useTheme,
 } from './helpers';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 
 const DATABASE_NAME = 'whoisleuth-browser-data-v1';
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';

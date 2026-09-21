@@ -3,8 +3,8 @@
     CASE_PIN_COMPLETENESS,
     CASE_SIGHTING_CATEGORIES,
     CASE_SIGHTING_STATES,
-    type CaseRecord,
-  } from '$lib/cases';
+  } from '../../../../packages/cases/case-response-records.mts';
+  import type { CaseRecord } from '../cases.ts';
   import { buildCaseSightingChronology } from '$lib/analysis/case-sighting-chronology.ts';
   import { isoFromUtcInput, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
   import { createCaseDraft } from '$lib/controllers/case-draft.svelte.ts';

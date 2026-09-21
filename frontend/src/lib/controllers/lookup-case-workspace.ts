@@ -16,8 +16,17 @@ type LookupCaseState = Readonly<{
 }>;
 
 function emptyCaseState(): LookupCaseState {
-  return { record: null, candidates: [], sourceState: 'loading', note: '', status: '',
-    disposition: DEFAULT_DISPOSITION, reviewReason: '', comparison: null, busy: false };
+  return {
+    record: null,
+    candidates: [],
+    sourceState: 'loading',
+    note: '',
+    status: '',
+    disposition: DEFAULT_DISPOSITION,
+    reviewReason: '',
+    comparison: null,
+    busy: false,
+  };
 }
 
 type LookupCaseWorkspaceOptions = Readonly<{
@@ -88,8 +97,14 @@ export class LookupCaseWorkspace {
     const current = this.#options.context();
     if (this.#disposed || read !== this.#readGeneration || action !== this.#actionGeneration
       || context.revision !== current.revision || context.domain !== current.domain) return;
-    this.#update({ record: next.record, candidates: next.records, status: next.status, sourceState: next.sourceState,
-      disposition: next.record?.disposition ?? DEFAULT_DISPOSITION, reviewReason: next.record?.reviewReasonCode ?? '' });
+    this.#update({
+      record: next.record,
+      candidates: next.records,
+      status: next.status,
+      sourceState: next.sourceState,
+      disposition: next.record?.disposition ?? DEFAULT_DISPOSITION,
+      reviewReason: next.record?.reviewReasonCode ?? '',
+    });
   }
 
   select(id: string): void {
@@ -97,8 +112,14 @@ export class LookupCaseWorkspace {
     const record = this.#state.candidates.find(candidate => candidate.id === id);
     if (!record) return;
     this.invalidate();
-    this.#update({ record, note: '', status: '', comparison: null,
-      disposition: record.disposition, reviewReason: record.reviewReasonCode ?? '' });
+    this.#update({
+      record,
+      note: '',
+      status: '',
+      comparison: null,
+      disposition: record.disposition,
+      reviewReason: record.reviewReasonCode ?? '',
+    });
     this.#options.select(record.id);
   }
 

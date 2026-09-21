@@ -15,7 +15,17 @@
   import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
   import { CASE_WORKSPACE_SECTIONS, caseWorkspaceHref, caseWorkspaceSection, type CaseWorkspaceSection } from '$lib/analysis/case-response-stage.ts';
   import type { BrandProfile } from '$lib/brand-profiles';
-  import { CASE_DISPOSITIONS, CASE_REVIEW_REASONS, caseLookupTarget, caseNumber, caseStatusOptionsForDirectEdit, dispositionLabel, sourceLabel, statusLabel, type CaseRecord } from '$lib/cases';
+  import {
+    CASE_DISPOSITIONS,
+    caseStatusOptionsForDirectEdit,
+    dispositionLabel,
+    statusLabel,
+  } from '../../../../packages/cases/case-record-decisions.mts';
+  import { CASE_REVIEW_REASONS } from '../../../../packages/cases/case-record-contracts.mts';
+  import { caseLookupTarget } from '../../../../packages/cases/case-evidence-model.mts';
+  import { caseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
+  import { sourceLabel } from '../../../../packages/cases/case-record-core.mts';
+  import type { CaseRecord } from '../cases.ts';
 
   let {
     record, allRecords, tagDraft, setTagDraft, noteDraft, setNoteDraft, pendingNoteCaseIds,

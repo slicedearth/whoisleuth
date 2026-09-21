@@ -1,6 +1,10 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { CASE_OBSERVED_EFFECT_STATES, CASE_PIN_COMPLETENESS, type CaseRecord } from '$lib/cases';
+  import {
+    CASE_OBSERVED_EFFECT_STATES,
+    CASE_PIN_COMPLETENESS,
+  } from '../../../../packages/cases/case-response-records.mts';
+  import type { CaseRecord } from '../cases.ts';
   import type { LookupRecheckComparison, LookupRecheckOutcomeInput } from '$lib/controllers/lookup-case-controller.ts';
   import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
   import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft';

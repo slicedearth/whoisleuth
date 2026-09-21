@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { CASE_PROVIDER_OUTCOMES, type CaseRecord, type CaseActionRecord, type CaseActionState } from '$lib/cases';
+  import { CASE_PROVIDER_OUTCOMES } from '../../../../packages/cases/case-response-records.mts';
+  import type { CaseRecord, CaseActionRecord, CaseActionState } from '../cases.ts';
   import type { CaseActionEventSourceClass } from '$lib/analysis/case-response-model.ts';
   import { isoFromUtcInput, utcDateTimeInputAttributes, list } from '$lib/analysis/case-response-form-values.ts';
   import type { CaseResponsePresentation, PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';

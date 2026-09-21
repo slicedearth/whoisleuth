@@ -14,7 +14,7 @@ import {
 import { readBrowserLocalData, updateBrowserLocalData } from './browser-local-data-service.ts';
 import { assertAnalystUndoCurrent } from './analysis/analyst-undo.ts';
 import { assertLocalRecordCurrent } from './local-mutation-outcome.ts';
-import { normalizeDomain } from './analysis/case-model.ts';
+import { normalizeDomain } from '../../../packages/evidence/domain-name.mts';
 
 export type {
   BulkReviewFilter,

@@ -16,7 +16,10 @@ import {
   useTheme,
 } from './helpers';
 import { caseRecord, snapshot } from './case-test-fixtures';
-import { CASE_SCHEMA_VERSION, MAX_CASE_STORE_BYTES, normalizeCaseStore, serializeCaseStore, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
+import { CASE_SCHEMA_VERSION, MAX_CASE_STORE_BYTES } from '../packages/contracts/case-portability.mts';
+import { normalizeCaseStore } from '../packages/cases/case-migration-model.mts';
+import { serializeCaseStore } from '../packages/cases/case-storage-model.mts';
+import type { CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
 import type { CaseActionRecord } from '../frontend/src/lib/analysis/case-response-model.ts';
 
 const NOW = '2026-08-09T02:00:00.000Z';

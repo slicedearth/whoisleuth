@@ -1,4 +1,4 @@
-import { hashString, normalizeEvidenceDomain } from './case-model.ts';
+import { hashString, normalizeEvidenceDomain } from '../../../../packages/cases/case-record-core.mts';
 import type { WatchlistComparableRecord } from './watchlist-history.ts';
 import {
   MAX_WATCHLIST_NAME_LENGTH,

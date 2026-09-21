@@ -1,25 +1,29 @@
 import { downloadLocalFile } from './download-local-file.ts';
-// Browser-local analyst case store. All validation, normalization, bounding,
-// merge, byte-budget, and export shaping live in analysis/case-model.ts (pure +
-// unit tested); this wrapper owns asynchronous provider access and downloads.
+// Browser-local analyst case store. Pure validation, merge, byte budgets and
+// export shaping live in packages/cases; this adapter owns provider access and
+// downloads. Internal consumers import pure operations from their domain owner.
 // Cases never leave the browser and hold no raw registry responses - only a
 // bounded, chronological history of evidence snapshots.
 import {
   buildCaseExport,
-  addCaseBrandProfileId,
   enforceStoreBudget,
   prepareCaseStoreSave,
   caseStoreSavePreviewIsCurrent,
-  mergeCases,
-  casesForDomain,
+} from '../../../packages/cases/case-storage-model.mts';
+import {
+  addCaseBrandProfileId,
+  removeCaseBrandProfileId,
+} from '../../../packages/cases/case-brand-profile-references.mts';
+import { mergeCases } from '../../../packages/cases/case-migration-model.mts';
+import { casesForDomain } from '../../../packages/cases/case-selection.mts';
+import {
   createCaseIncident as createCaseIncidentModel,
   openOrCreateCase,
   recordCaseConclusion as recordCaseConclusionModel,
   recordCaseInvestigationContext as recordCaseInvestigationContextModel,
   recordCaseRecheckOutcome as recordCaseRecheckOutcomeModel,
-  removeCaseBrandProfileId,
   updateCase,
-} from './analysis/case-model.ts';
+} from '../../../packages/cases/case-record-operations.mts';
 import type {
   CaseStoreSavePreview,
   CaseInput,

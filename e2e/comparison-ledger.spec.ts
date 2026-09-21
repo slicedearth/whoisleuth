@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData, useTheme } from './helpers';
-import { CASE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-model';
+import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import type { WebsiteProfileSnapshot, WebsiteSnapshotTechnology } from '../packages/workspace/website-snapshot-model.mts';
 import {
   TECHNOLOGY_PROFILE_VERSION,

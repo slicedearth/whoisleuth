@@ -19,12 +19,8 @@ import {
   type RiskCalibrationDisposition,
   type RiskCalibrationRecord,
 } from '../contracts/risk-calibration.mts';
-import {
-  currentCaseEvidence,
-  type CaseDisposition,
-  type CaseEvidenceSnapshot,
-  type CaseRecord,
-} from '../cases/case-record-model.mts';
+import { currentCaseEvidence } from '../cases/case-evidence-model.mts';
+import type { CaseDisposition, CaseEvidenceSnapshot, CaseRecord } from '../cases/case-record-model.mts';
 
 export {
   RISK_CALIBRATION_DATASET_SCHEMA,

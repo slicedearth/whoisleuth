@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { caseLookupTarget, type CaseRecord } from '$lib/cases';
+  import { caseLookupTarget } from '../../../../packages/cases/case-evidence-model.mts';
+  import type { CaseRecord } from '../cases.ts';
   import { caseResponseQueue } from '../../../../packages/cases/case-response-queue.mts';
   import { evidenceTime } from '$lib/analysis/evidence-time.ts';
   import { reviewClock } from '$lib/review-clock.ts';

@@ -11,7 +11,7 @@
   import type { CampaignCohortSourceState } from '$lib/analysis/campaign-cohort-review.ts';
   import type { CaseRelationshipSummary } from '$lib/analysis/case-relationships.ts';
   import type { CaseRecord } from '$lib/cases';
-  import { casesForDomain } from '$lib/analysis/case-model.ts';
+  import { casesForDomain } from '../../../../packages/cases/case-selection.mts';
   import { caseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
   import { buildCampaignReviewSummary } from '$lib/analysis/campaign-review-summary.ts';
   import { buildCampaignTemporalReview } from '$lib/analysis/campaign-temporal-review.ts';
