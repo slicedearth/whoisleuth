@@ -59,7 +59,7 @@
       linear-gradient(145deg,rgb(var(--overlay-rgb) / .025),transparent 64%),
       rgb(var(--panel-rgb) / .78);
   }
-  :global(:root[data-effects='minimal']) article{background:var(--panel)}
+  :global(:root[data-effects='minimal']) .goal-paths:not(.guide) article{background:var(--panel)}
   h3{margin:0;font:700 clamp(1.05rem,2vw,1.28rem) var(--mono);letter-spacing:-.025em}
   p{margin:9px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.6}
   ol{display:flex;align-items:center;flex-wrap:wrap;gap:6px 0;margin:22px 0 0;padding:0;list-style:none}
