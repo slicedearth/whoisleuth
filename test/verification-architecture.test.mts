@@ -559,6 +559,32 @@ describe('verification architecture contracts', () => {
     assert.deepEqual(known.focusedBrowserChecks, buildVerificationOwnershipPlan([stage]).focusedBrowserChecks);
   });
 
+  test('discovers frontend controller coverage through consumers rather than unrelated default workflows', () => {
+    const helper = 'frontend/src/lib/controllers/ordinary-reference-filter.ts';
+    const unit = 'test/ordinary-reference-filter.test.mts';
+    const route = 'frontend/src/routes/(public)/resources/+page.svelte';
+    const plan = buildVerificationOwnershipPlan([helper], new Map([[helper, [unit]]]), new Map(),
+      new Map([[helper, [route]]]));
+    assert.ok(plan.focusedUnitChecks.includes(unit));
+    assert.ok(plan.focusedBrowserChecks.includes('e2e/public-guide.spec.ts'));
+    assert.ok(plan.focusedBrowserChecks.includes('e2e/accessibility.spec.ts'));
+    assert.equal(plan.focusedUnitChecks.includes('test/lookup-request-controller.test.mts'), false);
+    assert.equal(plan.focusedBrowserChecks.includes('e2e/dashboard.spec.ts'), false);
+    assert.equal(plan.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
+    const missing = buildVerificationOwnershipPlan([helper]);
+    assert.deepEqual(missing.focusedBrowserChecks, readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).sort());
+    const unknown = buildVerificationOwnershipPlan([helper], new Map(), new Map(),
+      new Map([[helper, ['frontend/src/routes/(console)/new-workflow/+page.svelte']]]));
+    assert.deepEqual(unknown.focusedBrowserChecks, missing.focusedBrowserChecks);
+  });
+
+  test('does not assign frontend workflow ownership to a similarly named CLI helper', () => {
+    const assignment = buildVerificationOwnershipPlan(['cli/lookup-report.mts']).assignments[0]!;
+    assert.equal(assignment.ownershipArea, 'CLI command and installed-package surface');
+    assert.deepEqual(assignment.focusedBrowserChecks, []);
+    assert.ok(assignment.mandatorySpecialisedChecks.includes('cli-package'));
+  });
+
   test('resolves real components, helpers, release metadata and fixtures from one repository snapshot', async () => {
     // One graph covers these independent expectations. Rebuilding the identical
     // repository for each changed path adds no integration coverage.

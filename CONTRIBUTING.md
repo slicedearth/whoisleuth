@@ -18,6 +18,12 @@ rendered interface rather than freezing individual CSS values in tests.
   validation is in `case-response-review-inputs.mts`, separate from construction.
 - **Lookup downloads:** `frontend/src/lib/analysis/lookup-exports.ts` prepares
   projections and files; the route owns visible status, not export formatting.
+- **Lookup state:** `lookup-view-state.ts` creates and restores an observation;
+  `lookup-case-workspace.ts` owns the selected Case draft and stale-result guards.
+  The existing request and Case controllers own collection and persistence.
+- **Bulk state:** `bulk-scan-controller.ts` owns a scan from start through pause,
+  cancellation and disposal. `bulk-view-state.ts` creates, resets and projects
+  filters; keep retained presets separate from temporary progress.
 - **CLI options:** `cli/command-reference.mts` owns grammar and command bindings.
   Help and completion derive from it; command handlers own execution.
 - **Portable fields:** `packages/cases/case-record-projection.mts` requires
@@ -50,8 +56,8 @@ npm run verification:focused
 
 The default scope is the working diff. For a committed or smaller change, pass
 its paths explicitly after `--`. Read the plan: runtime imports find unit and
-browser consumers, while domain rules preserve workflow checks. Ordinary Svelte
-components inherit the checks of their consuming routes; known component families
+browser consumers, while domain rules preserve workflow checks. Ordinary frontend
+components and models inherit the checks of their consuming routes; known families
 retain their workflow suites. Shared-code edits keep all compiler projects checked,
 so erased type imports need not select unrelated runtime tests.
 Missing runtime import evidence falls back to all unit tests, and unexplained
@@ -105,6 +111,14 @@ For a concrete editing rehearsal, use one small change at a time:
 - Extract a private helper from an existing module, preserving its exported
   behaviour. The existing consumer tests and focused plan should still find it
   without an inventory baseline or a new registration table.
+
+For state changes, add a field to its owning state type and factory, then define
+whether it survives reset and navigation. Exercise the lifecycle through that
+owner instead of adding another route-level reset list. For removals, update
+consumers and inspect the focused plan's conservative fallback for deleted files.
+Remove obsolete behaviour tests, not historical compatibility or privacy evidence.
+Retain a forwarding export when the removed internal location is a supported
+public entry point.
 
 Review the actual diff and selected checks after each exercise. These rehearsals
 show the change path; they do not establish that an unfamiliar contributor

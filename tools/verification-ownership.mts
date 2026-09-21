@@ -266,8 +266,8 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'frontend-model', area: 'frontend analysis and controller models', priority: 40,
     matches: (value: string) => value.startsWith('frontend/src/lib/analysis/') || value.startsWith('frontend/src/lib/controllers/'),
-    focusedUnit: unit('test/model-contract-properties.test.mts', 'test/lookup-request-controller.test.mts'),
-    focusedBrowser: browser('e2e/dashboard.spec.ts', 'e2e/accessibility.spec.ts'),
+    focusedUnit: unit(),
+    focusedBrowser: browser('e2e/accessibility.spec.ts'),
     specialised: specialised('architecture', 'privacy-catalogue', 'analyst-journey-assurance'),
     browserRequired: true,
   }),
@@ -303,8 +303,8 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'frontend-lookup-impact', area: 'Lookup analyst workflow', priority: 0,
     impactOnly: true,
-    matches: (value: string) => value.includes('/lookup/')
-      || /\/(?:Lookup|lookup-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
+    matches: (value: string) => value.startsWith('frontend/src/') && (value.includes('/lookup/')
+      || /\/(?:Lookup|lookup-)[^/]*\.(?:svelte|ts|mts)$/u.test(value)),
     focusedUnit: unit('test/lookup-request-controller.test.mts', 'test/lookup-route-analysis.test.mts'),
     focusedBrowser: browserSpecsForPrefixes(['lookup']),
     specialised: specialised('privacy-catalogue', 'browser-timing-plan'),
@@ -313,8 +313,8 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'frontend-bulk-impact', area: 'Bulk analyst workflow', priority: 0,
     impactOnly: true,
-    matches: (value: string) => value.includes('/bulk/')
-      || /\/(?:Bulk|bulk-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
+    matches: (value: string) => value.startsWith('frontend/src/') && (value.includes('/bulk/')
+      || /\/(?:Bulk|bulk-)[^/]*\.(?:svelte|ts|mts)$/u.test(value)),
     focusedUnit: unit('test/bulk-route-model.test.mts', 'test/bulk-session-model.test.mts'),
     focusedBrowser: browserSpecsForPrefixes(['bulk']),
     specialised: specialised('privacy-catalogue', 'browser-timing-plan'),
@@ -323,9 +323,9 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'frontend-brand-impact', area: 'Brand and campaign analyst workflow', priority: 0,
     impactOnly: true,
-    matches: (value: string) => value.includes('/brands/')
+    matches: (value: string) => value.startsWith('frontend/src/') && (value.includes('/brands/')
       || value === 'frontend/src/lib/campaigns.ts'
-      || /\/(?:Brand|Campaign|brand-|campaign-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
+      || /\/(?:Brand|Campaign|brand-|campaign-)[^/]*\.(?:svelte|ts|mts)$/u.test(value)),
     focusedUnit: unit('test/brand-profile-model.test.mts', 'test/campaign-model.test.mts'),
     focusedBrowser: browser(...FUNCTIONAL_BROWSER_INVENTORY.filter((file) => /(?:^|[-/])(?:brand|campaign)[-.]/u.test(file))),
     specialised: specialised('privacy-catalogue', 'browser-timing-plan'),
@@ -334,7 +334,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'frontend-case-impact', area: 'Case analyst workflow', priority: 0,
     impactOnly: true,
-    matches: (value: string) => !CASE_FORM_COMPONENT.test(value) && (value === 'frontend/src/lib/cases.ts'
+    matches: (value: string) => value.startsWith('frontend/src/') && !CASE_FORM_COMPONENT.test(value) && (value === 'frontend/src/lib/cases.ts'
       || /\/(?:Case|case-)[^/]*\.(?:svelte|ts|mts)$/u.test(value)),
     focusedUnit: unit('test/case-model.test.mts', 'test/case-report.test.mts', 'test/case-response-model.test.mts'),
     focusedBrowser: browserSpecsForPrefixes(['case', 'cases']),
@@ -344,10 +344,10 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'frontend-monitor-impact', area: 'Monitoring analyst workflow', priority: 0,
     impactOnly: true,
-    matches: (value: string) => value.includes('/monitor/')
+    matches: (value: string) => value.startsWith('frontend/src/') && (value.includes('/monitor/')
       || value === 'frontend/src/lib/scheduled-monitoring.ts'
       || value === 'frontend/src/lib/watchlists.ts'
-      || /\/(?:HostedWatchlist|Monitor|Watchlist|monitor-|watchlist-)[^/]*\.(?:svelte|ts|mts)$/u.test(value),
+      || /\/(?:HostedWatchlist|Monitor|Watchlist|monitor-|watchlist-)[^/]*\.(?:svelte|ts|mts)$/u.test(value)),
     focusedUnit: unit('test/watchlist-store.test.mts', 'test/scheduled-monitor-model.test.mts'),
     focusedBrowser: browser('e2e/hosted-monitoring.spec.ts', 'e2e/lookup-case-monitoring.spec.ts', 'e2e/watchlist-storage.spec.ts'),
     specialised: specialised('privacy-catalogue', 'browser-timing-plan'),
@@ -356,7 +356,8 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'frontend-dashboard-impact', area: 'Dashboard analyst workflow', priority: 0,
     impactOnly: true,
-    matches: (value: string) => value.includes('/dashboard/') || /\/Dashboard[^/]*\.svelte$/u.test(value),
+    matches: (value: string) => value.startsWith('frontend/src/')
+      && (value.includes('/dashboard/') || /\/Dashboard[^/]*\.svelte$/u.test(value)),
     focusedUnit: unit('test/analyst-review-inbox.test.mts'),
     focusedBrowser: browser('e2e/analyst-context.spec.ts', 'e2e/local-data-platform.spec.ts', ...browserSpecsForPrefixes(['dashboard', 'console-workflow'])),
     specialised: specialised('browser-timing-plan'),
@@ -672,7 +673,7 @@ export function buildVerificationOwnershipPlan(
   rawPaths: readonly string[],
   importedTests: ReadonlyMap<string, readonly string[]> = new Map(),
   importedBrowserTests: ReadonlyMap<string, readonly string[]> = new Map(),
-  componentRoutes: ReadonlyMap<string, readonly string[]> = new Map(),
+  routeConsumers: ReadonlyMap<string, readonly string[]> = new Map(),
 ): VerificationOwnershipPlan {
   validateRules();
   if (!Array.isArray(rawPaths) || rawPaths.length < 1 || rawPaths.length > MAX_VERIFICATION_CHANGED_PATHS) {
@@ -683,8 +684,9 @@ export function buildVerificationOwnershipPlan(
   const assignments = changedPaths.sort().map((changedPath): VerificationOwnershipAssignment => {
     const directImpacts = matchingRules(changedPath);
     const owner = ownershipRule(changedPath, directImpacts);
-    const routes = owner.id === 'frontend-user-interface' && directImpacts.length === 1
-      ? componentRoutes.get(changedPath) ?? [] : [];
+    const discoverRouteCoverage = ['frontend-user-interface', 'frontend-model'].includes(owner.id)
+      && directImpacts.length === 1;
+    const routes = discoverRouteCoverage ? routeConsumers.get(changedPath) ?? [] : [];
     const routeImpacts = routes.flatMap(matchingRules);
     const impacts = [...new Map([...directImpacts, ...routeImpacts].map(rule => [rule.id, rule])).values()];
     const focusedUnitChecks = uniqueSorted([
@@ -692,9 +694,9 @@ export function buildVerificationOwnershipPlan(
       ...exactFocusedChecks(changedPath),
       ...(importedTests.get(changedPath) ?? []),
     ]);
-    // Existing route owners explain ordinary components without a second
-    // component register. Unknown consumers still require the full fallback.
-    const unexplainedInterface = owner.id === 'frontend-user-interface' && directImpacts.length === 1
+    // Existing route owners explain components and their controller/model
+    // dependencies. A new helper does not need a separate workflow declaration.
+    const unexplainedInterface = discoverRouteCoverage
       && (!routes.length || routes.some(route => matchingRules(route).length === 1));
     const focusedBrowserChecks = uniqueSorted([
       ...impacts.flatMap((rule) => rule.focusedBrowser),
@@ -733,7 +735,7 @@ export function buildVerificationOwnershipPlan(
       'Each path selects its most specific owner plus explicit cross-cutting impacts, not every ancestor owner.',
       'Every full batch and release gate remains mandatory regardless of this focused plan.',
       'The plan is request-free and contains test and check identities, never executable shell fragments.',
-      'Known browser families discover their current specifications; components inherit their resolved route owners, while unexplained interfaces select the complete functional inventory.',
+      'Known browser families discover their current specifications; components and frontend models inherit resolved route owners, while unexplained interfaces select the complete functional inventory.',
     ]),
   });
 }
@@ -781,13 +783,14 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
   const browserInventory = functionalBrowserInventory();
   let selection: ReadonlyMap<string, readonly string[]>;
   let browserSelection: ReadonlyMap<string, readonly string[]>;
-  let componentRoutes: ReadonlyMap<string, readonly string[]> = new Map();
+  let routeConsumers: ReadonlyMap<string, readonly string[]> = new Map();
   let explanation: string;
   try {
     const { cruise } = await import('dependency-cruiser');
     const config = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, '.dependency-cruiser.json'), 'utf8')) as { options: IOptions };
     const components = importedPaths.filter(file => file.endsWith('.svelte'));
-    const { output } = await cruise([...inventory, ...browserInventory, ...(components.length ? ['frontend/src/routes'] : [])], {
+    const frontendPaths = importedPaths.filter(file => file.startsWith('frontend/src/'));
+    const { output } = await cruise([...inventory, ...browserInventory, ...(frontendPaths.length ? ['frontend/src/routes'] : [])], {
       ...config.options, baseDir: REPOSITORY_ROOT, outputType: 'json', tsPreCompilationDeps: 'specify', validate: false,
       tsConfig: { fileName: path.join(REPOSITORY_ROOT, 'tsconfig.dependency-cruiser.json') },
     });
@@ -797,7 +800,7 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
       ...importedTestConsumers(components, graph, inventory, false),
     ]);
     const routes = graph.modules.map(module => module.source).filter(file => file.startsWith('frontend/src/routes/'));
-    componentRoutes = importedTestConsumers(components, graph, routes, false);
+    routeConsumers = importedTestConsumers(frontendPaths, graph, routes, false);
     // Known owners retain their conservative browser coverage. Positive import
     // evidence additionally follows shared support into its browser consumers;
     // a complete graph with no browser consumer does not turn CLI-only helpers
@@ -812,7 +815,7 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
     browserSelection = new Map(importedPaths.map((file) => [file, browserInventory]));
     explanation = 'Dependency analysis was unavailable: the focused plan falls back to the complete unit and functional browser inventories.';
   }
-  const plan = buildVerificationOwnershipPlan(rawPaths, selection, browserSelection, componentRoutes);
+  const plan = buildVerificationOwnershipPlan(rawPaths, selection, browserSelection, routeConsumers);
   return Object.freeze({ ...plan, interpretation: Object.freeze([...plan.interpretation, explanation]) });
 }
 
