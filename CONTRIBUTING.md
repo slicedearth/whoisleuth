@@ -24,6 +24,9 @@ rendered interface rather than freezing individual CSS values in tests.
 - **Bulk state:** `bulk-scan-controller.ts` owns a scan from start through pause,
   cancellation and disposal. `bulk-view-state.ts` creates, resets and projects
   filters; keep retained presets separate from temporary progress.
+- **Bulk actions:** `bulk-case-actions.ts` coordinates Case writes and refreshes;
+  `bulk-monitor-actions.ts` admits every Monitor save through the same checks.
+  `analysis/bulk-export.ts` owns CSV columns; the route only downloads the result.
 - **CLI options:** `cli/command-reference.mts` owns grammar and command bindings.
   Help and completion derive from it; command handlers own execution.
 - **Portable fields:** `packages/cases/case-record-projection.mts` requires

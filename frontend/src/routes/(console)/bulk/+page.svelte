@@ -14,7 +14,7 @@
   import type { ShortlistRecord } from '$lib/shortlist';
   import type { CaseRecord } from '$lib/cases';
   import { saveWatchlist } from '$lib/watchlists';
-  import { failedLocalMutationOutcome, summarizeLocalMutationOutcomes, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
+  import { failedLocalMutationOutcome, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
   import { MUTATION_LABELS } from '$lib/analysis/typosquat-generator.ts';
   import { buildCoverageReport } from '$lib/analysis/coverage.ts';
   import { canonicalBulkTargets, normalizeBulkScanResult } from '$lib/analysis/bulk-scan-normalizer.ts';
@@ -23,10 +23,11 @@
   import type { RelationshipObservation } from '$lib/analysis/relationship-evidence.ts';
   import { relationshipAdmissionMatchesCurrent, type RelationshipRetentionAdmission } from '$lib/analysis/relationship-admission-preview.ts';
   import { relationshipObservationId } from '$lib/analysis/relationship-observation-model.ts';
-  import { BULK_SCORE_CSV_HEADERS, bulkScoreCsvFields, ctCsvFields } from '$lib/analysis/bulk-export.ts';
+  import { buildBulkResultsCsv } from '$lib/analysis/bulk-export.ts';
   import { buildDefensiveIndicatorExport, prepareDefensiveIndicatorExport } from '$lib/analysis/defensive-indicator-export.ts';
   import { analyzeDomainIdn } from '$lib/analysis/idn-confusables.ts';
-  import { normalizeHttpSummary } from '$lib/analysis/http-summary.ts';
+  import { BulkCaseActions } from '$lib/controllers/bulk-case-actions.ts';
+  import { BulkMonitorActions, type BulkMonitorScope } from '$lib/controllers/bulk-monitor-actions.ts';
   import type { CompactLookupHttpResponse } from '$lib/analysis/lookup-response.ts';
   import { fetchCompactBulkLookup } from '$lib/analysis/bulk-lookup-controller.ts';
   import {
@@ -450,30 +451,19 @@
       });
     };
   });
-  function prunedNote(pruned:number){return pruned?` (pruned ${pruned} old evidence snapshot${pruned===1?'':'s'} to stay within storage)`:'';}
-  async function reconcileBulkCaseSnapshot(committed:{cases:CaseRecord[]},success:string){
-    if(!casesApi){cases=committed.cases;casesSourceState='ready';caseStatus=success;return;}
-    try{cases=await casesApi.loadCases();caseStatus=success;}
-    catch{cases=committed.cases;casesSourceState='ready';caseStatus=`${success} The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.`;}
-  }
-  async function trackCase(row:ScanResult):Promise<LocalMutationOutcome>{
-    await ensurePrimaryResultContext();
-    if(casesSourceState!=='ready'||!casesApi){caseStatus='Cases are unavailable. Reload before creating a case.';return'rejected';}
-    const s=row.saved;
-    try{
-      const selected=caseByDomain.get(row.domain);
-      const committed=await casesApi.openCase({domain:row.domain,source:'bulk',evidence:{scanDepth:s.scanDepth,availability:s.availability,confidence:row.confidence,riskModelVersion:s.riskModelVersion,riskScore:row.risk,riskFactors:s.riskFactors,opportunityModelVersion:s.opportunityModelVersion,opportunityScore:row.opportunity,registrar:row.registrar&&row.registrar!=='—'?row.registrar:null,createdDate:s.createdDate,expiryDate:s.expiryDate,nameservers:s.nameservers,hasMx:s.hasMx,hasSpf:s.hasSpf,hasDmarc:s.hasDmarc,activityStatus:s.activityStatus,pageTitle:s.pageTitle,...(normalizeHttpSummary(s)||{}),faviconMatch:s.faviconMatch,faviconNearMatch:s.faviconNearMatch,reusesOfficialAssets:s.reusesOfficialAssets,hasPasswordField:s.hasPasswordField,hasExternalFormAction:s.hasExternalFormAction,phishingLanguageMatch:s.phishingLanguageMatch,privacyProtected:s.privacyProtected,idnReferenceMatch:s.idnReferenceMatch,pageBaselineMatch:s.pageBaselineMatch,hasActiveBrandProfile:s.hasActiveBrandProfile,profileContextState:s.profileContext.sourceState==='ready'?'ready':'unavailable',profileContextLimitation:s.profileContext.limitation||null,mutationTypes:s.mutationTypes}},selected?{caseId:selected.id}:{});
-      await reconcileBulkCaseSnapshot(committed,`${committed.created?`Opened a case for ${committed.record.domain}.`:`${committed.record.domain} already has a case.`}${prunedNote(committed.pruned)}`);
-      return'committed';
-    }catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not open the case.';return failedLocalMutationOutcome(cause);}
-  }
-  async function setRowDisposition(row:ScanResult,value:string){
-    await ensurePrimaryResultContext();
-    if(casesSourceState!=='ready'||!casesApi){caseStatus='Cases are unavailable. Reload before changing a disposition.';return;}
-    const record=caseByDomain.get(row.domain);if(!record)return;
-    try{const committed=await casesApi.editCase(record.id,{disposition:value});await reconcileBulkCaseSnapshot(committed,`Marked ${row.domain} as ${casesApi.dispositionLabel(value)}.${prunedNote(committed.pruned)}`);}
-    catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not update the case.';}
-  }
+  const caseActions = new BulkCaseActions({
+    context: async () => {
+      await ensurePrimaryResultContext();
+      return casesSourceState === 'ready' && casesApi ? { api: casesApi, selected: new Map(caseByDomain) } : null;
+    },
+    publish: records => { cases = records; casesSourceState = 'ready'; },
+    changed: state => { caseStatus = state.status; caseMutationBusy = state.busy; },
+    confirm: message => confirm(message),
+  });
+  const monitorActions = new BulkMonitorActions(saveWatchlist);
+  const trackCase = (row: ScanResult) => caseActions.open(row);
+  const setRowDisposition = (row: ScanResult, value: string) => caseActions.setDisposition(row, value);
+
   function parseDomains(){return [...scanTargets];}
   function provenance(domain:string):Candidate|undefined{return provenanceByDomain.get(domain.toLowerCase());}
   function matchesReviewState(domain:string){if(bulkReviewSourceState!=='ready')return true;const state=bulkReviewStateByDomain.get(domain)||'unreviewed';return !view.reviewStateFilter||state===view.reviewStateFilter;}
@@ -729,19 +719,9 @@
   async function trackCaseAt(index:number){if(casesSourceState!=='ready'){caseStatus='Cases are unavailable. Reload before creating a case.';return;}const row=resultAt(index);if(row)await trackCase(row);}
   async function setDispositionAt(index:number,value:string){if(casesSourceState!=='ready'){caseStatus='Cases are unavailable. Reload before changing a disposition.';return;}const row=resultAt(index);if(row)await setRowDisposition(row,value);}
   function setReviewStateAt(index:number,value:string){const row=resultAt(index);if(row)void setBulkReviewState(row,value);}
-  async function saveCurrentResultAt(index:number){
-    const row=resultAt(index);
-    const name=watchlistName.trim();
-    if(!row){saveStatus='The current review row is no longer available.';return;}
-    if(!name){saveStatus='Enter a watchlist name.';return;}
-    if(profileSourceState!=='ready'||row.saved.profileContext.sourceState!=='ready'){saveStatus='Brand Profile trust and allowlist context is inconclusive, so this row cannot be saved to Monitor. Reload or rescan after context is ready.';return;}
-    if(row.trusted){saveStatus='Domains trusted by the active Brand Profile are excluded from watchlists.';return;}
-    try{
-      const changes=await saveWatchlist(name,[row.saved],mode);
-      saveStatus=changes.length
-        ? `Updated ${name} with ${row.domain} and recorded ${changes.length} material change${changes.length===1?'':'s'}.`
-        : `Saved ${row.domain} to ${name}.`;
-    }catch(cause){saveStatus=cause instanceof Error?cause.message:'Could not save the current result.';}
+  function saveCurrentResultAt(index: number) {
+    const row = resultAt(index);
+    return saveToMonitor(row ? [row] : [], 'row');
   }
   async function inspectAt(index:number){
     const row=resultAt(index);if(!row)return;
@@ -794,7 +774,10 @@
     retryStatus = `Running ${plan.lookupRequests} reviewed retry${plan.lookupRequests === 1 ? '' : 'ies'}.`;
     await runReviewed(failed.map(row => row.domain), 'Retry');
   }
-  function exportRowsCsv(selected:ScanResult[],scope='bulk'){const header=['domain','unicode_domain','idn_scripts','idn_mixed_script','idn_official_skeleton_matches','availability','confidence','profile_context_state','profile_context_limitation','profile_status','registrar','activity',...BULK_SCORE_CSV_HEADERS,'mutations','error','dns_status','dnssec','dns_a','dns_aaaa','dns_cname','dns_caa','technology_ids','tls_issuer','tls_spki_sha256','ct_first_observed','ct_last_observed','ct_certificate_count','ct_hostnames'];const rows=selected.map(r=>{const contextReady=r.saved.profileContext.sourceState==='ready';return[r.domain,r.idn?.hasIdn?r.idn.unicodeDomain:'',r.idn?.scripts?.join('|')||'',r.idn?.mixedScript?'true':'false',contextReady?r.idn?.referenceMatches?.map((match)=>match.asciiDomain).join('|')||'':'',r.availability,r.confidence,r.saved.profileContext.sourceState,r.saved.profileContext.limitation,contextReady?(r.trusted||''):'',r.registrar,r.activity,...bulkScoreCsvFields(r),r.mutationTypes.join('|'),r.error,r.dns?.status||'',r.dnssec||'',r.dns?.records.a.join('|')||'',r.dns?.records.aaaa.join('|')||'',r.dns?.records.cname.join('|')||'',r.dns?.records.caa.map((item)=>`${item.critical} ${item.tag} ${item.value}`).join('|')||'',r.comparisonEvidence?.technology.ids.join('|')||'',r.comparisonEvidence?.tls.issuerLabel||'',r.comparisonEvidence?.tls.spkiSha256||'',...ctCsvFields(r.ct)]});downloadLocalFile(new Blob([rowsToCsv([header,...rows])],{type:'text/csv'}), `whoisleuth-${scope}-${new Date().toISOString().slice(0,10)}.csv`);}
+  function exportRowsCsv(selected: ScanResult[], scope = 'bulk') {
+    downloadLocalFile(new Blob([buildBulkResultsCsv(selected)], { type: 'text/csv' }),
+      `whoisleuth-${scope}-${new Date().toISOString().slice(0,10)}.csv`);
+  }
   function exportCsv(){exportRowsCsv(results);}
   async function exportSelectedCsv(){
     const selected = [...selectedRows];
@@ -839,21 +822,8 @@
   }
   async function exportDomainComparison(){if(!domainComparison)return;const exported=await buildBulkDomainComparisonExport(domainComparison);downloadText(exported.content,exported.filename,'application/json');bulkReviewStatus='Exported the two-domain evidence comparison with an integrity digest.';}
   async function exportMailExposure(){if(profileSourceState!=='ready'){bulkReviewStatus='Brand Profile context is not ready, so the mail-exposure comparison remains inconclusive and cannot be exported yet.';return;}const exported=await buildBulkMailExposureExport(mailExposureReport);downloadText(exported.content,exported.filename,'application/json');bulkReviewStatus='Exported the filtered mail-exposure review with an integrity digest.';}
-  async function createCasesSelected(){if(caseMutationBusy)return;caseMutationBusy=true;try{await ensurePrimaryResultContext();if(casesSourceState!=='ready'||!casesApi){caseStatus='Cases are unavailable. Reload before creating cases.';return;}const rows=selectedRows.slice(0,50);if(!rows.length||!confirm(`Create or refresh cases for ${rows.length} selected domain${rows.length===1?'':'s'}?`))return;const outcomes:LocalMutationOutcome[]=[];for(const row of rows)outcomes.push(await trackCase(row));const summary=summarizeLocalMutationOutcomes(outcomes);caseStatus=`Reviewed ${rows.length} selected domain${rows.length===1?'':'s'} for case creation: ${summary.committed} committed, ${summary.rejected} rejected${summary.unknown?`, ${summary.unknown} with unknown commit state; reload before retrying`:''}${selectedRows.length>rows.length?'; the action was capped at 50':''}.`;}finally{caseMutationBusy=false;}}
-  async function setSelectedDisposition(value:string){
-    if(caseMutationBusy)return;
-    caseMutationBusy=true;
-    try{
-      await ensurePrimaryResultContext();
-      if(casesSourceState!=='ready'||!casesApi){caseStatus='Cases are unavailable. Reload before changing dispositions.';return;}
-      const records=selectedRows.map((row)=>caseByDomain.get(row.domain)).filter((record):record is CaseRecord=>Boolean(record)).slice(0,100);
-      const omitted=selectedRows.length-records.length;
-      if(!records.length){caseStatus='Select an incident Case for each target before changing its disposition.';return;}
-      const committed=await casesApi.setCaseDispositions(records.map((record)=>record.id),value);
-      await reconcileBulkCaseSnapshot(committed,`Marked ${committed.changed} selected case${committed.changed===1?'':'s'} as ${casesApi.dispositionLabel(value)}.${omitted?` ${omitted} target${omitted===1?' was':'s were'} not changed: no incident was selected, no Case exists, or the 100-Case batch limit was reached.`:''}${prunedNote(committed.pruned)}`);
-    }catch(cause){caseStatus=cause instanceof Error?cause.message:'Could not update the selected Cases.';}
-    finally{caseMutationBusy=false;}
-  }
+  const createCasesSelected = () => caseActions.createSelected(selectedRows);
+  const setSelectedDisposition = (value: string) => caseActions.setSelectedDisposition(selectedRows, value);
   function downloadText(content:string,filename:string,mimeType:string){downloadLocalFile(new Blob([content],{type:mimeType}), filename);}
   async function exportDefensiveIndicators(){
     if(profileSourceState!=='ready'){indicatorStatus='Brand Profile context is unavailable, so trusted and allowlisted exclusions are inconclusive. Reload before exporting defensive indicators.';return;}
@@ -875,8 +845,17 @@
       indicatorStatus='Indicator export modules are unavailable. Reload the page before exporting.';
     }
   }
-  async function saveResults(){const name=watchlistName.trim();if(!name){saveStatus='Enter a watchlist name.';return;}if(profileSourceState!=='ready'){saveStatus='Brand Profile context is unavailable, so trusted and allowlisted exclusions are inconclusive. Reload before saving these results to Monitor.';return;}const blocked=results.filter((row)=>row.saved.profileContext.sourceState!=='ready').length;if(blocked){saveStatus=`Nothing was saved. ${blocked} target row${blocked===1?' has':'s have'} unevaluated Brand Profile context, so this Monitor update was blocked atomically until every target is rescanned.`;return;}const findings=results.filter(row=>!row.trusted);if(!findings.length){saveStatus='Every result is trusted by the active profile; nothing was added to Monitor.';return;}try{const changes=await saveWatchlist(name,findings.map(r=>r.saved),mode);const excluded=results.length-findings.length;saveStatus=changes.length?`Updated ${name} and recorded ${changes.length} material change${changes.length===1?'':'s'}${excluded?`; excluded ${excluded} trusted domain${excluded===1?'':'s'}`:''}.`:`Saved ${findings.length} result${findings.length===1?'':'s'} to ${name}${excluded?`; excluded ${excluded} trusted domain${excluded===1?'':'s'}`:''}.`;watchlistName='';}catch(cause){saveStatus=cause instanceof Error?cause.message:'Could not save watchlist.';}}
-  async function saveSelectedResults(){const name=watchlistName.trim();if(!name){saveStatus='Enter a watchlist name.';return;}if(profileSourceState!=='ready'){saveStatus='Brand Profile context is unavailable, so selected results cannot be classified against trusted or allowlisted domains. Reload before saving.';return;}const blocked=selectedRows.filter((row)=>row.saved.profileContext.sourceState!=='ready').length;if(blocked){saveStatus=`Nothing was saved. ${blocked} selected row${blocked===1?' has':'s have'} unevaluated Brand Profile context, so this Monitor update was blocked atomically until every target is rescanned.`;return;}const findings=selectedRows.filter((row)=>!row.trusted);if(!findings.length){saveStatus='Select at least one non-trusted result before saving to Monitor.';return;}try{await saveWatchlist(name,findings.map((row)=>row.saved),mode);saveStatus=`Saved ${findings.length} explicitly selected result${findings.length===1?'':'s'} to ${name}.`;watchlistName='';}catch(cause){saveStatus=cause instanceof Error?cause.message:'Could not save the selected results.';}}
+  async function saveToMonitor(rows: readonly ScanResult[], scope: BulkMonitorScope) {
+    const submittedName = watchlistName;
+    const result = await monitorActions.submit({
+      rows, scope, name: submittedName, mode, profileReady: profileSourceState === 'ready',
+    });
+    if (!result) return;
+    saveStatus = result.status;
+    if (result.clearName && watchlistName === submittedName) watchlistName = '';
+  }
+  const saveResults = () => saveToMonitor(results, 'all');
+  const saveSelectedResults = () => saveToMonitor(selectedRows, 'selected');
 </script>
 
 <svelte:head><title>Bulk · WHOISleuth</title></svelte:head>
