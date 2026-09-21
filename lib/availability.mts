@@ -21,7 +21,7 @@ import { fetchFaviconHash } from './favicon.mts';
 import { extractHtmlSignals } from './html-signals.mts';
 import { analyzeStaticHtml } from './static-html-analysis.mts';
 import { featureDecision, networkFeaturePolicy } from './feature-policy.mts';
-import { buildHttpObservation, failedHttpObservation, skippedHttpObservation } from './http-intelligence.mts';
+import { withoutHttpDeliveryMetadata, buildHttpObservation, failedHttpObservation, skippedHttpObservation } from './http-intelligence.mts';
 import { collectTlsIntelligence, skippedTlsObservation } from './tls-intelligence.mts';
 import { parseRegistryDate, registryDateIso } from './registry-dates.mts';
 import { analyzeWebsiteSecurityPosture } from './website-security-posture.mts';
@@ -102,7 +102,6 @@ function errorRecord(value: unknown): UnknownRecord {
     ? value as UnknownRecord
     : {};
 }
-
 function registryStatusToken(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/gu, '');
 }
@@ -145,16 +144,6 @@ type HtmlSignals = Omit<Awaited<ReturnType<typeof extractHtmlSignals>>, 'cspMeta
   cspMetaPolicy: Awaited<ReturnType<typeof extractHtmlSignals>>['cspMetaPolicy'] | null;
 }>;
 
-function withoutHttpDeliveryMetadata(value: unknown): unknown {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
-  const output = { ...(value as Record<string, unknown>) };
-  if (output.response && typeof output.response === 'object' && !Array.isArray(output.response)) {
-    const response = { ...(output.response as Record<string, unknown>) };
-    delete response.deliveryMetadata;
-    output.response = response;
-  }
-  return output;
-}
 
 // No marketplace (Afternic/Sedo/Dan.com/GoDaddy Auctions/etc.) offers a
 // free, no-auth API to check "is this specific domain listed for sale" -

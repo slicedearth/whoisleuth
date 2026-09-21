@@ -277,7 +277,7 @@ export function normalizeBulkProfileContext(
   return unavailableBulkProfileContext(profileContextLimitation(item?.limitation, fallbackLimitation));
 }
 
-function sameProfileContext(left: BulkProfileContextProvenance, right: BulkProfileContextProvenance): boolean {
+export function bulkProfileContextsMatch(left: BulkProfileContextProvenance, right: BulkProfileContextProvenance): boolean {
   return left.sourceState === right.sourceState
     && left.activeProfileId === right.activeProfileId
     && left.profileUpdatedAt === right.profileUpdatedAt
@@ -289,7 +289,7 @@ export function summarizeBulkProfileContexts(
 ): BulkProfileContextProvenance {
   const first = rows[0]?.profileContext;
   if (!first) return unavailableBulkProfileContext('This saved Bulk session contains no settled row with profile-context provenance.');
-  if (rows.every((row) => sameProfileContext(first, row.profileContext))) return { ...first };
+  if (rows.every((row) => bulkProfileContextsMatch(first, row.profileContext))) return { ...first };
   return {
     sourceState: 'mixed',
     activeProfileId: null,
@@ -591,7 +591,7 @@ export function normalizeBulkSession(value: unknown, sourceStoreVersion?: number
   }
   if ((state === 'complete') !== (results.length === domains.length)) return null;
   const profileContext = summarizeBulkProfileContexts(results);
-  if (!sameProfileContext(declaredProfileContext, profileContext)) return null;
+  if (!bulkProfileContextsMatch(declaredProfileContext, profileContext)) return null;
   return {
     id,
     name,
@@ -651,7 +651,7 @@ export function normalizeBulkSessionStore(raw: unknown): BulkSessionStore {
 export function bulkSessionStorageValue(session: BulkSession) {
   return {
     ...session,
-    results: session.results.map(({ profileContext, ...row }) => sameProfileContext(profileContext, session.profileContext)
+    results: session.results.map(({ profileContext, ...row }) => bulkProfileContextsMatch(profileContext, session.profileContext)
       ? row
       : { ...row, profileContext }),
   };
@@ -752,7 +752,7 @@ function sourceStateMap(value: BulkSessionResult): Map<string, string> {
 export function areBulkRiskScoresComparable(previous: BulkSessionResult, current: BulkSessionResult): boolean {
   return previous.profileContext.sourceState === 'ready'
     && current.profileContext.sourceState === 'ready'
-    && sameProfileContext(previous.profileContext, current.profileContext)
+    && bulkProfileContextsMatch(previous.profileContext, current.profileContext)
     && previous.scanDepth === current.scanDepth
     && previous.risk !== null
     && current.risk !== null

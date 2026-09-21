@@ -17,6 +17,7 @@ import {
 } from './registrar-standing-catalogue-contract.mts';
 import {
   deriveRegistrarStandingAssessment,
+  normalizedRegistrarIanaId,
   MAX_REGISTRAR_COMPLIANCE_ACTIONS,
   REGISTRAR_STANDING_SCHEMA,
   REGISTRAR_STANDING_VERSION,
@@ -205,13 +206,6 @@ function accreditationMap(catalogue: Catalogue): Map<string, RegistrarAccreditat
   return result;
 }
 
-function normalizedIanaId(value: unknown): string | null {
-  if (typeof value === 'number' && Number.isSafeInteger(value)) value = String(value);
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return /^\d{1,8}$/u.test(trimmed) && Number(trimmed) > 0 ? String(Number(trimmed)) : null;
-}
-
 function projectedActions(catalogue: Catalogue, ianaId: string): Readonly<{
   actions: readonly RegistrarComplianceAction[];
   truncated: boolean;
@@ -233,7 +227,7 @@ export function buildRegistrarStanding(options: BuildRegistrarStandingOptions): 
   const now = options.now ?? new Date();
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new TypeError('Registrar standing time must be valid.');
   const catalogue = validatedCatalogue(options.catalogue ?? REGISTRAR_STANDING_CATALOGUE, now);
-  const ianaId = normalizedIanaId(options.registrarIanaId);
+  const ianaId = normalizedRegistrarIanaId(options.registrarIanaId);
   const ianaHealth = catalogue ? sourceHealth(catalogue.iana.observedAt, now) : 'unavailable';
   const icannHealth = catalogue ? sourceHealth(catalogue.icann.reviewedAt, now) : 'unavailable';
   const accreditation = catalogue && ianaId

@@ -1,6 +1,7 @@
 // Lookup result shaping after the source plan has settled. This module starts no
 // collection and preserves compact, diagnostics and enrichment response shapes.
 
+import { withoutHttpDeliveryMetadata } from './http-intelligence.mts';
 import { buildBulkComparisonEvidence } from './bulk-comparison-evidence.mts';
 import {
   failedReverseDnsIntelligence,
@@ -88,17 +89,6 @@ function withoutNestedPublicationMetadata(value: unknown): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
   const output = { ...(value as Record<string, unknown>) };
   delete output.publicationMetadata;
-  return output;
-}
-
-function withoutNestedDeliveryMetadata(value: unknown): unknown {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
-  const output = { ...(value as Record<string, unknown>) };
-  if (output.response && typeof output.response === 'object' && !Array.isArray(output.response)) {
-    const response = { ...(output.response as Record<string, unknown>) };
-    delete response.deliveryMetadata;
-    output.response = response;
-  }
   return output;
 }
 
@@ -408,7 +398,7 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
       availability: {
         ...compactAvailability,
         ...(richPageIdentity !== undefined ? { pageIdentity: withoutNestedPublicationMetadata(richPageIdentity) } : {}),
-        ...(richHttp !== undefined ? { http: withoutNestedDeliveryMetadata(richHttp) } : {}),
+        ...(richHttp !== undefined ? { http: withoutHttpDeliveryMetadata(richHttp) } : {}),
         ...(bulkComparison ? { bulkComparison } : {}),
       },
       diagnostics,

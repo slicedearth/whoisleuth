@@ -20,6 +20,19 @@ import {
 } from './homepage-metadata-contract.mts';
 
 type UnknownRecord = Record<string, unknown>;
+
+/** Publish delivery metadata only at its owning response boundary. */
+export function withoutHttpDeliveryMetadata(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const output = { ...(value as Record<string, unknown>) };
+  if (output.response && typeof output.response === 'object' && !Array.isArray(output.response)) {
+    const response = { ...(output.response as Record<string, unknown>) };
+    delete response.deliveryMetadata;
+    output.response = response;
+  }
+  return output;
+}
+
 type HeaderReader = { get(name: string): string | null };
 type NormalizedProvenanceUrl = { url: string; queryOmitted: boolean; pathTruncated: boolean };
 type HttpAttempt = { url: string | null; queryOmitted: boolean; outcome: string; httpStatus: number | null; error: string | null };

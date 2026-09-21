@@ -8,6 +8,7 @@ import { recordOrNull } from '../../../../lib/json-record.mts';
 import { normalizeExplicitIsoTimestamp, OBSERVATION_VERSION } from '../../../../packages/evidence/observation.mts';
 import {
   BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION,
+  bulkProfileContextsMatch,
   normalizeBulkProfileContext,
   type BulkSessionDnsEvidence,
   type BulkSessionComparisonEvidence,
@@ -323,15 +324,7 @@ export function fromBulkSessionResult(
   };
 }
 
-export function bulkProfileContextsMatch(
-  left: BulkProfileContextProvenance,
-  right: BulkProfileContextProvenance,
-): boolean {
-  return left.sourceState === right.sourceState
-    && left.activeProfileId === right.activeProfileId
-    && left.profileUpdatedAt === right.profileUpdatedAt
-    && left.limitation === right.limitation;
-}
+export { bulkProfileContextsMatch } from './bulk-session-model.ts';
 
 export function quarantineBulkProfileDerivedEvidence(
   row: ScanResult,
