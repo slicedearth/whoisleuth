@@ -54,6 +54,12 @@ resumption, Case exports and signing. Their shared process runner records comple
 invocations directly; package assembly does not maintain a second check inventory.
 The optional packages do not load the CLI builder to compile shared code.
 
+The capture adapter obtains minimised page observations through native accessors
+installed before page scripts. Shared investigation models validate and compare
+them; browser and companion adapters present the same comparison. Case expected
+changes use the existing assertion and save coordinator, not a separate baseline
+store.
+
 Schema source discovery inventories literal identities and their canonical
 definitions. References and runtime propagation need no per-file registration.
 Domain validators and independent historical fixtures verify format behaviour;

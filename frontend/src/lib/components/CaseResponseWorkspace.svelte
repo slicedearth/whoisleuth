@@ -333,6 +333,7 @@
       <CaseMessageIntake {record} {mutationBusy} {persistOperation} />
       <CaseRenderedCapture
         {record}
+        {persist}
         exactIncidentUrl={investigationContext?.urlRetention === 'exact' ? investigationContext.incidentUrl : null}
         {persistOperation}
         {mutationBusy}

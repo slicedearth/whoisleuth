@@ -8,6 +8,35 @@ import { createHash } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
 import { sourceImage } from './case-image-fixtures';
 
+test('page dependency comparison works without images and records only an explicitly expected change', async ({ page }) => {
+  await openCasesView(page); await createCase(page, 'capture.example'); await openCaseSection(page, 'Evidence');
+  const workspace = page.locator('.capture-workspace'); await workspace.locator(':scope > summary').click();
+  const fixture = captureReviewFixture();
+  const request = { position: 1, kind: 'script', origin: 'https://static.example.test', contentSha256: 'a'.repeat(64), status: 200, cspEnforced: false, cspReportOnly: true };
+  const first = { ...fixture.manifest, captures: [{ ...fixture.manifest.captures[0]!, pageBehaviour: { version: 1, state: 'partial', requests: [request], elements: [], actionHints: ['verification_prompt'], clipboardWriteAttempts: 1 } }] };
+  const second = { ...first, captures: [{ ...first.captures[0]!, capturedAt: '2026-09-01T01:00:00.000Z', pageBehaviour: { ...first.captures[0]!.pageBehaviour, requests: [{ ...request, contentSha256: 'b'.repeat(64) }] } }] };
+  const before = await readBrowserLocalCollection(page, 'cases');
+  const requests: string[] = []; page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) requests.push(request.url()); });
+  await workspace.getByLabel('Select capture manifest', { exact: true }).setInputFiles({ name: 'first.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(first)) });
+  const observations = workspace.locator('.page-behaviour'); await observations.locator(':scope > summary').click();
+  await expect(observations).toContainText('https://static.example.test'); await expect(observations).toContainText('1 Clipboard API write attempts');
+  const comparison = workspace.locator('.capture-comparison'); await comparison.locator(':scope > summary').click();
+  await comparison.getByLabel('Comparison capture manifest', { exact: true }).setInputFiles({ name: 'second.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(second)) });
+  const result = comparison.getByRole('region', { name: 'Page dependency comparison', exact: true });
+  await expect(result).toContainText('inconclusive'); await expect(result).toContainText('Added observation × 1'); await expect(result).toContainText('Not re-observed × 1');
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  await result.getByText('Record an expected change', { exact: true }).click();
+  const save = result.getByRole('button', { name: 'Record expected page change', exact: true });
+  await save.click(); expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  await result.getByRole('checkbox').check(); await result.getByLabel('Reason or change reference').fill('Approved static asset update; release record 17.');
+  await save.click();
+  await expect(result.getByRole('status')).toContainText('Expected change recorded');
+  const after = await readBrowserLocalCollection(page, 'cases', { minimumRevision: before.manifest.revision + 1 });
+  expect(JSON.stringify(after)).toContain('Approved static asset update'); expect(JSON.stringify(after)).toContain('sorted-json-v2');
+  expect(await storedFiles(page)).toEqual([]); expect(requests).toEqual([]);
+  for (const theme of ['light', 'dark'] as const) { await useTheme(page, theme); for (const width of [320, 390, 1024, 1280, 2560]) { await page.setViewportSize({ width, height: 900 }); await expectNoHorizontalOverflow(page); } }
+});
+
 test('capture comparison exposes declared conditions, handles unmatched and different-sized images, and saves nothing', async ({ page }, testInfo) => {
   await openCasesView(page); await createCase(page, 'capture.example'); await openCaseSection(page, 'Evidence');
   const capture = page.locator('.capture-workspace'); await capture.locator(':scope > summary').click();
@@ -169,7 +198,7 @@ test('cancelling capture attachment processing terminates its worker and clears 
     const post = Worker.prototype.postMessage, terminate = Worker.prototype.terminate;
     const held = new Set<Worker>(); let stopped = 0;
     Worker.prototype.postMessage = function(message: unknown, ...rest: unknown[]) {
-      if ((message as { kind?: string } | null)?.kind === 'capture') { held.add(this); return; }
+      if ((message as { kind?: string; input?: { files?: unknown[] } } | null)?.kind === 'capture' && (message as { input?: { files?: unknown[] } }).input?.files?.length) { held.add(this); return; }
       return Reflect.apply(post, this, [message, ...rest]);
     };
     Worker.prototype.terminate = function() { if (held.delete(this)) stopped++; return terminate.call(this); };

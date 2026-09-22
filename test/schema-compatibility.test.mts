@@ -453,13 +453,13 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.web-capture-summary').currentVersion, WEB_CAPTURE_SUMMARY_VERSION);
     assert.equal(byId(inventory, 'export.web-capture-manifest').schema, WEB_CAPTURE_MANIFEST_SCHEMA);
     assert.equal(byId(inventory, 'export.web-capture-manifest').currentVersion, WEB_CAPTURE_MANIFEST_VERSION);
-    assert.deepEqual(byId(inventory, 'export.web-capture-manifest').supportedVersions, [2]);
+    assert.deepEqual(byId(inventory, 'export.web-capture-manifest').supportedVersions, [2, 3]);
     assert.equal(byId(inventory, 'export.web-capture-manifest').byteBudget, MAX_MANIFEST_BYTES);
     assert.equal(byId(inventory, 'export.web-capture-dom-digest').schema, WEB_CAPTURE_DOM_DIGEST_SCHEMA);
     assert.equal(byId(inventory, 'export.web-capture-dom-digest').byteBudget, MAX_WEB_CAPTURE_DOM_DIGEST_BYTES);
     assert.equal(byId(inventory, 'cli.web-capture-comparison').schema, WEB_CAPTURE_COMPARISON_SCHEMA);
     assert.equal(byId(inventory, 'cli.web-capture-comparison').currentVersion, WEB_CAPTURE_COMPARISON_VERSION);
-    assert.deepEqual(byId(inventory, 'cli.web-capture-comparison').supportedVersions, [3]);
+    assert.deepEqual(byId(inventory, 'cli.web-capture-comparison').supportedVersions, [4]);
     assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [26, 27, 28, LOOKUP_EVIDENCE_SCHEMA_VERSION]);
     assert.deepEqual(byId(inventory, 'export.synthetic-demo').supportedVersions, [5]);
     assert.deepEqual(byId(inventory, 'export.external-findings').supportedVersions, [4]);

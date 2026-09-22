@@ -10,6 +10,7 @@ import { isValidAsciiHostname } from '../contracts/domain-name.mts';
 import { decodeBoundedUtf8, readBoundedRegularFile } from '../../lib/bounded-file.mts';
 import { parseBoundedJson } from '../analysis/bounded-json.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { readManifestPageBehaviour, comparePageBehaviour, type PageBehaviour } from '../investigation/page-behaviour.mts';
 import {
   MAX_WEB_CAPTURE_MANIFEST_BYTES,
   MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
@@ -22,6 +23,7 @@ import {
   WEB_CAPTURE_DOM_DIGEST_VERSION,
   WEB_CAPTURE_MANIFEST_SCHEMA,
   WEB_CAPTURE_MANIFEST_VERSION,
+  WEB_CAPTURE_MANIFEST_SUPPORTED_VERSIONS,
 } from '../contracts/web-capture.mts';
 import { MAX_CAPTURE_HOSTS, hasTerminalUnsafeCharacters } from './capture.mts';
 
@@ -34,7 +36,7 @@ const SHA256_RE = /^[a-f0-9]{64}$/iu;
 const PERCEPTUAL_HASH_RE = /^[a-f0-9]{16}$/iu;
 const ROOT_KEYS = new Set(['schema', 'schemaVersion', 'source', 'captures']);
 const SOURCE_KEYS = new Set(['name', 'reference', 'collectedAt']);
-const CAPTURE_KEYS = new Set(['domain', 'capturedAt', 'completeness', 'limitations', 'page', 'requestDomains', 'technologies', 'artifacts', 'conditions', 'observerLabel', 'vantageLabel']);
+const CAPTURE_KEYS = new Set(['domain', 'capturedAt', 'completeness', 'limitations', 'page', 'requestDomains', 'technologies', 'artifacts', 'conditions', 'observerLabel', 'vantageLabel', 'pageBehaviour']);
 const PAGE_KEYS = new Set(['title', 'finalOrigin']);
 const ARTIFACT_KEYS = new Set(['kind', 'fileName', 'mimeType', 'sha256', 'perceptualHash', 'bytes', 'width', 'height']);
 const DOM_ROOT_KEYS = new Set(['schema', 'version', 'capturedAt', 'domain', 'counts', 'structure', 'visibleText', 'limitations']);
@@ -68,6 +70,7 @@ type CaptureManifest = Readonly<{
   technologies: string[];
   screenshot: Artifact;
   domDigest: Artifact;
+  pageBehaviour: PageBehaviour | null;
 }>;
 type DomDigest = Readonly<{
   domain: string;
@@ -227,7 +230,7 @@ function parseArtifact(value: unknown, label: string): Artifact {
 function parseManifest(value: unknown): CaptureManifest {
   const root = record(value);
   if (!root || !onlyKeys(root, ROOT_KEYS) || root.schema !== WEB_CAPTURE_MANIFEST_SCHEMA
-    || root.schemaVersion !== WEB_CAPTURE_MANIFEST_VERSION || !Array.isArray(root.captures) || root.captures.length !== 1) {
+    || !WEB_CAPTURE_MANIFEST_SUPPORTED_VERSIONS.includes(root.schemaVersion as number) || !Array.isArray(root.captures) || root.captures.length !== 1) {
     throw new Error(`Rendered comparison requires one ${WEB_CAPTURE_MANIFEST_SCHEMA} version ${WEB_CAPTURE_MANIFEST_VERSION} capture.`);
   }
   const source = record(root.source);
@@ -252,6 +255,8 @@ function parseManifest(value: unknown): CaptureManifest {
   if (!screenshot || !domDigest) throw new Error('Rendered capture must contain distinct screenshot and DOM digest artefacts.');
   const capturedAt = timestamp(capture.capturedAt, 'Rendered capture time');
   if (sourceCollectedAt !== capturedAt) throw new Error('Rendered capture source time does not match its capture time.');
+  const pageBehaviour = readManifestPageBehaviour(capture.pageBehaviour, root.schemaVersion);
+  if (pageBehaviour?.state === 'partial' && completeness === 'complete') throw new Error('Partial page observations cannot declare a complete capture.');
   return {
     domain: captureDomain(capture.domain, 'Rendered capture domain'),
     capturedAt,
@@ -264,6 +269,7 @@ function parseManifest(value: unknown): CaptureManifest {
     technologies: technologyList(capture.technologies, 'Rendered capture technologies'),
     screenshot,
     domDigest,
+    pageBehaviour,
   };
 }
 
@@ -418,6 +424,7 @@ export async function compareRenderedCaptures(
     left: { domain: left.manifest.domain, capturedAt: left.manifest.capturedAt, completeness: left.manifest.completeness },
     right: { domain: right.manifest.domain, capturedAt: right.manifest.capturedAt, completeness: right.manifest.completeness },
     partial,
+    pageBehaviour: comparePageBehaviour(left.manifest.pageBehaviour, right.manifest.pageBehaviour),
     observationContext: compareObservationContexts([left, right].map(({ manifest }) => ({
       observedAt: manifest.capturedAt, observerLabel: manifest.observerLabel, vantageLabel: manifest.vantageLabel, conditions: manifest.conditions,
     }))),

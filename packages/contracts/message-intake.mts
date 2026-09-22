@@ -46,7 +46,8 @@ export type IntakeLink = Readonly<{
 }>;
 /** Exact values exist only in the transient review, never in its saved report. */
 export type IntakeTarget = Readonly<{ id: string; exactUrl: string }>;
-export type MessageActionHint = 'clipboard_instruction' | 'shell_instruction' | 'verification_prompt' | 'device_code_instruction' | 'consent_instruction';
+export const MESSAGE_ACTION_HINTS = ['clipboard_instruction', 'shell_instruction', 'verification_prompt', 'device_code_instruction', 'consent_instruction'] as const;
+export type MessageActionHint = typeof MESSAGE_ACTION_HINTS[number];
 export type MessageIdentity = Readonly<{ part: number; role: 'from' | 'reply_to' | 'return_path' | 'dkim' | 'authentication_service'; domain: string }>;
 export type MessageAuthenticationClaim = Readonly<{ part: number; method: 'spf' | 'dkim' | 'dmarc' | 'arc'; result: string }>;
 export type MessageIntakeReport = Readonly<{

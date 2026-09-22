@@ -568,6 +568,15 @@ declarations can enter imported metadata and shared exports; they do not verify
 identity, location or independent collection. Older missing declarations stay
 unknown.
 
+Current manifests also retain navigation, script and frame response origins,
+script hashes, CSP-header and integrity-attribute presence, default form
+destinations, password-field counts and fixed requested-action wording labels.
+Clipboard API writes are blocked and their final-page attempt count is retained.
+No script text, clipboard content, form values or command text enters these
+observations. Page elements describe the final top-level document, not every
+frame or a verified user interaction. Case summary import retains counts and
+wording labels; the full set remains in the manifest unless explicitly retained.
+
 When an analyst selects a local capture manifest for one Case, the browser
 validates it before preview and imports only sanitised manifest metadata and
 declared digests. A separate optional attachment selection reads and checks

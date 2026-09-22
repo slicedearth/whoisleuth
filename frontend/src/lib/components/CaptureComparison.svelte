@@ -6,10 +6,13 @@
   import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../../../../packages/contracts/investigation-package-limits.mts';
   import ArtifactPreview from './ArtifactPreview.svelte';
   import ImageChangeReview from './ImageChangeReview.svelte';
+  import PageBehaviourComparison from './PageBehaviourComparison.svelte';
+  import type { PersistCaseResponse } from '$lib/analysis/case-response-stage.ts';
 
-  let { left }: { left: BrowserCaptureAttachmentReview } = $props();
+  let { left, caseDomain, persist, mutationBusy }: { left: BrowserCaptureAttachmentReview; caseDomain: string; persist: PersistCaseResponse; mutationBusy: boolean } = $props();
   let right = $state.raw<BrowserCaptureAttachmentReview | null>(null), manifest = $state.raw<Blob | null>(null);
   let busy = $state(false), error = $state(''), leftKey = $state(''), rightKey = $state('');
+  let leftObservation = $state(''), rightObservation = $state('');
   let manifestInput = $state<HTMLInputElement>(), attachmentsInput = $state<HTMLInputElement>();
   let controller: AbortController | null = null;
   function screenshots(review: BrowserCaptureAttachmentReview | null) {
@@ -22,6 +25,8 @@
   $effect(() => { left; untrack(() => { controller?.abort(); controller = null; busy = false; right = null; manifest = null; leftKey = ''; rightKey = ''; error = ''; }); });
   $effect(() => { if (leftChoices.length === 1) leftKey = leftChoices[0]!.key; });
   $effect(() => { if (rightChoices.length === 1) rightKey = rightChoices[0]!.key; });
+  $effect(() => { leftObservation = left.captures.length === 1 ? '0' : ''; });
+  $effect(() => { rightObservation = right?.captures.length === 1 ? '0' : ''; });
   onDestroy(() => controller?.abort());
 
   async function select(event: Event, isManifest: boolean) {
@@ -48,11 +53,20 @@
 <details class="capture-comparison">
   <summary>Compare another capture</summary>
   <div class="body">
-    <p>Choose a second manifest and its PNG. Files are checksum-checked locally. This comparison does not import the other capture into the Case or verify the declared collection location.</p>
+    <p>Choose a second manifest to compare dependencies. Add matching PNG files for an image comparison. The other capture is not imported automatically.</p>
     <label>Comparison capture manifest<input bind:this={manifestInput} type="file" accept="application/json,.json" disabled={busy} onchange={event => void select(event, true)}></label>
     {#if manifest}<label>Comparison capture attachments<input bind:this={attachmentsInput} type="file" multiple disabled={busy} onchange={event => void select(event, false)}></label>{/if}
     {#if busy}<p role="status">Checking comparison capture…</p><button class="btn" type="button" onclick={cancel}>Cancel comparison capture</button>{/if}
     {#if error}<p role="alert">{error}</p>{/if}
+    {#if right}
+      <div class="choices"><label>First page observation<select bind:value={leftObservation}><option value="">Select observation</option>{#each left.captures as item, index}<option value={String(index)}>{item.domain} · {item.observedAt ?? 'time unknown'} · {index + 1}</option>{/each}</select></label>
+        <label>Second page observation<select bind:value={rightObservation}><option value="">Select observation</option>{#each right.captures as item, index}<option value={String(index)}>{item.domain} · {item.observedAt ?? 'time unknown'} · {index + 1}</option>{/each}</select></label></div>
+      {#if leftObservation !== '' && rightObservation !== ''}
+        {#key `${leftObservation}:${rightObservation}:${right.captures[Number(rightObservation)]?.observedAt}`}
+          <PageBehaviourComparison left={left.captures[Number(leftObservation)]!} right={right.captures[Number(rightObservation)]!} {caseDomain} {persist} {mutationBusy} />
+        {/key}
+      {/if}
+    {/if}
     {#if !leftChoices.length}<p>The current capture has no verified PNG selected.</p>{/if}
     {#if right && !rightChoices.length}<p>No comparison PNG has matching selected bytes yet.</p>{/if}
     {#if leftChoices.length && rightChoices.length}

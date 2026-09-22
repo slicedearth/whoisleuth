@@ -9298,9 +9298,10 @@
       "schema": "whoisleuth.web-capture-manifest",
       "lifecycleSchema": "whoisleuth.web-capture-manifest",
       "coverageClass": "registered_schema",
-      "currentVersion": 2,
+      "currentVersion": 3,
       "supportedVersions": [
-        2
+        2,
+        3
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -11265,7 +11266,8 @@
         {
           "schema": "whoisleuth.web-capture-manifest",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -11273,7 +11275,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.web-capture-manifest",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "analyst-interchange.privacy",

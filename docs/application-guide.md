@@ -585,6 +585,15 @@ save originals by default. Select **Retain this manifest and verified matching
 files** to save them together; unmatched selections remain excluded. Existing
 capture manifests can be reviewed without a retained Incident URL.
 
+Open **Page behaviour and dependencies** to inspect navigation, script and frame
+responses, default form destinations, script hashes and requested-action wording.
+**Compare another capture** compares those records from two manifests before any
+PNG is selected. Review the declared conditions alongside changes. Missing
+observations remain qualified, and historical manifests have no page-observation
+data. For a page you own or are authorised to review, **Record an expected
+change** adds your reason and a digest of the selected observations to the Case
+assessment. It does not approve future changes automatically.
+
 **Retained files** also accepts deliberately selected originals without a
 capture manifest. Review the filename, optional source and observation time,
 then choose **Retain selected files**. The workspace stores exact bytes and

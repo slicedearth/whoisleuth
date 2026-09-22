@@ -69,12 +69,16 @@ function patternedPng(width = 64, height = 64, flat = false) {
   ]);
 }
 
-function fakeRoute(url: string, options: { rejectAbort?: boolean } = {}) {
+const MAIN_FRAME = {};
+function fakeRoute(url: string, options: { rejectAbort?: boolean; navigation?: boolean } = {}) {
   let aborted = false;
   const route = {
     request: () => ({
       url: () => url,
       method: () => 'GET',
+      resourceType: () => url.includes('.js') ? 'script' : options.navigation ? 'document' : 'stylesheet',
+      isNavigationRequest: () => Boolean(options.navigation),
+      frame: () => MAIN_FRAME,
       headers: () => ({ accept: 'text/html', cookie: 'must-not-leave-browser=1', authorization: 'Bearer secret' }),
     }),
     fulfill: async () => {},
@@ -155,10 +159,11 @@ function fakeBrowser(options: {
   let routeHandler: ((route: Route) => Promise<void>) | null = null;
   const page = {
     on: () => {},
+    mainFrame: () => MAIN_FRAME,
     goto: async () => {
       if (!routeHandler) return;
       const handleRoute = routeHandler;
-      const mainRequest = fakeRoute(`https://${options.hostname ?? 'example.test'}/entry?discard=this`);
+      const mainRequest = fakeRoute(`https://${options.hostname ?? 'example.test'}/entry?discard=this`, { navigation: true });
       await handleRoute(mainRequest.route);
       if (mainRequest.wasAborted()) throw new Error('navigation aborted');
       const subresources = options.subresourceUrls ?? [
@@ -182,6 +187,7 @@ function fakeBrowser(options: {
     title: async () => options.title ?? ' Example sign in ',
     evaluate: async (_callback: unknown, argument?: unknown) => {
       if (argument === undefined) return options.networkApisDisabled !== false;
+      if (argument === '__whoisleuthPageObservationsV1') return { elements: [], partial: false, clipboardWriteAttempts: 0 };
       if (options.stallDomProjection) await new Promise<never>(() => {});
       return {
         structure: options.structure ?? 'html body main form input button',
@@ -638,14 +644,17 @@ describe('optional local rendered capture package', () => {
         manifest.captures[0]?.limitations.join(' ') ?? '',
         /No dedicated path or query field.*page title and screenshot can reproduce/u,
       );
-      assert.equal(initScriptCalls, 2);
+      assert.equal(initScriptCalls, 3);
       assert.deepEqual(resolved, ['example.test', 'example.test', 'static.example.test']);
       const capture = manifest.captures[0]!;
       assert.equal(capture.completeness, 'complete');
       assert.deepEqual(capture.conditions, { browser: 'chromium', browserVersion: '151.0.0.0', viewport: { width: 1024, height: 768 }, deviceScaleFactor: 1, locale: 'en-US', timezone: 'UTC', colourScheme: 'light' });
       assert.equal(capture.artifacts[0]?.perceptualHash?.length, 16);
       const imported = parseWebCaptureManifest(manifest);
-      assert.equal(imported.findings.length, 1);
+      assert.ok(imported.findings.length >= 1);
+      assert.equal(capture.pageBehaviour.requests.length, 2);
+      assert.deepEqual(capture.pageBehaviour.requests.map(item => [item.kind, item.origin]), [['navigation', 'https://example.test'], ['script', 'https://static.example.test']]);
+      assert.equal(capture.pageBehaviour.requests[1]!.contentSha256, createHash('sha256').update('void 0;').digest('hex'));
       const manifestText = await readFile(path.join(destination, 'manifest.json'), 'utf8');
       const digestText = await readFile(path.join(destination, 'dom-digest.json'), 'utf8');
       assert.doesNotMatch(`${manifestText}${digestText}`, /private rendered|discarded|private=value|entry\?|asset\.js/u);
@@ -742,7 +751,7 @@ describe('optional local rendered capture package', () => {
       );
       const comparison = await compareRenderedCaptures(leftManifest, rightManifest, '2026-08-01T00:10:00.000Z');
       assert.equal(comparison.schema, WEB_CAPTURE_COMPARISON_SCHEMA);
-      assert.equal(comparison.version, 3);
+      assert.equal(comparison.version, 4);
       assert.equal(comparison.screenshot.state, 'same');
       assert.equal(comparison.renderedDom.structure.state, 'different');
       assert.equal(comparison.renderedDom.visibleText.state, 'different');

@@ -6,18 +6,12 @@ import { createLinkIntake } from './link-intake.mts';
 import { AUTHENTICATION_METHODS, addressDomains, authenticationState, authenticationServiceDomains,
   dkimSigningDomains } from './mail-header-identity.mts';
 import { reviewIdentityIncident } from './identity-incident-review.mts';
+import { requestedActionHints } from './requested-action-hints.mts';
 import { MESSAGE_INTAKE_SCHEMA, MESSAGE_INTAKE_VERSION, MESSAGE_INTAKE_KINDS, MAX_MESSAGE_INTAKE_BYTES,
   MAX_MESSAGE_PARTS, MAX_MESSAGE_DEPTH, MAX_MESSAGE_HTML_NODES,
   type IntakeLink, type MessageActionHint, type MessageIdentity, type MessageAuthenticationClaim,
   type MessageIntakeKind, type MessageIntakeResult } from '../contracts/message-intake.mts';
 
-const HINTS: Readonly<Record<MessageActionHint, RegExp>> = {
-  clipboard_instruction: /(?:clipboard|copy.{0,40}(?:paste|command)|paste.{0,40}(?:terminal|run|console))/iu,
-  shell_instruction: /(?:powershell|cmd\.exe|curl\s|wget\s|terminal|windows\s*\+\s*r)/iu,
-  verification_prompt: /(?:verify.{0,40}(?:human|browser)|not a robot|captcha|browser.{0,40}(?:repair|update))/iu,
-  device_code_instruction: /(?:device[ -]code|enter.{0,40}code.{0,40}(?:sign|login|log in))/iu,
-  consent_instruction: /(?:grant.{0,40}(?:access|permission)|consent|approve.{0,40}(?:application|permission))/iu,
-};
 
 export function assertMessageBytes(bytes: Uint8Array): void {
   if (!(bytes instanceof Uint8Array) || !(bytes.buffer instanceof ArrayBuffer) || !bytes.byteLength || bytes.byteLength > MAX_MESSAGE_INTAKE_BYTES) {
@@ -35,7 +29,7 @@ export async function reviewMessageInput(bytes: Uint8Array, kind: MessageIntakeK
   const actionHints = new Set<MessageActionHint>(), bounds = new Set<string>();
   let reviewedParts = 0, unreviewedAttachments = 0, decodedBytes = 0;
   const text = (value: string, source: IntakeLink['source']) => {
-    for (const [hint, expression] of Object.entries(HINTS)) if (expression.test(value)) actionHints.add(hint as MessageActionHint);
+    for (const hint of requestedActionHints(value)) actionHints.add(hint);
     links.addText(value, source);
   };
   function html(value: string) {

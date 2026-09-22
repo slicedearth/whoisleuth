@@ -34,7 +34,8 @@ export const MAX_STATIC_PAGE_PATTERN_PACK_BYTES = 256 * 1024;
 export const WEB_CAPTURE_SUMMARY_SCHEMA = 'whoisleuth.web-capture-summary';
 export const WEB_CAPTURE_SUMMARY_VERSION = 1;
 export const WEB_CAPTURE_MANIFEST_SCHEMA = 'whoisleuth.web-capture-manifest';
-export const WEB_CAPTURE_MANIFEST_VERSION = 2;
+export const WEB_CAPTURE_MANIFEST_VERSION = 3;
+export const WEB_CAPTURE_MANIFEST_SUPPORTED_VERSIONS: readonly number[] = [2, WEB_CAPTURE_MANIFEST_VERSION];
 export const MAX_WEB_CAPTURE_MANIFEST_BYTES = 1024 * 1024;
 
 const CACAO_COMPATIBILITY = defineSchemaCompatibility({
@@ -82,11 +83,11 @@ const WEB_CAPTURE_SUMMARY_COMPATIBILITY = defineSchemaCompatibility({
 });
 const WEB_CAPTURE_MANIFEST_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.web-capture-manifest', kind: 'export', schema: WEB_CAPTURE_MANIFEST_SCHEMA,
-  currentVersion: WEB_CAPTURE_MANIFEST_VERSION, supportedVersions: [WEB_CAPTURE_MANIFEST_VERSION],
+  currentVersion: WEB_CAPTURE_MANIFEST_VERSION, supportedVersions: WEB_CAPTURE_MANIFEST_SUPPORTED_VERSIONS,
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'read_only',
   writeSemantics: 'read_only', byteBudget: MAX_WEB_CAPTURE_MANIFEST_BYTES,
   owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
-  note: 'Metadata-only capture manifest; the browser and offline artefact comparison accept the v1.47.4 current-writer version 2.',
+  note: 'Metadata-only capture manifest. Version 3 adds bounded page and dependency observations; version 2 remains readable with those observations unavailable.',
 });
 const DEFENSIVE_MANIFEST_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.defensive-indicator-manifest', kind: 'export', schema: DEFENSIVE_INDICATOR_MANIFEST_SCHEMA,
@@ -185,7 +186,8 @@ export const ANALYST_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(
       requiredKeys: ['schema', 'schemaVersion', 'source', 'captures'], optionalKeys: [],
       hook: { module: 'packages/interchange/web-capture-import.mts', exportName: 'parseWebCaptureManifest', role: 'normaliser', runtime: 'shared' },
       fixtures: [
-        { id: 'web-capture-manifest-v2', path: `${F}web-capture-manifest-v2.json`, bytes: 494, sha256: 'a2208dc956a832d70e37cd9a5929db81d29148856c485e4fd6ce5b123de5b8e6', version: WEB_CAPTURE_MANIFEST_VERSION },
+        { id: 'web-capture-manifest-v2', path: `${F}web-capture-manifest-v2.json`, bytes: 494, sha256: 'a2208dc956a832d70e37cd9a5929db81d29148856c485e4fd6ce5b123de5b8e6', version: 2 },
+        { id: 'web-capture-manifest-v3', path: `${F}web-capture-manifest-v3.json`, bytes: 614, sha256: '6a52d12cde7247afd43ac421b7aa902f6853acb52f510e6dbe4b9f9c83434759', version: WEB_CAPTURE_MANIFEST_VERSION },
       ] },
     { descriptor: DEFENSIVE_MANIFEST_COMPATIBILITY, lifecycleSchema: DEFENSIVE_INDICATOR_MANIFEST_SCHEMA,
       requiredKeys: ['schema', 'version', 'generatedAt'], optionalKeys: ['expiresAt', 'reviewRequired', 'explicitSelection', 'includeWildcards', 'entries', 'indicators', 'exclusions', 'limitations'],

@@ -16,6 +16,7 @@ export function captureReviewFixture() {
   const manifest = { schema: WEB_CAPTURE_MANIFEST_SCHEMA, schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
     source: { name: 'Synthetic capture', reference: null, collectedAt: WHEN },
     captures: [{ domain: 'capture.example', capturedAt: WHEN, completeness: 'partial', limitations: ['Synthetic capture.'],
+      pageBehaviour: { version: 1, state: 'partial', requests: [], elements: [], actionHints: [], clipboardWriteAttempts: 0 },
       page: { title: 'Example page', finalOrigin: 'https://capture.example' }, technologies: [], requestDomains: [],
       artifacts: [
         { kind: 'screenshot', fileName: 'screenshot.png', mimeType: 'image/png', sha256: digest(screenshot), bytes: screenshot.length, width: ICON_SIZE, height: ICON_SIZE },

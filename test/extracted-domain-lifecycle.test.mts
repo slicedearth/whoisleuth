@@ -78,8 +78,8 @@ describe('extracted domain lifecycle contracts', () => {
     const summary = await fixture(`${FIXTURE_ROOT}web-capture-summary-v1.json`) as Record<string, unknown>;
     assert.throws(() => parseWebCaptureSummary({ ...summary, schemaVersion: 2 }), /schema version 1/u);
     const manifest = await fixture(`${FIXTURE_ROOT}web-capture-manifest-v2.json`) as Record<string, unknown>;
-    assert.throws(() => parseWebCaptureManifest({ ...manifest, schemaVersion: 1 }), /schema version 2/u);
-    assert.throws(() => parseWebCaptureManifest({ ...manifest, schemaVersion: 3 }), /schema version 2/u);
+    assert.throws(() => parseWebCaptureManifest({ ...manifest, schemaVersion: 1 }), /schema version 3/u);
+    assert.throws(() => parseWebCaptureManifest({ ...manifest, schemaVersion: 4 }), /schema version 3/u);
     const pattern = await fixture(`${FIXTURE_ROOT}static-page-pattern-pack-v2.json`) as Record<string, unknown>;
     assert.throws(() => validateStaticPagePatternPack({ ...pattern, version: 3 }), /requires schema 2/u);
   });

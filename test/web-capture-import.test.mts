@@ -50,10 +50,10 @@ describe('sanitised web-capture import', () => {
     assert.throws(() => parseWebCaptureManifest(manifest(WEB_CAPTURE_MANIFEST_VERSION, zoneLess)), /explicit timezone/u);
     assert.throws(
       () => parseWebCaptureManifest(manifest(1, '2026-07-01T12:00:00.000Z')),
-      /schema version 2/u,
+      /schema version 3/u,
     );
     assert.equal(
-      parseWebCaptureManifest(manifest(WEB_CAPTURE_MANIFEST_VERSION, '2026-07-01T12:00:00.000+01:00')).findings[0]?.observedAt,
+      parseWebCaptureManifest(manifest(2, '2026-07-01T12:00:00.000+01:00')).findings[0]?.observedAt,
       '2026-07-01T11:00:00.000Z',
     );
   });
@@ -136,7 +136,7 @@ describe('sanitised web-capture import', () => {
   test('validates bounded capture artifact metadata without accepting artifact bytes', () => {
     const document = parseWebCaptureManifest({
       schema: WEB_CAPTURE_MANIFEST_SCHEMA,
-      schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
+      schemaVersion: 2,
       source: { name: 'Reviewed isolated capture', reference: 'capture-17', collectedAt: '2026-07-01T00:00:00Z' },
       captures: [{
         domain: 'example.test',
@@ -184,7 +184,7 @@ describe('sanitised web-capture import', () => {
     }];
     const document = parseWebCaptureManifest({
       schema: WEB_CAPTURE_MANIFEST_SCHEMA,
-      schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
+      schemaVersion: 2,
       source: { name: 'Local capture package', reference: null, collectedAt: '2026-08-01T00:00:00Z' },
       captures: [{
         domain: 'one.example.test', capturedAt: '2026-08-01T00:00:00Z', completeness: 'partial',
@@ -215,7 +215,7 @@ describe('sanitised web-capture import', () => {
   test('accepts current screenshot perceptual hashes and rejects reader-only version 1', () => {
     const current = parseWebCaptureManifest({
       schema: WEB_CAPTURE_MANIFEST_SCHEMA,
-      schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
+      schemaVersion: 2,
       source: { name: 'Local capture package', reference: null, collectedAt: '2026-08-01T00:00:00Z' },
       captures: [{
         domain: 'example.test',
@@ -238,13 +238,13 @@ describe('sanitised web-capture import', () => {
           sha256: 'a'.repeat(64), perceptualHash: '0123456789abcdef', bytes: 100, width: 100, height: 100,
         }],
       }],
-    }), /schema version 2/u);
+    }), /schema version 3/u);
   });
 
   test('rejects path traversal, archive payloads, and unsupported artifact declarations', () => {
     const base = {
       schema: WEB_CAPTURE_MANIFEST_SCHEMA,
-      schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
+      schemaVersion: 2,
       source: { name: 'Capture', reference: null, collectedAt: null },
       captures: [{
         domain: 'example.test',

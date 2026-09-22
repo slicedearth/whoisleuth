@@ -127,11 +127,19 @@ output states how many were omitted; review the original input for them.
 
 ## Sanitised capture artefact manifest
 
-`whoisleuth.web-capture-manifest` version 2 imports reviewed metadata for a
+`whoisleuth.web-capture-manifest` versions 2 and 3 import reviewed metadata for a
 sanitised screenshot and optional DOM digest without importing either
 artefact's bytes. Each capture declares a domain, capture time, completeness,
 optional page title and final HTTP(S) origin, up to 30 request domains, up to 20
 technology labels, limitations, and one or two artefact metadata records.
+
+Version 3 also carries bounded page observations: navigation/script/frame
+response origins, script hashes, policy and integrity-attribute presence,
+default form destinations, password-field counts, requested-action wording
+categories and blocked Clipboard API attempt counts. The preview and comparison
+show these records; Case findings retain their counts and wording categories.
+Choose explicit manifest retention to preserve the full observation set. Version
+2 has no equivalent records and remains unknown, not empty.
 
 A screenshot record contains a plain file name, PNG, JPEG, or WebP MIME type,
 SHA-256 digest, declared byte size up to 10 MiB, and dimensions up to

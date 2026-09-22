@@ -4,6 +4,8 @@ import { isIP } from 'node:net';
 import path from 'node:path';
 
 import type { Browser, BrowserContext, Page, Route } from 'playwright';
+import { installPageObservationBoundary, collectPageElements, buildPageBehaviour } from './page-observation-boundary.mts';
+import type { PageRequestObservation } from '../investigation/page-behaviour.mts';
 
 import { WHOISLEUTH_USER_AGENT } from '../../lib/outbound-identity.mts';
 import { inspectDecodedImage } from '../../lib/perceptual-hash.mts';
@@ -442,6 +444,7 @@ async function installRequestBoundary(
   let reservedTransferBytes = 0;
   let acceptingRequests = true;
   const pendingRequests = new Set<Promise<void>>();
+  const pageRequests: PageRequestObservation[] = [];
 
   const reserveResponseBytes = (): number => {
     const remaining = MAX_CAPTURE_TRANSFER_BYTES - transferredBytes - reservedTransferBytes;
@@ -459,6 +462,7 @@ async function installRequestBoundary(
   });
   const handleRoute = async (route: Route) => {
     requestCount += 1;
+    const position = requestCount;
     if (requestCount > MAX_CAPTURE_REQUESTS) {
       blockedRequestCount += 1;
       await route.abort('blockedbyclient').catch(() => {});
@@ -534,6 +538,17 @@ async function installRequestBoundary(
         headers: responseHeaders(response),
         body: body.bytes,
       });
+      const request = route.request();
+      let kind: PageRequestObservation['kind'] | null = request.resourceType() === 'script' ? 'script' : null;
+      if (request.isNavigationRequest()) {
+        kind = 'document';
+        // Early or detached-frame navigation can have no available frame.
+        // Preserve the fulfilled document response without inventing its role.
+        try { kind = request.frame() === page.mainFrame() ? 'navigation' : 'frame'; } catch { /* Unclassified document. */ }
+      }
+      if (kind) pageRequests.push({ position, kind, origin: parsed.origin,
+        contentSha256: kind === 'script' && method === 'GET' && response.status >= 200 && response.status < 300 ? sha256(body.bytes) : null,
+        status: response.status, cspEnforced: response.headers.has('content-security-policy'), cspReportOnly: response.headers.has('content-security-policy-report-only') });
     } catch {
       blockedRequestCount += 1;
       await route.abort('blockedbyclient').catch(() => {});
@@ -574,6 +589,7 @@ async function installRequestBoundary(
       }
       return {
         requestHosts: [...retainedPublicRequestHosts].sort().slice(0, MAX_CAPTURE_HOSTS),
+        pageRequests,
         stats: {
           requestCount,
           blockedRequestCount,
@@ -846,6 +862,7 @@ export async function captureRenderedPage(
     }));
     await deadline.run(installDomProjectionBoundary(context));
     await deadline.run(disableBrowserOnlyNetworkApis(context));
+    await deadline.run(installPageObservationBoundary(context));
     page = await deadline.run(context.newPage());
     if (!await deadline.run(page.evaluate(browserNetworkIntrinsicsAreDisabled))) {
       throw new Error('Rendered capture could not verify that browser-managed transports were disabled.');
@@ -864,6 +881,7 @@ export async function captureRenderedPage(
     const finalUrl = captureUrl(page.url());
     const title = sanitizeCaptureText(await deadline.run(page.title()), 300);
     const dom = await deadline.run(projectDom(page));
+    const pageElements = await deadline.run(collectPageElements(page));
     const screenshot = await deadline.run(page.screenshot({ type: 'png', fullPage: false, animations: 'disabled' }));
     const screenshotBuffer = Buffer.from(screenshot);
     if (!screenshotBuffer.length || screenshotBuffer.length > MAX_WEB_CAPTURE_SCREENSHOT_BYTES) {
@@ -894,6 +912,8 @@ export async function captureRenderedPage(
     await deadline.run(browser.close());
     const blockedDirectConnections = browser.blockedDirectConnections();
     browser = null;
+    const pageBehaviour = buildPageBehaviour(pageElements, sealedBoundary.pageRequests, dom.visibleText,
+      Boolean(requestStats.blockedRequestCount || blockedDirectConnections || dom.structureTruncated || dom.textTruncated));
     const domDigest = {
       schema: WEB_CAPTURE_DOM_DIGEST_SCHEMA,
       version: WEB_CAPTURE_DOM_DIGEST_VERSION,
@@ -939,9 +959,10 @@ export async function captureRenderedPage(
         conditions: readCaptureConditions({ browser: 'chromium', browserVersion, viewport: VIEWPORT,
           deviceScaleFactor: 1, locale: 'en-US', timezone: 'UTC', colourScheme: 'light' }),
         ...(observerLabel ? { observerLabel } : {}), ...(vantageLabel ? { vantageLabel } : {}),
-        completeness: requestStats.blockedRequestCount || blockedDirectConnections || dom.structureTruncated || dom.textTruncated ? 'partial' : 'complete',
+        completeness: pageBehaviour.state === 'partial' ? 'partial' : 'complete',
         limitations,
         page: { title: title || null, finalOrigin: finalUrl.origin.toLowerCase() },
+        pageBehaviour,
         requestDomains: sealedBoundary.requestHosts,
         technologies: [],
         artifacts: [{
