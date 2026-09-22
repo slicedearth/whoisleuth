@@ -151,6 +151,14 @@ reported action. The report does not infer a stolen session from domain evidence
 `--strict-exit` returns 4 for a partial review. QR review supports still PNGs;
 no decoded result is not proof that a symbol is absent.
 
+### Contextual reviews
+
+`review-evidence` also accepts [contextual review inputs](contextual-reviews.md)
+for source-qualified incident sequences, retained domain history, platform-object continuity, authorised storefront
+comparison and connector provenance. These workflows are offline; partial
+context reviews return 4 when `--strict-exit` is selected. Browser-generated
+reusable inputs use the same validators.
+
 ### Message-header review
 
 `mail-headers` parses only the bounded header block from a selected message file

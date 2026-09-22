@@ -52,6 +52,8 @@ test('Case intake retains a minimised review by default and records reported ide
   const snapshot = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1, minimumRevision: 2 });
   expect(JSON.stringify(snapshot.records)).toContain('Analyst-selected message review');
   expect(JSON.stringify(snapshot.records)).not.toContain('private-value');
+  expect(snapshot.records[0]!.value.sightings).toEqual([]);
+  expect(snapshot.records[0]!.value.evidencePins[0]).toMatchObject({ label: 'Local review summary', observedAt: null, completeness: 'inconclusive' });
   await openCaseSection(page, 'Response');
   await page.getByText('Account and device recovery', { exact: true }).click();
   await page.getByLabel('Granted application consent', { exact: true }).check();

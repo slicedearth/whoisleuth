@@ -594,6 +594,15 @@ data. For a page you own or are authorised to review, **Record an expected
 change** adds your reason and a digest of the selected observations to the Case
 assessment. It does not approve future changes automatically.
 
+**Contextual reviews** in the same Evidence section lets you arrange source-qualified
+incident stages without treating a reported action as an observed event. Compare retained domain
+changes with expected maintenance, follow a stable platform object across
+versions and per-object outcomes, compare an authorised official storefront,
+or inspect connector configuration without running it. Save the report to keep
+its observations and a source-qualified Case summary. Incident, platform and storefront
+inputs can be reloaded for a later review; connector secrets are excluded.
+See [contextual reviews](contextual-reviews.md) for fields and CLI examples.
+
 **Retained files** also accepts deliberately selected originals without a
 capture manifest. Review the filename, optional source and observation time,
 then choose **Retain selected files**. The workspace stores exact bytes and

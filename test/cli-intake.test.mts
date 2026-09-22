@@ -49,9 +49,9 @@ test('browser worker, Case projection and CLI use the same source and privacy co
   assert.equal(reply.kind, 'review'); if (reply.kind !== 'review') throw new Error('No review');
   const direct = await reviewMessageInput(new Uint8Array(await file.arrayBuffer()), 'text', now);
   assert.deepEqual(reply.result, direct);
-  const findings = messageCaseEvidence(reply.result.report, 'selected.example');
-  assert.equal(findings.findings[0]?.completeness, 'inconclusive');
-  assert.equal(findings.findings[0]?.domain, 'selected.example');
+  const findings = messageCaseEvidence(reply.result.report, `sha256:${'a'.repeat(64)}`);
+  assert.equal(findings.completeness, 'inconclusive');
+  assert.equal(findings.title, 'Analyst-selected message review');
   assert.equal(JSON.stringify(findings).includes('secret'), false);
   assert.deepEqual(await runMessageIntakeOperation({ kind: 'qr', file, reviewedAt: now }), { kind: 'error' });
 });

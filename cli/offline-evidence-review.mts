@@ -1,6 +1,8 @@
 import { Buffer } from 'node:buffer';
 
 import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
+import { CONTEXT_INPUT_SCHEMAS, reviewContextInput } from '../packages/investigation/context-review.mts';
+import { CONTEXT_REVIEW_KINDS, type ContextReviewKind } from '../packages/contracts/context-review.mts';
 
 import {
   normalizeEncryptedDnsAdapter,
@@ -70,9 +72,13 @@ function parseInput(value: unknown): UnknownRecord {
 
 function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toISOString()) {
   const input = parseInput(value);
-  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'cryptographic_assurance' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store';
+  let kind: 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'cryptographic_assurance' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store' | ContextReviewKind;
   let result: unknown;
-  if (input.schema === RDAP_SEARCH_INPUT_SCHEMA) {
+  if ((CONTEXT_INPUT_SCHEMAS as readonly string[]).includes(input.schema as string)) {
+    const review = reviewContextInput(input, generatedAt);
+    kind = review.kind;
+    result = review;
+  } else if (input.schema === RDAP_SEARCH_INPUT_SCHEMA) {
     kind = 'rdap_search';
     const request = record(input.request);
     const help = normalizeRdapSearchHelp(input.help);
@@ -205,7 +211,15 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
     `Kind   ${document.kind.replaceAll('_', ' ')}`,
     `State  ${state.replaceAll('_', ' ')}`,
   ];
-  if (document.kind === 'rdap_search') {
+  if ((CONTEXT_REVIEW_KINDS as readonly string[]).includes(document.kind)) {
+    lines.push(safeTerminalValue(result.summary, ''));
+    for (const item of Array.isArray(result.observations) ? result.observations : []) {
+      const row = record(item);
+      lines.push('', `${safeTerminalValue(row.label, 'Observation')} [${safeTerminalValue(row.state, 'unknown')}]`,
+        `  ${safeTerminalValue(row.detail, '')}`, `  Source: ${safeTerminalValue(row.source, '')} · ${safeTerminalValue(row.observedAt, 'time unknown')}`);
+    }
+    for (const step of Array.isArray(result.nextSteps) ? result.nextSteps : []) lines.push(`Next: ${safeTerminalValue(step, '')}`);
+  } else if (document.kind === 'rdap_search') {
     const help = record(result.help);
     const plan = record(result.plan);
     const responseInspection = record(result.responseInspection);

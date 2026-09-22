@@ -171,7 +171,7 @@
       }
       if (generation !== selectionGeneration || record.id !== caseId) return;
       const success = retainFiles ? 'Imported capture metadata and retained the manifest and matching original files.' : 'Imported capture metadata. Original files were not retained.';
-      if (await persistOperation(() => retainFiles ? retainCaseAttachments(caseId, files, document) : importExternalFindingsIntoCase(caseId, document), success, () => manifestInput ?? null)
+      if (await persistOperation(() => retainFiles ? retainCaseAttachments(caseId, files, { findings: document }) : importExternalFindingsIntoCase(caseId, document), success, () => manifestInput ?? null)
         && generation === selectionGeneration) await clearPreview();
     } catch (cause) {
       onmessage(cause instanceof Error ? cause.message : 'Could not import the rendered-capture manifest.');

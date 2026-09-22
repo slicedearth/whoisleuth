@@ -16,6 +16,7 @@
   import CaseRenderedCapture from '$lib/components/CaseRenderedCapture.svelte';
   import CaseMessageIntake from './CaseMessageIntake.svelte';
   import CaseIdentityReview from './CaseIdentityReview.svelte';
+  import CaseContextReviewEntry from './CaseContextReviewEntry.svelte';
   import CaseAttachments from '$lib/components/CaseAttachments.svelte';
   import CaseWorkflowDetails from '$lib/components/CaseWorkflowDetails.svelte';
   import CaseTitleForm from '$lib/components/CaseTitleForm.svelte';
@@ -331,6 +332,7 @@
       <CaseObservationStage {record} {mutationBusy} {persist} mode={presentationMode} />
       <CaseAttachments {record} {mutationBusy} {persistOperation} {onmessage} />
       <CaseMessageIntake {record} {mutationBusy} {persistOperation} />
+      <CaseContextReviewEntry {record} {mutationBusy} {persistOperation} />
       <CaseRenderedCapture
         {record}
         {persist}

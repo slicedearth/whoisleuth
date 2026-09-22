@@ -1,5 +1,6 @@
 import type { CliArguments } from './arguments.mts';
 import { runIntakeCommand } from './intake-command.mts';
+import { CONTEXT_REVIEW_KINDS } from '../packages/contracts/context-review.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../packages/contracts/investigation-package-limits.mts';
 import { verifyOfflineInvestigationFolder, verifyOfflineInvestigationPackage } from './investigation-package-review.mts';
@@ -335,7 +336,8 @@ async function runOfflineEvidenceReviewCommand(
       || (result.counts && typeof result.counts === 'object' && !Array.isArray(result.counts)
         && ['different', 'missing', 'unexpected', 'incomplete'].some((key) => Number((result.counts as Record<string, unknown>)[key]) > 0))
     );
-    if (gate?.pass === false || zoneMismatch) return EXIT_CODES.PARTIAL_FAILURE;
+    const contextPartial = (CONTEXT_REVIEW_KINDS as readonly string[]).includes(document.kind) && result.state === 'partial';
+    if (gate?.pass === false || zoneMismatch || contextPartial) return EXIT_CODES.PARTIAL_FAILURE;
   }
   return EXIT_CODES.SUCCESS;
 }

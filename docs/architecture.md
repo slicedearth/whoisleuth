@@ -60,6 +60,12 @@ them; browser and companion adapters present the same comparison. Case expected
 changes use the existing assertion and save coordinator, not a separate baseline
 store.
 
+Contextual review models in `packages/investigation` project retained Case
+history or explicitly selected incident, platform, storefront and connector metadata.
+Separate Case forms own temporary drafts; reports and reusable minimised inputs
+use existing attachment retention and mutation coordination. CLI dispatch uses
+the same validators. Connector configuration is never an execution input.
+
 Schema source discovery inventories literal identities and their canonical
 definitions. References and runtime propagation need no per-file registration.
 Domain validators and independent historical fixtures verify format behaviour;

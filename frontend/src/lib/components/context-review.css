@@ -1,0 +1,20 @@
+.context-review,.context-report{display:grid;gap:14px;min-width:0;max-width:100%}
+.context-review>summary{font-weight:650}
+.context-review summary,.context-report summary{cursor:pointer;min-height:44px;padding-block:12px}
+.context-review .body,.context-review form,.context-review fieldset{display:grid;gap:12px;min-width:0}
+.context-review fieldset{border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin:0}
+.context-review legend{font-weight:650;font-size:var(--text-sm);padding-inline:4px}
+.context-review .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;min-width:0}
+.context-review label{display:grid;gap:5px;min-width:0;font-size:var(--text-xs)}
+.context-review label.checkbox{display:flex;align-items:center;gap:8px;min-height:44px}
+.context-review input,.context-review select,.context-review textarea{max-width:100%;min-width:0;width:100%;box-sizing:border-box}
+.context-review input[type=checkbox]{width:auto;flex:none}
+.context-review p,.context-review li,.context-report p,.context-report li{font-size:var(--text-xs);line-height:1.65;margin:0;overflow-wrap:anywhere}
+.context-review .actions,.context-report .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.context-review .btn,.context-report .btn{white-space:normal;max-width:100%;min-height:44px}
+.context-report{padding-block:14px;border-top:1px solid var(--border)}
+.context-report h4{font-size:var(--text-sm);margin:0}
+.context-report ol,.context-report ul{display:grid;gap:14px;padding-left:22px;margin:0;min-width:0}
+.context-report .meta,.context-review .meta{color:var(--muted)}
+.context-review [role=status]:empty,.context-report [role=status]:empty{display:none}
+@media(max-width:640px){.context-review .fields{grid-template-columns:minmax(0,1fr)}}

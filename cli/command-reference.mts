@@ -25,6 +25,7 @@ import {
 import { CLI_FAIL_POLICIES_BY_COMMAND, type CliFailPolicyCommand } from './fail-policy.mts';
 import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../packages/investigation/investigation-manifest.mts';
 import { IDENTITY_ACTIONS, MESSAGE_INTAKE_KINDS, MESSAGE_INTAKE_SCHEMA } from '../packages/contracts/message-intake.mts';
+import { CONTEXT_INPUT_SCHEMAS, CONTEXT_REVIEW_SCHEMA } from '../packages/contracts/context-review.mts';
 
 const LEGACY_WORKSPACE_ARCHIVE_VERSIONS = SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS
   .filter((version) => version !== WORKSPACE_ARCHIVE_VERSION);
@@ -1287,7 +1288,7 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   "review-evidence": commandSeed({
     reference: {
-      description: 'Review one versioned DNS, domain-change, routing, GeoIP, RDAP, or trust-store document offline.',
+      description: 'Review versioned protocol evidence, incident sequences, domain history, platform objects, storefronts or connector configuration offline.',
       example: 'whoisleuth review-evidence domain-change.json --json --strict-exit',
       boundary: 'The command reads only the supplied document. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.',
     },
@@ -1300,6 +1301,8 @@ const COMMAND_SEEDS = Object.freeze({
     networkEffect: 'offline',
     common: true,
     schemaIdentifiers: Object.freeze([
+    CONTEXT_REVIEW_SCHEMA,
+    ...CONTEXT_INPUT_SCHEMAS,
     'whoisleuth.cli.offline-evidence-review',
     'whoisleuth.rdap-search-input',
     'whoisleuth.dnssec-evidence-input',

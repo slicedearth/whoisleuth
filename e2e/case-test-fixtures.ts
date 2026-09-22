@@ -134,7 +134,7 @@ export function caseRecord(overrides: CaseOverrides = {}) {
 export async function openSeededTimelineCase(
   page: Page,
   domain: string,
-  records: ReturnType<typeof caseRecord>[],
+  records: Array<CaseRecord | ReturnType<typeof caseRecord>>,
   schemaVersion = 13,
 ) {
   await migrateLegacyBrowserData(page, {

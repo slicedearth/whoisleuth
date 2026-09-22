@@ -1,6 +1,8 @@
 import { addCaseAttachments, assertDerivedCaseAttachmentSource, readCaseAttachment, removeCaseAttachment, type CaseAttachment } from '../../../packages/cases/case-attachment-model.mts';
 import { enforceStoreBudget } from '../../../packages/cases/case-storage-model.mts';
 import type { CaseRecord } from '../../../packages/cases/case-model.mts';
+import { updateCase } from '../../../packages/cases/case-record-operations.mts';
+import { localCaseReviewPin, type LocalCaseReviewSummary } from '../../../packages/cases/case-review-summary.mts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../../../packages/contracts/selected-file-limits.mts';
 import { captureRetainedFiles } from '../../../packages/evidence/retained-file.mts';
 import { sha256ArtifactBytes } from '../../../packages/evidence/artifact-integrity.mts';
@@ -37,7 +39,8 @@ function preserveExistingEvidence(cases: CaseRecord[]) {
   return bounded;
 }
 
-export async function retainCaseAttachments(caseId: string, input: readonly SelectedCaseAttachment[], findings?: ExternalFindingsDocument) {
+export async function retainCaseAttachments(caseId: string, input: readonly SelectedCaseAttachment[], context?:
+  { findings: ExternalFindingsDocument; reviewSummary?: never } | { reviewSummary: LocalCaseReviewSummary; findings?: never }) {
   if (!Array.isArray(input) || !input.length || input.length > MAX_SELECTED_FILES) throw new Error(`Select between 1 and ${MAX_SELECTED_FILES} attachments to retain.`);
   const now = new Date().toISOString();
   const selected = input.map(item => ({ attachment: readCaseAttachment({ ...item.attachment, retainedAt: now }), file: item.file }));
@@ -50,12 +53,19 @@ export async function retainCaseAttachments(caseId: string, input: readonly Sele
   }
   const files = captureRetainedFiles([...bodies.values()]);
   // The bounded parser detaches fields synchronously, including reactive views.
-  const imported = findings ? parseExternalFindingsDocument(findings) : null;
+  if (context?.findings && context.reviewSummary) throw new TypeError('Select an imported finding or a local review summary, not both.');
+  const imported = context?.findings ? parseExternalFindingsDocument(context.findings) : null;
+  const reviewPin = context?.reviewSummary ? localCaseReviewPin(context.reviewSummary) : null;
+  if (context?.reviewSummary && !selected.some(item => item.attachment.digestSha256 === context.reviewSummary.reportDigestSha256)) throw new TypeError('The local review summary must identify a report retained in this operation.');
   return updateBrowserLocalData('cases', current => {
     const original = current.find(record => record.id === caseId);
     if (!original) throw new Error('The Case is no longer available. No files were retained.');
     for (const item of selected) assertDerivedCaseAttachmentSource(original, item.attachment);
-    const merged = imported ? mergeExternalFindingsIntoCase(current, caseId, imported) : { cases: current, record: original };
+    let merged = imported ? mergeExternalFindingsIntoCase(current, caseId, imported) : { cases: current, record: original };
+    if (reviewPin && !original.evidencePins.some(pin => pin.label === reviewPin.label && pin.source === reviewPin.source && pin.value === reviewPin.value && pin.observedAt === null
+      && pin.completeness === reviewPin.completeness && pin.truncated === false && JSON.stringify(pin.limitations) === JSON.stringify(reviewPin.limitations))) {
+      merged = updateCase(current, caseId, { evidencePin: reviewPin }, now);
+    }
     const record = addCaseAttachments(merged.record, selected.map(item => item.attachment), now);
     const { cases } = preserveExistingEvidence(merged.cases.map(item => item.id === caseId ? record : item));
     return { document: cases, result: { cases, record: cases.find(item => item.id === caseId)!, pruned: 0 } };

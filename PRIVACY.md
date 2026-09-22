@@ -543,6 +543,20 @@ Checksums and signatures can detect content change or verify a mathematical key
 relationship under their named contract. They do not prove evidence accuracy,
 authorship, signer identity, recipient authorisation or safety.
 
+## Local contextual reviews
+
+Incident-sequence, domain-history, platform-object, storefront and connector reviews use selected
+local records or files. Drafts stay in page memory. Saving retains the report
+and a source-qualified summary through existing Case controls. Incident, platform and
+storefront reviews also retain their reusable metadata input; names, stable
+object IDs, origins, source references and analyst declarations may be sensitive.
+Domain-history input downloads contain the selected Case but are not duplicated
+in its storage. Connector reports exclude raw configuration, local paths,
+arguments, environment/header values, authentication material and URL paths or
+queries; names, package identities, origins and metadata counts remain visible.
+No file is uploaded, software executed or endpoint contacted by these reviews.
+Only a deliberate Lookup pivot selects a hostname for a separate investigation.
+
 ## Optional local rendered capture
 
 The optional capture companion is an explicit authorised-capture action outside

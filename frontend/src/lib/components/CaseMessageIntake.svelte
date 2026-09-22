@@ -9,11 +9,12 @@
 
   let { record, mutationBusy, persistOperation }: { record: CaseRecord; mutationBusy: boolean; persistOperation: PersistCaseOperation } = $props();
   async function save(result: MessageIntakeResult, original: File, retainOriginal: boolean): Promise<boolean> {
-    const id = record.id, findings = messageCaseEvidence(result.report, record.domain);
+    const id = record.id;
     const report = new File([JSON.stringify(result.report, null, 2)], 'message-review.json', { type: 'application/json' });
     const files = await prepareCaseAttachmentFiles(retainOriginal ? [report, original] : [report], 'Analyst-selected message review', null);
     if (id !== record.id) return false;
-    return persistOperation(() => retainCaseAttachments(id, files, findings), 'Saved the minimised message review and its source hash.', null);
+    const reviewSummary = messageCaseEvidence(result.report, files[0]!.attachment.digestSha256);
+    return persistOperation(() => retainCaseAttachments(id, files, { reviewSummary }), 'Saved the minimised message review and its source hash.', null);
   }
 </script>
 

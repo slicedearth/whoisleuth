@@ -2852,7 +2852,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "review-evidence",
       "summary": "Review supplied evidence offline",
-      "description": "Review one versioned DNS, domain-change, routing, GeoIP, RDAP, or trust-store document offline.",
+      "description": "Review versioned protocol evidence, incident sequences, domain history, platform objects, storefronts or connector configuration offline.",
       "group": "investigate",
       "common": true,
       "usage": "whoisleuth review-evidence [\u003csource>] [--mmdb \u003cfile>] [--json] [--strict-exit] [--quiet] [--no-color]",
@@ -2886,6 +2886,12 @@ export const PUBLIC_CLI_CATALOGUE = {
       "planSupport": false,
       "failurePolicySupport": true,
       "supportedSchemaIdentifiers": [
+        "whoisleuth\u002econtext-review",
+        "whoisleuth\u002edomain-history.input",
+        "whoisleuth\u002eplatform-continuity.input",
+        "whoisleuth\u002estorefront-review.input",
+        "whoisleuth\u002econnector-review.input",
+        "whoisleuth\u002eincident-sequence.input",
         "whoisleuth\u002ecli.offline-evidence-review",
         "whoisleuth\u002erdap-search-input",
         "whoisleuth\u002ednssec-evidence-input",

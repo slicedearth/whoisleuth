@@ -8,6 +8,7 @@ import { createCase, type CaseRecord } from '../packages/cases/case-model.mts';
 import { emptyCaseViewsStore } from '../packages/workspace/case-views.mts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../packages/contracts/selected-file-limits.mts';
 import type { CaseViewFilters } from '../packages/contracts/case-views-contract.mts';
+import { localCaseReviewPin, type LocalCaseReviewSummary } from '../packages/cases/case-review-summary.mts';
 
 const NOW = '2026-09-01T00:00:00.000Z';
 const FILTERS: CaseViewFilters = { status: '', disposition: '', search: '', sort: 'updated' };
@@ -79,6 +80,30 @@ test('attachment validation rejects invalid selections before reading or writing
   await assert.rejects(retainCaseAttachments('missing', []));
   await assert.rejects(readRetainedCaseFiles([]));
   assert.equal(state.writes, 0);
+});
+
+test('local report retention binds the actual file without creating a provider sighting or event time', async t => {
+  const record = createCase({ domain: 'files.example' }, NOW);
+  const state = localStore(t, [['cases', [record]]]);
+  const selected = await prepareCaseAttachmentFiles([new File(['{"review":"selected"}'], 'review.json')], 'Selected local review', null);
+  const reviewSummary: LocalCaseReviewSummary = { title: 'Selected local review', summary: 'Two supplied observations were compared.', reviewedAt: NOW,
+    reportDigestSha256: selected[0]!.attachment.digestSha256, completeness: 'inconclusive', limitations: ['The source times are not supplied.'] };
+  const saved = await retainCaseAttachments(record.id, selected, { reviewSummary });
+  assert.equal(state.writes, 1); assert.equal(saved.record.evidencePins.length, 1);
+  assert.deepEqual(saved.record.sightings, []);
+  assert.equal(saved.record.evidencePins[0]!.observedAt, null);
+  assert.equal(saved.record.evidencePins[0]!.source, 'Selected local review');
+  assert.equal(saved.record.evidencePins[0]!.label, 'Local review summary');
+  assert.match(saved.record.evidencePins[0]!.value, new RegExp(selected[0]!.attachment.digestSha256));
+  assert.match(saved.record.evidencePins[0]!.limitations[0]!, /not a source event time or a provider report/u);
+  const repeat = await retainCaseAttachments(record.id, selected.map(item => ({ ...item, attachment: { ...item.attachment, id: 'second-review-reference' } })), { reviewSummary });
+  assert.equal(repeat.record.evidencePins.length, 1);
+  const before = structuredClone(state.documents.get('cases'));
+  await assert.rejects(retainCaseAttachments(record.id, selected, { reviewSummary: { ...reviewSummary, reportDigestSha256: `sha256:${'a'.repeat(64)}` } }), /retained in this operation/u);
+  for (const patch of [{ reviewedAt: '2026-09-01' }, { completeness: 'complete' }, { title: 'a'.repeat(1000) }, { summary: '\u001b[31m' }]) assert.throws(() => localCaseReviewPin({ ...reviewSummary, ...patch } as LocalCaseReviewSummary));
+  state.failure = new Error('Fixture write failure');
+  await assert.rejects(retainCaseAttachments(record.id, selected, { reviewSummary: { ...reviewSummary, summary: 'A changed review.' } }), /Fixture write failure/u);
+  assert.deepEqual(state.documents.get('cases'), before);
 });
 
 test('missing originals, changed references and failed persistence stay explicit', async t => {
