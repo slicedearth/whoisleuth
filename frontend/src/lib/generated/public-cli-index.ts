@@ -1,6 +1,6 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
 export const PUBLIC_CLI_INDEX = {
-  "commandCount": 49,
+  "commandCount": 50,
   "groups": [
     "investigate",
     "respond",
@@ -248,6 +248,13 @@ export const PUBLIC_CLI_INDEX = {
       "summary": "Review message headers offline",
       "group": "investigate",
       "common": false,
+      "mode": "offline"
+    },
+    {
+      "id": "intake",
+      "summary": "Review suspicious messages and QR links offline",
+      "group": "investigate",
+      "common": true,
       "mode": "offline"
     },
     {

@@ -188,10 +188,13 @@ const INSTALLED_INLINE_FAMILY_MODULES = Object.freeze([
   Object.freeze({ source: 'cli/history-command-runner.mjs', exportName: 'runHistoryCommand', label: 'history-family-handler' }),
 ]);
 export const CLI_RUNTIME_DEPENDENCIES = Object.freeze([
+  '@nuintun/qrcode',
   '@peculiar/x509',
+  'fast-png',
   'fflate',
   'maxmind',
   'parse5',
+  'postal-mime',
   'reflect-metadata',
   'tldts',
   'undici',

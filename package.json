@@ -1,6 +1,6 @@
 {
   "name": "whoisleuth",
-  "version": "2.4.1",
+  "version": "2.5.0",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Open-source, local-first domain intelligence and brand-protection console for WHOIS, RDAP, DNS, certificate transparency, lookalike domains, and web evidence.",
@@ -125,8 +125,10 @@
   },
   "dependencies": {
     "@netlify/blobs": "11.0.3",
+    "@nuintun/qrcode": "5.0.3",
     "@peculiar/x509": "^2.0.0",
     "express": "^5.2.1",
+    "fast-png": "8.0.0",
     "fflate": "0.8.3",
     "graphology": "^0.26.0",
     "graphology-components": "^1.5.4",
@@ -134,6 +136,7 @@
     "maxmind": "^5.0.7",
     "minisearch": "^7.2.0",
     "parse5": "^8.0.1",
+    "postal-mime": "2.7.5",
     "reflect-metadata": "0.2.2",
     "tldts": "^7.4.11",
     "undici": "^8.10.1"

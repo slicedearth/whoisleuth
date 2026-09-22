@@ -1,4 +1,5 @@
 import type { CliArguments } from './arguments.mts';
+import { runIntakeCommand } from './intake-command.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../packages/contracts/investigation-package-limits.mts';
 import { verifyOfflineInvestigationFolder, verifyOfflineInvestigationPackage } from './investigation-package-review.mts';
@@ -386,6 +387,7 @@ const REVIEW_COMMAND_HANDLERS = Object.freeze({
   'page-compare': runPageCompareCommand,
   'mail-review': runMailReviewCommand,
   'mail-headers': runMailHeadersCommand,
+  intake: runIntakeCommand,
   'review-evidence': runOfflineEvidenceReviewCommand,
   'brief': runBriefOrCasePackCommand,
   'case': runCaseCommand,

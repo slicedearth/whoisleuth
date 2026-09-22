@@ -88,6 +88,7 @@ export const CLI_COMMAND_SEMANTICS = Object.freeze({
   'page-compare': semantic('investigate', CAPABILITY_IDS.OFFLINE_REVIEW),
   'mail-review': semantic('investigate', CAPABILITY_IDS.OFFLINE_REVIEW),
   'mail-headers': semantic('investigate', CAPABILITY_IDS.OFFLINE_REVIEW),
+  intake: semantic('investigate', CAPABILITY_IDS.OFFLINE_REVIEW),
   'review-evidence': semantic('investigate', CAPABILITY_IDS.PORTABLE_EVIDENCE),
   brief: semantic('investigate', CAPABILITY_IDS.OFFLINE_REVIEW),
   case: semantic('respond', CAPABILITY_IDS.ANALYST_CASES),

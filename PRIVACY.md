@@ -415,6 +415,15 @@ domain-only identity and routing, reported authentication states, and
 observation counts. It does not retain address local parts, display names,
 subject, body, attachments, or raw header values, and makes no network request.
 
+Message intake processes selected text, email, calendar and still PNG files
+locally, without opening links or executing attachments. Exact URLs remain in
+the temporary review; downloaded summaries omit paths, queries, fragments,
+message bodies, subjects and address local parts. Selecting a destination fills
+Lookup without starting collection. Saving a review in a Case is explicit;
+retaining the unredacted original requires a separate choice. Reported account
+actions can be recorded as analyst claims and select recovery guidance. They
+do not establish account compromise.
+
 The isolated `dnssec-validate` and `mail-transport` commands require a selected
 literal public resolver, local trust-anchor document and explicit
 owned-or-authorised acknowledgement. Mail transport also requires a separate

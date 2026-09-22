@@ -100,6 +100,19 @@ response; already-admitted requests may finish within their existing bounds.
 
 ### Fast and Deep collection
 
+Before collecting, **Review a message, link or QR image** accepts pasted text,
+MIME email, calendar invitations and still PNGs. It shows the actual destination
+beside a URL displayed in the message, expands supplied redirect parameters and
+identifies authorisation-request fields. Choosing a destination fills Lookup;
+it does not start a request. Exact URLs are available in a private disclosure
+and omitted from the minimised review download.
+
+The same review is available in Case Evidence. Save its minimised report and
+source hash, optionally retaining the private original separately. In Case
+Response, **Account and device recovery** provides guidance from reported
+actions such as entering a password, granting consent or running a command.
+Record recovery, provider reporting and later availability as separate outcomes.
+
 - **Fast** is registration-led triage. It uses RDAP and bounded authoritative
   DNS fallback where required, while explicitly skipping richer WHOIS, website
   and TLS work.

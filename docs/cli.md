@@ -136,6 +136,21 @@ their focused help. They do not use the hosted login or hosted usage controls.
 `lookup --plan` lists planned source families and disclosure targets before
 collection. `doctor` is offline unless `--network` is selected.
 
+### Message and link intake
+
+Use `intake email message.eml --json` for MIME email and nested messages,
+`intake calendar invitation.ics`, `intake qr selected.png`, or `intake text`
+with text on standard input. These commands never open a destination or execute
+supplied content. Output compares displayed and actual hosts, retains reported
+header authentication and interprets supplied authorisation parameters without
+retaining URL tokens. The source hash identifies the original bytes.
+
+Add a repeatable `--reported-action`, such as `entered_device_code` or
+`granted_consent`, to include account-recovery guidance based on an explicitly
+reported action. The report does not infer a stolen session from domain evidence.
+`--strict-exit` returns 4 for a partial review. QR review supports still PNGs;
+no decoded result is not proof that a symbol is absent.
+
 ### Message-header review
 
 `mail-headers` parses only the bounded header block from a selected message file

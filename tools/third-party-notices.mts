@@ -65,6 +65,7 @@ const REVIEWED_LICENSE_EXPRESSIONS = new Set([
   'BSD-3-Clause',
   'ISC',
   'MIT',
+  'MIT-0',
 ]);
 
 function boundedToken(value: unknown, label: string, maxLength: number): string {

@@ -24,6 +24,7 @@ import {
 } from '../packages/contracts/cli-command-semantics.mts';
 import { CLI_FAIL_POLICIES_BY_COMMAND, type CliFailPolicyCommand } from './fail-policy.mts';
 import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../packages/investigation/investigation-manifest.mts';
+import { IDENTITY_ACTIONS, MESSAGE_INTAKE_KINDS, MESSAGE_INTAKE_SCHEMA } from '../packages/contracts/message-intake.mts';
 
 const LEGACY_WORKSPACE_ARCHIVE_VERSIONS = SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS
   .filter((version) => version !== WORKSPACE_ARCHIVE_VERSION);
@@ -313,6 +314,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--palette': enumeration(['auto', 'light', 'dark']),
   '--network': flag(),
   '--json': flag(),
+  '--reported-action': optionDefinition('enum', { values: IDENTITY_ACTIONS.map(action => action.id), occurrence: 'repeatable' }),
   '--package': flag(),
   '--folder': file(),
   '--quiet': flag('idempotent'),
@@ -1268,6 +1270,20 @@ const COMMAND_SEEDS = Object.freeze({
     planSupport: false,
     additionalOutputFormats: Object.freeze([]),
     bootstrapProfile: 'allowed',
+  }),
+  intake: commandSeed({
+    reference: {
+      description: 'Extract and review links, message identities, authorisation parameters and QR destinations from a selected file or pasted text.',
+      example: 'whoisleuth intake email message.eml --json',
+      boundary: 'Offline only: no link, attachment, command or QR payload is opened or executed. Email and calendar files may contain private data; output excludes original bodies, subjects, address local parts, URL paths, queries and fragments. Authentication headers are reported claims. QR input is a selected still PNG; non-URL and undecodable content is not interpreted as an absent threat. Use --strict-exit to return 4 when review bounds or unreviewed attachments make the report partial.',
+    },
+    collection: { mode: 'offline', scope: 'Reads one selected text, MIME email, calendar or PNG file. No collection or automatic Case write.' },
+    summary: 'Review suspicious messages and QR links offline',
+    options: ['--json', '--reported-action', '--strict-exit', '--quiet', '--no-color'],
+    positionals: Object.freeze([positional('kind', 'enum', 1, 1, MESSAGE_INTAKE_KINDS), positional('source', 'file', 0, 1, [], 'argv_or_stdin')]),
+    constraints: EMPTY_CONSTRAINTS, handlerOwner: 'inline', networkEffect: 'offline', common: true,
+    schemaIdentifiers: Object.freeze([MESSAGE_INTAKE_SCHEMA]), primaryArtefacts: Object.freeze([]),
+    planSupport: false, additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
   }),
   "review-evidence": commandSeed({
     reference: {

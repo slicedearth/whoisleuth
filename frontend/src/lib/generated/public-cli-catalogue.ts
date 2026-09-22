@@ -1,6 +1,6 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
 export const PUBLIC_CLI_CATALOGUE = {
-  "commandCount": 49,
+  "commandCount": 50,
   "groups": [
     "investigate",
     "respond",
@@ -2719,6 +2719,99 @@ export const PUBLIC_CLI_CATALOGUE = {
       ],
       "inputLimits": [
         "Parses only the bounded header block from one selected message or standard input.",
+        "source: 0-1 file value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
+      ],
+      "fileOutput": true,
+      "primaryEvidenceArtefacts": [],
+      "capability": {
+        "familyId": "offline_review",
+        "networkMode": "none",
+        "dataSent": [
+          "none"
+        ],
+        "recipients": [
+          "none"
+        ],
+        "authorisation": "explicit_action",
+        "retention": "local_output_deliberate",
+        "export": "local_output",
+        "outcomes": [
+          "complete",
+          "partial"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "The command reads only selected bounded local input and makes no network request.",
+          "Output remains under the operator's local retention and deletion control."
+        ]
+      }
+    },
+    {
+      "id": "intake",
+      "summary": "Review suspicious messages and QR links offline",
+      "description": "Extract and review links, message identities, authorisation parameters and QR destinations from a selected file or pasted text.",
+      "group": "investigate",
+      "common": true,
+      "usage": "whoisleuth intake \u003ctext|email|calendar|qr> [\u003csource>] [--json] [--reported-action \u003creported-action>] [--strict-exit] [--quiet] [--no-color]",
+      "example": "whoisleuth intake email message.eml --json",
+      "boundary": "Offline only: no link, attachment, command or QR payload is opened or executed. Email and calendar files may contain private data; output excludes original bodies, subjects, address local parts, URL paths, queries and fragments. Authentication headers are reported claims. QR input is a selected still PNG; non-URL and undecodable content is not interpreted as an absent threat. Use --strict-exit to return 4 when review bounds or unreviewed attachments make the report partial.",
+      "collection": {
+        "mode": "offline",
+        "scope": "Reads one selected text, MIME email, calendar or PNG file. No collection or automatic Case write."
+      },
+      "inputs": [
+        {
+          "name": "kind",
+          "valueKind": "enum",
+          "minimum": 1,
+          "maximum": 1,
+          "values": [
+            "text",
+            "email",
+            "calendar",
+            "qr"
+          ],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        },
+        {
+          "name": "source",
+          "valueKind": "file",
+          "minimum": 0,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv_or_stdin",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--json",
+        "--reported-action",
+        "--strict-exit",
+        "--quiet",
+        "--no-color"
+      ],
+      "networkEffect": "offline",
+      "disclosureClass": "none",
+      "explicitAuthorisationRequired": false,
+      "planSupport": false,
+      "failurePolicySupport": true,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002emessage-intake"
+      ],
+      "inputLimits": [
+        "Reads one selected text, MIME email, calendar or PNG file. No collection or automatic Case write.",
+        "kind: 1-1 enum value",
         "source: 0-1 file value"
       ],
       "outputLimits": [

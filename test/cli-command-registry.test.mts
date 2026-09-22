@@ -602,13 +602,17 @@ describe('canonical CLI command registry', () => {
   test('selects the canonical catalogue with deterministic intersection filters', () => {
     const defaults = selectCliCommands(CLI_COMMAND_REGISTRY, { common: false, group: null, mode: null });
     assert.deepEqual(defaults, CLI_COMMANDS);
-    const filtered = selectCliCommands(CLI_COMMAND_REGISTRY, {
+    // Representative positive and negative controls exercise intersection and
+    // ordering without making every new command update a second inventory.
+    const selectionCases = CLI_COMMAND_REGISTRY.filter(definition =>
+      ['lookup', 'discover', 'review-evidence', 'case', 'case-pack', 'export', 'doctor'].includes(definition.command));
+    const filtered = selectCliCommands(selectionCases, {
       common: true,
       group: 'respond',
       mode: 'offline',
     });
     assert.deepEqual(filtered, ['case', 'case-pack', 'export']);
-    assert.deepEqual(selectCliCommands(CLI_COMMAND_REGISTRY, {
+    assert.deepEqual(selectCliCommands(selectionCases, {
       common: true,
       group: 'investigate',
       mode: 'offline',

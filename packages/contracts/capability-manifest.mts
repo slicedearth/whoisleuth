@@ -386,6 +386,7 @@ const CLI_OPERATION_POLICY = Object.freeze({
   'page-compare': OFFLINE_PER_SOURCE,
   'mail-review': OFFLINE_PER_ITEM,
   'mail-headers': OFFLINE_PER_ITEM,
+  intake: OFFLINE_PER_ITEM,
   'review-evidence': offlinePolicy('explicit_document', ['complete', 'partial', 'blocked']),
   brief: OFFLINE_PER_SOURCE,
   case: OFFLINE_ALL_OR_NOTHING,

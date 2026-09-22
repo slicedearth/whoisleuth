@@ -12,6 +12,7 @@
   import LookupSourceCheckpoint from '$lib/components/LookupSourceCheckpoint.svelte';
   import type { CheckpointFact } from '$lib/analysis/case-evidence-checkpoint.ts';
   import LookupForm from '$lib/components/LookupForm.svelte';
+  import MessageIntake from '$lib/components/MessageIntake.svelte';
   import LookupTaskGuidance from '$lib/components/LookupTaskGuidance.svelte';
   import LookupWebEvidenceSection from '$lib/components/LookupWebEvidenceSection.svelte';
   import LookupSavedContextPreview from '$lib/components/LookupSavedContextPreview.svelte';
@@ -819,6 +820,11 @@
     <LookupTaskGuidance task={taskView} {lookupMode} ontask={setTaskView} onmode={(mode) => { lookupMode = mode; invalidateLookupForInputChange(); clearCompletedLookupContext(); }} />
   {/snippet}
 </LookupForm>
+
+<MessageIntake disabled={loading} onselect={async target => {
+  query = target; collectSelectedUrl = false; handleLookupQueryChange(target);
+  await tick(); document.getElementById('query')?.focus();
+}} />
 
 <LookupSavedContextPreview {query} />
 

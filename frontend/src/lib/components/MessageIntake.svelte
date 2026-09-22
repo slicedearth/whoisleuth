@@ -1,0 +1,111 @@
+<script lang="ts">
+  import { onDestroy, tick } from 'svelte';
+  import { MAX_MESSAGE_INTAKE_BYTES, type MessageIntakeKind, type MessageIntakeResult } from '../../../../packages/contracts/message-intake.mts';
+  import { runMessageIntakeWorker } from '$lib/message-intake-worker.ts';
+  import { downloadLocalFile } from '$lib/download-local-file.ts';
+  import Pagination from './Pagination.svelte';
+
+  let { onselect, onsave, disabled = false }: {
+    onselect: (target: string) => void | Promise<void>;
+    onsave?: (result: MessageIntakeResult, original: File, retainOriginal: boolean) => Promise<boolean>;
+    disabled?: boolean;
+  } = $props();
+  let kind = $state<MessageIntakeKind>('text'), pasted = $state('');
+  let file = $state.raw<File | null>(null), reviewedFile = $state.raw<File | null>(null);
+  let result = $state.raw<MessageIntakeResult | null>(null);
+  let busy = $state(false), saving = $state(false), error = $state(''), message = $state(''), retainOriginal = $state(false), page = $state(1);
+  let heading = $state<HTMLHeadingElement>(), input = $state<HTMLInputElement>();
+  let controller: AbortController | null = null;
+  const PAGE_SIZE = 10;
+  const links = $derived(result?.report.links.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) ?? []);
+  function clearReview() { controller?.abort(); controller = null; busy = false; result = null; reviewedFile = null; error = ''; message = ''; retainOriginal = false; page = 1; }
+  function changeKind() { clearReview(); file = null; if (input) input.value = ''; }
+  function selectFile(event: Event) {
+    clearReview();
+    file = (event.currentTarget as HTMLInputElement).files?.[0] ?? null;
+    if (file && (!file.size || file.size > MAX_MESSAGE_INTAKE_BYTES)) { error = 'Select a non-empty file of at most 16 MiB.'; file = null; }
+  }
+  onDestroy(() => controller?.abort());
+  async function review() {
+    if (busy || saving || disabled) return;
+    clearReview();
+    const selected = file ?? (kind === 'text' && pasted.trim() ? new File([pasted], 'selected-text.txt', { type: 'text/plain' }) : null);
+    if (!selected || selected.size > MAX_MESSAGE_INTAKE_BYTES) { error = 'Choose an input file or paste text, up to 16 MiB.'; return; }
+    const current = new AbortController(); controller = current; busy = true;
+    try {
+      const reviewed = await runMessageIntakeWorker({ kind, file: selected, reviewedAt: new Date().toISOString() }, current.signal);
+      if (current.signal.aborted) return;
+      result = reviewed; reviewedFile = selected;
+      message = `${reviewed.report.links.length} links extracted. Nothing was opened or saved.`;
+      await tick(); if (!current.signal.aborted) heading?.focus();
+    } catch (cause) { if (!current.signal.aborted) error = cause instanceof Error ? cause.message : 'The selected input could not be reviewed.'; }
+    finally { if (controller === current) { controller = null; busy = false; } }
+  }
+  async function save() {
+    if (!onsave || !result || !reviewedFile || saving || disabled) return;
+    saving = true;
+    try { if (await onsave(result, reviewedFile, retainOriginal)) message = `Saved the review${retainOriginal ? ' and private original' : ''} in this Case.`; }
+    catch (cause) { error = cause instanceof Error ? cause.message : 'The review could not be saved.'; }
+    finally { saving = false; }
+  }
+</script>
+
+<details class="intake">
+  <summary>Review a message, link or QR image</summary>
+  <div class="body">
+    <p>Extract destinations locally before choosing what to investigate. Supplied links and attachments are not opened.</p>
+    <fieldset disabled={busy || saving || disabled}>
+      <legend class="sr-only">Selected input</legend>
+      <label>Input type<select bind:value={kind} onchange={changeKind}><option value="text">Pasted text or links</option><option value="email">Email (.eml, including nested messages)</option><option value="calendar">Calendar invitation (.ics)</option><option value="qr">QR image (still PNG)</option></select></label>
+      {#if kind === 'text'}<label>Text to review<textarea bind:value={pasted} oninput={() => { clearReview(); file = null; if (input) input.value = ''; }} rows="4" maxlength={MAX_MESSAGE_INTAKE_BYTES} spellcheck="false" placeholder="Paste the message or suspicious link"></textarea></label>{/if}
+      <label>{kind === 'text' ? 'Or select a text file' : 'Select a file'}<input bind:this={input} type="file" accept={kind === 'email' ? '.eml,message/rfc822' : kind === 'calendar' ? '.ics,text/calendar' : kind === 'qr' ? '.png,image/png' : '.txt,text/plain'} onchange={selectFile}></label>
+      <button type="button" class="btn" onclick={() => void review()}>Review locally</button>
+    </fieldset>
+    {#if busy}<div class="actions"><span role="status">Reviewing selected input…</span><button type="button" class="btn" onclick={() => { clearReview(); message = 'Review cancelled. Nothing was saved.'; }}>Cancel review</button></div>{/if}
+    {#if error}<p role="alert">{error}</p>{/if}
+    {#if result}
+      {@const report = result.report}
+      <h3 bind:this={heading} tabindex="-1">Extracted destinations</h3>
+      <p>{report.links.length} links · {report.coverage.reviewedParts} reviewed {kind === 'qr' ? 'symbols' : 'parts'}{report.coverage.state === 'partial' ? ' · Partial analysis' : ''}</p>
+      {#if !report.links.length}<p>{kind === 'qr' ? 'No HTTP(S) destination was decoded. This does not establish that the image has no QR code.' : 'No supported HTTP(S) destination was extracted.'}</p>{/if}
+      {#if report.coverage.unreviewedAttachments || report.coverage.boundsReached.length || report.coverage.rejectedLinks}
+        <p class="notice">{report.coverage.unreviewedAttachments} unreviewed attachments · {report.coverage.rejectedLinks} unsupported links{report.coverage.boundsReached.length ? ` · ${report.coverage.boundsReached.join('; ')}` : ''}</p>
+      {/if}
+      <ol class="links" start={(page - 1) * PAGE_SIZE + 1}>
+        {#each links as link (link.id)}
+          <li>
+            <strong>{link.origin}</strong>
+            <p class="meta">{link.source.replaceAll('_', ' ')}{link.parentId ? ` · supplied inside ${link.parentId}` : ''}</p>
+            {#if link.displayedHostname}<p>Displayed: <code>{link.displayedHostname}</code>{link.displayedDestination === 'different_host' ? ' — different from the link destination' : ''}</p>{/if}
+            {#if link.authorisation}
+              <div class="auth"><h4>{link.authorisation.kind === 'device_code_reference' ? 'Device-code page reference' : 'Authorisation request parameters'}</h4>
+                <dl><div><dt>Client ID</dt><dd>{link.authorisation.clientId ?? 'Not retained or ambiguous'}</dd></div><div><dt>Requested scopes</dt><dd>{link.authorisation.scopes.join(', ') || 'Not declared'}</dd></div><div><dt>Return origin</dt><dd>{link.authorisation.redirectOrigin ?? 'Not retained or ambiguous'}</dd></div></dl>
+                {#if link.authorisation.duplicateParameters.length}<p class="notice">Conflicting parameters: {link.authorisation.duplicateParameters.join(', ')}</p>{/if}
+                {#if link.authorisation.omittedParameters}<p class="meta">Some supplied parameter values were unsupported or too long to retain.</p>{/if}
+              </div>
+            {/if}
+            <button class="btn small" type="button" disabled={disabled || saving} onclick={() => void onselect(link.hostname)}>Use {link.hostname} in Lookup</button>
+            <details><summary>Review exact URL privately</summary><p>Paths, queries and fragments may contain tokens or personal information. They are excluded from the review download.</p><code class="exact">{result.targets.find(target => target.id === link.id)?.exactUrl}</code><button class="btn small" type="button" disabled={disabled || saving} onclick={() => { const target = result?.targets.find(value => value.id === link.id); if (target) void onselect(target.exactUrl); }}>Use exact URL in Lookup</button></details>
+          </li>
+        {/each}
+      </ol>
+      {#if report.links.length > PAGE_SIZE}<Pagination currentPage={page} pageCount={Math.ceil(report.links.length / PAGE_SIZE)} setPage={next => page = next} ariaLabel="Extracted destination pages" />{/if}
+      {#if report.identities.length || report.authenticationClaims.length || report.actionHints.length}
+        <details><summary>Message identity and requested actions</summary>
+          <p>Header results and request parameters are supplied claims. They do not verify sender identity or show that an account was compromised.</p>
+          <ul>{#each report.identities as identity}<li>Part {identity.part}: {identity.role.replaceAll('_', ' ')} — {identity.domain}</li>{/each}{#each report.authenticationClaims as claim}<li>Part {claim.part}: reported {claim.method} — {claim.result}</li>{/each}{#each report.actionHints as hint}<li>Wording to review: {hint.replaceAll('_', ' ')}</li>{/each}</ul>
+        </details>
+      {/if}
+      <div class="actions"><button type="button" class="btn" onclick={() => downloadLocalFile(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }), 'message-review.json')}>Download minimised review</button>
+        {#if onsave}<button type="button" class="btn" disabled={saving || disabled} onclick={() => void save()}>{saving ? 'Saving…' : 'Save review in Case'}</button>{/if}
+      </div>
+      {#if onsave}<label class="retain"><input type="checkbox" bind:checked={retainOriginal} disabled={saving || disabled}>Also retain the private original, including message bodies, addresses, attachments and exact links</label>{/if}
+      <details><summary>Review coverage and source identity</summary><p>Review time: {report.reviewedAt}. The original’s hash identifies the selected bytes, not its publisher or authenticity.</p><code>{report.source.digestSha256}</code><p>Static text, email and calendar links are extracted without following redirects. HTML scripts do not run. QR review uses still PNG pixels; image metadata and embedded attachments are not analysed.</p></details>
+    {/if}
+    <p class="status" role="status" aria-live="polite">{message}</p>
+  </div>
+</details>
+
+<style>
+  .intake{min-width:0;border-block:1px solid var(--border);padding-block:12px}.body,fieldset,.links>li,.auth{display:grid;gap:12px;min-width:0}.body{padding-block:14px}fieldset{border:0;padding:0;margin:0}label{display:grid;gap:6px;min-width:0;font-size:var(--text-sm)}input,select,textarea{min-width:0;max-width:100%}textarea{width:100%;resize:vertical}summary{cursor:pointer;min-height:32px;padding-block:4px;line-height:1.5}summary:focus-visible,button:focus-visible{outline:2px solid var(--focus);outline-offset:3px}p,h3,h4{margin:0;overflow-wrap:anywhere}p,li,dt,dd{font-size:var(--text-xs);line-height:1.6}h3{font-size:var(--text-md)}h4{font-size:var(--text-sm)}p{max-width:85ch}code,strong,dd{overflow-wrap:anywhere}.meta{color:var(--muted)}.links{display:grid;gap:20px;margin:0;padding-left:24px}.links>li{display:list-item;border-top:1px solid var(--border);padding-top:12px}.links>li>*+*{margin-top:8px}.actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}button{justify-self:start;max-width:100%;white-space:normal;text-align:center}.auth{padding:12px;background:var(--panel);border-radius:var(--radius-sm)}dl{display:grid;gap:6px;margin:0}dl>div{display:grid;grid-template-columns:minmax(100px,1fr) minmax(0,3fr);gap:12px}dd{margin:0}.exact{display:block;white-space:pre-wrap;font-size:var(--text-xs);padding-block:8px}.notice,[role=alert]{color:var(--amber)}.retain{display:flex;align-items:start;gap:8px;font-size:var(--text-xs)}.retain input{flex:none;margin-top:4px}.status:empty{display:none}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}@media(max-width:480px){dl>div{grid-template-columns:1fr;gap:2px}.actions>*{flex:1 1 160px}}
+</style>
