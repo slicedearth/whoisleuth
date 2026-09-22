@@ -122,7 +122,30 @@ test('incident sequence keeps source provenance, unknown times and chosen order 
   const report = review.getByRole('region', { name: 'Incident sequence', exact: true });
   await expect(report).toContainText('retained observations: 1; imported records: 0; reported actions: 1');
   await expect(report).toContainText('Time not supplied'); await expect(report).toContainText('Only the visible form was captured.');
-  for (const theme of ['light', 'dark'] as const) { await useTheme(page, theme); for (const width of [320, 390, 1024, 1280]) { await page.setViewportSize({ width, height: 900 }); await expectNoHorizontalOverflow(page); } }
+  const stageKind = review.getByRole('combobox', { name: 'Stage kind', exact: true });
+  const evidenceBasis = review.getByRole('combobox', { name: 'Evidence basis', exact: true });
+  const navigation = page.getByRole('navigation', { name: 'Case sections', exact: true });
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expectNoHorizontalOverflow(page);
+      await stageKind.focus();
+      for (const control of [stageKind, evidenceBasis]) {
+        if (control === evidenceBasis) await page.keyboard.press('Tab');
+        await expect(control).toBeFocused();
+        await expect.poll(async () => {
+          const box = await control.boundingBox(), nav = await navigation.boundingBox();
+          return Boolean(box && nav && box.height >= 24 && box.y >= nav.y + nav.height && box.y + box.height <= 900);
+        }).toBe(true);
+      }
+    }
+  }
+  // Resizing preserves a scroll position that can partly crop an unfocused
+  // control beneath the sticky navigation. Check actual focus above, then scan
+  // from a stable page position without disabling the target-size rule.
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   expect((await new AxeBuilder({ page }).include('.context-entry').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
   await report.scrollIntoViewIfNeeded(); await page.screenshot({ path: testInfo.outputPath('incident-sequence-dark-1280.png') });
   await report.getByRole('button', { name: 'Save review in Case', exact: true }).click(); await expect(report.getByRole('status')).toContainText('Review saved');
