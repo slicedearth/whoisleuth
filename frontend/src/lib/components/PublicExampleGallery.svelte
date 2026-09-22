@@ -2,14 +2,14 @@
   import { downloadLocalFile } from '$lib/download-local-file.ts';
   import { onDestroy } from 'svelte';
   import { PUBLIC_EXAMPLES_INDEX } from '$lib/generated/public-examples-index';
+  import { PUBLIC_EXAMPLE_LOADERS, type PublicExampleId, type PublicExampleOutput } from '$lib/generated/public-examples';
   import {
     DEFERRED_MODULE_RECOVERY_DETAIL,
     loadDeferredModule,
     reloadDeferredModulePage,
   } from '$lib/deferred-module';
 
-  type FullExamples = typeof import('$lib/generated/public-examples')['PUBLIC_EXAMPLES'];
-  type ExampleOutput = FullExamples['examples'][number];
+  type ExampleOutput = PublicExampleOutput;
 
   let format = $state('all');
   let direction = $state('all');
@@ -17,8 +17,8 @@
   let loadingId = $state('');
   let loadError = $state('');
   let actionStatus = $state('');
-  let outputs = $state<FullExamples | null>(null);
-  let outputsPromise: Promise<FullExamples> | null = null;
+  let outputs = $state<Partial<Record<PublicExampleId, ExampleOutput>>>({});
+  const pendingOutputs = new Map<PublicExampleId, Promise<ExampleOutput>>();
   let loadGeneration = 0;
   let active = true;
   const moduleController = new AbortController();
@@ -26,31 +26,29 @@
   const formats = Object.freeze([...new Set(PUBLIC_EXAMPLES_INDEX.examples.map((example) => example.format))]);
   const filtered = $derived(PUBLIC_EXAMPLES_INDEX.examples.filter((example) => (format === 'all' || example.format === format) && (direction === 'all' || example.direction === direction)));
 
-  function outputFor(id: string): ExampleOutput | null {
-    return outputs?.examples.find((example) => example.id === id) ?? null;
+  function outputFor(id: PublicExampleId): ExampleOutput | null {
+    return outputs[id] ?? null;
   }
 
-  async function ensureOutputs(): Promise<FullExamples> {
-    if (outputs) return outputs;
-    outputsPromise ??= loadDeferredModule(
-      () => import('$lib/generated/public-examples'),
-      { signal: moduleController.signal },
-    )
-      .then((module) => module.PUBLIC_EXAMPLES)
-      .catch((error) => {
-        outputsPromise = null;
-        throw error;
-      });
-    outputs = await outputsPromise;
-    return outputs;
+  function ensureOutput(id: PublicExampleId): Promise<ExampleOutput> {
+    const retained = outputs[id];
+    if (retained) return Promise.resolve(retained);
+    let pending = pendingOutputs.get(id);
+    if (!pending) {
+      pending = loadDeferredModule<ExampleOutput>(PUBLIC_EXAMPLE_LOADERS[id], { signal: moduleController.signal })
+        .then(output => { if (active) outputs[id] = output; return output; })
+        .finally(() => pendingOutputs.delete(id));
+      pendingOutputs.set(id, pending);
+    }
+    return pending;
   }
 
-  function preloadOutputs(): void {
+  function preloadOutput(id: PublicExampleId): void {
     if (loadError) return;
-    void ensureOutputs().catch(() => undefined);
+    void ensureOutput(id).catch(() => undefined);
   }
 
-  async function toggleOutput(id: string) {
+  async function toggleOutput(id: PublicExampleId) {
     if (loadError) return;
     if (openedId === id) {
       openedId = '';
@@ -61,7 +59,7 @@
     actionStatus = '';
     loadingId = id;
     try {
-      await ensureOutputs();
+      await ensureOutput(id);
       if (!active || request !== loadGeneration) return;
       openedId = id;
     } catch {
@@ -104,7 +102,7 @@
         <h3>{example.title}</h3>
         <p>{example.summary}</p>
         <code>{example.command}</code>
-        <button type="button" disabled={Boolean(loadError)} aria-expanded={openedId === example.id} aria-controls={openedId === example.id && outputFor(example.id) ? `example-output-${example.id}` : undefined} onpointerenter={preloadOutputs} onfocus={preloadOutputs} onclick={() => void toggleOutput(example.id)}>{loadingId === example.id ? `Loading synthetic ${example.direction}…` : openedId === example.id ? `Close synthetic ${example.direction}` : `Open synthetic ${example.direction}`}</button>
+        <button type="button" disabled={Boolean(loadError)} aria-expanded={openedId === example.id} aria-controls={openedId === example.id && outputFor(example.id) ? `example-output-${example.id}` : undefined} onpointerenter={() => preloadOutput(example.id)} onfocus={() => preloadOutput(example.id)} onclick={() => void toggleOutput(example.id)}>{loadingId === example.id ? `Loading synthetic ${example.direction}…` : openedId === example.id ? `Close synthetic ${example.direction}` : `Open synthetic ${example.direction}`}</button>
         {#if openedId === example.id && outputFor(example.id)}
           {@const output = outputFor(example.id)!}
           <div class="example-output" id={`example-output-${example.id}`}>

@@ -350,7 +350,23 @@ function renderPublicMethodologyModule(): string {
 }
 
 function renderPublicExamplesModule(): string {
-  return moduleSource('PUBLIC_EXAMPLES', publicExamples());
+  const entries = renderPublicExampleOutputModules().map(({ id, name }) =>
+    `  ${JSON.stringify(id)}: () => import(${JSON.stringify(`./${name}`)}).then(module => module.PUBLIC_EXAMPLE),`);
+  return `${GENERATED_MODULE_NOTICE}export const PUBLIC_EXAMPLE_LOADERS = {\n${entries.join('\n')}\n} as const;\n`
+    + 'export type PublicExampleId = keyof typeof PUBLIC_EXAMPLE_LOADERS;\n'
+    + 'export type PublicExampleOutput = Awaited<ReturnType<typeof PUBLIC_EXAMPLE_LOADERS[PublicExampleId]>>;\n';
+}
+
+function renderPublicExampleOutputModules(examples = publicExamples().examples) {
+  const ids = new Set<string>();
+  return examples.map(example => {
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(example.id) || ids.has(example.id)) {
+      throw new TypeError('Public examples require unique filename-safe identities.');
+    }
+    ids.add(example.id);
+    return Object.freeze({ id: example.id, name: `public-example-outputs/${example.id}.ts`,
+      content: moduleSource('PUBLIC_EXAMPLE', example) });
+  });
 }
 
 function renderPublicExamplesIndexModule(): string {
@@ -373,6 +389,7 @@ function renderPublicExamplesIndexModule(): string {
 }
 
 export {
+  GENERATED_MODULE_NOTICE,
   publicCliCatalogue,
   publicCoverage,
   publicExamples,
@@ -385,5 +402,6 @@ export {
   renderPublicCoverageSummaryModule,
   renderPublicExamplesIndexModule,
   renderPublicExamplesModule,
+  renderPublicExampleOutputModules,
   renderPublicMethodologyModule,
 };

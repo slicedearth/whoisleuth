@@ -425,7 +425,7 @@ test('a cached CLI module failure recovers only after the accessible reload acti
 });
 
 test('public examples and demo stages terminate failed module activation with reload recovery', async ({ page }) => {
-  const examplesChunk = productionChunkPath('src/lib/generated/public-examples.ts');
+  const examplesChunk = productionChunkPath('src/lib/generated/public-example-outputs/case-handoff.ts');
   await failChunkOnce(page, examplesChunk);
   await page.goto('/examples');
   const example = page.locator('article[data-example="case-handoff"]');

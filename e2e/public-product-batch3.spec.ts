@@ -2,6 +2,7 @@ import type { Page, Request } from '@playwright/test';
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
 import { PUBLIC_COVERAGE_SUMMARY } from '../frontend/src/lib/generated/public-coverage-summary.ts';
 import { PUBLIC_METHODOLOGY } from '../frontend/src/lib/generated/public-methodology.ts';
+import { PUBLIC_EXAMPLES_INDEX } from '../frontend/src/lib/generated/public-examples-index.ts';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, openNativeLinkInNewTab, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
@@ -554,6 +555,13 @@ test('contains an optional chunk preload failure without a page error', async ({
 
 test('opens, filters and downloads a large synthetic example without workspace access', async ({ page }) => {
   const investigationRequests = collectInvestigationRequests(page);
+  const exampleChunks = new Map(PUBLIC_EXAMPLES_INDEX.examples.map(example =>
+    [productionChunkPath(`src/lib/generated/public-example-outputs/${example.id}.ts`), example.id]));
+  const requestedExamples = new Set<string>();
+  page.on('request', request => {
+    const id = exampleChunks.get(new URL(request.url()).pathname);
+    if (id) requestedExamples.add(id);
+  });
   await page.goto('/examples');
   const before = await page.evaluate(async () => ({
     local: Object.keys(localStorage).sort(),
@@ -561,6 +569,7 @@ test('opens, filters and downloads a large synthetic example without workspace a
     workspace: (await indexedDB.databases()).some((database) => database.name === 'whoisleuth-browser-data-v1'),
   }));
   expect(before.workspace).toBe(false);
+  expect([...requestedExamples]).toEqual([]);
 
   const gallery = page.getByTestId('public-example-gallery');
   await gallery.getByLabel('Example type').selectOption('output');
@@ -575,6 +584,7 @@ test('opens, filters and downloads a large synthetic example without workspace a
   const unchangedPeerHeight = (await exampleCards.nth(1).boundingBox())?.height ?? 0;
   await exampleCards.nth(0).getByRole('button', { name: 'Open synthetic output' }).click();
   await expect(exampleCards.nth(0).getByRole('textbox')).toBeVisible();
+  expect([...requestedExamples]).toEqual(['lookup-preflight']);
   expect((await exampleCards.nth(1).boundingBox())?.height ?? 0).toBeCloseTo(unchangedPeerHeight, 0);
   await gallery.getByLabel('Format').selectOption('JSON');
   await expect(gallery.locator('article[data-example]')).toHaveCount(1);
@@ -588,6 +598,7 @@ test('opens, filters and downloads a large synthetic example without workspace a
   await expect(output).toHaveValue(/"digestSha256": "sha256:[a-f0-9]{64}"/u);
   await expect(example.getByRole('button', { name: 'Close synthetic output' })).toHaveAttribute('aria-controls', 'example-output-case-handoff');
   await expect(example.locator('#example-output-case-handoff')).toBeVisible();
+  expect([...requestedExamples].sort()).toEqual(['case-handoff', 'lookup-preflight']);
 
   const downloadPromise = page.waitForEvent('download');
   await example.getByRole('button', { name: 'Download example' }).click();
@@ -614,6 +625,7 @@ test('opens, filters and downloads a large synthetic example without workspace a
   }));
   expect(after).toEqual(before);
   expect(investigationRequests).toEqual([]);
+  expect([...requestedExamples].sort()).toEqual(['case-assess-input', 'case-handoff', 'case-pin-input', 'case-recheck-input', 'lookup-preflight']);
 });
 
 test('uses Investigate, Respond and Assure as the only top-level product jobs', async ({ page }) => {

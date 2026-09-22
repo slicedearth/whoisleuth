@@ -1,108 +1,12 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
-export const PUBLIC_EXAMPLES = {
-  "generatedAt": "2026-08-23T00:00:00.000Z",
-  "examples": [
-    {
-      "id": "lookup-preflight",
-      "direction": "output",
-      "title": "Deep Lookup preflight",
-      "format": "terminal",
-      "command": "whoisleuth lookup example.test --deep --plan",
-      "summary": "A request-free plan naming intended source families and disclosures.",
-      "synthetic": true,
-      "notice": "Synthetic reserved-domain example. It is not a live finding and no request was made.",
-      "content": "Synthetic reserved-domain example. It is not a live finding and no request was made.\n\nWHOISleuth lookup preflight\nTarget: example.test\nType: domain\nMode: deep\nNetwork requests made: no\nCollection requires network: yes\n\nPlanned collection:\n  rdap\n    Collect authoritative registration or allocation evidence where supported.\n    Disclosure: The normalised target is sent to the applicable RDAP bootstrap and service endpoints.\n  whois\n    Collect separately attributed registry and referral publications.\n    Disclosure: The normalised target is sent over bounded TCP connections to applicable WHOIS services.\n  domain_evidence\n    Collect bounded DNS, HTTP, TLS, page-identity, technology, and security-posture evidence.\n    Disclosure: DNS, TLS and website probes use the submitted hostname. Registration-delegation queries use the registrable domain.\n  registrar_rdap (conditional)\n    Collect a separately attributed registrar RDAP publication when registry evidence advertises one.\n    Disclosure: The registrable domain is sent to the advertised registrar RDAP service.\n  network_context (conditional)\n    Add allocation and routing context for public addresses observed during domain collection.\n    Disclosure: Observed public addresses may be sent to applicable RDAP services.\n\nLimitation: This is a local preflight. It does not test source availability, feature configuration, cache state, redirects, referrals, or the exact number of requests a completed lookup may require.\n\nLimitation: Conditional sources may be skipped when prerequisite evidence is absent, unsupported, disabled, or unavailable.\n",
-      "large": false,
-      "downloadName": "synthetic-lookup-preflight.txt",
-      "mediaType": "text/plain"
-    },
-    {
-      "id": "offline-route-review",
-      "direction": "output",
-      "title": "Offline route-origin review",
-      "format": "terminal",
-      "command": "whoisleuth review-evidence synthetic-route.json",
-      "summary": "An offline comparison against an empty analyst-supplied reserved-address authorisation set.",
-      "synthetic": true,
-      "notice": "Synthetic reserved-domain example. It is not a live finding and no request was made.",
-      "content": "Synthetic reserved-domain example. It is not a live finding and no request was made.\n\nOffline evidence review\nKind   rpki\nState  not found\nRejected0\nMatches0\n\nLimitations:\n  - The review is local and uses only the supplied document. It does not refresh, transmit, or independently establish the current completeness of the evidence.\n  - This offline review evaluates an explicitly supplied route prefix and origin ASN against an analyst-supplied VRP snapshot.\n  - It does not collect BGP announcements, establish route ownership, or prove that the snapshot was current or complete.\n  - AS0 authorisations do not authorise an announcement. An AS0 route origin is invalid input; snapshot validation and signature verification remain external to this review.\n",
-      "large": false,
-      "downloadName": "synthetic-offline-route-review.txt",
-      "mediaType": "text/plain"
-    },
-    {
-      "id": "workflow-plan",
-      "direction": "output",
-      "title": "Reviewed evidence-handoff workflow",
-      "format": "terminal",
-      "command": "whoisleuth workflow-plan evidence-handoff \"Example Review\"",
-      "summary": "A fixed plan that verifies, packages, and lints reviewed material without submitting it.",
-      "synthetic": true,
-      "notice": "Synthetic reserved-domain example. It is not a live finding and no request was made.",
-      "content": "Synthetic reserved-domain example. It is not a live finding and no request was made.\n\nInvestigation plan: Reviewed evidence handoff\nSubject  example review\nMode     plan_only\n\n1. Verify the selected artefact\n   verify-artifact \u003cevidence.json> --json --strict-exit\n   offline; approval: analyst selection\n   Verification checks structure and integrity, not the truth or currency of observations.\n2. Build a reviewed public Case-pack\n   case-pack \u003ccases.json> --audience public --reviewed --json\n   offline; approval: analyst selection\n   Review minimisation and audience projection before retaining the separate package.\n3. Review deliberate-sharing metadata\n   sharing-review \u003cpackage.json> --marking clear --recipient-scope public --purpose reviewed evidence handoff --human-reviewed --personal-data-reviewed --redactions-confirmed --json\n   offline; approval: analyst selection\n   A clear lint result does not send, upload, publish, or authorise the artefact.\n\nLimitation: The recipe prepares local material only; sharing remains a separate deliberate action.\nLimitation: This document is a fixed plan. It does not execute commands, expand placeholders, make requests, read files, change cases, or submit reports.\nLimitation: Network steps require deliberate execution and disclose the selected target to the sources described by that command.\nLimitation: Analyst-selection steps require reviewed local artefacts; placeholders are never interpreted as file paths by this planner.\n",
-      "large": false,
-      "downloadName": "synthetic-evidence-handoff-plan.txt",
-      "mediaType": "text/plain"
-    },
-    {
-      "id": "case-handoff",
-      "direction": "output",
-      "title": "Importable public Case handoff",
-      "format": "JSON",
-      "command": "whoisleuth case-pack synthetic-cases.json --audience public --reviewed --json",
-      "summary": "A complete public Case-pack v2 built from one reserved-domain Case schema 17 record, with a verifiable digest.",
-      "synthetic": true,
-      "notice": "Synthetic reserved-domain example. It is not a live finding and no request was made.",
-      "content": "{\n  \"version\": 17,\n  \"exportedAt\": \"2026-08-23T00:00:00.000Z\",\n  \"cases\": [\n    {\n      \"id\": \"case-synthetic-example\",\n      \"domain\": \"example.test\",\n      \"title\": \"\",\n      \"status\": \"new\",\n      \"disposition\": \"unreviewed\",\n      \"reviewReasonCode\": null,\n      \"brandProfileIds\": [],\n      \"tags\": [\n        \"synthetic\"\n      ],\n      \"notes\": [],\n      \"source\": \"manual\",\n      \"evidenceHistory\": [],\n      \"evidencePins\": [],\n      \"decisions\": [],\n      \"actions\": [],\n      \"assertions\": [],\n      \"manualTrail\": [],\n      \"sightings\": [],\n      \"observedEffects\": {\n        \"reviews\": [],\n        \"omitted\": 0,\n        \"preV13HistoryUnavailable\": false,\n        \"limitations\": [\n          \"Independent observed-effect review records were excluded from this public Case pack.\",\n          \"Observed-effect reviews are independent point-in-time records; provider workflow events do not create or replace them.\"\n        ]\n      },\n      \"closures\": {\n        \"records\": [],\n        \"omitted\": 0,\n        \"preV13HistoryUnavailable\": false,\n        \"limitations\": [\n          \"Closure records are deliberate analyst actions and do not establish absence, safety, provider performance, or legal sufficiency.\",\n          \"Deliberate closure records were excluded from this public Case pack.\"\n        ]\n      },\n      \"branches\": [],\n      \"createdAt\": \"2026-08-23T00:00:00.000Z\",\n      \"updatedAt\": \"2026-08-23T00:00:00.000Z\"\n    }\n  ],\n  \"packet\": {\n    \"schema\": \"whoisleuth\u002ecli.case-pack\",\n    \"version\": 2,\n    \"audience\": \"public\",\n    \"reviewed\": true,\n    \"reports\": [\n      {\n        \"schema\": \"whoisleuth\u002ecase-report\",\n        \"schemaVersion\": 13,\n        \"generatedAt\": \"2026-08-23T00:00:00.000Z\",\n        \"application\": {\n          \"name\": \"WHOISleuth\",\n          \"version\": \"2.5.0\",\n          \"projectUrl\": \"https://github.com/slicedearth/whoisleuth\"\n        },\n        \"case\": {\n          \"id\": \"case-synthetic-example\",\n          \"title\": \"\",\n          \"domain\": \"example.test\",\n          \"status\": \"new\",\n          \"disposition\": \"unreviewed\",\n          \"reviewReasonCode\": null,\n          \"brandProfileIds\": [],\n          \"interoperabilityTags\": [],\n          \"tags\": [\n            \"synthetic\"\n          ],\n          \"source\": \"manual\",\n          \"openedAt\": \"2026-08-23T00:00:00.000Z\",\n          \"updatedAt\": \"2026-08-23T00:00:00.000Z\",\n          \"notesIncluded\": false\n        },\n        \"currentAssessment\": null,\n        \"evidenceTimeline\": [],\n        \"analystResponse\": {\n          \"evidencePins\": [],\n          \"decisions\": [],\n          \"actions\": [],\n          \"assertions\": [],\n          \"manualTrail\": [],\n          \"sightings\": [],\n          \"observedEffects\": {\n            \"reviews\": [],\n            \"omitted\": 0,\n            \"preV13HistoryUnavailable\": false,\n            \"limitations\": [\n              \"Independent observed-effect review records were excluded from this public Case pack.\",\n              \"Observed-effect reviews are independent point-in-time records; provider workflow events do not create or replace them.\"\n            ]\n          },\n          \"closures\": {\n            \"records\": [],\n            \"omitted\": 0,\n            \"preV13HistoryUnavailable\": false,\n            \"limitations\": [\n              \"Closure records are deliberate analyst actions and do not establish absence, safety, provider performance, or legal sufficiency.\",\n              \"Deliberate closure records were excluded from this public Case pack.\"\n            ]\n          },\n          \"branches\": []\n        },\n        \"responseLifecycle\": {\n          \"providerOutcomeState\": \"missing\",\n          \"latestProviderOutcome\": null,\n          \"observedChangeState\": \"missing\",\n          \"latestObservedEffect\": null,\n          \"latestObservedChangeAt\": null,\n          \"latestClosure\": null\n        },\n        \"limitations\": \"This report contains normalised browser-local observations from WHOISleuth analyst cases. It is not a live lookup and does not contain raw WHOIS, RDAP, DNS, HTML, or responses collected during website checks. Snapshot hostnames are excluded; supporting DNS, TLS and web observations need not concern the Case registration domain. Absence of a signal (e.g. no MX record observed) does not prove nonexistence. It may not have been evaluated. Snapshot fingerprints are deduplication identifiers, not cryptographic evidence hashes. Scan-depth and scoring-model gates prevent misleading comparisons; \\\"incomparable\\\" means observations differ materially but one or more fields cannot be compared reliably. Brand Profile references record an explicit analyst-selected association only; they do not establish ownership, attribution, intent, safety, or maliciousness. Provider workflow outcomes and independently observed technical effects remain separately attributed. A provider outcome does not establish independent remediation, absence, or safety; neither evidence family establishes legal sufficiency or provider performance. Generated locally in the browser. Review the package before sharing it.\"\n      }\n    ],\n    \"redactionManifest\": {\n      \"excluded\": [\n        \"Case notes\",\n        \"Case titles\",\n        \"Brand Profile references\",\n        \"Actions and recipient values\",\n        \"Analyst assertions\",\n        \"Analyst evidence relationships\",\n        \"Investigation branches\",\n        \"Retained file references and provenance\",\n        \"Manual trail targets\",\n        \"Raw upstream payloads and credentials\",\n        \"Independent observed-effect reviews and closure history\"\n      ],\n      \"sourceCaseCount\": 1,\n      \"brandProfileReferencesOmitted\": 0\n    },\n    \"limitations\": [\n      \"This local package is browser-importable through its top-level case collection and does not upload or submit evidence.\",\n      \"The reviewed flag records a deliberate CLI choice; it does not prove recipient authorisation, factual correctness, or legal sufficiency.\",\n      \"Importing the package does not restore fields excluded by its audience profile.\"\n    ]\n  },\n  \"integrity\": {\n    \"algorithm\": \"SHA-256\",\n    \"canonicalization\": \"sorted-json-v2\",\n    \"digestSha256\": \"sha256:bb6021fec266fe19c52d3216c464ae0d6c1410fe3f799ee8dee7c639df0e9910\"\n  }\n}",
-      "large": true,
-      "downloadName": "synthetic-reviewed-case-handoff.json",
-      "mediaType": "application/json"
-    },
-    {
-      "id": "case-pin-input",
-      "title": "Case evidence-pin input",
-      "format": "JSON",
-      "direction": "input",
-      "command": "whoisleuth case pin synthetic-cases.json --input synthetic-pin.json --output reviewed-cases.json",
-      "summary": "An observation with its own source, time and partial coverage.",
-      "synthetic": true,
-      "notice": "Synthetic reserved-domain example. It is not a live finding and no request was made.",
-      "content": "{\n  \"label\": \"Selected page observation\",\n  \"value\": \"A form was retained in the supplied fictional capture.\",\n  \"source\": \"Analyst supplied fictional capture\",\n  \"observedAt\": \"2026-08-23T00:00:00.000Z\",\n  \"completeness\": \"partial\",\n  \"sourceState\": \"partial\",\n  \"observationHostname\": \"example.test\",\n  \"limitations\": [\n    \"One supplied page only.\"\n  ]\n}",
-      "large": false,
-      "downloadName": "synthetic-pin.json",
-      "mediaType": "application/json"
-    },
-    {
-      "id": "case-assess-input",
-      "title": "Case assessment input",
-      "format": "JSON",
-      "direction": "input",
-      "command": "whoisleuth case assess synthetic-cases.json --input synthetic-assess.json --output reviewed-cases.json",
-      "summary": "A reviewed disposition linked to a new source-qualified pin. Replace every fictional claim before using it.",
-      "synthetic": true,
-      "notice": "Synthetic reserved-domain example. It is not a live finding and no request was made.",
-      "content": "{\n  \"disposition\": \"suspicious\",\n  \"reviewReasonCode\": \"other_reviewed\",\n  \"summary\": \"Review the apparent credential request\",\n  \"rationale\": \"The supplied observation needs independent corroboration.\",\n  \"evidence\": [\n    {\n      \"pin\": {\n        \"label\": \"Selected page observation\",\n        \"value\": \"A form was retained in the supplied fictional capture.\",\n        \"source\": \"Analyst supplied fictional capture\",\n        \"observedAt\": \"2026-08-23T00:00:00.000Z\",\n        \"completeness\": \"partial\",\n        \"sourceState\": \"partial\",\n        \"observationHostname\": \"example.test\",\n        \"limitations\": [\n          \"One supplied page only.\"\n        ]\n      },\n      \"stance\": \"supports\"\n    }\n  ]\n}",
-      "large": false,
-      "downloadName": "synthetic-assess.json",
-      "mediaType": "application/json"
-    },
-    {
-      "id": "case-recheck-input",
-      "title": "Case incomplete-recheck input",
-      "format": "JSON",
-      "direction": "input",
-      "command": "whoisleuth case recheck synthetic-cases.json --input synthetic-recheck.json --output reviewed-cases.json",
-      "summary": "An unavailable observation, not a removal or takedown conclusion.",
-      "synthetic": true,
-      "notice": "Synthetic reserved-domain example. It is not a live finding and no request was made.",
-      "content": "{\n  \"state\": \"unavailable\",\n  \"observedAt\": \"2026-08-23T00:00:00.000Z\",\n  \"completeness\": \"partial\",\n  \"source\": \"Fictional later capture\",\n  \"comparisonSummary\": \"The later capture did not complete.\",\n  \"limitations\": [\n    \"No later page content is available.\"\n  ]\n}",
-      "large": false,
-      "downloadName": "synthetic-recheck.json",
-      "mediaType": "application/json"
-    }
-  ],
-  "limitations": [
-    "Synthetic reserved-domain example. It is not a live finding and no request was made.",
-    "Copying or downloading an example changes no workspace data and does not execute the displayed command."
-  ]
+export const PUBLIC_EXAMPLE_LOADERS = {
+  "lookup-preflight": () => import("./public-example-outputs/lookup-preflight.ts").then(module => module.PUBLIC_EXAMPLE),
+  "offline-route-review": () => import("./public-example-outputs/offline-route-review.ts").then(module => module.PUBLIC_EXAMPLE),
+  "workflow-plan": () => import("./public-example-outputs/workflow-plan.ts").then(module => module.PUBLIC_EXAMPLE),
+  "case-handoff": () => import("./public-example-outputs/case-handoff.ts").then(module => module.PUBLIC_EXAMPLE),
+  "case-pin-input": () => import("./public-example-outputs/case-pin-input.ts").then(module => module.PUBLIC_EXAMPLE),
+  "case-assess-input": () => import("./public-example-outputs/case-assess-input.ts").then(module => module.PUBLIC_EXAMPLE),
+  "case-recheck-input": () => import("./public-example-outputs/case-recheck-input.ts").then(module => module.PUBLIC_EXAMPLE),
 } as const;
+export type PublicExampleId = keyof typeof PUBLIC_EXAMPLE_LOADERS;
+export type PublicExampleOutput = Awaited<ReturnType<typeof PUBLIC_EXAMPLE_LOADERS[PublicExampleId]>>;

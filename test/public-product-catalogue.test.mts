@@ -30,6 +30,8 @@ import {
   renderPublicCoverageSummaryModule,
   renderPublicExamplesIndexModule,
   renderPublicExamplesModule,
+  renderPublicExampleOutputModules,
+  GENERATED_MODULE_NOTICE,
   renderPublicMethodologyModule,
 } from '../tools/public-product-catalogue-renderer.mts';
 import {
@@ -39,9 +41,10 @@ import {
   renderPublicSitemap,
 } from '../lib/prerendered-routes.mts';
 import { WHOISLEUTH_SITE_ORIGIN } from '../lib/project-metadata.mts';
-import { writeAtomically } from '../tools/public-product-catalogue.mts';
+import { writeAtomically, obsoleteExampleOutputs } from '../tools/public-product-catalogue.mts';
 import { PUBLIC_CLI_CATALOGUE } from '../frontend/src/lib/generated/public-cli-catalogue.ts';
 import { PUBLIC_CLI_GRAMMAR } from '../frontend/src/lib/generated/public-cli-grammar.ts';
+import { PUBLIC_EXAMPLE_LOADERS } from '../frontend/src/lib/generated/public-examples.ts';
 
 const GENERATED_DIRECTORY = new URL('../frontend/src/lib/generated/', import.meta.url);
 const ROUTES_DIRECTORY = new URL('../frontend/src/routes/(public)/', import.meta.url);
@@ -161,6 +164,7 @@ describe('public product catalogue', () => {
       ['public-coverage.ts', renderPublicCoverageModule()],
       ['public-coverage-summary.ts', renderPublicCoverageSummaryModule()],
       ['public-examples.ts', renderPublicExamplesModule()],
+      ...renderPublicExampleOutputModules().map(({ name, content }) => [name, content] as const),
       ['public-examples-index.ts', renderPublicExamplesIndexModule()],
       ['public-methodology.ts', renderPublicMethodologyModule()],
     ] as const;
@@ -173,6 +177,33 @@ describe('public product catalogue', () => {
       'whoisleuth workflow-plan --explain evidence-handoff',
       'whoisleuth case-pack cases.json --audience public --reviewed --json',
     ]);
+  });
+
+  test('discovers individual example payloads from the same canonical catalogue', async () => {
+    const examples = publicExamples().examples;
+    assert.deepEqual(Object.keys(PUBLIC_EXAMPLE_LOADERS), examples.map(example => example.id));
+    for (const [id, load] of Object.entries(PUBLIC_EXAMPLE_LOADERS)) {
+      assert.deepEqual(await load(), examples.find(example => example.id === id));
+    }
+    const unsafe = [{ ...examples[0]!, id: '../escape' }] as unknown as Parameters<typeof renderPublicExampleOutputModules>[0];
+    assert.throws(() => renderPublicExampleOutputModules(unsafe), /filename-safe/u);
+    assert.throws(() => renderPublicExampleOutputModules([examples[0]!, examples[0]!]), /unique/u);
+  });
+
+  test('identifies retired generated examples without deleting unexpected local material', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'whoisleuth-example-outputs-'));
+    try {
+      assert.deepEqual(obsoleteExampleOutputs(path.join(root, 'absent'), []), []);
+      writeFileSync(path.join(root, 'current.ts'), `${GENERATED_MODULE_NOTICE}export const value = 1;`);
+      writeFileSync(path.join(root, 'retired.ts'), `${GENERATED_MODULE_NOTICE}export const value = 2;`);
+      assert.deepEqual(obsoleteExampleOutputs(root, ['current.ts']), [path.join(root, 'retired.ts')]);
+      assert.equal(readFileSync(path.join(root, 'retired.ts'), 'utf8').includes('value = 2'), true);
+      writeFileSync(path.join(root, 'local.ts'), 'export const local = true;');
+      assert.throws(() => obsoleteExampleOutputs(root, ['current.ts']), /not marked as generated/u);
+      rmSync(path.join(root, 'local.ts'));
+      writeFileSync(path.join(root, 'notes.md'), 'Keep this local note.');
+      assert.throws(() => obsoleteExampleOutputs(root, ['current.ts']), /unrecognised entry/u);
+    } finally { rmSync(root, { recursive: true, force: true }); }
   });
 
   test('registers every public reference route, canonical redirect and sitemap URL', () => {
