@@ -5,7 +5,8 @@ import type { InvestigationPlanRecipe, RunnableInvestigationPlanRecipe } from '.
 import type { WorkflowArtifactBinding } from '../packages/contracts/investigation-run.mts';
 import { parseCliFailPolicies, type CliFailPolicy, type CliFailPolicyCommand } from './fail-policy.mts';
 import { isDirectLookupTarget } from '../lib/classify.mts';
-import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../packages/investigation/investigation-manifest.mts';
+import { MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH } from '../packages/contracts/cli-grammar.mts';
+import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../packages/contracts/investigation-package-limits.mts';
 import {
   CLI_COMMANDS,
   CLI_CASE_OPERATIONS,
@@ -17,9 +18,6 @@ import {
   type CliHelpGroup,
   type CompletionShell,
 } from './command-reference.mts';
-
-const MAX_CLI_ARGUMENTS = MAX_INVESTIGATION_MANIFEST_ARTIFACTS + 32;
-const MAX_CLI_ARGUMENT_LENGTH = 1024;
 
 type TerminalOptions = { quiet: boolean; color: boolean };
 type LookupDetail = 'summary' | 'standard' | 'verbose';
@@ -98,7 +96,7 @@ type CliAction =
   | ({ action: 'workflow-plan'; recipe: InvestigationPlanRecipe; subject: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'workflow-plan'; discovery: 'list'; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'workflow-plan'; discovery: 'explain'; recipe: InvestigationPlanRecipe; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'workflow-run'; recipe: RunnableInvestigationPlanRecipe; subject: string; resumeSource: string | null; selections: readonly Readonly<{ stepId: string; value: string }>[]; artifactBindings: readonly WorkflowArtifactBinding[]; confirmedReviews: readonly string[]; approveNetwork: boolean; interactive: boolean; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'workflow-run'; recipe: RunnableInvestigationPlanRecipe; subject: string; resumeSource: string | null; selections: readonly Readonly<{ stepId: string; value: string }>[]; artifactBindings: readonly WorkflowArtifactBinding[]; confirmedReviews: readonly string[]; approveNetwork: boolean; interactive: boolean; preview?: true; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'diff'; leftSource: string; rightSource: string; leftSessionId: string | null; rightSessionId: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'reconcile'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'timeline'; sources: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
@@ -464,6 +462,7 @@ function parseWorkflowRunArguments(parsed: ParsedCommandArguments): Extract<CliA
     confirmedReviews: Object.freeze(parsed.optionValues('--confirm-review')),
     approveNetwork: parsed.hasOption('--approve-network'),
     interactive: parsed.hasOption('--interactive'),
+    ...(parsed.hasOption('--preview') ? { preview: true } : {}),
     output: jsonOutput(parsed),
     ...terminalOptions(parsed),
   };

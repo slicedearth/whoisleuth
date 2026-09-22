@@ -23,6 +23,7 @@ import {
   publicExamples,
   publicMethodology,
   renderPublicCliCatalogueModule,
+  renderPublicCliGrammarModule,
   renderPublicCliGuidanceModule,
   renderPublicCliIndexModule,
   renderPublicCoverageModule,
@@ -40,6 +41,7 @@ import {
 import { WHOISLEUTH_SITE_ORIGIN } from '../lib/project-metadata.mts';
 import { writeAtomically } from '../tools/public-product-catalogue.mts';
 import { PUBLIC_CLI_CATALOGUE } from '../frontend/src/lib/generated/public-cli-catalogue.ts';
+import { PUBLIC_CLI_GRAMMAR } from '../frontend/src/lib/generated/public-cli-grammar.ts';
 
 const GENERATED_DIRECTORY = new URL('../frontend/src/lib/generated/', import.meta.url);
 const ROUTES_DIRECTORY = new URL('../frontend/src/routes/(public)/', import.meta.url);
@@ -54,6 +56,7 @@ function strings(value: unknown): string[] {
 describe('public product catalogue', () => {
   test('generated command data preserves every canonical field after sharing repeated options', () => {
     assert.deepEqual(PUBLIC_CLI_CATALOGUE, JSON.parse(JSON.stringify(publicCliCatalogue())));
+    assert.deepEqual(PUBLIC_CLI_GRAMMAR, Object.fromEntries(CLI_COMMAND_REGISTRY.map(definition => [definition.command, definition.grammar])));
   });
 
   test('projects all installed commands and fixed workflows from canonical metadata', () => {
@@ -129,6 +132,11 @@ describe('public product catalogue', () => {
         continue;
       }
       const document = JSON.parse(example.content) as { cases?: readonly { tags?: readonly string[] }[] };
+      if (example.direction === 'input') {
+        assert.ok(example.command.includes('--input'));
+        assert.ok(!Object.hasOwn(document, 'id'));
+        continue;
+      }
       assert.equal(document.cases?.every((item) => item.tags?.includes('synthetic')) ?? false, true, example.id);
     }
     assert.ok(first.examples.some((example) => example.large));
@@ -147,6 +155,7 @@ describe('public product catalogue', () => {
   test('retains byte-exact generated frontend projections without browser execution imports', () => {
     const artifacts = [
       ['public-cli-catalogue.ts', renderPublicCliCatalogueModule()],
+      ['public-cli-grammar.ts', renderPublicCliGrammarModule()],
       ['public-cli-guidance.ts', renderPublicCliGuidanceModule()],
       ['public-cli-index.ts', renderPublicCliIndexModule()],
       ['public-coverage.ts', renderPublicCoverageModule()],

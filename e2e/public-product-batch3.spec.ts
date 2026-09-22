@@ -96,7 +96,7 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
     ['/cli', 'WHOISleuth CLI'],
     ['/methodology', 'Evidence methodology'],
     ['/coverage', 'Capability and registry coverage'],
-    ['/examples', 'See the output before running a command'],
+    ['/examples', 'Prepare inputs and understand the output'],
   ] as const) {
     await page.goto(path);
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
@@ -563,6 +563,7 @@ test('opens, filters and downloads a large synthetic example without workspace a
   expect(before.workspace).toBe(false);
 
   const gallery = page.getByTestId('public-example-gallery');
+  await gallery.getByLabel('Example type').selectOption('output');
   const exampleCards = gallery.locator('article[data-example]');
   await expect(exampleCards).toHaveCount(4);
   await expect(exampleCards.getByRole('button', { name: 'Open synthetic output' })).toHaveCount(4);
@@ -595,6 +596,16 @@ test('opens, filters and downloads a large synthetic example without workspace a
   await example.getByRole('button', { name: 'Close synthetic output' }).click();
   await expect(example.locator('#example-output-case-handoff')).toHaveCount(0);
   await expect(example.getByRole('button', { name: 'Open synthetic output' })).not.toHaveAttribute('aria-controls');
+
+  await gallery.getByLabel('Example type').selectOption('input');
+  for (const id of ['case-pin-input', 'case-assess-input', 'case-recheck-input']) {
+    const input = gallery.locator(`article[data-example="${id}"]`);
+    await input.getByRole('button', { name: 'Open synthetic input' }).click();
+    const document = JSON.parse(await input.getByRole('textbox').inputValue());
+    expect(document).not.toHaveProperty('id');
+    await expect(input).toContainText('--input');
+    await input.getByRole('button', { name: 'Close synthetic input' }).click();
+  }
 
   const after = await page.evaluate(async () => ({
     local: Object.keys(localStorage).sort(),

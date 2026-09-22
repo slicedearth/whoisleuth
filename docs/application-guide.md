@@ -20,6 +20,11 @@ Reference pages use a plain reading surface in either theme. The console command
 palette includes a keyboard-shortcut reference below its results. Its
 **Documentation** scope searches the same public guides and command reference,
 without searching saved Cases. Queries stay in memory and are cleared on close.
+The command reference's **Build this command** editor checks arguments against
+the current application's command grammar and quotes them for Bash/zsh/sh or PowerShell.
+Values stay in memory. Lookup's **Continue in the CLI** starts with an offline
+plan for the current target and depth; optional browser source selections are
+not transferred to the CLI's separate configuration.
 
 Public guides share documentation search, section navigation and print layouts.
 Search finds tasks, commands, examples and glossary terms without reading saved
@@ -439,6 +444,8 @@ original-file matches. **Open temporary Case review** reads the Case and matched
 originals without accessing or changing saved work. Closing the package clears
 its decrypted contents from the page. To make edits, download its Case JSON for
 an explicit import into a separate workspace and retain needed originals there.
+Supported Lookup entries also open a temporary, read-only replay. Select the
+entry explicitly; its source states and observation times remain historical.
 Return a current Case export or encrypted package.
 The unencrypted Case-only copy remains available when deliberately needed.
 Select the return in the original Case and review each addition before saving.

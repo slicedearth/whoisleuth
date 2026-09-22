@@ -70,7 +70,7 @@ function retainExistingEntries(before: CaseRecord, after: CaseRecord): void {
   }
 }
 
-function mutate(cases: CaseRecord[], args: CaseArguments, input: JsonObject | null, note: string | null, now: string): CaseRecord[] {
+export function applyCliCaseOperation(cases: CaseRecord[], args: CaseArguments, input: JsonObject | null, note: string | null, now: string): CaseRecord[] {
   if (args.operation === 'open') {
     const title = args.title === null ? undefined : prose(args.title, MAX_CASE_OBJECTIVE_LENGTH, 'Incident title');
     const result = args.newIncident
@@ -169,7 +169,7 @@ export async function runCaseCommand(args: CaseArguments, dependencies: CliDepen
       maximumBytes: MAX_EDITABLE_CASE_INPUT_BYTES, limits: boundedJsonLimitsForBytes(MAX_CASE_STORE_BYTES), label: 'Case operation input',
     }) : null;
     const note = args.noteSource ? await context.readInput(args.noteSource, MAX_NOTE_LENGTH * 4 + 4, 'Case note') : args.text;
-    const next = mutate(cases, args, input, note, now);
+    const next = applyCliCaseOperation(cases, args, input, note, now);
     if (Buffer.byteLength(serializeCaseStore(next)) > MAX_CASE_STORE_BYTES) throw new CliUsageError('The updated Case store exceeds its byte budget. No evidence was pruned and nothing was written.');
     const output = `${JSON.stringify(buildCaseExport(next, now))}\n`;
     // Apply the same strict admission to our output before atomic publication.

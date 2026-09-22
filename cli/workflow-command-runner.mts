@@ -16,6 +16,8 @@ import {
   formatInvestigationRun,
   investigationRunExitCode,
   runInvestigationRecipe,
+  previewInvestigationRecipe,
+  formatInvestigationPreview,
 } from './investigation-run.mts';
 import { MAX_OFFLINE_EVIDENCE_INPUT_BYTES } from './offline-evidence-review.mts';
 import { MAX_OFFLINE_ARTIFACT_BYTES } from './artifact-verify.mts';
@@ -161,6 +163,13 @@ async function runWorkflowRecipeCommand(
       if (error instanceof CliUsageError) throw error;
       throw new CliUsageError(`Could not read investigation resume state: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
     }
+  }
+  if (args.preview) {
+    const preview = previewInvestigationRecipe(args.recipe, args.subject, {
+      resumeInput, selections: args.selections, artifactBindings: args.artifactBindings, generatedAt: context.now(),
+    });
+    context.writeStdout(args.output === 'json' ? formatJsonDocument(preview) : context.terminal(formatInvestigationPreview(preview), args.color));
+    return EXIT_CODES.SUCCESS;
   }
   const document = await runInvestigationRecipe(args.recipe, args.subject, {
     approveNetwork: args.approveNetwork,

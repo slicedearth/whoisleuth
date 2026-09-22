@@ -194,6 +194,8 @@ own retention policy. No automatic key discovery, key storage or trust refresh o
   evidence. They do not tune the running model, change infrastructure or turn an
   analyst label into observed truth.
 - `workflow-plan` lists fixed installed recipes without executing them.
+  `workflow-run --preview` validates a selected checkpoint and explains remaining
+  inputs and approvals offline, without running steps or rewriting the checkpoint.
   `workflow-run` executes only installed steps, requires approval for network
   work and pauses at unresolved analyst selections. Repeat
   `--select <step-id>=<path-or-value>` for remaining placeholders in order, or bind

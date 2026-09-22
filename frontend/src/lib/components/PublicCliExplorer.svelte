@@ -3,6 +3,7 @@
   import { pushState, replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import CopyableCommand from '$lib/components/CopyableCommand.svelte';
+  import DeferredSurface from './DeferredSurface.svelte';
   import { PUBLIC_CLI_INDEX } from '$lib/generated/public-cli-index';
   import { PUBLIC_EXAMPLES_INDEX } from '$lib/generated/public-examples-index';
   import { commandReferenceSections, resolveCommandReferenceHash } from '$lib/public-cli-sections';
@@ -32,6 +33,8 @@
   let active = true;
   let urlSyncReady = $state(false);
   let clientReady = $state(false);
+  let builderOpen = $state(false);
+  $effect(() => { expandedId; builderOpen = false; });
   const moduleController = new AbortController();
   const runnableWorkflows = PUBLIC_CLI_INDEX.workflows.filter((recipe) => recipe.runnableByWorkflowRun);
   const planningWorkflows = PUBLIC_CLI_INDEX.workflows.filter((recipe) => !recipe.runnableByWorkflowRun);
@@ -300,12 +303,16 @@
           <details class="compact-disclosure usage"><summary>Full command syntax</summary><CopyableCommand command={detail.usage} label={`${command.id} usage`} compact /></details>
         </div>
         <p class="network-summary"><strong>{detail.networkEffect === 'offline' ? 'Runs locally.' : detail.networkEffect === 'conditional_network' ? 'Network use depends on the selected options.' : 'Makes network requests.'}</strong> {detail.collection.scope}{#if detail.explicitAuthorisationRequired} Explicit authorisation is required.{/if}</p>
+        <details class="compact-disclosure" bind:open={builderOpen}><summary>Build this command</summary>
+          {#if builderOpen}<DeferredSurface load={() => import('./CliCommandBuilder.svelte')} props={{command:command.id}} loadingLabel="Opening command builder…" unavailableLabel="The command builder is unavailable. The command syntax remains above." />{/if}
+        </details>
         <div class="command-inputs" id={`command-${command.id}--inputs`} tabindex="-1">
           <section>
             <h3>Inputs</h3>
             {#if detail.inputs.length}
               <dl>{#each detail.inputs as input}<div><dt><code>{input.name}</code></dt><dd>{inputCardinality(input)} {labelToken(input.valueKind)}{input.inputSource === 'argv_or_stdin' ? ' · argument or standard input' : ''}{input.values.length ? ` · ${input.values.join(', ')}` : ''}</dd></div>{/each}</dl>
             {:else}<p>No positional input.</p>{/if}
+            {#each PUBLIC_EXAMPLES_INDEX.examples.filter(example => example.direction === 'input' && example.command.split(' ')[1] === command.id) as example}<a class="output-example" href={`/examples#example-${example.id}`}><strong>Input example: {example.title}</strong><span>{example.summary}</span></a>{/each}
           </section>
           <section>
             <h3>Command options</h3>
@@ -322,7 +329,7 @@
             <div><dt>Destination</dt><dd>{#if detail.fileOutput}<code>--output &lt;file&gt;</code> writes a local file atomically. Replacing a file requires <code>--force</code>. Required file outputs are identified in the command syntax.{:else}See the syntax for command-specific files.{/if}</dd></div>
             <div><dt>Exit status</dt><dd>{exitBehaviour(detail)}</dd></div>
           </dl>
-          {#each PUBLIC_EXAMPLES_INDEX.examples.filter(example => example.command.split(' ')[1] === command.id) as example}<a class="output-example" href={`/examples#example-${example.id}`}><strong>See example output: {example.title}</strong><span>{example.summary} Fictional data.</span></a>{/each}
+          {#each PUBLIC_EXAMPLES_INDEX.examples.filter(example => example.direction === 'output' && example.command.split(' ')[1] === command.id) as example}<a class="output-example" href={`/examples#example-${example.id}`}><strong>See example output: {example.title}</strong><span>{example.summary} Fictional data.</span></a>{/each}
         </section>
         {#if related.length}
           <nav class="related-commands" aria-label={`Commands related to ${command.id}`}><strong>Related commands</strong><div>{#each related as item}<a href={`#command-${item.id}`} onclick={(event) => navigateToCommand(event, item.id)}><code>{item.id}</code><span>{item.summary}</span></a>{/each}</div></nav>

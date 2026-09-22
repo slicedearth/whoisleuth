@@ -4,6 +4,7 @@ export const PUBLIC_EXAMPLES_INDEX = {
   "examples": [
     {
       "id": "lookup-preflight",
+      "direction": "output",
       "title": "Deep Lookup preflight",
       "format": "terminal",
       "command": "whoisleuth lookup example.test --deep --plan",
@@ -14,6 +15,7 @@ export const PUBLIC_EXAMPLES_INDEX = {
     },
     {
       "id": "offline-route-review",
+      "direction": "output",
       "title": "Offline route-origin review",
       "format": "terminal",
       "command": "whoisleuth review-evidence synthetic-route.json",
@@ -24,6 +26,7 @@ export const PUBLIC_EXAMPLES_INDEX = {
     },
     {
       "id": "workflow-plan",
+      "direction": "output",
       "title": "Reviewed evidence-handoff workflow",
       "format": "terminal",
       "command": "whoisleuth workflow-plan evidence-handoff \"Example Review\"",
@@ -34,6 +37,7 @@ export const PUBLIC_EXAMPLES_INDEX = {
     },
     {
       "id": "case-handoff",
+      "direction": "output",
       "title": "Importable public Case handoff",
       "format": "JSON",
       "command": "whoisleuth case-pack synthetic-cases.json --audience public --reviewed --json",
@@ -41,6 +45,39 @@ export const PUBLIC_EXAMPLES_INDEX = {
       "synthetic": true,
       "notice": "Synthetic reserved-domain example. It is not a live finding and no request was made.",
       "large": true
+    },
+    {
+      "id": "case-pin-input",
+      "direction": "input",
+      "title": "Case evidence-pin input",
+      "format": "JSON",
+      "command": "whoisleuth case pin synthetic-cases.json --input synthetic-pin.json --output reviewed-cases.json",
+      "summary": "An observation with its own source, time and partial coverage.",
+      "synthetic": true,
+      "notice": "Synthetic reserved-domain example. It is not a live finding and no request was made.",
+      "large": false
+    },
+    {
+      "id": "case-assess-input",
+      "direction": "input",
+      "title": "Case assessment input",
+      "format": "JSON",
+      "command": "whoisleuth case assess synthetic-cases.json --input synthetic-assess.json --output reviewed-cases.json",
+      "summary": "A reviewed disposition linked to a new source-qualified pin. Replace every fictional claim before using it.",
+      "synthetic": true,
+      "notice": "Synthetic reserved-domain example. It is not a live finding and no request was made.",
+      "large": false
+    },
+    {
+      "id": "case-recheck-input",
+      "direction": "input",
+      "title": "Case incomplete-recheck input",
+      "format": "JSON",
+      "command": "whoisleuth case recheck synthetic-cases.json --input synthetic-recheck.json --output reviewed-cases.json",
+      "summary": "An unavailable observation, not a removal or takedown conclusion.",
+      "synthetic": true,
+      "notice": "Synthetic reserved-domain example. It is not a live finding and no request was made.",
+      "large": false
     }
   ],
   "limitations": [

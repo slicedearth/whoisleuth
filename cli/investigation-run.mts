@@ -15,6 +15,8 @@ import { scanBoundedJson } from '../packages/analysis/bounded-json.mts';
 import type { CliCommand } from './command-reference.mts';
 import {
   CLI_INVESTIGATION_RUN_SCHEMA,
+  CLI_INVESTIGATION_PREVIEW_SCHEMA,
+  CLI_INVESTIGATION_PREVIEW_VERSION,
   CLI_INVESTIGATION_RUN_VERSION,
   SUPPORTED_CLI_INVESTIGATION_RUN_VERSIONS,
   MAX_INVESTIGATION_RUN_BYTES,
@@ -254,8 +256,8 @@ function validateSelectedInputs(plan: InvestigationPlan, selections: readonly Re
 function parseResumeState(
   input: string | null,
   plan: InvestigationPlan,
-): Readonly<{ completed: readonly CompletedStep[]; selections: readonly RetainedSelections[]; bindings: readonly WorkflowArtifactBinding[] }> {
-  if (!input) return Object.freeze({ completed: Object.freeze([]), selections: Object.freeze([]), bindings: Object.freeze([]) });
+): Readonly<{ completed: readonly CompletedStep[]; selections: readonly RetainedSelections[]; bindings: readonly WorkflowArtifactBinding[]; retryableStepId: string | null }> {
+  if (!input) return Object.freeze({ completed: Object.freeze([]), selections: Object.freeze([]), bindings: Object.freeze([]), retryableStepId: null });
   if (Buffer.byteLength(input, 'utf8') > MAX_INVESTIGATION_RUN_BYTES) throw new CliUsageError('Investigation resume state exceeds the 24 MiB limit.');
   const normalizedInput = input.replace(/^\uFEFF/u, '');
   try {
@@ -289,6 +291,7 @@ function parseResumeState(
     throw new CliUsageError('Investigation resume state contains more steps than the installed fixed recipe.');
   }
   const completed: CompletedStep[] = [];
+  let retryableStepId: string | null = null;
   for (const [index, value] of root.completedSteps.entries()) {
     const baseStep = plan.steps[index];
     const planned = baseStep ? selectedStep(baseStep, selectionsByStep.get(baseStep.id) ?? [], bindings, completed) : null;
@@ -319,6 +322,7 @@ function parseResumeState(
       if (index !== root.completedSteps.length - 1) {
         throw new CliUsageError('A failed investigation step must be the final retained step.');
       }
+      retryableStepId = planned.id;
       break;
     }
     completed.push(Object.freeze({
@@ -333,7 +337,93 @@ function parseResumeState(
     }));
   }
   validateSelectedInputs(plan, selections, bindings, completed);
-  return Object.freeze({ completed: Object.freeze(completed), selections, bindings });
+  return Object.freeze({ completed: Object.freeze(completed), selections, bindings, retryableStepId });
+}
+
+type InvocationInputs = Readonly<{
+  resumeInput: string | null;
+  generatedAt: string;
+  selections?: readonly WorkflowSelection[];
+  artifactBindings?: readonly WorkflowArtifactBinding[];
+}>;
+
+function prepareInvestigationInvocation(recipe: RunnableInvestigationPlanRecipe, subjectValue: string, options: InvocationInputs) {
+  if (!isRunnableInvestigationRecipe(recipe)) {
+    throw new CliUsageError('workflow-run supports only installed recipes whose exact steps satisfy the execution contract.');
+  }
+  const plan = buildInvestigationPlan(recipe, subjectValue, options.generatedAt);
+  const prior = parseResumeState(options.resumeInput, plan);
+  const suppliedSelections = normalizeInvocationSelections(plan, options.selections ?? []);
+  // A complete explicit input list replaces a not-yet-run step's standard or
+  // retained connections. Partial lists fill the remaining unbound slots.
+  const explicitSteps = new Set(suppliedSelections.filter(selection =>
+    selection.values.length === placeholderCount(plan.steps.find(step => step.id === selection.stepId)!)
+      && !prior.completed.some(step => step.id === selection.stepId)).map(selection => selection.stepId));
+  const initialBindings = options.resumeInput === null ? workflowStandardInputs(recipe) : prior.bindings;
+  const bindings = mergeBindings(plan, initialBindings.filter(binding => !explicitSteps.has(binding.stepId)),
+    normalizeWorkflowBindings(plan, options.artifactBindings ?? []), prior.completed);
+  const selections = mergeSelections(plan, prior.selections, suppliedSelections, prior.completed, bindings);
+  validateSelectedInputs(plan, selections, bindings, prior.completed);
+  return { plan, prior, bindings, selections };
+}
+
+/** Validate exactly what execution would resume, without an executor or authority. */
+export function previewInvestigationRecipe(recipe: RunnableInvestigationPlanRecipe, subjectValue: string, options: InvocationInputs) {
+  const { plan, prior, bindings, selections } = prepareInvestigationInvocation(recipe, subjectValue, options);
+  const selected = new Map(selections.map(item => [item.stepId, item.values]));
+  const steps = plan.steps.map(base => {
+    const retained = prior.completed.find(item => item.id === base.id);
+    const step = selectedStep(base, selected.get(base.id) ?? [], bindings, prior.completed);
+    let input = 0;
+    const inputs = base.arguments.flatMap((argument, index) => {
+      if (!PLACEHOLDER_PATTERN.test(argument)) return [];
+      input++;
+      const binding = bindings.find(item => item.stepId === base.id && item.input === input);
+      const source = binding ? prior.completed.find(item => item.id === binding.sourceStepId) : undefined;
+      return [{
+        input, placeholder: argument,
+        state: binding ? source?.artifact ? 'validated_output' as const : 'awaiting_output' as const
+          : PLACEHOLDER_PATTERN.test(step.arguments[index]!) ? 'unresolved' as const : 'selected_file_or_value' as const,
+        sourceStepId: binding?.sourceStepId ?? null,
+        artifactId: source?.artifact?.id ?? null,
+        value: binding ? null : PLACEHOLDER_PATTERN.test(step.arguments[index]!) ? null : step.arguments[index]!,
+      }];
+    });
+    return {
+      id: step.id, label: step.label, command: step.command, mode: step.mode,
+      state: retained ? retained.exitCode === EXIT_CODES.PARTIAL_FAILURE ? 'retained_partial' as const : 'retained_complete' as const
+        : prior.retryableStepId === step.id ? 'retryable_failure' as const : 'remaining' as const,
+      artifact: retained?.artifact ?? null, inputs,
+      networkApprovalRequired: !retained && step.mode === 'network',
+      reviewDeclarationsRequired: retained ? [] : workflowReviewDeclarations(step),
+      arguments: step.arguments,
+    };
+  });
+  return {
+    schema: CLI_INVESTIGATION_PREVIEW_SCHEMA, version: CLI_INVESTIGATION_PREVIEW_VERSION,
+    generatedAt: options.generatedAt, recipe, subject: plan.subject, steps,
+    requestsExecuted: 0, checkpointWritten: false,
+    limitations: [
+      'This preview validates retained results and connections but does not open selected input files, execute steps, or grant approvals.',
+      'Retained partial observations are reused as partial, not silently recollected. Failed steps remain retryable.',
+      'File paths and selected values are included in this local preview. Review them before sharing.',
+    ],
+  } as const;
+}
+
+export function formatInvestigationPreview(document: ReturnType<typeof previewInvestigationRecipe>): string {
+  return [
+    `Workflow preview: ${document.recipe}`, `Subject: ${document.subject}`,
+    'Offline inspection only; no requests or checkpoint writes.',
+    ...document.steps.flatMap(step => [
+      `${step.id}: ${step.state.replaceAll('_', ' ')} · ${step.label}`,
+      ...(step.artifact ? [`  Retained: ${step.artifact.schema} v${step.artifact.version} · ${step.artifact.id}`] : []),
+      ...step.inputs.map(input => `  Input ${input.input}: ${input.state.replaceAll('_', ' ')}${input.sourceStepId ? ` from ${input.sourceStepId}` : ''}${input.value ? ` · ${input.value}` : ''}`),
+      ...(step.networkApprovalRequired ? ['  Requires fresh network approval.'] : []),
+      ...(step.reviewDeclarationsRequired.length ? [`  Requires human review: ${step.reviewDeclarationsRequired.join(', ')}.`] : []),
+    ]),
+    ...document.limitations, '',
+  ].join('\n');
 }
 
 export async function runInvestigationRecipe(
@@ -351,28 +441,15 @@ export async function runInvestigationRecipe(
     execute: (command: CliCommand, args: readonly string[], inputs: WorkflowStepInputs) => Promise<ExecutionResult>;
   }>,
 ) {
-  if (!isRunnableInvestigationRecipe(recipe)) {
-    throw new CliUsageError('workflow-run supports only installed recipes whose exact steps satisfy the execution contract.');
-  }
-  const plan = buildInvestigationPlan(recipe, subjectValue, options.generatedAt);
+  const prepared = prepareInvestigationInvocation(recipe, subjectValue, options);
+  const { plan, prior, bindings } = prepared;
+  let selections = prepared.selections;
   const confirmedReviews = options.confirmedReviews ?? [];
   if (!Array.isArray(confirmedReviews) || confirmedReviews.length > plan.steps.length
     || new Set(confirmedReviews).size !== confirmedReviews.length
     || confirmedReviews.some(id => !plan.steps.some(step => step.id === id && workflowReviewDeclarations(step).length))) {
     throw new CliUsageError('--confirm-review must name each selected review-declaration step at most once.');
   }
-  const prior = parseResumeState(options.resumeInput, plan);
-  const suppliedSelections = normalizeInvocationSelections(plan, options.selections ?? []);
-  // A complete explicit input list replaces a not-yet-run step's standard or
-  // retained connections. Partial lists fill the remaining unbound slots.
-  const explicitSteps = new Set(suppliedSelections.filter(selection =>
-    selection.values.length === placeholderCount(plan.steps.find(step => step.id === selection.stepId)!)
-      && !prior.completed.some(step => step.id === selection.stepId)).map(selection => selection.stepId));
-  const initialBindings = options.resumeInput === null ? workflowStandardInputs(recipe) : prior.bindings;
-  const bindings = mergeBindings(plan, initialBindings.filter(binding => !explicitSteps.has(binding.stepId)),
-    normalizeWorkflowBindings(plan, options.artifactBindings ?? []), prior.completed);
-  let selections = mergeSelections(plan, prior.selections, suppliedSelections, prior.completed, bindings);
-  validateSelectedInputs(plan, selections, bindings, prior.completed);
   const selectionsByStep = new Map(selections.map((item) => [item.stepId, item.values]));
   const completed = [...prior.completed];
   let state: InvestigationRunState = completed.some((step) => step.exitCode === EXIT_CODES.PARTIAL_FAILURE) ? 'partial' : 'complete';

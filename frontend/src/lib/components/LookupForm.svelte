@@ -7,6 +7,7 @@
   import type { LookupProgressUpdate } from '../../../../lib/lookup-progress-http.mts';
   import { MAX_DOMAIN_INPUT_CHARACTERS } from '$lib/analysis/utils.ts';
   import { prepareSelectedLookupUrl } from '../../../../packages/evidence/lookup-target.mts';
+  import DeferredSurface from './DeferredSurface.svelte';
 
   let {
     query = $bindable(),
@@ -98,6 +99,7 @@
     : `${(loadingElapsedMs / 1_000).toFixed(1)} s elapsed`);
   const deadlineLabel = $derived(`${Math.round(loadingDeadlineMs / 1_000)} s browser deadline`);
   let formElement: HTMLFormElement | undefined;
+  let cliOpen = $state(false);
 
   function handleQueryKeydown(event: KeyboardEvent) {
     if (
@@ -216,10 +218,16 @@
   {/if}
 
   <CollectionPreflight {preflight} />
-
 </form>
 
+  {#if entryCount === 1 && !inputTooLarge}
+    <details class="cli-bridge" bind:open={cliOpen}><summary>Continue in the CLI</summary>
+      {#if cliOpen}<DeferredSurface load={() => import('./LookupCliBridge.svelte')} props={{query,mode:lookupMode,selectedUrl:collectSelectedUrl && deepMode && selectedUrlEligible,selectedSources:selectedSourceCount}} loadingLabel="Preparing CLI setup…" unavailableLabel="CLI setup is unavailable. The public command reference remains available." />{/if}
+    </details>
+  {/if}
+
 <style>
+  .cli-bridge{margin-top:16px;min-width:0;padding:var(--card-pad)}.cli-bridge>summary{min-height:44px}
   .search{padding:var(--card-pad)}
   .search-label{display:block;margin-bottom:9px;font:700 var(--text-sm) var(--mono)}
   .input-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px}

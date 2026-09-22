@@ -1,4 +1,6 @@
 import { buildCliCasePack } from '../cli/case-pack.mts';
+import { applyCliCaseOperation } from '../cli/case-command.mts';
+import { parseCliArguments } from '../cli/arguments.mts';
 import { CLI_COMMAND_REGISTRY, commandOptionHelp } from '../cli/command-reference.mts';
 import {
   buildInvestigationPlan,
@@ -168,6 +170,25 @@ function publicExamples() {
   const workflow = buildInvestigationPlan('evidence-handoff', 'Example Review', EXAMPLE_TIME);
   const createdCase = createCase({ domain: 'example.test', source: 'manual', tags: ['synthetic'] }, EXAMPLE_TIME);
   const syntheticCase = Object.freeze({ ...createdCase, id: 'case-synthetic-example' });
+  const observation = { label: 'Selected page observation', value: 'A form was retained in the supplied fictional capture.', source: 'Analyst supplied fictional capture',
+    observedAt: EXAMPLE_TIME, completeness: 'partial', sourceState: 'partial', observationHostname: 'example.test', limitations: ['One supplied page only.'] };
+  const inputs: ReadonlyArray<{ operation: 'pin' | 'assess' | 'recheck'; title: string; summary: string; value: Record<string, unknown> }> = [
+    { operation: 'pin', title: 'Case evidence-pin input', summary: 'An observation with its own source, time and partial coverage.', value: observation },
+    { operation: 'assess', title: 'Case assessment input', summary: 'A reviewed disposition linked to a new source-qualified pin. Replace every fictional claim before using it.',
+      value: { disposition: 'suspicious', reviewReasonCode: 'other_reviewed', summary: 'Review the apparent credential request', rationale: 'The supplied observation needs independent corroboration.', evidence: [{ pin: observation, stance: 'supports' }] } },
+    { operation: 'recheck', title: 'Case incomplete-recheck input', summary: 'An unavailable observation, not a removal or takedown conclusion.',
+      value: { state: 'unavailable', observedAt: EXAMPLE_TIME, completeness: 'partial', source: 'Fictional later capture', comparisonSummary: 'The later capture did not complete.', limitations: ['No later page content is available.'] } },
+  ];
+  const inputExamples = inputs.map(input => {
+    const filename = `synthetic-${input.operation}.json`;
+    const argv = ['case', input.operation, 'synthetic-cases.json', '--input', filename, '--output', 'reviewed-cases.json'];
+    const args = parseCliArguments(argv);
+    if (args.action !== 'case') throw new Error('Case input example selected another command.');
+    applyCliCaseOperation([syntheticCase], args, input.value, null, EXAMPLE_TIME);
+    return Object.freeze({ id: `case-${input.operation}-input`, title: input.title, format: 'JSON', direction: 'input' as const,
+      command: `whoisleuth ${argv.join(' ')}`, summary: input.summary, synthetic: true, notice: SYNTHETIC_NOTICE,
+      content: JSON.stringify(input.value, null, 2), large: false, downloadName: filename, mediaType: 'application/json' });
+  });
   const casePack = buildCliCasePack(JSON.stringify({
     version: CASE_SCHEMA_VERSION,
     exportedAt: EXAMPLE_TIME,
@@ -176,6 +197,7 @@ function publicExamples() {
   const examples = Object.freeze([
     Object.freeze({
       id: 'lookup-preflight',
+      direction: 'output' as const,
       title: 'Deep Lookup preflight',
       format: 'terminal',
       command: 'whoisleuth lookup example.test --deep --plan',
@@ -189,6 +211,7 @@ function publicExamples() {
     }),
     Object.freeze({
       id: 'offline-route-review',
+      direction: 'output' as const,
       title: 'Offline route-origin review',
       format: 'terminal',
       command: 'whoisleuth review-evidence synthetic-route.json',
@@ -202,6 +225,7 @@ function publicExamples() {
     }),
     Object.freeze({
       id: 'workflow-plan',
+      direction: 'output' as const,
       title: 'Reviewed evidence-handoff workflow',
       format: 'terminal',
       command: 'whoisleuth workflow-plan evidence-handoff "Example Review"',
@@ -215,6 +239,7 @@ function publicExamples() {
     }),
     Object.freeze({
       id: 'case-handoff',
+      direction: 'output' as const,
       title: 'Importable public Case handoff',
       format: 'JSON',
       command: 'whoisleuth case-pack synthetic-cases.json --audience public --reviewed --json',
@@ -226,6 +251,7 @@ function publicExamples() {
       downloadName: 'synthetic-reviewed-case-handoff.json',
       mediaType: 'application/json',
     }),
+    ...inputExamples,
   ]);
   return Object.freeze({
     generatedAt: EXAMPLE_TIME,
@@ -259,6 +285,24 @@ function renderPublicCliCatalogueModule(): string {
   return `${GENERATED_MODULE_NOTICE}const SHARED_COMMAND_OPTIONS = ${sourceJson(sharedOptions)} as const;\n`
     + `export const PUBLIC_CLI_CATALOGUE = ${sourceJson({ ...catalogue, commands: [] })
       .replace('  "commands": []', () => `  "commands": [\n${commandSources.join(',\n')}\n  ]`)} as const;\n`;
+}
+
+function renderPublicCliGrammarModule(): string {
+  const shared: unknown[] = [], indices = new Map<string, number>();
+  const commands = CLI_COMMAND_REGISTRY.map(definition => {
+    const references = definition.grammar.options.map(option => {
+      const key = JSON.stringify(option);
+      let index = indices.get(key);
+      if (index === undefined) { index = shared.length; indices.set(key, index); shared.push(option); }
+      return `SHARED_OPTIONS[${index}]`;
+    });
+    const grammar = sourceJson({ ...definition.grammar, options: [] })
+      .replace('  "options": []', () => `  "options": [${references.join(', ')}]`);
+    return `${JSON.stringify(definition.command)}: ${grammar}`;
+  });
+  return `${GENERATED_MODULE_NOTICE}import type { CliCommandGrammar } from '../../../../packages/contracts/cli-grammar.mts';\n`
+    + `const SHARED_OPTIONS = ${sourceJson(shared)} as const;\n`
+    + `export const PUBLIC_CLI_GRAMMAR = {\n${commands.join(',\n')}\n} as const satisfies Readonly<Record<string, CliCommandGrammar>>;\n`;
 }
 
 function renderPublicCliIndexModule(): string {
@@ -315,6 +359,7 @@ function renderPublicExamplesIndexModule(): string {
     generatedAt: examples.generatedAt,
     examples: Object.freeze(examples.examples.map((example) => Object.freeze({
       id: example.id,
+      direction: example.direction,
       title: example.title,
       format: example.format,
       command: example.command,
@@ -333,6 +378,7 @@ export {
   publicExamples,
   publicMethodology,
   renderPublicCliCatalogueModule,
+  renderPublicCliGrammarModule,
   renderPublicCliGuidanceModule,
   renderPublicCliIndexModule,
   renderPublicCoverageModule,

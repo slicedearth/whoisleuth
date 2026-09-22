@@ -1,5 +1,7 @@
 export const CLI_INVESTIGATION_RUN_SCHEMA = 'whoisleuth.cli.investigation-run';
 export const CLI_INVESTIGATION_RUN_VERSION = 3;
+export const CLI_INVESTIGATION_PREVIEW_SCHEMA = 'whoisleuth.cli.investigation-preview';
+export const CLI_INVESTIGATION_PREVIEW_VERSION = 1;
 export const SUPPORTED_CLI_INVESTIGATION_RUN_VERSIONS = Object.freeze([1, 2, 3] as const);
 export const MAX_INVESTIGATION_RUN_BYTES = 24 * 1024 * 1024;
 export const MAX_INVESTIGATION_RUN_SELECTIONS = 16;

@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   renderPublicCliCatalogueModule,
+  renderPublicCliGrammarModule,
   renderPublicCliGuidanceModule,
   renderPublicCliIndexModule,
   renderPublicCoverageModule,
@@ -32,6 +33,7 @@ const MAX_PUBLIC_PRODUCT_ARTIFACT_BYTES = 512 * 1024;
 
 const OUTPUTS = Object.freeze([
   Object.freeze({ name: 'public-cli-catalogue.ts', directory: OUTPUT_DIRECTORY, render: renderPublicCliCatalogueModule }),
+  Object.freeze({ name: 'public-cli-grammar.ts', directory: OUTPUT_DIRECTORY, render: renderPublicCliGrammarModule }),
   Object.freeze({ name: 'public-cli-guidance.ts', directory: OUTPUT_DIRECTORY, render: renderPublicCliGuidanceModule }),
   Object.freeze({ name: 'public-cli-index.ts', directory: OUTPUT_DIRECTORY, render: renderPublicCliIndexModule }),
   Object.freeze({ name: 'public-coverage.ts', directory: OUTPUT_DIRECTORY, render: renderPublicCoverageModule }),

@@ -344,6 +344,17 @@ selected evidence exports, not complete workspace backups.
 
 ### Resuming a fixed workflow
 
+Inspect a paused run without executing any step or rewriting its checkpoint:
+
+```sh
+whoisleuth workflow-run domain-triage example.test --resume run.json --preview --json
+```
+
+The preview separates validated complete and partial outputs, failed steps that
+can be retried, unresolved inputs, pending upstream outputs and fresh approval
+requirements. It does not open selected input files. Preview output goes to
+stdout; approval, interactive and output-file flags cannot be combined with it.
+
 All recipes listed by `workflow-plan --list` can run through `workflow-run`.
 Planning remains offline. Execution emits a checkpoint; terminal output shows
 retained steps, output identities, missing inputs and the next required action.

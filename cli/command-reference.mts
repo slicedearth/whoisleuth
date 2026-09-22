@@ -1,3 +1,8 @@
+import type {
+  CliOptionValueKind, CliOptionOccurrence, CliOptionScope, CliPositionalValueKind,
+  CliPositionalInputSource, CliMetaActionId, CliMetaAction, CliOptionIntegerRange,
+  CliOptionSpec, CliPositionalSpec, CliGrammarConstraint, CliCommandGrammar,
+} from '../packages/contracts/cli-grammar.mts';
 import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../packages/analysis/project-metadata.mts';
 import {
   LOOKUP_EVIDENCE_SCHEMA_VERSION,
@@ -52,52 +57,6 @@ type CommandCollection = Readonly<{
 type CliNetworkEffect = 'offline' | 'always_network' | 'conditional_network';
 type CliInvocationNetworkEffect = 'offline' | 'network';
 type CliDisclosureClass = 'none' | 'bounded_passive' | 'conditional_bounded_passive' | 'bounded_authorised_active';
-type CliOptionValueKind = 'enum' | 'file' | 'flag' | 'integer' | 'policy_list' | 'text';
-type CliOptionOccurrence = 'idempotent' | 'once' | 'repeatable';
-type CliOptionScope = 'command' | 'common';
-type CliPositionalValueKind = 'enum' | 'file' | 'text';
-type CliPositionalInputSource = 'argv' | 'argv_or_stdin';
-type CliMetaActionId = 'help' | 'version';
-type CliMetaAction = Readonly<{
-  id: CliMetaActionId;
-  aliases: readonly string[];
-  scope: 'root_only' | 'root_or_command';
-  precedence: 'before_command_grammar';
-  bypassesOrdinaryRequirements: true;
-  acceptsAdditionalArguments: false;
-}>;
-type CliOptionIntegerRange = Readonly<{
-  minimum: number;
-  maximum: number;
-  whenOptionPresent: string | null;
-}>;
-type CliOptionSpec = Readonly<{
-  option: string;
-  scope: CliOptionScope;
-  arity: 0 | 1;
-  valueKind: CliOptionValueKind;
-  values: readonly string[];
-  integerRanges: readonly CliOptionIntegerRange[];
-  occurrence: CliOptionOccurrence;
-  acceptsOptionLikeValue: boolean;
-  metaAction: CliMetaActionId | null;
-}>;
-type CliPositionalSpec = Readonly<{
-  name: string;
-  valueKind: CliPositionalValueKind;
-  minimum: number;
-  maximum: number;
-  values: readonly string[];
-  inputSource: CliPositionalInputSource;
-  requiredWhenOptions: readonly string[];
-}>;
-type CliGrammarConstraint =
-  | Readonly<{ kind: 'mutually_exclusive'; options: readonly string[] }>
-  | Readonly<{ kind: 'excludes_all'; option: string; excludedOptions: readonly string[] }>
-  | Readonly<{ kind: 'requires_all'; option: string; requiredOptions: readonly string[] }>
-  | Readonly<{ kind: 'requires_any'; option: string; requiredOptions: readonly string[] }>
-  | Readonly<{ kind: 'value_excludes'; option: string; value: string; excludedOptions: readonly string[] }>
-  | Readonly<{ kind: 'required'; options: readonly string[] }>;
 type CliHandlerOwner =
   | 'bulk'
   | 'discovery'
@@ -116,14 +75,7 @@ type CliCommandDefinition = Readonly<{
     commonOptions: readonly string[];
     options: readonly string[];
   }>;
-  grammar: Readonly<{
-    parserKey: CliCommand;
-    bootstrapProfile: 'allowed' | 'command_owned';
-    options: readonly CliOptionSpec[];
-    positionals: readonly CliPositionalSpec[];
-    constraints: readonly CliGrammarConstraint[];
-    metaActions: readonly CliMetaActionId[];
-  }>;
+  grammar: CliCommandGrammar & Readonly<{ parserKey: CliCommand }>;
   execution: Readonly<{
     handlerOwner: CliHandlerOwner;
     networkEffect: CliNetworkEffect;
@@ -421,6 +373,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--use-artifact': optionDefinition('text', 'Connect a step input to an earlier compatible output.', { occurrence: 'repeatable' }),
   '--confirm-review': optionDefinition('text', 'Confirm human review for the named step in this invocation.', { occurrence: 'repeatable' }),
   '--approve-network': flag('Approve the workflow’s declared network steps for this invocation.'),
+  '--preview': flag('Inspect validated retained outputs, unresolved inputs and remaining approvals without executing or writing a checkpoint.'),
   '--left-session': text('Select the left-hand retained capture session.', true),
   '--right-session': text('Select the right-hand retained capture session.', true),
   '--compact': flag('Write a compact report presentation.'),
@@ -1514,21 +1467,21 @@ const COMMAND_SEEDS = Object.freeze({
     reference: {
       description: 'Execute approved steps from a fixed investigation recipe and emit a resumable checkpoint.',
       example: 'whoisleuth workflow-run domain-triage example.test --approve-network --json --output run.json',
-      boundary: 'Only installed recipe commands can run. Network steps require explicit approval for each invocation. New runs connect compatible earlier outputs using the recipe defaults. Use --use-artifact <step-id>:<input-number>=<earlier-step-id> to override a connection; input numbers start at 1. Repeat --select for remaining placeholders in order, or supply every input for a step to replace its connections with files. Values stay literal and cannot start with a hyphen or invoke a shell. Optional --interactive prompts on terminal stderr for missing inputs; a blank answer pauses. It grants neither network approval nor human-review confirmation. A step declaring human review still requires --confirm-review <step-id> for that invocation. Checkpoints do not grant later approvals. Resumes preserve recorded connections. Content digests identify retained output, not authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.',
+      boundary: '--preview validates the checkpoint and shows retained outputs, unresolved inputs and remaining approvals without executing or writing. It cannot be combined with approval, interactive, quiet or output-file flags. Only installed recipe commands can run. Network steps require explicit approval for each invocation. New runs connect compatible earlier outputs using the recipe defaults. Use --use-artifact <step-id>:<input-number>=<earlier-step-id> to override a connection; input numbers start at 1. Repeat --select for remaining placeholders in order, or supply every input for a step to replace its connections with files. Values stay literal and cannot start with a hyphen or invoke a shell. Optional --interactive prompts on terminal stderr for missing inputs; a blank answer pauses. It grants neither network approval nor human-review confirmation. A step declaring human review still requires --confirm-review <step-id> for that invocation. Checkpoints do not grant later approvals. Resumes preserve recorded connections. Content digests identify retained output, not authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.',
     },
     collection: { mode: 'network', scope: 'Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause.' },
     summary: 'Execute approved fixed-recipe steps',
-    options: ['--select', '--use-artifact', '--confirm-review', '--approve-network', '--resume', '--interactive', '--json', '--quiet', '--no-color'],
+    options: ['--select', '--use-artifact', '--confirm-review', '--approve-network', '--resume', '--interactive', '--preview', '--json', '--quiet', '--no-color'],
     positionals: Object.freeze([
     positional('recipe', 'enum', 1, 1, RUNNABLE_INVESTIGATION_PLAN_RECIPES),
     positional('subject', 'text', 1, 1),
   ]),
-    constraints: EMPTY_CONSTRAINTS,
+    constraints: Object.freeze([constraint({ kind: 'excludes_all', option: '--preview', excludedOptions: ['--approve-network', '--confirm-review', '--interactive', '--output', '--force', '--quiet'] })]),
     handlerOwner: 'inline',
     networkEffect: 'conditional_network',
     common: false,
-    schemaIdentifiers: Object.freeze(['whoisleuth.cli.investigation-run']),
-    primaryArtefacts: Object.freeze(['Resumable workflow state']),
+    schemaIdentifiers: Object.freeze(['whoisleuth.cli.investigation-run', 'whoisleuth.cli.investigation-preview']),
+    primaryArtefacts: Object.freeze(['Resumable workflow state', 'Offline resume preview']),
     planSupport: false,
     additionalOutputFormats: Object.freeze([]),
     bootstrapProfile: 'allowed',

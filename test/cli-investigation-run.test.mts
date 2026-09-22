@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 
 import { CliUsageError, parseCliArguments } from '../cli/arguments.mts';
-import { formatInvestigationRun, investigationRunExitCode, runInvestigationRecipe } from '../cli/investigation-run.mts';
+import { formatInvestigationRun, investigationRunExitCode, runInvestigationRecipe, previewInvestigationRecipe, formatInvestigationPreview } from '../cli/investigation-run.mts';
 import { createCliDiagnosticOutput } from '../cli/errors.mts';
 import { buildInvestigationPlan } from '../cli/investigation-plan.mts';
 import { runCli } from '../cli/runner.mts';
@@ -28,6 +28,56 @@ function commandOutput(recipe: Parameters<typeof buildInvestigationPlan>[0], sub
 }
 
 describe('fixed investigation execution', () => {
+  test('offline preview distinguishes retained incomplete evidence, pending connections and fresh approvals', async () => {
+    const partial = await runInvestigationRecipe('domain-triage', 'example.test', {
+      approveNetwork: true, resumeInput: null, generatedAt: NOW,
+      execute: async command => ({ exitCode: EXIT_CODES.PARTIAL_FAILURE, stdout: commandOutput('domain-triage', 'example.test', command) }),
+    });
+    const preview = previewInvestigationRecipe('domain-triage', 'example.test', { resumeInput: JSON.stringify(partial), generatedAt: NOW });
+    assert.equal(preview.steps[0]!.state, 'retained_partial');
+    assert.equal(preview.steps[0]!.networkApprovalRequired, false);
+    assert.equal(preview.steps[1]!.inputs[0]!.state, 'validated_output');
+    assert.equal(preview.steps[2]!.inputs[0]!.state, 'awaiting_output');
+    assert.equal(preview.requestsExecuted, 0); assert.equal(preview.checkpointWritten, false);
+    assert.match(formatInvestigationPreview(preview), /retained partial/u);
+    const fresh = previewInvestigationRecipe('domain-triage', 'example.test', { resumeInput: null, generatedAt: NOW });
+    assert.equal(fresh.steps[0]!.networkApprovalRequired, true);
+    const changed = JSON.parse(JSON.stringify(partial)); changed.completedSteps[0].artifact.id = 'changed';
+    assert.throws(() => previewInvestigationRecipe('domain-triage', 'example.test', { resumeInput: JSON.stringify(changed), generatedAt: NOW }), /identity/u);
+  });
+
+  test('preview identifies retryable failures instead of accepting failed output as evidence', async () => {
+    const failed = await runInvestigationRecipe('domain-triage', 'example.test', {
+      approveNetwork: true, resumeInput: null, generatedAt: NOW,
+      execute: async command => command === 'lookup' ? { exitCode: 0, stdout: commandOutput('domain-triage', 'example.test', command) } : { exitCode: 3, stdout: '' },
+    });
+    const preview = previewInvestigationRecipe('domain-triage', 'example.test', { resumeInput: JSON.stringify(failed), generatedAt: NOW });
+    assert.equal(preview.steps[0]!.state, 'retained_complete');
+    assert.equal(preview.steps[1]!.state, 'retryable_failure');
+    assert.equal(preview.steps[1]!.artifact, null);
+    assert.equal(preview.steps[2]!.inputs[0]!.state, 'awaiting_output');
+  });
+
+  test('command-runner preview path never executes, prompts or overwrites a checkpoint', async () => {
+    for (const option of ['--approve-network', '--interactive', '--quiet']) {
+      assert.throws(() => parseCliArguments(['workflow-run', 'domain-triage', 'example.test', '--preview', option]), /cannot be combined/u);
+    }
+    assert.throws(() => parseCliArguments(['workflow-run', 'domain-triage', 'example.test', '--preview', '--force', '--output', 'checkpoint.json']), /cannot be combined/u);
+    for (const [option, value] of [['--output', 'checkpoint.json'], ['--confirm-review', 'share']]) {
+      assert.throws(() => parseCliArguments(['workflow-run', 'domain-triage', 'example.test', '--preview', option!, value!]), /cannot be combined/u);
+    }
+    let stdout = '', stderr = '';
+    const code = await runCli(['workflow-run', 'historical-comparison', 'example.test', '--preview', '--json'], {
+      stdout: { write(value) { stdout += value; } }, stderr: { write(value) { stderr += value; } }, now: () => NOW,
+      runUnifiedLookup: async () => { throw new Error('Preview must not collect.'); },
+      workflowQuestion: async () => { throw new Error('Preview must not prompt.'); },
+    });
+    assert.equal(code, EXIT_CODES.SUCCESS); assert.equal(stderr, '');
+    const preview = JSON.parse(stdout);
+    assert.equal(preview.schema, 'whoisleuth.cli.investigation-preview');
+    assert.equal(preview.steps[1].inputs[0].state, 'unresolved');
+  });
+
   test('rejects names outside the installed fixed recipes', () => {
     assert.throws(
       () => parseCliArguments(['workflow-run', 'arbitrary-command', 'Example Organisation']),

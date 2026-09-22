@@ -4,7 +4,7 @@ import { buildInvestigationPackage, inspectInvestigationPackage } from '../packa
 import { buildWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
 import { createCase } from '../packages/cases/case-record-operations.mts';
 import { unzipSync, zipSync } from 'fflate';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { writeInvestigationFolder } from '../cli/investigation-folder.mts';
 import { MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES } from '../packages/investigation/investigation-manifest.mts';
@@ -25,6 +25,31 @@ async function openPackages(page: import('@playwright/test').Page) {
   return page.getByRole('region', { name: 'Package and review evidence files' });
 }
 const asFile = (bytes: Uint8Array) => ({ name: 'evidence.zip', mimeType: 'application/zip', buffer: Buffer.from(bytes) });
+
+test('packaged Lookup review is temporary, source-qualified and independent of saved Cases', async ({ page }, testInfo) => {
+  const panel = await openPackages(page), before = await readBrowserLocalCollection(page, 'cases');
+  const artifact = { content: (await readFile('test/fixtures/lookup-evidence-v27.json', 'utf8')).trimEnd(), mediaType: 'application/json' as const, source: { identity: 'Selected export', observedAt: null } };
+  const built = await makePackage([artifact]);
+  await panel.getByLabel('Review evidence package', { exact: true }).setInputFiles(asFile(built.bytes));
+  const trigger = panel.getByRole('button', { name: 'Review Lookup artifact-1', exact: true });
+  await trigger.click();
+  const dialog = page.getByRole('dialog', { name: 'Temporary Lookup review', exact: true });
+  await expect(dialog).toContainText('Normalised facts');
+  await expect(dialog).toContainText('matched to the package manifest; not source authentication');
+  await expect(dialog.getByRole('button', { name: /Create Case|Add replay|Save|Collect|Import/u })).toHaveCount(0);
+  for (const width of [320, 390, 1024, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await dialog.getByRole('button', { name: 'Return to package', exact: true }).click();
+    await page.setViewportSize({ width, height: width < 700 ? 844 : 768 }); await useTheme(page, theme); await trigger.click();
+    await expect(dialog).toBeVisible(); await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('dialog[open]').analyze()).violations).toEqual([]);
+    if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`lookup-review-${width}-${theme}.png`) });
+  }
+  await dialog.getByRole('button', { name: 'Return to package', exact: true }).click();
+  await expect(trigger).toBeFocused();
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  await panel.getByRole('button', { name: 'Close package review', exact: true }).click();
+  await expect(trigger).toHaveCount(0); await expect(dialog).toHaveCount(0);
+});
 
 test('BagIt export and review preserve selected bytes, explicit encryption choices and accessible layouts', async ({ page }, testInfo) => {
   test.slow();

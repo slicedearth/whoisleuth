@@ -9,13 +9,13 @@
   ] as const;
 </script>
 
-<PublicSeo title="Synthetic output examples | WHOISleuth" description="Open reserved-domain Lookup plans, offline reviews, command plans and Case handoff previews." path="/examples" />
+<PublicSeo title="Synthetic input and output examples | WHOISleuth" description="Open validated command inputs, reserved-domain Lookup plans, offline reviews and Case handoff previews." path="/examples" />
 
 <PublicReferenceDocument
   currentHref="/examples"
-  eyebrow="Example outputs"
-  title="See the output before running a command"
-  summary={['Reserved-domain examples formatted by the same code as the local CLI.']}
+  eyebrow="Command examples"
+  title="Prepare inputs and understand the output"
+  summary={['Fictional examples validated or formatted by the same code as the local CLI.']}
   sections={pageSections}
 >
   {#snippet actions()}
@@ -29,7 +29,7 @@
 
   <aside class="interpretation card" aria-labelledby="interpretation-title">
     <h2 id="interpretation-title">How to read the examples</h2>
-    <p>A plan records intended collection, an offline review assesses supplied material, and a Case pack records an export.</p>
+    <p>Input examples are starting points, not findings to retain unchanged. A plan records intended collection, an offline review assesses supplied material, and a Case pack records an export.</p>
   </aside>
 </PublicReferenceDocument>
 

@@ -1391,6 +1391,16 @@ const SHARED_COMMAND_OPTIONS = [
     "defaultDescription": null
   },
   {
+    "option": "--preview",
+    "scope": "command",
+    "usage": "--preview",
+    "description": "Inspect validated retained outputs, unresolved inputs and remaining approvals without executing or writing a checkpoint.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
     "option": "--left-session",
     "scope": "command",
     "usage": "--left-session \u003cvalue>",
@@ -5180,9 +5190,9 @@ export const PUBLIC_CLI_CATALOGUE = {
       "description": "Execute approved steps from a fixed investigation recipe and emit a resumable checkpoint.",
       "group": "assure",
       "common": false,
-      "usage": "whoisleuth workflow-run \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison|campaign-review|certificate-anomaly|registry-disagreement|evidence-handoff|planned-domain-change|post-change-verification> \u003csubject> [--select \u003cvalue>] [--use-artifact \u003cvalue>] [--confirm-review \u003cvalue>] [--approve-network] [--resume \u003cfile>] [--interactive] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth workflow-run \u003cdomain-triage|lookalike-review|owned-domain-review|historical-comparison|campaign-review|certificate-anomaly|registry-disagreement|evidence-handoff|planned-domain-change|post-change-verification> \u003csubject> [--select \u003cvalue>] [--use-artifact \u003cvalue>] [--confirm-review \u003cvalue>] [--approve-network] [--resume \u003cfile>] [--interactive] [--preview] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth workflow-run domain-triage example.test --approve-network --json --output run.json",
-      "boundary": "Only installed recipe commands can run. Network steps require explicit approval for each invocation. New runs connect compatible earlier outputs using the recipe defaults. Use --use-artifact \u003cstep-id>:\u003cinput-number>=\u003cearlier-step-id> to override a connection; input numbers start at 1. Repeat --select for remaining placeholders in order, or supply every input for a step to replace its connections with files. Values stay literal and cannot start with a hyphen or invoke a shell. Optional --interactive prompts on terminal stderr for missing inputs; a blank answer pauses. It grants neither network approval nor human-review confirmation. A step declaring human review still requires --confirm-review \u003cstep-id> for that invocation. Checkpoints do not grant later approvals. Resumes preserve recorded connections. Content digests identify retained output, not authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.",
+      "boundary": "--preview validates the checkpoint and shows retained outputs, unresolved inputs and remaining approvals without executing or writing. It cannot be combined with approval, interactive, quiet or output-file flags. Only installed recipe commands can run. Network steps require explicit approval for each invocation. New runs connect compatible earlier outputs using the recipe defaults. Use --use-artifact \u003cstep-id>:\u003cinput-number>=\u003cearlier-step-id> to override a connection; input numbers start at 1. Repeat --select for remaining placeholders in order, or supply every input for a step to replace its connections with files. Values stay literal and cannot start with a hyphen or invoke a shell. Optional --interactive prompts on terminal stderr for missing inputs; a blank answer pauses. It grants neither network approval nor human-review confirmation. A step declaring human review still requires --confirm-review \u003cstep-id> for that invocation. Checkpoints do not grant later approvals. Resumes preserve recorded connections. Content digests identify retained output, not authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.",
       "collection": {
         "mode": "network",
         "scope": "Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause."
@@ -5225,18 +5235,20 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--approve-network",
         "--resume",
         "--interactive",
+        "--preview",
         "--json",
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[109], SHARED_COMMAND_OPTIONS[110], SHARED_COMMAND_OPTIONS[111], SHARED_COMMAND_OPTIONS[112], SHARED_COMMAND_OPTIONS[113], SHARED_COMMAND_OPTIONS[114], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[109], SHARED_COMMAND_OPTIONS[110], SHARED_COMMAND_OPTIONS[111], SHARED_COMMAND_OPTIONS[112], SHARED_COMMAND_OPTIONS[113], SHARED_COMMAND_OPTIONS[114], SHARED_COMMAND_OPTIONS[115], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "conditional_network",
       "disclosureClass": "bounded_authorised_active",
       "explicitAuthorisationRequired": true,
       "planSupport": false,
       "failurePolicySupport": false,
       "supportedSchemaIdentifiers": [
-        "whoisleuth\u002ecli.investigation-run"
+        "whoisleuth\u002ecli.investigation-run",
+        "whoisleuth\u002ecli.investigation-preview"
       ],
       "inputLimits": [
         "Runs only fixed-recipe steps; network collection requires --approve-network and unresolved analyst selections pause.",
@@ -5255,7 +5267,8 @@ export const PUBLIC_CLI_CATALOGUE = {
       ],
       "fileOutput": true,
       "primaryEvidenceArtefacts": [
-        "Resumable workflow state"
+        "Resumable workflow state",
+        "Offline resume preview"
       ],
       "capability": {
         "familyId": "workflow_execution",
@@ -5329,7 +5342,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[115], SHARED_COMMAND_OPTIONS[116], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[116], SHARED_COMMAND_OPTIONS[117], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -5565,7 +5578,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--compact",
         "--no-attribution"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[20], SHARED_COMMAND_OPTIONS[21], SHARED_COMMAND_OPTIONS[117], SHARED_COMMAND_OPTIONS[22]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[20], SHARED_COMMAND_OPTIONS[21], SHARED_COMMAND_OPTIONS[118], SHARED_COMMAND_OPTIONS[22]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,

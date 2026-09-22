@@ -432,7 +432,7 @@ test('public examples and demo stages terminate failed module activation with re
   const exampleButton = example.locator(':scope > button');
   await exampleButton.focus();
   await page.keyboard.press('Enter');
-  const examplesAlert = page.getByRole('alert').filter({ hasText: 'Synthetic output is unavailable.' });
+  const examplesAlert = page.getByRole('alert').filter({ hasText: 'The synthetic example is unavailable.' });
   await expect(examplesAlert).toBeVisible();
   await expect(examplesAlert.getByRole('button', { name: 'Reload page' })).toBeVisible();
   await expect(exampleButton).toBeDisabled();
