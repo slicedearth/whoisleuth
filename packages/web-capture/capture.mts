@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { Browser, BrowserContext, Page, Route } from 'playwright';
 import { installPageObservationBoundary, collectPageElements, buildPageBehaviour } from './page-observation-boundary.mts';
 import type { PageRequestObservation } from '../investigation/page-behaviour.mts';
+import { CAPTURE_REQUEST_CHANNELS, MAX_CAPTURE_CHANNEL_OBSERVATIONS, emptyCaptureCoverage, type CaptureRequestAttempt, type CaptureRequestChannel } from '../investigation/capture-coverage.mts';
 
 import { WHOISLEUTH_USER_AGENT } from '../../lib/outbound-identity.mts';
 import { inspectDecodedImage } from '../../lib/perceptual-hash.mts';
@@ -445,6 +446,26 @@ async function installRequestBoundary(
   let acceptingRequests = true;
   const pendingRequests = new Set<Promise<void>>();
   const pageRequests: PageRequestObservation[] = [];
+  const attempts: CaptureRequestAttempt[] = [];
+  let omittedAttempts = 0, websocketRefusals = 0;
+  function requestChannel(route: Route): CaptureRequestChannel {
+    const request = route.request();
+    if (request.isNavigationRequest()) {
+      try { return request.frame() === page.mainFrame() ? 'navigation' : 'frame'; }
+      catch { return 'document'; }
+    }
+    const type = request.resourceType(), channel = type === 'ping' ? 'beacon' : type === 'eventsource' ? 'event_source' : type;
+    return (CAPTURE_REQUEST_CHANNELS as readonly string[]).includes(channel) ? channel as CaptureRequestChannel : 'other';
+  }
+  function attempt(route: Route, position: number): CaptureRequestAttempt {
+    const method = route.request().method();
+    return { position, channel: requestChannel(route), method: !method ? 'unknown' : ['GET', 'HEAD'].includes(method) ? 'read' : 'non_read',
+      origin: null, state: 'unavailable', reason: 'address_or_transport', collectionStarted: false };
+  }
+  function retainAttempt(value: CaptureRequestAttempt) {
+    if (value.position <= MAX_CAPTURE_CHANNEL_OBSERVATIONS) attempts.push(value);
+    else omittedAttempts = Math.min(1_000_000, omittedAttempts + 1);
+  }
 
   const reserveResponseBytes = (): number => {
     const remaining = MAX_CAPTURE_TRANSFER_BYTES - transferredBytes - reservedTransferBytes;
@@ -458,19 +479,23 @@ async function installRequestBoundary(
   };
   await context.routeWebSocket('**/*', async (webSocket) => {
     blockedRequestCount += 1;
+    websocketRefusals = Math.min(1_000_000, websocketRefusals + 1);
     await webSocket.close({ code: 1008, reason: 'WHOISleuth local capture blocks WebSockets' });
   });
   const handleRoute = async (route: Route) => {
     requestCount += 1;
     const position = requestCount;
+    let observation = attempt(route, position);
     if (requestCount > MAX_CAPTURE_REQUESTS) {
       blockedRequestCount += 1;
+      retainAttempt({ ...observation, state: 'refused', reason: 'request_bound' });
       await route.abort('blockedbyclient').catch(() => {});
       return;
     }
     try {
       totalSignal.throwIfAborted();
       if (!['GET', 'HEAD'].includes(route.request().method())) {
+        observation = { ...observation, state: 'refused', reason: 'method' };
         throw new Error('non-read request blocked');
       }
       const parsed = captureUrl(route.request().url());
@@ -478,6 +503,7 @@ async function installRequestBoundary(
       if (!seenRequestHosts.has(hostname)) {
         if (seenRequestHosts.size >= MAX_CAPTURE_HOSTS) {
           hostLimitReached = true;
+          observation = { ...observation, state: 'refused', reason: 'host_bound' };
           throw new Error('request-host limit reached');
         }
         // Admit a new browser-requested hostname synchronously. Route handlers
@@ -489,12 +515,15 @@ async function installRequestBoundary(
       // The exact validated records are then injected into safeFetchDetailed,
       // so the request cannot perform a second attacker-controlled DNS lookup.
       const addresses = await abortable(resolveAddresses(hostname), totalSignal);
+      // Do not retain an unvalidated destination merely to fill a ledger cell.
+      observation = { ...observation, origin: parsed.origin };
       retainedPublicRequestHosts.add(hostname);
       const method = route.request().method();
       const requestSignal = AbortSignal.any([
         totalSignal,
         AbortSignal.timeout(Math.min(timeoutMs, 10_000)),
       ]);
+      observation = { ...observation, collectionStarted: true };
       const response = await abortable(fetchResource(parsed.toString(), {
         method,
         headers: requestHeaders(route),
@@ -507,6 +536,7 @@ async function installRequestBoundary(
             const allowance = reserveResponseBytes();
             if (allowance <= 0) {
               responseByteLimitReached = true;
+              observation = { ...observation, state: 'refused', reason: 'response_bound' };
               await response.body?.cancel().catch(() => {});
               throw new Error('response byte limit reached');
             }
@@ -531,6 +561,7 @@ async function installRequestBoundary(
           })();
       if (body.truncated) {
         responseByteLimitReached = true;
+        observation = { ...observation, state: 'refused', reason: 'response_bound' };
         throw new Error('response byte limit reached');
       }
       await route.fulfill({
@@ -538,26 +569,23 @@ async function installRequestBoundary(
         headers: responseHeaders(response),
         body: body.bytes,
       });
-      const request = route.request();
-      let kind: PageRequestObservation['kind'] | null = request.resourceType() === 'script' ? 'script' : null;
-      if (request.isNavigationRequest()) {
-        kind = 'document';
-        // Early or detached-frame navigation can have no available frame.
-        // Preserve the fulfilled document response without inventing its role.
-        try { kind = request.frame() === page.mainFrame() ? 'navigation' : 'frame'; } catch { /* Unclassified document. */ }
-      }
+      observation = { ...observation, state: 'observed', reason: null };
+      const kind = ['script', 'navigation', 'frame', 'document'].includes(observation.channel) ? observation.channel as PageRequestObservation['kind'] : null;
       if (kind) pageRequests.push({ position, kind, origin: parsed.origin,
         contentSha256: kind === 'script' && method === 'GET' && response.status >= 200 && response.status < 300 ? sha256(body.bytes) : null,
         status: response.status, cspEnforced: response.headers.has('content-security-policy'), cspReportOnly: response.headers.has('content-security-policy-report-only') });
     } catch {
       blockedRequestCount += 1;
       await route.abort('blockedbyclient').catch(() => {});
+    } finally {
+      retainAttempt(observation);
     }
   };
   await context.route('**/*', (route: Route) => {
     if (!acceptingRequests) {
       requestCount += 1;
       blockedRequestCount += 1;
+      retainAttempt({ ...attempt(route, requestCount), state: 'refused', reason: 'shutdown' });
       const refusal = route.abort('blockedbyclient').catch(() => {});
       pendingRequests.add(refusal);
       void refusal.then(
@@ -590,6 +618,7 @@ async function installRequestBoundary(
       return {
         requestHosts: [...retainedPublicRequestHosts].sort().slice(0, MAX_CAPTURE_HOSTS),
         pageRequests,
+        coverage: { ...emptyCaptureCoverage(), attempts: attempts.sort((a, b) => a.position - b.position), omittedAttempts, websocketRefusals },
         stats: {
           requestCount,
           blockedRequestCount,
@@ -913,7 +942,8 @@ export async function captureRenderedPage(
     const blockedDirectConnections = browser.blockedDirectConnections();
     browser = null;
     const pageBehaviour = buildPageBehaviour(pageElements, sealedBoundary.pageRequests, dom.visibleText,
-      Boolean(requestStats.blockedRequestCount || blockedDirectConnections || dom.structureTruncated || dom.textTruncated));
+      Boolean(requestStats.blockedRequestCount || blockedDirectConnections || dom.structureTruncated || dom.textTruncated),
+      { ...sealedBoundary.coverage, directConnectionRefusals: Math.min(1_000_000, blockedDirectConnections) });
     const domDigest = {
       schema: WEB_CAPTURE_DOM_DIGEST_SCHEMA,
       version: WEB_CAPTURE_DOM_DIGEST_VERSION,

@@ -633,6 +633,10 @@ capture manifests can be reviewed without a retained Incident URL.
 
 Open **Page behaviour and dependencies** to inspect navigation, script and frame
 responses, default form destinations, script hashes and requested-action wording.
+**Request-channel coverage** also shows images, styles, fonts, media, fetch, XHR
+and beacon attempts. Each request distinguishes a supplied, refused or unavailable
+response and whether collection started. Disabled transports and interactions not
+exercised are listed separately; an unseen request is not evidence of absence.
 **Compare another capture** compares those records from two manifests before any
 PNG is selected. Review the declared conditions alongside changes. Missing
 observations remain qualified, and historical manifests have no page-observation

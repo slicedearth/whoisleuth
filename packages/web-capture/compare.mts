@@ -521,6 +521,8 @@ export function formatRenderedCaptureComparison(document: Awaited<ReturnType<typ
     `Final origin      ${document.page.finalOrigin.state}`,
     `Request domains   ${requestDomains.state} · ${requestDomains.sharedCount} shared`,
     `Technologies      ${document.page.technologies.state}`,
+    `Page observations ${document.pageBehaviour.state}`,
+    `Request channels  ${document.pageBehaviour.requestChannelsChanged === null ? 'unavailable' : document.pageBehaviour.requestChannelsChanged ? 'different recorded ledger' : 'matching recorded ledger'}`,
     '',
     'Rendered counts (left → right)',
     ...Object.entries(document.renderedDom.counts).map(([key, value]) => `  ${key.padEnd(10)} ${value.left} → ${value.right} (${value.delta >= 0 ? '+' : ''}${value.delta})`),

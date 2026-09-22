@@ -19,6 +19,7 @@ Usage:
 
 Capture executes page JavaScript for one explicitly authorised public hostname.
 It writes a screenshot, bounded DOM digest and manifest into a new directory.
+The manifest separates supplied/refused/unavailable request channels, disabled transports and unexercised interactions.
 Each admitted resource receives its exact URL; no cookies or credentials are forwarded.
 Compare verifies selected local artefacts and makes no network requests.
 Capture accepts optional --observer and --vantage declarations. Labels do not verify network independence.

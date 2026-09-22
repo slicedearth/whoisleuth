@@ -83,6 +83,16 @@ Fixed wording matches describe requested actions without retaining commands or
 body text. Clipboard API writes are refused and counted for the final page.
 No form is submitted, and an attribute or policy header is not a verification.
 
+The request-channel ledger records the first 500 attempts, including navigation,
+scripts, frames, stylesheets, images, fonts, media, XHR, fetch, beacons and event
+streams. It separates responses supplied to the page from refusals and failed
+collection, with an explicit collector-started flag. No request body, header,
+path or query enters the ledger. Only public-address-validated origins are
+retained; filling missing destinations never triggers another request. Omitted
+attempts and unattributed direct-connection refusals remain explicit counts.
+Disabled transports and interactions not exercised are recorded separately.
+The existing request, host, transfer and deadline limits still apply.
+
 The offline `compare` command accepts selected version-2 and version-3 manifests. Before
 comparing them it verifies the declared artefact sizes, SHA-256 digests, and
 screenshot perceptual hashes against the local files. It then reports exact

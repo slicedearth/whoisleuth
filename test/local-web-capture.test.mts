@@ -70,13 +70,13 @@ function patternedPng(width = 64, height = 64, flat = false) {
 }
 
 const MAIN_FRAME = {};
-function fakeRoute(url: string, options: { rejectAbort?: boolean; navigation?: boolean } = {}) {
+function fakeRoute(url: string, options: { rejectAbort?: boolean; navigation?: boolean; method?: string; resourceType?: string } = {}) {
   let aborted = false;
   const route = {
     request: () => ({
       url: () => url,
-      method: () => 'GET',
-      resourceType: () => url.includes('.js') ? 'script' : options.navigation ? 'document' : 'stylesheet',
+      method: () => options.method ?? 'GET',
+      resourceType: () => options.resourceType ?? (url.includes('.js') ? 'script' : options.navigation ? 'document' : 'stylesheet'),
       isNavigationRequest: () => Boolean(options.navigation),
       frame: () => MAIN_FRAME,
       headers: () => ({ accept: 'text/html', cookie: 'must-not-leave-browser=1', authorization: 'Bearer secret' }),
@@ -148,6 +148,7 @@ function fakeBrowser(options: {
   flatScreenshot?: boolean;
   onInitScript?: () => void;
   subresourceUrls?: string[];
+  subresourceRequests?: { url: string; method?: string; resourceType?: string }[];
   concurrentSubresources?: boolean;
   detachedSubresources?: boolean;
   closeSubresourceUrl?: string;
@@ -166,12 +167,12 @@ function fakeBrowser(options: {
       const mainRequest = fakeRoute(`https://${options.hostname ?? 'example.test'}/entry?discard=this`, { navigation: true });
       await handleRoute(mainRequest.route);
       if (mainRequest.wasAborted()) throw new Error('navigation aborted');
-      const subresources = options.subresourceUrls ?? [
+      const subresources = options.subresourceRequests ?? (options.subresourceUrls ?? [
         `https://${options.hostname ?? 'example.test'}/style.css`,
         'https://static.example.test/asset.js?secret=discarded',
-      ];
-      const handleSubresource = async (url: string) => {
-        const request = fakeRoute(url);
+      ]).map(url => ({ url }));
+      const handleSubresource = async (value: { url: string; method?: string; resourceType?: string }) => {
+        const request = fakeRoute(value.url, value);
         await handleRoute(request.route);
       };
       if (options.detachedSubresources) {
@@ -1243,6 +1244,7 @@ describe('optional local rendered capture package', () => {
 
       assert.equal(manifest.captures[0]?.completeness, 'partial');
       assert.equal(manifest.captures[0]?.requestDomains.includes('late.example.test'), false);
+      assert.deepEqual(manifest.captures[0]!.pageBehaviour.coverage.attempts.at(-1), { position: 4, channel: 'script', method: 'read', origin: null, state: 'refused', reason: 'shutdown', collectionStarted: false });
     } finally {
       await rm(parent, { recursive: true, force: true });
     }
@@ -1266,6 +1268,7 @@ describe('optional local rendered capture package', () => {
       });
       assert.equal(manifest.captures[0]?.completeness, 'partial');
       assert.ok(manifest.captures[0]?.limitations.some(value => value.startsWith('Additional direct browser')));
+      assert.equal(manifest.captures[0]!.pageBehaviour.coverage.directConnectionRefusals, 2);
       assert.equal(parseWebCaptureManifest(manifest).findings.length, 1);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
@@ -1286,9 +1289,36 @@ describe('optional local rendered capture package', () => {
       });
       assert.equal(manifest.captures[0]?.completeness, 'partial');
       assert.deepEqual(manifest.captures[0]?.requestDomains, ['example.test']);
+      assert.equal(manifest.captures[0]!.pageBehaviour.coverage.attempts[1]!.origin, null);
+      assert.equal(manifest.captures[0]!.pageBehaviour.coverage.attempts[1]!.collectionStarted, false);
     } finally {
       await rm(parent, { recursive: true, force: true });
     }
+  });
+
+  test('records request channels without collecting non-read attempts or retaining their destinations', async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'capture-channel-test-'));
+    const collected: string[] = [];
+    try {
+      const manifest = await captureFixturePage({ targetUrl: 'https://example.test/', outputDirectory: path.join(parent, 'capture'), timeoutMs: 5000 }, {
+        launchBrowser: async () => fakeBrowser({ subresourceRequests: [
+          { url: 'https://api.example.test/private?token=sentinel', resourceType: 'fetch' },
+          { url: 'https://api.example.test/request', resourceType: 'xhr' },
+          { url: 'https://beacon.example.test/private?token=sentinel', resourceType: 'ping', method: 'POST' },
+        ] }),
+        resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+        fetchResource: async url => { collected.push(url); return fakeFetchResource(url); },
+      });
+      assert.equal(collected.length, 3);
+      assert.equal(collected.some(url => new URL(url).hostname === 'beacon.example.test'), false);
+      const coverage = manifest.captures[0]!.pageBehaviour.coverage;
+      assert.deepEqual(coverage.attempts.map(row => [row.channel, row.state, row.collectionStarted]), [
+        ['navigation', 'observed', true], ['fetch', 'observed', true], ['xhr', 'observed', true], ['beacon', 'refused', false],
+      ]);
+      assert.equal(coverage.attempts[3]!.origin, null);
+      assert.doesNotMatch(JSON.stringify(coverage), /private|sentinel|beacon\.example/u);
+      assert.equal(manifest.captures[0]!.completeness, 'partial');
+    } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   test('bounds and records browser-requested hosts even when their bodies are refused', async () => {

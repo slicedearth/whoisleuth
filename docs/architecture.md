@@ -60,6 +60,12 @@ them; browser and companion adapters present the same comparison. Case expected
 changes use the existing assertion and save coordinator, not a separate baseline
 store.
 
+The request-boundary owner records a bounded channel ledger through shutdown.
+The shared capture-coverage model separates supplied responses, refusals, failed
+collection, disabled transports and interactions not exercised. Direct-connection
+accounting has no destination attribution. Imported historical manifests retain
+unknown coverage rather than inheriting the current capture policy.
+
 Contextual review models in `packages/investigation` project retained Case
 history or explicitly selected incident, platform, storefront and connector metadata.
 Separate Case forms own temporary drafts; reports and reusable minimised inputs

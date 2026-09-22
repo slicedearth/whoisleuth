@@ -33,6 +33,7 @@
   {#if result.state === 'unavailable'}<p>Both captures need page observations to compare dependencies.</p>{:else}
     <p>Added observation groups: {result.added.length} · Not re-observed: {result.notReobserved.length}. {result.navigationChanged ? 'The navigation-origin sequence differs.' : 'The recorded navigation-origin sequence matches.'}</p>
     {#if result.clipboardWriteDelta}<p>Blocked Clipboard API attempts changed by {result.clipboardWriteDelta}.</p>{/if}
+    {#if result.requestChannelsChanged}<p>The request-channel ledger differs. Review supplied, refused and unavailable responses in each capture.</p>{/if}
     <ol>{#each changes.slice((page - 1) * 12, page * 12) as row}<li><strong>{row.change} × {row.count}</strong><span>{row.label}</span>{#if row.origin}<span>{row.origin}</span>{/if}{#if row.digest}<code>{row.digest}</code>{/if}</li>{/each}</ol>
     <Pagination currentPage={page} pageCount={Math.ceil(changes.length / 12)} setPage={next => page = next} ariaLabel="Page dependency changes" />
   {/if}

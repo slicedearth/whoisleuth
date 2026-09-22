@@ -612,6 +612,10 @@ No script text, clipboard content, form values or command text enters these
 observations. Page elements describe the final top-level document, not every
 frame or a verified user interaction. Case summary import retains counts and
 wording labels; the full set remains in the manifest unless explicitly retained.
+The request-channel ledger retains validated origins, method categories, response
+outcomes and whether collection started. It excludes paths, queries, headers and
+body content. Disabled transports and interactions not exercised are separate
+from requests not observed; refused direct connections retain counts only.
 
 When an analyst selects a local capture manifest for one Case, the browser
 validates it before preview and imports only sanitised manifest metadata and

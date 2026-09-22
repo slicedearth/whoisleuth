@@ -187,7 +187,7 @@ export const ANALYST_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(
       hook: { module: 'packages/interchange/web-capture-import.mts', exportName: 'parseWebCaptureManifest', role: 'normaliser', runtime: 'shared' },
       fixtures: [
         { id: 'web-capture-manifest-v2', path: `${F}web-capture-manifest-v2.json`, bytes: 494, sha256: 'a2208dc956a832d70e37cd9a5929db81d29148856c485e4fd6ce5b123de5b8e6', version: 2 },
-        { id: 'web-capture-manifest-v3', path: `${F}web-capture-manifest-v3.json`, bytes: 614, sha256: '6a52d12cde7247afd43ac421b7aa902f6853acb52f510e6dbe4b9f9c83434759', version: WEB_CAPTURE_MANIFEST_VERSION },
+        { id: 'web-capture-manifest-v3', path: `${F}web-capture-manifest-v3.json`, bytes: 868, sha256: 'bca4e8cb539ac6035dd44586fa7e27774766a14dadbc4fc73cad2b71dace2ac8', version: WEB_CAPTURE_MANIFEST_VERSION },
       ] },
     { descriptor: DEFENSIVE_MANIFEST_COMPATIBILITY, lifecycleSchema: DEFENSIVE_INDICATOR_MANIFEST_SCHEMA,
       requiredKeys: ['schema', 'version', 'generatedAt'], optionalKeys: ['expiresAt', 'reviewRequired', 'explicitSelection', 'includeWildcards', 'entries', 'indicators', 'exclusions', 'limitations'],

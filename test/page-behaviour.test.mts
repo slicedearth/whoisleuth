@@ -5,8 +5,9 @@ import { readFile } from 'node:fs/promises';
 import { readPageBehaviour, readManifestPageBehaviour, comparePageBehaviour, type PageBehaviour } from '../packages/investigation/page-behaviour.mts';
 import { buildPageBehaviour } from '../packages/web-capture/page-observation-boundary.mts';
 import { readWebCaptureManifest } from '../packages/interchange/web-capture-import.mts';
+import { emptyCaptureCoverage } from '../packages/investigation/capture-coverage.mts';
 
-const empty = (): PageBehaviour => ({ version: 1, state: 'observed', requests: [], elements: [], actionHints: [], clipboardWriteAttempts: 0 });
+const empty = (): PageBehaviour => ({ version: 1, state: 'observed', requests: [], elements: [], actionHints: [], clipboardWriteAttempts: 0, coverage: emptyCaptureCoverage() });
 const script = (position = 1, digest = 'a'.repeat(64)) => ({ position, kind: 'script' as const, origin: 'https://static.example.test', contentSha256: digest, status: 200, cspEnforced: false, cspReportOnly: false });
 
 test('capture observations minimise URLs and hash inline scripts without retaining code or form values', () => {
@@ -15,7 +16,7 @@ test('capture observations minimise URLs and hash inline scripts without retaini
     { position: 1, kind: 'script', url: '', base: 'https://example.test/private?token=sentinel', inlineText: code, inline: true, integrity: false, method: null, passwordFields: 0 },
     { position: 2, kind: 'form', url: 'https://submit.example.test/private?token=sentinel', base: 'https://example.test/', inlineText: null, inline: false, integrity: false, method: 'POST', passwordFields: 1 },
     { position: 3, kind: 'frame', url: 'https://user:secret@frame.example.test/', base: 'https://example.test/', inlineText: null, inline: false, integrity: false, method: null, passwordFields: 0 },
-  ] }, [script()], 'Verify you are human. Copy and paste into terminal.', false);
+  ] }, [script()], 'Verify you are human. Copy and paste into terminal.', false, emptyCaptureCoverage());
   assert.equal(result.elements[0]!.scriptSha256, createHash('sha256').update(code).digest('hex'));
   assert.equal(result.elements[1]!.origin, 'https://submit.example.test');
   assert.equal(result.elements[2]!.origin, null);

@@ -3,6 +3,7 @@ import type { BrowserContext, Page } from 'playwright';
 import { MAX_PAGE_OBSERVATIONS, PAGE_BEHAVIOUR_VERSION, pageObservationOrigin, readPageBehaviour, type PageBehaviour, type PageRequestObservation } from '../investigation/page-behaviour.mts';
 import { MAX_WEB_CAPTURE_DOM_ELEMENTS, MAX_WEB_CAPTURE_DOM_PROJECTION_CHARACTERS } from '../contracts/web-capture.mts';
 import { requestedActionHints } from '../investigation/requested-action-hints.mts';
+import { captureCoverageIsPartial, type CaptureCoverage } from '../investigation/capture-coverage.mts';
 
 type RawElement = { position: number; kind: 'script' | 'frame' | 'form'; url: string | null; base: string | null; inlineText: string | null; inline: boolean; integrity: boolean; method: string | null; passwordFields: number };
 type RawProjection = { elements: RawElement[]; partial: boolean; clipboardWriteAttempts: number };
@@ -84,7 +85,7 @@ export async function collectPageElements(page: Page): Promise<RawProjection> {
   }, BOUNDARY);
 }
 
-export function buildPageBehaviour(raw: RawProjection, requests: readonly PageRequestObservation[], bodyText: string, partial: boolean): PageBehaviour {
+export function buildPageBehaviour(raw: RawProjection, requests: readonly PageRequestObservation[], bodyText: string, partial: boolean, coverage: CaptureCoverage): PageBehaviour {
   const elements = raw.elements.map(value => ({ position: value.position, kind: value.kind,
     origin: value.inline || value.url === null || value.base === null || value.kind === 'frame' && !value.url ? null : pageObservationOrigin(value.url, value.base), inline: value.inline,
     integrity: value.kind === 'script' ? value.integrity ? 'present' as const : 'absent' as const : 'not_applicable' as const,
@@ -92,5 +93,5 @@ export function buildPageBehaviour(raw: RawProjection, requests: readonly PageRe
     passwordFields: value.passwordFields,
     scriptSha256: value.inlineText === null ? null : createHash('sha256').update(value.inlineText).digest('hex') }));
   const actionHints = requestedActionHints(bodyText);
-  return readPageBehaviour({ version: PAGE_BEHAVIOUR_VERSION, state: partial || raw.partial ? 'partial' : 'observed', requests: [...requests].sort((a, b) => a.position - b.position), elements, actionHints, clipboardWriteAttempts: raw.clipboardWriteAttempts });
+  return readPageBehaviour({ version: PAGE_BEHAVIOUR_VERSION, state: partial || raw.partial || captureCoverageIsPartial(coverage) ? 'partial' : 'observed', requests: [...requests].sort((a, b) => a.position - b.position), elements, actionHints, clipboardWriteAttempts: raw.clipboardWriteAttempts, coverage });
 }
