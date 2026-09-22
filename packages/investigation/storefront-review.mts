@@ -52,12 +52,12 @@ export function reviewStorefront(raw: unknown, reviewedAt: string): ContextRevie
     if (left === null || right === null) missing++;
     const shared = left && right ? right.filter(value => left.includes(value)) : [];
     observations.push({ label: field.label, state: left === null || right === null ? 'unknown' : 'observed',
-      detail: `Official: ${left === null ? 'not reviewed' : left.length ? left.join(', ') : 'no values recorded'}. Candidate: ${right === null ? 'not reviewed' : right.length ? right.join(', ') : 'no values recorded'}. ${left !== null && right !== null ? `${shared.length} exact shared values.` : 'No comparison established.'}`,
+      detail: `Official: ${left === null ? 'not reviewed' : left.length ? left.join(', ') : 'no values recorded'}. Candidate: ${right === null ? 'not reviewed' : right.length ? right.join(', ') : 'no values recorded'}. ${left !== null && right !== null ? `Exact shared values: ${shared.length}.` : 'No comparison established.'}`,
       source: `${official.hostname} · ${official.source} · ${official.observedAt} / ${candidate.hostname} · ${candidate.source}`, observedAt: candidate.observedAt, hostname: candidate.hostname });
   }
   observations.push({ label: 'Reseller or affiliate authority', state: reseller === 'unknown' ? 'unknown' : 'reported', detail: reseller.replaceAll('_', ' '), source: resellerSource ?? 'No authority evidence supplied', observedAt: null, hostname: candidate.hostname });
   return { schema: CONTEXT_REVIEW_SCHEMA, version: CONTEXT_REVIEW_VERSION, kind: 'storefront', reviewedAt, title: 'Storefront comparison', state: missing ? 'partial' : 'reviewed',
-    summary: `${candidate.hostname} compared with the authorised reference ${official.hostname}; ${missing} evidence categories lack one side.`, observations,
+    summary: `${candidate.hostname} compared with the authorised reference ${official.hostname}; evidence categories missing one side: ${missing}.`, observations,
     nextSteps: ['Check reseller, affiliate and regional-store authority before preparing a complaint.', 'Retain the source pages and distinctive assets privately; select relevant findings in the Case response packet.', 'Use the observed checkout platform and the rights or policy evidence to choose a reporting route. Do not enter payment information or submit an order.'],
     limitations: ['This compares analyst-supplied observations. It does not collect a page, verify a merchant, submit a payment or issue a scam score.', 'Shared wording, assets and payment providers can have legitimate explanations. Digests establish byte equality only when inputs were captured consistently; missing observations do not establish absence.'] };
 }

@@ -23,7 +23,7 @@
       if (reusableInput !== null && retainReusableInput) files.push(new File([JSON.stringify(reusableInput, null, 2)], `${selected.kind}-input.json`, { type: 'application/json' }));
       const prepared = await prepareCaseAttachmentFiles(files, selected.title, null);
       const reviewSummary: LocalCaseReviewSummary = { title: selected.title, reviewedAt: selected.reviewedAt, reportDigestSha256: prepared[0]!.attachment.digestSha256,
-        completeness: selected.state === 'partial' ? 'partial' : 'inconclusive', summary: `${selected.summary} See the retained review for ${selected.observations.length} source-qualified observations.`,
+        completeness: selected.state === 'partial' ? 'partial' : 'inconclusive', summary: `${selected.summary} Source-qualified observations in the retained review: ${selected.observations.length}.`,
         limitations: ['Inputs are analyst-selected and do not independently establish maliciousness.', 'Select the retained report deliberately when preparing a response packet.'] };
       if (!active || id !== record.id || selected !== report) return;
       if (await persistOperation(() => retainCaseAttachments(id, prepared, { reviewSummary }), 'Saved the contextual review and its source-qualified summary.', () => heading ?? null)) {

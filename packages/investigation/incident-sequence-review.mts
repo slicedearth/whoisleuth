@@ -61,7 +61,7 @@ export function reviewIncidentSequence(raw: unknown, reviewedAt: string): Contex
   }
   return { schema: CONTEXT_REVIEW_SCHEMA, version: CONTEXT_REVIEW_VERSION, kind: 'incident_sequence', reviewedAt, title: 'Incident sequence',
     state: !stages.length || stages.some(row => row.occurredAt === null || row.completeness !== 'complete') || reversedTimes ? 'partial' : 'reviewed',
-    summary: `${stages.length} analyst-ordered stages: ${counts.retained_observation} retained observations, ${counts.imported_record} imported records and ${counts.reported_action} reported actions.${reversedTimes ? ` ${reversedTimes} timestamp reversals need review; the selected order was preserved.` : ''}`,
+    summary: `Analyst-ordered stages: ${stages.length} (retained observations: ${counts.retained_observation}; imported records: ${counts.imported_record}; reported actions: ${counts.reported_action}).${reversedTimes ? ` Timestamp reversals needing review: ${reversedTimes}; the selected order was preserved.` : ''}`,
     observations: stages.map((row, index) => ({ label: `${index + 1}. ${row.kind.replaceAll('_', ' ')} · ${row.basis.replaceAll('_', ' ')}`,
       state: row.completeness === 'complete' ? 'reported' : 'partial', detail: `${row.description} · Source completeness: ${row.completeness}.${row.limitations.length ? ` ${row.limitations.join(' ')}` : ''}`,
       source: `${row.source} · reference ${row.reference}${row.referenceSha256 ? ` · reference SHA-256 ${row.referenceSha256}` : ''}`, observedAt: row.occurredAt, hostname: row.hostname })),

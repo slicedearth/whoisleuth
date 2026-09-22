@@ -36,7 +36,7 @@
       const reviewed = await runMessageIntakeWorker({ kind, file: selected, reviewedAt: new Date().toISOString() }, current.signal);
       if (current.signal.aborted) return;
       result = reviewed; reviewedFile = selected;
-      message = `${reviewed.report.links.length} links extracted. Nothing was opened or saved.`;
+      message = `Extracted links: ${reviewed.report.links.length}. Nothing was opened or saved.`;
       await tick(); if (!current.signal.aborted) heading?.focus();
     } catch (cause) { if (!current.signal.aborted) error = cause instanceof Error ? cause.message : 'The selected input could not be reviewed.'; }
     finally { if (controller === current) { controller = null; busy = false; } }
@@ -66,10 +66,10 @@
     {#if result}
       {@const report = result.report}
       <h3 bind:this={heading} tabindex="-1">Extracted destinations</h3>
-      <p>{report.links.length} links · {report.coverage.reviewedParts} reviewed {kind === 'qr' ? 'symbols' : 'parts'}{report.coverage.state === 'partial' ? ' · Partial analysis' : ''}</p>
+      <p>Links: {report.links.length} · Reviewed {kind === 'qr' ? 'QR symbols' : 'parts'}: {report.coverage.reviewedParts}{report.coverage.state === 'partial' ? ' · Partial analysis' : ''}</p>
       {#if !report.links.length}<p>{kind === 'qr' ? 'No HTTP(S) destination was decoded. This does not establish that the image has no QR code.' : 'No supported HTTP(S) destination was extracted.'}</p>{/if}
       {#if report.coverage.unreviewedAttachments || report.coverage.boundsReached.length || report.coverage.rejectedLinks}
-        <p class="notice">{report.coverage.unreviewedAttachments} unreviewed attachments · {report.coverage.rejectedLinks} unsupported links{report.coverage.boundsReached.length ? ` · ${report.coverage.boundsReached.join('; ')}` : ''}</p>
+        <p class="notice">Unreviewed attachments: {report.coverage.unreviewedAttachments} · Unsupported links: {report.coverage.rejectedLinks}{report.coverage.boundsReached.length ? ` · ${report.coverage.boundsReached.join('; ')}` : ''}</p>
       {/if}
       <ol class="links" start={(page - 1) * PAGE_SIZE + 1}>
         {#each links as link (link.id)}

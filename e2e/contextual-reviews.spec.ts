@@ -59,7 +59,7 @@ test('platform continuity reloads editable observations and keeps provider claim
   await review.getByRole('button', { name: 'Update object observation', exact: true }).click();
   await review.getByRole('button', { name: 'Review platform continuity', exact: true }).click();
   const report = review.getByRole('region', { name: 'Platform object continuity', exact: true });
-  await expect(report).toContainText('2 observations across 1 distinct platform objects');
+  await expect(report).toContainText('Recorded observations: 2; distinct platform objects: 1');
   await expect(report).toContainText('provider reports resolved'); await expect(report).toContainText('not reproduced'); await expect(report).toContainText('still observed');
   await report.getByRole('button', { name: 'Save review in Case', exact: true }).click(); await expect(report.getByRole('status')).toContainText('Review saved');
   const files = await retainedJson(page); expect(files).toHaveLength(2);
@@ -76,7 +76,7 @@ test('storefront review requires current authority and preserves a failed-save d
   await expect(authority).not.toBeChecked(); await review.getByRole('button', { name: 'Compare storefront evidence' }).click();
   const report = review.getByRole('region', { name: 'Storefront comparison', exact: true }); await expect(report).toHaveCount(0);
   await authority.check(); await review.getByRole('button', { name: 'Compare storefront evidence' }).click();
-  await expect(report).toContainText('1 exact shared values'); await expect(report).toContainText('Rights-holder reseller register');
+  await expect(report).toContainText('Exact shared values: 1'); await expect(report).toContainText('Rights-holder reseller register');
   const before = await readBrowserLocalCollection(page, 'cases');
   await failNextFileWrite(page); await report.getByRole('button', { name: 'Save review in Case' }).click(); await expect(report.getByRole('status')).toContainText('not confirmed');
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before); expect(await retainedJson(page)).toEqual([]);
@@ -90,7 +90,7 @@ test('domain-history declarations remain qualified and an empty Case does not cl
   const review = await openReview(page, 'Domain history and retired dependencies');
   await review.getByRole('button', { name: 'Review retained history', exact: true }).click();
   const report = review.getByRole('region', { name: 'Domain history and retired dependencies', exact: true });
-  await expect(report).toContainText('0 retained snapshots'); await expect(report).toContainText('Some comparison evidence is unavailable');
+  await expect(report).toContainText('Retained snapshots: 0'); await expect(report).toContainText('Some comparison evidence is unavailable');
   await review.getByText('Declare an expected change or retired dependency', { exact: true }).click();
   await review.getByRole('checkbox', { name: 'I own or am authorised to review the affected assets.', exact: true }).check();
   await review.getByLabel('Owned asset hostname').fill('www.example.test'); await review.getByLabel('Dependency hostname').fill('retired.example.test');
@@ -120,7 +120,7 @@ test('incident sequence keeps source provenance, unknown times and chosen order 
   await expect(review.getByRole('list', { name: 'Incident stage draft' }).locator(':scope > li').first()).toContainText('retained observation');
   await review.getByRole('button', { name: 'Review incident sequence', exact: true }).click();
   const report = review.getByRole('region', { name: 'Incident sequence', exact: true });
-  await expect(report).toContainText('1 retained observations, 0 imported records and 1 reported actions');
+  await expect(report).toContainText('retained observations: 1; imported records: 0; reported actions: 1');
   await expect(report).toContainText('Time not supplied'); await expect(report).toContainText('Only the visible form was captured.');
   for (const theme of ['light', 'dark'] as const) { await useTheme(page, theme); for (const width of [320, 390, 1024, 1280]) { await page.setViewportSize({ width, height: 900 }); await expectNoHorizontalOverflow(page); } }
   expect((await new AxeBuilder({ page }).include('.context-entry').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);

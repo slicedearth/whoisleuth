@@ -61,7 +61,7 @@ describe('contextual evidence review', () => {
   test('platform continuity scopes identity to origin and object type, preserving version and per-object outcomes', () => {
     const first = platformObject();
     const result = reviewPlatformContinuity([first, { ...first, version: '2.0.0', observedAt: NOW }, { ...first, objectType: 'account' }, { ...first, platformOrigin: 'https://different.example.test' }], NOW);
-    assert.match(result.summary, /3 distinct platform objects/u);
+    assert.match(result.summary, /distinct platform objects: 3/u);
     assert.match(result.observations[0]!.detail, /provider reports resolved; independent recheck: still observed/u);
     assert.match(result.observations[0]!.detail, /2 versions/u);
     assert.equal(result.observations[0]!.state, 'reported');
@@ -77,7 +77,7 @@ describe('contextual evidence review', () => {
     const evidence = contextInputs()[2]!.evidence as Record<string, unknown>;
     const result = reviewStorefront(evidence, NOW);
     assert.ok(result.observations.some(row => row.label.includes('Reseller') && row.detail === 'authorised'));
-    assert.ok(result.observations.some(row => row.detail.includes('1 exact shared values')));
+    assert.ok(result.observations.some(row => row.detail.includes('Exact shared values: 1')));
     assert.equal(Object.hasOwn(result, 'score'), false);
     const partial = reviewStorefront({ ...evidence, candidate: { ...storefrontObservation('candidate.example.test'), brandNames: null, assetHashes: null } }, NOW);
     assert.equal(partial.state, 'partial'); assert.equal(partial.observations.filter(row => row.state === 'unknown').length, 2);
@@ -113,7 +113,7 @@ describe('contextual evidence review', () => {
   test('connector handling rejects ambiguous containers and credentials and qualifies unsupported fields', () => {
     for (const input of [{ servers: {}, mcpServers: {} }, { servers: {}, unrelated: {} }, { servers: { one: { url: 'https://secret:password@example.test' } } }, { servers: { one: { command: 'npx', enabled: true, disabled: true } } }]) assert.throws(() => readConnectorConfiguration(input));
     const result = reviewConnectorProvenance({ current: { servers: { one: { url: 'https://example.test', command: 'node', futureOption: true } } }, previous: null }, NOW);
-    assert.equal(result.state, 'partial'); assert.match(result.observations[0]!.detail, /1 unsupported/u);
+    assert.equal(result.state, 'partial'); assert.match(result.observations[0]!.detail, /Uninterpreted fields: 1/u);
     assert.equal(reviewConnectorProvenance({ current: { servers: {} }, previous: null }, NOW).state, 'partial');
   });
   test('connector worker computation shares bounded parsing and handles only one request', async () => {
@@ -150,7 +150,7 @@ describe('contextual evidence review', () => {
       { ...first, id: 'earlier-stage', occurredAt: BEFORE, completeness: 'complete' }];
     const result = reviewIncidentSequence(input, NOW);
     assert.equal(result.state, 'partial');
-    assert.match(result.summary, /1 timestamp reversals/u);
+    assert.match(result.summary, /Timestamp reversals needing review: 1/u);
     assert.equal(result.observations[0]!.observedAt, null);
     assert.match(result.observations[1]!.label, /imported record/u);
     assert.match(result.observations[2]!.label, /reported action/u);

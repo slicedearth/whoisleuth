@@ -10,7 +10,7 @@ import { formatJsonDocument } from './formatters/json.mts';
 import EXIT_CODES from './exit-codes.mts';
 
 export function formatMessageIntake(report: MessageIntakeReport): string {
-  const lines = [`Offline ${report.source.kind} intake`, `Review: ${report.coverage.state} · ${report.links.length} extracted links · ${report.coverage.reviewedParts} reviewed parts`,
+  const lines = [`Offline ${report.source.kind} intake`, `Review: ${report.coverage.state} · Extracted links: ${report.links.length} · Reviewed parts: ${report.coverage.reviewedParts}`,
     `Source: ${report.source.digestSha256} · ${report.source.byteLength} bytes`];
   for (const identity of report.identities) lines.push(`Part ${identity.part} ${identity.role.replaceAll('_', ' ')}: ${identity.domain}`);
   for (const claim of report.authenticationClaims) lines.push(`Part ${claim.part} reported ${claim.method}: ${claim.result} (not independently verified)`);

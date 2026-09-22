@@ -46,7 +46,7 @@ export function reviewPlatformContinuity(raw: unknown, reviewedAt: string): Cont
   }
   const unresolved = rows.filter(row => ['not_checked', 'still_observed', 'changed', 'unavailable'].includes(row.recheck)).length;
   return { schema: CONTEXT_REVIEW_SCHEMA, version: CONTEXT_REVIEW_VERSION, kind: 'platform_continuity', reviewedAt, title: 'Platform object continuity',
-    state: rows.length ? 'reviewed' : 'partial', summary: `${rows.length} observations across ${groups.size} distinct platform objects; ${unresolved} observations need a follow-up or qualified outcome.`, observations,
+    state: rows.length ? 'reviewed' : 'partial', summary: `Recorded observations: ${rows.length}; distinct platform objects: ${groups.size}; observations needing follow-up or a qualified outcome: ${unresolved}.`, observations,
     nextSteps: ['Use the exact object and version when preparing a provider report; do not report an entire shared platform from a hosted URL alone.', 'Record each report and recheck separately. New versions, changed content and newly observed objects require their own review.'],
     limitations: ['Platform origin, object identity and outcomes are analyst-supplied metadata, not verified provider telemetry.', 'A matching object ID establishes only declared continuity within that platform and object type. Provider resolution is separate from independent recheck; not reproduced does not establish worldwide removal.'] };
 }
