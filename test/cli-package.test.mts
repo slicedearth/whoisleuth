@@ -8,6 +8,8 @@ import { spawnSync } from 'node:child_process';
 
 import {
   CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS,
+  CLI_PACKAGE_SUPPORT_FILES,
+  CLI_RUNTIME_DEPENDENCIES,
   MAX_CLI_PACKAGE_PROCESSING_ITEMS,
   buildCliPackageManifest,
   formatCliPackageReport,
@@ -22,18 +24,18 @@ import { npmExecutableName } from '../tools/maintainer-tool-helpers.mts';
 
 const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
+// Synthetic versions exercise pin selection independently of current releases.
+// Only dependency membership follows the package owner; no second pin inventory
+// needs updating when an approved runtime dependency is added or removed.
+const runtimePins = Object.fromEntries(CLI_RUNTIME_DEPENDENCIES.map((name, index) => [name, `1.1.${index}`]));
+const selectedDependency = CLI_RUNTIME_DEPENDENCIES[0];
+assert.ok(selectedDependency, 'The package fixture requires a runtime dependency.');
 const rootManifest = {
   name: 'whoisleuth',
   version: '1.26.0',
   dependencies: {
-    '@peculiar/x509': '^2.0.0',
+    ...Object.fromEntries(Object.entries(runtimePins).map(([name, version]) => [name, `^${version}`])),
     express: '^5.2.1',
-    fflate: '0.8.3',
-    maxmind: '^5.0.7',
-    parse5: '^8.0.1',
-    'reflect-metadata': '0.2.2',
-    tldts: '^7.4.9',
-    undici: '^8.7.0',
   },
 };
 
@@ -60,13 +62,8 @@ const lockfile = {
       version: '1.26.0',
       dependencies: rootManifest.dependencies,
     },
-    'node_modules/@peculiar/x509': { version: '2.0.0' },
-    'node_modules/fflate': { version: '0.8.3' },
-    'node_modules/maxmind': { version: '5.0.7' },
-    'node_modules/parse5': { version: '8.0.1' },
-    'node_modules/reflect-metadata': { version: '0.2.2' },
-    'node_modules/tldts': { version: '7.4.10' },
-    'node_modules/undici': { version: '8.9.0' },
+    ...Object.fromEntries(Object.entries(runtimePins).map(([name, version]) => [`node_modules/${name}`, { version }])),
+    'node_modules/express': { version: '5.2.1' },
   },
 };
 
@@ -313,18 +310,11 @@ describe('scoped CLI package contract', () => {
     assert.equal(manifest.version, '1.26.0');
     assert.equal(manifest.private, true);
     assert.deepEqual(manifest.contentPolicy, { class: 'dual-use' });
-    assert.deepEqual(manifest.dependencies, {
-      '@peculiar/x509': '2.0.0',
-      fflate: '0.8.3',
-      maxmind: '5.0.7',
-      parse5: '8.0.1',
-      'reflect-metadata': '0.2.2',
-      tldts: '7.4.10',
-      undici: '8.9.0',
-    });
+    assert.deepEqual(manifest.dependencies, runtimePins);
     assert.equal(Object.hasOwn(manifest.dependencies as object, 'express'), false);
     assert.equal(Object.hasOwn(manifest, 'publishConfig'), false);
     assert.ok((manifest.files as string[]).includes('frontend/src/lib/**/*.js'));
+    for (const [, destination] of CLI_PACKAGE_SUPPORT_FILES) assert.ok((manifest.files as string[]).includes(destination));
   });
 
   test('generates public metadata only for an explicit release candidate', () => {
@@ -364,7 +354,7 @@ describe('scoped CLI package contract', () => {
 
   test('refuses dependency ranges that drift from the reviewed lockfile', () => {
     assert.throws(() => buildCliPackageManifest(
-      { ...rootManifest, dependencies: { ...rootManifest.dependencies, undici: '^8.9.0' } },
+      { ...rootManifest, dependencies: { ...rootManifest.dependencies, [selectedDependency]: '^99.0.0' } },
       templateManifest,
       lockfile,
     ), /must match the lockfile request/u);
@@ -372,9 +362,15 @@ describe('scoped CLI package contract', () => {
       ...lockfile,
       packages: {
         ...lockfile.packages,
-        'node_modules/undici': { version: '^8.9.0' },
+        [`node_modules/${selectedDependency}`]: { version: '^1.1.0' },
       },
     }), /Release version must contain major, minor, and patch/u);
+    const missingRootDependency = structuredClone(rootManifest);
+    Reflect.deleteProperty(missingRootDependency.dependencies, selectedDependency);
+    assert.throws(() => buildCliPackageManifest(missingRootDependency, templateManifest, lockfile), /Root dependency/u);
+    const missingLockedDependency = structuredClone(lockfile);
+    Reflect.deleteProperty(missingLockedDependency.packages, `node_modules/${selectedDependency}`);
+    assert.throws(() => buildCliPackageManifest(rootManifest, templateManifest, missingLockedDependency), /Locked dependency/u);
   });
 
   test('keeps arguments and the human report explicit', () => {
