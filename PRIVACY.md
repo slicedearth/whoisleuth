@@ -206,6 +206,10 @@ Provider evidence requests retain the original submitted-packet digest, request
 summary, optional deadline, preparation notes and selected pin identities.
 Amendments link to those request events without rewriting the original packet.
 These records stay browser-local until exported; public Case packs exclude them.
+Analyst-declared evidence relationships retain pin identities, their basis and
+any withdrawal reason. Matching source labels, checkpoints and imported-content
+identities are displayed without assuming independent corroboration. Case files
+and reports retain the declarations; public Case packs exclude them.
 Exact public v1 Case schema 12 and published-v2 schemas 13–16
 remain readable and migrate directly; migrated fields can remain null, unknown
 or blank because WHOISleuth does not reconstruct them from weaker evidence.

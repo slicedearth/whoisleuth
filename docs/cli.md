@@ -227,13 +227,19 @@ Use `--case-id` when the file contains several Cases. `open` reuses the selected
 Case; `--new-incident --title "Another incident"` creates a distinct ID for the
 same domain. It does not open a browser or collect anything.
 
-`pin`, `assess` and `recheck` read a selected JSON file with `--input`:
+`pin`, `link`, `withdraw-link`, `assess` and `recheck` read a selected JSON file with `--input`:
 
 ```sh
 whoisleuth case pin cases.json --input pin.json --output cases.json --force
+whoisleuth case link cases.json --input relationship.json --output cases.json --force
 whoisleuth case assess cases.json --input assessment.json --output cases.json --force
 whoisleuth case recheck cases.json --input recheck.json --output cases.json --force
 ```
+
+For `link`, use `fromPinId`, `toPinId`, `kind` (`derived_from` or
+`shared_source`) and `basis`. `withdraw-link` takes the relationship `id` and
+`reason`; its original declaration remains in the file. `case show` lists the
+identities and `--json` includes the full history.
 
 A pin describes the supplied observation, not a new collection. For example:
 

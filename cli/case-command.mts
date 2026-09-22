@@ -8,6 +8,7 @@ import { createCaseIncident, openOrCreateCase, recordCaseConclusion, recordCaseR
 import { buildCaseExport, serializeCaseStore } from '../packages/cases/case-storage-model.mts';
 import { appendCaseEvidencePin, type CaseEvidencePin } from '../packages/cases/case-response-model.mts';
 import { readCaseRecheckAnswerContext } from '../packages/cases/case-recheck-model.mts';
+import { caseEvidenceLinkIssues, mergeCaseEvidenceLinks } from '../packages/cases/case-evidence-links.mts';
 import { dispositionLabel, statusLabel } from '../packages/cases/case-record-decisions.mts';
 import { normalizeDomain } from '../packages/cases/case-record-core.mts';
 import type { CaseRecord } from '../packages/cases/case-record-contracts.mts';
@@ -55,6 +56,10 @@ function pin(input: unknown, now: string): JsonObject {
 }
 
 function retainExistingEntries(before: CaseRecord, after: CaseRecord): void {
+  if (canonicalArtifactJsonV2(mergeCaseEvidenceLinks(before.evidenceLinks, after.evidenceLinks) ?? [])
+    !== canonicalArtifactJsonV2(mergeCaseEvidenceLinks(undefined, after.evidenceLinks) ?? [])) {
+    throw new CliUsageError('The operation would remove retained evidence relationships. Nothing was written.');
+  }
   const pairs = [
     [before.notes, after.notes], [before.evidenceHistory, after.evidenceHistory], [before.evidencePins, after.evidencePins],
     [before.decisions, after.decisions], [before.actions, after.actions], [before.assertions, after.assertions],
@@ -85,6 +90,8 @@ export function applyCliCaseOperation(cases: CaseRecord[], args: CaseArguments, 
     result = updateCase(cases, current.id, { note: prose(note, MAX_NOTE_LENGTH, 'Case note') }, now);
   } else if (args.operation === 'pin') {
     result = updateCase(cases, current.id, { evidencePin: pin(input, now) }, now);
+  } else if (args.operation === 'link' || args.operation === 'withdraw-link') {
+    result = updateCase(cases, current.id, args.operation === 'link' ? { evidenceLink: input } : { evidenceLinkWithdrawal: input }, now);
   } else if (args.operation === 'assess') {
     if (!input) throw new CliUsageError('An assessment requires JSON input.');
     fields(input, ['disposition', 'reviewReasonCode', 'summary', 'rationale', 'evidence'], 'Assessment');
@@ -144,6 +151,14 @@ function formatCases(cases: readonly CaseRecord[], digest: string): string {
       `  Source ${safeTerminalValue(pin.source)} · ${safeTerminalValue(pin.observedAt, 'time unavailable')} · ${pin.completeness}`);
     for (const decision of record.decisions) lines.push(`Assessment ${decision.createdAt}`,
       safeTerminalValue(decision.summary, '—', MAX_RESPONSE_VALUE_LENGTH), safeTerminalValue(decision.rationale, '—', MAX_RESPONSE_RATIONALE_LENGTH));
+    for (const { link, missingPinIds, cyclic } of caseEvidenceLinkIssues(record.evidenceLinks ?? [], record.evidencePins)) {
+      lines.push(`Evidence relationship ${safeTerminalValue(link.id)} · analyst declaration`,
+        `  ${safeTerminalValue(link.fromPinId)} ${link.kind.replaceAll('_', ' ')} ${safeTerminalValue(link.toPinId)}`,
+        `  ${safeTerminalValue(link.basis, '—', MAX_RESPONSE_RATIONALE_LENGTH)}`);
+      if (link.withdrawal) lines.push(`  Withdrawn ${link.withdrawal.at}: ${safeTerminalValue(link.withdrawal.reason, '—', MAX_RESPONSE_RATIONALE_LENGTH)}`);
+      if (missingPinIds.length) lines.push(`  Referenced pins not retained: ${missingPinIds.map(id => safeTerminalValue(id)).join(', ')}`);
+      if (cyclic) lines.push('  Conflicting imported derivation cycle; no order is inferred.');
+    }
     for (const review of record.observedEffects.reviews) lines.push(`Recheck ${safeTerminalValue(review.observedAt, 'time unavailable')} · ${review.state} · ${review.completeness} · ${safeTerminalValue(review.source)}`);
     lines.push(`Other retained records: ${record.evidenceHistory.length} snapshots, ${record.actions.length} actions, ${record.assertions.length} assertions, ${record.attachments?.length ?? 0} file references.`, '');
   }

@@ -506,8 +506,8 @@ function parseCaseArguments(parsed: ParsedCommandArguments): Extract<CliAction, 
   if (operation === 'note' ? (text === null && !noteSource) : (text !== null || noteSource !== null)) {
     throw new CliUsageError('Only case note accepts and requires --text or --note-file.');
   }
-  if (['pin', 'assess', 'recheck'].includes(operation) ? !inputSource : inputSource !== null) {
-    throw new CliUsageError('Only case pin, assess and recheck accept and require --input.');
+  if (['pin', 'link', 'withdraw-link', 'assess', 'recheck'].includes(operation) ? !inputSource : inputSource !== null) {
+    throw new CliUsageError('Only case pin, link, withdraw-link, assess and recheck accept and require --input.');
   }
   if (expectedFileDigest !== null && (!source || !/^sha256:[a-f0-9]{64}$/u.test(expectedFileDigest))) {
     throw new CliUsageError('--expect-file-digest requires a source file and sha256:<64 lowercase hexadecimal characters>.');

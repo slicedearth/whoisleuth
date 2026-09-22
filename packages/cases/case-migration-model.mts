@@ -47,6 +47,8 @@ import {
 } from '../contracts/case-portability.mts';
 import { canonicalArtifactJsonV2 } from '../evidence/artifact-integrity.mts';
 import { readCaseAttachments, mergeCaseAttachments, type CaseAttachment } from './case-attachment-model.mts';
+import { readCaseEvidenceLinks, mergeCaseEvidenceLinks, type CaseEvidenceLink } from './case-evidence-links.mts';
+import { EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
 import { assertBoundedJsonStructure } from '../analysis/bounded-json.mts';
 import {
   inspectCaseBrandProfileIds,
@@ -114,6 +116,7 @@ type ImportPatch = {
   closures: CaseClosureHistory;
   branches: CaseInvestigationBranch[];
   attachments: CaseAttachment[] | undefined;
+  evidenceLinks: CaseEvidenceLink[] | undefined;
   tags: string[];
   notes: CaseNote[];
   createdAt: string | null;
@@ -197,6 +200,7 @@ export function normalizeCaseStore(raw: unknown): CaseStore {
 function assertModernCaseShape(raw: unknown, sourceVersion: number): void {
   for (const item of boundedCaseList(raw).items) {
     const itemRecord = objectRecord(item);
+    if (sourceVersion < EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION && Object.hasOwn(itemRecord, 'evidenceLinks')) throw new TypeError('Evidence relationships require the current Case schema.');
     if (sourceVersion < INCIDENT_CASE_SCHEMA_VERSION && Object.hasOwn(itemRecord, 'attachments')) {
       throw new TypeError('Retained file references require the current Case schema; no data was changed.');
     }
@@ -281,6 +285,7 @@ function boundedCaseList(raw: unknown): { items: unknown[]; omitted: number } {
  */
 function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch | null {
   const record = objectRecord(raw);
+  if (record.evidenceLinks !== undefined && importedVersion < EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION) throw new TypeError('Evidence relationships require the current Case schema.');
   const domain = normalizeDomain(record.domain);
   if (!domain) return null;
   const importFallback = caseTimestampOrNull(record.updatedAt, importedVersion)
@@ -360,6 +365,7 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
       ? normalizeCaseInvestigationBranches(record.branches, normalizedFallback, branchReferences, timestampOptions)
       : [],
     attachments: importedVersion >= INCIDENT_CASE_SCHEMA_VERSION ? readCaseAttachments(record.attachments) : undefined,
+    evidenceLinks: readCaseEvidenceLinks(record.evidenceLinks),
     tags: normalizeTags(record.tags),
     // Imported notes fall back only to the imported record's own timestamps
     // (never "now"), so a timestamp-less note gets a stable, deterministic time
@@ -437,6 +443,7 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
     closures: patch.closures,
     branches: patch.branches,
     ...(patch.attachments === undefined ? {} : { attachments: patch.attachments }),
+    ...(patch.evidenceLinks === undefined ? {} : { evidenceLinks: patch.evidenceLinks }),
     createdAt: patch.createdAt || patch.updatedAt || now,
     updatedAt: patch.updatedAt || patch.createdAt || now,
   };
@@ -488,6 +495,7 @@ function applyImportPatch(
   const trailSelection = retainLocalAuthoredRecords(local.manualTrail, patch.manualTrail, MAX_CASE_MANUAL_TRAIL_EVENTS);
   const manualTrail = normalizeCaseManualTrail(trailSelection.records, fallback);
   const attachments = mergeCaseAttachments(local.attachments, patch.attachments);
+  const evidenceLinks = mergeCaseEvidenceLinks(local.evidenceLinks, patch.evidenceLinks);
   const authoredHistoryOmitted = patch.authoredHistoryOmitted
     + pinSelection.omitted
     + decisionSelection.omitted
@@ -513,6 +521,7 @@ function applyImportPatch(
     closures,
     branches: mergeCaseInvestigationBranches(local.branches ?? [], patch.branches, fallback, branchReferences),
     ...(attachments === undefined ? {} : { attachments }),
+    ...(evidenceLinks === undefined ? {} : { evidenceLinks }),
     tags: normalizeTags([...local.tags, ...patch.tags]),
     notes: unionNotes(local.notes, patch.notes),
     createdAt: patch.createdAt && Date.parse(patch.createdAt) < Date.parse(local.createdAt) ? patch.createdAt : local.createdAt,

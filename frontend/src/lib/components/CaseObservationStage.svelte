@@ -14,6 +14,7 @@
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
   import DocumentationSearch from './DocumentationSearch.svelte';
+  import CaseEvidenceRelationships from './CaseEvidenceRelationships.svelte';
 
   let { record, mode, mutationBusy, persist }: {
     record: CaseRecord;
@@ -133,6 +134,8 @@
       </ol>
     {/if}
   </details>
+
+  <CaseEvidenceRelationships {record} {persist} {mutationBusy} />
 
   <details id={`case-response-observation-sightings-${record.id}`}>
     <summary>Record a source-qualified sighting</summary>

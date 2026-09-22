@@ -4505,10 +4505,10 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "case",
       "summary": "Review and update ordinary local Case files",
-      "description": "Show or open a local Case, append a note or evidence pin, record an assessment, or retain an offline recheck. Use --input for pin, assessment and recheck JSON; --text or --note-file for a note. Mutations require --output and always write the complete current Case export.",
+      "description": "Show or open a local Case, append a note or evidence pin, link evidence, withdraw a link, record an assessment, or retain an offline recheck. Use --input for pin, link, withdraw-link, assessment and recheck JSON; --text or --note-file for a note. Link input contains fromPinId, toPinId, kind (derived_from or shared_source), and basis. Withdrawal input contains id and reason. Mutations require --output and always write the complete current Case export.",
       "group": "respond",
       "common": true,
-      "usage": "whoisleuth case \u003cshow|open|note|pin|assess|recheck> [\u003csource>] [--text \u003cvalue>|--note-file \u003cfile>] [--case-id \u003cvalue>] [--domain \u003cvalue>] [--title \u003cvalue>] [--new-incident] [--input \u003cfile>] [--expect-file-digest \u003cvalue>] [--json] [--no-color]",
+      "usage": "whoisleuth case \u003cshow|open|note|pin|link|withdraw-link|assess|recheck> [\u003csource>] [--text \u003cvalue>|--note-file \u003cfile>] [--case-id \u003cvalue>] [--domain \u003cvalue>] [--title \u003cvalue>] [--new-incident] [--input \u003cfile>] [--expect-file-digest \u003cvalue>] [--json] [--no-color]",
       "example": "whoisleuth case open --domain example.test --output cases.json\n  whoisleuth case show cases.json\n  whoisleuth case note cases.json --text \"Review the retained observation\" --output cases.json --force",
       "boundary": "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:\u003cdigest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
       "collection": {
@@ -4526,6 +4526,8 @@ export const PUBLIC_CLI_CATALOGUE = {
             "open",
             "note",
             "pin",
+            "link",
+            "withdraw-link",
             "assess",
             "recheck"
           ],

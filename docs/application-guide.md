@@ -438,6 +438,12 @@ exports retain its revision origin, including after later explicit edits.
 The Summary's decision overview keeps the latest analyst conclusion, supporting
 and contrary observations, incomplete evidence and next scheduled review together.
 Evidence added later prompts another review; it does not change the conclusion.
+**Evidence relationships and shared sources** records which retained pin derives
+from another, or shares its source, with an analyst-supplied basis. Shared source
+labels, collection checkpoints and imported-content identities are listed
+separately. A relationship can be withdrawn with a reason; its original record
+remains. These declarations do not add confidence or establish independence.
+
 **Copy citation** on a retained pin or Lookup checkpoint copies only that fact,
 its source, observation time and completeness, not surrounding notes or raw data.
 **Preview report** shows the selected notes and imported sharing restrictions

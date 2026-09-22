@@ -1,4 +1,5 @@
 import type { CaseAssertionRecord, CaseEvidencePin, CaseEvidenceRelationStance } from './case-response-records.mts';
+import { caseEvidenceSharedContext } from './case-evidence-links.mts';
 
 export type ComparedEvidenceRelationship = CaseEvidenceRelationStance | 'not_linked' | 'unspecified';
 
@@ -27,22 +28,8 @@ export function compareCaseAssertions(
     left: relationship(left, leftIds, id),
     right: relationship(right, rightIds, id),
   }));
-  const groups = new Map<string, { kind: 'checkpoint' | 'import' | 'source'; label: string; pinIds: string[] }>();
-  function add(kind: 'checkpoint' | 'import' | 'source', identity: string | null | undefined, label: string, id: string) {
-    if (!identity?.trim()) return;
-    const key = JSON.stringify([kind, identity]);
-    const group = groups.get(key) ?? { kind, label, pinIds: [] };
-    group.pinIds.push(id);
-    groups.set(key, group);
-  }
-  for (const { id, pin } of rows) {
-    if (!pin) continue;
-    add('checkpoint', pin.checkpointId, 'Same collection checkpoint', id);
-    add('import', pin.importContentSha256, 'Same imported content', id);
-    add('source', pin.source, `Same declared source: ${pin.source}`, id);
-  }
   return {
     rows,
-    sharedContext: [...groups.values()].filter(group => group.pinIds.length > 1),
+    sharedContext: caseEvidenceSharedContext(rows.flatMap(row => row.pin ? [row.pin] : [])),
   };
 }

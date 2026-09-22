@@ -13,6 +13,7 @@ import { caseEvidenceTimeline, compareCaseEvidence, currentCaseEvidence } from '
 import type { CaseEvidenceSnapshot, CaseRecord, EvidenceFactor } from './case-model.mts';
 import { httpSecurityHeaderLabel } from './http-summary.mts';
 import { analystInteroperabilityTags } from '../analysis/analyst-taxonomy.mts';
+import { caseEvidenceLinkIssues } from './case-evidence-links.mts';
 import {
   buildPortableGeneratorMetadata,
   portableGeneratorAttribution,
@@ -104,6 +105,7 @@ type CaseReportJson = {
   evidenceTimeline: ReportTimelineEntry[];
   analystResponse: {
     evidencePins: CaseRecord['evidencePins'];
+    evidenceLinks?: CaseRecord['evidenceLinks'];
     decisions: CaseRecord['decisions'];
     actions: CaseRecord['actions'];
     assertions: CaseRecord['assertions'];
@@ -312,6 +314,7 @@ export function buildCaseReport(
     evidenceTimeline: timelineEntries,
     analystResponse: {
       evidencePins: caseRecord.evidencePins.map((item) => ({ ...item, limitations: [...item.limitations] })),
+      ...(caseRecord.evidenceLinks === undefined ? {} : { evidenceLinks: structuredClone(caseRecord.evidenceLinks) }),
       decisions: caseRecord.decisions.map((item) => ({ ...item, evidencePinIds: [...item.evidencePinIds] })),
       actions: caseRecord.actions.map((item) => ({
         ...item,
@@ -555,7 +558,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
   lines.push('## Analyst Decision Packet');
   lines.push('');
   const response = report.analystResponse;
-  if (!response.evidencePins.length && !response.sightings.length && !response.decisions.length && !response.actions.length && !response.assertions.length && !response.manualTrail.length && !response.observedEffects.reviews.length && !response.closures.records.length && !response.branches.length) {
+  if (!response.evidencePins.length && !response.evidenceLinks?.length && !response.sightings.length && !response.decisions.length && !response.actions.length && !response.assertions.length && !response.manualTrail.length && !response.observedEffects.reviews.length && !response.closures.records.length && !response.branches.length) {
     lines.push('No evidence pins, source-qualified sightings, structured assertions, decision records, response actions, independent effect reviews, closures, or manual investigation steps recorded.');
     lines.push('');
   } else {
@@ -613,6 +616,17 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
         }
       }
       lines.push('');
+    }
+    if (response.evidenceLinks?.length) {
+      lines.push('### Analyst-declared evidence relationships', '');
+      for (const { link, missingPinIds, cyclic } of caseEvidenceLinkIssues(response.evidenceLinks, response.evidencePins)) lines.push(
+        `- ${escapeMarkdownInline(link.fromPinId)} ${link.kind === 'derived_from' ? 'derived from' : 'shares a source with'} ${escapeMarkdownInline(link.toPinId)} · recorded ${link.createdAt}`,
+        `  Basis: ${escapeMarkdownInline(link.basis)}`,
+        ...(link.withdrawal ? [`  Withdrawn ${link.withdrawal.at}: ${escapeMarkdownInline(link.withdrawal.reason)}`] : []),
+        ...(missingPinIds.length ? [`  Referenced pins not retained: ${missingPinIds.map(escapeMarkdownInline).join(', ')}`] : []),
+        ...(cyclic ? ['  Conflicting imported derivation cycle; no order is inferred.'] : []),
+      );
+      lines.push('These relationships record analyst attribution, not independent corroboration or added confidence.', '');
     }
     lines.push('### Decisions');
     lines.push('');

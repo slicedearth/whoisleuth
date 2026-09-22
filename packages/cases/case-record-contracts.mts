@@ -34,6 +34,7 @@ import {
 } from '../contracts/case-portability.mts';
 import type { CaseInvestigationBranch } from './case-investigation-branch-model.mts';
 import type { CaseAttachment } from './case-attachment-model.mts';
+import type { CaseEvidenceLink } from './case-evidence-links.mts';
 import {
   CASE_DISPOSITIONS,
   CASE_STATUSES,
@@ -171,6 +172,7 @@ export type CaseRecord = {
   source: CaseSource;
   evidenceHistory: CaseEvidenceSnapshot[];
   evidencePins: CaseEvidencePin[];
+  evidenceLinks?: CaseEvidenceLink[];
   decisions: CaseDecisionRecord[];
   actions: CaseActionRecord[];
   assertions: CaseAssertionRecord[];
@@ -197,6 +199,8 @@ export type CaseInput = {
   evidence?: unknown;
   evidencePin?: unknown;
   evidencePins?: unknown;
+  evidenceLink?: unknown;
+  evidenceLinkWithdrawal?: unknown;
   decision?: unknown;
   action?: unknown;
   actionUpdate?: unknown;

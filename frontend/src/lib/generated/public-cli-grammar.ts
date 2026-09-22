@@ -3474,6 +3474,8 @@ export const PUBLIC_CLI_GRAMMAR = {
         "open",
         "note",
         "pin",
+        "link",
+        "withdraw-link",
         "assess",
         "recheck"
       ],

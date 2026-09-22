@@ -41,6 +41,8 @@ import {
 } from './case-record-contracts.mts';
 import { PUBLISHED_V2_3_CASE_SCHEMA_VERSION, INCIDENT_CASE_SCHEMA_VERSION, MAX_CASE_OBJECTIVE_LENGTH } from '../contracts/case-portability.mts';
 import { readCaseAttachments } from './case-attachment-model.mts';
+import { readCaseEvidenceLinks, appendCaseEvidenceLink, withdrawCaseEvidenceLink } from './case-evidence-links.mts';
+import { EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
 import { assertCurrentRecheckQuestion, assertRecheckNonReproduction, readCaseRecheckAnswerContext } from './case-recheck-model.mts';
 import {
   caseDispositionSupportsDefensiveResponse,
@@ -178,6 +180,8 @@ export function normalizeCase(
   const normalizedStatus = normalizeStatus(record.status);
   const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
   const attachments = readCaseAttachments(record.attachments);
+  if (record.evidenceLinks !== undefined && sourceVersion != null && sourceVersion < EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION) throw new TypeError('Evidence relationships require the current Case schema.');
+  const evidenceLinks = readCaseEvidenceLinks(record.evidenceLinks);
   return {
     id: existing ? existing.id : safeId(record.id) || deterministicId(domain),
     domain,
@@ -203,6 +207,7 @@ export function normalizeCase(
     closures,
     branches: normalizeCaseInvestigationBranches(record.branches, updatedAt, branchReferences, timestampOptions),
     ...(attachments === undefined ? {} : { attachments }),
+    ...(evidenceLinks === undefined ? {} : { evidenceLinks }),
     createdAt,
     updatedAt,
   };
@@ -276,6 +281,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
     decisions: input.decision !== undefined
       ? appendCaseDecision([], input.decision, now)
       : [],
+    ...(input.evidenceLink === undefined ? {} : { evidenceLinks: appendCaseEvidenceLink([], input.evidenceLink, evidencePins, now) }),
     actions,
     assertions,
     manualTrail: input.trailEvent !== undefined
@@ -361,6 +367,7 @@ export function updateCase(
   if (index < 0) throw new Error('That case no longer exists.');
   const current = cases[index];
   if (!current) throw new Error('That case no longer exists.');
+  if (patch.evidenceLink !== undefined && patch.evidenceLinkWithdrawal !== undefined) throw new TypeError('Record or withdraw one evidence relationship at a time.');
   if (patch.title !== undefined && patch.expectedTitle !== undefined && patch.expectedTitle !== (current.title ?? '')) {
     throw new Error('The incident title changed after this draft was started. Reload and review the current title before saving; your draft has not been applied.');
   }
@@ -476,6 +483,11 @@ export function updateCase(
     source,
     evidenceHistory,
     evidencePins,
+    ...((patch.evidenceLink !== undefined || patch.evidenceLinkWithdrawal !== undefined) ? {
+      evidenceLinks: patch.evidenceLink !== undefined
+        ? appendCaseEvidenceLink(current.evidenceLinks ?? [], patch.evidenceLink, evidencePins, now)
+        : withdrawCaseEvidenceLink(current.evidenceLinks ?? [], patch.evidenceLinkWithdrawal, now),
+    } : {}),
     decisions,
     actions,
     assertions,
