@@ -27,7 +27,7 @@
     } catch (cause) { report = null; error = cause instanceof Error ? cause.message : 'Retained history could not be reviewed.'; }
   }
 </script>
-<details class="context-review"><summary>Domain history and retired dependencies</summary><div class="body">
+<section class="context-review" aria-label="Domain history and retired dependencies"><h3>Domain history and retired dependencies</h3><div class="body">
   <p>Compare this Case’s retained observations. Add expected maintenance or a retired dependency to put the changes in context.</p>
   <details><summary>Declare an expected change or retired dependency</summary><div class="body">
     <label class="checkbox"><input type="checkbox" bind:checked={authorised}> I own or am authorised to review the affected assets.</label>
@@ -40,4 +40,4 @@
   <button class="btn" type="button" disabled={mutationBusy} onclick={review}>Review retained history</button>
   {#if error}<p role="alert">{error}</p>{/if}
   {#if report}<CaseContextReport {report} {record} {mutationBusy} {persistOperation} reusableInput={input} retainReusableInput={false} /><p class="meta">The reusable input download includes this Case’s retained record. It is not duplicated in Case storage.</p>{/if}
-</div></details>
+</div></section>

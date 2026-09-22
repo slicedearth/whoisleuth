@@ -4,7 +4,7 @@ import { readContextEvidence, readContextFile } from '../frontend/src/lib/contex
 import { runConnectorProvenanceWorker } from '../frontend/src/lib/connector-provenance-worker.ts';
 import { runMessageIntakeWorker } from '../frontend/src/lib/message-intake-worker.ts';
 import { runMessageIntakeOperation } from '../frontend/src/lib/message-intake-worker-model.ts';
-import { reviewConnectorConfigurationText } from '../packages/investigation/connector-provenance-review.mts';
+import { connectorConfigurationPresentation } from '../packages/investigation/connector-provenance-review.mts';
 import { MAX_CONTEXT_INPUT_BYTES } from '../packages/contracts/context-review.mts';
 
 const NOW = '2026-09-22T00:00:00.000Z';
@@ -32,7 +32,7 @@ test('local review adapters validate replies and share cancellation and worker t
   Object.defineProperty(globalThis, 'Worker', { configurable: true, value: FixtureWorker });
   try {
     const input = { current: '{"servers":{"selected":{"url":"https://example.test"}}}', previous: '', reviewedAt: NOW };
-    response = reviewConnectorConfigurationText(input.current, input.previous, NOW);
+    response = connectorConfigurationPresentation(input.current, input.previous, NOW);
     assert.deepEqual(await runConnectorProvenanceWorker(input, new AbortController().signal), response);
     response = { schema: 'private transport detail', observations: [] };
     await assert.rejects(runConnectorProvenanceWorker(input, new AbortController().signal), error => error instanceof Error && !error.message.includes('private transport detail') && error.message.includes('nothing was saved'));

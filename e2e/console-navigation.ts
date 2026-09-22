@@ -33,7 +33,15 @@ export async function openConsoleView(page: Page, view: ConsoleView) {
 }
 
 export async function openCaseSection(page: Page, section: 'Summary' | 'Evidence' | 'Assessment' | 'Response' | 'History') {
-  const link = page.getByRole('navigation', { name: 'Case sections', exact: true }).getByRole('link', { name: section, exact: true });
+  const navigation = page.getByRole('navigation', { name: 'Case sections', exact: true });
+  const selector = navigation.getByRole('combobox', { name: 'Case section', exact: true, includeHidden: true });
+  await expect(selector).toBeAttached();
+  if (await selector.isVisible()) {
+    await selector.selectOption({ label: section });
+    await expect(selector.locator('option:checked')).toHaveText(section);
+    return;
+  }
+  const link = navigation.getByRole('link', { name: section, exact: true });
   await expect(link).toBeVisible();
   if (await link.getAttribute('aria-current') !== 'page') await link.click();
   await expect(link).toHaveAttribute('aria-current', 'page');

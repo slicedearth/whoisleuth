@@ -58,7 +58,7 @@ export function readConnectorConfiguration(raw: unknown): ConnectorMetadata[] {
   });
 }
 
-export function reviewConnectorProvenance(raw: unknown, reviewedAt: string): ContextReview {
+export function connectorProvenancePresentation(raw: unknown, reviewedAt: string): Readonly<{ report: ContextReview; connectors: readonly ConnectorMetadata[] }> {
   iso(reviewedAt, 'Review time');
   const input = exact(raw, ['current', 'previous'], 'Connector review');
   const current = readConnectorConfiguration(input.current), previous = input.previous === null ? null : readConnectorConfiguration(input.previous);
@@ -71,14 +71,24 @@ export function reviewConnectorProvenance(raw: unknown, reviewedAt: string): Con
       source: 'Analyst-selected local configuration; declarations were not negotiated with a server', observedAt: null, hostname: row.origin ? new URL(row.origin).hostname : null };
   });
   for (const row of previous ?? []) if (!current.some(value => value.name === row.name)) observations.push({ label: `${row.name} · no longer listed`, state: 'changed', detail: 'Absent from the selected current configuration; this does not establish that a process or endpoint has stopped.', source: 'Selected configuration comparison', observedAt: null, hostname: row.origin ? new URL(row.origin).hostname : null });
-  return { schema: CONTEXT_REVIEW_SCHEMA, version: CONTEXT_REVIEW_VERSION, kind: 'connector', reviewedAt, title: 'Connector provenance', state: !current.length || observations.some(row => row.state === 'partial') ? 'partial' : 'reviewed',
+  const report: ContextReview = { schema: CONTEXT_REVIEW_SCHEMA, version: CONTEXT_REVIEW_VERSION, kind: 'connector', reviewedAt, title: 'Connector provenance', state: !current.length || observations.some(row => row.state === 'partial') ? 'partial' : 'reviewed',
     summary: `Configured connectors: ${current.length}${previous ? `; earlier configuration entries: ${previous.length}` : ''}. Commands were not run and endpoints were not contacted.`, observations,
     nextSteps: ['Verify package publisher, exact version, installation source and requested privileges through a trusted source before enabling a local connector.', 'For remote connectors, investigate the endpoint domain separately and review authentication and data-sharing scope before granting access.', 'Review tool, resource and prompt capabilities against the task. Configuration declarations are not evidence of negotiated capabilities or trustworthy behaviour.'],
     limitations: ['Arguments, local paths, environment values, header values, auth material and URL paths or queries are excluded from this report. Names and package identities remain visible; review them before sharing.', 'Matching retained metadata does not mean excluded values are unchanged. This is not code execution, a server connection, a protocol conformance test or safety certification.'] };
+  return { report, connectors: current };
+}
+
+export function reviewConnectorProvenance(raw: unknown, reviewedAt: string): ContextReview {
+  return connectorProvenancePresentation(raw, reviewedAt).report;
 }
 
 export function reviewConnectorConfigurationText(current: string, previous: string, reviewedAt: string): ContextReview {
+  return connectorConfigurationPresentation(current, previous, reviewedAt).report;
+}
+
+/** Browser presentation receives only the same minimised metadata as the report. */
+export function connectorConfigurationPresentation(current: string, previous: string, reviewedAt: string) {
   if (typeof current !== 'string' || typeof previous !== 'string') throw new TypeError('Select connector configuration text.');
   const parse = (value: string) => parseBoundedJson(value, { label: 'Connector configuration', maximumBytes: MAX_CONTEXT_INPUT_BYTES });
-  return reviewConnectorProvenance({ current: parse(current), previous: previous.trim() ? parse(previous) : null }, reviewedAt);
+  return connectorProvenancePresentation({ current: parse(current), previous: previous.trim() ? parse(previous) : null }, reviewedAt);
 }

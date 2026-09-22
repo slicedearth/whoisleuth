@@ -280,7 +280,7 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
   await openCasesView(page);
   await createCase(page, 'quick-stages.invalid');
   const workspace = await openCaseResponseWorkspace(page, '', 'quick');
-  await expect(page.getByRole('navigation', { name: 'Case sections' }).getByRole('link')).toHaveCount(5);
+  await expect(page.getByRole('navigation', { name: 'Case sections' }).getByRole('combobox', { name: 'Case section' }).locator('option')).toHaveCount(5);
 
   await openCaseSection(page, 'Evidence');
   const observation = workspace.getByRole('region', { name: 'Case observations', exact: true });

@@ -1,10 +1,15 @@
 # Contextual evidence reviews
 
-Cases → Evidence → **Contextual reviews** offers incident-sequence, domain-history,
+Cases → Evidence → **Specialist evidence reviews** offers incident-sequence, domain-history,
 platform-object, storefront and connector reviews. Inputs stay in page memory until you
 save or download. Saved reports use the existing Case attachment and evidence
 summary controls; select the report file explicitly when preparing a response
-packet. Changing sections preserves the draft; leaving the Case discards it.
+packet. Switching tasks or Case sections preserves opened drafts; leaving the Case
+discards them. Save the review in the Case, download its JSON, or print a summary.
+Reusable inputs are a separate download. Storefront columns keep unreviewed fields
+distinct from reviewed fields with no values; platform histories separate report
+status, provider response and independent recheck. Sources and interpretation are
+available beneath each review, with exact observation times and citation copying.
 
 The CLI uses the same models:
 

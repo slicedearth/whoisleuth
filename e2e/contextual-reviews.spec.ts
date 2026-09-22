@@ -12,8 +12,17 @@ import { contextInputs } from '../test/context-review-fixtures.mts';
 async function openReview(page: Page, name: string) {
   await openCasesView(page); await createCase(page, 'example.test'); await openCaseSection(page, 'Evidence');
   const entry = page.locator('.context-entry'); await entry.locator(':scope > summary').click();
-  const summary = entry.getByText(name, { exact: true }); await summary.click();
-  return summary.locator('..');
+  const tasks: Record<string, string> = {
+    'Connector and MCP configuration provenance': 'Review connector configuration',
+    'Platform objects and version continuity': 'Track platform objects',
+    'Storefront and official-site comparison': 'Compare a storefront',
+    'Domain history and retired dependencies': 'Check domain history',
+    'Incident sequence and reported actions': 'Trace an incident',
+  };
+  const task = tasks[name];
+  if (!task) throw new Error(`No review task for ${name}`);
+  await entry.getByRole('button', { name: task, exact: true }).click();
+  return entry.getByRole('region', { name, exact: true });
 }
 async function retainedJson(page: Page) {
   return page.evaluate(async () => {
@@ -37,6 +46,18 @@ test('connector review excludes secret values, saves only the report and pivots 
   await review.getByRole('button', { name: 'Review connector provenance', exact: true }).click();
   const report = review.getByRole('region', { name: 'Connector provenance', exact: true });
   await expect(report).toContainText('@example/connector@1.0.0'); await expect(report).not.toContainText('excluded-auth-value');
+  const copied: string[] = [];
+  await page.exposeFunction('recordReviewCopy', (value: string) => copied.push(value));
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: (value: string) => (window as unknown as { recordReviewCopy(value: string): Promise<void> }).recordReviewCopy(value) } }));
+  await report.getByRole('button', { name: 'Copy defanged indicator for connector.example.test', exact: true }).click();
+  await expect.poll(() => copied).toEqual(['connector[.]example[.]test']);
+  await report.getByText('Sources and interpretation', { exact: true }).click();
+  await report.getByRole('button', { name: /^Copy citation for/ }).click();
+  await expect.poll(() => copied.length).toBe(2);
+  expect(copied[1]).toContain('Source: Analyst-selected local configuration');
+  expect(copied[1]).toContain('Observed: Time not supplied');
+  expect(copied[1]).not.toContain('excluded-');
+  await report.getByText('Sources and interpretation', { exact: true }).click();
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before); expect(await retainedJson(page)).toEqual([]);
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
@@ -44,7 +65,7 @@ test('connector review excludes secret values, saves only the report and pivots 
     expect((await new AxeBuilder({ page }).include('.context-entry').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
   }
   await report.getByRole('button', { name: 'Save review in Case', exact: true }).click();
-  await expect(report.getByRole('status')).toContainText('Review saved'); await expect(report.getByRole('heading')).toBeFocused();
+  await expect(report.getByRole('status')).toContainText('Review saved'); await expect(report.getByRole('heading', { name: 'Connector provenance', exact: true })).toBeFocused();
   const files = await retainedJson(page); expect(files).toHaveLength(1); expect(files[0]).not.toMatch(/excluded-|private\/selected|--secret|Authorization/u);
   await report.getByRole('link', { name: 'Review connector.example.test in Lookup', exact: true }).click();
   await expect(page).toHaveURL(/\/lookup\?q=connector.example.test&case=/u); expect(requests).toEqual([]);
@@ -61,6 +82,19 @@ test('platform continuity reloads editable observations and keeps provider claim
   const report = review.getByRole('region', { name: 'Platform object continuity', exact: true });
   await expect(report).toContainText('Recorded observations: 2; distinct platform objects: 1');
   await expect(report).toContainText('provider reports resolved'); await expect(report).toContainText('not reproduced'); await expect(report).toContainText('still observed');
+  await page.getByRole('button', { name: 'Check domain history', exact: true }).click();
+  await page.getByRole('button', { name: 'Track platform objects', exact: true }).click();
+  await expect(report).toBeVisible();
+  await report.getByRole('button', { name: 'Print review', exact: true }).click();
+  const preview = page.getByRole('dialog', { name: 'Platform object continuity', exact: true });
+  await expect(preview.getByRole('heading', { level: 2 })).toBeFocused();
+  await expect(preview).toContainText('provider outcome: provider reports resolved');
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.getByRole('navigation', { name: 'Case sections', exact: true })).toBeHidden();
+  await expect(preview.locator('ol > li')).toHaveCount(2);
+  await page.emulateMedia({ media: 'screen' });
+  await preview.getByRole('button', { name: 'Close print preview', exact: true }).click();
+  await expect(report.getByRole('button', { name: 'Print review', exact: true })).toBeFocused();
   await report.getByRole('button', { name: 'Save review in Case', exact: true }).click(); await expect(report.getByRole('status')).toContainText('Review saved');
   const files = await retainedJson(page); expect(files).toHaveLength(2);
   const input = files.map(value => JSON.parse(value)).find(value => value.schema === 'whoisleuth.platform-continuity.input');
@@ -68,7 +102,7 @@ test('platform continuity reloads editable observations and keeps provider claim
   await openCaseSection(page, 'Assessment'); await openCaseSection(page, 'Evidence'); await expect(report).toBeVisible();
 });
 
-test('storefront review requires current authority and preserves a failed-save draft for deliberate retry', async ({ page }) => {
+test('storefront review requires current authority and preserves a failed-save draft for deliberate retry', async ({ page }, testInfo) => {
   const review = await openReview(page, 'Storefront and official-site comparison');
   await review.getByLabel('Load an earlier storefront review input').setInputFiles({ name: 'storefront.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(contextInputs()[2])) });
   await expect(review.getByLabel('Official hostname')).toHaveValue('official.example.test');
@@ -77,6 +111,18 @@ test('storefront review requires current authority and preserves a failed-save d
   const report = review.getByRole('region', { name: 'Storefront comparison', exact: true }); await expect(report).toHaveCount(0);
   await authority.check(); await review.getByRole('button', { name: 'Compare storefront evidence' }).click();
   await expect(report).toContainText('Exact shared values: 1'); await expect(report).toContainText('Rights-holder reseller register');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1280, 2560]) {
+      await page.setViewportSize({ width, height: 900 });
+      const comparison = report.getByRole('table', { name: 'Official and candidate storefront evidence' });
+      await expect(comparison.getByRole('rowheader')).toHaveCount(6);
+      await expectNoHorizontalOverflow(page);
+      await report.scrollIntoViewIfNeeded();
+      if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`storefront-${theme}-${width}.png`) });
+    }
+    expect((await new AxeBuilder({ page }).include('.context-entry').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+  }
   const before = await readBrowserLocalCollection(page, 'cases');
   await failNextFileWrite(page); await report.getByRole('button', { name: 'Save review in Case' }).click(); await expect(report.getByRole('status')).toContainText('not confirmed');
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before); expect(await retainedJson(page)).toEqual([]);
@@ -108,7 +154,8 @@ test('incident sequence keeps source provenance, unknown times and chosen order 
   const selected = updateCase([initial], initial.id, { evidencePin: { label: 'Recorded page prompt', value: 'A credential form was visible.', source: 'Selected capture', observedAt: null, completeness: 'partial', limitations: ['Only the visible form was captured.'] } }, now).record;
   await openSeededTimelineCase(page, selected.domain, [selected], CASE_SCHEMA_VERSION); await openCaseSection(page, 'Evidence');
   const entry = page.locator('.context-entry'); await entry.locator(':scope > summary').click();
-  const summary = entry.getByText('Incident sequence and reported actions', { exact: true }); await summary.click(); const review = summary.locator('..');
+  await entry.getByRole('button', { name: 'Trace an incident', exact: true }).click();
+  const review = entry.getByRole('region', { name: 'Incident sequence and reported actions', exact: true });
   await review.getByLabel('Load an earlier incident-sequence input').setInputFiles({ name: 'sequence.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(contextInputs()[4])) });
   await review.getByRole('combobox', { name: 'Evidence basis', exact: true }).selectOption('retained_observation');
   await review.getByRole('combobox', { name: 'Stage kind', exact: true }).selectOption('identity_prompt');

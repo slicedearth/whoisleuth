@@ -5,7 +5,7 @@ import { parseContextInput, reviewContextInput } from '../packages/investigation
 import { reviewDomainHistory, readDomainHistoryDeclarations } from '../packages/investigation/domain-history-review.mts';
 import { reviewPlatformContinuity, readPlatformObjects } from '../packages/investigation/platform-continuity-review.mts';
 import { reviewStorefront, readStorefrontObservation } from '../packages/investigation/storefront-review.mts';
-import { reviewConnectorProvenance, readConnectorConfiguration, reviewConnectorConfigurationText } from '../packages/investigation/connector-provenance-review.mts';
+import { reviewConnectorProvenance, readConnectorConfiguration, reviewConnectorConfigurationText, connectorConfigurationPresentation } from '../packages/investigation/connector-provenance-review.mts';
 import { reviewIncidentSequence, readIncidentStages, incidentStageFromPin } from '../packages/investigation/incident-sequence-review.mts';
 import { updateCase } from '../packages/cases/case-record-operations.mts';
 import { MAX_CONTEXT_INPUT_BYTES, MAX_CONTEXT_RECORDS } from '../packages/contracts/context-review.mts';
@@ -118,7 +118,7 @@ describe('contextual evidence review', () => {
   });
   test('connector worker computation shares bounded parsing and handles only one request', async () => {
     const current = JSON.stringify({ servers: { selected: { url: 'https://example.test/private?token=excluded-worker-value', headers: { Authorization: 'excluded-secret' } } } });
-    const expected = reviewConnectorConfigurationText(current, '', NOW);
+    const expected = connectorConfigurationPresentation(current, '', NOW);
     assert.doesNotMatch(JSON.stringify(expected), /excluded-/u);
     assert.throws(() => reviewConnectorConfigurationText('{"servers":{},"servers":{}}', '', NOW), /duplicate/iu);
     assert.throws(() => reviewConnectorConfigurationText(' '.repeat(MAX_CONTEXT_INPUT_BYTES + 1), '', NOW), /byte/iu);

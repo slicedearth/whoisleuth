@@ -151,11 +151,21 @@ test('Case sections retain reading position and keep the assessment evidence and
     for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720], [2560, 1440]] as const) {
       await page.setViewportSize({ width, height });
       await expect(evidence).toBeVisible();
-      expect(await nav.getByRole('link').evaluateAll(links => links.every(link => {
-        const range = document.createRange();
-        range.selectNodeContents(link);
-        return range.getClientRects().length === 1 && link.scrollWidth <= link.clientWidth;
-      }))).toBe(true);
+      if (width <= 600) {
+        const selector = nav.getByRole('combobox', { name: 'Case section', exact: true });
+        await expect(selector).toBeVisible();
+        await expect(selector).toHaveValue('assessment');
+        await expect(selector.locator('option')).toHaveText(['Summary', 'Evidence', 'Assessment', 'Response', 'History']);
+        expect((await selector.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        await expect(nav.getByRole('link', { includeHidden: true })).toHaveCount(5);
+        await expect(nav.getByRole('link', { name: 'Evidence', includeHidden: true })).toBeHidden();
+      } else {
+        await expect(nav.getByRole('link')).toHaveCount(5);
+        expect(await nav.getByRole('link').evaluateAll(links => links.every(link => {
+          const range = document.createRange(); range.selectNodeContents(link);
+          return range.getClientRects().length === 1 && link.scrollWidth <= link.clientWidth;
+        }))).toBe(true);
+      }
       const layout = await evidence.evaluate(element => {
         const evidence = element.getBoundingClientRect();
         const draft = document.querySelector('.assessment-draft')!.getBoundingClientRect();

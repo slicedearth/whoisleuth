@@ -4,6 +4,10 @@
   import { runMessageIntakeWorker } from '$lib/message-intake-worker.ts';
   import { downloadLocalFile } from '$lib/download-local-file.ts';
   import Pagination from './Pagination.svelte';
+  import LocalFileInput from './LocalFileInput.svelte';
+  import CopyButton from './CopyButton.svelte';
+  import EvidenceTimestamp from './EvidenceTimestamp.svelte';
+  import { defangedIndicator } from '$lib/analysis/evidence-copy.ts';
 
   let { onselect, onsave, disabled = false }: {
     onselect: (target: string) => void | Promise<void>;
@@ -14,17 +18,12 @@
   let file = $state.raw<File | null>(null), reviewedFile = $state.raw<File | null>(null);
   let result = $state.raw<MessageIntakeResult | null>(null);
   let busy = $state(false), saving = $state(false), error = $state(''), message = $state(''), retainOriginal = $state(false), page = $state(1);
-  let heading = $state<HTMLHeadingElement>(), input = $state<HTMLInputElement>();
+  let heading = $state<HTMLHeadingElement>();
   let controller: AbortController | null = null;
   const PAGE_SIZE = 10;
   const links = $derived(result?.report.links.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) ?? []);
   function clearReview() { controller?.abort(); controller = null; busy = false; result = null; reviewedFile = null; error = ''; message = ''; retainOriginal = false; page = 1; }
-  function changeKind() { clearReview(); file = null; if (input) input.value = ''; }
-  function selectFile(event: Event) {
-    clearReview();
-    file = (event.currentTarget as HTMLInputElement).files?.[0] ?? null;
-    if (file && (!file.size || file.size > MAX_MESSAGE_INTAKE_BYTES)) { error = 'Select a non-empty file of at most 16 MiB.'; file = null; }
-  }
+  function changeKind() { clearReview(); file = null; }
   onDestroy(() => controller?.abort());
   async function review() {
     if (busy || saving || disabled) return;
@@ -57,8 +56,9 @@
     <fieldset disabled={busy || saving || disabled}>
       <legend class="sr-only">Selected input</legend>
       <label>Input type<select bind:value={kind} onchange={changeKind}><option value="text">Pasted text or links</option><option value="email">Email (.eml, including nested messages)</option><option value="calendar">Calendar invitation (.ics)</option><option value="qr">QR image (still PNG)</option></select></label>
-      {#if kind === 'text'}<label>Text to review<textarea bind:value={pasted} oninput={() => { clearReview(); file = null; if (input) input.value = ''; }} rows="4" maxlength={MAX_MESSAGE_INTAKE_BYTES} spellcheck="false" placeholder="Paste the message or suspicious link"></textarea></label>{/if}
-      <label>{kind === 'text' ? 'Or select a text file' : 'Select a file'}<input bind:this={input} type="file" accept={kind === 'email' ? '.eml,message/rfc822' : kind === 'calendar' ? '.ics,text/calendar' : kind === 'qr' ? '.png,image/png' : '.txt,text/plain'} onchange={selectFile}></label>
+      {#if kind === 'text'}<label>Text to review<textarea bind:value={pasted} oninput={() => { clearReview(); file = null; }} rows="4" maxlength={MAX_MESSAGE_INTAKE_BYTES} spellcheck="false" placeholder="Paste the message or suspicious link"></textarea></label>{/if}
+      <LocalFileInput label={kind === 'text' ? 'Or select a text file' : 'Select a file'} bind:file maximumBytes={MAX_MESSAGE_INTAKE_BYTES} disabled={busy || saving || disabled}
+        accept={kind === 'email' ? '.eml,message/rfc822' : kind === 'calendar' ? '.ics,text/calendar' : kind === 'qr' ? '.png,image/png' : '.txt,text/plain'} onselect={clearReview} />
       <button type="button" class="btn" onclick={() => void review()}>Review locally</button>
     </fieldset>
     {#if busy}<div class="actions"><span role="status">Reviewing selected input…</span><button type="button" class="btn" onclick={() => { clearReview(); message = 'Review cancelled. Nothing was saved.'; }}>Cancel review</button></div>{/if}
@@ -85,6 +85,7 @@
               </div>
             {/if}
             <button class="btn small" type="button" disabled={disabled || saving} onclick={() => void onselect(link.hostname)}>Use {link.hostname} in Lookup</button>
+            <CopyButton value={link.hostname} label="Copy domain" description={`Copy domain ${link.hostname}`} /><CopyButton value={defangedIndicator(link.hostname)} label="Copy defanged" description={`Copy defanged indicator for ${link.hostname}`} />
             <details><summary>Review exact URL privately</summary><p>Paths, queries and fragments may contain tokens or personal information. They are excluded from the review download.</p><code class="exact">{result.targets.find(target => target.id === link.id)?.exactUrl}</code><button class="btn small" type="button" disabled={disabled || saving} onclick={() => { const target = result?.targets.find(value => value.id === link.id); if (target) void onselect(target.exactUrl); }}>Use exact URL in Lookup</button></details>
           </li>
         {/each}
@@ -96,11 +97,11 @@
           <ul>{#each report.identities as identity}<li>Part {identity.part}: {identity.role.replaceAll('_', ' ')} — {identity.domain}</li>{/each}{#each report.authenticationClaims as claim}<li>Part {claim.part}: reported {claim.method} — {claim.result}</li>{/each}{#each report.actionHints as hint}<li>Wording to review: {hint.replaceAll('_', ' ')}</li>{/each}</ul>
         </details>
       {/if}
-      <div class="actions"><button type="button" class="btn" onclick={() => downloadLocalFile(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }), 'message-review.json')}>Download minimised review</button>
-        {#if onsave}<button type="button" class="btn" disabled={saving || disabled} onclick={() => void save()}>{saving ? 'Saving…' : 'Save review in Case'}</button>{/if}
+      <div class="actions">{#if onsave}<button type="button" class="btn primary" disabled={saving || disabled} onclick={() => void save()}>{saving ? 'Saving…' : 'Save review in Case'}</button>{/if}
+        <button type="button" class="btn" onclick={() => downloadLocalFile(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }), 'message-review.json')}>Download review</button>
       </div>
       {#if onsave}<label class="retain"><input type="checkbox" bind:checked={retainOriginal} disabled={saving || disabled}>Also retain the private original, including message bodies, addresses, attachments and exact links</label>{/if}
-      <details><summary>Review coverage and source identity</summary><p>Review time: {report.reviewedAt}. The original’s hash identifies the selected bytes, not its publisher or authenticity.</p><code>{report.source.digestSha256}</code><p>Static text, email and calendar links are extracted without following redirects. HTML scripts do not run. QR review uses still PNG pixels; image metadata and embedded attachments are not analysed.</p></details>
+      <details><summary>Review coverage and source identity</summary><EvidenceTimestamp value={report.reviewedAt} label="review time" /><p>The original’s hash identifies the selected bytes, not its publisher or authenticity.</p><code>{report.source.digestSha256}</code><p>Static text, email and calendar links are extracted without following redirects. HTML scripts do not run. QR review uses still PNG pixels; image metadata and embedded attachments are not analysed.</p></details>
     {/if}
     <p class="status" role="status" aria-live="polite">{message}</p>
   </div>

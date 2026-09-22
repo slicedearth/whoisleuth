@@ -159,6 +159,7 @@
   </div>
   <div aria-hidden="true"></div>
   <nav class="case-sections workspace-view-nav" aria-label="Case sections" use:keepCaseControlsVisible>
+    <label class="mobile-section">Case section<select value={activeSection} onchange={event => { const section = CASE_WORKSPACE_SECTIONS.find(item => item.id === event.currentTarget.value); if (section) void selectSection(section.id); }}>{#each CASE_WORKSPACE_SECTIONS as section}<option value={section.id}>{section.label}</option>{/each}</select></label>
     {#each CASE_WORKSPACE_SECTIONS as section}
       <a href={caseWorkspaceHref(record.id, section.id)} aria-current={activeSection === section.id ? 'page' : undefined}
         onclick={(event) => { if (handlesLocalLink(event)) { event.preventDefault(); void selectSection(section.id); } }}>{section.label}</a>
@@ -226,5 +227,6 @@
   .notes time { color: var(--muted); font-size: var(--text-xs); }
   .notes p { margin: 6px 0 0; font-size: var(--text-sm); line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
   @media(max-width: 720px) { .field-grid { grid-template-columns: minmax(0,1fr); } }
-  @media(max-width: 480px) { .case-sections { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; } .case-sections a { grid-column: span 2; justify-content: center; padding-inline: 4px; font-size: var(--text-xs); white-space: nowrap; } .case-sections a:nth-last-child(-n+2) { grid-column: span 3; } .tags-edit > div { flex-wrap: wrap; } }
+  .mobile-section{display:none}
+  @media(max-width: 600px) { .case-sections{display:block;padding-block:6px}.case-sections a{display:none}.mobile-section{display:flex;align-items:center;gap:12px;font-size:var(--text-xs);font-weight:600}.mobile-section select{min-height:44px;flex:1;min-width:0;font:inherit}.tags-edit > div{flex-wrap:wrap} }
 </style>

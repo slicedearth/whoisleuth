@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import type { CaseResponsePacket } from '$lib/analysis/case-response-packet.ts';
+  import './print-surface.css';
 
   let { packet, onvalidate, onclose }: {
     packet: CaseResponsePacket;
@@ -53,7 +54,7 @@
   {#if value}<time datetime={value}>{value.replace('T', ' ').replace(/Z$/u, ' UTC')}</time>{:else}<span>Time unavailable</span>{/if}
 {/snippet}
 
-<dialog class="packet-print" class:print-approved={printing} bind:this={dialog} aria-labelledby="packet-report-title" onclose={onclose}>
+<dialog class="packet-print" data-print-surface class:print-approved={printing} bind:this={dialog} aria-labelledby="packet-report-title" onclose={onclose}>
   <div class="print-controls">
     <div><button type="button" class="btn" onclick={() => void printReport()} disabled={busy || printing}>{busy ? 'Checking packet…' : 'Print or save PDF'}</button><button type="button" class="btn" onclick={() => dialog.close()}>Close report</button></div>
     <label><input type="checkbox" bind:checked={includeAppendix} disabled={printing}> Include exact packet JSON as a technical appendix</label>
@@ -127,11 +128,6 @@
   footer p{margin-top:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:400 var(--text-xs)/1.5 var(--mono);max-width:100%;margin:12px 0 0}
   @media(max-width:600px){.packet-print{width:calc(100% - 12px);max-height:calc(100dvh - 12px)}.print-controls{position:static;padding:12px}.report-content{padding:22px 16px}.report-facts{grid-template-columns:minmax(0,1fr)}}
   @media print {
-    @page{margin:16mm}
-    :global(html:has(dialog.packet-print[open])){background:white!important;color:#111!important;color-scheme:light!important}
-    :global(body:has(dialog.packet-print[open]) *:not(dialog.packet-print):not(dialog.packet-print *):not(:has(dialog.packet-print[open]))){display:none!important}
-    :global(body:has(dialog.packet-print[open])),:global(body:has(dialog.packet-print[open]) *:has(dialog.packet-print[open])){display:block!important;position:static!important;contain:none!important;transform:none!important;width:auto!important;max-width:none!important;min-width:0!important;height:auto!important;max-height:none!important;min-height:0!important;overflow:visible!important;margin:0!important;padding:0!important;border:0!important;background:white!important;box-shadow:none!important}
-    :global(body:has(dialog.packet-print[open]))::before,:global(body:has(dialog.packet-print[open]))::after,:global(body:has(dialog.packet-print[open]) *:has(dialog.packet-print[open]))::before,:global(body:has(dialog.packet-print[open]) *:has(dialog.packet-print[open]))::after{display:none!important}
     .packet-print{position:static!important;inset:auto!important;display:block!important;width:100%!important;max-width:none!important;height:auto!important;max-height:none!important;margin:0!important;padding:0!important;overflow:visible!important;border:0!important;border-radius:0!important;background:white!important;color:#111!important;--muted:#333;--border:#aaa;box-shadow:none!important}
     .packet-print::backdrop,.print-controls{display:none!important}.report-content{padding:0;font-size:10pt}.report-facts{grid-template-columns:repeat(2,minmax(0,1fr))}
     h2{font-size:22pt}h3{font-size:14pt}h4{font-size:11pt}h2,h3,h4,dt{break-after:avoid}.evidence-list>li,.report-facts>div,.readiness>div{break-inside:avoid}.identifier,.reference,pre{font-size:8pt}

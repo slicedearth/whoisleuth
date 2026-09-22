@@ -12,6 +12,7 @@ test('local message review exposes destination mismatch and fills Lookup without
   const intake = page.locator('details.intake');
   await intake.getByLabel('Input type').selectOption('email');
   await intake.getByLabel('Select a file').setInputFiles({ name: 'selected.eml', mimeType: 'message/rfc822', buffer: Buffer.from('From: private@brand.example\r\nContent-Type: text/html\r\n\r\n<a href="https://destination.test/private?token=private-value">https://brand.example</a>') });
+  await expect(intake.locator('.file-selection')).toContainText('selected.eml');
   await intake.getByRole('button', { name: 'Review locally', exact: true }).click();
   await expect(intake.getByRole('heading', { name: 'Extracted destinations' })).toBeFocused();
   await expect(intake.getByText('different from the link destination', { exact: false })).toBeVisible();
@@ -19,7 +20,7 @@ test('local message review exposes destination mismatch and fills Lookup without
   await expect(page.locator('#query')).toHaveValue('destination.test');
   await expect(page.locator('#query')).toBeFocused();
   expect(lookups).toBe(0);
-  const [download] = await Promise.all([page.waitForEvent('download'), intake.getByRole('button', { name: 'Download minimised review' }).click()]);
+  const [download] = await Promise.all([page.waitForEvent('download'), intake.getByRole('button', { name: 'Download review', exact: true }).click()]);
   const stream = await download.createReadStream();
   const chunks: Buffer[] = [];
   for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
@@ -36,6 +37,18 @@ test('local message review exposes destination mismatch and fills Lookup without
       if (width === 390 || width === 1280) await intake.screenshot({ path: testInfo.outputPath(`intake-${width}-${theme}.png`) });
     }
   }
+  expect(lookups).toBe(0);
+  await intake.getByRole('button', { name: 'Remove select a file', exact: true }).click();
+  await expect(intake.getByRole('heading', { name: 'Extracted destinations' })).toHaveCount(0);
+  await expect(intake.getByLabel('Select a file')).toBeFocused();
+  await intake.locator('.local-file').evaluate(element => {
+    const files = new DataTransfer();
+    files.items.add(new File(['Content-Type: text/plain\r\n\r\nhttps://replacement.test'], 'dropped.eml', { type: 'message/rfc822' }));
+    element.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: files }));
+  });
+  await expect(intake.locator('.file-selection')).toContainText('dropped.eml');
+  await intake.getByRole('button', { name: 'Review locally', exact: true }).click();
+  await expect(intake.getByRole('button', { name: 'Use replacement.test in Lookup', exact: true })).toBeVisible();
   expect(lookups).toBe(0);
 });
 

@@ -1,0 +1,18 @@
+/* Isolate an explicitly opened print preview from the surrounding workspace. */
+@media print {
+  @page { margin: 16mm; }
+  html:has(dialog[data-print-surface][open]) { background: white !important; color: #111 !important; color-scheme: light !important; }
+  body:has(dialog[data-print-surface][open]) *:not(dialog[data-print-surface]):not(dialog[data-print-surface] *):not(:has(dialog[data-print-surface][open])) { display: none !important; }
+  body:has(dialog[data-print-surface][open]),
+  body:has(dialog[data-print-surface][open]) *:has(dialog[data-print-surface][open]) {
+    display: block !important; position: static !important; contain: none !important; transform: none !important;
+    width: auto !important; max-width: none !important; min-width: 0 !important;
+    height: auto !important; max-height: none !important; min-height: 0 !important;
+    overflow: visible !important; margin: 0 !important; padding: 0 !important; border: 0 !important;
+    background: white !important; box-shadow: none !important;
+  }
+  body:has(dialog[data-print-surface][open])::before,
+  body:has(dialog[data-print-surface][open])::after,
+  body:has(dialog[data-print-surface][open]) *:has(dialog[data-print-surface][open])::before,
+  body:has(dialog[data-print-surface][open]) *:has(dialog[data-print-surface][open])::after { display: none !important; }
+}

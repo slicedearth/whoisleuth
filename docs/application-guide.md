@@ -594,7 +594,7 @@ data. For a page you own or are authorised to review, **Record an expected
 change** adds your reason and a digest of the selected observations to the Case
 assessment. It does not approve future changes automatically.
 
-**Contextual reviews** in the same Evidence section lets you arrange source-qualified
+**Specialist evidence reviews** in the same Evidence section lets you arrange source-qualified
 incident stages without treating a reported action as an observed event. Compare retained domain
 changes with expected maintenance, follow a stable platform object across
 versions and per-object outcomes, compare an authorised official storefront,

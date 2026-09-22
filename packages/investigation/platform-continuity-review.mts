@@ -32,13 +32,17 @@ export function readPlatformObjects(raw: unknown): PlatformObject[] {
   return rows;
 }
 
+export function groupPlatformObjects(rows: readonly PlatformObject[]): readonly (readonly PlatformObject[])[] {
+  const groups = new Map<string, PlatformObject[]>();
+  for (const row of rows) { const key = JSON.stringify([row.platformOrigin, row.objectType, row.objectId]); groups.set(key, [...(groups.get(key) ?? []), row]); }
+  return [...groups.values()].map(values => values.sort((a, b) => Date.parse(a.observedAt) - Date.parse(b.observedAt)));
+}
+
 export function reviewPlatformContinuity(raw: unknown, reviewedAt: string): ContextReview {
   iso(reviewedAt, 'Review time');
-  const rows = readPlatformObjects(raw), groups = new Map<string, PlatformObject[]>();
-  for (const row of rows) { const key = JSON.stringify([row.platformOrigin, row.objectType, row.objectId]); groups.set(key, [...(groups.get(key) ?? []), row]); }
+  const rows = readPlatformObjects(raw), groups = groupPlatformObjects(rows);
   const observations: ContextObservation[] = [];
-  for (const values of groups.values()) {
-    values.sort((a, b) => Date.parse(a.observedAt) - Date.parse(b.observedAt));
+  for (const values of groups) {
     const versions = new Set(values.map(row => row.version).filter(value => value !== null));
     for (const row of values) observations.push({ label: `${row.objectType} · ${row.objectId}${row.version ? ` · version ${row.version}` : ''}`, state: 'reported',
       detail: `${row.report.replaceAll('_', ' ')}; provider outcome: ${row.providerOutcome?.replaceAll('_', ' ') ?? 'not supplied'}; independent recheck: ${row.recheck.replaceAll('_', ' ')}${row.recheckedAt ? ` at ${row.recheckedAt}` : ''}. ${versions.size > 1 ? `${versions.size} versions retained for this same declared object.` : 'No version change established.'}`,
@@ -46,7 +50,7 @@ export function reviewPlatformContinuity(raw: unknown, reviewedAt: string): Cont
   }
   const unresolved = rows.filter(row => ['not_checked', 'still_observed', 'changed', 'unavailable'].includes(row.recheck)).length;
   return { schema: CONTEXT_REVIEW_SCHEMA, version: CONTEXT_REVIEW_VERSION, kind: 'platform_continuity', reviewedAt, title: 'Platform object continuity',
-    state: rows.length ? 'reviewed' : 'partial', summary: `Recorded observations: ${rows.length}; distinct platform objects: ${groups.size}; observations needing follow-up or a qualified outcome: ${unresolved}.`, observations,
+    state: rows.length ? 'reviewed' : 'partial', summary: `Recorded observations: ${rows.length}; distinct platform objects: ${groups.length}; observations needing follow-up or a qualified outcome: ${unresolved}.`, observations,
     nextSteps: ['Use the exact object and version when preparing a provider report; do not report an entire shared platform from a hosted URL alone.', 'Record each report and recheck separately. New versions, changed content and newly observed objects require their own review.'],
     limitations: ['Platform origin, object identity and outcomes are analyst-supplied metadata, not verified provider telemetry.', 'A matching object ID establishes only declared continuity within that platform and object type. Provider resolution is separate from independent recheck; not reproduced does not establish worldwide removal.'] };
 }
