@@ -91,10 +91,10 @@ describe('canonical Case portability lifecycle', () => {
     assert.equal(workspace.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS, contracts.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS);
     assert.equal(encryptedWorkspace.ENCRYPTED_WORKSPACE_ARCHIVE_VERSION, contracts.ENCRYPTED_WORKSPACE_ARCHIVE_VERSION);
 
-    assert.deepEqual([...contracts.CASE_BROWSER_SUPPORTED_VERSIONS], [12, 13, 14, 15, contracts.CASE_SCHEMA_VERSION]);
-    assert.deepEqual([...contracts.CASE_IMPORT_VERSIONS], [12, 13, 14, 15, contracts.CASE_SCHEMA_VERSION]);
-    assert.deepEqual([...contracts.CASE_REPORT_OUTPUT_VERSIONS], [9, 10, 11, contracts.CASE_REPORT_SCHEMA_VERSION]);
-    assert.deepEqual([...contracts.SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS], [6, 7, 8, 9, contracts.CASE_RESPONSE_PACKET_VERSION]);
+    assert.deepEqual([...contracts.CASE_BROWSER_SUPPORTED_VERSIONS], [12, 13, 14, 15, 16, contracts.CASE_SCHEMA_VERSION]);
+    assert.deepEqual([...contracts.CASE_IMPORT_VERSIONS], [12, 13, 14, 15, 16, contracts.CASE_SCHEMA_VERSION]);
+    assert.deepEqual([...contracts.CASE_REPORT_OUTPUT_VERSIONS], [9, 10, 11, 12, contracts.CASE_REPORT_SCHEMA_VERSION]);
+    assert.deepEqual([...contracts.SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS], [6, 7, 8, 9, 10, contracts.CASE_RESPONSE_PACKET_VERSION]);
     assert.deepEqual([...contracts.SUPPORTED_CLI_CASE_PACK_VERSIONS], [2]);
     assert.deepEqual([...contracts.SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS], [5, 6, 7, 8, 9]);
 
@@ -172,7 +172,7 @@ describe('canonical Case portability lifecycle', () => {
       browserStore,
     );
 
-    for (const name of ['browser-case-v12', 'browser-case-v13', 'browser-case-v14', 'browser-case-v15']) {
+    for (const name of ['browser-case-v12', 'browser-case-v13', 'browser-case-v14', 'browser-case-v15', 'browser-case-v16']) {
       assert.deepEqual(caseModel.normalizeCaseStore(await fixture(name)), browserStore);
     }
 
@@ -189,13 +189,13 @@ describe('canonical Case portability lifecycle', () => {
       currentExport,
     );
 
-    for (const name of ['case-response-packet-v6', 'case-response-packet-v7', 'case-response-packet-v8', 'case-response-packet-v9', CURRENT_PACKET]) {
+    for (const name of ['case-response-packet-v6', 'case-response-packet-v7', 'case-response-packet-v8', 'case-response-packet-v9', 'case-response-packet-v10', CURRENT_PACKET]) {
       const packet = await fixture<Record<string, unknown>>(name);
       validateOfflineArtifactStructure(contracts.CASE_RESPONSE_PACKET_SCHEMA, packet);
       assert.equal(await responsePacket.verifyCaseResponsePacketIntegrity(packet), true);
     }
 
-    for (const name of ['cli-case-pack-v2-case-v12-public', 'cli-case-pack-v2-case-v13', 'cli-case-pack-v2-case-v14', 'cli-case-pack-v2-case-v15', 'cli-case-pack-v2-case-v15-current', contracts.CLI_CASE_PACK_WRITER_FIXTURE_ID]) {
+    for (const name of ['cli-case-pack-v2-case-v12-public', 'cli-case-pack-v2-case-v13', 'cli-case-pack-v2-case-v14', 'cli-case-pack-v2-case-v15', 'cli-case-pack-v2-case-v15-current', 'cli-case-pack-v2-case-v16-current', contracts.CLI_CASE_PACK_WRITER_FIXTURE_ID]) {
       const pack = await fixture(name);
       assert.ok(casePack.verifyCliCasePack(pack).caseCount > 0);
       assert.ok(caseModel.mergeCases([], pack).added > 0);

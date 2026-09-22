@@ -18,6 +18,7 @@ export type * from './case-response-packet-types.mts';
 // Pure abuse-evidence packet builder. It creates local review artifacts only:
 // no network requests, mailto links, submissions, or provider side effects.
 
+import { assertPacketAmendmentSelection } from './case-requested-evidence.mts';
 import {
   assertBoundedJsonStructure,
 } from '../analysis/bounded-json.mts';
@@ -86,6 +87,8 @@ export {
   CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   PUBLISHED_V2_2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   PUBLISHED_V2_3_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
+  LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION,
+  LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   PUBLISHED_V2_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
   MAX_ABUSE_CATEGORY_LENGTH,
   MAX_ABUSIVE_URLS,
@@ -100,11 +103,6 @@ export {
   MAX_RESPONSE_SELECTED_EVIDENCE,
   RESPONSE_ROUTE_STALE_AFTER_DAYS,
   SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS,
-} from '../contracts/case-portability.mts';
-
-export {
-  LATEST_PUBLIC_CASE_RESPONSE_PACKET_VERSION,
-  LATEST_PUBLIC_CASE_RESPONSE_REVIEW_INPUTS_VERSION,
 } from '../contracts/case-portability.mts';
 
 export const CASE_RESPONSE_PREFLIGHT_EVIDENCE_SCOPE = Object.freeze({
@@ -304,6 +302,13 @@ function selectedPacketAction(caseRecord: CaseRecord, input: CaseResponsePacketI
     ? input.actionId
     : null;
   return actionId ? caseRecord.actions.find((action) => action.id === actionId) ?? null : null;
+}
+
+function assertAmendmentEvidence(caseRecord: CaseRecord, input: CaseResponsePacketInput): void {
+  const action = selectedPacketAction(caseRecord, input);
+  const selected = new Set(Array.isArray(input.selectedEvidencePinIds) ? input.selectedEvidencePinIds : []);
+  assertPacketAmendmentSelection(caseRecord.actions, action?.id ?? null,
+    new Set(caseRecord.evidencePins.filter(pin => selected.has(pin.id)).map(pin => pin.id)));
 }
 
 function packetActionLineage(caseRecord: CaseRecord, input: CaseResponsePacketInput) {
@@ -661,6 +666,9 @@ export function buildCaseResponsePreflight(
   const observedAt = timestamp(input.observedAt);
   const normalizedGeneratedAt = timestamp(generatedAt) || new Date().toISOString();
   const binding = bindPacketRoute(caseRecord, input, normalizedGeneratedAt);
+  let amendmentError: string | null = null;
+  try { assertAmendmentEvidence(caseRecord, input); }
+  catch (error) { amendmentError = error instanceof Error ? error.message : 'Review this amendment and its retained evidence.'; }
   const urls = normalizeUrls(input.abusiveUrls);
   const selectedEvidence = normalizeSelectedEvidence(caseRecord, input.selectedEvidencePinIds);
   const requiredComplete = Boolean(
@@ -768,10 +776,10 @@ export function buildCaseResponsePreflight(
     {
       id: 'packet_action',
       label: 'Packet action',
-      state: binding.actionBinding.state === 'selected' ? 'pass' : profile.id === 'internal_soc' ? 'caution' : 'block',
-      detail: binding.actionBinding.state === 'selected'
+      state: amendmentError ? 'block' : binding.actionBinding.state === 'selected' ? 'pass' : profile.id === 'internal_soc' ? 'caution' : 'block',
+      detail: amendmentError ?? (binding.actionBinding.state === 'selected'
         ? `Action ${binding.actionBinding.selectedActionId} owns this packet and its retained origin lineage.`
-        : 'Select the retained Case action this packet prepares or documents.',
+        : 'Select the retained Case action this packet prepares or documents.'),
     },
     {
       id: 'action_tracking',
@@ -813,6 +821,7 @@ function normalizeActionHistory(caseRecord: CaseRecord, input: CaseResponsePacke
     .map((action) => ({
       actionId: action.id,
       type: text(action.type, 80),
+      ...(action.amendment ? { amendment: structuredClone(action.amendment) } : {}),
       recipient: text(action.recipient, 320),
       contactSource: text(action.contactSource, 120),
       routeObservedAt: timestamp(action.routeObservedAt),
@@ -826,6 +835,7 @@ function normalizeActionHistory(caseRecord: CaseRecord, input: CaseResponsePacke
       historyLimitations: normalizeLimitations(action.historyLimitations),
       transitions: action.history.map((event) => ({
         id: event.id,
+        ...(event.evidenceRequest ? { evidenceRequest: structuredClone(event.evidenceRequest) } : {}),
         previousState: event.previousState,
         nextState: event.nextState,
         occurredAt: event.occurredAt,
@@ -923,6 +933,7 @@ export function buildCaseResponseReviewInputs(
   input: CaseResponsePacketInput,
   generatedAt: string,
 ) {
+  assertAmendmentEvidence(caseRecord, input);
   const profile = buildResponsePacketProfilePreview(caseRecord, input);
   const category = text(input.category, MAX_ABUSE_CATEGORY_LENGTH);
   const selectedEvidence = normalizeSelectedEvidence(caseRecord, input.selectedEvidencePinIds);

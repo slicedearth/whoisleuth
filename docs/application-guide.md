@@ -630,6 +630,15 @@ or record delivery. The report digest identifies the packet JSON, not the PDF.
 Provider acknowledgement or reported resolution remains analyst-recorded state,
 not independently observed remediation.
 
+In **Requested evidence and amendments**, choose a recorded packet delivery and
+record the provider's request and any stated UTC deadline. Review it against
+retained pins, or record why the evidence cannot be provided. **Create drafting
+amendment** starts a linked action: review its recipient and select all prepared
+pins in its response packet before authorising it. Preparation is not delivery;
+record the new packet's delivery separately. The original digest and request
+history remain unchanged. Case exports, reports and CLI Case packs preserve this
+history; public Case packs exclude it.
+
 A retained exact Incident URL can also be handed to the [optional capture companion](../packages/web-capture/README.md).
 The browser validates the selected manifest and can
 import its sanitised metadata and declared digests into that Case. Optionally

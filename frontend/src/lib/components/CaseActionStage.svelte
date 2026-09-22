@@ -15,6 +15,7 @@
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
   import CaseActionReceipt from './CaseActionReceipt.svelte';
+  import CaseRequestedEvidence from './CaseRequestedEvidence.svelte';
 
   let { record, mode, mutationBusy, persist, onadvanced }: {
     record: CaseRecord;
@@ -258,6 +259,7 @@
           <small>Route observed {action.routeObservedAt ?? 'time unavailable'}</small>
           <small>Route review after {action.routeReviewAfter ?? 'not recorded'} · follow-up {action.followUpAt ?? 'not scheduled'}</small>
           {#if action.originActionId}<small>Originating action: {action.originActionId}</small>{/if}
+          {#if action.amendment}<small>Amends submitted packet SHA-256: {action.amendment.packetDigestSha256}</small>{/if}
           {#if action.reference}<p>Latest reference: {action.reference}</p>{/if}
           {#if action.providerOutcome}<p>Latest typed provider outcome: {action.providerOutcome.replaceAll('_', ' ')}{action.outcome ? ` · ${action.outcome}` : ''}</p>{:else if action.outcome}<p>Recorded legacy outcome detail: {action.outcome}</p>{/if}
           <ol class="transition-timeline" aria-label={`Transitions for ${action.recipient}`}>
@@ -289,6 +291,7 @@
     <summary>{mode === 'quick' ? 'Prepare and track response' : 'Track append-only response actions'}</summary>
     <div class="response-form">
       <CaseActionReceipt bind:this={receipt} {record} {mode} {mutationBusy} {persist} onreviewrecipient={reviewRecipient} metadata={receiptMetadata} />
+      <CaseRequestedEvidence {record} {mutationBusy} {persist} onamendment={async id => { await selectReceipt(id); await reviewRecipient(id); }} />
       {#if mode === 'advanced'}
         <CaseDraftRecovery draft={transitionDraft} />
         {#if record.actions.length}<label class="field">Action for transition<select value={transitionDraft.value.transitionActionId} onchange={async (event) => { const select = event.currentTarget; await selectTransitionAction(select.value); select.value = transitionDraft.value.transitionActionId; }}><option value="">Select an action</option>{#each record.actions as action}<option value={action.id}>{action.type.replaceAll('_', ' ')} · {action.recipient}</option>{/each}</select></label>{/if}

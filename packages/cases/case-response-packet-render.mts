@@ -60,10 +60,16 @@ export function renderCaseResponsePacket(packet: CaseResponsePacket): { markdown
           ...(action.providerOutcome ? [`  - Typed provider outcome: ${escapeMarkdown(action.providerOutcome.replaceAll('_', ' '))}`] : []),
           ...(action.outcomeDetail ? [`  - Outcome detail: ${escapeMarkdown(action.outcomeDetail)}`] : []),
           ...(action.originActionId ? [`  - Originating action: ${escapeMarkdown(action.originActionId)}`] : []),
+          ...(action.amendment ? [`  - Amendment of submitted packet SHA-256: ${action.amendment.packetDigestSha256}`, `  - Prepared request events: ${action.amendment.requestEventIds.map(escapeMarkdown).join(', ')}`] : []),
           ...action.transitions.flatMap((event) => [
             `  - ${event.occurredAt}: ${escapeMarkdown(event.previousState ?? 'none')} → ${escapeMarkdown(event.nextState)} · ${escapeMarkdown(event.sourceClass)} · ${escapeMarkdown(event.provenance)}${event.providerOutcome ? ` · ${escapeMarkdown(event.providerOutcome.replaceAll('_', ' '))}` : ''}${event.applied ? '' : ' · retained conflict'}`,
             ...(event.reference ? [`    - Reference: ${escapeMarkdown(event.reference)}`] : []),
             ...(event.evidencePinId ? [`    - Evidence pin: ${escapeMarkdown(event.evidencePinId)}`] : []),
+            ...(event.evidenceRequest ? [
+              `    - Requested evidence (${event.evidenceRequest.state}): ${escapeMarkdown(event.evidenceRequest.summary)}`,
+              `    - Original packet SHA-256: ${event.evidenceRequest.packetDigestSha256}; deadline: ${event.evidenceRequest.dueAt ?? 'not provided'}`,
+              `    - Prepared pins: ${event.evidenceRequest.evidencePinIds.map(escapeMarkdown).join(', ') || 'none'}${event.evidenceRequest.rationale ? `; ${escapeMarkdown(event.evidenceRequest.rationale)}` : ''}`,
+            ] : []),
             ...(event.originActionId ? [`    - Originating action: ${escapeMarkdown(event.originActionId)}`] : []),
             ...event.limitations.map((limitation) => `    - Limitation: ${escapeMarkdown(limitation)}`),
           ]),

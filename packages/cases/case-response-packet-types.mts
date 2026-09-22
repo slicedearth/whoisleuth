@@ -1,6 +1,7 @@
 import type { CASE_RESPONSE_PACKET_SCHEMA, CASE_RESPONSE_PACKET_VERSION } from '../contracts/case-portability.mts';
 import type { SORTED_JSON_V2 } from '../evidence/artifact-integrity.mts';
 import type { CaseRecord } from './case-model.mts';
+import type { CaseEvidenceRequest, CasePacketAmendment } from './case-requested-evidence.mts';
 import type { buildCaseActionOutcomeSummary, CaseObservedEffectState } from './case-response-model.mts';
 import type {
   RESPONSE_CONTACT_KINDS, RESPONSE_PACKET_PROFILE_IDS, RESPONSE_READINESS_ROW_IDS,
@@ -206,6 +207,7 @@ export type CaseResponsePacket = {
   authorisation: CaseResponseAuthorisation;
   preflight: CaseResponsePreflight;
   escalationHistory: Array<{
+    amendment?: CasePacketAmendment;
     actionId: string;
     type: string;
     recipient: string;
@@ -220,6 +222,7 @@ export type CaseResponsePacket = {
     historyOmitted: number;
     historyLimitations: string[];
     transitions: Array<{
+      evidenceRequest?: CaseEvidenceRequest;
       id: string;
       previousState: string | null;
       nextState: string;

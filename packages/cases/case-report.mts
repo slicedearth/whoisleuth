@@ -24,6 +24,7 @@ import { CASE_RECHECK_CONDITIONS } from './case-recheck-model.mts';
 import {
   CASE_REPORT_SCHEMA,
   CASE_REPORT_SCHEMA_VERSION,
+  LATEST_PUBLIC_CASE_REPORT_SCHEMA_VERSION,
   PUBLISHED_V2_3_CASE_REPORT_SCHEMA_VERSION,
 } from '../contracts/case-portability.mts';
 
@@ -371,6 +372,7 @@ export function buildCaseReportVerificationProjection(
 ) {
   const current = buildCaseReport(caseRecord, options).json;
   if (schemaVersion === CASE_REPORT_SCHEMA_VERSION) return current;
+  if (schemaVersion === LATEST_PUBLIC_CASE_REPORT_SCHEMA_VERSION) return { ...current, schemaVersion };
   if (schemaVersion !== PUBLISHED_V2_3_CASE_REPORT_SCHEMA_VERSION) {
     throw new TypeError('No strict Case report projection is defined for this version.');
   }
@@ -631,6 +633,12 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
       if (action.routeObservedAt) lines.push(`  Route reviewed: ${escapeMarkdownInline(action.routeObservedAt)}`);
       if (action.routeReviewAfter) lines.push(`  Route review due: ${escapeMarkdownInline(action.routeReviewAfter)}`);
       if (action.originActionId) lines.push(`  Originating action: ${escapeMarkdownInline(action.originActionId)}`);
+      if (action.amendment) lines.push(`  Amendment of submitted packet SHA-256: ${action.amendment.packetDigestSha256}; request events: ${action.amendment.requestEventIds.map(escapeMarkdownInline).join(', ')}`);
+      for (const event of action.history) if (event.evidenceRequest) {
+        const request = event.evidenceRequest;
+        lines.push(`  Requested evidence [${request.state}]: ${escapeMarkdownInline(request.summary)}; deadline: ${request.dueAt ?? 'not stated'}; original packet: ${request.packetDigestSha256}${event.applied ? '' : ' (retained conflict)'}`,
+          `  Prepared pins: ${request.evidencePinIds.map(escapeMarkdownInline).join(', ') || 'none'}${request.rationale ? `; ${escapeMarkdownInline(request.rationale)}` : ''}`);
+      }
       if (action.dueAt) lines.push(`  Due: ${escapeMarkdownInline(action.dueAt)}`);
       if (action.followUpAt) lines.push(`  Follow-up: ${escapeMarkdownInline(action.followUpAt)}`);
       if (action.reference) lines.push(`  Reference: ${escapeMarkdownInline(action.reference)}`);

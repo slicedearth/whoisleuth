@@ -396,13 +396,15 @@ test('Case stage forms remain usable across supported layouts and both themes', 
       await expect(sighting.getByLabel('Source', { exact: true })).toBeVisible();
       const geometry = await pin.evaluate((element) => {
         const panel = element.getBoundingClientRect();
-        return [...element.querySelectorAll('input, select, textarea, button')].every((control) => {
+        const controls = [...element.querySelectorAll('input, select, textarea, button')]
+          .filter(control => control.getClientRects().length > 0);
+        return controls.length > 0 && controls.every((control) => {
           const box = control.getBoundingClientRect();
           return box.width > 0 && box.left >= panel.left && box.right <= panel.right + 1;
         });
       });
       expect(geometry).toBe(true);
-      expect(await pin.locator('summary').evaluate((element) => getComputedStyle(element).cursor)).toBe('pointer');
+      expect(await pin.locator(':scope > summary').evaluate((element) => getComputedStyle(element).cursor)).toBe('pointer');
       await pin.scrollIntoViewIfNeeded();
       await page.screenshot({ path: testInfo.outputPath(`observation-${theme.split(' ')[0]!.toLowerCase()}-${width}.png`), animations: 'disabled' });
       await sighting.screenshot({ path: testInfo.outputPath(`sighting-${theme.split(' ')[0]!.toLowerCase()}-${width}.png`), animations: 'disabled' });

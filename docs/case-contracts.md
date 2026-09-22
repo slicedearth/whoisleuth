@@ -14,24 +14,24 @@ fixture remain. Every writer emits only the version shown in â€œCurrent writerâ€
 
 | Contract | Canonical lifecycle schema | Durable supported | Readable | Current writer | Future version | Migration |
 | --- | --- | ---: | ---: | ---: | --- | --- |
-| Browser-local Cases | `whoisleuth.browser.case-store` | 12, 13, 14, 15, 16 | 12, 13, 14, 15, 16 | 16 | `preserve_without_write` | `normalize_to_current` |
-| Portable Case export | `whoisleuth.case-export` | 12, 13, 14, 15, 16 | 12, 13, 14, 15, 16 | 16 | `reject` | `normalize_to_current` |
-| Case report | `whoisleuth.case-report` | 9, 10, 11, 12 | 9, 10, 11, 12 | 12 | `reject` | `read_only` |
-| Case-response packet | `whoisleuth.case-response-packet` | 6, 7, 8, 9, 10 | 6, 7, 8, 9, 10 | 10 | `reject` | `read_only` |
-| Review-input digest material | `whoisleuth.case-response-review-inputs` | 1, 2, 3, 4 | 1, 2, 3, 4 | 4 | `reject` | `read_only` |
+| Browser-local Cases | `whoisleuth.browser.case-store` | 12, 13, 14, 15, 16, 17 | 12, 13, 14, 15, 16, 17 | 17 | `preserve_without_write` | `normalize_to_current` |
+| Portable Case export | `whoisleuth.case-export` | 12, 13, 14, 15, 16, 17 | 12, 13, 14, 15, 16, 17 | 17 | `reject` | `normalize_to_current` |
+| Case report | `whoisleuth.case-report` | 9, 10, 11, 12, 13 | 9, 10, 11, 12, 13 | 13 | `reject` | `read_only` |
+| Case-response packet | `whoisleuth.case-response-packet` | 6, 7, 8, 9, 10, 11 | 6, 7, 8, 9, 10, 11 | 11 | `reject` | `read_only` |
+| Review-input digest material | `whoisleuth.case-response-review-inputs` | 1, 2, 3, 4, 5 | 1, 2, 3, 4, 5 | 5 | `reject` | `read_only` |
 | CLI Case-pack | `whoisleuth.cli.case-pack` | 2 | 2 | 2 | `reject` | `read_only` |
 | Workspace archive | `whoisleuth.workspace-archive` | 5, 6, 7, 8, 9 | 5, 6, 7, 8, 9 | 9 | `reject` | `normalize_to_current` |
 | Workspace settings section | `whoisleuth.workspace-settings` | 1 | 1 | 1 | `reject` | `exact_current_only` |
 | Encrypted workspace archive | `whoisleuth.encrypted-workspace-archive` | 1 | 1 | 1 | `reject` | `exact_current_only` |
 
 Browser-local Case reading and portable Case import accept only schema
-12, 13, 14, 15, 16. The current writers emit Case report
-schema 12 and response-packet schema
-10; the compatible output epochs are
+12, 13, 14, 15, 16, 17. The current writers emit Case report
+schema 13 and response-packet schema
+11; the compatible output epochs are
 listed above. Response-packet verification accepts schema
-6, 7, 8, 9, 10. Review-input digest material
-accepts exact versions 1, 2, 3, 4
-and the current writer emits version 4.
+6, 7, 8, 9, 10, 11. Review-input digest material
+accepts exact versions 1, 2, 3, 4, 5
+and the current writer emits version 5.
 
 ## CLI Case/report epochs
 
@@ -44,6 +44,7 @@ The Case-pack verifier accepts every exact Case/report epoch listed below.
 | 14 | 10 |
 | 15 | 11 |
 | 16 | 12 |
+| 17 | 13 |
 
 The durable CLI Case-pack envelope is version 2.
 The durable workspace archive envelope supports versions 5, 6, 7, 8 and 9;
@@ -58,8 +59,8 @@ The published format checkpoint is release 2.4.0. It emitted
 Case schema 16, Case report schema 12, response-packet schema
 10, review-input digest material version 4, and workspace
 archive schema 9. The current writer emits
-Case schema 16, report schema 12,
-response-packet schema 10, review-input version 4, and workspace
+Case schema 17, report schema 13,
+response-packet schema 11, review-input version 5, and workspace
 archive schema 9.
 
 Application patches do not create new format epochs. Release verification also
@@ -70,10 +71,10 @@ formats written by public release 1.47.4:
 browser and portable Case schema 12, Case report schema 8, response-packet schema 6,
 CLI Case-pack schema 2 with its Case 12/report 8 epoch, workspace archive schema
 5, workspace settings schema 1, and encrypted workspace archive schema 1.
-Case schemas 12, 13, 14 and 15 migrate directly to schema
-16; response packets
-6, 7, 8 and 9 verify alongside packet
-10. Every declared CLI epoch remains
+Case schemas 12, 13, 14, 15 and 16 migrate directly to schema
+17; response packets
+6, 7, 8, 9 and 10 verify alongside packet
+11. Every declared CLI epoch remains
 readable without passing through an unreleased checkpoint.
 
 Older formats accepted only by historical readers and formats produced only by
@@ -85,7 +86,7 @@ and no import path automatically deletes stored data.
 
 ## Durable compatibility evidence
 
-The lifecycle family binds 36 immutable current-format
+The lifecycle family binds 42 immutable current-format
 fixtures to exact byte counts and SHA-256 identities. The canonical JSON
 commitment is
 `docs/case-supported-contract-baseline-v1.json`; it is derived from

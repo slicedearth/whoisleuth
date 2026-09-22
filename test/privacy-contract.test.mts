@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import {
   CASE_REPORT_SCHEMA_VERSION,
   CASE_SCHEMA_VERSION,
+  LATEST_PUBLIC_CASE_SCHEMA_VERSION,
   PUBLISHED_V2_3_WORKSPACE_ARCHIVE_VERSION,
   PUBLISHED_V2_2_CASE_RESPONSE_PACKET_VERSION,
   PUBLISHED_V2_3_CASE_RESPONSE_PACKET_VERSION,
@@ -75,7 +76,8 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   { id: 'named-workspace-retention', pattern: /Each tab selects its workspace.*guide progress, candidate handoffs and named-workspace Brand preferences are scoped.*Backups and imports use the explicitly selected workspace, excluding the directory and tab state.*Deleting an inactive named workspace removes its saved collections, not other workspaces or downloaded files.*Clearing site data removes all workspaces/iu },
   { id: 'posture-source-retention', pattern: /Saved settings reviews also retain source times, completeness, the profile identifier and a digest of its collection settings/iu },
   { id: 'browser-delete', pattern: /Clearing site data removes the browser workspace/iu },
-  { id: 'case-compatibility', pattern: new RegExp(`Case schema ${CASE_SCHEMA_VERSION}.*exact public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION}.*published-v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION}–${PUBLISHED_V2_3_CASE_SCHEMA_VERSION} remain readable`, 'iu') },
+  { id: 'case-compatibility', pattern: new RegExp(`Case schema ${CASE_SCHEMA_VERSION}.*exact public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION}.*published-v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION}–${LATEST_PUBLIC_CASE_SCHEMA_VERSION} remain readable`, 'iu') },
+  { id: 'case-requested-evidence', pattern: /Provider evidence requests retain the original submitted-packet digest.*Amendments link to those request events without rewriting the original packet.*browser-local until exported; public Case packs exclude them/iu },
   { id: 'unknown-source-time', pattern: /Pins and sightings with unknown observation times retain null; saving them does not create a source observation time/iu },
   { id: 'case-report', pattern: new RegExp(`Case report v${CASE_REPORT_SCHEMA_VERSION} JSON and Markdown`, 'iu') },
   { id: 'case-incident-links', pattern: /Case can (?:also )?retain controlled classifications and exact HTTP\(S\) incident links.*browser-local Case metadata/iu },

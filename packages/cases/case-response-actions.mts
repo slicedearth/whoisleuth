@@ -1,4 +1,5 @@
 // Append-only response actions: transitions, reconciliation and bounded history.
+import { readCaseEvidenceRequest, readCasePacketAmendment, assertEvidenceRequestEvent, assertEvidenceRequestHistory, assertEvidenceRequestTransition, assertPacketAmendment } from './case-requested-evidence.mts';
 
 import {
   CASE_SCHEMA_VERSION,
@@ -133,6 +134,9 @@ function normalizeActionEvent(
   if (['ready_for_review', 'reviewed', 'authorised', 'submitted'].includes(nextState)
     && sourceClass !== 'analyst' && !migrationSnapshot) return null;
   const provenance = text(item.provenance, MAX_RESPONSE_LABEL_LENGTH) || `${sourceClass}_record`;
+  if (item.evidenceRequest !== undefined && options.sourceVersion != null && options.sourceVersion < 17) throw new Error('Requested evidence requires Case schema 17.');
+  const evidenceRequest = readCaseEvidenceRequest(item.evidenceRequest);
+  assertEvidenceRequestEvent(evidenceRequest, { previousState, nextState, sourceClass, providerOutcome: item.providerOutcome });
   const providerOutcome = typeof item.providerOutcome === 'string' && PROVIDER_OUTCOMES.has(item.providerOutcome)
     ? item.providerOutcome as CaseProviderOutcome
     : null;
@@ -159,6 +163,7 @@ function normalizeActionEvent(
     : null;
   const eventMaterial = {
     previousState,
+    ...(evidenceRequest ? { evidenceRequest } : {}),
     nextState,
     occurredAt,
     sourceClass,
@@ -361,6 +366,9 @@ function normalizeAction(
   const createdAt = iso(item.createdAt, fallback, options);
   const actionId = safeId(item.id, 'action', { recipient, createdAt });
   const history = normalizeActionHistory(item.history, item, actionId, createdAt, fallback, options);
+  assertEvidenceRequestHistory(history.history, history.omitted > 0);
+  if (item.amendment !== undefined && options.sourceVersion != null && options.sourceVersion < 17) throw new Error('Packet amendments require Case schema 17.');
+  const amendment = readCasePacketAmendment(item.amendment);
   const applied = history.history.filter((event) => event.applied);
   const latestReference = [...applied].reverse().find((event) => event.reference)?.reference ?? null;
   const latestProviderOutcome = [...applied].reverse().find((event) => event.providerOutcome) ?? null;
@@ -375,6 +383,7 @@ function normalizeAction(
     : null;
   return {
     id: actionId,
+    ...(amendment ? { amendment } : {}),
     type: legacyPlatformReview
       ? 'platform_report'
       : typeof item.type === 'string' && ACTION_TYPES.has(item.type)
@@ -565,6 +574,8 @@ export function appendCaseAction(
     ? item.originActionId
     : null;
   if (item.originActionId != null && !originActionId) throw new Error('A follow-on action requires an existing originating action.');
+  const amendment = readCasePacketAmendment(item.amendment);
+  if (amendment) assertPacketAmendment(current, originActionId, amendment);
   const history = [{
     id: freshId('action-event'),
     previousState: null,
@@ -626,6 +637,11 @@ export function appendCaseActionTransition(
     || !SAFE_ID_RE.test(item.evidencePinId) || (validPinIds && !validPinIds.has(item.evidencePinId)))) {
     throw new Error('An action transition evidence pin must reference a retained Case evidence pin.');
   }
+  const evidenceRequest = readCaseEvidenceRequest(item.evidenceRequest);
+  if (evidenceRequest) assertEvidenceRequestTransition(action, evidenceRequest, sourceClass, item.providerOutcome, validPinIds);
+  if (action.amendment && ['ready_for_review', 'reviewed', 'authorised', 'submitted'].includes(nextState)) {
+    assertPacketAmendment(current, action.originActionId, action.amendment);
+  }
   const occurredAt = optionalIso(item.occurredAt) ?? now;
   const event = normalizeActionEvent({
     ...item,
@@ -651,7 +667,7 @@ export function appendCaseActionTransition(
 }
 
 const ACTION_REVIEW_MATERIAL_FIELDS = [
-  'type', 'recipient', 'contactSource', 'routeObservedAt', 'routeReviewAfter', 'contactLimitations', 'originActionId',
+  'type', 'recipient', 'contactSource', 'routeObservedAt', 'routeReviewAfter', 'contactLimitations', 'originActionId', 'amendment',
 ] as const satisfies readonly (keyof CaseActionRecord)[];
 
 export function updateCaseAction(
@@ -684,6 +700,7 @@ export function updateCaseAction(
   if (!updated) throw new Error('An action requires a recipient or internal owner.');
   const materialChanged = ACTION_REVIEW_MATERIAL_FIELDS
     .some((key) => Object.hasOwn(patch, key) && JSON.stringify(record(existing)[key]) !== JSON.stringify(record(updated)[key]));
+  if (materialChanged && updated.amendment) assertPacketAmendment(current, updated.originActionId, updated.amendment);
   if (materialChanged && ['submitted', 'acknowledged', 'terminal'].includes(existing.state)) {
     throw new Error('Submitted or terminal action identity and recipient metadata cannot be rewritten; create a linked follow-on action instead.');
   }
