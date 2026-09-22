@@ -116,7 +116,7 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(page.getByRole('heading', { name: 'Evidence guides', exact: true }).last()).toBeVisible();
       await expect(page.getByRole('region', { name: 'Evidence guides', exact: true })).toHaveCount(1);
       if (viewport.width < 1080) {
-        const navigator = page.getByText('Browse documentation', { exact: true });
+        const navigator = page.getByRole('button', { name: 'Browse documentation', exact: true });
         await navigator.click();
         await expect(page.getByRole('dialog', { name: 'Documentation', exact: true })).toBeVisible();
       }

@@ -172,6 +172,10 @@ Saved Bulk rows and deliberately retained relationships can include bounded
 contributing-source identities, states and observation times, not raw responses.
 Older records remain readable with missing provenance marked unknown.
 
+Public documentation search runs in memory over public text. Its search terms
+are not saved, added to URLs or sent to a search service. This is separate from
+shareable CLI catalogue filters and saved-work search.
+
 The browser can derive searches, filters, timelines, relationship views,
 posture comparisons, evidence-gap queues and response preflight from retained
 records without another request. Derived views do not create evidence, prove a

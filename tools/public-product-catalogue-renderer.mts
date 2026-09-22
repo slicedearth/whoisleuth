@@ -1,5 +1,5 @@
 import { buildCliCasePack } from '../cli/case-pack.mts';
-import { CLI_COMMAND_REGISTRY } from '../cli/command-reference.mts';
+import { CLI_COMMAND_REGISTRY, commandOptionHelp } from '../cli/command-reference.mts';
 import {
   buildInvestigationPlan,
   buildWorkflowRecipeCatalogue,
@@ -58,6 +58,7 @@ function publicCliCatalogue() {
         requiredWhenOptions: input.requiredWhenOptions,
       }))),
       importantOptions: definition.completion.options,
+      options: commandOptionHelp(definition.command),
       networkEffect: definition.execution.networkEffect,
       disclosureClass: definition.documentation.disclosureClass,
       explicitAuthorisationRequired: definition.documentation.explicitAuthorisationRequired,

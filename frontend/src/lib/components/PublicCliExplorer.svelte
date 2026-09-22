@@ -4,6 +4,9 @@
   import { page } from '$app/state';
   import CopyableCommand from '$lib/components/CopyableCommand.svelte';
   import { PUBLIC_CLI_INDEX } from '$lib/generated/public-cli-index';
+  import { PUBLIC_EXAMPLES_INDEX } from '$lib/generated/public-examples-index';
+  import { commandReferenceSections, resolveCommandReferenceHash } from '$lib/public-cli-sections';
+  import { revealDocumentationTarget } from '$lib/documentation-anchors';
   import { preloadOnIdle } from '$lib/idle-preload';
   import { handlesLocalLink } from '$lib/link-activation';
   import {
@@ -14,6 +17,7 @@
 
   type FullCatalogue = typeof import('$lib/generated/public-cli-catalogue')['PUBLIC_CLI_CATALOGUE'];
   type CommandDetail = FullCatalogue['commands'][number];
+  let { onsectionschange }: { onsectionschange?: (sections: readonly { href: string; label: string }[]) => void } = $props();
 
   let query = $state('');
   let group = $state('all');
@@ -93,7 +97,7 @@
     }
   }
 
-  async function revealCommand(id: string): Promise<void> {
+  async function revealCommand(id: string, anchor = `command-${id}`): Promise<void> {
     const request = ++loadGeneration;
     if (!filtered.some((command) => command.id === id)) {
       resetFilters();
@@ -105,7 +109,8 @@
     await tick();
     requestAnimationFrame(() => {
       if (!currentSelection(request)) return;
-      const target = document.getElementById(`command-${id}`);
+      const target = document.getElementById(anchor);
+      if (target) revealDocumentationTarget(target);
       target?.focus({ preventScroll: true });
       target?.scrollIntoView({ block: 'start' });
       requestAnimationFrame(() => {
@@ -215,8 +220,8 @@
 
   onMount(() => {
     function openHashCommand() {
-      const id = location.hash.match(/^#command-(.+)$/u)?.[1] ?? '';
-      if (PUBLIC_CLI_INDEX.commands.some((command) => command.id === id)) void revealCommand(id);
+      const selected = resolveCommandReferenceHash(location.hash);
+      if (selected) void revealCommand(selected.id, selected.anchor);
       else clearCommandSelection();
     }
 
@@ -243,6 +248,10 @@
     mode;
     commonOnly;
     if (urlSyncReady && typeof location !== 'undefined') syncFiltersToLocation();
+  });
+
+  $effect(() => {
+    onsectionschange?.(expandedId ? [{ href: '#commands', label: 'All commands' }, ...commandReferenceSections(expandedId)] : []);
   });
 </script>
 
@@ -272,6 +281,7 @@
     {@const related = relatedCommands(expandedId)}
     {@const previousCommand = adjacentCommand(-1)}
     {@const nextCommand = adjacentCommand(1)}
+    {#key expandedId}
     <article class="command-workspace" id={`command-${command.id}`} data-command-detail={command.id} tabindex="-1">
       <header class="command-detail-heading">
         <nav class="command-detail-navigation" aria-label="Command reference navigation">
@@ -285,19 +295,12 @@
       </header>
       <div class="command-detail" id={`command-detail-${command.id}`}>
         <p class="command-description">{detail.description}</p>
-        <div class="command-examples">
-          <section><h3>Usage</h3><CopyableCommand command={detail.usage} label={`${command.id} usage`} compact /></section>
+        <div class="command-examples" id={`command-${command.id}--example`} tabindex="-1">
           <section><h3>Example</h3><CopyableCommand command={detail.example} label={`${command.id} example`} compact /></section>
+          <details class="compact-disclosure usage"><summary>Full command syntax</summary><CopyableCommand command={detail.usage} label={`${command.id} usage`} compact /></details>
         </div>
-        <dl class="command-facts">
-          <div><dt>Network behaviour</dt><dd><strong>{labelToken(detail.networkEffect)} · {labelToken(detail.capability.networkMode)}</strong>{detail.collection.scope}</dd></div>
-          <div><dt>Authorisation</dt><dd>{labelToken(detail.capability.authorisation)}{detail.explicitAuthorisationRequired ? ' · dedicated acknowledgement required' : ''}</dd></div>
-          <div><dt>Produced artefact</dt><dd>{detail.primaryEvidenceArtefacts.length ? detail.primaryEvidenceArtefacts.join(', ') : 'No evidence artefact is declared.'}</dd></div>
-          <div><dt>Presentation options</dt><dd>{#if detail.presentationOptions.length}<ul>{#each detail.presentationOptions as format}<li><code>{format.option}</code> · {format.format}</li>{/each}</ul>{:else}No alternate presentation flag; the command writes its native output.{/if}</dd></div>
-          <div><dt>Output destination</dt><dd>{#if detail.fileOutput}<code>--output &lt;file&gt;</code> writes a local file atomically. Replacing a file requires <code>--force</code>. The command instructions state when file output is required.{:else}No common <code>--output</code> option. See usage for command-specific files.{/if}</dd></div>
-          <div><dt>Exit behaviour</dt><dd>{exitBehaviour(detail)}</dd></div>
-        </dl>
-        <div class="command-inputs">
+        <p class="network-summary"><strong>{detail.networkEffect === 'offline' ? 'Runs locally.' : detail.networkEffect === 'conditional_network' ? 'Network use depends on the selected options.' : 'Makes network requests.'}</strong> {detail.collection.scope}{#if detail.explicitAuthorisationRequired} Explicit authorisation is required.{/if}</p>
+        <div class="command-inputs" id={`command-${command.id}--inputs`} tabindex="-1">
           <section>
             <h3>Inputs</h3>
             {#if detail.inputs.length}
@@ -306,19 +309,27 @@
           </section>
           <section>
             <h3>Command options</h3>
-            {#if detail.importantOptions.length}<ul class="option-list">{#each detail.importantOptions as option}<li><code>{option}</code></li>{/each}</ul>{:else}<p>No command-specific options.</p>{/if}
-            <p>Run <code>whoisleuth {command.id} --help</code> for option descriptions and common file or presentation controls.</p>
+            <dl class="option-descriptions">{#each detail.options.filter(option => option.scope === 'command') as option}<div><dt><code>{option.usage}</code></dt><dd>{option.description}{#if option.defaultDescription}<small>Default: {option.defaultDescription}.</small>{/if}{#if option.repeatable}<small>May be repeated.</small>{/if}{#each option.ranges as range}<small>{range.whenOptionPresent ? `With ${range.whenOptionPresent}: ` : 'Range: '}{range.minimum}–{range.maximum}.</small>{/each}{#if option.values.length && !option.values.every(value => option.usage.includes(value))}<details class="compact-disclosure"><summary>Accepted values</summary><p>{option.values.join(', ')}</p></details>{/if}</dd></div>{/each}</dl>
+            <details class="common-options compact-disclosure"><summary>Common options</summary><dl class="option-descriptions">{#each detail.options.filter(option => option.scope === 'common') as option}<div><dt><code>{option.usage}</code></dt><dd>{option.description}</dd></div>{/each}</dl></details>
+            <p><code>whoisleuth {command.id} --help</code> describes the version installed on your machine.</p>
           </section>
         </div>
+        <section class="command-output" id={`command-${command.id}--output`} tabindex="-1">
+          <h3>Output</h3>
+          <dl class="command-facts">
+            <div><dt>Result</dt><dd>{detail.primaryEvidenceArtefacts.length ? detail.primaryEvidenceArtefacts.join(', ') : 'Terminal command output.'}</dd></div>
+            <div><dt>Formats</dt><dd>{#if detail.presentationOptions.length}<ul>{#each detail.presentationOptions as format}<li><code>{format.option}</code> · {format.format}</li>{/each}</ul>{:else}Native command output.{/if}</dd></div>
+            <div><dt>Destination</dt><dd>{#if detail.fileOutput}<code>--output &lt;file&gt;</code> writes a local file atomically. Replacing a file requires <code>--force</code>. Required file outputs are identified in the command syntax.{:else}See the syntax for command-specific files.{/if}</dd></div>
+            <div><dt>Exit status</dt><dd>{exitBehaviour(detail)}</dd></div>
+          </dl>
+          {#each PUBLIC_EXAMPLES_INDEX.examples.filter(example => example.command.split(' ')[1] === command.id) as example}<a class="output-example" href={`/examples#example-${example.id}`}><strong>See example output: {example.title}</strong><span>{example.summary} Fictional data.</span></a>{/each}
+        </section>
         {#if related.length}
           <nav class="related-commands" aria-label={`Commands related to ${command.id}`}><strong>Related commands</strong><div>{#each related as item}<a href={`#command-${item.id}`} onclick={(event) => navigateToCommand(event, item.id)}><code>{item.id}</code><span>{item.summary}</span></a>{/each}</div></nav>
         {/if}
-        <section class="boundary" aria-label="Operational boundary">
-          <h3>Operational boundary</h3>
-          <p>{detail.boundary}</p>
-        </section>
-        <details class="contract-details compact-disclosure">
-          <summary>Limits and contracts</summary>
+        <details class="contract-details compact-disclosure" id={`command-${command.id}--interpretation`} tabindex="-1">
+          <summary>Interpretation and limits</summary>
+          <section class="boundary" aria-label="Operational boundary"><p>{detail.boundary}</p></section>
           <dl>
             <div><dt>Input limits</dt><dd><ul>{#each detail.inputLimits as item}<li>{item}</li>{/each}</ul></dd></div>
             <div><dt>Output limits</dt><dd><ul>{#each detail.outputLimits as item}<li>{item}</li>{/each}</ul></dd></div>
@@ -334,6 +345,7 @@
         {#if nextCommand}<a class="next" href={`#command-${nextCommand.id}`} onclick={(event) => navigateToCommand(event, nextCommand.id)}><span>Next command</span><strong>{nextCommand.id}</strong></a>{/if}
       </nav>
     </article>
+    {/key}
   {:else}
     <div class="command-list">
       {#each filtered as command (command.id)}
@@ -415,7 +427,7 @@
   .command-detail-heading h2 code { color: var(--accent); }
   .command-detail-heading .command-purpose { max-width: 75ch; color: var(--text); font: 400 var(--text-sm)/1.6 var(--font-sans); }
   .command-detail { padding-block: 24px; }
-  .command-examples h3, .command-inputs h3, .boundary h3, .related-commands>strong {
+  .command-examples h3, .command-inputs h3, .command-output h3, .related-commands>strong {
     color: var(--text);
     font: 700 var(--text-md)/1.4 var(--font-sans);
   }
@@ -433,7 +445,6 @@
   }
   dt { color: var(--interface-accent); font: 700 var(--text-xs)/1.55 var(--mono); }
   dd { min-width: 0; margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: 1.55; overflow-wrap: anywhere; }
-  .command-facts dd>strong { display: block; margin-bottom: 4px; color: var(--text); font: 700 var(--text-xs) var(--mono); }
   dd ul { margin: 6px 0 0; padding-left: 18px; }
   .command-inputs { display: grid; gap: 12px; margin-top: 12px; }
   .command-inputs>section { min-width: 0; padding-block: 20px; border-top: 1px solid var(--border); }
@@ -442,19 +453,27 @@
   .command-inputs dl>div { display: grid; grid-template-columns: minmax(90px,.35fr) minmax(0,.65fr); gap: 8px; }
   .command-inputs dd, .command-inputs p { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.55; }
   .command-inputs>section>p:last-child { margin-top: 12px; }
-  .option-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-  .option-list li { font-size: var(--text-sm); overflow-wrap: anywhere; }
+  .network-summary { margin: 24px 0; padding: 14px 16px; background: var(--panel); border-left: 3px solid var(--border-strong); color: var(--muted); line-height: 1.6; }
+  .network-summary strong { color: var(--text); }
+  .command-inputs .option-descriptions>div { grid-template-columns: minmax(120px,.4fr) minmax(0,.6fr); border-top: 1px solid var(--border); padding-block: 14px; }
+  .option-descriptions code { overflow-wrap: anywhere; }
+  .option-descriptions small { display: block; margin-top: 6px; }
+  .common-options { margin-top: 18px; }
+  .common-options summary,.usage summary { min-height: 44px; padding: 12px; }
+  .common-options dl { padding: 0 12px; }
+  .output-example { display: grid; gap: 6px; padding: 16px; margin-top: 20px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  .output-example strong { color: var(--accent); }.output-example span { color: var(--muted); line-height: 1.5; }
+  .command-output { padding-block: 20px; }.command-output h3 { margin: 0; }
   .related-commands { display: grid; gap: 12px; margin-top: 12px; padding-block: 20px; border-top: 1px solid var(--border); }
   .related-commands>div { display: flex; flex-wrap: wrap; gap: 8px; }
   .related-commands a { display: grid; gap: 4px; min-width: 145px; flex: 1 1 180px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
   .related-commands a:hover, .related-commands a:focus-visible { border-color: var(--accent); background: var(--control-hover); }
   .related-commands a code { color: var(--accent); font-size: var(--text-xs); }
   .related-commands a span { color: var(--muted); font-size: var(--text-xs); line-height: 1.5; }
-  .boundary, .contract-details { margin-top: 12px; border: 0; border-block: 1px solid var(--border); border-radius: 0; background: transparent; }
-  .boundary h3 { margin: 20px 0 12px; }
+  .contract-details { margin-top: 12px; border: 0; border-block: 1px solid var(--border); border-radius: 0; background: transparent; }
   .contract-details summary { min-height: 48px; padding: 12px 4px; font: 700 var(--text-xs) var(--mono); }
   .contract-details summary:hover { background: var(--control-hover); }
-  .boundary p { margin: 0; padding: 0 0 20px; color: var(--muted); font-size: var(--text-sm); line-height: 1.65; }
+  .boundary p { margin: 0; padding: 0 4px 20px; color: var(--muted); font-size: var(--text-sm); line-height: 1.65; }
   .contract-details dl { margin: 0; padding: 0 4px; }
   .command-pagination { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin-top: 12px; }
   .command-pagination a { display: grid; gap: 5px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
@@ -467,6 +486,7 @@
   .empty button { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); font: 700 var(--text-xs) var(--mono); }
   .recipes{display:grid;grid-template-columns:minmax(210px,.45fr) minmax(0,1.55fr);gap:24px;margin-top:40px;padding-top:32px;border-top:1px solid var(--border)}.recipe-groups{display:grid;gap:10px}.recipe-groups>section{display:grid;gap:9px;padding:16px 0;border-top:1px solid var(--border)}.recipe-groups header{display:flex;align-items:baseline;justify-content:space-between;gap:10px}.recipe-groups h4{margin:0;font:700 var(--text-sm) var(--mono)}.recipe-groups header span{color:var(--interface-accent);font:700 var(--text-xs) var(--mono)}.recipe-groups>section>p{font-size:var(--text-xs)}.recipes ul{display:grid;gap:6px;margin:0;padding:0;list-style:none}.recipes li{display:grid;grid-template-columns:minmax(135px,.35fr) minmax(0,.65fr);gap:4px 11px;padding:12px 0;border-top:1px solid var(--border)}.recipes li code{color:var(--accent);font-size:var(--text-xs)}.recipes li strong{font:700 var(--text-xs) var(--mono)}.recipes li span,.recipes li small{grid-column:1/-1;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.recipes li small{color:var(--interface-accent);text-transform:uppercase}
   @media(max-width:560px){.load-error{align-items:stretch;flex-direction:column}.load-error button{width:100%}}
+  @media(max-width:640px){.command-inputs .option-descriptions>div { grid-template-columns: 1fr; gap: 8px; }}
   @media(max-width:800px){.filters{position:static;grid-template-columns:repeat(2,minmax(0,1fr));box-shadow:none;backdrop-filter:none}.recipes{grid-template-columns:1fr}.command-facts,.contract-details dl,.command-inputs{grid-template-columns:1fr}}
   @media(max-width:520px){.filters{grid-template-columns:1fr}.command-open{grid-template-columns:minmax(0,1fr);gap:10px;padding:16px 8px}.command-facts>div,.contract-details dl>div{grid-template-columns:1fr;gap:6px}.command-pagination{grid-template-columns:1fr}.command-pagination>span{display:none}.command-pagination a.next{text-align:left}.recipes li{grid-template-columns:1fr}.recipes li strong,.recipes li span,.recipes li small{grid-column:1}}
 </style>

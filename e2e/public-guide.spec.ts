@@ -17,7 +17,7 @@ for (const theme of ['light', 'dark'] as const) {
         await expect(page.locator('main h1')).toHaveCount(1);
         await expect(page.locator('main h1')).toBeInViewport({ ratio: 1 });
         await expect(page.getByRole('navigation', { name: 'Breadcrumb', exact: true })).toBeVisible();
-        await expect(page.getByText('Browse documentation', { exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Browse documentation', exact: true })).toBeVisible();
         await expectNoHorizontalOverflow(page);
         const bodyTop = await page.locator('.reference-body').evaluate(element => element.getBoundingClientRect().top);
         measurements.push({ href: destination.href, theme, ...viewport, bodyTop });
@@ -210,7 +210,7 @@ test('public resources offer task-specific source boundaries on desktop and mobi
   await expect(references.getByRole('link')).toHaveCount(3);
   await expect(references.getByRole('link', { name: /IETF RFC 3912: WHOIS protocol/u })).toHaveAttribute('href', 'https://www.rfc-editor.org/rfc/rfc3912');
   await expect(references.locator('.sr-only').first()).toHaveCSS('clip-path', 'inset(50%)');
-  await expect(page.getByRole('link', { name: 'Inspect synthetic registration evidence' })).toHaveAttribute('href', '/demo');
+  await expect(page.getByRole('link', { name: 'Inspect synthetic registration evidence', exact: true })).toHaveAttribute('href', '/demo');
   await expect(page.getByRole('link', { name: 'Open docs/registry-data-contract.md' })).toHaveAttribute(
     'href',
     'https://github.com/slicedearth/whoisleuth/blob/main/docs/registry-data-contract.md',
@@ -288,31 +288,24 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await practice.getByLabel('Review the official domain and trusted allowlists before generating candidates.').check();
   await expect(practice.getByText('Defensible choice')).toBeVisible();
   await expect(practice.getByRole('button', { name: 'Next decision' })).toBeEnabled();
-  const toolCards = page.locator('.tool-guide article');
+  const toolCards = page.locator('.tool-guide details');
   const referenceCards = page.locator('.reference-guide article');
   await expect(toolCards).toHaveCount(toolGuides.length);
-  await expect(toolCards.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
+  const cases = page.locator('#tool-cases');
+  await cases.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(cases).toHaveAttribute('open', '');
+  await expect(cases.locator('dl')).toContainText('Each Case holds evidence');
   await expect(referenceCards).toHaveCount(referenceGuides.length);
-  const desktopCardWidths = await toolCards.evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().width));
-  const ordinaryWidth = desktopCardWidths[0]!;
-  expect(ordinaryWidth).toBeGreaterThan(0);
-  for (const [index, width] of desktopCardWidths.entries()) {
-    if (index === desktopCardWidths.length - 1 && desktopCardWidths.length % 2 !== 0) {
-      expect(width).toBeGreaterThan(ordinaryWidth * 1.9);
-    } else {
-      expect(Math.abs(width - ordinaryWidth)).toBeLessThanOrEqual(1);
-    }
-  }
-  expect((await referenceCards.first().boundingBox())?.width ?? 0).toBeGreaterThan((desktopCardWidths[0] ?? 0) * 1.9);
-  const wideDefinitionRows = (toolGuides.length % 2 ? toolCards.last() : referenceCards.first()).locator('dl > div');
-  expect(await wideDefinitionRows.nth(0).evaluate((row) => Math.round(row.getBoundingClientRect().top)))
-    .toBe(await wideDefinitionRows.nth(1).evaluate((row) => Math.round(row.getBoundingClientRect().top)));
+  await expect(page.locator('#tool-monitor')).toHaveAttribute('open', '');
+  await expect(page.locator('#tool-monitor-next')).toContainText('Open the relevant Case');
   const resultLayout = page.getByRole('article', { name: 'Start with the decision, then open the evidence you need' });
   await expect(resultLayout).toBeVisible();
   await expect(resultLayout.getByText('Relationships and history', { exact: true })).toBeVisible();
   await expect(resultLayout).toContainText('Each family can be opened or collapsed independently.');
   await expect(page.locator('.state-grid article')).toHaveCount(9);
   await expect(page.locator('.glossary-grid > div')).toHaveCount(59);
+  await page.locator('#glossary > summary').click();
   await expect(page.locator('.glossary-grid').getByText('DANE', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('MTA-STS', { exact: true })).toBeVisible();
   await expect(page.locator('.glossary-grid').getByText('TLSA', { exact: true })).toBeVisible();
@@ -335,8 +328,7 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await page.setViewportSize({ width: 320, height: 700 });
   const mobileCardWidths = await toolCards.evaluateAll((cards) => cards.map((card) => Math.round(card.getBoundingClientRect().width)));
   expect(new Set(mobileCardWidths).size).toBe(1);
-  expect(await wideDefinitionRows.nth(0).evaluate((row) => Math.round(row.getBoundingClientRect().top)))
-    .toBeLessThan(await wideDefinitionRows.nth(1).evaluate((row) => Math.round(row.getBoundingClientRect().top)));
+  await expect(cases.locator('dl')).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 

@@ -17,6 +17,7 @@
     toolGuides,
   } from '$lib/public-guide';
   import { PUBLIC_RESOURCES } from '$lib/public-resources';
+  import { documentationAnchor } from '$lib/documentation-anchors';
   import { publicResourceHubNavigation } from '$lib/workspaces';
   import { WHOISLEUTH_SITE_ORIGIN } from '../../../../../packages/analysis/project-metadata.mts';
 
@@ -50,11 +51,9 @@
     { href: '#practice', label: 'Practice' },
     { href: '#tools', label: 'Tools' },
     { href: '#reference', label: 'Reference' },
-    { href: '#privacy', label: 'Privacy' },
     { href: '#results', label: 'Read results' },
     { href: '#glossary', label: 'Glossary' },
     { href: '#faq', label: 'FAQ' },
-    { href: '#mistakes', label: 'Common mistakes' },
   ] as const;
 </script>
 
@@ -77,7 +76,7 @@
   {/snippet}
 
 <section id="start" class="resource-section" aria-labelledby="start-title">
-  <div class="section-intro"><h2 id="start-title">Choose a task</h2><p>These steps cover common starting points.</p></div>
+  <div class="section-intro"><h2 id="start-title">Choose a task</h2></div>
   <PublicGoalPaths goals={publicGuideGoals} linkSteps ariaLabel="Common WHOISleuth tasks" />
 </section>
 
@@ -98,17 +97,16 @@
 
 <section id="tools" class="resource-section" aria-labelledby="tools-title">
   <div class="section-intro"><h2 id="tools-title">Choose the right tool</h2><p>Each tool has a distinct role.</p></div>
-  <div class="tool-guide responsive-grid">
+  <div class="tool-guide">
     {#each toolGuides as tool}
-      <article class="card" id={`tool-${tool.id}`}>
-        <h3>{tool.name}</h3>
+      <details class="tool-entry compact-disclosure" id={`tool-${tool.id}`}>
+        <summary><span><strong>{tool.name}</strong><span>{tool.useWhen}</span></span></summary>
         <dl>
-          <div><dt>Use it when</dt><dd>{tool.useWhen}</dd></div>
           <div id={`tool-${tool.id}-input`}><dt>What you provide</dt><dd>{tool.input}</dd></div>
           <div id={`tool-${tool.id}-result`}><dt>What you receive</dt><dd>{tool.result}</dd></div>
           <div id={`tool-${tool.id}-next`}><dt>What to do next</dt><dd>{tool.next}</dd></div>
         </dl>
-      </article>
+      </details>
     {/each}
   </div>
 </section>
@@ -156,7 +154,7 @@
   </article>
   <div class="state-grid">
     {#each resultStates as state}
-      <article><h3>{state.term}</h3><p>{state.definition}</p></article>
+      <article id={`state-${documentationAnchor(state.term)}`}><h3>{state.term}</h3><p>{state.definition}</p></article>
     {/each}
   </div>
   <aside class="interpretation card">
@@ -165,20 +163,21 @@
   </aside>
 </section>
 
-<section id="glossary" class="resource-section" aria-labelledby="glossary-title">
-  <div class="section-intro"><h2 id="glossary-title">Domain investigation terms</h2><p>Short definitions for the protocols, records and labels used throughout WHOISleuth.</p></div>
+<details id="glossary" class="resource-section reference-fold">
+  <summary><h2 id="glossary-title">Domain investigation terms</h2></summary>
+  <p>Search documentation for a specific term, or browse the glossary.</p>
   <dl class="glossary-grid">
     {#each glossaryTerms as item}
-      <div><dt>{item.term}</dt><dd>{item.definition}</dd></div>
+      <div id={`term-${documentationAnchor(item.term)}`}><dt>{item.term}</dt><dd>{item.definition}</dd></div>
     {/each}
   </dl>
-</section>
+</details>
 
 <section id="faq" class="resource-section" aria-labelledby="faq-title">
   <div class="section-intro"><h2 id="faq-title">Common questions</h2><p>Practical answers about interpretation, privacy and saved investigation work.</p></div>
   <div class="faq-list card">
     {#each guideFaqs as item}
-      <details><summary>{item.question}</summary><p>{item.answer}</p></details>
+      <details id={`question-${documentationAnchor(item.question)}`}><summary>{item.question}</summary><p>{item.answer}</p></details>
     {/each}
   </div>
 </section>
@@ -192,10 +191,13 @@
 
 <style>
   .closing-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}.closing-actions a{min-height:42px}
+  .tool-guide{display:grid;gap:8px}.tool-entry{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
+  .tool-entry summary{padding:18px;font:400 var(--text-sm)/1.5 var(--font-sans)}.tool-entry summary>span{display:inline-grid;gap:6px;max-width:calc(100% - 28px);vertical-align:top}.tool-entry summary strong{color:var(--accent);font-size:var(--text-md)}.tool-entry summary span span{color:var(--muted)}.tool-entry dl{padding:0 18px 18px}
+  .reference-fold{border-inline:0;border-bottom:0;border-radius:0;background:transparent}.reference-fold summary{padding:0 0 16px}.reference-fold h2{display:inline;font:700 clamp(1.45rem,2.5vw,1.9rem)/1.3 var(--font-sans)}.reference-fold>p{color:var(--muted);line-height:1.6}
   .reference-link{display:inline-flex;color:var(--accent);font:700 var(--text-xs) var(--mono)}
-  .resource-section{padding:62px 0;border-top:1px solid var(--border);scroll-margin-top:74px}.section-intro{max-width:790px;margin-bottom:24px}.section-intro h2{margin:.3rem 0 .65rem;font:700 clamp(1.6rem,3.4vw,2.45rem) var(--mono);letter-spacing:-.04em}.section-intro>p:not(.eyebrow){margin:0;color:var(--muted);line-height:1.65}
+  .resource-section{padding:36px 0;border-top:1px solid var(--border);scroll-margin-top:74px}.section-intro{max-width:790px;margin-bottom:24px}.section-intro h2{margin:.3rem 0 .65rem;font:700 clamp(1.6rem,3.4vw,2.45rem) var(--mono);letter-spacing:-.04em}.section-intro>p:not(.eyebrow){margin:0;color:var(--muted);line-height:1.65}
   .reference-pages{--grid-min:180px;--grid-gap:8px;margin:0 0 12px}.reference-pages a{display:grid;min-width:0;gap:6px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.reference-pages a:hover,.reference-pages a:focus-visible{border-color:var(--accent);background:rgb(var(--accent-rgb) / .06)}.reference-pages strong{color:var(--accent);font:700 var(--text-sm) var(--mono)}.reference-pages span{color:var(--muted);font-size:var(--type-supporting-size);line-height:1.45}
-  .tool-guide,.reference-guide{--grid-min:330px;--grid-gap:10px}.tool-guide article,.reference-guide article{padding:20px}.tool-guide article:last-child:nth-child(odd),.reference-guide article:only-child{grid-column:1 / -1}.tool-guide article:last-child:nth-child(odd) dl,.reference-guide article:only-child dl{grid-template-columns:repeat(2,minmax(0,1fr))}.tool-guide h3,.reference-guide h3{margin:0 0 16px;color:var(--accent);font:700 1.05rem var(--mono)}.tool-guide dl,.reference-guide dl{display:grid;gap:1px;margin:0;background:var(--border)}.tool-guide dl div,.reference-guide dl div{display:grid;grid-template-columns:128px minmax(0,1fr);gap:12px;padding:10px;background:var(--panel)}.tool-guide dt,.reference-guide dt{color:var(--muted);font:650 var(--type-label-size) var(--mono)}.tool-guide dd,.reference-guide dd{margin:0;font-size:var(--type-supporting-size);line-height:1.5}
+  .tool-guide,.reference-guide{--grid-min:330px;--grid-gap:10px}.reference-guide article{padding:20px}.reference-guide article:only-child{grid-column:1 / -1}.reference-guide article:only-child dl{grid-template-columns:repeat(2,minmax(0,1fr))}.reference-guide h3{margin:0 0 16px;color:var(--accent);font:700 1.05rem var(--mono)}.tool-guide dl,.reference-guide dl{display:grid;gap:1px;margin:0;background:var(--border)}.tool-guide dl div,.reference-guide dl div{display:grid;grid-template-columns:128px minmax(0,1fr);gap:12px;padding:10px;background:var(--panel)}.tool-guide dt,.reference-guide dt{color:var(--muted);font:650 var(--type-label-size) var(--mono)}.tool-guide dd,.reference-guide dd{margin:0;font-size:var(--type-supporting-size);line-height:1.5}
   .state-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:0 24px}.state-grid article{padding:16px 0;border-top:1px solid var(--border)}.state-grid h3{margin:0;color:var(--interface-accent);font:700 var(--text-sm) var(--mono)}.state-grid p{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.interpretation{margin-top:12px;padding:19px;border-left:3px solid var(--amber)}.interpretation strong{font:700 var(--text-sm) var(--mono)}.interpretation p{margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.6}
   .result-layout{--split-leading:.85fr;--split-trailing:1.15fr;--split-gap:26px;margin-bottom:24px;padding:22px}.result-layout h3{margin:4px 0 8px;font:700 clamp(1.1rem,2vw,1.35rem) var(--mono);line-height:1.25}.result-layout p{margin:0;color:var(--muted);font-size:var(--type-body-size);line-height:1.6}.result-layout ol{display:grid;gap:1px;margin:0;padding:0;background:var(--border);list-style:none}.result-layout li{display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;padding:10px 12px;background:var(--panel)}.result-layout li strong{color:var(--accent);font:700 var(--text-xs) var(--mono)}.result-layout li span{color:var(--muted);font-size:var(--type-supporting-size);line-height:1.45}.result-layout .layout-note{grid-column:1 / -1;padding-top:14px;border-top:1px solid var(--border)}
   .glossary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 30px;margin:0}.glossary-grid>div{display:grid;grid-template-columns:145px minmax(0,1fr);gap:15px;padding:16px 0;border-top:1px solid var(--border)}.glossary-grid dt{color:var(--accent);font:700 var(--text-xs) var(--mono)}.glossary-grid dd{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
@@ -204,8 +206,8 @@
   @media(max-width:900px){.glossary-grid{grid-template-columns:1fr}}
   @media(max-width:680px){
     .state-grid{grid-template-columns:1fr}
-    .tool-guide article:last-child:nth-child(odd),.reference-guide article:only-child{grid-column:auto}
-    .tool-guide article:last-child:nth-child(odd) dl,.reference-guide article:only-child dl{grid-template-columns:1fr}
+    .reference-guide article:only-child{grid-column:auto}
+    .reference-guide article:only-child dl{grid-template-columns:1fr}
     .tool-guide dl div,.reference-guide dl div,.glossary-grid>div,.result-layout li{grid-template-columns:1fr;gap:4px}
     .resource-section{scroll-margin-top:20px}
   }

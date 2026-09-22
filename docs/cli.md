@@ -7,6 +7,11 @@ collection boundaries and output. Installed `whoisleuth --help`, focused
 version. The [CLI reference](cli-reference.md) covers durable command and
 artefact contracts.
 
+The [website command reference](https://www.whoisleuth.com/cli) starts with common
+tasks, then offers searchable commands with examples, option explanations and
+defaults. Command-section links can be bookmarked. Its option guidance and
+installed help derive from the same command definitions.
+
 The generated [privacy and data-flow catalogue](https://github.com/slicedearth/whoisleuth/blob/main/docs/privacy-data-flow-catalogue.md)
 lists the network, recipient, retention and export boundary for every command.
 

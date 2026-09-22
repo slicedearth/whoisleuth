@@ -260,6 +260,8 @@ const OPTIONAL_TEXT_POSITIONAL = Object.freeze([positional('subject', 'text', 0,
 
 
 type CliOptionDefinition = Readonly<{
+  description: (command: CliCommand) => string;
+  defaultValue: (command: CliCommand, deep: boolean) => string | number | null;
   valueKind: (command: CliCommand) => CliOptionValueKind;
   values: (command: CliCommand) => readonly string[];
   occurrence: CliOptionOccurrence;
@@ -277,7 +279,9 @@ const DEEP_INTEGER_RANGE = (minimum: number, maximum: number): CliOptionIntegerR
 );
 function optionDefinition(
   valueKind: CliOptionValueKind | ((command: CliCommand) => CliOptionValueKind),
+  description: string | ((command: CliCommand) => string),
   options: Readonly<{
+    defaultValue?: string | number | ((command: CliCommand, deep: boolean) => string | number | null);
     values?: readonly string[] | ((command: CliCommand) => readonly string[]);
     occurrence?: CliOptionOccurrence;
     acceptsOptionLikeValue?: boolean;
@@ -286,7 +290,10 @@ function optionDefinition(
   }> = {},
 ): CliOptionDefinition {
   const configuredValues = options.values;
+  const configuredDefault = options.defaultValue;
   return Object.freeze({
+    description: typeof description === 'function' ? description : () => description,
+    defaultValue: typeof configuredDefault === 'function' ? configuredDefault : () => configuredDefault ?? null,
     valueKind: typeof valueKind === 'function' ? valueKind : () => valueKind,
     values: typeof configuredValues === 'function'
       ? configuredValues
@@ -298,133 +305,133 @@ function optionDefinition(
   });
 }
 
-const flag = (occurrence: CliOptionOccurrence = 'once') => optionDefinition('flag', { occurrence });
-const file = () => optionDefinition('file');
-const text = (acceptsOptionLikeValue = false) => optionDefinition('text', { acceptsOptionLikeValue });
-const enumeration = (values: readonly string[]) => optionDefinition('enum', { values });
-const integer = (ranges: (command: CliCommand) => readonly CliOptionIntegerRange[]) => (
-  optionDefinition('integer', { integerRanges: ranges })
+const flag = (description: string, occurrence: CliOptionOccurrence = 'once') => optionDefinition('flag', description, { occurrence });
+const file = (description: string) => optionDefinition('file', description);
+const text = (description: string, acceptsOptionLikeValue = false) => optionDefinition('text', description, { acceptsOptionLikeValue });
+const enumeration = (description: string, values: readonly string[], defaultValue?: string) => optionDefinition('enum', description, { values, ...(defaultValue === undefined ? {} : { defaultValue }) });
+const integer = (description: string, ranges: (command: CliCommand) => readonly CliOptionIntegerRange[], defaultValue: CliOptionDefinition['defaultValue']) => (
+  optionDefinition('integer', description, { integerRanges: ranges, defaultValue })
 );
 
 const CLI_OPTION_DEFINITIONS = Object.freeze({
-  '--help': optionDefinition('flag', { metaAction: 'help' }),
-  '--output': file(),
-  '--force': flag(),
-  '--config': file(),
-  '--profile': text(true),
-  '--palette': enumeration(['auto', 'light', 'dark']),
-  '--network': flag(),
-  '--json': flag(),
-  '--reported-action': optionDefinition('enum', { values: IDENTITY_ACTIONS.map(action => action.id), occurrence: 'repeatable' }),
-  '--package': flag(),
-  '--folder': file(),
-  '--quiet': flag('idempotent'),
-  '--no-color': flag('idempotent'),
-  '--common': flag(),
-  '--group': enumeration(['investigate', 'respond', 'assure', 'utilities']),
-  '--mode': enumeration(['offline', 'network']),
-  '--workflow': text(true),
-  '--configuration-digest': text(true),
-  '--junit': flag(),
-  '--markdown': flag(),
-  '--html': flag(),
-  '--no-attribution': flag(),
-  '--fast': flag(),
-  '--deep': flag(),
-  '--exact-url': flag(),
-  '--observer': text(),
-  '--vantage': text(),
-  '--plan': flag(),
-  '--summary': flag(),
-  '--verbose': flag(),
-  '--browse': flag(),
-  '--interactive': flag(),
-  '--save-lookup': file(),
-  '--strict-exit': flag(),
-  '--fail-on': optionDefinition('policy_list', {
+  '--help': optionDefinition('flag', 'Show command usage, options and an example without executing it.', { metaAction: 'help' }),
+  '--output': file('Write output atomically to this local file.'),
+  '--force': flag('Allow replacement of the selected output file.'),
+  '--config': file('Load explicit versioned CLI configuration from this file.'),
+  '--profile': optionDefinition('text', command => command === 'registry-scaffold' ? 'Select the registry fixture capability profile.' : 'Select a named profile from the supplied configuration.', { acceptsOptionLikeValue: true }),
+  '--palette': enumeration('Choose the terminal colour palette; redirected output and no-colour settings still take precedence.', ['auto', 'light', 'dark']),
+  '--network': flag('Include the optional public DNS and port 43 runtime checks.'),
+  '--json': flag('Write structured JSON to stdout or the selected output file.'),
+  '--reported-action': optionDefinition('enum', 'Record an analyst-reported identity action; repeat for separate actions.', { values: IDENTITY_ACTIONS.map(action => action.id), occurrence: 'repeatable' }),
+  '--package': optionDefinition('flag', command => command === 'manifest' ? 'Create a portable evidence ZIP containing the selected files.' : 'Verify a portable evidence ZIP or encrypted package rather than a single report.'),
+  '--folder': optionDefinition('file', command => command === 'manifest' ? 'Create a new evidence folder containing the selected files.' : 'Verify the evidence package within this selected folder.'),
+  '--quiet': flag('Suppress ordinary terminal presentation.', 'idempotent'),
+  '--no-color': flag('Suppress ANSI colour in terminal output.', 'idempotent'),
+  '--common': flag('Show only commands marked as common.'),
+  '--group': enumeration('Filter commands by task group.', ['investigate', 'respond', 'assure', 'utilities']),
+  '--mode': enumeration('Filter commands by offline or network collection mode.', ['offline', 'network']),
+  '--workflow': text('Label the workflow recorded in the evidence manifest.', true),
+  '--configuration-digest': text('Record a supplied configuration digest in the manifest provenance.', true),
+  '--junit': flag('Write JUnit XML for automated result reporting.'),
+  '--markdown': flag('Write a Markdown report.'),
+  '--html': flag('Write an HTML report.'),
+  '--no-attribution': flag('Omit the optional product attribution from presentation output.'),
+  '--fast': flag('Select registration-first Fast collection.'),
+  '--deep': flag('Select broader Deep collection and its additional source requests.'),
+  '--exact-url': flag('With Deep Lookup, send the selected URL path and query to the website; omit its fragment.'),
+  '--observer': text('Attach the supplied observer label to the retained observation.'),
+  '--vantage': text('Attach the supplied collection-vantage label.'),
+  '--plan': flag('Describe intended collection and limits without making requests.'),
+  '--summary': flag('Show a concise terminal result.'),
+  '--verbose': flag('Show the detailed terminal result.'),
+  '--browse': flag('Open the interactive terminal evidence browser.'),
+  '--interactive': flag('Prompt for missing supported inputs on an interactive terminal.'),
+  '--save-lookup': file('After a normal evidence-browser close, save the completed private Lookup JSON to a new file.'),
+  '--strict-exit': flag('Use the command’s strict outcome policy when deciding the exit status.'),
+  '--fail-on': optionDefinition('policy_list', 'Return a failure-policy exit status for the selected comma-separated outcomes.', {
     values: (command) => CLI_FAIL_POLICIES_BY_COMMAND[command as CliFailPolicyCommand] ?? [],
   }),
-  '--events': flag(),
-  '--jsonl': flag(),
-  '--csv': flag(),
-  '--csv-with-metadata': flag(),
-  '--domains': flag(),
-  '--queries': flag(),
-  '--registered-only': flag(),
-  '--inconclusive-only': flag(),
-  '--errors-only': flag(),
-  '--concurrency': integer((command) => command === 'monitor-once'
+  '--events': flag('Emit collection progress events on stderr.'),
+  '--jsonl': flag('Write one JSON record per line.'),
+  '--csv': flag('Write compact CSV rows.'),
+  '--csv-with-metadata': flag('Write CSV with source, observation-time and collection-state metadata.'),
+  '--domains': flag('Write the selected domain names only.'),
+  '--queries': flag('Write the selected original queries only.'),
+  '--registered-only': flag('Keep registered results in the presented output.'),
+  '--inconclusive-only': flag('Keep inconclusive results in the presented output.'),
+  '--errors-only': flag('Keep error results in the presented output.'),
+  '--concurrency': integer('Set the maximum number of concurrent collection tasks.', (command) => command === 'monitor-once'
     ? Object.freeze([BASE_INTEGER_RANGE(1, 3)])
-    : Object.freeze([BASE_INTEGER_RANGE(1, 8), DEEP_INTEGER_RANGE(1, 3)])),
-  '--checkpoint': file(),
-  '--resume': optionDefinition((command) => command === 'workflow-run' ? 'file' : 'flag'),
-  '--tlds': text(true),
-  '--preset': enumeration(['common', 'impersonation', 'all']),
-  '--families': text(),
-  '--keyboard': enumeration(['qwerty', 'azerty', 'qwertz', 'all']),
-  '--dictionary': file(),
-  '--snapshot': file(),
-  '--scan-limit': integer(() => Object.freeze([
+    : Object.freeze([BASE_INTEGER_RANGE(1, 8), DEEP_INTEGER_RANGE(1, 3)]), (command, deep) => command === 'monitor-once' || deep ? 2 : 4),
+  '--checkpoint': file('Save resumable collection state to this local file.'),
+  '--resume': optionDefinition((command) => command === 'workflow-run' ? 'file' : 'flag', command => command === 'workflow-run' ? 'Resume the selected workflow checkpoint; approvals must be supplied again.' : 'Resume collection from the selected checkpoint.'),
+  '--tlds': text('Use this comma-separated set of domain endings.', true),
+  '--preset': enumeration('Choose candidate-generation families; explicit families select a custom set instead.', ['common', 'impersonation', 'all'], 'all'),
+  '--families': text('Select the candidate-generation families explicitly.'),
+  '--keyboard': enumeration('Choose keyboard layouts for adjacent-key candidates.', ['qwerty', 'azerty', 'qwertz', 'all'], 'qwerty'),
+  '--dictionary': file('Read candidate words from this local dictionary.'),
+  '--snapshot': file('Use this retained observation snapshot.'),
+  '--scan-limit': integer('Limit the number of generated candidates to collect.', () => Object.freeze([
     BASE_INTEGER_RANGE(1, 500),
     DEEP_INTEGER_RANGE(1, 50),
-  ])),
-  '--chunk-size': integer(() => Object.freeze([BASE_INTEGER_RANGE(1, 100)])),
-  '--resolver': text(),
-  '--allowlist': file(),
-  '--observation-snapshot': file(),
-  '--acquisition-only': flag(),
-  '--suppressed-only': flag(),
-  '--selectors': text(true),
-  '--retired-selectors': text(true),
-  '--mail-profile': enumeration(['standard', 'defensive-no-mail', 'parked']),
-  '--sarif': flag(),
-  '--owned-domain': flag(),
-  '--include-inherited-dns': flag(),
-  '--trust-anchor': file(),
-  '--owned-or-authorized': flag(),
-  '--active-probe': flag(),
-  '--suffix': text(true),
-  '--scenario': enumeration(['registered', 'not_found', 'inconclusive']),
-  '--summary-json': flag(),
-  '--passphrase-file': file(),
-  '--manifest': file(),
-  '--bagit': flag(),
-  '--manifest-entry': enumeration(Array.from({ length: MAX_INVESTIGATION_MANIFEST_ARTIFACTS }, (_, index) => `artifact-${index + 1}`)),
-  '--search': text(),
-  '--require-match': flag(),
-  '--reveal': flag(),
-  '--expect-content-digest': text(true),
-  '--private-key-file': file(),
-  '--public-key-file': file(),
-  '--trust-store-file': file(),
-  '--mmdb': file(),
-  '--audience': enumeration(['internal', 'trusted', 'public']),
-  '--reviewed': flag(),
-  '--previous': file(),
-  '--limit': integer(() => Object.freeze([BASE_INTEGER_RANGE(1, 20)])),
-  '--marking': enumeration(['clear', 'green', 'amber', 'amber-strict', 'red']),
-  '--recipient-scope': enumeration(['public', 'community', 'organization', 'named-recipients']),
-  '--purpose': text(),
-  '--human-reviewed': flag('idempotent'),
-  '--personal-data-reviewed': flag('idempotent'),
-  '--redactions-confirmed': flag('idempotent'),
-  '--list': flag(),
-  '--explain': enumeration(INVESTIGATION_PLAN_RECIPES),
-  '--select': optionDefinition('text', { occurrence: 'repeatable', acceptsOptionLikeValue: true }),
-  '--use-artifact': optionDefinition('text', { occurrence: 'repeatable' }),
-  '--confirm-review': optionDefinition('text', { occurrence: 'repeatable' }),
-  '--approve-network': flag(),
-  '--left-session': text(true),
-  '--right-session': text(true),
-  '--compact': flag(),
-  '--case-id': text(),
-  '--domain': text(),
-  '--title': text(),
-  '--new-incident': flag(),
-  '--text': text(),
-  '--note-file': file(),
-  '--input': file(),
-  '--expect-file-digest': text(),
+  ]), (_command, deep) => deep ? 50 : 100),
+  '--chunk-size': integer('Set the number of candidates processed per checkpoint chunk.', () => Object.freeze([BASE_INTEGER_RANGE(1, 100)]), () => 25),
+  '--resolver': text('Choose the supported DNS resolver for collection.'),
+  '--allowlist': file('Read reviewed domains whose priority should be suppressed, without changing their evidence.'),
+  '--observation-snapshot': file('Compare with this retained observation snapshot.'),
+  '--acquisition-only': flag('Present only acquisition candidates.'),
+  '--suppressed-only': flag('Present only candidates suppressed by the allowlist.'),
+  '--selectors': text('Supply explicit DKIM selectors; no selector enumeration is performed.', true),
+  '--retired-selectors': text('Supply previously retired DKIM selectors for review.', true),
+  '--mail-profile': enumeration('Choose the expected mail posture for the review.', ['standard', 'defensive-no-mail', 'parked'], 'standard'),
+  '--sarif': flag('Write the posture review as SARIF.'),
+  '--owned-domain': flag('Declare that the reviewed domain is owned by the analyst.'),
+  '--include-inherited-dns': flag('Explicitly collect inherited DMARC and parent-delegation evidence.'),
+  '--trust-anchor': file('Read the analyst-selected DNSSEC trust anchor.'),
+  '--owned-or-authorized': flag('Acknowledge ownership or permission for this active collection.'),
+  '--active-probe': flag('Explicitly enable the bounded active protocol exchange.'),
+  '--suffix': text('Select the registry suffix.', true),
+  '--scenario': enumeration('Choose the expected registry fixture outcome.', ['registered', 'not_found', 'inconclusive']),
+  '--summary-json': flag('Write the concise structured summary.'),
+  '--passphrase-file': file('Read the archive passphrase from a local file, not a command-line value.'),
+  '--manifest': file('Use the selected investigation manifest.'),
+  '--bagit': optionDefinition('flag', command => command === 'manifest' ? 'Create a BagIt 1.0 package with SHA-512 checksums.' : 'Verify the selected package as BagIt 1.0.'),
+  '--manifest-entry': enumeration('Select an artefact entry from the supplied manifest.', Array.from({ length: MAX_INVESTIGATION_MANIFEST_ARTIFACTS }, (_, index) => `artifact-${index + 1}`)),
+  '--search': text('Search the selected local archive.'),
+  '--require-match': flag('Require the local archive search to find a match.'),
+  '--reveal': flag('Include retained values otherwise redacted by archive inspection.'),
+  '--expect-content-digest': text('Compare archive content with the supplied version-qualified or historical digest.', true),
+  '--private-key-file': file('Read the private signing key from this local file.'),
+  '--public-key-file': file('Read the public verification key from this local file.'),
+  '--trust-store-file': file('Read the analyst-selected signer trust store.'),
+  '--mmdb': file('Use the selected local IP-location database.'),
+  '--audience': enumeration('Choose the export audience and its field-disclosure policy.', ['internal', 'trusted', 'public']),
+  '--reviewed': flag('Confirm the required human review of the exported material.'),
+  '--previous': file('Compare against this earlier retained report.'),
+  '--limit': integer('Limit the number of watchlist targets checked in this run.', () => Object.freeze([BASE_INTEGER_RANGE(1, 20)]), () => 20),
+  '--marking': enumeration('Declare the information-sharing marking.', ['clear', 'green', 'amber', 'amber-strict', 'red']),
+  '--recipient-scope': enumeration('Declare the intended recipient scope.', ['public', 'community', 'organization', 'named-recipients']),
+  '--purpose': text('Record the purpose of the intended sharing.'),
+  '--human-reviewed': flag('Confirm that a person reviewed the material.', 'idempotent'),
+  '--personal-data-reviewed': flag('Confirm that personal-data disclosure was reviewed.', 'idempotent'),
+  '--redactions-confirmed': flag('Confirm that the intended redactions were checked.', 'idempotent'),
+  '--list': flag('List available workflow recipes.'),
+  '--explain': enumeration('Explain a selected workflow without executing it.', INVESTIGATION_PLAN_RECIPES),
+  '--select': optionDefinition('text', 'Bind a literal input to a workflow step; repeat for further inputs.', { occurrence: 'repeatable', acceptsOptionLikeValue: true }),
+  '--use-artifact': optionDefinition('text', 'Connect a step input to an earlier compatible output.', { occurrence: 'repeatable' }),
+  '--confirm-review': optionDefinition('text', 'Confirm human review for the named step in this invocation.', { occurrence: 'repeatable' }),
+  '--approve-network': flag('Approve the workflow’s declared network steps for this invocation.'),
+  '--left-session': text('Select the left-hand retained capture session.', true),
+  '--right-session': text('Select the right-hand retained capture session.', true),
+  '--compact': flag('Write a compact report presentation.'),
+  '--case-id': text('Select the retained Case identifier.'),
+  '--domain': text('Supply the Case domain.'),
+  '--title': text('Supply the Case title.'),
+  '--new-incident': flag('Create a separate incident instead of updating a matching Case.'),
+  '--text': text('Supply the note text directly.'),
+  '--note-file': file('Read note text from a selected local file.'),
+  '--input': file('Read the selected local input file.'),
+  '--expect-file-digest': text('Require the input file to match this SHA-256 digest.'),
 } as const satisfies Readonly<Record<string, CliOptionDefinition>>);
 
 type CliOption = keyof typeof CLI_OPTION_DEFINITIONS;
@@ -1901,7 +1908,43 @@ function commandHelp(command: CliCommand): string {
   const collection = COMMAND_COLLECTION[command];
   const values = commandDefinition(command).grammar.options.filter(expandedOptionValues)
     .map(option => `\n${option.option} values:\n${option.values.map(value => `  ${value}`).join('\n')}\n`).join('');
-  return `WHOISleuth ${command}\n${detail.description}\n\nUsage:\n  ${COMMAND_USAGE[command]}\n\nExample:\n  ${detail.example}\n\nCollection:\n  ${collection.mode === 'offline' ? 'Offline' : 'Network'}: ${collection.scope}\n\nBoundary:\n  ${detail.boundary}\n${values}\nRun "whoisleuth --help" to see the grouped command list.\n`;
+  const options = commandOptionHelp(command).map(option => {
+    const range = option.ranges.map(item => `${item.whenOptionPresent ? `With ${item.whenOptionPresent}: ` : 'Range: '}${item.minimum}–${item.maximum}.`).join(' ');
+    const policies = option.option === '--fail-on' ? ` Values: ${option.values.join(', ')}.` : '';
+    return `  ${option.usage}\n    ${option.description}${option.defaultDescription ? ` Default: ${option.defaultDescription}.` : ''}${option.repeatable ? ' May be repeated.' : ''}${range ? ` ${range}` : ''}${policies}`;
+  }).join('\n');
+  return `WHOISleuth ${command}\n${detail.description}\n\nExample:\n  ${detail.example}\n\nUsage:\n  ${COMMAND_USAGE[command]}\n\nOptions:\n${options}\n\nCollection:\n  ${collection.mode === 'offline' ? 'Offline' : 'Network'}: ${collection.scope}\n\nBoundary:\n  ${detail.boundary}\n${values}\nRun "whoisleuth --help" to see the grouped command list.\n`;
+}
+
+export function commandDefaultNumber(command: CliCommand, option: CliOption, deep = false): number {
+  const value = CLI_OPTION_DEFINITIONS[option].defaultValue(command, deep);
+  if (!commandOwnsOption(command, option) || typeof value !== 'number') throw new TypeError(`No numeric default for ${command} ${option}.`);
+  return value;
+}
+
+export function commandDefaultText(command: CliCommand, option: CliOption): string {
+  const value = CLI_OPTION_DEFINITIONS[option].defaultValue(command, false);
+  if (!commandOwnsOption(command, option) || typeof value !== 'string') throw new TypeError(`No text default for ${command} ${option}.`);
+  return value;
+}
+
+// Help is a mechanical projection, not another parser or public grammar format.
+export function commandOptionHelp(command: CliCommand) {
+  return commandDefinition(command).grammar.options.map(specification => {
+    const owner = CLI_OPTION_DEFINITIONS[specification.option as CliOption];
+    const ordinary = owner.defaultValue(command, false);
+    const deep = owner.defaultValue(command, true);
+    return Object.freeze({
+      option: specification.option,
+      scope: specification.scope,
+      usage: optionUsage(specification),
+      description: owner.description(command),
+      values: specification.values,
+      repeatable: specification.occurrence === 'repeatable',
+      ranges: specification.integerRanges,
+      defaultDescription: ordinary === null ? null : ordinary === deep ? String(ordinary) : `${ordinary} in Fast mode; ${deep} in Deep mode`,
+    });
+  });
 }
 
 export {

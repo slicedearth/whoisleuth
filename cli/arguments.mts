@@ -9,6 +9,8 @@ import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../packages/investigation/
 import {
   CLI_COMMANDS,
   CLI_CASE_OPERATIONS,
+  commandDefaultNumber,
+  commandDefaultText,
   cliMetaActionForInvocation,
   isCliCommand,
   type CliCommand,
@@ -254,7 +256,7 @@ function parseBulkArguments(parsed: ParsedCommandArguments): Extract<CliAction, 
     source: parsed.positionalValue('source'),
     output,
     deep,
-    concurrency: parsed.integerOption('--concurrency') ?? (deep ? 2 : 4),
+    concurrency: parsed.integerOption('--concurrency') ?? commandDefaultNumber('bulk', '--concurrency', deep),
     checkpoint: parsed.optionValue('--checkpoint'),
     resume: parsed.hasOption('--resume'),
     events: parsed.hasOption('--events'),
@@ -268,8 +270,8 @@ function parseBulkArguments(parsed: ParsedCommandArguments): Extract<CliAction, 
 function discoveryValues(parsed: ParsedCommandArguments) {
   const familyText = parsed.optionValue('--families');
   return {
-    preset: (familyText ? 'custom' : parsed.optionValue('--preset') ?? 'all') as 'common' | 'impersonation' | 'all' | 'custom',
-    keyboardLayout: (parsed.optionValue('--keyboard') ?? 'qwerty') as 'qwerty' | 'azerty' | 'qwertz' | 'all',
+    preset: (familyText ? 'custom' : parsed.optionValue('--preset') ?? commandDefaultText('discover', '--preset')) as 'common' | 'impersonation' | 'all' | 'custom',
+    keyboardLayout: (parsed.optionValue('--keyboard') ?? commandDefaultText('discover', '--keyboard')) as 'qwerty' | 'azerty' | 'qwertz' | 'all',
     tldText: parsed.optionValue('--tlds'),
     dictionarySource: parsed.optionValue('--dictionary'),
     familyText,
@@ -300,9 +302,9 @@ function parseDiscoverScanArguments(parsed: ParsedCommandArguments): Extract<Cli
     output: parseOutput(parsed, [['--json', 'json'], ['--jsonl', 'jsonl'], ['--csv', 'csv'], ['--csv-with-metadata', 'csv_metadata'], ['--domains', 'domains']]) as Extract<CliAction, { action: 'discover-scan' }>['output'],
     ...discoveryValues(parsed),
     deep,
-    scanLimit: parsed.integerOption('--scan-limit') ?? Math.min(100, deep ? 50 : 500),
-    chunkSize: parsed.integerOption('--chunk-size') ?? 25,
-    concurrency: parsed.integerOption('--concurrency') ?? (deep ? 2 : 4),
+    scanLimit: parsed.integerOption('--scan-limit') ?? commandDefaultNumber('discover-scan', '--scan-limit', deep),
+    chunkSize: parsed.integerOption('--chunk-size') ?? commandDefaultNumber('discover-scan', '--chunk-size'),
+    concurrency: parsed.integerOption('--concurrency') ?? commandDefaultNumber('discover-scan', '--concurrency', deep),
     checkpoint: parsed.optionValue('--checkpoint'),
     resume: parsed.hasOption('--resume'),
     resolverText: parsed.optionValue('--resolver'),
@@ -317,7 +319,7 @@ function parseDiscoverScanArguments(parsed: ParsedCommandArguments): Extract<Cli
 }
 
 function parsePostureArguments(parsed: ParsedCommandArguments): Extract<CliAction, { action: 'posture' }> {
-  const mailProfile = parsed.optionValue('--mail-profile') ?? 'standard';
+  const mailProfile = parsed.optionValue('--mail-profile') ?? commandDefaultText('posture', '--mail-profile');
   return {
     action: 'posture',
     domain: parsed.positionalValue('domain'),
@@ -389,8 +391,8 @@ function parseMonitorOnceArguments(parsed: ParsedCommandArguments): Extract<CliA
     source: parsed.positionalValue('source'),
     previousSource: parsed.optionValue('--previous'),
     output: parseOutput(parsed, [['--json', 'json'], ['--junit', 'junit']]) as 'terminal' | 'json' | 'junit',
-    limit: parsed.integerOption('--limit') ?? 20,
-    concurrency: parsed.integerOption('--concurrency') ?? 2,
+    limit: parsed.integerOption('--limit') ?? commandDefaultNumber('monitor-once', '--limit'),
+    concurrency: parsed.integerOption('--concurrency') ?? commandDefaultNumber('monitor-once', '--concurrency'),
     ...terminalOptions(parsed),
     ...(selectedFailPolicies ? { failOn: selectedFailPolicies } : {}),
   };

@@ -9,14 +9,15 @@
 
   const pageSections = [
     { href: '#start', label: 'Get started' },
-    { href: '#commands', label: 'Command reference' },
     { href: '#tasks', label: 'Common tasks' },
+    { href: '#commands', label: 'Command reference' },
     { href: '#browser-handoff', label: 'Browser and CLI handoffs' },
     { href: '#capture-companion', label: 'Capture companion' },
     { href: '#local-application', label: 'Local application' },
     { href: '#behaviour', label: 'CLI behaviour' },
     { href: '#more', label: 'More documentation' },
   ] as const;
+  let commandSections = $state<readonly { href: string; label: string }[]>([]);
 
   const jobDefinitions = [
     {
@@ -60,7 +61,7 @@
   eyebrow="Command line"
   title="WHOISleuth CLI"
   summary={['Collect domain evidence and review saved investigations from your terminal.']}
-  sections={pageSections}
+  sections={commandSections.length ? commandSections : pageSections}
 >
   {#snippet actions()}
     <a class="btn" href="#commands">Browse all commands</a>
@@ -85,10 +86,6 @@
   </div>
 </section>
 
-<section class="cli-section" id="commands" aria-label="Command reference">
-  <PublicCliExplorer />
-</section>
-
 <section class="cli-section" id="tasks" aria-labelledby="tasks-title">
   <div class="section-intro"><p class="eyebrow">Common tasks</p><h2 id="tasks-title">Start with what you need to do</h2><p>Examples use reserved domains or local files chosen by the user.</p></div>
   <div class="task-groups">
@@ -100,6 +97,10 @@
       </section>
     {/each}
   </div>
+</section>
+
+<section class="cli-section" id="commands" aria-label="Command reference">
+  <PublicCliExplorer onsectionschange={sections => commandSections = sections} />
 </section>
 
 <section class="cli-section browser-handoff" id="browser-handoff" aria-labelledby="browser-handoff-title">

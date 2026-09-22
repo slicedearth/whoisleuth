@@ -98,7 +98,7 @@
   <p class="action-status" role="status" aria-live="polite">{actionStatus}</p>
   <div class="example-grid independent-grid">
     {#each filtered as example (example.id)}
-      <article class="card" data-example={example.id}>
+      <article class="card" id={`example-${example.id}`} data-example={example.id}>
         <header><span class="synthetic-chip">Synthetic</span><span>{example.format}{example.large ? ' · larger output' : ''}</span></header>
         <h3>{example.title}</h3>
         <p>{example.summary}</p>

@@ -48,9 +48,9 @@ test('offline Case file guidance is reachable from tasks and direct command link
   const command = page.locator('article[data-command-detail="case"]');
   await expect(command.getByRole('heading', { name: 'case', exact: true })).toBeVisible();
   await expect(command).toContainText('Mutations require --output');
+  await command.getByText('Interpretation and limits', { exact: true }).click();
   await expect(command.getByRole('region', { name: 'Operational boundary' })).toBeVisible();
   await expect(command).toContainText('Not reproduced requires an existing saved question');
-  await command.getByText('Limits and contracts', { exact: true }).click();
   await expect(command).toContainText('without pruning');
   await expect(page.getByRole('link', { name: 'Case file inputs and examples' })).toHaveAttribute('href', /docs\/cli\.md#local-case-files$/u);
   for (const theme of ['light', 'dark'] as const) {
@@ -152,7 +152,7 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
   }
   await expect(mobileNavigation.getByRole('link', { name: 'Overview', exact: true })).toHaveCount(0);
   await siteMenu.getByText('Menu', { exact: true }).click();
-  await page.getByText('Browse documentation', { exact: true }).click();
+  await page.getByRole('button', { name: 'Browse documentation', exact: true }).click();
   documentation = page.getByRole('navigation', { name: 'Documentation' });
   await expect(documentation.getByRole('link', { name: 'Methodology', exact: true })).toBeVisible();
   await expect(documentation.getByRole('link', { name: 'CLI', exact: true })).toHaveAttribute('aria-current', 'page');
@@ -251,7 +251,7 @@ test('filters and opens the canonical CLI catalogue entirely by keyboard', async
   const workspace = catalogue.locator('article[data-command-detail="workflow-plan"]');
   await expect(workspace).toBeFocused();
   await expect(workspace.getByRole('link', { name: 'Direct link to workflow-plan command' })).toHaveAttribute('href', '#command-workflow-plan');
-  await expect(workspace.locator('.command-detail')).toContainText('Network behaviour');
+  await expect(workspace.locator('.command-detail')).toContainText('Runs locally.');
   await expect(workspace.locator('.command-detail')).toContainText('Schemas');
   await workspace.getByRole('link', { name: /Back to 1 filtered command/u }).click();
   await expect(catalogue.locator('article[data-command="workflow-plan"] .command-open')).toBeFocused();
@@ -260,6 +260,7 @@ test('filters and opens the canonical CLI catalogue entirely by keyboard', async
   await workspace.getByRole('combobox', { name: 'Jump to command' }).selectOption('lookup');
   await expect(catalogue.locator('article[data-command-detail="lookup"]')).toBeFocused();
   await expect(page).toHaveURL(/\/cli#command-lookup$/u);
+  await catalogue.getByText('Interpretation and limits', { exact: true }).click();
   await expect(catalogue.getByRole('region', { name: 'Operational boundary' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   expect(investigationRequests).toEqual([]);
@@ -293,6 +294,7 @@ test('signer trust guidance is reachable by direct command link at supported wid
       await expect(detail).toContainText('--trust-store-file');
       await expect(detail).toContainText('whoisleuth.evidence-signer-trust-report');
       await expect(detail).toBeFocused();
+      await detail.getByText('Interpretation and limits', { exact: true }).click();
       await expect(detail.locator('.boundary p')).toBeVisible();
       await expect(detail.locator('.boundary p')).toContainText('unknown, retired, revoked or future-reviewed entries exit 4');
       await expectNoHorizontalOverflow(page);
@@ -332,7 +334,7 @@ test('opens a directly linked CLI command without loading unrelated command deta
   const catalogue = page.getByTestId('public-cli-catalogue');
   const command = catalogue.locator('article[data-command-detail="workflow-plan"]');
   await expect(command).toBeVisible();
-  await expect(command.locator('.command-detail')).toContainText('Limits and contracts');
+  await expect(command.locator('.command-detail')).toContainText('Interpretation and limits');
   await expect(catalogue.locator('.command-detail')).toHaveCount(1);
   await expect(command).toBeFocused();
   await expect(command.getByRole('heading', { name: 'workflow-plan', exact: true })).toBeInViewport({ ratio: 1 });
@@ -376,12 +378,12 @@ test('command details distinguish an artefact from its presentation and destinat
   const command = page.locator('[data-command-detail="export"]');
   await expect(command).toBeVisible();
   await expect(command.locator('.command-facts')).toContainText('Portable evidence report');
-  const formats = command.locator('dt').filter({ hasText: /^Presentation options$/u }).locator('..');
+  const formats = command.locator('dt').filter({ hasText: /^Formats$/u }).locator('..');
   await expect(formats).toContainText('--markdown');
   await expect(formats).toContainText('--html');
   await expect(formats).not.toContainText('--json');
   await expect(command.locator('.command-facts')).toContainText('--output <file>');
-  await command.getByText('Limits and contracts', { exact: true }).click();
+  await command.getByText('Interpretation and limits', { exact: true }).click();
   await expect(command.locator('.contract-details')).toContainText('Exit 0 reports command completion');
 });
 
@@ -391,9 +393,11 @@ test('distinguishes compact and metadata CSV in responsive command details', asy
     await page.goto(`/cli#command-${commandId}`);
     const command = page.locator(`[data-command-detail="${commandId}"]`);
     await expect(command).toBeVisible();
-    const presentations = command.locator('dt').filter({ hasText: /^Presentation options$/u }).locator('..');
+    const presentations = command.locator('dt').filter({ hasText: /^Formats$/u }).locator('..');
     await expect(presentations.getByText('--csv', { exact: true })).toBeVisible();
     await expect(presentations.getByText('--csv-with-metadata', { exact: true })).toBeVisible();
+    await expect(command.locator('.contract-details')).not.toHaveAttribute('open');
+    await command.getByText('Interpretation and limits', { exact: true }).click();
     await expect(command.getByRole('region', { name: 'Operational boundary' })).toBeVisible();
     const boundary = command.locator('.boundary p');
     await expect(boundary).toContainText('separate observation and report times');
@@ -438,6 +442,7 @@ test('keeps workflow partial-result and resume guidance readable across referenc
   await page.goto('/cli#command-workflow-run');
   const detail = page.locator('article[data-command-detail="workflow-run"]');
   await expect(detail).toBeVisible();
+  await detail.getByText('Interpretation and limits', { exact: true }).click();
   const boundary = detail.getByRole('region', { name: 'Operational boundary' });
   await expect(boundary).toBeVisible();
   await expect(boundary).toContainText(/Partial collections pause for review.*not recollected.*resume/u);

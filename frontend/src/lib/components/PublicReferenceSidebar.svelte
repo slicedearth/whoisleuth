@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { handlesLocalLink } from '$lib/link-activation';
+  import DocumentationSearch from '$lib/components/DocumentationSearch.svelte';
+  import { revealDocumentationTarget } from '$lib/documentation-anchors';
   import {
     PUBLIC_REFERENCE_GROUPS,
     publicReferenceDestination,
@@ -36,6 +38,7 @@
     if (!href.startsWith('#')) return;
     const target = document.getElementById(href.slice(1));
     if (!target) return;
+    revealDocumentationTarget(target);
     // Let the anchor own scrolling; move keyboard focus out of the closed dialog.
     const focusTarget = target;
     const previous = focusTarget.getAttribute('tabindex');
@@ -117,6 +120,7 @@
 {/snippet}
 
 <aside class="reference-sidebar">
+  <DocumentationSearch />
   <div class="desktop-navigation">
     <a class="reference-title" href="/resources">Documentation</a>
     {#if currentSections.length}
@@ -125,7 +129,7 @@
     {@render pages()}
   </div>
   <div class="reference-browser">
-    <button type="button" aria-haspopup="dialog" aria-expanded={navigatorOpen && mobileView === 'pages'} onclick={(event) => openNavigator('pages', event.currentTarget)}>Browse documentation</button>
+    <button type="button" aria-label="Browse documentation" aria-haspopup="dialog" aria-expanded={navigatorOpen && mobileView === 'pages'} onclick={(event) => openNavigator('pages', event.currentTarget)}>Browse</button>
     {#if currentSections.length}<button type="button" aria-haspopup="dialog" aria-expanded={navigatorOpen && mobileView === 'contents'} onclick={(event) => openNavigator('contents', event.currentTarget)}>On this page</button>{/if}
   </div>
 </aside>
@@ -139,7 +143,7 @@
 
 <style>
   .reference-sidebar{position:sticky;top:18px;min-width:0;max-height:calc(100vh - 36px);overflow-y:auto;scrollbar-width:thin}
-  .desktop-navigation{padding-right:20px}
+  .desktop-navigation{padding-right:20px;padding-top:24px}
   .reference-title{display:block;margin-bottom:24px;padding:0 8px;color:var(--text);font:700 var(--text-sm) var(--font-sans)}
   .reference-tree section+section{margin-top:20px}
   h2{margin:0 8px 7px;color:var(--muted);font:700 var(--text-2xs) var(--mono);letter-spacing:.08em;text-transform:uppercase}
@@ -159,9 +163,9 @@
   .reference-navigator button{flex:none;min-height:44px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font:600 var(--text-sm) var(--font-sans)}
   .reference-navigator .page-sections a,.reference-navigator .reference-tree section>a{min-height:44px}
   @media(max-width:1080px){
-    .reference-sidebar{top:0;z-index:20;max-height:none;overflow:visible;margin-bottom:22px;background:var(--bg);border-bottom:1px solid var(--border)}
+    .reference-sidebar{display:flex;align-items:center;justify-content:space-between;gap:8px;top:0;z-index:20;max-height:none;overflow:visible;margin-bottom:22px;padding-block:4px;background:var(--bg);border-bottom:1px solid var(--border)}
     .desktop-navigation{display:none}
-    .reference-browser{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0}
+    .reference-browser{display:contents}
     .reference-browser button{min-height:44px;padding:8px 4px;border:0;border-radius:0;background:transparent;color:var(--text);font:600 var(--text-xs)/1.4 var(--font-sans);text-align:left}
     .reference-browser button:hover,.reference-browser button:focus-visible{color:var(--accent)}
   }

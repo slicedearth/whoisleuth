@@ -17,6 +17,9 @@ import {
   OPTIONS_BY_COMMAND,
   RUNNABLE_INVESTIGATION_PLAN_RECIPES,
   commandHelp,
+  commandOptionHelp,
+  commandDefaultNumber,
+  commandDefaultText,
   cliMetaActionForInvocation,
   cliInvocationNetworkEffect,
   commandOptionSpec,
@@ -61,6 +64,27 @@ import {
 } from './support/shell-completion-harness.mts';
 
 const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url));
+
+test('option help explains every accepted option without changing the public grammar', () => {
+  for (const command of CLI_COMMAND_REGISTRY) {
+    const help = commandOptionHelp(command.command);
+    assert.deepEqual(help.map(option => option.option), command.grammar.options.map(option => option.option));
+    for (const option of help) {
+      assert.ok(option.description.length > 15, `${command.command} ${option.option}`);
+      assert.ok(commandHelp(command.command).includes(option.description));
+    }
+  }
+  assert.equal(commandOptionHelp('bulk').find(option => option.option === '--concurrency')?.defaultDescription, '4 in Fast mode; 2 in Deep mode');
+  assert.equal(commandDefaultNumber('discover-scan', '--scan-limit'), 100);
+  assert.equal(commandDefaultNumber('discover-scan', '--scan-limit', true), 50);
+  assert.equal(commandDefaultNumber('discover-scan', '--chunk-size'), 25);
+  assert.equal(commandDefaultNumber('monitor-once', '--limit'), 20);
+  assert.equal(commandDefaultNumber('monitor-once', '--concurrency'), 2);
+  assert.equal(commandDefaultText('discover', '--keyboard'), 'qwerty');
+  assert.equal(commandDefaultText('posture', '--mail-profile'), 'standard');
+  assert.throws(() => commandDefaultNumber('lookup', '--concurrency'), /No numeric default/u);
+  assert.throws(() => commandDefaultText('bulk', '--concurrency'), /No text default/u);
+});
 
 test('large option vocabularies remain complete without overwhelming focused usage', () => {
   const help = commandHelp('verify-artifact');
