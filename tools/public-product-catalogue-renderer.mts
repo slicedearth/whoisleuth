@@ -351,7 +351,7 @@ function renderPublicMethodologyModule(): string {
 
 function renderPublicExamplesModule(): string {
   const entries = renderPublicExampleOutputModules().map(({ id, name }) =>
-    `  ${JSON.stringify(id)}: () => import(${JSON.stringify(`./${name}`)}).then(module => module.PUBLIC_EXAMPLE),`);
+    `  ${sourceJson(id)}: () => import(${sourceJson(`./${name}`)}).then(module => module.PUBLIC_EXAMPLE),`);
   return `${GENERATED_MODULE_NOTICE}export const PUBLIC_EXAMPLE_LOADERS = {\n${entries.join('\n')}\n} as const;\n`
     + 'export type PublicExampleId = keyof typeof PUBLIC_EXAMPLE_LOADERS;\n'
     + 'export type PublicExampleOutput = Awaited<ReturnType<typeof PUBLIC_EXAMPLE_LOADERS[PublicExampleId]>>;\n';
