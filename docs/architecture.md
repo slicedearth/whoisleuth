@@ -66,6 +66,12 @@ Separate Case forms own temporary drafts; reports and reusable minimised inputs
 use existing attachment retention and mutation coordination. CLI dispatch uses
 the same validators. Connector configuration is never an execution input.
 
+Selected-file intake uses shared format adapters for messages, PDF, DOCX, PNG
+and HAR. Browser workers and the disposable CLI worker own cancellation and
+deadlines. PDF decoding uses a nested parser worker; DOCX uses checked ZIP parts
+and streaming XML. Reports retain minimised destinations and source/part hashes,
+not original document text or request credentials.
+
 Schema source discovery inventories literal identities and their canonical
 definitions. References and runtime propagation need no per-file registration.
 Domain validators and independent historical fixtures verify format behaviour;

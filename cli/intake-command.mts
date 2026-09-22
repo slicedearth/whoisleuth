@@ -1,7 +1,6 @@
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
-import { MAX_MESSAGE_INTAKE_BYTES, type MessageIntakeReport } from '../packages/contracts/message-intake.mts';
-import { reviewMessageInput } from '../packages/investigation/message-intake.mts';
-import { reviewQrInput } from '../packages/investigation/qr-intake.mts';
+import { MAX_MESSAGE_INTAKE_BYTES, MESSAGE_INTAKE_INPUTS, type MessageIntakeReport } from '../packages/contracts/message-intake.mts';
+import { reviewSelectedInputInWorker } from './selected-input-worker.mts';
 import { reviewIdentityIncident } from '../packages/investigation/identity-incident-review.mts';
 import { selectReceiverTrust, authenticationHeaderLabel } from '../packages/investigation/mail-authentication-review.mts';
 import type { CliArguments } from './arguments.mts';
@@ -31,6 +30,16 @@ export function formatMessageIntake(report: MessageIntakeReport): string {
     }
   }
   if (report.actionHints.length) lines.push(`Review wording: ${report.actionHints.map(value => value.replaceAll('_', ' ')).join(', ')}`);
+  if (report.documentReview) {
+    lines.push(`Document coverage: ${report.documentReview.state} · pages ${report.documentReview.reviewedPages}/${report.documentReview.pageCount ?? 'not a paginated review'}`);
+    for (const part of report.documentReview.parts) lines.push(`  ${part.id}${part.page ? ` · page ${part.page}` : ''} · ${part.kind} · ${part.identity} · ${part.digestSha256}`);
+    lines.push(...report.documentReview.notes);
+  }
+  if (report.harReview) {
+    lines.push('Recorded HTTP sequence (not replayed)');
+    for (const entry of report.harReview.entries) lines.push(`  ${entry.sequence}. ${entry.startedAt ?? 'time unavailable'} · ${entry.method} ${entry.origin ?? 'origin unavailable'} · status ${entry.status ?? 'unavailable'} · ${entry.mimeCategory} · ${entry.durationMs === null ? 'duration unavailable' : `${entry.durationMs} ms`}`);
+    if (report.harReview.invalidEntries) lines.push(`Invalid request records omitted: ${report.harReview.invalidEntries}`);
+  }
   for (const step of report.identityRecovery.nextSteps) lines.push(`Account response — ${step.title}: ${step.detail}`);
   if (report.coverage.unreviewedAttachments) lines.push(`Unreviewed attachments: ${report.coverage.unreviewedAttachments}`);
   if (report.coverage.rejectedLinks) lines.push(`Unsupported link values: ${report.coverage.rejectedLinks}`);
@@ -42,13 +51,13 @@ export function formatMessageIntake(report: MessageIntakeReport): string {
 
 export async function runIntakeCommand(args: Extract<CliArguments, { action: 'intake' }>, dependencies: CliDependencies, context: CliCommandContext): Promise<number> {
   context.setFailureLabel('Message intake');
-  if (args.kind === 'qr' && (!args.source || args.source === '-')) throw new CliUsageError('QR intake requires a selected PNG file; binary stdin is not accepted.');
+  if (MESSAGE_INTAKE_INPUTS[args.kind].binary && (!args.source || args.source === '-')) throw new CliUsageError('Binary intake requires a selected file; binary stdin is not accepted.');
   let bytes: Uint8Array;
   if (dependencies.readBinaryArtifactInput && args.source && args.source !== '-') bytes = await dependencies.readBinaryArtifactInput(args.source);
   else if (args.source && args.source !== '-') bytes = await readBoundedRegularFile(args.source, { maximumBytes: MAX_MESSAGE_INTAKE_BYTES, minimumBytes: 1, label: 'Selected input', ...(dependencies.signal ? { signal: dependencies.signal } : {}) });
   else bytes = new TextEncoder().encode(await context.readInput(args.source, MAX_MESSAGE_INTAKE_BYTES, 'Selected input'));
   try {
-    const result = args.kind === 'qr' ? await reviewQrInput(bytes, context.now()) : await reviewMessageInput(bytes, args.kind, context.now());
+    const result = await reviewSelectedInputInWorker(bytes, args.kind, context.now(), dependencies.signal);
     let authenticationReview;
     try { authenticationReview = selectReceiverTrust(result.report.authenticationReview, args.trustedAuthHeaders ?? []); }
     catch (cause) { if (cause instanceof TypeError) throw new CliUsageError(cause.message); throw cause; }

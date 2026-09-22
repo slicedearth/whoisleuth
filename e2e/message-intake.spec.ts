@@ -9,7 +9,7 @@ test('authentication headers retain separate receiver choices, nested provenance
   let collections = 0;
   await page.route('**/api/lookup', route => { collections++; return route.abort(); });
   await page.goto('/lookup');
-  await page.getByText('Review a message, link or QR image', { exact: true }).click();
+  await page.getByText('Review a message, link or selected file', { exact: true }).click();
   const intake = page.locator('details.intake');
   await intake.getByLabel('Input type').selectOption('email');
   await intake.getByLabel('Select a file').setInputFiles({ name: 'receiver-review.eml', mimeType: 'message/rfc822', buffer: Buffer.from(
@@ -47,7 +47,7 @@ test('local message review exposes destination mismatch and fills Lookup without
   let lookups = 0;
   await page.route('**/api/lookup', route => { lookups++; return route.abort(); });
   await page.goto('/lookup');
-  await page.getByText('Review a message, link or QR image', { exact: true }).click();
+  await page.getByText('Review a message, link or selected file', { exact: true }).click();
   const intake = page.locator('details.intake');
   await intake.getByLabel('Input type').selectOption('email');
   await intake.getByLabel('Select a file').setInputFiles({ name: 'selected.eml', mimeType: 'message/rfc822', buffer: Buffer.from('From: private@brand.example\r\nContent-Type: text/html\r\n\r\n<a href="https://destination.test/private?token=private-value">https://brand.example</a>') });
@@ -93,7 +93,7 @@ test('local message review exposes destination mismatch and fills Lookup without
 
 test('Case intake retains a minimised review by default and records reported identity actions separately', async ({ page }) => {
   await openSeededTimelineCase(page, 'incident.example', [caseRecord({ domain: 'incident.example' })], CASE_SCHEMA_VERSION);
-  await page.getByText('Review a message, link or QR image', { exact: true }).click();
+  await page.getByText('Review a message, link or selected file', { exact: true }).click();
   const intake = page.locator('details.intake');
   await intake.getByLabel('Text to review').fill('https://destination.test/private?token=private-value');
   await intake.getByRole('button', { name: 'Review locally', exact: true }).click();

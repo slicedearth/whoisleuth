@@ -6,9 +6,24 @@ import type { RunInstalledCli } from './installed-cli-check.mts';
 import { MAX_INVESTIGATION_RUN_BYTES } from '../packages/contracts/investigation-run.mts';
 import { CLI_CASE_PACK_WRITER_FIXTURE_ID } from '../packages/contracts/case-portability.mts';
 import { assertReleaseVersionDerivedCasePack } from './release-version-check.mts';
+import { selectedPdfFixture, selectedDocxFixture, selectedHarFixture } from '../fixtures/selected-input-examples.mts';
 
 /** Independent identity and privacy expectations across exported Case audiences. */
 export async function checkInstalledCliIncidents(repositoryRoot: string, temporaryRoot: string, packageVersion: string, run: RunInstalledCli): Promise<void> {
+  for (const [kind, bytes, hostname] of [
+    ['pdf', selectedPdfFixture(), 'document-qr.example'],
+    ['docx', selectedDocxFixture(), 'docx-link.example'],
+    ['har', selectedHarFixture(), 'request.example'],
+  ] as const) {
+    const filename = path.join(temporaryRoot, `selected-input.${kind}`);
+    await writeFile(filename, bytes, { mode: 0o600, flag: 'wx' });
+    const output = await run(['intake', kind, filename, '--json'], `selected ${kind} review`);
+    const report = record(JSON.parse(output), 'Installed selected-input review');
+    if (!Array.isArray(report.links) || !report.links.some(link => record(link, 'Selected-input link').hostname === hostname)
+      || /private-value|private-body|Bearer|access_token|Authorization/u.test(output)) {
+      throw new TypeError('The installed selected-input review lost destination evidence or exposed excluded original content.');
+    }
+  }
   const currentPack = record(JSON.parse((await readBoundedRegularFileWithin(repositoryRoot,
     `test/fixtures/case-lifecycle/${CLI_CASE_PACK_WRITER_FIXTURE_ID}.json`, {
       maximumBytes: MAX_INVESTIGATION_RUN_BYTES, minimumBytes: 1, label: 'Current Case-pack fixture',

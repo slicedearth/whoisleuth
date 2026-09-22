@@ -4710,8 +4710,8 @@
       "id": "command.cli.intake",
       "command": "intake",
       "capabilityFamilyId": "offline_review",
-      "title": "Review suspicious messages and QR links offline",
-      "requestPurpose": "Reads one selected text, MIME email, calendar or PNG file. No collection or automatic Case write.",
+      "title": "Review messages, documents and HTTP archives offline",
+      "requestPurpose": "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX or HAR file. No collection or automatic Case write.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -4772,7 +4772,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
-        "Offline only: no link, attachment, command or QR payload is opened or executed. Email and calendar files may contain private data; output excludes original bodies, subjects, address local parts, URL paths, queries and fragments. Authentication headers are reported claims. QR input is a selected still PNG; non-URL and undecodable content is not interpreted as an absent threat. Use --strict-exit to return 4 when review bounds or unreviewed attachments make the report partial.",
+        "Offline only: no destination, embedded command or QR payload is opened or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies. Use --strict-exit to return 4 for partial coverage.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],

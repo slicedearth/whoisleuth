@@ -5,5 +5,7 @@ let started = false;
 worker.onmessage = event => {
   if (started) return;
   started = true;
-  void runMessageIntakeOperation(event.data).then(result => worker.postMessage(result));
+  void (event.data.kind === 'pdf'
+    ? import('../pdf-intake-worker.ts').then(module => module.runPdfIntakeOperation(event.data))
+    : runMessageIntakeOperation(event.data)).then(result => worker.postMessage(result), () => worker.postMessage({ kind: 'error' }));
 };

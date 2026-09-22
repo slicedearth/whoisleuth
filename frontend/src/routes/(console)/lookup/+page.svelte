@@ -821,7 +821,7 @@
   {/snippet}
 </LookupForm>
 
-<MessageIntake disabled={loading} onselect={async target => {
+<MessageIntake headingLevel={2} disabled={loading} onselect={async target => {
   query = target; collectSelectedUrl = false; handleLookupQueryChange(target);
   await tick(); document.getElementById('query')?.focus();
 }} />

@@ -1,12 +1,14 @@
 import { binarize, Decoder, Detector } from '@nuintun/qrcode';
 import { decodeEvidencePng } from '../evidence/png-pixels.mts';
 import { assertMessageBytes, reviewMessageInput } from './message-intake.mts';
+import { readEvidenceImageDimensions } from '../evidence/image-regions.mts';
 
 export const MAX_QR_DETECTION_ATTEMPTS = 256;
 
-export async function reviewQrInput(bytes: Uint8Array, reviewedAt: string) {
-  assertMessageBytes(bytes);
-  const image = decodeEvidencePng(bytes), luminance = new Uint8Array(image.width * image.height);
+export function decodeQrPixels(image: Readonly<{ width: number; height: number; pixels: Uint8ClampedArray }>) {
+  readEvidenceImageDimensions(image.width, image.height);
+  if (!(image.pixels instanceof Uint8ClampedArray) || image.pixels.length !== image.width * image.height * 4) throw new TypeError('Invalid QR pixel surface.');
+  const luminance = new Uint8Array(image.width * image.height);
   for (let index = 0; index < luminance.length; index++) {
     const offset = index * 4, alpha = image.pixels[offset + 3]! / 255;
     luminance[index] = Math.round((image.pixels[offset]! * 0.299 + image.pixels[offset + 1]! * 0.587 + image.pixels[offset + 2]! * 0.114) * alpha + 255 * (1 - alpha));
@@ -32,7 +34,13 @@ export async function reviewQrInput(bytes: Uint8Array, reviewedAt: string) {
     }
     if (bounded) break;
   }
-  const result = await reviewMessageInput(bytes, 'qr', reviewedAt, [...texts]);
+  return { texts: [...texts], bounded, structured };
+}
+
+export async function reviewQrInput(bytes: Uint8Array, reviewedAt: string) {
+  assertMessageBytes(bytes);
+  const { texts, bounded, structured } = decodeQrPixels(decodeEvidencePng(bytes));
+  const result = await reviewMessageInput(bytes, 'qr', reviewedAt, texts);
   const boundsReached = [...result.report.coverage.boundsReached, ...(bounded ? ['QR candidate work'] : []), ...(structured ? ['Multi-symbol structured content requires reassembly'] : [])];
   return { ...result, report: { ...result.report, coverage: { ...result.report.coverage,
     state: boundsReached.length ? 'partial' as const : result.report.coverage.state, boundsReached } } };

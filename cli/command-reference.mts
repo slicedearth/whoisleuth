@@ -1235,12 +1235,12 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   intake: commandSeed({
     reference: {
-      description: 'Extract and review links, message identities, authorisation parameters and QR destinations from a selected file or pasted text.',
+      description: 'Review message identities, document links and QR destinations, or a minimised HTTP archive from selected local files.',
       example: 'whoisleuth intake email message.eml --json',
-      boundary: 'Offline only: no link, attachment, command or QR payload is opened or executed. Email and calendar files may contain private data; output excludes original bodies, subjects, address local parts, URL paths, queries and fragments. Authentication headers are reported claims. QR input is a selected still PNG; non-URL and undecodable content is not interpreted as an absent threat. Use --strict-exit to return 4 when review bounds or unreviewed attachments make the report partial.',
+      boundary: 'Offline only: no destination, embedded command or QR payload is opened or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies. Use --strict-exit to return 4 for partial coverage.',
     },
-    collection: { mode: 'offline', scope: 'Reads one selected text, MIME email, calendar or PNG file. No collection or automatic Case write.' },
-    summary: 'Review suspicious messages and QR links offline',
+    collection: { mode: 'offline', scope: 'Reads one selected text, MIME email, calendar, PNG, PDF, DOCX or HAR file. No collection or automatic Case write.' },
+    summary: 'Review messages, documents and HTTP archives offline',
     options: ['--json', '--reported-action', '--trusted-auth-header', '--strict-exit', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('kind', 'enum', 1, 1, MESSAGE_INTAKE_KINDS), positional('source', 'file', 0, 1, [], 'argv_or_stdin')]),
     constraints: EMPTY_CONSTRAINTS, handlerOwner: 'inline', networkEffect: 'offline', common: true,

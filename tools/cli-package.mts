@@ -194,8 +194,10 @@ export const CLI_RUNTIME_DEPENDENCIES = Object.freeze([
   'fflate',
   'maxmind',
   'parse5',
+  'pdfjs-dist',
   'postal-mime',
   'reflect-metadata',
+  'saxes',
   'tldts',
   'undici',
 ]);

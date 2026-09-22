@@ -1,32 +1,24 @@
 import PostalMime, { type Email } from 'postal-mime';
 import { parse, defaultTreeAdapter, type DefaultTreeAdapterTypes } from 'parse5';
 import { sha256ArtifactBytes } from '../evidence/artifact-integrity.mts';
-import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { createLinkIntake } from './link-intake.mts';
 import { AUTHENTICATION_METHODS, addressDomains, authenticationServiceDomains,
   dkimSigningDomains } from './mail-header-identity.mts';
-import { reviewIdentityIncident } from './identity-incident-review.mts';
+import { createIntakeReport } from './intake-report.mts';
+export { assertMessageBytes } from './intake-report.mts';
 import { requestedActionHints } from './requested-action-hints.mts';
 import { reviewMailAuthentication, aggregateMailAuthentication } from './mail-authentication-review.mts';
 import { MAX_AUTHENTICATION_HEADERS, type MailAuthenticationHeader } from '../contracts/mail-authentication.mts';
-import { MESSAGE_INTAKE_SCHEMA, MESSAGE_INTAKE_VERSION, MESSAGE_INTAKE_KINDS, MAX_MESSAGE_INTAKE_BYTES,
+import { MAX_MESSAGE_INTAKE_BYTES,
   MAX_MESSAGE_PARTS, MAX_MESSAGE_DEPTH, MAX_MESSAGE_HTML_NODES,
   type IntakeLink, type MessageActionHint, type MessageIdentity, type MessageAuthenticationClaim,
   type MessageIntakeKind, type MessageIntakeResult } from '../contracts/message-intake.mts';
 
 
-export function assertMessageBytes(bytes: Uint8Array): void {
-  if (!(bytes instanceof Uint8Array) || !(bytes.buffer instanceof ArrayBuffer) || !bytes.byteLength || bytes.byteLength > MAX_MESSAGE_INTAKE_BYTES) {
-    throw new TypeError('Select one non-empty input of at most 16 MiB. No input was retained.');
-  }
-}
-
 /** All parsing is inert. Only HTTP(S) link targets are offered for deliberate collection. */
 export async function reviewMessageInput(bytes: Uint8Array, kind: MessageIntakeKind, reviewedAt: string, qrText?: readonly string[]): Promise<MessageIntakeResult> {
-  assertMessageBytes(bytes);
-  const instant = normalizeExplicitIsoTimestamp(reviewedAt);
-  if (!instant) throw new TypeError('Input review requires a timestamp with an explicit timezone.');
-  if (!MESSAGE_INTAKE_KINDS.includes(kind)) throw new TypeError('Unsupported message input type.');
+  const base = await createIntakeReport(bytes, kind, reviewedAt);
+  if (['pdf', 'docx', 'har'].includes(kind)) throw new TypeError('Use the selected-file intake entry point for this format.');
   const links = createLinkIntake(), identities: MessageIdentity[] = [], authenticationClaims: MessageAuthenticationClaim[] = [];
   const actionHints = new Set<MessageActionHint>(), bounds = new Set<string>();
   const authenticationHeaders: MailAuthenticationHeader[] = [];
@@ -116,7 +108,7 @@ export async function reviewMessageInput(bytes: Uint8Array, kind: MessageIntakeK
     try { mail = await PostalMime.parse(input, { maxNestingDepth: MAX_MESSAGE_DEPTH, maxHeadersSize: 256 * 1024, rfc822Attachments: true, forceRfc822Attachments: true, attachmentEncoding: 'arraybuffer' }); }
     catch { throw new TypeError('The message could not be decoded within the MIME nesting and header limits. No input was retained.'); }
     const part = ++reviewedParts;
-    messageParts.push({ part, parentPart, digestSha256: await sha256ArtifactBytes(input), byteLength: input.byteLength });
+    messageParts.push({ part, parentPart, digestSha256: parentPart === null ? base.source.digestSha256 : await sha256ArtifactBytes(input), byteLength: input.byteLength });
     headers(mail, part);
     if (mail.text) text(mail.text, 'text');
     if (mail.html) html(mail.html);
@@ -140,9 +132,8 @@ export async function reviewMessageInput(bytes: Uint8Array, kind: MessageIntakeK
   }
   const result = links.result();
   if (result.bounded) bounds.add('Link extraction');
-  return { report: { schema: MESSAGE_INTAKE_SCHEMA, schemaVersion: MESSAGE_INTAKE_VERSION, reviewedAt: instant,
-    source: { kind, digestSha256: messageParts[0]?.digestSha256 ?? await sha256ArtifactBytes(bytes), byteLength: bytes.byteLength },
+  return { report: { ...base,
     coverage: { state: bounds.size || unreviewedAttachments || partialAuthentication ? 'partial' : 'reviewed', reviewedParts, unreviewedAttachments, rejectedLinks: result.rejected, boundsReached: [...bounds] },
     identities, authenticationClaims, authenticationReview: { headers: authenticationHeaders, omittedHeaders: omittedAuthenticationHeaders }, messageParts,
-    links: result.links, actionHints: [...actionHints], identityRecovery: reviewIdentityIncident({ reportedActions: [] }) }, targets: result.targets };
+    links: result.links, actionHints: [...actionHints] }, targets: result.targets };
 }

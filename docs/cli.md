@@ -179,6 +179,14 @@ record trust in one exact header, add `--trusted-auth-header 1:3` (message part 
 header 3). Repeat for separate headers. This annotates the supplied claim without
 validating it or extending trust to matching service names or nested messages.
 
+`intake pdf selected.pdf`, `intake docx selected.docx` and `intake har selected.har`
+use the same offline review as the browser. Document results include part hashes,
+page references and extraction coverage. Encrypted documents require a separately
+decrypted copy; no password is requested. HAR results preserve file order and
+reported timings, with unavailable values distinct from zero. Neither document
+resources nor recorded requests are fetched. Add `--strict-exit` for exit 4 when
+coverage is partial, and `--json` for the minimised report.
+
 ## Output and automation
 
 ### Local Case files

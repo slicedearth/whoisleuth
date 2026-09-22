@@ -52,29 +52,29 @@ export function createLinkIntake() {
   const links: IntakeLink[] = [], targets: IntakeTarget[] = [];
   const seen = new Set<string>();
   let rejected = 0, bounded = false;
-  function add(raw: string, source: IntakeLink['source'], displayed = '', parentId: string | null = null, depth = 0): void {
+  function add(raw: string, source: IntakeLink['source'], displayed = '', parentId: string | null = null, depth = 0, location?: IntakeLink['location']): void {
     if (links.length >= MAX_INTAKE_LINKS) { bounded = true; return; }
     const url = parseCredentialFreeHttpUrl(refangIntakeUrl(raw.trim()), MAX_INTAKE_URL_LENGTH);
     if (!url || url.port || !canonicalRegistrableDomain(url.hostname)) { rejected++; return; }
     const shown = displayedHost(displayed);
-    const key = JSON.stringify([url.href, source, parentId, shown]);
+    const key = JSON.stringify([url.href, source, parentId, shown, location ?? null]);
     if (seen.has(key)) return;
     seen.add(key);
     const id = `link-${links.length + 1}`;
     links.push({ id, origin: url.origin, hostname: url.hostname, registrationDomain: canonicalRegistrableDomain(url.hostname),
-      source, parentId, displayedHostname: shown, displayedDestination: shown ? shown === url.hostname ? 'same_host' : 'different_host' : 'not_a_hostname',
+      source, ...(location ? { location } : {}), parentId, displayedHostname: shown, displayedDestination: shown ? shown === url.hostname ? 'same_host' : 'different_host' : 'not_a_hostname',
       hasPrivateLocation: url.pathname !== '/' || Boolean(url.search || url.hash), authorisation: reviewAuthorisationLink(url) });
     targets.push({ id, exactUrl: url.href });
     for (const [name, value] of url.searchParams) {
       if (!EMBEDDED_KEYS.has(name.toLowerCase()) || !/^(?:https?|hxxps?):\/\//iu.test(value)) continue;
       if (depth >= MAX_EMBEDDED_LINK_DEPTH) { bounded = true; continue; }
-      add(value, 'embedded_parameter', '', id, depth + 1);
+      add(value, 'embedded_parameter', '', id, depth + 1, location);
     }
   }
-  function addText(text: string, source: IntakeLink['source'] = 'text'): void {
+  function addText(text: string, source: IntakeLink['source'] = 'text', location?: IntakeLink['location']): void {
     // The caller admits bytes before this scan; iteration stops at the work bound.
     for (const match of text.matchAll(/(?:https?|hxxps?):\/\/[^\s<>"'`]+/giu)) {
-      add(match[0].replace(/[.,;!?]+$/u, ''), source);
+      add(match[0].replace(/[.,;!?]+$/u, ''), source, '', null, 0, location);
       if (links.length >= MAX_INTAKE_LINKS) { bounded = true; break; }
     }
   }

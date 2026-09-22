@@ -44,6 +44,23 @@ async function writeFixturePackage(root: string, name: string, licenseText = '')
 }
 
 describe('third-party production dependency notices', () => {
+  test('uses an exact-version retained upstream licence only when the package omits one', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-retained-notice-'));
+    try {
+      await writeFixturePackage(directory, 'alpha');
+      await writeFixturePackage(directory, 'shared', 'Shared licence');
+      await mkdir(path.join(directory, 'LICENSES'));
+      const options = { directDependencyNames: ['alpha'], lockfileValue: fixtureLockfile() };
+      await writeFile(path.join(directory, 'LICENSES/alpha-0.9.0.txt'), 'Wrong version licence');
+      assert.doesNotMatch(await buildThirdPartyNotices(directory, options), /Wrong version/u);
+      await writeFile(path.join(directory, 'LICENSES/alpha-1.0.0.txt'), 'Exact upstream attribution');
+      assert.match(await buildThirdPartyNotices(directory, options), /Exact upstream attribution/u);
+      await writeFixturePackage(directory, 'alpha', 'Packaged attribution');
+      const packaged = await buildThirdPartyNotices(directory, options);
+      assert.match(packaged, /Packaged attribution/u);
+      assert.doesNotMatch(packaged, /Exact upstream attribution/u);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
   test('collects exact direct and transitive production packages while excluding development dependencies', () => {
     assert.deepEqual(collectProductionPackages(fixtureLockfile()), [
       { name: 'alpha', version: '1.0.0', license: 'MIT', direct: true, installPath: 'node_modules/alpha' },
@@ -108,10 +125,14 @@ describe('third-party production dependency notices', () => {
       const absent = await buildOptionalPackageNotices(directory, ['alpha'], 'Fixture companion', lockfile);
       assert.match(absent, /Package count: 2/u);
       assert.doesNotMatch(absent, /native@/u);
-      await assert.rejects(buildThirdPartyNotices(directory, { directDependencyNames: ['alpha'], lockfileValue: lockfile }), { code: 'ENOENT' });
+      const portable = await buildThirdPartyNotices(directory, { directDependencyNames: ['alpha'], lockfileValue: lockfile });
+      assert.match(portable, /native@1\.0\.0.*locked optional platform package metadata/su);
+      await writeFixturePackage(directory, 'beta', 'Beta licence');
+      await assert.rejects(buildThirdPartyNotices(directory, { bundledDependencies: [{ name: 'native', version: '1.0.0' }], lockfileValue: lockfile }), { code: 'ENOENT' });
       await writeFixturePackage(directory, 'native', 'Optional native licence');
       assert.equal(await buildOptionalPackageNotices(directory, ['alpha'], 'Fixture companion', lockfile), absent);
-      assert.match(await buildThirdPartyNotices(directory, { directDependencyNames: ['alpha'], lockfileValue: lockfile }), /native@1\.0\.0/u);
+      assert.equal(await buildThirdPartyNotices(directory, { directDependencyNames: ['alpha'], lockfileValue: lockfile }), portable);
+      assert.match(await buildThirdPartyNotices(directory, { bundledDependencies: [{ name: 'native', version: '1.0.0' }], lockfileValue: lockfile }), /Optional native licence/u);
       await rm(path.join(directory, 'node_modules/shared'), { recursive: true });
       await assert.rejects(buildOptionalPackageNotices(directory, ['alpha'], 'Fixture companion', lockfile), { code: 'ENOENT' });
     } finally { await rm(directory, { recursive: true, force: true }); }

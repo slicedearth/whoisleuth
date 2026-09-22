@@ -1,9 +1,20 @@
 import type { MailAuthenticationReview } from './mail-authentication.mts';
+import type { DocumentReview } from './document-intake.mts';
+import type { HarReview } from './har-review.mts';
 
 export const MESSAGE_INTAKE_SCHEMA = 'whoisleuth.message-intake';
 export const MESSAGE_INTAKE_VERSION = 1;
-export const MESSAGE_INTAKE_KINDS = ['text', 'email', 'calendar', 'qr'] as const;
+export const MESSAGE_INTAKE_KINDS = ['text', 'email', 'calendar', 'qr', 'pdf', 'docx', 'har'] as const;
 export type MessageIntakeKind = typeof MESSAGE_INTAKE_KINDS[number];
+export const MESSAGE_INTAKE_INPUTS = {
+  text: { label: 'Pasted text or links', accept: '.txt,text/plain', binary: false },
+  email: { label: 'Email (.eml, including nested messages)', accept: '.eml,message/rfc822', binary: false },
+  calendar: { label: 'Calendar invitation (.ics)', accept: '.ics,text/calendar', binary: false },
+  qr: { label: 'QR image (still PNG)', accept: '.png,image/png', binary: true },
+  pdf: { label: 'PDF document', accept: '.pdf,application/pdf', binary: true },
+  docx: { label: 'Word document (.docx)', accept: '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document', binary: true },
+  har: { label: 'HTTP archive (.har)', accept: '.har,application/json', binary: false },
+} as const satisfies Record<MessageIntakeKind, Readonly<{ label: string; accept: string; binary: boolean }>>;
 export const IDENTITY_ACTIONS = [
   { id: 'opened_link', label: 'Opened the link' },
   { id: 'entered_password', label: 'Entered a password' },
@@ -39,7 +50,8 @@ export type IntakeLink = Readonly<{
   origin: string;
   hostname: string;
   registrationDomain: string | null;
-  source: 'text' | 'html_link' | 'html_form' | 'html_frame' | 'calendar' | 'qr' | 'embedded_parameter';
+  source: 'text' | 'html_link' | 'html_form' | 'html_frame' | 'calendar' | 'qr' | 'embedded_parameter' | 'document_text' | 'document_link' | 'document_qr' | 'har_request';
+  location?: Readonly<{ partId: string; page: number | null }>;
   parentId: string | null;
   displayedHostname: string | null;
   displayedDestination: 'same_host' | 'different_host' | 'not_a_hostname';
@@ -62,6 +74,8 @@ export type MessageIntakeReport = Readonly<{
   authenticationClaims: readonly MessageAuthenticationClaim[];
   authenticationReview: MailAuthenticationReview;
   messageParts: readonly Readonly<{ part: number; parentPart: number | null; digestSha256: string; byteLength: number }>[];
+  documentReview?: DocumentReview;
+  harReview?: HarReview;
   links: readonly IntakeLink[];
   actionHints: readonly MessageActionHint[];
   identityRecovery: Readonly<{ reportedActions: readonly IdentityAction[]; nextSteps: readonly IdentityReviewStep[] }>;

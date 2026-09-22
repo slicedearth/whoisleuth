@@ -136,8 +136,10 @@
     "maxmind": "^5.0.7",
     "minisearch": "^7.2.0",
     "parse5": "^8.0.1",
+    "pdfjs-dist": "6.3.289",
     "postal-mime": "2.7.5",
     "reflect-metadata": "0.2.2",
+    "saxes": "6.0.0",
     "tldts": "^7.4.11",
     "undici": "^8.10.1"
   },

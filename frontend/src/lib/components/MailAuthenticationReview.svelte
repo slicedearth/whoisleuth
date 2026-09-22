@@ -2,7 +2,7 @@
   import type { MailAuthenticationReview } from '../../../../packages/contracts/mail-authentication.mts';
   import { authenticationHeaderLabel, selectReceiverTrust } from '../../../../packages/investigation/mail-authentication-review.mts';
   import Pagination from './Pagination.svelte';
-  let { review, onchange, disabled = false }: { review: MailAuthenticationReview; onchange: (review: MailAuthenticationReview) => void; disabled?: boolean } = $props();
+  let { review, onchange, disabled = false, headingTag = 'h4' }: { review: MailAuthenticationReview; onchange: (review: MailAuthenticationReview) => void; disabled?: boolean; headingTag?: 'h3' | 'h4' } = $props();
   let page = $state(1);
   const PAGE_SIZE = 10;
   const headers = $derived(review.headers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE));
@@ -15,7 +15,7 @@
 </script>
 
 <section aria-label="Authentication by header" class="authentication-review">
-  <h4>Authentication by header</h4>
+  <svelte:element this={headingTag} class="heading">Authentication by header</svelte:element>
   <p>Each row reports what that source claimed. Only select receiver trust when you recognise the exact header as added inside your receiving system; a matching service name is not proof. Nested messages have separate selections.</p>
   {#if !review.headers.length}<p>No Authentication-Results or Received-SPF header was found in the reviewed message parts.</p>{/if}
   {#if review.omittedHeaders}<p class="notice">{review.omittedHeaders} further headers were not analysed within the review bound.</p>{/if}
@@ -40,5 +40,5 @@
 </section>
 
 <style>
-  .authentication-review{display:grid;gap:12px;min-width:0}h4,p{margin:0}h4{font-size:var(--text-sm)}p,li,label{font-size:var(--text-xs);line-height:1.6;overflow-wrap:anywhere}ol{display:grid;gap:18px;margin:0;padding-left:24px}ol>li{border-top:1px solid var(--border);padding-top:12px}ol>li>*+*{margin-top:8px}ul{padding-left:20px}code{font-size:inherit;overflow-wrap:anywhere}.meta{color:var(--muted)}.notice{color:var(--amber)}label{display:flex;align-items:flex-start;gap:8px;min-height:44px}input{flex:none;margin-top:5px}
+  .authentication-review{display:grid;gap:12px;min-width:0}.heading,p{margin:0}.heading{font-size:var(--text-sm)}p,li,label{font-size:var(--text-xs);line-height:1.6;overflow-wrap:anywhere}ol{display:grid;gap:18px;margin:0;padding-left:24px}ol>li{border-top:1px solid var(--border);padding-top:12px}ol>li>*+*{margin-top:8px}ul{padding-left:20px}code{font-size:inherit;overflow-wrap:anywhere}.meta{color:var(--muted)}.notice{color:var(--amber)}label{display:flex;align-items:flex-start;gap:8px;min-height:44px}input{flex:none;margin-top:5px}
 </style>

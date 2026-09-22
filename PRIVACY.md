@@ -424,7 +424,13 @@ malformed states, and any receiver trust explicitly selected by the analyst.
 Nested email parts retain separate byte digests and parent-part links; trust is
 not inherited between parts or inferred from a service name.
 
-Message intake processes selected text, email, calendar and still PNG files
+Document review retains source and part digests, page references, supported links
+and extraction coverage. Passwords are not requested or retained. HAR review
+retains request sequence, origins, method and MIME categories, status and reported
+timings; it excludes headers, cookies, bodies, usernames and private URL
+components. It does not replay requests.
+
+Message intake processes selected text, email, calendar, still PNG, PDF, DOCX and HAR files
 locally, without opening links or executing attachments. Exact URLs remain in
 the temporary review; downloaded summaries omit paths, queries, fragments,
 message bodies, subjects and address local parts. Selecting a destination fills

@@ -3329,7 +3329,10 @@ export const PUBLIC_CLI_GRAMMAR = {
         "text",
         "email",
         "calendar",
-        "qr"
+        "qr",
+        "pdf",
+        "docx",
+        "har"
       ],
       "inputSource": "argv",
       "requiredWhenOptions": []

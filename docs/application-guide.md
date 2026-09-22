@@ -116,7 +116,7 @@ response; already-admitted requests may finish within their existing bounds.
 
 ### Fast and Deep collection
 
-Before collecting, **Review a message, link or QR image** accepts pasted text,
+Before collecting, **Review a message, link or selected file** accepts pasted text,
 MIME email, calendar invitations and still PNGs. It shows the actual destination
 beside a URL displayed in the message, expands supplied redirect parameters and
 identifies authorisation-request fields. Choosing a destination fills Lookup;
@@ -127,6 +127,13 @@ Expand **Review reported authentication sources** to inspect the reporting
 service, evaluated domains and malformed or duplicated values. Receiver-trust
 checkboxes record your assessment of those exact headers; matching names and
 nested messages do not inherit the selection.
+
+Select PDF or DOCX to extract document links and supported embedded raster QR
+images. Each link references its source part and PDF page where available.
+Coverage distinguishes encrypted, unsupported and partially decoded content;
+no document scripts, macros or external resources run. Select HAR to inspect
+request order, origins, statuses and timings without replaying requests. The
+minimised report excludes headers, cookies, bodies and private URL components.
 
 The same review is available in Case Evidence. Save its minimised report and
 source hash, optionally retaining the private original separately. In Case
