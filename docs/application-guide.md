@@ -122,6 +122,11 @@ beside a URL displayed in the message, expands supplied redirect parameters and
 identifies authorisation-request fields. Choosing a destination fills Lookup;
 it does not start a request. Exact URLs are available in a private disclosure
 and omitted from the minimised review download.
+Email authentication is grouped by message part and physical header position.
+Expand **Review reported authentication sources** to inspect the reporting
+service, evaluated domains and malformed or duplicated values. Receiver-trust
+checkboxes record your assessment of those exact headers; matching names and
+nested messages do not inherit the selection.
 
 The same review is available in Case Evidence. Save its minimised report and
 source hash, optionally retaining the private original separately. In Case

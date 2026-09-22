@@ -1,3 +1,5 @@
+import type { MailAuthenticationReview } from './mail-authentication.mts';
+
 export const MESSAGE_INTAKE_SCHEMA = 'whoisleuth.message-intake';
 export const MESSAGE_INTAKE_VERSION = 1;
 export const MESSAGE_INTAKE_KINDS = ['text', 'email', 'calendar', 'qr'] as const;
@@ -58,6 +60,8 @@ export type MessageIntakeReport = Readonly<{
   coverage: Readonly<{ state: 'reviewed' | 'partial'; reviewedParts: number; unreviewedAttachments: number; rejectedLinks: number; boundsReached: readonly string[] }>;
   identities: readonly MessageIdentity[];
   authenticationClaims: readonly MessageAuthenticationClaim[];
+  authenticationReview: MailAuthenticationReview;
+  messageParts: readonly Readonly<{ part: number; parentPart: number | null; digestSha256: string; byteLength: number }>[];
   links: readonly IntakeLink[];
   actionHints: readonly MessageActionHint[];
   identityRecovery: Readonly<{ reportedActions: readonly IdentityAction[]; nextSteps: readonly IdentityReviewStep[] }>;

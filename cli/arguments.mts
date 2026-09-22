@@ -82,8 +82,8 @@ type CliAction =
   | ({ action: 'compare'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'page-compare'; leftSource: string; rightSource: string; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'mail-review'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'mail-headers'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
-  | ({ action: 'intake'; kind: import('../packages/contracts/message-intake.mts').MessageIntakeKind; reportedActions: readonly import('../packages/contracts/message-intake.mts').IdentityAction[]; source: string | null; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
+  | ({ action: 'mail-headers'; source: string | null; trustedAuthHeaders?: readonly string[]; output: 'terminal' | 'json' } & TerminalOptions)
+  | ({ action: 'intake'; kind: import('../packages/contracts/message-intake.mts').MessageIntakeKind; reportedActions: readonly import('../packages/contracts/message-intake.mts').IdentityAction[]; trustedAuthHeaders?: readonly string[]; source: string | null; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
   | ({ action: 'review-evidence'; source: string | null; mmdbSource: string | null; output: 'terminal' | 'json'; strictExit: boolean } & TerminalOptions)
   | ({ action: 'brief'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'case'; operation: typeof CLI_CASE_OPERATIONS[number]; source: string | null; caseId: string | null; domain: string | null; title: string | null; newIncident: boolean; text: string | null; noteSource: string | null; inputSource: string | null; expectedFileDigest: string | null; output: 'terminal' | 'json' } & TerminalOptions)
@@ -567,9 +567,10 @@ const CLI_PARSERS = Object.freeze({
   compare: (parsed) => singleInputAction('compare', parsed),
   'page-compare': (parsed) => ({ action: 'page-compare', ...parseTwoFileComparisonArguments(parsed, 'page-compare') }),
   'mail-review': (parsed) => singleInputAction('mail-review', parsed),
-  'mail-headers': (parsed) => singleInputAction('mail-headers', parsed),
+  'mail-headers': (parsed) => ({ ...singleInputAction('mail-headers', parsed), ...(parsed.hasOption('--trusted-auth-header') ? { trustedAuthHeaders: parsed.optionValues('--trusted-auth-header') } : {}) }),
   intake: (parsed) => ({ action: 'intake', kind: parsed.positionalValue('kind') as import('../packages/contracts/message-intake.mts').MessageIntakeKind,
     reportedActions: parsed.optionValues('--reported-action') as readonly import('../packages/contracts/message-intake.mts').IdentityAction[],
+    ...(parsed.hasOption('--trusted-auth-header') ? { trustedAuthHeaders: parsed.optionValues('--trusted-auth-header') } : {}),
     source: parsed.positionalValue('source'), output: jsonOutput(parsed), strictExit: parsed.hasOption('--strict-exit'), ...terminalOptions(parsed) }),
   'review-evidence': (parsed) => ({
     action: 'review-evidence', source: parsed.positionalValue('source'), mmdbSource: parsed.optionValue('--mmdb'),

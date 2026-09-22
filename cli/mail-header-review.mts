@@ -1,15 +1,15 @@
 import { createHash } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 
-import { AUTHENTICATION_METHODS, MAX_MAIL_REVIEW_DOMAINS, addressDomains, messageIdDomains,
-  authenticationState, authenticationServiceDomains, dkimSigningDomains, normalizeHeaderDomain,
-  type AuthenticationMethod, type AuthenticationState } from '../packages/investigation/mail-header-identity.mts';
+import { MAX_MAIL_REVIEW_DOMAINS, addressDomains, messageIdDomains,
+  authenticationServiceDomains, dkimSigningDomains, normalizeHeaderDomain } from '../packages/investigation/mail-header-identity.mts';
 export { MAX_MAIL_REVIEW_DOMAINS } from '../packages/investigation/mail-header-identity.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import { CliUsageError } from './errors.mts';
+import { reviewMailAuthentication, selectReceiverTrust, authenticationHeaderLabel, aggregateMailAuthentication } from '../packages/investigation/mail-authentication-review.mts';
 
 export const CLI_MAIL_HEADER_REVIEW_SCHEMA = 'whoisleuth.cli.mail-header-review';
-export const CLI_MAIL_HEADER_REVIEW_VERSION = 1;
+export const CLI_MAIL_HEADER_REVIEW_VERSION = 2;
 export const MAX_MAIL_HEADER_INPUT_BYTES = 256 * 1024;
 export const MAX_MAIL_HEADER_FIELDS = 512;
 export const MAX_MAIL_HEADER_LINE_BYTES = 4 * 1024;
@@ -116,20 +116,19 @@ function addDomainRoles(store: Map<string, Set<DomainRole>>, domains: readonly s
   }
 }
 
-export function buildCliMailHeaderReview(value: unknown, generatedAt = new Date().toISOString()) {
+export function buildCliMailHeaderReview(value: unknown, generatedAt = new Date().toISOString(), trustedHeaders: readonly string[] = []) {
   const normalizedGeneratedAt = normalizeExplicitIsoTimestamp(generatedAt);
   if (!normalizedGeneratedAt) throw new CliUsageError('Mail-header review generation time must be a valid ISO 8601 timestamp.');
   const parsed = parseHeaderFields(value);
+  let authenticationReview;
+  try { authenticationReview = selectReceiverTrust(reviewMailAuthentication(parsed.fields), trustedHeaders); }
+  catch (cause) { if (cause instanceof TypeError) throw new CliUsageError(cause.message); throw cause; }
   const fromDomains = addressDomains(fieldsNamed(parsed.fields, 'from'));
   const replyToDomains = addressDomains(fieldsNamed(parsed.fields, 'reply-to'));
   const returnPathDomains = addressDomains(fieldsNamed(parsed.fields, 'return-path'));
   const messageIdentifierDomains = messageIdDomains(fieldsNamed(parsed.fields, 'message-id'));
   const authenticationResults = fieldsNamed(parsed.fields, 'authentication-results');
-  const receivedSpf = fieldsNamed(parsed.fields, 'received-spf');
-  const authentication = Object.fromEntries(AUTHENTICATION_METHODS.map((method) => [
-    method,
-    authenticationState(authenticationResults, method, method === 'spf' ? receivedSpf : []),
-  ])) as Readonly<Record<AuthenticationMethod, Readonly<{ state: AuthenticationState; observations: number }>>>;
+  const authentication = aggregateMailAuthentication(authenticationReview);
   const authServiceDomains = authenticationServiceDomains(authenticationResults);
   const signerDomains = dkimSigningDomains(fieldsNamed(parsed.fields, 'dkim-signature'));
   const receivedValues = fieldsNamed(parsed.fields, 'received');
@@ -179,6 +178,7 @@ export function buildCliMailHeaderReview(value: unknown, generatedAt = new Date(
       messageIdentifierDomains: Object.freeze(messageIdentifierDomains),
     }),
     authentication: Object.freeze(authentication),
+    authenticationReview,
     routing: Object.freeze({
       receivedHops: Object.freeze(receivedHops),
       omittedReceivedHops,
@@ -193,6 +193,7 @@ export function buildCliMailHeaderReview(value: unknown, generatedAt = new Date(
     limitations: Object.freeze([
       'This review parses analyst-selected message headers offline. It makes no DNS, SMTP, HTTP, registry or provider request.',
       'Authentication results are claims reported in the supplied headers; they are not independently validated here.',
+      'Receiver trust is an explicit analyst selection for an exact header, not a conclusion from a matching service name. Aggregate counts combine all reported sources, not a trusted verdict.',
       'Exact-domain alignment is descriptive. Divergence can be legitimate and does not establish spoofing, abuse or maliciousness.',
       'Display names, subjects, address local parts, message bodies, attachments and raw header values are not retained in the output.',
       ...(omittedReceivedHops ? [`${omittedReceivedHops} older Received header${omittedReceivedHops === 1 ? ' was' : 's were'} omitted by the ${MAX_MAIL_RECEIVED_HOPS}-hop bound.`] : []),
@@ -210,8 +211,13 @@ export function formatCliMailHeaderReview(document: ReturnType<typeof buildCliMa
     `Reply-To domains   ${document.identity.replyToDomains.join(', ') || 'Unavailable'}`,
     `Return-Path        ${document.identity.returnPathDomains.join(', ') || 'Unavailable'}`,
     '',
-    'Reported authentication',
-    ...AUTHENTICATION_METHODS.map((method) => `  ${method.toUpperCase().padEnd(6)} ${document.authentication[method].state} (${document.authentication[method].observations} observation${document.authentication[method].observations === 1 ? '' : 's'})`),
+    'Authentication by source header',
+    ...document.authenticationReview.headers.flatMap(header => [
+      `  ${authenticationHeaderLabel(header)} · ${header.state} · receiver trust: ${header.receiverTrust.replaceAll('_', ' ')}`,
+      ...header.claims.map(claim => `    ${claim.method.toUpperCase()}/${claim.methodVersion}: ${claim.result}${claim.state === 'unsupported' ? ' (unsupported)' : ''}${claim.domains.map(value => ` · ${value.property}=${value.domain}`).join('')}${claim.duplicateProperties.length ? ` · ambiguous: ${claim.duplicateProperties.join(', ')}` : ''}`),
+      ...(header.duplicateOf ? [`    Duplicate of header ${header.duplicateOf} in this part.`] : []),
+      ...header.issues.map(issue => `    ${issue}`),
+    ]),
     '',
     'Exact-domain alignment',
     `  From / Reply-To     ${document.alignment.fromToReplyTo}`,

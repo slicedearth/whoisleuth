@@ -1,17 +1,17 @@
 import { isValidAsciiDomainName } from '../contracts/domain-name.mts';
+import { MAIL_AUTHENTICATION_METHODS } from '../contracts/mail-authentication.mts';
 
 export const MAX_MAIL_REVIEW_DOMAINS = 128;
-export const AUTHENTICATION_METHODS = Object.freeze(['spf', 'dkim', 'dmarc', 'arc'] as const);
+export const AUTHENTICATION_METHODS = MAIL_AUTHENTICATION_METHODS;
 export type AuthenticationMethod = typeof AUTHENTICATION_METHODS[number];
 export type AuthenticationState = 'fail' | 'mixed' | 'neutral' | 'none' | 'pass' | 'permerror' | 'softfail' | 'temperror' | 'unknown';
-const AUTHENTICATION_STATES = new Set<string>(['fail', 'neutral', 'none', 'pass', 'permerror', 'softfail', 'temperror']);
 
 export function normalizeHeaderDomain(value: string): string | null {
   const normalized = value.trim().toLowerCase().replace(/^\[|\]$/gu, '').replace(/\.$/u, '');
   return isValidAsciiDomainName(normalized, { requireLowercase: true }) ? normalized : null;
 }
 
-function lexicalSegments(value: string, delimiter: ',' | ';', trackAngles = false): string[] | null {
+export function lexicalSegments(value: string, delimiter: ',' | ';', trackAngles = false): string[] | null {
   const segments: string[] = [];
   let start = 0;
   let quoted = false;
@@ -151,38 +151,6 @@ export function addressDomains(values: readonly string[]): string[] {
 
 export function messageIdDomains(values: readonly string[]): string[] {
   return addressDomains(values.map((value) => value.replace(/[<>]/gu, '')));
-}
-
-export function authenticationState(
-  values: readonly string[],
-  method: AuthenticationMethod,
-  directValues: readonly string[] = [],
-): Readonly<{ state: AuthenticationState; observations: number }> {
-  const states = new Set<string>();
-  let observations = 0;
-  for (const value of values) {
-    const clauses = lexicalSegments(value, ';');
-    if (!clauses) continue;
-    for (const clause of clauses) {
-      const match = /^\s*([a-z][a-z0-9_-]*)\s*=\s*([a-z0-9_-]+)(?=\s|$)/iu.exec(clause);
-      if (match?.[1]?.toLowerCase() === method) {
-        observations += 1;
-        const raw = (match[2] ?? '').toLowerCase();
-        states.add(AUTHENTICATION_STATES.has(raw) ? raw : 'unknown');
-      }
-    }
-  }
-  for (const value of directValues) {
-    const match = /^\s*([a-z0-9_-]+)(?=\s|\(|$)/iu.exec(value);
-    const raw = (match?.[1] ?? '').toLowerCase();
-    if (!raw) continue;
-    observations += 1;
-    states.add(AUTHENTICATION_STATES.has(raw) ? raw : 'unknown');
-  }
-  return Object.freeze({
-    state: observations === 0 ? 'unknown' : states.size === 1 ? [...states][0] as AuthenticationState : 'mixed',
-    observations,
-  });
 }
 
 export function authenticationServiceDomains(values: readonly string[]): string[] {

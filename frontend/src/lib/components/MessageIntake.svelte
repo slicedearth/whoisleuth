@@ -8,6 +8,7 @@
   import CopyButton from './CopyButton.svelte';
   import EvidenceTimestamp from './EvidenceTimestamp.svelte';
   import { defangedIndicator } from '$lib/analysis/evidence-copy.ts';
+  import MailAuthenticationReview from './MailAuthenticationReview.svelte';
 
   let { onselect, onsave, disabled = false }: {
     onselect: (target: string) => void | Promise<void>;
@@ -94,14 +95,21 @@
       {#if report.identities.length || report.authenticationClaims.length || report.actionHints.length}
         <details><summary>Message identity and requested actions</summary>
           <p>Header results and request parameters are supplied claims. They do not verify sender identity or show that an account was compromised.</p>
-          <ul>{#each report.identities as identity}<li>Part {identity.part}: {identity.role.replaceAll('_', ' ')} — {identity.domain}</li>{/each}{#each report.authenticationClaims as claim}<li>Part {claim.part}: reported {claim.method} — {claim.result}</li>{/each}{#each report.actionHints as hint}<li>Wording to review: {hint.replaceAll('_', ' ')}</li>{/each}</ul>
+          <ul>{#each report.identities as identity}<li>Part {identity.part}: {identity.role.replaceAll('_', ' ')} — {identity.domain}</li>{/each}{#each report.actionHints as hint}<li>Wording to review: {hint.replaceAll('_', ' ')}</li>{/each}</ul>
+        </details>
+      {/if}
+      {#if kind === 'email'}
+        <details><summary>Review reported authentication sources</summary>
+          {#key report.source.digestSha256}<MailAuthenticationReview review={report.authenticationReview} disabled={disabled || saving} onchange={authenticationReview => { if (result && !saving && !disabled) result = { ...result, report: { ...result.report, authenticationReview } }; }} />{/key}
         </details>
       {/if}
       <div class="actions">{#if onsave}<button type="button" class="btn primary" disabled={saving || disabled} onclick={() => void save()}>{saving ? 'Saving…' : 'Save review in Case'}</button>{/if}
         <button type="button" class="btn" onclick={() => downloadLocalFile(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }), 'message-review.json')}>Download review</button>
       </div>
       {#if onsave}<label class="retain"><input type="checkbox" bind:checked={retainOriginal} disabled={saving || disabled}>Also retain the private original, including message bodies, addresses, attachments and exact links</label>{/if}
-      <details><summary>Review coverage and source identity</summary><EvidenceTimestamp value={report.reviewedAt} label="review time" /><p>The original’s hash identifies the selected bytes, not its publisher or authenticity.</p><code>{report.source.digestSha256}</code><p>Static text, email and calendar links are extracted without following redirects. HTML scripts do not run. QR review uses still PNG pixels; image metadata and embedded attachments are not analysed.</p></details>
+      <details><summary>Review coverage and source identity</summary><EvidenceTimestamp value={report.reviewedAt} label="review time" /><p>The original’s hash identifies the selected bytes, not its publisher or authenticity.</p><code>{report.source.digestSha256}</code><p>Static text, email and calendar links are extracted without following redirects. HTML scripts do not run. QR review uses still PNG pixels; image metadata and embedded attachments are not analysed.</p>
+        {#if report.messageParts.length}<ul>{#each report.messageParts as part}<li>Message part {part.part}{part.parentPart ? ` inside part ${part.parentPart}` : ' (outer message)'} · {part.byteLength} bytes · <code>{part.digestSha256}</code></li>{/each}</ul>{/if}
+      </details>
     {/if}
     <p class="status" role="status" aria-live="polite">{message}</p>
   </div>

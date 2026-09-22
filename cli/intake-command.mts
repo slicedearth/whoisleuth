@@ -3,6 +3,7 @@ import { MAX_MESSAGE_INTAKE_BYTES, type MessageIntakeReport } from '../packages/
 import { reviewMessageInput } from '../packages/investigation/message-intake.mts';
 import { reviewQrInput } from '../packages/investigation/qr-intake.mts';
 import { reviewIdentityIncident } from '../packages/investigation/identity-incident-review.mts';
+import { selectReceiverTrust, authenticationHeaderLabel } from '../packages/investigation/mail-authentication-review.mts';
 import type { CliArguments } from './arguments.mts';
 import type { CliCommandContext, CliDependencies } from './runner-types.mts';
 import { CliUsageError } from './errors.mts';
@@ -13,7 +14,12 @@ export function formatMessageIntake(report: MessageIntakeReport): string {
   const lines = [`Offline ${report.source.kind} intake`, `Review: ${report.coverage.state} · Extracted links: ${report.links.length} · Reviewed parts: ${report.coverage.reviewedParts}`,
     `Source: ${report.source.digestSha256} · ${report.source.byteLength} bytes`];
   for (const identity of report.identities) lines.push(`Part ${identity.part} ${identity.role.replaceAll('_', ' ')}: ${identity.domain}`);
-  for (const claim of report.authenticationClaims) lines.push(`Part ${claim.part} reported ${claim.method}: ${claim.result} (not independently verified)`);
+  for (const header of report.authenticationReview.headers) {
+    lines.push(`${authenticationHeaderLabel(header)} · ${header.state} · receiver trust: ${header.receiverTrust.replaceAll('_', ' ')}`);
+    for (const claim of header.claims) lines.push(`  ${claim.method}/${claim.methodVersion}: ${claim.result} (${claim.state})${claim.domains.map(value => ` · ${value.property}=${value.domain}`).join('')}${claim.duplicateProperties.length ? ` · ambiguous properties: ${claim.duplicateProperties.join(', ')}` : ''}`);
+    if (header.duplicateOf) lines.push(`  Duplicate of header ${header.duplicateOf} in this part.`);
+    lines.push(...header.issues.map(issue => `  ${issue}`));
+  }
   for (const link of report.links) {
     lines.push(`${link.id}: ${link.origin} · ${link.source.replaceAll('_', ' ')}${link.parentId ? ` · supplied inside ${link.parentId}` : ''}`);
     if (link.displayedHostname) lines.push(`  Displayed: ${link.displayedHostname} · ${link.displayedDestination.replaceAll('_', ' ')}`);
@@ -43,7 +49,10 @@ export async function runIntakeCommand(args: Extract<CliArguments, { action: 'in
   else bytes = new TextEncoder().encode(await context.readInput(args.source, MAX_MESSAGE_INTAKE_BYTES, 'Selected input'));
   try {
     const result = args.kind === 'qr' ? await reviewQrInput(bytes, context.now()) : await reviewMessageInput(bytes, args.kind, context.now());
-    const report = { ...result.report, identityRecovery: reviewIdentityIncident({ reportedActions: args.reportedActions }) };
+    let authenticationReview;
+    try { authenticationReview = selectReceiverTrust(result.report.authenticationReview, args.trustedAuthHeaders ?? []); }
+    catch (cause) { if (cause instanceof TypeError) throw new CliUsageError(cause.message); throw cause; }
+    const report = { ...result.report, authenticationReview, identityRecovery: reviewIdentityIncident({ reportedActions: args.reportedActions }) };
     dependencies.signal?.throwIfAborted();
     if (!args.quiet) context.writeStdout(args.output === 'json' ? formatJsonDocument(report) : context.terminal(formatMessageIntake(report), args.color));
     return args.strictExit && report.coverage.state === 'partial' ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;

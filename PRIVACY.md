@@ -418,6 +418,11 @@ selected message or standard input. Its output can retain a header digest,
 domain-only identity and routing, reported authentication states, and
 observation counts. It does not retain address local parts, display names,
 subject, body, attachments, or raw header values, and makes no network request.
+Authentication review also retains the message-part and header positions,
+restricted service identifiers, domain-only evaluated properties, duplicate or
+malformed states, and any receiver trust explicitly selected by the analyst.
+Nested email parts retain separate byte digests and parent-part links; trust is
+not inherited between parts or inferred from a service name.
 
 Message intake processes selected text, email, calendar and still PNG files
 locally, without opening links or executing attachments. Exact URLs remain in

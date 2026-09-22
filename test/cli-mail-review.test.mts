@@ -362,7 +362,7 @@ describe('offline message-header review', () => {
   test('projects domain-only identity, reported authentication, and ordered routing', () => {
     const document = buildCliMailHeaderReview(MESSAGE, ISO);
     assert.equal(document.schema, 'whoisleuth.cli.mail-header-review');
-    assert.equal(document.version, 1);
+    assert.equal(document.version, 2);
     assert.equal(document.generatedAt, ISO);
     assert.deepEqual(document.identity.fromDomains, ['sender.test']);
     assert.deepEqual(document.identity.replyToDomains, ['support.sender.test']);
@@ -395,7 +395,8 @@ describe('offline message-header review', () => {
       'Confidential message body',
       'private-signature',
     ]) assert.doesNotMatch(serialised, new RegExp(omitted, 'u'));
-    assert.match(formatCliMailHeaderReview(document), /Reported authentication/u);
+    assert.match(formatCliMailHeaderReview(document), /Authentication by source header/u);
+    assert.match(formatCliMailHeaderReview(document), /header 3 · authentication-results · mx\.recipient\.test/u);
     assert.match(document.limitations.join(' '), /does not establish spoofing, abuse or maliciousness/u);
   });
 

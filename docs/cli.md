@@ -173,6 +173,11 @@ reported order. It makes no request and does not retain address local parts,
 display names, subject, body, attachments, or raw header values in its output.
 Authentication states are header claims, not an independent DNS or
 cryptographic validation, and alignment differences can be legitimate.
+Both `mail-headers` and `intake email` preserve individual authentication header
+positions and service identifiers. Evaluate the receiver boundary yourself; to
+record trust in one exact header, add `--trusted-auth-header 1:3` (message part 1,
+header 3). Repeat for separate headers. This annotates the supplied claim without
+validating it or extending trust to matching service names or nested messages.
 
 ## Output and automation
 

@@ -3,10 +3,12 @@ import { parse, defaultTreeAdapter, type DefaultTreeAdapterTypes } from 'parse5'
 import { sha256ArtifactBytes } from '../evidence/artifact-integrity.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { createLinkIntake } from './link-intake.mts';
-import { AUTHENTICATION_METHODS, addressDomains, authenticationState, authenticationServiceDomains,
+import { AUTHENTICATION_METHODS, addressDomains, authenticationServiceDomains,
   dkimSigningDomains } from './mail-header-identity.mts';
 import { reviewIdentityIncident } from './identity-incident-review.mts';
 import { requestedActionHints } from './requested-action-hints.mts';
+import { reviewMailAuthentication, aggregateMailAuthentication } from './mail-authentication-review.mts';
+import { MAX_AUTHENTICATION_HEADERS, type MailAuthenticationHeader } from '../contracts/mail-authentication.mts';
 import { MESSAGE_INTAKE_SCHEMA, MESSAGE_INTAKE_VERSION, MESSAGE_INTAKE_KINDS, MAX_MESSAGE_INTAKE_BYTES,
   MAX_MESSAGE_PARTS, MAX_MESSAGE_DEPTH, MAX_MESSAGE_HTML_NODES,
   type IntakeLink, type MessageActionHint, type MessageIdentity, type MessageAuthenticationClaim,
@@ -27,6 +29,10 @@ export async function reviewMessageInput(bytes: Uint8Array, kind: MessageIntakeK
   if (!MESSAGE_INTAKE_KINDS.includes(kind)) throw new TypeError('Unsupported message input type.');
   const links = createLinkIntake(), identities: MessageIdentity[] = [], authenticationClaims: MessageAuthenticationClaim[] = [];
   const actionHints = new Set<MessageActionHint>(), bounds = new Set<string>();
+  const authenticationHeaders: MailAuthenticationHeader[] = [];
+  const messageParts: Array<{ part: number; parentPart: number | null; digestSha256: string; byteLength: number }> = [];
+  let omittedAuthenticationHeaders = 0;
+  let partialAuthentication = false;
   let reviewedParts = 0, unreviewedAttachments = 0, decodedBytes = 0;
   const text = (value: string, source: IntakeLink['source']) => {
     for (const hint of requestedActionHints(value)) actionHints.add(hint);
@@ -84,6 +90,11 @@ export async function reviewMessageInput(bytes: Uint8Array, kind: MessageIntakeK
     for (const domain of domains) identities.push({ part, role, domain });
   }
   function headers(mail: Email, part: number) {
+    const sourceReview = reviewMailAuthentication(mail.headers.map(header => ({ name: header.key, value: header.value })), part, MAX_AUTHENTICATION_HEADERS - authenticationHeaders.length);
+    authenticationHeaders.push(...sourceReview.headers);
+    omittedAuthenticationHeaders += sourceReview.omittedHeaders;
+    partialAuthentication ||= sourceReview.headers.some(header => !['parsed', 'none'].includes(header.state));
+    if (sourceReview.omittedHeaders) bounds.add('Authentication headers');
     const values = (name: string) => mail.headers.filter(header => header.key === name).map(header => header.value);
     identity(part, 'from', addressDomains(values('from')));
     identity(part, 'reply_to', addressDomains(values('reply-to')));
@@ -91,12 +102,13 @@ export async function reviewMessageInput(bytes: Uint8Array, kind: MessageIntakeK
     identity(part, 'dkim', dkimSigningDomains(values('dkim-signature')));
     const reported = values('authentication-results');
     identity(part, 'authentication_service', authenticationServiceDomains(reported));
+    const aggregate = aggregateMailAuthentication(sourceReview);
     for (const method of AUTHENTICATION_METHODS) {
-      const claim = authenticationState(reported, method, method === 'spf' ? values('received-spf') : []);
+      const claim = aggregate[method];
       if (claim.observations) authenticationClaims.push({ part, method, result: claim.state });
     }
   }
-  async function message(input: Uint8Array, depth: number): Promise<void> {
+  async function message(input: Uint8Array, depth: number, parentPart: number | null): Promise<void> {
     if (depth > MAX_MESSAGE_DEPTH || reviewedParts >= MAX_MESSAGE_PARTS) { bounds.add('Message nesting or parts'); unreviewedAttachments++; return; }
     decodedBytes += input.byteLength;
     if (decodedBytes > MAX_MESSAGE_INTAKE_BYTES * 2) { bounds.add('Decoded message bytes'); unreviewedAttachments++; return; }
@@ -104,18 +116,19 @@ export async function reviewMessageInput(bytes: Uint8Array, kind: MessageIntakeK
     try { mail = await PostalMime.parse(input, { maxNestingDepth: MAX_MESSAGE_DEPTH, maxHeadersSize: 256 * 1024, rfc822Attachments: true, forceRfc822Attachments: true, attachmentEncoding: 'arraybuffer' }); }
     catch { throw new TypeError('The message could not be decoded within the MIME nesting and header limits. No input was retained.'); }
     const part = ++reviewedParts;
+    messageParts.push({ part, parentPart, digestSha256: await sha256ArtifactBytes(input), byteLength: input.byteLength });
     headers(mail, part);
     if (mail.text) text(mail.text, 'text');
     if (mail.html) html(mail.html);
     for (const attachment of mail.attachments) {
       if (reviewedParts >= MAX_MESSAGE_PARTS) { bounds.add('Message parts'); unreviewedAttachments++; continue; }
       const body = typeof attachment.content === 'string' ? new TextEncoder().encode(attachment.content) : new Uint8Array(attachment.content);
-      if (attachment.mimeType === 'message/rfc822') await message(body, depth + 1);
+      if (attachment.mimeType === 'message/rfc822') await message(body, depth + 1, part);
       else if (attachment.mimeType === 'text/calendar') { reviewedParts++; calendar(new TextDecoder().decode(body)); }
       else { unreviewedAttachments++; }
     }
   }
-  if (kind === 'email') await message(bytes, 0);
+  if (kind === 'email') await message(bytes, 0, null);
   else if (kind === 'qr') {
     if (!Array.isArray(qrText) || qrText.length > MAX_MESSAGE_PARTS || qrText.some(value => typeof value !== 'string' || value.length > 8_192)) throw new TypeError('QR review requires bounded decoded text.');
     reviewedParts = qrText.length;
@@ -128,7 +141,8 @@ export async function reviewMessageInput(bytes: Uint8Array, kind: MessageIntakeK
   const result = links.result();
   if (result.bounded) bounds.add('Link extraction');
   return { report: { schema: MESSAGE_INTAKE_SCHEMA, schemaVersion: MESSAGE_INTAKE_VERSION, reviewedAt: instant,
-    source: { kind, digestSha256: await sha256ArtifactBytes(bytes), byteLength: bytes.byteLength },
-    coverage: { state: bounds.size || unreviewedAttachments ? 'partial' : 'reviewed', reviewedParts, unreviewedAttachments, rejectedLinks: result.rejected, boundsReached: [...bounds] },
-    identities, authenticationClaims, links: result.links, actionHints: [...actionHints], identityRecovery: reviewIdentityIncident({ reportedActions: [] }) }, targets: result.targets };
+    source: { kind, digestSha256: messageParts[0]?.digestSha256 ?? await sha256ArtifactBytes(bytes), byteLength: bytes.byteLength },
+    coverage: { state: bounds.size || unreviewedAttachments || partialAuthentication ? 'partial' : 'reviewed', reviewedParts, unreviewedAttachments, rejectedLinks: result.rejected, boundsReached: [...bounds] },
+    identities, authenticationClaims, authenticationReview: { headers: authenticationHeaders, omittedHeaders: omittedAuthenticationHeaders }, messageParts,
+    links: result.links, actionHints: [...actionHints], identityRecovery: reviewIdentityIncident({ reportedActions: [] }) }, targets: result.targets };
 }

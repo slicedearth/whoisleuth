@@ -291,7 +291,7 @@ async function runMailHeadersCommand(
     throw new CliUsageError(`Could not read mail-header input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
   }
   if (!input.trim()) throw new CliUsageError('mail-headers requires one message or header file, or headers on stdin.');
-  const document = buildCliMailHeaderReview(input, context.now());
+  const document = buildCliMailHeaderReview(input, context.now(), args.trustedAuthHeaders);
   if (!args.quiet) {
     context.writeStdout(args.output === 'json'
       ? formatJsonDocument(document)
