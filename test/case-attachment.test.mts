@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { addCaseAttachments, caseAttachmentReferences, mergeCaseAttachments, readCaseAttachment, readCaseAttachments, removeCaseAttachment, type CaseAttachment } from '../packages/cases/case-attachment-model.mts';
-import { createCase, normalizeCaseStore, serializeCaseStore, mergeCases, buildCaseExport, CASE_SCHEMA_VERSION, projectCaseForAudience } from '../packages/cases/case-model.mts';
+import { createCase, normalizeCaseStore, serializeCaseStore, mergeCases, buildCaseExport, projectCaseForAudience } from '../packages/cases/case-model.mts';
 
 const now = '2026-09-13T00:00:00.000Z';
 const original: CaseAttachment = { id: 'original-one', fileName: 'private-original.png', mediaType: 'image/png',
@@ -44,7 +44,8 @@ test('file references survive internal portability but never enter trusted or pu
     for (const secret of ['private-original.png', 'Private selected capture', original.digestSha256, 'original-one']) assert.ok(!output.includes(secret));
   }
   assert.deepEqual(projectCaseForAudience(updated, 'internal').attachments, [original]);
-  assert.throws(() => normalizeCaseStore({ version: CASE_SCHEMA_VERSION - 1, cases: [updated] }), /current Case schema/);
+  assert.deepEqual(normalizeCaseStore({ version: 16, cases: [updated] }).cases[0]!.attachments, [original]);
+  assert.throws(() => normalizeCaseStore({ version: 15, cases: [updated] }), /current Case schema/);
 });
 
 test('removal is deliberate, conflict-aware and leaves unrelated references intact', () => {
