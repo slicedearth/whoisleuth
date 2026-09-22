@@ -12,6 +12,7 @@
   import EvidencePackageInput from './EvidencePackageInput.svelte';
   import { readPackagedCaseReview } from '$lib/case-review-package.ts';
   import BagItEvidenceReview from './BagItEvidenceReview.svelte';
+  import DeferredSurface from './DeferredSurface.svelte';
 
   let { onworkspace }: { onworkspace?: (file: Blob) => Promise<void> } = $props();
   type Selection = SelectedInvestigationFile & { name: string; key: number };
@@ -21,6 +22,11 @@
   let selectedPage = $state(0);
   let review = $state.raw<BrowserInvestigationPackageReview | null>(null);
   let caseReview = $state.raw<Awaited<ReturnType<typeof readPackagedCaseReview>> | null>(null);
+  let temporaryCase = $state(false);
+  let temporaryTrigger: HTMLButtonElement | null = null;
+  $effect(() => { caseReview; temporaryCase = false; });
+
+  async function closeTemporaryCase() { temporaryCase = false; await tick(); temporaryTrigger?.focus(); }
   let reviewPage = $state(0);
   let activeArtifact = $state('');
   let artifactTrigger: HTMLButtonElement | null = null;
@@ -189,7 +195,8 @@
         <h4>Case handoff completeness</h4>
         <p>One exact current Case in {caseReview.entryId}. {caseReview.attachments.length - caseReview.missing.length} of {caseReview.attachments.length} original file references have matching bytes. This does not establish who reviewed the Case or whether its conclusions are correct.</p>
         <button class="btn" type="button" onclick={() => downloadEntry(caseReview!.entryId, true)}>Download Case JSON</button>
-        <p>Import the Case JSON into a separate workspace before reviewing. Unfinished forms are not included. Accepting returned entries in an existing Case never imports response authority, status or file bytes.</p>
+        <button class="primary" type="button" onclick={event => { temporaryTrigger = event.currentTarget; temporaryCase = true; }}>Open temporary Case review</button>
+        <p>Review without importing, or download the Case JSON for an explicit import into a separate workspace. Unfinished forms are not included.</p>
         {#if caseReview.attachments.length}<details><summary>Original file matches</summary><ul>{#each caseReview.attachments as item}<li>{item.attachment.fileName}: {item.entries.length ? item.entries.join(', ') : 'matching bytes absent'}</li>{/each}</ul></details>{/if}
       </section>{/if}
       {#if review.links.length}<ul class="links">{#each review.links as link}<li>Capsule {link.capsuleEntryId}: {link.state === 'linked' ? `exact source identity linked to ${link.sourceEntryId}` : `source identity ${link.state}`}</li>{/each}</ul>{/if}
@@ -227,6 +234,7 @@
   {/if}
   {/if}
 </section>
+{#if temporaryCase && caseReview}<DeferredSurface load={() => import('./PackagedCaseReview.svelte')} props={{review:caseReview,onclose:closeTemporaryCase}} loadingLabel="Opening temporary Case review…" unavailableLabel="The temporary review could not be opened. Verified file downloads remain available." />{/if}
 
 <style>
   .review-format{margin-block:18px 12px;max-width:28rem}.review-format select{min-width:0;max-width:100%}

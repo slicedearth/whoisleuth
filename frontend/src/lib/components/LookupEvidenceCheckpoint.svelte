@@ -10,6 +10,8 @@
     CaseTransitionExpectation,
   } from '$lib/cases';
   import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
+  import CopyButton from './CopyButton.svelte';
+  import { evidenceFactCitation } from '$lib/analysis/evidence-copy.ts';
 
   let {
     facts,
@@ -96,7 +98,7 @@
     </label>{/if}
     <div class="fact-grid independent-grid">
       {#each selectable as fact (fact.field)}
-        <label>
+        <div class="copyable-fact"><label>
           <input type="checkbox" disabled={actionBusy || !fact.observedAt} checked={selectedFields.includes(fact.field)} onchange={(event) => toggle(fact.field, event.currentTarget.checked)}>
           <span>
             <strong>{fact.label}</strong>
@@ -112,7 +114,7 @@
               </select>
             {/if}
           </span>
-        </label>
+        </label><CopyButton value={evidenceFactCitation(fact)} label="Copy citation" description={`Copy citation for ${fact.label}`} /></div>
       {/each}
     </div>
   {:else}
@@ -163,6 +165,7 @@
 </section>
 
 <style>
+  .copyable-fact{display:grid;gap:8px;min-width:0;align-content:start}
   .checkpoint{display:grid;gap:12px;padding:var(--card-pad)}
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
   h4,header p{margin:0}h4{margin-top:3px;font:700 var(--text-md) var(--mono)}

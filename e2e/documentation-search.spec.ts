@@ -3,6 +3,31 @@ import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
 import { documentationSearchDocuments } from '../frontend/src/lib/documentation-search';
 
+test('the console palette searches documentation without reading saved work or retaining the query', async ({ page }) => {
+  await page.goto('/dashboard');
+  const trigger = page.getByRole('button', { name: 'Open console navigation' });
+  await trigger.click();
+  const dialog = page.getByRole('dialog', { name: 'Go to', exact: true });
+  await dialog.getByRole('button', { name: 'Documentation', exact: true }).click();
+  const query = dialog.getByRole('searchbox', { name: 'Command, task or term' });
+  await expect(query).toBeFocused();
+  await query.fill('DMARC');
+  await expect(dialog.getByRole('link', { name: /Glossary DMARC/u })).toBeVisible();
+  await expect(page).toHaveURL('/dashboard');
+  await query.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await dialog.getByRole('button', { name: 'Documentation', exact: true }).click();
+  await expect(query).toHaveValue('');
+  await query.fill('verify-artifact');
+  await query.press('ArrowDown');
+  await expect(dialog.getByRole('link').first()).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL('/cli#command-verify-artifact');
+  await expect(page.locator('[data-command-detail="verify-artifact"]')).toBeVisible();
+});
+
 test('documentation search supports keyboard selection, focus recovery and private queries', async ({ page }, testInfo) => {
   const requests: string[] = [];
   page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/') && !/\/(session|capabilities)$/u.test(new URL(request.url()).pathname)) requests.push(request.url()); });

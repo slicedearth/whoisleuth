@@ -170,7 +170,7 @@ export function formatSnapshotValue(field: string, value: unknown): string {
  * @param {import('./case-model.ts').CaseEvidenceSnapshot} snapshot
  * @returns {Array<{ name: string, rows: Array<{ field: string, label: string, value: unknown }> }>}
  */
-export function snapshotFieldGroups(snapshot: CaseEvidenceSnapshot): SnapshotGroup[] {
+export function snapshotFieldGroups(snapshot: Readonly<Partial<CaseEvidenceSnapshot>>): SnapshotGroup[] {
   const groups: SnapshotGroup[] = [];
   for (const group of FIELD_GROUPS) {
     const rows: SnapshotGroup['rows'] = [];

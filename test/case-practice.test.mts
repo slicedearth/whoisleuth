@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createCasePracticeRecord, createCasePracticeSession, CASE_PRACTICE_LATER_AT } from '../frontend/src/lib/analysis/case-practice.ts';
+import { createCasePracticeRecord, createCasePracticeSession, CASE_PRACTICE_LATER_AT, CASE_PRACTICE_SCENARIOS, casePracticeFeedback } from '../frontend/src/lib/analysis/case-practice.ts';
+import { normalizeCase } from '../packages/cases/case-record-operations.mts';
 import { replaceCaseDraft } from '../packages/cases/case-drafts.mts';
 import { caseRecheckAnswerContext } from '../packages/cases/case-recheck-model.mts';
 import { createCaseDraftRecovery, type CaseDraftRecoveryState } from '../frontend/src/lib/controllers/case-draft-recovery.ts';
@@ -16,6 +17,24 @@ test('practice starts from fictional, separately attributed complete and unavail
   assert.equal(record.assertions[0]!.recheck?.baselinePinId, record.evidencePins[0]!.id);
   assert.equal(record.actions.length, 0);
   assert.equal(record.closures.records.length, 0);
+});
+
+test('every practice scenario uses valid current records and only checks explicit recorded relationships', () => {
+  for (const { id } of CASE_PRACTICE_SCENARIOS) {
+    const record = createCasePracticeRecord(id), ids = record.evidencePins.map(pin => pin.id);
+    assert.deepEqual(normalizeCase(record), record);
+    assert.ok(casePracticeFeedback(record, ids, id).every(check => !check.complete));
+    const session = createCasePracticeSession(id), current = session.read();
+    const pinIds = current.evidencePins.map(pin => pin.id);
+    session.edit({ decision: { summary: 'The evidence needs review.', rationale: 'No automatic verdict.', confidence: 'low', evidencePinIds: [pinIds[0]!] } });
+    assert.equal(casePracticeFeedback(session.read(), pinIds, id)[1]!.complete, id !== 'contradictory-sources');
+    if (id === 'provider-resolved') {
+      assert.equal(record.actions[0]!.providerOutcome, 'provider_reports_resolved');
+      assert.deepEqual(record.observedEffects.reviews, []);
+      assert.deepEqual(record.closures.records, []);
+    }
+    session.close();
+  }
 });
 
 test('practice sessions and detached read results cannot alter each other', () => {

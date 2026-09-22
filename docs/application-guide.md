@@ -17,17 +17,22 @@ Appearance controls offer comfortable or compact reading density. Compact uses
 the full available width for console workspaces; public prose remains constrained.
 Turn off decorative effects for plain card backgrounds without scanlines or glows.
 Reference pages use a plain reading surface in either theme. The console command
-palette includes a keyboard-shortcut reference below its results.
+palette includes a keyboard-shortcut reference below its results. Its
+**Documentation** scope searches the same public guides and command reference,
+without searching saved Cases. Queries stay in memory and are cleared on close.
 
 Public guides share documentation search, section navigation and print layouts.
 Search finds tasks, commands, examples and glossary terms without reading saved
 work. Direct links open the relevant tool guidance or glossary section.
 
-Use **Practise with real Case forms** in the demo to pin a supplied observation,
+Use **Practise with real Case forms** in the demo to choose a sign-in-page,
+conflicting-source or provider-resolution scenario. Pin a supplied observation,
 record an evidence-linked conclusion and review an incomplete later capture.
 The forms and validation match the Console, but the practice Case and drafts
 remain only on that page. Restarting, reloading or leaving discards them. The
-exercise offers no collection, reporting or export controls.
+exercise offers no collection, reporting or export controls. Changing scenario
+requires confirming that its Case and drafts should be discarded. Feedback
+checks retained relationships and states, not the quality of free-text reasoning.
 
 ## Dashboard
 
@@ -401,6 +406,12 @@ It saves a normal Case note; unanswered questions are omitted.
 The Summary's decision overview keeps the latest analyst conclusion, supporting
 and contrary observations, incomplete evidence and next scheduled review together.
 Evidence added later prompts another review; it does not change the conclusion.
+**Copy citation** on a retained pin or Lookup checkpoint copies only that fact,
+its source, observation time and completeness, not surrounding notes or raw data.
+**Preview report** shows the selected notes and imported sharing restrictions
+before an ordinary Case report download. Previewed downloads use the same
+prepared bytes; changing the Case or options requires a fresh preview. These
+reports are separate from authorised response packets.
 Due reviews refresh while the view is open without changing observation times.
 Section links support
 browser back and forward and remember reading positions while that Case remains
@@ -423,9 +434,12 @@ package download. The full Case includes notes, incident links, filenames and
 response records; unfinished forms are excluded. A changed Case requires a new
 check. Send the passphrase separately.
 
-The reviewer unlocks the package in Dashboard’s saved-work tools, checks the original-file matches
-and downloads its Case JSON for a separate workspace. Keep needed originals
-alongside that workspace. Return a current Case export or encrypted package.
+The reviewer unlocks the package in Dashboard’s saved-work tools and checks the
+original-file matches. **Open temporary Case review** reads the Case and matched
+originals without accessing or changing saved work. Closing the package clears
+its decrypted contents from the page. To make edits, download its Case JSON for
+an explicit import into a separate workspace and retain needed originals there.
+Return a current Case export or encrypted package.
 The unencrypted Case-only copy remains available when deliberately needed.
 Select the return in the original Case and review each addition before saving.
 Linked new pins must be selected with their claims; conflicting IDs

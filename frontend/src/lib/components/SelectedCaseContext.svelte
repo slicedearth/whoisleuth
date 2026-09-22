@@ -86,7 +86,7 @@
           </section>
           <section aria-label="Case evidence pins">
             <h2>Selected evidence ({record.evidencePins.length} {record.evidencePins.length === 1 ? 'pin' : 'pins'})</h2>
-            {#if record.evidencePins.length}<ul>{#each record.evidencePins as pin}<li><CaseEvidenceFact {pin} /></li>{/each}</ul>{:else}<p>No evidence pins retained.</p>{/if}
+            {#if record.evidencePins.length}<ul>{#each record.evidencePins as pin}<li><CaseEvidenceFact {pin} copyable /></li>{/each}</ul>{:else}<p>No evidence pins retained.</p>{/if}
           </section>
           <section aria-label="Case report history">
             <h2>Response history ({record.actions.length} {record.actions.length === 1 ? 'action' : 'actions'})</h2>

@@ -5,6 +5,30 @@ import { expectNoHorizontalOverflow, useTheme } from './helpers';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
+test('practice scenarios require deliberate replacement and keep provider outcomes distinct', async ({ page }) => {
+  const verifyIsolation = await isolateCasePractice(page);
+  await page.goto('/demo#case-practice');
+  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const label = practice.locator('form[data-recovery-form="evidence-pin"]').getByLabel('Label', { exact: true });
+  await label.fill('Keep my practice draft');
+  const scenario = page.getByRole('combobox', { name: 'Practice scenario', exact: true });
+  await scenario.selectOption('contradictory-sources');
+  await expect(label).toHaveValue('Keep my practice draft');
+  await page.getByRole('button', { name: 'Keep current practice', exact: true }).click();
+  await expect(scenario).toHaveValue('credential-form');
+  await scenario.selectOption('contradictory-sources');
+  await page.getByRole('button', { name: 'Discard practice and change scenario', exact: true }).click();
+  await expect(label).toHaveValue('');
+  await expect(practice.getByRole('heading', { name: 'Practise a Case review', exact: true })).toBeFocused();
+  await expect(practice).toContainText('Separate review reported no credential form');
+  await scenario.selectOption('provider-resolved');
+  await page.getByRole('button', { name: 'Discard practice and change scenario', exact: true }).click();
+  await expect(practice).toContainText('Provider-reported outcome: provider reports resolved');
+  await practice.getByText('Check your reasoning', { exact: true }).click();
+  await expect(practice.getByRole('list', { name: 'Practice record checks' })).toContainText('Not yet recorded: The incomplete later capture is recorded as unavailable');
+  await verifyIsolation();
+});
+
 async function isolateCasePractice(page: Page) {
   const requests: string[] = [];
   page.on('request', request => {

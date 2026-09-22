@@ -301,6 +301,8 @@ test('the console command palette filters destinations and remains keyboard oper
   await page.keyboard.press('Tab');
   await expect(dialog.getByRole('button', { name: 'Saved work', exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Documentation', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(search).toBeFocused();
   await search.fill('whois');
   await expect(dialog.getByRole('option', { name: /Lookup/ })).toBeVisible();

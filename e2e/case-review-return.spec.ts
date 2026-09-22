@@ -96,6 +96,30 @@ test('encrypted Case handoff includes selected originals, excludes recovery draf
   await packages.getByRole('button', { name: 'Unlock evidence package', exact: true }).click();
   const completeness = packages.getByRole('region', { name: 'Case handoff completeness', exact: true });
   await expect(completeness).toContainText('1 of 1 original file references have matching bytes');
+  const openTemporary = completeness.getByRole('button', { name: 'Open temporary Case review', exact: true });
+  await openTemporary.click();
+  const temporary = page.getByRole('dialog', { name: 'Temporary Case review', exact: true });
+  await expect(temporary).toBeVisible();
+  await expect(temporary).toContainText(current.title!);
+  await expect(temporary.getByRole('region', { name: 'Packaged original files' })).toContainText(FILE_NAME);
+  await expect(temporary.getByRole('button', { name: /Save|Import|Submit|Collect/u })).toHaveCount(0);
+  for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720]] as const) {
+    await page.setViewportSize({ width, height });
+    for (const theme of ['light', 'dark'] as const) {
+      await temporary.getByRole('button', { name: 'Return to package', exact: true }).click();
+      await useTheme(page, theme);
+      await openTemporary.click();
+      await expect(temporary).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      expect((await new AxeBuilder({ page }).include('dialog[open]').analyze()).violations).toEqual([]);
+      if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`temporary-review-${theme}-${width}.png`) });
+    }
+  }
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  expect(await storedFiles(page)).toEqual(originalsBefore);
+  await temporary.getByRole('button', { name: 'Return to package', exact: true }).click();
+  await expect(temporary).not.toBeVisible();
+  await expect(openTemporary).toBeFocused();
   const caseDownload = page.waitForEvent('download'); await completeness.getByRole('button', { name: 'Download Case JSON', exact: true }).click();
   expect(JSON.parse(await readFile((await (await caseDownload).path())!, 'utf8')).cases).toEqual([current]);
   await page.goto(originalUrl); await section.getByText('Share a copy or review returned entries', { exact: true }).click();

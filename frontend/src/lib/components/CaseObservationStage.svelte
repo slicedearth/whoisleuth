@@ -13,6 +13,7 @@
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
+  import DocumentationSearch from './DocumentationSearch.svelte';
 
   let { record, mode, mutationBusy, persist }: {
     record: CaseRecord;
@@ -92,6 +93,7 @@
 <section class="case-response-stage" aria-label="Case observations">
   <details id={`case-response-observation-${record.id}`} bind:open={expanded}>
     <summary>Pin an observed fact</summary>
+    <DocumentationSearch initialQuery="evidence" label="Evidence guidance" />
     <form class="response-form" data-recovery-form={pinDraft.form} oninput={pinDraft.changed} onsubmit={(event) => { event.preventDefault(); void addPin(); }}>
       <p class="notice">Date and time fields use UTC.</p>
       <div class="two-columns">
@@ -125,7 +127,7 @@
       <ol class="records">
         {#each [...record.evidencePins].reverse() as pin}
           <li>
-            <CaseEvidenceFact {pin} />
+            <CaseEvidenceFact {pin} copyable />
           </li>
         {/each}
       </ol>

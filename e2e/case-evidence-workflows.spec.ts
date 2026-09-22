@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures';
 import { openCaseSection } from './console-navigation';
-import { boundingBox, expectNoHorizontalOverflow } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, useTheme } from './helpers';
+import AxeBuilder from '@axe-core/playwright';
 import { readFileSync } from 'node:fs';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { CASE_REPORT_SCHEMA_VERSION } from '../frontend/src/lib/analysis/case-report';
@@ -445,7 +446,7 @@ test.describe('cross-case comparison', () => {
 });
 
 test.describe('case report export', () => {
-  test('export JSON for a case with correct filename and content', async ({ page }) => {
+  test('export JSON for a case with correct filename and content', async ({ page }, testInfo) => {
     await openSeededTimelineCase(page, 'export-json.invalid', [
       caseRecord({
         id: 'export-json',
@@ -466,8 +467,26 @@ test.describe('case report export', () => {
     ]);
 
     await openCaseSection(page, 'Response');
+    const previewTrigger = page.locator('.export-controls').getByRole('button', { name: 'Preview report', exact: true });
+    await previewTrigger.click();
+    const preview = page.getByRole('dialog', { name: 'Case report preview', exact: true });
+    await expect(preview).toContainText('export-json.invalid');
+    for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720]] as const) {
+      await page.setViewportSize({ width, height });
+      for (const theme of ['light', 'dark'] as const) {
+        await preview.getByRole('button', { name: 'Close report preview', exact: true }).click();
+        await useTheme(page, theme);
+        await previewTrigger.click();
+        await expect(preview).toBeVisible();
+        await expectNoHorizontalOverflow(page);
+        expect((await new AxeBuilder({ page }).include('dialog[open]').analyze()).violations).toEqual([]);
+        if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`report-${theme}-${width}.png`) });
+      }
+    }
+    await preview.getByText('Exact JSON download', { exact: true }).click();
+    const previewedJson = await preview.locator('details').filter({ has: page.getByText('Exact JSON download', { exact: true }) }).locator('pre').textContent();
     const downloadPromise = page.waitForEvent('download');
-    await page.locator('.export-controls').getByRole('button', { name: 'Export JSON' }).click();
+    await preview.getByRole('button', { name: /^Download previewed JSON/u }).click();
     const download = await downloadPromise;
 
     expect(download.suggestedFilename()).toMatch(/^whoisleuth-case-export-json\.invalid-.*\.json$/);
@@ -475,6 +494,9 @@ test.describe('case report export', () => {
 
     const body = await (await download.createReadStream()).toArray();
     const text = Buffer.concat(body).toString('utf-8');
+    expect(text).toBe(previewedJson);
+    await preview.getByRole('button', { name: 'Close report preview', exact: true }).click();
+    await expect(previewTrigger).toBeFocused();
     const parsed = JSON.parse(text);
 
     expect(parsed.schema).toBe('whoisleuth.case-report');

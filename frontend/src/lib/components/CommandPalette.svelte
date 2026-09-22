@@ -20,9 +20,9 @@
   let commands = $state<readonly ConsoleCommand[]>([]);
   let destinationsState = $state<'loading' | 'ready' | 'unavailable'>('loading');
   let query = $state('');
-  let mode = $state<'pages' | 'saved'>('pages');
+  let mode = $state<'pages' | 'saved' | 'documentation'>('pages');
 
-  async function selectMode(next: 'pages' | 'saved') {
+  async function selectMode(next: typeof mode) {
     mode = next;
     await tick();
     if (next === 'pages') searchInput?.focus();
@@ -197,9 +197,11 @@
       </div>
       <button type="button" class="palette-close" aria-label="Close command palette" onclick={close}>Esc</button>
     </header>
-    <div class="search-modes" role="group" aria-label="Search scope"><button type="button" aria-pressed={mode === 'pages'} onclick={() => void selectMode('pages')}>Pages and tools</button><button type="button" aria-pressed={mode === 'saved'} onclick={() => void selectMode('saved')}>Saved work</button></div>
+    <div class="search-modes" role="group" aria-label="Search scope"><button type="button" aria-pressed={mode === 'pages'} onclick={() => void selectMode('pages')}>Pages and tools</button><button type="button" aria-pressed={mode === 'saved'} onclick={() => void selectMode('saved')}>Saved work</button><button type="button" aria-pressed={mode === 'documentation'} onclick={() => void selectMode('documentation')}>Documentation</button></div>
     {#if mode === 'saved'}
       <div class="saved-search"><DeferredSurface load={() => import('./SavedWorkSearch.svelte')} props={{compact:true,onopen:openSaved}} loadingLabel="Opening saved-work search…" unavailableLabel="Saved-work search could not be opened." /></div>
+    {:else if mode === 'documentation'}
+      <div class="documentation-search"><DeferredSurface load={() => import('./DocumentationSearchContent.svelte')} props={{onopen:openSaved}} loadingLabel="Opening documentation search…" unavailableLabel="Documentation search could not be opened." /></div>
     {:else}
     <label for="command-search">Search pages and tools</label>
     <div class="command-search">
@@ -271,6 +273,7 @@
 </div>
 
 <style>
+  .documentation-search{min-height:0;overflow:auto;padding:14px;overscroll-behavior:contain}.search-modes{flex-wrap:wrap}
   .search-modes{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border)}.search-modes button{min-height:40px;padding:6px 12px;border:1px solid transparent;background:transparent;color:var(--muted);font:inherit}.search-modes button[aria-pressed='true']{border-color:var(--border);background:var(--panel-raised);color:var(--text)}.saved-search{min-height:0;overflow:auto;overscroll-behavior:contain}
   .palette-layer{position:fixed;inset:0;z-index:100;display:grid;place-items:start center;padding:clamp(72px,12vh,130px) 14px 24px}
   .palette-backdrop{position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:0;background:rgb(var(--shadow-rgb) / .76);backdrop-filter:blur(4px)}

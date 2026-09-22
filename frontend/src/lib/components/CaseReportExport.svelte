@@ -1,7 +1,8 @@
 <script lang="ts">
   import { downloadLocalFile } from '$lib/download-local-file.ts';
   import type { CaseRecord } from '$lib/cases';
-  import { buildCaseReport, caseReportFilename } from '$lib/analysis/case-report.ts';
+  import { prepareCaseReportPreview, caseReportPreviewIsCurrent, type CaseReportPreview as ReportPreview } from '../../../../packages/cases/case-report-preview.mts';
+  import CaseReportPreview from './CaseReportPreview.svelte';
   import { buildCaseSightingStixExport } from '$lib/analysis/case-sighting-stix-export.ts';
 
   let {
@@ -14,21 +15,21 @@
 
   let includeNotes = $state(false);
   let includeAttribution = $state(true);
+  let preview = $state.raw<ReportPreview | null>(null);
+  const options = $derived({ includeAttribution, includeNotes, applicationVersion: __WHOISLEUTH_VERSION__ });
+  const current = $derived(preview !== null && caseReportPreviewIsCurrent(preview, record, options));
+
+  function prepare() {
+    try { preview = prepareCaseReportPreview(record, options, new Date().toISOString()); }
+    catch { onmessage?.('Could not prepare the report preview. Nothing was downloaded.'); }
+  }
 
   function exportReport(format: 'json' | 'md') {
     try {
-      const generatedAt = new Date().toISOString();
-      const { json, markdown } = buildCaseReport(record, {
-        applicationVersion: __WHOISLEUTH_VERSION__,
-        includeAttribution,
-        includeNotes,
-        generatedAt,
-      });
-      const content = format === 'md' ? markdown : JSON.stringify(json, null, 2);
-      const blob = new Blob([content], {
-        type: format === 'md' ? 'text/markdown' : 'application/json',
-      });
-      downloadLocalFile(blob, caseReportFilename(record.domain, format, generatedAt));
+      if (preview && !caseReportPreviewIsCurrent(preview, record, options)) throw new Error('The Case or options changed. Prepare a current preview before downloading.');
+      const prepared = preview ?? prepareCaseReportPreview(record, options, new Date().toISOString());
+      const file = prepared.files[format];
+      downloadLocalFile(new Blob([file.content], { type: file.mimeType }), file.filename);
       onmessage?.(`Exported ${format === 'md' ? 'Markdown' : 'JSON'} report for ${record.domain}${includeNotes ? ' (with notes)' : ''}.`);
     } catch (cause) {
       onmessage?.(cause instanceof Error ? cause.message : 'Could not export case report.');
@@ -63,12 +64,14 @@
     </span>
   </label>
   <div class="export-actions">
+    <button type="button" class="btn" onclick={event => { event.currentTarget.focus({ preventScroll: true }); prepare(); }}>Preview report</button>
     <button type="button" class="btn" onclick={() => exportReport('json')}>Export JSON</button>
     <button type="button" class="btn" onclick={() => exportReport('md')}>Export Markdown</button>
     <button type="button" class="btn" onclick={exportSightings} disabled={!record.sightings.length}>Export sightings STIX</button>
   </div>
   <small class="exchange-note">The STIX export includes only source-qualified sightings and their bounded provenance. Negative review states remain notes and never erase earlier observations.</small>
 </fieldset>
+{#if preview}<CaseReportPreview {preview} {current} ondownload={exportReport} onclose={() => preview = null} />{/if}
 
 <style>
   .export-controls { display: grid; gap: 10px; min-width: 0; margin: 0; padding: 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
