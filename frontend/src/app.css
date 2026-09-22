@@ -7,6 +7,7 @@
   --panel-rgb: 23 26 33;
   --panel-raised: #1c2029;
   --surface: var(--panel);
+  --reading-surface: var(--bg);
   --border: #2a2e39;
   --border-strong: #3a4050;
   --text: #e6e8ee;
@@ -159,11 +160,12 @@
      reserved for interaction, evidence families, and semantic states. */
   --bg: #e7e2d8;
   --bg-rgb: 231 226 216;
-  --panel: #faf7f1;
-  --panel-rgb: 250 247 241;
-  --panel-raised: #efeae1;
-  --surface: var(--panel-raised);
-  --border: #d6cfc2;
+  --panel: #fffdf8;
+  --panel-rgb: 255 253 248;
+  --panel-raised: #f2eee6;
+  --surface: var(--panel);
+  --reading-surface: var(--panel);
+  --border: #cec5b6;
   --border-strong: #b0a798;
   --text: #1c1915;
   --muted: #585045;
@@ -339,7 +341,7 @@ a[href], summary { cursor: pointer; }
 a[href]:focus-visible, summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 button, input, select, textarea { color: var(--text); font: inherit; }
 button { cursor: pointer; }
-button, select { font-family: var(--mono); }
+button, select { font-family: var(--font-sans); }
 input, select, textarea { caret-color: var(--interface-accent); }
 
 .skip-link {
@@ -403,7 +405,7 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible { box-sh
 .choice > span > strong { display: block; color: var(--text); font-size: var(--text-sm); }
 .choice > span > small { color: var(--muted); font-size: var(--text-xs); }
 
-.field { display: block; font: 600 var(--text-xs) var(--mono); color: var(--text); }
+.field { display: block; font: 600 var(--text-xs) var(--font-sans); color: var(--text); }
 .field > input, .field > select, .field > textarea { display: block; margin-top: 6px; font-family: var(--font-sans); }
 .field > small { color: var(--muted); font-weight: 400; }
 
@@ -421,7 +423,7 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible { box-sh
   border-radius: var(--radius-sm);
   background: var(--panel-raised);
   color: var(--text);
-  font: 600 var(--text-xs) var(--mono);
+  font: 600 var(--text-xs) var(--font-sans);
   cursor: pointer;
   text-align: center;
 }
@@ -438,7 +440,7 @@ input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible { box-sh
   border-radius: var(--radius-sm);
   color: var(--primary-text);
   background: linear-gradient(135deg,var(--primary-start),var(--primary-end));
-  font-family: var(--mono);
+  font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: 750;
 }

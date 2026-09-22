@@ -80,7 +80,7 @@
   const selected = $derived(previewCandidates.find((candidate) => candidate.id === selectedCandidateId) ?? initialCandidate);
   const timeline = $derived(selected.timeline.toReversed());
   type PreviewView = 'overview' | 'sources' | 'timeline';
-  let previewView = $state<PreviewView>('sources');
+  let previewView = $state<PreviewView>('overview');
   const previewTabs: ReadonlyArray<{ id: PreviewView; label: string }> = [
     { id: 'overview', label: 'At a glance' },
     { id: 'sources', label: 'Evidence' },
@@ -192,7 +192,7 @@
           <div><small>Direct evidence</small><strong>{completeSourceCount}/{directSourceCount} <span>sources complete</span></strong></div>
           <div><small>Next review</small><strong>{compactMonitorAction}</strong><span class="triage-score">Risk triage {selected.risk}/100</span></div>
         </div>
-        <div class="preview-findings" aria-label="Synthetic lookup summary">
+        <div class="preview-findings" role="group" aria-label="Synthetic lookup summary">
           {#each selected.signals.slice(0, 2) as signal, index}
             <p><span class:observed={index === 0} class:review={index > 0} class="finding-state">{index === 0 ? 'Observed' : 'Review'}</span><strong>{signal}</strong></p>
           {/each}
@@ -250,7 +250,7 @@
 
 <style>
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
-  .product-preview{display:grid;grid-template-columns:.85fr 1.25fr;grid-template-rows:auto auto;gap:10px;align-items:stretch}
+  .product-preview{display:grid;grid-template-columns:.85fr 1.25fr;grid-template-rows:auto auto;gap:10px;align-items:start}
   .discover-panel{grid-column:1;grid-row:1}.monitor-panel{grid-column:1;grid-row:2}.lookup-panel{grid-column:2;grid-row:1 / 3}
   .preview-panel{min-width:0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);box-shadow:0 18px 48px rgb(var(--shadow-rgb) / .12)}
   .preview-panel header{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);background:rgb(var(--overlay-rgb) / .025);font-family:var(--mono)}

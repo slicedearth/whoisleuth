@@ -9,6 +9,6 @@
   function prepare() { void loadDeferredModule(load).catch(() => {}); }
 </script>
 <details class="context-entry" onpointerenter={prepare} onfocusin={prepare} ontoggle={event => { if (event.currentTarget.open) activated = true; }}><summary>Specialist evidence reviews</summary>
-  {#if activated}<DeferredSurface {load} props={{ record, mutationBusy, persistOperation }} loadingLabel="Opening contextual reviews…" unavailableLabel="Contextual reviews could not load." />{/if}
+  {#if activated}<DeferredSurface {load} props={{ record, mutationBusy, persistOperation }} loadingLabel="Opening specialist reviews…" unavailableLabel="Specialist reviews could not load." />{/if}
 </details>
 <style>.context-entry{min-width:0;border-block:1px solid var(--border);padding-block:12px}.context-entry>summary{cursor:pointer;min-height:44px;padding-block:12px;overflow-wrap:anywhere}</style>

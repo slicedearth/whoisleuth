@@ -16,6 +16,8 @@ workspace data.
 Appearance controls offer comfortable or compact reading density. Compact uses
 the full available width for console workspaces; public prose remains constrained.
 Turn off decorative effects for plain card backgrounds without scanlines or glows.
+Reference pages use a plain reading surface in either theme. The console command
+palette includes a keyboard-shortcut reference below its results.
 
 Public guides share documentation search, section navigation and print layouts.
 Search finds tasks, commands, examples and glossary terms without reading saved

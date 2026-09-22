@@ -39,7 +39,7 @@
         message = 'Review saved. Select the retained review file when preparing the response packet.';
         await tick(); if (active) heading?.focus();
       } else message = 'The save was not confirmed. Review the workspace message and existing files before retrying; this draft is preserved.';
-    } catch { message = 'The review could not be saved. No successful save is claimed; keep the draft and retry after checking workspace storage.'; }
+    } catch { message = 'Could not confirm the save. Check the Case’s files before retrying. Your draft is preserved.'; }
     finally { if (active) saving = false; }
   }
 </script>

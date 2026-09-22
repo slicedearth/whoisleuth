@@ -227,7 +227,7 @@
       <p class="open-error" role="alert">Destinations could not be loaded. The sidebar remains available. Reloading this page clears unsaved form edits.</p>
       <button class="btn" type="button" onclick={reloadDeferredModulePage}>Reload destinations</button>
     {:else if filteredCommands.length}
-      <ul id="command-results" role="listbox" aria-label="Console destinations" bind:this={resultsList}>
+      <ul id="command-results" role="listbox" tabindex="-1" aria-label="Console destinations" bind:this={resultsList}>
         {#each filteredCommands as command,index (command.href)}
           <li role="presentation" class:selected={index === selectedIndex}>
             <button
@@ -256,8 +256,17 @@
     {:else}
       <p class="no-results">No page or tool matches that search.</p>
     {/if}
-    <footer><span><kbd>↑</kbd><kbd>↓</kbd> select</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></footer>
     {/if}
+    <footer><details class="shortcut-help"><summary>Keyboard shortcuts</summary><dl>
+      <div><dt><kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>K</kbd></dt><dd>Open or close this palette</dd></div>
+      {#if mode === 'pages'}
+        <div><dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Select a destination while searching</dd></div>
+        <div><dt><kbd>Home</kbd> / <kbd>End</kbd></dt><dd>Select the first or last destination</dd></div>
+        <div><dt><kbd>Enter</kbd></dt><dd>Open the selected destination</dd></div>
+      {/if}
+      <div><dt><kbd>Tab</kbd> / <kbd>Shift</kbd> + <kbd>Tab</kbd></dt><dd>Move between controls</dd></div>
+      <div><dt><kbd>Esc</kbd></dt><dd>Close and return to the previous control</dd></div>
+    </dl></details></footer>
   </div>
 </div>
 
@@ -273,7 +282,7 @@
   .command-search{display:grid;grid-template-columns:34px minmax(0,1fr);align-items:center;margin:14px;border:1px solid var(--border-strong);border-radius:var(--radius-md);overflow:hidden;background:var(--panel-raised);box-shadow:inset 0 1px rgb(var(--overlay-rgb) / .035);transition:border-color .14s ease,box-shadow .14s ease,background-color .14s ease}
   .command-search:focus-within{border-color:var(--interface-accent);background:rgb(var(--panel-rgb) / .98);box-shadow:0 0 0 2px rgb(var(--interface-accent-rgb) / .16),inset 3px 0 var(--interface-accent)}
   .command-search span{align-self:stretch;display:grid;place-items:center;border-right:1px solid var(--border);background:rgb(var(--interface-accent-rgb) / .045);color:var(--interface-accent);font:700 var(--text-sm) var(--mono)}
-  .command-search input{width:100%;min-width:0;padding:12px;border:0;background:transparent;font:650 var(--text-sm) var(--mono);outline:0}
+  .command-search input{width:100%;min-width:0;padding:12px;border:0;background:transparent;font:500 var(--text-sm) var(--font-sans);outline:0}
   .command-search input:focus{box-shadow:none}
   ul{display:grid;flex:1 1 auto;gap:4px;min-height:0;max-height:360px;margin:0;padding:0 10px 12px;overflow-y:auto;list-style:none}
   li button{display:flex;width:100%;min-width:0;align-items:center;justify-content:space-between;gap:12px;padding:10px;border:1px solid transparent;border-radius:var(--radius-sm);background:transparent;color:var(--text);text-align:left}
@@ -282,15 +291,17 @@
   .command-main{display:grid;grid-template-columns:28px minmax(0,1fr);min-width:0;align-items:center}
   .command-glyph{display:grid;width:24px;height:24px;place-items:center;border:1px solid var(--border);border-radius:6px;color:var(--muted);background:rgb(var(--overlay-rgb) / .025)}
   li.selected .command-glyph{border-color:rgb(var(--interface-accent-rgb) / .42);color:var(--interface-accent);background:rgb(var(--interface-accent-rgb) / .07)}
-  .command-copy{min-width:0}strong,small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}strong{font:700 var(--text-sm) var(--mono)}small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs)}
+  .command-copy{min-width:0}strong,small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}strong{font:650 var(--text-sm) var(--font-sans)}small{margin-top:3px;color:var(--muted);font-size:var(--text-2xs)}
   .command-meta{display:grid;flex:0 0 auto;justify-items:end;gap:3px}
   em,.command-current,.command-new-tab{color:var(--accent);font:650 .55rem var(--mono);font-style:normal;letter-spacing:.07em;text-transform:uppercase}
   .command-current{color:var(--interface-accent)}
   .command-new-tab{color:var(--muted)}
   .open-error{margin:0 14px 10px;color:var(--danger);font-size:var(--text-xs)}
   .no-results{margin:0;padding:28px;color:var(--muted);text-align:center}
-  footer{display:flex;flex-wrap:wrap;gap:12px;padding:9px 14px;border-top:1px solid var(--border);color:var(--muted);font:var(--text-2xs) var(--mono)}
-  kbd{margin-right:3px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--panel-raised);font:inherit}
+  footer{flex:none;padding:0 14px;border-top:1px solid var(--border);color:var(--muted);font:var(--text-2xs)/1.5 var(--font-sans)}
+  .shortcut-help{max-height:180px;overflow:auto}.shortcut-help summary{display:list-item;min-height:44px;padding:12px 0;color:var(--text)}
+  .shortcut-help dl{display:grid;gap:10px;margin:0 0 14px}.shortcut-help dl>div{display:grid;grid-template-columns:minmax(120px,.8fr) minmax(0,1.2fr);gap:12px}.shortcut-help dd{margin:0}
+  kbd{margin-right:3px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--panel-raised);font:var(--text-2xs) var(--mono);white-space:nowrap}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   @media(max-width:600px){
     .palette-layer{place-items:start center;padding:10px}
@@ -298,8 +309,8 @@
     header{padding:12px 13px 10px}
     .command-search{margin:10px}
     ul{grid-template-columns:minmax(0,1fr);gap:3px;max-height:none;padding:0 8px 12px;overflow-y:auto}
-    li button{min-height:38px;padding:7px 9px}
-    small,em[data-command-group],footer{display:none}
+    li button{min-height:44px;padding:7px 9px}
+    small,em[data-command-group]{display:none}
     .command-current{font-size:.5rem}
     strong{overflow:visible;text-overflow:clip;white-space:normal;overflow-wrap:anywhere}
   }

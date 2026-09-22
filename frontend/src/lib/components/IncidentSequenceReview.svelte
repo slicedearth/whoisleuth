@@ -55,14 +55,14 @@
   function review() { report = reviewIncidentSequence(stages, new Date().toISOString()); presentation = incidentPresentation(stages); input = { schema: INCIDENT_SEQUENCE_INPUT_SCHEMA, version: INCIDENT_SEQUENCE_INPUT_VERSION, evidence: stages }; }
 </script>
 <section class="context-review" aria-label="Incident sequence and reported actions"><h3>Incident sequence and reported actions</h3><div class="body">
-  <p>Arrange the message, page and account events you can support. Keep observations separate from what a person reports doing; the order does not establish causation.</p>
+  <p>Arrange sourced message, page and account events in the order you want to review.</p>
   <LocalFileInput label="Load an earlier incident-sequence input" accept=".json,application/json" maximumBytes={MAX_CONTEXT_INPUT_BYTES} disabled={loading || mutationBusy} onselect={load} />
   <form onsubmit={add}><fieldset disabled={loading || mutationBusy || stages.length >= MAX_CONTEXT_RECORDS}><legend>Add a stage</legend>
     <div class="fields"><label>Stage kind<select bind:value={kind}>{#each INCIDENT_STAGE_KINDS as value}<option value={value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label>
       <label>Evidence basis<select bind:value={basis}>{#each INCIDENT_STAGE_BASES as value}<option value={value}>{value.replaceAll('_', ' ')}</option>{/each}</select></label></div>
     {#if basis === 'retained_observation'}
       <label>Retained Case observation<select required bind:value={selectedPin}><option value="">Select an observation</option>{#each record.evidencePins as pin}<option value={pin.id}>{pin.label} · {pin.source}</option>{/each}</select></label>
-      <p class="meta">The selected pin supplies its source, time, completeness and limitations unchanged. A truncated complete pin remains partial.</p>
+      <p class="meta">Source, time and collection state come from the selected observation.</p>
     {:else}
       <label>Stage description<textarea required rows="3" maxlength={MAX_RESPONSE_VALUE_LENGTH} bind:value={description}></textarea></label>
       <div class="fields"><label>Source or reporter reference<input required maxlength={MAX_RESPONSE_LABEL_LENGTH} bind:value={source}></label><label>Record reference<input required maxlength="500" bind:value={reference}></label>

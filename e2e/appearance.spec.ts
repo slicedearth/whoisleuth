@@ -101,3 +101,20 @@ test('appearance controls remain usable at narrow and wide widths in both themes
     }
   }
 });
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`public reading surfaces remain usable from phones to wide desktops in ${theme}`, async ({ page }, testInfo) => {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 768, 1024, 1280, 1920, 2560, 3840]) {
+      await page.setViewportSize({ width, height: width === 320 ? 700 : width === 390 ? 844 : width < 1280 ? 768 : width === 1280 ? 720 : 1080 });
+      for (const path of ['/', '/resources', '/cli#command-lookup', '/resources/lookalike-domain-checker']) {
+        await page.goto(path);
+        await expect(page.locator('main h1')).toHaveCount(1);
+        if (path.includes('#')) await expect(page.locator('[data-command-detail="lookup"]')).toBeInViewport();
+        else await expect(page.locator('main h1')).toBeInViewport();
+        await expectNoHorizontalOverflow(page);
+        if ([320, 1280, 3840].includes(width)) await page.screenshot({ path: testInfo.outputPath(`reading-${theme}-${width}-${path.replace(/[^a-z]+/gu, '-')}.png`) });
+      }
+    }
+  });
+}

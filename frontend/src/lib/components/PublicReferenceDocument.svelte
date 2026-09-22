@@ -111,7 +111,7 @@
 <style>
   .reference-shell{display:grid;grid-template-columns:230px minmax(0,1fr);gap:clamp(32px,4vw,56px);align-items:start;--reference-anchor-offset:24px}
   .reference-document{min-width:0;max-width:1200px}
-  .breadcrumbs{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;margin:0 0 16px;color:var(--muted);font:650 var(--text-2xs) var(--mono);line-height:1.4}
+  .breadcrumbs{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;margin:0 0 16px;color:var(--muted);font:650 var(--text-2xs) var(--font-sans);line-height:1.4}
   .breadcrumbs a{color:var(--accent)}
   .reference-heading{max-width:850px;padding:0 0 24px}
   .reference-heading h1{max-width:820px;margin:.35rem 0 .8rem;font:750 clamp(1.9rem,4vw,2.8rem)/1.15 var(--font-sans);letter-spacing:-.035em}
@@ -141,10 +141,13 @@
   @media print {
     :global(body:has(.reference-shell) *) { visibility:hidden; }
     .reference-document,.reference-document :global(*) { visibility:visible; }
-    .reference-shell { display:block; }.reference-document { max-width:none; }
+    .reference-shell { display:block; }.reference-document { max-width:none; --text:#111; --muted:#333; --accent:#111; --interface-accent:#111; --panel:white; --panel-raised:#f5f5f5; --surface:white; --bg:white; --border:#aaa; color:#111; background:white; }
+    .reference-document :global(pre) { white-space:pre-wrap; overflow-wrap:anywhere; }
     .reference-document :global(nav),.reference-document :global(button),.reference-document :global(.reference-actions),.reference-document :global(form) { display:none!important; }
     .reference-document :global(details) { break-inside:auto; }.reference-document :global(h2),.reference-document :global(h3) { break-after:avoid; }
     :global(body:has(.reference-shell)) { background:white; color:black; }
+    :global(body:has(.reference-shell))::before { display:none; }
+    :global(body:has(.reference-shell) .documentation-shell) { width:100%; padding:0; background:white; }
     :global(body:has(.reference-shell) .public-header),:global(body:has(.reference-shell) .public-footer),:global(body:has(.reference-shell) .reference-sidebar) { display:none!important; }
   }
 </style>

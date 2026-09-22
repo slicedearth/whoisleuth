@@ -289,6 +289,12 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(search).toHaveAttribute('aria-activedescendant', 'command-option-1');
   await expect(dialog.getByRole('option').nth(1)).toHaveAttribute('aria-selected', 'true');
   await search.press('Tab');
+  const shortcuts = dialog.locator('.shortcut-help > summary');
+  await expect(shortcuts).toBeFocused();
+  await shortcuts.press('Enter');
+  await expect(dialog.locator('.shortcut-help')).toContainText('Select the first or last destination');
+  await shortcuts.press('Enter');
+  await shortcuts.press('Tab');
   await expect(dialog.getByRole('button', { name: 'Close command palette' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(dialog.getByRole('button', { name: 'Pages and tools', exact: true })).toBeFocused();

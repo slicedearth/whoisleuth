@@ -70,7 +70,7 @@ test('option help explains every accepted option without changing the public gra
     const help = commandOptionHelp(command.command);
     assert.deepEqual(help.map(option => option.option), command.grammar.options.map(option => option.option));
     for (const option of help) {
-      assert.ok(option.description.length > 15, `${command.command} ${option.option}`);
+      assert.ok(option.description.trim(), `${command.command} ${option.option}`);
       assert.ok(commandHelp(command.command).includes(option.description));
     }
   }

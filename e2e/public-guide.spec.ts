@@ -93,6 +93,9 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(candidateButtons).toHaveCount(3);
   await expect(page.getByRole('button', { name: 'Show northstar-login.example in the preview' })).toHaveAttribute('aria-pressed', 'true');
   const previewTabs = page.getByRole('tablist', { name: 'Lookup result layout preview' });
+  await expect(previewTabs.getByRole('tab', { name: 'At a glance' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tabpanel', { name: 'At a glance' })).toBeVisible();
+  await previewTabs.getByRole('tab', { name: 'Evidence' }).click();
   await expect(previewTabs.getByRole('tab', { name: 'Evidence' })).toHaveAttribute('aria-selected', 'true');
   const topology = page.getByRole('region', { name: 'Where this result comes from' });
   await expect(topology).toBeVisible();
