@@ -118,7 +118,7 @@
   .public-shell{width:min(1280px,100%);min-height:100vh;margin:auto;padding:0 clamp(20px,4vw,48px)}
   .public-shell.documentation-shell{width:min(1680px,100%);background:var(--reading-surface)}
   .public-header{display:flex;position:static;inset:auto;z-index:auto;height:auto;align-items:center;justify-content:space-between;gap:12px 24px;padding:18px 0;border-bottom:1px solid var(--border);background:transparent;container:public-header/inline-size;flex-wrap:wrap}
-  .public-brand{display:flex;align-items:center;gap:10px;font-family:var(--mono)}
+  .public-brand{display:flex;min-height:44px;align-items:center;gap:10px;font-family:var(--mono)}
   .public-brand .mark{width:38px;height:38px}
   .public-brand strong,.public-brand small{display:block}
   .public-brand strong{font-size:1rem;letter-spacing:-.02em}
