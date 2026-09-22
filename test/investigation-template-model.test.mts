@@ -122,7 +122,7 @@ test('exports and non-destructively merges only the strict versioned schema', ()
 
   const unsupported = { ...exported, version: 1 };
   const before = structuredClone(unsupported);
-  assert.throws(() => mergeInvestigationTemplates([], unsupported), /schema 2/u);
+  assert.throws(() => mergeInvestigationTemplates([], unsupported), /schema 3/u);
   assert.deepEqual(unsupported, before);
 });
 

@@ -5,7 +5,7 @@ import { describe, test } from 'node:test';
 
 import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
 import { parseSerializedHandoff } from '../packages/investigation/candidate-handoff.mts';
-import { parseCacaoInvestigationPlaybook } from '../packages/interchange/investigation-playbook-interchange.mts';
+import { parseCacaoInvestigationPlaybook, INVESTIGATION_CACAO_PROFILE_VERSION } from '../packages/interchange/investigation-playbook-interchange.mts';
 import { validateStaticPagePatternPack } from '../packages/interchange/static-page-pattern-packs.mts';
 import {
   parseWebCaptureManifest,
@@ -72,7 +72,7 @@ describe('extracted domain lifecycle contracts', () => {
     const extensions = cacao.playbook_extensions as Record<string, Record<string, unknown>>;
     const profile = Object.values(extensions)[0];
     assert.ok(profile);
-    profile.profile_version = 3;
+    profile.profile_version = INVESTIGATION_CACAO_PROFILE_VERSION + 1;
     assert.throws(() => parseCacaoInvestigationPlaybook(cacao), /profile metadata is missing or invalid/u);
 
     const summary = await fixture(`${FIXTURE_ROOT}web-capture-summary-v1.json`) as Record<string, unknown>;

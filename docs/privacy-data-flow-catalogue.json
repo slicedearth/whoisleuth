@@ -8084,12 +8084,13 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.investigation-template-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 2,
+      "currentVersion": 3,
       "supportedVersions": [
-        2
+        2,
+        3
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 262144,
       "storageClass": "browser_profile_storage",
@@ -9003,12 +9004,13 @@
       "schema": "cacao-2.0",
       "lifecycleSchema": "cacao-2.0",
       "coverageClass": "registered_schema",
-      "currentVersion": 2,
+      "currentVersion": 3,
       "supportedVersions": [
-        2
+        2,
+        3
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 393216,
       "storageClass": "deliberate_local_file",
@@ -9041,12 +9043,13 @@
       "schema": "whoisleuth.investigation-templates",
       "lifecycleSchema": "whoisleuth.investigation-templates",
       "coverageClass": "registered_schema",
-      "currentVersion": 2,
+      "currentVersion": 3,
       "supportedVersions": [
-        2
+        2,
+        3
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 393216,
       "storageClass": "deliberate_local_file",
@@ -11122,7 +11125,8 @@
         {
           "schema": "cacao-2.0",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -11130,7 +11134,7 @@
       ],
       "emittedContract": {
         "schema": "cacao-2.0",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "analyst-interchange.privacy",
@@ -14456,7 +14460,8 @@
         {
           "schema": "whoisleuth.browser.investigation-template-store",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -14464,7 +14469,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.investigation-template-store",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.browser-state",
@@ -14883,7 +14888,8 @@
         {
           "schema": "whoisleuth.investigation-templates",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -14908,7 +14914,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.investigation-templates",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.portable-output",

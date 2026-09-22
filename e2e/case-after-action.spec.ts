@@ -9,7 +9,7 @@ test('after-action reviews retain failed drafts and save once through the Case c
   await openCaseResponseWorkspace(page);
   await openCaseSection(page, 'History');
   const region = page.getByRole('region', { name: 'Case after-action review', exact: true });
-  const summary = region.locator('summary');
+  const summary = region.getByText('Record lessons from this investigation', { exact: true });
   await summary.focus(); await summary.press('Enter');
   const form = region.locator('form');
   await form.getByRole('button', { name: 'Save review as a note', exact: true }).click();

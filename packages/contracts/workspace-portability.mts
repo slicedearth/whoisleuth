@@ -147,8 +147,8 @@ export const MAX_BULK_SESSION_SOURCES = 12;
 export const MAX_BULK_PROFILE_CONTEXT_LIMITATION_LENGTH = 300;
 
 export const INVESTIGATION_TEMPLATE_SCHEMA = 'whoisleuth.investigation-templates';
-export const INVESTIGATION_TEMPLATE_VERSION = 2;
-export const INVESTIGATION_TEMPLATE_SUPPORTED_VERSIONS = Object.freeze([INVESTIGATION_TEMPLATE_VERSION]);
+export const INVESTIGATION_TEMPLATE_VERSION = 3;
+export const INVESTIGATION_TEMPLATE_SUPPORTED_VERSIONS = Object.freeze([2, INVESTIGATION_TEMPLATE_VERSION]);
 export const MAX_INVESTIGATION_TEMPLATES = 20;
 export const MAX_INVESTIGATION_TEMPLATE_STORE_BYTES = 256 * 1024;
 export const MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES = 384 * 1024;
@@ -323,9 +323,9 @@ export const BULK_SESSION_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
 export const INVESTIGATION_TEMPLATE_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.investigation-templates', kind: 'browser_store', schema: null,
   currentVersion: INVESTIGATION_TEMPLATE_VERSION, supportedVersions: INVESTIGATION_TEMPLATE_SUPPORTED_VERSIONS,
-  acceptsUnversionedLegacy: false, futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only',
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current',
   writeSemantics: 'normalized_rewrite', byteBudget: MAX_INVESTIGATION_TEMPLATE_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Version 2 adds the fixed response-playbook recipe identifiers. Analyst-authored guidance remains bound to allowlisted built-in stages and cannot run code, start collection, submit evidence, or remove mandatory request gates.',
+  note: 'Public version 2 remains readable. Version 3 retains optional lesson-revision provenance without Case identities or note text. Guidance remains bound to built-in stages and cannot execute actions or remove mandatory request gates.',
 });
 export const BULK_REVIEW_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.bulk-review', kind: 'browser_store', schema: null, currentVersion: BULK_REVIEW_SCHEMA_VERSION,
@@ -394,9 +394,9 @@ export const BULK_SESSION_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
 export const INVESTIGATION_TEMPLATE_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.investigation-templates', kind: 'export', schema: INVESTIGATION_TEMPLATE_SCHEMA,
   currentVersion: INVESTIGATION_TEMPLATE_VERSION, supportedVersions: INVESTIGATION_TEMPLATE_SUPPORTED_VERSIONS,
-  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only',
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current',
   writeSemantics: 'non_destructive_merge', byteBudget: MAX_INVESTIGATION_TEMPLATE_IMPORT_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'The unchanged public version 2 writer remains the exact bounded analyst-authored guide baseline with allowlisted stage identities and request gates.',
+  note: 'Version 3 exports authored guidance and optional content-hash lesson provenance. Public version 2 remains readable; future versions fail closed.',
 });
 export const BULK_REVIEW_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.bulk-review', kind: 'export', schema: BULK_REVIEW_SCHEMA, currentVersion: BULK_REVIEW_SCHEMA_VERSION,
@@ -833,6 +833,14 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly Pick<SchemaLifecycleFixture, 
     "version": 2
   },
   {
+    "id": "workspace.browser.template.v3",
+    "path": "test/fixtures/workspace-lifecycle/browser-template-v3.json",
+    "bytes": 88,
+    "sha256": "70a6dfe2c27c75d86c74a9dfe05148c3186be68191002cbea8c18816a64792c9",
+    "schema": "whoisleuth.browser.investigation-template-store",
+    "version": 3
+  },
+  {
     "id": "workspace.browser.watchlist.v2",
     "path": "test/fixtures/workspace-lifecycle/browser-watchlist-v2.json",
     "bytes": 76,
@@ -959,6 +967,14 @@ const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly Pick<SchemaLifecycleFixture, 
     "sha256": "827aaa27e86cc2e22247f5709fb0df8fa92226ae0691750d7bfdb9a85ca6e6b5",
     "schema": "whoisleuth.investigation-templates",
     "version": 2
+  },
+  {
+    "id": "workspace.portable.template.v3",
+    "path": "test/fixtures/workspace-lifecycle/portable-template-v3.json",
+    "bytes": 471,
+    "sha256": "6b211af44661594337731767cd212beae305d81e03e090a783633eebaa62d03e",
+    "schema": "whoisleuth.investigation-templates",
+    "version": 3
   },
   {
     "id": "workspace.portable.watchlist.v2",

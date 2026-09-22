@@ -427,6 +427,14 @@ pins and relationships; **Assessment** holds conclusions and branches;
 an optional **Record lessons from this investigation** form for useful or
 misleading evidence, delays, returned complaints and changes for next time.
 It saves a normal Case note; unanswered questions are omitted.
+**Use a saved lesson to revise a template** lets you select one note and one
+saved template, edit the step instructions and completion criteria, and preview
+the changes. Add an applicability statement and reason, then save a new revision.
+The original template stays unchanged. Revision provenance contains the source
+template identity and content hashes, not the Case identity or lesson text;
+anything you type into guidance is included in template exports. The active
+guide uses the selected revision's guidance. JSON and restricted manual CACAO
+exports retain its revision origin, including after later explicit edits.
 The Summary's decision overview keeps the latest analyst conclusion, supporting
 and contrary observations, incomplete evidence and next scheduled review together.
 Evidence added later prompts another review; it does not change the conclusion.

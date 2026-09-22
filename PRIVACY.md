@@ -91,6 +91,12 @@ relationship observations, saved Bulk sessions, website snapshots,
 investigation templates, Bulk review state and saved List column choices, saved Case views and Analyst Review Item state. They
 are visible to anyone able to use the browser profile.
 
+Lesson-based template revisions retain authored guidance, applicability, reason,
+source-template identity and content hashes of the source template and selected
+lesson. They do not copy the Case identity or note text automatically. These
+fields are included in template, manual-playbook and workspace exports; hashes
+can correlate the same lesson across exports and are not anonymisation.
+
 Retained files require a separate explicit save. Selected originals are stored
 unchanged in the current workspace, using its encryption when enabled. Case
 references include filenames, declared sources and observation times, retention

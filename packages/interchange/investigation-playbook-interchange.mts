@@ -1,5 +1,6 @@
 import {
   normalizeInvestigationTemplate,
+  readTemplateLessonRevision,
   type InvestigationTemplate,
 } from '../workspace/investigation-template-model.mts';
 import {
@@ -60,6 +61,7 @@ type ProfileMetadata = {
   recipe_id: InvestigationTemplate['recipeId'];
   execution_mode: 'manual_only';
   limitations: string[];
+  lesson_revision?: InvestigationTemplate['lessonRevision'];
 };
 
 type StageMetadata = {
@@ -119,12 +121,15 @@ function profileExtension(value: unknown): ProfileMetadata | null {
     || typeof item.recipe_id !== 'string'
     || !Array.isArray(item.limitations)) return null;
   const profileVersion = Number(item.profile_version);
+  if (profileVersion < 3 && item.lesson_revision !== undefined) throw new Error('Lesson provenance requires restricted profile 3.');
+  const lessonRevision = readTemplateLessonRevision(item.lesson_revision);
   return {
     profile_version: profileVersion,
     template_id: item.template_id,
     recipe_id: item.recipe_id as InvestigationTemplate['recipeId'],
     execution_mode: 'manual_only',
     limitations: item.limitations.filter((entry): entry is string => typeof entry === 'string').slice(0, 6),
+    ...(lessonRevision ? { lesson_revision: lessonRevision } : {}),
   };
 }
 
@@ -214,6 +219,7 @@ export function buildCacaoInvestigationPlaybook(
         template_id: template.id,
         recipe_id: template.recipeId,
         execution_mode: 'manual_only',
+        ...(template.lessonRevision ? { lesson_revision: template.lessonRevision } : {}),
         limitations: [
           'This profile contains manual analyst guidance only.',
           'Import does not execute commands, start collection, submit evidence, or change a case.',
@@ -234,7 +240,7 @@ export function buildCacaoInvestigationPlaybook(
         name: 'WHOISleuth restricted investigation profile',
         description: 'Maps allowlisted manual investigation stages without adding executable operations.',
         created_by: CREATOR_ID,
-        schema: 'WHOISleuth profile v1: template and stage identifiers, workspace, expected evidence, completion criteria, approval requirement, and manual-only limitations.',
+        schema: 'WHOISleuth manual profile: template and stage identifiers, guidance, approval requirements, and optional lesson-revision provenance.',
         version: INVESTIGATION_CACAO_PROFILE_SEMVER,
       },
     },
@@ -263,7 +269,7 @@ export function parseCacaoInvestigationPlaybook(raw: unknown): InvestigationTemp
   const profile = profileExtension(record(playbook.playbook_extensions)?.[PROFILE_EXTENSION_ID]);
   if (!profile) throw new Error('The restricted investigation profile metadata is missing or invalid.');
   const definition = record(record(playbook.extension_definitions)?.[PROFILE_EXTENSION_ID]);
-  const expectedProfileSemver = profile.profile_version === 1 ? '1.0.0' : INVESTIGATION_CACAO_PROFILE_SEMVER;
+  const expectedProfileSemver = `${profile.profile_version}.0.0`;
   if (definition?.type !== 'extension-definition'
     || definition.version !== expectedProfileSemver) {
     throw new Error('The playbook does not declare the supported restricted investigation profile.');
@@ -331,6 +337,7 @@ export function parseCacaoInvestigationPlaybook(raw: unknown): InvestigationTemp
     stages,
     createdAt: playbook.created,
     updatedAt: playbook.modified,
+    ...(profile.lesson_revision ? { lessonRevision: profile.lesson_revision } : {}),
   });
   if (!normalized) {
     throw new Error('The playbook does not map to a valid allowlisted investigation template.');

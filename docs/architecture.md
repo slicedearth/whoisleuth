@@ -72,6 +72,14 @@ Separate Case forms own temporary drafts; reports and reusable minimised inputs
 use existing attachment retention and mutation coordination. CLI dispatch uses
 the same validators. Connector configuration is never an execution input.
 
+Template revisions use the workspace template model and the existing template
+editor. A selected Case note supplies a content hash; authored instructions,
+completion criteria, applicability and origin metadata belong to the new
+template. The browser adapter checks both the new identity and source-template
+snapshot within the existing collection transaction. Template JSON and the
+restricted manual-playbook adapter retain origin metadata; active guides retain
+the selected guidance snapshot.
+
 Selected-file intake uses shared format adapters for messages, PDF, DOCX, PNG
 and HAR. Browser workers and the disposable CLI worker own cancellation and
 deadlines. PDF decoding uses a nested parser worker; DOCX uses checked ZIP parts

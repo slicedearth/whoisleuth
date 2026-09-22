@@ -112,7 +112,7 @@ export interface InvestigationGuideSummary {
 type UnknownRecord = Record<string, unknown>;
 
 const CONTROL_RE = /[\x00-\x1f\x7f]/u;
-const SAFE_TEMPLATE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/u;
+export const SAFE_TEMPLATE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/u;
 const GUIDE_STATUSES = new Set<InvestigationGuideStatus>(['active', 'paused']);
 const GUIDE_OUTCOMES = new Set<InvestigationGuideOutcome>(['pending', 'complete', 'partial', 'skipped']);
 

@@ -3,9 +3,9 @@ import { buildExtractedLifecycleFamily } from './extracted-domain-lifecycle.mts'
 import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 export const ANALYST_INTERCHANGE_CONTRACT_OWNER = 'packages/contracts/analyst-interchange.mts';
 export const INVESTIGATION_CACAO_SPEC_VERSION = 'cacao-2.0';
-export const INVESTIGATION_CACAO_PROFILE_VERSION = 2;
-export const INVESTIGATION_CACAO_PROFILE_SEMVER = '2.0.0';
-export const INVESTIGATION_CACAO_SUPPORTED_PROFILE_VERSIONS = [INVESTIGATION_CACAO_PROFILE_VERSION] as const;
+export const INVESTIGATION_CACAO_PROFILE_VERSION = 3;
+export const INVESTIGATION_CACAO_PROFILE_SEMVER = '3.0.0';
+export const INVESTIGATION_CACAO_SUPPORTED_PROFILE_VERSIONS = [2, INVESTIGATION_CACAO_PROFILE_VERSION] as const;
 export const MAX_INVESTIGATION_CACAO_IMPORT_BYTES = 384 * 1024;
 export const BRAND_PROTECTION_OPERATIONS_REPORT_SCHEMA = 'whoisleuth.brand-protection-operations-report';
 export const BRAND_PROTECTION_OPERATIONS_REPORT_VERSION = 2;
@@ -41,10 +41,10 @@ export const MAX_WEB_CAPTURE_MANIFEST_BYTES = 1024 * 1024;
 const CACAO_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.investigation-cacao-profile', kind: 'export', schema: INVESTIGATION_CACAO_SPEC_VERSION,
   currentVersion: INVESTIGATION_CACAO_PROFILE_VERSION, supportedVersions: INVESTIGATION_CACAO_SUPPORTED_PROFILE_VERSIONS,
-  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only',
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'normalize_to_current',
   writeSemantics: 'non_destructive_merge', byteBudget: MAX_INVESTIGATION_CACAO_IMPORT_BYTES,
   owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
-  note: 'Restricted CACAO 2.0 profile with a connected linear sequence of manual analyst steps; version 2 adds fixed response recipe identifiers while executable commands, branches, targets, credentials, and arbitrary operations remain rejected.',
+  note: 'Restricted CACAO 2.0 manual profile. Version 3 retains optional lesson-revision provenance; public profile 2 remains readable. Executable commands, branches, targets and credentials remain rejected.',
 });
 const OPERATIONS_REPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.brand-protection-operations-report', kind: 'export', schema: BRAND_PROTECTION_OPERATIONS_REPORT_SCHEMA,
@@ -150,7 +150,8 @@ export const ANALYST_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(
       optionalKeys: ['description', 'playbook_types', 'playbook_activities', 'created_by', 'playbook_extensions', 'agent_definitions', 'x_whoisleuth_profile_version'],
       hook: { module: 'packages/interchange/investigation-playbook-interchange.mts', exportName: 'parseCacaoInvestigationPlaybook', role: 'normaliser', runtime: 'shared' },
       fixtures: [
-        { id: 'investigation-cacao-profile-v2', path: `${F}investigation-cacao-profile-v2.json`, bytes: 4_091, sha256: '7e9a3de6e12b83477690c0c58e03e6efbbb8b0c11fd98dc8470bdb6784d42358', version: INVESTIGATION_CACAO_PROFILE_VERSION },
+        { id: 'investigation-cacao-profile-v2', path: `${F}investigation-cacao-profile-v2.json`, bytes: 4_091, sha256: '7e9a3de6e12b83477690c0c58e03e6efbbb8b0c11fd98dc8470bdb6784d42358', version: 2 },
+        { id: 'investigation-cacao-profile-v3', path: `${F}investigation-cacao-profile-v3.json`, bytes: 4_067, sha256: '608cbb7875c3448ca11f6f8cb2f96ae098e18316532a8f651bbe540ca7f25a2d', version: INVESTIGATION_CACAO_PROFILE_VERSION },
       ] },
     { descriptor: OPERATIONS_REPORT_COMPATIBILITY, lifecycleSchema: BRAND_PROTECTION_OPERATIONS_REPORT_SCHEMA,
       requiredKeys: ['schema', 'version', 'generatedAt', 'window', 'limitations'], optionalKeys: ['sourceState', 'summary', 'counts', 'states', 'actionTypes', 'durations', 'denominators', 'omissions'],
