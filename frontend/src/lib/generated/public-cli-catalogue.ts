@@ -1,4 +1,1426 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
+const SHARED_COMMAND_OPTIONS = [
+  {
+    "option": "--help",
+    "scope": "common",
+    "usage": "--help",
+    "description": "Show command usage, options and an example without executing it.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--output",
+    "scope": "common",
+    "usage": "--output \u003cfile>",
+    "description": "Write output atomically to this local file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--force",
+    "scope": "common",
+    "usage": "--force",
+    "description": "Allow replacement of the selected output file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--config",
+    "scope": "common",
+    "usage": "--config \u003cfile>",
+    "description": "Load explicit versioned CLI configuration from this file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--profile",
+    "scope": "common",
+    "usage": "--profile \u003cvalue>",
+    "description": "Select a named profile from the supplied configuration.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--palette",
+    "scope": "common",
+    "usage": "--palette \u003cauto|light|dark>",
+    "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
+    "values": [
+      "auto",
+      "light",
+      "dark"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--network",
+    "scope": "command",
+    "usage": "--network",
+    "description": "Include the optional public DNS and port 43 runtime checks.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--json",
+    "scope": "command",
+    "usage": "--json",
+    "description": "Write structured JSON to stdout or the selected output file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--quiet",
+    "scope": "command",
+    "usage": "--quiet",
+    "description": "Suppress ordinary terminal presentation.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--no-color",
+    "scope": "command",
+    "usage": "--no-color",
+    "description": "Suppress ANSI colour in terminal output.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--common",
+    "scope": "command",
+    "usage": "--common",
+    "description": "Show only commands marked as common.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--group",
+    "scope": "command",
+    "usage": "--group \u003cinvestigate|respond|assure|utilities>",
+    "description": "Filter commands by task group.",
+    "values": [
+      "investigate",
+      "respond",
+      "assure",
+      "utilities"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--mode",
+    "scope": "command",
+    "usage": "--mode \u003coffline|network>",
+    "description": "Filter commands by offline or network collection mode.",
+    "values": [
+      "offline",
+      "network"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--workflow",
+    "scope": "command",
+    "usage": "--workflow \u003cvalue>",
+    "description": "Label the workflow recorded in the evidence manifest.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--configuration-digest",
+    "scope": "command",
+    "usage": "--configuration-digest \u003cvalue>",
+    "description": "Record a supplied configuration digest in the manifest provenance.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--package",
+    "scope": "command",
+    "usage": "--package",
+    "description": "Create a portable evidence ZIP containing the selected files.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--bagit",
+    "scope": "command",
+    "usage": "--bagit",
+    "description": "Create a BagIt 1.0 package with SHA-512 checksums.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--passphrase-file",
+    "scope": "command",
+    "usage": "--passphrase-file \u003cfile>",
+    "description": "Read the archive passphrase from a local file, not a command-line value.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--folder",
+    "scope": "command",
+    "usage": "--folder \u003cfile>",
+    "description": "Create a new evidence folder containing the selected files.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--junit",
+    "scope": "command",
+    "usage": "--junit",
+    "description": "Write JUnit XML for automated result reporting.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--markdown",
+    "scope": "command",
+    "usage": "--markdown",
+    "description": "Write a Markdown report.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--html",
+    "scope": "command",
+    "usage": "--html",
+    "description": "Write an HTML report.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--no-attribution",
+    "scope": "command",
+    "usage": "--no-attribution",
+    "description": "Omit the optional product attribution from presentation output.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--fast",
+    "scope": "command",
+    "usage": "--fast",
+    "description": "Select registration-first Fast collection.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--deep",
+    "scope": "command",
+    "usage": "--deep",
+    "description": "Select broader Deep collection and its additional source requests.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--exact-url",
+    "scope": "command",
+    "usage": "--exact-url",
+    "description": "With Deep Lookup, send the selected URL path and query to the website; omit its fragment.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--observer",
+    "scope": "command",
+    "usage": "--observer \u003cvalue>",
+    "description": "Attach the supplied observer label to the retained observation.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--vantage",
+    "scope": "command",
+    "usage": "--vantage \u003cvalue>",
+    "description": "Attach the supplied collection-vantage label.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--plan",
+    "scope": "command",
+    "usage": "--plan",
+    "description": "Describe intended collection and limits without making requests.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--summary",
+    "scope": "command",
+    "usage": "--summary",
+    "description": "Show a concise terminal result.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--verbose",
+    "scope": "command",
+    "usage": "--verbose",
+    "description": "Show the detailed terminal result.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--browse",
+    "scope": "command",
+    "usage": "--browse",
+    "description": "Open the interactive terminal evidence browser.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--save-lookup",
+    "scope": "command",
+    "usage": "--save-lookup \u003cfile>",
+    "description": "After a normal evidence-browser close, save the completed private Lookup JSON to a new file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--strict-exit",
+    "scope": "command",
+    "usage": "--strict-exit",
+    "description": "Use the command’s strict outcome policy when deciding the exit status.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--fail-on",
+    "scope": "command",
+    "usage": "--fail-on \u003cpolicy[,policy...]>",
+    "description": "Return a failure-policy exit status for the selected comma-separated outcomes.",
+    "values": [
+      "source-failure",
+      "inconclusive",
+      "danger"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--events",
+    "scope": "command",
+    "usage": "--events",
+    "description": "Emit collection progress events on stderr.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--jsonl",
+    "scope": "command",
+    "usage": "--jsonl",
+    "description": "Write one JSON record per line.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--csv",
+    "scope": "command",
+    "usage": "--csv",
+    "description": "Write compact CSV rows.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--csv-with-metadata",
+    "scope": "command",
+    "usage": "--csv-with-metadata",
+    "description": "Write CSV with source, observation-time and collection-state metadata.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--domains",
+    "scope": "command",
+    "usage": "--domains",
+    "description": "Write the selected domain names only.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--queries",
+    "scope": "command",
+    "usage": "--queries",
+    "description": "Write the selected original queries only.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--registered-only",
+    "scope": "command",
+    "usage": "--registered-only",
+    "description": "Keep registered results in the presented output.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--inconclusive-only",
+    "scope": "command",
+    "usage": "--inconclusive-only",
+    "description": "Keep inconclusive results in the presented output.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--errors-only",
+    "scope": "command",
+    "usage": "--errors-only",
+    "description": "Keep error results in the presented output.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--concurrency",
+    "scope": "command",
+    "usage": "--concurrency \u003cinteger>",
+    "description": "Set the maximum number of concurrent collection tasks.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [
+      {
+        "minimum": 1,
+        "maximum": 8,
+        "whenOptionPresent": null
+      },
+      {
+        "minimum": 1,
+        "maximum": 3,
+        "whenOptionPresent": "--deep"
+      }
+    ],
+    "defaultDescription": "4 in Fast mode; 2 in Deep mode"
+  },
+  {
+    "option": "--checkpoint",
+    "scope": "command",
+    "usage": "--checkpoint \u003cfile>",
+    "description": "Save resumable collection state to this local file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--resume",
+    "scope": "command",
+    "usage": "--resume",
+    "description": "Resume collection from the selected checkpoint.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--tlds",
+    "scope": "command",
+    "usage": "--tlds \u003cvalue>",
+    "description": "Use this comma-separated set of domain endings.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--preset",
+    "scope": "command",
+    "usage": "--preset \u003ccommon|impersonation|all>",
+    "description": "Choose candidate-generation families; explicit families select a custom set instead.",
+    "values": [
+      "common",
+      "impersonation",
+      "all"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": "all"
+  },
+  {
+    "option": "--families",
+    "scope": "command",
+    "usage": "--families \u003cvalue>",
+    "description": "Select the candidate-generation families explicitly.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--keyboard",
+    "scope": "command",
+    "usage": "--keyboard \u003cqwerty|azerty|qwertz|all>",
+    "description": "Choose keyboard layouts for adjacent-key candidates.",
+    "values": [
+      "qwerty",
+      "azerty",
+      "qwertz",
+      "all"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": "qwerty"
+  },
+  {
+    "option": "--dictionary",
+    "scope": "command",
+    "usage": "--dictionary \u003cfile>",
+    "description": "Read candidate words from this local dictionary.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--snapshot",
+    "scope": "command",
+    "usage": "--snapshot \u003cfile>",
+    "description": "Use this retained observation snapshot.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--scan-limit",
+    "scope": "command",
+    "usage": "--scan-limit \u003cinteger>",
+    "description": "Limit the number of generated candidates to collect.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [
+      {
+        "minimum": 1,
+        "maximum": 500,
+        "whenOptionPresent": null
+      },
+      {
+        "minimum": 1,
+        "maximum": 50,
+        "whenOptionPresent": "--deep"
+      }
+    ],
+    "defaultDescription": "100 in Fast mode; 50 in Deep mode"
+  },
+  {
+    "option": "--chunk-size",
+    "scope": "command",
+    "usage": "--chunk-size \u003cinteger>",
+    "description": "Set the number of candidates processed per checkpoint chunk.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [
+      {
+        "minimum": 1,
+        "maximum": 100,
+        "whenOptionPresent": null
+      }
+    ],
+    "defaultDescription": "25"
+  },
+  {
+    "option": "--resolver",
+    "scope": "command",
+    "usage": "--resolver \u003cvalue>",
+    "description": "Choose the supported DNS resolver for collection.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--allowlist",
+    "scope": "command",
+    "usage": "--allowlist \u003cfile>",
+    "description": "Read reviewed domains whose priority should be suppressed, without changing their evidence.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--observation-snapshot",
+    "scope": "command",
+    "usage": "--observation-snapshot \u003cfile>",
+    "description": "Compare with this retained observation snapshot.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--acquisition-only",
+    "scope": "command",
+    "usage": "--acquisition-only",
+    "description": "Present only acquisition candidates.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--suppressed-only",
+    "scope": "command",
+    "usage": "--suppressed-only",
+    "description": "Present only candidates suppressed by the allowlist.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--selectors",
+    "scope": "command",
+    "usage": "--selectors \u003cvalue>",
+    "description": "Supply explicit DKIM selectors; no selector enumeration is performed.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--retired-selectors",
+    "scope": "command",
+    "usage": "--retired-selectors \u003cvalue>",
+    "description": "Supply previously retired DKIM selectors for review.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--mail-profile",
+    "scope": "command",
+    "usage": "--mail-profile \u003cstandard|defensive-no-mail|parked>",
+    "description": "Choose the expected mail posture for the review.",
+    "values": [
+      "standard",
+      "defensive-no-mail",
+      "parked"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": "standard"
+  },
+  {
+    "option": "--include-inherited-dns",
+    "scope": "command",
+    "usage": "--include-inherited-dns",
+    "description": "Explicitly collect inherited DMARC and parent-delegation evidence.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--sarif",
+    "scope": "command",
+    "usage": "--sarif",
+    "description": "Write the posture review as SARIF.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--owned-domain",
+    "scope": "command",
+    "usage": "--owned-domain",
+    "description": "Declare that the reviewed domain is owned by the analyst.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--trust-anchor",
+    "scope": "command",
+    "usage": "--trust-anchor \u003cfile>",
+    "description": "Read the analyst-selected DNSSEC trust anchor.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--owned-or-authorized",
+    "scope": "command",
+    "usage": "--owned-or-authorized",
+    "description": "Acknowledge ownership or permission for this active collection.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--active-probe",
+    "scope": "command",
+    "usage": "--active-probe",
+    "description": "Explicitly enable the bounded active protocol exchange.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--profile",
+    "scope": "command",
+    "usage": "--profile \u003cvalue>",
+    "description": "Select the registry fixture capability profile.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--suffix",
+    "scope": "command",
+    "usage": "--suffix \u003cvalue>",
+    "description": "Select the registry suffix.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--scenario",
+    "scope": "command",
+    "usage": "--scenario \u003cregistered|not_found|inconclusive>",
+    "description": "Choose the expected registry fixture outcome.",
+    "values": [
+      "registered",
+      "not_found",
+      "inconclusive"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--summary-json",
+    "scope": "command",
+    "usage": "--summary-json",
+    "description": "Write the concise structured summary.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--manifest",
+    "scope": "command",
+    "usage": "--manifest \u003cfile>",
+    "description": "Use the selected investigation manifest.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--manifest-entry",
+    "scope": "command",
+    "usage": "--manifest-entry \u003cmanifest-entry>",
+    "description": "Select an artefact entry from the supplied manifest.",
+    "values": [
+      "artifact-1",
+      "artifact-2",
+      "artifact-3",
+      "artifact-4",
+      "artifact-5",
+      "artifact-6",
+      "artifact-7",
+      "artifact-8",
+      "artifact-9",
+      "artifact-10",
+      "artifact-11",
+      "artifact-12",
+      "artifact-13",
+      "artifact-14",
+      "artifact-15",
+      "artifact-16",
+      "artifact-17",
+      "artifact-18",
+      "artifact-19",
+      "artifact-20",
+      "artifact-21",
+      "artifact-22",
+      "artifact-23",
+      "artifact-24",
+      "artifact-25",
+      "artifact-26",
+      "artifact-27",
+      "artifact-28",
+      "artifact-29",
+      "artifact-30",
+      "artifact-31",
+      "artifact-32",
+      "artifact-33",
+      "artifact-34",
+      "artifact-35",
+      "artifact-36",
+      "artifact-37",
+      "artifact-38",
+      "artifact-39",
+      "artifact-40",
+      "artifact-41",
+      "artifact-42",
+      "artifact-43",
+      "artifact-44",
+      "artifact-45",
+      "artifact-46",
+      "artifact-47",
+      "artifact-48",
+      "artifact-49",
+      "artifact-50",
+      "artifact-51",
+      "artifact-52",
+      "artifact-53",
+      "artifact-54",
+      "artifact-55",
+      "artifact-56",
+      "artifact-57",
+      "artifact-58",
+      "artifact-59",
+      "artifact-60",
+      "artifact-61",
+      "artifact-62",
+      "artifact-63",
+      "artifact-64",
+      "artifact-65",
+      "artifact-66",
+      "artifact-67",
+      "artifact-68",
+      "artifact-69",
+      "artifact-70",
+      "artifact-71",
+      "artifact-72",
+      "artifact-73",
+      "artifact-74",
+      "artifact-75",
+      "artifact-76",
+      "artifact-77",
+      "artifact-78",
+      "artifact-79",
+      "artifact-80",
+      "artifact-81",
+      "artifact-82",
+      "artifact-83",
+      "artifact-84",
+      "artifact-85",
+      "artifact-86",
+      "artifact-87",
+      "artifact-88",
+      "artifact-89",
+      "artifact-90",
+      "artifact-91",
+      "artifact-92",
+      "artifact-93",
+      "artifact-94",
+      "artifact-95",
+      "artifact-96",
+      "artifact-97",
+      "artifact-98",
+      "artifact-99",
+      "artifact-100",
+      "artifact-101",
+      "artifact-102",
+      "artifact-103",
+      "artifact-104",
+      "artifact-105",
+      "artifact-106",
+      "artifact-107",
+      "artifact-108",
+      "artifact-109",
+      "artifact-110",
+      "artifact-111",
+      "artifact-112",
+      "artifact-113",
+      "artifact-114",
+      "artifact-115",
+      "artifact-116",
+      "artifact-117",
+      "artifact-118",
+      "artifact-119",
+      "artifact-120",
+      "artifact-121",
+      "artifact-122",
+      "artifact-123",
+      "artifact-124",
+      "artifact-125",
+      "artifact-126",
+      "artifact-127",
+      "artifact-128",
+      "artifact-129"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--package",
+    "scope": "command",
+    "usage": "--package",
+    "description": "Verify a portable evidence ZIP or encrypted package rather than a single report.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--bagit",
+    "scope": "command",
+    "usage": "--bagit",
+    "description": "Verify the selected package as BagIt 1.0.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--folder",
+    "scope": "command",
+    "usage": "--folder \u003cfile>",
+    "description": "Verify the evidence package within this selected folder.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--search",
+    "scope": "command",
+    "usage": "--search \u003cvalue>",
+    "description": "Search the selected local archive.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--require-match",
+    "scope": "command",
+    "usage": "--require-match",
+    "description": "Require the local archive search to find a match.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--reveal",
+    "scope": "command",
+    "usage": "--reveal",
+    "description": "Include retained values otherwise redacted by archive inspection.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--expect-content-digest",
+    "scope": "command",
+    "usage": "--expect-content-digest \u003cvalue>",
+    "description": "Compare archive content with the supplied version-qualified or historical digest.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--private-key-file",
+    "scope": "command",
+    "usage": "--private-key-file \u003cfile>",
+    "description": "Read the private signing key from this local file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--public-key-file",
+    "scope": "command",
+    "usage": "--public-key-file \u003cfile>",
+    "description": "Read the public verification key from this local file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--trust-store-file",
+    "scope": "command",
+    "usage": "--trust-store-file \u003cfile>",
+    "description": "Read the analyst-selected signer trust store.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--reported-action",
+    "scope": "command",
+    "usage": "--reported-action \u003creported-action>",
+    "description": "Record an analyst-reported identity action; repeat for separate actions.",
+    "values": [
+      "opened_link",
+      "entered_password",
+      "approved_signin",
+      "granted_consent",
+      "entered_device_code",
+      "executed_command"
+    ],
+    "repeatable": true,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--mmdb",
+    "scope": "command",
+    "usage": "--mmdb \u003cfile>",
+    "description": "Use the selected local IP-location database.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--case-id",
+    "scope": "command",
+    "usage": "--case-id \u003cvalue>",
+    "description": "Select the retained Case identifier.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--domain",
+    "scope": "command",
+    "usage": "--domain \u003cvalue>",
+    "description": "Supply the Case domain.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--title",
+    "scope": "command",
+    "usage": "--title \u003cvalue>",
+    "description": "Supply the Case title.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--new-incident",
+    "scope": "command",
+    "usage": "--new-incident",
+    "description": "Create a separate incident instead of updating a matching Case.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--text",
+    "scope": "command",
+    "usage": "--text \u003cvalue>",
+    "description": "Supply the note text directly.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--note-file",
+    "scope": "command",
+    "usage": "--note-file \u003cfile>",
+    "description": "Read note text from a selected local file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--input",
+    "scope": "command",
+    "usage": "--input \u003cfile>",
+    "description": "Read the selected local input file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--expect-file-digest",
+    "scope": "command",
+    "usage": "--expect-file-digest \u003cvalue>",
+    "description": "Require the input file to match this SHA-256 digest.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--audience",
+    "scope": "command",
+    "usage": "--audience \u003cinternal|trusted|public>",
+    "description": "Choose the export audience and its field-disclosure policy.",
+    "values": [
+      "internal",
+      "trusted",
+      "public"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--reviewed",
+    "scope": "command",
+    "usage": "--reviewed",
+    "description": "Confirm the required human review of the exported material.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--previous",
+    "scope": "command",
+    "usage": "--previous \u003cfile>",
+    "description": "Compare against this earlier retained report.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--limit",
+    "scope": "command",
+    "usage": "--limit \u003cinteger>",
+    "description": "Limit the number of watchlist targets checked in this run.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [
+      {
+        "minimum": 1,
+        "maximum": 20,
+        "whenOptionPresent": null
+      }
+    ],
+    "defaultDescription": "20"
+  },
+  {
+    "option": "--concurrency",
+    "scope": "command",
+    "usage": "--concurrency \u003cinteger>",
+    "description": "Set the maximum number of concurrent collection tasks.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [
+      {
+        "minimum": 1,
+        "maximum": 3,
+        "whenOptionPresent": null
+      }
+    ],
+    "defaultDescription": "2"
+  },
+  {
+    "option": "--fail-on",
+    "scope": "command",
+    "usage": "--fail-on \u003cpolicy[,policy...]>",
+    "description": "Return a failure-policy exit status for the selected comma-separated outcomes.",
+    "values": [
+      "source-failure",
+      "inconclusive",
+      "material-drift"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--marking",
+    "scope": "command",
+    "usage": "--marking \u003cclear|green|amber|amber-strict|red>",
+    "description": "Declare the information-sharing marking.",
+    "values": [
+      "clear",
+      "green",
+      "amber",
+      "amber-strict",
+      "red"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--recipient-scope",
+    "scope": "command",
+    "usage": "--recipient-scope \u003cpublic|community|organization|named-recipients>",
+    "description": "Declare the intended recipient scope.",
+    "values": [
+      "public",
+      "community",
+      "organization",
+      "named-recipients"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--purpose",
+    "scope": "command",
+    "usage": "--purpose \u003cvalue>",
+    "description": "Record the purpose of the intended sharing.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--human-reviewed",
+    "scope": "command",
+    "usage": "--human-reviewed",
+    "description": "Confirm that a person reviewed the material.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--personal-data-reviewed",
+    "scope": "command",
+    "usage": "--personal-data-reviewed",
+    "description": "Confirm that personal-data disclosure was reviewed.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--redactions-confirmed",
+    "scope": "command",
+    "usage": "--redactions-confirmed",
+    "description": "Confirm that the intended redactions were checked.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--list",
+    "scope": "command",
+    "usage": "--list",
+    "description": "List available workflow recipes.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--explain",
+    "scope": "command",
+    "usage": "--explain \u003cexplain>",
+    "description": "Explain a selected workflow without executing it.",
+    "values": [
+      "domain-triage",
+      "lookalike-review",
+      "owned-domain-review",
+      "historical-comparison",
+      "campaign-review",
+      "certificate-anomaly",
+      "registry-disagreement",
+      "evidence-handoff",
+      "planned-domain-change",
+      "post-change-verification"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--select",
+    "scope": "command",
+    "usage": "--select \u003cvalue>",
+    "description": "Bind a literal input to a workflow step; repeat for further inputs.",
+    "values": [],
+    "repeatable": true,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--use-artifact",
+    "scope": "command",
+    "usage": "--use-artifact \u003cvalue>",
+    "description": "Connect a step input to an earlier compatible output.",
+    "values": [],
+    "repeatable": true,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--confirm-review",
+    "scope": "command",
+    "usage": "--confirm-review \u003cvalue>",
+    "description": "Confirm human review for the named step in this invocation.",
+    "values": [],
+    "repeatable": true,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--approve-network",
+    "scope": "command",
+    "usage": "--approve-network",
+    "description": "Approve the workflow’s declared network steps for this invocation.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--resume",
+    "scope": "command",
+    "usage": "--resume \u003cfile>",
+    "description": "Resume the selected workflow checkpoint; approvals must be supplied again.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--interactive",
+    "scope": "command",
+    "usage": "--interactive",
+    "description": "Prompt for missing supported inputs on an interactive terminal.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--left-session",
+    "scope": "command",
+    "usage": "--left-session \u003cvalue>",
+    "description": "Select the left-hand retained capture session.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--right-session",
+    "scope": "command",
+    "usage": "--right-session \u003cvalue>",
+    "description": "Select the right-hand retained capture session.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--compact",
+    "scope": "command",
+    "usage": "--compact",
+    "description": "Write a compact report presentation.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  }
+] as const;
 export const PUBLIC_CLI_CATALOGUE = {
   "commandCount": 50,
   "groups": [
@@ -42,72 +1464,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         }
       ],
       "importantOptions": [],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -166,112 +1523,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--network",
-          "scope": "command",
-          "usage": "--network",
-          "description": "Include the optional public DNS and port 43 runtime checks.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[6], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "conditional_network",
       "disclosureClass": "conditional_bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -341,140 +1593,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--common",
-          "scope": "command",
-          "usage": "--common",
-          "description": "Show only commands marked as common.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--group",
-          "scope": "command",
-          "usage": "--group \u003cinvestigate|respond|assure|utilities>",
-          "description": "Filter commands by task group.",
-          "values": [
-            "investigate",
-            "respond",
-            "assure",
-            "utilities"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--mode",
-          "scope": "command",
-          "usage": "--mode \u003coffline|network>",
-          "description": "Filter commands by offline or network collection mode.",
-          "values": [
-            "offline",
-            "network"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[10], SHARED_COMMAND_OPTIONS[11], SHARED_COMMAND_OPTIONS[12], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -534,72 +1653,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       },
       "inputs": [],
       "importantOptions": [],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -672,162 +1726,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--workflow",
-          "scope": "command",
-          "usage": "--workflow \u003cvalue>",
-          "description": "Label the workflow recorded in the evidence manifest.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--configuration-digest",
-          "scope": "command",
-          "usage": "--configuration-digest \u003cvalue>",
-          "description": "Record a supplied configuration digest in the manifest provenance.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--package",
-          "scope": "command",
-          "usage": "--package",
-          "description": "Create a portable evidence ZIP containing the selected files.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--bagit",
-          "scope": "command",
-          "usage": "--bagit",
-          "description": "Create a BagIt 1.0 package with SHA-512 checksums.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--passphrase-file",
-          "scope": "command",
-          "usage": "--passphrase-file \u003cfile>",
-          "description": "Read the archive passphrase from a local file, not a command-line value.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--folder",
-          "scope": "command",
-          "usage": "--folder \u003cfile>",
-          "description": "Create a new evidence folder containing the selected files.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[13], SHARED_COMMAND_OPTIONS[14], SHARED_COMMAND_OPTIONS[15], SHARED_COMMAND_OPTIONS[16], SHARED_COMMAND_OPTIONS[17], SHARED_COMMAND_OPTIONS[18], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -903,102 +1802,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -1075,102 +1879,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -1266,276 +1975,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--junit",
-          "scope": "command",
-          "usage": "--junit",
-          "description": "Write JUnit XML for automated result reporting.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--markdown",
-          "scope": "command",
-          "usage": "--markdown",
-          "description": "Write a Markdown report.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--html",
-          "scope": "command",
-          "usage": "--html",
-          "description": "Write an HTML report.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-attribution",
-          "scope": "command",
-          "usage": "--no-attribution",
-          "description": "Omit the optional product attribution from presentation output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--fast",
-          "scope": "command",
-          "usage": "--fast",
-          "description": "Select registration-first Fast collection.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--deep",
-          "scope": "command",
-          "usage": "--deep",
-          "description": "Select broader Deep collection and its additional source requests.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--exact-url",
-          "scope": "command",
-          "usage": "--exact-url",
-          "description": "With Deep Lookup, send the selected URL path and query to the website; omit its fragment.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--observer",
-          "scope": "command",
-          "usage": "--observer \u003cvalue>",
-          "description": "Attach the supplied observer label to the retained observation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--vantage",
-          "scope": "command",
-          "usage": "--vantage \u003cvalue>",
-          "description": "Attach the supplied collection-vantage label.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--plan",
-          "scope": "command",
-          "usage": "--plan",
-          "description": "Describe intended collection and limits without making requests.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--summary",
-          "scope": "command",
-          "usage": "--summary",
-          "description": "Show a concise terminal result.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--verbose",
-          "scope": "command",
-          "usage": "--verbose",
-          "description": "Show the detailed terminal result.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--browse",
-          "scope": "command",
-          "usage": "--browse",
-          "description": "Open the interactive terminal evidence browser.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--save-lookup",
-          "scope": "command",
-          "usage": "--save-lookup \u003cfile>",
-          "description": "After a normal evidence-browser close, save the completed private Lookup JSON to a new file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--strict-exit",
-          "scope": "command",
-          "usage": "--strict-exit",
-          "description": "Use the command’s strict outcome policy when deciding the exit status.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--fail-on",
-          "scope": "command",
-          "usage": "--fail-on \u003cpolicy[,policy...]>",
-          "description": "Return a failure-policy exit status for the selected comma-separated outcomes.",
-          "values": [
-            "source-failure",
-            "inconclusive",
-            "danger"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--events",
-          "scope": "command",
-          "usage": "--events",
-          "description": "Emit collection progress events on stderr.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[19], SHARED_COMMAND_OPTIONS[20], SHARED_COMMAND_OPTIONS[21], SHARED_COMMAND_OPTIONS[22], SHARED_COMMAND_OPTIONS[23], SHARED_COMMAND_OPTIONS[24], SHARED_COMMAND_OPTIONS[25], SHARED_COMMAND_OPTIONS[26], SHARED_COMMAND_OPTIONS[27], SHARED_COMMAND_OPTIONS[28], SHARED_COMMAND_OPTIONS[29], SHARED_COMMAND_OPTIONS[30], SHARED_COMMAND_OPTIONS[31], SHARED_COMMAND_OPTIONS[32], SHARED_COMMAND_OPTIONS[33], SHARED_COMMAND_OPTIONS[34], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "conditional_network",
       "disclosureClass": "conditional_bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -1653,287 +2093,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--jsonl",
-          "scope": "command",
-          "usage": "--jsonl",
-          "description": "Write one JSON record per line.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--junit",
-          "scope": "command",
-          "usage": "--junit",
-          "description": "Write JUnit XML for automated result reporting.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--csv",
-          "scope": "command",
-          "usage": "--csv",
-          "description": "Write compact CSV rows.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--csv-with-metadata",
-          "scope": "command",
-          "usage": "--csv-with-metadata",
-          "description": "Write CSV with source, observation-time and collection-state metadata.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--domains",
-          "scope": "command",
-          "usage": "--domains",
-          "description": "Write the selected domain names only.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--queries",
-          "scope": "command",
-          "usage": "--queries",
-          "description": "Write the selected original queries only.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--registered-only",
-          "scope": "command",
-          "usage": "--registered-only",
-          "description": "Keep registered results in the presented output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--inconclusive-only",
-          "scope": "command",
-          "usage": "--inconclusive-only",
-          "description": "Keep inconclusive results in the presented output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--errors-only",
-          "scope": "command",
-          "usage": "--errors-only",
-          "description": "Keep error results in the presented output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--fast",
-          "scope": "command",
-          "usage": "--fast",
-          "description": "Select registration-first Fast collection.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--deep",
-          "scope": "command",
-          "usage": "--deep",
-          "description": "Select broader Deep collection and its additional source requests.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--concurrency",
-          "scope": "command",
-          "usage": "--concurrency \u003cinteger>",
-          "description": "Set the maximum number of concurrent collection tasks.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [
-            {
-              "minimum": 1,
-              "maximum": 8,
-              "whenOptionPresent": null
-            },
-            {
-              "minimum": 1,
-              "maximum": 3,
-              "whenOptionPresent": "--deep"
-            }
-          ],
-          "defaultDescription": "4 in Fast mode; 2 in Deep mode"
-        },
-        {
-          "option": "--checkpoint",
-          "scope": "command",
-          "usage": "--checkpoint \u003cfile>",
-          "description": "Save resumable collection state to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--resume",
-          "scope": "command",
-          "usage": "--resume",
-          "description": "Resume collection from the selected checkpoint.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--events",
-          "scope": "command",
-          "usage": "--events",
-          "description": "Emit collection progress events on stderr.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--plan",
-          "scope": "command",
-          "usage": "--plan",
-          "description": "Describe intended collection and limits without making requests.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--fail-on",
-          "scope": "command",
-          "usage": "--fail-on \u003cpolicy[,policy...]>",
-          "description": "Return a failure-policy exit status for the selected comma-separated outcomes.",
-          "values": [
-            "source-failure",
-            "inconclusive",
-            "danger"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[36], SHARED_COMMAND_OPTIONS[19], SHARED_COMMAND_OPTIONS[37], SHARED_COMMAND_OPTIONS[38], SHARED_COMMAND_OPTIONS[39], SHARED_COMMAND_OPTIONS[40], SHARED_COMMAND_OPTIONS[41], SHARED_COMMAND_OPTIONS[42], SHARED_COMMAND_OPTIONS[43], SHARED_COMMAND_OPTIONS[23], SHARED_COMMAND_OPTIONS[24], SHARED_COMMAND_OPTIONS[44], SHARED_COMMAND_OPTIONS[45], SHARED_COMMAND_OPTIONS[46], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[28], SHARED_COMMAND_OPTIONS[34], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "conditional_network",
       "disclosureClass": "conditional_bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -2046,102 +2206,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -2217,102 +2282,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -2398,191 +2368,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--tlds",
-          "scope": "command",
-          "usage": "--tlds \u003cvalue>",
-          "description": "Use this comma-separated set of domain endings.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--preset",
-          "scope": "command",
-          "usage": "--preset \u003ccommon|impersonation|all>",
-          "description": "Choose candidate-generation families; explicit families select a custom set instead.",
-          "values": [
-            "common",
-            "impersonation",
-            "all"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": "all"
-        },
-        {
-          "option": "--families",
-          "scope": "command",
-          "usage": "--families \u003cvalue>",
-          "description": "Select the candidate-generation families explicitly.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--keyboard",
-          "scope": "command",
-          "usage": "--keyboard \u003cqwerty|azerty|qwertz|all>",
-          "description": "Choose keyboard layouts for adjacent-key candidates.",
-          "values": [
-            "qwerty",
-            "azerty",
-            "qwertz",
-            "all"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": "qwerty"
-        },
-        {
-          "option": "--dictionary",
-          "scope": "command",
-          "usage": "--dictionary \u003cfile>",
-          "description": "Read candidate words from this local dictionary.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--snapshot",
-          "scope": "command",
-          "usage": "--snapshot \u003cfile>",
-          "description": "Use this retained observation snapshot.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--jsonl",
-          "scope": "command",
-          "usage": "--jsonl",
-          "description": "Write one JSON record per line.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--domains",
-          "scope": "command",
-          "usage": "--domains",
-          "description": "Write the selected domain names only.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[47], SHARED_COMMAND_OPTIONS[48], SHARED_COMMAND_OPTIONS[49], SHARED_COMMAND_OPTIONS[50], SHARED_COMMAND_OPTIONS[51], SHARED_COMMAND_OPTIONS[52], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[36], SHARED_COMMAND_OPTIONS[39], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -2698,403 +2484,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--tlds",
-          "scope": "command",
-          "usage": "--tlds \u003cvalue>",
-          "description": "Use this comma-separated set of domain endings.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--preset",
-          "scope": "command",
-          "usage": "--preset \u003ccommon|impersonation|all>",
-          "description": "Choose candidate-generation families; explicit families select a custom set instead.",
-          "values": [
-            "common",
-            "impersonation",
-            "all"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": "all"
-        },
-        {
-          "option": "--families",
-          "scope": "command",
-          "usage": "--families \u003cvalue>",
-          "description": "Select the candidate-generation families explicitly.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--keyboard",
-          "scope": "command",
-          "usage": "--keyboard \u003cqwerty|azerty|qwertz|all>",
-          "description": "Choose keyboard layouts for adjacent-key candidates.",
-          "values": [
-            "qwerty",
-            "azerty",
-            "qwertz",
-            "all"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": "qwerty"
-        },
-        {
-          "option": "--dictionary",
-          "scope": "command",
-          "usage": "--dictionary \u003cfile>",
-          "description": "Read candidate words from this local dictionary.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--fast",
-          "scope": "command",
-          "usage": "--fast",
-          "description": "Select registration-first Fast collection.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--deep",
-          "scope": "command",
-          "usage": "--deep",
-          "description": "Select broader Deep collection and its additional source requests.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--scan-limit",
-          "scope": "command",
-          "usage": "--scan-limit \u003cinteger>",
-          "description": "Limit the number of generated candidates to collect.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [
-            {
-              "minimum": 1,
-              "maximum": 500,
-              "whenOptionPresent": null
-            },
-            {
-              "minimum": 1,
-              "maximum": 50,
-              "whenOptionPresent": "--deep"
-            }
-          ],
-          "defaultDescription": "100 in Fast mode; 50 in Deep mode"
-        },
-        {
-          "option": "--chunk-size",
-          "scope": "command",
-          "usage": "--chunk-size \u003cinteger>",
-          "description": "Set the number of candidates processed per checkpoint chunk.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [
-            {
-              "minimum": 1,
-              "maximum": 100,
-              "whenOptionPresent": null
-            }
-          ],
-          "defaultDescription": "25"
-        },
-        {
-          "option": "--concurrency",
-          "scope": "command",
-          "usage": "--concurrency \u003cinteger>",
-          "description": "Set the maximum number of concurrent collection tasks.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [
-            {
-              "minimum": 1,
-              "maximum": 8,
-              "whenOptionPresent": null
-            },
-            {
-              "minimum": 1,
-              "maximum": 3,
-              "whenOptionPresent": "--deep"
-            }
-          ],
-          "defaultDescription": "4 in Fast mode; 2 in Deep mode"
-        },
-        {
-          "option": "--resolver",
-          "scope": "command",
-          "usage": "--resolver \u003cvalue>",
-          "description": "Choose the supported DNS resolver for collection.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--allowlist",
-          "scope": "command",
-          "usage": "--allowlist \u003cfile>",
-          "description": "Read reviewed domains whose priority should be suppressed, without changing their evidence.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--checkpoint",
-          "scope": "command",
-          "usage": "--checkpoint \u003cfile>",
-          "description": "Save resumable collection state to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--resume",
-          "scope": "command",
-          "usage": "--resume",
-          "description": "Resume collection from the selected checkpoint.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--observation-snapshot",
-          "scope": "command",
-          "usage": "--observation-snapshot \u003cfile>",
-          "description": "Compare with this retained observation snapshot.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--registered-only",
-          "scope": "command",
-          "usage": "--registered-only",
-          "description": "Keep registered results in the presented output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--inconclusive-only",
-          "scope": "command",
-          "usage": "--inconclusive-only",
-          "description": "Keep inconclusive results in the presented output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--acquisition-only",
-          "scope": "command",
-          "usage": "--acquisition-only",
-          "description": "Present only acquisition candidates.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--suppressed-only",
-          "scope": "command",
-          "usage": "--suppressed-only",
-          "description": "Present only candidates suppressed by the allowlist.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--events",
-          "scope": "command",
-          "usage": "--events",
-          "description": "Emit collection progress events on stderr.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--plan",
-          "scope": "command",
-          "usage": "--plan",
-          "description": "Describe intended collection and limits without making requests.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--fail-on",
-          "scope": "command",
-          "usage": "--fail-on \u003cpolicy[,policy...]>",
-          "description": "Return a failure-policy exit status for the selected comma-separated outcomes.",
-          "values": [
-            "source-failure",
-            "inconclusive",
-            "danger"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--jsonl",
-          "scope": "command",
-          "usage": "--jsonl",
-          "description": "Write one JSON record per line.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--csv",
-          "scope": "command",
-          "usage": "--csv",
-          "description": "Write compact CSV rows.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--csv-with-metadata",
-          "scope": "command",
-          "usage": "--csv-with-metadata",
-          "description": "Write CSV with source, observation-time and collection-state metadata.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--domains",
-          "scope": "command",
-          "usage": "--domains",
-          "description": "Write the selected domain names only.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[47], SHARED_COMMAND_OPTIONS[48], SHARED_COMMAND_OPTIONS[49], SHARED_COMMAND_OPTIONS[50], SHARED_COMMAND_OPTIONS[51], SHARED_COMMAND_OPTIONS[23], SHARED_COMMAND_OPTIONS[24], SHARED_COMMAND_OPTIONS[53], SHARED_COMMAND_OPTIONS[54], SHARED_COMMAND_OPTIONS[44], SHARED_COMMAND_OPTIONS[55], SHARED_COMMAND_OPTIONS[56], SHARED_COMMAND_OPTIONS[45], SHARED_COMMAND_OPTIONS[46], SHARED_COMMAND_OPTIONS[57], SHARED_COMMAND_OPTIONS[41], SHARED_COMMAND_OPTIONS[42], SHARED_COMMAND_OPTIONS[58], SHARED_COMMAND_OPTIONS[59], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[28], SHARED_COMMAND_OPTIONS[34], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[36], SHARED_COMMAND_OPTIONS[37], SHARED_COMMAND_OPTIONS[38], SHARED_COMMAND_OPTIONS[39], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "conditional_network",
       "disclosureClass": "conditional_bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -3205,166 +2595,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--selectors",
-          "scope": "command",
-          "usage": "--selectors \u003cvalue>",
-          "description": "Supply explicit DKIM selectors; no selector enumeration is performed.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--retired-selectors",
-          "scope": "command",
-          "usage": "--retired-selectors \u003cvalue>",
-          "description": "Supply previously retired DKIM selectors for review.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--mail-profile",
-          "scope": "command",
-          "usage": "--mail-profile \u003cstandard|defensive-no-mail|parked>",
-          "description": "Choose the expected mail posture for the review.",
-          "values": [
-            "standard",
-            "defensive-no-mail",
-            "parked"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": "standard"
-        },
-        {
-          "option": "--include-inherited-dns",
-          "scope": "command",
-          "usage": "--include-inherited-dns",
-          "description": "Explicitly collect inherited DMARC and parent-delegation evidence.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--sarif",
-          "scope": "command",
-          "usage": "--sarif",
-          "description": "Write the posture review as SARIF.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--owned-domain",
-          "scope": "command",
-          "usage": "--owned-domain",
-          "description": "Declare that the reviewed domain is owned by the analyst.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[60], SHARED_COMMAND_OPTIONS[61], SHARED_COMMAND_OPTIONS[62], SHARED_COMMAND_OPTIONS[63], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[64], SHARED_COMMAND_OPTIONS[65], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -3449,102 +2680,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -3623,102 +2759,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -3800,132 +2841,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--resolver",
-          "scope": "command",
-          "usage": "--resolver \u003cvalue>",
-          "description": "Choose the supported DNS resolver for collection.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--trust-anchor",
-          "scope": "command",
-          "usage": "--trust-anchor \u003cfile>",
-          "description": "Read the analyst-selected DNSSEC trust anchor.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--owned-or-authorized",
-          "scope": "command",
-          "usage": "--owned-or-authorized",
-          "description": "Acknowledge ownership or permission for this active collection.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[55], SHARED_COMMAND_OPTIONS[66], SHARED_COMMAND_OPTIONS[67], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_authorised_active",
       "explicitAuthorisationRequired": true,
@@ -4008,142 +2924,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--resolver",
-          "scope": "command",
-          "usage": "--resolver \u003cvalue>",
-          "description": "Choose the supported DNS resolver for collection.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--trust-anchor",
-          "scope": "command",
-          "usage": "--trust-anchor \u003cfile>",
-          "description": "Read the analyst-selected DNSSEC trust anchor.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--owned-or-authorized",
-          "scope": "command",
-          "usage": "--owned-or-authorized",
-          "description": "Acknowledge ownership or permission for this active collection.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--active-probe",
-          "scope": "command",
-          "usage": "--active-probe",
-          "description": "Explicitly enable the bounded active protocol exchange.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[55], SHARED_COMMAND_OPTIONS[66], SHARED_COMMAND_OPTIONS[67], SHARED_COMMAND_OPTIONS[68], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_authorised_active",
       "explicitAuthorisationRequired": true,
@@ -4225,102 +3006,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -4397,102 +3083,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -4569,102 +3160,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -4731,86 +3227,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--suffix",
         "--scenario"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "command",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select the registry fixture capability profile.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--suffix",
-          "scope": "command",
-          "usage": "--suffix \u003cvalue>",
-          "description": "Select the registry suffix.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--scenario",
-          "scope": "command",
-          "usage": "--scenario \u003cregistered|not_found|inconclusive>",
-          "description": "Choose the expected registry fixture outcome.",
-          "values": [
-            "registered",
-            "not_found",
-            "inconclusive"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[69], SHARED_COMMAND_OPTIONS[70], SHARED_COMMAND_OPTIONS[71]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -4879,112 +3296,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--summary-json",
-          "scope": "command",
-          "usage": "--summary-json",
-          "description": "Write the concise structured summary.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[72], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -5065,102 +3377,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -5246,302 +3463,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--passphrase-file",
-          "scope": "command",
-          "usage": "--passphrase-file \u003cfile>",
-          "description": "Read the archive passphrase from a local file, not a command-line value.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--manifest",
-          "scope": "command",
-          "usage": "--manifest \u003cfile>",
-          "description": "Use the selected investigation manifest.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--manifest-entry",
-          "scope": "command",
-          "usage": "--manifest-entry \u003cmanifest-entry>",
-          "description": "Select an artefact entry from the supplied manifest.",
-          "values": [
-            "artifact-1",
-            "artifact-2",
-            "artifact-3",
-            "artifact-4",
-            "artifact-5",
-            "artifact-6",
-            "artifact-7",
-            "artifact-8",
-            "artifact-9",
-            "artifact-10",
-            "artifact-11",
-            "artifact-12",
-            "artifact-13",
-            "artifact-14",
-            "artifact-15",
-            "artifact-16",
-            "artifact-17",
-            "artifact-18",
-            "artifact-19",
-            "artifact-20",
-            "artifact-21",
-            "artifact-22",
-            "artifact-23",
-            "artifact-24",
-            "artifact-25",
-            "artifact-26",
-            "artifact-27",
-            "artifact-28",
-            "artifact-29",
-            "artifact-30",
-            "artifact-31",
-            "artifact-32",
-            "artifact-33",
-            "artifact-34",
-            "artifact-35",
-            "artifact-36",
-            "artifact-37",
-            "artifact-38",
-            "artifact-39",
-            "artifact-40",
-            "artifact-41",
-            "artifact-42",
-            "artifact-43",
-            "artifact-44",
-            "artifact-45",
-            "artifact-46",
-            "artifact-47",
-            "artifact-48",
-            "artifact-49",
-            "artifact-50",
-            "artifact-51",
-            "artifact-52",
-            "artifact-53",
-            "artifact-54",
-            "artifact-55",
-            "artifact-56",
-            "artifact-57",
-            "artifact-58",
-            "artifact-59",
-            "artifact-60",
-            "artifact-61",
-            "artifact-62",
-            "artifact-63",
-            "artifact-64",
-            "artifact-65",
-            "artifact-66",
-            "artifact-67",
-            "artifact-68",
-            "artifact-69",
-            "artifact-70",
-            "artifact-71",
-            "artifact-72",
-            "artifact-73",
-            "artifact-74",
-            "artifact-75",
-            "artifact-76",
-            "artifact-77",
-            "artifact-78",
-            "artifact-79",
-            "artifact-80",
-            "artifact-81",
-            "artifact-82",
-            "artifact-83",
-            "artifact-84",
-            "artifact-85",
-            "artifact-86",
-            "artifact-87",
-            "artifact-88",
-            "artifact-89",
-            "artifact-90",
-            "artifact-91",
-            "artifact-92",
-            "artifact-93",
-            "artifact-94",
-            "artifact-95",
-            "artifact-96",
-            "artifact-97",
-            "artifact-98",
-            "artifact-99",
-            "artifact-100",
-            "artifact-101",
-            "artifact-102",
-            "artifact-103",
-            "artifact-104",
-            "artifact-105",
-            "artifact-106",
-            "artifact-107",
-            "artifact-108",
-            "artifact-109",
-            "artifact-110",
-            "artifact-111",
-            "artifact-112",
-            "artifact-113",
-            "artifact-114",
-            "artifact-115",
-            "artifact-116",
-            "artifact-117",
-            "artifact-118",
-            "artifact-119",
-            "artifact-120",
-            "artifact-121",
-            "artifact-122",
-            "artifact-123",
-            "artifact-124",
-            "artifact-125",
-            "artifact-126",
-            "artifact-127",
-            "artifact-128",
-            "artifact-129"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--package",
-          "scope": "command",
-          "usage": "--package",
-          "description": "Verify a portable evidence ZIP or encrypted package rather than a single report.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--bagit",
-          "scope": "command",
-          "usage": "--bagit",
-          "description": "Verify the selected package as BagIt 1.0.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--folder",
-          "scope": "command",
-          "usage": "--folder \u003cfile>",
-          "description": "Verify the evidence package within this selected folder.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--strict-exit",
-          "scope": "command",
-          "usage": "--strict-exit",
-          "description": "Use the command’s strict outcome policy when deciding the exit status.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[17], SHARED_COMMAND_OPTIONS[73], SHARED_COMMAND_OPTIONS[74], SHARED_COMMAND_OPTIONS[75], SHARED_COMMAND_OPTIONS[76], SHARED_COMMAND_OPTIONS[77], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[33], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -5621,112 +3543,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--passphrase-file",
-          "scope": "command",
-          "usage": "--passphrase-file \u003cfile>",
-          "description": "Read the archive passphrase from a local file, not a command-line value.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[17], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -5810,152 +3627,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--passphrase-file",
-          "scope": "command",
-          "usage": "--passphrase-file \u003cfile>",
-          "description": "Read the archive passphrase from a local file, not a command-line value.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--search",
-          "scope": "command",
-          "usage": "--search \u003cvalue>",
-          "description": "Search the selected local archive.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--require-match",
-          "scope": "command",
-          "usage": "--require-match",
-          "description": "Require the local archive search to find a match.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--reveal",
-          "scope": "command",
-          "usage": "--reveal",
-          "description": "Include retained values otherwise redacted by archive inspection.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--expect-content-digest",
-          "scope": "command",
-          "usage": "--expect-content-digest \u003cvalue>",
-          "description": "Compare archive content with the supplied version-qualified or historical digest.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[17], SHARED_COMMAND_OPTIONS[78], SHARED_COMMAND_OPTIONS[79], SHARED_COMMAND_OPTIONS[80], SHARED_COMMAND_OPTIONS[81], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -6031,82 +3703,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "importantOptions": [
         "--private-key-file"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--private-key-file",
-          "scope": "command",
-          "usage": "--private-key-file \u003cfile>",
-          "description": "Read the private signing key from this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[82]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -6179,122 +3776,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--public-key-file",
-          "scope": "command",
-          "usage": "--public-key-file \u003cfile>",
-          "description": "Read the public verification key from this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--trust-store-file",
-          "scope": "command",
-          "usage": "--trust-store-file \u003cfile>",
-          "description": "Read the analyst-selected signer trust store.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[83], SHARED_COMMAND_OPTIONS[84], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -6374,102 +3856,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -6546,102 +3933,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -6718,102 +4010,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -6890,102 +4087,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -7062,102 +4164,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -7250,129 +4257,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--reported-action",
-          "scope": "command",
-          "usage": "--reported-action \u003creported-action>",
-          "description": "Record an analyst-reported identity action; repeat for separate actions.",
-          "values": [
-            "opened_link",
-            "entered_password",
-            "approved_signin",
-            "granted_consent",
-            "entered_device_code",
-            "executed_command"
-          ],
-          "repeatable": true,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--strict-exit",
-          "scope": "command",
-          "usage": "--strict-exit",
-          "description": "Use the command’s strict outcome policy when deciding the exit status.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[85], SHARED_COMMAND_OPTIONS[33], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -7452,122 +4337,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--mmdb",
-          "scope": "command",
-          "usage": "--mmdb \u003cfile>",
-          "description": "Use the selected local IP-location database.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--strict-exit",
-          "scope": "command",
-          "usage": "--strict-exit",
-          "description": "Use the command’s strict outcome policy when deciding the exit status.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[86], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[33], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -7657,102 +4427,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -7852,172 +4527,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--json",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--case-id",
-          "scope": "command",
-          "usage": "--case-id \u003cvalue>",
-          "description": "Select the retained Case identifier.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--domain",
-          "scope": "command",
-          "usage": "--domain \u003cvalue>",
-          "description": "Supply the Case domain.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--title",
-          "scope": "command",
-          "usage": "--title \u003cvalue>",
-          "description": "Supply the Case title.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--new-incident",
-          "scope": "command",
-          "usage": "--new-incident",
-          "description": "Create a separate incident instead of updating a matching Case.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--text",
-          "scope": "command",
-          "usage": "--text \u003cvalue>",
-          "description": "Supply the note text directly.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--note-file",
-          "scope": "command",
-          "usage": "--note-file \u003cfile>",
-          "description": "Read note text from a selected local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--input",
-          "scope": "command",
-          "usage": "--input \u003cfile>",
-          "description": "Read the selected local input file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--expect-file-digest",
-          "scope": "command",
-          "usage": "--expect-file-digest \u003cvalue>",
-          "description": "Require the input file to match this SHA-256 digest.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[87], SHARED_COMMAND_OPTIONS[88], SHARED_COMMAND_OPTIONS[89], SHARED_COMMAND_OPTIONS[90], SHARED_COMMAND_OPTIONS[91], SHARED_COMMAND_OPTIONS[92], SHARED_COMMAND_OPTIONS[93], SHARED_COMMAND_OPTIONS[94], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -8098,126 +4608,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--audience",
-          "scope": "command",
-          "usage": "--audience \u003cinternal|trusted|public>",
-          "description": "Choose the export audience and its field-disclosure policy.",
-          "values": [
-            "internal",
-            "trusted",
-            "public"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--reviewed",
-          "scope": "command",
-          "usage": "--reviewed",
-          "description": "Confirm the required human review of the exported material.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[95], SHARED_COMMAND_OPTIONS[96], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -8296,102 +4687,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -8474,168 +4770,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--previous",
-          "scope": "command",
-          "usage": "--previous \u003cfile>",
-          "description": "Compare against this earlier retained report.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--limit",
-          "scope": "command",
-          "usage": "--limit \u003cinteger>",
-          "description": "Limit the number of watchlist targets checked in this run.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [
-            {
-              "minimum": 1,
-              "maximum": 20,
-              "whenOptionPresent": null
-            }
-          ],
-          "defaultDescription": "20"
-        },
-        {
-          "option": "--concurrency",
-          "scope": "command",
-          "usage": "--concurrency \u003cinteger>",
-          "description": "Set the maximum number of concurrent collection tasks.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [
-            {
-              "minimum": 1,
-              "maximum": 3,
-              "whenOptionPresent": null
-            }
-          ],
-          "defaultDescription": "2"
-        },
-        {
-          "option": "--fail-on",
-          "scope": "command",
-          "usage": "--fail-on \u003cpolicy[,policy...]>",
-          "description": "Return a failure-policy exit status for the selected comma-separated outcomes.",
-          "values": [
-            "source-failure",
-            "inconclusive",
-            "material-drift"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--junit",
-          "scope": "command",
-          "usage": "--junit",
-          "description": "Write JUnit XML for automated result reporting.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[97], SHARED_COMMAND_OPTIONS[98], SHARED_COMMAND_OPTIONS[99], SHARED_COMMAND_OPTIONS[100], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[19], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -8725,102 +4860,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -8898,102 +4938,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -9078,173 +5023,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--marking",
-          "scope": "command",
-          "usage": "--marking \u003cclear|green|amber|amber-strict|red>",
-          "description": "Declare the information-sharing marking.",
-          "values": [
-            "clear",
-            "green",
-            "amber",
-            "amber-strict",
-            "red"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--recipient-scope",
-          "scope": "command",
-          "usage": "--recipient-scope \u003cpublic|community|organization|named-recipients>",
-          "description": "Declare the intended recipient scope.",
-          "values": [
-            "public",
-            "community",
-            "organization",
-            "named-recipients"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--purpose",
-          "scope": "command",
-          "usage": "--purpose \u003cvalue>",
-          "description": "Record the purpose of the intended sharing.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--human-reviewed",
-          "scope": "command",
-          "usage": "--human-reviewed",
-          "description": "Confirm that a person reviewed the material.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--personal-data-reviewed",
-          "scope": "command",
-          "usage": "--personal-data-reviewed",
-          "description": "Confirm that personal-data disclosure was reviewed.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--redactions-confirmed",
-          "scope": "command",
-          "usage": "--redactions-confirmed",
-          "description": "Confirm that the intended redactions were checked.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[101], SHARED_COMMAND_OPTIONS[102], SHARED_COMMAND_OPTIONS[103], SHARED_COMMAND_OPTIONS[104], SHARED_COMMAND_OPTIONS[105], SHARED_COMMAND_OPTIONS[106], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -9344,133 +5123,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--list",
-          "scope": "command",
-          "usage": "--list",
-          "description": "List available workflow recipes.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--explain",
-          "scope": "command",
-          "usage": "--explain \u003cexplain>",
-          "description": "Explain a selected workflow without executing it.",
-          "values": [
-            "domain-triage",
-            "lookalike-review",
-            "owned-domain-review",
-            "historical-comparison",
-            "campaign-review",
-            "certificate-anomaly",
-            "registry-disagreement",
-            "evidence-handoff",
-            "planned-domain-change",
-            "post-change-verification"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[107], SHARED_COMMAND_OPTIONS[108], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -9576,162 +5229,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--select",
-          "scope": "command",
-          "usage": "--select \u003cvalue>",
-          "description": "Bind a literal input to a workflow step; repeat for further inputs.",
-          "values": [],
-          "repeatable": true,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--use-artifact",
-          "scope": "command",
-          "usage": "--use-artifact \u003cvalue>",
-          "description": "Connect a step input to an earlier compatible output.",
-          "values": [],
-          "repeatable": true,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--confirm-review",
-          "scope": "command",
-          "usage": "--confirm-review \u003cvalue>",
-          "description": "Confirm human review for the named step in this invocation.",
-          "values": [],
-          "repeatable": true,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--approve-network",
-          "scope": "command",
-          "usage": "--approve-network",
-          "description": "Approve the workflow’s declared network steps for this invocation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--resume",
-          "scope": "command",
-          "usage": "--resume \u003cfile>",
-          "description": "Resume the selected workflow checkpoint; approvals must be supplied again.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--interactive",
-          "scope": "command",
-          "usage": "--interactive",
-          "description": "Prompt for missing supported inputs on an interactive terminal.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[109], SHARED_COMMAND_OPTIONS[110], SHARED_COMMAND_OPTIONS[111], SHARED_COMMAND_OPTIONS[112], SHARED_COMMAND_OPTIONS[113], SHARED_COMMAND_OPTIONS[114], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "conditional_network",
       "disclosureClass": "bounded_authorised_active",
       "explicitAuthorisationRequired": true,
@@ -9831,122 +5329,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--left-session",
-          "scope": "command",
-          "usage": "--left-session \u003cvalue>",
-          "description": "Select the left-hand retained capture session.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--right-session",
-          "scope": "command",
-          "usage": "--right-session \u003cvalue>",
-          "description": "Select the right-hand retained capture session.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[115], SHARED_COMMAND_OPTIONS[116], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -10025,102 +5408,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -10197,102 +5485,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--json",
-          "scope": "command",
-          "usage": "--json",
-          "description": "Write structured JSON to stdout or the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--quiet",
-          "scope": "command",
-          "usage": "--quiet",
-          "description": "Suppress ordinary terminal presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-color",
-          "scope": "command",
-          "usage": "--no-color",
-          "description": "Suppress ANSI colour in terminal output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -10372,112 +5565,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--compact",
         "--no-attribution"
       ],
-      "options": [
-        {
-          "option": "--help",
-          "scope": "common",
-          "usage": "--help",
-          "description": "Show command usage, options and an example without executing it.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--output",
-          "scope": "common",
-          "usage": "--output \u003cfile>",
-          "description": "Write output atomically to this local file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--force",
-          "scope": "common",
-          "usage": "--force",
-          "description": "Allow replacement of the selected output file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--config",
-          "scope": "common",
-          "usage": "--config \u003cfile>",
-          "description": "Load explicit versioned CLI configuration from this file.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--profile",
-          "scope": "common",
-          "usage": "--profile \u003cvalue>",
-          "description": "Select a named profile from the supplied configuration.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--palette",
-          "scope": "common",
-          "usage": "--palette \u003cauto|light|dark>",
-          "description": "Choose the terminal colour palette; redirected output and no-colour settings still take precedence.",
-          "values": [
-            "auto",
-            "light",
-            "dark"
-          ],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--markdown",
-          "scope": "command",
-          "usage": "--markdown",
-          "description": "Write a Markdown report.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--html",
-          "scope": "command",
-          "usage": "--html",
-          "description": "Write an HTML report.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--compact",
-          "scope": "command",
-          "usage": "--compact",
-          "description": "Write a compact report presentation.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        },
-        {
-          "option": "--no-attribution",
-          "scope": "command",
-          "usage": "--no-attribution",
-          "description": "Omit the optional product attribution from presentation output.",
-          "values": [],
-          "repeatable": false,
-          "ranges": [],
-          "defaultDescription": null
-        }
-      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[20], SHARED_COMMAND_OPTIONS[21], SHARED_COMMAND_OPTIONS[117], SHARED_COMMAND_OPTIONS[22]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,

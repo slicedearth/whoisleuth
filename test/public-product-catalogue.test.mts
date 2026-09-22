@@ -39,6 +39,7 @@ import {
 } from '../lib/prerendered-routes.mts';
 import { WHOISLEUTH_SITE_ORIGIN } from '../lib/project-metadata.mts';
 import { writeAtomically } from '../tools/public-product-catalogue.mts';
+import { PUBLIC_CLI_CATALOGUE } from '../frontend/src/lib/generated/public-cli-catalogue.ts';
 
 const GENERATED_DIRECTORY = new URL('../frontend/src/lib/generated/', import.meta.url);
 const ROUTES_DIRECTORY = new URL('../frontend/src/routes/(public)/', import.meta.url);
@@ -51,6 +52,10 @@ function strings(value: unknown): string[] {
 }
 
 describe('public product catalogue', () => {
+  test('generated command data preserves every canonical field after sharing repeated options', () => {
+    assert.deepEqual(PUBLIC_CLI_CATALOGUE, JSON.parse(JSON.stringify(publicCliCatalogue())));
+  });
+
   test('projects all installed commands and fixed workflows from canonical metadata', () => {
     const catalogue = publicCliCatalogue();
     const workflows = buildWorkflowRecipeCatalogue();

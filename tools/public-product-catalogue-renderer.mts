@@ -26,11 +26,16 @@ import {
 const EXAMPLE_TIME = '2026-08-23T00:00:00.000Z';
 const SYNTHETIC_NOTICE = 'Synthetic reserved-domain example. It is not a live finding and no request was made.';
 
-function moduleSource(name: string, value: unknown): string {
-  const json = JSON.stringify(value, null, 2)
+const GENERATED_MODULE_NOTICE = '// Generated from canonical runtime-neutral metadata. Do not edit by hand.\n';
+
+function sourceJson(value: unknown): string {
+  return JSON.stringify(value, null, 2)
     .replaceAll('<', '\\u003c')
     .replaceAll('whoisleuth.', 'whoisleuth\\u002e');
-  return `// Generated from canonical runtime-neutral metadata. Do not edit by hand.\nexport const ${name} = ${json} as const;\n`;
+}
+
+function moduleSource(name: string, value: unknown): string {
+  return `${GENERATED_MODULE_NOTICE}export const ${name} = ${sourceJson(value)} as const;\n`;
 }
 
 function publicCliCatalogue() {
@@ -233,7 +238,27 @@ function publicExamples() {
 }
 
 function renderPublicCliCatalogueModule(): string {
-  return moduleSource('PUBLIC_CLI_CATALOGUE', publicCliCatalogue());
+  const catalogue = publicCliCatalogue();
+  const sharedOptions: ReturnType<typeof commandOptionHelp>[number][] = [];
+  const optionIndices = new Map<string, number>();
+  const commandSources = catalogue.commands.map((command) => {
+    const references = command.options.map((option) => {
+      const identity = JSON.stringify(option);
+      let index = optionIndices.get(identity);
+      if (index === undefined) {
+        index = sharedOptions.length;
+        optionIndices.set(identity, index);
+        sharedOptions.push(option);
+      }
+      return `SHARED_COMMAND_OPTIONS[${index}]`;
+    });
+    return sourceJson({ ...command, options: [] })
+      .replace('  "options": []', () => `  "options": [${references.join(', ')}]`)
+      .split('\n').map((line) => `    ${line}`).join('\n');
+  });
+  return `${GENERATED_MODULE_NOTICE}const SHARED_COMMAND_OPTIONS = ${sourceJson(sharedOptions)} as const;\n`
+    + `export const PUBLIC_CLI_CATALOGUE = ${sourceJson({ ...catalogue, commands: [] })
+      .replace('  "commands": []', () => `  "commands": [\n${commandSources.join(',\n')}\n  ]`)} as const;\n`;
 }
 
 function renderPublicCliIndexModule(): string {
