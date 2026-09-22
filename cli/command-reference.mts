@@ -32,6 +32,7 @@ import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_ARTIFA
 import { IDENTITY_ACTIONS, MESSAGE_INTAKE_KINDS, MESSAGE_INTAKE_SCHEMA } from '../packages/contracts/message-intake.mts';
 import { IDENTITY_EVENTS_INPUT_SCHEMA } from '../packages/contracts/identity-events.mts';
 import { CONTEXT_INPUT_SCHEMAS, CONTEXT_REVIEW_SCHEMA } from '../packages/contracts/context-review.mts';
+import { MANAGED_INDICATOR_SET_SCHEMA, MAX_MANAGED_INDICATOR_SET_BYTES, MAX_MANAGED_INDICATOR_PLAN_BYTES } from '../packages/contracts/analyst-interchange.mts';
 
 const LEGACY_WORKSPACE_ARCHIVE_VERSIONS = SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS
   .filter((version) => version !== WORKSPACE_ARCHIVE_VERSION);
@@ -116,6 +117,7 @@ const INVESTIGATION_PLAN_RECIPES = Object.freeze([
 
 const RUNNABLE_INVESTIGATION_PLAN_RECIPES = INVESTIGATION_PLAN_RECIPES;
 const CLI_CASE_OPERATIONS = ['show', 'open', 'note', 'pin', 'link', 'withdraw-link', 'assess', 'recheck'] as const;
+const CLI_INDICATOR_OPERATIONS = ['revise', 'inspect', 'stix', 'misp'] as const;
 
 const CLI_META_ACTIONS: readonly CliMetaAction[] = Object.freeze([
   Object.freeze({
@@ -1314,6 +1316,20 @@ const COMMAND_SEEDS = Object.freeze({
     primaryArtefacts: Object.freeze(['Case export']), planSupport: false,
     additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
   }),
+  'indicator-set': commandSeed({
+    reference: {
+      description: 'Create or revise a file-based indicator set, inspect its identities and review windows, or export the exact revision as STIX or MISP JSON. Revise takes a plan containing basis, name, expiresAt, reviewed rows and selectedDomains; later plans embed previous and explicitly select renewIds, withdrawIds or reintroduceDomains. Use --json with revise to retain the manifest. STIX and MISP operations always output JSON.',
+      example: 'whoisleuth indicator-set revise indicator-plan.json --json --output indicators.json\n  whoisleuth indicator-set inspect indicators.json\n  whoisleuth indicator-set stix indicators.json --output indicators.stix.json',
+      boundary: 'Offline files only; no submission, feed synchronisation or automatic deletion. Missing candidates are unchanged. Renewal changes the review window, not the original observation. Withdrawn identities stay withdrawn; reintroduction requires a new identity. Keep prior manifests: a digest verifies content, not authorship or the complete revision chain. MISP expiry is a review deadline, not automatic enforcement.',
+    },
+    collection: { mode: 'offline', scope: `Reads a selected ${MAX_MANAGED_INDICATOR_PLAN_BYTES / 1024 / 1024} MiB revision plan or ${MAX_MANAGED_INDICATOR_SET_BYTES / 1024 / 1024} MiB manifest. Makes no requests and does not alter the source file.` },
+    summary: 'Manage reviewed indicator revisions offline',
+    options: ['--json', '--quiet', '--no-color'],
+    positionals: Object.freeze([positional('operation', 'enum', 1, 1, CLI_INDICATOR_OPERATIONS), positional('source', 'file', 0, 1)]),
+    constraints: EMPTY_CONSTRAINTS, handlerOwner: 'inline', networkEffect: 'offline', common: false,
+    schemaIdentifiers: Object.freeze([MANAGED_INDICATOR_SET_SCHEMA]), primaryArtefacts: Object.freeze(['Managed indicator revision']),
+    planSupport: false, additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
+  }),
   "case-pack": commandSeed({
     reference: {
       description: `Package browser-created Case records from schemas ${CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(' or ')} as a reviewed, audience-specific Case-pack v2 with current schema ${CASE_SCHEMA_VERSION}.`,
@@ -1905,6 +1921,7 @@ export function commandOptionHelp(command: CliCommand) {
 export {
   CLI_COMMAND_REGISTRY,
   CLI_CASE_OPERATIONS,
+  CLI_INDICATOR_OPERATIONS,
   CLI_COMMANDS,
   CLI_META_ACTIONS,
   COMMAND_COLLECTION,

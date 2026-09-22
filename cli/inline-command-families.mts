@@ -26,6 +26,7 @@ const REVIEW_INLINE_COMMANDS = Object.freeze([
   'brief',
   'case',
   'case-pack',
+  'indicator-set',
 ] as const satisfies readonly CliCommand[]);
 
 const ASSURANCE_INLINE_COMMANDS = Object.freeze([

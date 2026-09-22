@@ -117,7 +117,7 @@
   type CasesApi = typeof import('$lib/cases');
   type ShortlistSelectionResult = Awaited<ReturnType<ShortlistApi['setShortlistSelection']>>;
   type MobileResultView = 'review' | 'list' | 'analysis';
-  type WorkspaceTool = 'sessions' | 'review';
+  type WorkspaceTool = 'sessions' | 'review' | 'indicators';
   type BulkSessionsApi = typeof import('$lib/bulk-sessions');
   type BulkReviewApi = typeof import('$lib/bulk-review');
   type RelationshipApi = typeof import('$lib/relationship-observations');
@@ -347,13 +347,13 @@
   function toggleWorkspaceTools(){
     preloadWorkspaceTool(workspaceTool);
     workspaceToolsOpen=!workspaceToolsOpen;
-    if(workspaceToolsOpen)void (workspaceTool==='sessions'?ensureBulkSessionsContext():ensureBulkReviewContext());
+    if(workspaceToolsOpen)void (workspaceTool==='sessions'?ensureBulkSessionsContext():workspaceTool==='review'?ensureBulkReviewContext():ensurePrimaryResultContext());
   }
 
   function selectWorkspaceTool(next:WorkspaceTool){
     preloadWorkspaceTool(next);
     workspaceTool=next;
-    void (next==='sessions'?ensureBulkSessionsContext():ensureBulkReviewContext());
+    void (next==='sessions'?ensureBulkSessionsContext():next==='review'?ensureBulkReviewContext():ensurePrimaryResultContext());
   }
 
   function selectResultView(next:MobileResultView){
@@ -363,7 +363,8 @@
   }
   function preloadWorkspaceTool(next:WorkspaceTool){
     if(next==='sessions')preloadModule(()=>import('$lib/components/BulkSessions.svelte'));
-    else preloadModule(()=>import('$lib/components/BulkReviewWorkspace.svelte'));
+    else if(next==='review')preloadModule(()=>import('$lib/components/BulkReviewWorkspace.svelte'));
+    else preloadModule(()=>import('$lib/components/ManagedIndicatorWorkspace.svelte'));
   }
   function preloadResultView(next:MobileResultView){
     if(next==='review')preloadModule(()=>import('$lib/components/BulkReviewCockpit.svelte'));
@@ -914,6 +915,7 @@
       <div class="workspace-tool-switcher" role="group" aria-label="Bulk workspace tool">
         <button type="button" aria-pressed={workspaceTool==='sessions'} onpointerenter={()=>preloadWorkspaceTool('sessions')} onfocus={()=>preloadWorkspaceTool('sessions')} onclick={()=>selectWorkspaceTool('sessions')}>Saved sessions</button>
         <button type="button" aria-pressed={workspaceTool==='review'} onpointerenter={()=>preloadWorkspaceTool('review')} onfocus={()=>preloadWorkspaceTool('review')} onclick={()=>selectWorkspaceTool('review')}>Saved review views</button>
+        <button type="button" aria-pressed={workspaceTool==='indicators'} onpointerenter={()=>preloadWorkspaceTool('indicators')} onfocus={()=>preloadWorkspaceTool('indicators')} onclick={()=>selectWorkspaceTool('indicators')}>Indicator revisions</button>
       </div>
       {#if workspaceTool==='sessions'}
         <DeferredSurface
@@ -923,12 +925,19 @@
           loadingLabel="Loading saved Bulk sessions from this browser."
           unavailableLabel="Saved Bulk sessions could not be loaded."
         />
-      {:else}
+      {:else if workspaceTool==='review'}
         <DeferredSurface
           load={()=>import('$lib/components/BulkReviewWorkspace.svelte')}
           props={{store:bulkReviewStore,currentView:currentBulkReviewView(),reviewFilter:view.reviewStateFilter,setReviewFilter:(value:BulkReviewFilter)=>{view.reviewStateFilter=value;view.page=1;},saveView:saveCurrentBulkReviewView,loadView:loadBulkReviewView,deleteView:removeBulkReviewView,sourceState:bulkReviewSourceState}}
           loadingLabel="Loading saved Bulk review views from this browser."
           unavailableLabel="Saved Bulk review views could not be loaded."
+        />
+      {:else}
+        <DeferredSurface
+          load={()=>import('$lib/components/ManagedIndicatorWorkspace.svelte')}
+          props={{rows:reviewedIndicatorRows,selectedDomains:[...shortlistedDomains],officialDomains:profile?.officialDomains??[],allowlistedDomains:profile?.allowlistedDomains??[],contextReady:indicatorEligibilityAvailable}}
+          loadingLabel="Loading indicator revision tools."
+          unavailableLabel="Indicator revision tools could not be loaded. Your retained files have not changed."
         />
       {/if}
     </div>

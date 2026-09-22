@@ -86,4 +86,30 @@ export async function checkInstalledCliEvidence(repositoryRoot: string, temporar
     maximumBytes: 512 * 1024, minimumBytes: 1, label: 'Installed folder manifest',
   });
   if (refusal !== '' || !preservedManifestBytes.equals(originalManifestBytes)) throw new TypeError('Folder replacement refusal changed the existing manifest or emitted success output.');
+
+  const indicatorSource = path.join(temporaryRoot, 'retained-indicators.json');
+  const indicatorBytes = await readBoundedRegularFileWithin(repositoryRoot, 'test/fixtures/extracted-domain-lifecycle/managed-indicator-set-v1.json', {
+    maximumBytes: 4 * 1024 * 1024, minimumBytes: 1, label: 'Managed indicator fixture',
+  });
+  await writeFile(indicatorSource, indicatorBytes, { flag: 'wx', mode: 0o600 });
+  const indicators = record(JSON.parse(await run(['indicator-set', 'inspect', indicatorSource, '--json'], 'managed indicator inspection')), 'Managed indicator manifest');
+  const indicatorVerification = record(JSON.parse(await run(['verify-artifact', indicatorSource, '--json', '--strict-exit'], 'managed indicator verification')), 'Managed indicator verification');
+  if (indicatorVerification.state !== 'verified' || indicators.schema !== 'whoisleuth.managed-indicator-set'
+    || !Array.isArray(indicators.entries) || indicators.entries.length !== 1) throw new TypeError('Installed indicator manifest did not verify independently.');
+  const retained = record(indicators.entries[0], 'Retained indicator');
+  const indicatorStix = record(JSON.parse(await run(['indicator-set', 'stix', indicatorSource], 'managed indicator STIX export')), 'Managed STIX bundle');
+  const indicatorMisp = record(record(JSON.parse(await run(['indicator-set', 'misp', indicatorSource], 'managed indicator MISP export')), 'Managed MISP export').Event, 'Managed MISP event');
+  if (!Array.isArray(indicatorStix.objects) || !indicatorStix.objects.some(value => {
+    const object = record(value, 'Managed STIX object');
+    return object.id === `indicator--${retained.id}` && object.valid_until === retained.expiresAt && object.revoked === false;
+  }) || !Array.isArray(indicatorMisp.Attribute) || record(indicatorMisp.Attribute[0], 'Managed attribute').uuid !== retained.id
+    || record(indicatorMisp.Attribute[0], 'Managed attribute').deleted !== false) throw new TypeError('Installed native exports changed retained indicator identity or expiry semantics.');
+  const indicatorPlan = path.join(temporaryRoot, 'indicator-plan.json');
+  await writeFile(indicatorPlan, JSON.stringify({ name: 'Selected indicators', basis: 'Reviewed fixture',
+    expiresAt: new Date(Date.now() + 86_400_000).toISOString(), selectedDomains: ['selected.example.test'],
+    rows: [{ domain: 'selected.example.test', availability: 'registered', risk: 80, analystDisposition: 'suspicious', profileContext: { sourceState: 'ready' } }],
+  }), { flag: 'wx', mode: 0o600 });
+  const createdIndicators = record(JSON.parse(await run(['indicator-set', 'revise', indicatorPlan, '--json'], 'managed indicator creation')), 'Created indicator manifest');
+  if (createdIndicators.revision !== 1 || !Array.isArray(createdIndicators.entries) || createdIndicators.entries.length !== 1
+    || record(createdIndicators.entries[0], 'Created indicator').domain !== 'selected.example.test') throw new TypeError('Installed indicator revision did not use the selected eligible input.');
 }

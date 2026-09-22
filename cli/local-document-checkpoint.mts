@@ -62,7 +62,7 @@ export async function prepareLocalDocumentWrite(options: Readonly<{
   force: boolean;
   maximumInputBytes: number;
   maximumOutputBytes: number;
-  label: 'Workflow state' | 'Case';
+  label: 'Workflow state' | 'Case' | 'Indicator revision';
   allowSourceReplacement?: boolean;
   signal?: AbortSignal;
 }>) {

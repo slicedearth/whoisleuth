@@ -6,7 +6,7 @@
       "schema": "whoisleuth.capability-manifest",
       "version": 1,
       "capabilityCount": 32,
-      "cliOperationCount": 50,
+      "cliOperationCount": 51,
       "cliVariantCount": 16
     },
     "cliCommandCatalogue": {
@@ -15,9 +15,9 @@
     },
     "schemaLifecycleRegistry": {
       "familyCount": 21,
-      "compatibilityCount": 88,
+      "compatibilityCount": 89,
       "privacyProfileCount": 48,
-      "consumerFlowCount": 147,
+      "consumerFlowCount": 148,
       "metadataVersions": [
         4
       ]
@@ -4633,6 +4633,78 @@
       "variants": []
     },
     {
+      "id": "command.cli.indicator-set",
+      "command": "indicator-set",
+      "capabilityFamilyId": "portable_evidence",
+      "title": "Manage reviewed indicator revisions offline",
+      "requestPurpose": "Reads a selected 16 MiB revision plan or 4 MiB manifest. Makes no requests and does not alter the source file.",
+      "collectionMode": "offline",
+      "executionPlanes": [
+        "local_cli_offline"
+      ],
+      "trigger": "explicit_cli_command",
+      "networkMode": "none",
+      "authorisation": "explicit_action",
+      "dataSent": [
+        "none"
+      ],
+      "dataDeliberatelyNotSent": [
+        "no_network_request",
+        "no_third_party_disclosure",
+        "credentials",
+        "cookies_and_session_data",
+        "local_paths"
+      ],
+      "recipientClasses": [
+        "none"
+      ],
+      "returnedDataCategories": [
+        "bounded_portable_document",
+        "integrity_or_compatibility_state"
+      ],
+      "processingClasses": [
+        "transient_processing",
+        "deliberate_local_file_export",
+        "offline_processing_no_request"
+      ],
+      "requestBudget": "none",
+      "responseBudget": "bounded_portable_document",
+      "concurrency": "none",
+      "retention": {
+        "mode": "local_output_deliberate",
+        "storageClass": "operator_controlled_local_output",
+        "durationControl": "no_automatic_retention_beyond_process_unless_operator_saves_output"
+      },
+      "exports": {
+        "mode": "deliberate_bounded",
+        "classes": [
+          "bounded_user_initiated_export"
+        ]
+      },
+      "credentialModel": "none",
+      "credentialUse": "No operation credential is required.",
+      "cancellation": "bounded_atomic",
+      "partialResults": "all_or_nothing",
+      "outcomes": [
+        "complete"
+      ],
+      "normalisedOutcomes": {
+        "unavailable": "not_declared_for_boundary",
+        "blocked": "not_declared_for_boundary",
+        "partial": "not_declared_for_boundary",
+        "unsupported": "not_declared_for_boundary"
+      },
+      "documentStates": [],
+      "scoringEffect": "none",
+      "nonInferences": [
+        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Offline files only; no submission, feed synchronisation or automatic deletion. Missing candidates are unchanged. Renewal changes the review window, not the original observation. Withdrawn identities stay withdrawn; reintroduction requires a new identity. Keep prior manifests: a digest verifies content, not authorship or the complete revision chain. MISP expiry is a review deadline, not automatic enforcement.",
+        "The command reads only selected bounded local input and makes no network request.",
+        "Output remains under the operator's local retention and deletion control."
+      ],
+      "variants": []
+    },
+    {
       "id": "command.cli.inspect-archive",
       "command": "inspect-archive",
       "capabilityFamilyId": "portable_evidence",
@@ -7404,6 +7476,7 @@
         "export.dns-change-rehearsal",
         "export.investigation-cacao-profile",
         "export.mail-report-review",
+        "export.managed-indicator-set",
         "export.misp-indicators",
         "export.registration-disclosure-plan",
         "export.static-page-pattern-pack",
@@ -7422,6 +7495,7 @@
         "analyst-interchange.export-dns-change-rehearsal.consumer",
         "analyst-interchange.export-investigation-cacao-profile.consumer",
         "analyst-interchange.export-mail-report-review.consumer",
+        "analyst-interchange.export-managed-indicator-set.consumer",
         "analyst-interchange.export-misp-indicators.consumer",
         "analyst-interchange.export-registration-disclosure-plan.consumer",
         "analyst-interchange.export-static-page-pattern-pack.consumer",
@@ -9099,6 +9173,24 @@
       "retentionControl": "operator_controlled_after_export"
     },
     {
+      "id": "export.managed-indicator-set",
+      "familyId": "analyst-interchange",
+      "kind": "export",
+      "schema": "whoisleuth.managed-indicator-set",
+      "lifecycleSchema": "whoisleuth.managed-indicator-set",
+      "coverageClass": "registered_schema",
+      "currentVersion": 1,
+      "supportedVersions": [
+        1
+      ],
+      "futureVersionBehavior": "reject",
+      "migration": "exact_current_only",
+      "writeSemantics": "read_only",
+      "byteBudget": 4194304,
+      "storageClass": "deliberate_local_file",
+      "retentionControl": "operator_controlled_after_export"
+    },
+    {
       "id": "export.misp-indicators",
       "familyId": "analyst-interchange",
       "kind": "export",
@@ -9574,6 +9666,7 @@
         "analyst-interchange.export-dns-change-rehearsal.consumer",
         "analyst-interchange.export-investigation-cacao-profile.consumer",
         "analyst-interchange.export-mail-report-review.consumer",
+        "analyst-interchange.export-managed-indicator-set.consumer",
         "analyst-interchange.export-misp-indicators.consumer",
         "analyst-interchange.export-registration-disclosure-plan.consumer",
         "analyst-interchange.export-static-page-pattern-pack.consumer",
@@ -11161,6 +11254,36 @@
       "emittedContract": {
         "schema": "whoisleuth.mail-report-review",
         "version": 3,
+        "discriminator": null
+      },
+      "privacyProfileId": "analyst-interchange.privacy",
+      "requestMode": "none",
+      "retentionEffect": "operator_controlled_output",
+      "processingClasses": [
+        "transient_processing",
+        "deliberate_local_file_export",
+        "offline_processing_no_request"
+      ],
+      "policyState": "current"
+    },
+    {
+      "id": "analyst-interchange.export-managed-indicator-set.consumer",
+      "familyId": "analyst-interchange",
+      "plane": "shared",
+      "operation": "validate-and-produce",
+      "acceptedContracts": [
+        {
+          "schema": "whoisleuth.managed-indicator-set",
+          "versions": [
+            1
+          ],
+          "mode": "direct",
+          "discriminator": null
+        }
+      ],
+      "emittedContract": {
+        "schema": "whoisleuth.managed-indicator-set",
+        "version": 1,
         "discriminator": null
       },
       "privacyProfileId": "analyst-interchange.privacy",

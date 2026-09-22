@@ -79,6 +79,7 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   { id: 'case-compatibility', pattern: new RegExp(`Case schema ${CASE_SCHEMA_VERSION}.*exact public v1 Case schema ${PUBLIC_CASE_SCHEMA_VERSION}.*published-v2 schemas ${PUBLISHED_V2_CASE_SCHEMA_VERSION}–${LATEST_PUBLIC_CASE_SCHEMA_VERSION} remain readable`, 'iu') },
   { id: 'case-requested-evidence', pattern: /Provider evidence requests retain the original submitted-packet digest.*Amendments link to those request events without rewriting the original packet.*browser-local until exported; public Case packs exclude them/iu },
   { id: 'case-evidence-relationships', pattern: /Analyst-declared evidence relationships retain pin identities, their basis and any withdrawal reason.*without assuming independent corroboration.*public Case packs exclude them/iu },
+  { id: 'managed-indicator-files', pattern: /Managed indicator revisions are selected files, not a browser-local collection.*Previewing or revising them makes no requests.*not submitted or applied automatically.*Content digests do not authenticate authors/iu },
   { id: 'unknown-source-time', pattern: /Pins and sightings with unknown observation times retain null; saving them does not create a source observation time/iu },
   { id: 'case-report', pattern: new RegExp(`Case report v${CASE_REPORT_SCHEMA_VERSION} JSON and Markdown`, 'iu') },
   { id: 'case-incident-links', pattern: /Case can (?:also )?retain controlled classifications and exact HTTP\(S\) incident links.*browser-local Case metadata/iu },

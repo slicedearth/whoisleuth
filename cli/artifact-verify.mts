@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { MANAGED_INDICATOR_SET_SCHEMA, MANAGED_INDICATOR_SET_VERSION } from '../packages/contracts/analyst-interchange.mts';
 import { createHash } from 'node:crypto';
 import type { OfflineInvestigationPackageDetails } from './investigation-package-review.mts';
 import type { BagItReview } from '../packages/interchange/bagit.mts';
@@ -194,6 +195,7 @@ function currentCanonicalizationRoutes(versions: readonly number[]): readonly Ar
 }
 
 const SIGNED_ARTIFACT_ROUTES: Readonly<Record<string, readonly ArtifactCanonicalizationRoute[]>> = Object.freeze({
+  [MANAGED_INDICATOR_SET_SCHEMA]: currentCanonicalizationRoutes([MANAGED_INDICATOR_SET_VERSION]),
   [ACQUISITION_DECISION_PACKET_SCHEMA]: currentCanonicalizationRoutes(SUPPORTED_ACQUISITION_DECISION_PACKET_VERSIONS),
   [LOOKUP_CLAIM_PASSPORT_SCHEMA]: currentCanonicalizationRoutes([LOOKUP_CLAIM_PASSPORT_VERSION]),
   [BULK_DOMAIN_COMPARISON_SCHEMA]: currentCanonicalizationRoutes(SUPPORTED_BULK_DOMAIN_COMPARISON_EXPORT_VERSIONS),

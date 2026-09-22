@@ -19,6 +19,8 @@ import {
   SUPPORTED_BULK_REVIEW_MANIFEST_VERSIONS,
 } from '../../packages/contracts/investigation-portability.mts';
 import { MAX_BULK_SESSION_ROWS, MAX_BULK_SESSION_SOURCES } from '../../packages/contracts/workspace-portability.mts';
+import { MANAGED_INDICATOR_SET_SCHEMA } from '../../packages/contracts/analyst-interchange.mts';
+import { validateManagedIndicatorSet } from '../../packages/interchange/managed-indicator-set.mts';
 import { BULK_SORT_KEYS } from '../../packages/workspace/bulk-sort.mts';
 import { normalizeExplicitIsoTimestamp } from '../../packages/evidence/observation.mts';
 import {
@@ -606,6 +608,7 @@ function validateDomainChangePacket(value: UnknownRecord): void {
 export function validateSignedDigestArtifactStructure(schema: string, value: UnknownRecord): void {
   if (value.schema !== schema) fail('Signed review artefact');
   if (schema === ACQUISITION_DECISION_PACKET_SCHEMA) validateAcquisition(value);
+  else if (schema === MANAGED_INDICATOR_SET_SCHEMA) validateManagedIndicatorSet(value);
   else if (schema === LOOKUP_CLAIM_PASSPORT_SCHEMA) validateLookupClaimPassport(value);
   else if (schema === BULK_DOMAIN_COMPARISON_SCHEMA) validateDomainComparison(value);
   else if (schema === BULK_MAIL_EXPOSURE_SCHEMA) validateMailExposure(value);

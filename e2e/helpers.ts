@@ -301,7 +301,7 @@ export async function openBrandWorkbench(
 
 export async function openBulkWorkspaceTools(
   page: Page,
-  tool: 'review' | 'sessions' = 'sessions',
+  tool: 'review' | 'sessions' | 'indicators' = 'sessions',
 ): Promise<void> {
   const trigger = page.getByRole('button', { name: /^Workspace tools\b/u });
   await expect(trigger).toBeVisible();
@@ -309,7 +309,7 @@ export async function openBulkWorkspaceTools(
   await expect(trigger).toHaveAttribute('aria-expanded', 'true');
   const switcher = page.getByRole('group', { name: 'Bulk workspace tool' });
   const option = switcher.getByRole('button', {
-    name: tool === 'sessions' ? 'Saved sessions' : 'Saved review views',
+    name: tool === 'sessions' ? 'Saved sessions' : tool === 'review' ? 'Saved review views' : 'Indicator revisions',
   });
   if (await option.getAttribute('aria-pressed') !== 'true') await option.click();
   await expect(option).toHaveAttribute('aria-pressed', 'true');

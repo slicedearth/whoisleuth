@@ -210,6 +210,11 @@ Analyst-declared evidence relationships retain pin identities, their basis and
 any withdrawal reason. Matching source labels, checkpoints and imported-content
 identities are displayed without assuming independent corroboration. Case files
 and reports retain the declarations; public Case packs exclude them.
+Managed indicator revisions are selected files, not a browser-local collection.
+They contain domain identities, minimised original observations, review notes,
+expiry and withdrawal records. Previewing or revising them makes no requests;
+only deliberate downloads create output files. STIX and MISP exports are not
+submitted or applied automatically. Content digests do not authenticate authors.
 Exact public v1 Case schema 12 and published-v2 schemas 13–16
 remain readable and migrate directly; migrated fields can remain null, unknown
 or blank because WHOISleuth does not reconstruct them from weaker evidence.

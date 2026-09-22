@@ -1,5 +1,6 @@
 import type { CliArguments } from './arguments.mts';
 import { runIntakeCommand } from './intake-command.mts';
+import { runIndicatorSetCommand } from './indicator-set-command.mts';
 import { CONTEXT_REVIEW_KINDS } from '../packages/contracts/context-review.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../packages/contracts/investigation-package-limits.mts';
@@ -394,6 +395,7 @@ const REVIEW_COMMAND_HANDLERS = Object.freeze({
   'brief': runBriefOrCasePackCommand,
   'case': runCaseCommand,
   'case-pack': runBriefOrCasePackCommand,
+  'indicator-set': runIndicatorSetCommand,
 } satisfies DiscriminatedCommandHandlerMap<
   ReviewCommandArguments,
   [CliDependencies, CliCommandContext],

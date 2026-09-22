@@ -10,6 +10,7 @@ import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../packages/contracts/inve
 import {
   CLI_COMMANDS,
   CLI_CASE_OPERATIONS,
+  CLI_INDICATOR_OPERATIONS,
   commandDefaultNumber,
   commandDefaultText,
   cliMetaActionForInvocation,
@@ -88,6 +89,7 @@ type CliAction =
   | ({ action: 'brief'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'case'; operation: typeof CLI_CASE_OPERATIONS[number]; source: string | null; caseId: string | null; domain: string | null; title: string | null; newIncident: boolean; text: string | null; noteSource: string | null; inputSource: string | null; expectedFileDigest: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'case-pack'; source: string | null; output: 'terminal' | 'json'; audience: 'internal' | 'trusted' | 'public'; reviewed: true } & TerminalOptions)
+  | ({ action: 'indicator-set'; operation: typeof CLI_INDICATOR_OPERATIONS[number]; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'domain-control'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
   | ({ action: 'monitor-once'; source: string | null; previousSource: string | null; output: 'terminal' | 'json' | 'junit'; limit: number; concurrency: number; failOn?: readonly CliFailPolicy[] } & TerminalOptions)
   | ({ action: 'assurance'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions)
@@ -578,6 +580,7 @@ const CLI_PARSERS = Object.freeze({
   }),
   brief: (parsed) => singleInputAction('brief', parsed),
   case: parseCaseArguments,
+  'indicator-set': (parsed) => ({ action: 'indicator-set', operation: parsed.positionalValue('operation') as typeof CLI_INDICATOR_OPERATIONS[number], source: parsed.positionalValue('source'), output: jsonOutput(parsed), ...terminalOptions(parsed) }),
   'case-pack': (parsed) => ({
     action: 'case-pack', source: parsed.positionalValue('source'), output: jsonOutput(parsed),
     audience: parsed.optionValue('--audience') as 'internal' | 'trusted' | 'public', reviewed: true, ...terminalOptions(parsed),

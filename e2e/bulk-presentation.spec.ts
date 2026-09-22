@@ -337,6 +337,20 @@ test('risk model v8 exposes capped cross-family corroboration in Bulk triage', a
   expect(event.Attribute[0].first_seen).toBe('2026-07-13T01:00:00.000Z');
   expect(event.Attribute[0].last_seen).toBe('2026-07-13T01:00:00.000Z');
   expect(JSON.stringify(event)).not.toContain('official.example');
+
+  await openBulkWorkspaceTools(page, 'indicators');
+  const revisions = page.getByRole('region', { name: 'Indicator revisions', exact: true });
+  await revisions.getByLabel(/^Add eligible shortlisted domains/).check();
+  await revisions.getByLabel('Review basis', { exact: true }).fill('Reviewed the selected candidate evidence.');
+  await revisions.getByRole('button', { name: 'Prepare revision preview' }).click();
+  const revisionPreview = revisions.getByRole('region', { name: 'Prepared indicator revision' });
+  await expect(revisionPreview).toContainText('candidate.example · added');
+  const [revisionDownload] = await captureDownloads(page, () => revisionPreview.getByRole('button', { name: 'Download revision manifest' }).click(), 1);
+  const managed = JSON.parse(await readFile((await revisionDownload!.path())!, 'utf8'));
+  expect(managed).toMatchObject({ schema: 'whoisleuth.managed-indicator-set', revision: 1 });
+  expect(managed.entries).toHaveLength(1);
+  expect(managed.entries[0]).toMatchObject({ domain: 'candidate.example', withdrawal: null,
+    observation: { observedAt: '2026-07-13T01:00:00.000Z', riskScore: 79 } });
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalOverflow(page);
 });

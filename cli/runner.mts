@@ -27,7 +27,7 @@ import {
 import {
   MAX_OFFLINE_PASSPHRASE_FILE_BYTES,
 } from './artifact-verify.mts';
-import { cleanupPendingOutputFiles, createBufferedOutput, writePrivateFile } from './output-file.mts';
+import { cleanupPendingOutputFiles, createBufferedOutput, writePrivateFile, MAX_CLI_OUTPUT_BYTES } from './output-file.mts';
 import { createTerminalProgress, type TerminalProgress } from './progress.mts';
 import type { CliProgressEvents } from './progress-events.mts';
 import type { CliCommandContext, CliDependencies, WritableLike } from './runner-types.mts';
@@ -356,6 +356,18 @@ async function runCliCommand(argv: unknown, dependencies: CliDependencies = {}):
       });
       checkpoint = caseCheckpoint;
       capturedSource = caseCheckpoint.sourceInput;
+    } else if (args.action === 'indicator-set') {
+      const { prepareLocalDocumentWrite } = await import('./local-document-checkpoint.mts');
+      const { MAX_MANAGED_INDICATOR_PLAN_BYTES, MAX_MANAGED_INDICATOR_SET_BYTES } = await import('../packages/contracts/analyst-interchange.mts');
+      const indicatorCheckpoint = await prepareLocalDocumentWrite({
+        destination: args.destination, source: args.source,
+        force: args.force === true, label: 'Indicator revision', allowSourceReplacement: false,
+        maximumInputBytes: args.operation === 'revise' ? MAX_MANAGED_INDICATOR_PLAN_BYTES : MAX_MANAGED_INDICATOR_SET_BYTES,
+        maximumOutputBytes: MAX_CLI_OUTPUT_BYTES,
+        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      });
+      checkpoint = indicatorCheckpoint;
+      capturedSource = indicatorCheckpoint.sourceInput;
     }
     const code = await runParsedCli(args, {
       ...dependencies, stdout: buffered.stream,
@@ -363,6 +375,7 @@ async function runCliCommand(argv: unknown, dependencies: CliDependencies = {}):
         ? { workflowResumeInput: capturedSource }
         : {}),
       ...(args.action === 'case' && capturedSource !== null ? { caseFileInput: capturedSource } : {}),
+      ...(args.action === 'indicator-set' && capturedSource !== null ? { readArtifactInput: async () => capturedSource! } : {}),
     }, buffered.writeBinary);
     if (code !== EXIT_CODES.SUCCESS && code !== EXIT_CODES.PARTIAL_FAILURE) return code;
     const content = buffered.value();
@@ -387,7 +400,7 @@ async function runCliCommand(argv: unknown, dependencies: CliDependencies = {}):
     return EXIT_CODES.LOOKUP_FAILED;
   } finally {
     if (checkpoint && await checkpoint.release() > 0) {
-      write(stderr, `${args.action === 'case' ? 'Case' : 'Workflow'} cleanup warning: File ownership changed or a lease could not be removed. Inspect the selected directory before resuming.\n`);
+      write(stderr, `${args.action === 'case' ? 'Case' : args.action === 'indicator-set' ? 'Indicator revision' : 'Workflow'} cleanup warning: File ownership changed or a lease could not be removed. Inspect the selected directory before resuming.\n`);
     }
   }
 }

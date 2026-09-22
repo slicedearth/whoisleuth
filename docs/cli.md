@@ -467,6 +467,52 @@ an interrupted process, confirm that its owner has stopped before removing its
 abandoned lock. Locks have no automatic expiry. Shell redirection and external
 editors do not participate in this cooperative file-ownership protocol.
 
+### Managed indicator revisions
+
+`indicator-set` uses the same file-backed revision model as Bulk. It performs
+no collection or submission. A plan names the set, gives a review `basis` and
+UTC `expiresAt`, and supplies `rows` plus an explicit `selectedDomains` list.
+Rows use the normal Bulk eligibility rules, including available profile
+context, a Suspicious or Confirmed abuse disposition and retained risk evidence.
+Supply `officialDomains`, `allowlistedDomains` and `commonInfrastructureDomains`
+where applicable; excluded candidates never become additions.
+
+Example plan shape (fictional input; replace the evidence and expiry):
+
+```json
+{
+  "name": "Reviewed candidates",
+  "basis": "Reviewed the selected page observation",
+  "expiresAt": "2026-10-23T00:00:00.000Z",
+  "selectedDomains": ["candidate.example.test"],
+  "rows": [{
+    "domain": "candidate.example.test", "availability": "registered",
+    "analystDisposition": "suspicious", "risk": 80,
+    "profileContext": { "sourceState": "ready" }
+  }]
+}
+```
+
+```sh
+whoisleuth indicator-set revise indicator-plan.json --json --output indicators-r1.json
+whoisleuth indicator-set inspect indicators-r1.json
+whoisleuth verify-artifact indicators-r1.json --strict-exit
+whoisleuth indicator-set stix indicators-r1.json --output indicators-r1.stix.json
+whoisleuth indicator-set misp indicators-r1.json --output indicators-r1.misp.json
+```
+
+Later plans embed the last manifest as `previous` and explicitly list `renewIds`
+or `withdrawIds`. New domains still require reviewed rows and selection.
+`reintroduceDomains` permits a previously withdrawn domain to receive a new
+identity; it never revives the old one. Missing domains stay unchanged.
+Renewal updates the review window and note, not the original observation.
+
+Keep previous manifests and use separate output paths. File ownership checks
+reject concurrent source/destination changes and refuse replacing the input,
+even with `--force`. STIX and MISP operations always emit JSON. MISP expiry is
+a review deadline, not automatic deletion; exports require separate recipient
+review. Digests verify content, not authorship or an unavailable earlier chain.
+
 ### Formats and exit behaviour
 
 Terminal text is the default. Commands expose JSON, JSONL, CSV, Markdown, HTML

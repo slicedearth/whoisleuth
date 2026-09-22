@@ -108,6 +108,7 @@ Every operation below is joined to the exact installed command identity. Variant
 | `command.cli.domain-control`<br>Build or review a domain control manifest | Reads one bounded desired-state or review document and performs no collection or configuration change. | none<br>explicit action | none<br>Recipients: none | bounded portable document<br>integrity or compatibility state | local output deliberate<br>Export: deliberate bounded | complete<br>partial |
 | `command.cli.export`<br>Convert a lookup to an evidence report | Reads one saved Lookup and writes one bounded report. | none<br>explicit action | none<br>Recipients: none | bounded portable document<br>integrity or compatibility state | local output deliberate<br>Export: deliberate bounded | complete |
 | `command.cli.http`<br>Inspect one homepage request | Accepts one domain and follows only the bounded SSRF-guarded homepage redirect workflow. | bounded passive<br>explicit action | normalised target<br>dns question<br>homepage request<br>Recipients: dns resolver<br>target public service | bounded http and page evidence<br>source health | local output deliberate<br>Export: local output | complete<br>partial |
+| `command.cli.indicator-set`<br>Manage reviewed indicator revisions offline | Reads a selected 16 MiB revision plan or 4 MiB manifest. Makes no requests and does not alter the source file. | none<br>explicit action | none<br>Recipients: none | bounded portable document<br>integrity or compatibility state | local output deliberate<br>Export: deliberate bounded | complete |
 | `command.cli.inspect-archive`<br>Inspect an archive locally | Reads one selected bounded workspace archive v9, retains exact v5 and v6 and v7 and v8 compatibility, and redacts output by default. | none<br>explicit action | none<br>Recipients: none | bounded portable document<br>integrity or compatibility state | local output deliberate<br>Export: deliberate bounded | complete<br>partial<br>unavailable |
 | `command.cli.intake`<br>Review selected files and identity events offline | Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file. No collection or automatic Case write. | none<br>explicit action | none<br>Recipients: none | bounded local derivation | local output deliberate<br>Export: local output | complete<br>partial |
 | `command.cli.interchange-report`<br>Report portable artefact fidelity offline | Reads one selected bounded portable artefact and emits fixed compatibility metadata only. | none<br>explicit action | none<br>Recipients: none | bounded portable document<br>integrity or compatibility state | local output deliberate<br>Export: deliberate bounded | complete<br>partial<br>unsupported<br>unavailable |
@@ -152,7 +153,7 @@ The machine-readable catalogue contains every exact compatibility, privacy-profi
 
 | Lifecycle family | Privacy class | Contracts | Privacy profiles | Consumer flows |
 | --- | --- | ---: | ---: | ---: |
-| `analyst-interchange` | analyst authored sensitive | 13 | 1 | 13 |
+| `analyst-interchange` | analyst authored sensitive | 14 | 1 | 14 |
 | `analyst-review-state` | analyst authored sensitive | 1 | 1 | 1 |
 | `case-drafts` | analyst authored sensitive | 1 | 1 | 1 |
 | `case-portability` | analyst authored sensitive | 9 | 3 | 18 |

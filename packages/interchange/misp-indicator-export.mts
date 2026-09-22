@@ -51,11 +51,11 @@ function nextUuid(uuidFactory: UuidFactory, used: Set<string>): string {
   return uuid;
 }
 
-function attributeComment(source: unknown, provenance: ReturnType<typeof defensiveIndicatorProvenance>): string {
+function attributeComment(availability: unknown, provenance: ReturnType<typeof defensiveIndicatorProvenance>): string {
   const { riskScore: score, riskModelVersion: modelVersion, scanDepth, observedAt } = provenance;
   return [
     'Heuristic Bulk finding',
-    `availability=${record(source).availability}`,
+    `availability=${availability}`,
     `risk=${score ?? 'unknown'}`,
     ...(modelVersion === null ? [] : [`risk-model=v${modelVersion}`]),
     `scan-depth=${scanDepth}`,
@@ -63,6 +63,22 @@ function attributeComment(source: unknown, provenance: ReturnType<typeof defensi
     `timestamp-basis=${observedAt ? 'scan' : 'unknown'}`,
     WARNING,
   ].join('; ');
+}
+
+export function mispIndicatorAttribute(domain: string, availability: unknown, provenance: ReturnType<typeof defensiveIndicatorProvenance>, uuid: string, modifiedAt: string) {
+  return {
+    uuid, type: 'domain', category: 'Network activity', value: domain,
+    to_ids: false, distribution: '5', timestamp: String(Math.floor(Date.parse(modifiedAt) / 1000)),
+    ...(provenance.observedAt ? { first_seen: provenance.observedAt, last_seen: provenance.observedAt } : {}),
+    comment: attributeComment(availability, provenance), disable_correlation: true, deleted: false,
+  };
+}
+
+export function mispIndicatorEvent(uuid: string, generatedAt: string, attributes: ReturnType<typeof mispIndicatorAttribute>[]) {
+  return { uuid, date: generatedAt.slice(0, 10),
+    info: `WHOISleuth heuristic defensive-domain candidates for analyst review (export v${MISP_INDICATOR_EXPORT_VERSION})`,
+    threat_level_id: '4', analysis: '0', distribution: '0', published: false,
+    timestamp: String(Math.floor(Date.parse(generatedAt) / 1000)), publish_timestamp: '0', disable_correlation: true, Attribute: attributes };
 }
 
 export function buildMispIndicatorExport(records: unknown, options: MispExportOptions = {}) {
@@ -79,38 +95,8 @@ export function buildMispIndicatorExport(records: unknown, options: MispExportOp
   }
   const used = new Set<string>();
   const eventUuid = nextUuid(uuidFactory, used);
-  const epochSeconds = String(Math.floor(Date.parse(generatedAt) / 1000));
-  const attributes = collected.entries.map(({ domain, source }) => {
-    const provenance = defensiveIndicatorProvenance(source);
-    return {
-      uuid: nextUuid(uuidFactory, used),
-      type: 'domain',
-      category: 'Network activity',
-      value: domain,
-      to_ids: false,
-      distribution: '5',
-      timestamp: epochSeconds,
-      ...(provenance.observedAt ? { first_seen: provenance.observedAt, last_seen: provenance.observedAt } : {}),
-      comment: attributeComment(source, provenance),
-      disable_correlation: true,
-      deleted: false,
-    };
-  });
-  const payload = {
-    Event: {
-      uuid: eventUuid,
-      date: generatedAt.slice(0, 10),
-      info: `WHOISleuth heuristic defensive-domain candidates for analyst review (export v${MISP_INDICATOR_EXPORT_VERSION})`,
-      threat_level_id: '4',
-      analysis: '0',
-      distribution: '0',
-      published: false,
-      timestamp: epochSeconds,
-      publish_timestamp: '0',
-      disable_correlation: true,
-      Attribute: attributes,
-    },
-  };
+  const attributes = collected.entries.map(({ domain, source }) => mispIndicatorAttribute(domain, record(source).availability, defensiveIndicatorProvenance(source), nextUuid(uuidFactory, used), generatedAt));
+  const payload = { Event: mispIndicatorEvent(eventUuid, generatedAt, attributes) };
   return {
     version: MISP_INDICATOR_EXPORT_VERSION,
     format: 'misp',

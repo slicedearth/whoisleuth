@@ -1442,7 +1442,7 @@ const SHARED_COMMAND_OPTIONS = [
   }
 ] as const;
 export const PUBLIC_CLI_CATALOGUE = {
-  "commandCount": 50,
+  "commandCount": 51,
   "groups": [
     "investigate",
     "respond",
@@ -4596,6 +4596,99 @@ export const PUBLIC_CLI_CATALOGUE = {
         "authorisation": "explicit_action",
         "retention": "local_output_deliberate",
         "export": "local_output",
+        "outcomes": [
+          "complete"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "The command reads only selected bounded local input and makes no network request.",
+          "Output remains under the operator's local retention and deletion control."
+        ]
+      }
+    },
+    {
+      "id": "indicator-set",
+      "summary": "Manage reviewed indicator revisions offline",
+      "description": "Create or revise a file-based indicator set, inspect its identities and review windows, or export the exact revision as STIX or MISP JSON. Revise takes a plan containing basis, name, expiresAt, reviewed rows and selectedDomains; later plans embed previous and explicitly select renewIds, withdrawIds or reintroduceDomains. Use --json with revise to retain the manifest. STIX and MISP operations always output JSON.",
+      "group": "respond",
+      "common": false,
+      "usage": "whoisleuth indicator-set \u003crevise|inspect|stix|misp> [\u003csource>] [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth indicator-set revise indicator-plan.json --json --output indicators.json\n  whoisleuth indicator-set inspect indicators.json\n  whoisleuth indicator-set stix indicators.json --output indicators.stix.json",
+      "boundary": "Offline files only; no submission, feed synchronisation or automatic deletion. Missing candidates are unchanged. Renewal changes the review window, not the original observation. Withdrawn identities stay withdrawn; reintroduction requires a new identity. Keep prior manifests: a digest verifies content, not authorship or the complete revision chain. MISP expiry is a review deadline, not automatic enforcement.",
+      "collection": {
+        "mode": "offline",
+        "scope": "Reads a selected 16 MiB revision plan or 4 MiB manifest. Makes no requests and does not alter the source file."
+      },
+      "inputs": [
+        {
+          "name": "operation",
+          "valueKind": "enum",
+          "minimum": 1,
+          "maximum": 1,
+          "values": [
+            "revise",
+            "inspect",
+            "stix",
+            "misp"
+          ],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        },
+        {
+          "name": "source",
+          "valueKind": "file",
+          "minimum": 0,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--json",
+        "--quiet",
+        "--no-color"
+      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[8], SHARED_COMMAND_OPTIONS[9]],
+      "networkEffect": "offline",
+      "disclosureClass": "none",
+      "explicitAuthorisationRequired": false,
+      "planSupport": false,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002emanaged-indicator-set"
+      ],
+      "inputLimits": [
+        "Reads a selected 16 MiB revision plan or 4 MiB manifest. Makes no requests and does not alter the source file.",
+        "operation: 1-1 enum value",
+        "source: 0-1 file value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
+      ],
+      "fileOutput": true,
+      "primaryEvidenceArtefacts": [
+        "Managed indicator revision"
+      ],
+      "capability": {
+        "familyId": "portable_evidence",
+        "networkMode": "none",
+        "dataSent": [
+          "none"
+        ],
+        "recipients": [
+          "none"
+        ],
+        "authorisation": "explicit_action",
+        "retention": "local_output_deliberate",
+        "export": "deliberate_bounded",
         "outcomes": [
           "complete"
         ],

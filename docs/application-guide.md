@@ -746,6 +746,18 @@ Defensive domain exports require deliberate reviewed selection and contain
 expiry, provenance, exclusions and rollback guidance. They are not uploaded or
 applied automatically.
 
+For revisions, open **Bulk → Workspace tools → Indicator revisions**. Preview
+a retained manifest, then choose whether to use it as the baseline. Explicitly
+add eligible shortlisted candidates, renew selected review windows or withdraw
+specific identities. Review the change list and download the manifest plus the
+required STIX or MISP file. Nothing is saved to the browser workspace.
+
+Keep each manifest: the next one links its predecessor's digest, not its full
+history. Original observations and creation times stay unchanged by renewal.
+Expired entries remain distinct from withdrawn entries; omission is not
+withdrawal. A withdrawn domain can be reintroduced only with a new identity.
+MISP expiry is a recipient review deadline, not an automatic removal rule.
+
 Cryptographic assurance keeps DNSSEC, route-origin, DANE/TLSA, PKIX, signatures
 and timestamps independent. A valid digest or signature proves only its named
 content and key relationship; it does not establish evidence accuracy, signer

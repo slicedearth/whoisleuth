@@ -18,6 +18,10 @@ export const STIX_INDICATOR_LIFECYCLE_SCHEMA = 'whoisleuth.internal.stix-indicat
 export const STIX_INDICATOR_EXPORT_VERSION = 2;
 export const MISP_INDICATOR_LIFECYCLE_SCHEMA = 'whoisleuth.internal.misp-indicators';
 export const MISP_INDICATOR_EXPORT_VERSION = 2;
+export const MANAGED_INDICATOR_SET_SCHEMA = 'whoisleuth.managed-indicator-set';
+export const MANAGED_INDICATOR_SET_VERSION = 1;
+export const MAX_MANAGED_INDICATOR_SET_BYTES = 4 * 1024 * 1024;
+export const MAX_MANAGED_INDICATOR_PLAN_BYTES = 16 * 1024 * 1024;
 export const DNS_CHANGE_REHEARSAL_VERSION = 2;
 export const DNS_CHANGE_REHEARSAL_EXPORT_SCHEMA = 'whoisleuth.dns-change-rehearsal';
 export const MAIL_REPORT_SCHEMA = 'whoisleuth.mail-report-review';
@@ -73,6 +77,13 @@ const MISP_INDICATORS_COMPATIBILITY = defineSchemaCompatibility({
   acceptsUnversionedLegacy: false, futureVersionBehavior: 'not_applicable', migration: 'read_only',
   writeSemantics: 'read_only', byteBudget: null, owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
   note: 'Unpublished, non-IDS, non-correlating event for reviewed import. Version 2 omits optional seen times when the source observation time is unknown.',
+});
+export const MANAGED_INDICATOR_SET_COMPATIBILITY = defineSchemaCompatibility({
+  id: 'export.managed-indicator-set', kind: 'export', schema: MANAGED_INDICATOR_SET_SCHEMA,
+  currentVersion: MANAGED_INDICATOR_SET_VERSION, supportedVersions: [MANAGED_INDICATOR_SET_VERSION],
+  acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only',
+  writeSemantics: 'read_only', byteBudget: MAX_MANAGED_INDICATOR_SET_BYTES, owner: ANALYST_INTERCHANGE_CONTRACT_OWNER,
+  note: 'File-backed managed indicator revisions retain original observations, stable identities, explicit renewals and permanent withdrawals. Known predecessors prevent history replacement; content digests do not authenticate authorship or an unavailable earlier chain.',
 });
 const WEB_CAPTURE_SUMMARY_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.web-capture-summary', kind: 'export', schema: WEB_CAPTURE_SUMMARY_SCHEMA,
@@ -145,6 +156,10 @@ export const ANALYST_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(
   includedCategories: ['reviewed-indicators', 'source-identity', 'provenance', 'completeness', 'omitted-counts', 'limitations'],
   excludedCategories: ['credentials', 'cookies', 'message-content', 'raw-upstream-responses', 'expanded-contacts'],
   formats: [
+    { descriptor: MANAGED_INDICATOR_SET_COMPATIBILITY, lifecycleSchema: MANAGED_INDICATOR_SET_SCHEMA,
+      requiredKeys: ['schema', 'version', 'id', 'producerId', 'revisionId', 'name', 'revision', 'createdAt', 'modifiedAt', 'previous', 'entries', 'integrity'], optionalKeys: [],
+      hook: { module: 'packages/interchange/managed-indicator-set.mts', exportName: 'validateManagedIndicatorSet', role: 'structure_validator', runtime: 'shared' },
+      fixtures: [{ id: 'managed-indicator-set-v1', path: `${F}managed-indicator-set-v1.json`, bytes: 1_193, sha256: '3a4ffb7256e696d1f1b3bae14743bb8c03ddeb0922186868e935f5a489ba3985', version: MANAGED_INDICATOR_SET_VERSION }] },
     { descriptor: CACAO_COMPATIBILITY, lifecycleSchema: INVESTIGATION_CACAO_SPEC_VERSION,
       requiredKeys: ['type', 'spec_version', 'id', 'name', 'created', 'modified', 'workflow_start', 'workflow', 'extension_definitions'],
       optionalKeys: ['description', 'playbook_types', 'playbook_activities', 'created_by', 'playbook_extensions', 'agent_definitions', 'x_whoisleuth_profile_version'],
