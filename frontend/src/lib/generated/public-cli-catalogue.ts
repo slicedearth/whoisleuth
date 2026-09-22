@@ -4235,16 +4235,16 @@ export const PUBLIC_CLI_CATALOGUE = {
     },
     {
       "id": "intake",
-      "summary": "Review messages, documents and HTTP archives offline",
-      "description": "Review message identities, document links and QR destinations, or a minimised HTTP archive from selected local files.",
+      "summary": "Review selected files and identity events offline",
+      "description": "Review message identities, document links, QR destinations, HTTP archives or selected identity events locally.",
       "group": "investigate",
       "common": true,
-      "usage": "whoisleuth intake \u003ctext|email|calendar|qr|pdf|docx|har> [\u003csource>] [--json] [--reported-action \u003creported-action>] [--trusted-auth-header \u003cvalue>] [--strict-exit] [--quiet] [--no-color]",
+      "usage": "whoisleuth intake \u003ctext|email|calendar|qr|pdf|docx|har|identity> [\u003csource>] [--json] [--reported-action \u003creported-action>] [--trusted-auth-header \u003cvalue>] [--strict-exit] [--quiet] [--no-color]",
       "example": "whoisleuth intake email message.eml --json",
       "boundary": "Offline only: no destination, embedded command or QR payload is opened or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies. Use --strict-exit to return 4 for partial coverage.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX or HAR file. No collection or automatic Case write."
+        "scope": "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file. No collection or automatic Case write."
       },
       "inputs": [
         {
@@ -4259,7 +4259,8 @@ export const PUBLIC_CLI_CATALOGUE = {
             "qr",
             "pdf",
             "docx",
-            "har"
+            "har",
+            "identity"
           ],
           "inputSource": "argv",
           "requiredWhenOptions": []
@@ -4289,10 +4290,11 @@ export const PUBLIC_CLI_CATALOGUE = {
       "planSupport": false,
       "failurePolicySupport": true,
       "supportedSchemaIdentifiers": [
-        "whoisleuth\u002emessage-intake"
+        "whoisleuth\u002emessage-intake",
+        "whoisleuth\u002eidentity-events.input"
       ],
       "inputLimits": [
-        "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX or HAR file. No collection or automatic Case write.",
+        "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file. No collection or automatic Case write.",
         "kind: 1-1 enum value",
         "source: 0-1 file value"
       ],

@@ -40,6 +40,18 @@ export function formatMessageIntake(report: MessageIntakeReport): string {
     for (const entry of report.harReview.entries) lines.push(`  ${entry.sequence}. ${entry.startedAt ?? 'time unavailable'} · ${entry.method} ${entry.origin ?? 'origin unavailable'} · status ${entry.status ?? 'unavailable'} · ${entry.mimeCategory} · ${entry.durationMs === null ? 'duration unavailable' : `${entry.durationMs} ms`}`);
     if (report.harReview.invalidEntries) lines.push(`Invalid request records omitted: ${report.harReview.invalidEntries}`);
   }
+  if (report.identityEventReview) {
+    const review = report.identityEventReview;
+    const matches = new Map(review.comparison?.events.map(event => [event.sequence, event]));
+    lines.push(`Selected identity events: ${review.provider} · ${review.events.length} records · ${review.invalidEvents} invalid records omitted`);
+    for (const event of review.events) {
+      const match = matches.get(event.sequence);
+      lines.push(`  ${event.sequence}. ${event.occurredAt ?? 'time unavailable'} · ${event.actorLabel ?? 'actor unavailable'} · ${event.kind} · ${event.result}`,
+        `    applications ${event.applicationIds.join(', ') || 'unavailable'} · resource tenant ${event.tenantId ?? 'unavailable'} · protocol ${event.protocol}`);
+      if (match) lines.push(`    comparison ${match.state}: application ${match.application}, tenant ${match.tenant}, actor ${match.actor}, time ${match.time}`);
+    }
+    lines.push('Actor labels are file-local. Matching supplied fields does not establish account compromise.');
+  }
   for (const step of report.identityRecovery.nextSteps) lines.push(`Account response — ${step.title}: ${step.detail}`);
   if (report.coverage.unreviewedAttachments) lines.push(`Unreviewed attachments: ${report.coverage.unreviewedAttachments}`);
   if (report.coverage.rejectedLinks) lines.push(`Unsupported link values: ${report.coverage.rejectedLinks}`);

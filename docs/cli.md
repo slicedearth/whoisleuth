@@ -187,6 +187,30 @@ reported timings, with unavailable values distinct from zero. Neither document
 resources nor recorded requests are fetched. Add `--strict-exit` for exit 4 when
 coverage is partial, and `--json` for the minimised report.
 
+`intake identity events.json --json` reads an Entra sign-in `value` array or an
+Okta System Log array. To record a scoped comparison, wrap the selected provider
+records in this input (timestamps require an explicit timezone):
+
+```json
+{
+  "schema": "whoisleuth.identity-events.input",
+  "version": 1,
+  "provider": "entra",
+  "events": [],
+  "match": {
+    "applicationId": "11111111-1111-4111-8111-111111111111",
+    "tenantId": null,
+    "actorLabel": null,
+    "startedAt": "2026-01-01T00:00:00Z",
+    "endedAt": "2026-01-01T01:00:00Z"
+  }
+}
+```
+
+Replace `events` with the selected records. Actor labels apply only within that
+file; missing fields stay unavailable. The source hash identifies the complete
+selected file, including an envelope when supplied. No provider API is contacted.
+
 ## Output and automation
 
 ### Local Case files

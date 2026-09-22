@@ -30,6 +30,7 @@ import {
 import { CLI_FAIL_POLICIES_BY_COMMAND, type CliFailPolicyCommand } from './fail-policy.mts';
 import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS, MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES, MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../packages/investigation/investigation-manifest.mts';
 import { IDENTITY_ACTIONS, MESSAGE_INTAKE_KINDS, MESSAGE_INTAKE_SCHEMA } from '../packages/contracts/message-intake.mts';
+import { IDENTITY_EVENTS_INPUT_SCHEMA } from '../packages/contracts/identity-events.mts';
 import { CONTEXT_INPUT_SCHEMAS, CONTEXT_REVIEW_SCHEMA } from '../packages/contracts/context-review.mts';
 
 const LEGACY_WORKSPACE_ARCHIVE_VERSIONS = SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS
@@ -1235,16 +1236,16 @@ const COMMAND_SEEDS = Object.freeze({
   }),
   intake: commandSeed({
     reference: {
-      description: 'Review message identities, document links and QR destinations, or a minimised HTTP archive from selected local files.',
+      description: 'Review message identities, document links, QR destinations, HTTP archives or selected identity events locally.',
       example: 'whoisleuth intake email message.eml --json',
       boundary: 'Offline only: no destination, embedded command or QR payload is opened or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies. Use --strict-exit to return 4 for partial coverage.',
     },
-    collection: { mode: 'offline', scope: 'Reads one selected text, MIME email, calendar, PNG, PDF, DOCX or HAR file. No collection or automatic Case write.' },
-    summary: 'Review messages, documents and HTTP archives offline',
+    collection: { mode: 'offline', scope: 'Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file. No collection or automatic Case write.' },
+    summary: 'Review selected files and identity events offline',
     options: ['--json', '--reported-action', '--trusted-auth-header', '--strict-exit', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('kind', 'enum', 1, 1, MESSAGE_INTAKE_KINDS), positional('source', 'file', 0, 1, [], 'argv_or_stdin')]),
     constraints: EMPTY_CONSTRAINTS, handlerOwner: 'inline', networkEffect: 'offline', common: true,
-    schemaIdentifiers: Object.freeze([MESSAGE_INTAKE_SCHEMA]), primaryArtefacts: Object.freeze([]),
+    schemaIdentifiers: Object.freeze([MESSAGE_INTAKE_SCHEMA, IDENTITY_EVENTS_INPUT_SCHEMA]), primaryArtefacts: Object.freeze([]),
     planSupport: false, additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
   }),
   "review-evidence": commandSeed({

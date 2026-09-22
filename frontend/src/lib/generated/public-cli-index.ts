@@ -252,7 +252,7 @@ export const PUBLIC_CLI_INDEX = {
     },
     {
       "id": "intake",
-      "summary": "Review messages, documents and HTTP archives offline",
+      "summary": "Review selected files and identity events offline",
       "group": "investigate",
       "common": true,
       "mode": "offline"

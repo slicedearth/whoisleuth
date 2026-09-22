@@ -7,9 +7,15 @@ import { MAX_INVESTIGATION_RUN_BYTES } from '../packages/contracts/investigation
 import { CLI_CASE_PACK_WRITER_FIXTURE_ID } from '../packages/contracts/case-portability.mts';
 import { assertReleaseVersionDerivedCasePack } from './release-version-check.mts';
 import { selectedPdfFixture, selectedDocxFixture, selectedHarFixture } from '../fixtures/selected-input-examples.mts';
+import { identityEventExample } from '../fixtures/identity-event-examples.mts';
 
 /** Independent identity and privacy expectations across exported Case audiences. */
 export async function checkInstalledCliIncidents(repositoryRoot: string, temporaryRoot: string, packageVersion: string, run: RunInstalledCli): Promise<void> {
+  const identityFile = path.join(temporaryRoot, 'selected-identity-events.json');
+  await writeFile(identityFile, JSON.stringify(identityEventExample()), { mode: 0o600, flag: 'wx' });
+  const identityOutput = await run(['intake', 'identity', identityFile, '--json'], 'selected identity-event review');
+  const identityReview = record(record(JSON.parse(identityOutput), 'Identity intake').identityEventReview, 'Identity events');
+  if (!Array.isArray(identityReview.events) || identityReview.events.length !== 3 || /private-|userPrincipalName|192\.0\.2|token/iu.test(identityOutput)) throw new TypeError('The installed identity-event review lost events or retained excluded fields.');
   for (const [kind, bytes, hostname] of [
     ['pdf', selectedPdfFixture(), 'document-qr.example'],
     ['docx', selectedDocxFixture(), 'docx-link.example'],

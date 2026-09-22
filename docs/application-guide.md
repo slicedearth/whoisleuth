@@ -135,6 +135,13 @@ no document scripts, macros or external resources run. Select HAR to inspect
 request order, origins, statuses and timings without replaying requests. The
 minimised report excludes headers, cookies, bodies and private URL components.
 
+Select **Identity events** for an Entra sign-in export (`value` array) or an Okta
+System Log array. The preview replaces actor identifiers with labels local to
+that file. **Compare an application and time window** records exact matches,
+different fields and missing context separately. An event's reported result is
+not an account-compromise verdict. Saving keeps only the previewed report unless
+you separately select the private original.
+
 The same review is available in Case Evidence. Save its minimised report and
 source hash, optionally retaining the private original separately. In Case
 Response, **Account and device recovery** provides guidance from reported

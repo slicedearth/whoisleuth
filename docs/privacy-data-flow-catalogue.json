@@ -4710,8 +4710,8 @@
       "id": "command.cli.intake",
       "command": "intake",
       "capabilityFamilyId": "offline_review",
-      "title": "Review messages, documents and HTTP archives offline",
-      "requestPurpose": "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX or HAR file. No collection or automatic Case write.",
+      "title": "Review selected files and identity events offline",
+      "requestPurpose": "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file. No collection or automatic Case write.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"

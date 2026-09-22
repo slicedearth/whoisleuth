@@ -1,10 +1,11 @@
 import type { MailAuthenticationReview } from './mail-authentication.mts';
 import type { DocumentReview } from './document-intake.mts';
 import type { HarReview } from './har-review.mts';
+import type { IdentityEventReview } from './identity-events.mts';
 
 export const MESSAGE_INTAKE_SCHEMA = 'whoisleuth.message-intake';
 export const MESSAGE_INTAKE_VERSION = 1;
-export const MESSAGE_INTAKE_KINDS = ['text', 'email', 'calendar', 'qr', 'pdf', 'docx', 'har'] as const;
+export const MESSAGE_INTAKE_KINDS = ['text', 'email', 'calendar', 'qr', 'pdf', 'docx', 'har', 'identity'] as const;
 export type MessageIntakeKind = typeof MESSAGE_INTAKE_KINDS[number];
 export const MESSAGE_INTAKE_INPUTS = {
   text: { label: 'Pasted text or links', accept: '.txt,text/plain', binary: false },
@@ -14,6 +15,7 @@ export const MESSAGE_INTAKE_INPUTS = {
   pdf: { label: 'PDF document', accept: '.pdf,application/pdf', binary: true },
   docx: { label: 'Word document (.docx)', accept: '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document', binary: true },
   har: { label: 'HTTP archive (.har)', accept: '.har,application/json', binary: false },
+  identity: { label: 'Identity events (selected JSON)', accept: '.json,application/json', binary: false },
 } as const satisfies Record<MessageIntakeKind, Readonly<{ label: string; accept: string; binary: boolean }>>;
 export const IDENTITY_ACTIONS = [
   { id: 'opened_link', label: 'Opened the link' },
@@ -76,6 +78,7 @@ export type MessageIntakeReport = Readonly<{
   messageParts: readonly Readonly<{ part: number; parentPart: number | null; digestSha256: string; byteLength: number }>[];
   documentReview?: DocumentReview;
   harReview?: HarReview;
+  identityEventReview?: IdentityEventReview;
   links: readonly IntakeLink[];
   actionHints: readonly MessageActionHint[];
   identityRecovery: Readonly<{ reportedActions: readonly IdentityAction[]; nextSteps: readonly IdentityReviewStep[] }>;

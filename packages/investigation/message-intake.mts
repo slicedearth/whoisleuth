@@ -18,7 +18,7 @@ import { MAX_MESSAGE_INTAKE_BYTES,
 /** All parsing is inert. Only HTTP(S) link targets are offered for deliberate collection. */
 export async function reviewMessageInput(bytes: Uint8Array, kind: MessageIntakeKind, reviewedAt: string, qrText?: readonly string[]): Promise<MessageIntakeResult> {
   const base = await createIntakeReport(bytes, kind, reviewedAt);
-  if (['pdf', 'docx', 'har'].includes(kind)) throw new TypeError('Use the selected-file intake entry point for this format.');
+  if (!['text', 'email', 'calendar', 'qr'].includes(kind)) throw new TypeError('Use the selected-file intake entry point for this format.');
   const links = createLinkIntake(), identities: MessageIdentity[] = [], authenticationClaims: MessageAuthenticationClaim[] = [];
   const actionHints = new Set<MessageActionHint>(), bounds = new Set<string>();
   const authenticationHeaders: MailAuthenticationHeader[] = [];

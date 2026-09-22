@@ -10,6 +10,7 @@
   import { defangedIndicator } from '$lib/analysis/evidence-copy.ts';
   import MailAuthenticationReview from './MailAuthenticationReview.svelte';
   import SelectedInputEvidence from './SelectedInputEvidence.svelte';
+  import IdentityEventEvidence from './IdentityEventEvidence.svelte';
 
   let { onselect, onsave, disabled = false, headingLevel = 3 }: {
     onselect: (target: string) => void | Promise<void>;
@@ -39,7 +40,7 @@
       const reviewed = await runMessageIntakeWorker({ kind, file: selected, reviewedAt: new Date().toISOString() }, current.signal);
       if (current.signal.aborted) return;
       result = reviewed; reviewedFile = selected;
-      message = `Extracted links: ${reviewed.report.links.length}. Nothing was opened or saved.`;
+      message = `${reviewed.report.identityEventReview ? `Identity events: ${reviewed.report.identityEventReview.events.length}` : `Extracted links: ${reviewed.report.links.length}`}. Nothing was opened or saved.`;
       await tick(); if (!current.signal.aborted) heading?.focus();
     } catch (cause) { if (!current.signal.aborted) error = cause instanceof Error ? cause.message : 'The selected input could not be reviewed.'; }
     finally { if (controller === current) { controller = null; busy = false; } }
@@ -69,9 +70,9 @@
     {#if error}<p role="alert">{error}</p>{/if}
     {#if result}
       {@const report = result.report}
-      <svelte:element this={headingLevel === 2 ? 'h2' : 'h3'} class="heading" bind:this={heading} tabindex="-1">Extracted destinations</svelte:element>
+      <svelte:element this={headingLevel === 2 ? 'h2' : 'h3'} class="heading" bind:this={heading} tabindex="-1">{report.identityEventReview ? 'Identity event review' : 'Extracted destinations'}</svelte:element>
       <p>Links: {report.links.length} · Reviewed {kind === 'qr' ? 'QR symbols' : 'parts'}: {report.coverage.reviewedParts}{report.coverage.state === 'partial' ? ' · Partial analysis' : ''}</p>
-      {#if !report.links.length}<p>{kind === 'qr' ? 'No HTTP(S) destination was decoded. This does not establish that the image has no QR code.' : 'No supported HTTP(S) destination was extracted.'}</p>{/if}
+      {#if !report.links.length && !report.identityEventReview}<p>{kind === 'qr' ? 'No HTTP(S) destination was decoded. This does not establish that the image has no QR code.' : 'No supported HTTP(S) destination was extracted.'}</p>{/if}
       {#if report.coverage.unreviewedAttachments || report.coverage.boundsReached.length || report.coverage.rejectedLinks}
         <p class="notice">Unreviewed attachments: {report.coverage.unreviewedAttachments} · Unsupported links: {report.coverage.rejectedLinks}{report.coverage.boundsReached.length ? ` · ${report.coverage.boundsReached.join('; ')}` : ''}</p>
       {/if}
@@ -96,6 +97,7 @@
       </ol>
       {#if report.links.length > PAGE_SIZE}<Pagination currentPage={page} pageCount={Math.ceil(report.links.length / PAGE_SIZE)} setPage={next => page = next} ariaLabel="Extracted destination pages" />{/if}
       {#key report.source.digestSha256}<SelectedInputEvidence {report} headingTag={subheadingTag} />{/key}
+      {#if report.identityEventReview}{#key report.source.digestSha256}<IdentityEventEvidence review={report.identityEventReview} headingTag={subheadingTag} disabled={disabled || saving} onchange={identityEventReview => { if (result && !saving && !disabled) result = { ...result, report: { ...result.report, identityEventReview } }; }} />{/key}{/if}
       {#if report.identities.length || report.authenticationClaims.length || report.actionHints.length}
         <details><summary>Message identity and requested actions</summary>
           <p>Header results and request parameters are supplied claims. They do not verify sender identity or show that an account was compromised.</p>

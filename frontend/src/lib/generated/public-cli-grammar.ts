@@ -3332,7 +3332,8 @@ export const PUBLIC_CLI_GRAMMAR = {
         "qr",
         "pdf",
         "docx",
-        "har"
+        "har",
+        "identity"
       ],
       "inputSource": "argv",
       "requiredWhenOptions": []

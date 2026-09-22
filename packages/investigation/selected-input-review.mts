@@ -9,6 +9,7 @@ export async function reviewSelectedInput(bytes: Uint8Array, kind: MessageIntake
     case 'docx': return (await import('./docx-intake.mts')).reviewDocxInput(bytes, reviewedAt);
     case 'pdf': return (await import('./pdf-intake.mts')).reviewPdfInput(bytes, reviewedAt, pdfWorker);
     case 'har': return (await import('./har-intake.mts')).reviewHarInput(bytes, reviewedAt);
+    case 'identity': return (await import('./identity-event-intake.mts')).reviewIdentityEventInput(bytes, reviewedAt);
     default: { const unsupported: never = kind; throw new TypeError(`Unsupported selected input: ${String(unsupported)}`); }
   }
 }

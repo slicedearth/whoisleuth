@@ -430,6 +430,13 @@ retains request sequence, origins, method and MIME categories, status and report
 timings; it excludes headers, cookies, bodies, usernames and private URL
 components. It does not replay requests.
 
+Identity-event review reads selected JSON exports locally. It retains provider,
+application and resource-tenant identifiers, protocol category, reported time and
+result, source digest and file-local actor labels. Usernames, raw actor identifiers,
+IP addresses, tokens, session identifiers and provider error text are excluded.
+Optional comparisons retain the analyst-selected field and time scope; matching
+does not establish account compromise. No provider API is contacted.
+
 Message intake processes selected text, email, calendar, still PNG, PDF, DOCX and HAR files
 locally, without opening links or executing attachments. Exact URLs remain in
 the temporary review; downloaded summaries omit paths, queries, fragments,
