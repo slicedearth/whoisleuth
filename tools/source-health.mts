@@ -17,6 +17,8 @@ import { buildReviewedAccuracyStatus } from './reviewed-accuracy-status.mts';
 import { auditServiceDependencySignatures } from './service-dependency-signature-audit.mts';
 import { registrarStandingCatalogueHealth } from '../lib/registrar-standing.mts';
 import { platformReportingCatalogueHealth } from '../packages/cases/platform-reporting-routes.mts';
+import { browserCatalogueHealth } from './retire-browser-catalog.mts';
+import { commonInfrastructureHealth, FRESHNESS_DAYS } from './common-infrastructure-snapshot.mts';
 
 export const SOURCE_HEALTH_SCHEMA = 'whoisleuth.source-health';
 export const SOURCE_HEALTH_VERSION = 2;
@@ -45,6 +47,8 @@ type SourceHealthBuilders = Readonly<{
   serviceDependencies: (now: Date) => ReturnType<typeof auditServiceDependencySignatures>;
   registrarStanding: (now: Date) => ReturnType<typeof registrarStandingCatalogueHealth>;
   platformReporting: (now: Date) => ReturnType<typeof platformReportingCatalogueHealth>;
+  browserCatalogue: (now: Date) => ReturnType<typeof browserCatalogueHealth>;
+  infrastructure: (now: Date) => ReturnType<typeof commonInfrastructureHealth>;
 }>;
 type BuildOptions = Readonly<{
   now?: Date;
@@ -79,6 +83,8 @@ const DEFAULT_BUILDERS: SourceHealthBuilders = Object.freeze({
   serviceDependencies: (now) => auditServiceDependencySignatures({ now: () => now }),
   registrarStanding: (now) => registrarStandingCatalogueHealth(now),
   platformReporting: (now) => platformReportingCatalogueHealth(now),
+  browserCatalogue: (now) => browserCatalogueHealth(now),
+  infrastructure: (now) => commonInfrastructureHealth(now),
 });
 
 function entry(value: SourceHealthEntry): SourceHealthEntry {
@@ -180,6 +186,22 @@ export async function buildSourceHealthReport(options: BuildOptions = {}) {
   const builders: SourceHealthBuilders = Object.freeze({ ...DEFAULT_BUILDERS, ...options.builders });
 
   const retainedEntries = await Promise.all([
+    observedEntry('browser_library_catalogue', 'Browser-library advisory catalogue', 'retained_dataset', 'npm run sources:drift -- --live', async () => {
+      const health = await builders.browserCatalogue(now);
+      return entry({ id: 'browser_library_catalogue', label: 'Browser-library advisory catalogue', kind: 'retained_dataset',
+        state: health.state, sourceObservedAt: health.sourceUpdatedAt, ageDays: health.ageDays, itemCount: health.itemCount,
+        detail: 'The generated-module digest and source identity are checked locally; current upstream revision requires the explicit live check.',
+        limitation: 'Updating the scanner dependency does not update this separately pinned catalogue. Offline freshness does not establish the newest upstream revision.',
+        action: 'Compare the live source and review a pinned catalogue refresh when it differs.', strictCommand: 'npm run sources:drift -- --live' });
+    }),
+    observedEntry('common_infrastructure', 'Shared-infrastructure ranges', 'retained_dataset', 'npm run common-infrastructure:check', async () => {
+      const health = await builders.infrastructure(now);
+      return entry({ id: 'common_infrastructure', label: 'Shared-infrastructure ranges', kind: 'retained_dataset',
+        state: health.state, sourceObservedAt: health.observedAt, ageDays: health.ageDays, itemCount: health.itemCount,
+        detail: `${health.excludedCount} excluded sources; ${FRESHNESS_DAYS}-day source/verification review window.`,
+        limitation: 'A verified unchanged provider range retains its publisher date. The separate digest-bound verification date controls its review age.',
+        action: 'Check current warning lists and official edge ranges before refreshing the retained snapshot.', strictCommand: 'npm run common-infrastructure:check' });
+    }),
     observedEntry('sslbl_certificate_snapshot', 'SSL certificate intelligence snapshot', 'retained_dataset', 'npm run sslbl:status', async () => {
       const health = await builders.sslbl(now);
       const state: SourceHealthState = health.state === 'current'

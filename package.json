@@ -73,6 +73,7 @@
     "technology:source-verify": "node tools/technology-source-verify.mts",
     "accuracy:status": "node tools/reviewed-accuracy-status.mts",
     "sources:health": "node tools/source-health.mts",
+    "sources:drift": "node tools/source-drift-audit.mts",
     "platform:routes:check": "node --test test/platform-reporting-routes.test.mts",
     "accuracy:review-scaffold": "node tools/reviewed-accuracy-scaffold.mts",
     "service-dependencies:audit": "node tools/service-dependency-signature-audit.mts",

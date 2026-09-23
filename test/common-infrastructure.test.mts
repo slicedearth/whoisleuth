@@ -12,6 +12,8 @@ import {
   main,
   parseArguments,
   SNAPSHOT_PATH,
+  verifyCloudflareRanges,
+  commonInfrastructureHealth,
 } from '../tools/common-infrastructure-snapshot.mts';
 import {
   classifyCommonInfrastructureAddress,
@@ -29,6 +31,15 @@ function warningList(version: number, list: string[]) {
   });
 }
 
+function verifiedWarningFetch(version: number): typeof fetch {
+  return async input => {
+    const url = String(input);
+    if (url.endsWith('/ips-v4')) return new Response('198.19.0.0/24\n');
+    if (url.endsWith('/ips-v6')) return new Response('2001:db8::/32\n');
+    return new Response(warningList(version, ['198.19.0.0/24', '2001:db8::/32']));
+  };
+}
+
 function snapshotWithRanges(values: string[]) {
   return {
     ...structuredClone(COMMON_INFRASTRUCTURE_SNAPSHOT),
@@ -40,6 +51,25 @@ function snapshotWithRanges(values: string[]) {
 }
 
 describe('Common-infrastructure catalogue', () => {
+  test('keeps publisher age separate from bounded official verification and rejects altered proof', async () => {
+    const now = new Date('2026-09-23T12:00:00.000Z');
+    const snapshot = await buildCommonInfrastructureSnapshot(DEFAULT_UPSTREAM_COMMIT, { now: () => now, fetchImpl: verifiedWarningFetch(20260811) });
+    const health = commonInfrastructureHealth(now, snapshot);
+    assert.equal(health.state, 'stale'); // Other, unverified older sources are excluded.
+    assert.equal(health.sourceAges.find(item => item.id === 'cloudflare')?.ageDays, 0);
+    assert.equal(snapshot.sources.find(item => item.id === 'cloudflare')?.sourceDate, '2026-08-11');
+    assert.equal(commonInfrastructureHealth(new Date('2026-09-22'), snapshot).state, 'unavailable');
+    const changed = structuredClone(snapshot);
+    const proof = changed.sources.find(item => item.id === 'cloudflare')?.verification;
+    assert.ok(proof);
+    for (const mutation of [
+      { rangesSha256: '0'.repeat(64) }, { observedAt: '2026-09-24T00:00:00.000Z' },
+      { observedAt: '2026-08-01T00:00:00.000Z' }, { sources: [] },
+    ]) {
+      assert.throws(() => commonInfrastructureHealth(now, { ...snapshot, sources: snapshot.sources.map(source => source.id === 'cloudflare'
+        ? { ...source, verification: { ...proof, ...mutation } } : source) }), /provenance/u);
+    }
+  });
   test('uses the checked-in bounded, attributed snapshot without a runtime request', () => {
     assert.equal(COMMON_INFRASTRUCTURE_SNAPSHOT.schema, 'whoisleuth.common-infrastructure');
     assert.equal(COMMON_INFRASTRUCTURE_SNAPSHOT.version, 1);
@@ -167,7 +197,7 @@ describe('Common-infrastructure catalogue', () => {
     assert.throws(() => parseCommonInfrastructureSnapshot(aggregate), /invalid contract/u);
   });
 
-  test('builds from fresh exact-CIDR sources and explicitly excludes fully validated stale sources', async () => {
+  test('distinguishes an old publication date from an independently verified allocation', async () => {
     const bodies = [
       warningList(20260720, ['198.18.0.0/24']),
       warningList(20260720, ['198.19.0.0/24']),
@@ -188,10 +218,13 @@ describe('Common-infrastructure catalogue', () => {
 
     const stale = await buildCommonInfrastructureSnapshot('a'.repeat(40), {
       now: () => new Date('2026-07-31T00:00:00.000Z'),
-      fetchImpl: async () => new Response(warningList(20240101, ['198.19.0.0/24'])),
+      fetchImpl: verifiedWarningFetch(20240101),
     });
-    assert.deepEqual(stale.sources.map((source) => source.id), ['public-dns-core']);
-    assert.equal(stale.excludedSources.length, 3);
+    assert.deepEqual(stale.sources.map((source) => source.id), ['cloudflare', 'public-dns-core']);
+    assert.equal(stale.sources[0]?.sourceDate, '2024-01-01');
+    assert.equal(stale.sources[0]?.verification?.observedAt, '2026-07-31T00:00:00.000Z');
+    assert.equal(stale.sources[0]?.verification?.sources.length, 2);
+    assert.equal(stale.excludedSources.length, 2);
     assert.ok(stale.excludedSources.every((source) => source.reason === 'stale'));
 
     const exactBoundary = await buildCommonInfrastructureSnapshot('a'.repeat(40), {
@@ -201,10 +234,10 @@ describe('Common-infrastructure catalogue', () => {
     assert.equal(exactBoundary.sources.length, 4, `A source exactly ${FRESHNESS_DAYS} days old remains active.`);
     const beyondBoundary = await buildCommonInfrastructureSnapshot('a'.repeat(40), {
       now: () => new Date('2026-07-31T00:00:00.000Z'),
-      fetchImpl: async () => new Response(warningList(20260630, ['198.19.0.0/24'])),
+      fetchImpl: verifiedWarningFetch(20260630),
     });
-    assert.equal(beyondBoundary.sources.length, 1);
-    assert.equal(beyondBoundary.excludedSources.length, 3);
+    assert.equal(beyondBoundary.sources.length, 2);
+    assert.equal(beyondBoundary.excludedSources.length, 2);
 
     await assert.rejects(
       buildCommonInfrastructureSnapshot('a'.repeat(40), {
@@ -213,6 +246,23 @@ describe('Common-infrastructure catalogue', () => {
       }),
       /not a valid date/iu,
     );
+  });
+
+  test('cannot renew verification with changed, malformed, unavailable or oversized official ranges', async () => {
+    const values = ['198.19.0.0/24', '2001:db8::/32'];
+    const now = new Date('2026-07-31T00:00:00.000Z');
+    const proof = await verifyCloudflareRanges(values, now, verifiedWarningFetch(20240101));
+    assert.match(proof.rangesSha256, /^[a-f0-9]{64}$/u);
+    for (const [response, expected] of [
+      [() => new Response('198.19.1.0/24\n'), /ranges differ/u],
+      [() => new Response('198.19.0.0/24\n198.19.0.0/24\n'), /duplicate entries/u],
+      [() => new Response('<html>Unavailable</html>'), /malformed entries/u],
+      [() => new Response('unavailable', { status: 503 }), /HTTP 503/u],
+      [() => new Response('x'.repeat(16 * 1024 + 1)), /response byte limit/u],
+    ] as const) {
+      await assert.rejects(verifyCloudflareRanges(values, now, async input => String(input).endsWith('/ips-v6')
+        ? new Response('2001:db8::/32\n') : response()), expected);
+    }
   });
 
   test('rejects oversized responses before parsing', async () => {

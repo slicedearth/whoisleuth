@@ -1,4 +1,4 @@
-name: Registry drift audit
+name: Source and registry drift audit
 
 on:
   workflow_dispatch:
@@ -49,8 +49,15 @@ jobs:
           exit_code=0
           npm run --silent registrar:standing:check -- --json > registrar-standing-report.json || exit_code=$?
           printf 'exit_code=%s\n' "$exit_code" >> "$GITHUB_OUTPUT"
+      - name: Compare retained sources with current upstream data
+        id: sources
+        timeout-minutes: 2
+        run: |
+          exit_code=0
+          npm run --silent sources:drift -- --live --json > source-drift-report.json || exit_code=$?
+          printf 'exit_code=%s\n' "$exit_code" >> "$GITHUB_OUTPUT"
       - name: Retain reviewable reports
-        if: steps.audit.outputs.exit_code != '0' || steps.fixtures.outputs.exit_code != '0' || steps.registrar_standing.outputs.exit_code != '0'
+        if: steps.audit.outputs.exit_code != '0' || steps.fixtures.outputs.exit_code != '0' || steps.registrar_standing.outputs.exit_code != '0' || steps.sources.outputs.exit_code != '0'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: registry-maintenance-reports
@@ -58,14 +65,16 @@ jobs:
             registry-drift-report.json
             registry-fixture-freshness-report.json
             registrar-standing-report.json
+            source-drift-report.json
           if-no-files-found: error
           retention-days: 7
       - name: Require manual review
-        if: steps.audit.outputs.exit_code != '0' || steps.fixtures.outputs.exit_code != '0' || steps.registrar_standing.outputs.exit_code != '0'
+        if: steps.audit.outputs.exit_code != '0' || steps.fixtures.outputs.exit_code != '0' || steps.registrar_standing.outputs.exit_code != '0' || steps.sources.outputs.exit_code != '0'
         env:
           REGISTRY_EXIT_CODE: ${{ steps.audit.outputs.exit_code }}
           FIXTURE_EXIT_CODE: ${{ steps.fixtures.outputs.exit_code }}
           REGISTRAR_EXIT_CODE: ${{ steps.registrar_standing.outputs.exit_code }}
+          SOURCE_EXIT_CODE: ${{ steps.sources.outputs.exit_code }}
         run: |
           node --input-type=module <<'NODE'
           import { appendFileSync, readFileSync, statSync } from 'node:fs';
@@ -73,11 +82,13 @@ jobs:
           const lines = ['## Registry maintenance review', '', '| Check | Exit code |', '| --- | --- |',
             `| Official registry data | ${text(process.env.REGISTRY_EXIT_CODE)} |`,
             `| Fixture freshness | ${text(process.env.FIXTURE_EXIT_CODE)} |`,
-            `| Registrar standing | ${text(process.env.REGISTRAR_EXIT_CODE)} |`, ''];
+            `| Registrar standing | ${text(process.env.REGISTRAR_EXIT_CODE)} |`,
+            `| Retained source catalogues | ${text(process.env.SOURCE_EXIT_CODE)} |`, ''];
           for (const [label, filename, key] of [
             ['Official registry', 'registry-drift-report.json', 'checks'],
             ['Fixture', 'registry-fixture-freshness-report.json', 'files'],
             ['Registrar', 'registrar-standing-report.json', 'checks'],
+            ['Source catalogue', 'source-drift-report.json', 'checks'],
           ]) {
             try {
               const stat = statSync(filename);

@@ -375,6 +375,7 @@ import {
   SOURCE_HEALTH_SCHEMA,
   SOURCE_HEALTH_VERSION,
 } from './source-health.mts';
+import { SOURCE_DRIFT_SCHEMA, SOURCE_DRIFT_VERSION } from './source-drift-audit.mts';
 import {
   MAX_SYNTHETIC_ANALYST_INPUT_BYTES,
   SYNTHETIC_ANALYST_REPORT_SCHEMA,
@@ -542,6 +543,7 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry({ id: 'maintainer.reviewed-accuracy-intake', kind: 'cli_document', schema: REVIEWED_ACCURACY_INTAKE_SCHEMA, currentVersion: REVIEWED_ACCURACY_INTAKE_VERSION, supportedVersions: [1], acceptsUnversionedLegacy: false, futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'read_only', byteBudget: null, owner: 'tools/reviewed-accuracy-scaffold.mts', note: 'Bounded reviewed-accuracy intake contract; future records are rejected rather than silently normalized.' }),
   outputEntry({ id: 'maintainer.reviewed-accuracy-status', schema: REVIEWED_ACCURACY_STATUS_SCHEMA, currentVersion: REVIEWED_ACCURACY_STATUS_VERSION, byteBudget: null, owner: 'tools/reviewed-accuracy-status.mts', note: 'Target-free corpus readiness report that never promotes insufficient samples to reviewed evidence.' }),
   outputEntry({ id: 'maintainer.source-health', schema: SOURCE_HEALTH_SCHEMA, currentVersion: SOURCE_HEALTH_VERSION, byteBudget: null, owner: 'tools/source-health.mts', note: 'Offline composition of checked-in retained-source health, reporting-route freshness and reviewed evaluation readiness without refreshing or querying any source.' }),
+  outputEntry({ id: 'maintainer.source-drift', schema: SOURCE_DRIFT_SCHEMA, currentVersion: SOURCE_DRIFT_VERSION, byteBudget: null, owner: 'tools/source-drift-audit.mts', note: 'Explicit bounded comparison of retained data with fixed public sources; reports drift and unavailable evidence without rewriting catalogues.' }),
   outputEntry({ id: 'maintainer.schema-compatibility-inventory', schema: SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA, currentVersion: SCHEMA_COMPATIBILITY_INVENTORY_VERSION, byteBudget: null, owner: 'tools/schema-compatibility.mts', note: 'Bounded deterministic inventory of every reviewed serialized contract and its explicit compatibility decision.' }),
   entry(SSLBL_SNAPSHOT_COMPATIBILITY),
   entry(REGISTRAR_STANDING_CATALOGUE_COMPATIBILITY),

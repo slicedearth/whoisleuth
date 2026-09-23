@@ -53,11 +53,16 @@ describe('official registry drift workflow', () => {
     assert.match(WORKFLOW, /registry-drift-report\.json/u);
     assert.match(WORKFLOW, /registry-fixture-freshness-report\.json/u);
     assert.match(WORKFLOW, /registrar-standing-report\.json/u);
+    assert.match(WORKFLOW, /npm run --silent sources:drift -- --live --json > source-drift-report\.json/u);
     assert.match(WORKFLOW, /retention-days: 7/u);
     const workflow = parse(WORKFLOW);
     const review = workflow.jobs.audit.steps.find((step: { env?: Record<string, string> }) => step.env?.REGISTRAR_EXIT_CODE);
     assert.ok(review);
     assert.match(review.run, /process\.exitCode = 1;/u);
+    assert.match(review.if, /steps\.sources\.outputs\.exit_code != '0'/u);
+    const retained = workflow.jobs.audit.steps.find((step: { uses?: string }) => step.uses?.startsWith('actions/upload-artifact@'));
+    assert.match(retained.if, /steps\.sources\.outputs\.exit_code != '0'/u);
+    assert.ok(retained.with.path.split('\n').includes('source-drift-report.json'));
     assert.doesNotMatch(WORKFLOW, /\b(?:gh issue|git commit|git push)\b/u);
   });
 
@@ -71,6 +76,10 @@ describe('official registry drift workflow', () => {
       await Promise.all([
         writeFile(path.join(directory, 'registry-drift-report.json'), JSON.stringify({ checks: [] })),
         writeFile(path.join(directory, 'registry-fixture-freshness-report.json'), JSON.stringify({ files: [] })),
+        writeFile(path.join(directory, 'source-drift-report.json'), JSON.stringify({ checks: [
+          { id: 'unicode', label: 'Unicode confusables', status: 'drift', detail: 'New source version requires calibration.' },
+          { id: 'unavailable', label: '<source>|`', status: 'inconclusive', observedItems: null, detail: 'Source unavailable.' },
+        ] })),
         writeFile(path.join(directory, 'registrar-standing-report.json'), JSON.stringify({ checks: [
           { id: 'iana_registrar_ids', status: 'drift', expectedItems: 10, observedItems: 11, expectedDigest: 'a'.repeat(64), observedDigest: 'b'.repeat(64) },
           { id: 'catalogue_freshness', status: 'current', expectedItems: 2, observedItems: 2 },
@@ -79,7 +88,7 @@ describe('official registry drift workflow', () => {
       const result = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', review.run], {
         cwd: directory,
         encoding: 'utf8',
-        env: { ...process.env, GITHUB_STEP_SUMMARY: summary, REGISTRY_EXIT_CODE: '0', FIXTURE_EXIT_CODE: '0', REGISTRAR_EXIT_CODE: '1' },
+        env: { ...process.env, GITHUB_STEP_SUMMARY: summary, REGISTRY_EXIT_CODE: '0', FIXTURE_EXIT_CODE: '0', REGISTRAR_EXIT_CODE: '1', SOURCE_EXIT_CODE: '2' },
         timeout: 10_000,
         maxBuffer: 64 * 1024,
       });
@@ -90,6 +99,9 @@ describe('official registry drift workflow', () => {
       assert.match(rendered, /iana_registrar_ids: drift; records 10 → 11/u);
       assert.match(rendered, /Normalised digest a{64} → b{64}/u);
       assert.doesNotMatch(rendered, /catalogue_freshness/u);
+      assert.match(rendered, /Retained source catalogues \| 2/u);
+      assert.match(rendered, /Unicode confusables: drift.*requires calibration/u);
+      assert.doesNotMatch(rendered, /<source>|`/u);
       assert.match(result.stdout, /::error title=Registry maintenance requires review::/u);
 
       await writeFile(path.join(directory, 'registrar-standing-report.json'), '{invalid');

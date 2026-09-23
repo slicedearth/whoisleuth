@@ -7,6 +7,7 @@ import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { isCveIdentifier } from '../packages/contracts/vulnerability-identifiers.mts';
 
 import * as retire from 'retire';
+import { RETIRE_BROWSER_CATALOG } from '../lib/generated/retire-browser-catalog.mts';
 import {
   jsonRecordOrEmpty as record,
   sha256Text as moduleDigest,
@@ -23,6 +24,7 @@ const OUTPUT_DIGEST_PATH = 'lib/generated/retire-browser-catalog.sha256';
 const MAX_SOURCE_BYTES = 5 * 1024 * 1024;
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 const MAX_COMPONENT_ADVISORIES = 256;
+export const MAX_CATALOGUE_COMPONENTS = 100;
 const EXPRESSION_QUALIFICATION_MS = 1_500;
 const EXPRESSION_QUALIFICATION_INPUT_CHARS = 4_096;
 const EXTRACTOR_NAMES = Object.freeze(['uri', 'filename', 'filecontent', 'filecontentreplace', 'hashes']);
@@ -91,8 +93,8 @@ function projectRepository(source: unknown): UnknownRecord {
   const sourceRepository = record(source);
   const projected: UnknownRecord = {};
   const entries = Object.entries(sourceRepository);
-  if (entries.length === 0 || entries.length > 100) {
-    throw new Error(`Expected between 1 and 100 Retire.js catalogue components; received ${entries.length}.`);
+  if (entries.length === 0 || entries.length > MAX_CATALOGUE_COMPONENTS) {
+    throw new Error(`Expected between 1 and ${MAX_CATALOGUE_COMPONENTS} Retire.js catalogue components; received ${entries.length}.`);
   }
 
   for (const [component, rawValue] of entries) {
@@ -267,6 +269,24 @@ function projectSource(sourceText: string): UnknownRecord {
 
 function buildModule(sourceText: string): string {
   return renderModule(projectSource(sourceText));
+}
+
+export async function browserCatalogueHealth(now = new Date()) {
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const module = await readBoundedText(resolve(root, OUTPUT_PATH), MAX_OUTPUT_BYTES);
+  const digest = (await readBoundedText(resolve(root, OUTPUT_DIGEST_PATH), 80)).trim();
+  const valid = moduleDigest(module) === digest
+    && RETIRE_BROWSER_CATALOG.sourceSha256 === SOURCE_SHA256
+    && RETIRE_BROWSER_CATALOG.sourceRevision === SOURCE_REVISION
+    && RETIRE_BROWSER_CATALOG.sourceUpdatedAt === SOURCE_UPDATED_AT;
+  const age = Math.floor((now.getTime() - Date.parse(SOURCE_UPDATED_AT)) / 86_400_000);
+  return Object.freeze({
+    state: !valid ? 'malformed' as const : !Number.isFinite(age) || age < 0 ? 'unavailable' as const
+      : 'limited' as const,
+    ageDays: Number.isFinite(age) && age >= 0 ? age : null,
+    sourceUpdatedAt: SOURCE_UPDATED_AT,
+    itemCount: Object.keys(RETIRE_BROWSER_CATALOG.components).length,
+  });
 }
 
 async function main(args = process.argv.slice(2), options: MainOptions = {}): Promise<number> {

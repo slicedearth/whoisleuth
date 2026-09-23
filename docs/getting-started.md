@@ -27,6 +27,9 @@ separate from source verification. Run `npm run dependencies:audit` when
 reviewing dependencies and before a release; its online, fail-closed policy is
 documented in [Dependency maintenance](dependency-maintenance.md).
 
+For bundled registry, threat-intelligence and Unicode data, use the separate
+[retained source checks and refresh procedure](source-maintenance.md).
+
 The development server prints its local URL. The protected Console requires the
 same authentication configuration described in the operations guide; public
 routes and the fixed synthetic demo do not perform live investigation

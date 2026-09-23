@@ -36,7 +36,9 @@ describe('offline source-health composition', () => {
     assert.equal(report.version, SOURCE_HEALTH_VERSION);
     assert.equal(report.mode, 'offline_checked_in_assets');
     assert.equal(report.networkRequests, 0);
-    assert.equal(report.summary.entries, 11);
+    assert.equal(report.summary.entries, 13);
+    assert.ok(report.entries.some(item => item.id === 'browser_library_catalogue'));
+    assert.ok(report.entries.some(item => item.id === 'common_infrastructure'));
     const platformRoutes = report.entries.find((item) => item.id === 'platform_reporting_routes');
     assert.equal(platformRoutes?.state, 'unavailable');
     assert.equal(platformRoutes?.ageDays, null);

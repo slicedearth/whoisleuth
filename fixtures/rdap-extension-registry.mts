@@ -2,7 +2,7 @@ export const RDAP_EXTENSION_REGISTRY_FIXTURE = Object.freeze({
   schema: 'whoisleuth.rdap-extension-registry-fixture',
   version: 1,
   source: 'https://www.iana.org/assignments/rdap-extensions/rdap-extensions-1.csv',
-  sourceLastUpdatedAt: '2026-05-26',
+  sourceLastUpdatedAt: '2026-09-01',
   capturedAt: '2026-09-23T12:27:45.993Z',
   sourceDigestSha256: '1115265922190295d6987863a4fbb22fe64232c5e29663f1315b87862b547618',
   entries: Object.freeze([
