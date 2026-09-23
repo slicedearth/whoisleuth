@@ -8,7 +8,7 @@ import { domainToUnicode, fileURLToPath } from 'node:url';
 import whoisFixtures from '../fixtures/whois-registry-fixtures.mts';
 import {
   REGISTRY_CAPABILITIES_VERSION,
-  VERSION_26_NO_RDAP_SUFFIXES,
+  REVIEWED_NO_RDAP_SUFFIXES,
   VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES,
   registryAccessDiagnosticFor,
   registryCapabilityFor,
@@ -148,7 +148,7 @@ const VERSION_24_PROMOTED_SUFFIXES = new Set(['xn--90ae', 'xn--l1acc', 'xn--wgbl
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 29);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 30);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);
@@ -647,14 +647,14 @@ describe('registry capability metadata', () => {
     }
   });
 
-  test('records the version twenty-six official RDAP access reconciliation', () => {
+  test('records reviewed RDAP exclusions and newly bootstrapped Korean suffixes', () => {
     const expectedNoRdapSuffixes = [
       'ac', 'ae', 'af', 'am', 'at', 'be', 'bg', 'by', 'cl', 'cn',
       'co', 'de', 'dk', 'ee', 'eu', 'gf', 'gi', 'gt', 'hk', 'hr',
-      'hu', 'ie', 'il', 'io', 'ir', 'it', 'jp', 'kr', 'kz', 'la',
+      'hu', 'ie', 'il', 'io', 'ir', 'it', 'jp', 'kz', 'la',
       'lt', 'lu', 'lv', 'md', 'me', 'mk', 'mo', 'mq', 'mx', 'my',
       'nz', 'pk', 'pt', 'ro', 'rs', 'ru', 'sa', 'se', 'sk', 'su',
-      'tn', 'tr', 'us', 'vc', 'xn--2scrj9c', 'xn--3e0b707e',
+      'tn', 'tr', 'us', 'vc', 'xn--2scrj9c',
       'xn--3hcrj9c', 'xn--45br5cyl', 'xn--45brj9c', 'xn--80ao21a',
       'xn--90a3ac', 'xn--90ais', 'xn--d1alf', 'xn--e1a4c',
       'xn--fiqs8s', 'xn--fiqz9s', 'xn--fpcrj9c3d', 'xn--gecrj9c',
@@ -664,9 +664,13 @@ describe('registry capability metadata', () => {
       'xn--xkc2dl3a5ee0h', 'xn--y9a3aq',
     ];
 
-    assert.deepEqual(VERSION_26_NO_RDAP_SUFFIXES, expectedNoRdapSuffixes);
-    assert.equal(expectedNoRdapSuffixes.length, 81);
-    assert.equal(new Set(expectedNoRdapSuffixes).size, 81);
+    assert.deepEqual(REVIEWED_NO_RDAP_SUFFIXES, expectedNoRdapSuffixes);
+    assert.equal(new Set(expectedNoRdapSuffixes).size, expectedNoRdapSuffixes.length);
+    for (const suffix of ['kr', 'xn--3e0b707e']) {
+      const capability = required(registryCapabilityFor(`example.${suffix}`));
+      assert.equal(capability.rdapAccessProfile, 'iana-bootstrap');
+      assert.equal(capability.whoisParserProfile, 'dot-leader');
+    }
     for (const suffix of expectedNoRdapSuffixes) {
       const capability = required(registryCapabilityFor(`example.${suffix}`));
       assert.equal(capability.rdapAccessProfile, 'no-iana-service', suffix);

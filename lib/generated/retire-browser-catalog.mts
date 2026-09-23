@@ -2,10 +2,11 @@
 // browser-library catalogue. Apache-2.0 licensed source; do not edit by hand.
 
 const RETIRE_BROWSER_CATALOG = Object.freeze({
-  catalogVersion: "retire.js-5.4.3",
-  sourceRevision: "db79fa77c86e24d91c9ce1934ad9f2a640242774",
-  sourceSha256: "574f68690a6f5031ac7602936196a3f4531407bc79fafec0f49278241fda857a",
-  sourceUrl: "https://github.com/RetireJS/retire.js/blob/db79fa77c86e24d91c9ce1934ad9f2a640242774/repository/jsrepository.json",
+  catalogVersion: "retire.js-2026.09.14",
+  sourceRevision: "2e68d01efd776dd4142b133f9ba723db00cad9d4",
+  sourceUpdatedAt: "2026-09-14T06:47:08.000Z",
+  sourceSha256: "3248e25c196094ae2d942cc417a1f2b811f32873814eed91b370aa3b99e12ab2",
+  sourceUrl: "https://github.com/RetireJS/retire.js/blob/2e68d01efd776dd4142b133f9ba723db00cad9d4/repository/jsrepository.json",
   components: {
   "jquery": {
     "extractors": {
@@ -7742,6 +7743,31 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
         }
       },
       {
+        "below": "15.5.24",
+        "severity": "critical",
+        "atOrAbove": "10.0.0",
+        "cwe": [
+          "CWE-1395"
+        ],
+        "identifiers": {
+          "githubID": "GHSA-2XP9-VWFH-VXW4"
+        }
+      },
+      {
+        "below": "15.5.24",
+        "severity": "critical",
+        "atOrAbove": "13.4.0",
+        "cwe": [
+          "CWE-22"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-75604"
+          ],
+          "githubID": "GHSA-P293-QW3H-JR36"
+        }
+      },
+      {
         "below": "15.6.0-canary.59",
         "severity": "high",
         "atOrAbove": "15.6.0-canary.0",
@@ -8336,6 +8362,31 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
             "CVE-2026-64644"
           ],
           "githubID": "GHSA-Q8WF-6R8G-63CH"
+        }
+      },
+      {
+        "below": "16.3.3",
+        "severity": "critical",
+        "atOrAbove": "16.0.0",
+        "cwe": [
+          "CWE-1395"
+        ],
+        "identifiers": {
+          "githubID": "GHSA-2XP9-VWFH-VXW4"
+        }
+      },
+      {
+        "below": "16.3.3",
+        "severity": "critical",
+        "atOrAbove": "16.0.0",
+        "cwe": [
+          "CWE-22"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-75604"
+          ],
+          "githubID": "GHSA-P293-QW3H-JR36"
         }
       }
     ]

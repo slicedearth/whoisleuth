@@ -21,6 +21,7 @@ import {
   sortRegistrySupportRows,
 } from '../frontend/src/lib/analysis/registry-support.ts';
 import {
+  REGISTRY_CAPABILITIES_VERSION,
   VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES,
   registryCompatibilityMatrix,
 } from '../lib/registry-capabilities.mts';
@@ -28,7 +29,7 @@ import {
 test('builds the bounded registry-support catalogue from the shared capability matrix', () => {
   const catalogue = registrySupportCatalogue();
 
-  assert.equal(catalogue.version, 29);
+  assert.equal(catalogue.version, REGISTRY_CAPABILITIES_VERSION);
   assert.equal(catalogue.rows.length, 335);
   assert.equal(catalogue.truncated, false);
   assert.deepEqual(catalogue.summary, {
@@ -36,9 +37,9 @@ test('builds the bounded registry-support catalogue from the shared capability m
     fixtureVerified: 217,
     accessDocumented: 118,
     serviceCoverage: {
-      both: 72,
+      both: 74,
       rdapOnly: 25,
-      whoisOnly: 166,
+      whoisOnly: 164,
       neither: 72,
     },
   });
@@ -50,7 +51,7 @@ test('builds the bounded registry-support catalogue from the shared capability m
     genericRestricted: 3,
     sponsored: 14,
     infrastructure: 1,
-    rdapBootstrapServiceGroups: 590,
+    rdapBootstrapServiceGroups: 591,
     genericAndRestrictedRdapCovered: 1114,
     sponsoredRdapCovered: 12,
     infrastructureRdapCovered: 0,
@@ -167,8 +168,8 @@ test('filters registry profiles by suffix, capability text, and explicit coverag
   ].sort());
   assert.deepEqual(filterRegistrySupportRows(rows, 'access', 'fixture_verified'), []);
   assert.equal(filterRegistrySupportRows(rows, '', 'all', 'rdap_only').length, 25);
-  assert.equal(filterRegistrySupportRows(rows, '', 'all', 'whois_only').length, 166);
-  assert.equal(filterRegistrySupportRows(rows, '', 'all', 'both').length, 72);
+  assert.equal(filterRegistrySupportRows(rows, '', 'all', 'whois_only').length, 164);
+  assert.equal(filterRegistrySupportRows(rows, '', 'all', 'both').length, 74);
   assert.equal(filterRegistrySupportRows(rows, '', 'all', 'neither').length, 72);
   assert.deepEqual(
     filterRegistrySupportRows(rows, '', 'all', 'rdap_only').map((row) => row.suffixes[0]),

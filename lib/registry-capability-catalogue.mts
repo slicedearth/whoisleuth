@@ -80,18 +80,18 @@ type RegistryCapabilitySeed = Pick<
   'id' | 'suffixes' | 'registryClass' | 'whoisParserProfile' | 'fixtureScenarios'
 >>;
 
-const REGISTRY_CAPABILITIES_VERSION = 29;
+const REGISTRY_CAPABILITIES_VERSION = 30;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const REGISTRY_STANDARDS_COVERAGE_SNAPSHOT = Object.freeze({
   schema: REGISTRY_STANDARDS_COVERAGE_SCHEMA,
   version: 1,
-  verifiedAt: '2026-08-03',
+  verifiedAt: '2026-09-23',
   sources: Object.freeze({
-    rootZoneVersion: '2026080200',
-    rootZoneLastUpdatedAt: '2026-08-02T07:07:01.000Z',
+    rootZoneVersion: '2026092300',
+    rootZoneLastUpdatedAt: '2026-09-23T07:07:01.000Z',
     rootZoneTldSetSha256: 'aa0a75a9860b2cba07d7fe8172f4546d981be3674bf6764fb0d5f39a45940d25',
-    rdapBootstrapPublication: '2026-07-23T02:00:03.000Z',
+    rdapBootstrapPublication: '2026-09-16T19:00:03.000Z',
     rdapBootstrapVersion: '1.0',
     urls: Object.freeze([
       'https://data.iana.org/TLD/tlds-alpha-by-domain.txt',
@@ -107,7 +107,7 @@ const REGISTRY_STANDARDS_COVERAGE_SNAPSHOT = Object.freeze({
     genericRestricted: 3,
     sponsored: 14,
     infrastructure: 1,
-    rdapBootstrapServiceGroups: 590,
+    rdapBootstrapServiceGroups: 591,
     genericAndRestrictedRdapCovered: 1114,
     sponsoredRdapCovered: 12,
     infrastructureRdapCovered: 0,
@@ -201,13 +201,13 @@ const CURRENT_UNVERIFIED_REFERRAL_SUFFIXES = Object.freeze(
     (suffix) => !VERSION_24_PROMOTED_SUFFIXES.includes(suffix),
   ),
 );
-const VERSION_26_NO_RDAP_SUFFIXES = Object.freeze([
+const REVIEWED_NO_RDAP_SUFFIXES = Object.freeze([
   'ac', 'ae', 'af', 'am', 'at', 'be', 'bg', 'by', 'cl', 'cn',
   'co', 'de', 'dk', 'ee', 'eu', 'gf', 'gi', 'gt', 'hk', 'hr',
-  'hu', 'ie', 'il', 'io', 'ir', 'it', 'jp', 'kr', 'kz', 'la',
+  'hu', 'ie', 'il', 'io', 'ir', 'it', 'jp', 'kz', 'la',
   'lt', 'lu', 'lv', 'md', 'me', 'mk', 'mo', 'mq', 'mx', 'my',
   'nz', 'pk', 'pt', 'ro', 'rs', 'ru', 'sa', 'se', 'sk', 'su',
-  'tn', 'tr', 'us', 'vc', 'xn--2scrj9c', 'xn--3e0b707e',
+  'tn', 'tr', 'us', 'vc', 'xn--2scrj9c',
   'xn--3hcrj9c', 'xn--45br5cyl', 'xn--45brj9c', 'xn--80ao21a',
   'xn--90a3ac', 'xn--90ais', 'xn--d1alf', 'xn--e1a4c',
   'xn--fiqs8s', 'xn--fiqz9s', 'xn--fpcrj9c3d', 'xn--gecrj9c',
@@ -216,7 +216,7 @@ const VERSION_26_NO_RDAP_SUFFIXES = Object.freeze([
   'xn--qxa6a', 'xn--rvc1e0am3e', 'xn--s9brj9c',
   'xn--xkc2dl3a5ee0h', 'xn--y9a3aq',
 ]);
-const VERSION_26_NO_RDAP_SUFFIX_SET = new Set(VERSION_26_NO_RDAP_SUFFIXES);
+const REVIEWED_NO_RDAP_SUFFIX_SET = new Set(REVIEWED_NO_RDAP_SUFFIXES);
 const VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES = Object.freeze([
   'app', 'boo', 'channel', 'dad', 'day', 'dev', 'esq', 'foo', 'how', 'info',
   'ing', 'meme', 'mov', 'new', 'nexus', 'page', 'phd', 'prof', 'rsvp', 'soy',
@@ -1272,7 +1272,7 @@ const EXPLICIT_CAPABILITY_SEEDS: RegistryCapabilitySeed[] = [
 function resolvedSeedRdapAccessProfile(entry: RegistryCapabilitySeed): RdapAccessProfile {
   const declared = entry.rdapAccessProfile || 'iana-bootstrap';
   const resolved = new Set(entry.suffixes.map((suffix) => (
-    VERSION_26_NO_RDAP_SUFFIX_SET.has(suffix) ? 'no-iana-service' : declared
+    REVIEWED_NO_RDAP_SUFFIX_SET.has(suffix) ? 'no-iana-service' : declared
   )));
   if (resolved.size !== 1) {
     throw new Error(`Registry capability ${entry.id} mixes RDAP access profiles and must be split by suffix.`);
@@ -1312,7 +1312,7 @@ for (const capability of EXPLICIT_CAPABILITIES) {
 export {
   REGISTRY_CAPABILITIES_VERSION,
   MAX_CAPABILITY_INPUT_LENGTH,
-  VERSION_26_NO_RDAP_SUFFIXES,
+  REVIEWED_NO_RDAP_SUFFIXES,
   VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES,
   REGISTRY_STANDARDS_COVERAGE_SNAPSHOT,
   DEFAULT_CAPABILITY,

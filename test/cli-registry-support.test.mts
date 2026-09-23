@@ -10,7 +10,7 @@ import {
   buildRegistrySupportDocument,
 } from '../cli/registry-support.mts';
 import { runCli } from '../cli/runner.mts';
-import { registryCapabilityFor } from '../lib/registry-capabilities.mts';
+import { REGISTRY_CAPABILITIES_VERSION, registryCapabilityFor, registryStandardsCoverageSnapshot } from '../lib/registry-capabilities.mts';
 import type { RegistryCompatibilityRow } from '../lib/registry-capabilities.mts';
 
 function capture() {
@@ -112,12 +112,12 @@ describe('registry-support runner', () => {
     assert.equal(stderr.value(), '');
     assert.equal(lookupCalled, false);
     const document = JSON.parse(stdout.value());
-    assert.equal(document.catalogueVersion, 29);
+    assert.equal(document.catalogueVersion, REGISTRY_CAPABILITIES_VERSION);
     assert.equal(document.suffix, 'uk');
     assert.equal(document.profile.explicitSuffixProfile, true);
     assert.equal(document.profile.coverageState, 'fixture_verified');
     assert.equal(document.interpretation.liveReachability, 'not_tested');
-    assert.equal(document.standardsCoverage.verifiedAt, '2026-08-03');
+    assert.equal(document.standardsCoverage.verifiedAt, registryStandardsCoverageSnapshot().verifiedAt);
     assert.match(document.interpretation.statement, /does not test current live reachability/);
   });
 

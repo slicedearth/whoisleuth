@@ -15,6 +15,7 @@ import {
   analyzeBrowserLibraries,
 } from '../lib/browser-library-profile.mts';
 import { CISA_KEV_CATALOG } from '../lib/generated/cisa-kev-catalog.mts';
+import { RETIRE_BROWSER_CATALOG } from '../lib/generated/retire-browser-catalog.mts';
 import { sanitizeLookupChildProfiles } from '../lib/lookup-child-profile-contract.mts';
 import { analyzeWebsiteTechnology } from '../lib/website-technology.mts';
 import { fastCheckParameters } from './helpers/fast-check-config.mts';
@@ -85,7 +86,7 @@ describe('bounded browser-library profile', () => {
 
     assert.equal(profile.status, 'success');
     assert.equal(profile.complete, true);
-    assert.equal(profile.catalog.version, 'retire.js-5.4.3');
+    assert.equal(profile.catalog.version, RETIRE_BROWSER_CATALOG.catalogVersion);
     assert.deepEqual(profile.findings.map(({ id, apparentVersion, detectionMethods }) => ({
       id,
       apparentVersion,
@@ -154,7 +155,7 @@ describe('bounded browser-library profile', () => {
     const finding = profile.findings.find(({ id }) => id === 'nextjs');
 
     assert.ok(finding);
-    assert.equal(finding.advisoryCount, 32);
+    assert.equal(finding.advisoryCount, 34);
     assert.ok(finding.advisoryIdentifiers.length <= 16);
     assert.ok(finding.weaknessClasses.length <= 12);
     assert.equal(profile.status, 'success');

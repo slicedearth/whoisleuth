@@ -7,7 +7,7 @@ import {
   MAX_CAPABILITY_INPUT_LENGTH,
   REGISTRY_CAPABILITIES_VERSION,
   REGISTRY_STANDARDS_COVERAGE_SNAPSHOT,
-  VERSION_26_NO_RDAP_SUFFIXES,
+  REVIEWED_NO_RDAP_SUFFIXES,
   VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES,
 } from './registry-capability-catalogue.mts';
 import type {
@@ -207,7 +207,7 @@ function registryCompatibilityMatrix(): RegistryCompatibilityRow[] {
 
 export {
   REGISTRY_CAPABILITIES_VERSION,
-  VERSION_26_NO_RDAP_SUFFIXES,
+  REVIEWED_NO_RDAP_SUFFIXES,
   VERSION_27_RDAP_ONLY_GENERIC_SUFFIXES,
   registryCapabilityFor,
   registryCompatibilityMatrix,

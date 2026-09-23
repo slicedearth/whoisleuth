@@ -12,9 +12,11 @@ import {
   sha256Text as moduleDigest,
 } from './maintainer-tool-helpers.mts';
 
-const SOURCE_VERSION = '5.4.3';
-const SOURCE_REVISION = 'db79fa77c86e24d91c9ce1934ad9f2a640242774';
-const SOURCE_SHA256 = '574f68690a6f5031ac7602936196a3f4531407bc79fafec0f49278241fda857a';
+// Catalogue identity follows its data revision, independently of the scanner package.
+const SOURCE_VERSION = '2026.09.14';
+const SOURCE_UPDATED_AT = '2026-09-14T06:47:08.000Z';
+const SOURCE_REVISION = '2e68d01efd776dd4142b133f9ba723db00cad9d4';
+const SOURCE_SHA256 = '3248e25c196094ae2d942cc417a1f2b811f32873814eed91b370aa3b99e12ab2';
 const SOURCE_URL = `https://github.com/RetireJS/retire.js/blob/${SOURCE_REVISION}/repository/jsrepository.json`;
 const OUTPUT_PATH = 'lib/generated/retire-browser-catalog.mts';
 const OUTPUT_DIGEST_PATH = 'lib/generated/retire-browser-catalog.sha256';
@@ -212,6 +214,7 @@ function renderModule(components: UnknownRecord): string {
     + `const RETIRE_BROWSER_CATALOG = Object.freeze({\n`
     + `  catalogVersion: ${JSON.stringify(`retire.js-${SOURCE_VERSION}`)},\n`
     + `  sourceRevision: ${JSON.stringify(SOURCE_REVISION)},\n`
+    + `  sourceUpdatedAt: ${JSON.stringify(SOURCE_UPDATED_AT)},\n`
     + `  sourceSha256: ${JSON.stringify(SOURCE_SHA256)},\n`
     + `  sourceUrl: ${JSON.stringify(SOURCE_URL)},\n`
     + `  components: ${JSON.stringify(components, null, 2)},\n`
@@ -318,6 +321,7 @@ export {
   SOURCE_SHA256,
   SOURCE_URL,
   SOURCE_VERSION,
+  SOURCE_UPDATED_AT,
   buildModule,
   main,
   moduleDigest,

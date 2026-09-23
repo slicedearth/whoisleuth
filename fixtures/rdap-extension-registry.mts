@@ -3,8 +3,8 @@ export const RDAP_EXTENSION_REGISTRY_FIXTURE = Object.freeze({
   version: 1,
   source: 'https://www.iana.org/assignments/rdap-extensions/rdap-extensions-1.csv',
   sourceLastUpdatedAt: '2026-05-26',
-  capturedAt: '2026-07-31T00:00:00.000Z',
-  sourceDigestSha256: '1c90946f32a8af2e77e588d030f26cb43cf2e59cdb804048815214b75f413719',
+  capturedAt: '2026-09-23T12:27:45.993Z',
+  sourceDigestSha256: '1115265922190295d6987863a4fbb22fe64232c5e29663f1315b87862b547618',
   entries: Object.freeze([
     ['arin_originas0', 'current'],
     ['artRecord', 'current'],
