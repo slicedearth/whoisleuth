@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import * as generator from '../frontend/src/lib/analysis/typosquat-generator.ts';
 import { requiredValue } from './value-assertions.mts';
 import { normalizeDiscoverySuffix, publicSuffixForAsciiHostname } from '../lib/registrable-domain.mts';
+import { advancedConfusableVariantsForAscii } from '../lib/idn-confusables.mts';
 
 describe('provenance-aware typosquat generation', () => {
   test('mutates only the registrable label and retains the full source and selected suffix', () => {
@@ -184,9 +185,13 @@ describe('provenance-aware typosquat generation', () => {
       && candidate.mutationTypes[0] === 'unicode_homoglyph_depth_2'));
     assert.deepEqual(result.advancedConfusable, {
       generated: 59,
-      omittedByPolicy: 225,
+      omittedByPolicy: 243,
       omittedByBudget: 0,
     });
+    const spellings = advancedConfusableVariantsForAscii('scope').variants;
+    const domains = new Set(spellings.map(item => domainToASCII(`${item.unicodeLabel}.invalid`)));
+    assert.ok(spellings.length > domains.size, 'the fixture must exercise IDNA-equivalent spellings');
+    assert.deepEqual(new Set(result.candidates.map(item => item.domain)), domains);
     assert.equal(result.truncated, false);
     assert.ok(generator.estimateTyposquatCandidateCount('scope.invalid', [], options).estimatedMaximum >= result.candidates.length);
   });

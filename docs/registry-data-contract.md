@@ -768,8 +768,8 @@ They are operational provider context, not a registrar reputation score or
 evidence that the target is malicious, safe, owned or controlled.
 
 The IDN analysis carries its own `mappingVersion`. Mapping version
-`tr39-17.0.0-bounded-ascii-v3` is a bounded, generated projection of Unicode
-17.0.0 UTS #39 confusables plus the previously reviewed compatibility set.
+`tr39-18.0.0-bounded-ascii-v3` is a bounded, generated projection of Unicode
+18.0.0 UTS #39 confusables plus the previously reviewed compatibility set.
 Only single-code-point, IDNA-valid additions from approved scripts are eligible,
 and per-letter and total caps apply before the mapping is checked in. The full
 Unicode table is not part of the runtime bundle. Mapping changes can alter

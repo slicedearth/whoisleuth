@@ -8,7 +8,7 @@ version and provenance.
 ## Projection boundary
 
 The current projection is generated from Unicode UTS #39 `confusables.txt`,
-version 17.0.0. The generator requires the exact pinned SHA-256 digest before
+version 18.0.0. The generator requires the exact pinned SHA-256 digest before
 it parses the file. It then:
 
 - bounds source bytes, lines, line length, source and target code points;
@@ -66,22 +66,22 @@ Download the source deliberately outside the repository:
 
 ```bash
 curl --fail --location \
-  https://www.unicode.org/Public/17.0.0/security/confusables.txt \
-  --output /tmp/confusables-17.0.0.txt
+  https://www.unicode.org/Public/18.0.0/security/confusables.txt \
+  --output /tmp/confusables.txt
 ```
 
 Check that it reproduces the committed projection:
 
 ```bash
 npm run unicode:confusables -- \
-  --source /tmp/confusables-17.0.0.txt
+  --source /tmp/confusables.txt
 ```
 
 After reviewing a version or policy change, regenerate the bounded module:
 
 ```bash
 npm run unicode:confusables -- \
-  --source /tmp/confusables-17.0.0.txt \
+  --source /tmp/confusables.txt \
   --write
 ```
 

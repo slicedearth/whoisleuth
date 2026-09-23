@@ -2,9 +2,9 @@
 // WHOISleuth's intentionally small domain-label mapping. The full upstream
 // table is never shipped to browsers or consulted at runtime.
 
-export const UNICODE_CONFUSABLE_DATA_VERSION = '17.0.0';
-export const UNICODE_CONFUSABLE_SOURCE_URL = 'https://www.unicode.org/Public/17.0.0/security/confusables.txt';
-export const UNICODE_CONFUSABLE_SOURCE_SHA256 = '091c7f82fc39ef208faf8f94d29c244de99254675e09de163160c810d13ef22a';
+export const UNICODE_CONFUSABLE_DATA_VERSION = '18.0.0';
+export const UNICODE_CONFUSABLE_SOURCE_URL = `https://www.unicode.org/Public/${UNICODE_CONFUSABLE_DATA_VERSION}/security/confusables.txt`;
+export const UNICODE_CONFUSABLE_SOURCE_SHA256 = '6ed3ee967c9dfdf6677d563c9985182fbc50a2efb7d6059cd57b2e2ce18f5b92';
 export const UNICODE_CONFUSABLE_LICENSE = 'Unicode-3.0';
 
 export const CONFUSABLE_PROJECTION_SCHEMA = 'whoisleuth.unicode-confusable-projection';
@@ -76,7 +76,9 @@ export const REVIEWED_GENERATION_CONFUSABLES: Readonly<Record<string, string>> =
   l: 'ӏǀꓲ',
   m: 'м',
   n: 'ոռ',
-  o: 'оοօᴏⲟ',
+  // Keep the complete previously generated o-set when newer source mappings
+  // compete for the same bounded generation slots.
+  o: 'оοօᴏⲟᴑꬽσ',
   p: 'рρⲣ',
   q: 'ԛգզ',
   r: 'гꭇ',

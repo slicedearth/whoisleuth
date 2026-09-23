@@ -13,7 +13,7 @@ import {
   GENERATED_CONFUSABLE_SOURCE,
   GENERATED_CONFUSABLE_STATS,
   GENERATED_GENERATION_CONFUSABLE_GROUPS,
-} from '../lib/generated/unicode-confusables-17.mts';
+} from '../lib/generated/unicode-confusables.mts';
 import {
   MAX_CONFUSABLE_SOURCE_BYTES,
   MAX_GENERATION_CONFUSABLES_PER_ASCII,
@@ -89,7 +89,7 @@ const CALIBRATION_SEEDS = Object.freeze([
   'example',
 ]);
 const MARK_RE = /\p{Mark}/u;
-const SAFE_LABEL_RE = /^[\p{Letter}\p{Number}-]+$/u;
+const SAFE_LABEL_RE = /^[\p{Letter}\p{Number}\p{Symbol}-]+$/u;
 const SAFE_ID_RE = /^[a-z0-9-]+$/u;
 const WHOLE_LABEL_SCRIPT_TESTS: ReadonlyArray<readonly [string, RegExp]> = Object.freeze([
   ['Cyrillic', /\p{Script=Cyrillic}/u],
@@ -113,6 +113,12 @@ function boundedLabel(value: unknown, label: string): string {
     || !SAFE_LABEL_RE.test(value)
   ) {
     throw new TypeError(`${label} must be a bounded domain-label value.`);
+  }
+  // Some source-backed confusables are symbols in a reviewed script. Match the
+  // generator's IDNA admission rather than silently leaving them uncalibrated.
+  const ascii = domainToASCII(`${value}.example`).slice(0, -8);
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(ascii)) {
+    throw new TypeError(`${label} must be a bounded IDNA domain label.`);
   }
   return value;
 }
@@ -416,7 +422,7 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
     const report = buildUnicodeConfusableAudit(CALIBRATION_CASES, projection);
     if (parsed.write) {
       if (report.status === 'pass' && generatedProjection) {
-        const outputPath = path.join(repositoryRoot, 'lib/generated/unicode-confusables-17.mts');
+        const outputPath = path.join(repositoryRoot, 'lib/generated/unicode-confusables.mts');
         await (options.writeProjection ?? writeFile)(
           outputPath,
           renderConfusableProjectionModule(generatedProjection),

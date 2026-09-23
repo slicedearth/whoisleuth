@@ -10,6 +10,7 @@ import {
 import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { INVESTIGATION_CAPSULE_VERSION, LOOKUP_INVESTIGATION_BRIEF_VERSION } from '../packages/contracts/investigation-portability.mts';
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
+import { CONFUSABLE_MAPPING_VERSION } from '../lib/idn-confusables.mts';
 import { parseRdap } from '../lib/rdap.mts';
 import { inspectInvestigationPackage } from '../packages/investigation/investigation-package.mts';
 import { decryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
@@ -1463,7 +1464,7 @@ test('IDN review shows Unicode and ASCII together with cautious profile similari
   await expandLookupFamilies(page);
   const card = page.locator('.idn-card');
   await expect(card.getByRole('heading', { name: 'IDN and confusable review' })).toBeVisible();
-  await expect(card.getByText('tr39-17.0.0-bounded-ascii-v3', { exact: true })).toBeVisible();
+  await expect(card.getByText(CONFUSABLE_MAPPING_VERSION, { exact: true })).toBeVisible();
   await expect(card.getByText('sаmple.example', { exact: true })).toBeVisible();
   await expect(card.getByText('xn--smple-4ve.example', { exact: true })).toBeVisible();
   await expect(card.getByText('Cyrillic, Latin', { exact: true })).toBeVisible();

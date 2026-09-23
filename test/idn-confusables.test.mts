@@ -86,7 +86,7 @@ describe('versioned visual skeleton comparison', () => {
   test('matches a mixed-script lookalike to an official ASCII domain', () => {
     const result = analysis(domainToASCII('sаmple.example'), ['sample.example']);
     assert.equal(result.version, 1);
-    assert.equal(result.mappingVersion, 'tr39-17.0.0-bounded-ascii-v3');
+    assert.equal(result.mappingVersion, idn.CONFUSABLE_MAPPING_VERSION);
     assert.equal(result.skeleton, 'sample.example');
     assert.deepEqual(result.referenceMatches.map((match) => match.asciiDomain), ['sample.example']);
     assert.ok(result.findings.some((finding) => finding.id === 'official_skeleton_match'));
@@ -111,7 +111,7 @@ describe('versioned visual skeleton comparison', () => {
   test('matches a newly curated Coptic lookalike with explicit script provenance', () => {
     const ascii = domainToASCII('ⲥope.example');
     const result = analysis(ascii, ['cope.example']);
-    assert.equal(result.mappingVersion, 'tr39-17.0.0-bounded-ascii-v3');
+    assert.equal(result.mappingVersion, idn.CONFUSABLE_MAPPING_VERSION);
     assert.equal(result.skeleton, 'cope.example');
     assert.deepEqual(firstLabel(result).scripts, ['Coptic', 'Latin']);
     assert.deepEqual(result.referenceMatches.map((match) => match.asciiDomain), ['cope.example']);
@@ -150,8 +150,8 @@ describe('versioned visual skeleton comparison', () => {
 
 describe('shared candidate-generation mapping', () => {
   test('provides a bounded deterministic set for supported ASCII characters', () => {
-    assert.deepEqual(idn.confusableCharactersForAscii('A'), ['а', 'α', 'ɑ']);
-    assert.deepEqual(idn.confusableCharactersForAscii('c'), ['с', 'ᴄ', 'ⲥ', '𐐽']);
+    assert.deepEqual(idn.confusableCharactersForAscii('A'), ['а', 'α', 'ɑ', 'ꭤ']);
+    assert.deepEqual(idn.confusableCharactersForAscii('c'), ['с', 'ᴄ', 'ⲥ', '𐐽', 'ᲃ']);
     assert.deepEqual(idn.confusableCharactersForAscii('i'), ['і', 'ι', 'ı', 'ɪ', 'ɩ', 'ⲓ', 'ꙇ', 'ւ']);
     assert.deepEqual(idn.confusableCharactersForAscii('g'), ['ɡ', 'ƍ', 'ᶃ', 'ց']);
     assert.deepEqual(idn.confusableCharactersForAscii('?'), []);
@@ -166,7 +166,9 @@ describe('shared candidate-generation mapping', () => {
     }
     const mutableCopy = idn.confusableCharactersForAscii('c');
     mutableCopy.push('x');
-    assert.deepEqual(idn.confusableCharactersForAscii('c'), ['с', 'ᴄ', 'ⲥ', '𐐽']);
+    assert.deepEqual(idn.confusableCharactersForAscii('c'), ['с', 'ᴄ', 'ⲥ', '𐐽', 'ᲃ']);
+    assert.deepEqual(idn.confusableCharactersForAscii('o'), [...'оοօᴏⲟᴑꬽσ']);
+    assert.equal(idn.unicodeSkeleton('ᲂ'), 'o', 'new skeleton evidence remains available without displacing a reviewed candidate');
   });
 
   test('builds deterministic whole-label candidates from one reviewed script', () => {
@@ -189,9 +191,9 @@ describe('shared candidate-generation mapping', () => {
 
   test('builds deterministic two-character candidates within one reviewed script', () => {
     const result = idn.advancedConfusableVariantsForAscii('scope');
-    assert.equal(result.eligibleVariantCount, 59);
-    assert.equal(result.variants.length, 59);
-    assert.equal(result.omittedByPolicy, 225);
+    assert.equal(result.eligibleVariantCount, 64);
+    assert.equal(result.variants.length, 64);
+    assert.equal(result.omittedByPolicy, 243);
     assert.equal(result.omittedByBudget, 0);
     assert.equal(Object.isFrozen(result), true);
     assert.equal(Object.isFrozen(result.variants), true);
