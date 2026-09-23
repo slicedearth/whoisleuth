@@ -10,6 +10,7 @@ import {
   PERFORMANCE_TIMING_POLICY,
   abortBrowserInteractionReadiness,
   beginBrowserInteractionReadiness,
+  beginInteractionTransferProbe,
   performanceMeasurementContext,
   performanceSampleMedian,
   summarizePerformanceTimings,
@@ -147,19 +148,12 @@ function isInvestigationEndpoint(request: Request): boolean {
   return url.pathname !== '/api/session' && url.pathname !== '/api/capabilities';
 }
 
-function numberField(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
-}
-
 async function beginInteractionProbe(page: Page) {
   await page.addInitScript(resetInteractionRuntimeProbe);
   await page.evaluate(resetInteractionRuntimeProbe);
 
-  const session = await page.context().newCDPSession(page);
-  const pendingAssets = new Set<string>();
+  const transfer = await beginInteractionTransferProbe(page);
   const investigationRequests: string[] = [];
-  let assetEncodedTransferBytes = 0;
-  let completedAssetRequestCount = 0;
   let active = true;
 
   const onRequest = (request: Request) => {
@@ -168,39 +162,6 @@ async function beginInteractionProbe(page: Page) {
     investigationRequests.push(`${request.method()} ${url.pathname}`);
   };
   page.on('request', onRequest);
-
-  session.on('Network.responseReceived', (payload) => {
-    if (!active) return;
-    const record = payload as unknown as Record<string, unknown>;
-    const response = record.response as Record<string, unknown> | undefined;
-    const url = typeof response?.url === 'string' ? response.url : '';
-    const mimeType = typeof response?.mimeType === 'string' ? response.mimeType : '';
-    const resourceType = typeof record.type === 'string' ? record.type : '';
-    const requestId = typeof record.requestId === 'string' ? record.requestId : '';
-    if (!requestId || !url) return;
-    let sameOrigin = false;
-    try {
-      sameOrigin = new URL(url).origin === ALLOWED_ORIGIN;
-    } catch {
-      return;
-    }
-    if (sameOrigin && (resourceType === 'Script'
-      || resourceType === 'Stylesheet'
-      || /(?:javascript|css)/iu.test(mimeType))) {
-      pendingAssets.add(requestId);
-    }
-  });
-  session.on('Network.loadingFinished', (payload) => {
-    if (!active) return;
-    const record = payload as unknown as Record<string, unknown>;
-    const requestId = typeof record.requestId === 'string' ? record.requestId : '';
-    if (!pendingAssets.delete(requestId)) return;
-    const bytes = numberField(record.encodedDataLength);
-    if (bytes === null) return;
-    assetEncodedTransferBytes += bytes;
-    completedAssetRequestCount += 1;
-  });
-  await session.send('Network.enable');
 
   async function close() {
     if (!active) return null;
@@ -218,10 +179,8 @@ async function beginInteractionProbe(page: Page) {
     const runtime = await readInteractionRuntimeProbe(page);
     active = false;
     page.off('request', onRequest);
-    await session.detach();
     return {
-      assetEncodedTransferBytes,
-      completedAssetRequestCount,
+      ...await transfer.close(),
       runtime,
       investigationRequests,
     };
@@ -231,7 +190,7 @@ async function beginInteractionProbe(page: Page) {
     if (!active) return;
     active = false;
     page.off('request', onRequest);
-    await session.detach().catch(() => undefined);
+    await transfer.close().catch(() => undefined);
   }
 
   return { close, abort };

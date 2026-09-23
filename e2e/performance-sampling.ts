@@ -56,6 +56,71 @@ export type InteractionRuntimeProbe = Readonly<{
   residualLayoutShiftScore: number;
 }>;
 
+export async function beginInteractionTransferProbe(page: Page) {
+  const session = await page.context().newCDPSession(page);
+  const startedRequests = new Set<string>();
+  const pendingAssets = new Set<string>();
+  let startedAt: number | null = null;
+  let assetEncodedTransferBytes = 0;
+  let completedAssetRequestCount = 0;
+  let active = true;
+
+  // A response delivered during the interaction can belong to earlier page
+  // loading. Own requests by their start, including across redirect hops.
+  session.on('Network.requestWillBeSent', ({ requestId, timestamp, redirectResponse }) => {
+    if (!active || startedAt === null || timestamp < startedAt) return;
+    if (redirectResponse && !startedRequests.has(requestId)) return;
+    startedRequests.add(requestId);
+  });
+  session.on('Network.responseReceived', ({ requestId, response, type }) => {
+    if (!active || !startedRequests.has(requestId)) return;
+    let sameOrigin = false;
+    try {
+      sameOrigin = new URL(response.url).origin === ALLOWED_ORIGIN;
+    } catch {
+      return;
+    }
+    if (sameOrigin && (type === 'Script' || type === 'Stylesheet'
+      || /(?:javascript|css)/iu.test(response.mimeType))) pendingAssets.add(requestId);
+  });
+  session.on('Network.loadingFinished', ({ requestId, encodedDataLength }) => {
+    startedRequests.delete(requestId);
+    if (!active || !pendingAssets.delete(requestId)) return;
+    if (!Number.isFinite(encodedDataLength) || encodedDataLength < 0) return;
+    assetEncodedTransferBytes += encodedDataLength;
+    completedAssetRequestCount += 1;
+  });
+  session.on('Network.loadingFailed', ({ requestId }) => {
+    startedRequests.delete(requestId);
+    pendingAssets.delete(requestId);
+  });
+  try {
+    await session.send('Network.enable');
+    await session.send('Performance.enable');
+    const { metrics } = await session.send('Performance.getMetrics');
+    const timestamp = metrics.find((metric) => metric.name === 'Timestamp')?.value;
+    if (timestamp === undefined || !Number.isFinite(timestamp) || timestamp < 0) {
+      throw new Error('The interaction transfer probe requires the browser monotonic clock.');
+    }
+    startedAt = timestamp;
+  } catch (error) {
+    await session.detach().catch(() => undefined);
+    throw error;
+  }
+
+  return {
+    async close() {
+      if (active) {
+        active = false;
+        startedRequests.clear();
+        pendingAssets.clear();
+        await session.detach();
+      }
+      return { assetEncodedTransferBytes, completedAssetRequestCount };
+    },
+  };
+}
+
 /** Installs browser-local observers; phase boundaries come from the actual input and readiness marks. */
 export function resetInteractionRuntimeProbe(): void {
   const scope = globalThis as typeof globalThis & {

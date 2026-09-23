@@ -9,6 +9,7 @@ import { expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers'
 import { productionChunkPath } from './production-build';
 import {
   beginBrowserInteractionReadiness,
+  beginInteractionTransferProbe,
   installNavigationReadinessMark,
   isBrowserInteractionReadinessMarked,
   isNavigationReadinessMarked,
@@ -149,6 +150,63 @@ test('interaction observations exclude setup and retain movement before the driv
     });
   } finally {
     await page.evaluate(() => (window as typeof window & { restoreInteractionObserver: () => void }).restoreInteractionObserver());
+  }
+});
+
+test('interaction transfer excludes earlier requests that finish during activation', async ({ page }) => {
+  let releaseEarlier = () => {};
+  let markRequested = () => {};
+  const earlierHeld = new Promise<void>((resolve) => { releaseEarlier = resolve; });
+  const earlierRequested = new Promise<void>((resolve) => { markRequested = resolve; });
+  const earlierBody = `/*${'x'.repeat(64 * 1024)}*/`;
+  await page.route('**/interaction-transfer-fixture/**', async (route) => {
+    const name = new URL(route.request().url()).pathname.split('/').at(-1);
+    if (name === 'earlier.js') {
+      markRequested();
+      await earlierHeld;
+      await route.fulfill({ contentType: 'text/javascript', body: earlierBody });
+    } else if (name === 'current.js') {
+      await route.fulfill({ contentType: 'text/javascript', body: 'void 0;' });
+    } else if (name === 'current.css') {
+      await route.fulfill({ contentType: 'text/css', body: 'button { min-height: 44px; }' });
+    } else {
+      await route.fulfill({ contentType: 'text/html', body: '<!doctype html><html lang="en"><title>Transfer fixture</title><button>Load interaction assets</button></html>' });
+    }
+  });
+  await page.goto('/interaction-transfer-fixture/');
+  await page.evaluate(() => {
+    const earlier = document.createElement('script');
+    earlier.src = './earlier.js';
+    earlier.onload = () => { document.documentElement.dataset.earlierLoaded = 'true'; };
+    document.head.append(earlier);
+    document.querySelector('button')!.onclick = () => {
+      const script = document.createElement('script');
+      script.src = './current.js';
+      const style = document.createElement('link');
+      style.rel = 'stylesheet';
+      style.href = './current.css';
+      let loaded = 0;
+      const ready = () => { if (++loaded === 2) document.querySelector('button')!.textContent = 'Interaction assets loaded'; };
+      script.onload = ready;
+      style.onload = ready;
+      document.head.append(script, style);
+    };
+  });
+  await earlierRequested;
+  const probe = await beginInteractionTransferProbe(page);
+  try {
+    releaseEarlier();
+    await page.getByRole('button', { name: 'Load interaction assets', exact: true }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-earlier-loaded', 'true');
+    await expect(page.getByRole('button', { name: 'Interaction assets loaded', exact: true })).toBeVisible();
+    const measured = await probe.close();
+    expect(measured.completedAssetRequestCount).toBe(2);
+    expect(measured.assetEncodedTransferBytes).toBeGreaterThan(0);
+    expect(measured.assetEncodedTransferBytes).toBeLessThan(earlierBody.length);
+    expect(await probe.close()).toEqual(measured);
+  } finally {
+    releaseEarlier();
+    await probe.close();
   }
 });
 
