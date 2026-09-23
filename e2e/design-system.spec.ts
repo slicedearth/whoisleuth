@@ -7,7 +7,10 @@ import { INTELLIGENCE_CAPABILITIES, sectionedLookupFixture } from './lookup-desi
 // Shared visual-system, navigation and overflow coverage.
 
 test('native temporal fields share text-control sizing and theme while choices stay compact', async ({ page }) => {
+  await useTheme(page, 'dark');
   await page.goto('/resources');
+  // The prerendered selector says System; Dark confirms its client state is attached.
+  await expect(page.getByRole('button', { name: 'Colour theme, Dark selected', exact: true })).toBeVisible();
   await page.evaluate(() => {
     const group = document.createElement('fieldset');
     group.id = 'native-control-fixture';
@@ -25,7 +28,8 @@ test('native temporal fields share text-control sizing and theme while choices s
       label.append(input);
       group.append(label);
     }
-    document.querySelector('main')!.append(group);
+    // Global control styles also apply outside the application-owned hydration root.
+    document.body.append(group);
   });
   try {
     const group = page.getByRole('group', { name: 'Native input controls', exact: true });
