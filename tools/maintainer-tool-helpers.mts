@@ -133,6 +133,16 @@ export function npmExecutableName(platform = process.platform): string {
   return platform === 'win32' ? 'npm.cmd' : 'npm';
 }
 
+/** Resolve the published command, not the dependency's internal file layout. */
+export function dependencyCruiserExecutable(repositoryRoot: string): string {
+  const packageRoot = path.join(repositoryRoot, 'node_modules', 'dependency-cruiser');
+  const manifest = requireJsonRecord(JSON.parse(readBoundedStableRegularFileSync(
+    path.join(packageRoot, 'package.json'), 256 * 1024, 'Dependency analyser manifest',
+  ).toString('utf8')), 'Dependency analyser manifest');
+  const commands = requireJsonRecord(manifest.bin, 'Dependency analyser commands');
+  return path.join(packageRoot, boundedSafeRelativePath(commands.depcruise, 'Dependency analyser command'));
+}
+
 export async function localPortIsFree(port: number, timeoutMs = 1_000): Promise<boolean> {
   if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
     throw new TypeError('Local port must be an integer from 1 through 65535.');

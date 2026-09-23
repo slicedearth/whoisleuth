@@ -96,6 +96,11 @@ Shared executable groups keep the required local and hosted checks aligned.
 Already-prepared lanes can use `npm run verification:ci -- --group=<name>`;
 group mode does not install dependencies or orchestrate other lanes.
 
+`npm test`, coverage and scheduled unit profiling share shell preflight before
+test workers start. Tests reuse the resolved executable paths; startup checks
+use a hang guard, not a performance target. Missing or unusable shells stop the
+run before test execution.
+
 For the Linux environment used by required CI, Docker can run the same owner
 from a clean commit:
 

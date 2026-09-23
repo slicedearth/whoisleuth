@@ -18,6 +18,7 @@ import {
 } from './package-source.mts';
 import { MAX_PACKAGE_COMPILER_CONTEXT_BYTES, MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES, MAX_PACKAGE_GRAPH_BYTES, PACKAGE_PROCESS_TIMEOUT_MS } from './package-resource-bounds.mts';
 import { playwrightBrowserCacheDirectory } from './ci-verification.mts';
+import { dependencyCruiserExecutable } from './maintainer-tool-helpers.mts';
 import { optionalPackageInputs, assertInstalledPackageDependencies, optionalPackageLock, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles, buildOptionalPackageNotices } from './optional-package.mts';
 
 const execFile = promisify(execFileCallback);
@@ -94,7 +95,7 @@ export async function checkCapturePackage(repositoryRoot = ROOT, candidateDirect
     await Promise.all(['npmrc', 'global-npmrc'].map(name => writeFile(path.join(home, name), '')));
     // Retain external dependency edges in this package report. The shared
     // do-not-follow rule still prevents traversing dependency internals.
-    const graph = parse((await run(process.execPath, [path.join(root, 'node_modules/dependency-cruiser/bin/dependency-cruise.mjs'), '--config', path.join(root, '.dependency-cruiser.json'), '--exclude', '^$', '--output-type', 'json', ENTRY], root)).stdout);
+    const graph = parse((await run(process.execPath, [dependencyCruiserExecutable(root), '--config', path.join(root, '.dependency-cruiser.json'), '--exclude', '^$', '--output-type', 'json', ENTRY], root)).stdout);
     const inputs = capturePackageInputs(graph);
     const closure = await discoverPackageCompilerClosure(root, temporary, inputs.sources, { acceptsSource: source => SOURCE.test(source) });
     const state = { totalBytes: 0 };

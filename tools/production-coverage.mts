@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeBoundedUtf8, readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
 import { MAX_FORWARDING_SOURCE_BYTES, moduleForwardingSpecifier, moduleIsTypeOnly } from './module-forwarding.mts';
+import { runUnitTests } from './toolchain-compatibility.mts';
 
 export const MAX_PRODUCTION_COVERAGE_BYTES = 16 * 1024 * 1024;
 export const MAX_PRODUCTION_COVERAGE_FILES = 2_000;
@@ -462,11 +462,8 @@ export function productionCoverageArguments(testPattern = 'test/*.test.mts'): st
 export async function main(args = process.argv.slice(2)): Promise<number> {
   try {
     if (args.length === 1 && args[0] === '--run') {
-      const result = spawnSync(process.execPath, productionCoverageArguments(), {
-        cwd: REPOSITORY_ROOT, env: process.env, stdio: 'inherit',
-      });
-      if (result.error) throw result.error;
-      if (result.status !== 0) return result.status ?? 2;
+      const status = runUnitTests(productionCoverageArguments(), { cwd: REPOSITORY_ROOT });
+      if (status !== 0) return status;
       args = [];
     }
     if (args.length > 1 || args[0]?.startsWith('-')) throw new TypeError('Usage: node tools/production-coverage.mts [--run|lcov-path]');

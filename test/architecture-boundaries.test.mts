@@ -1,14 +1,33 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { dependencyCruiserExecutable } from '../tools/maintainer-tool-helpers.mts';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const EXECUTABLE = join(ROOT, 'node_modules', 'dependency-cruiser', 'bin', 'dependency-cruise.mjs');
+const EXECUTABLE = dependencyCruiserExecutable(ROOT);
 const FIXTURE_ROOT = join(ROOT, 'test', 'fixtures', 'architecture');
 
 describe('architecture boundaries', () => {
+  test('uses the declared analyser command across internal file moves and rejects invalid declarations', () => {
+    const root = mkdtempSync(join(tmpdir(), 'architecture-command-'));
+    const packageRoot = join(root, 'node_modules', 'dependency-cruiser');
+    try {
+      mkdirSync(packageRoot, { recursive: true });
+      for (const target of ['bin/original.mjs', 'commands/renamed.mjs']) {
+        writeFileSync(join(packageRoot, 'package.json'), JSON.stringify({ bin: { depcruise: target } }));
+        assert.equal(dependencyCruiserExecutable(root), join(packageRoot, target));
+      }
+      for (const manifest of [{}, { bin: {} }, { bin: { depcruise: '../outside.mjs' } }, { bin: { depcruise: '/outside.mjs' } }]) {
+        writeFileSync(join(packageRoot, 'package.json'), JSON.stringify(manifest));
+        assert.throws(() => dependencyCruiserExecutable(root), TypeError);
+      }
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
   test('resolves supported package subpaths without hiding invalid imports', () => {
     const result = spawnSync(process.execPath, [EXECUTABLE, '--config', join(ROOT, '.dependency-cruiser.json'),
       // Include resolved external nodes in this diagnostic; the application

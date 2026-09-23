@@ -9,10 +9,6 @@ import { fileURLToPath } from 'node:url';
 import { FRONTEND_BROWSER_ARTIFACT_PATHS } from './frontend-build-integrity.mts';
 import { npmExecutableName } from './maintainer-tool-helpers.mts';
 import { codeqlRamMegabytes } from './local-codeql.mts';
-import {
-  resolveUnitTestExecutables,
-  unitTestExecutableEnvironment,
-} from './toolchain-compatibility.mts';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FULL_SHA = /^[a-f0-9]{40}$/u;
@@ -494,10 +490,7 @@ export function main(args = process.argv.slice(2)): number {
       if (group === 'cli-runtime') assertCliRuntime();
       else assertLocalCiRuntime();
       if (group === 'quality') assertHostedCiParity();
-      const environment = group === 'unit'
-        ? unitTestExecutableEnvironment(resolveUnitTestExecutables())
-        : process.env;
-      runCiCommandGroup(group, (script, extra) => npmRun(script, extra, environment));
+      runCiCommandGroup(group);
       return 0;
     }
     assertLocalCiRuntime();
@@ -507,7 +500,6 @@ export function main(args = process.argv.slice(2)): number {
     cleanup = true;
     assertPlaywrightBrowserCacheWritable();
     process.stdout.write(`Security analyser memory budget: ${codeqlRamMegabytes()} MiB.\n`);
-    const unitEnvironment = unitTestExecutableEnvironment(resolveUnitTestExecutables());
     const cliRuntime = cliRuntimeExecutable();
     const range = localCiRevisionRange();
     npmRun('security:staged', ['--', '--range', range]);
@@ -516,7 +508,7 @@ export function main(args = process.argv.slice(2)): number {
     assertHostedCiParity();
     runCiCommandGroup('quality');
     npmRun('security:codeql');
-    runCiCommandGroup('unit', (script, extra) => npmRun(script, extra, unitEnvironment));
+    runCiCommandGroup('unit');
     runCiCommandGroup('browser-build');
     run(process.execPath, [path.join(REPOSITORY_ROOT, 'node_modules/playwright/cli.js'), ...criticalBrowserInstallArguments()]);
     npmRun('test:e2e:built');

@@ -20,7 +20,7 @@ import {
 } from './package-source.mts';
 import { MAX_PACKAGE_COMPILER_CONTEXT_BYTES, MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES, MAX_PACKAGE_GRAPH_BYTES, PACKAGE_PROCESS_TIMEOUT_MS } from './package-resource-bounds.mts';
 import { optionalPackageInputs, assertInstalledPackageDependencies, optionalPackageLock, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles, buildOptionalPackageNotices } from './optional-package.mts';
-import { pathIsWithin, requireJsonRecord as object } from './maintainer-tool-helpers.mts';
+import { pathIsWithin, requireJsonRecord as object, dependencyCruiserExecutable } from './maintainer-tool-helpers.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ENTRY = 'packages/local-application/bin/whoisleuth-local.mts';
@@ -67,7 +67,7 @@ export async function checkLocalApplicationPackage(repositoryRoot = ROOT, candid
     await Promise.all(['npmrc', 'global-npmrc'].map(name => writeFile(path.join(home, name), '')));
     const metadata = await capturePackageSourceSnapshot(root, ['package.json', 'package-lock.json', PACKAGE_SOURCE, ...SUPPORT.map(([source]) => source)], { totalBytes: 0 });
     const lockfile = parse(metadata.get('package-lock.json')!.bytes);
-    const graph = parse((await run(process.execPath, [path.join(root, 'node_modules/dependency-cruiser/bin/dependency-cruise.mjs'), '--config', path.join(root, '.dependency-cruiser.json'), '--exclude', '^$', '--output-type', 'json', ...ENTRIES], root)).stdout);
+    const graph = parse((await run(process.execPath, [dependencyCruiserExecutable(root), '--config', path.join(root, '.dependency-cruiser.json'), '--exclude', '^$', '--output-type', 'json', ...ENTRIES], root)).stdout);
     const inputs = localApplicationPackageInputs(graph, parse(metadata.get('package.json')!.bytes));
     const closure = await discoverPackageCompilerClosure(root, temporary, inputs.sources, { acceptsSource: source => SOURCE.test(source) });
     const sources = await capturePackageSourceSnapshot(root, closure.sources, { totalBytes: 0 });

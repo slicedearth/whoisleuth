@@ -21,12 +21,12 @@
   ],
   "scripts": {
     "start": "npm run build && node server.mts",
-    "test": "node --test --test-concurrency=4 \"test/*.test.mts\"",
+    "test": "node tools/toolchain-compatibility.mts --unit-tests --test --test-concurrency=4 \"test/*.test.mts\"",
     "test:coverage": "node tools/production-coverage.mts --run",
     "test:properties": "node --test test/core-protocol-properties.test.mts test/evidence-quality-properties.test.mts test/browser-library-profile.test.mts test/service-binding-dns.test.mts test/model-contract-properties.test.mts test/verification-state-machines.test.mts",
     "test:properties:stress": "WHOISLEUTH_FAST_CHECK_RUN_MULTIPLIER=10 WHOISLEUTH_FAST_CHECK_SEED=334462 npm run test:properties",
     "test:mutation": "node tools/critical-mutation-gate.mts",
-    "test:profile": "node --test --test-concurrency=4 --test-reporter=spec --test-reporter-destination=stderr --test-reporter=./tools/test-duration-reporter.mts --test-reporter-destination=stdout \"test/*.test.mts\"",
+    "test:profile": "node tools/toolchain-compatibility.mts --unit-tests --test --test-concurrency=4 --test-reporter=spec --test-reporter-destination=stderr --test-reporter=./tools/test-duration-reporter.mts --test-reporter-destination=stdout \"test/*.test.mts\"",
     "test:duration-health": "node tools/test-duration-health.mts",
     "typecheck": "npm run sync --workspace=frontend && tsc --noEmit -p tsconfig.json && tsc --noEmit -p frontend/analysis-tsconfig.json && tsc --noEmit -p frontend/tsconfig.json && tsc --noEmit -p e2e/tsconfig.json && tsc --noEmit -p test/tsconfig.json",
     "dev": "npm run dev --workspace=frontend",
@@ -124,9 +124,9 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@netlify/blobs": "11.0.3",
+    "@netlify/blobs": "11.1.0",
     "@nuintun/qrcode": "5.0.3",
-    "@peculiar/x509": "^2.0.0",
+    "@peculiar/x509": "^2.1.0",
     "express": "^5.2.1",
     "fast-png": "8.0.0",
     "fflate": "0.8.3",
@@ -137,22 +137,22 @@
     "minisearch": "^7.2.0",
     "parse5": "^8.0.1",
     "pdfjs-dist": "6.3.289",
-    "postal-mime": "2.7.5",
+    "postal-mime": "3.0.0",
     "reflect-metadata": "0.2.2",
     "saxes": "6.0.0",
-    "tldts": "^7.4.11",
-    "undici": "^8.10.1"
+    "tldts": "^7.4.14",
+    "undici": "^8.11.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.63.0",
     "@types/express": "^5.0.6",
-    "@types/node": "^24.13.3",
+    "@types/node": "^24.13.6",
     "ajv": "^8.20.0",
-    "dependency-cruiser": "^18.2.0",
-    "fast-check": "^4.9.0",
+    "dependency-cruiser": "^18.4.0",
+    "fast-check": "^4.10.2",
     "retire": "^5.7.0",
     "typescript": "^6.0.3",
-    "yaml": "2.9.0"
+    "yaml": "2.9.1"
   }
 }

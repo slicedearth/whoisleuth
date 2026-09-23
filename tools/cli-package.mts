@@ -62,6 +62,7 @@ import {
   boundedUnpaddedText as boundedString,
   boundedSafeRelativePath as safeRelativePath,
   requireJsonRecord as record,
+  dependencyCruiserExecutable,
 } from './maintainer-tool-helpers.mts';
 import {
   CLI_COMMAND_REGISTRY,
@@ -382,7 +383,7 @@ async function readBoundedJson(filename: string, maxBytes = MAX_PACKAGE_GRAPH_BY
 }
 
 async function dependencyGraph(repositoryRoot: string, entrySources: readonly string[]): Promise<unknown> {
-  const executable = path.join(repositoryRoot, 'node_modules', 'dependency-cruiser', 'bin', 'dependency-cruise.mjs');
+  const executable = dependencyCruiserExecutable(repositoryRoot);
   const { stdout } = await execFile(process.execPath, [
     executable,
     '--config',

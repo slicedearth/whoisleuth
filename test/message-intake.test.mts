@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createLinkIntake } from '../packages/investigation/link-intake.mts';
 import { reviewMessageInput } from '../packages/investigation/message-intake.mts';
-import { MAX_INTAKE_LINKS, MAX_MESSAGE_INTAKE_BYTES } from '../packages/contracts/message-intake.mts';
+import { MAX_INTAKE_LINKS, MAX_MESSAGE_INTAKE_BYTES, MAX_MESSAGE_DEPTH } from '../packages/contracts/message-intake.mts';
 import { reviewIdentityIncident } from '../packages/investigation/identity-incident-review.mts';
 
 const now = '2026-09-22T00:00:00Z';
@@ -64,6 +64,65 @@ test('nested messages and calendars are parsed without opening attachments', asy
   for (const host of ['nested.example', 'calendar.example', 'event.example']) assert.ok(result.report.links.some(item => item.hostname === host), host);
   assert.equal(result.report.coverage.unreviewedAttachments, 1);
   assert.equal(result.report.coverage.state, 'partial');
+});
+
+test('email review retains duplicate and folded evidence without retaining recipient or subject fields', async () => {
+  const source = [
+    'From: "Private Sender"',
+    '\t<private-first@first.example>',
+    'From: private-second@second.example',
+    'Reply-To: private-reply@reply.example',
+    'Reply-To:\tprivate-other@other.example',
+    'To: private-recipient@recipient.example',
+    'To: private-later@later.example',
+    'Cc: private-copy@copy.example',
+    'Subject: private first subject',
+    'Subject: private second subject',
+    'Authentication-Results: receiver.example;',
+    '\tspf=pass smtp.mailfrom=first.example;',
+    '\t dkim=pass header.d=first.example',
+    'Authentication-Results: other-receiver.example; spf=fail smtp.mailfrom=second.example',
+    'Content-Type: text/plain; charset=utf-8', '', 'Review only',
+  ].join('\r\n');
+  const { report } = await reviewMessageInput(bytes(source), 'email', now);
+  assert.deepEqual(report.identities.filter(item => item.role === 'from').map(item => item.domain), ['first.example', 'second.example']);
+  assert.deepEqual(report.identities.filter(item => item.role === 'reply_to').map(item => item.domain), ['other.example', 'reply.example']);
+  assert.deepEqual(report.authenticationClaims.map(item => [item.method, item.result]), [['spf', 'mixed'], ['dkim', 'pass']]);
+  assert.deepEqual(report.authenticationReview.headers.map(header => [header.authservId, header.receiverTrust, header.claims.map(claim => [claim.method, claim.result])]), [
+    ['receiver.example', 'not_established', [['spf', 'pass'], ['dkim', 'pass']]],
+    ['other-receiver.example', 'not_established', [['spf', 'fail']]],
+  ]);
+  for (const privateValue of ['Private Sender', 'private-', 'subject', 'recipient.example', 'later.example', 'copy.example']) {
+    assert.equal(JSON.stringify(report).includes(privateValue), false, privateValue);
+  }
+});
+
+test('Unicode whitespace cannot turn an invalid field name into sender evidence', async () => {
+  const source = [
+    '\uFEFFFrom: forged@bom.example',
+    '\u00A0From: forged@space.example',
+    'From: sender@actual.example',
+    'Content-Type: text/plain', '', 'Review only',
+  ].join('\r\n');
+  const { report } = await reviewMessageInput(bytes(source), 'email', now);
+  assert.deepEqual(report.identities.filter(item => item.role === 'from').map(item => item.domain), ['actual.example']);
+});
+
+test('MIME nesting admits the supported boundary and rejects the next level without parser details', async () => {
+  function multipart(levels: number): Uint8Array {
+    let message = 'Content-Type: text/plain\r\n\r\nhttps://nested.example/';
+    for (let level = 0; level < levels; level++) {
+      message = `Content-Type: multipart/mixed; boundary=part-${level}\r\n\r\n--part-${level}\r\n${message}\r\n--part-${level}--`;
+    }
+    return bytes(message);
+  }
+  const { report } = await reviewMessageInput(multipart(MAX_MESSAGE_DEPTH), 'email', now);
+  assert.deepEqual(report.links.map(link => link.hostname), ['nested.example']);
+  assert.equal(report.coverage.state, 'reviewed');
+  await assert.rejects(reviewMessageInput(multipart(MAX_MESSAGE_DEPTH + 1), 'email', now), {
+    name: 'TypeError',
+    message: 'The message could not be decoded within the MIME nesting and header limits. No input was retained.',
+  });
 });
 
 test('message and header reviews share quoted-address and authentication-clause semantics', async () => {
