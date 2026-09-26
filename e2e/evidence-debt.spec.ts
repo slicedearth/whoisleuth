@@ -1,6 +1,6 @@
 import { openConsoleView } from './console-navigation';
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, test } from './native-tab-fixtures';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import {
   currentBulkSessionBrowserStore,
@@ -8,12 +8,9 @@ import {
   failBrowserLocalCollectionReads,
   holdBrowserLocalReads,
   migrateLegacyBrowserData,
-  nativeTabBrowserChannel,
   openNativeLinkInNewTab,
 } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
-
-test.use({ channel: nativeTabBrowserChannel });
 
 const OBSERVED_AT = '2026-08-08T00:00:00.000Z';
 const REVIEWED_AT = '2026-08-14T00:00:00.000Z';

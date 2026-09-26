@@ -14,22 +14,13 @@ import { classifyQuery } from '../lib/classify.mts';
 import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../lib/project-metadata.mts';
 import { BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { summarizeBulkProfileContexts, unavailableBulkProfileContext } from '../packages/workspace/bulk-session-model.mts';
+import { ALLOWED_ORIGIN } from './constants';
 
 // A few px of tolerance for subpixel layout rounding across engines.
 const OVERFLOW_TOLERANCE_PX = 1;
 const THEME_STORAGE_KEY = 'whoisleuth:theme:v1';
 const initialThemePreferences = new WeakMap<Page, 'dark' | 'light' | 'system'>();
 const LOCAL_DATA_DATABASE_NAME = 'whoisleuth-browser-data-v1';
-
-// Native tab disposition needs the full browser. The separate headless shell
-// can load a modified-click destination without publishing its navigation to
-// the driver. Keep the pinned browser and all guards; other engines are unchanged.
-export async function nativeTabBrowserChannel(
-  { browserName }: { browserName: string },
-  use: (channel: string | undefined) => Promise<void>,
-): Promise<void> {
-  await use(browserName === 'chromium' ? 'chromium' : undefined);
-}
 
 /** Verify native modifier handling, then activate the destination for UI checks. */
 export async function openNativeLinkInNewTab(page: Page, link: Locator): Promise<Page> {
@@ -53,6 +44,11 @@ export async function openNativeLinkInNewTab(page: Page, link: Locator): Promise
   await link.click({ modifiers: ['ControlOrMeta'] });
   await expect(link).toHaveAttribute('data-native-click', JSON.stringify({ intercepted: false, modified: true, shift: false }));
   await expect(page).toHaveURL(originalUrl);
+  const target = await link.evaluate(element => {
+    if (!(element instanceof HTMLAnchorElement)) throw new Error('Native navigation requires an anchor.');
+    return element.href;
+  });
+  expect(new URL(target).origin, 'native test destinations must stay on the fixture origin').toBe(ALLOWED_ORIGIN);
   const [destination] = await Promise.all([
     page.context().waitForEvent('page'),
     link.click({ modifiers: ['ControlOrMeta', 'Shift'] }),

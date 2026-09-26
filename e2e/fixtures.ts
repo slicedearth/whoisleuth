@@ -61,8 +61,9 @@ const CHROME_HTTP_500_NOISE_RE = /^Failed to load resource: the server responded
 // is either passed through (allowed origin) or aborted client-side before it
 // ever reaches the network (anything else). context.route() - unlike
 // page.on('request'), which only observes traffic on one already-open page -
-// applies to every page in the context, including popups and pages opened
-// later, so this can't be bypassed by opening a new tab/window.
+// applies to attached pages in the context. Native initial documents can
+// precede driver interception; native-tab-fixtures.ts adds transport isolation
+// for the specifications exercising that browser-owned disposition.
 export async function installNetworkGuard(context: BrowserContext, allowedOrigin: string = ALLOWED_ORIGIN) {
   const offOriginRequests: string[] = [];
 
