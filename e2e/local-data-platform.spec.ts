@@ -331,6 +331,61 @@ test('initialization validates every existing collection before writing a missin
   expect(await rawLocalDataSnapshot(page)).toBe(beforeReload);
 });
 
+for (const scenario of ['records without legacy', 'records with stale legacy', 'files without records'] as const) {
+  test(`missing plaintext metadata preserves orphaned ${scenario}`, async ({ page }) => {
+    await page.addInitScript(({ key, value }) => {
+      if (sessionStorage.getItem('orphan-fixture-seeded')) return;
+      sessionStorage.setItem('orphan-fixture-seeded', 'true');
+      localStorage.setItem(key, JSON.stringify(value));
+    }, {
+      key: SHORTLIST_KEY, value: publicShortlist(),
+    });
+    await page.goto('/bulk');
+    await readBrowserLocalCollection(page, 'shortlist', { minimumRecords: 1 });
+    await page.evaluate(async ({ scenario, key }) => {
+      if (scenario === 'records with stale legacy') {
+        const legacy = JSON.parse(localStorage.getItem(key)!);
+        legacy.entries[0].domain = 'stale.invalid';
+        localStorage.setItem(key, JSON.stringify(legacy));
+      } else localStorage.removeItem(key);
+      const request = indexedDB.open('whoisleuth-browser-data-v1');
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const transaction = database.transaction(['manifests', 'records', 'files'], 'readwrite');
+      transaction.objectStore('manifests').delete('shortlist');
+      if (scenario === 'files without records') {
+        transaction.objectStore('records').delete(IDBKeyRange.bound(['shortlist'], ['shortlist', []]));
+        transaction.objectStore('files').put({ key: ['shortlist', 'retained'], collection: 'shortlist',
+          lookupKey: 'retained', codec: 'json-v1', payload: new Uint8Array([1, 2, 3]).buffer });
+      }
+      await new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onabort = () => reject(transaction.error);
+      });
+      database.close();
+    }, { scenario, key: SHORTLIST_KEY });
+    const before = await rawLocalDataSnapshot(page);
+    const legacyBefore = await page.evaluate(key => localStorage.getItem(key), SHORTLIST_KEY);
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Browser-local data unavailable' })).toBeVisible();
+    await expect(page.getByText('The missing collection still has retained records or files. Nothing was replaced; restore from a verified backup or recover its missing metadata.')).toBeVisible();
+    expect(await rawLocalDataSnapshot(page)).toBe(before);
+    expect(await page.evaluate(key => localStorage.getItem(key), SHORTLIST_KEY)).toBe(legacyBefore);
+    if (scenario === 'files without records') {
+      expect(await page.evaluate(async () => {
+        const request = indexedDB.open('whoisleuth-browser-data-v1');
+        const database = await new Promise<IDBDatabase>(resolve => { request.onsuccess = () => resolve(request.result); });
+        const read = database.transaction('files').objectStore('files').get(['shortlist', 'retained']);
+        const record = await new Promise<{ payload: ArrayBuffer }>(resolve => { read.onsuccess = () => resolve(read.result); });
+        database.close();
+        return [...new Uint8Array(record.payload)];
+      })).toEqual([1, 2, 3]);
+    }
+  });
+}
+
 test('collection reads use a bounded cursor and stop at the configured maximum', async ({ page }) => {
   await page.addInitScript(({ casesId }) => {
     const originalOpenCursor = IDBIndex.prototype.openCursor;

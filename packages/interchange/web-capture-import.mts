@@ -6,6 +6,7 @@ import {
   MAX_EXTERNAL_FINDINGS_PER_DOMAIN,
   MAX_EXTERNAL_FINDING_SUMMARY_LENGTH,
   parseExternalFindingsDocument,
+  retainExternalFindingLimitations,
   type ExternalFindingsDocument,
 } from './external-findings-import.mts';
 import {
@@ -169,17 +170,17 @@ export function parseWebCaptureSummary(value: unknown): ExternalFindingsDocument
       screenshotSha256 ? `Screenshot SHA-256: ${screenshotSha256}.` : '',
     ].filter(Boolean);
     if (!summaries.length) throw new Error(`Web capture ${index + 1} contains no supported summary evidence.`);
+    const retainedLimitations = retainExternalFindingLimitations(limitations, [
+      'Imported sanitised capture summary; WHOISleuth did not collect or independently verify this observation.',
+    ]);
     findings.push({
       domain,
       category: technologies.length && summaries.length === 1 ? 'http' : 'page',
       evidenceClass: 'deployment_observation',
       summary: summaries.join(' '),
       observedAt,
-      completeness,
-      limitations: [
-        'Imported sanitised capture summary; WHOISleuth did not collect or independently verify this observation.',
-        ...limitations,
-      ].slice(0, 8),
+      completeness: limitations.every((item) => retainedLimitations.includes(item)) ? completeness : 'partial',
+      limitations: retainedLimitations,
       reference: sourceReference,
     });
   }
@@ -375,6 +376,9 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
       throw new Error(`Web capture manifests exceed the ${MAX_EXTERNAL_FINDINGS_PER_DOMAIN}-finding per-domain import limit after preserving bounded metadata.`);
     }
     findingCounts.set(domain, priorFindingCount + summaries.length);
+    const retainedLimitations = retainExternalFindingLimitations(limitations, [
+      'Imported capture metadata, not independently collected website evidence; artefact bytes and separate byte checks are not retained in these findings.',
+    ]);
     for (const summary of summaries) {
       findings.push({
         domain,
@@ -382,11 +386,8 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
         evidenceClass: 'deployment_observation',
         summary,
         observedAt,
-        completeness,
-        limitations: [
-          'Imported capture metadata, not independently collected website evidence; artefact bytes and separate byte checks are not retained in these findings.',
-          ...limitations,
-        ].slice(0, 8),
+        completeness: limitations.every((item) => retainedLimitations.includes(item)) ? completeness : 'partial',
+        limitations: retainedLimitations,
         reference: sourceReference,
       });
     }

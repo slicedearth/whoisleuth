@@ -198,8 +198,9 @@ export class IndexedDbLocalDataStorage implements LocalDataStorage {
   async commit(change: LocalDataStorageCommit): Promise<void> {
     this.#assertWritable();
     const database = await this.#database();
+    const creating = [...change.expected].filter(([, manifest]) => manifest === null).map(([collection]) => collection);
     const transaction = database.transaction([LOCAL_DATA_RECORD_STORE, LOCAL_DATA_MANIFEST_STORE,
-      ...(change.binaries.length || change.createEmpty.size ? [LOCAL_DATA_BINARY_STORE] : [])], 'readwrite');
+      ...(change.binaries.length || creating.length ? [LOCAL_DATA_BINARY_STORE] : [])], 'readwrite');
     const done = transactionComplete(transaction, 'Saving browser-local data', this.timeoutMs);
     try {
       const records = transaction.objectStore(LOCAL_DATA_RECORD_STORE);
@@ -214,8 +215,7 @@ export class IndexedDbLocalDataStorage implements LocalDataStorage {
           throw new BrowserLocalDataError('LOCAL_DATA_CONFLICT', `${this.#definition(collection).label} changed in another tab.`);
         }
       }
-      for (const collection of change.createEmpty) {
-        if (change.expected.get(collection) !== null) continue;
+      for (const collection of creating) {
         const range = IDBKeyRange.bound([collection], [collection, []]);
         const counts = await Promise.all([
           requestResult(records.count(range), 'Checking retained records before collection creation', this.timeoutMs),

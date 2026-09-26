@@ -829,9 +829,7 @@ function previewVerifiedWorkspaceArchive(
       results.push({
         ...section,
         status: 'ready',
-        reason: definition.id === 'settings' && selected && (result.skipped ?? 0) > 0
-          ? result.reason ?? 'The imported workspace preference was skipped. Existing browser-local context is preserved.'
-          : section.reason,
+        reason: selected && result.reason ? result.reason : section.reason,
         added: result.added ?? 0,
         updated: result.updated ?? 0,
         skipped: result.skipped ?? 0,

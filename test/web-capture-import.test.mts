@@ -11,6 +11,25 @@ import {
 } from '../frontend/src/lib/analysis/web-capture-import.ts';
 
 describe('sanitised web-capture import', () => {
+  test('accounts for supplied qualification omissions before summary and manifest projection', () => {
+    const limitations = Array.from({ length: 8 }, (_, index) => `Qualification ${index + 1}`);
+    const { manifest } = captureReviewFixture();
+    const summary = parseWebCaptureSummary({ schema: WEB_CAPTURE_SUMMARY_SCHEMA, schemaVersion: 1,
+      source: manifest.source, captures: [{ domain: 'capture.example', capturedAt: manifest.captures[0]!.capturedAt,
+        completeness: 'complete', pageTitle: 'Example page', limitations }] });
+    const capture = parseWebCaptureManifest({ ...manifest, schemaVersion: 2,
+      captures: [{ ...manifest.captures[0]!, pageBehaviour: undefined, completeness: 'complete', limitations }] });
+    for (const document of [summary, capture]) {
+      assert.ok(document.findings.length > 0);
+      for (const finding of document.findings) {
+        assert.equal(finding.completeness, 'partial');
+        assert.equal(finding.limitations.length, 8);
+        assert.deepEqual(finding.limitations.slice(1, 7), limitations.slice(0, 6));
+        assert.match(finding.limitations[7]!, /^2 supplied limitations were omitted /u);
+      }
+    }
+  });
+
   test('preserves bounded declared conditions without inventing them for older captures', () => {
     const { manifest } = captureReviewFixture();
     assert.equal(readWebCaptureManifest(manifest).captures[0]!.conditions, null);

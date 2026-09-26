@@ -154,6 +154,29 @@ describe('optional local Ed25519 evidence-package signing', () => {
     assert.equal(embeddedOnly.signature.publicKeyMatched, null);
   });
 
+  test('rejects explicitly supplied empty or invalid trust keys instead of falling back to embedded trust', async () => {
+    const pair = keys();
+    const raw = JSON.stringify(await signEvidencePackage(JSON.stringify(await manifest()), pair.privatePem, NOW));
+    for (const publicKey of ['', ' \n\t', 'invalid public key']) {
+      await assert.rejects(verifyEvidencePackageSignature(raw, publicKey), /Trusted public key file/iu);
+      let stdout = '', stderr = '';
+      const code = await runCli(['verify-signature', 'signed.json', '--public-key-file', 'selected.pem', '--json'], {
+        stdout: { write(value) { stdout += value; } },
+        stderr: { write(value) { stderr += value; } },
+        readArtifactInput: async () => raw,
+        readPublicKeyFile: async () => publicKey,
+      });
+      assert.equal(code, EXIT_CODES.LOOKUP_FAILED);
+      assert.equal(stdout, '');
+      assert.match(stderr, /Trusted public key file/iu);
+    }
+    for (const absent of [undefined, null]) {
+      const report = await verifyEvidencePackageSignature(raw, absent);
+      assert.equal(report.signature.signerTrust, 'embedded_key_only');
+      assert.equal(report.signature.publicKeyMatched, null);
+    }
+  });
+
   test('separates a valid signature from embedded-artifact assurance and requires canonical signedAt text', async () => {
     const pair = keys();
     const signed = structuredClone(await signEvidencePackage(JSON.stringify(await manifest()), pair.privatePem, NOW)) as unknown as Record<string, unknown>;

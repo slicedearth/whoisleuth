@@ -856,8 +856,9 @@ Exports are deliberate local actions. Review them before sharing:
 
 Local importers bound and validate an entire file before preview or merge.
 Profile, watchlist and template merges retain local records when the incoming
-timestamp is older, equal or missing. New Bulk-session and template imports
-that exceed capacity are skipped without evicting saved work. Saving a Bulk
+timestamp is older, equal or missing. Imported Bulk sessions, saved views,
+review rows, website snapshots and templates that exceed capacity are skipped
+without evicting saved work. Saving a Bulk
 session at capacity lists the affected sessions and offers export, cancellation
 or explicit removal; a changed collection requires a fresh review.
 STIX, MISP and external-finding inputs remain analyst-supplied evidence; import

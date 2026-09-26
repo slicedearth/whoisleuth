@@ -32,6 +32,7 @@ export type LocalDataBinaryChanges = Readonly<{
   collection: string; writes: readonly LocalDataStoredBinary[]; remove: readonly string[];
 }>;
 export type LocalDataStorageCommit = Readonly<{
+  /** A null expectation requires absent metadata AND no retained records/files, checked atomically before writing. */
   expected: ReadonlyMap<string, LocalDataManifest | null>;
   collections: readonly LocalDataCapture[];
   binaries: readonly LocalDataBinaryChanges[];

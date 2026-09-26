@@ -8,9 +8,11 @@ import {
   WORKSPACE_ARCHIVE_SECTION_IDS,
   WORKSPACE_ARCHIVE_VERSION,
   buildWorkspaceArchive,
+  mergeReadyWorkspaceArchiveData,
   previewWorkspaceArchive,
   readWorkspaceArchive,
 } from '../frontend/src/lib/analysis/workspace-archive.ts';
+import { MAX_BULK_REVIEW_PRESETS, MAX_WEBSITE_SNAPSHOTS_PER_DOMAIN } from '../packages/contracts/workspace-portability.mts';
 import { createRelationshipObservation } from '../frontend/src/lib/analysis/relationship-observation-model.ts';
 import { sha256ArtifactDigest } from '../frontend/src/lib/analysis/artifact-integrity.ts';
 import { CASE_SCHEMA_VERSION, createCase, mergeCases, normalizeCaseStore, updateCase, type CaseRecord } from '../frontend/src/lib/analysis/case-model.ts';
@@ -349,6 +351,40 @@ function removeSections(archive: Awaited<ReturnType<typeof buildWorkspaceArchive
 }
 
 describe('portable workspace archive', () => {
+  test('preview and application preserve full local saved-view and snapshot collections', async () => {
+    const local = emptyInput();
+    local.bulkReview = { ...bulkReview(), rows: [], presets: Array.from({ length: MAX_BULK_REVIEW_PRESETS }, (_, index) => ({
+      ...bulkReview().presets[0]!, id: `local-${index}`,
+    })) };
+    local.websiteSnapshots = Array.from({ length: MAX_WEBSITE_SNAPSHOTS_PER_DOMAIN }, (_, index) => ({
+      ...websiteSnapshot(), id: `local-${index}`,
+    }));
+    const incoming = emptyInput();
+    incoming.bulkReview = { ...bulkReview(), rows: [] };
+    incoming.websiteSnapshots = [{ ...websiteSnapshot(), savedAt: '2026-07-20T02:00:00.000Z' }];
+    const archive = await buildWorkspaceArchive(incoming, { generatedAt: NOW });
+    const selectedSectionIds = ['bulkReview', 'websiteSnapshots'];
+    const preview = await previewWorkspaceArchive(archive, local, { selectedSectionIds });
+    const selected = preview.sections.filter(section => selectedSectionIds.includes(section.id));
+    const applied = mergeReadyWorkspaceArchiveData(local, selected, NOW);
+    assert.equal(selected.length, 2);
+    assert.equal(applied.length, 2);
+    for (const section of selected) {
+      assert.equal(section.selected, true);
+      assert.equal(section.status, 'ready');
+      assert.deepEqual({ added: section.added, updated: section.updated, skipped: section.skipped, pruned: section.pruned },
+        { added: 0, updated: 0, skipped: 1, pruned: 0 });
+      assert.match(section.reason, /capacity.*preserved/u);
+      const result = applied.find(item => item.id === section.id)!;
+      assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 0, updated: 0, skipped: 1 });
+      const records = section.id === 'bulkReview' ? recordValue(result.document).presets : result.document;
+      assert.ok(Array.isArray(records));
+      assert.deepEqual(new Set(records.map(item => recordValue(item).id)), new Set(
+        (section.id === 'bulkReview' ? local.bulkReview.presets : local.websiteSnapshots).map(item => item.id),
+      ));
+    }
+  });
+
   test('builds a deterministic versioned manifest for every supported section', async () => {
     const source = input();
     const before = structuredClone(source);

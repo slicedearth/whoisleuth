@@ -11,6 +11,8 @@ import {
   BULK_REVIEW_SCHEMA,
   BULK_REVIEW_SCHEMA_VERSION,
   BULK_SOURCE_FILTERS,
+  MAX_BULK_REVIEW_PRESETS,
+  MAX_BULK_REVIEW_ROWS,
   buildBulkReviewExport,
   mergeBulkReviewStores,
   normalizeBulkReviewStore,
@@ -41,6 +43,28 @@ function view() {
 }
 
 describe('Bulk review model', () => {
+  test('imports at capacity preserve local views and rows while counting skipped additions', () => {
+    const local = normalizeBulkReviewStore({ presets: Array.from({ length: MAX_BULK_REVIEW_PRESETS }, (_, index) => ({
+      id: `view-${index}`, name: `View ${index}`, view: view(), createdAt: EARLIER, updatedAt: EARLIER,
+    })), rows: Array.from({ length: MAX_BULK_REVIEW_ROWS }, (_, index) => ({
+      domain: `row-${index}.example`, state: 'reviewing', updatedAt: EARLIER,
+    })) });
+    const before = structuredClone(local);
+    const imported = buildBulkReviewExport({ presets: [{ ...local.presets[0]!, id: 'new', updatedAt: LATER },
+      { ...local.presets[1]!, name: 'Updated view', updatedAt: LATER }], rows: [
+      { ...local.rows[0]!, domain: 'new.example', updatedAt: LATER },
+      { ...local.rows[1]!, state: 'reviewed', updatedAt: LATER },
+    ] });
+    const result = mergeBulkReviewStores(local, imported);
+    assert.deepEqual({ added: result.added, updated: result.updated, skipped: result.skipped }, { added: 0, updated: 2, skipped: 2 });
+    assert.deepEqual(new Set(result.store.presets.map(item => item.id)), new Set(local.presets.map(item => item.id)));
+    assert.deepEqual(new Set(result.store.rows.map(item => item.domain)), new Set(local.rows.map(item => item.domain)));
+    assert.equal(result.store.presets.find(item => item.id === local.presets[1]!.id)!.name, 'Updated view');
+    assert.equal(result.store.rows.find(item => item.domain === local.rows[1]!.domain)!.state, 'reviewed');
+    assert.match(result.reason, /2 imported.*capacity.*preserved/u);
+    assert.deepEqual(local, before);
+  });
+
   test('migrates public preferences without changing their filters or dropping column choices on round trip', async () => {
     const historical = JSON.parse(await readFile(new URL('./fixtures/workspace-lifecycle/portable-review-v1.json', import.meta.url), 'utf8'));
     historical.presets = [{ kind: 'preset', id: 'old', name: 'Earlier view', view: { ...view(), columns: undefined }, createdAt: EARLIER, updatedAt: EARLIER }];

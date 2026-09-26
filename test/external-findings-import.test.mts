@@ -34,6 +34,20 @@ function document(overrides: Record<string, unknown> = {}) {
 }
 
 describe('strict external findings import', () => {
+  test('deduplicates only identical admitted findings, retaining distinct references, qualifications and structured values', () => {
+    const base = document().findings[0]!;
+    const findings = [base, { ...base, reference: 'finding-18' }, { ...base, limitations: ['Different qualification.'] },
+      { ...base, structuredObservation: { sourceSchema: 'whoisleuth.certificate-observation-rows', sourceVersion: 1, field: 'issuer', value: 'Issuer A' } },
+      { ...base, structuredObservation: { sourceSchema: 'whoisleuth.certificate-observation-rows', sourceVersion: 1, field: 'issuer', value: 'Issuer B' } }];
+    const forward = parseExternalFindingsDocument(document({ findings: [...findings, structuredClone(base)] }));
+    const reverse = parseExternalFindingsDocument(document({ findings: [...findings].reverse() }));
+    assert.equal(forward.findings.length, findings.length);
+    assert.deepEqual(new Set(forward.findings.map(finding => JSON.stringify(finding))), new Set(reverse.findings.map(finding => JSON.stringify(finding))));
+    const combined = mergeExternalFindingsIntoCases([], forward, NOW);
+    assert.equal(combined.findingsAdded, findings.length);
+    assert.equal(combined.cases[0]!.evidencePins.length, findings.length);
+  });
+
   test('previews the exact retained material and keeps long reimports distinct from changed suffixes', () => {
     const raw = document({
       source: { name: 'S'.repeat(80), reference: 'R'.repeat(500) },

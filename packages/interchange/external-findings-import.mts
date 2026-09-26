@@ -273,16 +273,7 @@ function structuredObservation(value: unknown, index: number): ExternalFindingSt
 }
 
 function findingKey(finding: ExternalFinding, sourceName: string): string {
-  return [
-    finding.domain,
-    finding.category,
-    finding.evidenceClass,
-    finding.summary,
-    finding.observedAt,
-    finding.completeness,
-    sourceName,
-    finding.structuredObservation?.eventId ?? '',
-  ].join('\u0000');
+  return canonicalArtifactJsonV2({ sourceName, finding });
 }
 
 export function parseExternalFindingsDocument(value: unknown): ExternalFindingsDocument {
