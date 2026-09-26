@@ -179,6 +179,12 @@ export function normalizeHttpSummary(value: unknown): CompactHttpSummary | null 
   };
 }
 
+/** A partial body still permits comparison of observed response metadata. */
+export function httpSummaryFieldIsObserved(field: string, value: unknown): boolean {
+  const summary = normalizeHttpSummary(value);
+  return summary !== null && Object.hasOwn(summary, field) && summary[field as keyof CompactHttpSummary] !== null;
+}
+
 export function httpSecurityHeaderLabel(token: string): string {
   const labels: Readonly<Record<string, string>> = {
     'content-security-policy': 'Content Security Policy',

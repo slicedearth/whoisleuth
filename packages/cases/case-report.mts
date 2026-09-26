@@ -12,6 +12,7 @@
 import { caseEvidenceTimeline, compareCaseEvidence, currentCaseEvidence, publishedCaseEvidenceTimelineForVerification } from './case-evidence-model.mts';
 import type { CaseEvidenceSnapshot, CaseRecord, EvidenceFactor } from './case-model.mts';
 import { httpSecurityHeaderLabel } from './http-summary.mts';
+import { webCollectionScoreLimitation } from '../evidence/collection-quality.mts';
 import { analystInteroperabilityTags } from '../analysis/analyst-taxonomy.mts';
 import { caseEvidenceLinkIssues } from './case-evidence-links.mts';
 import {
@@ -172,6 +173,13 @@ function formatReportValue(value: unknown, field?: string): string {
   }
   if (typeof value === 'number') return String(value);
   return String(value);
+}
+
+function readableRiskScore(snapshot: ReportSnapshot): string {
+  const value = escapeMarkdownInline(formatReportValue(snapshot.riskScore));
+  const limitation = snapshot.riskScore === null ? null
+    : webCollectionScoreLimitation(snapshot.webCollectionQuality, snapshot.scanDepth);
+  return limitation ? `${value} — ${escapeMarkdownInline(limitation)}` : value;
 }
 
 /**
@@ -443,7 +451,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
   if (report.currentAssessment) {
     const a = report.currentAssessment;
     lines.push(`- **Availability:** ${escapeMarkdownInline(formatReportValue(a.availability))}`);
-    lines.push(`- **Risk score:** ${escapeMarkdownInline(formatReportValue(a.riskScore))}`);
+    lines.push(`- **Risk score:** ${readableRiskScore(a)}`);
     lines.push(`- **Risk model:** ${a.riskModelVersion === null ? 'Unversioned' : `v${escapeMarkdownInline(formatReportValue(a.riskModelVersion))}`}`);
     lines.push(`- **Brand Profile context:** ${escapeMarkdownInline(formatReportValue(a.profileContextState))}`);
     if (a.profileContextLimitation) lines.push(`- **Profile-context limitation:** ${escapeMarkdownInline(a.profileContextLimitation)}`);
@@ -498,7 +506,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
       lines.push('**Key evidence:**');
       lines.push('');
       lines.push(`- Availability: ${escapeMarkdownInline(formatReportValue(snap.availability))}`);
-      lines.push(`- Risk score: ${escapeMarkdownInline(formatReportValue(snap.riskScore))}`);
+      lines.push(`- Risk score: ${readableRiskScore(snap)}`);
       lines.push(`- Risk model: ${snap.riskModelVersion === null ? 'Unversioned' : `v${escapeMarkdownInline(formatReportValue(snap.riskModelVersion))}`}`);
       lines.push(`- Brand Profile context: ${escapeMarkdownInline(formatReportValue(snap.profileContextState))}`);
       if (snap.profileContextLimitation) lines.push(`- Profile-context limitation: ${escapeMarkdownInline(snap.profileContextLimitation)}`);

@@ -51,6 +51,13 @@ export function webCollectionAllowsComparison(field: string, quality: WebCollect
   return true;
 }
 
+/** Retain the measured score while qualifying incomplete inputs at presentation. */
+export function webCollectionScoreLimitation(quality: WebCollectionQuality | undefined, depth: string): string | null {
+  if (depth === 'unknown') return 'Collection depth is unknown; score is not comparable.';
+  return webCollectionAllowsComparison('riskScore', quality, depth)
+    ? null : 'Incomplete or unknown web collection; score is not comparable.';
+}
+
 /** An incomplete current attempt cannot erase the last comparable baseline. */
 export function mergeWebCollectionQuality(previous: WebCollectionQuality | undefined, current: WebCollectionQuality | undefined): WebCollectionQuality | undefined {
   if (!previous && !current) return undefined;

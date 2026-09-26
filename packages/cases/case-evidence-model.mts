@@ -1,7 +1,7 @@
 // Pure, framework-neutral analyst-case records, evidence histories, bounded
 // record normalization, and analyst updates.
 
-import { normalizeHttpSummary } from './http-summary.mts';
+import { httpSummaryFieldIsObserved, normalizeHttpSummary } from './http-summary.mts';
 import { normalizeOpportunityModelVersion } from '../analysis/opportunity-scoring.mts';
 import { normalizeRiskModelVersion } from '../analysis/risk-scoring.mts';
 import { latestObservationCohort } from '../evidence/latest-observations.mts';
@@ -647,6 +647,12 @@ function valuesMateriallyEqual(
   return JSON.stringify(materialValue(field, previous)) === JSON.stringify(materialValue(field, current));
 }
 
+function collectionFieldComparable(field: string, snapshot: CaseEvidenceSnapshot): boolean {
+  return field.startsWith('http')
+    ? httpSummaryFieldIsObserved(field, snapshot)
+    : webCollectionAllowsComparison(field, snapshot.webCollectionQuality, snapshot.scanDepth);
+}
+
 /**
  * Explains material fields that comparison gates deliberately suppress. The
  * reasons are stable machine values for UI/report wording; they are not risk
@@ -676,8 +682,8 @@ function incomparableReasonsForEvidence(
     || COMPARE_FIELDS.some(spec => (spec.modelGate !== 'risk' || riskModelComparable(previous, current))
     && (spec.modelGate !== 'opportunity' || opportunityModelComparable(previous, current))
     && !valuesMateriallyEqual(spec.field, previous, current)
-    && (!webCollectionAllowsComparison(spec.field, previous.webCollectionQuality, previous.scanDepth)
-      || !webCollectionAllowsComparison(spec.field, current.webCollectionQuality, current.scanDepth))))) reasons.push('collection-quality');
+    && (!collectionFieldComparable(spec.field, previous)
+      || !collectionFieldComparable(spec.field, current))))) reasons.push('collection-quality');
   const hasRiskEvidence = previous.riskScore !== null || current.riskScore !== null
     || previous.riskFactors.length > 0 || current.riskFactors.length > 0;
   if (hasRiskEvidence && !riskModelComparable(previous, current)) reasons.push('risk-model');
@@ -868,8 +874,8 @@ function compareEvidence(
     if (spec.depthGate === 'comparable' && !comparableDepth) continue;
     if (spec.modelGate === 'risk' && !comparableRiskModel) continue;
     if (spec.modelGate === 'opportunity' && !comparableOpportunityModel) continue;
-    if (enforceCollectionQuality && (!webCollectionAllowsComparison(spec.field, previous.webCollectionQuality, previous.scanDepth)
-      || !webCollectionAllowsComparison(spec.field, current.webCollectionQuality, current.scanDepth))) continue;
+    if (enforceCollectionQuality && (!collectionFieldComparable(spec.field, previous)
+      || !collectionFieldComparable(spec.field, current))) continue;
     const result = compareField(spec, previous[spec.field], current[spec.field]);
     if (result) {
       changes.push({ field: spec.field, label: spec.label, before: result.before, after: result.after, tone: result.tone });

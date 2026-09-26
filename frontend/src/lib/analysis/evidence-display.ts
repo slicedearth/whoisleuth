@@ -10,6 +10,7 @@ import {
 } from '../../../../packages/cases/case-evidence-model.mts';
 import type { CaseEvidenceSnapshot } from './case-model.ts';
 import { httpSecurityHeaderLabel } from './http-summary.ts';
+import { webCollectionScoreLimitation } from '../../../../packages/evidence/collection-quality.mts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -288,7 +289,6 @@ export function evidenceSourceLabel(source: unknown): string {
  * The uniquely latest snapshot's summary, or null when retained capture times
  * cannot establish one. Used by the compact current-evidence summary.
  * @param {import('./case-model.ts').CaseEvidenceSnapshot[] | null | undefined} evidenceHistory
- * @returns {{ availability: string | null, riskModelVersion: number | null, riskScore: number | null, registrar: string | null, activityStatus: string | null, capturedAt: string | null } | null}
  */
 export function currentEvidenceSummary(evidenceHistory: CaseEvidenceSnapshot[] | null | undefined) {
   const latest = latestCaseEvidence(evidenceHistory ? { evidenceHistory } : {});
@@ -297,6 +297,7 @@ export function currentEvidenceSummary(evidenceHistory: CaseEvidenceSnapshot[] |
     availability: latest.availability,
     riskModelVersion: latest.riskModelVersion,
     riskScore: latest.riskScore,
+    riskCollectionLimitation: latest.riskScore === null ? null : webCollectionScoreLimitation(latest.webCollectionQuality, latest.scanDepth),
     registrar: latest.registrar,
     activityStatus: latest.activityStatus,
     profileContextState: latest.profileContextState ?? null,

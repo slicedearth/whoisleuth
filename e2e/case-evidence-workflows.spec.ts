@@ -28,6 +28,9 @@ test.describe('evidence timeline', () => {
     await expect(latest).toContainText('Web collection limits comparison');
     await expect(latest.locator('.timeline-change')).toHaveCount(0);
     await expect(latest.locator('.timeline-incomparable-note')).toContainText('not treated as additions or removals');
+    const riskSummary = page.locator('dl.evidence dt').filter({ hasText: /^Risk$/ }).locator('..').locator('dd').nth(1);
+    await expect(riskSummary).toContainText('10');
+    await expect(riskSummary).toContainText('Incomplete or unknown web collection; score is not comparable.');
     for (const width of [1280, 1024, 390, 320]) for (const theme of ['light', 'dark'] as const) {
       await page.setViewportSize({ width, height: width < 400 ? 844 : 768 });
       await useTheme(page, theme);
@@ -178,9 +181,7 @@ test.describe('evidence timeline', () => {
     await expect(summary).toContainText(/73\s*· model v1/u);
     await expect(summary).toContainText('Profile context');
     await expect(summary).toContainText('unavailable');
-    await expect(summary.locator('.profile-context-limitation')).toHaveText(
-      'Brand Profile context was unavailable; profile-derived evidence remains unevaluated.',
-    );
+    await expect(summary.getByText('Brand Profile context was unavailable; profile-derived evidence remains unevaluated.', { exact: true })).toBeVisible();
 
     await page.locator('.timeline-toggle').click();
     const provenance = page.locator('.timeline-group', { hasText: 'Profile provenance and limitations' });

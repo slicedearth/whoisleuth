@@ -987,14 +987,17 @@ test('sorts complete results by registration, confidence, website, registrar, an
 });
 
 test('keeps partial Bulk Risk evidence inconclusive and outside the comparable sort cohort', async ({ page }) => {
+  await page.getByLabel('Scan mode').selectOption('deep');
   await page.route('**/api/lookup?*', async (route) => {
     const domain = new URL(route.request().url()).searchParams.get('q') || '';
     const limited = domain === 'partial-risk.example';
+    const incompleteWeb = domain === 'partial-web.example';
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        availability: { applicable: true, domain, state: 'registered', confidence: 'high' },
+        availability: { applicable: true, domain, state: 'registered', confidence: 'high',
+          webCollectionQuality: { version: 1, page: 'complete', favicon: incompleteWeb ? 'unknown' : 'complete', combined: incompleteWeb ? 'partial' : 'complete' } },
         diagnostics: {
           version: 7,
           rdap: { status: limited ? 'partial' : 'complete' },
@@ -1005,21 +1008,27 @@ test('keeps partial Bulk Risk evidence inconclusive and outside the comparable s
     });
   });
 
-  await runBulkScan(page, ['partial-risk.example', 'settled-risk.example']);
+  await runBulkScan(page, ['partial-risk.example', 'settled-risk.example', 'partial-web.example']);
   await openBulkFilters(page);
   const partial = page.locator('.results-table tbody tr', { hasText: 'partial-risk.example' });
   const settled = page.locator('.results-table tbody tr', { hasText: 'settled-risk.example' });
+  const web = page.locator('.results-table tbody tr', { hasText: 'partial-web.example' });
   await expect(settled.locator('td[data-label="Risk"]')).toContainText('Lower');
   await expect(partial.locator('td[data-label="Risk"]')).toContainText('Inconclusive');
   await expect(partial.locator('td[data-label="Risk"]')).not.toContainText('Lower');
-  await expect(page.getByText(/Risk sorting compares 1 of 2 rows/u)).toBeVisible();
-  await expect(page.getByText(/1 incompatible or inconclusive row sorts last/u)).toBeVisible();
+  await expect(web.locator('td[data-label="Risk"]')).toContainText('Inconclusive');
+  await expect(web.locator('td[data-label="Risk"]')).not.toContainText('Lower');
+  await expect(page.getByText(/Risk sorting compares 1 of 3 rows/u)).toBeVisible();
+  await expect(page.getByText(/2 incompatible or inconclusive rows sort last/u)).toBeVisible();
   await expect(page.locator('.results-table tbody td[data-label="Domain"] strong')).toHaveText([
     'settled-risk.example',
     'partial-risk.example',
+    'partial-web.example',
   ]);
   await partial.locator('td[data-label="Risk"] summary[aria-label*="Inspect Risk model and factors"]').click();
   await expect(partial.locator('td[data-label="Risk"]')).toContainText(/source evidence is partial or unavailable/u);
+  await web.locator('td[data-label="Risk"] summary[aria-label*="Inspect Risk model and factors"]').click();
+  await expect(web.locator('td[data-label="Risk"]')).toContainText('Incomplete or unknown web collection; score is not comparable.');
 });
 
 test('keeps the current queue, results, filters, sort, and page during console navigation only', async ({ page }) => {

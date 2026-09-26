@@ -13,6 +13,9 @@ import { fromBulkSessionResult, toBulkSessionResult } from '../frontend/src/lib/
 import { buildLookupWatchlistRecord } from '../frontend/src/lib/analysis/lookup-watchlist-handoff.ts';
 import { richBulkSessionStore } from './bulk-session-fixture.mts';
 import { recordValue, requiredValue } from './value-assertions.mts';
+import { currentEvidenceSummary } from '../frontend/src/lib/analysis/evidence-display.ts';
+import { createCase } from '../packages/cases/case-record-operations.mts';
+import { buildCaseReport } from '../packages/cases/case-report.mts';
 
 const COMPLETE = { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' } as const;
 const FAILED = { version: 1, page: 'unavailable', favicon: 'unknown', combined: 'partial' } as const;
@@ -74,6 +77,39 @@ describe('collection-quality contract', () => {
 });
 
 describe('Case collection-quality comparisons', () => {
+  test('a missing HTTP response does not establish removed origins or security headers', () => {
+    const previous = snap({ httpSummaryVersion: 1, httpEvidenceStatus: 'success', httpResponseStatus: 200,
+      httpFinalOrigin: 'https://example.test', httpSecurityHeaders: ['hsts'] });
+    const failed = snap({ capturedAt: LATER, webCollectionQuality: FAILED });
+    assert.deepEqual(compareCaseEvidence(previous, failed), []);
+    assert.ok(caseEvidenceIncomparableReasons(previous, failed).includes('collection-quality'));
+    const partialBody = snap({ capturedAt: LATER, webCollectionQuality: { ...COMPLETE, page: 'partial', combined: 'partial' },
+      httpSummaryVersion: 1, httpEvidenceStatus: 'partial', httpResponseStatus: 200,
+      httpFinalOrigin: 'https://example.test', httpSecurityHeaders: [] });
+    assert.ok(compareCaseEvidence(previous, partialBody).some(change => change.field === 'httpSecurityHeaders'));
+  });
+
+  test('current Case summaries and readable reports qualify retained incomplete scores', () => {
+    const record = createCase({ domain: 'example.test', evidence: raw({ webCollectionQuality: FAILED, riskScore: 10 }) }, NOW);
+    const summary = requiredValue(currentEvidenceSummary(record.evidenceHistory));
+    assert.equal(summary.riskScore, 10);
+    assert.match(summary.riskCollectionLimitation ?? '', /web collection.*not comparable/iu);
+    const report = buildCaseReport(record, { generatedAt: NOW });
+    assert.equal(report.json.currentAssessment?.riskScore, 10);
+    assert.deepEqual(report.json.currentAssessment?.webCollectionQuality, FAILED);
+    assert.match(report.markdown, /\*\*Risk score:\*\* 10.*web collection.*not comparable/iu);
+    assert.match(report.markdown, /- Risk score: 10.*web collection.*not comparable/iu);
+    for (const [overrides, expected] of [
+      [{ webCollectionQuality: COMPLETE }, null],
+      [{ scanDepth: 'fast', webCollectionQuality: undefined }, null],
+      [{ scanDepth: 'unknown', webCollectionQuality: undefined }, 'Collection depth is unknown; score is not comparable.'],
+      [{ webCollectionQuality: FAILED, riskScore: null }, null],
+    ] as const) {
+      const snapshot = snap(overrides);
+      assert.equal(requiredValue(currentEvidenceSummary([snapshot])).riskCollectionLimitation, expected);
+    }
+  });
+
   test('failed collection is not removal of page or favicon signals or a favourable score change', () => {
     const previous = snap();
     const failed = snap({ capturedAt: LATER, webCollectionQuality: FAILED, activityStatus: 'unreachable', pageTitle: null,
