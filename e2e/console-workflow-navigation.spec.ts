@@ -13,6 +13,7 @@ test('navigation readiness includes loaded, usable destinations rather than only
   await page.route(`**${chunk}`, async route => { await pending; await route.continue(); });
   try {
     await page.goto('/dashboard');
+    await expect(page.getByRole('button', { name: 'Open console navigation', exact: true })).toBeEnabled();
     await beginBrowserInteractionReadiness(page, { start: { event: 'keydown', key: 'k', controlOrMeta: true }, targets: COMMAND_NAVIGATION_READINESS });
     await page.keyboard.press('Control+K');
     const dialog = page.getByRole('dialog', { name: 'Go to' });
