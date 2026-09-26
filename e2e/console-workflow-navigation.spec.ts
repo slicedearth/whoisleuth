@@ -1,9 +1,34 @@
 import { expect, test } from './fixtures';
-import { openInboxReview } from './console-navigation';
+import { COMMAND_NAVIGATION_READINESS, openInboxReview } from './console-navigation';
+import { beginBrowserInteractionReadiness, isBrowserInteractionReadinessMarked, readBrowserInteractionReadiness } from './performance-sampling';
 import { caseRecord, createCase, snapshot } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, holdBrowserLocalTransaction, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
+
+test('navigation readiness includes loaded, usable destinations rather than only the dialog shell', async ({ page }) => {
+  const chunk = productionChunkPath('src/lib/console-command-navigation.ts');
+  let release = () => {};
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route(`**${chunk}`, async route => { await pending; await route.continue(); });
+  try {
+    await page.goto('/dashboard');
+    await beginBrowserInteractionReadiness(page, { start: { event: 'keydown', key: 'k', controlOrMeta: true }, targets: COMMAND_NAVIGATION_READINESS });
+    await page.keyboard.press('Control+K');
+    const dialog = page.getByRole('dialog', { name: 'Go to' });
+    await expect(dialog.getByRole('combobox')).toBeEnabled();
+    await expect(dialog.getByRole('status').filter({ hasText: 'Loading destinations' })).toBeVisible();
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    expect(await isBrowserInteractionReadinessMarked(page)).toBe(false);
+    release();
+    await readBrowserInteractionReadiness(page);
+    await expect(dialog.getByRole('option').first()).toBeVisible();
+    await dialog.getByRole('combobox').fill('lookup');
+    await expect(dialog.getByRole('option', { name: /^Lookup /u })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'Open console navigation', exact: true })).toBeFocused();
+  } finally { release(); }
+});
 
 test('search remains escapable while its destinations are loading or unavailable', async ({ page }) => {
   const chunk = productionChunkPath('src/lib/console-command-navigation.ts');

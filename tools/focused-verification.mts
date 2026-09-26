@@ -5,12 +5,15 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { PLAYWRIGHT_FUNCTIONAL_PROJECT } from './playwright-execution-contract.mts';
+import { PLAYWRIGHT_FUNCTIONAL_PROJECT, PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT,
+  isPlaywrightFunctionalSpec, isPlaywrightPerformanceAuthoritySpec } from './playwright-execution-contract.mts';
 import { runPlaywrightProcess } from './playwright-process.mts';
 import { createHostedBrowserWorkspace, runHostedBrowserWorkspace } from './hosted-browser-workspace.mts';
 import { playwrightRunArtifacts } from './playwright-run-artifacts.mts';
 import {
   readPlaywrightResultData,
+  MAX_PLAYWRIGHT_RESULTS_BYTES,
+  playwrightReportedSpecFiles,
   renderPlaywrightResultSummary,
   summarizePlaywrightResults,
 } from './playwright-results-summary.mts';
@@ -82,6 +85,25 @@ function npmCommand(script: string): FocusedCommand {
   return Object.freeze({ id: script, executable: npmExecutableName(), args: Object.freeze(['run', script]) });
 }
 
+export function focusedBrowserLanes(specs: readonly string[]) {
+  if (new Set(specs).size !== specs.length || specs.some(spec => !isPlaywrightFunctionalSpec(spec) && !isPlaywrightPerformanceAuthoritySpec(spec))) {
+    throw new TypeError('Focused browser selection must contain unique maintained specifications.');
+  }
+  return [
+    { kind: 'performance', project: PLAYWRIGHT_PERFORMANCE_AUTHORITY_PROJECT, specs: specs.filter(isPlaywrightPerformanceAuthoritySpec) },
+    { kind: 'functional', project: PLAYWRIGHT_FUNCTIONAL_PROJECT, specs: specs.filter(isPlaywrightFunctionalSpec) },
+  ].filter(lane => lane.specs.length > 0);
+}
+
+export function assertFocusedBrowserCoverage(specs: readonly string[], report: unknown): void {
+  const actual = playwrightReportedSpecFiles(report);
+  const missing = specs.filter(spec => !actual.includes(spec));
+  const unexpected = actual.filter(spec => !specs.includes(spec));
+  if (!specs.length || missing.length || unexpected.length) {
+    throw new Error(`Focused browser inventory differs from its plan. Missing: ${missing.join(', ') || 'none'}; unexpected: ${unexpected.join(', ') || 'none'}.`);
+  }
+}
+
 export function parseFocusedVerificationOptions(args: readonly string[]): FocusedVerificationOptions {
   const listCount = args.filter((value) => value === '--list').length;
   const changedCount = args.filter((value) => value === '--changed').length;
@@ -136,8 +158,8 @@ export function buildFocusedVerificationExecution(
     commands.push(Object.freeze({
       id: 'browser-discovery', executable: process.execPath,
       args: Object.freeze([PLAYWRIGHT_CLI, 'test', ...plan.focusedBrowserChecks,
-        `--project=${PLAYWRIGHT_FUNCTIONAL_PROJECT}`, '--list', '--reporter=list']),
-      environment: Object.freeze({ CI: '', WHOISLEUTH_E2E_USE_BUILD: '0' }),
+        ...focusedBrowserLanes(plan.focusedBrowserChecks).map(lane => `--project=${lane.project}`), '--list', '--reporter=json']),
+      environment: Object.freeze({ CI: '', WHOISLEUTH_E2E_USE_BUILD: '0', WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1', PLAYWRIGHT_JSON_OUTPUT_FILE: '' }),
     }));
   }
   if (plan.focusedUnitChecks.length) {
@@ -230,13 +252,24 @@ function renderExecutionPlan(
 
 function runCommand(command: FocusedCommand): void {
   process.stdout.write(`\n> ${command.id}\n`);
+  const discovery = command.id === 'browser-discovery';
   const child = spawnSync(command.executable, command.args, {
     cwd: REPOSITORY_ROOT,
     env: { ...process.env, ...command.environment },
-    stdio: 'inherit',
+    stdio: discovery ? ['ignore', 'pipe', 'pipe'] : 'inherit',
+    encoding: 'utf8',
+    maxBuffer: MAX_PLAYWRIGHT_RESULTS_BYTES,
   });
   if (child.error) throw child.error;
-  if (child.status !== 0) throw new Error(`${command.id} failed with exit code ${child.status ?? 2}.`);
+  if (child.status !== 0) {
+    if (discovery) process.stderr.write(child.stderr || child.stdout || '');
+    throw new Error(`${command.id} failed with exit code ${child.status ?? 2}.`);
+  }
+  if (discovery) {
+    const specs = command.args.filter(arg => arg.endsWith('.spec.ts'));
+    assertFocusedBrowserCoverage(specs, JSON.parse(child.stdout));
+    process.stdout.write(`Discovered every selected browser specification (${specs.length}).\n`);
+  }
 }
 
 async function selectPlaywrightPort(): Promise<number> {
@@ -252,6 +285,8 @@ async function selectPlaywrightPort(): Promise<number> {
 }
 
 export async function runFocusedBrowserSpecs(specs: readonly string[]): Promise<void> {
+  const lanes = focusedBrowserLanes(specs);
+  if (!lanes.length) throw new Error('Focused browser verification requires selected specifications.');
   const port = await selectPlaywrightPort();
   const workspace = createHostedBrowserWorkspace(REPOSITORY_ROOT);
   const environment = {
@@ -276,30 +311,36 @@ export async function runFocusedBrowserSpecs(specs: readonly string[]): Promise<
 
   try {
     await runHostedBrowserWorkspace(workspace, async () => {
-      const exitCode = await runPlaywrightProcess([
-        path.join(workspace.root, 'node_modules/@playwright/test/cli.js'),
-        'test',
-        ...specs,
-        `--project=${PLAYWRIGHT_FUNCTIONAL_PROJECT}`,
-        '--workers=1',
-        '--retries=0',
-      ], {
-        cwd: workspace.root,
-        env: environment,
-        signal: interruption.signal,
-      });
-      if (requestedSignal) throw new Error(`Focused browser verification was interrupted by ${requestedSignal}.`);
+      for (const lane of lanes) {
+        const laneEnvironment = { ...environment, WHOISLEUTH_PLAYWRIGHT_RUN_KIND: lane.kind,
+          WHOISLEUTH_PLAYWRIGHT_SHARD: '', WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1' };
+        const exitCode = await runPlaywrightProcess([
+          path.join(workspace.root, 'node_modules/@playwright/test/cli.js'),
+          'test',
+          ...lane.specs,
+          `--project=${lane.project}`,
+          '--workers=1',
+          '--retries=0',
+        ], {
+          cwd: workspace.root,
+          env: laneEnvironment,
+          signal: interruption.signal,
+        });
+        if (requestedSignal) throw new Error(`Focused browser verification was interrupted by ${requestedSignal}.`);
 
-      const resultPath = path.join(workspace.root, playwrightRunArtifacts(environment).jsonResults);
-      if (!existsSync(resultPath)) throw new Error('Focused Playwright results were not written.');
-      const summary = summarizePlaywrightResults(readPlaywrightResultData(resultPath), 'focused iteration');
-      process.stdout.write(renderPlaywrightResultSummary(summary));
-      if (exitCode !== 0 || summary.failed || summary.flaky || summary.retried) {
-        throw new Error(
-          `Focused browser verification was not clean: ${summary.failed} failed, ${summary.flaky} flaky, ${summary.retried} retried.`,
-        );
+        const resultPath = path.join(workspace.root, playwrightRunArtifacts(laneEnvironment).jsonResults);
+        if (!existsSync(resultPath)) throw new Error('Focused Playwright results were not written.');
+        const report = readPlaywrightResultData(resultPath);
+        assertFocusedBrowserCoverage(lane.specs, report);
+        const summary = summarizePlaywrightResults(report, `focused ${lane.kind}`);
+        process.stdout.write(renderPlaywrightResultSummary(summary));
+        if (exitCode !== 0 || summary.failed || summary.flaky || summary.retried || summary.skipped || summary.truncated) {
+          throw new Error(
+            `Focused browser verification was not clean: ${summary.failed} failed, ${summary.flaky} flaky, ${summary.retried} retried, ${summary.skipped} skipped; truncated: ${summary.truncated}.`,
+          );
+        }
+        if (!(await localPortIsFree(port))) throw new Error(`Focused Playwright left port ${port} occupied.`);
       }
-      if (!(await localPortIsFree(port))) throw new Error(`Focused Playwright left port ${port} occupied.`);
       return 0;
     }, () => requestedSignal !== null);
   } finally {

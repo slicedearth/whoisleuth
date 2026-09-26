@@ -18,6 +18,8 @@ import {
 import { createTestDurationReport } from '../tools/test-duration-reporter.mts';
 import {
   buildFocusedVerificationExecution,
+  assertFocusedBrowserCoverage,
+  focusedBrowserLanes,
   parseFocusedVerificationOptions,
 } from '../tools/focused-verification.mts';
 import {
@@ -684,7 +686,7 @@ describe('verification architecture contracts', () => {
 
     assert.equal(ids[0], 'browser-discovery');
     assert.equal(execution.commands[0]!.args.includes('--list'), true);
-    assert.deepEqual(execution.commands[0]!.environment, { CI: '', WHOISLEUTH_E2E_USE_BUILD: '0' });
+    assert.deepEqual(execution.commands[0]!.environment, { CI: '', WHOISLEUTH_E2E_USE_BUILD: '0', WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1', PLAYWRIGHT_JSON_OUTPUT_FILE: '' });
     assert.ok(execution.commands.slice(1).every(command => command.environment === undefined));
 
     assert.equal(ids.filter((id) => id === 'typecheck (e2e/tsconfig.json)').length, 1);
@@ -732,7 +734,7 @@ describe('verification architecture contracts', () => {
       const valid = run();
       assert.ifError(valid.error);
       assert.equal(valid.status, 0, valid.stdout + valid.stderr);
-      assert.match(valid.stdout, /Total: 1 test in 1 file/u);
+      assert.equal(JSON.parse(valid.stdout).suites[0].specs.length, 1);
       assert.doesNotMatch(valid.stdout + valid.stderr, /Error: (setup|test) must not run/u);
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
@@ -741,6 +743,29 @@ describe('verification architecture contracts', () => {
     const execution = buildFocusedVerificationExecution(buildVerificationOwnershipPlan(['CONTRIBUTING.md']));
     assert.equal(execution.browserSpecs.length, 0);
     assert.equal(execution.commands.some(command => ['browser-discovery', 'build'].includes(command.id)), false);
+  });
+
+  test('focused discovery includes both execution owners and rejects missing or unexpected specifications', () => {
+    const specs = ['e2e/dashboard.spec.ts', 'e2e/console-loading.spec.ts'];
+    assert.deepEqual(focusedBrowserLanes(specs), [
+      { kind: 'performance', project: 'performance-measurement', specs: ['e2e/console-loading.spec.ts'] },
+      { kind: 'functional', project: 'chromium', specs: ['e2e/dashboard.spec.ts'] },
+    ]);
+    assert.throws(() => focusedBrowserLanes([...specs, specs[0]!]), /unique/u);
+    assert.throws(() => focusedBrowserLanes(['e2e/not-a-spec.ts']), /maintained/u);
+    const execution = buildFocusedVerificationExecution({ ...buildVerificationOwnershipPlan(['e2e/dashboard.spec.ts']), focusedBrowserChecks: specs });
+    const command = execution.commands[0]!;
+    const run = spawnSync(command.executable, command.args, {
+      cwd: REPOSITORY_ROOT, env: { ...environmentWithoutV8Coverage(), ...command.environment },
+      encoding: 'utf8', timeout: 30_000, maxBuffer: 4 * 1024 * 1024,
+    });
+    assert.ifError(run.error);
+    assert.equal(run.status, 0, run.stdout + run.stderr);
+    const report = JSON.parse(run.stdout);
+    assert.doesNotThrow(() => assertFocusedBrowserCoverage(specs, report));
+    assert.throws(() => assertFocusedBrowserCoverage([...specs, 'e2e/missing.spec.ts'], report), /Missing: e2e\/missing/u);
+    assert.throws(() => assertFocusedBrowserCoverage([specs[0]!], report), /unexpected: e2e\/console-loading/u);
+    assert.throws(() => assertFocusedBrowserCoverage(specs, { suites: [] }), /Missing:/u);
   });
 
   test('workflow edits run the native workflow validator once without deferring syntax validation', () => {

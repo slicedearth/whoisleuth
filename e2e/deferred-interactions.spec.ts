@@ -3,6 +3,7 @@ import type { Locator, Page, Request, TestInfo } from '@playwright/test';
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
 import { ALLOWED_ORIGIN, expect, test } from './fixtures';
 import { caseRecord } from './case-test-fixtures';
+import { COMMAND_NAVIGATION_READINESS } from './console-navigation';
 import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import {
@@ -896,10 +897,7 @@ test('measures command navigation and preserves shortcut focus recovery', async 
     action: () => page.keyboard.press('Control+K'),
     browserReadiness: {
       start: { event: 'keydown', key: 'k', controlOrMeta: true },
-      targets: [
-        { selector: '[role="dialog"][aria-labelledby="command-palette-title"]' },
-        { selector: '#command-search', requireEnabled: true },
-      ],
+      targets: COMMAND_NAVIGATION_READINESS,
     },
     ready: dialog,
     readyControl: search,

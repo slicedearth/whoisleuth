@@ -169,6 +169,17 @@ function collectSuites(
   return truncated;
 }
 
+/** Specifications actually reported by discovery or execution, excluding setup. */
+export function playwrightReportedSpecFiles(raw: unknown): readonly string[] {
+  const root = record(raw);
+  if (!root || !Array.isArray(root.suites)) throw new TypeError('Playwright report has no suite inventory.');
+  const results: PlaywrightTestResult[] = [];
+  if (collectSuites(root.suites, results, [], 0)) throw new TypeError('Playwright report inventory is truncated.');
+  return Object.freeze([...new Set(results.map(result => result.file)
+    .filter(file => file.endsWith('.spec.ts'))
+    .map(file => file.startsWith('e2e/') ? file : `e2e/${file}`))].sort());
+}
+
 export function summarizePlaywrightResults(
   raw: unknown,
   rawLabel = '',

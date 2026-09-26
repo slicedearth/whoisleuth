@@ -1,5 +1,14 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect } from './fixtures';
+import type { BrowserReadinessTarget } from './performance-sampling';
+
+// An editable loading shell is not usable navigation. The list and its first
+// destination must have reached the same rendered frame as the active input.
+export const COMMAND_NAVIGATION_READINESS: readonly BrowserReadinessTarget[] = [
+  { selector: '[role="dialog"][aria-labelledby="command-palette-title"]' },
+  { selector: '#command-search[aria-expanded="true"]', requireEnabled: true },
+  { selector: '#command-results [role="option"]', requireEnabled: true },
+];
 
 type ConsoleView = 'cases' | 'inbox' | 'campaigns' | 'relationships' | 'timeline' | 'certificates' | 'watchlists' | 'rules';
 const monitoringViews = new Set<ConsoleView>(['timeline', 'certificates', 'watchlists', 'rules']);

@@ -104,19 +104,22 @@ test workers start. Tests reuse the resolved executable paths; startup checks
 use a hang guard, not a performance target. Missing or unusable shells stop the
 run before test execution.
 
-For the Linux environment used by required CI, Docker can run the same owner
-from a clean commit:
+Docker can run the same verification owner on Linux from a clean commit:
 
 ```bash
 npm run verification:linux
 ```
 
 This builds an Ubuntu 24.04 image with the locked browser release, the primary
-Node version and the compatibility runtime. Image digests are recorded for each
-run. Only committed source and local tag history enter the container: no host
+Node version and the compatibility runtime. It uses the local engine's native
+AMD64 or ARM64 architecture, including pinned security-analysis and shell tools,
+and checks available analysis memory before downloading images. It does not
+silently emulate another architecture. Image digests, architecture and memory
+are recorded for each run; hosted runner hardware and architecture remain
+separate from this local check. Only committed source and local tag history enter the container: no host
 dependencies, credentials, development servers or Docker socket are mounted.
-The browser sandbox remains enabled. On an ARM host the x64 environment is
-emulated; its elapsed times are not representative of hosted runner performance.
+The browser sandbox remains enabled. Container elapsed times are not a proxy
+for hosted runner performance.
 `-- --build-image` prepares the environment without requiring a clean checkout.
 Private logs and environment details remain outside the repository. Failed
 containers are stopped and retained for diagnosis; remove them when finished.

@@ -5,12 +5,37 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { linuxVerificationImages, linuxVerificationRunArguments } from '../tools/linux-verification.mts';
+import { linuxVerificationEnvironment, linuxVerificationImageReference, linuxVerificationImages, linuxVerificationRunArguments } from '../tools/linux-verification.mts';
 import { criticalBrowserInstallArguments } from '../tools/ci-verification.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 describe('isolated Linux verification', () => {
+  test('pins the requested platform manifest before pulling rather than relying on daemon tag aliases', () => {
+    const amd = { digest: `sha256:${'a'.repeat(64)}`, platform: { os: 'linux', architecture: 'amd64' } };
+    const arm = { digest: `sha256:${'b'.repeat(64)}`, platform: { os: 'linux', architecture: 'arm64', variant: 'v8' } };
+    const manifest = { manifests: [amd, arm, { platform: { os: 'unknown', architecture: 'unknown' } }] };
+    assert.equal(linuxVerificationImageReference('node:24.19.0-bookworm-slim', manifest, 'linux/arm64'), `node:24.19.0-bookworm-slim@${arm.digest}`);
+    assert.equal(linuxVerificationImageReference('node:24.19.0-bookworm-slim', manifest, 'linux/amd64'), `node:24.19.0-bookworm-slim@${amd.digest}`);
+    for (const invalid of [null, {}, { manifests: [amd] }, { manifests: [arm, arm] }, { manifests: [{ ...arm, digest: 'mutable' }] }]) {
+      assert.throws(() => linuxVerificationImageReference('node:24.19.0-bookworm-slim', invalid, 'linux/arm64'), /unique immutable manifest/u);
+    }
+  });
+
+  test('selects the native engine architecture and rejects unsupported or insufficient environments before downloads', () => {
+    for (const architecture of ['arm64', 'aarch64', 'amd64', 'x86_64']) {
+      const result = linuxVerificationEnvironment({ OSType: 'linux', Architecture: architecture, MemTotal: 4 * 1024 ** 3 });
+      assert.equal(result.platform, ['arm64', 'aarch64'].includes(architecture) ? 'linux/arm64' : 'linux/amd64');
+      assert.equal(result.analysisMemoryMiB, 3072);
+    }
+    for (const info of [
+      { OSType: 'windows', Architecture: 'amd64', MemTotal: 4 * 1024 ** 3 },
+      { OSType: 'linux', Architecture: 'riscv64', MemTotal: 4 * 1024 ** 3 },
+      { OSType: 'linux', Architecture: 'arm64', MemTotal: 2 * 1024 ** 3 },
+      { OSType: 'linux', Architecture: 'arm64', MemTotal: NaN },
+    ]) assert.throws(() => linuxVerificationEnvironment(info));
+  });
+
   test('derives runtime images from existing source identities', () => {
     assert.deepEqual(linuxVerificationImages('24.19.0', '1.62.1', 26), {
       PRIMARY_NODE_IMAGE: 'node:24.19.0-bookworm-slim',
@@ -28,6 +53,7 @@ describe('isolated Linux verification', () => {
       name: 'whoisleuth-verification-1234', image: `sha256:${'a'.repeat(64)}`,
       bundle: '/private/review/source.bundle', seccomp: '/private/review/seccomp.json',
       revision: 'b'.repeat(40), base: 'c'.repeat(40),
+      platform: 'linux/amd64' as const,
     };
     const args = linuxVerificationRunArguments(options);
     assert.deepEqual(args.filter((_, index) => args[index - 1] === '--mount'), [
@@ -37,6 +63,7 @@ describe('isolated Linux verification', () => {
       `WHOISLEUTH_VERIFY_REVISION=${options.revision}`, `WHOISLEUTH_VERIFY_BASE=${options.base}`,
     ]);
     assert.equal(args.includes('--platform=linux/amd64'), true);
+    assert.equal(linuxVerificationRunArguments({ ...options, platform: 'linux/arm64' }).includes('--platform=linux/arm64'), true);
     assert.equal(args.includes('seccomp=/private/review/seccomp.json'), true);
     assert.equal(args.includes('--privileged'), false);
     assert.equal(args.some(arg => /no-sandbox|docker\.sock|network=host/u.test(arg)), false);
