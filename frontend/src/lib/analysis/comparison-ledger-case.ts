@@ -192,14 +192,14 @@ export function buildCaseComparisonCandidates(
       counters.invalidRecords += 1;
       continue;
     }
-    if (cases.has(item.id) || [...cases.values()].some((candidate) => candidate.domain === item.domain)) {
+    if (cases.has(item.id)) {
       counters.duplicateRecords += 1;
       continue;
     }
     cases.set(item.id, item);
   }
   const candidates: ComparisonLedgerCandidate[] = [];
-  for (const item of [...cases.values()].sort((left, right) => left.domain.localeCompare(right.domain))) {
+  for (const item of [...cases.values()].sort((left, right) => left.domain.localeCompare(right.domain) || left.id.localeCompare(right.id))) {
     const history = [...item.evidenceHistory].sort((left, right) => (
       left.capturedAt.localeCompare(right.capturedAt) || left.id.localeCompare(right.id)
     ));

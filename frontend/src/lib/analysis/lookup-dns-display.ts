@@ -27,6 +27,7 @@ function httpsServiceBindingValue(value: unknown): string {
       : boundedTechnologyText(record.target, 253) || 'target unavailable';
   return [
     `${mode} priority ${priority} → ${target}`,
+    record.owner ? `owner ${boundedTechnologyText(record.owner, 253)}` : '',
     stringList(parameters.alpn).length
       ? `ALPN ${stringList(parameters.alpn)
           .slice(0, 16)

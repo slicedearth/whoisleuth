@@ -62,6 +62,7 @@ describe('DNS delegation health', () => {
     assert.equal(result.status, 'partial');
     assert.equal(result.complete, false);
     assert.deepEqual(result.authorities, []);
+    assert.equal(result.findings.find((finding) => finding.id === 'in_bailiwick_glue')?.state, 'unknown');
     assert.match(result.limitations.join(' '), /no eligible authority/iu);
   });
 

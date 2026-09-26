@@ -66,6 +66,9 @@ describe('passive mail exposure review', () => {
     }]);
     assert.equal(document.providerCoverage.complete, true);
     assert.match(formatCliMailReview(document), /Passive mail exposure review/u);
+    assert.match(formatCliMailReview(document), /MX, SPF and DMARC observed/u);
+    assert.doesNotMatch(formatCliMailReview(document), /authenticated mail|receiving MX/iu);
+    assert.match(document.limitations.join(' '), /does not establish policy validity, alignment, message authentication or delivery/u);
     assert.doesNotMatch(JSON.stringify(document), /SMTP banner|message acceptance was tested/u);
   });
 

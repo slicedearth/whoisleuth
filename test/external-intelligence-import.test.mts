@@ -14,6 +14,20 @@ const DIGEST = 'a'.repeat(64);
 const NOW = '2026-07-29T02:00:00.000Z';
 const OBSERVED = '2026-07-28T01:00:00.000Z';
 
+test('rejects an over-bound canonical URL instead of retaining a different shortened identity', () => {
+  for (const count of [100, 200]) {
+    const value = `https://example.test/${'ü'.repeat(count)}`;
+    const preview = parseExternalIntelligenceDocument(stixBundle([{
+      type: 'url', spec_version: '2.1', id: 'url--00000000-0000-4000-8000-000000000010', value,
+    }]), DIGEST);
+    if (count === 100) assert.equal(preview.items[0]?.entityValue, new URL(value).toString());
+    else {
+      assert.equal(preview.items.length, 0);
+      assert.ok(preview.limitations.length > 0);
+    }
+  }
+});
+
 test('intelligence retention preview preserves source time and excludes generated save metadata', () => {
   const preview = parseExternalIntelligenceDocument(stixBundle(stixObjects()), DIGEST);
   const item = preview.items.find((value) => value.entityValue === 'candidate.invalid' && value.observedAt === OBSERVED);

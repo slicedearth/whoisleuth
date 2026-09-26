@@ -184,7 +184,7 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
   } else if (skipWhois) {
     whois = { skipped: true, detail: 'WHOIS is omitted in fast RDAP-only mode.' };
   } else if (Array.isArray(whoisChain)) {
-    whois = { chain: whoisChain, parsed: parseWhoisChain(whoisChain) };
+    whois = { chain: whoisChain, parsed: parseWhoisChain(whoisChain, classified.type === 'domain' ? classified.registrableDomain ?? classified.value : undefined) };
   } else {
     whois = {
       error: whoisResult.status === 'rejected'
@@ -237,7 +237,7 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
     ? 'skipped'
     : whoisResult.status === 'rejected'
       ? 'error'
-      : whoisCollectionStatus(whoisChain);
+      : whoisCollectionStatus(whoisChain, classified.type === 'domain' ? classified.registrableDomain ?? classified.value : undefined);
   const availabilityStatus = classified.type !== 'domain'
     ? 'not_applicable'
     : !availabilityEnabled ? 'disabled'

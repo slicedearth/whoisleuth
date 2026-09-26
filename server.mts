@@ -497,7 +497,7 @@ function registerNetworkApiRoutes(
           inputHostname: classified.inputHostname,
           registrableDomain: classified.registrableDomain,
           chain,
-          parsed: services.parseWhoisChain(chain),
+          parsed: services.parseWhoisChain(chain, classified.type === 'domain' ? classified.registrableDomain ?? classified.value : undefined),
         });
       } catch (err) {
         sendUnexpectedApiError(res);

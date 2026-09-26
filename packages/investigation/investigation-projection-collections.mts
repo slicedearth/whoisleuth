@@ -1,4 +1,5 @@
 import { normalizeDomain } from '../evidence/domain-name.mts';
+import { canonicalIpAddress } from '../contracts/ip-address.mts';
 import {
   MAX_NAMESERVERS_PER_ROW,
   RELATIONSHIP_EVIDENCE_SCHEMA,
@@ -102,14 +103,7 @@ const EXTERNAL_OBSERVATION_SCHEMAS = new Set([
 ]);
 
 function normalizedIp(value: string): string {
-  const candidate = value.trim().toLowerCase();
-  const ipv4Parts = candidate.split('.');
-  if (
-    ipv4Parts.length === 4
-    && ipv4Parts.every((part) => /^\d{1,3}$/u.test(part) && Number(part) <= 255)
-  ) return ipv4Parts.map((part) => String(Number(part))).join('.');
-  if (candidate.includes(':') && candidate.length <= 45 && /^[0-9a-f:.]+$/u.test(candidate)) return candidate;
-  return '';
+  return canonicalIpAddress(value) ?? '';
 }
 
 function dnsTarget(value: string, field: string): string {

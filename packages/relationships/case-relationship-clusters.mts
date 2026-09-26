@@ -252,6 +252,7 @@ export function buildCaseRelationshipClusters(
     sourceRelationshipCount: summary.groups.length,
     truncated,
     limitations: [
+      ...(truncated ? ['The source relationship inventory is incomplete; some connected components or members may be omitted from this review.'] : []),
       'Clusters are connected components over retained relationship observations. They are review aids, not ownership, coordination, intent, attribution, or maliciousness conclusions.',
       'Common infrastructure is qualified separately because shared DNS, hosting, CDN, redirect, and platform services can connect unrelated domains.',
       'Cluster review controls adjust only the current local view. They do not alter source cases, relationships, or observations.',

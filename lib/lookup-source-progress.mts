@@ -94,6 +94,7 @@ function normalizedState(
   source: LookupProgressSource,
   outcome: 'fulfilled' | 'rejected',
   value: unknown,
+  requestedDomain?: string,
 ): LookupProgressState {
   if (outcome === 'rejected') return 'error';
   if (value === null || value === undefined) return 'skipped';
@@ -105,7 +106,7 @@ function normalizedState(
     return sourceTruncated(rdap) ? 'partial' : 'success';
   }
   if (source === 'whois') {
-    const status = whoisCollectionStatus(value);
+    const status = whoisCollectionStatus(value, requestedDomain);
     return status === 'complete' ? 'success' : status;
   }
   if (source === 'domain_evidence') {
@@ -134,8 +135,9 @@ function normalizeLookupSourceSettlement(
   source: LookupProgressSource,
   outcome: 'fulfilled' | 'rejected',
   value: unknown,
+  requestedDomain?: string,
 ): LookupSourceSettlement {
-  const state = normalizedState(source, outcome, value);
+  const state = normalizedState(source, outcome, value, requestedDomain);
   const sourceRecord = record(value);
   const threatObservation = THREAT_INTELLIGENCE_SOURCES.has(source)
     ? record(sourceRecord.observation)

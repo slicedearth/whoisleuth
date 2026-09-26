@@ -68,6 +68,18 @@ function writer() {
 }
 
 describe('registrar standing catalogue maintenance', () => {
+  test('ends current-year absence coverage at rollover while preserving fresh accreditation', () => {
+    const catalogue = buildRegistrarStandingSnapshot({
+      registrarRows: parseIanaRegistrarCsv(CSV), notices: [],
+    }, { generatedAt: '2026-12-31T23:00:00.000Z', ianaObservedAt: '2026-12-31T23:00:00.000Z', catalogueYear: 2026 });
+    const now = new Date('2027-01-01T00:00:00.000Z');
+    const standing = buildRegistrarStanding({ registrarIanaId: '2', catalogue, now });
+    assert.equal(standing.accreditation.sourceHealth, 'current');
+    assert.equal(standing.compliance.sourceHealth, 'stale');
+    assert.equal(standing.compliance.state, 'stale');
+    assert.equal(validRegistrarStanding(standing), true);
+    assert.equal(registrarStandingCatalogueHealth(now, catalogue).state, 'stale');
+  });
   test('parses quoted IANA CSV and current-year ICANN sections into minimal records', () => {
     const rows = parseIanaRegistrarCsv(CSV);
     const notices = parseIcannComplianceNotices(HTML, 2026);

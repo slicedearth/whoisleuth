@@ -562,7 +562,7 @@ async function resolveDomainRegistration(domain: string, options: AvailabilityOp
           : await buildWhoisChain(domain, options.signal ? { signal: options.signal } : {})) ?? null;
       options.signal?.throwIfAborted();
       if (!Array.isArray(whoisChain)) throw new Error('WHOIS chain unavailable');
-      const parsed = parseWhoisChain(whoisChain);
+      const parsed = parseWhoisChain(whoisChain, domain);
       whoisParsed = parsed;
       if (parsed.notFound) {
         return assessment({

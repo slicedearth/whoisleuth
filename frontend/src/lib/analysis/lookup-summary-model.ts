@@ -572,7 +572,9 @@ export function buildLookupSummaryModel(input: LookupSummaryInput): LookupSummar
           observedAt: formatDate(input.resultObservedAt),
           fieldFamilies: ['HTTP response', 'redirect chain', 'bounded homepage body', 'favicon response'],
           normalization: 'Observed responses are classified into active, parked, inactive, or unknown context without executing page scripts.',
-          completeness: availability.deepScanComplete === false ? 'partial' : 'complete',
+          completeness: record(availability.http).status === 'success' && record(availability.http).complete === true
+            ? 'complete'
+            : record(availability.http).status === 'partial' ? 'partial' : 'unknown',
           limitations: textList(record(availability.http).limitations),
           conflicts: [],
           decisionImpact: 'Website activity can inform explainable analysis. A failed or missing response never implies inactivity, safety, or domain availability.',

@@ -47,6 +47,26 @@ const registrarError = { server: REGISTRAR, error: 'connect ETIMEDOUT' };
 const registrarRateLimited = { server: REGISTRAR, response: 'WHOIS LIMIT EXCEEDED - please try again later.\n' };
 
 describe('analyzeWhoisChainAuthority', () => {
+  test('binds echoed positive and negative registry objects to the requested domain', () => {
+    for (const response of [
+      'Domain Name: OTHER.TEST\nRegistrar: Example Registrar',
+      'No match for "other.test".',
+      'Domain name:\n    other.test\nRelevant dates:\n    Registered: 2020-01-01\nRegistration status:\n    Registered',
+      '[Domain Name] OTHER.TEST\n[Registrant] Example',
+      'Domain Name: EXAMPLE.TEST\nDomain Name: OTHER.TEST\nRegistrar: Example',
+    ]) {
+      const chain = [ianaHop, { server: REGISTRY, response }];
+      assert.equal(analyzeWhoisChainAuthority(chain, 'example.test').registrationStatus, 'inconclusive', response);
+      assert.equal(analyzeWhoisChainAuthority(chain, 'example.test').notFound, false);
+      assert.equal(parseWhoisChain(chain, 'example.test').registrar, undefined);
+    }
+    for (const response of ['No match for "EXAMPLE.TEST".', 'Domain Name: example.test\nStatus: available', 'No data found']) {
+      assert.equal(analyzeWhoisChainAuthority([ianaHop, { server: REGISTRY, response }], 'example.test').registrationStatus, 'not_found', response);
+    }
+    const idn = [ianaHop, { server: REGISTRY, response: 'Domain Name: bücher.test (xn--bcher-kva.test)\nRegistrar: Example' }];
+    assert.equal(analyzeWhoisChainAuthority(idn, 'XN--BCHER-KVA.TEST.').registrationStatus, 'registered');
+  });
+
   test('thin registry + registrar chain reads as registered', () => {
     const a = analyzeWhoisChainAuthority([ianaHop, registryPositive, registrarThick]);
     assert.equal(a.notFound, false);

@@ -298,6 +298,7 @@ function extractPageRelationships(analysis: StaticHtmlAnalysis, domain: string, 
   let downloadFileTypeLimitReached = false;
   let perTagLimitReached = false;
   let resourceCountLimitReached = false;
+  let resourceIdentityTruncated = false;
   for (const element of analysis.elements) {
     if (!element.html || !RELATIONSHIP_TAGS.has(element.name)) continue;
     if (tagsExamined >= MAX_RESOURCE_TAGS) {
@@ -347,6 +348,7 @@ function extractPageRelationships(analysis: StaticHtmlAnalysis, domain: string, 
         if (reference.value) discardedUrls += 1;
         continue;
       }
+      if (normalized.pathTruncated) resourceIdentityTruncated = true;
       const key = `${reference.type}:${normalized.url}`;
       if (!resourceKeys.has(key)) {
         if (resourceKeys.size >= MAX_RESOURCE_TAGS) { resourceCountLimitReached = true; continue; }
@@ -367,7 +369,7 @@ function extractPageRelationships(analysis: StaticHtmlAnalysis, domain: string, 
   if (analysis.scriptLimitReached || analysis.inlineLimitReached) tracking.truncated = true;
   const truncated = tagLimitReached || resourceOriginLimitReached || embeddedOriginLimitReached
     || contactDomainLimitReached || downloadOriginLimitReached || downloadFileTypeLimitReached
-    || perTagLimitReached || resourceCountLimitReached || tracking.truncated;
+    || perTagLimitReached || resourceCountLimitReached || resourceIdentityTruncated || tracking.truncated;
   const limitations: string[] = [];
   if (tagLimitReached) limitations.push(`Resource parsing reached the ${MAX_RESOURCE_TAGS}-tag or ${MAX_IDENTITY_TAG_LENGTH}-character tag limit.`);
   if (resourceOriginLimitReached) limitations.push(`Only the first ${MAX_RESOURCE_ORIGINS} external resource origins were retained.`);
@@ -377,13 +379,14 @@ function extractPageRelationships(analysis: StaticHtmlAnalysis, domain: string, 
   if (downloadFileTypeLimitReached) limitations.push(`Only the first ${MAX_DOWNLOAD_FILE_TYPES} risky download file types were retained.`);
   if (perTagLimitReached) limitations.push(`Some srcset URL candidates could not be safely enumerated within the ${MAX_URLS_PER_TAG}-candidate per-tag boundary.`);
   if (resourceCountLimitReached) limitations.push(`Only the first ${MAX_RESOURCE_TAGS} distinct resource references were examined.`);
+  if (resourceIdentityTruncated) limitations.push('Overlong resource paths were reduced to origins; distinct resource counts may be incomplete.');
   if (tracking.truncated) limitations.push(`Only the first ${MAX_TRACKING_IDENTIFIERS} tracking identifiers were retained.`);
   return {
     resources: {
       count: resourceKeys.size,
       byType,
       externalOrigins: [...resourceOrigins].sort(),
-      truncated: tagLimitReached || resourceOriginLimitReached || perTagLimitReached || resourceCountLimitReached,
+      truncated: tagLimitReached || resourceOriginLimitReached || perTagLimitReached || resourceCountLimitReached || resourceIdentityTruncated,
     },
     embeddedOrigins: [...embeddedOrigins].sort(),
     contactDomains: [...contactDomains].sort(),

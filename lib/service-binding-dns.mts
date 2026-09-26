@@ -474,6 +474,8 @@ function parseServiceBindingDnsResponse(
   }
 
   const records: ServiceBindingRecord[] = [];
+  const aliases = new Map<string, string>();
+  const answerOwners = new Set<string>();
   let truncated = false;
   for (let index = 0; index < recordCount; index += 1) {
     const ownerResult = decodeDnsName(message, offset);
@@ -487,11 +489,20 @@ function parseServiceBindingDnsResponse(
     const rdataEnd = offset + rdataLength;
     assertRange(message, offset, rdataLength);
 
+    if (index < answerCount && rrClass === DNS_CLASS_IN && rrType === 5) {
+      const alias = decodeDnsName(message, offset);
+      if (alias.nextOffset !== rdataEnd || alias.name === '.'
+        || (aliases.has(ownerResult.name) && aliases.get(ownerResult.name) !== alias.name)) {
+        throw new ServiceBindingDnsError('DNS answer contains an invalid or ambiguous alias');
+      }
+      aliases.set(ownerResult.name, alias.name);
+    }
     if (
       index < answerCount
       && rrType === recordTypeCode(expected.type)
       && rrClass === DNS_CLASS_IN
     ) {
+      answerOwners.add(ownerResult.name);
       const parsed = parseServiceBindingRecord(
         message,
         ownerResult.name,
@@ -507,6 +518,20 @@ function parseServiceBindingDnsResponse(
     offset = rdataEnd;
   }
   if (offset !== message.length) throw new ServiceBindingDnsError('DNS response has trailing bytes');
+
+  const allowedOwners = new Set<string>();
+  let owner = question.name;
+  while (true) {
+    if (allowedOwners.has(owner)) throw new ServiceBindingDnsError('DNS answer contains a cyclic alias chain');
+    allowedOwners.add(owner);
+    const next = aliases.get(owner);
+    if (!next) break;
+    if (answerOwners.has(owner)) throw new ServiceBindingDnsError('DNS alias owner also contains service-binding records');
+    owner = next;
+  }
+  if ([...answerOwners].some(value => !allowedOwners.has(value))) {
+    throw new ServiceBindingDnsError('DNS service-binding answer owner is not bound to the query');
+  }
 
   const unique = new Map<string, ServiceBindingRecord>();
   for (const record of records) unique.set(JSON.stringify(record), record);

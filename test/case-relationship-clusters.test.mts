@@ -46,6 +46,21 @@ function summary(groups: CaseRelationshipGroup[]): CaseRelationshipSummary {
 }
 
 describe('case relationship clusters', () => {
+  test('retains source-wide omissions through review and export without labelling retained components incomplete', () => {
+    const groups = Array.from({ length: 51 }, (_, index) => relationship('certificate', `certificate-${index}`, [`a${index}.invalid`, `b${index}.invalid`]));
+    const result = buildCaseRelationshipClusters(summary(groups));
+    assert.equal(result.clusters.length, 50);
+    assert.equal(result.truncated, true);
+    const adjustments = { labels: {}, dismissed: [], merged: [], splitCases: {} };
+    for (const output of [applyCaseRelationshipClusterAdjustments(result, adjustments), buildCaseRelationshipClusterExport(result, adjustments, NOW)]) {
+      assert.ok(Array.isArray(output.limitations));
+      assert.match(output.limitations.join(' '), /source relationship inventory is incomplete/u);
+    }
+    assert.ok(result.clusters.every(cluster => !cluster.truncated && cluster.complete));
+    const complete = buildCaseRelationshipClusters(summary(groups.slice(0, 50)));
+    assert.equal(complete.truncated, false);
+    assert.doesNotMatch(applyCaseRelationshipClusterAdjustments(complete, adjustments).limitations.join(' '), /source relationship inventory is incomplete/u);
+  });
   test('builds deterministic connected components while retaining source groups', () => {
     const source = summary([
       relationship('nameserver_set', 'ns.shared.invalid', ['one.invalid', 'two.invalid']),

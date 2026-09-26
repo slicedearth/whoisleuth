@@ -282,6 +282,19 @@ describe('typed local investigation projection', () => {
     assert.ok(observations.some((item) => item.complete === false));
   });
 
+  test('requires syntactically valid IP identities while retaining unverified raw claims', () => {
+    for (const [value, expected] of [['abc:def', null], ['2001:db8:0:0:0:0:0:1', '2001:db8::1'], ['192.0.2.44', '192.0.2.44']] as const) {
+      const evidencePins = [{ id: 'pin-ip', field: 'AAAA', category: 'dns', label: 'External DNS finding', value,
+        source: 'Imported observations', sourceSchema: { collection: 'external_observations', schema: 'whoisleuth.dns-observation-rows', version: 1 },
+        observedAt: EARLY, completeness: 'complete', limitations: ['Not independently verified.'], createdAt: LATE }];
+      const result = buildInvestigationProjection(currentInput({ cases: {
+        version: CASE_SCHEMA_VERSION, cases: [caseRecord('case-ip', 'observed.invalid', [], { evidencePins })],
+      } }), { generatedAt: LATE });
+      assert.deepEqual(result.entities.filter(item => item.type === 'ip_address').map(item => item.canonical), expected ? [expected] : []);
+      assert.equal(result.relationships.filter(item => item.type === 'domain_resolved_to_ip').length, expected ? 1 : 0);
+    }
+  });
+
   test('projects brands, official domains, favicon identity, campaigns, and derived case membership', () => {
     const profile = {
       id: 'brand-a',

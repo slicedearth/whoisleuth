@@ -558,7 +558,9 @@ async function collectDnsDelegationHealth(
     .filter((primary): primary is string => primary !== null))];
   const soaSerialConflict = soaSerials.length > 1;
   const soaPrimaryConflict = soaPrimaries.length > 1;
-  const inBailiwick = candidates.filter((nameserver) => (
+  const glueInventoryComplete = (parentStatus === 'success' && parentNameservers.length > 0 && parentQuery.truncated !== true)
+    || (registry.nameservers.length > 0 && !registry.truncated);
+  const inBailiwick = eligibleAuthorities.filter((nameserver) => (
     nameserver === domain || nameserver.endsWith(`.${domain}`)
   ));
   const missingGlue = inBailiwick.filter((nameserver) => (
@@ -642,8 +644,10 @@ async function collectDnsDelegationHealth(
     finding(
       'in_bailiwick_glue',
       'In-bailiwick glue',
-      !inBailiwick.length ? 'healthy' : missingGlue.length ? 'warning' : 'healthy',
-      !inBailiwick.length
+      !glueInventoryComplete ? 'unknown' : missingGlue.length ? 'warning' : 'healthy',
+      !glueInventoryComplete
+        ? 'The delegated nameserver inventory is unavailable or incomplete'
+        : !inBailiwick.length
         ? 'No in-bailiwick nameserver requires registry glue'
         : missingGlue.length
           ? 'Registry glue was not observed for every in-bailiwick nameserver'

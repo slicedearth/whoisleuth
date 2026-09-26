@@ -5,6 +5,8 @@
 import type { WhoisHop } from './whois-chain.mts';
 import type { WhoisAuthority } from './whois-contracts.mts';
 import { normalizeWhoisChain } from './whois-normalization.mts';
+import { domainToASCII } from 'node:url';
+import { isValidAsciiHostname } from '../packages/contracts/domain-name.mts';
 import {
   parseIndentedWhoisValue,
   whoisFieldLimit,
@@ -73,12 +75,46 @@ export function hasNicKgRegistrationEvidence(text: string): boolean {
     && /^[ \t]*Name servers in the listed order[ \t]*:[ \t]*$/im.test(text);
 }
 
-function classifyHopEvidence(hop: WhoisHop, index: number): string {
+function canonicalObjectName(value: string): string | null {
+  const name = domainToASCII(value.trim().replace(/^["']|["'.]+$/gu, '')).toLowerCase();
+  return isValidAsciiHostname(name) ? name : null;
+}
+
+/** An echoed object may qualify this response, never a different query. */
+export function whoisResponseMatchesDomain(text: string, requestedDomain: string): boolean {
+  const expected = canonicalObjectName(requestedDomain);
+  if (!expected) return false;
+  const identityPatterns = [
+    /^[ \t*]*(?:domain(?:[ \t]+name)?|domain_name|domainname)[ \t.]*:[ \t]*(\S[^\r\n]*)$/gimu,
+    /^[ \t]*\[Domain Name\][ \t]*(\S[^\r\n]*)$/gimu,
+    /^[ \t]*Domain[ \t]+([^\s()]+)[ \t]+\([A-Z][A-Z0-9_-]*\)[ \t]*$/gmu,
+    /^[ \t]*Domain(?: name)?[ \t]*:[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]+(?:name:[ \t]*)?(\S[^\r\n]*)$/gimu,
+  ];
+  for (const pattern of identityPatterns) {
+    for (const match of text.matchAll(pattern)) {
+      // A few registries publish Unicode plus its parenthesised ASCII form.
+      const names = (match[1] ?? '').split(/[ \t()]+/u).filter(Boolean);
+      if (!names.length || names.some(name => canonicalObjectName(name) !== expected)) return false;
+    }
+  }
+  for (const pattern of LINE_NOT_FOUND_PATTERNS) {
+    for (const match of text.matchAll(new RegExp(pattern.source, `${pattern.flags}g`))) {
+      const names = match[0].match(/[a-z0-9-]+(?:\.[a-z0-9-]+)+\.?/giu) ?? [];
+      if (names.some(name => canonicalObjectName(name) !== expected)) return false;
+    }
+  }
+  // Known complete negative line formats without an echoed name retain their
+  // existing meaning only within the exact IANA-referred registry response.
+  return true;
+}
+
+function classifyHopEvidence(hop: WhoisHop, index: number, requestedDomain?: string): string {
   if (hop.error) return 'error';
   const text = hop.response || '';
   if (!text.trim()) return 'inconclusive';
   if (RATE_LIMIT_LINE_RE.test(text) || RETRY_LINE_RE.test(text)) return 'rate_limited';
   if (NZ_TEMPORARY_FAILURE_RE.test(text)) return 'rate_limited';
+  if (index > 0 && requestedDomain !== undefined && !whoisResponseMatchesDomain(text, requestedDomain)) return 'inconclusive';
   if (NZ_NOT_FOUND_RE.test(text)) return 'negative';
   if (
     LINE_NOT_FOUND_PATTERNS.some((pattern) => pattern.test(text))
@@ -119,12 +155,12 @@ function ianaRegistryReferral(hop: WhoisHop | undefined): string | null {
   return null;
 }
 
-export function analyzeWhoisChainAuthority(chain: unknown): WhoisAuthority {
+export function analyzeWhoisChainAuthority(chain: unknown, requestedDomain?: string): WhoisAuthority {
   const source = normalizeWhoisChain(chain);
   const evidence = source.map((hop, index) => ({
     server: hop.server,
     index,
-    kind: classifyHopEvidence(hop, index),
+    kind: classifyHopEvidence(hop, index, requestedDomain),
   }));
   const failed = evidence.filter(
     (item) => item.kind === 'error' || item.kind === 'rate_limited',
@@ -166,9 +202,9 @@ export function analyzeWhoisChainAuthority(chain: unknown): WhoisAuthority {
 }
 
 /** Collection status shared by final and incremental Lookup presentation. */
-export function whoisCollectionStatus(chain: unknown): 'error' | 'unsupported' | 'complete' | 'partial' {
+export function whoisCollectionStatus(chain: unknown, requestedDomain?: string): 'error' | 'unsupported' | 'complete' | 'partial' {
   const source = normalizeWhoisChain(chain);
   if (!source.length || source[0]?.error) return 'error';
   if (source.length === 1) return 'unsupported';
-  return analyzeWhoisChainAuthority(source).chainStatus;
+  return analyzeWhoisChainAuthority(source, requestedDomain).chainStatus;
 }

@@ -2,7 +2,7 @@
 // remain owned by the facade in whois.mts.
 
 import { registryDateIso } from './registry-dates.mts';
-import { analyzeWhoisChainAuthority } from './whois-authority.mts';
+import { analyzeWhoisChainAuthority, whoisResponseMatchesDomain } from './whois-authority.mts';
 import { normalizeWhoisChain } from './whois-normalization.mts';
 import { applyWhoisCommonFormats } from './whois-common-formats.mts';
 import { applyWhoisDialects } from './whois-dialects.mts';
@@ -21,7 +21,7 @@ import type {
   WhoisScalarFields,
 } from './whois-contracts.mts';
 
-function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
+function parseWhoisChain(chain: unknown, requestedDomain?: string): ParsedWhoisRecord {
   const source = normalizeWhoisChain(chain);
   const fields: WhoisScalarFields = {};
   const truncatedFields = new Set<string>();
@@ -32,6 +32,7 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
   source.forEach((hop, hopIndex) => {
     const text = hop.response;
     if (!text) return;
+    if (hopIndex > 0 && requestedDomain !== undefined && !whoisResponseMatchesDomain(text, requestedDomain)) return;
 
     // hopIndex 0 is always whois.iana.org, whose "domain:"/"created:"/
     // "changed:" fields describe the TLD's own root delegation record, not
@@ -126,7 +127,7 @@ function parseWhoisChain(chain: unknown): ParsedWhoisRecord {
   // Existence is decided authority-aware, not by a global "any hop said no
   // match" flag: positive registry evidence is never overridden by a later
   // registrar hop that failed, rate-limited, or returned "no match".
-  const authority = analyzeWhoisChainAuthority(source);
+  const authority = analyzeWhoisChainAuthority(source, requestedDomain);
   return {
     ...fields,
     nameservers: [...nameservers],

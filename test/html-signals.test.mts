@@ -781,6 +781,15 @@ describe('pageIdentity', () => {
     assert.doesNotMatch(JSON.stringify(result.resources), /logo\.png|app\.js|main\.css|movie\.mp4|secret|token=/);
   });
 
+  test('qualifies resource counts when long paths collapse to the same retained origin', () => {
+    const result = identity(`<script src="https://assets.example.test/${'a'.repeat(2500)}"></script><script src="https://assets.example.test/${'b'.repeat(2500)}"></script>`);
+    assert.equal(result.resources.truncated, true);
+    assert.equal(result.truncated, true);
+    assert.equal(result.complete, false);
+    assert.match(result.limitations.join(' '), /distinct resource counts may be incomplete/u);
+    assert.doesNotMatch(JSON.stringify(result.resources), /aaaa|bbbb/u);
+  });
+
   test('retains bounded embedded origins separately from general resources', () => {
     const result = identity(`
       <iframe src="https://frame.example/login?secret=value"></iframe>

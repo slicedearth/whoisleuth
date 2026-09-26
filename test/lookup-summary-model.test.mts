@@ -3,6 +3,17 @@ import test from 'node:test';
 import { buildLookupSummaryModel } from '../frontend/src/lib/analysis/lookup-summary-model.ts';
 import { buildFixtureRegistrarStanding as buildRegistrarStanding } from './registrar-standing-fixture.mts';
 
+test('website coverage reflects the source outcome rather than enabled Deep capabilities', () => {
+  for (const [http, expected] of [
+    [undefined, 'unknown'], [{ status: 'error', complete: false }, 'unknown'],
+    [{ status: 'skipped', complete: false }, 'unknown'], [{ status: 'partial', complete: false }, 'partial'],
+    [{ status: 'success', complete: true }, 'complete'], [{ status: 'success' }, 'unknown'],
+  ] as const) {
+    const summary = buildLookupSummaryModel({ availability: { deepScanComplete: true, http } });
+    assert.equal(summary.facts.find(fact => fact.label === 'Website')?.provenance.completeness, expected);
+  }
+});
+
 test('builds bounded assessment signals and separately attributed diagnostics', () => {
   const summary = buildLookupSummaryModel({
     availability: {

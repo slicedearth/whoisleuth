@@ -325,7 +325,7 @@ export function projectCaseRelationshipGraph(
     }
   }
 
-  const caseItems = [...cases.values()].sort((left, right) => left.domain.localeCompare(right.domain));
+  const caseItems = [...cases.values()].sort((left, right) => left.domain.localeCompare(right.domain) || left.id.localeCompare(right.id));
   const caseIds = new Set(caseItems.map((item) => item.id));
   const candidateEdges: CaseRelationshipGraphEdge[] = [];
   const candidateEdgeIds = new Set<string>();

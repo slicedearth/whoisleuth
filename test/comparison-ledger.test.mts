@@ -355,6 +355,22 @@ describe('comparison ledger row contract', () => {
 });
 
 describe('retained comparison adapters', () => {
+  test('keeps separate incident histories for the same domain and deduplicates only the same incident', () => {
+    const first = caseWithSnapshots('same.reservation.invalid', caseEvidence({ registrar: 'First A' }), caseEvidence({ registrar: 'First B' }));
+    const second = caseWithSnapshots('same.reservation.invalid', caseEvidence({ registrar: 'Second A' }), caseEvidence({ registrar: 'Second B' }));
+    assert.notEqual(first.id, second.id);
+    const input = { cases: [first, second, first] };
+    const index = buildComparisonLedgerIndex(input);
+    assert.equal(index.items.length, 2);
+    const reverse = buildComparisonLedgerIndex({ cases: [...input.cases].reverse() });
+    assert.deepEqual(index.items, reverse.items);
+    const details = buildComparisonLedgerDetails(input, { itemIds: index.items.map(item => item.id) });
+    const registrars = details.rows.filter(row => row.field === 'Registrar');
+    assert.equal(registrars.length, 2);
+    assert.equal(new Set(registrars.map(row => row.id)).size, 2);
+    assert.match(JSON.stringify(registrars), /First B/u);
+    assert.match(JSON.stringify(registrars), /Second B/u);
+  });
   test('derives adjacent case rows without treating an inconclusive later observation as removal', () => {
     const record = caseWithSnapshots(
       'case-change.reservation.invalid',

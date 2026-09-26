@@ -153,7 +153,8 @@ function normalizeUrl(value: unknown): string | null {
     const parsed = new URL(candidate);
     if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return null;
     parsed.hash = '';
-    return parsed.toString().slice(0, 1_000);
+    const normalized = parsed.toString();
+    return normalized.length <= 1_000 ? normalized : null;
   } catch {
     return null;
   }
