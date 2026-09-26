@@ -1,7 +1,11 @@
-import { MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, hasUnsafeCliText, type CliCommandGrammar } from '../contracts/cli-grammar.mts';
+import { MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, hasUnsafeCliText, type CliCommandGrammar, type CliOptionSpec } from '../contracts/cli-grammar.mts';
 import { parseCliGrammar } from './cli-argument-grammar.mts';
 
 export type CommandShell = 'posix' | 'powershell';
+
+export function isBuildableCliOption(option: CliOptionSpec): boolean {
+  return !option.metaAction && !(option.scope === 'common' && ['--config', '--profile'].includes(option.option));
+}
 
 /** Literal arguments only. Never interpolate into a command or evaluate a shell. */
 export function quoteCommandArgument(value: string, shell: CommandShell): string {
@@ -18,7 +22,7 @@ export function buildCliCommand(command: string, grammar: CliCommandGrammar, inp
   const args: string[] = [];
   for (const [option, values] of Object.entries(input.options)) {
     const definition = grammar.options.find(candidate => candidate.option === option);
-    if (!definition || definition.metaAction || ['--config', '--profile'].includes(option)) throw new Error('This option is not supported by the command builder.');
+    if (!definition || !isBuildableCliOption(definition)) throw new Error('This option is not supported by the command builder.');
     if (!Array.isArray(values) || values.length > MAX_CLI_ARGUMENTS) throw new Error('Too many option values.');
     for (const value of values) {
       if (definition.arity === 0 && value !== '') throw new Error('Flags do not accept a value.');

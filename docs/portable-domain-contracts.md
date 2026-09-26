@@ -25,9 +25,9 @@ descriptors, lifecycle contracts, and immutable fixtures. Runtime behaviour is
 owned by `packages/investigation/`. The generated schema inventory reports the
 exact tier and supported versions.
 
-The exact public investigation-capsule writer remains readable alongside its
-single v2 successor. Other investigation documents retain only their public
-current writer unless the generated durable inventory records a direct reader.
+Investigation capsules retain the historical readers listed by
+`npm run schema:inventory`. Each other investigation document
+supports the exact versions recorded there.
 Cryptographic-family and canonicalisation dispatch remain explicit; no current
 writer regenerates a public historical fixture.
 

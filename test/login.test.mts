@@ -29,6 +29,27 @@ function rawRequest(body: string) {
 }
 
 describe('login handler origin enforcement', () => {
+  test('uses runtime site identity for separate client buckets and fails closed before reading an unidentified body', async () => {
+    const saved = { SITE_ID: process.env.SITE_ID, NETLIFY: process.env.NETLIFY, NODE_ENV: process.env.NODE_ENV };
+    try {
+      delete process.env.NETLIFY;
+      process.env.SITE_ID = '01234567-89ab-cdef-0123-456789abcdef';
+      process.env.NODE_ENV = 'production';
+      const headers = { host: 'example.test', origin: 'https://example.test', 'x-nf-client-connection-ip': '192.0.2.241' };
+      for (let index = 0; index < 10; index += 1) assert.equal((await request(headers, 'incorrect')).statusCode, 401);
+      assert.equal((await request(headers, 'incorrect')).statusCode, 429);
+      assert.equal((await request({ ...headers, 'x-nf-client-connection-ip': '192.0.2.242' }, 'incorrect')).statusCode, 401);
+      for (const client of ['', 'invalid', '192.0.2.241, 192.0.2.242']) {
+        const response = await runLoginFunction({ httpMethod: 'POST', headers: { ...headers, 'x-nf-client-connection-ip': client }, get body(): never { throw new Error('must not read unidentified input'); } });
+        assert.equal(response.statusCode, 503);
+        assert.equal(response.headers['Set-Cookie'], undefined);
+        assert.doesNotMatch(response.body ?? '', /must not read|01234567/u);
+      }
+    } finally {
+      for (const [key, value] of Object.entries(saved)) if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  });
+
   test('exports only a rate-limited modern deployment boundary for the canonical path', () => {
     assert.equal(typeof loginHandler, 'function');
     assert.equal(Object.hasOwn(loginModule, 'handler'), false);

@@ -2,7 +2,7 @@
   import { onMount, untrack } from 'svelte';
   import { PUBLIC_CLI_GRAMMAR } from '$lib/generated/public-cli-grammar';
   import { loadDeferredModule, reloadDeferredModulePage } from '$lib/deferred-module';
-  import { buildCliCommand, type CommandShell } from '../../../../packages/analysis/cli-command-builder.mts';
+  import { buildCliCommand, isBuildableCliOption, type CommandShell } from '../../../../packages/analysis/cli-command-builder.mts';
   import { MAX_CLI_ARGUMENTS, MAX_CLI_ARGUMENT_LENGTH, type CliCommandGrammar } from '../../../../packages/contracts/cli-grammar.mts';
   import CopyableCommand from './CopyableCommand.svelte';
   let { command, initialPositionals = [], initialOptions = {} }: {
@@ -21,7 +21,7 @@
       .catch(() => { if (!controller.signal.aborted) loadError = true; });
     return () => controller.abort();
   });
-  const specifications = grammar?.options.filter(option => !option.metaAction && !['--config', '--profile'].includes(option.option)) ?? [];
+  const specifications = grammar?.options.filter(isBuildableCliOption) ?? [];
   const id = $props.id();
   let shell = $state<CommandShell>('posix');
   let positionalFields = $state(untrack(() => {

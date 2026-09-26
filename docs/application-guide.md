@@ -820,8 +820,9 @@ workspace is shown above Console pages and beside backup/import controls.
 Export each workspace separately. Open the intended destination before reviewing
 an import. Names and tab state are not part of a backup. To delete a named
 workspace, switch away, close its other tabs and confirm its name. Pending
-deletions can be refreshed and retried. Workspaces share browser quota and are
-not encrypted or access-controlled from one another.
+deletions can be refreshed and retried. Workspaces share browser quota. Ordinary
+workspaces are plaintext; separately encrypted workspaces require their own
+passphrase. Workspace names do not create separate user permissions.
 
 Ordinary workspace state stays in IndexedDB as bounded plaintext JSON in the
 current browser profile. Failed reads, quota errors and unsupported versions
@@ -899,7 +900,9 @@ review; PNGs can be decoded locally, and all verified files remain downloadable.
 No document scripts or links run. Capture manifests are checked against every
 included attachment's exact bytes. Browser import and CLI format verification
 remain separate from those byte checks.
-Packaging keeps selected bytes unchanged and does not encrypt or redact them.
+Packaging preserves the selected content without redaction. Ordinary ZIP and
+folder exports are plaintext; the encrypted `.wlep` option protects the manifest
+and all included files until unlocked.
 
 Use the same short sequence for each handoff: export deliberately, verify the
 selected file, inspect its interchange report, then preview the destination

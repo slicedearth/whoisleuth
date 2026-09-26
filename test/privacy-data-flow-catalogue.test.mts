@@ -422,7 +422,7 @@ describe('privacy data-flow catalogue', () => {
 
     for (const flow of allBoundaries) {
       assert.ok(flow.outcomes.length > 0, flow.id);
-      assert.ok(flow.nonInferences.includes(PRIVACY_CATALOGUE_INVARIANTS[3]), flow.id);
+      assert.ok(flow.nonInferences.includes('Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.'), flow.id);
       assert.deepEqual(flow.normalisedOutcomes, Object.fromEntries([
         'unavailable', 'blocked', 'partial', 'unsupported',
       ].map((state) => [

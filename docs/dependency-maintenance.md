@@ -29,11 +29,11 @@ The existing pinned action references, lockfile, reviewed production audit,
 CodeQL, architecture check, and generated production notices remain
 independent controls. Dependabot does not amend or auto-merge them.
 
-Pull requests also run the pinned GitHub Dependency Review action. It compares
-manifest and lockfile changes with the base branch and blocks newly introduced
-vulnerabilities of moderate severity or higher. The workflow has read-only
-repository permissions and does not replace the complete locked install or
-reviewed production dependency audit.
+Local and hosted CI run `npm run dependencies:review` over all locked production,
+development and optional dependencies. It blocks advisories of moderate severity
+or higher, including existing advisories rather than only dependency changes.
+This shared gate does not replace the complete locked install or the stricter
+production dependency audit.
 
 ## Production audit policy
 
@@ -43,10 +43,9 @@ It uses a five-minute outer deadline, bounds and validates the JSON report, then
 prints a concise deterministic result. A missing, failed or timed-out advisory
 response fails closed rather than being mistaken for a clean audit.
 
-Pull requests that change a manifest or lockfile are checked by the
-pinned GitHub Dependency Review action, while the full online production audit
-runs on its own weekly or manually dispatched workflow and remains a release
-gate. Required local and hosted CI both install the exact lockfile with
+The all-dependency review runs in the shared quality group. The full online
+production audit also runs on its weekly or manually dispatched workflow and
+remains a release gate. Required local and hosted CI both install the exact lockfile with
 install-time auditing disabled.
 Scheduled maintenance workflows make the same choice. The CLI release workflow
 runs the explicit production audit before its audited-disabled locked install,

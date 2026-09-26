@@ -7,6 +7,24 @@ import contactRouteHandler, {
 } from '../netlify/functions/contact-route.mts';
 
 describe('contact route function', () => {
+  test('keeps runtime client buckets separate without relying on a build-only flag', async () => {
+    const saved = { SITE_ID: process.env.SITE_ID, NETLIFY: process.env.NETLIFY, NODE_ENV: process.env.NODE_ENV };
+    try {
+      delete process.env.NETLIFY;
+      process.env.SITE_ID = '01234567-89ab-cdef-0123-456789abcdef';
+      process.env.NODE_ENV = 'production';
+      const post = (client: string) => runContactRouteRequest(new Request('https://example.test/api/contact-route', {
+        method: 'POST', headers: { Host: 'example.test', Origin: 'https://example.test', 'x-nf-client-connection-ip': client }, body: '{}',
+      }));
+      for (let index = 0; index < 60; index += 1) assert.equal((await post('192.0.2.241')).status, 400);
+      assert.equal((await post('192.0.2.241')).status, 429);
+      assert.equal((await post('192.0.2.242')).status, 400);
+      for (const client of ['', 'invalid', '192.0.2.241, 192.0.2.242']) assert.equal((await post(client)).status, 503);
+    } finally {
+      for (const [key, value] of Object.entries(saved)) if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  });
+
   test('declares the public path and bounded edge rate limit', () => {
     assert.deepEqual(config, {
       path: '/api/contact-route',

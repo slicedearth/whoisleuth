@@ -195,7 +195,7 @@ accepted. These detect corruption, not the authenticity of the source.
 - Maximum findings: 100.
 - Maximum distinct domains: 25.
 - Maximum findings per domain: 20.
-- A preview shows at most the first eight validated findings.
+- All accepted findings and diagnostics are available through the paged preview.
 
 Applying a validated preview creates a missing case or adds evidence pins to an
 existing one in a single browser-storage update. Existing status, disposition,

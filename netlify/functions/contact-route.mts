@@ -15,7 +15,7 @@ import {
   readRequestTextCapped,
   withNetlifyFetchApiErrorBoundary,
 } from '../../lib/http.mts';
-import { checkContactRouteRateLimit, getClientIp } from '../../lib/rate-limit.mts';
+import { checkContactRouteRateLimit, serverlessClientIdentity } from '../../lib/rate-limit.mts';
 
 type ContactRouteFunctionConfig = {
   path: string;
@@ -48,7 +48,9 @@ async function runContactRouteRequest(request: Request): Promise<Response> {
   if (!isTrustedOrigin(headers, { protocol: new URL(request.url).protocol })) {
     return netlifyJsonToResponse(json(403, { error: 'Cross-site request blocked' }));
   }
-  const rate = checkContactRouteRateLimit(getClientIp(headers));
+  const identity = serverlessClientIdentity(headers);
+  if (identity.ip === undefined) return netlifyJsonToResponse(json(503, { error: 'Client identity is unavailable. Please try again later.' }));
+  const rate = checkContactRouteRateLimit(identity.ip);
   if (!rate.allowed) {
     return netlifyJsonToResponse(json(
       429,

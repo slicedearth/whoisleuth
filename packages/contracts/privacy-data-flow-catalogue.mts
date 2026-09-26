@@ -77,13 +77,15 @@ export const PRIVACY_PROCESSING_CLASSES = Object.freeze([
 
 export type PrivacyProcessingClassId = typeof PRIVACY_PROCESSING_CLASSES[number]['id'];
 
+const GLOBAL_NON_INFERENCE = 'Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.';
+
 export const PRIVACY_CATALOGUE_INVARIANTS = Object.freeze([
   'Browser-profile retention describes the browser deployment. The optional standalone local application instead stores saved collections, recovery drafts and original files in an explicitly selected plaintext filesystem workspace; appearance and tab preferences remain browser-local.',
   'Standalone workspace traffic stays between the browser and its authenticated loopback process. Starting it makes no collection request; explicit collection uses the existing request policy from this machine, and offline mode disables collection. Clearing browser data or signing out does not delete the filesystem workspace. Encrypted portable backups remain separate.',
   'The catalogue contains fixed contract metadata only; it contains no target, evidence value, personal data, raw contact, credential, cookie, authorisation value, runtime secret, complete query-bearing URL, unnecessary path or local filesystem detail.',
   'Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.',
   'Offline operations make no request and do not inherit a capability family\'s possible network disclosure.',
-  'Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.',
+  GLOBAL_NON_INFERENCE,
   'A normalised outcome marked not_declared_for_boundary is outside that boundary\'s current output vocabulary; it is not evidence that the state cannot occur upstream or that evidence is absent.',
   'The catalogue describes current checked-in contracts. It does not enable a capability, make a request, grant authorisation, inspect a deployment or create a legal conclusion.',
 ] as const);
@@ -336,8 +338,6 @@ export type PrivacyDataFlowCatalogueBuildInput = Readonly<{
   }>;
   schemaLifecycleRegistry: SchemaLifecycleRegistry;
 }>;
-
-const GLOBAL_NON_INFERENCE = PRIVACY_CATALOGUE_INVARIANTS[3];
 
 function unique(values: readonly string[]): readonly string[] {
   return Object.freeze([...new Set(values)]);

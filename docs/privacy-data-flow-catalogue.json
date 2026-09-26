@@ -148,7 +148,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Cases and Review Items remain in the selected workspace unless deliberately exported: the current browser profile for the browser deployment, or the selected filesystem folder in the standalone local application.",
         "Review decisions retain stable subject identity, the reviewed material fingerprint, rationale, timestamps, expiry and bounded associations; current titles, evidence summaries and source values remain derived.",
         "Analyst assertions, response actions and Review Item lifecycle decisions never rewrite their source evidence or start collection, reporting, monitoring or enforcement.",
@@ -228,7 +228,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Authoritative registration publications take precedence. When they are inconclusive, positive authoritative DNS delegation can support registered status at medium confidence.",
         "Missing DNS never proves availability. Page, mail and heuristic evidence cannot decide registration existence."
       ]
@@ -303,7 +303,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Search results are lower-bound public log observations and do not prove current deployment or control."
       ]
     },
@@ -371,7 +371,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Budget records contain operation classes and bounded counters, not targets or evidence contents.",
         "Unavailable distributed controls make configured network-heavy operations fail closed."
       ]
@@ -447,7 +447,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_input",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Resolver answers are point-in-time publications and do not prove provider ownership or control."
       ]
     },
@@ -521,7 +521,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The selected resolver receives the bounded DNS questions for this explicitly authorised run.",
         "DNSSEC assurance remains separate from routing, DANE, PKIX and ownership claims."
       ]
@@ -600,7 +600,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Each source retains its own state, observation time, completeness and limitations.",
         "Fast and Compact never inherit the richer Deep request or storage contract.",
         "A URL path and query are sent only after separate selection in a full Deep Lookup."
@@ -681,7 +681,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Posture findings describe bounded public registry, DNS and MTA-STS publication evidence and never change configuration.",
         "Inherited DMARC and direct parent delegation require a separate opt-in: at most seven ancestor TXT questions, one parent NS discovery and A/AAAA discovery for at most two parent servers, followed by one pinned public-address DNS/TCP question per server. No messages are sent; recursive policy and direct referral observations remain separate."
       ]
@@ -754,7 +754,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_input",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Optional providers remain off unless configured and selected for one Deep Lookup.",
         "A provider report or miss remains attributed and is not proof of maliciousness, safety or absence."
       ]
@@ -826,7 +826,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_input",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Local string similarity and script analysis do not establish impersonation, intent or maliciousness."
       ]
     },
@@ -909,7 +909,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Targets are disclosed only to the source families eligible for the selected mode.",
         "Fast, Compact, Deep and monitoring retain distinct request, evidence and storage boundaries.",
         "Only explicit selected-URL collection in a single full Deep Lookup sends a path and query; fragments are excluded.",
@@ -989,7 +989,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The action never sends mail, authenticates, tests relay, enumerates recipients or retries automatically.",
         "DNSSEC, TLSA, DANE, PKIX, STARTTLS and SMTP states remain independently attributed."
       ]
@@ -1065,7 +1065,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "One observed public endpoint does not establish an origin host, hosting control or ownership."
       ]
     },
@@ -1136,7 +1136,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Offline commands read only selected bounded local inputs and make no network request.",
         "Generated output remains under the operator's local retention and deletion control."
       ]
@@ -1210,7 +1210,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Integrity, structure, signature and content assurance remain separate checks.",
         "Browser exports require an explicit browser action; CLI exports, verification and review require an explicit CLI command.",
         "Sharing a generated artefact is a deliberate action outside the collection runtime.",
@@ -1288,7 +1288,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Published registration and allocation data remains attributed to its RDAP service.",
         "Missing or redacted fields do not establish absence, ownership or operational control."
       ]
@@ -1363,7 +1363,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The query is limited to one selected registry and is not a global reverse-nameserver inventory."
       ]
     },
@@ -1438,7 +1438,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "At most one eligible registry-advertised HTTPS service is followed and it never overwrites registry evidence."
       ]
     },
@@ -1508,7 +1508,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The comparator reads only two selected bounded local capture sets and makes no network request.",
         "It reports independent verified components and never emits a combined similarity, intent or maliciousness score."
       ]
@@ -1582,7 +1582,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Each admitted resource request discloses its exact URL, including path and query, its GET or HEAD method, and ordinary allowlisted request headers to that public resource endpoint; DNS questions are disclosed to the configured resolver.",
         "Structured outputs exclude request paths, queries, headers and bodies, but the control-sanitised page title and screenshot retain page-controlled content that may reproduce a path or query.",
         "Rendered capture executes page JavaScript and remains separate from hosted Lookup and the distributable CLI."
@@ -1659,7 +1659,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "PTR names are publisher-controlled context and do not prove ownership or service identity."
       ]
     },
@@ -1735,7 +1735,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Network diagnostics run only with the explicit network option and use fixed diagnostic targets."
       ]
     },
@@ -1814,7 +1814,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The worker retains only the documented compact encrypted projection and is not general evidence custody.",
         "Disabling collection does not delete retained ciphertext; deletion remains deliberate."
       ]
@@ -1892,7 +1892,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Publication is a source-attributed contact route, not proof that it is monitored or appropriate."
       ]
     },
@@ -1964,7 +1964,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_input",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "One exact retained-indicator search is performed without submitting an indicator or sample."
       ]
     },
@@ -2041,7 +2041,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "PKIX, hostname, validity and connection states remain independent and point-in-time.",
         "A successful handshake is not a safety, ownership or intent verdict."
       ]
@@ -2114,7 +2114,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_input",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "One exact host search is performed without submitting a URL, file or report."
       ]
     },
@@ -2186,7 +2186,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_input",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Archived scan history is searched without submitting a new scan."
       ]
     },
@@ -2258,7 +2258,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Saved monitoring state is not refreshed automatically unless a separately configured worker is used."
       ]
     },
@@ -2335,7 +2335,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Static captured evidence is not a browser execution, vulnerability test or proof of page purpose.",
         "Selected-URL collection sends the path and query only after explicit selection; retained paths and page-derived text still require privacy review.",
         "Complete query-bearing URLs, cookies, credentials, scripts and raw page content are not retained."
@@ -2412,7 +2412,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Registry and referral publications remain separately attributed and can disagree.",
         "Raw WHOIS payloads and expanded contact data are excluded from compact retention."
       ]
@@ -2501,7 +2501,7 @@
       ],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Only installed fixed-recipe steps can run, and each network invocation requires explicit approval.",
         "Analyst-selection placeholders pause without interpretation or collection."
       ]
@@ -2574,7 +2574,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The command is offline and treats every provider label, readiness state, and evidence reference as analyst-authored input. It changes no configuration.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -2646,7 +2646,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The command is offline, excludes raw upstream payloads, and does not create an analyst assertion or claim that the saved observation is current.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -2730,7 +2730,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.",
         "Only the source families eligible for the selected command and mode receive the bounded target representation.",
         "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
@@ -2810,7 +2810,7 @@
           "documentStates": [],
           "scoringEffect": "bounded_risk_and_acquisition_input",
           "nonInferences": [
-            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -2885,7 +2885,7 @@
           "documentStates": [],
           "scoringEffect": "bounded_risk_and_acquisition_input",
           "nonInferences": [
-            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -2953,7 +2953,7 @@
           "documentStates": [],
           "scoringEffect": "none",
           "nonInferences": [
-            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -3021,7 +3021,7 @@
           "documentStates": [],
           "scoringEffect": "none",
           "nonInferences": [
-            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -3092,7 +3092,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:<digest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -3164,7 +3164,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The command is an offline handoff from the browser Case workflow: it creates a new package, never creates or mutates a durable Case, never mutates the source archive, and requires an explicit review acknowledgement.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -3238,7 +3238,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Assembly is offline. Readiness reflects only the supplied bounded evidence and does not authorise or perform a domain change.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -3309,7 +3309,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Catalogue generation is offline. It reports declared command modes and limits without executing collection or inspecting local evidence.",
         "The command emits fixed installed metadata and makes no network request or local evidence read."
       ],
@@ -3380,7 +3380,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Comparison is offline. Differences are review context and do not by themselves prove which publication is current.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -3451,7 +3451,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Generation is offline and writes only the script to stdout. The command never modifies shell configuration.",
         "The command emits fixed installed metadata and makes no network request or local evidence read."
       ],
@@ -3522,7 +3522,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The command is offline, caps output at 100 findings, and treats every event as a review lead rather than proof of serving or control.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -3596,7 +3596,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Certificate observations do not prove website activity, registration ownership, or malicious intent.",
         "The bounded search term is sent to the fixed Certificate Transparency search service."
       ],
@@ -3667,7 +3667,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; same-domain comparisons preserve observation times and collection uncertainty. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -3739,7 +3739,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Generation and optional local snapshot comparison are offline. Candidates are leads only and are not resolved, registered, or classified as malicious.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -3823,7 +3823,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "This command performs network collection. Fast compact lookup is the default; deep mode is capped at 50 candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.",
         "Only the source families eligible for the selected command and mode receive the bounded target representation.",
         "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
@@ -3903,7 +3903,7 @@
           "documentStates": [],
           "scoringEffect": "bounded_risk_and_acquisition_input",
           "nonInferences": [
-            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -3978,7 +3978,7 @@
           "documentStates": [],
           "scoringEffect": "bounded_risk_and_acquisition_input",
           "nonInferences": [
-            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -4046,7 +4046,7 @@
           "documentStates": [],
           "scoringEffect": "none",
           "nonInferences": [
-            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -4114,7 +4114,7 @@
           "documentStates": [],
           "scoringEffect": "none",
           "nonInferences": [
-            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -4189,7 +4189,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "This isolated action is never invoked by Lookup, Bulk, monitoring, or recipes. It caps DNS queries, aliases, delegations, bytes, and duration; transport and validation failures remain separate, and secure is not a general safety verdict.",
         "The selected resolver receives the bounded questions only after the owned-or-authorised acknowledgement.",
         "The local trust anchor is read from the selected file and is never transmitted."
@@ -4266,7 +4266,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The default check is offline. Public DNS and port 43 checks run only when --network is explicitly supplied.",
         "Network diagnostics are opt-in and use only fixed public diagnostic destinations."
       ],
@@ -4334,7 +4334,7 @@
           "documentStates": [],
           "scoringEffect": "none",
           "nonInferences": [
-            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
             "Network diagnostics are opt-in and use only fixed public diagnostic destinations."
           ]
         },
@@ -4405,7 +4405,7 @@
           "documentStates": [],
           "scoringEffect": "none",
           "nonInferences": [
-            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
             "Network diagnostics are opt-in and use only fixed public diagnostic destinations."
           ]
         }
@@ -4477,7 +4477,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The command is offline and changes no registrar, DNS, mail, or certificate configuration. Only complete, recent source observations can establish drift or expected absence.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -4549,7 +4549,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-29 exports preserve evidence-source attribution and limitations; published v2 schemas 27, 28 and exact v1 schema 26 remain readable, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -4626,7 +4626,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Requests use the shared public-address and redirect guards. Fixed content-coding and cache-policy metadata describes only the selected response, excludes raw header values, and does not prove caching, transfer savings, performance, privacy, or safety. This is not a rendered browser or vulnerability scan.",
         "The target public service receives one bounded SSRF-guarded homepage workflow."
       ],
@@ -4697,7 +4697,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Offline files only; no submission, feed synchronisation or automatic deletion. Missing candidates are unchanged. Renewal changes the review window, not the original observation. Withdrawn identities stay withdrawn; reintroduction requires a new identity. Keep prior manifests: a digest verifies content, not authorship or the complete revision chain. MISP expiry is a review deadline, not automatic enforcement.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -4771,7 +4771,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Exact values require --reveal. New content comparisons use the reported sorted-json-v2:sha256 identity with --expect-content-digest; bare sha256 hashes retain their legacy locale-sensitive meaning. Retired and future archives are rejected. The archive is read locally and is never uploaded.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -4843,7 +4843,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Offline only: no destination, embedded command or QR payload is opened or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies. Use --strict-exit to return 4 for partial coverage.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -4918,7 +4918,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The report is offline and metadata-only. It does not echo targets, contacts, notes, passphrases, evidence values, or an unrecognised schema string.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -4989,7 +4989,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Calibration is offline and diagnostic. It omits candidate identifiers, domains, notes, and evidence and never tunes generation or filtering automatically.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -5074,7 +5074,7 @@
       "documentStates": [],
       "scoringEffect": "bounded_risk_and_acquisition_input",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Fast is the default. An ICANN-recognised public domain, reserved documentation domain, IP, or ASN may occupy command position as shorthand; it delegates to this same parser and URL-like input requires the explicit lookup command. Deep mode adds bounded WHOIS, DNS, HTTP, TLS, technology, posture, and network context where applicable. --deep --exact-url explicitly sends the input URL path and query to the website, without its fragment; ordinary URL input sends only the hostname. --plan remains offline and omits the selected URL. Retained paths and page-derived text require review before sharing. A full Deep homepage observation can derive fixed publication and delivery/cache summaries from the same response without retaining raw metadata values or making another request. --browse opens before collection, shows aggregate Fast progress or independently settled planned Deep sources, and then navigates allowlisted retained fields in the completed document. Press ? for help and / to search rendered panel text only. Closing during collection cancels without a partial document. --save-lookup writes the exact completed private JSON only after a normal browser close; it can contain normalised evidence omitted from panels and refuses an existing path.",
         "Only the source families eligible for the selected command and mode receive the bounded target representation.",
         "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
@@ -5155,7 +5155,7 @@
           "documentStates": [],
           "scoringEffect": "bounded_risk_and_acquisition_input",
           "nonInferences": [
-            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -5230,7 +5230,7 @@
           "documentStates": [],
           "scoringEffect": "bounded_risk_and_acquisition_input",
           "nonInferences": [
-            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -5298,7 +5298,7 @@
           "documentStates": [],
           "scoringEffect": "none",
           "nonInferences": [
-            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -5366,7 +5366,7 @@
           "documentStates": [],
           "scoringEffect": "none",
           "nonInferences": [
-            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
             "Only the source families eligible for the selected command and mode receive the bounded target representation.",
             "The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract."
           ]
@@ -5438,7 +5438,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Review is offline. It makes no DNS, SMTP, HTTP, registry, or provider request, and does not retain address local parts, display names, subjects, message bodies, attachments, or raw header values. Reported authentication is not independently validated.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -5510,7 +5510,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Review is offline and sends no SMTP traffic. Missing or partial DNS evidence remains inconclusive.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -5588,7 +5588,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "This isolated action probes at most three selected MX hosts sequentially, reports selection, public revalidation, connection, and address authentication separately, sends only EHLO and optional STARTTLS, never retries, and performs no authentication, relay, recipient, mailbox, catch-all, or message test. If a DANE-TA TLSA usage 2 association is published, active collection retains only the leaf certificate and leaves that comparison partial without certificate-path construction and trust-anchor path validation. SMTP relay PKIX-TA usage 0 and PKIX-EE usage 1 records remain unsupported and cannot complete SMTP DANE assurance; a separate usage 3 match remains eligible.",
         "The command requires both owned-or-authorised and active-probe acknowledgements.",
         "It never sends mail, authenticates, tests relay, enumerates recipients or retries automatically."
@@ -5660,7 +5660,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Ordinary output contains metadata only. ZIP and folder output include unchanged selected bytes and are private until reviewed for sharing. Folders must be new; existing destinations are never replaced and a failed write may leave explicit partial output. BagIt output is unencrypted; its checksums do not authenticate evidence. Filenames ending in .json are parsed as JSON; other files are opaque and never executed. Original paths are omitted. No network request is made.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -5731,7 +5731,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Generation is offline and derives from the same command catalogue as focused help.",
         "The command emits fixed installed metadata and makes no network request or local evidence read."
       ],
@@ -5802,7 +5802,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Profiles select allowlisted dotted fields only. They execute no scripts, make no requests, and emit the browser-compatible external-findings contract.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -5885,7 +5885,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "This is an operator-scheduled one-shot collection, not a daemon. It caps targets and concurrency, retains normalised observations, and never changes domain configuration.",
         "The one-shot monitor reads selected local control state and performs only the bounded scheduled review collection.",
         "Its checkpoint and review evidence do not calculate Risk or Opportunity scores."
@@ -5958,7 +5958,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The projection is offline, preserves source completeness without inventing confidence, and covers only bounded FQDN, IP address, certificate, and related edge vocabulary.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6030,7 +6030,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Comparison is offline and component-based. It executes no page code and produces no aggregate similarity or maliciousness score.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6109,7 +6109,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Missing or failed DNS observations remain inconclusive. --include-inherited-dns explicitly adds a bounded DMARC tree walk and direct parent-delegation sample; records retain their queried owner and source. No message is sent and receiver enforcement is not inferred.",
         "The posture review performs bounded RDAP, DNS and MTA-STS publication checks without changing configuration."
       ],
@@ -6180,7 +6180,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The command is offline, accepts 2 to 5 saved observations for one domain, and never treats labels as proof of network independence or majority agreement as truth.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6252,7 +6252,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "This command is offline and omits domains, queries, and raw evidence. Input families cannot be mixed, and retained samples are never assumed independent.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6324,7 +6324,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The command is offline. It distinguishes expected access constraints from collection results and does not contact a live registry.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6395,7 +6395,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The output is a sanitised template only. Its command-owned --profile selects fixture capability, --config is rejected, and contributors must not paste live responses or personal registration data into fixtures.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6466,7 +6466,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "This command is offline. Catalogue coverage does not test live reachability or decide registration or availability.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6540,7 +6540,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The command reads only the supplied document. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6611,7 +6611,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Calibration is offline and diagnostic. The summary form omits record identifiers, domains, and evidence; neither form trains, tunes, or changes the scoring model automatically.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6685,7 +6685,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The command is offline and emits only bounded schema/version metadata, no content values, and no raw evidence. Its result is a review aid, not legal advice or recipient authorisation.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6757,7 +6757,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The command never creates, stores, or transmits keys. Key custody and signer identity remain the operator's responsibility.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6829,7 +6829,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The report retains source states and timings but excludes targets, queries, endpoints, and raw evidence.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6901,7 +6901,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "The command is offline, accepts 2 to 20 bounded inputs for one domain, retains no filenames or raw registry payloads, and does not treat changed collection conditions as a domain change.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -6978,7 +6978,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "One observed connection is point-in-time evidence and does not establish every address, edge, or historical certificate.",
         "The selected public endpoint receives one bounded certificate connection."
       ],
@@ -7050,7 +7050,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Case exports are checked without repairing content; ordinary package review also counts original references with matching bytes. Ordinary folders allow only the declared layout; BagIt allows bounded nested payloads and checks SHA-256/SHA-512 manifests without interpreting payloads. Symbolic links are refused. BagIt fetch.txt is never fetched; missing files, mismatches and unsupported algorithms remain explicit. Package digests describe bytes, not filesystem metadata or authenticity. In scripts, use --strict-exit: incomplete verification returns 4. Default exit 0 means the report was produced, not that its checks passed.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -7124,7 +7124,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "A valid signature proves package consistency for the embedded key, not identity, authority or evidence accuracy. With --trust-store-file, unknown, retired, revoked or future-reviewed entries exit 4 even if --public-key-file matches. Replacement fingerprints need their own trusted entry; no signing date overrides current revocation.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -7195,7 +7195,7 @@
       "documentStates": [],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Planning is offline and plan-only. It does not execute commands, expand placeholders, read files, make requests, or submit evidence.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
@@ -7290,7 +7290,7 @@
       ],
       "scoringEffect": "none",
       "nonInferences": [
-        "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "--preview validates the checkpoint and shows retained outputs, unresolved inputs and remaining approvals without executing or writing. It cannot be combined with approval, interactive, quiet or output-file flags. Only installed recipe commands can run. Network steps require explicit approval for each invocation. New runs connect compatible earlier outputs using the recipe defaults. Use --use-artifact <step-id>:<input-number>=<earlier-step-id> to override a connection; input numbers start at 1. Repeat --select for remaining placeholders in order, or supply every input for a step to replace its connections with files. Values stay literal and cannot start with a hyphen or invoke a shell. Optional --interactive prompts on terminal stderr for missing inputs; a blank answer pauses. It grants neither network approval nor human-review confirmation. A step declaring human review still requires --confirm-review <step-id> for that invocation. Checkpoints do not grant later approvals. Resumes preserve recorded connections. Content digests identify retained output, not authenticity or freshness. Partial collections pause for review and are not recollected on resume; failed validation or export steps remain retryable. Diagnostics go to stderr. File output holds exclusive adjacent locks and refuses concurrently changed state files.",
         "Only fixed installed recipe steps can run, and every network invocation requires explicit approval."
       ],
@@ -7381,7 +7381,7 @@
           ],
           "scoringEffect": "none",
           "nonInferences": [
-            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
             "Only fixed installed recipe steps can run, and every network invocation requires explicit approval."
           ]
         },
@@ -7457,7 +7457,7 @@
           ],
           "scoringEffect": "none",
           "nonInferences": [
-            "Retention and export are independent: a transient projection can be deliberately exported, and retained state is not exported unless a separate deliberate path is declared.",
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
             "Only fixed installed recipe steps can run, and every network invocation requires explicit approval."
           ]
         }

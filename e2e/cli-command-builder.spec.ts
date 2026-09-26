@@ -2,6 +2,21 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
 
+test('fixture command builder exposes its required command-owned profile', async ({ page }) => {
+  await page.goto('/cli#command-registry-scaffold');
+  await page.getByText('Build this command', { exact: true }).click();
+  const builder = page.getByRole('region', { name: 'Build registry-scaffold command' });
+  await builder.getByText('Choose options', { exact: true }).click();
+  for (const [option, value] of [['--profile', 'example-profile'], ['--suffix', 'test'], ['--scenario', 'registered']] as const) {
+    await builder.getByRole('checkbox', { name: option, exact: true }).check();
+    const input = builder.getByRole(option === '--scenario' ? 'combobox' : 'textbox', { name: `Value for ${option}`, exact: true });
+    if (option === '--scenario') await input.selectOption(value);
+    else await input.fill(value);
+  }
+  await expect(builder.locator('.copyable-command code')).toContainText("'--profile' 'example-profile'");
+  await expect(builder.getByRole('checkbox', { name: '--config', exact: true })).toHaveCount(0);
+});
+
 test('command builder uses literal arguments, shared constraints and accessible local drafts', async ({ page }, testInfo) => {
   const requests: string[] = [];
   page.on('request', request => {

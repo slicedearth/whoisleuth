@@ -148,21 +148,21 @@ collected evidence remain distinct. Missing or unreadable storage is reported
 as unavailable; it does not become an empty collection or evidence of absence.
 
 Cases have individual UUIDs and can share a canonical registrable domain.
-Schema 16 can retain
+Current Cases can retain
 the exact normalised submitted hostname on each new evidence snapshot and the
 observation time and explicit review deadline of a response route. Analyst
-decisions can retain confidence and its basis. Cases migrated from supported
-schemas 12–15 may retain null or unknown values because WHOISleuth does
+decisions can retain confidence and its basis. Migrated historical Cases
+may retain null or unknown values because WHOISleuth does
 not reconstruct historical input from weaker fields. Case response histories
 are append-only and bounded. Pins and sightings keep unknown observation times
 as null, independently of the time the record was saved.
 
-The current workspace archive is version 9. It contains Case schema 16, bounded
-analyst review state and saved Case views. Exact workspace versions 5–8 remain
-readable and gain an empty saved-views section; version 5 also adds an empty
-review-state section without inventing decisions. Brand Profiles write version 9 and read exact
-versions 6–8; website snapshots write version 6 and read exact versions 4–5.
-Other historical formats and future versions are unsupported.
+Workspace archives contain Cases, bounded analyst review state and saved Case
+views. Historical readers add missing sections without inventing decisions or
+observations. The generated [Case contracts](case-contracts.md) and the
+`npm run schema:inventory` report identify exact current and supported versions
+for each collection and archive. Other historical formats and future
+versions are unsupported.
 
 Native HTML fingerprints use algorithm 2. Public algorithm-1 baselines retain
 their hashes and remain readable; HTML-derived comparisons across algorithms
