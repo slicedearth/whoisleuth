@@ -9,7 +9,7 @@
 // registry/web responses, contacts, cookies, screenshots, and authentication
 // data. Reports contain only the normalized case record.
 
-import { caseEvidenceTimeline, compareCaseEvidence, currentCaseEvidence } from './case-evidence-model.mts';
+import { caseEvidenceTimeline, compareCaseEvidence, currentCaseEvidence, publishedCaseEvidenceTimelineForVerification } from './case-evidence-model.mts';
 import type { CaseEvidenceSnapshot, CaseRecord, EvidenceFactor } from './case-model.mts';
 import { httpSecurityHeaderLabel } from './http-summary.mts';
 import { analystInteroperabilityTags } from '../analysis/analyst-taxonomy.mts';
@@ -69,7 +69,7 @@ type ReportOptions = {
   includeAttribution?: boolean;
   includeNotes?: boolean;
 };
-type ReportReason = 'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model' | 'other';
+type ReportReason = 'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model' | 'collection-quality' | 'other';
 type ReportChange = ReturnType<typeof compareCaseEvidence>[number];
 type ReportSnapshot = Omit<CaseEvidenceSnapshot, 'inputHostname' | 'observationHostname'>;
 type ReportTimelineEntry = {
@@ -195,6 +195,7 @@ function pickKnownSnapshotFields(snapshot: CaseEvidenceSnapshot): ReportSnapshot
     capturedAt: snapshot.capturedAt,
     source: snapshot.source,
     scanDepth: snapshot.scanDepth,
+    ...(snapshot.webCollectionQuality ? { webCollectionQuality: { ...snapshot.webCollectionQuality } } : {}),
     availability: snapshot.availability,
     confidence: snapshot.confidence,
     riskModelVersion: snapshot.riskModelVersion,
@@ -264,14 +265,7 @@ export function buildCaseReport(
   // --- Build JSON report ---
 
   const timeline = caseEvidenceTimeline(caseRecord.evidenceHistory);
-  const timelineEntries: ReportTimelineEntry[] = timeline.map((entry) => ({
-    snapshot: pickKnownSnapshotFields(entry.snapshot),
-    isBaseline: entry.isBaseline,
-    hasRepeatedObservation: entry.hasRepeatedObservation,
-    changes: entry.changes?.map(({ field, label, before, after, tone }) => ({ field, label, before, after, tone })) ?? null,
-    hasIncomparableChange: entry.hasIncomparableChange,
-    incomparableReasons: [...entry.incomparableReasons],
-  }));
+  const timelineEntries = projectReportTimeline(timeline);
   const selection = currentCaseEvidence(caseRecord);
   const latest = selection.snapshot;
   const currentAssessment = latest ? pickKnownSnapshotFields(latest) : null;
@@ -367,14 +361,27 @@ export function buildCaseReport(
   return { json, markdown: md };
 }
 
+function projectReportTimeline(timeline: ReturnType<typeof caseEvidenceTimeline>): ReportTimelineEntry[] {
+  return timeline.map(entry => ({
+    snapshot: pickKnownSnapshotFields(entry.snapshot), isBaseline: entry.isBaseline,
+    hasRepeatedObservation: entry.hasRepeatedObservation,
+    changes: entry.changes?.map(({ field, label, before, after, tone }) => ({ field, label, before, after, tone })) ?? null,
+    hasIncomparableChange: entry.hasIncomparableChange, incomparableReasons: [...entry.incomparableReasons],
+  }));
+}
+
 /** Expected strict reader projection; historical disclosure wording is immutable. */
 export function buildCaseReportVerificationProjection(
   caseRecord: CaseRecord,
   options: ReportOptions,
   schemaVersion: number,
 ) {
-  const current = buildCaseReport(caseRecord, options).json;
-  if (schemaVersion === CASE_REPORT_SCHEMA_VERSION) return current;
+  const generated = buildCaseReport(caseRecord, options).json;
+  if (schemaVersion === CASE_REPORT_SCHEMA_VERSION) return generated;
+  if (caseRecord.evidenceHistory.some(snapshot => snapshot.webCollectionQuality !== undefined)) {
+    throw new TypeError('Published report formats cannot declare newer collection-quality fields.');
+  }
+  const current = { ...generated, evidenceTimeline: projectReportTimeline(publishedCaseEvidenceTimelineForVerification(caseRecord.evidenceHistory)) };
   if (schemaVersion === LATEST_PUBLIC_CASE_REPORT_SCHEMA_VERSION) return { ...current, schemaVersion };
   if (schemaVersion !== PUBLISHED_V2_3_CASE_REPORT_SCHEMA_VERSION) {
     throw new TypeError('No strict Case report projection is defined for this version.');
@@ -549,6 +556,7 @@ function buildMarkdown(report: CaseReportJson, includeAttribution: boolean): str
         if (reasons.includes('risk-model')) lines.push('> Risk scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');
         if (reasons.includes('opportunity-model')) lines.push('> Opportunity scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');
         if (reasons.includes('scan-depth')) lines.push('> Capture depths differ, so unevaluated deep signals are not treated as additions or removals.');
+        if (reasons.includes('collection-quality')) lines.push('> Incomplete or unknown web collection prevents comparison of affected page, favicon and score fields.');
         if (reasons.length === 0 || reasons.includes('other')) lines.push('> The observations differ materially, but no reliable field-level comparison is available.');
         lines.push('');
       }

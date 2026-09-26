@@ -4,6 +4,7 @@ import { isSafeJsonObjectKey } from '../packages/analysis/bounded-json.mts';
 import { recordOrNull, type UnknownRecord } from './json-record.mts';
 import { isUriShapedLabel } from '../packages/analysis/portable-generator.mts';
 import { validHttpDeliveryMetadata, validPagePublicationMetadata } from './homepage-metadata-contract.mts';
+import { normalizeWebCollectionQuality } from '../packages/evidence/collection-quality.mts';
 import {
   LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES, LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES,
   LOOKUP_EVIDENCE_PORTABLE_MAX_DEPTH, LOOKUP_EVIDENCE_PORTABLE_MAX_ARRAY_ITEMS,
@@ -27,7 +28,9 @@ const LOOKUP_AVAILABILITY_ANALYSIS_KEYS = new Set([
   ...[...PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS]
     .filter((key) => !['registrar', 'registrant', 'abuse'].includes(key)),
   'registryContactsExcluded', 'observationHostname', 'webObservationMode',
+  'webCollectionQuality',
 ]);
+const HISTORICAL_LOOKUP_AVAILABILITY_ANALYSIS_KEYS = new Set([...LOOKUP_AVAILABILITY_ANALYSIS_KEYS].filter(key => key !== 'webCollectionQuality'));
 const PRIVATE_EVIDENCE_KEYS = new Set([
   'authorization', 'proxyauthorization', 'cookie', 'cookies', 'setcookie',
   'session', 'sessionid', 'sessiontoken', 'token', 'accesstoken', 'refreshtoken',
@@ -410,6 +413,10 @@ function projectLookupEvidenceAvailabilityWithKeys(
     if (!Object.hasOwn(source, key)) continue;
     const item = source[key];
     if (privateEvidenceKey(key, item)) continue;
+    if (key === 'webCollectionQuality') {
+      output[key] = normalizeWebCollectionQuality(item);
+      continue;
+    }
     output[key] = currentPrivacyRules
       ? projectLookupEvidenceAvailabilityValue(item, [key], state, 1, legacyUris)
       : projectLookupEvidenceAvailabilityPublicValue(item, [key], state, 1);
@@ -462,7 +469,7 @@ export function projectLookupEvidenceAvailabilityPublic(value: unknown): Unknown
 export function projectLookupEvidenceAvailability(value: unknown, { legacyUris = false } = {}): UnknownRecord | null {
   return projectLookupEvidenceAvailabilityWithKeys(
     value,
-    LOOKUP_AVAILABILITY_ANALYSIS_KEYS,
+    legacyUris ? HISTORICAL_LOOKUP_AVAILABILITY_ANALYSIS_KEYS : LOOKUP_AVAILABILITY_ANALYSIS_KEYS,
     true,
     true,
     legacyUris,

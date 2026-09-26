@@ -28,6 +28,7 @@ function responseLoopFixture(sequence: number) {
       domain: CASE_DOMAIN,
       observationHostname: LOOKUP_TARGET,
       deepScanComplete: true,
+      webCollectionQuality: { version: 1, page: 'complete', favicon: 'unknown', combined: 'partial' },
       pageTitle: sequence === 1 ? 'Fixture sign-in review' : 'Fixture account review',
       nameservers: sequence === 1
         ? ['ns1.response-loop.invalid', 'ns2.response-loop.invalid']

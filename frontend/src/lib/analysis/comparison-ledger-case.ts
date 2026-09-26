@@ -109,6 +109,15 @@ function buildCaseRows(
     });
   }
   for (const reason of reasons) {
+    if (reason === 'collection-quality') {
+      output.add({ comparisonId, ownerId, entityId, mode: 'temporal', state: 'not_compared',
+        field: 'Web collection quality', family: 'collection',
+        earlier: caseSide(earlier, earlier.webCollectionQuality ?? 'Unknown', 'retained'),
+        later: caseSide(later, later.webCollectionQuality ?? 'Unknown', 'incomplete'), completeness: 'partial',
+        limitations: ['Affected page, favicon and score fields require complete collection at both observations.'],
+      });
+      continue;
+    }
     if (reason === 'observation-context') {
       output.add({
         comparisonId,

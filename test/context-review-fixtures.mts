@@ -4,8 +4,9 @@ import { DOMAIN_HISTORY_INPUT_SCHEMA, PLATFORM_CONTINUITY_INPUT_SCHEMA, STOREFRO
 export const CONTEXT_NOW = '2026-09-22T00:00:00.000Z';
 export const CONTEXT_BEFORE = '2026-09-20T00:00:00.000Z';
 export function historyCase() {
-  const before = createCase({ domain: 'example.test', source: 'lookup', evidence: { scanDepth: 'deep', capturedAt: CONTEXT_BEFORE, registrar: 'Example registrar', nameservers: ['ns1.example.test'], hasMx: true, hasSpf: true, hasDmarc: true, pageTitle: 'Earlier site', activityStatus: 'active' } }, CONTEXT_BEFORE);
-  return updateCase([before], before.id, { evidence: { scanDepth: 'deep', capturedAt: CONTEXT_NOW, registrar: 'Different registrar', nameservers: ['ns2.example.test'], hasMx: false, hasSpf: false, hasDmarc: false, pageTitle: 'Changed site', activityStatus: 'active' } }, CONTEXT_NOW).record;
+  const webCollectionQuality = { version: 1, page: 'complete', favicon: 'not_collected', combined: 'partial' } as const;
+  const before = createCase({ domain: 'example.test', source: 'lookup', evidence: { scanDepth: 'deep', webCollectionQuality, capturedAt: CONTEXT_BEFORE, registrar: 'Example registrar', nameservers: ['ns1.example.test'], hasMx: true, hasSpf: true, hasDmarc: true, pageTitle: 'Earlier site', activityStatus: 'active' } }, CONTEXT_BEFORE);
+  return updateCase([before], before.id, { evidence: { scanDepth: 'deep', webCollectionQuality, capturedAt: CONTEXT_NOW, registrar: 'Different registrar', nameservers: ['ns2.example.test'], hasMx: false, hasSpf: false, hasDmarc: false, pageTitle: 'Changed site', activityStatus: 'active' } }, CONTEXT_NOW).record;
 }
 export function platformObject() {
   return { platformOrigin: 'https://platform.example.test', objectType: 'extension' as const, objectId: 'extension-17', version: '1.0.0', observedAt: CONTEXT_BEFORE, source: 'Analyst-selected manifest', report: 'acknowledged' as const, providerOutcome: 'provider_reports_resolved' as const, recheck: 'still_observed' as const, recheckedAt: CONTEXT_NOW };

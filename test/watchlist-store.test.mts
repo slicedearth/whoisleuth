@@ -120,8 +120,8 @@ test('imports reject unrelated, malformed, and future schemas', () => {
   assert.throws(() => mergeWatchlistStores({}, []), /not a WHOISleuth watchlist export/i);
   assert.throws(() => mergeWatchlistStores({}, { Priority: entry() }), /not a WHOISleuth watchlist export/i);
   assert.throws(() => mergeWatchlistStores({}, { schema: 'whoisleuth.cases', watchlists: {} }), /not a WHOISleuth watchlist export/);
-  assert.throws(() => mergeWatchlistStores({}, { schema: WATCHLIST_SCHEMA, version: 1, watchlists: {} }), /using schema 2/);
-  assert.throws(() => mergeWatchlistStores({}, { schema: 'whoisleuth.watchlists', version: 3, watchlists: {} }), /newer schema 3/);
+  assert.throws(() => mergeWatchlistStores({}, { schema: WATCHLIST_SCHEMA, version: 1, watchlists: {} }), /supported WHOISleuth watchlist export/);
+  assert.throws(() => mergeWatchlistStores({}, { schema: 'whoisleuth.watchlists', version: WATCHLIST_SCHEMA_VERSION + 1, watchlists: {} }), /newer schema/);
   assert.equal(watchlistStoreVersion({ schema: WATCHLIST_SCHEMA, version: 2.5, watchlists: {} }), 2.5);
 });
 

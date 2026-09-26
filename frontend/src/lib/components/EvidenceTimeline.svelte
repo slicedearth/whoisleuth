@@ -30,11 +30,13 @@
     if (reasons.includes('opportunity-model')) return 'Opportunity models differ';
     if (reasons.includes('risk-model')) return 'Risk models differ';
     if (reasons.includes('scan-depth')) return 'Depth prevents comparison';
+    if (reasons.includes('collection-quality')) return 'Web collection limits comparison';
     return 'Comparison unavailable';
   }
 
   function incomparableNote(reasons: string[]) {
     const notes = [];
+    if (reasons.includes('collection-quality')) notes.push('Page or favicon collection was incomplete or unknown. Affected fields and scores are not treated as additions or removals.');
     if (reasons.includes('observation-context')) notes.push('The submitted hostname differs. This is observation context and is not evidence that domain or infrastructure state changed.');
     if (reasons.includes('risk-model')) notes.push('Risk scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');
     if (reasons.includes('opportunity-model')) notes.push('Opportunity scores and factors use different or unversioned models, so their numeric difference is not treated as a domain change.');

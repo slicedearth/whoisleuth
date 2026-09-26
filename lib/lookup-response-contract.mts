@@ -30,6 +30,7 @@ import {
 import { assertBoundedJsonStructure } from '../packages/analysis/bounded-json.mts';
 import { canonicalRegistrableDomain } from '../packages/analysis/registrable-domain.mts';
 import { validLookupObservationScope } from '../packages/evidence/lookup-target.mts';
+import { isWebCollectionQuality } from '../packages/evidence/collection-quality.mts';
 import {
   MAX_LOOKUP_DNS_RECORDS_PER_TYPE,
   MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS,
@@ -850,6 +851,7 @@ function validAvailabilityScalars(value: JsonObject): boolean {
     && validOptionalNullableText(value.pageTitle, MAX_LOOKUP_RESPONSE_PAGE_TITLE_LENGTH)
     && validOptionalNullableText(value.dnssec, 40)
     && (value.deepScanComplete === undefined || typeof value.deepScanComplete === 'boolean')
+    && (value.webCollectionQuality === undefined || isWebCollectionQuality(value.webCollectionQuality))
     && (value.hasMx === undefined || value.hasMx === null || typeof value.hasMx === 'boolean')
     && (value.hasNullMx === undefined || value.hasNullMx === null || typeof value.hasNullMx === 'boolean')
     && (value.hasSpf === undefined || value.hasSpf === null || typeof value.hasSpf === 'boolean')
@@ -1079,6 +1081,7 @@ function parseCompactLookupHttpResponse(
     || typeof availability.confidence !== 'string'
     || !COMPACT_CONFIDENCE_LEVELS.has(availability.confidence as CompactLookupConfidence)
     || (availability.deepScanComplete !== undefined && typeof availability.deepScanComplete !== 'boolean')
+    || (availability.webCollectionQuality !== undefined && !isWebCollectionQuality(availability.webCollectionQuality))
     || (availability.bulkComparison !== undefined
       && !validCompactBulkComparison(availability.bulkComparison))
     || compactPageIdentity !== null && Object.hasOwn(compactPageIdentity, 'publicationMetadata')

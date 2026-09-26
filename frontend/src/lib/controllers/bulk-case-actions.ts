@@ -30,6 +30,7 @@ export function bulkCaseInput(row: ScanResult) {
     createdDate: saved.createdDate, expiryDate: saved.expiryDate, nameservers: saved.nameservers,
     hasMx: saved.hasMx, hasSpf: saved.hasSpf, hasDmarc: saved.hasDmarc,
     activityStatus: saved.activityStatus, pageTitle: saved.pageTitle,
+    ...(saved.webCollectionQuality ? { webCollectionQuality: saved.webCollectionQuality } : {}),
     ...(normalizeHttpSummary(saved) || {}),
     faviconMatch: saved.faviconMatch, faviconNearMatch: saved.faviconNearMatch,
     reusesOfficialAssets: saved.reusesOfficialAssets, hasPasswordField: saved.hasPasswordField,

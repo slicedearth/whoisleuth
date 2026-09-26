@@ -6,8 +6,9 @@ import { normalizeOpportunityModelVersion } from '../analysis/opportunity-scorin
 import { normalizeRiskModelVersion } from '../analysis/risk-scoring.mts';
 import { latestObservationCohort } from '../evidence/latest-observations.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
-import { PUBLISHED_V2_3_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION, PUBLISHED_V2_3_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
 import { validWebObservationMode } from '../evidence/lookup-target.mts';
+import { normalizeWebCollectionQuality, webCollectionAllowsComparison } from '../evidence/collection-quality.mts';
 import {
   MAX_EVIDENCE_CHANGES,
   MAX_EVIDENCE_DETAIL_LENGTH,
@@ -155,6 +156,7 @@ const MATERIAL_FIELD_ORDER: Array<keyof CaseEvidenceMaterial> = [
   'observationHostname',
   'webObservationMode',
   'scanDepth',
+  'webCollectionQuality',
   'availability', 'confidence', 'riskModelVersion', 'riskScore', 'opportunityModelVersion', 'opportunityScore',
   'riskFactors', 'opportunityFactors',
   'registrar', 'createdDate', 'expiryDate', 'nameservers',
@@ -207,7 +209,7 @@ function isEmptyMaterial(value: unknown): boolean {
 
 // Fields that describe the capture rather than assert evidence, so they never
 // on their own keep an otherwise-empty snapshot alive.
-const NON_EVIDENCE_MATERIAL = new Set(['inputHostname', 'observationHostname', 'webObservationMode', 'scanDepth', 'confidence']);
+const NON_EVIDENCE_MATERIAL = new Set(['inputHostname', 'observationHostname', 'webObservationMode', 'scanDepth', 'webCollectionQuality', 'confidence']);
 
 // A snapshot with no material evidence (only timestamps/source/depth, or only a
 // bare confidence/unknown-availability) is dropped rather than added to a
@@ -227,7 +229,7 @@ function canonicalMaterialString(snapshot: CaseEvidenceMaterial, legacyOrder = f
     const value = materialValue(field, snapshot, legacyOrder);
     // Optional collection context does not alter historical fingerprints when
     // absent; recorded context separates otherwise-identical captures.
-    if ((field === 'inputHostname' || field === 'observationHostname' || field === 'webObservationMode') && value === null) continue;
+    if ((field === 'inputHostname' || field === 'observationHostname' || field === 'webObservationMode' || field === 'webCollectionQuality') && value === null) continue;
     canonical[field] = value;
   }
   return JSON.stringify(canonical);
@@ -265,6 +267,10 @@ function buildSnapshot(
   const legacyOrder = historicalSchema || (record.factorOrder === undefined && typeof record.fingerprint === 'string');
   const scanDepth = normalizeScanDepth(record.scanDepth);
   const httpSummary = normalizeHttpSummary(record);
+  const webCollectionQuality = normalizeWebCollectionQuality(record.webCollectionQuality, scanDepth);
+  if (webCollectionQuality && options.sourceVersion != null && options.sourceVersion < EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION) {
+    throw new TypeError('Web collection quality requires Case schema 17 or later; historical evidence was not reinterpreted.');
+  }
   const acceptsProfileContext = options.sourceVersion === undefined || Number(options.sourceVersion) >= 12;
   const acceptsInputHostname = options.sourceVersion === undefined || Number(options.sourceVersion) >= 13;
   const acceptsObservationHostname = options.sourceVersion === undefined || Number(options.sourceVersion) > PUBLISHED_V2_3_CASE_SCHEMA_VERSION;
@@ -280,6 +286,7 @@ function buildSnapshot(
     ...(observationHostname ? { observationHostname } : {}),
     ...(acceptsObservationHostname && scanDepth !== 'fast' && record.webObservationMode === 'selected_url' ? { webObservationMode: record.webObservationMode } : {}),
     scanDepth,
+    ...(webCollectionQuality ? { webCollectionQuality } : {}),
     availability: evidenceString(record.availability),
     confidence: evidenceString(record.confidence),
     riskModelVersion: normalizeRiskModelVersion(record.riskModelVersion),
@@ -330,6 +337,11 @@ function buildSnapshot(
   // so it cannot make otherwise-identical evidence look materially different.
   if (fields.riskScore === null && fields.riskFactors.length === 0) fields.riskModelVersion = null;
   if (fields.opportunityScore === null && fields.opportunityFactors.length === 0) fields.opportunityModelVersion = null;
+  if (webCollectionQuality) {
+    for (const field of ['hasPasswordField', 'hasExternalFormAction', 'pageBaselineMatch', 'faviconMatch', 'faviconNearMatch', 'reusesOfficialAssets'] as const) {
+      if (fields[field] === false && !webCollectionAllowsComparison(field, webCollectionQuality, scanDepth)) fields[field] = null;
+    }
+  }
   // A fast capture never evaluates the deep signals, so any value supplied for
   // them (e.g. a profile's default `false`) is discarded as unevaluated.
   if (scanDepth === 'fast') {
@@ -502,6 +514,15 @@ export function latestCaseEvidence(
 
 /** Chronological presentation and comparison admission shared by the browser and Case report. */
 export function caseEvidenceTimeline(history: readonly CaseEvidenceSnapshot[] | null | undefined) {
+  return buildEvidenceTimeline(history, true);
+}
+
+/** Reproduce published report fields only; not current analyst comparisons. */
+export function publishedCaseEvidenceTimelineForVerification(history: readonly CaseEvidenceSnapshot[]) {
+  return buildEvidenceTimeline(history, false);
+}
+
+function buildEvidenceTimeline(history: readonly CaseEvidenceSnapshot[] | null | undefined, enforceCollectionQuality: boolean) {
   const dated = (history ?? []).map((snapshot) => ({
     snapshot,
     at: normalizeExplicitIsoTimestamp(snapshot.capturedAt),
@@ -520,10 +541,10 @@ export function caseEvidenceTimeline(history: readonly CaseEvidenceSnapshot[] | 
         ? 'Equal-time snapshots have no unique before-and-after order; no temporal change is inferred.'
         : null;
     const comparable = previous && !orderingLimitation;
-    const changes = comparable ? compareCaseEvidence(previous.snapshot, snapshot) : [];
+    const changes = comparable ? compareEvidence(previous.snapshot, snapshot, enforceCollectionQuality) : [];
     const incomparableReasons: Array<ReturnType<typeof caseEvidenceIncomparableReasons>[number] | 'other'> = orderingLimitation
       ? ['other']
-      : comparable ? caseEvidenceIncomparableReasons(previous.snapshot, snapshot) : [];
+      : comparable ? incomparableReasonsForEvidence(previous.snapshot, snapshot, enforceCollectionQuality) : [];
     if (comparable && !changes.length && !incomparableReasons.length
       && canonicalMaterialString(previous.snapshot) !== canonicalMaterialString(snapshot)) incomparableReasons.push('other');
     return {
@@ -633,15 +654,30 @@ function valuesMateriallyEqual(
  * in the same observation produced an ordinary material change.
  * @param {CaseEvidenceSnapshot | null | undefined} previous
  * @param {CaseEvidenceSnapshot | null | undefined} current
- * @returns {Array<'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model'>}
+ * @returns {Array<'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model' | 'collection-quality'>}
  */
 export function caseEvidenceIncomparableReasons(
   previous: CaseEvidenceSnapshot | null | undefined,
   current: CaseEvidenceSnapshot | null | undefined,
-): Array<'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model'> {
+): Array<'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model' | 'collection-quality'> {
+  return incomparableReasonsForEvidence(previous, current, true);
+}
+
+function incomparableReasonsForEvidence(
+  previous: CaseEvidenceSnapshot | null | undefined,
+  current: CaseEvidenceSnapshot | null | undefined,
+  enforceCollectionQuality: boolean,
+): Array<'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model' | 'collection-quality'> {
   if (!previous || !current || previous.fingerprint === current.fingerprint) return [];
-  const reasons: Array<'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model'> = [];
+  const reasons: Array<'observation-context' | 'opportunity-model' | 'scan-depth' | 'risk-model' | 'collection-quality'> = [];
   if (!sameObservationContext(previous, current)) reasons.push('observation-context');
+  if (enforceCollectionQuality && previous.scanDepth === 'deep' && current.scanDepth === 'deep'
+    && (JSON.stringify(previous.webCollectionQuality) !== JSON.stringify(current.webCollectionQuality)
+    || COMPARE_FIELDS.some(spec => (spec.modelGate !== 'risk' || riskModelComparable(previous, current))
+    && (spec.modelGate !== 'opportunity' || opportunityModelComparable(previous, current))
+    && !valuesMateriallyEqual(spec.field, previous, current)
+    && (!webCollectionAllowsComparison(spec.field, previous.webCollectionQuality, previous.scanDepth)
+      || !webCollectionAllowsComparison(spec.field, current.webCollectionQuality, current.scanDepth))))) reasons.push('collection-quality');
   const hasRiskEvidence = previous.riskScore !== null || current.riskScore !== null
     || previous.riskFactors.length > 0 || current.riskFactors.length > 0;
   if (hasRiskEvidence && !riskModelComparable(previous, current)) reasons.push('risk-model');
@@ -809,6 +845,14 @@ export function compareCaseEvidence(
   previous: CaseEvidenceSnapshot | null | undefined,
   current: CaseEvidenceSnapshot | null | undefined,
 ): EvidenceChange[] {
+  return compareEvidence(previous, current, true);
+}
+
+function compareEvidence(
+  previous: CaseEvidenceSnapshot | null | undefined,
+  current: CaseEvidenceSnapshot | null | undefined,
+  enforceCollectionQuality: boolean,
+): EvidenceChange[] {
   if (!previous || !current) return [];
   const bothDeep = previous.scanDepth === 'deep' && current.scanDepth === 'deep';
   const comparableDepth = depthComparable(previous.scanDepth, current.scanDepth);
@@ -824,6 +868,8 @@ export function compareCaseEvidence(
     if (spec.depthGate === 'comparable' && !comparableDepth) continue;
     if (spec.modelGate === 'risk' && !comparableRiskModel) continue;
     if (spec.modelGate === 'opportunity' && !comparableOpportunityModel) continue;
+    if (enforceCollectionQuality && (!webCollectionAllowsComparison(spec.field, previous.webCollectionQuality, previous.scanDepth)
+      || !webCollectionAllowsComparison(spec.field, current.webCollectionQuality, current.scanDepth))) continue;
     const result = compareField(spec, previous[spec.field], current[spec.field]);
     if (result) {
       changes.push({ field: spec.field, label: spec.label, before: result.before, after: result.after, tone: result.tone });

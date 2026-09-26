@@ -11,6 +11,7 @@ import { buildLookupEvidenceTopologyNodes } from './evidence-topology.ts';
 import { buildLookupEvidenceCoverageLedger } from './evidence-coverage-ledger.ts';
 import { calibrateExternalIntelligenceRisk } from './external-intelligence-risk.ts';
 import { compactHttpObservation } from './http-summary.ts';
+import { webCollectionQualityForCapture } from '../../../../packages/evidence/collection-quality.mts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import { buildLookupAssetGraph } from './lookup-asset-graph.ts';
 import { buildLookupClaimReadiness } from './lookup-claim-readiness.ts';
@@ -567,6 +568,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     hasDmarc: availability.hasDmarc ?? null,
     activityStatus: boundedTechnologyText(availability.activityStatus, 40) || null,
     websiteProbeDetail: boundedTechnologyText(availability.websiteProbeDetail, 500) || null,
+    webCollectionQuality: webCollectionQualityForCapture(availability.webCollectionQuality, lookupEvidenceDepth),
     pageTitle: availability.pageTitle ?? null,
     faviconMatch: profileSignals.faviconMatch ?? null,
     faviconNearMatch: profileSignals.faviconNearMatch ?? null,

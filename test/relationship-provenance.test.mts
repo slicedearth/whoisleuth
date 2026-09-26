@@ -7,6 +7,7 @@ import { normalizeRelationshipSourceProjection, qualifyRelationshipSources, rela
 import { buildRelationshipAdmissionPreview, relationshipAdmissionMatchesCurrent, snapshotRelationshipAdmission } from '../packages/relationships/relationship-admission-preview.mts';
 import { buildRelationshipObservationExport, createRelationshipObservation, mergeRelationshipObservations, normalizeRelationshipObservationStore } from '../packages/workspace/relationship-observation-model.mts';
 import { buildBulkSessionExport, mergeBulkSessions, normalizeBulkSessionStore, serializeBulkSessionStore } from '../packages/workspace/bulk-session-model.mts';
+import { BULK_SESSION_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { fromBulkSessionResult, toBulkSessionResult } from '../frontend/src/lib/analysis/bulk-result-model.ts';
 import { richBulkSessionStore } from './bulk-session-fixture.mts';
 import { requiredValue } from './value-assertions.mts';
@@ -190,7 +191,7 @@ test('saved Bulk round trips preserve source times, while public rows remain exp
   const imported = mergeBulkSessions([], buildBulkSessionExport(restored, RETAINED));
   assert.equal(requiredValue(requiredValue(imported.sessions[0]).results[0]).observedAt, LAST);
   const publicEmpty = JSON.parse(await readFile(new URL('./fixtures/workspace-lifecycle/browser-bulk-v4.json', import.meta.url), 'utf8'));
-  assert.equal(normalizeBulkSessionStore(publicEmpty).version, 5);
+  assert.equal(normalizeBulkSessionStore(publicEmpty).version, BULK_SESSION_SCHEMA_VERSION);
   assert.equal(requiredValue(normalizeBulkSessionStore(raw).sessions[0])?.results[0]?.observedAt, null);
 });
 

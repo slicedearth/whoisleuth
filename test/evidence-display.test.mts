@@ -17,6 +17,7 @@ function deepSnapshot(overrides: Partial<CaseEvidenceSnapshot> = {}): CaseEviden
     source: 'lookup',
     inputHostname: null,
     scanDepth: 'deep',
+    webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
     availability: 'registered',
     confidence: null,
     riskModelVersion: 1,

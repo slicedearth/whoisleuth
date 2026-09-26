@@ -482,10 +482,10 @@ describe('schema compatibility inventory', () => {
     assert.deepEqual(byId(inventory, 'browser.website-snapshots').supportedVersions, [...SUPPORTED_WEBSITE_SNAPSHOT_SCHEMA_VERSIONS]);
     assert.equal(byId(inventory, 'browser.website-snapshots').migration, 'normalize_to_current');
     assert.equal(byId(inventory, 'browser.website-snapshots').byteBudget, MAX_WEBSITE_SNAPSHOT_STORE_BYTES);
-    assert.deepEqual(byId(inventory, 'browser.bulk-sessions').supportedVersions, [4, 5]);
+    assertPublishedVersions(byId(inventory, 'browser.bulk-sessions'), [4, 5]);
     assert.equal(byId(inventory, 'browser.bulk-sessions').migration, 'normalize_to_current');
     assert.equal(byId(inventory, 'browser.bulk-sessions').acceptsUnversionedLegacy, false);
-    assert.deepEqual(byId(inventory, 'export.bulk-sessions').supportedVersions, [4, 5]);
+    assertPublishedVersions(byId(inventory, 'export.bulk-sessions'), [4, 5]);
     assert.equal(byId(inventory, 'export.bulk-sessions').migration, 'normalize_to_current');
     assert.equal(byId(inventory, 'export.bulk-sessions').acceptsUnversionedLegacy, false);
     assert.equal(byId(inventory, 'browser.investigation-templates').schema, null);
@@ -888,10 +888,10 @@ describe('schema compatibility inventory', () => {
     assert.deepEqual(byId(inventory, 'browser.cases').supportedVersions, [...CASE_IMPORT_VERSIONS]);
     assertPublishedVersions(byId(inventory, 'browser.cases'), [12, 13, 14, 15, 16]);
     assert.deepEqual(byId(inventory, 'browser.brand-profiles').supportedVersions, [...SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS]);
-    assert.deepEqual(byId(inventory, 'browser.watchlists').supportedVersions, [2]);
+    assertPublishedVersions(byId(inventory, 'browser.watchlists'), [2]);
     assert.deepEqual(byId(inventory, 'browser.shortlist').supportedVersions, [3]);
     assert.deepEqual(byId(inventory, 'browser.ct-history').supportedVersions, [3]);
-    assert.deepEqual(byId(inventory, 'export.watchlists').supportedVersions, [2]);
+    assertPublishedVersions(byId(inventory, 'export.watchlists'), [2]);
     assert.deepEqual(byId(inventory, 'export.shortlist').supportedVersions, [3]);
     assert.deepEqual(byId(inventory, 'export.cases').supportedVersions, [...CASE_IMPORT_VERSIONS]);
     assert.deepEqual(byId(inventory, 'export.brand-profiles').supportedVersions, [...SUPPORTED_BRAND_PROFILE_SCHEMA_VERSIONS]);

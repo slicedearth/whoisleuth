@@ -118,8 +118,8 @@
         },
         "cliCasePack": {
           "caseCount": 8,
-          "totalBytes": 116388,
-          "retainedEvidenceBytes": 86394,
+          "totalBytes": 114572,
+          "retainedEvidenceBytes": 84578,
           "caseLimitApplied": false
         }
       }
@@ -348,8 +348,8 @@
         },
         "cliCasePack": {
           "caseCount": 24,
-          "totalBytes": 347639,
-          "retainedEvidenceBytes": 259356,
+          "totalBytes": 342191,
+          "retainedEvidenceBytes": 253908,
           "caseLimitApplied": false
         }
       }

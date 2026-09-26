@@ -5,6 +5,7 @@
 import { normalizeDomain } from '../evidence/domain-name.mts';
 import { normalizeCaaCritical } from './dns-record-normalization.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
+import { normalizeWebCollectionQuality, webCollectionAllowsComparison, type WebCollectionQuality } from '../evidence/collection-quality.mts';
 import { RELATIONSHIP_EVIDENCE_VERSION } from '../contracts/offline-comparison.mts';
 import { normalizeRelationshipSourceProjection } from '../comparison/relationship-provenance.mts';
 import type { RelationshipObservation } from '../comparison/relationship-evidence.mts';
@@ -134,6 +135,7 @@ export type BulkSessionResult = {
   trusted: 'allowlisted' | 'official' | 'partner' | null;
   error: string;
   scanDepth: BulkSessionMode;
+  webCollectionQuality?: WebCollectionQuality;
   observedAt: string | null;
   createdDate: string | null;
   expiryDate: string | null;
@@ -486,6 +488,7 @@ export function normalizeBulkSessionResult(
   );
   const profileClaimsUsable = profileContextReady && !impossibleNoProfileClaim;
   if (!profileClaimsUsable || readyWithoutActiveProfile) relationship.officialAssetHosts = [];
+  const webCollectionQuality = normalizeWebCollectionQuality(item.webCollectionQuality, scanDepth);
   return {
     domain,
     status: status as BulkSessionResult['status'],
@@ -499,6 +502,7 @@ export function normalizeBulkSessionResult(
     trusted: profileClaimsUsable && !readyWithoutActiveProfile && TRUST_STATES.has(trusted) ? trusted as BulkSessionResult['trusted'] : null,
     error: boundedText(item.error),
     scanDepth: scanDepth as BulkSessionMode,
+    ...(webCollectionQuality ? { webCollectionQuality } : {}),
     observedAt: normalizeExplicitIsoTimestamp(item.observedAt),
     createdDate: boundedText(item.createdDate, 64) || null,
     expiryDate: boundedText(item.expiryDate, 64) || null,
@@ -562,7 +566,7 @@ export function normalizeBulkSession(value: unknown, sourceStoreVersion?: number
   // Only an explicitly versioned current document may omit identical row
   // context. Bare runtime rows and public schema 4 must carry their own context;
   // an explicit invalid/null row value never falls back to the session.
-  const inheritedProfileContext = sourceStoreVersion === 5
+  const inheritedProfileContext = sourceStoreVersion !== undefined && sourceStoreVersion >= 5
     && declaredProfileContext.sourceState !== 'mixed'
     && rawProfileContext.sourceState === declaredProfileContext.sourceState
     ? declaredProfileContext
@@ -571,6 +575,9 @@ export function normalizeBulkSession(value: unknown, sourceStoreVersion?: number
   const results: BulkSessionResult[] = [];
   const seen = new Set<string>();
   for (const candidate of Array.isArray(item.results) ? item.results.slice(0, MAX_BULK_SESSION_ROWS * 2) : []) {
+    if (sourceStoreVersion !== undefined && sourceStoreVersion < 6 && record(candidate)?.webCollectionQuality !== undefined) {
+      throw new TypeError('Web collection quality requires Bulk schema 6 or later; historical evidence was not reinterpreted.');
+    }
     const publicLegacyRow = sourceStoreVersion === 4;
     if (publicLegacyRow && record(record(candidate)?.relationship)?.version === RELATIONSHIP_EVIDENCE_VERSION) {
       throw new TypeError('Bulk schema 4 cannot contain newer relationship source evidence; no evidence was interpreted.');
@@ -754,6 +761,8 @@ export function areBulkRiskScoresComparable(previous: BulkSessionResult, current
     && current.profileContext.sourceState === 'ready'
     && bulkProfileContextsMatch(previous.profileContext, current.profileContext)
     && previous.scanDepth === current.scanDepth
+    && webCollectionAllowsComparison('riskScore', previous.webCollectionQuality, previous.scanDepth)
+    && webCollectionAllowsComparison('riskScore', current.webCollectionQuality, current.scanDepth)
     && previous.risk !== null
     && current.risk !== null
     && previous.riskModelVersion !== null
@@ -767,7 +776,9 @@ function resultChanges(previous: BulkSessionResult, current: BulkSessionResult):
     changes.push(`Risk: ${previous.risk ?? 'unavailable'} → ${current.risk ?? 'unavailable'}`);
   }
   if (previous.registrar !== current.registrar) changes.push(`Registrar: ${previous.registrar} → ${current.registrar}`);
-  if (previous.activity !== current.activity) changes.push(`Website: ${previous.activity} → ${current.activity}`);
+  if (previous.activity !== current.activity
+    && webCollectionAllowsComparison('activityStatus', previous.webCollectionQuality, previous.scanDepth)
+    && webCollectionAllowsComparison('activityStatus', current.webCollectionQuality, current.scanDepth)) changes.push(`Website: ${previous.activity} → ${current.activity}`);
   const previousComparison = previous.comparisonEvidence;
   const currentComparison = current.comparisonEvidence;
   if (JSON.stringify(previousComparison?.technology.ids ?? null)
@@ -833,7 +844,7 @@ export function compareBulkSessions(
       'A source-state change may reflect collection availability rather than a change to the domain.',
       'A missing row means it was not completed in that saved session; it does not establish domain removal.',
       ...(riskIncomparable
-        ? ['Risk deltas are omitted unless both rows retain the same ready Brand Profile provenance, scan depth, and versioned Risk model.']
+        ? ['Risk deltas are omitted unless both rows retain the same ready Brand Profile provenance, scan depth, versioned Risk model and complete web collection for Deep observations.']
         : []),
     ],
   };

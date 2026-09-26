@@ -9,6 +9,7 @@ import type {
   CaseSightingRecord,
 } from './case-response-model.mts';
 import { ANALYST_REVIEW_REASONS } from '../analysis/analyst-taxonomy.mts';
+import type { WebCollectionQuality } from '../evidence/collection-quality.mts';
 import {
   CASE_IMPORT_VERSIONS,
   CASE_SCHEMA_VERSION,
@@ -111,6 +112,7 @@ export type CaseEvidenceSnapshot = {
   observationHostname?: string | null;
   webObservationMode?: 'selected_url';
   scanDepth: string;
+  webCollectionQuality?: WebCollectionQuality;
   availability: string | null;
   confidence: string | null;
   riskModelVersion: number | null;
@@ -223,7 +225,7 @@ export type SnapshotOptions = {
 };
 export type EvidenceChange = { field: string; label: string; before: unknown; after: unknown; tone: string };
 export type CompareFieldSpec = {
-  field: keyof CaseEvidenceSnapshot;
+  field: keyof CaseEvidenceMaterial;
   scope: 'registration' | 'hostname' | 'web';
   label: string;
   type: string;

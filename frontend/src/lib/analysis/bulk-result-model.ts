@@ -217,6 +217,7 @@ export function toBulkSessionResult(row: ScanResult): BulkSessionResult {
     trusted: row.trusted,
     error: row.error,
     scanDepth: row.saved.scanDepth,
+    ...(row.saved.webCollectionQuality ? { webCollectionQuality: row.saved.webCollectionQuality } : {}),
     observedAt: normalizeExplicitIsoTimestamp(row.saved.observedAt),
     createdDate: row.saved.createdDate ?? null,
     expiryDate: row.saved.expiryDate ?? null,
@@ -258,6 +259,7 @@ export function fromBulkSessionResult(
   const saved: SavedScanRecord = {
     domain: row.domain,
     scanDepth: row.scanDepth,
+    ...(row.webCollectionQuality ? { webCollectionQuality: row.webCollectionQuality } : {}),
     observedAt: row.observedAt,
     availability: row.availability,
     registrarName: row.registrar,

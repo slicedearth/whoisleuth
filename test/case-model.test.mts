@@ -16,6 +16,7 @@ function deepEvidence(overrides: Record<string, unknown> = {}): Record<string, u
   return {
     inputHostname: null,
     scanDepth: 'deep',
+    webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
     availability: 'registered',
     riskModelVersion: 1,
     riskScore: 40,
@@ -1200,8 +1201,8 @@ describe('compareCaseEvidence', () => {
   });
 
   test('reports a deep->deep signal removal', () => {
-    const before = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', faviconMatch: true }, { fallback: ISO });
-    const after = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', faviconMatch: false }, { fallback: LATER });
+    const before = normalizedSnapshot(deepEvidence({ faviconMatch: true }), { fallback: ISO });
+    const after = normalizedSnapshot(deepEvidence({ faviconMatch: false }), { fallback: LATER });
     const change = find(model.compareCaseEvidence(before, after), 'faviconMatch');
     assert.ok(change);
     assert.equal(change.before, true);
@@ -1237,8 +1238,8 @@ describe('compareCaseEvidence', () => {
   });
 
   test('reports a factor change even when the total score is unchanged', () => {
-    const before = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', riskModelVersion: 1, riskScore: 70, riskFactors: [{ label: 'A', points: 40 }, { label: 'B', points: 30 }] }, { fallback: ISO });
-    const after = normalizedSnapshot({ scanDepth: 'deep', availability: 'registered', activityStatus: 'active', riskModelVersion: 1, riskScore: 70, riskFactors: [{ label: 'A', points: 50 }, { label: 'B', points: 20 }] }, { fallback: LATER });
+    const before = normalizedSnapshot(deepEvidence({ riskScore: 70, riskFactors: [{ label: 'A', points: 40 }, { label: 'B', points: 30 }] }), { fallback: ISO });
+    const after = normalizedSnapshot(deepEvidence({ riskScore: 70, riskFactors: [{ label: 'A', points: 50 }, { label: 'B', points: 20 }] }), { fallback: LATER });
     const changes = model.compareCaseEvidence(before, after);
     assert.equal(find(changes, 'riskScore'), undefined); // total unchanged
     assert.ok(find(changes, 'riskFactors')); // composition changed -> explainable material change

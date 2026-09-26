@@ -91,6 +91,11 @@ relationship observations, saved Bulk sessions, website snapshots,
 investigation templates, Bulk review state and saved List column choices, saved Case views and Analyst Review Item state. They
 are visible to anyone able to use the browser profile.
 
+Saved Case, Bulk and watchlist evidence can retain page and favicon collection
+outcomes, not response bodies. Incomplete checks do not replace usable watchlist
+baselines or establish signal removal. Historical records without these
+outcomes remain readable with unknown collection quality.
+
 Lesson-based template revisions retain authored guidance, applicability, reason,
 source-template identity and content hashes of the source template and selected
 lesson. They do not copy the Case identity or note text automatically. These

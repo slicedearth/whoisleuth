@@ -169,8 +169,11 @@ their hashes and remain readable; HTML-derived comparisons across algorithms
 are unavailable rather than a match or a change. Refresh a baseline deliberately
 to use the current parser. Exact favicon-byte comparison remains separate.
 
-Saved Bulk schema 5 reads public schema 4; retained relationship schema 2 reads
-public schema 1. Current records preserve each contributing source's identity,
+Saved Bulk schema 6 reads public schemas 4 and 5; Watchlist schema 3 reads public
+schema 2. They preserve explicit page and favicon collection outcomes for
+comparisons; historical outcomes remain unknown. Failed or partial checks stay
+visible without replacing a usable Watchlist baseline. Retained relationship
+schema 2 reads public schema 1. Current records preserve each contributing source's identity,
 state, observation time and completeness. Unknown historical provenance stays
 unknown, and a partial source can still support an exact positive pivot. The
 archive versions these sections independently; its outer format is unchanged.

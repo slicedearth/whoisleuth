@@ -1138,6 +1138,7 @@ describe('retained comparison adapters', () => {
 
   test('allows an identical fully source-complete non-empty Bulk pair to be equivalent', () => {
     const retained = bulkResult('complete-equivalence.reservation.invalid', {
+      webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
       sourceCoverage: [
         { source: 'rdap', state: 'complete' },
         { source: 'whois', state: 'unsupported' },

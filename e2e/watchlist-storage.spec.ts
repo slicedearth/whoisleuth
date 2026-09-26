@@ -1,6 +1,7 @@
 import { openConsoleView } from './console-navigation';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalCollectionReadAfterWrite, readBrowserLocalCollection } from './helpers';
+import { appendWatchlistScan } from '../packages/workspace/watchlist-history.mts';
 
 const WATCHLIST_KEY = 'whois-rdap-watchlist-v1';
 const NOW = '2026-07-14T08:00:00.000Z';
@@ -20,6 +21,25 @@ async function seed(page: import('@playwright/test').Page, value: unknown) {
   await page.goto('/monitor');
   await openConsoleView(page, 'watchlists');
 }
+
+test('incomplete web collection is visible while a usable Watchlist baseline survives reload', async ({ page }) => {
+  const complete = { domain: 'quality.invalid', availability: 'registered', scanDepth: 'deep', pageTitle: 'Earlier page',
+    hasPasswordField: true, riskScore: 80, riskModelVersion: 8, webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' } };
+  const first = appendWatchlistScan(null, [complete], { checkedAt: '2026-07-13T08:00:00.000Z', mode: 'deep' }).entry;
+  const latest = appendWatchlistScan(first, [{ ...complete, hasPasswordField: false, riskScore: 10,
+    webCollectionQuality: { version: 1, page: 'unavailable', favicon: 'unknown', combined: 'partial' } }], { checkedAt: NOW, mode: 'deep' }).entry;
+  await seed(page, { Quality: latest });
+  await page.getByRole('row', { name: /Quality/ }).getByRole('button', { name: 'History', exact: true }).click();
+  await expect(page.locator('.events article').first()).toContainText('Web comparison was limited for 1 domain');
+  await expect(page.locator('.events article').first().locator('li')).toHaveCount(0);
+  await page.getByLabel('History focus', { exact: true }).selectOption('quality.invalid');
+  await expect(page.locator('.history-summary')).toContainText('Page: unavailable · Favicon: unknown');
+  const stored = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });
+  expect(stored.records[0]!.value.baseline[0]!.riskScore).toBe(80);
+  expect(stored.records[0]!.value.results[0]!.riskScore).toBe(10);
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expectNoHorizontalOverflow(page);
+});
 
 for (const all of [false, true]) test(`a committed watchlist ${all ? 'clear' : 'deletion'} remains visible when rereading fails`, async ({ page }) => {
   await seed(page, { Priority: entry('priority.invalid'), Other: entry('other.invalid') });
@@ -44,8 +64,8 @@ test('history distinguishes omitted changes from a completed check with no chang
   await expect(events).toHaveCount(2);
   const omitted = events.filter({ hasText: '3 change details were omitted' });
   await expect(omitted).toHaveCount(1);
-  await expect(omitted).not.toContainText('No material changes');
-  await expect(events.filter({ hasText: 'No material changes' })).toHaveCount(1);
+  await expect(omitted).not.toContainText('No comparable material changes');
+  await expect(events.filter({ hasText: 'No comparable material changes' })).toHaveCount(1);
 });
 
 test('a future watchlist schema is never overwritten by an older app', async ({ page }) => {

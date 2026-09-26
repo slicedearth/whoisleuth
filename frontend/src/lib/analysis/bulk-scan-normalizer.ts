@@ -5,6 +5,7 @@ import { registryDateIso } from '../../../../packages/evidence/registry-dates.mt
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import { compactHttpObservation } from './http-summary.ts';
+import { webCollectionQualityForCapture } from '../../../../packages/evidence/collection-quality.mts';
 import { createPageBaseline } from './page-baseline.ts';
 import { comparePageBaselines, hasStrongPageIdentityReviewMatch } from './page-similarity.ts';
 import { entityDisplayName } from './utils.ts';
@@ -144,6 +145,7 @@ export function normalizeBulkScanResult(
     activityStatus,
     pageTitle: boundedText(availability.pageTitle, 300),
     ...httpSummary,
+    webCollectionQuality: webCollectionQualityForCapture(availability.webCollectionQuality, context.mode),
     faviconHash: boundedText(availability.faviconHash, 64),
     faviconPHash: boundedText(availability.faviconPHash, 64),
     faviconMatch: matched.faviconMatch,

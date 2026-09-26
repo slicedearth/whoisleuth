@@ -10,6 +10,7 @@
 
 import { promises as dns } from 'node:dns';
 import { abortable } from './abort.mts';
+import { capturedWebCollectionQuality } from '../packages/evidence/collection-quality.mts';
 
 import { fetchRdapRecord } from './rdap.mts';
 import { buildWhoisChain, parseWhoisChain } from './whois.mts';
@@ -840,6 +841,10 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
   const faviconEvidence = pageAnalysis ? {
     iconLinks: pageAnalysis.iconLinks, effectiveBaseUrl: pageAnalysis.effectiveBaseUrl,
   } : undefined;
+  const pageCollectionComplete = homepage.status === 'fetched' && homepage.http?.complete === true
+    && homepage.http.response?.bodyTruncated !== true && Boolean(pageAnalysis)
+    && !pageAnalysis?.inputLimitReached && !pageAnalysis?.tagLimitReached
+    && !pageAnalysis?.visibleTextLimitReached && !pageAnalysis?.forms.truncated;
   pageAnalysis = undefined;
   const favicon = websiteProbeEnabled
     ? await fetchFaviconForDomain(observationHostname, {
@@ -902,6 +907,13 @@ async function checkDomainAvailability(domain: string, options: AvailabilityOpti
     ...(options.observationHostname !== undefined || selectedUrl ? { observationHostname } : {}),
     ...(selectedUrl ? { webObservationMode: 'selected_url' as const } : {}),
     deepScanComplete,
+    webCollectionQuality: capturedWebCollectionQuality(
+      !websiteProbeEnabled ? 'not_collected' : pageCollectionComplete ? 'complete'
+        : homepage.status === 'fetched' ? 'partial' : 'unavailable',
+      // The bounded favicon collector returns no result for both failed and
+      // non-image candidates. A miss therefore cannot prove an icon was removed.
+      !websiteProbeEnabled ? 'not_collected' : favicon ? 'complete' : 'unknown',
+    ),
     faviconHash,
     faviconPHash,
     ...retainedHtmlSignals,

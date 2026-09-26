@@ -20,7 +20,7 @@ test('retained Bulk and watchlist registry dates are identical in distinct host 
     ['2026-08-07', '2026-08-07T00:30:00.000Z'],
     ['2026-08-06', '2026-08-06T14:30:00.000Z'],
     [null, null],
-  ].map(([date, instant]) => ({ ...(date === null ? {} : { created: date, expiry: date }), bulkCreated: instant, bulkExpiry: instant }));
+  ].map(([date, instant]) => ({ created: date, expiry: date, bulkCreated: instant, bulkExpiry: instant }));
   for (const timezone of ['UTC', 'Australia/Melbourne', 'America/Los_Angeles']) {
     const output = execFileSync(process.execPath, ['--input-type=module', '--eval', script], {
       env: { ...process.env, TZ: timezone }, encoding: 'utf8', timeout: 20_000, maxBuffer: 64 * 1024,

@@ -61,9 +61,9 @@ export const MAX_CAMPAIGN_INPUT_RECORDS = 500;
 export const MAX_CAMPAIGN_STORE_BYTES = 512 * 1024;
 
 export const WATCHLIST_SCHEMA = 'whoisleuth.watchlists';
-export const WATCHLIST_SCHEMA_VERSION = 2;
-export const WATCHLIST_BROWSER_SUPPORTED_VERSIONS = Object.freeze([WATCHLIST_SCHEMA_VERSION]);
-export const WATCHLIST_EXPORT_SUPPORTED_VERSIONS = Object.freeze([WATCHLIST_SCHEMA_VERSION]);
+export const WATCHLIST_SCHEMA_VERSION = 3;
+export const WATCHLIST_BROWSER_SUPPORTED_VERSIONS = Object.freeze([2, WATCHLIST_SCHEMA_VERSION]);
+export const WATCHLIST_EXPORT_SUPPORTED_VERSIONS = WATCHLIST_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_WATCHLISTS = 100;
 export const MAX_WATCHLIST_INPUTS = MAX_WATCHLISTS * 4;
 export const MAX_WATCHLIST_NAME_LENGTH = 100;
@@ -134,8 +134,8 @@ export const MAX_WEBSITE_SNAPSHOT_STORE_BYTES = 512 * 1024;
 export const MAX_WEBSITE_SNAPSHOT_IMPORT_BYTES = 768 * 1024;
 
 export const BULK_SESSION_SCHEMA = 'whoisleuth.bulk-sessions';
-export const BULK_SESSION_SCHEMA_VERSION = 5;
-export const BULK_SESSION_BROWSER_SUPPORTED_VERSIONS = Object.freeze([4, BULK_SESSION_SCHEMA_VERSION]);
+export const BULK_SESSION_SCHEMA_VERSION = 6;
+export const BULK_SESSION_BROWSER_SUPPORTED_VERSIONS = Object.freeze([4, 5, BULK_SESSION_SCHEMA_VERSION]);
 export const SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS = BULK_SESSION_BROWSER_SUPPORTED_VERSIONS;
 export const MAX_BULK_SESSIONS = 10;
 export const MAX_BULK_SESSION_ROWS = 2_000;
@@ -274,9 +274,9 @@ export const CAMPAIGN_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
 export const WATCHLIST_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.watchlists', kind: 'browser_store', schema: null, currentVersion: WATCHLIST_SCHEMA_VERSION,
   supportedVersions: WATCHLIST_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
-  futureVersionBehavior: 'preserve_without_write', migration: 'exact_current_only', writeSemantics: 'normalized_rewrite',
+  futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_WATCHLIST_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'The unchanged public version 2 envelope is the browser baseline; unversioned maps are outside the compatibility boundary.',
+  note: 'Public version 2 remains readable without inferred collection outcomes. Version 3 retains explicit page and favicon collection quality; unversioned maps are outside the compatibility boundary.',
 });
 export const SHORTLIST_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.shortlist', kind: 'browser_store', schema: null, currentVersion: SHORTLIST_SCHEMA_VERSION,
@@ -318,7 +318,7 @@ export const BULK_SESSION_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   supportedVersions: BULK_SESSION_BROWSER_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'preserve_without_write', migration: 'normalize_to_current', writeSemantics: 'normalized_rewrite',
   byteBudget: MAX_BULK_SESSION_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Public schema 4 sessions migrate with unknown row and per-source observation times and contributing-source provenance. Schema 5 retains those bounded fields without retaining raw lookup payloads; future versions are preserved without rewrite.',
+  note: 'Public schemas 4 and 5 remain readable with their original observation provenance. Schema 6 retains explicit page and favicon collection quality for saved evidence handoffs; future versions are preserved without rewrite.',
 });
 export const INVESTIGATION_TEMPLATE_BROWSER_COMPATIBILITY = defineSchemaCompatibility({
   id: 'browser.investigation-templates', kind: 'browser_store', schema: null,
@@ -352,9 +352,9 @@ export const CAMPAIGN_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
 export const WATCHLIST_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.watchlists', kind: 'export', schema: WATCHLIST_SCHEMA, currentVersion: WATCHLIST_SCHEMA_VERSION,
   supportedVersions: WATCHLIST_EXPORT_SUPPORTED_VERSIONS, acceptsUnversionedLegacy: false,
-  futureVersionBehavior: 'reject', migration: 'exact_current_only', writeSemantics: 'non_destructive_merge',
+  futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_WATCHLIST_IMPORT_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Non-destructive collection merge with current schema required.',
+  note: 'Public version 2 and current version 3 merge non-destructively. Historical records have unknown collection quality; incomplete current checks cannot erase a usable baseline.',
 });
 export const SHORTLIST_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.shortlist', kind: 'export', schema: SHORTLIST_SCHEMA, currentVersion: SHORTLIST_SCHEMA_VERSION,
@@ -389,7 +389,7 @@ export const BULK_SESSION_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   supportedVersions: SUPPORTED_BULK_SESSION_SCHEMA_VERSIONS, acceptsUnversionedLegacy: false,
   futureVersionBehavior: 'reject', migration: 'normalize_to_current', writeSemantics: 'non_destructive_merge',
   byteBudget: MAX_BULK_SESSION_STORE_BYTES, owner: WORKSPACE_CONTRACT_OWNER,
-  note: 'Public schema 4 sessions migrate directly to schema 5 with unknown historical row and per-source observation times and source provenance. Current exports retain source-qualified relationship evidence and bounded profile context.',
+  note: 'Public schemas 4 and 5 migrate without invented observation times or collection outcomes. Current exports retain source-qualified relationship evidence, bounded profile context and collection quality.',
 });
 export const INVESTIGATION_TEMPLATE_EXPORT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'export.investigation-templates', kind: 'export', schema: INVESTIGATION_TEMPLATE_SCHEMA,
@@ -720,6 +720,26 @@ const WORKSPACE_LIFECYCLE_DEFINITIONS: readonly WorkspaceLifecycleDefinition[] =
 ]);
 
 const WORKSPACE_LIFECYCLE_FIXTURE_SOURCE: readonly Pick<SchemaLifecycleFixture, 'id' | 'path' | 'bytes' | 'sha256' | 'schema' | 'version'>[] = Object.freeze([
+  {
+    id: 'workspace.browser.watchlist.v3', path: 'test/fixtures/workspace-lifecycle/browser-watchlist-v3.json',
+    bytes: 76, sha256: '740246c1666c332ae907a5b40364e03a4f008484fce7b1c6dce8082a6ac7b654',
+    schema: 'whoisleuth.browser.watchlist-store', version: 3,
+  },
+  {
+    id: 'workspace.portable.watchlist.v3', path: 'test/fixtures/workspace-lifecycle/portable-watchlist-v3.json',
+    bytes: 120, sha256: 'ad07c8a530c369b49192bd3d8dde1b17c58b737da4e3d00a834a64be6aa429bf',
+    schema: 'whoisleuth.watchlists', version: 3,
+  },
+  {
+    id: 'workspace.browser.bulk.v6', path: 'test/fixtures/workspace-lifecycle/browser-bulk-v6.json',
+    bytes: 77, sha256: '811ef0b05415f19dc7bd940a4786d53a6398121cbb7cd060fcd6d21ed562487b',
+    schema: 'whoisleuth.browser.bulk-session-store', version: 6,
+  },
+  {
+    id: 'workspace.portable.bulk.v6', path: 'test/fixtures/workspace-lifecycle/portable-bulk-v6.json',
+    bytes: 338, sha256: 'ec7f6445cf42c013163ea835d5f919213b69978124d6883c1f10d62a0868235f',
+    schema: 'whoisleuth.bulk-sessions', version: 6,
+  },
   {
     "id": "workspace.browser.brand.v6",
     "path": "test/fixtures/workspace-lifecycle/browser-brand-v6.json",

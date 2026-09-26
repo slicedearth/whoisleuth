@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { normalizeSnapshot, normalizeEvidenceHistory, compareCaseEvidence, caseEvidenceTimeline } from '../packages/cases/case-evidence-model.mts';
+import { normalizeSnapshot, normalizeEvidenceHistory, compareCaseEvidence, caseEvidenceTimeline, publishedCaseEvidenceTimelineForVerification } from '../packages/cases/case-evidence-model.mts';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 
 const historical = JSON.parse(readFileSync(new URL('./fixtures/case-snapshot-factor-order-v1.json', import.meta.url), 'utf8'));
@@ -38,7 +38,9 @@ test('historical identities remain verifiable while ordering alone is not new ev
   const changed = normalizeSnapshot({ ...current, riskFactors: [{ label: 'Z', points: 7 }] });
   assert.ok(changed);
   assert.equal(normalizeEvidenceHistory([historical, changed]).length, 2);
-  assert.ok(compareCaseEvidence(historical, changed).some(change => change.field === 'riskFactors'));
+  assert.deepEqual(compareCaseEvidence(historical, changed), []);
+  assert.ok(caseEvidenceTimeline([historical, changed])[1]?.incomparableReasons.includes('collection-quality'));
+  assert.ok(publishedCaseEvidenceTimelineForVerification([historical, changed])[1]?.changes?.some(change => change.field === 'riskFactors'));
 });
 
 test('unsupported factor declarations are never silently interpreted under another version', () => {

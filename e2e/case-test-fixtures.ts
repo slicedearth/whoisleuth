@@ -12,6 +12,7 @@ export interface SnapshotOverrides {
   source?: string;
   inputHostname?: string | null;
   scanDepth?: 'fast' | 'deep';
+  webCollectionQuality?: CaseRecord['evidenceHistory'][number]['webCollectionQuality'];
   availability?: string | null;
   riskModelVersion?: number | null;
   riskScore?: number | null;
@@ -48,6 +49,7 @@ export function snapshot(overrides: SnapshotOverrides = {}) {
     source: overrides.source ?? 'lookup',
     inputHostname: overrides.inputHostname ?? null,
     scanDepth: overrides.scanDepth ?? 'deep',
+    ...(overrides.webCollectionQuality ? { webCollectionQuality: overrides.webCollectionQuality } : {}),
     availability: overrides.availability ?? 'registered',
     confidence: null,
     riskModelVersion: Object.hasOwn(overrides, 'riskModelVersion')

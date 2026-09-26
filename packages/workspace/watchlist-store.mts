@@ -12,6 +12,8 @@ import {
   MAX_WATCHLIST_STORE_BYTES,
   WATCHLIST_SCHEMA,
   WATCHLIST_SCHEMA_VERSION,
+  WATCHLIST_BROWSER_SUPPORTED_VERSIONS,
+  WATCHLIST_EXPORT_SUPPORTED_VERSIONS,
 } from '../contracts/workspace-portability.mts';
 
 export {
@@ -70,11 +72,20 @@ function defineEntry(
   Object.defineProperty(target, name, { value: entry, writable: true, enumerable: true, configurable: true });
 }
 
+function assertHistoricalQuality(entry: Record<string, unknown>, version: number | null): void {
+  if (version !== 2) return;
+  for (const values of [entry.results, entry.baseline]) {
+    if (Array.isArray(values) && values.some(value => plainRecord(value)?.webCollectionQuality !== undefined)) {
+      throw new TypeError('Web collection quality requires Watchlist schema 3 or later; historical evidence was not reinterpreted.');
+    }
+  }
+}
+
 export function normalizeWatchlistStore(raw: unknown): WatchlistStore {
   assertWorkspaceInputGraph(raw, 'Watchlist store');
   const root = plainRecord(raw);
   if (root?.schema === WATCHLIST_SCHEMA) assertWorkspaceDeclaredVersion(raw, 'Watchlist store');
-  if (root?.schema === WATCHLIST_SCHEMA && watchlistStoreVersion(root) !== WATCHLIST_SCHEMA_VERSION) {
+  if (root?.schema === WATCHLIST_SCHEMA && !WATCHLIST_BROWSER_SUPPORTED_VERSIONS.includes(Number(watchlistStoreVersion(root)))) {
     throw new Error(`Watchlist schema ${String(root.version)} is unsupported; no data was changed.`);
   }
   const source = watchlistMap(raw);
@@ -84,6 +95,7 @@ export function normalizeWatchlistStore(raw: unknown): WatchlistStore {
     const name = normalizeWatchlistName(rawName);
     const entry = plainRecord(rawEntry);
     if (!name || !entry || !Array.isArray(entry.results) || entry.results.length > MAX_WATCHLIST_DOMAINS) continue;
+    assertHistoricalQuality(entry, root?.schema === WATCHLIST_SCHEMA ? watchlistStoreVersion(root) : null);
     defineEntry(watchlists, name, normalizeWatchlistEntry(entry));
     if (Object.keys(watchlists).length >= MAX_WATCHLISTS) break;
   }
@@ -125,8 +137,8 @@ export function mergeWatchlistStores(localRaw: unknown, importedRaw: unknown) {
   if (importedVersion !== null && importedVersion > WATCHLIST_SCHEMA_VERSION) {
     throw new Error(`This watchlist file uses newer schema ${importedVersion}. Update the app before importing it.`);
   }
-  if (importedVersion !== WATCHLIST_SCHEMA_VERSION) {
-    throw new Error(`Expected a WHOISleuth watchlist export using schema ${WATCHLIST_SCHEMA_VERSION}.`);
+  if (!WATCHLIST_EXPORT_SUPPORTED_VERSIONS.includes(Number(importedVersion))) {
+    throw new Error('Expected a supported WHOISleuth watchlist export.');
   }
   const local = normalizeWatchlistStore(localRaw).watchlists;
   const source = watchlistMap(importedRaw) || {};
@@ -141,6 +153,7 @@ export function mergeWatchlistStores(localRaw: unknown, importedRaw: unknown) {
       skipped++;
       continue;
     }
+    assertHistoricalQuality(entry, importedVersion);
     const normalized = normalizeWatchlistEntry(entry);
     if (Object.prototype.hasOwnProperty.call(local, name)) {
       if (normalized.updatedAt <= local[name]!.updatedAt) { skipped++; continue; }

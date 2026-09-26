@@ -57,6 +57,7 @@
   let focusedDomain=$state('');
   const domainOptions=$derived(watchlistHistoryDomains(entry));
   const domainHistory=$derived(focusedDomain?projectWatchlistDomainHistory(entry,focusedDomain):null);
+  const currentDomainEvidence=$derived(entry?.results.find(record=>record.domain===focusedDomain));
   function setPage(value:number){page=Math.min(pageCount,Math.max(1,Math.trunc(value)));}
   async function removeAndFocus(name:string){
     const origin=document.activeElement;
@@ -140,6 +141,7 @@
           <div><dt>Watchlist checks</dt><dd>{domainHistory.retainedWatchlistChecks}</dd></div>
           <div><dt>Material changes</dt><dd>{domainHistory.materialChangeCount}</dd></div>
           <div><dt>Scan modes</dt><dd>{domainHistory.scanModes.join(', ') || 'None retained'}</dd></div>
+          {#if currentDomainEvidence}<div><dt>Latest web collection</dt><dd>Page: {currentDomainEvidence.webCollectionQuality?.page.replaceAll('_',' ') ?? 'unknown'} · Favicon: {currentDomainEvidence.webCollectionQuality?.favicon.replaceAll('_',' ') ?? 'unknown'}</dd></div>{/if}
         </dl>
 
         <p class="coverage-note">The window describes retained checks for the watchlist. It does not prove this domain was included in every check, or that unrecorded fields stayed unchanged.</p>
@@ -165,7 +167,7 @@
         {/if}
       </section>
     {:else}
-      <div class="events">{#each [...history].reverse() as event}<article><div class="event-head"><time datetime={event.checkedAt}>{formatDate(event.checkedAt)}</time><span>{event.mode} scan</span><strong class:changed={event.changeCount > 0}>{event.changeCount} change{event.changeCount === 1 ? '' : 's'}</strong><small>{event.conclusiveCount}/{event.resultCount} conclusive</small></div>{#if event.changes.length}<ul>{#each event.changes as change}<li class={change.tone}><strong>{change.domain}</strong><span>{fieldLabels[change.field] || change.field}</span><small>{formatValue(change.before, change.field)} → {formatValue(change.after, change.field)}</small></li>{/each}</ul>{:else if event.changeCount===0&&event.omittedChanges===0}<p class="no-change">No material changes detected.</p>{:else}<p class="no-change">Changes were reported, but no individual change details are retained.</p>{/if}{#if event.omittedChanges}<p class="no-change">{event.omittedChanges} change detail{event.omittedChanges===1?' was':'s were'} omitted from the retained history.</p>{/if}</article>{/each}</div>
+      <div class="events">{#each [...history].reverse() as event}<article><div class="event-head"><time datetime={event.checkedAt}>{formatDate(event.checkedAt)}</time><span>{event.mode} scan</span><strong class:changed={event.changeCount > 0}>{event.changeCount} change{event.changeCount === 1 ? '' : 's'}</strong><small>{event.conclusiveCount}/{event.resultCount} conclusive</small></div>{#if event.changes.length}<ul>{#each event.changes as change}<li class={change.tone}><strong>{change.domain}</strong><span>{fieldLabels[change.field] || change.field}</span><small>{formatValue(change.before, change.field)} → {formatValue(change.after, change.field)}</small></li>{/each}</ul>{:else if event.changeCount===0&&event.omittedChanges===0}<p class="no-change">No comparable material changes recorded.</p>{:else}<p class="no-change">Changes were reported, but no individual change details are retained.</p>{/if}{#if event.webComparisonLimitedCount}<p class="no-change">Web comparison was limited for {event.webComparisonLimitedCount} domain{event.webComparisonLimitedCount===1?'':'s'} by incomplete or unknown page or favicon collection.</p>{/if}{#if event.omittedChanges}<p class="no-change">{event.omittedChanges} change detail{event.omittedChanges===1?' was':'s were'} omitted from the retained history.</p>{/if}</article>{/each}</div>
     {/if}
   </section>
 {/if}

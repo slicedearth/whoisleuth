@@ -8027,10 +8027,11 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.bulk-session-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 5,
+      "currentVersion": 6,
       "supportedVersions": [
         4,
-        5
+        5,
+        6
       ],
       "futureVersionBehavior": "preserve_without_write",
       "migration": "normalize_to_current",
@@ -8233,12 +8234,13 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.watchlist-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 2,
+      "currentVersion": 3,
       "supportedVersions": [
-        2
+        2,
+        3
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "normalized_rewrite",
       "byteBudget": 2097152,
       "storageClass": "browser_profile_storage",
@@ -8759,10 +8761,11 @@
       "schema": "whoisleuth.bulk-sessions",
       "lifecycleSchema": "whoisleuth.bulk-sessions",
       "coverageClass": "registered_schema",
-      "currentVersion": 5,
+      "currentVersion": 6,
       "supportedVersions": [
         4,
-        5
+        5,
+        6
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
@@ -9380,12 +9383,13 @@
       "schema": "whoisleuth.watchlists",
       "lifecycleSchema": "whoisleuth.watchlists",
       "coverageClass": "registered_schema",
-      "currentVersion": 2,
+      "currentVersion": 3,
       "supportedVersions": [
-        2
+        2,
+        3
       ],
       "futureVersionBehavior": "reject",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "non_destructive_merge",
       "byteBudget": 2097152,
       "storageClass": "deliberate_local_file",
@@ -14384,7 +14388,8 @@
           "schema": "whoisleuth.browser.bulk-session-store",
           "versions": [
             4,
-            5
+            5,
+            6
           ],
           "mode": "direct",
           "discriminator": null
@@ -14392,7 +14397,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.bulk-session-store",
-        "version": 5,
+        "version": 6,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.browser-state",
@@ -14627,7 +14632,8 @@
         {
           "schema": "whoisleuth.browser.watchlist-store",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -14635,7 +14641,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.watchlist-store",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.browser-state",
@@ -14740,7 +14746,8 @@
           "schema": "whoisleuth.bulk-sessions",
           "versions": [
             4,
-            5
+            5,
+            6
           ],
           "mode": "direct",
           "discriminator": null
@@ -14765,7 +14772,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.bulk-sessions",
-        "version": 5,
+        "version": 6,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.portable-output",
@@ -15072,7 +15079,8 @@
         {
           "schema": "whoisleuth.watchlists",
           "versions": [
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -15097,7 +15105,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.watchlists",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "workspace.privacy.portable-output",

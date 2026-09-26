@@ -17,6 +17,26 @@ import { caseRecord, openSeededTimelineCase, snapshot } from './case-test-fixtur
 
 
 test.describe('evidence timeline', () => {
+  test('an incomplete web check stays visible without claiming removed signals or reduced Risk', async ({ page }, testInfo) => {
+    await openSeededTimelineCase(page, 'quality.invalid', [caseRecord({ id: 'quality-case', domain: 'quality.invalid', evidenceHistory: [
+      snapshot({ id: 'quality-before', capturedAt: '2026-06-01T00:00:00.000Z', riskScore: 80, hasPasswordField: true,
+        webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' } }),
+      snapshot({ id: 'quality-after', capturedAt: '2026-07-01T00:00:00.000Z', riskScore: 10, hasPasswordField: false,
+        webCollectionQuality: { version: 1, page: 'unavailable', favicon: 'unknown', combined: 'partial' } }),
+    ] })], CASE_SCHEMA_VERSION);
+    const latest = page.locator('.timeline-entry').first();
+    await expect(latest).toContainText('Web collection limits comparison');
+    await expect(latest.locator('.timeline-change')).toHaveCount(0);
+    await expect(latest.locator('.timeline-incomparable-note')).toContainText('not treated as additions or removals');
+    for (const width of [1280, 1024, 390, 320]) for (const theme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width, height: width < 400 ? 844 : 768 });
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      await expect(latest.locator('.timeline-incomparable-note')).toBeVisible();
+      if (width === 1280 || width === 320) await page.screenshot({ path: testInfo.outputPath(`collection-quality-${width}-${theme}.png`) });
+    }
+  });
+
   test('equal-time conflicting snapshots stay reviewable without a chosen summary or temporal change', async ({ page }) => {
     await openSeededTimelineCase(page, 'equal-time.invalid', [caseRecord({
       id: 'case-equal-time', domain: 'equal-time.invalid', evidenceHistory: [
@@ -78,11 +98,13 @@ test.describe('evidence timeline', () => {
         evidenceHistory: [
           snapshot({
             id: 'ev-older', fingerprint: 'older',
+            webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
             firstCapturedAt: '2026-05-01T00:00:00.000Z', capturedAt: '2026-05-01T00:00:00.000Z',
             availability: 'available', riskScore: 20, registrar: 'Old Registrar', hasMx: false,
           }),
           snapshot({
             id: 'ev-newer', fingerprint: 'newer',
+            webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
             firstCapturedAt: '2026-06-01T00:00:00.000Z', capturedAt: '2026-06-01T00:00:00.000Z',
             source: 'bulk', availability: 'registered', riskScore: 85, registrar: 'New Registrar',
             hasMx: true, activityStatus: 'active', pageTitle: 'New Site', nameservers: ['ns1.new.example'],
@@ -91,7 +113,7 @@ test.describe('evidence timeline', () => {
         createdAt: '2026-05-01T00:00:00.000Z',
         updatedAt: '2026-06-01T00:00:00.000Z',
       }),
-    ]);
+    ], CASE_SCHEMA_VERSION);
 
     await expect(page.locator('.timeline-header small')).toHaveText('2 snapshots');
     const entries = page.locator('.timeline-entry');
@@ -202,11 +224,13 @@ test.describe('evidence timeline', () => {
         evidenceHistory: [
           snapshot({
             id: 'ev-base', fingerprint: 'base',
+            webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
             firstCapturedAt: '2026-05-01T00:00:00.000Z', capturedAt: '2026-05-01T00:00:00.000Z',
             riskScore: 40, registrar: 'StableReg',
           }),
           snapshot({
             id: 'ev-changed', fingerprint: 'changed',
+            webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
             firstCapturedAt: '2026-07-01T00:00:00.000Z', capturedAt: '2026-07-01T00:00:00.000Z',
             riskScore: 90, registrar: 'StableReg',
           }),
@@ -214,7 +238,7 @@ test.describe('evidence timeline', () => {
         createdAt: '2026-05-01T00:00:00.000Z',
         updatedAt: '2026-07-01T00:00:00.000Z',
       }),
-    ]);
+    ], CASE_SCHEMA_VERSION);
 
     // Both the baseline and the reliable material change are visible.
     await expect(page.locator('.timeline-entry')).toHaveCount(2);
@@ -455,16 +479,18 @@ test.describe('case report export', () => {
         evidenceHistory: [
           snapshot({
             id: 'ev-1', fingerprint: 'fp1', capturedAt: '2026-06-01T00:00:00.000Z',
+            webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
             riskScore: 20, availability: 'registered', registrar: 'TestReg',
           }),
           snapshot({
             id: 'ev-2', fingerprint: 'fp2', firstCapturedAt: '2026-07-01T00:00:00.000Z',
+            webCollectionQuality: { version: 1, page: 'complete', favicon: 'complete', combined: 'complete' },
             capturedAt: '2026-07-01T00:00:00.000Z', riskScore: 85,
             availability: 'registered', registrar: 'TestReg',
           }),
         ],
       }),
-    ]);
+    ], CASE_SCHEMA_VERSION);
 
     await openCaseSection(page, 'Response');
     const previewTrigger = page.locator('.export-controls').getByRole('button', { name: 'Preview report', exact: true });
