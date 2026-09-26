@@ -1,10 +1,22 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { buildDesiredPostureHistory, buildOwnedDomainPostureReview, filterPostureComparisons, type DesiredPostureComparison } from '../frontend/src/lib/analysis/owned-domain-posture-review.ts';
+import { buildDesiredPostureHistory, buildOwnedDomainPostureReview, filterPostureComparisons, officialDomainReviewBatch, type DesiredPostureComparison } from '../frontend/src/lib/analysis/owned-domain-posture-review.ts';
 import type { BrandProfile } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import type { DomainPostureHttpResponse } from '../frontend/src/lib/analysis/client-response-contracts.ts';
 import { brandPostureObservationContext } from '../frontend/src/lib/analysis/brand-profile-model.ts';
 import { postureObservation, postureSource } from './posture-observation-fixture.mts';
+
+test('explicit official-domain batches cover the admitted scope once without expanding a request', () => {
+  const officialDomains = Array.from({ length: 200 }, (_, index) => `official-${index}.example`);
+  const profile = { officialDomains } as BrandProfile;
+  const batches = Array.from({ length: 10 }, (_, index) => officialDomainReviewBatch(profile, index));
+  assert.ok(batches.every(batch => batch.length === 20));
+  assert.deepEqual(batches.flat(), officialDomains);
+  for (const index of [-1, 0.5, Number.NaN, Number.MAX_SAFE_INTEGER, 10]) {
+    assert.deepEqual(officialDomainReviewBatch(profile, index), []);
+  }
+  assert.deepEqual(officialDomainReviewBatch({ ...profile, officialDomains: officialDomains.slice(0, 21) }, 1), ['official-20.example']);
+});
 
 test('comparison filters keep unknowns distinct and preserve all source rows', () => {
   const states: DesiredPostureComparison['state'][] = ['aligned', 'approved_window', 'drift', 'not_configured', 'observed', 'review', 'suppressed', 'unavailable', 'unknown', 'unsupported'];

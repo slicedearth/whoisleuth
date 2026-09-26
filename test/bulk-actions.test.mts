@@ -54,10 +54,15 @@ test('Case actions preserve the selected incident and publish the committed snap
   const h = harness({ loadCases: async () => { throw new Error('read unavailable'); } });
   let writes = 0;
   h.context.api.openCase = async (input, selection) => {
-    writes++;
     assert.equal(input.domain, h.record.domain);
     assert.equal(selection?.caseId, h.record.id);
     return { cases: [h.record], record: h.record, created: false, pruned: 0 };
+  };
+  h.context.api.editCase = async (id, input) => {
+    writes++;
+    assert.equal(id, h.record.id);
+    assert.deepEqual(input, { source: 'bulk', evidence: bulkCaseInput(row()).evidence });
+    return { cases: [h.record], record: h.record, pruned: 0 };
   };
   await h.actions.open(row());
   assert.equal(writes, 1);

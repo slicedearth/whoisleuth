@@ -17,6 +17,12 @@ import { DOMAIN_POSTURE_COMPARISON_VERSION, MAX_POSTURE_CHECKS, MAX_POSTURE_CHEC
 
 export type DomainPostureAuditResult = { domain: string; report: DomainPostureHttpResponse | null; error: string; context?: DomainPostureProfileContext };
 
+export const OFFICIAL_DOMAIN_REVIEW_BATCH_SIZE = 20;
+export function officialDomainReviewBatch(profile: BrandProfile, batchIndex: number): string[] {
+  if (!Number.isSafeInteger(batchIndex) || batchIndex < 0) return [];
+  return profile.officialDomains.slice(batchIndex * OFFICIAL_DOMAIN_REVIEW_BATCH_SIZE, (batchIndex + 1) * OFFICIAL_DOMAIN_REVIEW_BATCH_SIZE);
+}
+
 export type DesiredPostureGroup = Readonly<{
   id: string;
   label: string;

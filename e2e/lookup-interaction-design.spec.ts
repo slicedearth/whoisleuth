@@ -205,6 +205,13 @@ test('Lookup analyst question and disclosure controls change presentation withou
   await page.getByText('Open assessment', { exact: true }).click();
   await expect(detailedAssessment).toHaveAttribute('open', '');
   await expect(page.getByRole('heading', { name: 'What the current evidence can support' })).toBeVisible();
+  const readiness = detailedAssessment.locator('.claim-readiness');
+  const states = await readiness.locator('.claims > li > .claim-head > .state').allTextContents();
+  expect(states.length).toBeGreaterThan(0);
+  for (const [label, summaryLabel] of [['Evidence ready', 'ready'], ['Limited', 'limited'], ['Not ready', 'not ready']]) {
+    const count = states.filter(value => value.trim() === label).length;
+    await expect(readiness.getByRole('group', { name: 'Evidence Readiness summary' }).locator('span').filter({ hasText: new RegExp(`^${count} ${summaryLabel}$`, 'u') })).toHaveCount(1);
+  }
   await page.evaluate(() => {
     const state = window as typeof window & { __claimPassportWrites?: number };
     state.__claimPassportWrites = 0;

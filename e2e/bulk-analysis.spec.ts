@@ -3,7 +3,8 @@ import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { BULK_REVIEW_MANIFEST_VERSION } from '../packages/contracts/investigation-portability.mts';
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, holdBrowserLocalTransaction, lookupDomainIdentity, openBulkFilters, openBulkWorkspaceTools, pseudoContent, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
+import { boundingBox, currentBrowserLocalDocument, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, holdBrowserLocalTransaction, lookupDomainIdentity, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, pseudoContent, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
+import { createCase } from '../packages/cases/case-model.mts';
 import { captureDownloads, invalidDomains } from './bulk-analysis-fixtures';
 
 // Bulk queue, review, comparison and retained-work coverage.
@@ -12,6 +13,26 @@ test.use({ allowExpectedBulkLookup400Noise: true });
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/bulk');
+});
+
+test('creating selected Cases appends current Bulk evidence to the existing incident', async ({ page }) => {
+  const record = createCase({ domain: 'existing-incident.example' }, '2026-08-01T00:00:00.000Z');
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [record] }) });
+  await page.route('**/api/lookup?*', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+    availability: { applicable: true, domain: record.domain, state: 'registered', confidence: 'high', registrarName: 'Current fixture registrar' },
+    diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+  }) }));
+  await runBulkScan(page, [record.domain]);
+  await page.getByRole('button', { name: `Add ${record.domain} to shortlist`, exact: true }).click();
+  await openBulkFilters(page);
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Create cases', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '1 committed, 0 rejected' })).toBeVisible();
+  const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(saved.records).toHaveLength(1);
+  expect(saved.records[0]?.value.id).toBe(record.id);
+  expect(saved.records[0]?.value.evidenceHistory).toHaveLength(1);
+  expect(saved.records[0]?.value.evidenceHistory[0]).toMatchObject({ source: 'bulk', availability: 'registered' });
 });
 test('the scan button only takes the high-contrast primary treatment once ready', async ({ page }) => {
   const scanButton = page.locator('.queue-actions button.primary');

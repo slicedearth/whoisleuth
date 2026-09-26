@@ -6,9 +6,15 @@
     type DomainPostureMatrixState,
   } from '$lib/analysis/domain-posture-matrix.ts';
   import PostureObservationHistory from './PostureObservationHistory.svelte';
+  import Pagination from './Pagination.svelte';
 
   let { active }: { active: BrandProfile } = $props();
   const matrix = $derived(buildDomainPostureMatrix(active));
+  const PAGE_SIZE = 20;
+  let page = $state(1);
+  const pageCount = $derived(Math.max(1, Math.ceil(matrix.rows.length / PAGE_SIZE)));
+  const currentPage = $derived(Math.min(page, pageCount));
+  const visibleRows = $derived(matrix.rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE));
 
   function stateLabel(state: DomainPostureMatrixState): string {
     if (state === 'approved_window') return 'Approved window';
@@ -52,7 +58,7 @@
         <caption class="visually-hidden">Official domains by expected setting and saved comparison state</caption>
         <thead><tr><th scope="col">Official domain</th>{#each matrix.columns as column}<th scope="col">{column.label}</th>{/each}</tr></thead>
         <tbody>
-          {#each matrix.rows as row (row.domain)}
+          {#each visibleRows as row (row.domain)}
             <tr>
               <th scope="row"><strong>{row.domain}</strong><small>{row.lifecycle.replaceAll('_', ' ')} · {row.zoneIntent.replaceAll('_', ' ')}</small></th>
               {#each row.cells as cell (cell.field)}
@@ -68,13 +74,15 @@
     </div>
 
     <div class="mobile-rows">
-      {#each matrix.rows as row (row.domain)}
+      {#each visibleRows as row (row.domain)}
         <article>
           <header><div><h3>{row.domain}</h3><p>{row.lifecycle.replaceAll('_', ' ')} · {row.zoneIntent.replaceAll('_', ' ')}</p></div><span>{row.observationAt ? date(row.observationAt) : row.observationId ? 'No unique latest observation' : 'No retained observation'}</span></header>
           <dl>{#each row.cells as cell (cell.field)}<div class={`state-${cell.state}`}><dt>{cell.label}</dt><dd><strong>{stateLabel(cell.state)}</strong><span><a href={cell.baselineHref}>Expected</a>{#if cell.observationHref}<a href={cell.observationHref}>Observed</a>{:else}<em>No observation</em>{/if}</span></dd></div>{/each}</dl>
         </article>
       {/each}
     </div>
+
+    <Pagination {currentPage} {pageCount} setPage={value => { page = value; }} ariaLabel="Official-domain comparison pages" pageInputLabel="Official-domain comparison page" />
 
     <div class="retained-observations">
       <h3>Retained observation sources</h3>

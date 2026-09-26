@@ -1,6 +1,6 @@
 import { openConsoleView } from './console-navigation';
 import { expect, test } from './fixtures';
-import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, readBrowserLocalCollection } from './helpers';
+import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalCollectionReadAfterWrite, readBrowserLocalCollection } from './helpers';
 
 const WATCHLIST_KEY = 'whois-rdap-watchlist-v1';
 const NOW = '2026-07-14T08:00:00.000Z';
@@ -20,6 +20,33 @@ async function seed(page: import('@playwright/test').Page, value: unknown) {
   await page.goto('/monitor');
   await openConsoleView(page, 'watchlists');
 }
+
+for (const all of [false, true]) test(`a committed watchlist ${all ? 'clear' : 'deletion'} remains visible when rereading fails`, async ({ page }) => {
+  await seed(page, { Priority: entry('priority.invalid'), Other: entry('other.invalid') });
+  const before = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 2 });
+  await failNextBrowserLocalCollectionReadAfterWrite(page, 'watchlists');
+  page.once('dialog', dialog => dialog.accept());
+  await (all ? page.getByRole('button', { name: 'Clear all', exact: true }) : page.getByRole('row', { name: /Priority/ }).getByRole('button', { name: 'Delete', exact: true })).click();
+  await expect(page.getByRole('status')).toContainText('committed');
+  await expect(page.getByRole('row', { name: /Priority/ })).toHaveCount(0);
+  await expect(page.getByRole('status')).not.toContainText('Could not');
+  const after = await readBrowserLocalCollection(page, 'watchlists', { minimumRevision: before.manifest.revision + 1 });
+  expect(after.records.map(record => record.id)).toEqual(all ? [] : ['Other']);
+});
+
+test('history distinguishes omitted changes from a completed check with no changes', async ({ page }) => {
+  await seed(page, { Priority: { ...entry('priority.invalid'), history: [
+    { checkedAt: NOW, mode: 'fast', resultCount: 1, conclusiveCount: 1, changeCount: 0, omittedChanges: 3, changes: [] },
+    { checkedAt: '2026-07-13T08:00:00.000Z', mode: 'fast', resultCount: 1, conclusiveCount: 1, changeCount: 0, omittedChanges: 0, changes: [] },
+  ] } });
+  await page.getByRole('row', { name: /Priority/ }).getByRole('button', { name: 'History', exact: true }).click();
+  const events = page.locator('.history .events article');
+  await expect(events).toHaveCount(2);
+  const omitted = events.filter({ hasText: '3 change details were omitted' });
+  await expect(omitted).toHaveCount(1);
+  await expect(omitted).not.toContainText('No material changes');
+  await expect(events.filter({ hasText: 'No material changes' })).toHaveCount(1);
+});
 
 test('a future watchlist schema is never overwritten by an older app', async ({ page }) => {
   const future = { schema: 'whoisleuth.watchlists', version: 99, watchlists: { Future: entry('future.invalid') }, futureMetadata: { retain: true } };

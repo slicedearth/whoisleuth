@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import type {
     DesiredPostureBaseline,
     DesiredPostureChangeWindow,
@@ -45,6 +45,25 @@
   let busy = $state(false);
   let appliedRequestedDomain = $state('');
   let changeWindowSequence = 0;
+  let loadedDraft = '';
+
+  function draftIdentity(): string {
+    return JSON.stringify({ recordDrafts, recordModes, tlsIssuer, tlsSanPatterns, tlsSpkiSha256, registrarLock,
+      renewalReviewAt, zoneIntent, lifecycle, recoveryDependency, approvedChangeWindows, suppressions, note });
+  }
+
+  function changeDomain(domain: string): boolean {
+    if (domain === selectedDomain) return true;
+    if (draftProfile && draftIdentity() !== loadedDraft && !confirm('Expected settings have unsaved edits. Discard them and change domain?')) {
+      return false;
+    }
+    load(domain);
+    return true;
+  }
+
+  function selectDomain(control: HTMLSelectElement): void {
+    if (!changeDomain(control.value)) control.value = selectedDomain;
+  }
 
   function changeWindowId(): string {
     if (typeof globalThis.crypto?.randomUUID === 'function') return `cw-${globalThis.crypto.randomUUID()}`;
@@ -158,6 +177,7 @@
     approvedChangeWindows = (baseline?.approvedChangeWindows || []).map((item) => ({ ...item }));
     suppressions = (baseline?.suppressions || []).map((item) => ({ ...item }));
     note = baseline?.note || '';
+    loadedDraft = draftIdentity();
     message = '';
   }
 
@@ -254,7 +274,7 @@
     if (busy || writeDisabled) return;
     if (requestedDomain && requestedDomain !== appliedRequestedDomain && active.officialDomains.includes(requestedDomain)) {
       appliedRequestedDomain = requestedDomain;
-      load(requestedDomain);
+      untrack(() => changeDomain(requestedDomain));
       return;
     }
     if (!selectedDomain && !draftProfile) load(active.officialDomains[0] || '');
@@ -270,7 +290,7 @@
     </div>
     <label>
       <span>Official domain</span>
-      <select value={selectedDomain} onchange={(event) => load(event.currentTarget.value)} disabled={busy || writeDisabled}>
+      <select value={selectedDomain} onchange={(event) => selectDomain(event.currentTarget)} disabled={busy || writeDisabled}>
         {#if selectedDomain && !active.officialDomains.includes(selectedDomain)}<option value={selectedDomain}>{selectedDomain} — no longer official</option>{/if}
         {#each active.officialDomains as domain}<option value={domain}>{domain}</option>{/each}
       </select>

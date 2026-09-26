@@ -3,9 +3,15 @@
   import { buildBrandCertificateEventReplay, type CertificateEventReplayState } from '$lib/analysis/brand-certificate-event-replay.ts';
   import type { BrandProfile } from '$lib/brand-profiles';
   import type { CaseRecord } from '$lib/cases';
+  import Pagination from './Pagination.svelte';
 
   let { active, cases, unavailable = false }: { active: BrandProfile; cases: CaseRecord[]; unavailable?: boolean } = $props();
   const replay = $derived(buildBrandCertificateEventReplay(active, cases));
+  const PAGE_SIZE = 20;
+  let page = $state(1);
+  const pageCount = $derived(Math.max(1, Math.ceil(replay.domains.length / PAGE_SIZE)));
+  const currentPage = $derived(Math.min(page, pageCount));
+  const visibleDomains = $derived(replay.domains.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE));
 
   function stateLabel(state: CertificateEventReplayState): string {
     if (state === 'not_configured') return 'Not configured';
@@ -32,7 +38,7 @@
   {#if unavailable}<p class="notice">Saved cases could not be read, so retained certificate-event comparisons are unavailable. No missing event is treated as alignment.</p>{/if}
   {#if replay.truncated}<p class="notice">Only the newest {replay.retainedEventCount} bounded event groups are shown.</p>{/if}
   <div class="domain-list">
-    {#each replay.domains as domainReview}
+    {#each visibleDomains as domainReview}
       <article class="domain-review">
         <header>
           <div><h3>{domainReview.domain}</h3><p>{domainReview.baselineConfigured ? 'Reviewed certificate expectations configured.' : 'No issuer or certificate-name expectation configured.'}</p></div>
@@ -75,6 +81,7 @@
       </article>
     {/each}
   </div>
+  <Pagination {currentPage} {pageCount} setPage={value => { page = value; }} ariaLabel="Certificate event domain pages" pageInputLabel="Certificate event domain page" />
   <ul class="limitations">{#each replay.limitations as limitation}<li>{limitation}</li>{/each}</ul>
 </section>
 

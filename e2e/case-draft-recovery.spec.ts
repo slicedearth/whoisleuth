@@ -16,6 +16,27 @@ async function pinForm(page: Page) {
   return details.locator('form').first();
 }
 
+test('sign-out resolves unsaved Case edits before ending the session', { tag: '@cross-browser-critical' }, async ({ page }) => {
+  await openCasesView(page); await createCase(page, 'signout-draft.example');
+  const form = await pinForm(page);
+  await failNextBrowserLocalManifestWrite(page, 'case_drafts');
+  await form.getByLabel('Label', { exact: true }).fill('Unsubmitted sign-out draft');
+  await expect(form.getByRole('status')).toContainText('could not be saved for recovery');
+  let logoutRequests = 0;
+  page.on('request', request => { if (new URL(request.url()).pathname === '/api/logout') logoutRequests++; });
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(form.getByLabel('Label', { exact: true })).toHaveValue('Unsubmitted sign-out draft');
+  expect(logoutRequests).toBe(0);
+  let prompts = 0;
+  page.on('dialog', async dialog => { prompts++; await dialog.accept(); });
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page).toHaveURL('/login');
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  expect(logoutRequests).toBe(1);
+  expect(prompts).toBe(1);
+});
+
 test('Case drafts recover after reload, stay out of backups and clear atomically on submission', { tag: '@cross-browser-critical' }, async ({ page }, testInfo) => {
   await openCasesView(page); await createCase(page, 'draft-recovery.example');
   let form = await pinForm(page);

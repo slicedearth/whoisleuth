@@ -26,6 +26,7 @@
   import { clearConsoleWorkflowState, subscribeSelectedConsoleCase } from '$lib/console-workflow-state';
   import { hasUnlockedBrowserWorkspace, lockBrowserWorkspace } from '$lib/browser-workspace-unlock';
   import { isLocalApplication } from '$lib/local-application-context.ts';
+  import { hasUnprotectedCaseDrafts } from '$lib/controllers/case-draft-state.ts';
   let localApplication = $state(false);
   import {
     hasStoredInvestigationGuide,
@@ -33,7 +34,7 @@
   } from '$lib/investigation-guide-storage';
 
   let { children } = $props();
-  let session = $state<'checking'|'authenticated'|'unavailable'>('checking');
+  let session = $state<'checking'|'authenticated'|'unavailable'|'ended'>('checking');
   let navOpen = $state(false);
   let commandOpen = $state(false);
   let signingOut = $state(false);
@@ -140,21 +141,25 @@
 
   async function logout(){
     if(signingOut)return;
+    if(hasUnprotectedCaseDrafts()&&!window.confirm('Some Case edits are not saved. Sign out and lose those edits?'))return;
     signingOut=true;
     logoutError='';
     try{
       const {response}=await requestJsonCapped('/api/logout',{method:'POST'},{maximumBytes:SMALL_JSON_RESPONSE_BYTES,timeoutMs:10_000});
       if(!response.ok)throw new Error('The protected session could not be ended.');
-      clearConsoleWorkflowState();
-      if (localApplication) { window.location.replace('/login'); return; }
-      try{await goto('/login',{replaceState:true});}
-      finally{clearConsoleWorkflowState();}
     }
     catch{
-      clearConsoleWorkflowState();
-      logoutError='Sign out failed. Your session remains active; try again.';
+      logoutError='Sign out could not be confirmed. Check the session before continuing.';
+      signingOut=false;
+      return;
     }
-    finally{signingOut=false;}
+    clearConsoleWorkflowState();
+    lockBrowserWorkspace();
+    session='ended';
+    // Unmount drafts and their leave handlers before replacing the document.
+    // A committed logout must never leave protected-looking controls usable.
+    await tick();
+    window.location.replace('/login');
   }
 
   function navigationFocusables(){
@@ -249,6 +254,8 @@
     title="Opening WHOISleuth"
     detail="Confirming the protected session before loading saved investigation data."
   />
+{:else if session==='ended'}
+  <div class="center"><section class="login card"><h1>Signed out</h1><p>Your protected session has ended.</p><a href="/login">Return to sign in</a></section></div>
 {:else if session==='unavailable'}
   <div class="center"><section class="login card"><h1>Session service unavailable</h1><p class="muted">The protected console could not confirm your session.</p><button class="primary" onclick={checkSession}>Retry</button><p class="login-links"><a href="/">Return home</a></p></section></div>
 {:else if localData.state==='initializing'||localData.state==='idle'}

@@ -65,9 +65,10 @@ export async function saveBulkSession(
   });
 }
 
-export async function deleteBulkSession(id: string): Promise<BulkSession[]> {
+export async function deleteBulkSession(expected: BulkSession): Promise<BulkSession[]> {
   return updateBrowserLocalData('bulk_sessions', (current) => {
-    const sessions = boundedSessions(removeBulkSession(current, id));
+    assertLocalRecordCurrent(current.find(session => session.id === expected.id), expected, 'Bulk session');
+    const sessions = boundedSessions(removeBulkSession(current, expected.id));
     return { document: sessions, result: sessions };
   });
 }

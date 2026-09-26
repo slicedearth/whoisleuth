@@ -44,6 +44,58 @@ function profileFixture() {
   };
 }
 
+test('expected-setting domain switches require an explicit decision before discarding a draft', async ({ page }) => {
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: currentBrandProfileBrowserStore([{ ...profileFixture(), officialDomains: ['first.example', 'second.example'] }]),
+    [ACTIVE_KEY]: 'profile-1',
+  });
+  await openBrandWorkbench(page, 'baselines');
+  const baseline = page.locator('#desired-posture-baseline');
+  const domain = baseline.getByRole('combobox', { name: 'Official domain', exact: true });
+  await expect(domain).toHaveValue('first.example');
+  await baseline.getByLabel('Analyst note', { exact: true }).fill('Keep this unsaved domain note');
+  page.once('dialog', dialog => dialog.dismiss());
+  await domain.selectOption('second.example');
+  await expect(domain).toHaveValue('first.example');
+  await expect(baseline.getByLabel('Analyst note', { exact: true })).toHaveValue('Keep this unsaved domain note');
+  page.once('dialog', dialog => dialog.accept());
+  await domain.selectOption('second.example');
+  await expect(domain).toHaveValue('second.example');
+  await expect(baseline.getByLabel('Analyst note', { exact: true })).toHaveValue('');
+  const stored = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+  expect(stored.records[0]?.value.desiredPostureBaselines).toEqual([]);
+});
+
+test('official-domain review and comparison include later batches without implicit collection', async ({ page }) => {
+  const officialDomains = Array.from({ length: 21 }, (_, index) => `d${String(index).padStart(2, '0')}.example`);
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: currentBrandProfileBrowserStore([{ ...profileFixture(), officialDomains }]), [ACTIVE_KEY]: 'profile-1',
+  });
+  const requested: string[] = [];
+  await page.route('**/api/domain-posture?*', async route => {
+    const domain = new URL(route.request().url()).searchParams.get('q')!;
+    requested.push(domain);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(postureFixture(domain)) });
+  });
+  await openBrandWorkbench(page, 'posture');
+  await page.getByRole('combobox', { name: 'Official-domain batch', exact: true }).selectOption('1');
+  expect(requested).toEqual([]);
+  await page.getByRole('button', { name: 'Review official domains', exact: true }).click();
+  await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toHaveText('Reviewed 1/1 official domain in this batch; 21 domains in the profile.');
+  expect(requested).toEqual(['d20.example']);
+  await openBrandWorkbench(page, 'portfolio');
+  const matrix = page.getByRole('region', { name: 'Owned-domain comparison' });
+  await matrix.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(matrix).toContainText('d20.example');
+  for (const width of [1280, 390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const theme of ['light', 'dark'] as const) { await useTheme(page, theme); await expectNoHorizontalOverflow(page); }
+  }
+  expect(requested).toEqual(['d20.example']);
+});
+
 function availabilityFixture() {
   return {
     applicable: true,
@@ -1375,7 +1427,7 @@ test('retained certificate events replay reviewed expectations without mobile ov
   await page.goto('/brands');
   const profile = {
     ...profileFixture(),
-    officialDomains: ['stored.example'],
+    officialDomains: [...Array.from({ length: 20 }, (_, index) => `d${String(index).padStart(2, '0')}.example`), 'stored.example'],
     desiredPostureBaselines: [{
       domain: 'stored.example',
       tlsIssuer: 'Fixture issuer',
@@ -1425,6 +1477,7 @@ test('retained certificate events replay reviewed expectations without mobile ov
 
   const replay = page.getByRole('region', { name: 'Certificate event review' });
   await expect(replay).toContainText('1 retained event');
+  await replay.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(replay).toContainText('Aligned');
   await replay.getByText(/Certificate …/u).click();
   await expect(replay).toContainText('The retained event matches the reviewed expectation.');

@@ -139,7 +139,7 @@ export async function saveSingleDomainWatchlist(
   });
 }
 
-export async function deleteWatchlist(name:string):Promise<void>{await updateBrowserLocalData('watchlists',(current)=>{const all={...current} as Watchlists;delete all[name];return{document:boundedWatchlists(all),result:undefined};});}
+export async function deleteWatchlist(name:string):Promise<Watchlists>{return updateBrowserLocalData('watchlists',(current)=>{const all={...current} as Watchlists;delete all[name];const document=boundedWatchlists(all);return{document,result:document};});}
 
 export async function importWatchlists(value:unknown){return updateBrowserLocalData('watchlists',(current)=>{const result=mergeWatchlistStores(current,value);const watchlists=boundedWatchlists(result.watchlists as Watchlists);return{document:watchlists,result:{added:result.added,updated:result.updated,skipped:result.skipped}};});}
 

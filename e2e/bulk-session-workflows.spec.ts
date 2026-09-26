@@ -3,7 +3,7 @@ import { expect, test } from './fixtures';
 import { BULK_SESSION_SCHEMA, BULK_SESSION_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { MAX_BULK_SESSIONS } from '../packages/workspace/bulk-session-model.mts';
 import { richBulkSessionStore } from '../test/bulk-session-fixture.mts';
-import { currentBulkSessionBrowserStore, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
+import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
 
 // Saved Bulk sessions, provenance, resumption and cancellation coverage.
 
@@ -11,6 +11,50 @@ test.use({ allowExpectedBulkLookup400Noise: true });
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/bulk');
+});
+
+test('clearing filtered selection reaches a selected row beyond the shortlist capacity position', async ({ page }) => {
+  const session = richBulkSessionStore(501).sessions[0]!;
+  const domain = session.results.at(-1)!.domain;
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-bulk-sessions-v1': currentBulkSessionBrowserStore([session]),
+    'whois-rdap-shortlist-v1': currentBrowserLocalDocument('shortlist', { entries: [{ domain, savedAt: session.updatedAt, scanDepth: 'deep', availability: 'registered', mutationTypes: [] }] }),
+  });
+  await openBulkWorkspaceTools(page);
+  await page.getByRole('article').filter({ has: page.getByRole('heading', { name: session.name, exact: true }) }).getByRole('button', { name: 'Load', exact: true }).click();
+  await openBulkFilters(page);
+  await page.getByRole('combobox', { name: 'Desktop result sort', exact: true }).selectOption('domain');
+  await page.getByRole('combobox', { name: /^Order\b/u }).selectOption('1');
+  await expect(page.getByText('1 selected in the filtered set')).toBeVisible();
+  await page.getByRole('button', { name: 'Clear filtered selection', exact: true }).click();
+  await expect(page.getByText('1 selected in the filtered set')).toHaveCount(0);
+  expect((await readBrowserLocalCollection(page, 'shortlist')).records).toHaveLength(0);
+});
+
+test('a stale saved-session deletion cannot remove a newer peer revision', async ({ page, context }) => {
+  const base = richBulkSessionStore(1).sessions[0]!;
+  await migrateLegacyBrowserData(page, { 'whoisleuth-bulk-sessions-v1': currentBulkSessionBrowserStore([{ ...base, name: 'Original review' }]) });
+  await openBulkWorkspaceTools(page);
+  const stale = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Original review', exact: true }) });
+  await expect(stale).toBeVisible();
+  const peer = await context.newPage();
+  try {
+    await peer.goto('/bulk'); await openBulkWorkspaceTools(peer);
+    await peer.getByRole('article').filter({ has: peer.getByRole('heading', { name: 'Original review', exact: true }) }).getByRole('button', { name: 'Load', exact: true }).click();
+    await peer.getByLabel('Session name').fill('Peer revised review');
+    await peer.getByRole('button', { name: 'Update saved session', exact: true }).click();
+    await expect(peer.getByRole('status').filter({ hasText: 'Updated Peer revised review.' })).toBeVisible();
+    const updated = await readBrowserLocalCollection(peer, 'bulk_sessions', { minimumRecords: 1 });
+    page.once('dialog', dialog => dialog.accept());
+    await stale.getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: /changed|deleted/u })).toBeVisible();
+    expect(await readBrowserLocalCollection(page, 'bulk_sessions')).toEqual(updated);
+    await page.reload(); await openBulkWorkspaceTools(page);
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Peer revised review', exact: true }) }).getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Deleted Peer revised review.' })).toBeVisible();
+    expect((await readBrowserLocalCollection(page, 'bulk_sessions')).records).toHaveLength(0);
+  } finally { await peer.close(); }
 });
 
 test('reviews capacity before saving and invalidates consent when another tab changes the affected records', async ({ page, context }) => {

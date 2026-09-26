@@ -78,9 +78,11 @@ export class BulkCaseActions {
   async #open(context: BulkCaseContext, row: ScanResult): Promise<LocalMutationOutcome> {
     try {
       const selected = context.selected.get(row.domain);
-      const committed = await context.api.openCase(bulkCaseInput(row), selected ? { caseId: selected.id } : {});
+      const input = bulkCaseInput(row);
+      const opened = await context.api.openCase(input, selected ? { caseId: selected.id } : {});
+      const committed = opened.created ? opened : await context.api.editCase(opened.record.id, { source: 'bulk', evidence: input.evidence });
       await this.#reconcile(context.api, committed);
-      this.#set(`${committed.created ? `Opened a case for ${committed.record.domain}.` : `${committed.record.domain} already has a case.`}${prunedNote(committed.pruned)}`);
+      this.#set(`${opened.created ? `Opened a case for ${committed.record.domain}.` : `Refreshed the retained Case evidence for ${committed.record.domain}.`}${prunedNote(committed.pruned)}`);
       return 'committed';
     } catch (cause) {
       this.#set(cause instanceof Error ? cause.message : 'Could not open the case.');

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { BrandProfile } from '$lib/brand-profiles';
   import type { DomainPostureHttpResponse } from '$lib/analysis/client-response-contracts';
-  import { buildOwnedDomainPostureReview, filterPostureComparisons, POSTURE_COMPARISON_FILTERS, type PostureComparisonFilter, type DomainPostureAuditResult } from '$lib/analysis/owned-domain-posture-review.ts';
+  import { buildOwnedDomainPostureReview, filterPostureComparisons, POSTURE_COMPARISON_FILTERS, OFFICIAL_DOMAIN_REVIEW_BATCH_SIZE, type PostureComparisonFilter, type DomainPostureAuditResult } from '$lib/analysis/owned-domain-posture-review.ts';
   import { reviewClock } from '$lib/review-clock.ts';
   import { desiredPostureObservations } from '$lib/analysis/brand-profile-model.ts';
   import { POSTURE_SOURCE_LABELS } from '../../../../packages/evidence/domain-posture-context.mts';
@@ -11,11 +11,14 @@
     disabledReason: string;
     auditing: boolean;
     results: DomainPostureAuditResult[];
-    audit: (includeInheritedDns?: boolean) => void | Promise<void>;
+    audit: (includeInheritedDns?: boolean, batchIndex?: number) => void | Promise<void>;
     retainObservation: (report: DomainPostureHttpResponse) => void | Promise<void>;
   } = $props();
   let comparisonFilter = $state<PostureComparisonFilter>('all');
   let includeInheritedDns = $state(false);
+  let batchIndex = $state(0);
+  const batchCount = $derived(Math.ceil(active.officialDomains.length / OFFICIAL_DOMAIN_REVIEW_BATCH_SIZE));
+  const selectedBatch = $derived(Math.min(batchIndex, Math.max(0, batchCount - 1)));
 </script>
 
 <section class="audit card">
@@ -25,10 +28,20 @@
       <h2>Official-domain settings review</h2>
       <p>Review registration controls, delegation, SPF, DMARC, MTA-STS, TLS-RPT, BIMI, CAA, DNSSEC and supplied DKIM selectors.</p>
     </div>
-    <button class="primary" onclick={() => audit(includeInheritedDns)} disabled={auditing || !active.officialDomains.length || Boolean(disabledReason)}>
+    <button class="primary" onclick={() => audit(includeInheritedDns, selectedBatch)} disabled={auditing || !active.officialDomains.length || Boolean(disabledReason)}>
       {auditing ? 'Reviewing…' : 'Review official domains'}
     </button>
   </header>
+  {#if batchCount > 1}
+    <label>Official-domain batch
+      <select value={selectedBatch} onchange={event => { batchIndex = Number(event.currentTarget.value); }} disabled={auditing}>
+        {#each Array.from({ length: batchCount }, (_, index) => index) as index}
+          <option value={index}>Domains {index * OFFICIAL_DOMAIN_REVIEW_BATCH_SIZE + 1}–{Math.min((index + 1) * OFFICIAL_DOMAIN_REVIEW_BATCH_SIZE, active.officialDomains.length)} of {active.officialDomains.length}</option>
+        {/each}
+      </select>
+    </label>
+    <p>Each review requests only the selected batch. Choose another batch to review the remaining domains.</p>
+  {/if}
   <label class="inheritance-option"><input type="checkbox" bind:checked={includeInheritedDns} disabled={auditing} /> Include inherited DMARC and direct parent delegation</label>
   <p class="inheritance-detail">Adds up to seven ancestor DMARC queries and a direct sample of two parent DNS servers per domain, with bounded server discovery. Exact-name results remain separate.</p>
   {#if disabledReason}<p class="feature-disabled" role="note">{disabledReason}</p>{/if}

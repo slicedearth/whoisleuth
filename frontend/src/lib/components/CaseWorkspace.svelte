@@ -6,7 +6,7 @@
 import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   import { registerAnalystUndo } from '$lib/analyst-undo';
   import { createDraftRevision, restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
-  import { hasUnprotectedCaseDrafts } from '$lib/controllers/case-draft.svelte.ts';
+  import { hasUnprotectedCaseDrafts, trackTransientCaseDraft } from '$lib/controllers/case-draft.svelte.ts';
   import { preloadBestEffort } from '$lib/idle-preload';
   import { readCaseNavigationContext, selectConsoleCase } from '$lib/console-workflow-state';
   import { monitorRouteKey, monitorRouteTarget } from '$lib/controllers/monitor-route-controller.ts';
@@ -92,6 +92,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   let newDomain = $state('');
   let openingCase = $state(false);
   let incidentDraftDirty = $state(false);
+  trackTransientCaseDraft(() => incidentDraftDirty);
   let incidentOpeningIntent: (() => boolean) | null = null;
   let calibrationCaseIds = $state<string[]>([]);
   let calibrationReview = $state<RiskCalibrationExportPreview | null>(null);

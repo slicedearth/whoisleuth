@@ -17,7 +17,7 @@
 import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
   import type { DesiredPostureBaseline, OfficialChannel, ProtectionAttestation, RightsReference } from '$lib/analysis/brand-profile-model.ts';
   import { brandPostureCollectionFingerprint, brandPostureObservationContext, currentDesiredPostureObservation, desiredPostureObservations, normalizeDesiredPostureObservationHistory } from '$lib/analysis/brand-profile-model.ts';
-  import { buildDesiredPostureObservation, type DomainPostureAuditResult as AuditResult } from '$lib/analysis/owned-domain-posture-review.ts';
+  import { buildDesiredPostureObservation, officialDomainReviewBatch, type DomainPostureAuditResult as AuditResult } from '$lib/analysis/owned-domain-posture-review.ts';
   import { brandProfileDeletionImpact, buildBrandReviewInbox, type BrandReviewSourceState } from '$lib/analysis/brand-review-inbox.ts';
   import { buildBrandAssetRegister } from '$lib/analysis/brand-asset-register.ts';
   import {
@@ -431,11 +431,13 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
     }
   }
   function baselineDate(value:string){const date=new Date(value);return Number.isNaN(date.getTime())?'Unknown time':date.toLocaleString('en-AU');}
-  async function audit(includeInheritedDns=false){
+  async function audit(includeInheritedDns=false,batchIndex=0){
     if(profileWriteDisabled)return;
     if(postureDisabled){message=postureDisabled.reason||'Official-domain settings review is disabled by deployment policy.';return;}
     if(!active?.officialDomains.length)return;
     const profileSnapshot=normalizeProfile(active);
+    const domains=officialDomainReviewBatch(profileSnapshot,batchIndex);
+    if(!domains.length){message='Select a current official-domain batch before reviewing.';return;}
     const profileId=profileSnapshot.id;
     const profileFingerprint=auditProfileFingerprint(profileSnapshot);
     const generation=++auditGeneration;
@@ -445,7 +447,6 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
     const ownsRequest=()=>generation===auditGeneration&&auditController===controller;
     const canPublish=()=>{const current=active;return ownsRequest()&&activeId===profileId&&current!==null&&auditProfileFingerprint(current)===profileFingerprint;};
     auditing=true;auditResults=[];
-    const domains=profileSnapshot.officialDomains.slice(0,20);
     message=`Reviewing ${domains.length} official domain${domains.length===1?'':'s'}…`;
     let cursor=0;
     const next:AuditResult[]=new Array(domains.length);
@@ -473,7 +474,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
       await Promise.all(Array.from({length:Math.min(3,domains.length)},worker));
       if(!canPublish())return;
       auditResults=next;
-      message=`Reviewed ${next.filter(v=>v?.report).length}/${domains.length} official domain${domains.length===1?'':'s'}.`;
+      message=`Reviewed ${next.filter(v=>v?.report).length}/${domains.length} official domain${domains.length===1?'':'s'}${domains.length<profileSnapshot.officialDomains.length?` in this batch; ${profileSnapshot.officialDomains.length} domains in the profile`:''}.`;
     }finally{
       if(ownsRequest()){auditing=false;auditController=null;}
     }

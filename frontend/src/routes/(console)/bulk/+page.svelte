@@ -553,7 +553,7 @@
   async function selectRows(rows:ScanResult[],selected=true){
     await ensurePrimaryResultContext();
     if(shortlistSourceState!=='ready'||!shortlistApi){shortlistStatus='The shortlist is unavailable. Reload before changing the selection.';return false;}
-    const affected=rows.slice(0,500);
+    const affected=selected?rows:rows.filter(row=>isShortlisted(row.domain));
     try{
       const result=await shortlistApi.setShortlistSelection(affected.map(shortlistPayload),selected);
       shortlist=result.records;
@@ -562,7 +562,7 @@
         registerAnalystUndo({
           kind:'shortlist_membership',
           action:selected?'Updated shortlist selection':'Removed shortlist selection',
-          affectedRecord:`${affected.length} domain${affected.length===1?'':'s'}`,
+          affectedRecord:`${result.undo.length} domain${result.undo.length===1?'':'s'}`,
           undo:()=>restoreShortlistSelection(result.undo),
         });
       }
@@ -713,7 +713,7 @@
     }
     if (await run(pending, false) !== null) await saveCurrentBulkSession();
   }
-  async function removeSavedBulkSession(session:BulkSession){if(scan.running){bulkSessionStatus='Cancel or wait for the active scan before deleting a saved session.';return;}if(!confirm(`Delete the saved session “${session.name}”?`))return;await ensureBulkSessionsContext();if(!bulkSessionsApi)return;try{bulkSessions=await bulkSessionsApi.deleteBulkSession(session.id);if(currentBulkSessionId===session.id){currentBulkSessionId='';bulkSessionName='';}bulkSessionStatus=`Deleted ${session.name}.`;}catch(cause){bulkSessionStatus=cause instanceof Error?cause.message:'Could not delete the Bulk session.';}}
+  async function removeSavedBulkSession(session:BulkSession){if(scan.running){bulkSessionStatus='Cancel or wait for the active scan before deleting a saved session.';return;}if(!confirm(`Delete the saved session “${session.name}”?`))return;await ensureBulkSessionsContext();if(!bulkSessionsApi)return;try{bulkSessions=await bulkSessionsApi.deleteBulkSession(session);if(currentBulkSessionId===session.id){currentBulkSessionId='';bulkSessionName='';}bulkSessionStatus=`Deleted ${session.name}.`;}catch(cause){bulkSessionStatus=cause instanceof Error?cause.message:'Could not delete the Bulk session.';}}
   async function downloadBulkSessions(){await ensureBulkSessionsContext();if(!bulkSessionsApi)return;try{await bulkSessionsApi.exportBulkSessions();bulkSessionStatus=`Exported ${bulkSessions.length} saved session${bulkSessions.length===1?'':'s'}.`;}catch(cause){bulkSessionStatus=cause instanceof Error?cause.message:'Could not export saved Bulk sessions.';}}
   function resultAt(index:number){return index>=0&&index<results.length?results[index]:null;}
   function toggleSavedAt(index:number){const row=resultAt(index);if(row)toggleSaved(row);}

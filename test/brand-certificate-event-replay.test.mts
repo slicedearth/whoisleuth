@@ -56,6 +56,13 @@ function eventCase(domain: string, overrides: Record<string, unknown> = {}) {
 }
 
 describe('retained certificate expectation replay', () => {
+  test('retains certificate observations for official domains beyond the first page', () => {
+    const officialDomains = Array.from({ length: 21 }, (_, index) => `d${String(index).padStart(2, '0')}.example`);
+    const replay = buildBrandCertificateEventReplay({ ...profile(), officialDomains }, [eventCase('d20.example')]);
+    assert.equal(replay.domains.length, 21);
+    assert.equal(replay.retainedEventCount, 1);
+    assert.equal(replay.domains.find(item => item.domain === 'd20.example')?.events.length, 1);
+  });
   test('retains an undated certificate event with its source instead of substituting Case save time', () => {
     const record = eventCase('official.example');
     record.evidencePins[0]!.observedAt = null;
