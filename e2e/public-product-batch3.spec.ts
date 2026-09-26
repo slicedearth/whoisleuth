@@ -4,8 +4,10 @@ import { PUBLIC_COVERAGE_SUMMARY } from '../frontend/src/lib/generated/public-co
 import { PUBLIC_METHODOLOGY } from '../frontend/src/lib/generated/public-methodology.ts';
 import { PUBLIC_EXAMPLES_INDEX } from '../frontend/src/lib/generated/public-examples-index.ts';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, openNativeLinkInNewTab, useTheme } from './helpers';
+import { expectNoHorizontalOverflow, nativeTabBrowserChannel, openNativeLinkInNewTab, useTheme } from './helpers';
 import { productionChunkPath } from './production-build';
+
+test.use({ channel: nativeTabBrowserChannel });
 
 function collectInvestigationRequests(page: Page): string[] {
   const requests: string[] = [];

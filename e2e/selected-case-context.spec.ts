@@ -4,7 +4,9 @@ import { TEST_SITE_PASSWORD } from './constants';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { currentActionFixture } from './case-response-fixtures';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
-import { currentBrowserLocalDocument, expandLookupFamilies, expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, migrateLegacyBrowserData, openNativeLinkInNewTab, readBrowserLocalCollection, useTheme } from './helpers';
+import { currentBrowserLocalDocument, expandLookupFamilies, expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, migrateLegacyBrowserData, nativeTabBrowserChannel, openNativeLinkInNewTab, readBrowserLocalCollection, useTheme } from './helpers';
+
+test.use({ channel: nativeTabBrowserChannel });
 
 const DOMAIN = 'selected-context.example';
 const CASE_ID = 'selected-context';

@@ -8,9 +8,12 @@ import {
   failBrowserLocalCollectionReads,
   holdBrowserLocalReads,
   migrateLegacyBrowserData,
+  nativeTabBrowserChannel,
   openNativeLinkInNewTab,
 } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
+
+test.use({ channel: nativeTabBrowserChannel });
 
 const OBSERVED_AT = '2026-08-08T00:00:00.000Z';
 const REVIEWED_AT = '2026-08-14T00:00:00.000Z';

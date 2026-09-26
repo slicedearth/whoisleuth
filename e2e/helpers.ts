@@ -21,6 +21,16 @@ const THEME_STORAGE_KEY = 'whoisleuth:theme:v1';
 const initialThemePreferences = new WeakMap<Page, 'dark' | 'light' | 'system'>();
 const LOCAL_DATA_DATABASE_NAME = 'whoisleuth-browser-data-v1';
 
+// Native tab disposition needs the full browser. The separate headless shell
+// can load a modified-click destination without publishing its navigation to
+// the driver. Keep the pinned browser and all guards; other engines are unchanged.
+export async function nativeTabBrowserChannel(
+  { browserName }: { browserName: string },
+  use: (channel: string | undefined) => Promise<void>,
+): Promise<void> {
+  await use(browserName === 'chromium' ? 'chromium' : undefined);
+}
+
 /** Verify native modifier handling, then activate the destination for UI checks. */
 export async function openNativeLinkInNewTab(page: Page, link: Locator): Promise<Page> {
   await page.bringToFront();

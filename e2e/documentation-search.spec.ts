@@ -21,8 +21,10 @@ test('the console palette searches documentation without reading saved work or r
   await dialog.getByRole('button', { name: 'Documentation', exact: true }).click();
   await expect(query).toHaveValue('');
   await query.fill('verify-artifact');
+  const destination = dialog.getByRole('link', { name: /^CLI command verify-artifact /u });
+  await expect(destination).toBeVisible();
   await query.press('ArrowDown');
-  await expect(dialog.getByRole('link').first()).toBeFocused();
+  await expect(destination).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL('/cli#command-verify-artifact');
   await expect(page.locator('[data-command-detail="verify-artifact"]')).toBeVisible();
@@ -56,8 +58,10 @@ test('documentation search supports keyboard selection, focus recovery and priva
   await page.getByRole('button', { name: 'Search documentation', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Search documentation', exact: true });
   await dialog.getByRole('searchbox').fill('verify-artifact');
+  const destination = dialog.getByRole('link', { name: /^CLI command verify-artifact /u });
+  await expect(destination).toBeVisible();
   await dialog.getByRole('searchbox').press('ArrowDown');
-  await expect(dialog.getByRole('link').first()).toBeFocused();
+  await expect(destination).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL('/cli#command-verify-artifact');
   await expect(page.locator('[data-command-detail="verify-artifact"]')).toBeVisible();

@@ -870,7 +870,7 @@ test('clears transient Lookup state when signing out through the Console', async
 test.describe('failed Console logout', () => {
   test.use({ allowExpectedLogout500Noise: true });
 
-test('clears transient Lookup state without an unhandled error when Console logout is unavailable', async ({ page }) => {
+test('preserves transient Lookup state after failed sign-out and clears it after confirmed sign-out', async ({ page }) => {
   const pageErrors: string[] = [];
   let logoutRequests = 0;
   page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -890,7 +890,8 @@ test('clears transient Lookup state without an unhandled error when Console logo
   await page.getByRole('button', { name: 'Sign out' }).click();
 
   await expect(page).toHaveURL('/lookup');
-  await expect(page.getByRole('alert')).toHaveText('Sign out failed. Your session remains active; try again.');
+  await expect(page.getByRole('alert')).toHaveText('Sign out could not be confirmed. Check the session before continuing.');
+  await expect(page.locator('#query')).toHaveValue('failed-signout-state.example.test');
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeEnabled();
   await expect.poll(() => logoutRequests).toBe(1);
   expect(pageErrors).toEqual([]);

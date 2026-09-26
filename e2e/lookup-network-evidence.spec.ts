@@ -228,7 +228,13 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
   await expect(card.getByText('192.0.2.10', { exact: true })).toBeVisible();
   await expect(card.getByText('0 issue ca.example', { exact: true })).toBeVisible();
   await expect(card.getByText(/ns1\.example.*serial 2026072701/i)).toBeVisible();
-  await expect(card.getByText(/Service priority 1 → owner · ALPN h2, h3 · port 443 · IPv4 hints 192\.0\.2\.10.*Published ech/i)).toBeVisible();
+  const serviceBinding = card.getByText(/^Service priority 1 → owner/u);
+  await expect(serviceBinding).toBeVisible();
+  await expect(serviceBinding).toContainText('owner dns-evidence.test');
+  await expect(serviceBinding).toContainText('ALPN h2, h3');
+  await expect(serviceBinding).toContainText('port 443');
+  await expect(serviceBinding).toContainText('IPv4 hints 192.0.2.10');
+  await expect(serviceBinding).toContainText('Published ech');
   await expect(card.getByText(/Service-binding targets and address hints are displayed but not followed/i)).toBeVisible();
   await expect(card.getByText(/CNAME: resolver timed out/i)).toBeVisible();
   await expect(card.getByText(/Verify shared infrastructure independently/i)).toBeVisible();

@@ -47,9 +47,10 @@ for (const all of [false, true]) test(`a committed watchlist ${all ? 'clear' : '
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'watchlists');
   page.once('dialog', dialog => dialog.accept());
   await (all ? page.getByRole('button', { name: 'Clear all', exact: true }) : page.getByRole('row', { name: /Priority/ }).getByRole('button', { name: 'Delete', exact: true })).click();
-  await expect(page.getByRole('status')).toContainText('committed');
+  const result = page.getByRole('status').filter({ hasText: all ? 'Cleared all watchlists.' : 'Deleted "Priority".' });
+  await expect(result).toContainText('committed');
   await expect(page.getByRole('row', { name: /Priority/ })).toHaveCount(0);
-  await expect(page.getByRole('status')).not.toContainText('Could not');
+  await expect(result).not.toContainText('Could not');
   const after = await readBrowserLocalCollection(page, 'watchlists', { minimumRevision: before.manifest.revision + 1 });
   expect(after.records.map(record => record.id)).toEqual(all ? [] : ['Other']);
 });
