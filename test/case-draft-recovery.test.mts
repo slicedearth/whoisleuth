@@ -6,6 +6,7 @@ import { MAX_CASE_DRAFT_RECORDS, type CaseDraftFields, type CaseDraftRecord } fr
 import { CASE_DRAFTS_COLLECTION } from '../frontend/src/lib/browser-local-data-definitions.ts';
 import type { CaseDraftValues } from '../frontend/src/lib/controllers/case-draft.svelte.ts';
 import { BrowserLocalDataError } from '../frontend/src/lib/browser-local-data.ts';
+import { hasUnprotectedCaseDrafts, setCaseDraftUnprotected } from '../frontend/src/lib/controllers/case-draft-state.ts';
 
 const draft = (overrides: Partial<CaseDraftRecord> = {}): CaseDraftRecord => ({
   id: 'draft-one', revision: 'revision-one', caseId: 'case-one', form: 'decision', formVersion: 1,
@@ -48,6 +49,28 @@ function harness() {
 }
 
 describe('bounded Case recovery drafts', () => {
+  test('the leave guard tracks independent draft owners without reading form values', () => {
+    const first = Object.freeze({ get fields() { throw new Error('Draft values must not enter the leave guard'); } });
+    const second = {};
+    assert.equal(hasUnprotectedCaseDrafts(), false);
+    try {
+      setCaseDraftUnprotected(first, false);
+      assert.equal(hasUnprotectedCaseDrafts(), false);
+      setCaseDraftUnprotected(first, true);
+      setCaseDraftUnprotected(first, true);
+      assert.equal(hasUnprotectedCaseDrafts(), true);
+      setCaseDraftUnprotected(second, true);
+      setCaseDraftUnprotected(first, false);
+      assert.equal(hasUnprotectedCaseDrafts(), true, 'protecting one form must not clear another form');
+      setCaseDraftUnprotected({}, false);
+      assert.equal(hasUnprotectedCaseDrafts(), true, 'an unrelated owner must not clear a pending draft');
+      setCaseDraftUnprotected(second, false);
+      assert.equal(hasUnprotectedCaseDrafts(), false);
+    } finally {
+      setCaseDraftUnprotected(first, false);
+      setCaseDraftUnprotected(second, false);
+    }
+  });
   for (const timing of ['before', 'after'] as const) test(`unknown recovery acknowledgement ${timing} a write blocks repetition while retaining the form`, async context => {
     context.mock.timers.enable({ apis: ['setTimeout'] });
     const h = harness();
