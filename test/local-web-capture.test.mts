@@ -490,7 +490,7 @@ describe('optional local rendered capture package', () => {
     const moved = path.join(parent, 'moved-capture');
     await mkdir(destination, { mode: 0o700 });
     const identity = await stat(destination);
-    const writer = await startAnchoredArtifactWriter(
+    let writer: Awaited<ReturnType<typeof startAnchoredArtifactWriter>> | null = await startAnchoredArtifactWriter(
       destination,
       { dev: identity.dev, ino: identity.ino },
       typeof process.getuid === 'function' ? process.getuid() : null,
@@ -502,9 +502,10 @@ describe('optional local rendered capture package', () => {
       assert.equal(await readFile(path.join(moved, 'dom-digest.json'), 'utf8'), '{}\n');
       await assert.rejects(() => stat(path.join(destination, 'dom-digest.json')), /ENOENT/u);
       await writer.finish(true);
+      writer = null;
       await assert.rejects(() => stat(path.join(moved, 'dom-digest.json')), /ENOENT/u);
     } finally {
-      writer.terminate();
+      writer?.terminate();
       await rm(parent, { recursive: true, force: true });
     }
   });
