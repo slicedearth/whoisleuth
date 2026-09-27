@@ -291,6 +291,14 @@ jobs:
         with:
           node-version: 26
           cache: npm
+      - name: Retain compatibility executable
+        id: compatibility-runtime
+        run: printf 'executable=%s\n' "$(command -v node)" >> "$GITHUB_OUTPUT"
+      - name: Restore primary package compiler runtime
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
       - name: Install locked dependencies
         run: npm ci --include=optional --ignore-scripts --audit=false
       - name: Download verified frontend build
@@ -299,6 +307,8 @@ jobs:
           name: frontend-build-${{ github.sha }}-${{ github.run_attempt }}
           path: frontend
       - name: Run maintained CLI compatibility group
+        env:
+          WHOISLEUTH_CLI_RUNTIME_NODE: ${{ steps.compatibility-runtime.outputs.executable }}
         run: npm run verification:ci -- --group=cli-runtime
 
   verify:

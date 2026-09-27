@@ -55,7 +55,7 @@ import {
   unitTestExecutableEnvironment,
 } from '../tools/toolchain-compatibility.mts';
 import { runFunctionalRuns, localBrowserJobs } from '../tools/playwright-balanced-suite.mts';
-import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
+import { captureVisualEvidenceEnabled, browserBuildAssetPath } from '../tools/playwright-execution-contract.mts';
 import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
 import { assertAppliedBrowserSafety } from '../tools/analyst-journey-assurance.mts';
 
@@ -353,7 +353,7 @@ describe('continuous integration workflow', () => {
     assert.equal(CI_CLI_RUNTIME_NODE_MAJOR, 26);
     assert.ok(CI_CLI_RUNTIME_SCRIPTS.includes('cli:package:check'));
     assert.ok(CI_CLI_RUNTIME_SCRIPTS.includes('capture:package:check'));
-    assert.match(localPlan, /^cli:package:check \(Node 26 compatibility runtime\)$/mu);
+    assert.match(localPlan, /^cli:package:check \(one assembly; primary and Node 26 installations\)$/mu);
     assert.equal(
       selectNodeRuntimeExecutable(26, ['/fixture/node-24', '/fixture/node-26'], (candidate) => (
         candidate.endsWith('node-26') ? '26' : '24'
@@ -833,6 +833,13 @@ describe('continuous integration workflow', () => {
     assert.equal(captureVisualEvidenceEnabled({ WHOISLEUTH_E2E_VISUAL_EVIDENCE: '1' }), true);
     assert.equal(captureVisualEvidenceEnabled({ WHOISLEUTH_E2E_VISUAL_EVIDENCE: '0' }), false);
     assert.throws(() => captureVisualEvidenceEnabled({ WHOISLEUTH_E2E_VISUAL_EVIDENCE: 'yes' }), /0 or 1/u);
+  });
+
+  test('asset diagnostics exclude query values, target requests and external origins', () => {
+    const origin = 'http://127.0.0.1:4173', asset = '/_app/immutable/chunks/example.A.js';
+    assert.equal(browserBuildAssetPath(origin + asset + '?private=sentinel#secret', origin), asset);
+    for (const value of [origin + '/api/lookup?target=example.test', 'https://example.test' + asset,
+      'malformed', 'http://user:password@127.0.0.1:4173' + asset]) assert.equal(browserBuildAssetPath(value, origin), null);
   });
 
   test('browser tests synchronize on observable state instead of fixed delays', () => {

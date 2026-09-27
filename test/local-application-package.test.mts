@@ -7,7 +7,7 @@ import { describe, test } from 'node:test';
 import { parseLocalApplicationArguments } from '../packages/local-application/arguments.mts';
 import { localApplicationPackageInputs, localApplicationPackageManifest } from '../tools/local-application-package.mts';
 import { optionalPackageLock, assertInstalledPackageDependencies, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles } from '../tools/optional-package.mts';
-import { CI_BROWSER_BUILD_SCRIPTS, CI_CLI_RUNTIME_SCRIPTS } from '../tools/ci-verification.mts';
+import { CI_CLI_RUNTIME_SCRIPTS } from '../tools/ci-verification.mts';
 import { buildVerificationOwnershipPlan } from '../tools/verification-ownership.mts';
 import { buildFocusedVerificationExecution } from '../tools/focused-verification.mts';
 
@@ -82,7 +82,6 @@ describe('local application package', () => {
   });
 
   test('selects a verified build before local packaging in both runtime lanes and focused checks', () => {
-    assert.ok(CI_BROWSER_BUILD_SCRIPTS.indexOf('frontend:build:integrity') < CI_BROWSER_BUILD_SCRIPTS.indexOf('local:package:check'));
     assert.ok(CI_CLI_RUNTIME_SCRIPTS.indexOf('frontend:build:integrity') < CI_CLI_RUNTIME_SCRIPTS.indexOf('local:package:check'));
     const plan = buildVerificationOwnershipPlan([entry]);
     assert.ok(plan.mandatorySpecialisedChecks.includes('local-package'));

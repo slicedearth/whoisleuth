@@ -94,7 +94,10 @@ npm run verification:ci
 
 It requires the exact `.nvmrc` runtime, tested shells and a Node 26 executable
 on `PATH` (or `WHOISLEUTH_CLI_RUNTIME_NODE`). It performs a locked install,
-quality checks, coverage, production-browser tests and CLI compatibility checks.
+quality checks, unit coverage, repository integration tests, production-browser
+tests and package compatibility checks. Each package is assembled once and its
+exact archive is installed independently under both runtimes. No prior test
+result substitutes for either installation.
 Shared executable groups keep the required local and hosted checks aligned.
 Already-prepared lanes can use `npm run verification:ci -- --group=<name>`;
 group mode does not install dependencies or orchestrate other lanes.

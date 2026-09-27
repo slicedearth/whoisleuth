@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import { verifyPackageRuntimes, readPackageRuntimeRequest, withPackageInstallation } from './package-runtime-check.mts';
 import { execFile as execFileCallback } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
@@ -52,18 +53,49 @@ export function localApplicationPackageManifest(sourceValue: unknown, lockfileVa
     dependencies: pinned, bundleDependencies: [...dependencies], repository: { type: 'git', url: WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL }, homepage: WHOISLEUTH_PROJECT_URL };
 }
 
+type LocalInstalledInput = Readonly<{
+  root: string; manifest: ReturnType<typeof localApplicationPackageManifest>; lockfile: Record<string, unknown>;
+  dependencies: readonly string[]; fileIdentity: readonly (readonly [string, { bytes: number; sha256: string }])[];
+}>;
+
+async function verifyInstalledLocal(archive: string, input: LocalInstalledInput) {
+  const { root, manifest, lockfile, dependencies, fileIdentity } = input;
+  return withPackageInstallation(async ({ installed, home, run }) => {
+    await writeFile(path.join(installed, 'package.json'), '{"private":true}\n');
+    await run('npm', ['install', '--offline', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund', archive], installed);
+    const packageRoot = path.join(installed, 'node_modules', ...manifest.name.split('/'));
+    const dependencyCount = await assertInstalledOptionalPackage(packageRoot, new Map(fileIdentity), parse(await readFile(path.join(installed, 'package-lock.json'))), lockfile, dependencies, manifest.name);
+    assert.deepEqual(parse(await readFile(path.join(packageRoot, 'package.json'))), manifest);
+    const executable = path.join(packageRoot, 'runtime', ENTRY.replace(/\.mts$/u, '.mjs'));
+    const guard = ['--import', path.join(root, 'tools/browser-server-egress-guard.mts')];
+    const checks: string[] = ['exact installed package and dependency integrity'];
+    for (const args of [[], ['--help'], ['-h'], ['--version']]) {
+      const result = await run(process.execPath, [...guard, executable, ...args], home);
+      assert.equal(result.stderr, '');
+      if (args[0] === '--version') assert.equal(result.stdout, `${manifest.version}\n`); else assert.match(result.stdout, /Saved records, drafts and retained files live in the selected folder/u);
+      checks.push(args.join(' ') || 'zero-argument help');
+    }
+    const smoke = await run(process.execPath, [path.join(root, 'tools/local-application-package-smoke.mts'), packageRoot, path.join(root, 'tools/browser-server-egress-guard.mts')], home);
+    assert.equal(smoke.stderr, '');
+    const smokeChecks: unknown = JSON.parse(smoke.stdout);
+    if (!Array.isArray(smokeChecks) || !smokeChecks.length || smokeChecks.some(value => typeof value !== 'string')) throw new Error('Installed local checks did not report completion.');
+    checks.push(...smokeChecks);
+    return { installedChecks: checks, dependencyCount };
+  });
+}
+
 export async function checkLocalApplicationPackage(repositoryRoot = ROOT, candidateDirectory?: string) {
   const root = await realpath(repositoryRoot), build = assertFrontendBuildIntegrity(root);
   const temporary = await mkdtemp(path.join(tmpdir(), 'whoisleuth-local-package-'));
   const sourceRoot = path.join(temporary, 'source'), staged = path.join(temporary, 'package'), runtime = path.join(staged, 'runtime');
-  const packed = path.join(temporary, 'packed'), installed = path.join(temporary, 'installed'), home = path.join(temporary, 'home');
+  const packed = path.join(temporary, 'packed'), home = path.join(temporary, 'home');
   const environment: NodeJS.ProcessEnv = { ...process.env, HOME: home, USERPROFILE: home,
     npm_config_registry: 'https://registry.npmjs.org', npm_config_cache: path.join(temporary, 'cache'), npm_config_userconfig: path.join(home, 'npmrc'),
     npm_config_globalconfig: path.join(home, 'global-npmrc'), npm_config_ignore_scripts: 'true', npm_config_audit: 'false', npm_config_fund: 'false' };
   for (const key of ['NODE_OPTIONS', 'NODE_PATH', 'NPM_TOKEN', 'NODE_AUTH_TOKEN', 'SITE_PASSWORD', 'SESSION_SECRET']) delete environment[key];
   const run = (command: string, args: string[], cwd: string) => execFile(command, args, { cwd, env: environment, encoding: 'utf8', timeout: PACKAGE_PROCESS_TIMEOUT_MS, maxBuffer: MAX_PACKAGE_GRAPH_BYTES, killSignal: 'SIGTERM' });
   try {
-    await Promise.all([sourceRoot, staged, packed, installed, home].map(directory => mkdir(directory)));
+    await Promise.all([sourceRoot, staged, packed, home].map(directory => mkdir(directory)));
     await Promise.all(['npmrc', 'global-npmrc'].map(name => writeFile(path.join(home, name), '')));
     const metadata = await capturePackageSourceSnapshot(root, ['package.json', 'package-lock.json', PACKAGE_SOURCE, ...SUPPORT.map(([source]) => source)], { totalBytes: 0 });
     const lockfile = parse(metadata.get('package-lock.json')!.bytes);
@@ -111,25 +143,11 @@ export async function checkLocalApplicationPackage(repositoryRoot = ROOT, candid
     await assertPackageSourceSnapshot(root, compiler, MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES);
     assert.deepEqual(assertFrontendBuildIntegrity(root), build);
     assert.equal(await buildOptionalPackageNotices(root, inputs.dependencies, 'Local application server', lockfile), notices);
-    await writeFile(path.join(installed, 'package.json'), '{"private":true}\n');
-    await run('npm', ['install', '--offline', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund', path.join(packed, pack.filename)], installed);
-    const packageRoot = path.join(installed, 'node_modules', ...manifest.name.split('/'));
-    const dependencyCount = await assertInstalledOptionalPackage(packageRoot, fileIdentity, parse(await readFile(path.join(installed, 'package-lock.json'))), lockfile, inputs.dependencies, manifest.name);
-    assert.deepEqual(parse(await readFile(path.join(packageRoot, 'package.json'))), manifest);
-    const executable = path.join(packageRoot, 'runtime', ENTRY.replace(/\.mts$/u, '.mjs'));
-    const guard = ['--import', path.join(root, 'tools/browser-server-egress-guard.mts')];
-    const checks: string[] = ['exact installed package and dependency integrity'];
-    for (const args of [[], ['--help'], ['-h'], ['--version']]) {
-      const result = await run(process.execPath, [...guard, executable, ...args], home);
-      assert.equal(result.stderr, '');
-      if (args[0] === '--version') assert.equal(result.stdout, `${manifest.version}\n`); else assert.match(result.stdout, /Saved records, drafts and retained files live in the selected folder/u);
-      checks.push(args.join(' ') || 'zero-argument help');
-    }
-    const smoke = await run(process.execPath, [path.join(root, 'tools/local-application-package-smoke.mts'), packageRoot, path.join(root, 'tools/browser-server-egress-guard.mts')], home);
-    assert.equal(smoke.stderr, '');
-    const smokeChecks: unknown = JSON.parse(smoke.stdout);
-    if (!Array.isArray(smokeChecks) || !smokeChecks.length || smokeChecks.some(value => typeof value !== 'string')) throw new Error('Installed local checks did not report completion.');
-    checks.push(...smokeChecks);
+    const { installedChecks: checks, dependencyCount } = await verifyPackageRuntimes(
+      fileURLToPath(import.meta.url), path.join(packed, pack.filename), MAX_LOCAL_PACKAGE_PACKED_BYTES,
+      { root, manifest, lockfile, dependencies: inputs.dependencies, fileIdentity: [...fileIdentity] },
+      verifyInstalledLocal,
+    );
     const archiveFile = `whoisleuth-local-${manifest.version}.tgz`;
     const report = { packageName: manifest.name, packageVersion: manifest.version, applicationVersion, sourceModules: frozen.sources.length,
       servedFiles: build.served.fileCount, servedBytes: build.served.totalBytes, servedDigestSha256: build.served.digestSha256,
@@ -149,7 +167,12 @@ export async function checkLocalApplicationPackage(repositoryRoot = ROOT, candid
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const args = process.argv.slice(2);
-    if (args.length && (args.length !== 2 || args[0] !== '--candidate' || !args[1])) throw new Error('Usage: local-application-package [--candidate <new-external-directory>]');
-    process.stdout.write(JSON.stringify(await checkLocalApplicationPackage(ROOT, args[1]), null, 2) + '\n');
+    if (args.length === 2 && args[0] === '--installed-check') {
+      const { archive, input } = await readPackageRuntimeRequest<LocalInstalledInput>(args[1]!, MAX_LOCAL_PACKAGE_PACKED_BYTES);
+      process.stdout.write(JSON.stringify(await verifyInstalledLocal(archive, input)) + '\n');
+    } else {
+      if (args.length && (args.length !== 2 || args[0] !== '--candidate' || !args[1])) throw new Error('Usage: local-application-package [--candidate <new-external-directory>]');
+      process.stdout.write(JSON.stringify(await checkLocalApplicationPackage(ROOT, args[1]), null, 2) + '\n');
+    }
   } catch (cause) { process.stderr.write((cause instanceof Error ? cause.message : 'Local application package verification failed.') + '\n'); process.exitCode = 1; }
 }

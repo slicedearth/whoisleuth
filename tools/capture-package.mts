@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import { verifyPackageRuntimes, readPackageRuntimeRequest, withPackageInstallation } from './package-runtime-check.mts';
 import { execFile as execFileCallback } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
@@ -77,6 +78,40 @@ export function assertCaptureInstalledDependencies(installedValue: unknown, revi
   return assertInstalledPackageDependencies(installedValue, reviewedValue, direct, '@slicedearth/whoisleuth-web-capture');
 }
 
+type CaptureInstalledInput = Readonly<{
+  root: string; manifest: Json; lockfile: Json;
+  dependencies: readonly string[]; fileIdentity: readonly (readonly [string, { bytes: number; sha256: string }])[];
+  browserSmoke: boolean;
+}>;
+
+async function verifyInstalledCapture(archive: string, input: CaptureInstalledInput) {
+  const { root, manifest, lockfile, dependencies, fileIdentity, browserSmoke } = input;
+  return withPackageInstallation(async ({ installed, home, environment, run }) => {
+    if (browserSmoke) environment.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowserCacheDirectory();
+    await writeFile(path.join(installed, 'package.json'), '{"private":true}\n');
+    await run('npm', ['install', '--offline', '--package-lock=true', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund', archive], installed);
+    const packageRoot = path.join(installed, 'node_modules', ...String(manifest.name).split('/'));
+    const dependencyCount = await assertInstalledOptionalPackage(packageRoot, new Map(fileIdentity), parse(await readFile(path.join(installed, 'package-lock.json'))), lockfile, dependencies, String(manifest.name));
+    assert.deepEqual(parse(await readFile(path.join(packageRoot, 'package.json'))), manifest);
+    const executable = path.join(packageRoot, 'runtime', ENTRY_OUTPUT);
+    const offlineGuard = ['--import', path.join(root, 'tools/browser-server-egress-guard.mts')];
+    const checks: string[] = ['installed dependency identities and integrity'];
+    for (const args of [[], ['--help'], ['-h'], ['compare', '--help'], ['--version']]) {
+      const output = await run(process.execPath, [...offlineGuard, executable, ...args], home);
+      assert.equal(output.stderr, '');
+      if (args[0] === '--version') assert.equal(output.stdout, `${String(manifest.version)}\n`);
+      else assert.match(output.stdout, /Compare verifies selected local artefacts and makes no network requests/u);
+      checks.push(args.join(' ') || 'zero-argument help');
+    }
+    const smoke = await run(process.execPath, [...offlineGuard, path.join(root, 'tools/capture-package-smoke.mts'), packageRoot, ...(browserSmoke ? ['--browser'] : [])], home);
+    assert.equal(smoke.stderr, '');
+    const checked = JSON.parse(smoke.stdout) as string[];
+    if (!Array.isArray(checked) || checked.some(value => typeof value !== 'string') || !checked.length) throw new Error('Installed capture smoke checks did not report completion.');
+    checks.push(...checked);
+    return { installedChecks: checks, dependencyCount };
+  });
+}
+
 export async function checkCapturePackage(repositoryRoot = ROOT, candidateDirectory?: string, browserSmoke = false) {
   const root = await realpath(repositoryRoot);
   const temporary = await mkdtemp(path.join(tmpdir(), 'whoisleuth-capture-package-'));
@@ -84,14 +119,13 @@ export async function checkCapturePackage(repositoryRoot = ROOT, candidateDirect
   const staged = path.join(temporary, 'package');
   const runtime = path.join(staged, 'runtime');
   const packed = path.join(temporary, 'packed');
-  const installed = path.join(temporary, 'installed');
   const home = path.join(temporary, 'home');
   const environment: NodeJS.ProcessEnv = { ...process.env, HOME: home, USERPROFILE: home, npm_config_registry: 'https://registry.npmjs.org', npm_config_cache: path.join(temporary, 'cache'), npm_config_userconfig: path.join(home, 'npmrc'), npm_config_globalconfig: path.join(home, 'global-npmrc'), npm_config_ignore_scripts: 'true', npm_config_audit: 'false', npm_config_fund: 'false', PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' };
   if (browserSmoke) environment.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowserCacheDirectory();
   for (const name of ['NODE_OPTIONS', 'NODE_PATH', 'NPM_TOKEN', 'NODE_AUTH_TOKEN']) delete environment[name];
   const run = (command: string, args: string[], cwd: string) => execFile(command, args, { cwd, env: environment, encoding: 'utf8', timeout: PACKAGE_PROCESS_TIMEOUT_MS, maxBuffer: MAX_PACKAGE_GRAPH_BYTES, killSignal: 'SIGTERM' });
   try {
-    await Promise.all([sourceRoot, staged, packed, installed, home].map(directory => mkdir(directory)));
+    await Promise.all([sourceRoot, staged, packed, home].map(directory => mkdir(directory)));
     await Promise.all(['npmrc', 'global-npmrc'].map(name => writeFile(path.join(home, name), '')));
     // Retain external dependency edges in this package report. The shared
     // do-not-follow rule still prevents traversing dependency internals.
@@ -137,26 +171,11 @@ export async function checkCapturePackage(repositoryRoot = ROOT, candidateDirect
     await assertPackageSourceSnapshot(root, metadata);
     await assertPackageSourceSnapshot(root, compiler, MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES);
     assert.equal(await buildOptionalPackageNotices(root, inputs.dependencies, 'Capture companion', parse(metadata.get('package-lock.json')!.bytes)), notices, 'Capture licence inputs changed.');
-    await writeFile(path.join(installed, 'package.json'), '{"private":true}\n');
-    await run('npm', ['install', '--offline', '--package-lock=true', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund', path.join(packed, pack.filename)], installed);
-    const packageRoot = path.join(installed, 'node_modules', ...String(manifest.name).split('/'));
-    const dependencyCount = await assertInstalledOptionalPackage(packageRoot, fileIdentity, parse(await readFile(path.join(installed, 'package-lock.json'))), parse(metadata.get('package-lock.json')!.bytes), inputs.dependencies, String(manifest.name));
-    assert.deepEqual(parse(await readFile(path.join(packageRoot, 'package.json'))), manifest);
-    const executable = path.join(packageRoot, 'runtime', ENTRY_OUTPUT);
-    const offlineGuard = ['--import', path.join(root, 'tools/browser-server-egress-guard.mts')];
-    const checks: string[] = ['installed dependency identities and integrity'];
-    for (const args of [[], ['--help'], ['-h'], ['compare', '--help'], ['--version']]) {
-      const output = await run(process.execPath, [...offlineGuard, executable, ...args], home);
-      assert.equal(output.stderr, '');
-      if (args[0] === '--version') assert.equal(output.stdout, `${String(manifest.version)}\n`);
-      else assert.match(output.stdout, /Compare verifies selected local artefacts and makes no network requests/u);
-      checks.push(args.join(' ') || 'zero-argument help');
-    }
-    const smoke = await run(process.execPath, [...offlineGuard, path.join(root, 'tools/capture-package-smoke.mts'), packageRoot, ...(browserSmoke ? ['--browser'] : [])], home);
-    assert.equal(smoke.stderr, '');
-    const checked = JSON.parse(smoke.stdout) as string[];
-    if (!Array.isArray(checked) || checked.some(value => typeof value !== 'string') || !checked.length) throw new Error('Installed capture smoke checks did not report completion.');
-    checks.push(...checked);
+    const { installedChecks: checks, dependencyCount } = await verifyPackageRuntimes(
+      fileURLToPath(import.meta.url), path.join(packed, pack.filename), MAX_CAPTURE_PACKAGE_PACKED_BYTES,
+      { root, manifest, lockfile: parse(metadata.get('package-lock.json')!.bytes), dependencies: inputs.dependencies, fileIdentity: [...fileIdentity], browserSmoke },
+      verifyInstalledCapture,
+    );
     const report = { packageName: manifest.name, packageVersion: manifest.version, applicationVersion, sourceModules: verified.sources.length, archiveFile: pack.filename, packedEntries: entries.length, packedBytes: archive.byteLength, unpackedBytes: pack.unpackedSize, archiveSha256: createHash('sha256').update(archive).digest('hex'), dependencies: manifest.dependencies, installedDependencies: dependencyCount, installedChecks: checks, publicationEnabled: false };
     if (candidateDirectory) {
       const destination = path.resolve(candidateDirectory);
@@ -174,9 +193,14 @@ export async function checkCapturePackage(repositoryRoot = ROOT, candidateDirect
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const args = process.argv.slice(2);
-    const browserSmoke = args[0] === '--browser-smoke';
-    if (browserSmoke) args.shift();
-    if (args.length && (args.length !== 2 || args[0] !== '--candidate' || !args[1])) throw new Error('Usage: capture-package [--browser-smoke] [--candidate <new-external-directory>]');
-    process.stdout.write(JSON.stringify(await checkCapturePackage(ROOT, args[1], browserSmoke), null, 2) + '\n');
+    if (args.length === 2 && args[0] === '--installed-check') {
+      const { archive, input } = await readPackageRuntimeRequest<CaptureInstalledInput>(args[1]!, MAX_CAPTURE_PACKAGE_PACKED_BYTES);
+      process.stdout.write(JSON.stringify(await verifyInstalledCapture(archive, input)) + '\n');
+    } else {
+      const browserSmoke = args[0] === '--browser-smoke';
+      if (browserSmoke) args.shift();
+      if (args.length && (args.length !== 2 || args[0] !== '--candidate' || !args[1])) throw new Error('Usage: capture-package [--browser-smoke] [--candidate <new-external-directory>]');
+      process.stdout.write(JSON.stringify(await checkCapturePackage(ROOT, args[1], browserSmoke), null, 2) + '\n');
+    }
   } catch (cause) { process.stderr.write((cause instanceof Error ? cause.message : 'Capture package verification failed.') + '\n'); process.exitCode = 1; }
 }

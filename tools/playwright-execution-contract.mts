@@ -29,6 +29,17 @@ export function captureVisualEvidenceEnabled(environment: NodeJS.ProcessEnv = pr
   return value === '1';
 }
 
+/** Diagnostics retain build-asset paths only, never target URLs or queries. */
+export function browserBuildAssetPath(value: string, origin: string): string | null {
+  if (value.length > 2_048) return null;
+  try {
+    const url = new URL(value);
+    return url.origin === origin && !url.username && !url.password
+      && /^\/_app\/immutable\/(?:chunks|nodes|entry|assets)\/[A-Za-z0-9_.-]+\.(?:js|css)$/u.test(url.pathname)
+      ? url.pathname : null;
+  } catch { return null; }
+}
+
 /** Only the synthetic policy document deliberately exercises native CSP denials. */
 export function isPolicyFixtureDiagnostic(browser: string, type: string, text: string, messageUrl: string, pageUrl: string, origin: string): boolean {
   const fixture = `${origin}/__policy-fixture`;

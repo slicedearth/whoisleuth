@@ -35,6 +35,7 @@ import { buildThirdPartyNotices } from './third-party-notices.mts';
 import { checkInstalledSigningTrust } from './cli-signing-package-check.mts';
 import { checkInstalledCaseFiles } from './cli-case-package-check.mts';
 import { createInstalledCliRunner } from './installed-cli-check.mts';
+import { verifyPackageRuntimes, readPackageRuntimeRequest, withPackageInstallation } from './package-runtime-check.mts';
 import { checkInstalledCliDiscovery } from './cli-discovery-package-check.mts';
 import { checkInstalledCliEvidence } from './cli-evidence-package-check.mts';
 import { checkInstalledCliWorkflows } from './cli-workflow-package-check.mts';
@@ -471,6 +472,122 @@ function parsePackResult(value: unknown): JsonRecord {
   return record(value[0], 'npm pack result');
 }
 
+type CliInstalledInput = Readonly<{ repositoryRoot: string; manifest: JsonRecord; publicationEnabled: boolean }>;
+
+async function verifyInstalledCli(tarball: string, input: CliInstalledInput) {
+  const { repositoryRoot, manifest, publicationEnabled } = input;
+  return withPackageInstallation(async ({ temporary: temporaryRoot, installed: installRoot, environment: commonEnvironment }) => {
+    await writeFile(path.join(installRoot, 'package.json'), '{"private":true}\n', 'utf8');
+    await execFile('npm', ['install', '--package-lock=true', '--ignore-scripts', '--no-audit', '--no-fund', tarball], {
+      cwd: installRoot,
+      encoding: 'utf8',
+      timeout: PACKAGE_PROCESS_TIMEOUT_MS,
+      killSignal: 'SIGTERM',
+      maxBuffer: 4 * 1024 * 1024,
+      env: commonEnvironment,
+    });
+    const packageName = boundedString(manifest.name, 'Generated package name', 128);
+    const packageVersion = boundedString(manifest.version, 'Generated package version', 128);
+    const executable = path.join(installRoot, 'node_modules', ...packageName.split('/'), 'bin', 'whoisleuth.mjs');
+    const installedManifest = record(await readBoundedJson(path.join(path.dirname(executable), '..', 'package.json')), 'Installed package manifest');
+    if (
+      installedManifest.name !== packageName
+      || installedManifest.version !== packageVersion
+      || installedManifest.license !== 'AGPL-3.0-only'
+      || installedManifest.author !== 'slicedearth'
+    ) {
+      throw new TypeError('Installed CLI identity metadata does not match the reviewed package contract.');
+    }
+    const installedBin = record(installedManifest.bin, 'Installed CLI executable mapping');
+    const installedEngines = record(installedManifest.engines, 'Installed CLI engine requirement');
+    if (installedBin.whoisleuth !== 'bin/whoisleuth.mjs' || Object.keys(installedBin).length !== 1 || installedEngines.node !== '>=24') {
+      throw new TypeError('Installed CLI executable or runtime boundary does not match the reviewed package contract.');
+    }
+    const installedContentPolicy = record(installedManifest.contentPolicy, 'Installed package content policy');
+    if (installedContentPolicy.class !== 'dual-use' || Object.keys(installedContentPolicy).length !== 1) {
+      throw new TypeError('Installed CLI does not retain the dual-use content declaration.');
+    }
+    for (const field of ['scripts', 'main', 'module', 'exports', 'devDependencies', 'optionalDependencies', 'peerDependencies']) {
+      if (Object.hasOwn(installedManifest, field)) throw new TypeError(`Installed CLI must not declare ${field}.`);
+    }
+    const installedDependencies = record(installedManifest.dependencies, 'Installed CLI dependencies');
+    const generatedDependencies = record(manifest.dependencies, 'Generated CLI dependencies');
+    if (Object.keys(installedDependencies).length !== CLI_RUNTIME_DEPENDENCIES.length) {
+      throw new TypeError('Installed CLI must retain only the bounded runtime dependencies.');
+    }
+    for (const dependency of CLI_RUNTIME_DEPENDENCIES) {
+      if (installedDependencies[dependency] !== generatedDependencies[dependency]) {
+        throw new TypeError(`Installed CLI dependency ${dependency} does not match the generated exact version.`);
+      }
+    }
+    const runtimeDependencies = Object.freeze(Object.fromEntries(
+      CLI_RUNTIME_DEPENDENCIES.map((dependency) => [
+        dependency,
+        boundedString(generatedDependencies[dependency], `Generated CLI dependency ${dependency}`, 128),
+      ]),
+    ));
+    const installedPackageRoot = path.dirname(path.dirname(executable));
+    await Promise.all(INSTALLED_COMPATIBILITY_FACADES.map((contract) => (
+      assertInstalledCompatibilityFacade(installedPackageRoot, contract)
+    )));
+    const [installedDomainControlRuntime, installedDomainName] = await Promise.all([
+      import(pathToFileURL(path.join(installedPackageRoot, 'packages/evidence/domain-control-runtime.mjs')).href),
+      import(pathToFileURL(path.join(installedPackageRoot, 'packages/evidence/domain-name.mjs')).href),
+    ]);
+    if (typeof installedDomainControlRuntime.serializeDomainControlManifest !== 'function'
+      || installedDomainName.normalizeDomain('EXAMPLE.TEST.') !== 'example.test') {
+      throw new TypeError('Installed canonical domain-control modules did not retain their reviewed runtime contract.');
+    }
+    const installedHandlerChecks: string[] = [];
+    const handlerOwners = new Set(CLI_COMMAND_REGISTRY.map((definition) => definition.execution.handlerOwner));
+    for (const owner of handlerOwners) {
+      if (owner === 'inline') continue;
+      const handler = INSTALLED_HANDLER_MODULES[owner];
+      const handlerModule = await import(pathToFileURL(path.join(installedPackageRoot, handler.source)).href);
+      if (typeof handlerModule[handler.exportName] !== 'function') {
+        throw new TypeError(`Installed CLI handler ${owner} does not export ${handler.exportName}.`);
+      }
+      installedHandlerChecks.push(`${owner}-handler`);
+    }
+    for (const handler of INSTALLED_INLINE_FAMILY_MODULES) {
+      const handlerModule = await import(pathToFileURL(path.join(installedPackageRoot, handler.source)).href);
+      if (typeof handlerModule[handler.exportName] !== 'function') {
+        throw new TypeError(`Installed CLI command family does not export ${handler.exportName}.`);
+      }
+      installedHandlerChecks.push(handler.label);
+    }
+    if (publicationEnabled) {
+      const publishConfig = record(installedManifest.publishConfig, 'Installed package publishConfig');
+      if (Object.hasOwn(installedManifest, 'private') || publishConfig.access !== 'public' || publishConfig.provenance !== true) {
+        throw new TypeError('Installed release candidate does not retain the public provenance contract.');
+      }
+    } else if (installedManifest.private !== true || Object.hasOwn(installedManifest, 'publishConfig')) {
+      throw new TypeError('Installed package check does not retain its private publication boundary.');
+    }
+    const installed = createInstalledCliRunner(executable, commonEnvironment);
+    await checkInstalledCliDiscovery(temporaryRoot, packageVersion, installed.run);
+    await checkInstalledCliEvidence(repositoryRoot, temporaryRoot, installed.run);
+    await checkInstalledSigningTrust(repositoryRoot, temporaryRoot, installed.run);
+    await checkInstalledCliWorkflows(repositoryRoot, temporaryRoot, installed.run);
+    await checkInstalledCaseFiles(temporaryRoot, installed.run);
+    await checkInstalledCliIncidents(repositoryRoot, temporaryRoot, packageVersion, installed.run);
+
+    const installedChecks = Object.freeze([
+      'installed-transitive-dependency-identities',
+      'domain-control-deep-imports',
+      ...installedHandlerChecks,
+      ...installed.completed(),
+    ]);
+    if (installedChecks.length === 0 || installedChecks.length > MAX_CLI_PACKAGE_PROCESSING_ITEMS) {
+      throw new TypeError('Installed CLI checks exceed the package processing bound.');
+    }
+
+    const digest = createHash('sha256').update(await readFile(tarball)).digest('hex');
+    const dependencies = await installedDependencyEvidence(installRoot, packageName, digest);
+    return { installedChecks, runtimeDependencies, dependencies };
+  });
+}
+
 export async function checkCliPackage(repositoryRoot: string, options: CliPackageOptions = {}): Promise<CliPackageReport> {
   const publicationEnabled = options.publicationEnabled === true;
   if (publicationEnabled && (!options.artifactDirectory || !options.expectedTag)) {
@@ -483,13 +600,11 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
   const stagingRoot = path.join(temporaryRoot, 'staging');
   const sourceRoot = path.join(temporaryRoot, 'source');
   const artifactsRoot = path.join(temporaryRoot, 'artifacts');
-  const installRoot = path.join(temporaryRoot, 'install');
   try {
     await Promise.all([
       mkdir(stagingRoot, { recursive: true }),
       mkdir(sourceRoot, { recursive: true }),
       mkdir(artifactsRoot, { recursive: true }),
-      mkdir(installRoot, { recursive: true }),
     ]);
     const [runtimeGraph, packageGraph] = await Promise.all([
       dependencyGraph(repositoryRoot, CLI_RUNTIME_ENTRY_MODULES),
@@ -640,108 +755,17 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       throw new TypeError('CLI third-party notice inputs changed during package assembly.');
     }
 
-    await writeFile(path.join(installRoot, 'package.json'), '{"private":true}\n', 'utf8');
-    await execFile('npm', ['install', '--package-lock=true', '--ignore-scripts', '--no-audit', '--no-fund', tarball], {
-      cwd: installRoot,
-      encoding: 'utf8',
-      timeout: PACKAGE_PROCESS_TIMEOUT_MS,
-      killSignal: 'SIGTERM',
-      maxBuffer: 4 * 1024 * 1024,
-      env: commonEnvironment,
-    });
     const packageName = boundedString(manifest.name, 'Generated package name', 128);
     const packageVersion = boundedString(manifest.version, 'Generated package version', 128);
-    if (publicationEnabled && options.expectedTag !== `v${packageVersion}`) {
-      throw new TypeError(`Release-candidate tag must equal v${packageVersion}.`);
-    }
-    const executable = path.join(installRoot, 'node_modules', ...packageName.split('/'), 'bin', 'whoisleuth.mjs');
-    const installedManifest = record(await readBoundedJson(path.join(path.dirname(executable), '..', 'package.json')), 'Installed package manifest');
-    if (
-      installedManifest.name !== packageName
-      || installedManifest.version !== packageVersion
-      || installedManifest.license !== 'AGPL-3.0-only'
-      || installedManifest.author !== 'slicedearth'
-    ) {
-      throw new TypeError('Installed CLI identity metadata does not match the reviewed package contract.');
-    }
-    const installedBin = record(installedManifest.bin, 'Installed CLI executable mapping');
-    const installedEngines = record(installedManifest.engines, 'Installed CLI engine requirement');
-    if (installedBin.whoisleuth !== 'bin/whoisleuth.mjs' || Object.keys(installedBin).length !== 1 || installedEngines.node !== '>=24') {
-      throw new TypeError('Installed CLI executable or runtime boundary does not match the reviewed package contract.');
-    }
-    const installedContentPolicy = record(installedManifest.contentPolicy, 'Installed package content policy');
-    if (installedContentPolicy.class !== 'dual-use' || Object.keys(installedContentPolicy).length !== 1) {
-      throw new TypeError('Installed CLI does not retain the dual-use content declaration.');
-    }
-    for (const field of ['scripts', 'main', 'module', 'exports', 'devDependencies', 'optionalDependencies', 'peerDependencies']) {
-      if (Object.hasOwn(installedManifest, field)) throw new TypeError(`Installed CLI must not declare ${field}.`);
-    }
-    const installedDependencies = record(installedManifest.dependencies, 'Installed CLI dependencies');
-    const generatedDependencies = record(manifest.dependencies, 'Generated CLI dependencies');
-    if (Object.keys(installedDependencies).length !== CLI_RUNTIME_DEPENDENCIES.length) {
-      throw new TypeError('Installed CLI must retain only the bounded runtime dependencies.');
-    }
-    for (const dependency of CLI_RUNTIME_DEPENDENCIES) {
-      if (installedDependencies[dependency] !== generatedDependencies[dependency]) {
-        throw new TypeError(`Installed CLI dependency ${dependency} does not match the generated exact version.`);
-      }
-    }
-    const runtimeDependencies = Object.freeze(Object.fromEntries(
-      CLI_RUNTIME_DEPENDENCIES.map((dependency) => [
-        dependency,
-        boundedString(generatedDependencies[dependency], `Generated CLI dependency ${dependency}`, 128),
-      ]),
-    ));
-    const installedPackageRoot = path.dirname(path.dirname(executable));
-    await Promise.all(INSTALLED_COMPATIBILITY_FACADES.map((contract) => (
-      assertInstalledCompatibilityFacade(installedPackageRoot, contract)
-    )));
-    const [installedDomainControlRuntime, installedDomainName] = await Promise.all([
-      import(pathToFileURL(path.join(installedPackageRoot, 'packages/evidence/domain-control-runtime.mjs')).href),
-      import(pathToFileURL(path.join(installedPackageRoot, 'packages/evidence/domain-name.mjs')).href),
-    ]);
-    if (typeof installedDomainControlRuntime.serializeDomainControlManifest !== 'function'
-      || installedDomainName.normalizeDomain('EXAMPLE.TEST.') !== 'example.test') {
-      throw new TypeError('Installed canonical domain-control modules did not retain their reviewed runtime contract.');
-    }
-    const installedHandlerChecks: string[] = [];
-    const handlerOwners = new Set(CLI_COMMAND_REGISTRY.map((definition) => definition.execution.handlerOwner));
-    for (const owner of handlerOwners) {
-      if (owner === 'inline') continue;
-      const handler = INSTALLED_HANDLER_MODULES[owner];
-      const handlerModule = await import(pathToFileURL(path.join(installedPackageRoot, handler.source)).href);
-      if (typeof handlerModule[handler.exportName] !== 'function') {
-        throw new TypeError(`Installed CLI handler ${owner} does not export ${handler.exportName}.`);
-      }
-      installedHandlerChecks.push(`${owner}-handler`);
-    }
-    for (const handler of INSTALLED_INLINE_FAMILY_MODULES) {
-      const handlerModule = await import(pathToFileURL(path.join(installedPackageRoot, handler.source)).href);
-      if (typeof handlerModule[handler.exportName] !== 'function') {
-        throw new TypeError(`Installed CLI command family does not export ${handler.exportName}.`);
-      }
-      installedHandlerChecks.push(handler.label);
-    }
-    if (publicationEnabled) {
-      const publishConfig = record(installedManifest.publishConfig, 'Installed package publishConfig');
-      if (Object.hasOwn(installedManifest, 'private') || publishConfig.access !== 'public' || publishConfig.provenance !== true) {
-        throw new TypeError('Installed release candidate does not retain the public provenance contract.');
-      }
-    } else if (installedManifest.private !== true || Object.hasOwn(installedManifest, 'publishConfig')) {
-      throw new TypeError('Installed package check does not retain its private publication boundary.');
-    }
-    const installed = createInstalledCliRunner(executable);
-    await checkInstalledCliDiscovery(temporaryRoot, packageVersion, installed.run);
-    await checkInstalledCliEvidence(repositoryRoot, temporaryRoot, installed.run);
-    await checkInstalledSigningTrust(repositoryRoot, temporaryRoot, installed.run);
-    await checkInstalledCliWorkflows(repositoryRoot, temporaryRoot, installed.run);
-    await checkInstalledCaseFiles(temporaryRoot, installed.run);
-    await checkInstalledCliIncidents(repositoryRoot, temporaryRoot, packageVersion, installed.run);
+    if (publicationEnabled && options.expectedTag !== `v${packageVersion}`) throw new TypeError(`Release-candidate tag must equal v${packageVersion}.`);
+    const { installedChecks, runtimeDependencies, dependencies } = await verifyPackageRuntimes(
+      fileURLToPath(import.meta.url), tarball, MAX_CLI_PACKAGE_PACKED_BYTES,
+      { repositoryRoot, manifest, publicationEnabled }, verifyInstalledCli,
+    );
 
     let archiveFilename: string | null = null;
     let archiveSha256: string | null = null;
     const candidateDigest = createHash('sha256').update(await readFile(tarball)).digest('hex');
-    const dependencies = await installedDependencyEvidence(installRoot, packageName, candidateDigest);
     if (publicationEnabled) {
       const artifactDirectory = path.resolve(options.artifactDirectory as string);
       await mkdir(artifactDirectory, { recursive: true });
@@ -751,17 +775,6 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
       archiveSha256 = candidateDigest;
       await writeFile(path.join(artifactDirectory, `${archiveFilename}.sha256`), `${archiveSha256}  ${archiveFilename}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o644 });
     }
-
-    const installedChecks = Object.freeze([
-      'installed-transitive-dependency-identities',
-      'domain-control-deep-imports',
-      ...installedHandlerChecks,
-      ...installed.completed(),
-    ]);
-    if (installedChecks.length === 0 || installedChecks.length > MAX_CLI_PACKAGE_PROCESSING_ITEMS) {
-      throw new TypeError('Installed CLI checks exceed the package processing bound.');
-    }
-
     const inventory = Object.freeze({
       runtimeGraphModuleCount,
       packageGraphModuleCount,
@@ -860,6 +873,11 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
   const stdout = options.stdout || process.stdout;
   const stderr = options.stderr || process.stderr;
   try {
+    if (args.length === 2 && args[0] === '--installed-check') {
+      const { archive, input } = await readPackageRuntimeRequest<CliInstalledInput>(args[1]!, MAX_CLI_PACKAGE_PACKED_BYTES);
+      stdout.write(JSON.stringify(await verifyInstalledCli(archive, input)) + '\n');
+      return 0;
+    }
     const parsed = parseArguments(args);
     const repositoryRoot = path.resolve(options.repositoryRoot || process.cwd());
     let inventory: CliPackageInventory | undefined;

@@ -28,8 +28,6 @@ export const CI_QUALITY_SCRIPTS = Object.freeze([
   'licenses:check',
   'providers:policy-check',
   'technology:coverage-check',
-  'cli:package:check',
-  'capture:package:check',
   'architecture:check',
   'typecheck',
   'check',
@@ -49,7 +47,6 @@ export const CI_BROWSER_BUILD_SCRIPTS = Object.freeze([
   'frontend:loading-report',
   'security:retire',
   'frontend:build:integrity',
-  'local:package:check',
 ] as const);
 
 export const CI_HOSTED_ONLY_BROWSER_SCRIPTS = Object.freeze([
@@ -245,10 +242,9 @@ function cliRuntimeExecutable(): string {
 }
 
 function runCliRuntimeCheck(executable: string): void {
-  const runtimePath = [path.dirname(executable), process.env.PATH].filter(Boolean).join(path.delimiter);
-  run(executable, [path.join(REPOSITORY_ROOT, 'tools', 'ci-verification.mts'), '--group=cli-runtime'], {
+  run(process.execPath, [path.join(REPOSITORY_ROOT, 'tools', 'ci-verification.mts'), '--group=cli-runtime'], {
     ...process.env,
-    PATH: runtimePath,
+    WHOISLEUTH_CLI_RUNTIME_NODE: executable,
   });
 }
 
@@ -257,13 +253,6 @@ export function criticalBrowserInstallArguments(systemDependencies = process.env
     throw new TypeError('Browser system dependencies must use the default installer or the prepared container image.');
   }
   return Object.freeze(['install', ...(systemDependencies === 'preinstalled' ? [] : ['--with-deps']), 'chromium', 'firefox', 'webkit']);
-}
-
-function assertCliRuntime(actual = process.versions.node): void {
-  const match = /^(\d+)\.\d+\.\d+$/u.exec(actual);
-  if (match?.[1] !== String(CI_CLI_RUNTIME_NODE_MAJOR)) {
-    throw new Error(`CLI compatibility CI group requires Node.js ${CI_CLI_RUNTIME_NODE_MAJOR}; running ${actual}.`);
-  }
 }
 
 type WorkflowStep = {
@@ -455,7 +444,7 @@ export function formatLocalCiPlan(): string {
     'test:e2e:critical:install',
     'test:e2e:built (performance, functional shards, browser-health aggregation and timing candidate)',
     'critical cross-browser checks (same isolated built suite)',
-    ...CI_CLI_RUNTIME_SCRIPTS.map(script => `${script} (Node ${CI_CLI_RUNTIME_NODE_MAJOR} compatibility runtime)`),
+    ...CI_CLI_RUNTIME_SCRIPTS.map(script => `${script} (one assembly; primary and Node ${CI_CLI_RUNTIME_NODE_MAJOR} installations)`),
     'verification:artifacts cleanup=all',
   ].join('\n');
 }
@@ -488,8 +477,8 @@ export function main(args = process.argv.slice(2)): number {
     }
     if (parsed.mode === 'group') {
       const group = parsed.group!;
-      if (group === 'cli-runtime') assertCliRuntime();
-      else assertLocalCiRuntime();
+      assertLocalCiRuntime();
+      if (group === 'cli-runtime') process.env.WHOISLEUTH_CLI_RUNTIME_NODE = cliRuntimeExecutable();
       if (group === 'quality') assertHostedCiParity();
       runCiCommandGroup(group);
       return 0;

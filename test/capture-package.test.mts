@@ -60,7 +60,7 @@ describe('independent capture package', () => {
   });
 
   test('checks the companion in both runtime lanes without changing application dependencies', () => {
-    assert.ok(CI_QUALITY_SCRIPTS.includes('capture:package:check'));
+    assert.equal(CI_QUALITY_SCRIPTS.some(script => String(script) === 'capture:package:check'), false);
     assert.ok(CI_CLI_RUNTIME_SCRIPTS.includes('capture:package:check'));
     const root = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
     const frontend = JSON.parse(readFileSync(new URL('../frontend/package.json', import.meta.url), 'utf8'));

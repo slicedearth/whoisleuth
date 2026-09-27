@@ -1,5 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { withPackageInstallation } from '../tools/package-runtime-check.mts';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -105,8 +106,7 @@ describe('scoped CLI package contract', () => {
   });
 
   test('packs a newly discovered domain without another directory registration', async () => {
-    const staging = await mkdtemp(path.join(tmpdir(), 'whoisleuth-package-domain-'));
-    try {
+    await withPackageInstallation(async ({ installed: staging, environment }) => {
       const manifest = buildCliPackageManifest(rootManifest, templateManifest, lockfile);
       await mkdir(path.join(staging, 'bin'));
       await mkdir(path.join(staging, 'packages/new-domain'), { recursive: true });
@@ -114,7 +114,7 @@ describe('scoped CLI package contract', () => {
       await writeFile(path.join(staging, 'bin/whoisleuth.mjs'), 'import "../packages/new-domain/helper.mjs";\n');
       await writeFile(path.join(staging, 'packages/new-domain/helper.mjs'), 'export const value = 1;\n');
       const packed = spawnSync(npmExecutableName(), ['pack', '--dry-run', '--json', '--ignore-scripts', '--offline'], {
-        cwd: staging, encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024,
+        cwd: staging, env: environment, encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024,
       });
       assert.equal(packed.status, 0, packed.stderr);
       const result = JSON.parse(packed.stdout)[0];
@@ -123,7 +123,7 @@ describe('scoped CLI package contract', () => {
       assert.throws(() => validateCompiledPackageFiles({ ...result,
         files: result.files.filter((entry: { path: string }) => entry.path !== 'packages/new-domain/helper.mjs'),
       }, files, { exact: true }), /complete compiled output/u);
-    } finally { await rm(staging, { recursive: true, force: true }); }
+    });
   });
 
   test('keeps per-file and aggregate source-byte ceilings independent of counts', async () => {

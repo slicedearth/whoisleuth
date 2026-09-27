@@ -168,7 +168,7 @@ function verifyHostedBrowserHealth(reports: readonly unknown[]): string {
       '--lane=browser',
       `--report=${aggregatePath}`,
       `--provenance-id=browser-local-parity-${process.pid}-${Date.now()}`,
-      `--environment=${process.platform}-${process.arch}-node${process.versions.node.split('.')[0]}-serial-shards`,
+      `--environment=${process.platform}-${process.arch}-node${process.versions.node.split('.')[0]}-local-jobs${localBrowserJobs()}`,
       '--sample-basis=complete-functional-shard-run',
     ]);
     if (result.aggregate.files.some((measured) => !candidate.files.some((item) =>
