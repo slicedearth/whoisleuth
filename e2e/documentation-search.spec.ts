@@ -90,7 +90,11 @@ test('command contents follow the selected command and preserve subsection links
   await page.goto('/cli#command-bulk--inputs');
   await expect(page.locator('#command-bulk--inputs')).toBeInViewport();
   await expect(page.locator('#command-bulk--inputs')).toContainText('4 in Fast mode; 2 in Deep mode');
-  const contents = page.getByRole('navigation', { name: 'CLI sections' });
+  const contents = page.getByRole('navigation', { name: 'bulk command sections' });
+  const pageContents = page.getByRole('navigation', { name: 'CLI sections', exact: true });
+  await expect(pageContents.getByRole('link', { name: 'Command reference' })).toHaveAttribute('href', '#commands');
+  await expect(pageContents.getByRole('link', { name: 'Get started' })).toHaveCount(1);
+  await expect(contents.getByRole('link', { name: 'All commands', exact: true })).toHaveCount(0);
   await expect(contents.getByRole('link', { name: 'Inputs and options' })).toHaveAttribute('href', '#command-bulk--inputs');
   await contents.getByRole('link', { name: 'Interpretation and limits' }).click();
   await expect(page.locator('#command-bulk--interpretation')).toHaveAttribute('open', '');
@@ -98,7 +102,7 @@ test('command contents follow the selected command and preserve subsection links
   await page.goBack();
   await expect(page).toHaveURL('/cli#command-bulk--inputs');
   await expect(page.locator('#command-bulk--inputs')).toBeInViewport();
-  await contents.getByRole('link', { name: 'All commands', exact: true }).click();
+  await page.getByRole('link', { name: /Back to \d+ filtered commands/u }).click();
   await expect(page.getByRole('searchbox', { name: 'Search commands' })).toBeVisible();
 });
 

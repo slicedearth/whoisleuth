@@ -51,9 +51,11 @@
     { href: '#practice', label: 'Practice' },
     { href: '#tools', label: 'Tools' },
     { href: '#reference', label: 'Reference' },
+    { href: '#privacy', label: 'Privacy' },
     { href: '#results', label: 'Read results' },
     { href: '#glossary', label: 'Glossary' },
     { href: '#faq', label: 'FAQ' },
+    { href: '#mistakes', label: 'Common mistakes' },
   ] as const;
 </script>
 
@@ -82,21 +84,20 @@
 
 <section id="topics" class="resource-section" aria-labelledby="topics-title">
   <div class="section-intro">
-    <p class="eyebrow">Topic library</p>
     <h2 id="topics-title">Evidence guides</h2>
-    <p>Each guide explains one source or investigation question using fixed examples.</p>
+    <p>Work through a specific investigation question.</p>
   </div>
   <PublicResourceCards resources={PUBLIC_RESOURCES} />
 </section>
 
 <section id="practice" class="resource-section" aria-labelledby="practice-title">
-  <div class="section-intro"><h2 id="practice-title">Practise with fictional evidence</h2><p>Open three decision exercises or <a href="/demo#case-practice">practise an evidence-to-recheck workflow with the real Case forms</a>.</p></div>
+  <div class="section-intro"><h2 id="practice-title">Practise with fictional evidence</h2><p>Try three short exercises or <a href="/demo#case-practice">work through a Case from evidence review to recheck</a>.</p></div>
   {#if !practiceOpen}<button class="primary" type="button" onpointerenter={preloadPractice} onfocus={preloadPractice} onclick={() => practiceOpen = true}>Open offline practice</button>{/if}
   {#if practiceOpen}<DeferredSurface load={() => import('$lib/components/OfflineInvestigationScenarios.svelte')} props={{}} loadingLabel="Loading offline practice." unavailableLabel="Offline practice could not be loaded." />{/if}
 </section>
 
 <section id="tools" class="resource-section" aria-labelledby="tools-title">
-  <div class="section-intro"><h2 id="tools-title">Choose the right tool</h2><p>Each tool has a distinct role.</p></div>
+  <div class="section-intro"><h2 id="tools-title">Choose the right tool</h2></div>
   <div class="tool-guide">
     {#each toolGuides as tool}
       <details class="tool-entry compact-disclosure" id={`tool-${tool.id}`}>
@@ -112,7 +113,7 @@
 </section>
 
 <section id="reference" class="resource-section" aria-labelledby="reference-title">
-  <div class="section-intro"><h2 id="reference-title">Product and source references</h2><p>Command-line use, evidence rules, implemented coverage and example output.</p></div>
+  <div class="section-intro"><h2 id="reference-title">Product and source references</h2><p>Commands, evidence rules, supported sources and example output.</p></div>
   <nav class="reference-pages responsive-grid" aria-label="Product references">
     {#each publicResourceHubNavigation as item}
       <a href={item.href}><strong>{item.label}</strong><span>{item.detail}</span></a>
@@ -120,7 +121,7 @@
   </nav>
   <div class="reference-guide responsive-grid">
     {#each referenceGuides as resource}
-      <article class="card" id={`reference-${resource.id}`}>
+      <article id={`reference-${resource.id}`}>
         <h3>{resource.name}</h3>
         <dl>
           <div><dt>Use it when</dt><dd>{resource.useWhen}</dd></div>
@@ -139,9 +140,10 @@
 </section>
 
 <section id="results" class="resource-section layout-container" aria-labelledby="results-title">
-  <div class="section-intro"><p class="eyebrow">Read the result</p><h2 id="results-title">Source health is part of the evidence</h2><p>Registration status is authority-aware. DNS, certificates, websites and external intelligence add context, but do not override an authoritative registry answer.</p></div>
-  <article class="result-layout split-layout card" aria-labelledby="result-layout-title">
-    <div><p class="eyebrow">Lookup layout</p><h3 id="result-layout-title">Start with the decision, then open the evidence you need</h3><p>At a glance separates complete, limited, disagreeing and unresolved evidence. The analyst question changes section order for the selected task; it does not change the evidence.</p></div>
+  <div class="section-intro"><h2 id="results-title">Source health is part of the evidence</h2><p>Registration status comes from authoritative evidence, not website activity. DNS, certificates, websites and external intelligence each answer different questions.</p></div>
+  <article class="result-layout" aria-labelledby="result-layout-title">
+    <h3 id="result-layout-title">Find your way around a Lookup result</h3>
+    <p>Start with At a glance, then open the evidence relevant to your question.</p>
     <ol>
       <li><strong>Registration</strong><span>Compare registry, registrar RDAP and WHOIS without merging their authority.</span></li>
       <li><strong>Web and DNS</strong><span>Review point-in-time DNS, HTTP, TLS, page, technology and posture evidence.</span></li>
@@ -150,14 +152,14 @@
       <li><strong>Case and response</strong><span>Retain reviewed facts and prepare actions without automatic submission.</span></li>
       <li><strong>Advanced evidence</strong><span>Open optional provider context and the full validated lookup response when required.</span></li>
     </ol>
-    <p class="layout-note">Each family can be opened or collapsed independently. On smaller screens, use Jump to section to move through the result without a horizontal navigation strip. Export actions are grouped under Export and do not send the result anywhere.</p>
+    <p class="layout-note">Use Jump to section to move around a long result. Export saves a local copy.</p>
   </article>
   <div class="state-grid">
     {#each resultStates as state}
       <article id={`state-${documentationAnchor(state.term)}`}><h3>{state.term}</h3><p>{state.definition}</p></article>
     {/each}
   </div>
-  <aside class="interpretation card">
+  <aside class="interpretation">
     <strong>Risk prioritises review.</strong>
     <p>Open the explanation to see the model, contributing observations and sensitivity. Corroborate shared infrastructure, page similarity and recent registration before acting.</p>
   </aside>
@@ -175,7 +177,7 @@
 
 <section id="faq" class="resource-section" aria-labelledby="faq-title">
   <div class="section-intro"><h2 id="faq-title">Common questions</h2><p>Practical answers about interpretation, privacy and saved investigation work.</p></div>
-  <div class="faq-list card">
+  <div class="faq-list">
     {#each guideFaqs as item}
       <details id={`question-${documentationAnchor(item.question)}`}><summary>{item.question}</summary><p>{item.answer}</p></details>
     {/each}
@@ -183,32 +185,29 @@
 </section>
 
 <section id="mistakes" class="resource-section" aria-labelledby="mistakes-title">
-  <div class="section-intro"><h2 id="mistakes-title">Keep the conclusion narrower than the evidence</h2></div>
-  <ul class="mistake-list card">{#each commonMistakes as item}<li>{item}</li>{/each}</ul>
-  <div class="closing-actions"><a class="primary" href="/demo">Walk through the demo</a><PublicConsoleCta /></div>
+  <div class="section-intro"><h2 id="mistakes-title">Common interpretation mistakes</h2></div>
+  <ul class="mistake-list">{#each commonMistakes as item}<li>{item}</li>{/each}</ul>
 </section>
 </PublicReferenceDocument>
 
 <style>
-  .closing-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}.closing-actions a{min-height:42px}
   .tool-guide{display:grid;gap:8px}.tool-entry{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .tool-entry summary{padding:18px;font:400 var(--text-sm)/1.5 var(--font-sans)}.tool-entry summary>span{display:inline-grid;gap:6px;max-width:calc(100% - 28px);vertical-align:top}.tool-entry summary strong{color:var(--accent);font-size:var(--text-md)}.tool-entry summary span span{color:var(--muted)}.tool-entry dl{padding:0 18px 18px}
   .reference-fold{border-inline:0;border-bottom:0;border-radius:0;background:transparent}.reference-fold summary{padding:0 0 16px}.reference-fold h2{display:inline;font:700 clamp(1.45rem,2.5vw,1.9rem)/1.3 var(--font-sans)}.reference-fold>p{color:var(--muted);line-height:1.6}
-  .reference-link{display:inline-flex;color:var(--accent);font:700 var(--text-xs) var(--mono)}
-  .resource-section{padding:36px 0;border-top:1px solid var(--border);scroll-margin-top:74px}.section-intro{max-width:790px;margin-bottom:24px}.section-intro h2{margin:.3rem 0 .65rem;font:700 clamp(1.6rem,3.4vw,2.45rem) var(--mono);letter-spacing:-.04em}.section-intro>p:not(.eyebrow){margin:0;color:var(--muted);line-height:1.65}
+  .reference-link{display:inline-flex;align-items:center;gap:10px;min-height:44px;color:var(--accent);font-weight:650}
+  .resource-section{padding:32px 0;border-top:1px solid var(--border)}.section-intro{max-width:790px;margin-bottom:24px}.section-intro h2{margin:0 0 .65rem;font:700 clamp(1.45rem,2.5vw,1.9rem)/1.25 var(--font-sans);letter-spacing:-.025em}.section-intro>p:not(.eyebrow){margin:0;color:var(--muted);line-height:1.65}
   .reference-pages{--grid-min:180px;--grid-gap:8px;margin:0 0 12px}.reference-pages a{display:grid;min-width:0;gap:6px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.reference-pages a:hover,.reference-pages a:focus-visible{border-color:var(--accent);background:rgb(var(--accent-rgb) / .06)}.reference-pages strong{color:var(--accent);font:700 var(--text-sm) var(--mono)}.reference-pages span{color:var(--muted);font-size:var(--type-supporting-size);line-height:1.45}
   .tool-guide,.reference-guide{--grid-min:330px;--grid-gap:10px}.reference-guide article{padding:20px}.reference-guide article:only-child{grid-column:1 / -1}.reference-guide article:only-child dl{grid-template-columns:repeat(2,minmax(0,1fr))}.reference-guide h3{margin:0 0 16px;color:var(--accent);font:700 1.05rem var(--mono)}.tool-guide dl,.reference-guide dl{display:grid;gap:1px;margin:0;background:var(--border)}.tool-guide dl div,.reference-guide dl div{display:grid;grid-template-columns:128px minmax(0,1fr);gap:12px;padding:10px;background:var(--panel)}.tool-guide dt,.reference-guide dt{color:var(--muted);font:650 var(--type-label-size) var(--mono)}.tool-guide dd,.reference-guide dd{margin:0;font-size:var(--type-supporting-size);line-height:1.5}
   .state-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:0 24px}.state-grid article{padding:16px 0;border-top:1px solid var(--border)}.state-grid h3{margin:0;color:var(--interface-accent);font:700 var(--text-sm) var(--mono)}.state-grid p{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.interpretation{margin-top:12px;padding:19px;border-left:3px solid var(--amber)}.interpretation strong{font:700 var(--text-sm) var(--mono)}.interpretation p{margin:7px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.6}
-  .result-layout{--split-leading:.85fr;--split-trailing:1.15fr;--split-gap:26px;margin-bottom:24px;padding:22px}.result-layout h3{margin:4px 0 8px;font:700 clamp(1.1rem,2vw,1.35rem) var(--mono);line-height:1.25}.result-layout p{margin:0;color:var(--muted);font-size:var(--type-body-size);line-height:1.6}.result-layout ol{display:grid;gap:1px;margin:0;padding:0;background:var(--border);list-style:none}.result-layout li{display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;padding:10px 12px;background:var(--panel)}.result-layout li strong{color:var(--accent);font:700 var(--text-xs) var(--mono)}.result-layout li span{color:var(--muted);font-size:var(--type-supporting-size);line-height:1.45}.result-layout .layout-note{grid-column:1 / -1;padding-top:14px;border-top:1px solid var(--border)}
+  .result-layout{margin-bottom:32px}.result-layout h3{margin:0 0 8px;font:700 1.125rem/1.4 var(--font-sans)}.result-layout p{margin:0;color:var(--muted);line-height:1.65}.result-layout ol{display:grid;gap:0;margin:20px 0;padding:0;list-style:none}.result-layout li{display:grid;grid-template-columns:190px minmax(0,1fr);gap:20px;padding:12px 0;border-bottom:1px solid var(--border)}.result-layout li strong{font-size:.9375rem}.result-layout li span{color:var(--muted);font-size:.9375rem;line-height:1.6}
   .glossary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 30px;margin:0}.glossary-grid>div{display:grid;grid-template-columns:145px minmax(0,1fr);gap:15px;padding:16px 0;border-top:1px solid var(--border)}.glossary-grid dt{color:var(--accent);font:700 var(--text-xs) var(--mono)}.glossary-grid dd{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
-  .faq-list{overflow:hidden}.faq-list details{padding:0;border-top:1px solid var(--border)}.faq-list details:first-child{border-top:0}.faq-list summary{padding:16px 48px 16px 18px;font:700 var(--text-sm) var(--mono)}.faq-list details p{margin:0;padding:0 18px 18px;color:var(--muted);font-size:var(--text-sm);line-height:1.65}
-  .mistake-list{display:grid;gap:10px;margin:0;padding:20px 20px 20px 42px}.mistake-list li{padding-left:5px;color:var(--muted);font-size:var(--text-sm);line-height:1.55}.mistake-list li::marker{color:var(--amber)}
+  .faq-list details{padding:0;border:0;border-top:1px solid var(--border);border-radius:0;background:transparent}.faq-list summary{padding:18px 0;font:650 1rem/1.5 var(--font-sans)}.faq-list details p{margin:0;padding:0 0 18px;color:var(--muted);font-size:.9375rem;line-height:1.65}
+  .mistake-list{display:grid;gap:12px;margin:0;padding-left:22px}.mistake-list li{padding-left:5px;color:var(--muted);font-size:.9375rem;line-height:1.65}.mistake-list li::marker{color:var(--muted)}
   @media(max-width:900px){.glossary-grid{grid-template-columns:1fr}}
   @media(max-width:680px){
     .state-grid{grid-template-columns:1fr}
     .reference-guide article:only-child{grid-column:auto}
     .reference-guide article:only-child dl{grid-template-columns:1fr}
     .tool-guide dl div,.reference-guide dl div,.glossary-grid>div,.result-layout li{grid-template-columns:1fr;gap:4px}
-    .resource-section{scroll-margin-top:20px}
   }
 </style>

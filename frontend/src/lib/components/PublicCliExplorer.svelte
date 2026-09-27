@@ -18,7 +18,6 @@
 
   type FullCatalogue = typeof import('$lib/generated/public-cli-catalogue')['PUBLIC_CLI_CATALOGUE'];
   type CommandDetail = FullCatalogue['commands'][number];
-  let { onsectionschange }: { onsectionschange?: (sections: readonly { href: string; label: string }[]) => void } = $props();
 
   let query = $state('');
   let group = $state('all');
@@ -253,9 +252,6 @@
     if (urlSyncReady && typeof location !== 'undefined') syncFiltersToLocation();
   });
 
-  $effect(() => {
-    onsectionschange?.(expandedId ? [{ href: '#commands', label: 'All commands' }, ...commandReferenceSections(expandedId)] : []);
-  });
 </script>
 
 <section
@@ -295,6 +291,9 @@
         <p>{labelToken(command.group)} · {labelToken(command.mode)}{command.common ? ' · Common' : ''}</p>
         <h2 id="selected-command-title"><code>{command.id}</code></h2>
         <p class="command-purpose">{command.summary}</p>
+        <nav class="command-contents" aria-label={`${command.id} command sections`}>
+          {#each commandReferenceSections(command.id) as section}<a href={section.href}>{section.label}</a>{/each}
+        </nav>
       </header>
       <div class="command-detail" id={`command-detail-${command.id}`}>
         <p class="command-description">{detail.description}</p>
@@ -384,7 +383,7 @@
   {/if}
 
   {#if !expandedId}<section class="recipes" aria-labelledby="command-recipes-title">
-    <div><p class="eyebrow">Command recipes</p><h3 id="command-recipes-title">Multi-step tasks</h3><p>Inspect a fixed sequence offline, then select its inputs and deliberately approve network collection and human-review declarations.</p></div>
+    <div><p class="eyebrow">Command recipes</p><h3 id="command-recipes-title">Multi-step tasks</h3><p>Plan a multi-step task, check its inputs, then choose when to run it.</p></div>
     <div class="recipe-groups">
       <section aria-labelledby="runnable-recipes-title"><header><h4 id="runnable-recipes-title">Runnable workflows</h4><span>{runnableWorkflows.length}</span></header><p>Inspect with <code>workflow-plan --explain &lt;recipe&gt;</code>, then run deliberately with <code>workflow-run</code>.</p><ul>{#each runnableWorkflows as recipe}<li><code>{recipe.id}</code><strong>{recipe.label}</strong><span>{recipe.objective}</span><small>Runnable · {labelToken(recipe.subjectRequirement)}</small></li>{/each}</ul></section>
       {#if planningWorkflows.length}<section aria-labelledby="planning-recipes-title"><header><h4 id="planning-recipes-title">Planning templates</h4><span>{planningWorkflows.length}</span></header><p>These sequences require manual execution.</p><ul>{#each planningWorkflows as recipe}<li><code>{recipe.id}</code><strong>{recipe.label}</strong><span>{recipe.objective}</span><small>Plan only · {labelToken(recipe.subjectRequirement)}</small></li>{/each}</ul></section>{/if}
@@ -394,7 +393,7 @@
 
 <style>
   .command-description{margin:0 0 20px;max-width:75ch;font-size:var(--text-sm);line-height:1.65;overflow-wrap:anywhere}
-  .catalogue-heading>div{max-width:720px}.catalogue-heading h2,.recipes h3{margin:.3rem 0 .55rem;font:700 clamp(1.45rem,3vw,2rem) var(--mono);letter-spacing:-.04em}.catalogue-heading p:not(.eyebrow),.recipes p{margin:0;color:var(--muted);line-height:1.6}
+  .catalogue-heading>div{max-width:720px}.catalogue-heading h2,.recipes h3{margin:.3rem 0 .55rem;font:700 clamp(1.45rem,2.5vw,1.9rem)/1.3 var(--font-sans);letter-spacing:-.025em}.catalogue-heading p:not(.eyebrow),.recipes p{margin:0;color:var(--muted);line-height:1.6}
   .filters{display:grid;position:sticky;z-index:6;top:8px;grid-template-columns:minmax(200px,1fr) 145px 130px auto;gap:8px;align-items:end;margin-top:22px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.filters label{display:grid;gap:6px;min-width:0}.filters label>span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.filters input[type='search'],.filters select{width:100%;min-width:0;padding:9px 10px}.filters .check{display:flex;min-height:40px;align-items:center;gap:8px;padding:0 5px}.filters .check input{width:18px;height:18px;margin:0}.filters .check span{color:var(--text)}
   .filter-status{margin:10px 0;color:var(--muted);font-size:var(--text-2xs)}.load-error{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:12px;padding:10px;border-left:2px dotted var(--muted);background:var(--panel-raised);color:var(--muted);font-size:var(--text-xs)}.load-error p,.load-error small{margin:0;overflow-wrap:anywhere}.load-error p{color:var(--danger)}.load-error small{flex:1}.load-error button{flex:0 0 auto}
   [hidden] { display: none; }
@@ -433,6 +432,8 @@
   .command-detail-heading h2 { margin: 8px 0 10px; font: 750 clamp(1.55rem,4vw,2.25rem) var(--mono); letter-spacing: -.04em; overflow-wrap: anywhere; }
   .command-detail-heading h2 code { color: var(--accent); }
   .command-detail-heading .command-purpose { max-width: 75ch; color: var(--text); font: 400 var(--text-sm)/1.6 var(--font-sans); }
+  .command-contents{display:flex;flex-wrap:wrap;gap:4px 20px;margin-top:20px}
+  .command-contents a{display:inline-flex;align-items:center;min-height:36px;color:var(--accent);font:600 var(--text-sm)/1.5 var(--font-sans);text-decoration:underline;text-underline-offset:3px}
   .command-detail { padding-block: 24px; }
   .command-examples h3, .command-inputs h3, .command-output h3, .related-commands>strong {
     color: var(--text);

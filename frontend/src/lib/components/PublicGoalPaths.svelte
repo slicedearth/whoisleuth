@@ -72,6 +72,8 @@
   .guide{grid-template-columns:1fr;gap:0}
   .guide article,.guide article.featured{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 28px;padding:22px 0;border:0;border-top:1px solid var(--border);border-radius:0;background:transparent}
   .guide h3{font-family:var(--font-sans)}
+  .guide li{font-family:var(--font-sans);font-size:.9375rem}
+  .guide p{font-size:.9375rem}
   .guide p{grid-column:1;margin:0}
   .guide ol{grid-column:2;grid-row:1/3;align-self:start;margin:0}
   @media(max-width:680px){

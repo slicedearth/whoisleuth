@@ -17,7 +17,6 @@
     { href: '#behaviour', label: 'CLI behaviour' },
     { href: '#more', label: 'More documentation' },
   ] as const;
-  let commandSections = $state<readonly { href: string; label: string }[]>([]);
 
   const jobDefinitions = [
     {
@@ -61,7 +60,7 @@
   eyebrow="Command line"
   title="WHOISleuth CLI"
   summary={['Collect domain evidence and review saved investigations from your terminal.']}
-  sections={commandSections.length ? commandSections : pageSections}
+  sections={pageSections}
 >
   {#snippet actions()}
     <a class="btn" href="#commands">Browse all commands</a>
@@ -100,7 +99,7 @@
 </section>
 
 <section class="cli-section" id="commands" aria-label="Command reference">
-  <PublicCliExplorer onsectionschange={sections => commandSections = sections} />
+  <PublicCliExplorer />
 </section>
 
 <section class="cli-section browser-handoff" id="browser-handoff" aria-labelledby="browser-handoff-title">
