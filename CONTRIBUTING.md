@@ -53,6 +53,23 @@ scheduling estimate until accepted measurements are available.
 
 ## Check the change
 
+Choose checks for the behaviour changed, not the number of files touched.
+
+| Change | Local verification |
+| --- | --- |
+| Spacing, colours, typography or equivalent wording | `npm run check`, `git diff --check`, and rendered review of affected pages at desktop/mobile widths and both themes. No new regression test or full local suite is required. |
+| A pure domain rule or helper | Run its independent unit tests and compiler checks. Preserve relevant property, hostile-input and compatibility tests. |
+| Navigation, forms, loading, persistence or meaningful evidence copy | Use the focused plan below and exercise the changed workflow. Keep accessibility and privacy expectations independent. |
+| Shared protocols, schemas, authentication, packaging or verification infrastructure | Use the relevant integration and contract checks; broaden to the full local boundary when the change crosses those boundaries. |
+
+Visual review includes alignment, hierarchy, density, legibility, hover/focus and
+clipping. Screenshots help review a substantial redesign; they are not an
+automatic request for screenshot baselines or pixel assertions. Changes to
+disclosed scope, uncertainty, privacy or accessibility are behavioural, not
+equivalent wording.
+
+For behavioural changes:
+
 ```bash
 npm run verification:focused -- --list
 npm run verification:focused
@@ -77,15 +94,24 @@ retain automatic screenshots and traces. `WHOISLEUTH_E2E_LOCAL_JOBS=2` permits
 two functional shards on a host with sufficient capacity. The default is one,
 performance measurements remain isolated, and queued shards stop on failure.
 
-The default scope is the working diff. For a committed or smaller change, pass
-its paths explicitly after `--`. Read the plan: runtime imports find unit and
-browser consumers, while domain rules preserve workflow checks. Ordinary frontend
+The default scope is the working diff. For a batch spanning local commits, use
+`npm run verification:focused -- --since=<base-commit> --list`, then omit `--list`
+to run it. This includes committed, staged, unstaged and new files. Explicit
+paths after `--` select a smaller declared scope. Read the plan: runtime imports
+and routes referenced by browser tests find consumers, while domain rules
+preserve workflow checks. Ordinary frontend
 components and models inherit the checks of their consuming routes; known families
 retain their workflow suites. Shared-code edits keep all compiler projects checked,
 so erased type imports need not select unrelated runtime tests.
 Missing runtime import evidence falls back to all unit tests, and unexplained
 interface changes select all functional browser tests. A full run remains available for infrastructure
 changes and reproducing CI; see [verification](docs/getting-started.md#verification).
+
+UI tests should assert the behaviour they protect. Locate navigation by its
+destination and accessible role; avoid layout classes or whole explanatory
+sentences when their wording is not the contract. Keep independent assertions
+for meaningful names, privacy disclosures and evidence limitations. Run the
+affected tests before broad verification.
 
 Selected browser specifications are loaded before expensive checks. This catches
 test-discovery and import errors without starting a server or browser; it is not
@@ -128,9 +154,9 @@ narrow-screen layout for affected forms.
 
 For a concrete editing rehearsal, use one small change at a time:
 
-- Change a Case form's presentation in its owning component. Inspect the
-  focused plan and exercise the affected control with keyboard and narrow-screen
-  checks; do not change domain rules to achieve a visual result.
+- Change a Case form's presentation in its owning component and review its
+  rendered appearance and keyboard operation. Do not change domain rules or
+  add tests for individual style values to achieve a visual result.
 - Change a recheck rule in `packages/cases/case-recheck-model.mts` and add an
   independently expected result in `test/case-recheck.test.mts`. A failed
   collection must remain inconclusive.

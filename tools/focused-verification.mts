@@ -42,6 +42,7 @@ export type FocusedVerificationOptions = Readonly<{
   list: boolean;
   changed: boolean;
   paths: readonly string[];
+  since?: string;
 }>;
 
 export type FocusedVerificationExecution = Readonly<{
@@ -107,21 +108,25 @@ export function assertFocusedBrowserCoverage(specs: readonly string[], report: u
 export function parseFocusedVerificationOptions(args: readonly string[]): FocusedVerificationOptions {
   const listCount = args.filter((value) => value === '--list').length;
   const changedCount = args.filter((value) => value === '--changed').length;
-  const paths = args.filter((value) => value !== '--list' && value !== '--changed');
+  const sinceOptions = args.filter(value => value.startsWith('--since='));
+  const since = sinceOptions[0]?.slice('--since='.length);
+  const paths = args.filter((value) => value !== '--list' && value !== '--changed' && !value.startsWith('--since='));
   if (listCount > 1 || changedCount > 1 || paths.some((value) => value.startsWith('-'))
-    || (changedCount > 0 && paths.length > 0)) {
-    throw new TypeError('Usage: node tools/focused-verification.mts [--list] [--changed | <changed-path> ...]');
+    || (changedCount > 0 && paths.length > 0) || sinceOptions.length > 1
+    || (since !== undefined && (!since || since.length > 320 || /^[\s-]|[\s\0]/u.test(since) || changedCount || paths.length))) {
+    throw new TypeError('Usage: node tools/focused-verification.mts [--list] [--changed | --since=<commit> | <changed-path> ...]');
   }
   return Object.freeze({
     list: listCount === 1,
     changed: changedCount === 1 || paths.length === 0,
     paths: Object.freeze(paths),
+    ...(since === undefined ? {} : { since }),
   });
 }
 
-function gitOutput(args: readonly string[]): string {
+function gitOutput(args: readonly string[], repositoryRoot = REPOSITORY_ROOT): string {
   const child = spawnSync('git', args, {
-    cwd: REPOSITORY_ROOT,
+    cwd: repositoryRoot,
     encoding: 'utf8',
     maxBuffer: MAX_GIT_OUTPUT_BYTES,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -135,13 +140,14 @@ function nulPaths(value: string): readonly string[] {
   return Object.freeze(value.split('\0').filter(Boolean));
 }
 
-export function discoverFocusedVerificationPaths(): readonly string[] {
+export function discoverFocusedVerificationPaths(since = 'HEAD', repositoryRoot = REPOSITORY_ROOT): readonly string[] {
+  const base = gitOutput(['rev-parse', '--verify', '--end-of-options', `${since}^{commit}`], repositoryRoot).trim();
   const tracked = nulPaths(gitOutput([
-    '-c', 'core.quotePath=false', 'diff', '--name-only', '-z', '--diff-filter=ACMRTD', 'HEAD', '--',
-  ]));
+    '-c', 'core.quotePath=false', 'diff', '--name-only', '-z', '--diff-filter=ACMRTD', base, '--',
+  ], repositoryRoot));
   const untracked = nulPaths(gitOutput([
     '-c', 'core.quotePath=false', 'ls-files', '--others', '--exclude-standard', '-z', '--',
-  ]));
+  ], repositoryRoot));
   const paths = [...new Set([...tracked, ...untracked])].sort();
   if (!paths.length) throw new Error('Focused verification found no changed paths.');
   return Object.freeze(paths);
@@ -354,7 +360,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   let failure: unknown;
   try {
     const options = parseFocusedVerificationOptions(args);
-    const paths = options.changed ? discoverFocusedVerificationPaths() : options.paths;
+    const paths = options.changed ? discoverFocusedVerificationPaths(options.since) : options.paths;
     const plan = await createVerificationOwnershipPlan(paths);
     const execution = buildFocusedVerificationExecution(plan);
     process.stdout.write(renderExecutionPlan(plan, execution));

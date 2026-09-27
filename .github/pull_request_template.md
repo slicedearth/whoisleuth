@@ -12,4 +12,6 @@ keyboard/mobile checks. Keep private investigations and credentials out of the P
 
 <!-- List the commands/checks run and their results, plus anything not run and why.
 Use proportionate local verification; a full local Linux run is not required for
-every contribution. Complete fresh hosted checks are still required before merge. -->
+every contribution. For presentation-only changes, describe rendered desktop/mobile
+and theme review; do not add tests that merely freeze styling. Behavioural changes
+need relevant automated checks. Complete fresh hosted checks are required before merge. -->

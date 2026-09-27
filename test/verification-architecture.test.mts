@@ -20,6 +20,7 @@ import {
   buildFocusedVerificationExecution,
   assertFocusedBrowserCoverage,
   focusedBrowserLanes,
+  discoverFocusedVerificationPaths,
   parseFocusedVerificationOptions,
 } from '../tools/focused-verification.mts';
 import {
@@ -512,6 +513,8 @@ describe('verification architecture contracts', () => {
     const demo = buildVerificationOwnershipPlan(['frontend/src/routes/(public)/demo/+page.svelte']);
     assert.ok(demo.focusedBrowserChecks.includes('e2e/demo.spec.ts'));
     assert.ok(demo.focusedBrowserChecks.includes('e2e/accessibility.spec.ts'));
+    const article = 'frontend/src/routes/(public)/resources/[slug]/+page.svelte';
+    assert.deepEqual(buildVerificationOwnershipPlan([article]).changedPaths, [article]);
   });
 
   test('leaf component contracts narrow iteration but not stateful, unresolved or unowned components', () => {
@@ -882,6 +885,39 @@ describe('verification architecture contracts', () => {
       /Usage/u,
     );
     assert.throws(() => parseFocusedVerificationOptions(['--unknown']), /Usage/u);
+    assert.deepEqual(parseFocusedVerificationOptions(['--since=HEAD~2', '--list']), {
+      list: true, changed: true, paths: [], since: 'HEAD~2',
+    });
+    for (const args of [['--since='], ['--since=HEAD', '--changed'], ['--since=HEAD', 'README.md'], ['--since=HEAD', '--since=HEAD~1'], ['--since=--help']]) {
+      assert.throws(() => parseFocusedVerificationOptions(args), /Usage/u);
+    }
+  });
+
+  test('a focused batch includes committed, staged, working and new files from its explicit baseline', () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'whoisleuth-focused-history-'));
+    const git = (...args: string[]) => {
+      const result = spawnSync('git', args, { cwd: directory, encoding: 'utf8' });
+      assert.ifError(result.error);
+      assert.equal(result.status, 0, result.stderr);
+      return result.stdout.trim();
+    };
+    try {
+      git('init', '--quiet');
+      git('config', 'user.name', 'Fixture Maintainer');
+      git('config', 'user.email', 'maintainer@example.invalid');
+      for (const file of ['committed.ts', 'staged.ts', 'working.ts', 'deleted.ts']) writeFileSync(path.join(directory, file), 'export const value = 1;\n');
+      git('add', '.'); git('-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'Initial fixture');
+      const base = git('rev-parse', 'HEAD');
+      writeFileSync(path.join(directory, 'committed.ts'), 'export const value = 2;\n');
+      git('add', 'committed.ts'); git('-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'Change fixture');
+      writeFileSync(path.join(directory, 'staged.ts'), 'export const value = 2;\n'); git('add', 'staged.ts');
+      writeFileSync(path.join(directory, 'working.ts'), 'export const value = 2;\n');
+      writeFileSync(path.join(directory, 'new.ts'), 'export const value = 2;\n');
+      rmSync(path.join(directory, 'deleted.ts'));
+      assert.deepEqual(discoverFocusedVerificationPaths(base, directory), ['committed.ts', 'deleted.ts', 'new.ts', 'staged.ts', 'working.ts']);
+      assert.deepEqual(discoverFocusedVerificationPaths('HEAD', directory), ['deleted.ts', 'new.ts', 'staged.ts', 'working.ts']);
+      assert.throws(() => discoverFocusedVerificationPaths('absent-revision', directory), /Git changed-path discovery failed/u);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 
   test('binds every declared analyst journey to enabled tests without claiming rendered outcomes', () => {

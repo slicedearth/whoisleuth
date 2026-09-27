@@ -67,7 +67,9 @@ Architecture checks enforce that direction.
 ## Verification
 
 Use [Contributing](../CONTRIBUTING.md) to locate an owner and choose checks for
-an ordinary change. During editing and before a feature-branch push:
+an ordinary change. Presentation-only changes use Svelte validation and rendered
+review, not a full local test run. For behavioural changes during editing and
+before a feature-branch push:
 
 ```bash
 npm run verification:focused -- --list
@@ -75,7 +77,9 @@ npm run verification:focused
 ```
 
 The plan explains selected owners and import dependents. Pass explicit
-repository-relative paths after `--` to narrow the declared scope. Documentation
+repository-relative paths after `--` to narrow the declared scope, or
+`--since=<base-commit>` to include a batch's local commits and working changes.
+Documentation
 changes select offline document checks; documents included in the CLI also
 select package-document checks. Unknown import impact falls back to the full
 unit inventory. Browser selection remains deliberately conservative.

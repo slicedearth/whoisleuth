@@ -12,6 +12,7 @@ import { PRIVACY_DATA_FLOW_CATALOGUE } from './privacy-data-flow-catalogue-rende
 import { readVerificationTestInventory } from './verification-timing-profile.mts';
 import { OUTPUT_PATH as CAPABILITY_DOCUMENT_PATH } from './capability-manifest.mts';
 import { CLI_PACKAGE_SUPPORT_FILES } from './cli-package.mts';
+import { browserRouteReferences, browserTestsForRoutes } from './browser-route-impact.mts';
 import type { ICruiseResult, IOptions } from 'dependency-cruiser';
 
 export const VERIFICATION_OWNERSHIP_MAP_VERSION = 2;
@@ -21,7 +22,7 @@ export const MAX_VERIFICATION_INVENTORY_FILES = 8_000;
 export const MAX_VERIFICATION_CHANGED_PATHS = MAX_VERIFICATION_INVENTORY_FILES;
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SAFE_CHANGED_PATH = /^(?:[a-zA-Z0-9._+()@-]+\/)*[a-zA-Z0-9._+()@-]+$/u;
+const SAFE_CHANGED_PATH = /^(?:[a-zA-Z0-9._+()@\[\]-]+\/)*[a-zA-Z0-9._+()@\[\]-]+$/u;
 
 export const FULL_BATCH_RELEASE_GATES = Object.freeze([
   'unit',
@@ -823,9 +824,19 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
     const config = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, '.dependency-cruiser.json'), 'utf8')) as { options: IOptions };
     const components = importedPaths.filter(file => file.endsWith('.svelte'));
     const frontendPaths = importedPaths.filter(file => file.startsWith('frontend/src/'));
-    const { output } = await cruise([...inventory, ...browserInventory, ...(frontendPaths.length ? ['frontend/src/routes'] : [])], {
+    const routeEntriesOnly = importedPaths.every(file => /^frontend\/src\/routes\/.*\+(?:page|layout)\.svelte$/u.test(file));
+    // Node unit tests cannot import Svelte components directly. Their explicit
+    // source-contract checks remain selected by owner/name; do not load every
+    // server and CLI test merely to resolve a presentation component's routes.
+    const unitEntries = importedPaths.some(file => !file.endsWith('.svelte')) ? inventory : [];
+    const entries = routeEntriesOnly ? [...browserInventory]
+      : [...unitEntries, ...browserInventory, ...(frontendPaths.length ? ['frontend/src/routes'] : [])];
+    const { output } = await cruise(entries, {
       ...config.options, baseDir: REPOSITORY_ROOT, outputType: 'json', tsPreCompilationDeps: 'specify', validate: false,
       tsConfig: { fileName: path.join(REPOSITORY_ROOT, 'tsconfig.dependency-cruiser.json') },
+      // Framework entry pages have no reverse application import tree. Their
+      // browser consumers are destinations, including imported test helpers.
+      ...(routeEntriesOnly ? { doNotFollow: { path: '^(?!e2e/)' } } : {}),
     });
     const graph = typeof output === 'string' ? JSON.parse(output) as ICruiseResult : output;
     selection = new Map([
@@ -841,10 +852,33 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
     // a complete graph with no browser consumer does not turn CLI-only helpers
     // into application changes. Unresolved local imports still fail broadly.
     browserSelection = importedTestConsumers(importedPaths, graph, browserInventory, false);
+    if (frontendPaths.length) {
+      // A browser journey can visit a page without importing it or sharing its
+      // filename. Include those consumers before iteration reaches a full run.
+      // Test helpers inherit their route references through the same graph.
+      const sources = graph.modules.map(module => module.source)
+        .filter(file => file.startsWith('e2e/') && /\.[cm]?[jt]s$/u.test(file));
+      const consumers = importedTestConsumers(sources, graph, browserInventory, false);
+      const references = new Map<string, readonly string[]>();
+      for (const file of sources) {
+        const destinations = browserRouteReferences(readFileSync(path.join(REPOSITORY_ROOT, file), 'utf8'));
+        for (const consumer of consumers.get(file) ?? []) {
+          references.set(consumer, uniqueSorted([...(references.get(consumer) ?? []), ...destinations]));
+        }
+      }
+      browserSelection = new Map(importedPaths.map(file => {
+        const routeTests = componentContracts.has(file) ? [] : browserTestsForRoutes([file, ...(routeConsumers.get(file) ?? [])], references);
+        return [file, uniqueSorted([
+          ...(browserSelection.get(file) ?? []),
+          ...routeTests,
+          ...(routeEntriesOnly && !routeTests.length ? browserInventory : []),
+        ])];
+      }));
+    }
     const fallback = importedPaths.filter((file) => selection.get(file)?.length === inventory.length);
     explanation = fallback.length
       ? `Complete unit fallback where import evidence is missing or uncertain: ${fallback.join(', ')}.`
-      : 'Runtime dependents are discovered from current imports, including transitive helpers and newly added tests; compiler checks protect type-only contracts.';
+      : 'Runtime dependents and browser route references are discovered from current sources, including transitive helpers and newly added tests; compiler checks protect type-only contracts.';
   } catch {
     selection = new Map(importedPaths.map((file) => [file, inventory]));
     browserSelection = new Map(importedPaths.map((file) => [file, browserInventory]));
