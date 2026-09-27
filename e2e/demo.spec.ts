@@ -104,7 +104,9 @@ test('real Case forms practise evidence, conclusions and inconclusive rechecks w
 test('Case practice is reachable, responsive and discarded on restart or reload', async ({ page }, testInfo) => {
   const verifyIsolation = await isolateCasePractice(page);
   await page.goto('/resources');
-  await page.getByRole('link', { name: 'practise an evidence-to-recheck workflow with the real Case forms' }).click();
+  const practiceLink = page.getByRole('link').and(page.locator('a[href="/demo#case-practice"]'));
+  await expect(practiceLink).toHaveAccessibleName(/Case/iu);
+  await practiceLink.click();
   await expect(page).toHaveURL(/\/demo#case-practice$/u);
   const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
   const form = practice.locator('form[data-recovery-form="evidence-pin"]');
