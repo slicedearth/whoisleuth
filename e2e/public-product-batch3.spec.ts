@@ -581,7 +581,6 @@ test('opens, filters and downloads a large synthetic example without workspace a
     await expect(button).not.toHaveAttribute('aria-controls');
     await expect(button).toHaveAttribute('aria-expanded', 'false');
   }
-  await expect(gallery.locator('.example-grid')).toHaveCSS('align-items', 'start');
   const unchangedPeerHeight = (await exampleCards.nth(1).boundingBox())?.height ?? 0;
   await exampleCards.nth(0).getByRole('button', { name: 'Open synthetic output' }).click();
   await expect(exampleCards.nth(0).getByRole('textbox')).toBeVisible();

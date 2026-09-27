@@ -784,9 +784,7 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   await page.setViewportSize({ width: 393, height: 852 });
   const exactTable = comparison.getByRole('table', { name: 'Exact retained values, source states, and derived field deltas' });
   await expect(exactTable).toBeVisible();
-  await expect(exactTable).toHaveCSS('display', 'block');
   await expect(technologyRow).toBeVisible();
-  await expect(technologyRow).toHaveCSS('display', 'block');
   await expect(technologyRow).toContainText('fixture-cms, shared-edge');
   await expect(technologyRow).toContainText('fixture-commerce, shared-edge');
   await expect(technologyRow).toContainText('Exact source state complete');

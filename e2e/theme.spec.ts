@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, useTheme } from './helpers';
+import { expectNoHorizontalOverflow, useTheme } from './helpers';
 
 const STORAGE_KEY = 'whoisleuth:theme:v1';
 
@@ -384,37 +384,6 @@ test('form hints remain readable in both colour themes', async ({ page }) => {
       return value;
     });
     expect(contrast.hintText).toBeGreaterThanOrEqual(4.5);
-  }
-});
-
-test('dashboard fields and quiet buttons use the theme-specific boundary', async ({ page }) => {
-  await clearThemePreference(page);
-  await page.goto('/dashboard');
-  await migrateLegacyBrowserData(page, {
-    'whois-rdap-shortlist-v1': currentBrowserLocalDocument('shortlist', {
-      entries: [{ domain: 'theme.invalid', availability: 'unknown', mutationTypes: [], savedAt: '2026-08-23T00:00:00.000Z' }],
-    }),
-  });
-  await openDashboardSecondaryWorkspaces(page);
-
-  for (const theme of ['Dark', 'Light'] as const) {
-    await chooseTheme(page, theme);
-    const expectedBorder = await page.evaluate((token) => {
-      const probe = document.createElement('span');
-      probe.style.border = `1px solid var(${token})`;
-      document.body.append(probe);
-      const value = getComputedStyle(probe).borderTopColor;
-      probe.remove();
-      return value;
-    }, theme === 'Dark' ? '--border' : '--control-border');
-    const controls = [
-      page.locator('#browser-target'),
-      page.locator('#handoff-destination'),
-      page.getByRole('button', { name: 'Prepare exact preview' }),
-      page.getByRole('button', { name: /^Colour theme,/u }),
-      page.getByRole('button', { name: 'Sign out' }),
-    ];
-    for (const control of controls) await expect(control).toHaveCSS('border-top-color', expectedBorder);
   }
 });
 

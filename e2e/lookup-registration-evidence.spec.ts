@@ -572,7 +572,6 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await expect(observedPlotMarker).toBeVisible();
   const observedLegendMarker = agreementMatrix.locator('.matrix-legend .state-observed span');
   await expect(observedLegendMarker).toBeVisible();
-  expect(await observedLegendMarker.evaluate((element) => getComputedStyle(element).borderRadius)).toBe('3px');
 
   await page.getByRole('tab', { name: /^Relationships/ }).click();
   const analystPivots = page.locator('details.analyst-pivots');

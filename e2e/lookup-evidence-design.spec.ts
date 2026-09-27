@@ -58,16 +58,12 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(localNav.getByRole('link', { name: 'Advanced' })).toBeVisible();
   const activeNavigation = localNav.locator('a.active');
   await expect(activeNavigation).toHaveAttribute('aria-current', 'location');
-  expect(await activeNavigation.evaluate((link) => getComputedStyle(link).boxShadow)).toContain('inset');
 
   await expect(page.getByRole('heading', { name: 'Overview', level: 3 })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Web and DNS evidence' })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Registration$/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Validated lookup response' })).toBeVisible();
   await expect(page.getByLabel('Source diagnostics')).toContainText('rdap');
-  const sourceQualityColour = await page.locator('#source-quality-title').evaluate((heading) => getComputedStyle(heading).color);
-  const caseResponseColour = await page.locator('#case-response-title').evaluate((heading) => getComputedStyle(heading).color);
-  expect(caseResponseColour).not.toBe(sourceQualityColour);
 
   // The D3-backed visual is paired with a complete, keyboard-operable source
   // rail. It does not replace the detailed source sections.

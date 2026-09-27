@@ -216,8 +216,12 @@ test('legacy response deep links still open the packet and Case follow-up keeps 
   await expect(page.getByRole('textbox', { name: 'Add note', exact: true })).toHaveValue('Keep this draft through response navigation');
   await page.getByRole('link', { name: 'Review follow-up', exact: true }).click();
   await expect(page).toHaveURL('/monitor?view=inbox&queue=all&case-review=workspace-first');
-  await expect(page.getByRole('group', { name: 'Review queue' })).toContainText('Selected Case');
-  await expect(page.getByRole('link', { name: 'Show all Cases', exact: true })).toBeVisible();
+  const inbox = page.getByRole('region', { name: 'Review inbox', exact: true });
+  const clearCaseScope = inbox.getByRole('link', { name: 'Show all Cases', exact: true });
+  await expect(clearCaseScope).toBeVisible();
+  await expect(clearCaseScope).toHaveAttribute('href', '/monitor?view=inbox&queue=all');
+  await clearCaseScope.click();
+  await expect(page).toHaveURL('/monitor?view=inbox&queue=all');
 });
 
 for (const theme of ['light', 'dark'] as const) {

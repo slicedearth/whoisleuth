@@ -867,7 +867,7 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
 
 @media (forced-colors: active) {
   .card, .compact-disclosure, .stat-grid > *, .shell > aside, .shell > header { background: Canvas; box-shadow: none; }
-  .shell > aside nav a.active, .local-nav a.active, .reference-tree a.active { outline: 2px solid Highlight; outline-offset: -2px; }
+  .shell > aside nav a.active, .local-nav a.active, nav a[aria-current]:not([aria-current='false']) { outline: 2px solid Highlight; outline-offset: -2px; }
   .evidence-status, .chip, .badge { border: 1px solid ButtonText; background: Canvas; color: CanvasText; }
   .evidence-status.success, .evidence-status.partial, .evidence-status.error { border-style: solid; }
   .card > summary::before, .compact-disclosure > summary::after { color: LinkText; }

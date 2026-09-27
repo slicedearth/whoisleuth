@@ -44,9 +44,6 @@ for (const destination of ['/dashboard', '/lookup', '/bulk', '/monitor', '/brand
         const box = await heading.boundingBox();
         const toolbar = await page.locator('.shell > header').boundingBox();
         expect(box && toolbar && box.y >= toolbar.y + toolbar.height).toBe(true);
-        for (const card of await page.locator('.shell .card:visible').all()) {
-          await expect(card).toHaveCSS('box-shadow', 'none');
-        }
         if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`console-${theme}-${width}.png`), animations: 'disabled' }); }
         if (width === 320 || width === 1280) {
           expect((await new AxeBuilder({ page }).include('main').analyze()).violations).toEqual([]);

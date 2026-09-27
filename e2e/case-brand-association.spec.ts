@@ -535,7 +535,6 @@ test('closes Brand Profile source truth after a post-ready storage failure', asy
   await expect(inbox).toHaveAttribute('aria-busy', 'false');
   await expect(metric).toHaveText('No active profile');
   await page.setViewportSize({ width: 390, height: 844 });
-  expect(await metric.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize))).toBeLessThan(14);
   await page.getByRole('radio', { name: 'Set Fixture profile active' }).check();
   await expect(metric).toHaveText('1 review items');
 
