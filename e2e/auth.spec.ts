@@ -198,7 +198,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(page.locator('.demo-footer').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.locator('.demo-footer').getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await page.goto('/resources');
-  await expect(page.locator('.closing-actions').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
+  await expect(page.getByRole('main').getByRole('link', { name: 'Open console', exact: true })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await page.goto('/');
   const publicSignOutButton = page.getByRole('button', { name: 'Sign out' });

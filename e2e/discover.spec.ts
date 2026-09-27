@@ -165,7 +165,9 @@ test('registry-scoped nameserver results disclose their lower-bound scope and co
   await expect(page.getByRole('note').filter({ hasText: 'Registry-scoped result' })).toContainText('.example');
   await expect(page.locator('.status')).toContainText('1 bounded partial domain result');
   await expect(page.locator('.candidate strong')).toHaveText(['matched.example']);
-  await expect(page.getByText(/not a global reverse-nameserver inventory/iu)).toBeVisible();
+  const scopeGuidance = page.locator('#rdap-search-guidance');
+  await expect(scopeGuidance).toContainText('that domain ending only');
+  await expect(scopeGuidance).toContainText('may be incomplete');
 
   await page.getByRole('button', { name: 'Select filtered (1)' }).click();
   await page.getByRole('button', { name: 'Continue to Bulk with 1' }).click();
