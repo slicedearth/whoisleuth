@@ -546,7 +546,7 @@ test('closes Brand Profile source truth after a post-ready storage failure', asy
 
   const profileSourceAlert = page.locator('.profile-source-state[role="alert"]');
   const inboxSourceAlert = inbox.getByRole('alert');
-  await expect(profileSourceAlert).toContainText('No empty-profile conclusion has been drawn');
+  await expect(profileSourceAlert).toContainText('Saved Brand Profiles could not be loaded');
   await expect(inboxSourceAlert).toContainText('Brand Profiles could not be read');
   expect(await profileSourceAlert.evaluate((element) => getComputedStyle(element).borderStyle)).toBe('dotted');
   expect(await inboxSourceAlert.evaluate((element) => getComputedStyle(element).borderStyle)).toBe('dotted');

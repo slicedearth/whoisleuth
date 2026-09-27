@@ -143,7 +143,7 @@
   </header>
 
   {#if projection.state === 'unavailable'}
-    <p class="source-alert" role="alert">The register is unavailable because Brand Profiles or the active-profile preference could not be read. Rows are suppressed and no empty-state conclusion has been drawn.</p>
+    <p class="source-alert" role="alert">The register could not be loaded because saved Brand Profiles or your selected profile are unavailable.</p>
   {:else if projection.state === 'no_active_profile'}
     <div class="empty-state"><h3>No active Brand Profile</h3><p>Set a profile active above to build a transient asset register.</p></div>
   {:else if projection.state === 'unresolved_active_profile'}

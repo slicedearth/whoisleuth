@@ -9,9 +9,9 @@
   const activity = $derived(projectWatchlistActivity(events));
   const activeDays = $derived(activity.days.filter((day) => day.checks > 0));
   const activityLegend = [
-    { token: 'activity-empty' as const, label: 'No retained check', shape: 'square' as const, dashed: true },
-    { token: 'activity-checked' as const, label: 'Retained check · no material change', shape: 'square' as const },
-    { token: 'activity-changed' as const, label: 'Retained check · material-change count shown', shape: 'square' as const },
+    { colour: 'activity-empty' as const, label: 'No saved check', shape: 'square' as const, dashed: true },
+    { colour: 'activity-checked' as const, label: 'Checked · no material change', shape: 'square' as const },
+    { colour: 'activity-changed' as const, label: 'Changed · number of material changes', shape: 'square' as const },
   ];
   function intensity(changes: number) {
     if (changes <= 0 || activity.maxChanges <= 0) return 0;
@@ -22,9 +22,9 @@
 {#if activity.days.length}
   <VisualizationFrame
     id="watchlist-activity"
-    eyebrow="Retained history"
+    eyebrow="Saved history"
     title="Watchlist activity"
-    description="Rows are UTC weekdays and columns are consecutive seven-day blocks in a 28-day window ending at the latest retained check. Empty cells mean no retained check, not proof that no monitoring occurred."
+    description="Saved checks over 28 days, ending at the latest check. Each column covers seven days; dates use UTC. Empty cells have no saved check."
     metric={activity.totalChanges}
     metricLabel="material changes"
     visualLabel={`${activity.totalChecks} retained watchlist checks with ${activity.totalChanges} material changes from ${activity.windowStart} through ${activity.windowEnd}, grouped by UTC calendar day`}
@@ -33,14 +33,14 @@
   >
     {#snippet visual()}
       <div class="activity-layout">
-        <svg viewBox={`0 0 ${activity.width} ${activity.height}`} aria-hidden="true">
+        <svg class="data-chart" width={activity.width} height={activity.height} viewBox={`0 0 ${activity.width} ${activity.height}`} aria-hidden="true">
           <defs>
             <pattern id="activity-change-pattern" width="6" height="6" patternUnits="userSpaceOnUse">
               <rect width="6" height="6" class="changed-background" />
               <path d="M -1 1 L 1 -1 M 0 6 L 6 0 M 5 7 L 7 5" class="changed-stripe" />
             </pattern>
           </defs>
-          <text x="12" y="20" class="axis-title">UTC weekday</text>
+          <text x="12" y="20" class="axis-title">Day (UTC)</text>
           {#each activity.weekdayLabels as weekday (weekday.index)}
             <text x="12" y={weekday.y} class="day-label">{weekday.label}</text>
           {/each}
@@ -58,14 +58,15 @@
             </g>
           {/each}
           {#each activity.weekLabels as week (week.index)}
-            <text x={week.x} y="211" text-anchor="middle" class="week-label">{week.label}</text>
+            <foreignObject x={week.x - 64} y="201" width="128" height="34">
+              <div xmlns="http://www.w3.org/1999/xhtml" class="week-label">{week.label}</div>
+            </foreignObject>
           {/each}
-          <text x="92" y="228" class="axis-title">Consecutive seven-day blocks →</text>
         </svg>
         <div class="activity-summary">
-          <div><strong>{activity.totalChecks}</strong><span>retained checks</span></div>
-          <div><strong>{activeDays.length}</strong><span>UTC days represented</span></div>
-          <div><strong>{activity.maxChanges}</strong><span>largest daily change count</span></div>
+          <div><strong>{activity.totalChecks}</strong><span>saved checks</span></div>
+          <div><strong>{activeDays.length}</strong><span>days with checks</span></div>
+          <div><strong>{activity.maxChanges}</strong><span>most changes in one day</span></div>
         </div>
       </div>
     {/snippet}
@@ -85,18 +86,17 @@
 {/if}
 
 <style>
-  .activity-layout{display:grid;grid-template-columns:minmax(600px,1fr) minmax(155px,.3fr);gap:10px;padding:10px}
-  svg{display:block;width:100%;min-width:600px;height:auto}
+  .activity-layout{display:grid;grid-template-columns:max-content minmax(155px,200px);justify-content:safe center;gap:10px;padding:10px}
+  svg{min-width:600px}
   g rect{fill:var(--panel);stroke:var(--border-strong);stroke-dasharray:3 2}
   g.checked rect{fill:color-mix(in srgb,var(--source-network-stroke) 18%,var(--panel));stroke:var(--source-network-stroke);stroke-dasharray:none}
   g.changed rect{fill:url(#activity-change-pattern);stroke:var(--source-whois-stroke);stroke-dasharray:none}
   .changed-background{fill:color-mix(in srgb,var(--source-whois-stroke) 72%,var(--panel))}
   .changed-stripe{fill:none;stroke:color-mix(in srgb,var(--panel) 58%,transparent);stroke-width:1.3}
-  g text{fill:var(--text);font:700 9px var(--mono)}
-  .day-label,.week-label,.axis-title{fill:var(--muted);font-family:var(--mono)}
-  .day-label{font-size:9px}
-  .week-label{font-size:8px}
-  .axis-title{font-size:8px;font-weight:700;letter-spacing:.03em;text-transform:uppercase}
+  g text{fill:var(--text);font:700 12px var(--mono)}
+  .day-label,.axis-title{fill:var(--muted);font-family:var(--font-sans);font-size:12px}
+  .week-label{color:var(--muted);font:400 12px/16px var(--font-sans);text-align:center}
+  .axis-title{font-weight:650}
   .activity-summary{display:grid;gap:7px}
   .activity-summary div{display:grid;align-content:center;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .activity-summary strong{color:var(--accent);font:750 var(--text-lg) var(--mono)}

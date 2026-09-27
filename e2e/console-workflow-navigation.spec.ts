@@ -139,6 +139,7 @@ test('Dashboard opens its exact attention set and retains a direct recent Case d
   await page.getByRole('link', { name: 'Open review inbox', exact: true }).click();
   await expect(page).toHaveURL('/monitor?view=inbox&attention=1');
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Attention needed' })).toBeVisible();
   await page.goBack();
   await page.getByRole('region', { name: 'Recent Cases' }).getByRole('link', { name: /review\.example/ }).click();
   await expect(page).toHaveURL('/cases?case=navigation-case');

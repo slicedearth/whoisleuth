@@ -779,7 +779,7 @@
     />
   {/if}
   {#if mode==='certificate-transparency'}<p class="generation-limits" id="ct-query-guidance">Search public certificate names using a keyword of up to {MAX_CT_QUERY_LENGTH} characters. This does not submit the target for a live website scan.</p>{/if}
-  {#if mode==='nameserver'}<p class="generation-limits" id="rdap-search-guidance">Search one IANA-selected registry for domains it reports against this nameserver. The result is a bounded lower bound for that suffix, not a global reverse-nameserver inventory.</p>{/if}
+  {#if mode==='nameserver'}<p class="generation-limits" id="rdap-search-guidance">Search the official registry for domains using this nameserver. Results cover that domain ending only and may be incomplete.</p>{/if}
   {#if mode==='keyword'}<p class="generation-limits" id="generation-limits">Generation is bounded to {MAX_GENERATION_TLDS} TLDs, {MAX_NAME_VARIANTS.toLocaleString()} label variants, and {MAX_GENERATED_CANDIDATES.toLocaleString()} candidates per run.</p>{/if}
   {#if localContextStatus}<p class="local-context-status" role="status">{localContextStatus}</p>{/if}
   {#if error}<p class="error" role="alert">{error}</p>{:else if status}<p class="status" role="status" aria-live="polite">{status}</p>{/if}

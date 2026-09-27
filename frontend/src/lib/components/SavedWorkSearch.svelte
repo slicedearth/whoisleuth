@@ -24,7 +24,7 @@
     ]);
     if (request.signal.aborted) return;
     if (results.every(result => result.status === 'rejected')) {
-      loadError = 'Saved work could not be read. No empty-workspace conclusion has been drawn.';
+      loadError = 'Saved work could not be loaded. Try searching again.';
       return;
     }
     const [cases, campaigns, profiles, relationships] = results;

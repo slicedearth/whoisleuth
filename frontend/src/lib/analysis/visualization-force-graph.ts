@@ -16,6 +16,8 @@ import {
 
 export const MAX_FORCE_GRAPH_NODES = 48;
 export const MAX_FORCE_GRAPH_LINKS = 80;
+export const FORCE_GRAPH_LABEL_FONT_SIZE = 12;
+export const FORCE_GRAPH_LABEL_LINE_HEIGHT = 17;
 
 export const FORCE_GRAPH_LINK_KINDS = [
   'observed',
@@ -206,13 +208,13 @@ function forceGraphClusterCenters(
 function forceGraphNodeBounds(node: ProjectedForceNode) {
   if (node.kind === 'target') {
     const halfWidth = (node.labelWidth + 20) / 2;
-    const halfHeight = (node.labelLines.length * 13 + 17) / 2;
+    const halfHeight = (node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT + 17) / 2;
     return { halfWidth, above: halfHeight, below: halfHeight };
   }
   return {
     halfWidth: Math.max(20, node.labelWidth / 2),
     above: 22,
-    below: 33 + node.labelLines.length * 13,
+    below: 33 + node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT,
   };
 }
 
@@ -288,7 +290,7 @@ export function projectBoundedForceGraph(
       const kind = boundedId(node?.kind) || 'evidence';
       const group = forceGraphGroup(kind, node?.group, node?.groupLabel);
       const labelLines = wrapForceGraphLabel(label);
-      const labelWidth = Math.max(54, Math.min(142, Math.max(...labelLines.map((line) => line.length)) * 6.2 + 16));
+      const labelWidth = Math.max(54, Math.max(...labelLines.map((line) => line.length)) * FORCE_GRAPH_LABEL_FONT_SIZE * 0.62 + 16);
       return {
         id,
         label,
@@ -378,7 +380,7 @@ export function projectBoundedForceGraph(
     for (const node of nodes) {
       const horizontalInset = Math.max(38, Math.min(82, node.collisionRadius));
       const topInset = node.kind === 'target' ? 28 : 34;
-      const bottomInset = Math.max(52, 34 + node.labelLines.length * 13);
+      const bottomInset = Math.max(52, 34 + node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT);
       node.x = Math.max(horizontalInset, Math.min(width - horizontalInset, Number(node.x) || centerX));
       node.y = Math.max(topInset, Math.min(height - bottomInset, Number(node.y) || centerY));
     }

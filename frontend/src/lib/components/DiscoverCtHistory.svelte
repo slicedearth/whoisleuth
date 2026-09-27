@@ -153,7 +153,7 @@
   {@const trend = checkTrend(checks)}
   {#if trend.points.length > 1}
     <figure class="ct-trend">
-      <svg viewBox={`0 0 ${trend.width} ${trend.height}`} role="img" aria-label={`Certificate search trend across ${trend.points.length} retained checks, including ${cappedCheckLabel(trend.summary.partialChecks)}, positioned by elapsed check time`}>
+      <svg class="data-chart" width={trend.width} height={trend.height} viewBox={`0 0 ${trend.width} ${trend.height}`} role="img" aria-label={`Certificate search trend across ${trend.points.length} retained checks, including ${cappedCheckLabel(trend.summary.partialChecks)}, positioned by elapsed check time`}>
         <title>Certificate search result trend across {trend.points.length} retained checks, including {cappedCheckLabel(trend.summary.partialChecks)}, positioned by elapsed check time</title>
         {#each trend.ticks as tick}<line class="grid-line" x1="64" x2="850" y1={tick.y} y2={tick.y}></line><text x="52" y={tick.y + 3} text-anchor="end">{tick.value}</text>{/each}
         {#each trend.segments as segment}
@@ -198,9 +198,8 @@
   .ct-checks li span{display:block;color:var(--muted)}
   .history-limit{margin:7px 0 0;color:var(--amber);font-size:var(--text-2xs);line-height:1.45}
   .ct-trend{max-width:100%;margin:8px 0 0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-  .ct-trend svg{display:block;width:100%;height:auto}
   .ct-trend .grid-line{stroke:var(--border);stroke-width:1}
-  .ct-trend text{fill:var(--muted);font:9px var(--mono)}
+  .ct-trend text{fill:var(--muted);font:12px var(--mono)}
   .ct-trend .elapsed-label{font-weight:700;text-transform:uppercase;letter-spacing:.04em}
   .ct-trend .trend-segment{stroke:var(--accent);stroke-width:3}
   .ct-trend .trend-marker{fill:var(--panel);stroke:var(--accent);stroke-width:3}

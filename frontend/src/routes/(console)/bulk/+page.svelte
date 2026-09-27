@@ -761,7 +761,7 @@
       return null;
     }
   }
-  async function start(){if(lookupDisabled){status=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(parsedInput.tooLarge){status='The pasted domain list exceeds the bounded input limit.';return;}if(profileSourceState==='loading'){status='Wait for saved Brand Profile context to finish loading before scanning.';return;}if(currentBulkSessionId)bulkSessionName='';currentBulkSessionId='';scanStartedAt=new Date().toISOString();await run(parseDomains(),true);}
+  async function start(){if(lookupDisabled){status=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}if(parsedInput.tooLarge){status='This domain list is too large. Shorten it and try again.';return;}if(profileSourceState==='loading'){status='Wait for saved Brand Profile context to finish loading before scanning.';return;}if(currentBulkSessionId)bulkSessionName='';currentBulkSessionId='';scanStartedAt=new Date().toISOString();await run(parseDomains(),true);}
   async function runReviewed(domains: string[], label: string) {
     const preserved = await run(domains, false, true);
     retryStatus = preserved === null ? '' : `${label} completed.${preserved.length ? ` ${preserved.length} stronger prior result${preserved.length === 1 ? ' was' : 's were'} retained.` : ''}`;

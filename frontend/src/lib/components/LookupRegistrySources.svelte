@@ -328,7 +328,7 @@
     </header>
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -- scrollable matrix must be keyboard reachable -->
     <div class="matrix-frame" role="img" tabindex="0" aria-label={`Pairwise registration agreement plot with ${comparisonMatrix.rows.length} source comparison lanes`}>
-      <svg viewBox={`0 0 ${comparisonMatrix.width} ${comparisonMatrix.height}`} aria-hidden="true">
+      <svg class="data-chart" width={comparisonMatrix.width} height={comparisonMatrix.height} viewBox={`0 0 ${comparisonMatrix.width} ${comparisonMatrix.height}`} aria-hidden="true">
         {#each comparisonMatrix.columns as column}
           <g class="publication-header" style={`--publication-color:${publicationColour(column.label)}`}>
             <line x1={column.x + column.width / 2} x2={column.x + column.width / 2} y1="44" y2={comparisonMatrix.height - 14} class="column-guide" />
@@ -620,12 +620,12 @@
   .agreement-matrix .section-head p:not(.eyebrow){max-width:720px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .matrix-frame{max-width:100%;margin-top:13px;overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);overscroll-behavior-x:contain}
   .matrix-frame:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-  .matrix-frame svg{display:block;width:100%;min-width:680px;height:auto}
-  .column-label,.row-label,.pair-label{fill:var(--muted);font-family:var(--mono);font-size:9px}
+  .matrix-frame svg{min-width:680px}
+  .column-label,.row-label,.pair-label{fill:var(--muted);font-family:var(--font-sans);font-size:13px}
   .publication-marker{fill:var(--publication-color);stroke:color-mix(in srgb,var(--publication-color) 40%,var(--panel));stroke-width:3}
   .column-guide{stroke:color-mix(in srgb,var(--publication-color) 14%,var(--border));stroke-width:1;stroke-dasharray:2 5}
   .row-label{fill:var(--text)}
-  .pair-label{font-size:8px}
+  .pair-label{font-size:12px}
   .agreement-track{stroke:var(--border-strong);stroke-width:1.5}
   .agreement-marker{fill:var(--panel);stroke:var(--muted);stroke-width:1.7}
   .agreement-glyph{fill:var(--muted);font:750 9px var(--mono);pointer-events:none}

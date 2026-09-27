@@ -1,5 +1,7 @@
 <script lang="ts">
   import {
+    FORCE_GRAPH_LABEL_FONT_SIZE,
+    FORCE_GRAPH_LABEL_LINE_HEIGHT,
     projectBoundedForceGraph,
     type ForceGraphLinkKind,
     type ForceGraphLinkInput,
@@ -21,7 +23,6 @@
   } = $props();
 
   const graph = $derived(projectBoundedForceGraph(nodes, links, { focusNodeId }));
-  const maximumRenderedWidth = $derived(Math.floor(680 * graph.width / graph.height));
   let activeGroup = $state('');
   let activeLinkKind = $state<'all' | ForceGraphLinkKind>('all');
   const linkKindLabels: Readonly<Record<ForceGraphLinkKind, string>> = {
@@ -133,11 +134,11 @@
     {/if}
     <div
       class="map-frame"
-      style:max-width={`${maximumRenderedWidth}px`}
+      style:max-width={`${graph.width}px`}
       role="img"
       aria-label={`${title}. ${graph.nodes.length} nodes and ${graph.links.length} relationships.${graph.truncated ? ` ${omittedInputCount} visual inputs omitted after bounded normalization.` : ''} Exact evidence follows the visual.`}
     >
-      <svg viewBox={`0 0 ${graph.width} ${graph.height}`} aria-hidden="true">
+      <svg class="data-chart" width={graph.width} height={graph.height} viewBox={`0 0 ${graph.width} ${graph.height}`} aria-hidden="true">
         <rect width={graph.width} height={graph.height} class="background"></rect>
         {#each graph.nodes.filter((node) => node.kind === 'target') as node (node.id)}
           <circle cx={node.x} cy={node.y} r="96" class="focus-halo"></circle>
@@ -175,9 +176,9 @@
                 <rect
                   class="node-shape target-shape"
                   x={-(node.labelWidth + 20) / 2}
-                  y={-(node.labelLines.length * 13 + 17) / 2}
+                  y={-(node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT + 17) / 2}
                   width={node.labelWidth + 20}
-                  height={node.labelLines.length * 13 + 17}
+                  height={node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT + 17}
                   rx="9"
                 ></rect>
               {:else if node.kind === 'technology'}
@@ -193,15 +194,16 @@
                   x={-node.labelWidth / 2}
                   y="25"
                   width={node.labelWidth}
-                  height={node.labelLines.length * 13 + 8}
+                  height={node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT + 8}
                   rx="6"
                 ></rect>
               {/if}
               <text
                 class:target-label={node.kind === 'target'}
-                y={node.kind === 'target' ? -(node.labelLines.length - 1) * 6.5 + 4 : 37}
+                style:font-size={`${FORCE_GRAPH_LABEL_FONT_SIZE}px`}
+                y={node.kind === 'target' ? -(node.labelLines.length - 1) * FORCE_GRAPH_LABEL_LINE_HEIGHT / 2 + 4 : 39}
                 text-anchor="middle"
-              >{#each node.labelLines as line, index}<tspan x="0" dy={index === 0 ? 0 : 13}>{line}</tspan>{/each}</text>
+              >{#each node.labelLines as line, index}<tspan x="0" dy={index === 0 ? 0 : FORCE_GRAPH_LABEL_LINE_HEIGHT}>{line}</tspan>{/each}</text>
               <title>{node.label}{node.detail ? `: ${node.detail}` : ''}</title>
             </g>
           {/each}
@@ -267,7 +269,6 @@
   .focus-status button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .map-frame{width:100%;margin:11px auto 0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background-color:var(--panel-raised);background-image:radial-gradient(circle,color-mix(in srgb,var(--border) 70%,transparent) 1px,transparent 1px);background-size:24px 24px;overscroll-behavior:auto;touch-action:pan-y pinch-zoom}
   .map-mobile{display:none}
-  svg{display:block;width:100%;height:auto}
   .background{fill:transparent}
   .focus-halo{fill:color-mix(in srgb,var(--accent) 5%,transparent);stroke:color-mix(in srgb,var(--accent) 12%,transparent);stroke-width:1;pointer-events:none}
   .links path{fill:none;stroke:color-mix(in srgb,var(--muted) 46%,transparent);stroke-width:1.35}

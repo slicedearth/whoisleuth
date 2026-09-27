@@ -693,7 +693,7 @@
     });}
   async function runLookup(options:Readonly<{refreshCaseEvidence?:boolean}>={}){
     if(lookupDisabled){error=lookupDisabled.reason||'Lookup is disabled by deployment policy.';return;}
-    if(parsedInput.tooLarge){error='The pasted domain list exceeds the bounded input limit.';return;}
+    if(parsedInput.tooLarge){error='This domain list is too large. Shorten it and try again.';return;}
     if(!lookupEntries.length||loading)return;
     if(lookupEntries.length>1){
       let targets:string[];

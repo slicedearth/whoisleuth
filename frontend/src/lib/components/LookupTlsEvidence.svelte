@@ -61,7 +61,7 @@
         <div><p class="eyebrow">Certificate structure</p><h5 id="certificate-visual-title">Validity and chain</h5></div>
         {#if validity.available}
           <div class="validity-chart" role="img" aria-label={`Certificate validity from ${validity.validFrom} to ${validity.validTo}${validity.hasObservation ? `, observed ${validity.observedAt}` : ''}`}>
-            <svg viewBox={`0 0 ${validity.width} ${validity.height}`} aria-hidden="true">
+            <svg class="data-chart" width={validity.width} height={validity.height} viewBox={`0 0 ${validity.width} ${validity.height}`} aria-hidden="true">
               <line x1={validity.fromX} x2={validity.toX} y1="54" y2="54" class="validity-line"></line>
               <circle cx={validity.fromX} cy="54" r="7" class="validity-bound"></circle>
               <circle cx={validity.toX} cy="54" r="7" class="validity-bound"></circle>
@@ -118,13 +118,12 @@
   .certificate-visual{margin-top:13px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
   .certificate-visual h5{margin:2px 0 0;font:700 var(--text-sm) var(--mono)}
   .validity-chart{max-width:100%;margin-top:9px;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-  .validity-chart svg{display:block;width:100%;min-width:0;height:auto}
   .validity-mobile{display:none}
   .validity-line{stroke:var(--accent);stroke-width:5;stroke-linecap:round}
   .validity-bound{fill:var(--panel);stroke:var(--accent);stroke-width:3}
   .observed-line{stroke:var(--success);stroke-width:3}
   .observed-line.outside{stroke:var(--danger)}
-  .validity-chart text{fill:var(--muted);font:600 9px var(--mono)}
+  .validity-chart text{fill:var(--muted);font:600 12px var(--mono)}
   .chain-flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px;margin:12px 0 0;padding:0;list-style:none}
   .chain-flow li{display:grid;position:relative;grid-template-columns:28px minmax(0,1fr);gap:8px;align-items:center;min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .chain-flow li>span{display:grid;width:26px;height:26px;place-items:center;border:1px solid var(--border-strong);border-radius:50%;color:var(--accent);font:700 var(--text-2xs) var(--mono)}

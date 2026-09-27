@@ -529,7 +529,7 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
 {#if profileSourceState === 'loading'}
   <section class="profile-source-state card" role="status" aria-busy="true">Loading saved Brand Profiles…</section>
 {:else if profileSourceState === 'unavailable'}
-  <section id="brand-profile-source-state" tabindex="-1" class="profile-source-state unavailable card" role="alert">Brand Profiles could not be read. No empty-profile conclusion has been drawn. Refresh saved profiles to retry; open drafts are retained.</section>
+  <section id="brand-profile-source-state" tabindex="-1" class="profile-source-state unavailable card" role="alert">Saved Brand Profiles could not be loaded. Refresh to try again. Your open drafts are still here.</section>
 {:else}
   {#if profiles.length}<details class="brand-profiles" bind:open={profilesOpen}><summary id="brand-profiles-summary">Brand profiles <span>{profiles.length}</span><small>{active ? `Active: ${active.name}` : 'No active profile'}</small></summary><div>{@render profilesList()}</div></details>{:else if !showForm}{@render profilesList()}{/if}
 {/if}

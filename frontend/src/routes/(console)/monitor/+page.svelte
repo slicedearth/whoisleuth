@@ -471,11 +471,11 @@ import { BrowserLocalDataError } from '$lib/browser-local-data-content.ts';
     {#if campaignsSourceState==='ready'&&relationshipsSourceState==='ready'}
       <DeferredSurface load={()=>import('$lib/components/CaseRelationshipClusters.svelte')} loadingLabel="Loading Case relationship clusters…" unavailableLabel="Case relationship clusters could not be loaded." props={{summary:relationshipClusters}} />
     {:else}
-      <LocalCollectionState state={campaignsSourceState==='loading'||relationshipsSourceState==='loading'?'loading':'unavailable'} title="Relationship augmentation incomplete" detail="Readable Case evidence remains below. Campaign or retained-relationship augmentation could not be fully loaded, so combined relationship counts remain unavailable rather than being inferred as zero." />
+      <LocalCollectionState state={campaignsSourceState==='loading'||relationshipsSourceState==='loading'?'loading':'unavailable'} title="Some relationship sources are unavailable" detail="Case evidence remains below. Campaigns or saved relationships could not be loaded, so combined totals are unavailable." />
     {/if}
     <DeferredSurface load={()=>import('$lib/components/CaseRelationshipWorkspace.svelte')} loadingLabel="Loading Case relationship workspace…" unavailableLabel="The Case relationship workspace could not be loaded. Retained Cases remain available in the Cases view." props={{records:cases,summary:relationshipSummary,onselect:openRelatedCase}} placeholder="workspace" />
   {:else}
-    <LocalCollectionState state={casesSourceState} title="Case relationships unavailable" detail="Cases must be readable before cross-case relationships can be projected. Readable website-profile and retained-relationship evidence remains separately attributed above." />
+    <LocalCollectionState state={casesSourceState} title="Case relationships unavailable" detail="Load saved Cases to see relationships between them. Available website profiles and saved relationships are shown above." />
   {/if}
 </div>
 {/if}

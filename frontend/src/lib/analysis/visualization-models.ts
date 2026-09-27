@@ -7,6 +7,8 @@ import {
 } from './visualization-bounds.ts';
 
 export {
+  FORCE_GRAPH_LABEL_FONT_SIZE,
+  FORCE_GRAPH_LABEL_LINE_HEIGHT,
   FORCE_GRAPH_LINK_KINDS,
   MAX_FORCE_GRAPH_LINKS,
   MAX_FORCE_GRAPH_NODES,

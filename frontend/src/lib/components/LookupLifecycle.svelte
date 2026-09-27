@@ -8,9 +8,9 @@
   let { events }: { events: readonly LifecycleEventInput[] } = $props();
   const timeline = $derived(projectLifecycleEvents(events));
   const lifecycleLegend = [
-    { token: 'registration' as const, label: 'Registry event', shape: 'circle' as const },
-    { token: 'certificate' as const, label: 'Certificate event', shape: 'diamond' as const },
-    { token: 'observation' as const, label: 'Lookup observation', shape: 'square' as const },
+    { colour: 'registration' as const, label: 'Registry event', shape: 'circle' as const },
+    { colour: 'certificate' as const, label: 'Certificate event', shape: 'diamond' as const },
+    { colour: 'observation' as const, label: 'Lookup observation', shape: 'square' as const },
   ];
 
   function displayDate(value: string) {
@@ -38,7 +38,7 @@
     note={timeline.truncated ? `The visual is capped at ${timeline.events.length} dated events. Detailed source sections remain available below.` : undefined}
   >
     {#snippet visual()}
-      <svg viewBox={`0 0 ${timeline.width} ${timeline.height}`} aria-hidden="true">
+      <svg class="data-chart" width={timeline.width} height={timeline.height} viewBox={`0 0 ${timeline.width} ${timeline.height}`} aria-hidden="true">
         <defs>
           <pattern id="lifecycle-grid" width="22" height="22" patternUnits="userSpaceOnUse">
             <path d="M 22 0 L 0 0 0 22" class="grid-line" />
@@ -78,7 +78,6 @@
 {/if}
 
 <style>
-  svg{display:block;width:100%;height:auto}
   .timeline-background{fill:var(--panel-raised)}
   .grid-line{fill:none;stroke:color-mix(in srgb,var(--border) 55%,transparent);stroke-width:1}
   .timeline-axis{stroke:var(--border-strong);stroke-width:2}
@@ -88,8 +87,8 @@
   .event line{stroke:color-mix(in srgb,var(--event-color) 48%,var(--border-strong));stroke-width:1}
   .event-shape{fill:var(--panel);stroke:var(--event-color);stroke-width:3}
   .event-label,.event-date{font-family:var(--mono)}
-  .event-label{fill:var(--text);font-size:11px;font-weight:750}
-  .event-date{fill:var(--muted);font-size:9px}
+  .event-label{fill:var(--text);font-size:13px;font-weight:750}
+  .event-date{fill:var(--muted);font-size:12px}
   .timeline-list{display:grid;list-style:none}
   .timeline-list li{display:grid;grid-template-columns:8px minmax(0,1fr);gap:8px;align-items:start;padding:8px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .event-marker{width:7px;height:7px;margin-top:5px;border:2px solid var(--event-color);border-radius:50%}

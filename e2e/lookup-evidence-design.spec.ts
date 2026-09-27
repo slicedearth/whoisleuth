@@ -616,6 +616,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(dependencyReview.getByText('within domain', { exact: true }).first()).toBeVisible();
 
   for (const size of [
+    { width: 3840, height: 2160 },
+    { width: 2560, height: 1440 },
     { width: 1920, height: 1080 },
     { width: 1440, height: 900 },
     { width: 1024, height: 768 },
@@ -687,6 +689,9 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       expect(graphicBox.width).toBeLessThanOrEqual(panelBox.width + 1);
       expect(graphicBox.height).toBeGreaterThan(150);
       expect(graphicBox.height).toBeLessThan(560);
+      const svg = topologyGraphic.locator(':scope > svg');
+      const scale = await svg.evaluate((element: SVGSVGElement) => element.getBoundingClientRect().width / element.viewBox.baseVal.width);
+      expect(scale, 'Evidence maps should fit their container without magnifying the diagram').toBeLessThanOrEqual(1);
     } else {
       await expect(topologyGraphic).toHaveCount(1);
       await expect(topologyGraphic).toBeHidden();
@@ -710,6 +715,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       expect(graphBox.width).toBeLessThanOrEqual(panelBox.width + 1);
       expect(graphBox.height).toBeGreaterThan(180);
       expect(graphBox.height).toBeLessThan(700);
+      const scale = await mapFrame.locator(':scope > svg').evaluate((element: SVGSVGElement) => element.getBoundingClientRect().width / element.viewBox.baseVal.width);
+      expect(scale, 'Relationship maps should not magnify their labels on wide displays').toBeLessThanOrEqual(1);
       expect(await mapFrame.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
       expect(await mapFrame.evaluate((element) => getComputedStyle(element).touchAction)).toContain('pinch-zoom');
       if (size.width === 1440) {
@@ -748,6 +755,8 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
       expect(graphicBox.width).toBeLessThanOrEqual(panelBox.width + 1);
       expect(graphicBox.height).toBeGreaterThan(130);
       expect(graphicBox.height).toBeLessThan(520);
+      const scale = await lifecycleGraphic.locator(':scope > svg').evaluate((element: SVGSVGElement) => element.getBoundingClientRect().width / element.viewBox.baseVal.width);
+      expect(scale, 'Timelines should not magnify their labels on wide displays').toBeLessThanOrEqual(1);
     } else {
       await expect(lifecycleGraphic).toHaveCount(1);
       await expect(lifecycleGraphic).toBeHidden();

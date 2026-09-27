@@ -71,7 +71,7 @@
   {#if chart.sources.length}
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -- scrollable diagnostic chart must be keyboard reachable -->
     <div class="timing-chart" role="img" tabindex="0" aria-label={`Overlapping collection timing for ${chart.sources.length} source branches`}>
-      <svg viewBox={`0 0 ${chart.width} ${chart.height}`} aria-hidden="true">
+      <svg class="data-chart" width={chart.width} height={chart.height} viewBox={`0 0 ${chart.width} ${chart.height}`} aria-hidden="true">
         {#each chart.ticks as tick}
           <line x1={tick.x} x2={tick.x} y1="18" y2={chart.height - 10} class="tick-line" />
           <text x={tick.x} y="13" text-anchor="middle" class="tick-label">{formatCollectionDuration(tick.value)}</text>
@@ -128,10 +128,10 @@
   .timing-summary strong{flex:none;color:var(--accent);font:650 var(--text-2xs) var(--mono);font-variant-numeric:tabular-nums}
   .timing-chart{max-width:100%;margin-top:14px;overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised);overscroll-behavior-x:contain}
   .timing-chart:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-  .timing-chart svg{display:block;width:100%;min-width:680px;height:auto}
+  .timing-chart svg{min-width:680px}
   .mobile-timing{display:none}
   .tick-line{stroke:var(--border);stroke-width:1}
-  .tick-label,.timing-source text{fill:var(--muted);font-family:var(--mono);font-size:9px}
+  .tick-label,.timing-source text{fill:var(--muted);font-family:var(--mono);font-size:12px}
   .timing-source rect{fill:rgb(var(--accent-rgb) / .24);stroke:var(--accent)}
   .timing-source circle{fill:var(--accent);stroke:var(--panel);stroke-width:2}
   .timing-source.rejected rect{fill:rgb(var(--danger-rgb) / .12);stroke:var(--danger)}

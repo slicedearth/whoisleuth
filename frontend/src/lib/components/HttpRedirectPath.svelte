@@ -8,11 +8,12 @@
   let { redirects }: { redirects: RedirectInput[] } = $props();
   const boundedRedirects = $derived(redirects.slice(0, MAX_HTTP_EVIDENCE_REDIRECTS));
   const path = $derived(projectRedirectPath(boundedRedirects));
+  const labelCharacters = $derived(Math.min(22, Math.max(10, Math.floor(776 / Math.max(1, path.nodes.length) / 7.5) - 2)));
 </script>
 
 {#if path.nodes.length}
   <div class="redirect-path">
-    <svg viewBox={`0 0 ${path.width} ${path.height}`} role="img" aria-label={`HTTP redirect path with ${boundedRedirects.length} hop${boundedRedirects.length === 1 ? '' : 's'}`}>
+    <svg class="data-chart" width={path.width} height={path.height} viewBox={`0 0 ${path.width} ${path.height}`} role="img" aria-label={`HTTP redirect path with ${boundedRedirects.length} hop${boundedRedirects.length === 1 ? '' : 's'}`}>
       <defs>
         <marker id="redirect-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path d="M 0 0 L 10 5 L 0 10 z" />
@@ -24,9 +25,10 @@
       {/each}
       {#each path.nodes as node, index (node.id)}
         <g class="path-node">
+          <title>{node.label}</title>
           <circle cx={node.x} cy={node.y} r="10" />
           <text x={node.x} y="37" text-anchor="middle" class="path-step">{index === 0 ? 'START' : `HTTP ${node.status}`}</text>
-          <text x={node.x} y="104" text-anchor="middle" class="path-label">{node.label.slice(0, 22)}</text>
+          <text x={node.x} y="104" text-anchor="middle" class="path-label">{node.label.length > labelCharacters ? `${node.label.slice(0, labelCharacters - 1)}…` : node.label}</text>
           {#if node.queryOmitted}<text x={node.x} y="119" text-anchor="middle" class="path-detail">query omitted</text>{/if}
         </g>
       {/each}
@@ -51,15 +53,14 @@
 
 <style>
   .redirect-path{max-width:100%;overflow:hidden;border-bottom:1px solid var(--border);background:var(--panel-raised)}
-  svg{display:block;width:100%;height:auto}
   marker path{fill:var(--accent)}
   .path-axis{stroke:var(--border);stroke-width:1}
   .path-edge{stroke:var(--accent);stroke-width:2}
   .path-node circle{fill:var(--panel);stroke:var(--accent2);stroke-width:3}
   .path-step,.path-label,.path-detail{font-family:var(--mono)}
-  .path-step{fill:var(--accent2);font-size:9px;font-weight:750;letter-spacing:.06em}
-  .path-label{fill:var(--text);font-size:9px;font-weight:680}
-  .path-detail{fill:var(--muted);font-size:8px}
+  .path-step{fill:var(--accent2);font-size:12px;font-weight:750}
+  .path-label{fill:var(--text);font-size:12px;font-weight:680}
+  .path-detail{fill:var(--muted);font-size:12px}
   .redirect-mobile{display:none}
   p{margin:0;padding:7px 10px;color:var(--muted);font-size:var(--text-2xs)}
   @media(max-width:720px){

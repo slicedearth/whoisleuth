@@ -62,7 +62,7 @@
   </div>
 
   {#if unavailable}
-    <p class="source-state unavailable" role="alert">This inbox is unavailable because {unavailableText}. No empty-state conclusion has been drawn.{#if anyLoading} {loadingLabels.join(' and ')} {loadingLabels.length === 1 ? 'is' : 'are'} still loading.{/if}</p>
+    <p class="source-state unavailable" role="alert">This inbox is unavailable because {unavailableText}. Try refreshing the saved data.{#if anyLoading} {loadingLabels.join(' and ')} {loadingLabels.length === 1 ? 'is' : 'are'} still loading.{/if}</p>
   {:else if loading}
     <p class="source-state" role="status">Loading {loadingLabels.join(' and ')}…</p>
   {/if}

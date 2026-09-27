@@ -536,6 +536,10 @@ button.danger:hover:not(:disabled), .btn.danger:hover:not(:disabled) { border-co
 .layout-container { min-width: 0; container-type: inline-size; }
 .responsive-grid { display: grid; min-width: 0; grid-template-columns: repeat(auto-fit,minmax(min(100%,var(--grid-min,240px)),1fr)); gap: var(--grid-gap,8px); align-items: start; }
 .responsive-grid > * { min-width: 0; }
+
+/* Charts declare their model's width and height on the SVG. Fit smaller
+   containers without magnifying labels and spacing on wider workspaces. */
+.data-chart { display: block; max-width: 100%; height: auto; margin-inline: auto; }
 .split-layout { display: grid; min-width: 0; grid-template-columns: minmax(0,var(--split-leading,1fr)) minmax(0,var(--split-trailing,1fr)); gap: var(--split-gap,clamp(16px,3vw,32px)); align-items: start; }
 .split-layout > * { min-width: 0; }
 .action-row { display: flex; min-width: 0; flex-wrap: wrap; gap: var(--action-gap,8px); align-items: center; }
