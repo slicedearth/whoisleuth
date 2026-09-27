@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
@@ -56,7 +57,7 @@ test('Case drafts recover after reload, stay out of backups and clear atomically
     for (const theme of ['light', 'dark'] as const) {
       await useTheme(page, theme); await expectNoHorizontalOverflow(page);
       await expect(form.getByRole('button', { name: 'Discard this draft' })).toBeVisible();
-      if (width === 320 || width === 1280) await form.screenshot({ path: testInfo.outputPath(`case-draft-${theme}-${width}.png`) });
+      if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await form.screenshot({ path: testInfo.outputPath(`case-draft-${theme}-${width}.png`) }); }
     }
   }
   expect((await new AxeBuilder({ page }).include('.case-response-stage').analyze()).violations).toEqual([]);

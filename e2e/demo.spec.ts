@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
@@ -130,7 +131,7 @@ test('Case practice is reachable, responsive and discarded on restart or reload'
           if (index === Number(name[0]) - 1) await expect(heading).toBeVisible(); else await expect(heading).toBeHidden();
         }
         await expectNoHorizontalOverflow(page);
-        if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`case-practice-${name[0]}-${theme}-${width}.png`) });
+        if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`case-practice-${name[0]}-${theme}-${width}.png`) }); }
       }
       if (width === 320 || width === 1280) expect((await new AxeBuilder({ page }).include('#case-practice').analyze()).violations).toEqual([]);
     }
@@ -148,7 +149,7 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
     for (const width of [390, 1920]) {
       await page.setViewportSize({ width, height: 1080 });
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`scenario-choices-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`scenario-choices-${theme}-${width}.png`) }); }
     }
   }
   await page.getByRole('button', { name: 'Inspect suspicious domain' }).click();
@@ -163,7 +164,7 @@ test('the suspicious-domain and change-review scenarios can start directly', asy
       await page.setViewportSize({ width, height: 1080 });
       await evidence.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`scenario-evidence-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`scenario-evidence-${theme}-${width}.png`) }); }
     }
   }
   await page.getByRole('button', { name: 'Reset demo' }).click();

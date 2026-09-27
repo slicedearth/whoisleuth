@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import type { Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -61,7 +62,7 @@ test('connector review excludes secret values, saves only the report and pivots 
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before); expect(await retainedJson(page)).toEqual([]);
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
-    for (const width of [320, 390, 1024, 1280, 2560]) { await page.setViewportSize({ width, height: 900 }); await report.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page); if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`connector-${theme}-${width}.png`) }); }
+    for (const width of [320, 390, 1024, 1280, 2560]) { await page.setViewportSize({ width, height: 900 }); await report.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page); if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`connector-${theme}-${width}.png`) }); } }
     expect((await new AxeBuilder({ page }).include('.context-entry').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
   }
   await report.getByRole('button', { name: 'Save review in Case', exact: true }).click();
@@ -119,7 +120,7 @@ test('storefront review requires current authority and preserves a failed-save d
       await expect(comparison.getByRole('rowheader')).toHaveCount(6);
       await expectNoHorizontalOverflow(page);
       await report.scrollIntoViewIfNeeded();
-      if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`storefront-${theme}-${width}.png`) });
+      if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`storefront-${theme}-${width}.png`) }); }
     }
     expect((await new AxeBuilder({ page }).include('.context-entry').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
   }
@@ -194,7 +195,7 @@ test('incident sequence keeps source provenance, unknown times and chosen order 
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   expect((await new AxeBuilder({ page }).include('.context-entry').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
-  await report.scrollIntoViewIfNeeded(); await page.screenshot({ path: testInfo.outputPath('incident-sequence-dark-1280.png') });
+  await report.scrollIntoViewIfNeeded(); if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath('incident-sequence-dark-1280.png') }); }
   await report.getByRole('button', { name: 'Save review in Case', exact: true }).click(); await expect(report.getByRole('status')).toContainText('Review saved');
   const files = (await retainedJson(page)).map(value => JSON.parse(value));
   const input = files.find(value => value.schema === 'whoisleuth.incident-sequence.input');

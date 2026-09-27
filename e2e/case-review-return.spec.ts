@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
@@ -71,7 +72,7 @@ test('encrypted Case handoff includes selected originals, excludes recovery draf
     await page.setViewportSize({ width, height }); await useTheme(page, theme);
     await handoff.getByRole('heading', { name: 'Handoff contents checked', exact: true }).scrollIntoViewIfNeeded();
     await expectNoHorizontalOverflow(page); await expect(download).toBeVisible();
-    if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`case-handoff-${theme}-${width}.png`) });
+    if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`case-handoff-${theme}-${width}.png`) }); }
   }
   expect((await new AxeBuilder({ page }).include('.review-package').analyze()).violations).toEqual([]);
   await page.setViewportSize({ width: 1280, height: 720 });
@@ -112,7 +113,7 @@ test('encrypted Case handoff includes selected originals, excludes recovery draf
       await expect(temporary).toBeVisible();
       await expectNoHorizontalOverflow(page);
       expect((await new AxeBuilder({ page }).include('dialog[open]').analyze()).violations).toEqual([]);
-      if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`temporary-review-${theme}-${width}.png`) });
+      if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`temporary-review-${theme}-${width}.png`) }); }
     }
   }
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
@@ -273,8 +274,8 @@ for (const width of [320, 390, 1024, 1280, 2560]) for (const theme of ['light', 
     expect(picker).not.toBeNull(); expect(picker!.height).toBeGreaterThanOrEqual(44);
     expect(choice).not.toBeNull(); expect(choice!.height).toBeGreaterThanOrEqual(44);
     await section.getByRole('heading', { name: 'Review with another analyst', exact: true }).scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath(`review-return-${width}-${theme}.png`) });
+    if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`review-return-${width}-${theme}.png`) }); }
     await section.locator('pre').first().scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath(`review-return-entry-${width}-${theme}.png`) });
+    if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`review-return-entry-${width}-${theme}.png`) }); }
   });
 }

@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openCaseClassification, openConsoleView, openInboxReview } from './console-navigation';
 import type { Page } from '@playwright/test';
 
@@ -322,7 +323,7 @@ test('calendar reaches and exports every matching event beyond the former five-h
       await timeline.getByRole('listitem').first().evaluate((item) => item.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
       await expect(timeline.getByRole('listitem').first()).toBeInViewport({ ratio: 1 });
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`complete-calendar-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`complete-calendar-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     }
   }
   expect(collectionRequests.count()).toBe(0);
@@ -347,7 +348,7 @@ test('platform reporting routes are unavailable before review and become usable 
       await routes.getByRole('article').evaluate((item) => item.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
       await expect(routes.getByRole('article')).toBeInViewport({ ratio: 1 });
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`unavailable-platform-route-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`unavailable-platform-route-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     }
   }
   await page.clock.setFixedTime('2026-09-04T00:00:00.000Z');
@@ -460,7 +461,7 @@ test('saved reporting routes remain reachable across pages with explicit local f
       await routes.getByRole('article').first().evaluate((card) => card.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
       await expectNoHorizontalOverflow(page);
       await expect(routes.getByRole('article').first()).toBeInViewport({ ratio: 1 });
-      await testInfo.attach(`reporting-routes-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`reporting-routes-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     }
   }
   expect(collectionRequests.count()).toBe(0);
@@ -557,7 +558,7 @@ test('focused inbox reviews keep separate drafts, exact times and keyboard-safe 
         expect(control.right).toBeLessThanOrEqual(geometry.width + 1);
         if (width <= 390) expect(control.height).toBeGreaterThanOrEqual(44);
       }
-      await page.screenshot({ path: testInfo.outputPath(`focused-inbox-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`focused-inbox-${theme}-${width}.png`) }); }
     }
   }
   expect(collectionRequests.count()).toBe(0);
@@ -692,7 +693,7 @@ test('ambiguous and future certificate observations remain reviewable through th
       await expect(ambiguous.getByRole('heading')).toBeVisible();
       await expect(sourceLink).toBeVisible();
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`certificate-context-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`certificate-context-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     }
   }
   await sourceLink.focus();

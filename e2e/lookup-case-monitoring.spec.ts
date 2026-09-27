@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page } from '@playwright/test';
 import { openCaseMetadata, openCaseSection } from './console-navigation';
 
@@ -126,7 +127,7 @@ test('Lookup recheck owns an explicit outcome draft and retains a saved question
         }));
         expect(unusedCardSpace.every(space => space < 2), 'Independent cards end after their own content').toBe(true);
       }
-      await page.screenshot({ path: testInfo.outputPath(`lookup-recheck-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`lookup-recheck-${theme}-${width}.png`) }); }
     }
   }
 });
@@ -197,7 +198,7 @@ test('an Incident URL sends only its hostname and retains exact Case context onl
       await expect(capture.getByRole('button', { name: 'Copy Rendered-capture command', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
       if (width === 320 && theme === 'light' || width === 1280 && theme === 'dark') {
-        await capture.screenshot({ path: testInfo.outputPath(`capture-handoff-${theme}-${width}.png`) });
+        if (captureVisualEvidenceEnabled()) { await capture.screenshot({ path: testInfo.outputPath(`capture-handoff-${theme}-${width}.png`) }); }
       }
     }
   }

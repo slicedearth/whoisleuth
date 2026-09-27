@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openCaseMetadata, openCaseSection, openConsoleView } from './console-navigation';
 import type { Page, Request } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
@@ -345,7 +346,7 @@ test('previews association storage pressure, exports or cancels, and reconciles 
       await useTheme(page, theme);
       await expect(review.getByRole('button', { name: 'Remove listed snapshots and save' })).toBeVisible();
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`case-storage-${width}-${theme}.png`), fullPage: true });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`case-storage-${width}-${theme}.png`), fullPage: true }); }
     }
   }
   const downloadEvent = page.waitForEvent('download');

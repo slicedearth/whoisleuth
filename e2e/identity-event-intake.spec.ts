@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { test, expect } from './fixtures';
 import AxeBuilder from '@axe-core/playwright';
 import { identityEventExample, identityEventScope } from '../fixtures/identity-event-examples.mts';
@@ -37,7 +38,7 @@ test('identity preview compares only explicit scope and retains the minimised re
       await page.setViewportSize({ width, height: width < 500 ? 844 : 768 });
       await expectNoHorizontalOverflow(page);
       expect((await new AxeBuilder({ page }).include('.identity-evidence').analyze()).violations).toEqual([]);
-      if (width === 320 || width === 1280) await events.screenshot({ path: testInfo.outputPath(`identity-${width}-${theme}.png`) });
+      if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await events.screenshot({ path: testInfo.outputPath(`identity-${width}-${theme}.png`) }); }
     }
   }
   const [download] = await Promise.all([page.waitForEvent('download'), intake.getByRole('button', { name: 'Download review', exact: true }).click()]);

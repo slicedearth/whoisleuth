@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
@@ -150,7 +151,7 @@ for (const width of [320, 1_280]) {
         await expect(page.getByRole('heading', { name: 'Shortlist · —', exact: true })).toBeVisible();
         await expect(page.getByText(/No Bulk sessions have been saved|No shortlisted domains|could not be read/u)).toHaveCount(0);
         await expectNoHorizontalOverflow(page);
-        await page.screenshot({ path: testInfo.outputPath('loading-collections.png'), fullPage: true });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath('loading-collections.png'), fullPage: true }); }
       } finally {
         await release();
       }
@@ -165,7 +166,7 @@ for (const width of [320, 1_280]) {
       await expect(page.getByText('No Bulk sessions have been saved in this workspace.', { exact: true })).toBeVisible();
       await expect(page.getByText(/still loading|could not be read/u)).toHaveCount(0);
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath('ready-collections.png'), fullPage: true });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath('ready-collections.png'), fullPage: true }); }
     });
   }
 }
@@ -590,7 +591,7 @@ test('filters, groups, and selected-only actions use compact observed evidence',
           return split;
         });
         expect(splitWords).toEqual([]);
-        await test.info().attach(`bulk-export-status-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+        if (captureVisualEvidenceEnabled()) { await test.info().attach(`bulk-export-status-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
       }
     }
   } finally {

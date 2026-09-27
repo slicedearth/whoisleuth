@@ -653,6 +653,9 @@ function exactBrowserChecks(changedPath: string): readonly string[] {
 
 function matchingRules(changedPath: string): readonly VerificationRule[] {
   const matches = RULES.filter((rule) => rule.matches(changedPath));
+  // A test does not change the production owner whose name it happens to share.
+  // Shared test helpers still follow their real consumers through the graph.
+  if (/^test\/[^/]+\.test\.mts$/u.test(changedPath)) return Object.freeze([ownershipRule(changedPath, matches)]);
   return Object.freeze([ownershipRule(changedPath, matches), ...matches.filter((rule) => rule.impactOnly)]);
 }
 
@@ -674,6 +677,7 @@ export function buildVerificationOwnershipPlan(
   importedTests: ReadonlyMap<string, readonly string[]> = new Map(),
   importedBrowserTests: ReadonlyMap<string, readonly string[]> = new Map(),
   routeConsumers: ReadonlyMap<string, readonly string[]> = new Map(),
+  componentContracts: ReadonlyMap<string, readonly string[]> = new Map(),
 ): VerificationOwnershipPlan {
   validateRules();
   if (!Array.isArray(rawPaths) || rawPaths.length < 1 || rawPaths.length > MAX_VERIFICATION_CHANGED_PATHS) {
@@ -684,14 +688,15 @@ export function buildVerificationOwnershipPlan(
   const assignments = changedPaths.sort().map((changedPath): VerificationOwnershipAssignment => {
     const directImpacts = matchingRules(changedPath);
     const owner = ownershipRule(changedPath, directImpacts);
-    const discoverRouteCoverage = ['frontend-user-interface', 'frontend-model'].includes(owner.id)
+    const componentChecks = componentContracts.get(changedPath) ?? [];
+    const discoverRouteCoverage = !componentChecks.length && ['frontend-user-interface', 'frontend-model'].includes(owner.id)
       && directImpacts.length === 1;
     const consumers = routeConsumers.get(changedPath) ?? [];
     const routes = discoverRouteCoverage ? consumers.filter(file => file.startsWith('frontend/src/routes/')) : [];
     const routeImpacts = routes.flatMap(matchingRules);
     // A helper extracted from a storage or loading owner inherits that owner's
     // cross-cutting checks through real imports, not a new filename exception.
-    const inheritedImpacts = consumers.filter(file => !file.startsWith('frontend/src/routes/'))
+    const inheritedImpacts = (componentChecks.length ? [] : consumers).filter(file => !file.startsWith('frontend/src/routes/'))
       .flatMap(matchingRules).filter(rule => rule.impactOnly);
     const impacts = [...new Map([...directImpacts, ...routeImpacts, ...inheritedImpacts].map(rule => [rule.id, rule])).values()];
     const focusedUnitChecks = uniqueSorted([
@@ -704,7 +709,11 @@ export function buildVerificationOwnershipPlan(
     const unexplainedInterface = discoverRouteCoverage
       && (!routes.length || routes.some(route => matchingRules(route).length === 1));
     const focusedBrowserChecks = uniqueSorted([
-      ...impacts.flatMap((rule) => rule.focusedBrowser),
+      ...(componentChecks.length ? componentChecks : impacts.flatMap((rule) => rule.focusedBrowser)),
+      ...[changedPath, ...routes].flatMap(file => {
+        const route = /^frontend\/src\/routes\/\([^/]+\)\/([^/]+)\/\+page\.(?:svelte|ts)$/u.exec(file)?.[1];
+        return route ? browserSpecsForPrefixes([route]) : [];
+      }),
       ...exactBrowserChecks(changedPath),
       ...(importedBrowserTests.get(changedPath) ?? []),
       ...(unexplainedInterface ? FUNCTIONAL_BROWSER_INVENTORY : []),
@@ -720,7 +729,8 @@ export function buildVerificationOwnershipPlan(
       impactAreas: uniqueSorted(impacts.map((rule) => rule.area)),
       focusedUnitChecks,
       focusedBrowserChecks,
-      mandatorySpecialisedChecks: uniqueSorted(impacts.flatMap((rule) => rule.specialised)),
+      mandatorySpecialisedChecks: /^test\/[^/]+\.test\.mts$/u.test(changedPath) ? specialised()
+        : componentChecks.length ? specialised('architecture') : uniqueSorted(impacts.flatMap((rule) => rule.specialised)),
       userFacingBrowserRequired: browserRequired,
     });
   });
@@ -779,16 +789,34 @@ export function importedTestConsumers(
   }));
 }
 
+/** A leaf UI contract is co-located by name, never a second source/test registry.
+ * Local dependencies or an explicit cross-cutting owner retain workflow coverage.
+ * Complete browser coverage remains mandatory at the integration boundary. */
+export function leafComponentContracts(
+  files: readonly string[], graph: Pick<ICruiseResult, 'modules'>, inventory: readonly string[],
+): ReadonlyMap<string, readonly string[]> {
+  return new Map(files.flatMap(file => {
+    const name = /^frontend\/src\/lib\/components\/([A-Z][A-Za-z0-9]*)\.svelte$/u.exec(file)?.[1];
+    if (!name || matchingRules(file).length !== 1) return [];
+    const module = graph.modules.find(module => module.source === file);
+    if (!module || module.dependencies.some(dependency => dependency.couldNotResolve
+      || !(dependency.module === 'svelte' || dependency.module.startsWith('svelte/')))) return [];
+    const spec = `e2e/${name.replace(/([a-z0-9])([A-Z])/gu, '$1-$2').toLowerCase()}.component.spec.ts`;
+    return inventory.includes(spec) ? [[file, Object.freeze([spec])] as const] : [];
+  }));
+}
+
 export async function createVerificationOwnershipPlan(rawPaths: readonly string[]): Promise<VerificationOwnershipPlan> {
   const initial = buildVerificationOwnershipPlan(rawPaths);
   const importedPaths = initial.changedPaths.filter((file) => /\.(?:[cm]?[jt]s|json|svelte)$/u.test(file)
-    && !file.startsWith('e2e/'));
+    && !file.startsWith('e2e/') && !/^test\/[^/]+\.test\.mts$/u.test(file));
   if (!importedPaths.length) return initial;
   const inventory = readVerificationTestInventory().filter((file) => file.startsWith('test/'));
   const browserInventory = functionalBrowserInventory();
   let selection: ReadonlyMap<string, readonly string[]>;
   let browserSelection: ReadonlyMap<string, readonly string[]>;
   let routeConsumers: ReadonlyMap<string, readonly string[]> = new Map();
+  let componentContracts: ReadonlyMap<string, readonly string[]> = new Map();
   let explanation: string;
   try {
     const { cruise } = await import('dependency-cruiser');
@@ -807,6 +835,7 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
     const routes = graph.modules.map(module => module.source).filter(file => file.startsWith('frontend/src/routes/')
       || file.startsWith('frontend/src/') && RULES.some(rule => rule.impactOnly && rule.matches(file)));
     routeConsumers = importedTestConsumers(frontendPaths, graph, routes, false);
+    componentContracts = leafComponentContracts(components, graph, browserInventory);
     // Known owners retain their conservative browser coverage. Positive import
     // evidence additionally follows shared support into its browser consumers;
     // a complete graph with no browser consumer does not turn CLI-only helpers
@@ -821,7 +850,7 @@ export async function createVerificationOwnershipPlan(rawPaths: readonly string[
     browserSelection = new Map(importedPaths.map((file) => [file, browserInventory]));
     explanation = 'Dependency analysis was unavailable: the focused plan falls back to the complete unit and functional browser inventories.';
   }
-  const plan = buildVerificationOwnershipPlan(rawPaths, selection, browserSelection, routeConsumers);
+  const plan = buildVerificationOwnershipPlan(rawPaths, selection, browserSelection, routeConsumers, componentContracts);
   return Object.freeze({ ...plan, interpretation: Object.freeze([...plan.interpretation, explanation]) });
 }
 

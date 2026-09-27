@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeBoundedUtf8, readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
 import { MAX_FORWARDING_SOURCE_BYTES, moduleForwardingSpecifier, moduleIsTypeOnly } from './module-forwarding.mts';
-import { runUnitTests } from './toolchain-compatibility.mts';
+import { nodeTestFiles, runUnitTests } from './toolchain-compatibility.mts';
 
 export const MAX_PRODUCTION_COVERAGE_BYTES = 16 * 1024 * 1024;
 export const MAX_PRODUCTION_COVERAGE_FILES = 2_000;
@@ -446,7 +446,7 @@ export function formatProductionCoverage(
 
 // Instrumentation and validation share the same source boundaries and global
 // floors. Generated files discovered in another package need no script edit.
-export function productionCoverageArguments(testPattern = 'test/*.test.mts'): string[] {
+export function productionCoverageArguments(testPattern?: string): string[] {
   return [
     '--test', '--test-concurrency=4', '--experimental-test-coverage',
     ...Object.entries(PRODUCTION_COVERAGE_POLICY.global).map(([metric, minimum]) => `--test-coverage-${metric}=${minimum}`),
@@ -455,7 +455,7 @@ export function productionCoverageArguments(testPattern = 'test/*.test.mts'): st
     ...GENERATED_SOURCE_GLOBS.map((pattern) => `--test-coverage-exclude=${pattern}`),
     '--test-reporter=spec', '--test-reporter-destination=stdout',
     '--test-reporter=lcov', '--test-reporter-destination=test-coverage.lcov',
-    testPattern,
+    ...(testPattern ? [testPattern] : nodeTestFiles('unit', REPOSITORY_ROOT)),
   ];
 }
 

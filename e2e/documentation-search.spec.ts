@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
@@ -49,7 +50,7 @@ test('documentation search supports keyboard selection, focus recovery and priva
       await expectNoHorizontalOverflow(page);
       const scan = await new AxeBuilder({ page }).include('.documentation-search').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
       expect(scan.violations).toEqual([]);
-      if ([320, 1280].includes(viewport.width)) await page.screenshot({ path: testInfo.outputPath(`search-${theme}-${viewport.width}.png`) });
+      if ([320, 1280].includes(viewport.width)) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`search-${theme}-${viewport.width}.png`) }); }
       await input.press('Escape');
       await expect(dialog).not.toBeVisible();
       await expect(trigger).toBeFocused();

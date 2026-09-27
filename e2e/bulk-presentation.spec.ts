@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import { boundingBox, currentBrandProfileBrowserStore, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, pseudoContent, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
@@ -65,7 +66,7 @@ test('partial contributing TLS stays qualified through saved Bulk restore and ex
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     await expectNoHorizontalOverflow(page);
     await preview.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath(`relationship-preview-${width}-${theme}.png`) });
+    if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`relationship-preview-${width}-${theme}.png`) }); }
   }
   await preview.getByRole('button', { name: 'Retain reviewed observation' }).click();
   await expect(section.getByRole('button', { name: 'Retained in Monitor' })).toBeDisabled();
@@ -84,7 +85,7 @@ test('partial contributing TLS stays qualified through saved Bulk restore and ex
   await expect(retained.locator('.relationship-sources li').filter({ hasText: 'second-source.example' })).toContainText('tls · partial');
   await expectNoHorizontalOverflow(page);
   await retained.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: testInfo.outputPath('retained-sources-mobile-light.png') });
+  if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath('retained-sources-mobile-light.png') }); }
   expect(requests).toEqual(['first-source.example', 'second-source.example']);
 });
 

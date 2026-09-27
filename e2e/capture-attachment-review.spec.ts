@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { createCase, openCasesView } from './case-test-fixtures';
 import { openCaseSection } from './console-navigation';
@@ -44,7 +45,7 @@ test('page dependency comparison works without images and records only an explic
   expect(JSON.stringify(after)).toContain('Approved static asset update'); expect(JSON.stringify(after)).toContain('sorted-json-v2');
   expect(await storedFiles(page)).toEqual([]); expect(requests).toEqual([]);
   for (const theme of ['light', 'dark'] as const) { await useTheme(page, theme); for (const width of [320, 390, 1024, 1280, 2560]) { await page.setViewportSize({ width, height: 900 }); await expectNoHorizontalOverflow(page);
-      if (width === 320 || width === 1280) { await observations.scrollIntoViewIfNeeded(); await page.screenshot({ path: testInfo.outputPath(`channel-coverage-${theme}-${width}.png`) }); }
+      if (width === 320 || width === 1280) { await observations.scrollIntoViewIfNeeded(); if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`channel-coverage-${theme}-${width}.png`) }); } }
     }
     expect((await new AxeBuilder({ page }).include('.page-behaviour').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
   }
@@ -88,7 +89,7 @@ test('capture comparison exposes declared conditions, handles unmatched and diff
     for (const width of [320, 390, 1024, 1280, 1920, 2560, 3840]) {
       await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
       await pixels.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
-      if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`capture-context-${theme}-${width}.png`) });
+      if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`capture-context-${theme}-${width}.png`) }); }
     }
     expect((await new AxeBuilder({ page }).include('.capture-comparison').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
   }
@@ -190,7 +191,7 @@ test('Case capture attachments are checked separately and metadata import preser
     for (const width of [320, 390, 1024, 1280, 2560]) {
       await page.setViewportSize({ width, height: 900 });
       await review.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
-      if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`capture-review-${theme}-${width}.png`) });
+      if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`capture-review-${theme}-${width}.png`) }); }
     }
   }
   await failNextBrowserLocalManifestWrite(page, 'cases');

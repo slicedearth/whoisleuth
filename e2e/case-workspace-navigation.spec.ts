@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { openCaseSection } from './console-navigation';
 import { caseRecord, snapshot } from './case-test-fixtures';
@@ -181,7 +182,7 @@ test('Case sections retain reading position and keep the assessment evidence and
       const navigation = await nav.boundingBox();
       expect(focus && navigation && focus.y >= navigation.y + navigation.height).toBe(true);
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`case-continuity-${theme}-${width}.png`), animations: 'disabled' });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`case-continuity-${theme}-${width}.png`), animations: 'disabled' }); }
     }
   }
   await expect(draft).toContainText('Analyst confidence');
@@ -230,7 +231,7 @@ for (const theme of ['light', 'dark'] as const) {
         await expectNoHorizontalOverflow(page);
       }
       await openCaseSection(page, 'Summary');
-      await page.screenshot({ path: testInfo.outputPath(`case-${theme}-${viewport.width}.png`), fullPage: true });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`case-${theme}-${viewport.width}.png`), fullPage: true }); }
     }
   });
 }

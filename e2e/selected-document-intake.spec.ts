@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { test, expect } from './fixtures';
 import type { Locator, Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -70,9 +71,9 @@ for (const document of selectedDocuments) {
           await expectNoHorizontalOverflow(page);
           expect((await new AxeBuilder({ page }).include('.intake').analyze()).violations).toEqual([]);
           if (document.kind === 'har' && (width === 320 || width === 1280)) {
-            await intake.getByRole('region', { name: 'Recorded HTTP sequence' }).screenshot({
+            if (captureVisualEvidenceEnabled()) { await intake.getByRole('region', { name: 'Recorded HTTP sequence' }).screenshot({
               path: testInfo.outputPath(`har-${width}-${theme}.png`),
-            });
+            }); }
           }
         });
       }

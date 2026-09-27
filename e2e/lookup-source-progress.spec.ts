@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import type { Page } from '@playwright/test';
 import { expectNoHorizontalOverflow, readBrowserLocalCollection, useTheme } from './helpers';
@@ -64,7 +65,7 @@ for (const width of [320, 390, 1024, 1280, 2560]) for (const theme of ['light', 
     const cancel = page.getByRole('button', { name: 'Cancel lookup', exact: true });
     await cancel.focus(); await expect(cancel).toBeFocused();
     await progress.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath(`lookup-progress-${width}-${theme}.png`) });
+    if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`lookup-progress-${width}-${theme}.png`) }); }
     await page.evaluate(() => window.lookupProgressFixture.finish());
     await expect(page.getByRole('heading', { name: 'registered', exact: true })).toBeVisible();
     await expect(progress).toHaveCount(0);

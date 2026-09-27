@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openCaseMetadata, openCaseSection, openConsoleView } from './console-navigation';
 import { createHash } from 'node:crypto';
 import { gzipSync, zipSync } from 'fflate';
@@ -190,7 +191,7 @@ for (const width of [320, 390, 1024, 1280, 1920, 3840]) {
       await page.keyboard.press('PageDown');
       await expect.poll(() => region.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`import-review-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`import-review-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     });
   }
 }

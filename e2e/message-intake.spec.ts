@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { test, expect } from './fixtures';
 import { openSeededTimelineCase, caseRecord } from './case-test-fixtures';
 import { openCaseSection } from './console-navigation';
@@ -30,7 +31,7 @@ test('authentication headers retain separate receiver choices, nested provenance
       await page.setViewportSize({ width, height: width < 500 ? 844 : 768 });
       await expectNoHorizontalOverflow(page);
       expect((await new AxeBuilder({ page }).include('.authentication-review').analyze()).violations).toEqual([]);
-      if (width === 320 || width === 1280) await review.screenshot({ path: testInfo.outputPath(`authentication-${width}-${theme}.png`) });
+      if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await review.screenshot({ path: testInfo.outputPath(`authentication-${width}-${theme}.png`) }); }
     }
   }
   const [download] = await Promise.all([page.waitForEvent('download'), intake.getByRole('button', { name: 'Download review', exact: true }).click()]);
@@ -73,7 +74,7 @@ test('local message review exposes destination mismatch and fills Lookup without
       await page.setViewportSize({ width, height: 900 });
       await expect(intake.getByRole('button', { name: 'Use destination.test in Lookup', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
-      if (width === 390 || width === 1280) await intake.screenshot({ path: testInfo.outputPath(`intake-${width}-${theme}.png`) });
+      if (width === 390 || width === 1280) if (captureVisualEvidenceEnabled()) { await intake.screenshot({ path: testInfo.outputPath(`intake-${width}-${theme}.png`) }); }
     }
   }
   expect(lookups).toBe(0);

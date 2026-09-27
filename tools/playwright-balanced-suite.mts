@@ -44,6 +44,14 @@ const interruption = new AbortController();
 
 type SuiteOptions = Readonly<{ useBuild: boolean; criticalOnly: boolean }>;
 
+export function localBrowserJobs(environment: NodeJS.ProcessEnv = process.env): number {
+  const value = environment.WHOISLEUTH_E2E_LOCAL_JOBS ?? '1';
+  // Each job has its own browser, server, storage and port. Keep the default
+  // usable in small containers; larger hosts can deliberately share two slots.
+  if (!/^[12]$/u.test(value)) throw new TypeError('WHOISLEUTH_E2E_LOCAL_JOBS must be 1 or 2.');
+  return Number(value);
+}
+
 type FunctionalRun = Readonly<{
   label: string;
   environment: NodeJS.ProcessEnv;
@@ -173,39 +181,41 @@ function verifyHostedBrowserHealth(reports: readonly unknown[]): string {
   }
 }
 
-export async function runFunctionalRunsSerially(
+export async function runFunctionalRuns(
   runs: readonly FunctionalRun[],
   dependencies: FunctionalRunDependencies,
+  jobs = 1,
 ): Promise<Readonly<{ exits: readonly number[]; reports: readonly unknown[]; interrupted: boolean }>> {
+  if (!Number.isInteger(jobs) || jobs < 1 || jobs > 2) throw new TypeError('Functional concurrency must be 1 or 2.');
   const exits: number[] = [];
   const reports: unknown[] = [];
-  for (const run of runs) {
-    if (dependencies.isInterrupted()) {
-      return Object.freeze({
-        exits: Object.freeze(exits),
-        reports: Object.freeze(reports),
-        interrupted: true,
-      });
-    }
-    const exit = await dependencies.execute(run);
-    exits.push(exit);
-    await dependencies.verifyPortFree(run);
-    // Each hosted functional shard must publish its result before that runner
-    // completes. Enforce the same boundary locally before another expensive
-    // shard starts, and retain the parsed report for final aggregation.
-    if (exit === 0) reports.push(dependencies.readResult(run));
-    if (dependencies.isInterrupted()) {
-      return Object.freeze({
-        exits: Object.freeze(exits),
-        reports: Object.freeze(reports),
-        interrupted: true,
-      });
+  let next = 0;
+  let stopped = false;
+  let failure: unknown;
+  async function worker(): Promise<void> {
+    while (!stopped && !dependencies.isInterrupted() && next < runs.length) {
+      const index = next++;
+      const run = runs[index]!;
+      try {
+        const exit = await dependencies.execute(run);
+        exits[index] = exit;
+        if (exit !== 0) stopped = true;
+        await dependencies.verifyPortFree(run);
+        if (exit === 0) reports[index] = dependencies.readResult(run);
+      } catch (error) {
+        stopped = true;
+        failure ??= error;
+      }
     }
   }
+  // Drain already-running jobs before cleanup or throwing. Never leave a child
+  // using the isolated workspace after its owner starts removing it.
+  await Promise.all(Array.from({ length: Math.min(jobs, runs.length) }, worker));
+  if (failure !== undefined) throw failure;
   return Object.freeze({
     exits: Object.freeze(exits),
     reports: Object.freeze(reports),
-    interrupted: false,
+    interrupted: dependencies.isInterrupted(),
   });
 }
 
@@ -269,17 +279,14 @@ async function runSuite(workspace: HostedBrowserWorkspace, criticalOnly: boolean
         args: Object.freeze([shardRunner, `--run=${identity}`]),
       });
     });
-    // Hosted CI assigns each shard its own runner. Launching every shard on one
-    // local host creates contention that the hosted topology does not have and
-    // can turn bounded deferred-module deadlines into false product failures.
-    // Preserve the exact shard plan and reports, but give each local shard the
-    // same isolated execution opportunity as its hosted counterpart.
-    const functionalResult = await runFunctionalRunsSerially(functionalRuns, {
+    const jobs = localBrowserJobs();
+    process.stdout.write(`Functional browser concurrency: ${jobs}; performance measurements remain isolated.\n`);
+    const functionalResult = await runFunctionalRuns(functionalRuns, {
       execute: (run) => runProcess(executionRoot, run.label, run.args, run.environment),
       verifyPortFree: (run) => requirePortRangeFree([run.port]),
       readResult: (run) => resultData(executionRoot, run.environment),
       isInterrupted: () => interruption.signal.aborted,
-    });
+    }, jobs);
     if (functionalResult.interrupted) return 130;
     if (functionalResult.exits.some((code) => code !== 0)) return 2;
 

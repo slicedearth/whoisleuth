@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openCasePacket, openCaseSection } from './console-navigation';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
@@ -65,8 +66,8 @@ test('the decision overview retains opposing evidence and unknowns across respon
       await expectNoHorizontalOverflow(page);
       await page.evaluate(() => window.scrollTo(0, 0));
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-      await page.screenshot({ path: testInfo.outputPath(`decision-page-${theme}-${width}.png`), fullPage: true });
-      await overview.screenshot({ path: testInfo.outputPath(`decision-overview-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`decision-page-${theme}-${width}.png`), fullPage: true }); }
+      if (captureVisualEvidenceEnabled()) { await overview.screenshot({ path: testInfo.outputPath(`decision-overview-${theme}-${width}.png`) }); }
     }
   }
   await overview.getByRole('button', { name: 'Review assessment', exact: true }).focus();
@@ -122,8 +123,8 @@ test('a recheck uses selected evidence without advancing its clock or discarding
       expect(box && header && box.y >= header.y + header.height).toBe(true);
       expect(await useSource.locator('..').evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
       await expectNoHorizontalOverflow(page);
-      await form.screenshot({ path: testInfo.outputPath(`retained-recheck-${theme}-${width}.png`), animations: 'disabled' });
-      await page.screenshot({ path: testInfo.outputPath(`retained-recheck-viewport-${theme}-${width}.png`), animations: 'disabled' });
+      if (captureVisualEvidenceEnabled()) { await form.screenshot({ path: testInfo.outputPath(`retained-recheck-${theme}-${width}.png`), animations: 'disabled' }); }
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`retained-recheck-viewport-${theme}-${width}.png`), animations: 'disabled' }); }
     }
   }
   await page.setViewportSize({ width: 1280, height: 720 });
@@ -213,7 +214,7 @@ test('undated Case observations persist once and remain usable across viewport a
         await expect(observation.locator('ol.records').first()).toContainText('Observation time unavailable');
         await expect(observation.getByRole('region', { name: 'Observation chronology', exact: true })).toContainText('Time unavailable');
         await expectNoHorizontalOverflow(page);
-        await testInfo.attach(`undated-observations-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+        if (captureVisualEvidenceEnabled()) { await testInfo.attach(`undated-observations-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
       });
     }
   }
@@ -367,7 +368,7 @@ test('Quick completes reviewed packet handoff, a response receipt, recheck and c
       await useTheme(page, theme as 'light' | 'dark');
       await preview.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`quick-packet-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`quick-packet-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     }
   }
   expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]!.value.actions[0]!.state).toBe('authorised');

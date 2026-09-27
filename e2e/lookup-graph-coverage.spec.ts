@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { expectFocusedResultsVisible, expectNoHorizontalOverflow, expandLookupFamilies, useTheme } from './helpers';
 import { lookupGraphCapacityFixture } from '../test/lookup-graph-capacity-fixture.mts';
@@ -33,7 +34,7 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768
       await expectFocusedResultsVisible(page, results, results.locator('li').first());
       await expect(pages.getByRole('status')).toContainText('Page 2 of');
       await expectNoHorizontalOverflow(page);
-      await test.info().attach(`graph-results-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await test.info().attach(`graph-results-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
       const finalPage = Math.ceil(count / 50);
       await pages.getByLabel('Evidence graph relationship page').fill(String(finalPage));
       await pages.getByRole('button', { name: 'Go', exact: true }).click();
@@ -52,7 +53,7 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 1024, height: 768
       await search.fill('san49.example.test');
       await results.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
-      await test.info().attach(`graph-search-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await test.info().attach(`graph-search-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
       await graph.locator('summary').filter({ hasText: 'Projection input coverage' }).click();
       const coverage = graph.locator('.input-coverage');
       await expect(coverage.locator('li').filter({ hasText: 'tls.dnsNames' })).toContainText('50 admitted · 50 of 50 inspected');

@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, failBrowserLocalReads, holdBrowserLocalTransaction, lookupDomainIdentity, migrateLegacyBrowserData, openDashboardGuidedInvestigation, openDashboardSecondaryWorkspaces, selectBulkResultView, useTheme } from './helpers';
 import { BASE_URL } from './constants.ts';
@@ -214,7 +215,7 @@ for (const width of [1280, 390]) for (const intent of ['unchanged', 'guide', 'wh
       )).toBeGreaterThanOrEqual(0);
       for (const theme of ['light', 'dark'] as const) {
         await useTheme(page, theme);
-        await page.screenshot({ path: testInfo.outputPath(`lookup-reveal-${width}-${theme}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`lookup-reveal-${width}-${theme}.png`) }); }
       }
       await openWorkPlan(page);
       await expect(page.locator('details.work-plan > summary')).toBeFocused();

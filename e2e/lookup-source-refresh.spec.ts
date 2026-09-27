@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import fs from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
@@ -83,7 +84,7 @@ test('refreshed facts survive section navigation and save through the existing C
       await page.setViewportSize({ width, height: 900 });
       await refresh.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`source-refresh-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`source-refresh-${theme}-${width}.png`) }); }
     }
   }
   await refresh.getByRole('button', { name: 'Refresh Registry RDAP', exact: true }).click();

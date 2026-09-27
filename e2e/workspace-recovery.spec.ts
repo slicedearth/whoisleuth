@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import type { Page } from '@playwright/test';
@@ -99,7 +100,7 @@ test('downloaded backup and file packages rehearse independently without switchi
         const parent = element.getBoundingClientRect(), rect = control.getBoundingClientRect();
         return rect.width > 0 && rect.left >= parent.left - 1 && rect.right <= parent.right + 1;
       }))).toBe(true);
-      await recovery.screenshot({ path: testInfo.outputPath(`recovery-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await recovery.screenshot({ path: testInfo.outputPath(`recovery-${theme}-${width}.png`) }); }
       if (width === 320 || width === 1280 || width === 3840) {
         const summary = recovery.locator(':scope > summary');
         // Element screenshots reposition the page without changing focus. Make
@@ -110,7 +111,7 @@ test('downloaded backup and file packages rehearse independently without switchi
         const header = await page.getByRole('banner').boundingBox(), target = await summary.boundingBox();
         expect(header).not.toBeNull(); expect(target).not.toBeNull();
         expect(target!.y).toBeGreaterThanOrEqual(header!.y + header!.height);
-        await page.screenshot({ path: testInfo.outputPath(`recovery-viewport-${theme}-${width}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`recovery-viewport-${theme}-${width}.png`) }); }
       }
     }
   }
@@ -134,7 +135,7 @@ test('encrypted backup cannot create a plaintext rehearsal and leaving does not 
     await useTheme(page, theme);
     for (const width of [320, 1280]) {
       await page.setViewportSize({ width, height: 900 }); await expectNoHorizontalOverflow(page);
-      await panel(page).screenshot({ path: testInfo.outputPath(`recovery-form-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await panel(page).screenshot({ path: testInfo.outputPath(`recovery-form-${theme}-${width}.png`) }); }
     }
   }
   const recovery = await start(page, 'Protected rehearsal', true);

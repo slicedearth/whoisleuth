@@ -48,12 +48,14 @@ import {
 } from '../tools/ci-verification.mts';
 import {
   buildToolchainCompatibilityReport,
+  nodeTestFiles,
   main as toolchainCompatibilityMain,
   resolveUnitTestExecutables,
   satisfiesCaretAlternatives,
   unitTestExecutableEnvironment,
 } from '../tools/toolchain-compatibility.mts';
-import { runFunctionalRunsSerially } from '../tools/playwright-balanced-suite.mts';
+import { runFunctionalRuns, localBrowserJobs } from '../tools/playwright-balanced-suite.mts';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { environmentWithoutV8Coverage } from './helpers/subprocess-environment.mts';
 import { assertAppliedBrowserSafety } from '../tools/analyst-journey-assurance.mts';
 
@@ -146,6 +148,16 @@ function escapeRegExp(value: string): string {
 }
 
 describe('continuous integration workflow', () => {
+  test('discovers disjoint unit and integration lanes without a maintained file list', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'whoisleuth-test-lanes-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    fs.mkdirSync(path.join(root, 'test'));
+    for (const name of ['ordinary.test.mts', 'new-owner.integration.test.mts', 'helper.mts']) fs.writeFileSync(path.join(root, 'test', name), '');
+    assert.deepEqual(nodeTestFiles('unit', root), ['test/ordinary.test.mts']);
+    assert.deepEqual(nodeTestFiles('integration', root), ['test/new-owner.integration.test.mts']);
+    assert.deepEqual([...nodeTestFiles('unit', root), ...nodeTestFiles('integration', root)].sort(), nodeTestFiles('all', root));
+    assert.ok(CI_UNIT_SCRIPTS.includes('test:integration'));
+  });
   test('audits the full locked dependency set through the shared quality group', () => {
     assert.ok(CI_QUALITY_SCRIPTS.includes('dependencies:review'));
     const args = PACKAGE_MANIFEST.scripts?.['dependencies:review']?.split(/\s+/u) ?? [];
@@ -723,7 +735,7 @@ describe('continuous integration workflow', () => {
     assert.equal(unavailable.viewport, null);
   });
 
-  test('stops serial local browser shards after an interruption without hiding ordinary failures', async () => {
+  test('stops queued local browser shards after interruption, failure or missing evidence', async () => {
     const runs = ['1/4', '2/4', '3/4'].map((identity, index) => ({
       label: `functional shard ${identity}`,
       environment: {},
@@ -733,7 +745,7 @@ describe('continuous integration workflow', () => {
     const interruptedLaunches: string[] = [];
     const verifiedPorts: number[] = [];
     let interrupted = false;
-    const interruptedResult = await runFunctionalRunsSerially(runs, {
+    const interruptedResult = await runFunctionalRuns(runs, {
       execute: async (run) => {
         interruptedLaunches.push(run.label);
         interrupted = true;
@@ -751,7 +763,7 @@ describe('continuous integration workflow', () => {
 
     const ordinaryLaunches: string[] = [];
     let liveResult = '';
-    const ordinaryResult = await runFunctionalRunsSerially(runs, {
+    const ordinaryResult = await runFunctionalRuns(runs, {
       execute: async (run) => {
         ordinaryLaunches.push(run.label);
         liveResult = `${run.label} report`;
@@ -761,16 +773,16 @@ describe('continuous integration workflow', () => {
       readResult: () => liveResult,
       isInterrupted: () => false,
     });
-    assert.deepEqual(ordinaryLaunches, runs.map((run) => run.label));
+    assert.deepEqual(ordinaryLaunches, runs.slice(0, 2).map((run) => run.label));
     assert.deepEqual(ordinaryResult, {
-      exits: [0, 2, 0],
-      reports: ['functional shard 1/4 report', 'functional shard 3/4 report'],
+      exits: [0, 2],
+      reports: ['functional shard 1/4 report'],
       interrupted: false,
     });
 
     const launchesBeforeMissingReport: string[] = [];
     await assert.rejects(
-      runFunctionalRunsSerially(runs, {
+      runFunctionalRuns(runs, {
         execute: async (run) => {
           launchesBeforeMissingReport.push(run.label);
           return 0;
@@ -784,6 +796,43 @@ describe('continuous integration workflow', () => {
       /Functional shard report is missing/u,
     );
     assert.deepEqual(launchesBeforeMissingReport, ['functional shard 1/4']);
+  });
+
+  test('bounds concurrent shards, keeps report order and drains active work after failure', async () => {
+    const runs = Array.from({ length: 4 }, (_, index) => ({ label: String(index), environment: {}, port: 4180 + index, args: [] }));
+    const pending = new Map<string, (code: number) => void>();
+    const started: string[] = [];
+    const completed: string[] = [];
+    const running = runFunctionalRuns(runs, {
+      execute: run => new Promise(resolve => { started.push(run.label); pending.set(run.label, resolve); }),
+      verifyPortFree: async run => { completed.push(run.label); },
+      readResult: run => run.label,
+      isInterrupted: () => false,
+    }, 2);
+    assert.deepEqual(started, ['0', '1']);
+    pending.get('1')!(2);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(started, ['0', '1']);
+    pending.get('0')!(0);
+    const result = await running;
+    assert.deepEqual(result.exits, [0, 2]);
+    assert.deepEqual(result.reports, ['0']);
+    assert.deepEqual(completed, ['1', '0']);
+    const success = await runFunctionalRuns(runs, {
+      execute: async () => 0, verifyPortFree: async () => undefined,
+      readResult: run => run.label, isInterrupted: () => false,
+    }, 2);
+    assert.deepEqual(success.reports, ['0', '1', '2', '3']);
+    assert.equal(localBrowserJobs({}), 1);
+    assert.equal(localBrowserJobs({ WHOISLEUTH_E2E_LOCAL_JOBS: '2' }), 2);
+    assert.throws(() => localBrowserJobs({ WHOISLEUTH_E2E_LOCAL_JOBS: '8' }), /1 or 2/u);
+  });
+
+  test('makes passing visual galleries explicit without disabling failure evidence', () => {
+    assert.equal(captureVisualEvidenceEnabled({}), false);
+    assert.equal(captureVisualEvidenceEnabled({ WHOISLEUTH_E2E_VISUAL_EVIDENCE: '1' }), true);
+    assert.equal(captureVisualEvidenceEnabled({ WHOISLEUTH_E2E_VISUAL_EVIDENCE: '0' }), false);
+    assert.throws(() => captureVisualEvidenceEnabled({ WHOISLEUTH_E2E_VISUAL_EVIDENCE: 'yes' }), /0 or 1/u);
   });
 
   test('browser tests synchronize on observable state instead of fixed delays', () => {

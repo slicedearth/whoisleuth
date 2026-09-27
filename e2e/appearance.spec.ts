@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import type { Route } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -26,7 +27,7 @@ test('minimal decoration exposes measurable contrast on plain reference surfaces
       expect(contrast.violations).toEqual([]);
       expect(contrast.incomplete).toEqual([]);
       expect(contrast.passes.length).toBeGreaterThan(0);
-      await page.screenshot({ path: testInfo.outputPath(`plain-reference-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`plain-reference-${theme}-${width}.png`) }); }
     }
   }
 });
@@ -95,7 +96,7 @@ test('appearance controls remain usable at narrow and wide widths in both themes
       await expect(page.getByLabel('Reading density')).toBeInViewport();
       await expect(page.getByLabel('Decorative effects')).toBeInViewport();
       await expectNoHorizontalOverflow(page);
-      if (width === 390 || width === 1920) await page.screenshot({ path: testInfo.outputPath(`appearance-${theme}-${width}.png`) });
+      if (width === 390 || width === 1920) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`appearance-${theme}-${width}.png`) }); }
       await page.getByLabel('Reading density').press('Escape');
       await expect(trigger).toBeFocused();
     }
@@ -113,7 +114,7 @@ for (const theme of ['light', 'dark'] as const) {
         if (path.includes('#')) await expect(page.locator('[data-command-detail="lookup"]')).toBeInViewport();
         else await expect(page.locator('main h1')).toBeInViewport();
         await expectNoHorizontalOverflow(page);
-        if ([320, 1280, 3840].includes(width)) await page.screenshot({ path: testInfo.outputPath(`reading-${theme}-${width}-${path.replace(/[^a-z]+/gu, '-')}.png`) });
+        if ([320, 1280, 3840].includes(width)) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`reading-${theme}-${width}-${path.replace(/[^a-z]+/gu, '-')}.png`) }); }
       }
     }
   });

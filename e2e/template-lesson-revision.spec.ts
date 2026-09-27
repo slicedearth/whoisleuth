@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
@@ -56,7 +57,7 @@ test('a lesson revision previews exact guidance, preserves failed drafts and sav
       await page.setViewportSize({ width, height: width < 500 ? 844 : 768 });
       await expectNoHorizontalOverflow(page);
       expect((await new AxeBuilder({ page }).include('.template-manager').analyze()).violations).toEqual([]);
-      if (width === 320 || width === 1280) await editor.screenshot({ path: testInfo.outputPath(`lesson-revision-${theme}-${width}.png`) });
+      if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await editor.screenshot({ path: testInfo.outputPath(`lesson-revision-${theme}-${width}.png`) }); }
     }
   }
   await failNextBrowserLocalManifestWrite(page, 'investigation_templates');

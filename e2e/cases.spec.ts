@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openCaseClassification, openCaseMetadata, openCaseSection, openConsoleView, openInboxReview } from './console-navigation';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
@@ -322,7 +323,7 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
       await trademarkRoute.getByRole('group', { name: 'Preparation checklist', exact: true }).scrollIntoViewIfNeeded();
       await expect(trademarkRoute.getByRole('checkbox').first()).toBeVisible();
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`route-checklist-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`route-checklist-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     }
   }
 
@@ -835,7 +836,7 @@ test('saved website profiles form searchable cross-domain pivots without another
   await workspace.getByLabel('Relationship type').selectOption('all');
   await expectNoHorizontalOverflow(page);
   await workspace.getByText('Example commerce', { exact: true }).scrollIntoViewIfNeeded();
-  await page.screenshot({ path: testInfo.outputPath('partial-profile-pivots.png') });
+  if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath('partial-profile-pivots.png') }); }
   expect(collectorRequests).toEqual([]);
 });
 

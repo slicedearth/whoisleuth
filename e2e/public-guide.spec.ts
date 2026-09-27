@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
 import { PUBLIC_RESOURCES } from '../frontend/src/lib/public-resources';
@@ -22,7 +23,7 @@ for (const theme of ['light', 'dark'] as const) {
         const bodyTop = await page.locator('.reference-body').evaluate(element => element.getBoundingClientRect().top);
         measurements.push({ href: destination.href, theme, ...viewport, bodyTop });
         expect(bodyTop, `${destination.href} places all practical content below the first viewport`).toBeLessThan(viewport.height);
-        if (viewport.width === 320) await page.screenshot({ path: testInfo.outputPath(`${destination.href.replaceAll('/', '-')}-${theme}-320.png`) });
+        if (viewport.width === 320) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`${destination.href.replaceAll('/', '-')}-${theme}-320.png`) }); }
       }
     }
     await testInfo.attach('reference-introductions.json', { body: JSON.stringify(measurements), contentType: 'application/json' });

@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { migrateLegacyBrowserData, expectNoHorizontalOverflow, useTheme } from './helpers';
@@ -46,7 +47,7 @@ for (const destination of ['/dashboard', '/lookup', '/bulk', '/monitor', '/brand
         for (const card of await page.locator('.shell .card:visible').all()) {
           await expect(card).toHaveCSS('box-shadow', 'none');
         }
-        await page.screenshot({ path: testInfo.outputPath(`console-${theme}-${width}.png`), animations: 'disabled' });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`console-${theme}-${width}.png`), animations: 'disabled' }); }
         if (width === 320 || width === 1280) {
           expect((await new AxeBuilder({ page }).include('main').analyze()).violations).toEqual([]);
         }

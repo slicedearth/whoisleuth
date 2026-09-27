@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { caseRecord, openSeededTimelineCase, openCaseResponseWorkspace } from './case-test-fixtures';
 import { currentActionFixture, caseWorkspaceActionStatus } from './case-response-fixtures';
@@ -56,10 +57,10 @@ test('the response queue links receipts and questions without inferring removal 
     for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720], [2560, 1440], [3840, 2160]] as const) {
       await page.setViewportSize({ width, height });
       await expectNoHorizontalOverflow(page);
-      await queue.screenshot({ path: testInfo.outputPath(`response-queue-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await queue.screenshot({ path: testInfo.outputPath(`response-queue-${theme}-${width}.png`) }); }
       if (width === 320 || width === 1280) {
         await page.evaluate(() => window.scrollTo(0, 0));
-        await page.screenshot({ path: testInfo.outputPath(`response-page-${theme}-${width}.png`), fullPage: true });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`response-page-${theme}-${width}.png`), fullPage: true }); }
       }
     }
   }

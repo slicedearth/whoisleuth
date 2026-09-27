@@ -40,6 +40,7 @@ import {
   checkVerificationOwnershipMap,
   createVerificationOwnershipPlan,
   importedTestConsumers,
+  leafComponentContracts,
   FULL_BATCH_RELEASE_GATES,
 } from '../tools/verification-ownership.mts';
 
@@ -497,6 +498,38 @@ describe('verification architecture contracts', () => {
     assert.equal(family.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
   });
 
+  test('test-only edits select their assertions without inheriting similarly named production work', async () => {
+    for (const file of ['test/deferred-module.test.mts', 'test/privacy-data-flow-catalogue.test.mts']) {
+      const plan = await createVerificationOwnershipPlan([file]);
+      assert.deepEqual(plan.focusedUnitChecks, [file]);
+      assert.deepEqual(plan.focusedBrowserChecks, []);
+      assert.deepEqual(plan.mandatorySpecialisedChecks, []);
+      assert.equal(buildFocusedVerificationExecution(plan).commands.some(command => command.id === 'build'), false);
+    }
+  });
+
+  test('public routes include their own discovered behaviour specifications', () => {
+    const demo = buildVerificationOwnershipPlan(['frontend/src/routes/(public)/demo/+page.svelte']);
+    assert.ok(demo.focusedBrowserChecks.includes('e2e/demo.spec.ts'));
+    assert.ok(demo.focusedBrowserChecks.includes('e2e/accessibility.spec.ts'));
+  });
+
+  test('leaf component contracts narrow iteration but not stateful, unresolved or unowned components', () => {
+    const file = 'frontend/src/lib/components/CopyButton.svelte';
+    const spec = 'e2e/copy-button.component.spec.ts';
+    const graph = { modules: [{ source: file, dependencies: [{ module: 'svelte', resolved: 'node_modules/svelte/src/index.js' }] }] } as Parameters<typeof leafComponentContracts>[1];
+    const contracts = leafComponentContracts([file], graph, [spec]);
+    assert.deepEqual(contracts.get(file), [spec]);
+    const plan = buildVerificationOwnershipPlan([file], new Map(), new Map(), new Map(), contracts);
+    assert.deepEqual(plan.focusedBrowserChecks, [spec]);
+    assert.ok(plan.fullBatchReleaseGates.includes('browser-complete'));
+    assert.equal(leafComponentContracts([file], graph, []).size, 0);
+    graph.modules[0]!.dependencies[0]!.couldNotResolve = true;
+    assert.equal(leafComponentContracts([file], graph, [spec]).size, 0);
+    graph.modules[0]!.dependencies[0] = { module: '../browser-local-data', resolved: 'frontend/src/lib/browser-local-data.ts' } as typeof graph.modules[0]['dependencies'][number];
+    assert.equal(leafComponentContracts([file], graph, [spec]).size, 0);
+  });
+
   test('an extracted frontend helper inherits its persistence owner without a filename registration', () => {
     const file = 'frontend/src/lib/ordinary-transaction-helper.ts';
     const plan = buildVerificationOwnershipPlan([file], new Map(), new Map(), new Map([
@@ -598,38 +631,6 @@ describe('verification architecture contracts', () => {
     assert.ok(assignment.mandatorySpecialisedChecks.includes('cli-package'));
   });
 
-  test('resolves real components, helpers, release metadata and fixtures from one repository snapshot', async () => {
-    // One graph covers these independent expectations. Rebuilding the identical
-    // repository for each changed path adds no integration coverage.
-    const paths = ['frontend/src/lib/components/PublicGoalPaths.svelte', 'packages/comparison/favicon-similarity.mts',
-      'package.json', 'test/support/current-case.mts'];
-    const plan = await createVerificationOwnershipPlan(paths);
-    const assignments = new Map(plan.assignments.map(assignment => [assignment.changedPath, assignment]));
-    assert.equal(assignments.size, paths.length);
-    assert.ok(plan.interpretation.some((line) => line.includes('current imports')));
-    const component = assignments.get(paths[0]!)!;
-    assert.ok(component.focusedBrowserChecks.includes('e2e/public-guide.spec.ts'));
-    assert.ok(component.focusedBrowserChecks.includes('e2e/accessibility.spec.ts'));
-    assert.equal(component.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
-    assert.equal(component.focusedBrowserChecks.includes('e2e/case-import-workflows.spec.ts'), false);
-    assert.ok(component.focusedUnitChecks.includes('test/public-guide.test.mts'));
-    assert.equal(component.focusedUnitChecks.includes('test/cli.test.mts'), false);
-    assert.ok(buildFocusedVerificationExecution(plan).commands.some(command => command.id === 'check'));
-    const helper = assignments.get(paths[1]!)!;
-    assert.ok(helper.focusedUnitChecks.includes('test/utils.test.mts'));
-    const metadata = assignments.get(paths[2]!)!;
-    assert.ok(metadata.focusedUnitChecks.includes('test/public-product-catalogue.test.mts'));
-    assert.ok(metadata.focusedBrowserChecks.includes('e2e/dashboard.spec.ts'));
-    assert.equal(metadata.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
-    const unitCount = readVerificationTestInventory().filter(file => file.startsWith('test/')).length;
-    for (const assignment of [helper, metadata]) assert.ok(assignment.focusedUnitChecks.length < unitCount);
-    const fixture = assignments.get(paths[3]!)!;
-    assert.ok(fixture.focusedUnitChecks.includes('test/current-case.test.mts'));
-    assert.ok(fixture.focusedBrowserChecks.includes('e2e/review-session.spec.ts'));
-    assert.equal(fixture.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
-    assert.equal(fixture.userFacingBrowserRequired, true);
-    assert.equal(buildFocusedVerificationExecution(plan).commands[0]!.id, 'browser-discovery');
-  });
 
   test('selects one owner while aggregating every matching verification impact', () => {
     const plan = buildVerificationOwnershipPlan([

@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { normalizeBrandProfile } from '../packages/workspace/brand-profile-model.mts';
 import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData, openBrandProfileList, runBulkScan, selectBulkResultView, useTheme } from './helpers';
@@ -106,7 +107,7 @@ for (const theme of ['light', 'dark'] as const) {
         expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
       }
       await page.evaluate(() => window.scrollTo(0, 0));
-      await page.screenshot({ path: testInfo.outputPath(`brands-tools-${theme}-${viewport.width}.png`), fullPage: false });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`brands-tools-${theme}-${viewport.width}.png`), fullPage: false }); }
     }
     await openBrandProfileList(page);
     await expect(page.getByRole('radio', { name: `Set ${profile!.name} active`, exact: true })).toBeChecked();
@@ -123,7 +124,7 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(selected).toBeInViewport({ ratio: 1 });
       await expectNoHorizontalOverflow(page);
       await page.evaluate(() => window.scrollTo(0, 0));
-      await page.screenshot({ path: testInfo.outputPath(`monitor-${theme}-${viewport.width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`monitor-${theme}-${viewport.width}.png`) }); }
       if (viewport.width < 500) {
         const toggle = page.getByRole('button', { name: 'Toggle navigation', exact: true });
         await toggle.click();
@@ -169,7 +170,7 @@ test('Bulk keeps collection and result controls readable with a header-aware vie
         expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
       }
       await page.evaluate(() => window.scrollTo(0, 0));
-      await page.screenshot({ path: testInfo.outputPath(`bulk-form-${theme}-${viewport.width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`bulk-form-${theme}-${viewport.width}.png`) }); }
       const nav = page.getByRole('group', { name: 'Bulk result view', exact: true });
       await nav.getByRole('button', { name: 'List', exact: true }).focus();
       const scroll = await nav.evaluate(element => ({
@@ -188,7 +189,7 @@ test('Bulk keeps collection and result controls readable with a header-aware vie
         expect(viewport.height).toBeGreaterThan(1080);
         await expect(nav).toBeInViewport({ ratio: 1 });
       }
-      await page.screenshot({ path: testInfo.outputPath(`bulk-results-${theme}-${viewport.width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`bulk-results-${theme}-${viewport.width}.png`) }); }
     }
     await page.setViewportSize({ width: 3840, height: 2160 });
     await page.evaluate(() => scrollTo(0, 0));
@@ -208,7 +209,7 @@ test('Bulk keeps collection and result controls readable with a header-aware vie
     expect(layout.tableWidth).toBeGreaterThan(comfortableWidth - 120);
     await expect(page.locator('.results-table tbody tr')).toHaveCount(targets.length);
     await expectNoHorizontalOverflow(page);
-    await page.screenshot({ path: testInfo.outputPath(`bulk-compact-${theme}-3840.png`) });
+    if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`bulk-compact-${theme}-3840.png`) }); }
     await page.getByRole('button', { name: /^Colour theme,/u }).click();
     await page.getByLabel('Reading density').selectOption('comfortable');
     await page.getByLabel('Reading density').press('Escape');

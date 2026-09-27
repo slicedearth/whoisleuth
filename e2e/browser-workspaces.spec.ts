@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
 import { BROWSER_LOCAL_COLLECTIONS, type BrowserLocalCollectionId } from '../frontend/src/lib/browser-local-data-definitions';
@@ -319,7 +320,7 @@ test('workspace controls remain navigable, wrapped and focusable across supporte
       const input = panel.getByLabel('Workspace name', { exact: true });
       await input.focus();
       await expect(input).toBeInViewport();
-      await testInfo.attach(`workspaces-${theme}-${viewport.width}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`workspaces-${theme}-${viewport.width}`, { body: await page.screenshot(), contentType: 'image/png' }); }
       await panel.getByRole('button', { name: 'Cancel workspace change' }).click();
       await expect(panel.getByRole('button', { name: `Rename workspace ${row.name}`, exact: true })).toBeFocused();
     }

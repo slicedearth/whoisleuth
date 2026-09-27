@@ -34,10 +34,6 @@ import {
   SUPPORTED_INVESTIGATION_CAPSULE_VERSIONS,
   SUPPORTED_LOOKUP_INVESTIGATION_BRIEF_VERSIONS,
 } from '../packages/contracts/investigation-portability.mts';
-import {
-  discoverSchemaSources,
-  validateSchemaSourceCoverage,
-} from '../tools/schema-source-coverage.mts';
 import { INTERCHANGE_ARTIFACT_CONTRACTS } from '../lib/interchange-fidelity-registry.mts';
 import { PUBLISHED_V2_2_BRAND_PROFILE_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import {
@@ -548,14 +544,6 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'export.website-snapshots').byteBudget, MAX_WEBSITE_SNAPSHOT_IMPORT_BYTES);
   });
 
-  test('accounts for every production schema-like identifier and canonical owner', async () => {
-    const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
-    const discovery = await discoverSchemaSources();
-    const coverage = await validateSchemaSourceCoverage(inventory.entries, discovery);
-    assert.ok(coverage.files > 700);
-    assert.equal(coverage.identifiers, coverage.inventoriedIdentifiers + coverage.classifiedIdentifiers);
-    assert.match(coverage.digestSha256, /^[a-f0-9]{64}$/u);
-  });
 
   test('returns a fresh non-mutating document for each report build', () => {
     const first = buildSchemaCompatibilityInventory({ generatedAt: NOW });

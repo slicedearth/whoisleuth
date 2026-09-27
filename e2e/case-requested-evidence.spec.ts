@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { caseRecord, openSeededTimelineCase, openCaseResponseWorkspace } from './case-test-fixtures';
@@ -51,7 +52,7 @@ test('requested evidence preserves failed drafts and creates a separately review
       await page.setViewportSize({ width, height });
       await expectNoHorizontalOverflow(page);
       expect((await new AxeBuilder({ page }).include('.requested-evidence').analyze()).violations).toEqual([]);
-      await region.screenshot({ path: testInfo.outputPath(`requested-evidence-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await region.screenshot({ path: testInfo.outputPath(`requested-evidence-${theme}-${width}.png`) }); }
     }
   }
   await page.setViewportSize({ width: 1280, height: 720 });

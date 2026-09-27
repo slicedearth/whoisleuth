@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
 import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, useTheme } from './helpers';
@@ -50,7 +51,7 @@ test('selected URL collection is deliberate and retains scope without its path o
       await page.setViewportSize({ width, height: 900 });
       await selection.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`selected-url-form-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`selected-url-form-${theme}-${width}.png`) }); }
     }
   }
   await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
@@ -73,7 +74,7 @@ test('selected URL collection is deliberate and retains scope without its path o
       await page.setViewportSize({ width, height: 900 });
       await page.locator('.result-head').scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`selected-url-result-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`selected-url-result-${theme}-${width}.png`) }); }
     }
   }
 });
@@ -117,7 +118,7 @@ test('subdomain evidence keeps its collection identity through display, Case sto
       await page.setViewportSize({ width, height: 900 });
       await header.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`hostname-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`hostname-${theme}-${width}.png`) }); }
     }
   }
 });
@@ -165,7 +166,7 @@ test('pins source-local facts through the Case writer and preserves selections a
       await page.setViewportSize({ width, height: 900 });
       await dns.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`source-checkpoint-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`source-checkpoint-${theme}-${width}.png`) }); }
     }
   }
 });

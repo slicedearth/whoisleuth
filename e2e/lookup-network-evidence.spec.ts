@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { readFile } from 'node:fs/promises';
 import { expandLookupFamilies, expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
@@ -92,8 +93,8 @@ for (const viewport of [
       const summaryOverflow = await web.locator('.family-summary .metric, .family-summary .description').evaluateAll((elements) =>
         elements.filter((element) => element.scrollWidth > element.clientWidth + 1).map((element) => element.textContent));
       expect(summaryOverflow).toEqual([]);
-      await network.screenshot({ path: testInfo.outputPath(`network-${viewport.width}-${theme}.png`) });
-      await web.locator('.family-summary').screenshot({ path: testInfo.outputPath(`source-summary-${viewport.width}-${theme}.png`) });
+      if (captureVisualEvidenceEnabled()) { await network.screenshot({ path: testInfo.outputPath(`network-${viewport.width}-${theme}.png`) }); }
+      if (captureVisualEvidenceEnabled()) { await web.locator('.family-summary').screenshot({ path: testInfo.outputPath(`source-summary-${viewport.width}-${theme}.png`) }); }
       await page.evaluate(() => { window.location.hash = '#evidence-network'; });
       await expect.poll(() => network.locator(':scope > summary').evaluate((summary) => {
         const bounds = summary.getBoundingClientRect();
@@ -101,7 +102,7 @@ for (const viewport of [
           && [bounds.top + 4, bounds.bottom - 4].every((y) =>
             summary.contains(document.elementFromPoint(bounds.left + bounds.width / 2, y)));
       })).toBe(true);
-      await page.screenshot({ path: testInfo.outputPath(`network-viewport-${viewport.width}-${theme}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`network-viewport-${viewport.width}-${theme}.png`) }); }
       const card = page.locator('.security-posture-card');
       const disclosure = card.locator(':scope > summary');
       await expect(card).not.toHaveAttribute('open', '');
@@ -131,7 +132,7 @@ for (const viewport of [
         .filter((element) => element.scrollWidth > element.clientWidth + 1)
         .map((element) => element.textContent));
       expect(clippedText).toEqual([]);
-      await card.screenshot({ path: testInfo.outputPath(`posture-${viewport.width}-${theme}.png`) });
+      if (captureVisualEvidenceEnabled()) { await card.screenshot({ path: testInfo.outputPath(`posture-${viewport.width}-${theme}.png`) }); }
       await disclosure.focus();
       await disclosure.press('Enter');
       await expect(card).not.toHaveAttribute('open', '');
@@ -326,7 +327,7 @@ test('DNS rehearsal retains null MX and exposes incomplete intent in the view an
       await expectNoHorizontalOverflow(page);
       await card.getByText('MX routing intent is incomplete', { exact: true }).scrollIntoViewIfNeeded();
       await expect(card.getByText('MX routing intent is incomplete', { exact: true })).toBeInViewport();
-      if (viewport.width === 320) await page.screenshot({ path: testInfo.outputPath(`dns-rehearsal-${theme}.png`) });
+      if (viewport.width === 320) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`dns-rehearsal-${theme}.png`) }); }
     }
   }
 });
@@ -876,7 +877,7 @@ test('real library projection retains advisory aliases and discloses malformed s
       await libraries.scrollIntoViewIfNeeded();
       await expect(libraries).toBeVisible();
       await expectNoHorizontalOverflow(page);
-      if ([320, 1280].includes(viewport.width)) await page.screenshot({ path: testInfo.outputPath(`library-provenance-${viewport.width}-${theme}.png`) });
+      if ([320, 1280].includes(viewport.width)) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`library-provenance-${viewport.width}-${theme}.png`) }); }
     }
   }
 });

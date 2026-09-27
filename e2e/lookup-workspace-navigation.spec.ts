@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { expectLookupTargetAligned, INTELLIGENCE_CAPABILITIES, sectionedLookupFixture } from './lookup-design-fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
@@ -34,7 +35,7 @@ test('Lookup evidence navigation and its target remain below the console header'
       expect(geometry.navTop).toBeGreaterThanOrEqual(geometry.headerBottom + 4);
       expect(geometry.targetTop).toBeGreaterThanOrEqual(geometry.navBottom + 4);
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`lookup-navigation-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`lookup-navigation-${theme}-${width}.png`) }); }
     }
   }
 });
@@ -125,7 +126,7 @@ test('optional sources are compact, keyboard accessible and retain explicit Deep
       await page.setViewportSize({ width: width!, height: height! });
       await page.locator('#query').scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`lookup-form-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`lookup-form-${theme}-${width}.png`) }); }
     }
   }
   await page.getByRole('radio', { name: /Fast/u }).check();

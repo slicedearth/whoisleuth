@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { isDeepStrictEqual } from 'node:util';
 import type { Page } from '@playwright/test';
@@ -94,7 +95,7 @@ test('rich Brand histories import, render and export without dropping captured r
       await history.locator(':scope > summary').scrollIntoViewIfNeeded();
       await expect(records).toBeVisible();
       await expectNoHorizontalOverflow(page);
-      await test.info().attach(`history-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await test.info().attach(`history-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     }
   }
   const pendingDownload = page.waitForEvent('download');
@@ -193,7 +194,7 @@ test('held or failed file preparation cannot claim a save and allows a deliberat
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
         await expect(status).toBeInViewport({ ratio: 1 });
         await expectNoHorizontalOverflow(page);
-        await test.info().attach(`profile-import-pending-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+        if (captureVisualEvidenceEnabled()) { await test.info().attach(`profile-import-pending-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
       }
       release();
       await expect(status).toContainText('worker is unavailable. No changes were saved.');

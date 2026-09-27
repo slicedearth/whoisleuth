@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import AxeBuilder from '@axe-core/playwright';
 import { readFile } from 'node:fs/promises';
 import { test, expect } from './fixtures';
@@ -36,10 +37,10 @@ test('retained indicators require an explicit reviewed withdrawal and preserve n
       await expectNoHorizontalOverflow(page);
       expect((await new AxeBuilder({ page }).include('.managed-indicators').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
         .options({ rules: { 'target-size': { enabled: true } } }).analyze()).violations).toEqual([]);
-      await section.screenshot({ path: info.outputPath(`indicators-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await section.screenshot({ path: info.outputPath(`indicators-${theme}-${width}.png`) }); }
       if ((theme === 'light' && width === 1280) || (theme === 'dark' && width === 390)) {
         await section.getByRole('heading', { name: 'Indicator revisions', exact: true }).scrollIntoViewIfNeeded();
-        await page.screenshot({ path: info.outputPath(`indicator-viewport-${theme}-${width}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: info.outputPath(`indicator-viewport-${theme}-${width}.png`) }); }
       }
     }
   }

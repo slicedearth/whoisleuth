@@ -19,6 +19,16 @@ export const PLAYWRIGHT_PERFORMANCE_AUTHORITY_SPEC_PATTERN = new RegExp(
 export const PLAYWRIGHT_NETWORK_GUARD_ROUTE_PATTERN = '**/*';
 export const PLAYWRIGHT_AUTOMATIC_GUARD_OPTIONS = Object.freeze({ auto: true as const });
 
+/** Passing screenshots are review artefacts, not assertions. Failures always retain
+ * the configured trace and screenshot independently of this opt-in gallery. */
+export function captureVisualEvidenceEnabled(environment: NodeJS.ProcessEnv = process.env): boolean {
+  const value = environment.WHOISLEUTH_E2E_VISUAL_EVIDENCE;
+  if (value !== undefined && value !== '' && value !== '0' && value !== '1') {
+    throw new TypeError('WHOISLEUTH_E2E_VISUAL_EVIDENCE must be 0 or 1.');
+  }
+  return value === '1';
+}
+
 /** Only the synthetic policy document deliberately exercises native CSP denials. */
 export function isPolicyFixtureDiagnostic(browser: string, type: string, text: string, messageUrl: string, pageUrl: string, origin: string): boolean {
   const fixture = `${origin}/__policy-fixture`;

@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { openCaseSection } from './console-navigation';
 import { boundingBox, expectNoHorizontalOverflow, useTheme } from './helpers';
@@ -36,7 +37,7 @@ test.describe('evidence timeline', () => {
       await useTheme(page, theme);
       await expectNoHorizontalOverflow(page);
       await expect(latest.locator('.timeline-incomparable-note')).toBeVisible();
-      if (width === 1280 || width === 320) await page.screenshot({ path: testInfo.outputPath(`collection-quality-${width}-${theme}.png`) });
+      if (width === 1280 || width === 320) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`collection-quality-${width}-${theme}.png`) }); }
     }
   });
 
@@ -507,7 +508,7 @@ test.describe('case report export', () => {
         await expect(preview).toBeVisible();
         await expectNoHorizontalOverflow(page);
         expect((await new AxeBuilder({ page }).include('dialog[open]').analyze()).violations).toEqual([]);
-        if (width === 320 || width === 1280) await page.screenshot({ path: testInfo.outputPath(`report-${theme}-${width}.png`) });
+        if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`report-${theme}-${width}.png`) }); }
       }
     }
     await preview.getByText('Exact JSON download', { exact: true }).click();

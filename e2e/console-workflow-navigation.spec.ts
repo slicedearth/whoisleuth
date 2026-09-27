@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { COMMAND_NAVIGATION_READINESS, openInboxReview } from './console-navigation';
 import { beginBrowserInteractionReadiness, isBrowserInteractionReadinessMarked, readBrowserInteractionReadiness } from './performance-sampling';
@@ -244,7 +245,7 @@ for (const theme of ['light', 'dark'] as const) {
       await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
       await expect(page.getByRole('heading', { name: 'Attention needed', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`dashboard-${theme}-${width}.png`), fullPage: true });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`dashboard-${theme}-${width}.png`), fullPage: true }); }
     }
   });
 }

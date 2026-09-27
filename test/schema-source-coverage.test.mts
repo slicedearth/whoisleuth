@@ -6,8 +6,6 @@ import path from 'node:path';
 import { describe, test } from 'node:test';
 import { compile } from 'svelte/compiler';
 
-import { SCHEMA_SOURCE_CLASSIFICATIONS } from '../fixtures/schema-source-classifications.mts';
-import { buildSchemaCompatibilityInventory } from '../tools/schema-compatibility.mts';
 import {
   discoverSchemaIdentifiersInSource,
   discoverSchemaSources,
@@ -22,7 +20,6 @@ import {
 import { discoverSchemaIdentifiersInSource as discoverSchemaIdentifiersInParser } from '../tools/schema-source-parsers.mts';
 import type { SchemaCompatibilityEntry } from '../packages/contracts/schema-compatibility.mts';
 
-const NOW = '2026-08-16T00:00:00.000Z';
 const POLICY_SOURCE_FILE_BYTES = 2_097_152;
 const POLICY_SOURCE_DIRECTORY_DEPTH = 32;
 const POLICY_SCHEMA_CANDIDATE_BYTES = 4_096;
@@ -675,116 +672,4 @@ describe('schema source coverage', () => {
     );
   });
 
-  test('fails closed for missing coverage, stale ownership, dynamic construction, and duplicate definitions', async () => {
-    const inventory = buildSchemaCompatibilityInventory({ generatedAt: NOW });
-    const discovery = await discoverSchemaSources();
-    const withoutThreatResult = inventory.entries.filter((entry) => entry.id !== 'derived.threat-intelligence-result');
-    await assert.rejects(
-      validateSchemaSourceCoverage(withoutThreatResult, discovery),
-      /not inventoried or classified: whoisleuth\.threat-intelligence-result/iu,
-    );
-
-    const missingOwner = structuredClone(inventory.entries);
-    const first = missingOwner[0];
-    assert.ok(first);
-    first.owner = 'lib/missing-schema-owner.mts';
-    await assert.rejects(
-      validateSchemaSourceCoverage(missingOwner, discovery),
-      /owner .* is missing/iu,
-    );
-
-    await assert.rejects(
-      validateSchemaSourceCoverage(inventory.entries, {
-        ...discovery,
-        dynamicConstructions: [
-          ...discovery.dynamicConstructions,
-          { file: 'lib/example.mts', line: 1, identifier: 'whoisleuth.lookup-progress', reason: 'dynamic' },
-        ],
-      }),
-      /unsafe dynamic/iu,
-    );
-
-    const definition = discovery.definitions.find((item) => item.identifier === 'whoisleuth.lookup-progress');
-    assert.ok(definition);
-    await assert.rejects(
-      validateSchemaSourceCoverage(inventory.entries, {
-        ...discovery,
-        definitions: [...discovery.definitions, { ...definition, file: 'lib/duplicate.mts', line: 1 }],
-      }),
-      /multiple definition owners/iu,
-    );
-
-    const runtimeUse = discovery.emitters.find((item) => (
-      item.file === 'cli/archive-inspect.mts' && item.identifier === null && item.role === 'writer'
-    ));
-    assert.ok(runtimeUse);
-    await validateSchemaSourceCoverage(inventory.entries, {
-      ...discovery,
-      emitters: discovery.emitters.filter((item) => item !== runtimeUse),
-    });
-    for (const copied of [
-      { ...runtimeUse, file: 'lib/extracted-helper.mts' },
-      { ...runtimeUse, role: 'reader' as const },
-    ]) {
-      await validateSchemaSourceCoverage(inventory.entries, {
-        ...discovery, emitters: [...discovery.emitters, copied],
-      });
-    }
-    for (const file of ['lib/extracted-helper.mts', 'tools/schema-compatibility.mts']) {
-      const constructed = discoverSchemaIdentifiersInSource(
-        "export const document = { schema: 'whoisleuth'.concat('.hidden') };", file);
-      assert.ok(constructed.dynamicConstructions.length > 0);
-      await assert.rejects(validateSchemaSourceCoverage(inventory.entries, {
-        ...discovery, dynamicConstructions: [...discovery.dynamicConstructions, ...constructed.dynamicConstructions],
-      }), /unsafe dynamic/iu);
-    }
-
-    await assert.rejects(
-      validateSchemaSourceCoverage(inventory.entries, discovery, [
-        ...SCHEMA_SOURCE_CLASSIFICATIONS.map((item) => item.identifier === 'whoisleuth.relationship-evidence'
-          ? { ...item, relatedEntryIds: ['derived.missing-entry'] }
-          : item),
-      ]),
-      /unknown compatibility entry/iu,
-    );
-
-    await assert.rejects(
-      validateSchemaSourceCoverage(inventory.entries, discovery, [
-        ...SCHEMA_SOURCE_CLASSIFICATIONS.map((item) => item.identifier === 'whoisleuth.relationship-evidence'
-          ? { identifier: item.identifier, kind: 'non_schema', reason: item.reason, note: item.note }
-          : item),
-      ]),
-      /inconsistent kind metadata/iu,
-    );
-
-    const sourceFilename = discovery.occurrences.find(item => item.identifier === 'whoisleuth.mts');
-    assert.ok(sourceFilename);
-    await validateSchemaSourceCoverage(inventory.entries, {
-      ...discovery,
-      occurrences: [...discovery.occurrences, { ...sourceFilename, file: 'tools/extracted-helper.mts', line: 1 }],
-    });
-    await assert.rejects(validateSchemaSourceCoverage(inventory.entries, {
-      ...discovery,
-      emitters: [...discovery.emitters, { file: 'tools/extracted-helper.mts', line: 1,
-        role: 'writer', identifier: sourceFilename.identifier, symbol: null }],
-    }), /cannot mask a schema emitter/iu);
-
-    const localGeoIpOccurrence = discovery.occurrences.find((item) => item.identifier === 'whoisleuth.local-geoip-evidence');
-    assert.ok(localGeoIpOccurrence);
-    await validateSchemaSourceCoverage(inventory.entries, {
-      ...discovery,
-      occurrences: [
-        ...discovery.occurrences,
-        { ...localGeoIpOccurrence, file: 'lib/extracted-reference.mts', line: 1 },
-      ],
-    });
-
-    await assert.rejects(
-      validateSchemaSourceCoverage(inventory.entries, {
-        ...discovery,
-        occurrences: discovery.occurrences.filter((item) => item !== localGeoIpOccurrence),
-      }),
-      /classification owner .* does not declare/iu,
-    );
-  });
 });

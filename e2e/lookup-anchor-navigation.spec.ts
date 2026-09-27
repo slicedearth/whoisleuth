@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { expectLookupTargetAligned, sectionedLookupFixture } from './lookup-design-fixtures';
 import { productionChunkPath } from './production-build';
@@ -72,9 +73,9 @@ test('evidence cards and source labels remain separated across map and mobile la
       await expectNoHorizontalOverflow(page);
       if ([2560, 1280, 320].includes(viewport.width)) {
         if (viewport.width === 320) await mappedCount.scrollIntoViewIfNeeded();
-        await page.screenshot({ path: testInfo.outputPath(`evidence-map-${viewport.width}-${theme}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`evidence-map-${viewport.width}-${theme}.png`) }); }
         await sources.getByRole('listitem').last().scrollIntoViewIfNeeded();
-        await page.screenshot({ path: testInfo.outputPath(`evidence-map-end-${viewport.width}-${theme}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`evidence-map-end-${viewport.width}-${theme}.png`) }); }
       }
     }
   }

@@ -41,6 +41,7 @@ export const CI_PREFLIGHT_SCRIPTS = Object.freeze([
 
 export const CI_UNIT_SCRIPTS = Object.freeze([
   'test:coverage',
+  'test:integration',
 ] as const);
 
 export const CI_BROWSER_BUILD_SCRIPTS = Object.freeze([

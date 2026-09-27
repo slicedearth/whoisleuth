@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, openBulkWorkspaceTools, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
 
@@ -71,7 +72,7 @@ test('saved Bulk columns survive reload without collecting targets or dropping r
         });
         expect(geometry.within).toBe(true);
       }
-      if ([320, 1280, 3840].includes(width)) await testInfo.attach(`columns-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if ([320, 1280, 3840].includes(width)) if (captureVisualEvidenceEnabled()) { await testInfo.attach(`columns-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     }
   }
   await page.setViewportSize({ width: 1280, height: 900 });

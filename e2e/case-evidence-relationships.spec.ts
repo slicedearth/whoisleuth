@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import AxeBuilder from '@axe-core/playwright';
 import { test, expect } from './fixtures';
 import { caseRecord, openSeededTimelineCase, openCaseResponseWorkspace } from './case-test-fixtures';
@@ -42,7 +43,7 @@ test('analysts link and withdraw retained evidence without changing observations
       await page.setViewportSize({ width, height });
       await expectNoHorizontalOverflow(page);
       expect((await new AxeBuilder({ page }).include('.evidence-relationships').analyze()).violations).toEqual([]);
-      await section.screenshot({ path: info.outputPath(`evidence-relationships-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await section.screenshot({ path: info.outputPath(`evidence-relationships-${theme}-${width}.png`) }); }
     }
   }
   await page.setViewportSize({ width: 1280, height: 720 });

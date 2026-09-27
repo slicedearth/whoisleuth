@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { isDeepStrictEqual } from 'node:util';
 import { expect, test } from './fixtures';
@@ -130,7 +131,7 @@ test('combined full-capacity stores export and restore through native backup fil
         await expect(heading).toBeVisible();
         await expect(preview.getByRole('button', { name: 'Add selected data' })).toBeEnabled();
         await expectNoHorizontalOverflow(page);
-        await test.info().attach(`backup-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+        if (captureVisualEvidenceEnabled()) { await test.info().attach(`backup-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
       }
     }
     await preview.getByRole('button', { name: 'Add selected data' }).click();

@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
@@ -48,7 +49,7 @@ test('command builder uses literal arguments, shared constraints and accessible 
       await page.setViewportSize({ width, height: width < 500 ? 844 : 768 });
       await expectNoHorizontalOverflow(page);
       expect((await new AxeBuilder({ page }).include('.command-builder').analyze()).violations).toEqual([]);
-      if (width === 320 || width === 1280) await builder.screenshot({ path: testInfo.outputPath(`builder-${theme}-${width}.png`) });
+      if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await builder.screenshot({ path: testInfo.outputPath(`builder-${theme}-${width}.png`) }); }
     }
   }
   await expect(page).toHaveURL('/cli#command-lookup');

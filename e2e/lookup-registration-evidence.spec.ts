@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { expandLookupFamilies, expectNoHorizontalOverflow, lookupDomainIdentity, migrateLegacyBrowserData, openLookupOptionalSources, readBrowserLocalCollection, useTheme } from './helpers';
 import { readFileSync } from 'node:fs';
@@ -103,7 +104,7 @@ test('long registration comparisons retain complete source values and a usable r
         expect(textGeometry.publicationTextWidth).toBeGreaterThan(textGeometry.publicationCellWidth * 0.7);
       }
       if (viewport.width === 320 || viewport.width === 1280) {
-        await page.screenshot({ path: testInfo.outputPath(`long-registration-${viewport.width}-${theme}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`long-registration-${viewport.width}-${theme}.png`) }); }
       }
     }
   }
@@ -150,7 +151,7 @@ test('registry interpretation retains late lifecycle evidence and role-scoped di
       const disclosure = interpretation.getByText('RDAP: public · WHOIS: unavailable', { exact: true });
       await disclosure.scrollIntoViewIfNeeded();
       await expect(disclosure).toBeInViewport();
-      if (viewport.width === 320) await page.screenshot({ path: testInfo.outputPath(`registry-interpretation-${theme}.png`) });
+      if (viewport.width === 320) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`registry-interpretation-${theme}.png`) }); }
     }
   }
 });
@@ -802,7 +803,7 @@ test('field checkpoints retain the supplying publication and reject an unknown o
     await page.evaluate((value) => document.documentElement.setAttribute('data-theme', value), theme);
     await page.setViewportSize({ width: 320, height: 700 });
     await expectNoHorizontalOverflow(page);
-    await checkpoint.screenshot({ path: testInfo.outputPath(`checkpoint-${theme}.png`) });
+    if (captureVisualEvidenceEnabled()) { await checkpoint.screenshot({ path: testInfo.outputPath(`checkpoint-${theme}.png`) }); }
   }
 });
 
@@ -1001,7 +1002,7 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
     for (const theme of ['light', 'dark'] as const) {
       await useTheme(page, theme);
       await expectNoHorizontalOverflow(page);
-      await currentNotice.screenshot({ path: testInfo.outputPath(`registry-profile-${width}-${theme}.png`) });
+      if (captureVisualEvidenceEnabled()) { await currentNotice.screenshot({ path: testInfo.outputPath(`registry-profile-${width}-${theme}.png`) }); }
     }
   }
 });
@@ -1193,7 +1194,7 @@ test('locally omitted provider findings remain visibly partial with accessible q
       await expect(qualification).toBeInViewport();
       await expectNoHorizontalOverflow(page);
       if ([320, 1280].includes(viewport.width)) {
-        await page.screenshot({ path: testInfo.outputPath(`provider-omission-${viewport.width}-${theme}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`provider-omission-${viewport.width}-${theme}.png`) }); }
       }
     }
   }

@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openConsoleView } from './console-navigation';
 import type { Page, Route } from '@playwright/test';
 
@@ -45,7 +46,7 @@ test('a failed opening action preserves an already loaded panel and does not rep
     await page.setViewportSize({ width, height: 844 });
     await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
     await expectNoHorizontalOverflow(page);
-    await page.screenshot({ path: testInfo.outputPath(`opening-action-${theme}-${width}.png`), fullPage: true });
+    if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`opening-action-${theme}-${width}.png`), fullPage: true }); }
   }
   expect(await page.evaluate(() => (window as unknown as { __openingActionCalls: number }).__openingActionCalls)).toBe(1);
   await expect(page.locator('body')).not.toContainText('private opening-action sentinel');

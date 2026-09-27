@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import AxeBuilder from '@axe-core/playwright';
@@ -52,7 +53,7 @@ test('selected originals require a deliberate atomic save and preserve drafts ac
       await files.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
       await expect(preview).toBeVisible();
-      await page.screenshot({ path: testInfo.outputPath(`retained-files-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`retained-files-${theme}-${width}.png`) }); }
     }
     expect((await new AxeBuilder({ page }).include('.case-files').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
   }

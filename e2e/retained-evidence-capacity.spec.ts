@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openConsoleView } from './console-navigation';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
@@ -57,9 +58,9 @@ for (const viewport of [
     await expect(timeline).toContainText('Observation time unavailable');
     await expectNoHorizontalOverflow(page);
     await timeline.getByRole('heading', { name: 'Investigation timeline', exact: true }).scrollIntoViewIfNeeded();
-    await testInfo.attach(`retained-timeline-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    if (captureVisualEvidenceEnabled()) { await testInfo.attach(`retained-timeline-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     await memberPages.scrollIntoViewIfNeeded();
-    await testInfo.attach(`retained-timeline-members-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    if (captureVisualEvidenceEnabled()) { await testInfo.attach(`retained-timeline-members-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
 
     await openConsoleView(page, 'inbox');
     const debt = page.getByRole('region', { name: 'Evidence gaps', exact: true });
@@ -80,7 +81,7 @@ for (const viewport of [
     const source = viewport.width <= 800 ? debt.locator('.mobile-matrix') : debt.locator('.desktop-matrix');
     await expect(source).toContainText('source-74');
     await matrixPages.scrollIntoViewIfNeeded();
-    await testInfo.attach(`retained-gaps-matrix-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    if (captureVisualEvidenceEnabled()) { await testInfo.attach(`retained-gaps-matrix-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     await debt.locator('.matrix > summary').press('Enter');
     await expect(debt.locator('.matrix')).not.toHaveAttribute('open');
     await debt.getByRole('searchbox', { name: 'Source', exact: true }).fill('source-74');
@@ -89,6 +90,6 @@ for (const viewport of [
     await expect(debt.locator('.queue > li').first()).toContainText('retained-74.example');
     await expectNoHorizontalOverflow(page);
     await debt.getByRole('heading', { name: 'Evidence gaps', exact: true }).scrollIntoViewIfNeeded();
-    await testInfo.attach(`retained-gaps-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+    if (captureVisualEvidenceEnabled()) { await testInfo.attach(`retained-gaps-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
   });
 }

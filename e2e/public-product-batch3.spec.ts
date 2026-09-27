@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page, Request } from '@playwright/test';
 import { CLI_COMMANDS } from '../cli/command-reference.mts';
 import { PUBLIC_COVERAGE_SUMMARY } from '../frontend/src/lib/generated/public-coverage-summary.ts';
@@ -38,7 +39,7 @@ test('CLI workflow recipes and review confirmation remain reachable without empt
     for (const width of [320, 390, 1024, 1280, 2560]) {
       await page.setViewportSize({ width, height: 900 });
       await expectNoHorizontalOverflow(page);
-      if (width === 320 || width === 1280) await command.screenshot({ path: testInfo.outputPath(`workflow-review-${theme}-${width}.png`) });
+      if (width === 320 || width === 1280) if (captureVisualEvidenceEnabled()) { await command.screenshot({ path: testInfo.outputPath(`workflow-review-${theme}-${width}.png`) }); }
     }
   }
 });
@@ -63,8 +64,8 @@ test('offline Case file guidance is reachable from tasks and direct command link
         const skip = page.getByRole('link', { name: 'Skip to main content', exact: true });
         await expect(skip).not.toBeFocused();
         expect(await skip.evaluate(element => element.getBoundingClientRect().bottom)).toBeLessThanOrEqual(0);
-        await command.screenshot({ path: testInfo.outputPath(`case-files-${theme}-${width}.png`) });
-        await page.screenshot({ path: testInfo.outputPath(`case-files-viewport-${theme}-${width}.png`) });
+        if (captureVisualEvidenceEnabled()) { await command.screenshot({ path: testInfo.outputPath(`case-files-${theme}-${width}.png`) }); }
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`case-files-viewport-${theme}-${width}.png`) }); }
       }
     }
   }
@@ -201,7 +202,7 @@ test('long reference labels remain distinct and the mobile navigator works by ke
       await expectNoHorizontalOverflow(page);
       await page.evaluate(() => scrollTo(0, 0));
       if (viewport.width === 320 || viewport.width === 1280) {
-        await page.screenshot({ path: testInfo.outputPath(`reference-labels-${viewport.width}-${theme}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`reference-labels-${viewport.width}-${theme}.png`) }); }
       }
     }
   }
@@ -299,7 +300,7 @@ test('signer trust guidance is reachable by direct command link at supported wid
       await expect(detail.locator('.boundary p')).toBeVisible();
       await expect(detail.locator('.boundary p')).toContainText('unknown, retired, revoked or future-reviewed entries exit 4');
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`signer-trust-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`signer-trust-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
       await detail.getByRole('link', { name: /Back to 1 filtered command/u }).click();
       await expect(page.locator('article[data-command="verify-signature"] .command-open')).toBeFocused();
     }
@@ -414,9 +415,9 @@ test('distinguishes compact and metadata CSV in responsive command details', asy
         await presentations.scrollIntoViewIfNeeded();
         await expect(presentations).toBeInViewport();
         await expectNoHorizontalOverflow(page);
-        await testInfo.attach(`csv-options-${viewport.width}-${theme}`, {
+        if (captureVisualEvidenceEnabled()) { await testInfo.attach(`csv-options-${viewport.width}-${theme}`, {
           body: await page.screenshot(), contentType: 'image/png',
-        });
+        }); }
         await boundary.scrollIntoViewIfNeeded();
         await expect(boundary).toBeInViewport();
         await expectNoHorizontalOverflow(page);
@@ -460,9 +461,9 @@ test('keeps workflow partial-result and resume guidance readable across referenc
       await boundary.scrollIntoViewIfNeeded();
       await expect(boundary).toBeInViewport();
       await expectNoHorizontalOverflow(page);
-      await testInfo.attach(`workflow-artifact-${viewport.width}-${theme}`, {
+      if (captureVisualEvidenceEnabled()) { await testInfo.attach(`workflow-artifact-${viewport.width}-${theme}`, {
         body: await page.screenshot(), contentType: 'image/png',
-      });
+      }); }
     }
   }
   expect(requests).toEqual([]);
@@ -514,7 +515,7 @@ test('renders methodology and deferred coverage from fixed metadata without requ
       await expect(authority).toBeVisible();
       await expectNoHorizontalOverflow(page);
       if (viewport.width === 320 || viewport.width === 1280) {
-        await page.screenshot({ path: testInfo.outputPath(`registration-authority-${viewport.width}-${theme}.png`) });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`registration-authority-${viewport.width}-${theme}.png`) }); }
       }
     }
   }

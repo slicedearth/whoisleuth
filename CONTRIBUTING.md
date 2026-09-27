@@ -57,6 +57,25 @@ npm run verification:focused -- --list
 npm run verification:focused
 ```
 
+For a fast all-domain feedback pass, use `npm run test:unit`. Repository-wide
+integration checks use the `.integration.test.mts` suffix and run through
+`npm run test:integration`. `npm test` still discovers both; required CI runs
+product coverage and integration checks separately, without instrumenting the
+repository analyser itself. New test files need no inventory registration.
+
+Small leaf components can have a `<kebab-name>.component.spec.ts` browser
+contract exercised through a real page. Focused selection uses it only when the
+component imports no local modules and has no cross-cutting owner. Shared state,
+storage, navigation and unresolved imports retain workflow coverage. Full
+pre-merge browser coverage is unchanged.
+
+Passing screenshots are an optional review gallery: set
+`WHOISLEUTH_E2E_VISUAL_EVIDENCE=1` when collecting images for inspection. Ordinary
+runs retain all viewport, accessibility and behaviour assertions; failures still
+retain automatic screenshots and traces. `WHOISLEUTH_E2E_LOCAL_JOBS=2` permits
+two functional shards on a host with sufficient capacity. The default is one,
+performance measurements remain isolated, and queued shards stop on failure.
+
 The default scope is the working diff. For a committed or smaller change, pass
 its paths explicitly after `--`. Read the plan: runtime imports find unit and
 browser consumers, while domain rules preserve workflow checks. Ordinary frontend

@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { openCaseSection, openConsoleView, openInboxReview } from './console-navigation';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
@@ -82,8 +83,8 @@ test('review history links exact retained decisions and missing associations wit
       await action.focus();
       await expect(action).toBeFocused();
       await expect(action).toBeInViewport({ ratio: 1 });
-      await page.screenshot({ path: testInfo.outputPath(`timeline-${theme}-${width}.png`) });
-      await latest.screenshot({ path: testInfo.outputPath(`timeline-card-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`timeline-${theme}-${width}.png`) }); }
+      if (captureVisualEvidenceEnabled()) { await latest.screenshot({ path: testInfo.outputPath(`timeline-card-${theme}-${width}.png`) }); }
     }
   }
   await latest.getByRole('link', { name: 'Open review history', exact: true }).press('Enter');
@@ -114,7 +115,7 @@ test('review history links exact retained decisions and missing associations wit
       expect(itemBounds).not.toBeNull();
       expect(historyBounds).not.toBeNull();
       expect(historyBounds!.width).toBeGreaterThan(itemBounds!.width - 80);
-      await page.screenshot({ path: testInfo.outputPath(`history-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`history-${theme}-${width}.png`) }); }
     }
   }
   expect((await readBrowserLocalCollection(page, 'analyst_review_state', { minimumRecords: 1 })).records).toEqual(before.records);

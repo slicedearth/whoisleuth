@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failBrowserLocalManifestWrites, migrateLegacyBrowserData, openBulkWorkspaceTools, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, requiredValue, selectBulkResultView, useTheme } from './helpers';
 import { spawnSync } from 'node:child_process';
@@ -364,7 +365,7 @@ test('a rich 2,000-row Bulk workspace remains readable after saving and plain or
     encryptedDownloadBytes: Buffer.byteLength(encrypted.content),
     durationMs: performance.now() - startedAt,
   }), contentType: 'application/json' });
-  await page.screenshot({ path: testInfo.outputPath('restored-bulk-mobile.png'), fullPage: false });
+  if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath('restored-bulk-mobile.png'), fullPage: false }); }
 });
 
 test('the Dashboard waits for every collection and then presents only genuine first-use actions', {

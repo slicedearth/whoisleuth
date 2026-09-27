@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, useTheme } from './helpers';
 
@@ -127,7 +128,7 @@ test('the contact form precedes route guidance on narrow screens without losing 
       expect(guidanceBox).not.toBeNull();
       expect(formBox!.y + formBox!.height).toBeLessThanOrEqual(guidanceBox!.y);
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`contact-${theme}-${width}.png`) });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`contact-${theme}-${width}.png`) }); }
     }
   }
 });

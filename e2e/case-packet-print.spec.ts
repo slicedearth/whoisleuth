@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import { caseRecord, openCaseResponseWorkspace, openSeededTimelineCase } from './case-test-fixtures';
@@ -64,7 +65,7 @@ test('printable packets preserve the exact audience projection, isolate print co
       await expect(dialog.getByRole('button', { name: 'Print or save PDF', exact: true })).toBeInViewport();
       expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
       await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`packet-report-${theme}-${width}.png`), animations: 'disabled' });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`packet-report-${theme}-${width}.png`), animations: 'disabled' }); }
     }
     await dialog.getByRole('button', { name: 'Close report', exact: true }).click();
   }
@@ -115,7 +116,7 @@ test('printable packets preserve the exact audience projection, isolate print co
   await expect(page.locator('.shell > header')).toBeHidden();
   await expect(page.getByRole('navigation', { name: 'Case sections', exact: true })).toBeHidden();
   await expect(dialog.locator('.technical-appendix')).toHaveCount(0);
-  await page.screenshot({ path: testInfo.outputPath('recipient-print-layout.png'), fullPage: true });
+  if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath('recipient-print-layout.png'), fullPage: true }); }
   if (browserName === 'chromium') await page.pdf({ path: testInfo.outputPath('recipient-report.pdf'), format: 'A4', printBackground: true });
   await page.emulateMedia({ media: 'screen' });
   await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));

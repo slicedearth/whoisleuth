@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, readBrowserLocalCollection, useTheme } from './helpers';
 import { caseRecord, openCaseResponseWorkspace, openSeededTimelineCase } from './case-test-fixtures';
@@ -55,7 +56,7 @@ test('retained explanations compare opposite relationships and shared sources wi
       await expect(rows).toHaveCount(2);
       await expectNoHorizontalOverflow(page);
       await summary.evaluate(element => element.scrollIntoView({ block: 'center' }));
-      await page.screenshot({ path: testInfo.outputPath(`assessment-page-${theme}-${width}.png`), fullPage: true, animations: 'disabled' });
+      if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`assessment-page-${theme}-${width}.png`), fullPage: true, animations: 'disabled' }); }
       const first = details.getByRole('combobox', { name: 'First explanation', exact: true });
       await first.focus();
       const visibleControl = await first.boundingBox();

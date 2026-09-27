@@ -17,17 +17,13 @@ import {
   WORKSPACE_DOMAIN_COMPATIBILITY_FACADES,
 } from '../packages/contracts/workspace-portability.mts';
 import {
-  MAX_SCHEMA_LIFECYCLE_FIXTURE_BYTES,
   assertSchemaLifecycleFixtureDiscriminator,
   buildSchemaLifecycleCompatibilityMatrix,
   discoverSchemaLifecycleSourceBindings,
   validateCasePortabilitySourceSnapshot,
   validateWorkspacePortabilitySourceSnapshot,
   validateSchemaLifecycleDefinitionCoverage,
-  prepareSchemaLifecycleRepositorySnapshot,
-  validatePreparedSchemaLifecycleRepository,
 } from '../tools/schema-lifecycle-repository.mts';
-import { discoverSchemaSources } from '../tools/schema-source-coverage.mts';
 
 const LIFECYCLE_MODULE = Object.freeze({
   file: 'packages/contracts/schema-lifecycle.mts',
@@ -61,19 +57,6 @@ function registrySource(
 
 function cloneRegistry(): Array<Record<string, unknown>> {
   return structuredClone(SCHEMA_LIFECYCLE_REGISTRY) as unknown as Array<Record<string, unknown>>;
-}
-
-function firstFixture(registry: Array<Record<string, unknown>>): Record<string, unknown> {
-  const fixtures = registry[0]?.fixtures as Array<Record<string, unknown>> | undefined;
-  assert.ok(fixtures?.[0]);
-  return fixtures[0];
-}
-
-function firstHook(registry: Array<Record<string, unknown>>): Record<string, unknown> {
-  const metadata = registry[0]?.metadata as Record<string, unknown> | undefined;
-  const hooks = metadata?.hooks as Array<Record<string, unknown>> | undefined;
-  assert.ok(hooks?.[0]);
-  return hooks[0];
 }
 
 async function casePortabilitySources() {
@@ -561,85 +544,4 @@ describe('schema lifecycle repository closure', () => {
     );
   });
 
-  test('verifies every registered fixture, hook and canonical definition in the checkout', async () => {
-    const discovery = await discoverSchemaSources();
-    const snapshot = await prepareSchemaLifecycleRepositorySnapshot(SCHEMA_LIFECYCLE_REGISTRY, discovery);
-    assert.doesNotThrow(() => validatePreparedSchemaLifecycleRepository(SCHEMA_LIFECYCLE_REGISTRY, snapshot));
-    assert.deepEqual(
-      [...snapshot.hookModules.keys()].sort(),
-      [...new Set(SCHEMA_LIFECYCLE_REGISTRY.flatMap((family) => (
-        'metadata' in family ? family.metadata.hooks.map((hook) => hook.module) : []
-      )))].sort(),
-    );
-
-    const missingFixture = cloneRegistry();
-    firstFixture(missingFixture).path = 'test/fixtures/missing-schema-lifecycle-fixture.json';
-    assert.throws(
-      () => validatePreparedSchemaLifecycleRepository(missingFixture as unknown as SchemaLifecycleRegistry, snapshot),
-      /fixture/u,
-    );
-
-    const wrongFixtureBytes = cloneRegistry();
-    firstFixture(wrongFixtureBytes).bytes = Number(firstFixture(wrongFixtureBytes).bytes) + 1;
-    assert.throws(
-      () => validatePreparedSchemaLifecycleRepository(wrongFixtureBytes as unknown as SchemaLifecycleRegistry, snapshot),
-      /fixture/u,
-    );
-
-    const wrongFixtureDigest = cloneRegistry();
-    firstFixture(wrongFixtureDigest).sha256 = '0'.repeat(64);
-    assert.throws(
-      () => validatePreparedSchemaLifecycleRepository(wrongFixtureDigest as unknown as SchemaLifecycleRegistry, snapshot),
-      /does not match its registered SHA-256/u,
-    );
-
-    const missingModule = cloneRegistry();
-    firstHook(missingModule).module = 'lib/missing-lifecycle-hook.mts';
-    assert.throws(
-      () => validatePreparedSchemaLifecycleRepository(missingModule as unknown as SchemaLifecycleRegistry, snapshot),
-      /hook module was not loaded from the canonical registry/u,
-    );
-
-    const missingExport = cloneRegistry();
-    firstHook(missingExport).exportName = 'missingLifecycleHook';
-    assert.throws(
-      () => validatePreparedSchemaLifecycleRepository(missingExport as unknown as SchemaLifecycleRegistry, snapshot),
-      /hook export is missing or is not callable/u,
-    );
-
-    const nonFunctionExport = cloneRegistry();
-    firstHook(nonFunctionExport).module = 'lib/domain-control-manifest.mts';
-    firstHook(nonFunctionExport).exportName = 'DOMAIN_CONTROL_MANIFEST_SCHEMA';
-    assert.throws(
-      () => validatePreparedSchemaLifecycleRepository(nonFunctionExport as unknown as SchemaLifecycleRegistry, snapshot),
-      /hook export is missing or is not callable/u,
-    );
-
-    const oversizedFixtures = cloneRegistry();
-    firstFixture(oversizedFixtures).path = 'test/fixtures/missing-schema-lifecycle-fixture.json';
-    firstFixture(oversizedFixtures).bytes = MAX_SCHEMA_LIFECYCLE_FIXTURE_BYTES;
-    assert.throws(
-      () => validatePreparedSchemaLifecycleRepository(oversizedFixtures as unknown as SchemaLifecycleRegistry, snapshot),
-      /fixtures exceed their aggregate byte ceiling/u,
-    );
-
-    const swappedOwners = cloneRegistry();
-    const firstOwner = String(swappedOwners[0]?.owner);
-    const secondOwner = String(swappedOwners[1]?.owner);
-    swappedOwners[0]!.owner = secondOwner;
-    swappedOwners[1]!.owner = firstOwner;
-    for (const descriptor of swappedOwners[0]!.compatibility as Array<Record<string, unknown>>) {
-      descriptor.owner = secondOwner;
-    }
-    for (const descriptor of swappedOwners[1]!.compatibility as Array<Record<string, unknown>>) {
-      descriptor.owner = firstOwner;
-    }
-    const swappedRegistry = defineSchemaLifecycleRegistry(
-      swappedOwners as unknown as SchemaLifecycleRegistry,
-    );
-    assert.throws(
-      () => validatePreparedSchemaLifecycleRepository(swappedRegistry, snapshot),
-      /runtime family owner does not match registry entry/u,
-    );
-  });
 });

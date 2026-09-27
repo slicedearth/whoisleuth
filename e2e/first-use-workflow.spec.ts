@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page, TestInfo } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { expectNoHorizontalOverflow, migrateLegacyBrowserData, openDashboardGuidedInvestigation, useTheme } from './helpers';
@@ -13,8 +14,8 @@ async function capture(page: Page, testInfo: TestInfo, name: string, fullPage = 
   await expectNoHorizontalOverflow(page);
   await page.evaluate(() => window.scrollTo(0, 0));
   const path = testInfo.outputPath(`${name}.png`);
-  await page.screenshot({ path, fullPage });
-  await testInfo.attach(name, { path, contentType: 'image/png' });
+  if (captureVisualEvidenceEnabled()) { await page.screenshot({ path, fullPage }); }
+  if (captureVisualEvidenceEnabled()) { await testInfo.attach(name, { path, contentType: 'image/png' }); }
 }
 
 test('empty Monitor and Brands prioritise useful first actions across desktop and mobile themes', async ({ page }, testInfo) => {

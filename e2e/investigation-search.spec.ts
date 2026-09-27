@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectFocusedResultsVisible, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, migrateLegacyBrowserData, openDashboardSecondaryWorkspaces, useTheme } from './helpers';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
@@ -273,7 +274,7 @@ test('saved-work search waits for its worker, retains typing and pages through e
         await expectFocusedResultsVisible(page, results);
         await expectNoHorizontalOverflow(page);
         await expect(pages.getByRole('button', { name: 'Previous', exact: true })).toBeVisible();
-        await test.info().attach(`saved-search-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+        if (captureVisualEvidenceEnabled()) { await test.info().attach(`saved-search-${viewport.width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
       }
     }
     await search.fill('item-000');

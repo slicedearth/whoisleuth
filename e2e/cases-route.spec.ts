@@ -1,3 +1,4 @@
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { openCaseMetadata, openCaseSection } from './console-navigation';
 import { caseRecord, createCase, snapshot } from './case-test-fixtures';
@@ -281,8 +282,8 @@ test('Cases first use and retained records remain readable across major widths a
         expect(button!.height).toBeGreaterThanOrEqual(44);
         const name = `cases-${populated ? 'retained' : 'empty'}-${theme}-${viewport.width}.png`;
         const screenshot = testInfo.outputPath(name);
-        await page.screenshot({ path: screenshot });
-        await testInfo.attach(name, { path: screenshot, contentType: 'image/png' });
+        if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: screenshot }); }
+        if (captureVisualEvidenceEnabled()) { await testInfo.attach(name, { path: screenshot, contentType: 'image/png' }); }
       }
     }
   }

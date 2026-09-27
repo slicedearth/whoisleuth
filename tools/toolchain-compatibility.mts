@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
-import { accessSync, constants as fsConstants } from 'node:fs';
+import { accessSync, constants as fsConstants, readdirSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -195,6 +195,17 @@ export function runUnitTests(
   return result.status ?? 2;
 }
 
+/** Test names declare execution cost; ordinary files need no registration. */
+export function nodeTestFiles(lane: 'unit' | 'integration' | 'all', cwd = process.cwd()): readonly string[] {
+  const files = readdirSync(path.join(cwd, 'test'), { withFileTypes: true })
+    .filter(entry => entry.isFile() && /^[a-zA-Z0-9._-]+\.test\.mts$/u.test(entry.name))
+    .map(entry => `test/${entry.name}`)
+    .filter(file => lane === 'all' || file.endsWith('.integration.test.mts') === (lane === 'integration'))
+    .sort();
+  if (!files.length) throw new Error(`No ${lane} tests were discovered.`);
+  return Object.freeze(files);
+}
+
 function parseVersion(value: unknown, label: string): Version {
   if (typeof value !== 'string') throw new TypeError(`${label} must be a semantic version.`);
   const match = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?$/u.exec(value);
@@ -332,6 +343,11 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
   const stderr = options.stderr || process.stderr;
   try {
     if (args[0] === '--unit-tests') {
+      if (args[1]?.startsWith('--lane=')) {
+        const lane = args[1].slice('--lane='.length);
+        if (lane !== 'unit' && lane !== 'integration' && lane !== 'all') throw new TypeError('Test lane must be unit, integration or all.');
+        return runUnitTests([...args.slice(2), ...nodeTestFiles(lane, options.repositoryRoot)], { cwd: options.repositoryRoot ?? process.cwd() });
+      }
       return runUnitTests(args.slice(1), { cwd: options.repositoryRoot ?? process.cwd() });
     }
     parseArguments(args);
