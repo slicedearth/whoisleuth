@@ -99,7 +99,8 @@ npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisle
 [Getting started](docs/getting-started.md) for local development and browser
 tests, or the [CLI guide](docs/cli.md) for installed commands.
 
-For changes to the project, see [Contributing](CONTRIBUTING.md).
+For changes to the project, see [Contributing](CONTRIBUTING.md) and the
+[Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Architecture
 

@@ -741,9 +741,12 @@ describe('verification architecture contracts', () => {
   });
 
   test('documentation-only plans do not acquire browser discovery or build work', () => {
-    const execution = buildFocusedVerificationExecution(buildVerificationOwnershipPlan(['CONTRIBUTING.md']));
-    assert.equal(execution.browserSpecs.length, 0);
-    assert.equal(execution.commands.some(command => ['browser-discovery', 'build'].includes(command.id)), false);
+    for (const document of ['CONTRIBUTING.md', 'CODE_OF_CONDUCT.md', '.github/pull_request_template.md', '.github/ISSUE_TEMPLATE/question.md']) {
+      const execution = buildFocusedVerificationExecution(buildVerificationOwnershipPlan([document]));
+      assert.equal(execution.browserSpecs.length, 0, document);
+      assert.equal(execution.commands.some(command => ['browser-discovery', 'build', 'workflow:check', 'typecheck'].includes(command.id)), false, document);
+      assert.equal(execution.commands.some(command => command.args.includes('test/documentation-links.test.mts')), true, document);
+    }
   });
 
   test('focused discovery includes both execution owners and rejects missing or unexpected specifications', () => {

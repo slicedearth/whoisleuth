@@ -530,7 +530,7 @@ const RULES: readonly VerificationRule[] = Object.freeze([
   Object.freeze({
     id: 'documentation', area: 'maintained public documentation', priority: 42,
     matches: (value: string) => (/^[^/]+\.md$/u.test(value) && value !== 'THIRD_PARTY_NOTICES.md') || value.startsWith('docs/')
-      || value.startsWith('packages/') && value.endsWith('.md'),
+      || (value.startsWith('packages/') || value.startsWith('.github/')) && value.endsWith('.md'),
     focusedUnit: unit('test/documentation-links.test.mts', 'test/documentation-contract.test.mts'), focusedBrowser: browser(),
     specialised: specialised('documentation'), browserRequired: false,
   }),

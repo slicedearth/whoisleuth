@@ -6,21 +6,54 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpat
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CI_CLI_RUNTIME_NODE_MAJOR } from './ci-verification.mts';
+import { CI_CLI_RUNTIME_NODE_MAJOR, CI_COMMAND_GROUPS, parseCiVerificationArguments } from './ci-verification.mts';
 import { codeqlRamMegabytes } from './local-codeql.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECCOMP_SHA256 = 'cc3e61cabda6bbc1e53e54d27ba4d55a9d3be829b6dd1a596f4a7b31b1cc7849';
 const MAX_COMMAND_OUTPUT = 4 * 1024 * 1024;
 export type LinuxVerificationPlatform = 'linux/amd64' | 'linux/arm64';
+const USAGE = `Usage: npm run verification:linux -- <selection>
+  --focused [--list] <changed-path> ...  Existing focused checks; --list previews without Docker
+  --group=<${CI_COMMAND_GROUPS.join('|')}>  One existing CI group
+  --full                               Complete local CI, including all browser tests
+  --build-image                        Prepare the pinned environment only
+`;
+
+/** Selection is explicit; an omitted path cannot become an empty clean-tree run. */
+export async function parseLinuxVerificationArguments(args: readonly string[]) {
+  if (!args.length || args.length === 1 && args[0] === '--help') {
+    return Object.freeze({ mode: 'help' as const, arguments: Object.freeze([] as string[]) });
+  }
+  if (args.length === 1 && (args[0] === '--full' || args[0] === '--build-image')) {
+    return Object.freeze({ mode: args[0] === '--full' ? 'full' as const : 'build-image' as const, arguments: Object.freeze([...args]) });
+  }
+  if (args[0] === '--focused') {
+    // Full verification can bootstrap before host dependencies are installed.
+    // Only focused planning needs the repository's dependency-aware selector.
+    const { parseFocusedVerificationOptions } = await import('./focused-verification.mts');
+    const { buildVerificationOwnershipPlan } = await import('./verification-ownership.mts');
+    const focused = parseFocusedVerificationOptions(args.slice(1));
+    if (focused.changed) throw new TypeError('Linux focused verification requires explicit repository-relative changed paths.');
+    const paths = buildVerificationOwnershipPlan(focused.paths).changedPaths;
+    return Object.freeze({ mode: 'focused' as const,
+      arguments: Object.freeze(['--focused', ...(focused.list ? ['--list'] : []), ...paths]) });
+  }
+  if (args[0]?.startsWith('--group')) {
+    const group = parseCiVerificationArguments(args);
+    if (group.mode === 'group') return Object.freeze({ mode: 'group' as const, arguments: Object.freeze([`--group=${group.group}`]) });
+  }
+  throw new TypeError(USAGE);
+}
 
 /** Follow the engine architecture: emulation is not a full-verification default. */
-export function linuxVerificationEnvironment(info: Readonly<{ OSType: string; Architecture: string; MemTotal: number }>) {
+export function linuxVerificationEnvironment(info: Readonly<{ OSType: string; Architecture: string; MemTotal: number }>, analysisRequired = true) {
   if (info.OSType !== 'linux') throw new Error('Verification requires a Linux container engine.');
   const platform: LinuxVerificationPlatform = info.Architecture === 'x86_64' || info.Architecture === 'amd64'
     ? 'linux/amd64' : info.Architecture === 'aarch64' || info.Architecture === 'arm64'
       ? 'linux/arm64' : (() => { throw new Error('Verification supports native Linux AMD64 and ARM64 engines.'); })();
-  const analysisMemoryMiB = codeqlRamMegabytes(info.MemTotal, 0, 'linux');
+  if (!Number.isSafeInteger(info.MemTotal) || info.MemTotal <= 0) throw new TypeError('Verification requires a valid engine memory limit.');
+  const analysisMemoryMiB = analysisRequired ? codeqlRamMegabytes(info.MemTotal, 0, 'linux') : null;
   return Object.freeze({ platform, engineMemoryBytes: info.MemTotal, analysisMemoryMiB });
 }
 
@@ -45,16 +78,21 @@ export function linuxVerificationImageReference(reference: string, manifest: unk
   return `${reference}@${matches[0].digest}`;
 }
 
-export function linuxVerificationRunArguments(options: Readonly<{
+export async function linuxVerificationRunArguments(options: Readonly<{
   name: string; image: string; bundle: string; seccomp: string; revision: string; base: string;
   platform: LinuxVerificationPlatform;
-}>): readonly string[] {
+  selection: readonly string[];
+}>): Promise<readonly string[]> {
   if (!/^[a-f0-9]{40}$/u.test(options.revision) || !/^[a-f0-9]{40}$/u.test(options.base)
     || !/^whoisleuth-verification-[a-f0-9-]+$/u.test(options.name)
     || !/^sha256:[a-f0-9]{64}$/u.test(options.image)
     || !['linux/amd64', 'linux/arm64'].includes(options.platform)
     || [options.bundle, options.seccomp].some(value => !path.isAbsolute(value) || /[,\r\n\0]/u.test(value))) {
     throw new TypeError('Verification requires exact image/source identities and unambiguous private input paths.');
+  }
+  const selection = await parseLinuxVerificationArguments(options.selection);
+  if (selection.mode === 'help' || selection.mode === 'build-image' || selection.arguments.includes('--list')) {
+    throw new TypeError('A container run requires an executable verification selection.');
   }
   return Object.freeze([
     'run', '--name', options.name, `--platform=${options.platform}`, '--init', '--shm-size=1g',
@@ -63,6 +101,7 @@ export function linuxVerificationRunArguments(options: Readonly<{
     '--env', `WHOISLEUTH_VERIFY_REVISION=${options.revision}`,
     '--env', `WHOISLEUTH_VERIFY_BASE=${options.base}`,
     options.image,
+    ...selection.arguments,
   ]);
 }
 
@@ -99,11 +138,20 @@ async function downloadSeccomp(filename: string, browser: string, signal: AbortS
 }
 
 export async function main(args = process.argv.slice(2)): Promise<number> {
-  if (args.length > 0 && !(args.length === 1 && args[0] === '--build-image')) {
-    process.stderr.write('Usage: npm run verification:linux [-- --build-image]\n');
+  let selection: Awaited<ReturnType<typeof parseLinuxVerificationArguments>>;
+  try {
+    selection = await parseLinuxVerificationArguments(args);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : USAGE}\n`);
     return 2;
   }
-  const buildOnly = args[0] === '--build-image';
+  if (selection.mode === 'help') { process.stdout.write(USAGE); return 0; }
+  if (selection.mode === 'focused' && selection.arguments.includes('--list')) {
+    process.stdout.write('Selection preview only, using the local source. Execution requires a clean committed snapshot.\n');
+    const { main: focusedVerification } = await import('./focused-verification.mts');
+    return focusedVerification(selection.arguments.slice(1));
+  }
+  const buildOnly = selection.mode === 'build-image';
   const cancellation = new AbortController();
   const interrupt = () => cancellation.abort();
   process.once('SIGINT', interrupt);
@@ -115,8 +163,9 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   let dockerEnvironment = process.env;
   try {
     const engine = JSON.parse(output('docker', ['info', '--format', '{{json .}}']));
-    const environment = linuxVerificationEnvironment(engine);
-    process.stdout.write(`Native verification platform: ${environment.platform}; engine memory: ${Math.floor(environment.engineMemoryBytes / 1024 / 1024)} MiB; analysis allocation: ${environment.analysisMemoryMiB} MiB.\n`);
+    const environment = linuxVerificationEnvironment(engine, selection.mode === 'full');
+    process.stdout.write(`Native verification platform: ${environment.platform}; engine memory: ${Math.floor(environment.engineMemoryBytes / 1024 / 1024)} MiB; analysis allocation: ${environment.analysisMemoryMiB === null ? 'not selected' : `${environment.analysisMemoryMiB} MiB`}.\n`);
+    process.stdout.write(`Linux verification selection: ${selection.arguments.join(' ')}\n`);
     if (!buildOnly && output('git', ['status', '--porcelain=v1', '--untracked-files=all'])) {
       throw new Error('Linux verification requires a clean commit. Use focused checks while editing.');
     }
@@ -176,11 +225,14 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     writeFileSync(path.join(temporary, 'environment.json'), JSON.stringify({
       revision, base, ...environment, primary, browser, images: resolvedImages, image,
       seccompSha256: SECCOMP_SHA256,
-      scope: 'Canonical local verification in Linux; hosted services and runner hardware remain separate.',
+      selection,
+      scope: selection.mode === 'full'
+        ? 'Complete canonical local verification in Linux; hosted services and runner hardware remain separate.'
+        : 'Selected checks only, not full CI or release assurance; required hosted checks remain separate.',
     }, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
     container = `whoisleuth-verification-${randomUUID()}`;
     try {
-      await run('docker', linuxVerificationRunArguments({ name: container, image, bundle, seccomp, revision, base, platform: environment.platform }), cancellation.signal, ROOT, dockerEnvironment);
+      await run('docker', await linuxVerificationRunArguments({ name: container, image, bundle, seccomp, revision, base, platform: environment.platform, selection: selection.arguments }), cancellation.signal, ROOT, dockerEnvironment);
       accepted = true;
     } finally {
       // Keep logs and the environment record outside the source checkout even
@@ -189,7 +241,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       if (!logs.error) writeFileSync(path.join(temporary, 'verification.log'), logs.stdout + logs.stderr, { mode: 0o600 });
       keepEvidence = true;
     }
-    process.stdout.write('Linux verification passed. No remote check, publication or deployment was performed.\n');
+    process.stdout.write(`Linux ${selection.mode} verification passed.${selection.mode === 'full' ? '' : ' This is not a complete CI or release result.'} No remote check, publication or deployment was performed.\n`);
     return 0;
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : 'Linux verification failed.'}\n`);

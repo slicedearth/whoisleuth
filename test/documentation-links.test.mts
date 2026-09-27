@@ -11,7 +11,7 @@ const ROOT = resolve(__dirname, '..');
 const DOCUMENTATION_FILES = [...new Set(execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], {
   cwd: ROOT, encoding: 'utf8', maxBuffer: 2 * 1024 * 1024,
 }).split('\0'))]
-  .filter((file) => /^(?:[^/]+\.md|docs\/.*\.md|packages\/.*\.md)$/u.test(file))
+  .filter((file) => /^(?:[^/]+\.md|docs\/.*\.md|packages\/.*\.md|\.github\/.*\.md)$/u.test(file))
   .map((file) => join(ROOT, file)).filter(existsSync).sort();
 const REQUIRED_GUIDES = [
   'docs/application-guide.md',

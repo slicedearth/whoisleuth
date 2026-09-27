@@ -107,17 +107,33 @@ test workers start. Tests reuse the resolved executable paths; startup checks
 use a hang guard, not a performance target. Missing or unusable shells stop the
 run before test execution.
 
-Docker can run the same verification owner on Linux from a clean commit:
+Use Linux locally when a change depends on operating-system behaviour or when
+reproducing a hosted failure. It is not a prerequisite for every contribution.
+Preview the existing focused selection without Docker, then run it in an
+isolated Linux checkout:
 
 ```bash
-npm run verification:linux
+npm run verification:linux -- --focused --list test/linux-verification.test.mts
+npm run verification:linux -- --focused test/linux-verification.test.mts
 ```
 
-This builds an Ubuntu 24.04 image with the locked browser release, the primary
+Paths are explicit because the container verifies a clean commit, not a working
+diff. Browser selections build the application and run the selected existing
+specifications; they do not maintain a separate Linux suite. A focused pass is
+not full CI or release assurance. Complete sharded hosted coverage remains
+required before merge.
+
+For a whole lane, use `--group=<name>` with the same groups as `verification:ci`.
+The container installs locked dependencies and prepares the build for the
+package lane. Use `--full` only when complete local Linux assurance is needed;
+it includes the full browser suite. With no selection, the command prints help
+without starting Docker.
+
+The runner builds an Ubuntu 24.04 image with the locked browser release, the primary
 Node version and the compatibility runtime. It uses the local engine's native
 AMD64 or ARM64 architecture, including pinned security-analysis and shell tools,
-and checks available analysis memory before downloading images. It does not
-silently emulate another architecture. Image digests, architecture and memory
+and checks analysis memory before a full run, not before checks that omit
+analysis. It does not silently emulate another architecture. Image digests, architecture and memory
 are recorded for each run; hosted runner hardware and architecture remain
 separate from this local check. Only committed source and local tag history enter the container: no host
 dependencies, credentials, development servers or Docker socket are mounted.

@@ -4,6 +4,7 @@ Start with [local setup](docs/getting-started.md). Use the committed lockfile
 and development runtime in `.nvmrc`. Keep changes focused. Add an independent
 regression test for a behavioural defect; inspect cosmetic changes in the
 rendered interface rather than freezing individual CSS values in tests.
+Participation follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Find the owner
 
@@ -100,6 +101,9 @@ Before submitting a feature branch, run proportionate local checks and state
 any omissions. Merge requires complete fresh hosted checks against the current
 merge candidate. Release verification is a separate boundary. Local success
 does not promise identical behaviour on every supported environment.
+For a Linux-specific change, `npm run verification:linux -- --focused <path> ...`
+runs the existing selection in a clean container; add `--list` to preview it.
+The complete local Linux run is opt-in with `--full`, not a routine push requirement.
 
 For workflow changes, run `npm run workflow:check`. Local and hosted quality
 checks use the same pinned actionlint release and platform archive digests.
