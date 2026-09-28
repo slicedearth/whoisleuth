@@ -68,7 +68,7 @@ function harness(request?: LookupRequest, overrides: Partial<LookupCollectionEff
     active: () => true,
     saveHandoff: (_source, candidates) => {
       handoffs.push(candidates);
-      return { saved: true, token: 'handoff-token', generatedContextTruncated: false };
+      return { saved: true, token: '<fixture-handoff>', generatedContextTruncated: false };
     },
     navigate: async (href) => {
       seen.push(href);
@@ -174,7 +174,7 @@ test('multiple targets use the existing handoff without collection and failed re
         h.handoffs[0]?.map((candidate) => candidate.domain),
         ['one.example.test', 'two.example.test'],
       );
-      assert.deepEqual(h.seen, ['reset:false', '/bulk?source=manual&handoff=handoff-token']);
+      assert.deepEqual(h.seen, ['reset:false', '/bulk?source=manual&handoff=<fixture-handoff>']);
     } else {
       assert.match(h.state.error, /could not retain/);
       assert.deepEqual(h.seen, ['reset:false']);
