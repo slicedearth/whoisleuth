@@ -1,7 +1,8 @@
 import { DEFAULT_DISPOSITION, isReviewedCaseDisposition } from '../../../../packages/cases/case-record-decisions.mts';
 import type { CaseRecord } from '../../../../packages/cases/case-record-contracts.mts';
 import type { LocalMutationOutcome } from '../local-mutation-outcome.ts';
-import type { LookupCaseActionResult, LookupCaseController, LookupRecheckComparison } from './lookup-case-controller.ts';
+import type { LookupCaseActionResult, LookupCaseController, LookupConclusionEvidenceSelection, LookupRecheckComparison, LookupRecheckOutcomeInput } from './lookup-case-controller.ts';
+import type { CheckpointFact } from '../analysis/case-evidence-checkpoint.ts';
 import { latestCaseEvidence } from '../../../../packages/cases/case-evidence-model.mts';
 import { compareLookupRecheck } from '../analysis/lookup-recheck-comparison.ts';
 import type { LookupOperation } from './lookup-request-controller.ts';
@@ -169,3 +170,76 @@ export class LookupCaseWorkspace {
 }
 
 export type { LookupCaseState };
+
+type LookupCaseObservation = Readonly<{
+  domain: string;
+  evidence: Parameters<LookupCaseController['open']>[1];
+  depth: 'fast' | 'deep';
+  incidentUrl: string;
+  target: string;
+  facts: readonly CheckpointFact[];
+}>;
+
+/** Binds analyst actions to one observation and the existing mutation coordinator. */
+export function lookupCaseActions(
+  workspace: LookupCaseWorkspace,
+  controller: Pick<LookupCaseController, 'open' | 'appendNote' | 'recordConclusion'
+    | 'recordInvestigationContext' | 'recordRecheckOutcome' | 'recordRecipient' | 'recordCheckpoint'>,
+  observation: () => LookupCaseObservation,
+) {
+  return {
+    async open() {
+      const { domain, evidence, depth } = observation();
+      const selection = workspace.state.record ? { caseId: workspace.state.record.id } : {};
+      await workspace.perform(() => controller.open(domain, evidence, depth, selection),
+        next => workspace.synchroniseDecision(next.record));
+    },
+    createIncident(title: string) {
+      const { domain, evidence, depth } = observation();
+      return workspace.perform(() => controller.open(domain, evidence, depth, { newIncident: true }, title), next => {
+        if (next.mutationOutcome === 'committed') {
+          workspace.synchroniseDecision(next.record);
+          workspace.setComparison(null);
+        }
+      });
+    },
+    async addNote() {
+      const { record, note } = workspace.state;
+      await workspace.perform(() => controller.appendNote(record, note), next => {
+        if (next.clearNote) workspace.setNote('');
+      });
+    },
+    recordConclusion(rationale: string, selections: readonly LookupConclusionEvidenceSelection[]) {
+      const { record, disposition, reviewReason } = workspace.state;
+      const { facts } = observation();
+      return workspace.perform(() => controller.recordConclusion(record, facts, disposition, reviewReason, rationale, selections),
+        next => workspace.synchroniseDecision(next.record));
+    },
+    recordInvestigationContext(objective: string, retainExactUrl: boolean) {
+      const { record } = workspace.state;
+      const { incidentUrl } = observation();
+      return workspace.perform(() => controller.recordInvestigationContext(record, { objective, incidentUrl, retainExactUrl }));
+    },
+    async recordRecheckOutcome(input: LookupRecheckOutcomeInput): Promise<LocalMutationOutcome> {
+      const { record, comparison } = workspace.state;
+      if (!comparison?.available) return 'rejected';
+      const { depth, target } = observation();
+      return workspace.perform(() => controller.recordRecheckOutcome(record, {
+        ...input, observedAt: comparison.observedAt, collectionDepth: depth, observationHostname: target,
+      }));
+    },
+    async recordRecipient(route: Parameters<LookupCaseController['recordRecipient']>[1]) {
+      const { record } = workspace.state;
+      await workspace.perform(() => controller.recordRecipient(record, route));
+    },
+    saveCheckpoint(selectedFields: string[], transitionExpectations: Parameters<LookupCaseController['recordCheckpoint']>[3] = {}) {
+      const { record } = workspace.state;
+      const { facts } = observation();
+      return workspace.perform(() => controller.recordCheckpoint(record, facts, [...selectedFields], { ...transitionExpectations }));
+    },
+    saveRefreshedCheckpoint(facts: readonly CheckpointFact[], selectedFields: string[]) {
+      const { record } = workspace.state;
+      return workspace.perform(() => controller.recordCheckpoint(record, facts, [...selectedFields]));
+    },
+  };
+}

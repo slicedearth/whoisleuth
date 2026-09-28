@@ -1,24 +1,19 @@
 import type { BulkPacing } from './analysis/bulk-pacing.ts';
 import type { BulkReviewPresetView } from '../../../packages/workspace/bulk-review-model.mts';
 import type { LookupHttpResponse } from './analysis/lookup-response.ts';
+import type { LookupRequestDraft } from './analysis/lookup-presentation.ts';
 import type { BulkProfileContextProvenance } from './analysis/bulk-session-model.ts';
 import { normalizeOpaqueReferenceId } from '../../../packages/cases/opaque-reference-id.mts';
 import { protectedReturnTarget } from './workspaces.ts';
 
 export type LookupMode = 'fast' | 'deep';
 
-export type LookupWorkflowState = {
-  query: string;
+export type LookupWorkflowState = LookupRequestDraft & {
   completedTarget: string;
   /** Exact Incident URL retained only in this in-memory navigation state. */
   completedIncidentUrl?: string;
   /** Optional only for compatibility with workflow state created before exact completed depth was retained. */
   completedLookupDepth?: LookupMode | null;
-  lookupMode: LookupMode;
-  includeExternalIntelligence: boolean;
-  includeMalwareHostIntelligence: boolean;
-  includeMalwareIocIntelligence: boolean;
-  includeSecurityTxt: boolean;
   error: string;
   result: LookupHttpResponse | null;
 };

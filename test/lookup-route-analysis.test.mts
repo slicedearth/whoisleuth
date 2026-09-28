@@ -77,9 +77,22 @@ function response(overrides: Partial<LookupHttpResponse> = {}): LookupHttpRespon
 }
 
 describe('Lookup route analysis', () => {
+  test('freshness is evaluated against the supplied review clock', () => {
+    const result = response();
+    const analyse = (now: string) => buildLookupRouteAnalysis({
+      now, result, lookupView: createLookupViewModel(result), profile: null,
+      task: 'general', completedLookupDepth: 'deep',
+    });
+    const fresh = analyse('2026-07-01T02:00:00.000Z');
+    const later = analyse('2026-09-01T02:00:00.000Z');
+    assert.equal(fresh.lookupSourceRefreshPlan.stale, false);
+    assert.equal(later.lookupSourceRefreshPlan.stale, true);
+    assert.deepEqual(fresh.caseEvidence, later.caseEvidence);
+    assert.equal(fresh.lookupObservedAt, later.lookupObservedAt);
+  });
   test('keeps the network evidence family available without other web collectors', () => {
     const base = response({ availability: {} });
-    const analyse = (result: LookupHttpResponse) => buildLookupRouteAnalysis({
+    const analyse = (result: LookupHttpResponse) => buildLookupRouteAnalysis({ now: '2026-07-02T00:00:00.000Z',
       result, lookupView: createLookupViewModel(result), profile: null,
       task: 'general', completedLookupDepth: 'deep',
     });
@@ -98,7 +111,7 @@ describe('Lookup route analysis', () => {
 
   test('builds the route evidence model from one normalized response view', () => {
     const result = response();
-    const analysis = buildLookupRouteAnalysis({
+    const analysis = buildLookupRouteAnalysis({ now: '2026-07-02T00:00:00.000Z',
       result,
       lookupView: createLookupViewModel(result),
       profile: null,
@@ -163,7 +176,7 @@ describe('Lookup route analysis', () => {
       whois: { parsed: { domainName: 'EXAMPLE.TEST', nameservers: whoisNameservers, contactsByRole: {} }, chain: [] },
     });
     const before = structuredClone(result);
-    const analysis = buildLookupRouteAnalysis({
+    const analysis = buildLookupRouteAnalysis({ now: '2026-07-02T00:00:00.000Z',
       result, lookupView: createLookupViewModel(result), profile: null,
       task: 'general', completedLookupDepth: 'fast',
     });
@@ -193,7 +206,7 @@ describe('Lookup route analysis', () => {
         now: new Date('2026-09-03T12:00:00.000Z'),
       }) as unknown as NonNullable<LookupHttpResponse['registrarStanding']>,
     });
-    const analyse = (result: LookupHttpResponse) => buildLookupRouteAnalysis({
+    const analyse = (result: LookupHttpResponse) => buildLookupRouteAnalysis({ now: '2026-07-02T00:00:00.000Z',
       result,
       lookupView: createLookupViewModel(result),
       profile: null,
@@ -214,7 +227,7 @@ describe('Lookup route analysis', () => {
   test('does not invent submitted-hostname context when the response omits it', () => {
     const { inputHostname: _inputHostname, ...withoutInputHostname } = response();
     const result = withoutInputHostname as LookupHttpResponse;
-    const analysis = buildLookupRouteAnalysis({
+    const analysis = buildLookupRouteAnalysis({ now: '2026-07-02T00:00:00.000Z',
       result,
       lookupView: createLookupViewModel(result),
       profile: null,
@@ -231,7 +244,7 @@ describe('Lookup route analysis', () => {
       type: 'ipv4',
       availability: { applicable: false, state: 'unknown' },
     });
-    const analysis = buildLookupRouteAnalysis({
+    const analysis = buildLookupRouteAnalysis({ now: '2026-07-02T00:00:00.000Z',
       result,
       lookupView: createLookupViewModel(result),
       profile: null,
@@ -259,7 +272,7 @@ describe('Lookup route analysis', () => {
           pageIdentity: { source: 'html', status: 'skipped', complete: false },
         },
       });
-      const analysis = buildLookupRouteAnalysis({
+      const analysis = buildLookupRouteAnalysis({ now: '2026-07-02T00:00:00.000Z',
         result,
         lookupView: createLookupViewModel(result),
         profile: null,
@@ -273,7 +286,7 @@ describe('Lookup route analysis', () => {
 
   test('keeps profile-derived evidence inconclusive when browser-local profile context is unavailable', () => {
     const result = response();
-    const analysis = buildLookupRouteAnalysis({
+    const analysis = buildLookupRouteAnalysis({ now: '2026-07-02T00:00:00.000Z',
       result,
       lookupView: createLookupViewModel(result),
       profile: null,
@@ -330,7 +343,7 @@ describe('Lookup route analysis', () => {
         }],
       },
     });
-    const analysis = buildLookupRouteAnalysis({
+    const analysis = buildLookupRouteAnalysis({ now: '2026-07-02T00:00:00.000Z',
       result,
       lookupView: createLookupViewModel(result),
       profile: null,
@@ -363,7 +376,7 @@ describe('Lookup route analysis', () => {
       },
     });
     const lookupView = createLookupViewModel(result);
-    const analysis = buildLookupRouteAnalysis({
+    const analysis = buildLookupRouteAnalysis({ now: '2026-07-02T00:00:00.000Z',
       result,
       lookupView,
       profile: null,
@@ -403,7 +416,7 @@ describe('Lookup route analysis', () => {
         },
       });
       for (const task of ['acquisition', 'brand', 'owned'] as const) {
-        const analysis = buildLookupRouteAnalysis({
+        const analysis = buildLookupRouteAnalysis({ now: '2026-07-02T00:00:00.000Z',
           result,
           lookupView: createLookupViewModel(result),
           profile: null,
@@ -436,7 +449,7 @@ describe('Lookup route analysis', () => {
         ['brand', 'review-page-identity'],
         ['owned', 'review-owned-posture'],
       ] as const) {
-        const analysis = buildLookupRouteAnalysis({
+        const analysis = buildLookupRouteAnalysis({ now: '2026-07-02T00:00:00.000Z',
           result,
           lookupView: createLookupViewModel(result),
           profile: null,
@@ -464,7 +477,7 @@ describe('Lookup route analysis', () => {
         availability: { applicable: false, state: 'unknown' },
       };
       for (const completedLookupDepth of ['fast', 'deep'] as const) {
-        const analysis = buildLookupRouteAnalysis({
+        const analysis = buildLookupRouteAnalysis({ now: '2026-07-02T00:00:00.000Z',
           result,
           lookupView: createLookupViewModel(result),
           profile: null,

@@ -60,6 +60,7 @@ import { lookupObservationHostname } from '../../../../packages/evidence/lookup-
 export { latestLookupTimestamp } from './lookup-route-projections.ts';
 
 export interface LookupRouteAnalysisInput {
+  now: string;
   result: LookupHttpResponse | null;
   lookupView: LookupViewModel;
   profile: BrandProfile | null;
@@ -109,31 +110,18 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     dnsRecords,
     httpEvidence,
     httpResponse,
-    httpSecurityHeaders,
-    httpDeliveryMetadata,
     tlsEvidence,
     tlsCertificate,
-    tlsSubject,
     tlsIssuer,
     tlsAltNames,
     tlsPublicKey,
-    tlsCipher,
     tlsAuthorization,
     tlsHostname,
-    tlsValidity,
-    tlsDiagnostics,
     pageIdentity,
-    pagePublicationMetadata,
     pageCanonical,
-    pageMetaRefresh,
-    pageOpenGraph,
     pageOpenGraphUrl,
     pageForms,
     pageResources,
-    pageResourceTypes,
-    pageDownloads,
-    pageFingerprints,
-    credentialSurfaceProfile,
     structuredDataIdentity,
     technologyProfile,
     pageRoleProfile,
@@ -194,28 +182,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
         },
       };
   const lifecycleDates = buildLookupLifecycleDates({ availability, rdapParsed, whoisParsed });
-  const networkDisplay = buildLookupNetworkDisplay({
-    availability,
-    reverseDns,
-    reverseDnsRecords,
-    dnsEvidence,
-    dnsRecords,
-    httpEvidence,
-    httpResponse,
-    httpSecurityHeaders,
-    httpDeliveryMetadata,
-    tlsEvidence,
-    tlsCertificate,
-    tlsSubject,
-    tlsIssuer,
-    tlsAltNames,
-    tlsPublicKey,
-    tlsCipher,
-    tlsAuthorization,
-    tlsHostname,
-    tlsValidity,
-    tlsDiagnostics,
-  });
+  const networkDisplay = buildLookupNetworkDisplay(lookupView);
   const dnsRehearsalEvidence = buildLookupDnsRehearsalEvidence(result, lookupView);
   const registryDisplay = buildLookupRegistryDisplay({
     result,
@@ -261,28 +228,8 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   const observedPageBaseline = createPageBaseline(lookupObservationHostname(availability) ?? caseDomain, availability);
   const pageComparison = comparePageBaselines(profileContextReady ? profile?.pageBaseline : null, observedPageBaseline);
   const pageDisplay = buildLookupPageDisplay({
-    pageIdentity,
-    pagePublicationMetadata,
-    pageCanonical,
-    pageMetaRefresh,
-    pageOpenGraph,
-    pageOpenGraphUrl,
-    pageForms,
-    pageResources,
-    pageResourceTypes,
-    pageDownloads,
-    pageFingerprints,
-    credentialSurfaceProfile,
-    structuredDataIdentity,
-    technologyProfile,
+    ...lookupView,
     browserLibraryProfile,
-    pageRoleProfile,
-    clientBehaviorProfile,
-    observedNetworkContext,
-    observedNetworkEndpoint,
-    observedNetwork,
-    securityPosture,
-    securityPostureSummary,
     pageComparison,
   });
   const brandMimicryReview = buildBrandMimicryReview({
@@ -449,7 +396,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
   const lookupSourceRefreshPlan = buildLookupSourceRefreshPlan(
     evidenceCoverage,
     lookupObservedAt,
-    new Date().toISOString(),
+    input.now,
     {
       task,
       observedAtByEvidence: evidenceObservedAtById,

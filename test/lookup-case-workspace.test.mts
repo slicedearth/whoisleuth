@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { LookupCaseWorkspace } from '../frontend/src/lib/controllers/lookup-case-workspace.ts';
+import { LookupCaseWorkspace, lookupCaseActions } from '../frontend/src/lib/controllers/lookup-case-workspace.ts';
 import type { LookupCaseActionResult, LookupCaseController } from '../frontend/src/lib/controllers/lookup-case-controller.ts';
 import { createCase } from '../packages/cases/case-record-operations.mts';
 
@@ -26,6 +26,48 @@ function harness(read: LookupCaseController['refresh'] = async () => ready) {
   return { workspace, selected, changeContext: (next: string) => { domain = next; revision++; },
     get published() { return published; } };
 }
+
+test('Lookup action bindings retain their observation and use the workspace publication boundary', async () => {
+  const h = harness();
+  await h.workspace.refresh();
+  const calls: Array<readonly unknown[]> = [];
+  const accepted: LookupCaseActionResult = { record: first, status: 'Saved', mutationOutcome: 'committed', clearNote: true };
+  const held = deferred<LookupCaseActionResult>();
+  const controller = {
+    open: async (...args: Parameters<LookupCaseController['open']>) => { calls.push(['open', ...args]); return accepted; },
+    appendNote: async (...args: Parameters<LookupCaseController['appendNote']>) => { calls.push(['note', ...args]); return held.promise; },
+    recordConclusion: async (...args: Parameters<LookupCaseController['recordConclusion']>) => { calls.push(['conclusion', ...args]); return accepted; },
+    recordInvestigationContext: async (...args: Parameters<LookupCaseController['recordInvestigationContext']>) => { calls.push(['context', ...args]); return accepted; },
+    recordRecheckOutcome: async (...args: Parameters<LookupCaseController['recordRecheckOutcome']>) => { calls.push(['recheck', ...args]); return accepted; },
+    recordRecipient: async (...args: Parameters<LookupCaseController['recordRecipient']>) => { calls.push(['recipient', ...args]); return accepted; },
+    recordCheckpoint: async (...args: Parameters<LookupCaseController['recordCheckpoint']>) => { calls.push(['checkpoint', ...args]); return accepted; },
+  };
+  const actions = lookupCaseActions(h.workspace, controller, () => ({
+    domain: 'example.test', evidence: {}, depth: 'deep', incidentUrl: 'https://example.test/review',
+    target: 'portal.example.test', facts: [],
+  }));
+  await actions.open();
+  assert.deepEqual(calls.pop(), ['open', 'example.test', {}, 'deep', { caseId: first.id }]);
+  await actions.createIncident('New incident');
+  assert.deepEqual(calls.pop(), ['open', 'example.test', {}, 'deep', { newIncident: true }, 'New incident']);
+  await actions.recordInvestigationContext('Review evidence', false);
+  assert.deepEqual(calls.pop(), ['context', first, { objective: 'Review evidence', incidentUrl: 'https://example.test/review', retainExactUrl: false }]);
+  await actions.recordConclusion('Reviewed', []);
+  assert.deepEqual(calls.pop(), ['conclusion', first, [], first.disposition, '', 'Reviewed', []]);
+  await actions.saveCheckpoint(['registration.registrar']);
+  assert.deepEqual(calls.pop(), ['checkpoint', first, [], ['registration.registrar'], {}]);
+  await actions.saveRefreshedCheckpoint([], ['dns.mx']);
+  assert.deepEqual(calls.pop(), ['checkpoint', first, [], ['dns.mx']]);
+  h.workspace.setNote('Original note');
+  const pending = actions.addNote();
+  h.changeContext('other.test');
+  h.workspace.reset();
+  h.workspace.setNote('New draft');
+  held.resolve(accepted);
+  await pending;
+  assert.equal(h.workspace.state.note, 'New draft');
+  assert.deepEqual(calls.pop(), ['note', first, 'Original note']);
+});
 
 describe('Lookup Case workspace lifecycle', () => {
   test('rechecks compare only the current collection and do not publish after disposal', async () => {
