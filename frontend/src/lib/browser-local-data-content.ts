@@ -26,9 +26,9 @@ const TEXT_ENCODER = new TextEncoder();
 
 export type BrowserStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
-export type LocalDataRecord = Readonly<{
+export type LocalDataRecord<Value = unknown> = Readonly<{
   id: string;
-  value: unknown;
+  value: Value;
 }>;
 
 export type BrowserLocalDataInitializationOptions = Readonly<{

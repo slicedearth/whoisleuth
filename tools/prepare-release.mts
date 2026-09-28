@@ -20,6 +20,25 @@ export function releasePreparationCommands(version: string, current: string): re
   ];
 }
 
+export function runReleasePreparation(
+  version: string,
+  current: string,
+  execute: (command: string, args: readonly string[]) => Readonly<{ status: number | null; error?: Error }> =
+    (command, args) => spawnSync(command, [...args], { cwd: ROOT, stdio: 'inherit', timeout: 120_000 }),
+  stderr: Pick<NodeJS.WriteStream, 'write'> = process.stderr,
+): number {
+  for (const [command, ...commandArgs] of releasePreparationCommands(version, current)) {
+    const result = execute(command!, commandArgs);
+    if (result.error || result.status !== 0) {
+      stderr.write(`Release preparation stopped at ${commandArgs.join(' ')}. Earlier edits remain in the working tree.\n`);
+      stderr.write(`Inspect the diff, correct the reported cause, then rerun npm run release:prepare -- ${version}.\n`);
+      if (result.error) throw result.error;
+      return 2;
+    }
+  }
+  return 0;
+}
+
 export function main(args = process.argv.slice(2)): number {
   try {
     if (args.length !== 1) throw new TypeError('Usage: npm run release:prepare -- <approved-version>');
@@ -32,15 +51,8 @@ export function main(args = process.argv.slice(2)): number {
       ? 'That release tag already exists. Published versions are immutable.'
       : 'Could not establish the local release-tag boundary.');
     const current = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version as string;
-    for (const [command, ...commandArgs] of releasePreparationCommands(version, current)) {
-      const result = spawnSync(command!, commandArgs, { cwd: ROOT, stdio: 'inherit', timeout: 120_000 });
-      if (result.error || result.status !== 0) {
-        process.stderr.write(`Release preparation stopped at ${commandArgs.join(' ')}. Earlier edits remain in the working tree.\n`);
-        process.stderr.write(`Inspect the diff, correct the reported cause, then rerun npm run release:prepare -- ${version}.\n`);
-        if (result.error) throw result.error;
-        return 2;
-      }
-    }
+    const status = runReleasePreparation(version, current);
+    if (status !== 0) return status;
     process.stdout.write(`Prepared ${version} locally. Review, verification and commit remain separate; no tag or publication was created.\n`);
     return 0;
   } catch (error) {

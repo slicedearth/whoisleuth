@@ -98,6 +98,7 @@ type WorkflowFixture = {
     if?: string;
     needs?: string[];
     permissions?: Record<string, string>;
+    env?: Record<string, string>;
     'timeout-minutes'?: number;
     'continue-on-error'?: boolean;
     steps: Array<{
@@ -302,6 +303,42 @@ describe('continuous integration workflow', () => {
       .flatMap(step => step.run?.includes('test:e2e:aggregate') ? [step.run] : []);
     assert.equal(commands.length, 2);
     assert.deepEqual(commands.map(command => /(?:^|\s)--summary(?:\s|$)/u.test(command)).sort(), [false, true]);
+  });
+
+  test('rejects stale shard and report bindings while allowing harmless command quoting', () => {
+    const mutations: Array<(workflow: WorkflowFixture) => void> = [
+      workflow => {
+        const step = fixtureJob(workflow, 'browser').steps.find(step => step.run?.includes('test:e2e:shard'))!;
+        step.run = 'npm run test:e2e:shard -- --run=1/4';
+      },
+      workflow => {
+        const step = fixtureJob(workflow, 'browser').steps.find(step => step.run?.includes('test:e2e:shard'))!;
+        step.run += ' --run=1/4';
+      },
+      workflow => { fixtureJob(workflow, 'browser').env!.WHOISLEUTH_PLAYWRIGHT_RUN_KIND = 'functional'; },
+      workflow => {
+        const step = fixtureJob(workflow, 'browser').steps.find(step => step.run === 'npm run test:e2e:summary')!;
+        step.env!.WHOISLEUTH_PLAYWRIGHT_SHARD = '1/4';
+      },
+      workflow => {
+        const step = fixtureJob(workflow, 'browser').steps.find(step => step.run === 'npm run test:e2e:summary')!;
+        step.env!.WHOISLEUTH_PLAYWRIGHT_RUN_LABEL = 'same-label';
+      },
+      workflow => {
+        for (const step of fixtureJob(workflow, 'browser-health').steps) {
+          if (step.run?.includes('test:e2e:aggregate')) step.run = step.run.replace('--summary', '');
+        }
+      },
+    ];
+    for (const mutate of mutations) {
+      const workflow = workflowFixture();
+      mutate(workflow);
+      assert.throws(() => assertHostedCiParity(stringify(workflow)), /matrix|machine inventory/u);
+    }
+    const workflow = workflowFixture();
+    const shard = fixtureJob(workflow, 'browser').steps.find(step => step.run?.includes('test:e2e:shard'))!;
+    shard.run = 'npm run test:e2e:shard -- --run "${{matrix.shard}}"';
+    assert.doesNotThrow(() => assertHostedCiParity(stringify(workflow)));
   });
 
   test('can inspect and run pre-install checks without loading the development parser', () => {

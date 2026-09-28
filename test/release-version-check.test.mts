@@ -26,12 +26,12 @@ import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts'
 import { WHOISLEUTH_APPLICATION_VERSION } from '../lib/application-version.mts';
 import { buildCaseSupportedContractBaseline } from '../packages/contracts/case-supported-contract-baseline.mts';
 import { CASE_SUPPORTED_CONTRACT_BASELINE_PATH } from '../tools/case-supported-contract-baseline.mts';
-import { releasePreparationCommands } from '../tools/prepare-release.mts';
+import { releasePreparationCommands, runReleasePreparation } from '../tools/prepare-release.mts';
 import { npmExecutableName } from '../tools/maintainer-tool-helpers.mts';
 
 function capture() {
   let value = '';
-  return { stream: { write(chunk: unknown) { value += String(chunk); } }, value: () => value };
+  return { stream: { write(chunk: unknown) { value += String(chunk); return true; } }, value: () => value };
 }
 
 function manifests(version = '1.5.0') {
@@ -64,6 +64,41 @@ describe('release semantic-version validation', () => {
     for (const version of ['0.1.0', '1.5.0', '2.0.0-rc.1', '2.0.0-rc.1+build.42']) {
       assert.equal(normalizeSemanticVersion(version), version);
     }
+  });
+
+  test('stops at a failed preparation phase and resumes an already updated version without another bump', () => {
+    for (const failedPhase of [0, 1, 2]) {
+      const stderr = capture();
+      let current = '4.1.0';
+      const executed: string[][] = [];
+      assert.equal(runReleasePreparation('4.1.1', current, (command, args) => {
+        executed.push([command, ...args]);
+        if (executed.length - 1 === failedPhase) return { status: 1 };
+        if (args[0] === 'version') current = args[1]!;
+        return { status: 0 };
+      }, stderr.stream), 2);
+      assert.equal(executed.length, failedPhase + 1);
+      assert.equal(current, failedPhase === 0 ? '4.1.0' : '4.1.1');
+      assert.match(stderr.value(), /Earlier edits remain/u);
+      assert.match(stderr.value(), /rerun npm run release:prepare -- 4\.1\.1/u);
+      const resumed: string[][] = [];
+      assert.equal(runReleasePreparation('4.1.1', current, (command, args) => {
+        resumed.push([command, ...args]);
+        return { status: 0 };
+      }, stderr.stream), 0);
+      assert.equal(resumed.filter(command => command[1] === 'version').length, failedPhase === 0 ? 1 : 0);
+      assert.deepEqual(resumed.slice(-2).map(command => command.slice(1)), [
+        ['tools/public-product-catalogue.mts', '--write'], ['tools/release-version-check.mts'],
+      ]);
+    }
+    const stderr = capture();
+    let attempts = 0;
+    assert.throws(() => runReleasePreparation('4.1.1', '4.1.0', () => {
+      attempts += 1;
+      return { status: null, error: new Error('fixture execution failed') };
+    }, stderr.stream), /fixture execution failed/u);
+    assert.equal(attempts, 1);
+    assert.match(stderr.value(), /Earlier edits remain/u);
   });
 
   test('rejects prefixes, whitespace, missing components, leading zeroes, and invalid identifiers', () => {

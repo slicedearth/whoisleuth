@@ -19,7 +19,7 @@ import {
   serializeWatchlistStore,
   watchlistStoreVersion,
 } from '../../../packages/workspace/watchlist-store.mts';
-import type { WatchlistCollection, WatchlistEntry } from '../../../packages/workspace/watchlist-store.mts';
+import type { WatchlistCollection } from '../../../packages/workspace/watchlist-store.mts';
 import {
   SHORTLIST_SCHEMA,
   normalizeShortlistStore,
@@ -34,7 +34,7 @@ import {
   normalizeCtHistoryStore,
   serializeCtHistoryStore,
 } from '../../../packages/workspace/ct-history.mts';
-import type { CtHistoryEntry, CtHistoryStore } from '../../../packages/workspace/ct-history.mts';
+import type { CtHistoryStore } from '../../../packages/workspace/ct-history.mts';
 import {
   detectionRuleStoreVersion,
   normalizeDetectionRuleStore,
@@ -77,7 +77,7 @@ import {
   enforceBulkReviewBudget,
   serializeBulkReviewStore,
 } from '../../../packages/workspace/bulk-review-model.mts';
-import type { BulkReviewRecord, BulkReviewStore } from '../../../packages/workspace/bulk-review-model.mts';
+import type { BulkReviewStore } from '../../../packages/workspace/bulk-review-model.mts';
 import {
   ANALYST_REVIEW_STATE_SCHEMA,
   ANALYST_REVIEW_STATE_BROWSER_STORAGE_REVISION,
@@ -88,7 +88,7 @@ import {
   migrateDevelopmentAnalystReviewStateStore,
   serializeAnalystReviewStateStore,
 } from '../../../packages/monitoring/analyst-review-state.mts';
-import type { AnalystReviewStateRecord, AnalystReviewStateStore } from '../../../packages/monitoring/analyst-review-state.mts';
+import type { AnalystReviewStateStore } from '../../../packages/monitoring/analyst-review-state.mts';
 import {
   BrowserLocalDataError,
   plaintextJsonCodec,
@@ -116,32 +116,13 @@ import {
   LEGACY_WEBSITE_SNAPSHOTS_KEY,
 } from './browser-local-data-contract.ts';
 import { BROWSER_LOCAL_COLLECTION_MANIFEST, BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID } from '../../../packages/contracts/browser-local-collection-manifest.mts';
-import { CASE_DRAFT_SCHEMA, type CaseDraftRecord, type CaseDraftStore } from '../../../packages/contracts/case-drafts.mts';
+import { CASE_DRAFT_SCHEMA, type CaseDraftStore } from '../../../packages/contracts/case-drafts.mts';
 import { emptyCaseDraftStore, normalizeCaseDraftStore, serializeCaseDraftStore, caseDraftStoreVersion } from '../../../packages/cases/case-drafts.mts';
 import { caseAttachmentReferences } from '../../../packages/cases/case-attachment-model.mts';
-import { CASE_VIEWS_SCHEMA, type CaseViewsStore, type SavedCaseView } from '../../../packages/contracts/case-views-contract.mts';
+import { CASE_VIEWS_SCHEMA, type CaseViewsStore } from '../../../packages/contracts/case-views-contract.mts';
 import { caseViewsStoreVersion, emptyCaseViewsStore, normalizeCaseViewsStore, serializeCaseViewsStore } from '../../../packages/workspace/case-views.mts';
-import { REVIEW_SESSION_SCHEMA, type ReviewSessionRecord, type ReviewSessionStore } from '../../../packages/contracts/review-session-contract.mts';
+import { REVIEW_SESSION_SCHEMA, type ReviewSessionStore } from '../../../packages/contracts/review-session-contract.mts';
 import { emptyReviewSessionStore, normalizeReviewSessionStore, reviewSessionStoreVersion, serializeReviewSessionStore } from '../../../packages/workspace/review-session.mts';
-
-export type BrowserLocalCollectionValueMap = Readonly<{
-  review_session: ReviewSessionRecord;
-  case_drafts: CaseDraftRecord;
-  case_views: SavedCaseView;
-  cases: CaseRecord;
-  campaigns: CampaignRecord;
-  brand_profiles: BrandProfile;
-  watchlists: WatchlistEntry;
-  shortlist: ShortlistRecord;
-  ct_history: CtHistoryEntry;
-  detection_rules: DetectionRule;
-  relationship_observations: RelationshipObservation;
-  bulk_sessions: BulkSession;
-  website_snapshots: WebsiteProfileSnapshot;
-  investigation_templates: InvestigationTemplate;
-  bulk_review: BulkReviewRecord;
-  analyst_review_state: AnalystReviewStateRecord;
-}>;
 
 export type BrowserLocalCollectionId = keyof typeof BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID;
 export type BrowserLocalDecodedCollectionRecord<Collection extends BrowserLocalCollectionId> = Readonly<{
@@ -149,7 +130,7 @@ export type BrowserLocalDecodedCollectionRecord<Collection extends BrowserLocalC
   value: BrowserLocalCollectionValueMap[Collection];
 }>;
 
-function recordsFromArray<T>(values: readonly T[], key: (value: T) => unknown): LocalDataRecord[] {
+function recordsFromArray<T>(values: readonly T[], key: (value: T) => unknown): LocalDataRecord<T>[] {
   return values.map((value) => ({ id: String(key(value) ?? ''), value }));
 }
 
@@ -189,7 +170,7 @@ function watchlistVersionedRoot(raw: unknown): boolean {
     && record(value.watchlists) !== null;
 }
 
-export const CASES_COLLECTION: LocalDataCollectionDefinition<CaseRecord[]> = Object.freeze({
+export const CASES_COLLECTION = Object.freeze({
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.cases,
   legacyKey: LEGACY_CASES_KEY,
   empty: () => [],
@@ -202,9 +183,9 @@ export const CASES_COLLECTION: LocalDataCollectionDefinition<CaseRecord[]> = Obj
   split: (cases) => recordsFromArray(cases, (record) => record.id),
   binaryReferences: caseAttachmentReferences,
   join: (records, schemaVersion) => ({ version: schemaVersion, cases: arrayFromRecords(records) }),
-});
+} satisfies LocalDataCollectionDefinition<CaseRecord[]>);
 
-export const CAMPAIGNS_COLLECTION: LocalDataCollectionDefinition<CampaignRecord[]> = Object.freeze({
+export const CAMPAIGNS_COLLECTION = Object.freeze({
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.campaigns,
   legacyKey: LEGACY_CAMPAIGNS_KEY,
   empty: () => [],
@@ -214,9 +195,9 @@ export const CAMPAIGNS_COLLECTION: LocalDataCollectionDefinition<CampaignRecord[
   serialize: serializeCampaignStore,
   split: (campaigns) => recordsFromArray(campaigns, (record) => record.id),
   join: (records, schemaVersion) => ({ version: schemaVersion, campaigns: arrayFromRecords(records) }),
-});
+} satisfies LocalDataCollectionDefinition<CampaignRecord[]>);
 
-export const PROFILES_COLLECTION: LocalDataCollectionDefinition<BrandProfile[]> = Object.freeze({
+export const PROFILES_COLLECTION = Object.freeze({
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.brand_profiles,
   legacyKey: LEGACY_PROFILES_KEY,
   empty: () => [],
@@ -226,9 +207,9 @@ export const PROFILES_COLLECTION: LocalDataCollectionDefinition<BrandProfile[]> 
   serialize: serializeBrandProfileStore,
   split: (profiles) => recordsFromArray(profiles, (record) => record.id),
   join: (records, schemaVersion) => ({ version: schemaVersion, profiles: arrayFromRecords(records) }),
-});
+} satisfies LocalDataCollectionDefinition<BrandProfile[]>);
 
-export const WATCHLISTS_COLLECTION: LocalDataCollectionDefinition<WatchlistCollection> = Object.freeze({
+export const WATCHLISTS_COLLECTION = Object.freeze({
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.watchlists,
   legacyKey: LEGACY_WATCHLIST_KEY,
   empty: () => ({}),
@@ -242,9 +223,9 @@ export const WATCHLISTS_COLLECTION: LocalDataCollectionDefinition<WatchlistColle
     version: schemaVersion,
     watchlists: Object.fromEntries(records.map((record) => [record.id, record.value])),
   }),
-});
+} satisfies LocalDataCollectionDefinition<WatchlistCollection>);
 
-export const SHORTLIST_COLLECTION: LocalDataCollectionDefinition<ShortlistRecord[]> = Object.freeze({
+export const SHORTLIST_COLLECTION = Object.freeze({
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.shortlist,
   legacyKey: LEGACY_SHORTLIST_KEY,
   empty: () => [],
@@ -254,9 +235,9 @@ export const SHORTLIST_COLLECTION: LocalDataCollectionDefinition<ShortlistRecord
   serialize: serializeShortlistStore,
   split: (entries) => recordsFromArray(entries, (record) => record.domain),
   join: (records, schemaVersion) => ({ schema: SHORTLIST_SCHEMA, version: schemaVersion, entries: arrayFromRecords(records) }),
-});
+} satisfies LocalDataCollectionDefinition<ShortlistRecord[]>);
 
-export const CT_HISTORY_COLLECTION: LocalDataCollectionDefinition<CtHistoryStore> = Object.freeze({
+export const CT_HISTORY_COLLECTION = Object.freeze({
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.ct_history,
   legacyKey: LEGACY_CT_HISTORY_KEY,
   empty: emptyCtHistoryStore,
@@ -266,9 +247,9 @@ export const CT_HISTORY_COLLECTION: LocalDataCollectionDefinition<CtHistoryStore
   serialize: serializeCtHistoryStore,
   split: (store) => recordsFromArray(store.entries, (record) => record.query),
   join: (records, schemaVersion) => ({ version: schemaVersion, entries: arrayFromRecords(records) }),
-});
+} satisfies LocalDataCollectionDefinition<CtHistoryStore>);
 
-export const DETECTION_RULES_COLLECTION: LocalDataCollectionDefinition<DetectionRule[]> = Object.freeze({
+export const DETECTION_RULES_COLLECTION = Object.freeze({
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.detection_rules,
   legacyKey: LEGACY_DETECTION_RULES_KEY,
   empty: () => [],
@@ -278,9 +259,9 @@ export const DETECTION_RULES_COLLECTION: LocalDataCollectionDefinition<Detection
   serialize: serializeDetectionRuleStore,
   split: (rules) => recordsFromArray(rules, (record) => record.id),
   join: (records, schemaVersion) => ({ version: schemaVersion, rules: arrayFromRecords(records) }),
-});
+} satisfies LocalDataCollectionDefinition<DetectionRule[]>);
 
-export const RELATIONSHIP_OBSERVATIONS_COLLECTION: LocalDataCollectionDefinition<RelationshipObservation[]> = Object.freeze({
+export const RELATIONSHIP_OBSERVATIONS_COLLECTION = Object.freeze({
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.relationship_observations,
   legacyKey: LEGACY_RELATIONSHIP_OBSERVATIONS_KEY,
   empty: () => [],
@@ -294,9 +275,9 @@ export const RELATIONSHIP_OBSERVATIONS_COLLECTION: LocalDataCollectionDefinition
     version: schemaVersion,
     observations: arrayFromRecords(records),
   }),
-});
+} satisfies LocalDataCollectionDefinition<RelationshipObservation[]>);
 
-export const BULK_SESSIONS_COLLECTION: LocalDataCollectionDefinition<BulkSession[]> = Object.freeze({
+export const BULK_SESSIONS_COLLECTION = Object.freeze({
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.bulk_sessions,
   legacyKey: LEGACY_BULK_SESSIONS_KEY,
   empty: () => [],
@@ -311,9 +292,9 @@ export const BULK_SESSIONS_COLLECTION: LocalDataCollectionDefinition<BulkSession
     version: schemaVersion,
     sessions: arrayFromRecords(records),
   }),
-});
+} satisfies LocalDataCollectionDefinition<BulkSession[]>);
 
-export const WEBSITE_SNAPSHOTS_COLLECTION: LocalDataCollectionDefinition<WebsiteProfileSnapshot[]> = Object.freeze({
+export const WEBSITE_SNAPSHOTS_COLLECTION = Object.freeze({
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.website_snapshots,
   legacyKey: LEGACY_WEBSITE_SNAPSHOTS_KEY,
   empty: () => [],
@@ -327,9 +308,9 @@ export const WEBSITE_SNAPSHOTS_COLLECTION: LocalDataCollectionDefinition<Website
     version: schemaVersion,
     snapshots: arrayFromRecords(records),
   }),
-});
+} satisfies LocalDataCollectionDefinition<WebsiteProfileSnapshot[]>);
 
-export const INVESTIGATION_TEMPLATES_COLLECTION: LocalDataCollectionDefinition<InvestigationTemplate[]> = Object.freeze({
+export const INVESTIGATION_TEMPLATES_COLLECTION = Object.freeze({
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.investigation_templates,
   legacyKey: LEGACY_INVESTIGATION_TEMPLATES_KEY,
   empty: () => [],
@@ -343,9 +324,9 @@ export const INVESTIGATION_TEMPLATES_COLLECTION: LocalDataCollectionDefinition<I
     version: schemaVersion,
     templates: arrayFromRecords(records),
   }),
-});
+} satisfies LocalDataCollectionDefinition<InvestigationTemplate[]>);
 
-export const BULK_REVIEW_COLLECTION: LocalDataCollectionDefinition<BulkReviewStore> = Object.freeze({
+export const BULK_REVIEW_COLLECTION = Object.freeze({
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.bulk_review,
   legacyKey: LEGACY_BULK_REVIEW_KEY,
   empty: () => enforceBulkReviewBudget(null),
@@ -360,9 +341,9 @@ export const BULK_REVIEW_COLLECTION: LocalDataCollectionDefinition<BulkReviewSto
   serialize: serializeBulkReviewStore,
   split: (store) => bulkReviewRecords(store).map((value) => ({ id: value.id, value })),
   join: (records) => bulkReviewStoreFromRecords(records.map((record) => record.value)),
-});
+} satisfies LocalDataCollectionDefinition<BulkReviewStore>);
 
-export const ANALYST_REVIEW_STATE_COLLECTION: LocalDataCollectionDefinition<AnalystReviewStateStore> = Object.freeze({
+export const ANALYST_REVIEW_STATE_COLLECTION = Object.freeze({
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.analyst_review_state,
   legacyKey: LEGACY_ANALYST_REVIEW_STATE_KEY,
   empty: emptyAnalystReviewStateStore,
@@ -382,9 +363,9 @@ export const ANALYST_REVIEW_STATE_COLLECTION: LocalDataCollectionDefinition<Anal
       records: records.map((record) => record.value),
     })
     : analystReviewStateStoreFromRecords(records.map((record) => record.value)),
-});
+} satisfies LocalDataCollectionDefinition<AnalystReviewStateStore>);
 
-export const CASE_DRAFTS_COLLECTION: LocalDataCollectionDefinition<CaseDraftStore> = Object.freeze({
+export const CASE_DRAFTS_COLLECTION = Object.freeze({
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.case_drafts,
   legacyKey: 'whoisleuth-case-drafts-v1',
   legacyRollback: false,
@@ -395,9 +376,9 @@ export const CASE_DRAFTS_COLLECTION: LocalDataCollectionDefinition<CaseDraftStor
   serialize: serializeCaseDraftStore,
   split: (store) => store.records.map(value => ({ id: value.id, value })),
   join: (records, version) => ({ schema: CASE_DRAFT_SCHEMA, version, records: records.map(item => item.value) }),
-});
+} satisfies LocalDataCollectionDefinition<CaseDraftStore>);
 
-export const CASE_VIEWS_COLLECTION: LocalDataCollectionDefinition<CaseViewsStore> = Object.freeze({
+export const CASE_VIEWS_COLLECTION = Object.freeze({
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.case_views,
   legacyKey: 'whoisleuth-case-views-v1',
   legacyRollback: false,
@@ -408,9 +389,9 @@ export const CASE_VIEWS_COLLECTION: LocalDataCollectionDefinition<CaseViewsStore
   serialize: serializeCaseViewsStore,
   split: (store) => store.views.map(value => ({ id: value.id, value })),
   join: (records, version) => ({ schema: CASE_VIEWS_SCHEMA, version, views: records.map(item => item.value) }),
-});
+} satisfies LocalDataCollectionDefinition<CaseViewsStore>);
 
-export const REVIEW_SESSION_COLLECTION: LocalDataCollectionDefinition<ReviewSessionStore> = Object.freeze({
+export const REVIEW_SESSION_COLLECTION = Object.freeze({
   ...BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID.review_session,
   legacyKey: 'whoisleuth-review-session-v1', legacyRollback: false,
   empty: emptyReviewSessionStore,
@@ -418,7 +399,7 @@ export const REVIEW_SESSION_COLLECTION: LocalDataCollectionDefinition<ReviewSess
   normalize: normalizeReviewSessionStore, version: reviewSessionStoreVersion, serialize: serializeReviewSessionStore,
   split: store => store.records.map(value => ({ id: value.id, value })),
   join: (records, version) => ({ schema: REVIEW_SESSION_SCHEMA, version, records: records.map(item => item.value) }),
-});
+} satisfies LocalDataCollectionDefinition<ReviewSessionStore>);
 
 const browserLocalCollectionsById = {
   review_session: REVIEW_SESSION_COLLECTION,
@@ -441,6 +422,10 @@ const browserLocalCollectionsById = {
 
 export type BrowserLocalCollectionDocumentMap = {
   readonly [Collection in BrowserLocalCollectionId]: ReturnType<typeof browserLocalCollectionsById[Collection]['normalize']>;
+};
+
+export type BrowserLocalCollectionValueMap = {
+  readonly [Collection in BrowserLocalCollectionId]: ReturnType<typeof browserLocalCollectionsById[Collection]['split']>[number]['value'];
 };
 
 export const BROWSER_LOCAL_COLLECTIONS = Object.freeze(

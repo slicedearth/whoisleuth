@@ -60,8 +60,8 @@ export const CI_HOSTED_ONLY_BROWSER_SCRIPTS = Object.freeze([
 ] as const);
 
 export const CI_BROWSER_HEALTH_SCRIPTS = Object.freeze([
-  'test:e2e:aggregate',
-  'test:e2e:aggregate',
+  'test:e2e:aggregate', // Machine inventory consumed by timing evidence.
+  'test:e2e:aggregate', // Human summary, selected with --summary.
   'verification:timing:update-candidate',
 ] as const);
 
@@ -262,6 +262,7 @@ type WorkflowStep = {
   if?: string | boolean;
   'continue-on-error'?: boolean | string;
   with?: Record<string, unknown>;
+  env?: Record<string, unknown>;
 };
 type WorkflowJob = {
   steps: WorkflowStep[];
@@ -269,6 +270,7 @@ type WorkflowJob = {
   if?: string | boolean;
   'continue-on-error'?: boolean | string;
   permissions?: unknown;
+  env?: Record<string, unknown>;
 };
 type Workflow = { jobs: Record<string, WorkflowJob>; permissions?: unknown };
 
@@ -376,6 +378,28 @@ function assertReadOnlyPermissions(value: unknown): void {
   }
 }
 
+function assertBrowserInvocationBindings(workflow: Workflow): void {
+  const browser = workflowJob(workflow, 'browser');
+  const shard = browser.steps.find(step => stepScripts(step).includes('test:e2e:shard'));
+  const command = shard?.run ?? '';
+  if ((command.match(/(?:^|\s)--run(?:=|\s)/gu) ?? []).length !== 1
+    || !/--run(?:=|\s+)["']?\$\{\{\s*matrix\.shard\s*\}\}["']?(?:\s|$)/u.test(command)
+    || condition(browser.env?.WHOISLEUTH_PLAYWRIGHT_RUN_KIND) !== 'matrix.kind') {
+    throw new Error('Functional browser execution must select its matrix shard and run kind.');
+  }
+  const summary = browser.steps.find(step => stepScripts(step).includes('test:e2e:summary'));
+  if (condition(summary?.env?.WHOISLEUTH_PLAYWRIGHT_SHARD) !== 'matrix.shard'
+    || condition(summary?.env?.WHOISLEUTH_PLAYWRIGHT_RUN_LABEL) !== 'matrix.label') {
+    throw new Error('Browser result summaries must identify their executed matrix shard and label.');
+  }
+  const reports = workflowJob(workflow, 'browser-health').steps
+    .filter(step => stepScripts(step).includes('test:e2e:aggregate'));
+  const human = reports.filter(step => /(?:^|\s)--summary(?:\s|$)/u.test(step.run ?? ''));
+  if (reports.length !== 2 || human.length !== 1) {
+    throw new Error('Browser health requires one machine inventory and one human summary.');
+  }
+}
+
 export function expectedHostedCiScriptPlan(): HostedCiScriptPlan {
   return Object.freeze({
     quality: Object.freeze(['security:staged', ...CI_PREFLIGHT_SCRIPTS, ...CI_QUALITY_SCRIPTS]),
@@ -429,6 +453,7 @@ export function assertHostedCiParity(
     throw new Error('The required verify job must always account for every verification lane.');
   }
   assertFrontendBuildArtifactFlow(parsed);
+  assertBrowserInvocationBindings(parsed);
 }
 
 export function formatLocalCiPlan(): string {
