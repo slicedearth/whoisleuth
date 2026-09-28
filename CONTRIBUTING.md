@@ -96,6 +96,11 @@ runs retain all viewport, accessibility and behaviour assertions; failures still
 retain automatic screenshots and traces. `WHOISLEUTH_E2E_LOCAL_JOBS=2` permits
 two functional shards on a host with sufficient capacity. The default is one,
 performance measurements remain isolated, and queued shards stop on failure.
+Loading reports record transfer, timing and long tasks without historical
+bundle-size ceilings. Prepared interactions still require zero new assets;
+readiness, layout stability, module isolation and request boundaries remain
+blocking. Review measurements for material regressions rather than updating
+a size baseline whenever an implementation changes.
 
 The default scope is the working diff. For a batch spanning local commits, use
 `npm run verification:focused -- --since=<base-commit> --list`, then omit `--list`

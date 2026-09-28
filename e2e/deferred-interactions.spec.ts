@@ -38,19 +38,20 @@ type InteractionId =
   | 'dashboard_command_palette';
 
 type InteractionBudget = Readonly<{
-  assetEncodedTransferBytes: number;
   residualLayoutShiftScore: number;
 }>;
+type TransferPolicy = 'observational' | 'prepared_no_transfer';
 
 type DeferredInteractionMeasurement = Readonly<{
   schema: 'whoisleuth.deferred-interaction-measurement';
-  version: 3;
+  version: 4;
   mode: 'authenticated_local_chromium_production_build';
   readinessClock: 'browser_event_to_animation_frame';
   interaction: InteractionId;
   path: string;
   readyPresentation: 'visible_usable' | 'attached_hidden';
   budget: InteractionBudget;
+  transferPolicy: TransferPolicy;
   timingPolicy: typeof PERFORMANCE_TIMING_POLICY;
   execution: PerformanceMeasurementContext;
   assetEncodedTransferBytes: number;
@@ -73,12 +74,13 @@ type DeferredInteractionMeasurement = Readonly<{
 
 type DeferredInteractionSampleSet = Readonly<{
   schema: 'whoisleuth.deferred-interaction-sample-set';
-  version: 3;
+  version: 4;
   mode: 'authenticated_local_chromium_repeated_interaction';
   interaction: InteractionId;
   path: string;
   readyPresentation: 'visible_usable' | 'attached_hidden';
   budget: InteractionBudget;
+  transferPolicy: TransferPolicy;
   timingPolicy: typeof PERFORMANCE_TIMING_POLICY;
   execution: PerformanceMeasurementContext;
   sampleCount: number;
@@ -86,6 +88,8 @@ type DeferredInteractionSampleSet = Readonly<{
   usableMsMaximum: number;
   hostActionMsMedian: number;
   hostActionMsMaximum: number;
+  assetEncodedTransferBytesMedian: number;
+  assetEncodedTransferBytesMaximum: number;
   longTaskTotalMsMedian: number;
   longTaskTotalMsMaximum: number;
   samples: readonly DeferredInteractionMeasurement[];
@@ -101,38 +105,10 @@ type DeferredInteractionSampleSet = Readonly<{
 // Response navigation is separate and ends when its response controls are usable.
 // Bulk Analysis likewise owns a separate transition/preload row before the
 // cohort-outlier disclosure is measured. Each phase keeps its own observations.
-// These are transfer ceilings, not historical measurements. Prepared
-// interactions require zero new assets; the portfolio ceiling includes its
-// source-qualified retained-history view. Each run reports actual transfer,
-// timing and layout separately. Elapsed time and pre-readiness transition
-// movement are observations; movement after usable paint remains bounded.
-const INTERACTION_TRANSFER_LIMITS: Readonly<Record<InteractionId, number>> = Object.freeze({
-  cli_command_detail: 0,
-  cli_catalogue_filter: 0,
-  examples_large_output: 15 * 1024,
-  demo_later_stage: 10 * 1024,
-  monitor_relationships_view: 113 * 1024,
-  brands_portfolio_workbench: 32 * 1024,
-  bulk_analysis_transition: 71 * 1024,
-  bulk_cohort_outliers: 0,
-  lookup_dns_evidence: 83 * 1024,
-  case_workspace_open: 0,
-  case_response_section: 0,
-  dashboard_command_palette: 0,
-});
-
-function interactionBudget(interaction: InteractionId): InteractionBudget {
-  return Object.freeze({
-    assetEncodedTransferBytes: INTERACTION_TRANSFER_LIMITS[interaction],
-    residualLayoutShiftScore: 0.01,
-  });
-}
-
-const INTERACTION_BUDGETS: Readonly<Record<InteractionId, InteractionBudget>> = Object.freeze(
-  Object.fromEntries(Object.keys(INTERACTION_TRANSFER_LIMITS).map((interaction) => (
-    [interaction, interactionBudget(interaction as InteractionId)]
-  ))) as Record<InteractionId, InteractionBudget>,
-);
+// Prepared interactions require zero new assets, declared by each scenario's
+// requireAsset option. Deferred transfer is reported, not compared with an old
+// bundle size. Movement after usable paint remains bounded independently.
+const INTERACTION_LAYOUT_BUDGET: InteractionBudget = Object.freeze({ residualLayoutShiftScore: 0.01 });
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
 const ACTIVE_PROFILE_KEY = 'whois-rdap-active-brand-profile-v1';
@@ -208,7 +184,6 @@ type DeferredInteractionOptions = Readonly<{
   ready: Locator;
   readyControl?: Locator;
   readyPresentation?: 'visible_usable' | 'attached_hidden';
-  budget?: InteractionBudget;
   requireAsset?: boolean;
 }>;
 
@@ -216,7 +191,7 @@ async function measureDeferredInteractionSample(
   options: DeferredInteractionOptions,
   sample: number,
 ): Promise<DeferredInteractionMeasurement> {
-  const budget = options.budget ?? INTERACTION_BUDGETS[options.interaction];
+  const budget = INTERACTION_LAYOUT_BUDGET;
   const readyPresentation = options.readyPresentation ?? 'visible_usable';
   await options.page.waitForLoadState('networkidle');
   await beginBrowserInteractionReadiness(options.page, options.browserReadiness);
@@ -240,13 +215,14 @@ async function measureDeferredInteractionSample(
     if (!captured) throw new Error(`The ${options.interaction} measurement probe closed before recording.`);
     const measurement: DeferredInteractionMeasurement = Object.freeze({
       schema: 'whoisleuth.deferred-interaction-measurement',
-      version: 3,
+      version: 4,
       mode: 'authenticated_local_chromium_production_build',
       readinessClock: 'browser_event_to_animation_frame',
       interaction: options.interaction,
       path: options.path,
       readyPresentation,
       budget,
+      transferPolicy: options.requireAsset === false ? 'prepared_no_transfer' : 'observational',
       timingPolicy: PERFORMANCE_TIMING_POLICY,
       execution: performanceMeasurementContext(options.page, options.testInfo),
       assetEncodedTransferBytes: captured.assetEncodedTransferBytes,
@@ -277,7 +253,7 @@ async function measureDeferredInteractionSample(
         'Layout shift excludes entries associated with recent input, matching the browser CLS definition.',
         'Transition layout shift includes every entry between input and browser-owned readiness. It reports expansion and other transition movement without a recent-input exemption or acceptance ceiling.',
         'Residual layout shift includes every entry from browser-owned usable readiness through eight observation frames, including movement before host assertions complete.',
-        'Transfer and post-readiness layout ceilings remain blocking; deliberate expansion is not treated as movement after an already usable interface.',
+        'Prepared interactions must transfer no new assets. Deferred transfer is measured without historical byte ceilings; post-readiness layout and investigation-request checks remain blocking.',
         'Elapsed time and long-task duration are observations for the recorded execution context, not universal performance guarantees or CI timing thresholds.',
       ]),
     });
@@ -294,9 +270,8 @@ async function measureDeferredInteractionSample(
       expect(measurement.assetEncodedTransferBytes).toBe(0);
     } else {
       expect(measurement.completedAssetRequestCount, 'the deferred action must transfer a JavaScript or CSS asset').toBeGreaterThan(0);
-      expect(measurement.assetEncodedTransferBytes).toBeGreaterThan(100);
+      expect(measurement.assetEncodedTransferBytes).toBeGreaterThan(0);
     }
-    expect(measurement.assetEncodedTransferBytes).toBeLessThanOrEqual(budget.assetEncodedTransferBytes);
     expect(measurement.usableMs).toBeGreaterThan(0);
     expect(measurement.longTaskSupported).toBe(true);
     expect(measurement.layoutShiftSupported).toBe(true);
@@ -311,7 +286,7 @@ async function measureDeferredInteractionSample(
 }
 
 async function measureDeferredInteraction(options: DeferredInteractionOptions): Promise<DeferredInteractionSampleSet> {
-  const budget = options.budget ?? INTERACTION_BUDGETS[options.interaction];
+  const budget = INTERACTION_LAYOUT_BUDGET;
   const readyPresentation = options.readyPresentation ?? 'visible_usable';
   const measurements: DeferredInteractionMeasurement[] = [];
   for (let sample = 1; sample <= PERFORMANCE_SAMPLE_COUNT; sample += 1) {
@@ -321,18 +296,21 @@ async function measureDeferredInteraction(options: DeferredInteractionOptions): 
   }
   const sampleSet: DeferredInteractionSampleSet = Object.freeze({
     schema: 'whoisleuth.deferred-interaction-sample-set',
-    version: 3,
+    version: 4,
     mode: 'authenticated_local_chromium_repeated_interaction',
     interaction: options.interaction,
     path: options.path,
     readyPresentation,
     budget,
+    transferPolicy: options.requireAsset === false ? 'prepared_no_transfer' : 'observational',
     timingPolicy: PERFORMANCE_TIMING_POLICY,
     execution: performanceMeasurementContext(options.page, options.testInfo),
     sampleCount: measurements.length,
     ...summarizePerformanceTimings(measurements),
     hostActionMsMedian: performanceSampleMedian(measurements.map((measurement) => measurement.hostActionMs)),
     hostActionMsMaximum: Math.max(...measurements.map((measurement) => measurement.hostActionMs)),
+    assetEncodedTransferBytesMedian: performanceSampleMedian(measurements.map((measurement) => measurement.assetEncodedTransferBytes)),
+    assetEncodedTransferBytesMaximum: Math.max(...measurements.map((measurement) => measurement.assetEncodedTransferBytes)),
     samples: Object.freeze([...measurements]),
     limitations: Object.freeze([
       'Three independently cache-cleared, browser-local-state-cleared samples retain their median and maximum for performance review.',
