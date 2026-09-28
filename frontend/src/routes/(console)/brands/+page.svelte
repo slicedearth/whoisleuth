@@ -82,15 +82,56 @@
     { id: 'tools', label: 'Tools' },
   ] as const;
   type BrandsView = (typeof BRAND_VIEWS)[number]['id'];
-  type BrandWorkbench =
-    | 'control'
-    | 'portfolio'
-    | 'posture'
-    | 'baselines'
-    | 'passport'
-    | 'certificates'
-    | 'attestations'
-    | 'mail';
+  const brandWorkbenches = {
+    control: {
+      label: 'Domain controls',
+      load: () => import('$lib/components/DomainControlCentre.svelte'),
+      retainDraft: false,
+    },
+    portfolio: {
+      label: 'Compare owned domains',
+      load: () => import('$lib/components/BrandPortfolioPostureMatrix.svelte'),
+      retainDraft: false,
+    },
+    posture: {
+      label: 'Review current settings',
+      load: () => import('$lib/components/BrandPostureAudit.svelte'),
+      retainDraft: false,
+    },
+    baselines: {
+      label: 'Expected domain settings',
+      load: () => import('$lib/components/BrandDesiredPostureBaselines.svelte'),
+      retainDraft: true,
+    },
+    passport: {
+      label: 'Portable domain settings',
+      load: () => import('$lib/components/BrandDomainControlPassport.svelte'),
+      retainDraft: true,
+    },
+    certificates: {
+      label: 'Certificate events',
+      load: () => import('$lib/components/BrandCertificateEventReplay.svelte'),
+      retainDraft: false,
+    },
+    attestations: {
+      label: 'Reviewed account controls',
+      load: () => import('$lib/components/BrandProtectionAttestations.svelte'),
+      retainDraft: true,
+    },
+    mail: {
+      label: 'Mail reports',
+      load: () => import('$lib/components/MailReportWorkbench.svelte'),
+      retainDraft: true,
+    },
+  } as const;
+  type BrandWorkbench = keyof typeof brandWorkbenches;
+  const brandWorkbenchOptions = (Object.keys(brandWorkbenches) as BrandWorkbench[]).map((id) => ({
+    id,
+    label: brandWorkbenches[id].label,
+  }));
+  function resolveBrandWorkbench(value: string | null): BrandWorkbench | null {
+    return brandWorkbenchOptions.find((option) => option.id === value)?.id ?? null;
+  }
   let profiles = $state<BrandProfile[]>([]);
   let activeId = $state('');
   let message = $state('');
@@ -154,22 +195,9 @@
   $effect(() => {
     profilesOpen = brandsView === 'overview';
   });
-  const brandWorkbenchOptions: ReadonlyArray<Readonly<{ id: BrandWorkbench; label: string }>> = [
-    { id: 'control', label: 'Domain controls' },
-    { id: 'portfolio', label: 'Compare owned domains' },
-    { id: 'posture', label: 'Review current settings' },
-    { id: 'baselines', label: 'Expected domain settings' },
-    { id: 'passport', label: 'Portable domain settings' },
-    { id: 'certificates', label: 'Certificate events' },
-    { id: 'attestations', label: 'Reviewed account controls' },
-    { id: 'mail', label: 'Mail reports' },
-  ];
   const brandWorkbench = $derived.by<BrandWorkbench | null>(() => {
     if (page.url.searchParams.has('baseline')) return 'baselines';
-    const requested = page.url.searchParams.get('workbench');
-    return brandWorkbenchOptions.some((option) => option.id === requested)
-      ? (requested as BrandWorkbench)
-      : null;
+    return resolveBrandWorkbench(page.url.searchParams.get('workbench'));
   });
   let openedDraftTools = $state<{ profileId: string; tools: BrandWorkbench[] }>({
     profileId: '',
@@ -180,7 +208,7 @@
     if (openedDraftTools.profileId !== profileId) openedDraftTools = { profileId, tools: [] };
     if (
       brandWorkbench &&
-      ['baselines', 'passport', 'attestations', 'mail'].includes(brandWorkbench) &&
+      brandWorkbenches[brandWorkbench].retainDraft &&
       !openedDraftTools.tools.includes(brandWorkbench)
     ) {
       openedDraftTools = { profileId, tools: [...openedDraftTools.tools, brandWorkbench] };
@@ -383,27 +411,12 @@
     document.getElementById('brand-profiles-summary')?.focus();
   }
   function preloadBrandWorkbench(next: string) {
-    if (next === 'control') preloadModule(() => import('$lib/components/DomainControlCentre.svelte'));
-    else if (next === 'portfolio')
-      preloadModule(() => import('$lib/components/BrandPortfolioPostureMatrix.svelte'));
-    else if (next === 'posture')
-      preloadModule(() => import('$lib/components/BrandPostureAudit.svelte'));
-    else if (next === 'baselines')
-      preloadModule(() => import('$lib/components/BrandDesiredPostureBaselines.svelte'));
-    else if (next === 'passport')
-      preloadModule(() => import('$lib/components/BrandDomainControlPassport.svelte'));
-    else if (next === 'certificates')
-      preloadModule(() => import('$lib/components/BrandCertificateEventReplay.svelte'));
-    else if (next === 'attestations')
-      preloadModule(() => import('$lib/components/BrandProtectionAttestations.svelte'));
-    else if (next === 'mail')
-      preloadModule(() => import('$lib/components/MailReportWorkbench.svelte'));
+    const selected = resolveBrandWorkbench(next);
+    if (selected) preloadModule(brandWorkbenches[selected].load);
   }
   async function selectBrandWorkbench(next: string) {
     const url = new URL(page.url);
-    const selected = brandWorkbenchOptions.some((option) => option.id === next)
-      ? (next as BrandWorkbench)
-      : null;
+    const selected = resolveBrandWorkbench(next);
     if (selected) preloadBrandWorkbench(selected);
     if (selected) url.searchParams.set('workbench', selected);
     else url.searchParams.delete('workbench');
@@ -1114,27 +1127,27 @@
       </section>
       {#if active&&active.id===draftProfile.id}
       {#if brandWorkbench==='control'}
-        <DeferredSurface load={()=>import('$lib/components/DomainControlCentre.svelte')} props={{active}} loadingLabel="Loading domain controls." unavailableLabel="Domain controls could not be loaded." placeholder="workspace" />
+        <DeferredSurface load={brandWorkbenches.control.load} props={{active}} loadingLabel="Loading domain controls." unavailableLabel="Domain controls could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='portfolio'&&active}
-        <DeferredSurface load={()=>import('$lib/components/BrandPortfolioPostureMatrix.svelte')} props={{active}} loadingLabel="Loading the owned-domain comparison." unavailableLabel="The owned-domain comparison could not be loaded." placeholder="workspace" />
+        <DeferredSurface load={brandWorkbenches.portfolio.load} props={{active}} loadingLabel="Loading the owned-domain comparison." unavailableLabel="The owned-domain comparison could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='posture'&&active}
-        <DeferredSurface load={()=>import('$lib/components/BrandPostureAudit.svelte')} props={{active,disabledReason:postureReason,auditing,results:auditResults,audit,retainObservation}} loadingLabel="Loading the current-settings review." unavailableLabel="The current-settings review could not be loaded." placeholder="workspace" />
+        <DeferredSurface load={brandWorkbenches.posture.load} props={{active,disabledReason:postureReason,auditing,results:auditResults,audit,retainObservation}} loadingLabel="Loading the current-settings review." unavailableLabel="The current-settings review could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='certificates'&&active}
-        <DeferredSurface load={()=>import('$lib/components/BrandCertificateEventReplay.svelte')} props={{active,cases,unavailable:certificateReplayUnavailable}} loadingLabel="Loading certificate events." unavailableLabel="Certificate events could not be loaded." placeholder="workspace" />
+        <DeferredSurface load={brandWorkbenches.certificates.load} props={{active,cases,unavailable:certificateReplayUnavailable}} loadingLabel="Loading certificate events." unavailableLabel="Certificate events could not be loaded." placeholder="workspace" />
       {/if}
       {/if}
       {#if openedDraftTools.tools.includes('mail')}
-        <div hidden={brandWorkbench!=='mail'}><DeferredSurface load={()=>import('$lib/components/MailReportWorkbench.svelte')} props={{active:draftProfile,available:active?.id===draftProfile.id}} loadingLabel="Loading mail reports." unavailableLabel="Mail reports could not be loaded." placeholder="workspace" /></div>
+        <div hidden={brandWorkbench!=='mail'}><DeferredSurface load={brandWorkbenches.mail.load} props={{active:draftProfile,available:active?.id===draftProfile.id}} loadingLabel="Loading mail reports." unavailableLabel="Mail reports could not be loaded." placeholder="workspace" /></div>
       {/if}
       {#key draftProfile.id}
         {#if openedDraftTools.tools.includes('baselines')}
-          <div hidden={brandWorkbench!=='baselines'}><DeferredSurface load={()=>import('$lib/components/BrandDesiredPostureBaselines.svelte')} props={{active:draftProfile,writeDisabled:draftWriteDisabled,saveBaselines,requestedDomain:page.url.searchParams.get('baseline')||''}} loadingLabel="Loading expected domain settings." unavailableLabel="Expected domain settings could not be loaded." onready={deferredBrandReady} placeholder="workspace" /></div>
+          <div hidden={brandWorkbench!=='baselines'}><DeferredSurface load={brandWorkbenches.baselines.load} props={{active:draftProfile,writeDisabled:draftWriteDisabled,saveBaselines,requestedDomain:page.url.searchParams.get('baseline')||''}} loadingLabel="Loading expected domain settings." unavailableLabel="Expected domain settings could not be loaded." onready={deferredBrandReady} placeholder="workspace" /></div>
         {/if}
         {#if openedDraftTools.tools.includes('passport')}
-          <div hidden={brandWorkbench!=='passport'}><DeferredSurface load={()=>import('$lib/components/BrandDomainControlPassport.svelte')} props={{active:draftProfile,writeDisabled:draftWriteDisabled,saveProfile:savePassportProfile}} loadingLabel="Loading portable domain settings." unavailableLabel="Portable domain settings could not be loaded." placeholder="workspace" /></div>
+          <div hidden={brandWorkbench!=='passport'}><DeferredSurface load={brandWorkbenches.passport.load} props={{active:draftProfile,writeDisabled:draftWriteDisabled,saveProfile:savePassportProfile}} loadingLabel="Loading portable domain settings." unavailableLabel="Portable domain settings could not be loaded." placeholder="workspace" /></div>
         {/if}
         {#if openedDraftTools.tools.includes('attestations')}
-          <div hidden={brandWorkbench!=='attestations'}><DeferredSurface load={()=>import('$lib/components/BrandProtectionAttestations.svelte')} props={{active:draftProfile,writeDisabled:draftWriteDisabled,saveAttestations}} loadingLabel="Loading reviewed account controls." unavailableLabel="Reviewed account controls could not be loaded." placeholder="workspace" /></div>
+          <div hidden={brandWorkbench!=='attestations'}><DeferredSurface load={brandWorkbenches.attestations.load} props={{active:draftProfile,writeDisabled:draftWriteDisabled,saveAttestations}} loadingLabel="Loading reviewed account controls." unavailableLabel="Reviewed account controls could not be loaded." placeholder="workspace" /></div>
         {/if}
       {/key}
       </div>
