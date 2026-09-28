@@ -19,9 +19,11 @@ import { assertLocalRecordCurrent, LocalRecordConflictError } from './local-muta
 export type { BulkSessionSavePreview } from './analysis/bulk-session-model.ts';
 
 export class BulkSessionCapacityError extends Error {
-  constructor(readonly preview: BulkSessionSavePreview) {
+  readonly preview: BulkSessionSavePreview;
+  constructor(preview: BulkSessionSavePreview) {
     super('Review the saved sessions that would be removed before saving. Nothing was changed.');
     this.name = 'BulkSessionCapacityError';
+    this.preview = preview;
   }
 }
 

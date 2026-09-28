@@ -20,11 +20,14 @@ Participation follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 - **Lookup downloads:** `frontend/src/lib/analysis/lookup-exports.ts` prepares
   projections and files; the route owns visible status, not export formatting.
 - **Lookup state:** `lookup-view-state.ts` creates and restores an observation;
-  `lookup-case-workspace.ts` owns the selected Case draft and stale-result guards.
-  The existing request and Case controllers own collection and persistence.
+  `lookup-case-workspace.ts` and `lookup-watchlist-workspace.ts` own their drafts,
+  saves and stale-result guards. `lookup-section-navigation.ts` handles section
+  buttons, evidence links and hash restoration through the shared anchor controller.
+  Request and storage adapters retain their collection and transaction boundaries.
 - **Bulk state:** `bulk-scan-controller.ts` owns a scan from start through pause,
   cancellation and disposal. `bulk-view-state.ts` creates, resets and projects
-  filters; keep retained presets separate from temporary progress.
+  filters. `bulk-session-workspace.ts` owns saved-session drafts, retention
+  approval and write/reload outcomes; the route connects it to the scan controller.
 - **Bulk actions:** `bulk-case-actions.ts` coordinates Case writes and refreshes;
   `bulk-monitor-actions.ts` admits every Monitor save through the same checks.
   `analysis/bulk-export.ts` owns CSV columns; the route only downloads the result.

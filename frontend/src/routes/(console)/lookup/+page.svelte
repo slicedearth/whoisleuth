@@ -65,7 +65,6 @@
     prepareLookupCollectionTarget,
     buildLookupResultSectionLinks,
     lookupEvidenceFamilyForHref,
-    lookupEvidenceTargetForHref,
   } from '$lib/analysis/lookup-page-actions.ts';
   import { projectEvidenceTopology } from '$lib/analysis/evidence-topology.ts';
   import {
@@ -77,11 +76,6 @@
     type LookupTaskView,
   } from '$lib/analysis/lookup-presentation.ts';
   import { buildLookupWebsiteSnapshot } from '$lib/analysis/lookup-snapshot-input.ts';
-  import {
-    buildLookupWatchlistRecord,
-    defaultLookupWatchlistName,
-    lookupWatchlistsForDomain,
-  } from '$lib/analysis/lookup-watchlist-handoff.ts';
   import { buildServiceDependencyReview } from '$lib/analysis/service-dependency-review.ts';
   import { parseDomainInput } from '$lib/analysis/utils.ts';
   import { CAPABILITY_CONTEXT, disabledCapabilities, disabledCapability, featureCapability, type CapabilityGetter } from '$lib/capabilities';
@@ -92,7 +86,9 @@
   import { LookupRequestController } from '$lib/controllers/lookup-request-controller';
   import type { LookupProgressUpdate } from '../../../../../lib/lookup-progress-http.mts';
   import { LookupCaseController, type LookupCaseActionResult, type LookupConclusionEvidenceSelection, type LookupRecheckOutcomeInput } from '$lib/controllers/lookup-case-controller';
-  import { createLookupResultState, restoreLookupResultState, createLookupWatchlistState } from '$lib/controllers/lookup-view-state';
+  import { createLookupResultState, restoreLookupResultState, type LookupWatchlistState } from '$lib/controllers/lookup-view-state';
+  import { LookupWatchlistWorkspace } from '$lib/controllers/lookup-watchlist-workspace';
+  import { LookupSectionNavigation } from '$lib/controllers/lookup-section-navigation';
   import { LookupCaseWorkspace, type LookupCaseState } from '$lib/controllers/lookup-case-workspace';
   import { LookupAnchorController } from '$lib/controllers/lookup-anchor-controller';
   import {
@@ -115,7 +111,12 @@
   let includeSecurityTxt=$state(false);
   let error=$state('');
   let observation = $state(createLookupResultState());
-  let watchlistState = $state(createLookupWatchlistState());
+  const watchlistWorkspace = new LookupWatchlistWorkspace({
+    context: () => ({ target: caseObservationTarget, revision: lookupRevision, evidence: caseEvidence, depth: lookupEvidenceDepth }),
+    load: loadWatchlists, save: saveSingleDomainWatchlist,
+    publish: next => { watchlistState = next; },
+  });
+  let watchlistState: LookupWatchlistState = $state.raw(watchlistWorkspace.state);
   $effect(() => { observation.response; observation.refreshLedger = null; });
   const linkedCaseReference = $derived(page.url.searchParams.get('case'));
   const invalidCaseReference = $derived(linkedCaseReference !== null && normalizeOpaqueReferenceId(linkedCaseReference) === null);
@@ -124,7 +125,6 @@
   });
   let profile=$state<BrandProfile|null>(null);
   let profileSourceState=$state<ActiveBrandProfileSourceState>('loading');
-  let watchlistActionGeneration = 0;
   let taskView=$state<LookupTaskView>('general');
   let preferredTaskView=$state<LookupTaskView>('general');
   let visualView=$state<LookupVisualView>('sources');
@@ -292,24 +292,6 @@
     } catch { /* Invalid URL input does not select a Case. */ }
     await lookupCaseWorkspace.refresh(preferredCase && preferredCase.domain === caseDomain ? preferredCase.id : linkedId);
   }
-  function invalidateWatchlistActions(){watchlistActionGeneration+=1;watchlistState.busy=false;}
-  async function refreshWatchlistContext(expectedRevision:number|null=null){
-    const target=caseObservationTarget;
-    if(!target){watchlistState.names=[];watchlistState.sourceState='ready';watchlistState.target='';watchlistState.name='';return;}
-    const targetChanged=target!==watchlistState.target;
-    if(targetChanged){watchlistState.names=[];watchlistState.name=defaultLookupWatchlistName(target);watchlistState.target=target;}
-    watchlistState.sourceState='loading';
-    try{
-      const all=await loadWatchlists();
-      if(expectedRevision!==null&&(expectedRevision!==lookupRevision||caseObservationTarget!==target))return;
-      watchlistState.names=lookupWatchlistsForDomain(all,target);
-      watchlistState.sourceState='ready';
-      if(watchlistState.names.length===1&&(targetChanged||!watchlistState.name.trim()))watchlistState.name=watchlistState.names[0]??watchlistState.name;
-    }catch{
-      if(expectedRevision!==null&&(expectedRevision!==lookupRevision||caseObservationTarget!==target))return;
-      watchlistState.sourceState='unavailable';
-    }
-  }
   function performCaseAction(
     action: () => Promise<LookupCaseActionResult>,
     afterPublish: (next: LookupCaseActionResult) => void = () => {},
@@ -367,32 +349,6 @@
     const { record } = caseState;
     await performCaseAction(() => lookupCaseController.recordRecipient(record, route));
   }
-  async function saveLookupWatchlist(){
-    if(watchlistState.busy)return;
-    const generation=++watchlistActionGeneration;
-    const revision=lookupRevision;
-    const target=caseObservationTarget;
-    const name=watchlistState.name;
-    const record=buildLookupWatchlistRecord(target,caseEvidence,lookupEvidenceDepth);
-    if(!record){watchlistState.status='The current Lookup result cannot be saved as a domain watchlist observation.';return;}
-    watchlistState.busy=true;
-    try{
-      const saved=await saveSingleDomainWatchlist(name,record,lookupEvidenceDepth);
-      if(generation!==watchlistActionGeneration||revision!==lookupRevision||target!==caseObservationTarget)return;
-      watchlistState.name=saved.name;
-      watchlistState.status=saved.created
-        ? `Created the watchlist “${saved.name}” with this ${lookupEvidenceDepth} observation.`
-        : saved.changes.length
-          ? `Updated “${saved.name}” and retained ${saved.changes.length} material change${saved.changes.length===1?'':'s'}.`
-          : `Updated “${saved.name}”; no comparable material change was observed.`;
-      await refreshWatchlistContext(revision);
-    }catch(cause){
-      if(generation!==watchlistActionGeneration||revision!==lookupRevision||target!==caseObservationTarget)return;
-      watchlistState.status=cause instanceof Error?cause.message:'Could not save the watchlist observation.';
-    }finally{
-      if(generation===watchlistActionGeneration)watchlistState.busy=false;
-    }
-  }
   async function recheckLookupCase(){
     const target=caseObservationTarget;
     if(!target||loading)return;
@@ -432,10 +388,9 @@
     sourceProgress=null;
   }
   function clearCompletedLookupContext(preserveWatchlistDraft = false) {
-    invalidateWatchlistActions();
     observation = createLookupResultState();
     lookupCaseWorkspace.reset();
-    watchlistState = createLookupWatchlistState(preserveWatchlistDraft ? watchlistState : undefined);
+    watchlistWorkspace.reset(preserveWatchlistDraft);
   }
   function handleLookupQueryChange(value:string){
     query=value;
@@ -506,104 +461,20 @@
     }
     if(loads.length)preloadBestEffort(()=>Promise.all(loads), moduleController.signal);
   }
-  async function showSectionDetail(sectionId:string){
-    const href=`#${sectionId}`;
-    window.history.replaceState(window.history.state,'',href);
-    lookupAnchorController?.begin(href,href);
-    preloadLookupSection(sectionId);
-    observation.expandedSections=observation.expandedSections.includes(sectionId)
-      ? observation.expandedSections
-      : [...observation.expandedSections,sectionId];
-    await tick();
-    lookupAnchorController?.align();
-  }
-  async function hideSectionDetail(sectionId:string){
-    const href=`#${sectionId}`;
-    window.history.replaceState(window.history.state,'',href);
-    lookupAnchorController?.begin(href,href);
-    observation.expandedSections=observation.expandedSections.filter((id)=>id!==sectionId);
-    await tick();
-    lookupAnchorController?.align();
-  }
-  function expandableResultSectionIds():string[]{
-    return resultSectionLinks()
-      .map((section)=>section.href.slice(1))
-      .filter((sectionId)=>sectionId!=='overview');
-  }
-  function beginCurrentLookupAlignment():boolean{
-    const href=lookupEvidenceTargetForHref(window.location.hash);
-    const familyId=lookupEvidenceFamilyForHref(href);
-    return familyId?Boolean(lookupAnchorController?.begin(href,`#${familyId}`)):false;
-  }
-  async function expandAllSectionDetails(){
-    const realign=beginCurrentLookupAlignment();
-    const sectionIds=expandableResultSectionIds();
-    for(const sectionId of sectionIds)preloadLookupSection(sectionId);
-    observation.expandedSections=sectionIds;
-    if(realign){await tick();lookupAnchorController?.align();}
-  }
-  async function collapseAllSectionDetails(){
-    const realign=beginCurrentLookupAlignment();
-    observation.expandedSections=[];
-    if(realign){await tick();lookupAnchorController?.align();}
-  }
-  function allSectionDetailsVisible():boolean{
-    const sectionIds=expandableResultSectionIds();
-    return sectionIds.length>0&&sectionIds.every((sectionId)=>observation.expandedSections.includes(sectionId));
-  }
-  function anySectionDetailsVisible():boolean{
-    return expandableResultSectionIds().some((sectionId)=>observation.expandedSections.includes(sectionId));
-  }
-  async function navigateToResultSection(href:string){
-    const sectionId=href.startsWith('#')?href.slice(1):'';
-    if(!sectionId)return;
-    window.history.replaceState(window.history.state,'',href);
-    lookupAnchorController?.begin(href,href);
-    preloadLookupSection(sectionId);
-    if(sectionId!=='overview'&&!observation.expandedSections.includes(sectionId)){
-      observation.expandedSections=[...observation.expandedSections,sectionId];
-    }
-    await tick();
-    lookupAnchorController?.align();
-  }
-  async function navigateToLookupEvidence(href:string){
-    const familyId=lookupEvidenceFamilyForHref(href);
-    if(!familyId)return;
-    const normalizedHref=lookupEvidenceTargetForHref(href);
-    window.history.replaceState(window.history.state,'',normalizedHref);
-    lookupAnchorController?.begin(normalizedHref,`#${familyId}`);
-    preloadLookupSection(familyId);
-    observation.expandedSections=familyId==='overview'||observation.expandedSections.includes(familyId)
-      ? observation.expandedSections
-      : [...observation.expandedSections,familyId];
-    await tick();
-    lookupAnchorController?.align();
-  }
-  function handleLookupEvidenceLink(event:MouseEvent){
-    if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
-    const origin=event.target;
-    if(!(origin instanceof Element))return;
-    const anchor=origin.closest<HTMLAnchorElement>('a[href^="#"]');
-    if(!anchor)return;
-    const href=anchor.getAttribute('href')||'';
-    if(!lookupEvidenceFamilyForHref(href))return;
-    event.preventDefault();
-    void navigateToLookupEvidence(href);
-  }
-  function evidenceLinkNavigation(node:HTMLElement){
-    node.addEventListener('click',handleLookupEvidenceLink);
-    return {destroy:()=>node.removeEventListener('click',handleLookupEvidenceLink)};
-  }
-  function navigateToCurrentLookupHash(){
-    const href=window.location.hash;
-    if(observation.response&&lookupEvidenceFamilyForHref(href))void navigateToLookupEvidence(href);
-  }
-  function sectionDetailVisible(sectionId:string):boolean{
-    return observation.expandedSections.includes(sectionId);
-  }
-  async function restoreDeferredLookupTarget(){
-    await tick();
-    lookupAnchorController?.contentReady();
+  const sectionNavigation = new LookupSectionNavigation({
+    expanded: () => observation.expandedSections,
+    publish: sections => { observation.expandedSections = sections; },
+    sections: resultSectionLinks,
+    preload: preloadLookupSection,
+    anchor: () => lookupAnchorController,
+    hash: () => window.location.hash,
+    replaceHash: href => window.history.replaceState(window.history.state, '', href),
+    rendered: tick,
+  });
+  const evidenceLinkNavigation = (node: HTMLElement) => sectionNavigation.links(node);
+  const restoreDeferredLookupTarget = () => sectionNavigation.contentReady();
+  function navigateToCurrentLookupHash() {
+    if (observation.response) void sectionNavigation.navigate(window.location.hash);
   }
   function setFreshnessPolicy(value:{mode:'task-default'|'analyst-custom';thresholdsDays:LookupFreshnessThresholds}){
     freshnessPolicyMode=value.mode;
@@ -626,12 +497,12 @@
     if(observation.response)requestAnimationFrame(navigateToCurrentLookupHash);
     void (async()=>{
       await refreshProfileContext();
-      if(observation.response)await Promise.all([refreshCase(lookupRevision),refreshWatchlistContext(lookupRevision)]);
+      if(observation.response)await Promise.all([refreshCase(lookupRevision),watchlistWorkspace.refresh(lookupRevision)]);
     })();
     return()=>{
       pageActive=false;
       lookupCaseWorkspace.dispose();
-      invalidateWatchlistActions();
+      watchlistWorkspace.dispose();
       lookupAnchorController?.destroy();
       lookupAnchorController=null;
       window.removeEventListener('hashchange',navigateToCurrentLookupHash);
@@ -762,14 +633,14 @@
       const outcome=completed.outcome;
       if(!outcome.ok){error=outcome.message;return;}
       observation.response=outcome.value;observation.target=target;observation.incidentUrl=submittedIncident?.exactUrl??'';observation.depth=requestedLookupMode;
-      await Promise.all([refreshCase(requestRevision,preferredCase),refreshWatchlistContext(requestRevision)]);
+      await Promise.all([refreshCase(requestRevision,preferredCase),watchlistWorkspace.refresh(requestRevision)]);
       if(!requestCurrent())return;
       if(options.refreshCaseEvidence&&revealIntent?.current())await openLookupCase();
       if(!requestCurrent())return;
       loading=false;
       await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
       if(!requestCurrent()||!revealIntent?.current())return;
-      if(options.refreshCaseEvidence){void navigateToResultSection('#case-response');return;}
+      if(options.refreshCaseEvidence){void sectionNavigation.navigate('#case-response');return;}
       if(window.location.hash&&lookupEvidenceFamilyForHref(window.location.hash))navigateToCurrentLookupHash();
       else document.querySelector('#result')?.scrollIntoView({behavior:'instant',block:'start'});
     }catch{
@@ -841,13 +712,13 @@
     {#if observation.exportStatus||lookupEvidenceProjection.error}<p class:portable-evidence-status={Boolean(lookupEvidenceProjection.error)} class="local-context-status" role="status" aria-atomic="true">{observation.exportStatus||lookupEvidenceProjection.error}</p>{/if}
 
     <LookupPresentationControls
-      allSectionsExpanded={allSectionDetailsVisible()}
-      anySectionsExpanded={anySectionDetailsVisible()}
-      expandAll={expandAllSectionDetails}
-      collapseAll={collapseAllSectionDetails}
+      allSectionsExpanded={sectionNavigation.allVisible()}
+      anySectionsExpanded={sectionNavigation.anyVisible()}
+      expandAll={() => sectionNavigation.setAll(true)}
+      collapseAll={() => sectionNavigation.setAll(false)}
     />
 
-    <LocalSectionNav label="Result sections" links={resultSectionLinks()} trackCurrent onnavigate={(href)=>void navigateToResultSection(href)} />
+    <LocalSectionNav label="Result sections" links={resultSectionLinks()} trackCurrent onnavigate={(href)=>void sectionNavigation.navigate(href)} />
 
     {#snippet overviewSection()}
     <section class="result-section family-overview" id="overview" aria-labelledby="overview-title">
@@ -914,13 +785,13 @@
         {lookupEvidenceDepth}
         {lookupObservedAt}
         {loading}
-        expanded={sectionDetailVisible('web-evidence')}
+        expanded={sectionNavigation.visible('web-evidence')}
         serviceDependencyScope={observation.serviceScope}
         serviceDependencyFalsePositives={observation.serviceFalsePositives}
         buildSnapshot={websiteSnapshotInput}
         onpreload={() => preloadLookupSection('web-evidence')}
-        onshow={() => void showSectionDetail('web-evidence')}
-        onhide={() => void hideSectionDetail('web-evidence')}
+        onshow={() => void sectionNavigation.navigate('#web-evidence')}
+        onhide={() => void sectionNavigation.navigate('#web-evidence', false)}
         onready={restoreDeferredLookupTarget}
         setServiceDependencyScope={(value) => observation.serviceScope = value}
         setServiceDependencyFalsePositives={(value) => observation.serviceFalsePositives = value}
@@ -947,12 +818,12 @@
         label="Registration"
         description="Compare authoritative registry evidence with separately attributed registrar RDAP and WHOIS publications."
         metrics={[`${registryDisplay.comparisonMetrics.equivalent} equivalent`, `${registryDisplay.comparisonMetrics.conflict} conflicts`, `${registryDisplay.comparisonMetrics.limitedOrSourceOnly} limited or source-only`]}
-        expanded={sectionDetailVisible('registry')}
+        expanded={sectionNavigation.visible('registry')}
         onpreload={()=>preloadLookupSection('registry')}
-        onshow={()=>void showSectionDetail('registry')}
-        onhide={()=>void hideSectionDetail('registry')}
+        onshow={()=>void sectionNavigation.navigate('#registry')}
+        onhide={()=>void sectionNavigation.navigate('#registry', false)}
       />
-      {#if sectionDetailVisible('registry')}
+      {#if sectionNavigation.visible('registry')}
       {#if registryAccess.suffix}
         <DeferredSurface
           load={()=>import('$lib/components/RegistryAccessNotice.svelte')}
@@ -1001,18 +872,18 @@
         label="Relationships and history"
         description="Inspect source coverage, exact observed relationships, optional passive pivots, and dated lifecycle events in one workspace."
         metrics={[`${evidenceTopologyProjection.provenanceCounts.direct} mapped direct sources`, `${evidenceTopologyProjection.provenanceCounts.derived} mapped derived analyses`, `${lookupAssetGraph.edges.length} relationships`, `${activationContext.events.filter((event)=>Boolean(event.date)).length} dated events`]}
-        expanded={sectionDetailVisible('relationships-history')}
+        expanded={sectionNavigation.visible('relationships-history')}
         onpreload={()=>preloadLookupSection('relationships-history')}
-        onshow={()=>void showSectionDetail('relationships-history')}
-        onhide={()=>void hideSectionDetail('relationships-history')}
+        onshow={()=>void sectionNavigation.navigate('#relationships-history')}
+        onhide={()=>void sectionNavigation.navigate('#relationships-history', false)}
       />
-      {#if sectionDetailVisible('relationships-history')}
+      {#if sectionNavigation.visible('relationships-history')}
         <DeferredSurface
           load={()=>import('$lib/components/LookupVisualWorkspace.svelte')}
           loadingLabel="Loading relationships and history workspace…"
           unavailableLabel="Relationships and history could not be loaded."
           onready={restoreDeferredLookupTarget}
-          props={{view:visualView,setview:(value:LookupVisualView)=>visualView=value,target:evidenceTopologyTarget,nodes:evidenceTopologyNodes,graph:lookupAssetGraph,pivots:analystEvidencePivots,events:activationContext.events,context:observation.response?.type==='domain'?activationContext:null,onnavigate:(href:string)=>void navigateToLookupEvidence(href)}}
+          props={{view:visualView,setview:(value:LookupVisualView)=>visualView=value,target:evidenceTopologyTarget,nodes:evidenceTopologyNodes,graph:lookupAssetGraph,pivots:analystEvidencePivots,events:activationContext.events,context:observation.response?.type==='domain'?activationContext:null,onnavigate:(href:string)=>void sectionNavigation.navigate(href)}}
         />
       {/if}
     </section>
@@ -1025,12 +896,12 @@
         label="Source quality"
         description="Review collection completeness, freshness, timing, provenance, and diagnostic routes before relying on a conclusion."
         metrics={[`${evidenceQualityMatrix.completeCount} complete`, `${evidenceQualityMatrix.limitedCount} limited`, `${evidenceQualityMatrix.entries.length} records`]}
-        expanded={sectionDetailVisible('source-quality')}
+        expanded={sectionNavigation.visible('source-quality')}
         onpreload={()=>preloadLookupSection('source-quality')}
-        onshow={()=>void showSectionDetail('source-quality')}
-        onhide={()=>void hideSectionDetail('source-quality')}
+        onshow={()=>void sectionNavigation.navigate('#source-quality')}
+        onhide={()=>void sectionNavigation.navigate('#source-quality', false)}
       />
-      {#if sectionDetailVisible('source-quality') && observation.response}
+      {#if sectionNavigation.visible('source-quality') && observation.response}
         <DeferredSurface
           load={()=>import('$lib/components/LookupEvidenceQuality.svelte')}
           loadingLabel="Loading source-quality review…"
@@ -1056,18 +927,18 @@
           label="Case and response"
           description="Save reviewed evidence, keep analyst assertions separate, and prepare human-reviewed response routes without sending anything automatically."
           metrics={[caseState.sourceState==='ready'?(caseRecord?'Case saved':'No case saved'):caseState.sourceState==='loading'?'Case loading':'Case unavailable', `${abuseRecipientResolution.recipients.length} published ${abuseRecipientResolution.recipients.length===1?'route':'routes'}`]}
-          expanded={sectionDetailVisible('case-response')}
+          expanded={sectionNavigation.visible('case-response')}
           onpreload={()=>preloadLookupSection('case-response')}
-          onshow={()=>void showSectionDetail('case-response')}
-          onhide={()=>void hideSectionDetail('case-response')}
+          onshow={()=>void sectionNavigation.navigate('#case-response')}
+          onhide={()=>void sectionNavigation.navigate('#case-response', false)}
         />
-        {#if sectionDetailVisible('case-response')}
+        {#if sectionNavigation.visible('case-response')}
         <DeferredSurface
           load={()=>import('$lib/components/LookupCaseResponse.svelte')}
           loadingLabel="Loading Case and response workspace…"
           unavailableLabel="The Case and response workspace could not be loaded."
           onready={restoreDeferredLookupTarget}
-          props={{oncaseopen:preserveLookupReturn,domain:caseDomain,lookupTarget:caseObservationTarget,lookupDepth:lookupEvidenceDepth,task:taskView,incidentUrl:observation.incidentUrl,recheckComparison:caseState.comparison,record:caseRecord,cases:caseState.candidates,selectCase:selectLookupCase,createIncident:createLookupIncident,note:caseState.note,caseStatus: caseState.status,caseSourceState: caseState.sourceState,retryCaseRead:()=>refreshCase(),caseDisposition: caseState.disposition,caseReviewReason: caseState.reviewReason,checkpointFacts,draftStatus: observation.draftStatus,outreach,recipientResolution:abuseRecipientResolution,linkedWatchlistNames: watchlistState.names,watchlistSourceState: watchlistState.sourceState,watchlistName: watchlistState.name,watchlistStatus: watchlistState.status,setNote:(value:string)=>lookupCaseWorkspace.setNote(value),setCaseDisposition:(value:string)=>lookupCaseWorkspace.setDisposition(value),setCaseReviewReason:(value:string)=>lookupCaseWorkspace.setReviewReason(value),setWatchlistName:(value:string)=>watchlistState.name=value,createCase:openLookupCase,addNote:addLookupNote,recordConclusion:recordLookupConclusion,recordInvestigationContext:recordLookupInvestigationContext,recordRecheckOutcome:recordLookupRecheckOutcome,saveToWatchlist:saveLookupWatchlist,recheckCase:recheckLookupCase,recordRecipient:recordAbuseRecipient,copyDraft,statusLabel:caseStatusLabel,dispositionLabel:caseDispositionLabel,actionBusy:caseState.busy,watchlistBusy:watchlistState.busy}}
+          props={{oncaseopen:preserveLookupReturn,domain:caseDomain,lookupTarget:caseObservationTarget,lookupDepth:lookupEvidenceDepth,task:taskView,incidentUrl:observation.incidentUrl,recheckComparison:caseState.comparison,record:caseRecord,cases:caseState.candidates,selectCase:selectLookupCase,createIncident:createLookupIncident,note:caseState.note,caseStatus: caseState.status,caseSourceState: caseState.sourceState,retryCaseRead:()=>refreshCase(),caseDisposition: caseState.disposition,caseReviewReason: caseState.reviewReason,checkpointFacts,draftStatus: observation.draftStatus,outreach,recipientResolution:abuseRecipientResolution,linkedWatchlistNames: watchlistState.names,watchlistSourceState: watchlistState.sourceState,watchlistName: watchlistState.name,watchlistStatus: watchlistState.status,setNote:(value:string)=>lookupCaseWorkspace.setNote(value),setCaseDisposition:(value:string)=>lookupCaseWorkspace.setDisposition(value),setCaseReviewReason:(value:string)=>lookupCaseWorkspace.setReviewReason(value),setWatchlistName:(value:string)=>watchlistWorkspace.setName(value),createCase:openLookupCase,addNote:addLookupNote,recordConclusion:recordLookupConclusion,recordInvestigationContext:recordLookupInvestigationContext,recordRecheckOutcome:recordLookupRecheckOutcome,saveToWatchlist:()=>watchlistWorkspace.save(),recheckCase:recheckLookupCase,recordRecipient:recordAbuseRecipient,copyDraft,statusLabel:caseStatusLabel,dispositionLabel:caseDispositionLabel,actionBusy:caseState.busy,watchlistBusy:watchlistState.busy}}
         />
         {#if caseRecord && checkpointFacts.length && taskView === 'acquisition'}
           <LookupEvidenceCheckpoint
@@ -1089,12 +960,12 @@
         label="Advanced evidence"
         description="Open optional external intelligence and the full validated lookup response only when the investigation requires their additional detail."
         metrics={[`${threatIntelligenceProviders.length} external providers`, 'Full response available']}
-        expanded={sectionDetailVisible('advanced-evidence')}
+        expanded={sectionNavigation.visible('advanced-evidence')}
         onpreload={()=>preloadLookupSection('advanced-evidence')}
-        onshow={()=>void showSectionDetail('advanced-evidence')}
-        onhide={()=>void hideSectionDetail('advanced-evidence')}
+        onshow={()=>void sectionNavigation.navigate('#advanced-evidence')}
+        onhide={()=>void sectionNavigation.navigate('#advanced-evidence', false)}
       />
-      {#if sectionDetailVisible('advanced-evidence')}
+      {#if sectionNavigation.visible('advanced-evidence')}
         {#if threatIntelligenceProviders.length}
           <section class="advanced-block" id="external-intelligence" aria-labelledby="external-intelligence-title">
             <h4 id="external-intelligence-title">External intelligence</h4>

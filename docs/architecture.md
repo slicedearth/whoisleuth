@@ -46,6 +46,13 @@ compatibility facades; internal consumers import the domain owner directly.
 Non-frontend production code cannot import Svelte routes, components or browser
 adapters.
 
+Console routes connect components to responsibility-specific controllers in
+`frontend/src/lib/controllers/`. Lookup has separate request, Case, watchlist
+and section-navigation owners. Bulk separates scan execution from saved-session
+drafts, retention approval and mutation outcomes. Controllers publish state
+snapshots; existing storage adapters retain transactional writes and conflict
+checks. A committed write and a failed subsequent refresh remain distinct.
+
 Package builders share bounded source discovery, snapshots, compilation and
 emitted-file validation in `tools/package-source.mts`. Each builder owns its
 entry points, runtime dependencies, allowed support files and installed checks.
