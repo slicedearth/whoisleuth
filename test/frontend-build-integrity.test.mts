@@ -436,11 +436,45 @@ describe('frontend build integrity', () => {
 
   test('discovers build-tool helpers without a separate source-file declaration', (context) => {
     const root = fixtureRepository(context);
-    write(root, 'tools/ordinary-build-helper.mts', 'export const value = 1;\n');
+    write(root, 'frontend/vite.config.ts', 'import { value } from "../tools/ordinary-build-helper.mts"; export default { value };\n');
+    write(root, 'tools/ordinary-build-helper.mts', 'export { value } from "./nested-helper.mts";\n');
+    write(root, 'tools/nested-helper.mts', 'export const value = 1;\n');
     const snapshot = recordFrontendBuildIntegrity(root, ENVIRONMENT);
     assert.ok(snapshot.source.files.some((file) => file.path === 'tools/ordinary-build-helper.mts'));
-    write(root, 'tools/ordinary-build-helper.mts', 'export const value = 2;\n');
+    assert.ok(snapshot.source.files.some((file) => file.path === 'tools/nested-helper.mts'));
+    write(root, 'tools/nested-helper.mts', 'export const value = 2;\n');
     assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /stale or mixed/u);
+  });
+
+  test('unrelated maintainer tools do not invalidate an otherwise identical build', (context) => {
+    const root = fixtureRepository(context);
+    const snapshot = recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    write(root, 'tools/ordinary-test-helper.mts', 'export const label = "changed test helper";\n');
+    assert.deepEqual(assertFrontendBuildIntegrity(root, ENVIRONMENT), snapshot);
+    assert.equal(snapshot.source.files.some(file => file.path.startsWith('tools/')), false);
+  });
+
+  test('new configuration dependencies are discovered and unresolved or linked helpers fail closed', (context) => {
+    const root = fixtureRepository(context);
+    recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    write(root, 'frontend/svelte.config.ts', 'import "../tools/new-helper.mts";\n');
+    assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /import is unresolved/u);
+    write(root, 'tools/new-helper.mts', 'export const value = true;\n');
+    assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /stale or mixed/u);
+    const snapshot = recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    assert.ok(snapshot.source.files.some(file => file.path === 'tools/new-helper.mts'));
+    rmSync(path.join(root, 'tools/new-helper.mts'));
+    symlinkSync(path.join(root, 'frontend/src/app.ts'), path.join(root, 'tools/new-helper.mts'));
+    assert.throws(() => assertFrontendBuildIntegrity(root, ENVIRONMENT), /symbolic links/u);
+  });
+
+  test('built-in imports need no file identity but unresolved aliases cannot hide a build input', (context) => {
+    const root = fixtureRepository(context);
+    write(root, 'frontend/vite.config.ts', 'import { readFileSync } from "node:fs"; import path from "path"; export default {};\n');
+    recordFrontendBuildIntegrity(root, ENVIRONMENT);
+    assert.doesNotThrow(() => assertFrontendBuildIntegrity(root, ENVIRONMENT));
+    write(root, 'frontend/vite.config.ts', 'import "#unresolved-build-helper";\n');
+    assert.throws(() => recordFrontendBuildIntegrity(root, ENVIRONMENT), /import is unresolved/u);
   });
 
   test('rejects malformed, future, oversized, and impossible markers', (context) => {

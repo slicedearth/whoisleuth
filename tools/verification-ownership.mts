@@ -17,7 +17,6 @@ import type { ICruiseResult, IOptions } from 'dependency-cruiser';
 
 export const VERIFICATION_OWNERSHIP_MAP_VERSION = 2;
 export const MAX_VERIFICATION_CHANGED_PATH_LENGTH = 320;
-export const MAX_VERIFICATION_RULES = 64;
 export const MAX_VERIFICATION_INVENTORY_FILES = 8_000;
 export const MAX_VERIFICATION_CHANGED_PATHS = MAX_VERIFICATION_INVENTORY_FILES;
 
@@ -620,8 +619,8 @@ export function assertDeclaredVerificationTest(
 }
 
 function validateRules(): void {
-  if (RULES.length < 1 || RULES.length > MAX_VERIFICATION_RULES || new Set(RULES.map((rule) => rule.id)).size !== RULES.length) {
-    throw new TypeError('Verification rules are missing, repeated, or unbounded.');
+  if (RULES.length < 1 || new Set(RULES.map((rule) => rule.id)).size !== RULES.length) {
+    throw new TypeError('Verification rules are missing or repeated.');
   }
   for (const rule of RULES) {
     for (const [lane, checks] of [

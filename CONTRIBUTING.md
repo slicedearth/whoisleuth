@@ -120,6 +120,11 @@ Selected browser specifications are loaded before expensive checks. This catches
 test-discovery and import errors without starting a server or browser; it is not
 a substitute for the subsequent verified-build execution.
 
+Frontend build identity discovers local build helpers through configuration
+imports. Adding or extracting a helper needs no inventory entry. Unrelated test
+tools are not frontend inputs; source bytes, served bytes and the build revision
+must still match before reusing an artefact.
+
 For ordinary Case setup, `test/support/current-case.mts` supplies a deterministic,
 detached current record and collection envelope. Invalid overrides fail at setup
 instead of being silently normalised. Keep the expected behaviour in the test
