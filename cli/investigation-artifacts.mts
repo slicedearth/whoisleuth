@@ -13,7 +13,7 @@ import {
   CLI_DISCOVER_SCHEMA, CLI_DISCOVER_SCHEMA_VERSION, CLI_POSTURE_SCHEMA, CLI_POSTURE_SCHEMA_VERSION,
   CLI_CT_SEARCH_SCHEMA, CLI_CT_SEARCH_SCHEMA_VERSION, CLI_COMPARE_SCHEMA, CLI_COMPARE_SCHEMA_VERSION,
 } from './formatters/json.mts';
-import { CLI_LOOKUP_BRIEF_SCHEMA, CLI_LOOKUP_BRIEF_VERSION } from './lookup-brief.mts';
+import { CLI_LOOKUP_BRIEF_SCHEMA, CLI_LOOKUP_BRIEF_VERSION } from '../packages/contracts/cli-lookup-brief.mts';
 import { EXTERNAL_FINDINGS_SCHEMA, EXTERNAL_FINDINGS_VERSION, parseExternalFindingsDocument } from '../packages/interchange/external-findings-import.mts';
 import { SOURCE_RELIABILITY_REPORT_SCHEMA, SOURCE_RELIABILITY_REPORT_VERSION } from './source-reliability.mts';
 import { CLI_CASE_PACK_SCHEMA, CLI_CASE_PACK_VERSION, verifyCliCasePack } from './case-pack.mts';

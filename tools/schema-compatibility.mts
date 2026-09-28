@@ -122,7 +122,7 @@ import { INTERCHANGE_ARTIFACT_CONTRACTS } from '../lib/interchange-fidelity-regi
 import {
   CLI_LOOKUP_BRIEF_SCHEMA,
   CLI_LOOKUP_BRIEF_VERSION,
-} from '../cli/lookup-brief.mts';
+} from '../packages/contracts/cli-lookup-brief.mts';
 import {
   MAX_REGISTRY_COHORT_INPUT_BYTES,
   REGISTRY_COHORT_SCHEMA,

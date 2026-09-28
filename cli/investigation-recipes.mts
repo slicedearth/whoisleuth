@@ -1,7 +1,7 @@
 import { CLI_DOMAIN_CONTROL_MONITOR_SCHEMA } from '../packages/contracts/domain-control-monitor.mts';
 import { DOMAIN_CONTROL_REVIEW_SCHEMA } from '../packages/contracts/domain-control-review.mts';
-import { EXTERNAL_FINDINGS_SCHEMA } from '../packages/interchange/external-findings-import.mts';
-import { CLI_LOOKUP_BRIEF_SCHEMA } from './lookup-brief.mts';
+import { EXTERNAL_FINDINGS_SCHEMA } from '../packages/contracts/external-observation-interchange.mts';
+import { CLI_LOOKUP_BRIEF_SCHEMA } from '../packages/contracts/cli-lookup-brief.mts';
 import type { WorkflowArtifactBinding } from '../packages/contracts/investigation-run.mts';
 import type { CliCommand } from '../packages/contracts/cli-command-semantics.mts';
 

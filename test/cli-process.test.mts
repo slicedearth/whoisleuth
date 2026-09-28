@@ -13,6 +13,24 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(__dirname, '..');
 const BIN = join(ROOT, 'bin', 'whoisleuth.mts');
 
+test('CLI information commands stay independent of evidence and collection services', () => {
+  const hook = `import { registerHooks } from 'node:module';
+    registerHooks({ load(url, context, next) {
+      if (/^node:(?:fs(?:\\/promises)?|net|http|https|tls|dns(?:\\/promises)?|child_process)$/.test(url))
+        throw new Error('Help loaded an evidence or collection service');
+      return next(url, context);
+    } });`;
+  for (const args of [['--help'], ['lookup', '--help'], ['--version']]) {
+    const result = spawnSync(process.execPath, [
+      '--import', `data:text/javascript,${encodeURIComponent(hook)}`, BIN, ...args,
+    ], { encoding: 'utf8', timeout: 10_000 });
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stderr, '');
+    assert.ok(result.stdout.trim(), 'The requested information must be printed');
+  }
+});
+
 function savedLookup() {
   return {
     schema: 'whoisleuth.cli.lookup',
