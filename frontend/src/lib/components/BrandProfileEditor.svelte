@@ -1,14 +1,12 @@
 <script lang="ts">
   import type { BrandProfile } from '$lib/brand-profiles';
+  import type { BrandEditorField, BrandEditorValues } from '$lib/controllers/brand-profile-editor.ts';
   import BrandIdentityReferencesEditor from './BrandIdentityReferencesEditor.svelte';
-
-  type Field = 'name'|'official'|'products'|'tlds'|'partners'|'selectors'|'retiredSelectors'|'mailProtectionProfile'|'trademarkOwner'|'trademarkRegistration'|'faviconHash';
-  type Values = Record<Field, string>;
 
   let { editing, values, setValue, officialChannels, rightsReferences, setOfficialChannels, setRightsReferences, pageBaseline, capturingIdentity, busy, saveDisabled=false, orphaned=false, disabledReason, captureSiteIdentity, save, close, formatDate }: {
     editing: boolean;
-    values: Values;
-    setValue: (field: Field, value: string) => void;
+    values: BrandEditorValues;
+    setValue: (field: BrandEditorField, value: string) => void;
     officialChannels: BrandProfile['officialChannels'];
     rightsReferences: BrandProfile['rightsReferences'];
     setOfficialChannels: (value: BrandProfile['officialChannels']) => void;
