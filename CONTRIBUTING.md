@@ -6,6 +6,12 @@ regression test for a behavioural defect; inspect cosmetic changes in the
 rendered interface rather than freezing individual CSS values in tests.
 Participation follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
+Format edited source with `npm run format -- <path> ...`; quote paths containing
+parentheses. The shared configuration also works in editors. Keep formatting
+focused on the files being changed, and put larger readability-only changes in
+their own commit. It is an editing aid, not a blocking CI style gate. Generated
+references, retained data and compatibility fixtures use their existing owners.
+
 ## Find the owner
 
 - **Interface behaviour:** start at `frontend/src/routes/`, follow component

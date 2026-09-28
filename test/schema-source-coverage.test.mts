@@ -475,6 +475,23 @@ describe('schema source coverage', () => {
     await assert.rejects(discoverSchemaSources(root), /unclassified repository path.*CONTRIBUTING\.mts/u);
   });
 
+  test('editor preferences need no schema registration in a checkout or source archive', async (t) => {
+    const root = await fixtureRepository(t);
+    await writeFile(path.join(root, '.prettierrc.json'), '{"singleQuote":true}\n');
+    await writeFile(path.join(root, '.prettierignore'), '**/fixtures/**\n');
+    await writeFile(path.join(root, '.editorconfig'), 'root = true\n');
+    const expected = ['server.mts'];
+    assert.deepEqual((await discoverSchemaSources(root)).files, expected);
+    execFileSync('git', ['init', '--quiet'], { cwd: root, stdio: 'pipe' });
+    assert.deepEqual((await discoverSchemaSources(root)).files, expected);
+    // A similarly named runtime module is still inspected rather than hidden
+    // by its basename. Unknown root code must still receive explicit scope.
+    await writeFile(path.join(root, 'lib', 'prettier.config.mts'), "export const SCHEMA = 'whoisleuth.fixture';\n");
+    assert.ok((await discoverSchemaSources(root)).identifiers.includes('whoisleuth.fixture'));
+    await writeFile(path.join(root, '.editorconfig.mts'), 'export {};\n');
+    await assert.rejects(discoverSchemaSources(root), /unclassified repository path.*\.editorconfig\.mts/u);
+  });
+
   test('resolves imported identities, rejects false ownership and permits repeated literal references', async (t) => {
     const root = await fixtureRepository(t);
     await mkdir(path.join(root, 'packages', 'contracts'), { recursive: true });

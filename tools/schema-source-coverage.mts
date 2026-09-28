@@ -11,7 +11,7 @@ import {
   type SchemaCompatibilityEntry,
 } from '../packages/contracts/schema-compatibility.mts';
 import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
-import { compareCodeUnits as ordinalCompare } from './maintainer-tool-helpers.mts';
+import { compareCodeUnits as ordinalCompare, isOptionalEditorConfiguration } from './maintainer-tool-helpers.mts';
 import {
   appendBounded,
   discoverSchemaIdentifiersInSource,
@@ -337,6 +337,7 @@ async function validateSchemaSourceScope(repositoryRoot: string): Promise<void> 
       if (pathInside(relative, SCHEMA_SOURCE_EXEMPT_ROOTS)
         || coveredFiles.has(relative)
         || isConventionalMarkdown(relative)
+        || isOptionalEditorConfiguration(relative)
         || SCHEMA_SOURCE_EXEMPT_FILES.has(relative)) continue;
       throw new TypeError(`Schema source scope contains an unclassified repository path: ${relative}`);
     }
@@ -386,7 +387,7 @@ async function validateSchemaSourceScope(repositoryRoot: string): Promise<void> 
         await visit(absolute, relative, depth + 1);
       } else if (!metadata.isFile()) {
         throw new TypeError(`Schema source scope path ${relative} must be an ordinary file or directory.`);
-      } else if (!isConventionalMarkdown(relative)) {
+      } else if (!isConventionalMarkdown(relative) && !isOptionalEditorConfiguration(relative)) {
         throw new TypeError(`Schema source scope contains an unclassified source path: ${relative}`);
       }
     }

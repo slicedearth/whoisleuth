@@ -36,7 +36,7 @@ describe('repository integration closure', () => {
     // repository for each changed path adds no integration coverage.
     const paths = ['frontend/src/lib/components/PublicGoalPaths.svelte', 'packages/comparison/favicon-similarity.mts',
       'package.json', 'test/support/current-case.mts', 'frontend/src/lib/components/CopyButton.svelte',
-      'frontend/src/routes/(public)/demo/+page.svelte'];
+      'frontend/src/routes/(public)/demo/+page.svelte', '.prettierrc.json'];
     const plan = await createVerificationOwnershipPlan(paths);
     const assignments = new Map(plan.assignments.map(assignment => [assignment.changedPath, assignment]));
     assert.equal(assignments.size, paths.length);
@@ -73,12 +73,17 @@ describe('repository integration closure', () => {
       first: buildFocusedVerificationExecution(plan).commands[0]!.id,
       leaf: assignments.get(paths[4]!)!.focusedBrowserChecks,
       demo: assignments.get(paths[5]!)!.focusedBrowserChecks.includes('e2e/demo.spec.ts'),
+      editor: {
+        unit: assignments.get(paths[6]!)!.focusedUnitChecks,
+        browser: assignments.get(paths[6]!)!.focusedBrowserChecks,
+      },
     }, {
       component: { guide: true, accessibility: true, bulk: false, caseImport: false, guideUnit: true, cliUnit: false },
       helper: { consumer: true, bounded: true },
       metadata: { catalogue: true, dashboard: true, bulk: false, bounded: true },
       fixture: { unit: true, review: true, bulk: false, browser: true },
       compile: true, first: 'browser-discovery', leaf: ['e2e/copy-button.component.spec.ts'], demo: true,
+      editor: { unit: [], browser: [] },
     });
   });
 

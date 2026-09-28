@@ -12,6 +12,11 @@ import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.
 
 export type MaintainerJsonRecord = Record<string, unknown>;
 
+/** Root editor preferences do not define runtime schemas or application inputs. */
+export function isOptionalEditorConfiguration(relative: string): boolean {
+  return /^(?:\.editorconfig|\.prettierignore|\.prettierrc(?:\.(?:json|json5|ya?ml|toml|[cm]?js|ts))?|prettier\.config\.[cm]?[jt]s)$/u.test(relative);
+}
+
 const UNSAFE_TEXT_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u;
 const UNSAFE_TEXT_GLOBAL_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/gu;
 

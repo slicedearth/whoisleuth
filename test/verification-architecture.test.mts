@@ -743,6 +743,37 @@ describe('verification architecture contracts', () => {
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 
+  test('optional editor configuration does not select application or release checks', async () => {
+    for (const file of ['.prettierrc.json', '.prettierignore', '.editorconfig', 'prettier.config.mjs']) {
+      const plan = await createVerificationOwnershipPlan([file]);
+      const execution = buildFocusedVerificationExecution(plan);
+      assert.equal(plan.assignments[0]!.ownershipArea, 'optional editor formatting');
+      assert.deepEqual(plan.focusedUnitChecks, []);
+      assert.deepEqual(plan.focusedBrowserChecks, []);
+      assert.deepEqual(execution.commands.map(command => command.id), ['diff-whitespace']);
+      assert.deepEqual(execution.deferredSpecialisedChecks, ['staged-security']);
+    }
+    // Executable application, compiler and package configuration is not an
+    // editor preference and must keep its independent verification boundaries.
+    for (const file of ['package.json', 'tsconfig.json', 'frontend/vite.config.ts']) {
+      const plan = buildVerificationOwnershipPlan([file]);
+      assert.notEqual(plan.assignments[0]!.ownershipArea, 'optional editor formatting');
+      assert.ok(buildFocusedVerificationExecution(plan).commands.length > 1);
+    }
+  });
+
+  test('new frontend configuration inherits build verification without a filename registration', () => {
+    const functional = readVerificationTestInventory().filter(isPlaywrightFunctionalSpec).sort();
+    for (const file of ['frontend/vite.config.ts', 'frontend/new-build-helper.ts', 'frontend/static/example.svg']) {
+      const plan = buildVerificationOwnershipPlan([file]);
+      assert.equal(plan.assignments[0]!.ownershipArea, 'frontend build configuration and assets');
+      assert.deepEqual(plan.focusedBrowserChecks, functional);
+      assert.ok(plan.focusedUnitChecks.includes('test/frontend-build-integrity.test.mts'));
+      assert.ok(plan.mandatorySpecialisedChecks.includes('browser-build'));
+      assert.ok(plan.mandatorySpecialisedChecks.includes('browser-loading-report'));
+    }
+  });
+
   test('documentation-only plans do not acquire browser discovery or build work', () => {
     for (const document of ['CONTRIBUTING.md', 'CODE_OF_CONDUCT.md', '.github/pull_request_template.md', '.github/ISSUE_TEMPLATE/question.md']) {
       const execution = buildFocusedVerificationExecution(buildVerificationOwnershipPlan([document]));

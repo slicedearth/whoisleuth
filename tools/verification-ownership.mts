@@ -13,6 +13,7 @@ import { readVerificationTestInventory } from './verification-timing-profile.mts
 import { OUTPUT_PATH as CAPABILITY_DOCUMENT_PATH } from './capability-manifest.mts';
 import { CLI_PACKAGE_SUPPORT_FILES } from './cli-package.mts';
 import { browserRouteReferences, browserTestsForRoutes } from './browser-route-impact.mts';
+import { isOptionalEditorConfiguration } from './maintainer-tool-helpers.mts';
 import type { ICruiseResult, IOptions } from 'dependency-cruiser';
 
 export const VERIFICATION_OWNERSHIP_MAP_VERSION = 2;
@@ -133,6 +134,14 @@ export function browserSpecsForPrefixes(
 const CASE_FORM_COMPONENT = /\/Case[A-Za-z]+Stage\.svelte$/u;
 
 const RULES: readonly VerificationRule[] = Object.freeze([
+  Object.freeze({
+    id: 'frontend-build', area: 'frontend build configuration and assets', priority: 10,
+    matches: (value: string) => value.startsWith('frontend/'),
+    focusedUnit: unit('test/frontend-build-integrity.test.mts', 'test/frontend-loading-report.test.mts'),
+    focusedBrowser: FUNCTIONAL_BROWSER_INVENTORY,
+    specialised: specialised('architecture', 'browser-build', 'browser-loading-report'),
+    browserRequired: true,
+  }),
   Object.freeze({
     id: 'shared-contracts', area: 'shared contracts and lifecycle metadata', priority: 40,
     matches: (value: string) => value.startsWith('packages/contracts/'),
@@ -550,6 +559,12 @@ const RULES: readonly VerificationRule[] = Object.freeze([
     focusedBrowser: browser(), specialised: specialised('documentation'), browserRequired: false,
   }),
   Object.freeze({
+    id: 'editor-configuration', area: 'optional editor formatting', priority: 30,
+    matches: isOptionalEditorConfiguration,
+    focusedUnit: unit(), focusedBrowser: browser(),
+    specialised: specialised('staged-security'), browserRequired: false,
+  }),
+  Object.freeze({
     id: 'package-release', area: 'package, dependency, and release metadata', priority: 30,
     matches: (value: string) => ['package.json', 'package-lock.json', 'THIRD_PARTY_NOTICES.md', '.nvmrc', 'playwright.config.ts', 'tsconfig.json'].includes(value),
     focusedUnit: unit(
@@ -809,6 +824,7 @@ export function leafComponentContracts(
 export async function createVerificationOwnershipPlan(rawPaths: readonly string[]): Promise<VerificationOwnershipPlan> {
   const initial = buildVerificationOwnershipPlan(rawPaths);
   const importedPaths = initial.changedPaths.filter((file) => /\.(?:[cm]?[jt]s|json|svelte)$/u.test(file)
+    && ownershipRule(file).id !== 'editor-configuration'
     && !file.startsWith('e2e/') && !/^test\/[^/]+\.test\.mts$/u.test(file));
   if (!importedPaths.length) return initial;
   const inventory = readVerificationTestInventory().filter((file) => file.startsWith('test/'));
@@ -893,6 +909,9 @@ function maintainedInventory(): readonly string[] {
     '.nvmrc', 'README.md', 'PRIVACY.md', 'SECURITY.md', 'package-lock.json',
     'package.json', 'playwright.config.ts', 'tsconfig.json',
   ];
+  for (const entry of readdirSync(path.join(REPOSITORY_ROOT, 'frontend'), { withFileTypes: true })) {
+    if (entry.isFile()) files.push(`frontend/${entry.name}`);
+  }
   const visit = (relative: string): void => {
     for (const entry of readdirSync(path.join(REPOSITORY_ROOT, relative), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const child = `${relative}/${entry.name}`;

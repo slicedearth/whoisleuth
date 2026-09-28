@@ -32,6 +32,7 @@
     "test:duration-health": "node tools/test-duration-health.mts",
     "typecheck": "npm run sync --workspace=frontend && tsc --noEmit -p tsconfig.json && tsc --noEmit -p frontend/analysis-tsconfig.json && tsc --noEmit -p frontend/tsconfig.json && tsc --noEmit -p e2e/tsconfig.json && tsc --noEmit -p test/tsconfig.json",
     "dev": "npm run dev --workspace=frontend",
+    "format": "prettier --write",
     "build": "npm run build --workspace=frontend",
     "check": "npm run check --workspace=frontend",
     "test:e2e": "node tools/playwright-balanced-suite.mts",
@@ -154,6 +155,8 @@
     "ajv": "^8.20.0",
     "dependency-cruiser": "^18.4.0",
     "fast-check": "^4.10.2",
+    "prettier": "3.9.9",
+    "prettier-plugin-svelte": "4.1.1",
     "retire": "^5.7.0",
     "typescript": "^6.0.3",
     "yaml": "2.9.1"
