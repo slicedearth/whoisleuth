@@ -39,6 +39,7 @@ import {
   buildLookupObservationProjection,
   buildLookupTaskEvidence,
   hasLookupWebEvidence,
+  lookupPageComparisonState,
 } from './lookup-route-projections.ts';
 import type { LookupHttpResponse, LookupViewModel } from './lookup-response.ts';
 import { buildLookupSourceRefreshPlan, type LookupFreshnessPolicyInput } from './lookup-source-refresh.ts';
@@ -227,6 +228,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     + comparison.counts.whois_incomplete;
   const observedPageBaseline = createPageBaseline(lookupObservationHostname(availability) ?? caseDomain, availability);
   const pageComparison = comparePageBaselines(profileContextReady ? profile?.pageBaseline : null, observedPageBaseline);
+  const pageComparisonState = lookupPageComparisonState(result, profile, pageComparison);
   const pageDisplay = buildLookupPageDisplay({
     ...lookupView,
     browserLibraryProfile,
@@ -240,7 +242,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     hasPasswordField: availability.hasPasswordField,
     phishingLanguageMatch: availability.phishingLanguageMatch,
   });
-  const hasWebEvidence = hasLookupWebEvidence(result, lookupView, profile, pageComparison);
+  const hasWebEvidence = hasLookupWebEvidence(lookupView, pageComparisonState);
   const lookupTaskEvidence = buildLookupTaskEvidence(result, lookupView);
   const hasCaseSection = Boolean(caseDomain) || Boolean(outreach) || abuseRecipientResolution.recipients.length > 0;
   const evidenceTopologyNodes = buildLookupEvidenceTopologyNodes({
@@ -563,6 +565,7 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     caseDomain,
     observedPageBaseline,
     pageComparison,
+    pageComparisonState,
     pageDisplay,
     brandMimicryReview,
     hasWebEvidence,

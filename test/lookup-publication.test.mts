@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import { LookupRequestController } from '../frontend/src/lib/controllers/lookup-request-controller.ts';
 import { publishLookupResult } from '../frontend/src/lib/controllers/lookup-publication.ts';
 import { lookupWebSurfaces } from '../frontend/src/lib/components/lookup-web-surfaces.ts';
-import { hasLookupWebEvidence, lookupWebEvidenceSources } from '../frontend/src/lib/analysis/lookup-route-projections.ts';
+import { hasLookupWebEvidence, lookupPageComparisonState, lookupWebEvidenceSources } from '../frontend/src/lib/analysis/lookup-route-projections.ts';
+import { normalizeBrandProfileStore } from '../packages/workspace/brand-profile-model.mts';
 import { lookupSectionSurfaces } from '../frontend/src/lib/components/lookup-section-surfaces.ts';
 import { createLookupViewModel } from '../lib/lookup-response-contract.mts';
 import { normalizeSnapshot } from '../packages/cases/case-evidence-model.mts';
@@ -176,18 +178,42 @@ test('each web source alone keeps its family available without inventing a compl
   } as const satisfies Record<keyof ReturnType<typeof lookupWebEvidenceSources>, readonly [
     keyof typeof view, Readonly<Record<string, unknown>>, keyof ReturnType<typeof lookupWebSurfaces> | null,
   ]>;
-  assert.equal(hasLookupWebEvidence(null, view, null, null), false);
+  assert.equal(hasLookupWebEvidence(view, 'hidden'), false);
   for (const [source, [field, input, surface]] of Object.entries(examples)) {
     for (const status of ['success', 'partial', 'unsupported']) {
       const only = { ...view, [field]: { ...input, status } };
       assert.deepEqual(Object.entries(lookupWebEvidenceSources(only)).filter(([, present]) => present).map(([key]) => key), [source]);
-      assert.equal(hasLookupWebEvidence(null, only, null, null), true, `${source}: ${status}`);
+      assert.equal(hasLookupWebEvidence(only, 'hidden'), true, `${source}: ${status}`);
       const surfaces = lookupWebSurfaces(only, context);
       if (surface) assert.equal(surfaces[surface].visible, true, source);
       else assert.equal(surfaces.behaviour.visible, false, 'A combined behaviour view still requires both inputs.');
     }
     const unknown = { ...view, [field]: { source: 'future', contextVersion: 99, sslblVersion: 99, securityTxtVersion: 99 } };
-    assert.equal(hasLookupWebEvidence(null, unknown, null, null), false, source);
+    assert.equal(hasLookupWebEvidence(unknown, 'hidden'), false, source);
+  }
+});
+
+test('saved baseline comparison has one state for the family, card and unavailable explanation', () => {
+  const archive = JSON.parse(readFileSync(new URL('./fixtures/workspace-html-baseline-v8-public.json', import.meta.url), 'utf8'));
+  const profile = normalizeBrandProfileStore(archive.sections.brandProfiles).profiles[0];
+  assert.ok(profile?.pageBaseline);
+  const empty = createLookupViewModel(null);
+  const domain = { type: 'domain' } as const;
+  const examples = [
+    { result: null, profile, comparison: null, state: 'hidden', visible: false },
+    { result: domain, profile: null, comparison: null, state: 'hidden', visible: false },
+    { result: domain, profile: { pageBaseline: null }, comparison: null, state: 'hidden', visible: false },
+    { result: { type: 'ipv4' } as const, profile, comparison: null, state: 'hidden', visible: false },
+    { result: domain, profile, comparison: null, state: 'unavailable', visible: true },
+    { result: domain, profile, comparison: {}, state: 'available', visible: true },
+  ] as const;
+  for (const example of examples) {
+    const state = lookupPageComparisonState(example.result, example.profile, example.comparison);
+    assert.equal(state, example.state);
+    assert.equal(hasLookupWebEvidence(empty, state), example.visible);
+    assert.equal(lookupWebSurfaces(empty, {
+      serviceDependency: false, brandMimicry: false, pageComparison: state !== 'hidden',
+    }).comparison.visible, example.visible);
   }
 });
 

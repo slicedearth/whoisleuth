@@ -196,11 +196,15 @@ export function runUnitTests(
 }
 
 /** Test names declare execution cost; ordinary files need no registration. */
+export function isNodeIntegrationTest(file: string): boolean {
+  return file.endsWith('.integration.test.mts');
+}
+
 export function nodeTestFiles(lane: 'unit' | 'integration' | 'all', cwd = process.cwd()): readonly string[] {
   const files = readdirSync(path.join(cwd, 'test'), { withFileTypes: true })
     .filter(entry => entry.isFile() && /^[a-zA-Z0-9._-]+\.test\.mts$/u.test(entry.name))
     .map(entry => `test/${entry.name}`)
-    .filter(file => lane === 'all' || file.endsWith('.integration.test.mts') === (lane === 'integration'))
+    .filter(file => lane === 'all' || isNodeIntegrationTest(file) === (lane === 'integration'))
     .sort();
   if (!files.length) throw new Error(`No ${lane} tests were discovered.`);
   return Object.freeze(files);

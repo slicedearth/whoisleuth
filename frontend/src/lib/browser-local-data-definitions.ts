@@ -1,83 +1,83 @@
 import { normalizeCaseStore, parseStoreVersion } from '../../../packages/cases/case-migration-model.mts';
 import { serializeCaseStore } from '../../../packages/cases/case-storage-model.mts';
-import type { CaseRecord } from './analysis/case-model.ts';
+import type { CaseRecord } from '../../../packages/cases/case-model.mts';
 import {
   campaignStoreVersion,
   normalizeCampaignStore,
   serializeCampaignStore,
-} from './analysis/campaign-model.ts';
-import type { CampaignRecord } from './analysis/campaign-model.ts';
+} from '../../../packages/workspace/campaign-model.mts';
+import type { CampaignRecord } from '../../../packages/workspace/campaign-model.mts';
 import {
   brandProfileStoreVersion,
   normalizeBrandProfileStore,
   serializeBrandProfileStore,
-} from './analysis/brand-profile-model.ts';
-import type { BrandProfile } from './analysis/brand-profile-model.ts';
+} from '../../../packages/workspace/brand-profile-model.mts';
+import type { BrandProfile } from '../../../packages/workspace/brand-profile-model.mts';
 import {
   WATCHLIST_SCHEMA,
   normalizeWatchlistStore,
   serializeWatchlistStore,
   watchlistStoreVersion,
-} from './analysis/watchlist-store.ts';
-import type { WatchlistCollection, WatchlistEntry } from './analysis/watchlist-store.ts';
+} from '../../../packages/workspace/watchlist-store.mts';
+import type { WatchlistCollection, WatchlistEntry } from '../../../packages/workspace/watchlist-store.mts';
 import {
   SHORTLIST_SCHEMA,
   normalizeShortlistStore,
   serializeShortlistStore,
   shortlistStoreVersion,
-} from './analysis/shortlist-model.ts';
-import type { ShortlistRecord } from './analysis/shortlist-model.ts';
+} from '../../../packages/workspace/shortlist-model.mts';
+import type { ShortlistRecord } from '../../../packages/workspace/shortlist-model.mts';
 import {
   ctHistoryStoreVersion,
   emptyCtHistoryStore,
   enforceCtHistoryBudget,
   normalizeCtHistoryStore,
   serializeCtHistoryStore,
-} from './analysis/ct-history.ts';
-import type { CtHistoryEntry, CtHistoryStore } from './analysis/ct-history.ts';
+} from '../../../packages/workspace/ct-history.mts';
+import type { CtHistoryEntry, CtHistoryStore } from '../../../packages/workspace/ct-history.mts';
 import {
   detectionRuleStoreVersion,
   normalizeDetectionRuleStore,
   serializeDetectionRuleStore,
-} from './analysis/detection-rule-model.ts';
-import type { DetectionRule } from './analysis/detection-rule-model.ts';
+} from '../../../packages/workspace/detection-rule-model.mts';
+import type { DetectionRule } from '../../../packages/workspace/detection-rule-model.mts';
 import {
   RELATIONSHIP_OBSERVATION_SCHEMA,
   normalizeRelationshipObservationStore,
   relationshipObservationStoreVersion,
   serializeRelationshipObservationStore,
-} from './analysis/relationship-observation-model.ts';
-import type { RelationshipObservation } from './analysis/relationship-observation-model.ts';
+} from '../../../packages/workspace/relationship-observation-model.mts';
+import type { RelationshipObservation } from '../../../packages/workspace/relationship-observation-model.mts';
 import {
   BULK_SESSION_SCHEMA,
   bulkSessionStorageValue,
   bulkSessionStoreVersion,
   normalizeBulkSessionStore,
   serializeNormalizedBulkSessions,
-} from './analysis/bulk-session-model.ts';
-import type { BulkSession } from './analysis/bulk-session-model.ts';
+} from '../../../packages/workspace/bulk-session-model.mts';
+import type { BulkSession } from '../../../packages/workspace/bulk-session-model.mts';
 import {
   WEBSITE_SNAPSHOT_SCHEMA,
   normalizeWebsiteSnapshotStore,
   serializeWebsiteSnapshotStore,
   websiteSnapshotStoreVersion,
-} from './analysis/website-snapshot-model.ts';
-import type { WebsiteProfileSnapshot } from './analysis/website-snapshot-model.ts';
+} from '../../../packages/workspace/website-snapshot-model.mts';
+import type { WebsiteProfileSnapshot } from '../../../packages/workspace/website-snapshot-model.mts';
 import {
   INVESTIGATION_TEMPLATE_SCHEMA,
   investigationTemplateStoreVersion,
   normalizeInvestigationTemplateStore,
   serializeInvestigationTemplateStore,
-} from './analysis/investigation-template-model.ts';
-import type { InvestigationTemplate } from './analysis/investigation-template-model.ts';
+} from '../../../packages/workspace/investigation-template-model.mts';
+import type { InvestigationTemplate } from '../../../packages/workspace/investigation-template-model.mts';
 import {
   bulkReviewRecords,
   bulkReviewStoreFromRecords,
   bulkReviewStoreVersion,
   enforceBulkReviewBudget,
   serializeBulkReviewStore,
-} from './analysis/bulk-review-model.ts';
-import type { BulkReviewRecord, BulkReviewStore } from './analysis/bulk-review-model.ts';
+} from '../../../packages/workspace/bulk-review-model.mts';
+import type { BulkReviewRecord, BulkReviewStore } from '../../../packages/workspace/bulk-review-model.mts';
 import {
   ANALYST_REVIEW_STATE_SCHEMA,
   ANALYST_REVIEW_STATE_BROWSER_STORAGE_REVISION,
@@ -87,8 +87,8 @@ import {
   emptyAnalystReviewStateStore,
   migrateDevelopmentAnalystReviewStateStore,
   serializeAnalystReviewStateStore,
-} from './analysis/analyst-review-state.ts';
-import type { AnalystReviewStateRecord, AnalystReviewStateStore } from './analysis/analyst-review-state.ts';
+} from '../../../packages/monitoring/analyst-review-state.mts';
+import type { AnalystReviewStateRecord, AnalystReviewStateStore } from '../../../packages/monitoring/analyst-review-state.mts';
 import {
   BrowserLocalDataError,
   plaintextJsonCodec,
@@ -141,25 +141,6 @@ export type BrowserLocalCollectionValueMap = Readonly<{
   investigation_templates: InvestigationTemplate;
   bulk_review: BulkReviewRecord;
   analyst_review_state: AnalystReviewStateRecord;
-}>;
-
-export type BrowserLocalCollectionDocumentMap = Readonly<{
-  review_session: ReviewSessionStore;
-  case_drafts: CaseDraftStore;
-  case_views: CaseViewsStore;
-  cases: CaseRecord[];
-  campaigns: CampaignRecord[];
-  brand_profiles: BrandProfile[];
-  watchlists: WatchlistCollection;
-  shortlist: ShortlistRecord[];
-  ct_history: CtHistoryStore;
-  detection_rules: DetectionRule[];
-  relationship_observations: RelationshipObservation[];
-  bulk_sessions: BulkSession[];
-  website_snapshots: WebsiteProfileSnapshot[];
-  investigation_templates: InvestigationTemplate[];
-  bulk_review: BulkReviewStore;
-  analyst_review_state: AnalystReviewStateStore;
 }>;
 
 export type BrowserLocalCollectionId = keyof typeof BROWSER_LOCAL_COLLECTION_MANIFEST_BY_ID;
@@ -456,8 +437,10 @@ const browserLocalCollectionsById = {
   investigation_templates: INVESTIGATION_TEMPLATES_COLLECTION,
   bulk_review: BULK_REVIEW_COLLECTION,
   analyst_review_state: ANALYST_REVIEW_STATE_COLLECTION,
-} satisfies {
-  readonly [Collection in BrowserLocalCollectionId]: LocalDataCollectionDefinition<BrowserLocalCollectionDocumentMap[Collection]>;
+} satisfies Readonly<Record<BrowserLocalCollectionId, AnyLocalDataCollectionDefinition>>;
+
+export type BrowserLocalCollectionDocumentMap = {
+  readonly [Collection in BrowserLocalCollectionId]: ReturnType<typeof browserLocalCollectionsById[Collection]['normalize']>;
 };
 
 export const BROWSER_LOCAL_COLLECTIONS = Object.freeze(

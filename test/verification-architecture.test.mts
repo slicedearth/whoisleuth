@@ -813,6 +813,35 @@ describe('verification architecture contracts', () => {
     assert.match(rendered, /Run: check — selected by frontend\/src\/lib\/components\/LookupAtAGlance.svelte/u);
   });
 
+  test('focused native integration checks use the shared preflight and stay out of iteration', async () => {
+    const shell = 'test/cli-shell-completion.integration.test.mts';
+    const unit = 'test/cli-doctor-completion.test.mts';
+    const plan = await createVerificationOwnershipPlan([shell, unit]);
+    assert.ok(plan.focusedUnitChecks.includes(shell));
+    assert.ok(plan.focusedUnitChecks.includes(unit));
+    const integration = buildFocusedVerificationExecution(plan);
+    const iteration = buildFocusedVerificationExecution(plan, { iteration: true });
+    const command = integration.commands.find(command => command.id === 'focused-integration');
+    assert.ok(command);
+    assert.equal(command.executable, process.execPath);
+    assert.deepEqual(command.args, [
+      path.join(REPOSITORY_ROOT, 'tools/toolchain-compatibility.mts'),
+      '--unit-tests', '--test', '--test-concurrency=1', shell,
+    ]);
+    assert.deepEqual(command.selectedBy, [shell]);
+    for (const execution of [integration, iteration]) {
+      const selectedUnit = execution.commands.find(command => command.id === 'focused-unit');
+      assert.ok(selectedUnit);
+      assert.ok(selectedUnit.args.includes(unit));
+      assert.equal(selectedUnit.args.includes(shell), false);
+    }
+    assert.equal(iteration.commands.some(command => command.id === 'focused-integration'), false);
+    assert.deepEqual(iteration.deferredIntegrationChecks, [shell]);
+    assert.deepEqual(integration.deferredIntegrationChecks, []);
+    assert.match(renderExecutionPlan(plan, iteration), /Integration execution deferred: test\/cli-shell-completion.integration.test.mts/u);
+    assert.match(renderExecutionPlan(plan, integration), /Focused integration files: 1/u);
+  });
+
   test('optional editor configuration does not select application or release checks', async () => {
     for (const file of ['.prettierrc.json', '.prettierignore', '.editorconfig', 'prettier.config.mjs']) {
       const plan = await createVerificationOwnershipPlan([file]);

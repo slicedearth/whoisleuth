@@ -111,10 +111,10 @@ npm run verification:focused
 ```
 
 While editing, add `--iteration` to run the selected unit/type checks and
-browser-import discovery without building or executing browsers, packages or
-repository-wide integration gates. The plan explains which changed paths
-selected each check and lists every deferred gate. Run the same selection
-without `--iteration` at the coherent batch boundary. Neither mode replaces
+browser-import discovery without building or executing browsers, packages,
+native integration tests or repository-wide integration gates. The plan explains
+which changed paths selected each check and lists every deferred gate. Run the
+same selection without `--iteration` at the coherent batch boundary. Neither mode replaces
 the complete required pre-merge checks.
 
 For a fast all-domain feedback pass, use `npm run test:unit`. Repository-wide

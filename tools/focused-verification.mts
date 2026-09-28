@@ -19,6 +19,7 @@ import {
 } from './playwright-results-summary.mts';
 import { inspectVerificationArtifacts } from './verification-artifact-status.mts';
 import { localPortIsFree, npmExecutableName } from './maintainer-tool-helpers.mts';
+import { isNodeIntegrationTest } from './toolchain-compatibility.mts';
 import {
   createVerificationOwnershipPlan,
   type SpecialisedCheck,
@@ -54,6 +55,7 @@ export type FocusedVerificationExecution = Readonly<{
   cleanupBrowserArtifacts: boolean;
   deferredSpecialisedChecks: readonly SpecialisedCheck[];
   deferredBrowserSpecs: readonly string[];
+  deferredIntegrationChecks: readonly string[];
 }>;
 
 const SPECIALISED_SCRIPTS: Readonly<Partial<Record<SpecialisedCheck, string>>> = Object.freeze({
@@ -164,6 +166,8 @@ export function buildFocusedVerificationExecution(
   options: Pick<FocusedVerificationOptions, 'iteration'> = {},
 ): FocusedVerificationExecution {
   const commands: FocusedCommand[] = [];
+  const unitChecks = plan.focusedUnitChecks.filter(file => !isNodeIntegrationTest(file));
+  const integrationChecks = plan.focusedUnitChecks.filter(isNodeIntegrationTest);
   const browserPaths = plan.assignments.filter(assignment => assignment.focusedBrowserChecks.length).map(assignment => assignment.changedPath);
   if (plan.focusedBrowserChecks.length) {
     // Discovery loads the real configuration and selected specifications but
@@ -177,15 +181,28 @@ export function buildFocusedVerificationExecution(
       environment: Object.freeze({ CI: '', WHOISLEUTH_E2E_USE_BUILD: '0', WHOISLEUTH_E2E_PERFORMANCE_FIRST: '1', PLAYWRIGHT_JSON_OUTPUT_FILE: '' }),
     }));
   }
-  if (plan.focusedUnitChecks.length) {
+  if (unitChecks.length) {
     commands.push(Object.freeze({
       id: 'focused-unit',
-      selectedBy: plan.assignments.filter(assignment => assignment.focusedUnitChecks.length).map(assignment => assignment.changedPath),
+      selectedBy: plan.assignments.filter(assignment => assignment.focusedUnitChecks.some(file => !isNodeIntegrationTest(file))).map(assignment => assignment.changedPath),
       executable: process.execPath,
       args: Object.freeze([
         '--test',
         '--test-concurrency=4',
-        ...plan.focusedUnitChecks,
+        ...unitChecks,
+      ]),
+    }));
+  }
+  if (integrationChecks.length && !options.iteration) {
+    commands.push(Object.freeze({
+      id: 'focused-integration',
+      selectedBy: plan.assignments.filter(assignment => assignment.focusedUnitChecks.some(isNodeIntegrationTest)).map(assignment => assignment.changedPath),
+      executable: process.execPath,
+      // The existing entry point probes native shells before starting workers
+      // and forwards their resolved paths, including paths containing spaces.
+      args: Object.freeze([
+        path.join(REPOSITORY_ROOT, 'tools/toolchain-compatibility.mts'),
+        '--unit-tests', '--test', '--test-concurrency=1', ...integrationChecks,
       ]),
     }));
   }
@@ -250,6 +267,7 @@ export function buildFocusedVerificationExecution(
     cleanupBrowserArtifacts: producesBrowserArtifacts,
     deferredSpecialisedChecks: Object.freeze([...deferred].sort()),
     deferredBrowserSpecs: Object.freeze(options.iteration ? [...plan.focusedBrowserChecks] : []),
+    deferredIntegrationChecks: Object.freeze(options.iteration ? integrationChecks : []),
   });
 }
 
@@ -259,7 +277,8 @@ export function renderExecutionPlan(
 ): string {
   const lines = [
     `Focused ${execution.scope} verification: ${plan.changedPaths.length} changed path(s) across ${plan.ownershipAreas.length} owner and ${plan.impactAreas.length} impact area(s).`,
-    `Focused unit files: ${plan.focusedUnitChecks.length}.`,
+    `Focused unit files: ${plan.focusedUnitChecks.filter(file => !isNodeIntegrationTest(file)).length}.`,
+    `Focused integration files: ${plan.focusedUnitChecks.filter(isNodeIntegrationTest).length}.`,
     ...plan.assignments.flatMap((assignment) => [
       `Selected for ${assignment.changedPath}: ${assignment.impactAreas.join('; ')}.`,
       ...assignment.selectionNotes.map(note => `  ${assignment.changedPath}: ${note}`),
@@ -271,6 +290,7 @@ export function renderExecutionPlan(
       ? [`Checks deferred: ${execution.deferredSpecialisedChecks.join(', ')}.`]
       : []),
     ...(execution.deferredBrowserSpecs.length ? [`Browser execution deferred: ${execution.deferredBrowserSpecs.join(', ')}.`] : []),
+    ...(execution.deferredIntegrationChecks.length ? [`Integration execution deferred: ${execution.deferredIntegrationChecks.join(', ')}.`] : []),
     ...(execution.scope === 'iteration'
       ? ['Iteration is not integration acceptance. Run the same selection without --iteration before completing the batch.'] : []),
     'This focused result covers the listed paths and checks only. Complete hosted checks are required before merge; release checks remain separate.',

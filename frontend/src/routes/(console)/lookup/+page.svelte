@@ -268,7 +268,6 @@
     setCaseNavigationContext(caseRecord.id, `/lookup?${params}#case-response`, 'Lookup');
   }
   const observedPageBaseline = $derived(lookupAnalysis.observedPageBaseline);
-  const pageComparison = $derived(lookupAnalysis.pageComparison);
   const pageDisplay = $derived(lookupAnalysis.pageDisplay);
   const brandMimicryReview = $derived(lookupAnalysis.brandMimicryReview);
   const hasWebEvidence = $derived(lookupAnalysis.hasWebEvidence);
@@ -364,10 +363,7 @@
   const webSurfaces = $derived(
     lookupWebSurfaces(lookupView, {
       serviceDependency: Boolean(serviceDependencyReview),
-      pageComparison: Boolean(
-        pageComparison ||
-        (profile?.pageBaseline && session.observation.response?.type === 'domain'),
-      ),
+      pageComparison: lookupAnalysis.pageComparisonState !== 'hidden',
       brandMimicry: Boolean(brandMimicryReview),
     }),
   );

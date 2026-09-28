@@ -100,7 +100,6 @@
 
   const networkDisplay = $derived(analysis.networkDisplay);
   const dnsRehearsalEvidence = $derived(analysis.dnsRehearsalEvidence);
-  const pageComparison = $derived(analysis.pageComparison);
   const pageDisplay = $derived(analysis.pageDisplay);
   const brandMimicryReview = $derived(analysis.brandMimicryReview);
   const certificatePolicyReview = $derived(analysis.certificatePolicyReview);
@@ -511,9 +510,7 @@
           unavailableLabel="The page-baseline comparison could not be loaded."
           props={{
             comparison: pageDisplay.pageComparison,
-            unavailable: Boolean(
-              !pageComparison && profile?.pageBaseline && result?.type === 'domain',
-            ),
+            unavailable: analysis.pageComparisonState === 'unavailable',
           }}
         /></div
       >

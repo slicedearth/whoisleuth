@@ -189,13 +189,19 @@ export function lookupWebEvidenceSources(view: LookupViewModel) {
   };
 }
 
-export function hasLookupWebEvidence(
-  result: LookupHttpResponse | null,
-  lookupView: LookupViewModel,
-  profile: BrandProfile | null,
+export function lookupPageComparisonState(
+  result: Pick<LookupHttpResponse, 'type'> | null,
+  profile: Pick<BrandProfile, 'pageBaseline'> | null,
   pageComparison: unknown,
+): 'available' | 'unavailable' | 'hidden' {
+  if (pageComparison) return 'available';
+  return profile?.pageBaseline && result?.type === 'domain' ? 'unavailable' : 'hidden';
+}
+
+export function hasLookupWebEvidence(
+  lookupView: LookupViewModel,
+  pageComparisonState: ReturnType<typeof lookupPageComparisonState>,
 ): boolean {
   return Object.values(lookupWebEvidenceSources(lookupView)).some(Boolean)
-    || Boolean(pageComparison)
-    || Boolean(profile?.pageBaseline && result?.type === 'domain');
+    || pageComparisonState !== 'hidden';
 }
