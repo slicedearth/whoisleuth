@@ -221,7 +221,9 @@ silently create an empty collection or assume the saved-views repair applies to
 other data. Implement an explicit migration or recovery path and test an existing
 workspace fixture, missing manifests with retained records/files, and concurrent
 creation. Follow the [storage recovery boundary](docs/browser-local-data.md#encrypted-working-workspaces)
-and [provider tests](test/browser-local-data-provider.test.mts). Keep historical
+and the [provider](test/browser-local-data-provider.test.mts),
+[encrypted migration](e2e/encrypted-workspaces.spec.ts) and
+[filesystem transaction](test/local-application-store.test.mts) tests. Keep historical
 fixtures independent. Version archive changes through their portable contract
 owner; browser persistence alone does not add export fields.
 

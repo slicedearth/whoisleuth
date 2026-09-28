@@ -71,6 +71,7 @@ import {
 } from '../../../packages/workspace/investigation-template-model.mts';
 import type { InvestigationTemplate } from '../../../packages/workspace/investigation-template-model.mts';
 import {
+  BULK_REVIEW_SCHEMA,
   bulkReviewRecords,
   bulkReviewStoreFromRecords,
   bulkReviewStoreVersion,
@@ -331,7 +332,7 @@ export const BULK_REVIEW_COLLECTION = Object.freeze({
   legacyKey: LEGACY_BULK_REVIEW_KEY,
   empty: () => enforceBulkReviewBudget(null),
   acceptLegacyRoot: (raw) => (
-    record(raw)?.schema === 'whoisleuth.bulk-review'
+    record(raw)?.schema === BULK_REVIEW_SCHEMA
     && positiveVersion(record(raw)?.version)
     && Array.isArray(record(raw)?.presets)
     && Array.isArray(record(raw)?.rows)

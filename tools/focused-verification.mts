@@ -298,6 +298,8 @@ export function renderExecutionPlan(
     ...(execution.scope === 'iteration'
       ? ['Iteration is not integration acceptance. Run the same selection without --iteration before completing the batch.'] : []),
     'This focused result covers the listed paths and checks only. Complete hosted checks are required before merge; release checks remain separate.',
+    `Full local scope: npm run ${plan.fullVerificationScript} -- --list. Omit -- --list to execute it.`,
+    'Timing-sensitive changes also require npm run test:e2e:stress. Release-only checks, including the production dependency audit, follow docs/releasing.md.',
   ];
   return `${lines.join('\n')}\n`;
 }

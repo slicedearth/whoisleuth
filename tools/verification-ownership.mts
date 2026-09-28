@@ -12,12 +12,11 @@ import { PRIVACY_DATA_FLOW_CATALOGUE } from './privacy-data-flow-catalogue-rende
 import { readVerificationTestInventory } from './verification-timing-profile.mts';
 import { browserRouteReferences, browserTestsForRoutes } from './browser-route-impact.mts';
 import type { ICruiseResult, IOptions } from 'dependency-cruiser';
-import { createVerificationRules, selectBrowserSpecs, FULL_BATCH_RELEASE_GATES, type FullGate, type SpecialisedCheck, type VerificationRule } from './verification-policy.mts';
+import { createVerificationRules, selectBrowserSpecs, type SpecialisedCheck, type VerificationRule } from './verification-policy.mts';
 import { indexRuntimeConsumers, describeRuntimeImportGaps } from './runtime-test-consumers.mts';
-export { FULL_BATCH_RELEASE_GATES } from './verification-policy.mts';
 export type { SpecialisedCheck } from './verification-policy.mts';
 
-export const VERIFICATION_OWNERSHIP_MAP_VERSION = 2;
+export const VERIFICATION_OWNERSHIP_MAP_VERSION = 3;
 export const MAX_VERIFICATION_CHANGED_PATH_LENGTH = 320;
 export const MAX_VERIFICATION_INVENTORY_FILES = 8_000;
 export const MAX_VERIFICATION_CHANGED_PATHS = MAX_VERIFICATION_INVENTORY_FILES;
@@ -37,7 +36,7 @@ export type VerificationOwnershipAssignment = Readonly<{
 }>;
 
 export type VerificationOwnershipPlan = Readonly<{
-  mapVersion: 2;
+  mapVersion: typeof VERIFICATION_OWNERSHIP_MAP_VERSION;
   changedPaths: readonly string[];
   assignments: readonly VerificationOwnershipAssignment[];
   ownershipAreas: readonly string[];
@@ -46,7 +45,7 @@ export type VerificationOwnershipPlan = Readonly<{
   focusedBrowserChecks: readonly string[];
   mandatorySpecialisedChecks: readonly SpecialisedCheck[];
   userFacingBrowserRequired: boolean;
-  fullBatchReleaseGates: readonly FullGate[];
+  fullVerificationScript: string;
   interpretation: readonly string[];
 }>;
 
@@ -244,11 +243,12 @@ export function buildVerificationOwnershipPlan(
     focusedBrowserChecks: uniqueSorted(assignments.flatMap((item) => item.focusedBrowserChecks)),
     mandatorySpecialisedChecks: uniqueSorted(assignments.flatMap((item) => item.mandatorySpecialisedChecks)),
     userFacingBrowserRequired: assignments.some((item) => item.userFacingBrowserRequired),
-    fullBatchReleaseGates: FULL_BATCH_RELEASE_GATES,
+    fullVerificationScript: 'verification:ci',
     interpretation: Object.freeze([
       'Focused checks support iteration only and do not establish batch or release readiness.',
       'Each path selects its most specific owner plus explicit cross-cutting impacts, not every ancestor owner.',
       'Every full batch and release gate remains mandatory regardless of this focused plan.',
+      'Timing-sensitive changes also require test:e2e:stress; release-only checks, including the production dependency audit, follow docs/releasing.md.',
       'The plan is request-free and contains test and check identities, never executable shell fragments.',
       'Known browser families discover their current specifications; components and frontend models inherit resolved route owners, while unexplained interfaces select the complete functional inventory.',
     ]),
@@ -480,7 +480,6 @@ export function checkVerificationOwnershipMap() {
     privacyConsumerFlows: PRIVACY_DATA_FLOW_CATALOGUE.schemaConsumerFlows.length,
     blockingDependencyRules: dependencyRules.length,
     browserRequiredSupportPaths: browserRequiredSupportPaths.length,
-    fullBatchReleaseGates: FULL_BATCH_RELEASE_GATES.length,
   });
 }
 
@@ -488,7 +487,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   try {
     if (args.length === 1 && args[0] === '--check') {
       const result = checkVerificationOwnershipMap();
-      process.stdout.write(`Verification ownership map v${result.mapVersion}: ${result.assignedFiles}/${result.maintainedFiles} files assigned across ${result.ownershipAreas} owner and ${result.impactAreas} impact areas; ${result.fullBatchReleaseGates} full gates retained.\n`);
+      process.stdout.write(`Verification ownership map v${result.mapVersion}: ${result.assignedFiles}/${result.maintainedFiles} files assigned across ${result.ownershipAreas} owner and ${result.impactAreas} impact areas.\n`);
       process.stdout.write(`Canonical closure: ${result.schemaFamilies} schema families, ${result.schemaOwnerPaths} owner paths, ${result.capabilities} capabilities, ${result.cliOperations} CLI operations, ${result.privacyProfiles} privacy profiles, ${result.privacyConsumerFlows} privacy consumer flows, ${result.blockingDependencyRules} blocking dependency rules.\n`);
       return 0;
     }

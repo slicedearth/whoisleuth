@@ -45,7 +45,6 @@ import {
   dependencyAnalysisFailure,
   importedTestConsumers,
   leafComponentContracts,
-  FULL_BATCH_RELEASE_GATES,
 } from '../tools/verification-ownership.mts';
 
 function rawProfile(): Record<string, unknown> {
@@ -378,9 +377,13 @@ describe('verification architecture contracts', () => {
       '.github/workflows/ci.yml',
     ];
     const plan = buildVerificationOwnershipPlan(paths);
-    assert.equal(plan.mapVersion, 2);
+    assert.equal(plan.mapVersion, 3);
     assert.equal(plan.assignments.length, paths.length);
-    assert.deepEqual(plan.fullBatchReleaseGates, FULL_BATCH_RELEASE_GATES);
+    assert.equal(plan.fullVerificationScript, 'verification:ci');
+    const explanation = renderExecutionPlan(plan, buildFocusedVerificationExecution(plan));
+    assert.match(explanation, /npm run verification:ci -- --list/u);
+    assert.match(explanation, /npm run test:e2e:stress/u);
+    assert.match(explanation, /production dependency audit.*docs\/releasing\.md/u);
     assert.ok(plan.focusedUnitChecks.length > 0);
     assert.ok(plan.focusedBrowserChecks.includes('e2e/dashboard.spec.ts'));
     assert.equal(plan.userFacingBrowserRequired, true);
@@ -390,7 +393,6 @@ describe('verification architecture contracts', () => {
 
     const closure = checkVerificationOwnershipMap();
     assert.equal(closure.assignedFiles, closure.maintainedFiles);
-    assert.equal(closure.fullBatchReleaseGates, FULL_BATCH_RELEASE_GATES.length);
     assert.ok(closure.schemaFamilies > 0 && closure.capabilities > 0 && closure.cliOperations > 0);
     assert.ok(closure.privacyProfiles > 0 && closure.privacyConsumerFlows > 0);
     assert.ok(closure.browserRequiredSupportPaths > 0);
@@ -558,7 +560,7 @@ describe('verification architecture contracts', () => {
     assert.deepEqual(contracts.get(file), [spec]);
     const plan = buildVerificationOwnershipPlan([file], new Map(), new Map(), new Map(), contracts);
     assert.deepEqual(plan.focusedBrowserChecks, [spec]);
-    assert.ok(plan.fullBatchReleaseGates.includes('browser-complete'));
+    assert.equal(plan.fullVerificationScript, 'verification:ci');
     assert.equal(leafComponentContracts([file], graph, []).size, 0);
     graph.modules[0]!.dependencies[0]!.couldNotResolve = true;
     assert.equal(leafComponentContracts([file], graph, [spec]).size, 0);

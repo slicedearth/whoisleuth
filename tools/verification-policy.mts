@@ -4,29 +4,6 @@ import { CAPABILITY_DOCUMENT_PATH } from './capability-document-contract.mts';
 import { CLI_PACKAGE_SUPPORT_FILES } from './cli-package-contract.mts';
 import { isOptionalEditorConfiguration } from './maintainer-tool-helpers.mts';
 
-export const FULL_BATCH_RELEASE_GATES = Object.freeze([
-  'unit',
-  'production-source-coverage',
-  'typecheck',
-  'frontend-check',
-  'build',
-  'architecture',
-  'capability-catalogue',
-  'privacy-catalogue',
-  'schema-inventory',
-  'licences',
-  'production-dependency-audit',
-  'cli-package',
-  'capture-package',
-  'local-package',
-  'release-contract',
-  'browser-complete',
-  'browser-timing-stress-when-affected',
-  'diff-whitespace',
-  'staged-security',
-] as const);
-
-export type FullGate = (typeof FULL_BATCH_RELEASE_GATES)[number];
 export type SpecialisedCheck =
   | 'architecture'
   | 'capability-catalogue'
