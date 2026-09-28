@@ -157,6 +157,16 @@ its audience treatment in `case-record-projection.mts`. Current recovery is in
 Run the Case ownership and portability lifecycle tests; retain published
 fixtures unchanged and add an independent current fixture when required.
 
+CLI commands are grouped by responsibility: collection, network, evidence,
+review, assurance, workflow, history and support. Each family's
+`cli/*-command-definitions.mts` owns its reference and grammar bindings;
+`cli/*-arguments.mts` owns its parsed contract and semantic validation.
+The combined argument union is inferred from those parsers. Shared option
+definitions live in `command-definition.mts`; help, completion and browser
+reference pages derive from them. Keep effects in the corresponding runner,
+not in the data-only definition. Independent network and privacy expectations
+remain in the contract tests.
+
 Before submitting a feature branch, run proportionate local checks and state
 any omissions. Merge requires complete fresh hosted checks against the current
 merge candidate. Release verification is a separate boundary. Local success

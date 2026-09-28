@@ -333,7 +333,7 @@ describe('canonical CLI command registry', () => {
   });
 
   test('binds every command to one parser and its own minimal accepted action', () => {
-    assert.deepEqual(Object.keys(CLI_PARSERS), CLI_COMMANDS);
+    assert.deepEqual(Object.keys(CLI_PARSERS).sort(), [...CLI_COMMANDS].sort());
     assert.deepEqual(Object.keys(MINIMUM_ARGUMENTS), CLI_COMMANDS);
     for (const command of CLI_COMMANDS) {
       const parsed = parseCliArguments(MINIMUM_ARGUMENTS[command]);

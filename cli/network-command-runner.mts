@@ -13,6 +13,7 @@ import {
   formatMailTransportReview,
 } from '../lib/smtp-transport-review.mts';
 import type { CliArguments } from './arguments.mts';
+import type { CliCommandFor } from './command-reference.mts';
 import { CliUsageError } from './errors.mts';
 import {
   buildCliCtSearchDocument,
@@ -34,9 +35,7 @@ import type { UnknownRecord } from './saved-lookup.mts';
 import EXIT_CODES from './exit-codes.mts';
 import { buildPostureSarif } from './ci-report.mts';
 
-type NetworkCommandArguments = Extract<CliArguments, {
-  action: 'ct-search' | 'posture' | 'http' | 'tls' | 'dnssec-validate' | 'mail-transport';
-}>;
+type NetworkCommandArguments = Extract<CliArguments, { action: CliCommandFor<'network'> }>;
 
 async function runNetworkCommand(
   args: NetworkCommandArguments,
@@ -44,6 +43,7 @@ async function runNetworkCommand(
   context: CliCommandContext,
 ): Promise<number> {
   if (args.action === 'ct-search') {
+    context.setFailureLabel('Certificate Transparency search');
     const keyword = args.keyword || await context.readSingleInput();
     if (!keyword) throw new CliUsageError('ct-search requires one keyword as an argument or on stdin.');
     const search = dependencies.searchCertificateTransparency || searchCertificateTransparency;
@@ -58,6 +58,7 @@ async function runNetworkCommand(
   }
 
   if (args.action === 'posture') {
+    context.setFailureLabel('Domain posture audit');
     const requestedDomain = args.domain || await context.readSingleInput();
     if (!requestedDomain) throw new CliUsageError('posture requires one domain as an argument or on stdin.');
     const normalizeDomain = dependencies.normalizeAuditDomain || normalizeAuditDomain;
@@ -88,6 +89,7 @@ async function runNetworkCommand(
   }
 
   if (args.action === 'http') {
+    context.setFailureLabel('HTTP probe');
     const requestedDomain = args.domain || await context.readSingleInput();
     if (!requestedDomain) throw new CliUsageError('http requires one domain as an argument or on stdin.');
     const normalizeDomain = dependencies.normalizeAuditDomain || normalizeAuditDomain;
@@ -108,6 +110,7 @@ async function runNetworkCommand(
   }
 
   if (args.action === 'dnssec-validate') {
+    context.setFailureLabel('DNSSEC chain validation');
     let anchorInput: string;
     try {
       anchorInput = dependencies.readTrustAnchorInput
@@ -136,6 +139,7 @@ async function runNetworkCommand(
   }
 
   if (args.action === 'mail-transport') {
+    context.setFailureLabel('Mail transport review');
     let input: string;
     let anchorInput: string;
     try {
@@ -176,6 +180,7 @@ async function runNetworkCommand(
     return review.runState === 'complete' ? EXIT_CODES.SUCCESS : EXIT_CODES.PARTIAL_FAILURE;
   }
 
+  context.setFailureLabel('TLS evidence collection');
   const requestedHostname = args.hostname || await context.readSingleInput();
   if (!requestedHostname) throw new CliUsageError('tls requires one hostname as an argument or on stdin.');
   const normalizeHostname = dependencies.normalizeTlsHostname || normalizeTlsHostname;

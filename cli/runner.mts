@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 
 import { abortable } from '../lib/abort.mts';
-import { parseCliArguments } from './arguments.mts';
+import { isCliCommandForOwner, parseCliArguments } from './arguments.mts';
 import type { CliArguments } from './arguments.mts';
 import type { BoundedTextStream } from './bulk.mts';
 import {
@@ -232,25 +232,9 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       });
     }
     if (handlerOwner === 'network') {
-      if (args.action !== 'ct-search'
-        && args.action !== 'posture'
-        && args.action !== 'http'
-        && args.action !== 'tls'
-        && args.action !== 'dnssec-validate'
-        && args.action !== 'mail-transport') {
+      if (!isCliCommandForOwner(args, 'network')) {
         throw new Error('Network command registry ownership is inconsistent.');
       }
-      failureLabel = args.action === 'ct-search'
-        ? 'Certificate Transparency search'
-        : args.action === 'posture'
-          ? 'Domain posture audit'
-          : args.action === 'http'
-            ? 'HTTP probe'
-            : args.action === 'tls'
-              ? 'TLS evidence collection'
-              : args.action === 'dnssec-validate'
-                ? 'DNSSEC chain validation'
-                : 'Mail transport review';
       const { runNetworkCommand } = await import('./network-command-runner.mts');
       return await runNetworkCommand(args, dependencies, commandContext);
     }
