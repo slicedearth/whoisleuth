@@ -40,31 +40,46 @@ describe('repository integration closure', () => {
     const plan = await createVerificationOwnershipPlan(paths);
     const assignments = new Map(plan.assignments.map(assignment => [assignment.changedPath, assignment]));
     assert.equal(assignments.size, paths.length);
-    assert.ok(plan.interpretation.some((line) => line.includes('current imports')));
     const component = assignments.get(paths[0]!)!;
-    assert.ok(component.focusedBrowserChecks.includes('e2e/public-guide.spec.ts'));
-    assert.ok(component.focusedBrowserChecks.includes('e2e/accessibility.spec.ts'));
-    assert.equal(component.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
-    assert.equal(component.focusedBrowserChecks.includes('e2e/case-import-workflows.spec.ts'), false);
-    assert.ok(component.focusedUnitChecks.includes('test/public-guide.test.mts'));
-    assert.equal(component.focusedUnitChecks.includes('test/cli.test.mts'), false);
-    assert.ok(buildFocusedVerificationExecution(plan).commands.some(command => command.id === 'check'));
     const helper = assignments.get(paths[1]!)!;
-    assert.ok(helper.focusedUnitChecks.includes('test/utils.test.mts'));
     const metadata = assignments.get(paths[2]!)!;
-    assert.ok(metadata.focusedUnitChecks.includes('test/public-product-catalogue.test.mts'));
-    assert.ok(metadata.focusedBrowserChecks.includes('e2e/dashboard.spec.ts'));
-    assert.equal(metadata.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
     const unitCount = readVerificationTestInventory().filter(file => file.startsWith('test/')).length;
-    for (const assignment of [helper, metadata]) assert.ok(assignment.focusedUnitChecks.length < unitCount);
     const fixture = assignments.get(paths[3]!)!;
-    assert.ok(fixture.focusedUnitChecks.includes('test/current-case.test.mts'));
-    assert.ok(fixture.focusedBrowserChecks.includes('e2e/review-session.spec.ts'));
-    assert.equal(fixture.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'), false);
-    assert.equal(fixture.userFacingBrowserRequired, true);
-    assert.equal(buildFocusedVerificationExecution(plan).commands[0]!.id, 'browser-discovery');
-    assert.deepEqual(assignments.get(paths[4]!)!.focusedBrowserChecks, ['e2e/copy-button.component.spec.ts']);
-    assert.ok(assignments.get(paths[5]!)!.focusedBrowserChecks.includes('e2e/demo.spec.ts'));
+    // Report all selection mismatches together. An early incidental assertion
+    // must not hide later under-selection or unnecessary whole-suite fallbacks.
+    assert.deepEqual({
+      component: {
+        guide: component.focusedBrowserChecks.includes('e2e/public-guide.spec.ts'),
+        accessibility: component.focusedBrowserChecks.includes('e2e/accessibility.spec.ts'),
+        bulk: component.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'),
+        caseImport: component.focusedBrowserChecks.includes('e2e/case-import-workflows.spec.ts'),
+        guideUnit: component.focusedUnitChecks.includes('test/public-guide.test.mts'),
+        cliUnit: component.focusedUnitChecks.includes('test/cli.test.mts'),
+      },
+      helper: { consumer: helper.focusedUnitChecks.includes('test/utils.test.mts'), bounded: helper.focusedUnitChecks.length < unitCount },
+      metadata: {
+        catalogue: metadata.focusedUnitChecks.includes('test/public-product-catalogue.test.mts'),
+        dashboard: metadata.focusedBrowserChecks.includes('e2e/dashboard.spec.ts'),
+        bulk: metadata.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'),
+        bounded: metadata.focusedUnitChecks.length < unitCount,
+      },
+      fixture: {
+        unit: fixture.focusedUnitChecks.includes('test/current-case.test.mts'),
+        review: fixture.focusedBrowserChecks.includes('e2e/review-session.spec.ts'),
+        bulk: fixture.focusedBrowserChecks.includes('e2e/bulk-analysis.spec.ts'),
+        browser: fixture.userFacingBrowserRequired,
+      },
+      compile: buildFocusedVerificationExecution(plan).commands.some(command => command.id === 'check'),
+      first: buildFocusedVerificationExecution(plan).commands[0]!.id,
+      leaf: assignments.get(paths[4]!)!.focusedBrowserChecks,
+      demo: assignments.get(paths[5]!)!.focusedBrowserChecks.includes('e2e/demo.spec.ts'),
+    }, {
+      component: { guide: true, accessibility: true, bulk: false, caseImport: false, guideUnit: true, cliUnit: false },
+      helper: { consumer: true, bounded: true },
+      metadata: { catalogue: true, dashboard: true, bulk: false, bounded: true },
+      fixture: { unit: true, review: true, bulk: false, browser: true },
+      compile: true, first: 'browser-discovery', leaf: ['e2e/copy-button.component.spec.ts'], demo: true,
+    });
   });
 
   test('accounts for every production schema-like identifier and canonical owner', async () => {

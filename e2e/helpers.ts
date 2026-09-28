@@ -492,9 +492,9 @@ export async function migrateLegacyBrowserData(
   entries: Record<string, LegacyStorageValue>,
   options: Readonly<{ clearStorage?: boolean; destination?: string }> = {},
 ) {
-  const current = options.destination ? null : new URL(page.url());
+  const current = new URL(page.url());
   const destination = options.destination
-    ?? `${current?.pathname ?? '/'}${current?.search ?? ''}${current?.hash ?? ''}`;
+    ?? `${current.pathname}${current.search}${current.hash}`;
   // Use a static same-origin document before deleting the database. That
   // closes any live IndexedDB connection without starting another application
   // session or storage load that the fixture would immediately abort.

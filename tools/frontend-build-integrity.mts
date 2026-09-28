@@ -12,8 +12,8 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { isBuiltin } from 'node:module';
-import ts from 'typescript';
+import { createRequire, isBuiltin } from 'node:module';
+import type { CompilerOptions } from 'typescript';
 
 import { parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 import {
@@ -250,10 +250,13 @@ function inventoryDirectory(
  * verification tools do not contribute bytes to the application. The compiler
  * resolves imports; lockfiles cover external packages. No helper registry. */
 function buildConfigurationFiles(repositoryRoot: string, known: ReadonlySet<string>, budget: InventoryBudget): PlannedFile[] {
+  // Build inspection runs after installation. Bootstrap commands also import
+  // this module's artefact paths and must remain usable without node_modules.
+  const ts = createRequire(path.join(DEFAULT_REPOSITORY_ROOT, 'package.json'))('typescript') as typeof import('typescript');
   const pending = ['frontend/vite.config.ts', 'frontend/svelte.config.ts'];
   const visited = new Set<string>();
   const additional: PlannedFile[] = [];
-  const resolution: ts.CompilerOptions = {
+  const resolution: CompilerOptions = {
     moduleResolution: ts.ModuleResolutionKind.Bundler, module: ts.ModuleKind.ESNext,
     allowJs: true, resolveJsonModule: true,
   };
