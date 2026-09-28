@@ -111,8 +111,10 @@ repository-relative paths after `--` to narrow the declared scope, or
 `--since=<base-commit>` to include a batch's local commits and working changes.
 Documentation
 changes select offline document checks; documents included in the CLI also
-select package-document checks. Unknown import impact falls back to the full
-unit inventory. Browser selection remains deliberately conservative.
+select package-document checks. Unit selection retains resolved runtime consumers,
+tests reachable from unresolved local imports, and missing test roots. No resolved
+consumer or an unavailable dependency graph selects the full unit inventory.
+Browser selection remains deliberately conservative.
 
 Complete required hosted checks must pass against the current merge candidate
 before merge or deployment. A routine contribution does not require a second
@@ -120,14 +122,16 @@ complete run on the contributor's machine. State which checks were run and
 which were not; a focused result is not release evidence.
 
 For verification-infrastructure changes, reproducing hosted failures, or full
-offline assurance, run the complete local boundary from a clean commit:
+local assurance, run the complete boundary from a clean commit:
 
 ```bash
 npm run verification:ci
 ```
 
 It requires the exact `.nvmrc` runtime, tested shells and a Node 26 executable
-on `PATH` (or `WHOISLEUTH_CLI_RUNTIME_NODE`). It performs a locked install,
+on `PATH` (or `WHOISLEUTH_CLI_RUNTIME_NODE`). Fixture tests do not collect live
+investigation data, but this full command is not offline: dependency/tool downloads
+and advisory checks require network access. It performs a locked install,
 quality checks, unit coverage, repository integration tests, production-browser
 tests and package compatibility checks. Each package is assembled once and its
 exact archive is installed independently under both runtimes. No prior test

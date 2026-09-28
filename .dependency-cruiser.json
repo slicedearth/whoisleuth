@@ -86,7 +86,7 @@
     {
       "name": "production-no-orphans",
       "severity": "error",
-      "comment": "Shared, CLI, and browser-library modules must have an application consumer so obsolete production files cannot survive behind tests alone.",
+      "comment": "Detect isolated shared, CLI and browser-library modules with no incoming or outgoing edges in the runtime graph. This is not a general entry-point reachability check.",
       "from": {
         "path": "^(?:cli|frontend/src/lib|lib)/",
         "pathNot": "^(?:cli/runner-types\\.mts|frontend/src/lib/local-data-platform-probe\\.ts|lib/(?:analyst-taxonomy|bounded-json|candidate-provenance-bounds|ct-query|ct-response-bounds|external-intelligence-risk|http-evidence-bounds|opportunity-scoring|perceptual-hash-comparison|portable-generator|project-metadata|registrable-domain|risk-calibration-summary|risk-scoring|scoring-evidence-quality|semantic-version|threat-intelligence-types|netlify-function-types|whois-contracts)\\.mts)$",

@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { FRONTEND_BROWSER_ARTIFACT_PATHS } from './frontend-build-integrity.mts';
 import { npmExecutableName } from './maintainer-tool-helpers.mts';
 import { codeqlRamMegabytes } from './local-codeql.mts';
+import { resolveUnitTestExecutables, unitTestExecutableEnvironment } from './toolchain-compatibility.mts';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FULL_SHA = /^[a-f0-9]{40}$/u;
@@ -487,6 +488,7 @@ export function main(args = process.argv.slice(2)): number {
     if (gitOutput(['status', '--porcelain=v1', '--untracked-files=all'])) {
       throw new Error('Local CI requires a clean worktree so it verifies the exact commit that would be pushed.');
     }
+    Object.assign(process.env, unitTestExecutableEnvironment(resolveUnitTestExecutables(undefined, { cwd: REPOSITORY_ROOT })));
     cleanup = true;
     assertPlaywrightBrowserCacheWritable();
     process.stdout.write(`Security analyser memory budget: ${codeqlRamMegabytes()} MiB.\n`);
