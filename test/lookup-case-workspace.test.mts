@@ -28,6 +28,29 @@ function harness(read: LookupCaseController['refresh'] = async () => ready) {
 }
 
 describe('Lookup Case workspace lifecycle', () => {
+  test('rechecks compare only the current collection and do not publish after disposal', async () => {
+    const h = harness();
+    await h.workspace.refresh();
+    await h.workspace.recheck(async () => ({ revision: 1, current: () => true }));
+    assert.equal(h.workspace.state.comparison?.available, false);
+    assert.match(h.workspace.state.comparison!.detail, /prior and current/);
+    await h.workspace.recheck(async () => {
+      h.workspace.select(second.id);
+      return { revision: 1, current: () => true };
+    });
+    assert.equal(h.workspace.state.comparison, null);
+    for (const result of [undefined, { revision: 2, current: () => false }]) {
+      await h.workspace.recheck(async () => result);
+      assert.equal(h.workspace.state.comparison, null);
+    }
+    const held = deferred<{ revision: number; current: () => boolean }>();
+    const running = h.workspace.recheck(() => held.promise);
+    h.workspace.dispose();
+    held.resolve({ revision: 3, current: () => true });
+    await running;
+    assert.equal(h.workspace.state.comparison, null);
+    await h.workspace.recheck(async () => { assert.fail('No collection after disposal'); });
+  });
   test('one reset restores every draft, selection and status without sharing mutable defaults', async () => {
     const h = harness();
     const initial = structuredClone(h.workspace.state);

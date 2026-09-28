@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import type { LookupWebSurfaces } from './lookup-web-surfaces.ts';
   import type { CheckpointFact } from '$lib/analysis/case-evidence-checkpoint.ts';
   import { lookupObservationHostname } from '../../../../packages/evidence/lookup-target.mts';
   import DeferredSurface from '$lib/components/DeferredSurface.svelte';
@@ -18,6 +19,7 @@
   import type { createLookupViewModel, LookupHttpResponse } from '$lib/analysis/lookup-response.ts';
   import type { buildLookupRouteAnalysis } from '$lib/analysis/lookup-route-analysis.ts';
   import type { ServiceDependencyReview } from '$lib/analysis/service-dependency-review.ts';
+  import { lookupTlsProps } from '$lib/analysis/lookup-tls-display.ts';
   import {
     MAX_OBSERVATION_LIMITATIONS,
     MAX_OBSERVATION_LIMITATION_LENGTH,
@@ -29,6 +31,7 @@
   let {
     result,
     view,
+    surfaces,
     analysis,
     serviceDependencyReview,
     profile,
@@ -50,6 +53,7 @@
   }: {
     result: LookupHttpResponse | null;
     view: LookupView;
+    surfaces: LookupWebSurfaces;
     analysis: LookupAnalysis;
     serviceDependencyReview: ServiceDependencyReview | null;
     profile: BrandProfile | null;
@@ -78,9 +82,6 @@
   const observedNetworkRdap = $derived(view.observedNetworkRdap);
   const dnsEvidence = $derived(view.dnsEvidence);
   const httpEvidence = $derived(view.httpEvidence);
-  const tlsEvidence = $derived(view.tlsEvidence);
-  const tlsCertificate = $derived(view.tlsCertificate);
-  const tlsAltNames = $derived(view.tlsAltNames);
   const sslbl = $derived(view.sslbl);
   const sslblSnapshot = $derived(rec(sslbl.snapshot));
   const securityTxt = $derived(view.securityTxt);
@@ -123,9 +124,9 @@
     {onhide}
   />
   {#if expanded}
-    {#if observedNetworkContext.contextVersion === 1}
+    {#if surfaces.network.visible}
       <div class="evidence-component" id="evidence-network"><DeferredSurface
-        load={() => import('$lib/components/LookupNetworkContext.svelte')}
+        load={surfaces.network.load}
         loadingLabel="Loading observed network context…"
         unavailableLabel="Observed network context could not be loaded."
         {onready}
@@ -163,9 +164,9 @@
       />
     {/if}
 
-    {#if reverseDns.source === 'reverse_dns'}
+    {#if surfaces.reverseDns.visible}
       <div class="evidence-component" id="evidence-reverse-dns"><DeferredSurface
-        load={() => import('$lib/components/LookupDnsEvidence.svelte')}
+        load={surfaces.reverseDns.load}
         loadingLabel="Loading reverse-DNS evidence…"
         unavailableLabel="Reverse-DNS evidence could not be loaded."
         {onready}
@@ -173,18 +174,18 @@
       /></div>
     {/if}
 
-    {#if dnsEvidence.source === 'dns'}
+    {#if surfaces.dns.visible}
       <div class="evidence-component" id="evidence-dns"><DeferredSurface
-        load={() => import('$lib/components/LookupDnsEvidence.svelte')}
+        load={surfaces.dns.load}
         loadingLabel="Loading DNS evidence…"
         unavailableLabel="DNS evidence could not be loaded."
         {onready}
         props={{headingId: 'dns-title', status: show(dnsEvidence.status), complete: dnsEvidence.complete !== false, rows: networkDisplay.dnsRows, failureDetail: networkDisplay.dnsQueryFailures, truncated: Boolean(dnsEvidence.truncated), delegation: networkDisplay.dnsDelegation, rehearsalEvidence: dnsRehearsalEvidence, domain: caseDomain, allowRehearsal: result?.type === 'domain', note: `Point-in-time resolver evidence for ${observationHostname}. Registration-delegation checks retain their separately named domain. Service-binding targets and address hints are displayed but not followed. Verify shared infrastructure independently.`}}
       /></div>
       {@render sourceCheckpoint?.('dns', 'DNS')}
-      {#if serviceDependencyReview}
+      {#if surfaces.serviceDependency.visible && serviceDependencyReview}
         <div class="evidence-component"><DeferredSurface
-          load={() => import('$lib/components/LookupServiceDependencyReview.svelte')}
+          load={surfaces.serviceDependency.load}
           loadingLabel="Loading service-dependency review…"
           unavailableLabel="Service-dependency review could not be loaded."
           props={{review: serviceDependencyReview, target: observationHostname, technologies: pageDisplay.technologyFindings, libraries: pageDisplay.browserLibraries, authorizedScope: serviceDependencyScope, falsePositiveTargets: serviceDependencyFalsePositives, setAuthorizedScope: setServiceDependencyScope, setFalsePositiveTargets: setServiceDependencyFalsePositives}}
@@ -192,9 +193,9 @@
       {/if}
     {/if}
 
-    {#if httpEvidence.source === 'http'}
+    {#if surfaces.http.visible}
       <div class="evidence-component" id="evidence-http"><DeferredSurface
-        load={() => import('$lib/components/LookupHttpEvidence.svelte')}
+        load={surfaces.http.load}
         loadingLabel="Loading HTTP evidence…"
         unavailableLabel="HTTP evidence could not be loaded."
         {onready}
@@ -203,26 +204,26 @@
       {@render sourceCheckpoint?.('http', 'HTTP')}
     {/if}
 
-    {#if tlsEvidence.source === 'tls'}
+    {#if surfaces.tls.visible}
       <div class="evidence-component" id="evidence-tls"><DeferredSurface
-        load={() => import('$lib/components/LookupTlsEvidence.svelte')}
+        load={surfaces.tls.load}
         loadingLabel="Loading TLS evidence…"
         unavailableLabel="TLS evidence could not be loaded."
         {onready}
-        props={{status: statusLabel(show(tlsEvidence.status)), complete: tlsEvidence.complete !== false, rows: networkDisplay.tlsRows, findings: networkDisplay.tlsFindings, leafCertificate: networkDisplay.leafCertificate, alternativeNames: networkDisplay.alternativeNames, alternativeNamesTruncated: Boolean(tlsAltNames.truncated), chain: networkDisplay.tlsChain, chainTruncated: Boolean(tlsEvidence.chainTruncated), validationDetails: networkDisplay.tlsValidation, limitations: stringList(tlsEvidence.limitations, MAX_OBSERVATION_LIMITATIONS, MAX_OBSERVATION_LIMITATION_LENGTH), validFrom: typeof tlsCertificate.validFrom === 'string' ? tlsCertificate.validFrom : null, validTo: typeof tlsCertificate.validTo === 'string' ? tlsCertificate.validTo : null, observedAt: lookupObservedAt}}
+        props={{...lookupTlsProps(networkDisplay), observedAt: lookupObservedAt}}
       /></div>
       {@render sourceCheckpoint?.('tls', 'TLS')}
       <div class="evidence-component"><DeferredSurface
-        load={() => import('$lib/components/LookupCertificatePolicyReview.svelte')}
+        load={surfaces.certificatePolicy.load}
         loadingLabel="Loading certificate-policy review…"
         unavailableLabel="Certificate-policy review could not be loaded."
         props={{review: certificatePolicyReview}}
       /></div>
     {/if}
 
-    {#if sslbl.sslblVersion === 1}
+    {#if surfaces.sslbl.visible}
       <div class="evidence-component" id="evidence-sslbl"><DeferredSurface
-        load={() => import('$lib/components/LookupSslblEvidence.svelte')}
+        load={surfaces.sslbl.load}
         loadingLabel="Loading certificate warning-data evidence…"
         unavailableLabel="Certificate warning data could not be loaded."
         {onready}
@@ -230,9 +231,9 @@
       /></div>
     {/if}
 
-    {#if securityTxt.securityTxtVersion === 1}
+    {#if surfaces.disclosure.visible}
       <div class="evidence-component" id="evidence-security-txt"><DeferredSurface
-        load={() => import('$lib/components/LookupSecurityTxt.svelte')}
+        load={surfaces.disclosure.load}
         loadingLabel="Loading disclosure-contact evidence…"
         unavailableLabel="Disclosure-contact evidence could not be loaded."
         {onready}
@@ -241,9 +242,9 @@
       {@render sourceCheckpoint?.('disclosure', 'Disclosure contact')}
     {/if}
 
-    {#if pageIdentity.source === 'html'}
+    {#if surfaces.page.visible}
       <div class="evidence-component" id="evidence-page"><DeferredSurface
-        load={() => import('$lib/components/LookupPageIdentity.svelte')}
+        load={surfaces.page.load}
         loadingLabel="Loading page-identity evidence…"
         unavailableLabel="Page-identity evidence could not be loaded."
         {onready}
@@ -252,10 +253,10 @@
       {@render sourceCheckpoint?.('page_identity', 'Page identity')}
     {/if}
 
-    {#if credentialSurfaceProfile.source === 'html'}
+    {#if surfaces.credentials.visible}
       {@const credentialSurface = pageDisplay.credentialSurface}
       <div class="evidence-component" id="evidence-credential-surface"><DeferredSurface
-        load={() => import('$lib/components/LookupCredentialSurfaceProfile.svelte')}
+        load={surfaces.credentials.load}
         loadingLabel="Loading credential-surface evidence…"
         unavailableLabel="Credential-surface evidence could not be loaded."
         {onready}
@@ -263,9 +264,9 @@
       /></div>
     {/if}
 
-    {#if securityPosture.source === 'derived'}
+    {#if surfaces.posture.visible}
       <div class="evidence-component" id="evidence-posture"><DeferredSurface
-        load={() => import('$lib/components/LookupSecurityPosture.svelte')}
+        load={surfaces.posture.load}
         loadingLabel="Loading passive posture evidence…"
         unavailableLabel="Passive posture evidence could not be loaded."
         {onready}
@@ -273,9 +274,9 @@
       /></div>
     {/if}
 
-    {#if structuredDataIdentity.source === 'html'}
+    {#if surfaces.structuredIdentity.visible}
       <div class="evidence-component" id="evidence-structured-identity"><DeferredSurface
-        load={() => import('$lib/components/LookupStructuredDataIdentity.svelte')}
+        load={surfaces.structuredIdentity.load}
         loadingLabel="Loading structured-identity evidence…"
         unavailableLabel="Structured-identity evidence could not be loaded."
         {onready}
@@ -283,9 +284,9 @@
       /></div>
     {/if}
 
-    {#if technologyProfile.source === 'derived'}
+    {#if surfaces.technology.visible}
       <div class="evidence-component" id="evidence-technology"><DeferredSurface
-        load={() => import('$lib/components/LookupTechnologyProfile.svelte')}
+        load={surfaces.technology.load}
         loadingLabel="Loading technology-profile evidence…"
         unavailableLabel="Technology-profile evidence could not be loaded."
         {onready}
@@ -293,9 +294,9 @@
       /></div>
     {/if}
 
-    {#if pageRoleProfile.source === 'derived' && clientBehaviorProfile.source === 'derived'}
+    {#if surfaces.behaviour.visible}
       <div class="evidence-component" id="evidence-page-role"><DeferredSurface
-        load={() => import('$lib/components/LookupPageRoleBehavior.svelte')}
+        load={surfaces.behaviour.load}
         loadingLabel="Loading page-role and behaviour evidence…"
         unavailableLabel="Page-role and behaviour evidence could not be loaded."
         {onready}
@@ -303,17 +304,17 @@
       /></div>
     {/if}
 
-    {#if pageComparison || (profile?.pageBaseline && result?.type === 'domain')}
+    {#if surfaces.comparison.visible}
       <div class="evidence-component"><DeferredSurface
-        load={() => import('$lib/components/LookupPageComparison.svelte')}
+        load={surfaces.comparison.load}
         loadingLabel="Loading saved page-baseline comparison…"
         unavailableLabel="The page-baseline comparison could not be loaded."
         props={{comparison: pageDisplay.pageComparison, unavailable: Boolean(!pageComparison && profile?.pageBaseline && result?.type === 'domain')}}
       /></div>
     {/if}
-    {#if brandMimicryReview}
+    {#if surfaces.brand.visible && brandMimicryReview}
       <div class="evidence-component"><DeferredSurface
-        load={() => import('$lib/components/LookupBrandMimicryReview.svelte')}
+        load={surfaces.brand.load}
         loadingLabel="Loading brand-mimicry review…"
         unavailableLabel="Brand-mimicry review could not be loaded."
         props={{review: brandMimicryReview}}

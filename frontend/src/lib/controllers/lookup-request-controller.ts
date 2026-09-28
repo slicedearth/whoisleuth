@@ -13,6 +13,8 @@ type LookupControllerResult =
   | { readonly state: 'complete'; readonly outcome: LookupRequestOutcome }
   | { readonly state: 'stale' };
 
+export type LookupOperation = Readonly<{ revision: number; current: () => boolean }>;
+
 type LookupRequestControllerOptions = Readonly<{
   request?: LookupRequest;
   now?: () => number;
@@ -38,15 +40,24 @@ class LookupRequestController {
       : DEFAULT_PROGRESS_INTERVAL_MS;
   }
 
+  get revision(): number { return this.#sequence; }
+
+  begin(currentContext: () => boolean = () => true): LookupOperation {
+    this.invalidate();
+    const revision = this.#sequence;
+    return { revision, current: () => !this.#disposed && revision === this.#sequence && currentContext() };
+  }
+
   async run(
     url: string,
     onProgress: (elapsedMs: number) => void,
     prepare: () => Promise<void> = async () => {},
     selection: Pick<LookupRequestOptions, 'selectedUrl' | 'onProgress'> = {},
+    operation: LookupOperation = this.begin(),
   ): Promise<LookupControllerResult> {
-    if (this.#disposed) return { state: 'stale' };
+    if (!operation.current()) return { state: 'stale' };
 
-    const sequence = ++this.#sequence;
+    const sequence = operation.revision;
     this.#activeController?.abort('superseded');
     this.#clearProgressTimer();
     const controller = new AbortController();
@@ -54,20 +65,20 @@ class LookupRequestController {
     const startedAt = this.#now();
     onProgress(0);
     this.#progressTimer = setInterval(() => {
-      if (sequence === this.#sequence && !this.#disposed) {
+      if (operation.current()) {
         onProgress(Math.max(0, this.#now() - startedAt));
       }
     }, this.#progressIntervalMs);
 
     try {
       await prepare();
-      if (sequence !== this.#sequence || this.#disposed) return { state: 'stale' };
+      if (!operation.current()) return { state: 'stale' };
       const outcome = await this.#request(url, { signal: controller.signal, ...selection,
         ...(selection.onProgress ? { onProgress: update => {
-          if (sequence === this.#sequence && this.#activeController === controller && !this.#disposed && !controller.signal.aborted) selection.onProgress?.(update);
+          if (operation.current() && this.#activeController === controller && !controller.signal.aborted) selection.onProgress?.(update);
         } } : {}),
       });
-      if (sequence !== this.#sequence || this.#disposed) return { state: 'stale' };
+      if (!operation.current()) return { state: 'stale' };
       onProgress(Math.max(0, this.#now() - startedAt));
       return { state: 'complete', outcome };
     } finally {

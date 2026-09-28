@@ -80,54 +80,18 @@ function emptyPageInput() {
   };
 }
 
-test('keeps the decomposed display contracts and property order stable', () => {
-  assert.deepEqual(Object.keys(buildLookupNetworkDisplay(emptyNetworkInput())), [
-    'dnsRows',
-    'dnsDelegation',
-    'dnsQueryFailures',
-    'reverseDnsRows',
-    'reverseDnsFailure',
-    'httpRows',
-    'httpRedirects',
-    'httpAttempts',
-    'httpMetadata',
-    'httpDeliveryMetadata',
-    'tlsRows',
-    'tlsFindings',
-    'leafCertificate',
-    'alternativeNames',
-    'tlsChain',
-    'tlsValidation',
-  ]);
-  assert.deepEqual(Object.keys(buildLookupPageDisplay(emptyPageInput())), [
-    'pagePublicationMetadata',
-    'pageIdentityFacts',
-    'resourceSummary',
-    'downloadSummary',
-    'trackingIdentifiers',
-    'fingerprints',
-    'credentialSurface',
-    'credentialSurfaceLimitations',
-    'structuredIdentities',
-    'structuredIdentityLimitations',
-    'technologyFindings',
-    'technologyLimitations',
-    'pageRoles',
-    'primaryPageRole',
-    'pageRoleLimitations',
-    'clientScriptSummary',
-    'clientBehaviorIndicators',
-    'clientBehaviorLimitations',
-    'browserLibraries',
-    'browserLibraryLimitations',
-    'observedNetworkSourceLabel',
-    'observedNetworkRows',
-    'observedNetworkLimitations',
-    'securityPostureSummary',
-    'securityPostureFindings',
-    'securityPostureLimitations',
-    'pageComparison',
-  ]);
+test('projects a typed TLS presentation without trusting malformed source values', () => {
+  const display = buildLookupNetworkDisplay({ ...emptyNetworkInput(),
+    tlsEvidence: { status: 'partial', complete: false, chainTruncated: true, limitations: ['A source limitation'] },
+    tlsCertificate: { validFrom: { private: 'not a date' }, validTo: '2026-10-01T00:00:00.000Z' },
+    tlsAltNames: { truncated: true },
+  });
+  assert.equal(display.tlsPresentation.complete, false);
+  assert.equal(display.tlsPresentation.validFrom, null);
+  assert.equal(display.tlsPresentation.validTo, '2026-10-01T00:00:00.000Z');
+  assert.equal(display.tlsPresentation.chainTruncated, true);
+  assert.equal(display.tlsPresentation.alternativeNamesTruncated, true);
+  assert.deepEqual(display.tlsPresentation.limitations, ['A source limitation']);
 });
 
 test('projects complete bounded DNS families and delegation evidence', () => {

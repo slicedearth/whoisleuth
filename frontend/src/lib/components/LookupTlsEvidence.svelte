@@ -1,9 +1,7 @@
 <script lang="ts">
   import { evidenceStatusTone } from '$lib/analysis/evidence-status-tone.ts';
   import { projectCertificateValidity } from '$lib/analysis/visualization-models.ts';
-  type Row = { label: string; value: string; danger?: boolean; hash?: boolean };
-  type Finding = { label: string; detail: string; tone: string };
-  type ChainEntry = { label: string; subject: string; fingerprint: string };
+  import type { LookupTlsProps } from '$lib/analysis/lookup-tls-display.ts';
 
   let {
     status,
@@ -21,20 +19,7 @@
     validTo = null,
     observedAt = null,
     initiallyExpanded = false,
-  }: {
-    status: string;
-    complete: boolean;
-    rows: Row[];
-    findings: Finding[];
-    leafCertificate: Row[];
-    alternativeNames: Array<{ type: string; value: string }>;
-    alternativeNamesTruncated: boolean;
-    chain: ChainEntry[];
-    chainTruncated: boolean;
-    validationDetails: Row[];
-    limitations: string[];
-    validFrom?: string | null;
-    validTo?: string | null;
+  }: LookupTlsProps & {
     observedAt?: string | null;
     initiallyExpanded?: boolean;
   } = $props();

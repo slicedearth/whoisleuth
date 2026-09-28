@@ -2,6 +2,9 @@ import { DEFAULT_DISPOSITION, isReviewedCaseDisposition } from '../../../../pack
 import type { CaseRecord } from '../../../../packages/cases/case-record-contracts.mts';
 import type { LocalMutationOutcome } from '../local-mutation-outcome.ts';
 import type { LookupCaseActionResult, LookupCaseController, LookupRecheckComparison } from './lookup-case-controller.ts';
+import { latestCaseEvidence } from '../../../../packages/cases/case-evidence-model.mts';
+import { compareLookupRecheck } from '../analysis/lookup-recheck-comparison.ts';
+import type { LookupOperation } from './lookup-request-controller.ts';
 
 type LookupCaseState = Readonly<{
   record: CaseRecord | null;
@@ -78,6 +81,16 @@ export class LookupCaseWorkspace {
   setNote(note: string): void { this.#update({ note }); }
   setReviewReason(reviewReason: string): void { this.#update({ reviewReason }); }
   setComparison(comparison: LookupRecheckComparison | null): void { this.#update({ comparison }); }
+
+  async recheck(collect: () => Promise<LookupOperation | undefined>): Promise<void> {
+    if (this.#disposed) return;
+    const caseId = this.#state.record?.id;
+    const before = latestCaseEvidence(this.#state.record);
+    this.setComparison(null);
+    const operation = await collect();
+    if (!operation?.current() || this.#disposed || (caseId && caseId !== this.#state.record?.id)) return;
+    this.setComparison(compareLookupRecheck(before, latestCaseEvidence(this.#state.record)));
+  }
 
   setDisposition(disposition: string): void {
     this.#update({ disposition, reviewReason: isReviewedCaseDisposition(disposition) ? this.#state.reviewReason : '' });

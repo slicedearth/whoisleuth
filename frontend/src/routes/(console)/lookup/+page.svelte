@@ -15,6 +15,7 @@
   import MessageIntake from '$lib/components/MessageIntake.svelte';
   import LookupTaskGuidance from '$lib/components/LookupTaskGuidance.svelte';
   import LookupWebEvidenceSection from '$lib/components/LookupWebEvidenceSection.svelte';
+  import { lookupWebSurfaces } from '$lib/components/lookup-web-surfaces.ts';
   import LookupSavedContextPreview from '$lib/components/LookupSavedContextPreview.svelte';
   import LookupResultHeader from '$lib/components/LookupResultHeader.svelte';
   import { lookupObservationHostname } from '../../../../../packages/evidence/lookup-target.mts';
@@ -26,17 +27,13 @@
     type ActiveBrandProfileSourceState,
     type BrandProfile,
   } from '$lib/brand-profiles';
-  import { compareCaseEvidence } from '../../../../../packages/cases/case-evidence-model.mts';
+  import { publishLookupResult } from '$lib/controllers/lookup-publication.ts';
   import {
     dispositionLabel as caseDispositionLabel,
     statusLabel as caseStatusLabel,
   } from '../../../../../packages/cases/case-record-decisions.mts';
   import { parseIncidentUrlContext } from '../../../../../packages/cases/case-incident-context.mts';
   import type { CaseRecord, CaseTransitionExpectation } from '../../../lib/cases.ts';
-  import {
-    caseEvidenceIncomparableReasons,
-    latestCaseEvidence,
-  } from '../../../../../packages/cases/case-evidence-model.mts';
   import { loadWatchlists, saveSingleDomainWatchlist } from '$lib/watchlists';
   import type { LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
   import { saveCandidateHandoff } from '$lib/candidate-handoff';
@@ -141,7 +138,7 @@
   const watchlistWorkspace = new LookupWatchlistWorkspace({
     context: () => ({
       target: caseObservationTarget,
-      revision: lookupRevision,
+      revision: lookupRequestController.revision,
       evidence: caseEvidence,
       depth: lookupEvidenceDepth,
     }),
@@ -183,13 +180,12 @@
   let pageActive = false;
   let urlReconciliationReady = $state(false);
   let lastReconciledUrl = $state('');
-  let lookupRevision = 0;
   let lookupAnchorController: LookupAnchorController | null = null;
   const lookupRequestController = new LookupRequestController();
   const lookupCaseController = new LookupCaseController();
   const lookupCaseWorkspace: LookupCaseWorkspace = new LookupCaseWorkspace({
     controller: lookupCaseController,
-    context: () => ({ domain: caseDomain, revision: lookupRevision }),
+    context: () => ({ domain: caseDomain, revision: lookupRequestController.revision }),
     publish: (next) => {
       caseState = next;
     },
@@ -267,21 +263,13 @@
   const registryAccess = $derived(lookupView.registryAccess);
   const registryInsights = $derived(lookupView.registryInsights);
   const registrarStanding = $derived(lookupView.registrarStanding);
-  const reverseDns = $derived(lookupView.reverseDns);
-  const observedNetworkContext = $derived(lookupView.observedNetworkContext);
-  const securityTxt = $derived(lookupView.securityTxt);
-  const sslbl = $derived(lookupView.sslbl);
   const threatIntelligenceProviders = $derived(lookupView.threatIntelligenceProviders);
   const dnsEvidence = $derived(lookupView.dnsEvidence);
   const dnsRecords = $derived(lookupView.dnsRecords);
   const httpEvidence = $derived(lookupView.httpEvidence);
   const tlsEvidence = $derived(lookupView.tlsEvidence);
   const pageIdentity = $derived(lookupView.pageIdentity);
-  const credentialSurfaceProfile = $derived(lookupView.credentialSurfaceProfile);
-  const structuredDataIdentity = $derived(lookupView.structuredDataIdentity);
   const technologyProfile = $derived(lookupView.technologyProfile);
-  const pageRoleProfile = $derived(lookupView.pageRoleProfile);
-  const clientBehaviorProfile = $derived(lookupView.clientBehaviorProfile);
   const securityPosture = $derived(lookupView.securityPosture);
   const lookupAnalysis = $derived(
     buildLookupRouteAnalysis({
@@ -301,10 +289,7 @@
   );
   const lookupEvidenceDepth = $derived(lookupAnalysis.lookupEvidenceDepth);
   const lookupObservedAt = $derived(lookupAnalysis.lookupObservedAt);
-  const populatedWhoisRoles = $derived(lookupAnalysis.populatedWhoisRoles);
   const comparison = $derived(lookupAnalysis.comparison);
-  const registrarPublicationComparison = $derived(lookupAnalysis.registrarPublicationComparison);
-  const lifecycleDates = $derived(lookupAnalysis.lifecycleDates);
   const registryDisplay = $derived(lookupAnalysis.registryDisplay);
   const idnAnalysis = $derived(lookupAnalysis.idnAnalysis);
   const profileSignals = $derived(lookupAnalysis.profileSignals);
@@ -355,7 +340,6 @@
       observedAt: lookupObservedAt,
     }),
   );
-  const evidenceCoverage = $derived(lookupAnalysis.evidenceCoverage);
   const evidenceObservedAtById = $derived(lookupAnalysis.evidenceObservedAtById);
   const lookupSourceRefreshPlan = $derived(lookupAnalysis.lookupSourceRefreshPlan);
   const lookupDecisionFacts = $derived(lookupAnalysis.lookupDecisionFacts);
@@ -394,7 +378,7 @@
     expectedRevision: number | null = null,
     preferredCase: Pick<CaseRecord, 'id' | 'domain'> | null = caseRecord,
   ) {
-    if (expectedRevision !== null && expectedRevision !== lookupRevision) return;
+    if (expectedRevision !== null && expectedRevision !== lookupRequestController.revision) return;
     let linkedId = '';
     const linkedQuery = page.url.searchParams.get('q');
     try {
@@ -502,52 +486,9 @@
   async function recheckLookupCase() {
     const target = caseObservationTarget;
     if (!target || loading) return;
-    const before = latestCaseEvidence(caseRecord);
-    lookupCaseWorkspace.setComparison(null);
     query = target;
     lookupMode = lookupEvidenceDepth;
-    await runLookup({ refreshCaseEvidence: true });
-    if (error) return;
-    const after = latestCaseEvidence(caseRecord);
-    if (!before || !after) {
-      lookupCaseWorkspace.setComparison({
-        available: false,
-        changes: [],
-        observedAt: after?.capturedAt ?? '',
-        detail:
-          'A uniquely latest prior and current Case observation are required. Review any equal-time or undated snapshots before comparing.',
-      });
-      return;
-    }
-    if (Date.parse(after.capturedAt) <= Date.parse(before.capturedAt)) {
-      lookupCaseWorkspace.setComparison({
-        available: false,
-        changes: [],
-        observedAt: after.capturedAt,
-        detail:
-          'No later Case capture is available. Equal or earlier capture times cannot establish a recheck outcome.',
-      });
-      return;
-    }
-    const changes = compareCaseEvidence(before, after);
-    if (caseEvidenceIncomparableReasons(before, after).includes('observation-context')) {
-      lookupCaseWorkspace.setComparison({
-        available: false,
-        changes,
-        observedAt: after.capturedAt,
-        detail:
-          'These captures concern different or unknown hostnames. Only registration fields can be compared; recheck the same hostname before recording an observed-effect outcome.',
-      });
-      return;
-    }
-    lookupCaseWorkspace.setComparison({
-      available: true,
-      changes,
-      observedAt: after.capturedAt,
-      detail: changes.length
-        ? `${changes.length} comparable material change${changes.length === 1 ? ' was' : 's were'} found.`
-        : 'No comparable material field change was found. This does not prove the page or behaviour is absent.',
-    });
+    await lookupCaseWorkspace.recheck(() => runLookup({ refreshCaseEvidence: true }));
   }
   async function saveEvidenceCheckpoint(
     selectedFields: string[],
@@ -588,7 +529,6 @@
     return `${url.pathname}${url.search}`;
   }
   function invalidateLookupForInputChange() {
-    lookupRevision += 1;
     lookupRequestController.invalidate();
     loading = false;
     loadingElapsedMs = 0;
@@ -640,43 +580,17 @@
     if (!urlReconciliationReady || signature === lastReconciledUrl) return;
     applyLookupUrl(page.url);
   });
+  const webSurfaces = $derived(lookupWebSurfaces(lookupView, {
+    serviceDependency: Boolean(serviceDependencyReview),
+    pageComparison: Boolean(pageComparison || (profile?.pageBaseline && observation.response?.type === 'domain')),
+    brandMimicry: Boolean(brandMimicryReview),
+  }));
   function preloadLookupSection(sectionId: string) {
     const loads: Array<Promise<unknown>> = [];
     if (sectionId === 'web-evidence') {
-      if (observedNetworkContext.contextVersion === 1)
-        loads.push(import('$lib/components/LookupNetworkContext.svelte'));
-      if (observation.response?.type === 'domain')
-        loads.push(import('$lib/components/WebsiteSnapshotManager.svelte'));
-      if (reverseDns.source === 'reverse_dns' || dnsEvidence.source === 'dns')
-        loads.push(import('$lib/components/LookupDnsEvidence.svelte'));
-      if (dnsEvidence.source === 'dns' && serviceDependencyReview)
-        loads.push(import('$lib/components/LookupServiceDependencyReview.svelte'));
-      if (httpEvidence.source === 'http')
-        loads.push(import('$lib/components/LookupHttpEvidence.svelte'));
-      if (tlsEvidence.source === 'tls')
-        loads.push(
-          import('$lib/components/LookupTlsEvidence.svelte'),
-          import('$lib/components/LookupCertificatePolicyReview.svelte'),
-        );
-      if (sslbl.sslblVersion === 1)
-        loads.push(import('$lib/components/LookupSslblEvidence.svelte'));
-      if (securityTxt.securityTxtVersion === 1)
-        loads.push(import('$lib/components/LookupSecurityTxt.svelte'));
-      if (pageIdentity.source === 'html')
-        loads.push(import('$lib/components/LookupPageIdentity.svelte'));
-      if (credentialSurfaceProfile.source === 'html')
-        loads.push(import('$lib/components/LookupCredentialSurfaceProfile.svelte'));
-      if (securityPosture.source === 'derived')
-        loads.push(import('$lib/components/LookupSecurityPosture.svelte'));
-      if (structuredDataIdentity.source === 'html')
-        loads.push(import('$lib/components/LookupStructuredDataIdentity.svelte'));
-      if (technologyProfile.source === 'derived')
-        loads.push(import('$lib/components/LookupTechnologyProfile.svelte'));
-      if (pageRoleProfile.source === 'derived' && clientBehaviorProfile.source === 'derived')
-        loads.push(import('$lib/components/LookupPageRoleBehavior.svelte'));
-      if (pageComparison || (profile?.pageBaseline && observation.response?.type === 'domain'))
-        loads.push(import('$lib/components/LookupPageComparison.svelte'));
-      if (brandMimicryReview) loads.push(import('$lib/components/LookupBrandMimicryReview.svelte'));
+      for (const surface of Object.values(webSurfaces)) {
+        if (surface.visible) loads.push(surface.load());
+      }
     } else if (sectionId === 'registry') {
       if (registryAccess.suffix) loads.push(import('$lib/components/RegistryAccessNotice.svelte'));
       loads.push(import('$lib/components/LookupRegistrySources.svelte'));
@@ -748,8 +662,8 @@
       await refreshProfileContext();
       if (observation.response)
         await Promise.all([
-          refreshCase(lookupRevision),
-          watchlistWorkspace.refresh(lookupRevision),
+          refreshCase(lookupRequestController.revision),
+          watchlistWorkspace.refresh(lookupRequestController.revision),
         ]);
     })();
     return () => {
@@ -923,13 +837,11 @@
     error = '';
     sourceProgress = null;
     const requestedLookupMode = lookupMode;
-    const requestRevision = ++lookupRevision;
     const revealIntent = lookupAnchorController?.captureRevealIntent();
-    const requestCurrent = () =>
-      pageActive &&
-      requestRevision === lookupRevision &&
-      lookupEntries[0] === submittedEntry &&
-      lookupMode === requestedLookupMode;
+    const operation = lookupRequestController.begin(() => pageActive &&
+      lookupEntries[0] === submittedEntry && lookupMode === requestedLookupMode);
+    const requestRevision = operation.revision;
+    const requestCurrent = operation.current;
     const lookupUrl = buildLookupRequestUrl(target, {
       mode: lookupMode,
       includeExternalIntelligence,
@@ -960,6 +872,7 @@
               }
             : {}),
         },
+        operation,
       );
       if (completed.state === 'stale' || !requestCurrent()) return;
       const outcome = completed.outcome;
@@ -967,34 +880,38 @@
         error = outcome.message;
         return;
       }
-      observation.response = outcome.value;
-      observation.target = target;
-      observation.incidentUrl = submittedIncident?.exactUrl ?? '';
-      observation.depth = requestedLookupMode;
-      await Promise.all([
-        refreshCase(requestRevision, preferredCase),
-        watchlistWorkspace.refresh(requestRevision),
-      ]);
-      if (!requestCurrent()) return;
-      if (options.refreshCaseEvidence && revealIntent?.current()) await openLookupCase();
-      if (!requestCurrent()) return;
-      loading = false;
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      if (!requestCurrent() || !revealIntent?.current()) return;
-      if (options.refreshCaseEvidence) {
-        void sectionNavigation.navigate('#case-response');
-        return;
-      }
-      if (window.location.hash && lookupEvidenceFamilyForHref(window.location.hash))
-        navigateToCurrentLookupHash();
-      else
-        document.querySelector('#result')?.scrollIntoView({ behavior: 'instant', block: 'start' });
+      const published = await publishLookupResult(operation, {
+        publish: () => {
+          observation.response = outcome.value;
+          observation.target = target;
+          observation.incidentUrl = submittedIncident?.exactUrl ?? '';
+          observation.depth = requestedLookupMode;
+        },
+        reconcile: () => Promise.all([
+          refreshCase(requestRevision, preferredCase),
+          watchlistWorkspace.refresh(requestRevision),
+        ]),
+        retain: async () => {
+          if (options.refreshCaseEvidence && revealIntent?.current()) await openLookupCase();
+        },
+        ready: async () => {
+          loading = false;
+          await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        },
+        reveal: () => {
+          if (!revealIntent?.current()) return;
+          if (options.refreshCaseEvidence) void sectionNavigation.navigate('#case-response');
+          else if (window.location.hash && lookupEvidenceFamilyForHref(window.location.hash)) navigateToCurrentLookupHash();
+          else document.querySelector('#result')?.scrollIntoView({ behavior: 'instant', block: 'start' });
+        },
+      });
+      if (published) return operation;
     } catch {
-      if (pageActive && requestRevision === lookupRevision)
+      if (operation.current())
         error = 'Lookup request could not be prepared.';
     } finally {
       revealIntent?.dispose();
-      if (pageActive && requestRevision === lookupRevision) {
+      if (operation.current()) {
         loading = false;
         sourceProgress = null;
       }
@@ -1128,6 +1045,7 @@
       <LookupWebEvidenceSection
         result={observation.response}
         view={lookupView}
+        surfaces={webSurfaces}
         analysis={lookupAnalysis}
         {serviceDependencyReview}
         {profile}
