@@ -49,7 +49,7 @@ async function readAllowlist(
     return parseDiscoveryScanAllowlist(text, classify);
   } catch (error) {
     if (error instanceof CliUsageError) throw error;
-    throw new CliUsageError(`Could not read discovery scan allowlist: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+    throw new CliUsageError(`Could not read discovery scan allowlist: ${boundedCliErrorMessage(error, 'Input could not be read')}`, 'input_unavailable');
   }
 }
 
@@ -117,7 +117,7 @@ async function runDiscoveryScanCommand(
       throw new CliUsageError('Bulk checkpoint collection context does not match the current DNS resolver selection.');
     }
     if (item.observedAt === null || item.observedAt === undefined) {
-      throw new CliUsageError('Discovery resume requires an observation time for every retained checkpoint result.');
+      throw new CliUsageError('Discovery resume requires an observation time for every retained checkpoint result.', 'missing_input');
     }
   }
   const indicator = context.beginProgress(`Collecting 0 of ${queries.length} generated candidates`);

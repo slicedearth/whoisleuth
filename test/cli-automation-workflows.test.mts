@@ -620,6 +620,53 @@ describe('strict exit and machine progress events', () => {
     assert.equal(parsed.state, 'partial\u202e');
     assert.equal(parsed.reason, 'line break\u00admarker');
   });
+
+  test('keeps usage reasons independent of human wording and omits the diagnostic from events', async () => {
+    for (const reason of ['input_unavailable', 'conflicting_options', 'missing_input', 'invalid_input'] as const) {
+      const stderr = capture();
+      const code = await runCli(['lookup', '--events'], {
+        stdout: capture().stream,
+        stderr: stderr.stream,
+        readStdin: async () => { throw new CliUsageError('private diagnostic requires different wording', reason); },
+        runUnifiedLookup: async () => { throw new Error('must not collect'); },
+        now: () => NOW,
+      });
+      assert.equal(code, EXIT_CODES.USAGE);
+      const events = stderr.value().trim().split('\n').map(line => JSON.parse(line));
+      assert.deepEqual(events.map(event => event.event), ['started', 'failed']);
+      assert.equal(events.at(-1).reason, reason);
+      assert.doesNotMatch(stderr.value(), /private diagnostic|different wording/u);
+    }
+    assert.equal(new CliUsageError('could not read; requires; mutually exclusive').reason, 'invalid_input');
+  });
+
+  test('classifies unreadable checkpoints and conflicting discovery options at their owners', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'cli-event-input-'));
+    try {
+      const scenarios = [
+        { argv: ['bulk', '--checkpoint', directory, '--resume', '--events'], reason: 'input_unavailable' },
+        { argv: ['discover-scan', 'example.test', '--families', 'pluralization', '--dictionary', 'terms.txt', '--events'], reason: 'conflicting_options' },
+      ];
+      for (const { argv, reason } of scenarios) {
+        const stderr = capture();
+        const code = await runCli(argv, {
+          stdout: capture().stream,
+          stderr: stderr.stream,
+          readBulkInput: async () => 'example.test',
+          readDiscoveryDictionary: async () => { throw new Error('must not read'); },
+          runUnifiedLookup: async () => { throw new Error('must not collect'); },
+          now: () => NOW,
+        });
+        assert.equal(code, EXIT_CODES.USAGE);
+        const events = stderr.value().trim().split('\n').map(line => JSON.parse(line));
+        assert.deepEqual(events.map(event => event.event), ['started', 'failed']);
+        assert.equal(events.at(-1).reason, reason);
+        assert.ok(!stderr.value().includes(directory));
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('direct reports and saved Lookup diff', () => {

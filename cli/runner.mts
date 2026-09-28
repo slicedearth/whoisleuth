@@ -79,14 +79,6 @@ function isCancellation(error: unknown, signal?: AbortSignal): boolean {
     || Boolean(error && typeof error === 'object' && 'name' in error && error.name === 'AbortError');
 }
 
-function usageEventReason(error: unknown): string {
-  const message = boundedCliErrorMessage(error, 'Invalid command input').toLowerCase();
-  if (message.includes('could not read')) return 'input_unavailable';
-  if (message.includes('cannot be combined') || message.includes('mutually exclusive')) return 'conflicting_options';
-  if (message.includes('requires') || message.includes('did not contain')) return 'missing_input';
-  return 'invalid_input';
-}
-
 async function runParsedCli(args: CliArguments, dependencies: CliDependencies = {}, writeBinaryOutput?: (value: Uint8Array) => void): Promise<number> {
   const stdout = dependencies.stdout || process.stdout;
   const stderr = dependencies.stderr || process.stderr;
@@ -153,7 +145,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
           : await readInput(source, MAX_OFFLINE_PASSPHRASE_FILE_BYTES, 'Passphrase file');
       } catch (error) {
         if (error instanceof CliUsageError) throw error;
-        throw new CliUsageError(`Could not read passphrase file: ${boundedCliErrorMessage(error, 'File could not be read')}`);
+        throw new CliUsageError(`Could not read passphrase file: ${boundedCliErrorMessage(error, 'File could not be read')}`, 'input_unavailable');
       }
       const passphrase = passphraseText.replace(/\r?\n$/u, '');
       if (!passphrase || /[\r\n\u0000]/u.test(passphrase)) {
@@ -260,7 +252,7 @@ async function runParsedCli(args: CliArguments, dependencies: CliDependencies = 
       eventProgress.current?.emit({
         event: 'failed',
         state: 'usage',
-        reason: usageEventReason(error),
+        reason: error.reason,
         exitCode: EXIT_CODES.USAGE,
       });
       if (!eventProgress.current?.enabled) write(stderr, `Usage error: ${boundedCliErrorMessage(error, 'Invalid command')}\n`);

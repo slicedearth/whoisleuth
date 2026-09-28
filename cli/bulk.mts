@@ -118,7 +118,7 @@ function parseBulkQueries(text: unknown, { deep = false }: { deep?: boolean } = 
       throw new CliUsageError(`${deep ? 'Deep' : 'Fast'} bulk mode is limited to ${limit} unique queries.`);
     }
   }
-  if (!queries.length) throw new CliUsageError('Bulk input did not contain any queries.');
+  if (!queries.length) throw new CliUsageError('Bulk input did not contain any queries.', 'missing_input');
   return { queries, duplicates, limit };
 }
 

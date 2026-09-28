@@ -24,7 +24,7 @@ async function generateDiscoveryCandidates(
   context: CliCommandContext,
 ) {
   const seed = args.seed || await context.readSingleInput();
-  if (!seed) throw new CliUsageError('discover requires one brand label or domain as an argument or on stdin.');
+  if (!seed) throw new CliUsageError('discover requires one brand label or domain as an argument or on stdin.', 'missing_input');
   const loadGenerator = dependencies.loadTyposquatGenerator || (() => import('../lib/typosquat-generator.mts'));
   const generator = await loadGenerator();
   const tlds = normalizeDiscoveryTlds(
@@ -47,7 +47,7 @@ async function generateDiscoveryCandidates(
     if (args.preset === 'custom'
       && !mutationFamilies.includes('dictionary')
       && !mutationFamilies.includes('dictionary_token_replacement')) {
-      throw new CliUsageError('--dictionary requires a dictionary mutation family.');
+      throw new CliUsageError('--dictionary requires a dictionary mutation family.', 'conflicting_options');
     }
     try {
       dictionaryText = dependencies.readDiscoveryDictionary
@@ -55,11 +55,11 @@ async function generateDiscoveryCandidates(
         : await context.readInput(args.dictionarySource, MAX_DISCOVERY_DICTIONARY_BYTES, 'Discovery dictionary');
     } catch (error) {
       if (error instanceof CliUsageError) throw error;
-      throw new CliUsageError(`Could not read discovery dictionary: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+      throw new CliUsageError(`Could not read discovery dictionary: ${boundedCliErrorMessage(error, 'Input could not be read')}`, 'input_unavailable');
     }
     const normalizedDictionary = generator.normalizeCustomDictionaryTerms(dictionaryText);
     if (!normalizedDictionary.values.length) {
-      throw new CliUsageError('The discovery dictionary did not contain any valid terms.');
+      throw new CliUsageError('The discovery dictionary did not contain any valid terms.', 'missing_input');
     }
   }
 

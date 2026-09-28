@@ -60,7 +60,7 @@ async function runLookupCommand(
   context.setEventProgress(eventProgress);
   eventProgress.emit({ event: 'started' });
   const input = args.query || await context.readSingleInput();
-  if (!input) throw new CliUsageError('lookup requires one domain, IP address, or ASN as an argument or on stdin.');
+  if (!input) throw new CliUsageError('lookup requires one domain, IP address, or ASN as an argument or on stdin.', 'missing_input');
   const classify = dependencies.classifyQuery || classifyQuery;
   const executeLookup = dependencies.runUnifiedLookup || runUnifiedLookup;
   let classified;

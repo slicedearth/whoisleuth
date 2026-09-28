@@ -50,7 +50,7 @@ async function runBulkCommand(
       : await context.readInput(args.source, MAX_BULK_INPUT_BYTES, 'Bulk input');
   } catch (error) {
     if (error instanceof CliUsageError) throw error;
-    throw new CliUsageError(`Could not read bulk input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+    throw new CliUsageError(`Could not read bulk input: ${boundedCliErrorMessage(error, 'Input could not be read')}`, 'input_unavailable');
   }
 
   const parsed = parseBulkQueries(input, { deep: args.deep });
