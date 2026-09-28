@@ -807,8 +807,6 @@ describe('canonical CLI command registry', () => {
       assert.doesNotMatch(options, /--config/u);
       assert.equal((options.match(/--profile/gu) || []).length, 1);
     }
-    assert.equal(fish.split('\n').some((line) => line.includes('registry-scaffold') && line.includes('-l config')), false);
-    assert.equal(fish.split('\n').filter((line) => line.includes('registry-scaffold') && line.includes('-l profile')).length, 1);
 
     assert.deepEqual(bashCandidates(['whoisleuth', 'monitor-once', '--concurrency', '']), ['1', '2', '3']);
     assert.deepEqual(bashCandidates(['whoisleuth', 'bulk', '--deep', '--concurrency', '']), ['1', '2', '3']);
@@ -871,15 +869,6 @@ describe('canonical CLI command registry', () => {
     for (const line of powershellRejectedCases) {
       assert.deepEqual(powershellCandidates(line), [], line);
     }
-
-    assert.match(fish, /function __whoisleuth_seen/u);
-    assert.match(fish, /function __whoisleuth_command_is/u);
-    assert.doesNotMatch(fish, /__fish_seen_subcommand_from/u);
-    assert.match(fish, /__whoisleuth_command_is bulk[^\n]*-l concurrency/u);
-    assert.doesNotMatch(fish, /__fish_seen_argument -l deep/u);
-    assert.match(fish, /__whoisleuth_integer_values 1 500/u);
-    assert.match(fish, /__whoisleuth_integer_values 1 100/u);
-    assert.match(fish, /__whoisleuth_integer_values 1 20/u);
 
     for (const value of ['source-failure', 'inconclusive', 'danger']) {
       assert.equal(parseCliArguments(['lookup', 'example.test', '--fail-on', value]).action, 'lookup');

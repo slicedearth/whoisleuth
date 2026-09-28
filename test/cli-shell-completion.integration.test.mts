@@ -251,15 +251,30 @@ describe('CLI shell completion integration', () => {
       ['whoisleuth report.json --de', []],
       ['whoisleuth http --scenario ', []],
     ] as const;
+    const ranges = [
+      ['whoisleuth discover-scan example.test --scan-limit ', 500],
+      ['whoisleuth discover-scan example.test --deep --scan-limit ', 50],
+      ['whoisleuth discover-scan example.test --tlds --deep --scan-limit ', 500],
+      ['whoisleuth discover-scan example.test --chunk-size ', 100],
+      ['whoisleuth monitor-once --limit ', 20],
+    ] as const;
     const complete = prepareFishCompletionBatch(
       script,
-      ['whoisleuth ', ...cases.map(([line]) => line)],
+      ['whoisleuth ', 'whoisleuth registry-scaffold --', ...cases.map(([line]) => line),
+        ...ranges.map(([line]) => line)],
       REPOSITORY_ROOT,
     );
     for (const command of CLI_COMMANDS)
       assert.ok(complete('whoisleuth ').includes(command), command);
     for (const [line, expected] of cases)
       assert.deepEqual([...complete(line)].sort(), [...expected].sort(), line);
+    const scaffold = complete('whoisleuth registry-scaffold --');
+    assert.equal(scaffold.includes('--config'), false);
+    assert.equal(scaffold.filter(option => option === '--profile').length, 1);
+    for (const [line, maximum] of ranges) {
+      assert.deepEqual([...complete(line)].map(Number).sort((left, right) => left - right),
+        Array.from({ length: maximum }, (_, index) => index + 1), line);
+    }
   });
 
   test('completes ordinary filenames as one literal argument, including spaces, quotes and metacharacters', () => {

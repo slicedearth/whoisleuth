@@ -760,9 +760,6 @@
           analysis={lookupAnalysis}
           {serviceDependencyReview}
           {profile}
-          {caseDomain}
-          {lookupEvidenceDepth}
-          {lookupObservedAt}
           loading={session.loading}
           expanded={sectionNavigation.visible('web-evidence')}
           serviceDependencyScope={session.observation.serviceScope}

@@ -36,9 +36,6 @@
     analysis,
     serviceDependencyReview,
     profile,
-    caseDomain,
-    lookupEvidenceDepth,
-    lookupObservedAt,
     loading,
     expanded,
     serviceDependencyScope,
@@ -58,9 +55,6 @@
     analysis: LookupAnalysis;
     serviceDependencyReview: ServiceDependencyReview | null;
     profile: BrandProfile | null;
-    caseDomain: string;
-    lookupEvidenceDepth: LookupAnalysis['lookupEvidenceDepth'];
-    lookupObservedAt: string | null;
     loading: boolean;
     expanded: boolean;
     serviceDependencyScope: string;
@@ -75,6 +69,7 @@
     sourceCheckpoint?: Snippet<[CheckpointFact['category'], string]>;
   } = $props();
 
+  const { caseDomain, lookupEvidenceDepth, lookupObservedAt } = $derived(analysis);
   const availability = $derived(view.availability);
   const observationHostname = $derived(lookupObservationHostname(availability) ?? caseDomain);
   const reverseDns = $derived(view.reverseDns);

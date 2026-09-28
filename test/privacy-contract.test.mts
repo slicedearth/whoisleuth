@@ -89,7 +89,6 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   { id: 'case-review-return', pattern: /handoff entry containing the file digest and selected-record-key digest.*(?:No upload occurs|Nothing is uploaded).*file identity does not authenticate the reviewer.*(?:conflicts|Conflicting entries).*response authorisations.*unselected records are not imported/iu },
   { id: 'public-case-pack', pattern: /Public CLI case packs clear identifiers, actions, observed-effect reviews,? and closure records/iu },
   { id: 'workspace-compatibility', pattern: new RegExp(`workspace archive version ${WORKSPACE_ARCHIVE_VERSION}.*exact versions ${SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS.filter(version => version !== WORKSPACE_ARCHIVE_VERSION).join(',? (?:and )?')} remain readable`, 'iu') },
-  { id: 'saved-case-views', pattern: /Saved Case views retain names, search text, status, disposition and sort choices.*current workspace.*Workspace backups include them; response packets do not.*without making network requests/iu },
   { id: 'saved-review-position', pattern: /Saved review positions retain filters, search text, selected Review Item and Case references, evidence fingerprints, unfinished review forms and save time.*current workspace.*encryption when enabled.*Saving is explicit.*excluded from backups, exports and legacy rollback copies.*Resume re-evaluates current records without collection or submission.*Discarding a position removes its saved review-form copies.*Cases and currently open forms are unchanged/iu },
   { id: 'unsupported-workspace', pattern: /Versions 1 through 4.*future versions fail without.*reset, deletion,? or rewrite/iu },
   { id: 'monitoring-custody', pattern: /scheduled monitoring.*application-encrypted.*Disabling collection (?:does not delete|also leaves)/iu },
@@ -141,6 +140,17 @@ test('public privacy notices share the current material data-handling contract',
     for (const fact of SHARED_PRIVACY_FACTS) {
       assert.match(normalised, fact.pattern, `${label} omits privacy fact ${fact.id}`);
     }
+    // Keep the facts independent of their order, but scoped to this disclosure.
+    const paragraphs = label === 'PRIVACY.md'
+      ? notice.split(/\n\s*\n/u)
+      : [...notice.matchAll(/<p(?:\s[^>]*)?>([\s\S]*?)<\/p>/gu)].map(match => match[1]!);
+    const savedViews = paragraphs.map(compact).filter(paragraph => /Saved Case views retain\b/iu.test(paragraph));
+    assert.equal(savedViews.length, 1, `${label} must have one saved-view disclosure`);
+    for (const clause of [
+      /Saved Case views retain names, search text, status, disposition and sort choices within the current workspace/iu,
+      /Workspace backups include them; response packets do not/iu,
+      /without making network requests/iu,
+    ]) assert.match(savedViews[0]!, clause, `${label} omits a saved-view privacy clause`);
   }
 
   const normalisedDisclosure = compact(disclosure);
