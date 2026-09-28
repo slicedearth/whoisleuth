@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildCaseDecisionOverview } from '../packages/cases/case-decision-overview.mts';
 import { createCase } from '../packages/cases/case-model.mts';
+import { caseRecheckComparisonWarnings } from '../packages/cases/case-recheck-model.mts';
 import type { CaseEvidencePin, CaseDecisionRecord, CaseActionRecord } from '../packages/cases/case-response-records.mts';
 
 const NOW = '2026-09-10T10:00:00.000Z';
@@ -47,6 +48,27 @@ test('undated and unavailable observations remain gaps even when a producer call
   const record = createCase({ domain: 'review.example' }, NOW);
   record.evidencePins = [{ ...pin, observedAt: null }, { ...pin, id: 'failed', sourceState: 'unavailable' }, { ...pin, id: 'cut', truncated: true }];
   assert.deepEqual(buildCaseDecisionOverview(record, NOW).evidenceGaps.map(value => value.id), ['pin-one', 'failed', 'cut']);
+});
+
+test('decision and recheck views retain the same collection-quality boundary without conflating dates', () => {
+  const record = createCase({ domain: 'review.example' }, NOW);
+  const context = { targetHostname: 'review.example', baselinePinId: null, conditions: 'Same page',
+    questionId: 'question', question: 'Still present?', conditionsMatch: 'comparable' as const };
+  for (const sourceState of ['complete', 'success', 'reviewed', 'not_found', 'unavailable', 'skipped', null]) {
+    for (const completeness of ['complete', 'partial'] as const) {
+      for (const truncated of [false, true]) {
+        const current = { ...pin, sourceState, completeness, truncated, observationHostname: 'review.example' };
+        record.evidencePins = [current];
+        const complete = ['complete', 'success', 'reviewed', 'not_found'].includes(sourceState ?? '') && completeness === 'complete' && !truncated;
+        assert.equal(buildCaseDecisionOverview(record, NOW).evidenceGaps.length, complete ? 0 : 1);
+        assert.equal(caseRecheckComparisonWarnings(context, [current], current).length, complete ? 0 : 1);
+      }
+    }
+  }
+  const undated = { ...pin, observedAt: null, observationHostname: 'review.example' };
+  record.evidencePins = [undated];
+  assert.equal(buildCaseDecisionOverview(record, NOW).evidenceGaps.length, 1);
+  assert.deepEqual(caseRecheckComparisonWarnings(context, [undated], undated), []);
 });
 
 test('manual acknowledgement schedules follow-up without implying removal or altering evidence', () => {

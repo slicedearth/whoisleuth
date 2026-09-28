@@ -20,8 +20,7 @@
   import CaseEvidencePinSelect from './CaseEvidencePinSelect.svelte';
   import {
     CASE_RECHECK_CONDITIONS,
-    caseRecheckQuestions,
-    caseRecheckAnswerContext,
+    selectCaseRecheckQuestion,
     caseRecheckComparisonWarnings,
     assertRecheckNonReproduction,
     type CaseRecheckAnswerContext,
@@ -61,11 +60,9 @@
   const retained = $derived(
     selected && draft.value.effectUsePinMetadata ? caseRecheckEvidence(selected) : null,
   );
-  const questions = $derived(caseRecheckQuestions(record.assertions));
-  const question = $derived(questions.find((item) => item.id === draft.value.questionId));
-  const recheck = $derived(
-    question ? caseRecheckAnswerContext(question, draft.value.conditionsMatch) : undefined,
-  );
+  const selection = $derived(selectCaseRecheckQuestion(record.assertions, draft.value));
+  const questions = $derived(selection.questions);
+  const recheck = $derived(selection.context);
   const comparisonWarnings = $derived(
     recheck
       ? caseRecheckComparisonWarnings(recheck, record.evidencePins, retained ? selected : undefined)
@@ -98,10 +95,7 @@
 
   async function save() {
     error = '';
-    if (
-      draft.value.questionId &&
-      (!question || question.updatedAt !== draft.value.questionUpdatedAt)
-    ) {
+    if (selection.stale) {
       error = 'The selected question changed or was resolved. Choose a current question.';
       return;
     }

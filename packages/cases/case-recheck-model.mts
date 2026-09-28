@@ -4,6 +4,7 @@ import {
   MAX_RESPONSE_RATIONALE_LENGTH,
 } from '../contracts/case-portability.mts';
 import { enumeration, exact, text } from '../evidence/artifact-structure.mts';
+import { casePinHasCompleteObservation } from './case-evidence-quality.mts';
 import type {
   CaseAssertionRecord,
   CaseEvidencePin,
@@ -118,6 +119,24 @@ export function caseRecheckAnswerContext(
   })!;
 }
 
+/** Shared read projection; each form retains its draft and existing save coordinator. */
+export function selectCaseRecheckQuestion(
+  assertions: readonly CaseAssertionRecord[],
+  selection: Readonly<{
+    questionId: string;
+    questionUpdatedAt: string;
+    conditionsMatch: CaseRecheckConditionsMatch;
+  }>,
+) {
+  const questions = caseRecheckQuestions(assertions);
+  const question = questions.find((item) => item.id === selection.questionId);
+  return {
+    questions,
+    context: question ? caseRecheckAnswerContext(question, selection.conditionsMatch) : undefined,
+    stale: Boolean(selection.questionId) && (!question || question.updatedAt !== selection.questionUpdatedAt),
+  };
+}
+
 /** A saved answer is a snapshot, not a live reference to an editable plan. */
 export function assertCurrentRecheckQuestion(
   answer: CaseRecheckAnswerContext,
@@ -154,12 +173,7 @@ export function caseRecheckComparisonWarnings(
   if (current) {
     if (current.observationHostname !== context.targetHostname)
       warnings.push('The current evidence concerns a different or unknown hostname.');
-    const completeSource =
-      current.sourceState !== null &&
-      ['complete', 'success', 'reviewed', 'not_found'].includes(current.sourceState);
-    const completeObservation =
-      current.completeness === 'complete' && !current.truncated && completeSource;
-    if (!completeObservation)
+    if (!casePinHasCompleteObservation(current))
       warnings.push('The current source does not establish a complete observation.');
     if (baseline) {
       const sameObservation = baseline.id === current.id;

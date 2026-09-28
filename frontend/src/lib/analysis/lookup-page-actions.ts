@@ -67,40 +67,28 @@ export function lookupSecurityTxtEligible(entries: readonly string[]): boolean {
   }
 }
 
+/** Retain the analyst's draft, but disclose and request only eligible selections. */
+export function eligibleLookupOptionalSources(selection: Omit<LookupRequestSelection, 'mode'>) {
+  return {
+    includeExternalIntelligence: selection.includeExternalIntelligence && selection.externalIntelligenceSupported,
+    includeMalwareHostIntelligence: selection.includeMalwareHostIntelligence && selection.malwareHostIntelligenceSupported,
+    includeMalwareIocIntelligence: selection.includeMalwareIocIntelligence && selection.malwareIocIntelligenceSupported,
+    includeSecurityTxt: selection.includeSecurityTxt && selection.websiteObservationSupported && selection.securityTxtEligible,
+  };
+}
+
 export function buildLookupRequestUrl(
   target: string,
   selection: LookupRequestSelection,
 ): string {
   const params = new URLSearchParams({ q: prepareLookupCollectionTarget(target) });
   if (selection.mode === 'fast') params.set('fast', '1');
-  if (
-    selection.mode === 'deep' &&
-    selection.includeExternalIntelligence &&
-    selection.externalIntelligenceSupported
-  ) {
-    params.set('intelligence', '1');
-  }
-  if (
-    selection.mode === 'deep' &&
-    selection.includeMalwareHostIntelligence &&
-    selection.malwareHostIntelligenceSupported
-  ) {
-    params.set('malware', '1');
-  }
-  if (
-    selection.mode === 'deep' &&
-    selection.includeMalwareIocIntelligence &&
-    selection.malwareIocIntelligenceSupported
-  ) {
-    params.set('ioc', '1');
-  }
-  if (
-    selection.mode === 'deep' &&
-    selection.includeSecurityTxt &&
-    selection.websiteObservationSupported &&
-    selection.securityTxtEligible
-  ) {
-    params.set('security_txt', '1');
+  if (selection.mode === 'deep') {
+    const eligible = eligibleLookupOptionalSources(selection);
+    if (eligible.includeExternalIntelligence) params.set('intelligence', '1');
+    if (eligible.includeMalwareHostIntelligence) params.set('malware', '1');
+    if (eligible.includeMalwareIocIntelligence) params.set('ioc', '1');
+    if (eligible.includeSecurityTxt) params.set('security_txt', '1');
   }
   return `/api/lookup?${params}`;
 }

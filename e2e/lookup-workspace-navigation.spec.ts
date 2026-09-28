@@ -101,7 +101,9 @@ test('explicit Lookup Case context can be cleared and invalid references do not 
 
 test('optional sources are compact, keyboard accessible and retain explicit Deep consent', async ({ page }, testInfo) => {
   await page.route('**/api/capabilities', route => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify(INTELLIGENCE_CAPABILITIES),
+    status: 200, contentType: 'application/json', body: JSON.stringify({ ...INTELLIGENCE_CAPABILITIES,
+      features: [...INTELLIGENCE_CAPABILITIES.features, { id: 'website_probe', status: 'supported', execution: 'hosted', scanModes: ['deep'] }],
+    }),
   }));
   let collections = 0;
   page.on('request', request => { if (new URL(request.url()).pathname === '/api/lookup') collections += 1; });
@@ -134,5 +136,20 @@ test('optional sources are compact, keyboard accessible and retain explicit Deep
   await summary.click();
   await expect(option).toBeChecked();
   await expect(option).toBeDisabled();
+  await page.getByRole('radio', { name: /Deep/u }).check();
+  const contacts = page.getByRole('checkbox', { name: /Retrieve security.txt contacts/u });
+  await contacts.check();
+  await page.locator('.collection-preflight > summary').click();
+  const plannedContacts = page.getByRole('list', { name: 'Planned source families' }).getByRole('listitem').filter({ has: page.getByText('security.txt', { exact: true }) });
+  await expect(plannedContacts.locator('small')).toHaveText('included');
+  await page.locator('#query').fill('192.0.2.1');
+  await expect(contacts).toBeChecked();
+  await expect(contacts).toBeDisabled();
+  await expect(plannedContacts.locator('small')).toHaveText('optional');
+  await expect(summary).toContainText('1 selected for Deep');
+  await page.locator('#query').fill('optional-evidence.invalid');
+  await expect(contacts).toBeEnabled();
+  await expect(plannedContacts.locator('small')).toHaveText('included');
+  await expect(summary).toContainText('2 selected for Deep');
   expect(collections).toBe(0);
 });

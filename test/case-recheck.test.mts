@@ -20,6 +20,7 @@ import {
   caseRecheckQuestions,
   readCaseRecheckAnswerContext,
   readCaseRecheckContext,
+  selectCaseRecheckQuestion,
 } from '../packages/cases/case-recheck-model.mts';
 
 const before = '2026-09-01T10:00:00.000Z',
@@ -98,6 +99,23 @@ test('recheck plans are strict detached context on next steps, not observations 
     /next step/,
   );
   assert.equal(readCaseRecheckContext(undefined, 15), undefined);
+});
+
+test('saved-question selection distinguishes independent, current, changed and resolved drafts', () => {
+  const record = planned();
+  const question = record.assertions[0]!;
+  const selection = { questionId: question.id, questionUpdatedAt: question.updatedAt, conditionsMatch: 'comparable' as const };
+  const current = selectCaseRecheckQuestion(record.assertions, selection);
+  assert.equal(current.stale, false);
+  assert.deepEqual(current.context, { ...plan, questionId: question.id, question: question.statement, conditionsMatch: 'comparable' });
+  assert.equal(selectCaseRecheckQuestion(record.assertions, { ...selection, questionUpdatedAt: after }).stale, true);
+  assert.equal(selectCaseRecheckQuestion([], selection).stale, true);
+  assert.equal(selectCaseRecheckQuestion([{ ...question, state: 'resolved' }], selection).stale, true);
+  const independent = selectCaseRecheckQuestion(record.assertions, { ...selection, questionId: '' });
+  assert.equal(independent.stale, false);
+  assert.equal(independent.context, undefined);
+  assert.equal(independent.questions.length, 1);
+  assert.equal(record.assertions[0]?.updatedAt, before);
 });
 
 test('recheck context rejects invalid targets, excess text, unknown properties and historical formats', () => {

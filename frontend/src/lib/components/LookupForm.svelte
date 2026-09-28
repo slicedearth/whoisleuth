@@ -2,6 +2,7 @@
   import type { Snippet } from 'svelte';
   import type { Capability } from '$lib/capabilities';
   import { buildLookupCollectionPreflight } from '$lib/analysis/collection-preflight.ts';
+  import { eligibleLookupOptionalSources } from '$lib/analysis/lookup-page-actions.ts';
   import CollectionPreflight from '$lib/components/CollectionPreflight.svelte';
   import LookupSourceProgress from '$lib/components/LookupSourceProgress.svelte';
   import type { LookupProgressUpdate } from '../../../../lib/lookup-progress-http.mts';
@@ -79,16 +80,17 @@
     try { prepareSelectedLookupUrl(query.trim()); return true; } catch { return false; }
   });
   $effect(() => { query; lookupMode; collectSelectedUrl = false; });
-  const selectedSourceCount = $derived(Number(includeSecurityTxt) + Number(includeExternalIntelligence)
-    + Number(includeMalwareHostIntelligence) + Number(includeMalwareIocIntelligence));
+  const eligibleSources = $derived(eligibleLookupOptionalSources({
+    includeSecurityTxt, includeExternalIntelligence, includeMalwareHostIntelligence, includeMalwareIocIntelligence,
+    externalIntelligenceSupported, malwareHostIntelligenceSupported, malwareIocIntelligenceSupported,
+    websiteObservationSupported, securityTxtEligible,
+  }));
+  const selectedSourceCount = $derived(Object.values(eligibleSources).filter(Boolean).length);
   const preflight = $derived(buildLookupCollectionPreflight({
     mode: lookupMode,
     targetCount: entryCount,
     disabledSourceIds: lookupLimitations.map((item) => item.id),
-    includeSecurityTxt,
-    includeExternalIntelligence,
-    includeMalwareHostIntelligence,
-    includeMalwareIocIntelligence,
+    ...(entryCount === 1 ? eligibleSources : {}),
     selectedUrl: collectSelectedUrl && deepMode && selectedUrlEligible,
   }));
   const loadingDetail = $derived(lookupMode === 'fast'

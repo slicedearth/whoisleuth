@@ -3,14 +3,14 @@
 
   let {
     preflight,
-    open = false,
+    open = $bindable(false),
   }: {
     preflight: CollectionPreflight;
     open?: boolean;
   } = $props();
 </script>
 
-<details class="collection-preflight" {open}>
+<details class="collection-preflight" bind:open>
   <summary>
     <span>{preflight.heading}</span>
     <small>{preflight.targetCount || 'No'} target{preflight.targetCount === 1 ? '' : 's'}</small>

@@ -8,9 +8,29 @@ import {
   lookupEvidenceFamilyForHref,
   lookupEvidenceTargetForHref,
   lookupSecurityTxtEligible,
+  eligibleLookupOptionalSources,
 } from '../frontend/src/lib/analysis/lookup-page-actions.ts';
+import { buildLookupCollectionPreflight } from '../frontend/src/lib/analysis/collection-preflight.ts';
 
 describe('lookup page actions', () => {
+  test('retained consent cannot disclose or request sources that are no longer supported', () => {
+    const selection = {
+      mode: 'deep' as const,
+      includeExternalIntelligence: true, externalIntelligenceSupported: false,
+      includeMalwareHostIntelligence: true, malwareHostIntelligenceSupported: false,
+      includeMalwareIocIntelligence: true, malwareIocIntelligenceSupported: false,
+      includeSecurityTxt: true, websiteObservationSupported: true, securityTxtEligible: false,
+    };
+    const eligible = eligibleLookupOptionalSources(selection);
+    assert.deepEqual(eligible, { includeExternalIntelligence: false, includeMalwareHostIntelligence: false,
+      includeMalwareIocIntelligence: false, includeSecurityTxt: false });
+    const preflight = buildLookupCollectionPreflight({ mode: 'deep', targetCount: 1, ...eligible });
+    assert.equal(preflight.sources.find(source => source.id === 'external_intelligence')?.state, 'optional');
+    assert.equal(preflight.sources.find(source => source.id === 'security_txt')?.state, 'optional');
+    assert.equal(buildLookupRequestUrl('target.example', selection), '/api/lookup?q=target.example');
+    assert.equal(selection.includeSecurityTxt, true, 'The retained draft is not silently changed.');
+  });
+
   test('offers security.txt only for a single admitted hostname', () => {
     for (const target of [
       'portal.example.test',

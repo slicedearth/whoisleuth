@@ -9,7 +9,7 @@
   import { clearsLocalMutationDraft, type LocalMutationOutcome } from '$lib/local-mutation-outcome.ts';
   import { restoreSubmittedFocus } from '$lib/controllers/submitted-draft';
   import { isoFromUtcInput, utcDateTimeInputAttributes } from '$lib/analysis/case-response-form-values.ts';
-  import { CASE_RECHECK_CONDITIONS, caseRecheckQuestions, caseRecheckAnswerContext, type CaseRecheckAnswerContext } from '../../../../packages/cases/case-recheck-model.mts';
+  import { CASE_RECHECK_CONDITIONS, selectCaseRecheckQuestion, type CaseRecheckAnswerContext } from '../../../../packages/cases/case-recheck-model.mts';
 
   let { record, comparison, busy, save, changed }: {
     record: CaseRecord; comparison: LookupRecheckComparison; busy: boolean;
@@ -20,9 +20,9 @@
   let followUpAt = $state(''), limitations = $state(''), questionId = $state(''), questionUpdatedAt = $state('');
   let conditionsMatch = $state<CaseRecheckAnswerContext['conditionsMatch']>('unknown'), error = $state('');
   let form = $state<HTMLFormElement>();
-  const questions = $derived(caseRecheckQuestions(record.assertions));
-  const question = $derived(questions.find(item => item.id === questionId));
-  const recheck = $derived(question ? caseRecheckAnswerContext(question, conditionsMatch) : undefined);
+  const selection = $derived(selectCaseRecheckQuestion(record.assertions, { questionId, questionUpdatedAt, conditionsMatch }));
+  const questions = $derived(selection.questions);
+  const recheck = $derived(selection.context);
 
   function display(value: unknown): string {
     if (Array.isArray(value)) return value.map(String).join(', ') || 'none';
@@ -31,7 +31,7 @@
   async function submit() {
     error = '';
     if (!comparison.available || outcomeState === 'not_checked' || busy) return;
-    if (questionId && (!question || question.updatedAt !== questionUpdatedAt)) { error = 'The saved question changed or was resolved. Select it again after reviewing its conditions.'; return; }
+    if (selection.stale) { error = 'The saved question changed or was resolved. Select it again after reviewing its conditions.'; return; }
     const followUp = isoFromUtcInput(followUpAt);
     if (followUpAt && !followUp) { error = 'Enter a valid UTC follow-up time.'; return; }
     const comparisonSummary = comparison.changes.length ? comparison.changes.map(change => `${change.label}: ${display(change.before)} to ${display(change.after)}`).join('; ').slice(0, 1000)
